@@ -1,10 +1,14 @@
-pub enum Types {
-    INT,    // int数字
-    FLOAT,  // float数字
-    PLUS,   // +
-    MINUS,  // -
-    MUL,    // *
-    DIV,    // /
-    LPAREN, // (
-    RPAREN, // )
+#[derive(Debug, PartialEq)]
+pub enum Token {
+    Operator(Operator), // 运算符
+    LPAREN,             // (
+    RPAREN,             // )
+    EOF,                //EOF
+}
+#[derive(Debug, PartialEq)]
+pub enum Operator {
+    PLUS,  // +
+    MINUS, // -
+    MUL,   // *
+    DIV,   // /
 }

@@ -1,5 +1,6 @@
 mod lexer;
 
 fn main() {
-    println!("Hello, world!");
+    let lexer = lexer::lexer::Lexer::new("+-*/");
+    println!("{:?}", lexer);
 }
