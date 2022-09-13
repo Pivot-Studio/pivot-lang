@@ -139,6 +139,7 @@ name = "pivot-lang"
 version = "0.1.0"
 dependencies = [
  "inkwell",
+ "lazy_static",
 ]
 
 [[package]]

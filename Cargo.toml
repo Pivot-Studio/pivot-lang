@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm14-0"] }
+lazy_static = "1.4.0"
