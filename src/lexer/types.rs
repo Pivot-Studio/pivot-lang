@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 #[derive(Debug, PartialEq)]
-pub enum Token {
+pub enum TokenType {
     Operator(Operator), // 运算符
     Keyword(Keyword),   // 关键字
     String(String),     // 字符串
@@ -9,7 +9,8 @@ pub enum Token {
     FLOAT(String),      //浮点数
     LPAREN,             // (
     RPAREN,             // )
-    WhiteSpace,         // ' ','\n','\r'
+    WhiteSpace,         // ' ','\r'
+    NewLine,            // '\n'
     EOF,                //EOF
 }
 #[derive(Debug, PartialEq, Eq)]

@@ -2,14 +2,17 @@ use core::fmt;
 
 use super::types::Keyword;
 use super::types::Operator;
-use super::types::Token;
+use super::types::TokenType;
 use super::types::KEYWORDS_MAP;
 use core::iter::Peekable;
 use core::str::Chars;
 #[derive(Debug)]
 pub struct Lexer<'a> {
-    tokens: Vec<Token>,
+    tokens: Vec<TokenType>,
     input: &'a str,
+    offsset: usize, // offset char
+    line: usize, // 1 based line
+    column: usize, // 1 based col
 }
 
 impl<'a> Lexer<'a> {
@@ -17,24 +20,28 @@ impl<'a> Lexer<'a> {
         let mut peekable = input.chars().peekable();
         let mut tokens = vec![];
         while let Ok(token) = Self::next_token(&mut peekable) {
-            if token == Token::EOF {
+            if token == TokenType::EOF {
                 tokens.push(token);
                 break;
             }
             tokens.push(token);
         }
-        Self { input, tokens }
+        Self { input, tokens, offsset: 0, line: 1, column: 1 }
     }
-    fn next_token(peekable: &mut Peekable<Chars<'_>>) -> Result<Token, TokenizerError> {
+    // fn eat_token(expect_type: TokenType) -> Result<(), TokenizerError> {
+    // }
+
+    fn next_token(peekable: &mut Peekable<Chars<'_>>) -> Result<TokenType, TokenizerError> {
         if let Some(&ch) = peekable.peek() {
             match ch {
-                '+' => Self::eat_char_and_return(peekable, Token::Operator(Operator::PLUS)),
-                '-' => Self::eat_char_and_return(peekable, Token::Operator(Operator::MINUS)),
-                '*' => Self::eat_char_and_return(peekable, Token::Operator(Operator::MUL)),
-                '/' => Self::eat_char_and_return(peekable, Token::Operator(Operator::DIV)),
-                '(' => Self::eat_char_and_return(peekable, Token::LPAREN),
-                ')' => Self::eat_char_and_return(peekable, Token::RPAREN),
-                '\n' | '\r' | ' ' => Self::eat_char_and_return(peekable, Token::WhiteSpace),
+                '+' => Self::eat_char_and_return(peekable, TokenType::Operator(Operator::PLUS)),
+                '-' => Self::eat_char_and_return(peekable, TokenType::Operator(Operator::MINUS)),
+                '*' => Self::eat_char_and_return(peekable, TokenType::Operator(Operator::MUL)),
+                '/' => Self::eat_char_and_return(peekable, TokenType::Operator(Operator::DIV)),
+                '(' => Self::eat_char_and_return(peekable, TokenType::LPAREN),
+                ')' => Self::eat_char_and_return(peekable, TokenType::RPAREN),
+                '\r' | ' ' => Self::eat_char_and_return(peekable, TokenType::WhiteSpace),
+                '\n' => Self::eat_char_and_return(peekable, TokenType::NewLine),
                 _ => {
                     if Self::is_letter_or_underscore(ch) {
                         let mut str = String::new();
@@ -49,9 +56,9 @@ impl<'a> Lexer<'a> {
                             continue;
                         }
                         if let Some(&keyword) = KEYWORDS_MAP.get(&str.as_str()) {
-                            return Ok(Token::Keyword(keyword));
+                            return Ok(TokenType::Keyword(keyword));
                         }
-                        return Ok(Token::String(str));
+                        return Ok(TokenType::String(str));
                     }
                     if Self::is_num(ch) {
                         let mut str = String::new();
@@ -73,9 +80,9 @@ impl<'a> Lexer<'a> {
                             continue;
                         }
                         if is_float {
-                            return Ok(Token::FLOAT(str));
+                            return Ok(TokenType::FLOAT(str));
                         }
-                        return Ok(Token::INT(str));
+                        return Ok(TokenType::INT(str));
                     }
                     Err(TokenizerError {
                         message: "unknown ch".to_string(),
@@ -83,7 +90,7 @@ impl<'a> Lexer<'a> {
                 }
             }
         } else {
-            Ok(Token::EOF)
+            Ok(TokenType::EOF)
         }
     }
     fn is_letter(ch: char) -> bool {
@@ -97,8 +104,8 @@ impl<'a> Lexer<'a> {
     }
     fn eat_char_and_return(
         peekable: &mut Peekable<Chars<'_>>,
-        token: Token,
-    ) -> Result<Token, TokenizerError> {
+        token: TokenType,
+    ) -> Result<TokenType, TokenizerError> {
         peekable.next();
         Ok(token)
     }
@@ -113,20 +120,20 @@ fn test_token_vec_gen() {
     let lexer = Lexer::new("+-* / fn fnabc\n34\r3.145");
     let tokens = lexer.tokens;
     let expected = vec![
-        Token::Operator(Operator::PLUS),
-        Token::Operator(Operator::MINUS),
-        Token::Operator(Operator::MUL),
-        Token::WhiteSpace,
-        Token::Operator(Operator::DIV),
-        Token::WhiteSpace,
-        Token::Keyword(Keyword::FN),
-        Token::WhiteSpace,
-        Token::String("fnabc".to_string()),
-        Token::WhiteSpace,
-        Token::INT("34".to_string()),
-        Token::WhiteSpace,
-        Token::FLOAT("3.145".to_string()),
-        Token::EOF,
+        TokenType::Operator(Operator::PLUS),
+        TokenType::Operator(Operator::MINUS),
+        TokenType::Operator(Operator::MUL),
+        TokenType::WhiteSpace,
+        TokenType::Operator(Operator::DIV),
+        TokenType::WhiteSpace,
+        TokenType::Keyword(Keyword::FN),
+        TokenType::WhiteSpace,
+        TokenType::String("fnabc".to_string()),
+        TokenType::NewLine,
+        TokenType::INT("34".to_string()),
+        TokenType::WhiteSpace,
+        TokenType::FLOAT("3.145".to_string()),
+        TokenType::EOF,
     ];
     assert_eq!(tokens, expected);
 }
