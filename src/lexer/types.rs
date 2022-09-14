@@ -4,11 +4,15 @@ use std::collections::HashMap;
 pub enum Token {
     Operator(Operator), // 运算符
     Keyword(Keyword),   // 关键字
+    String(String),     // 字符串
+    INT(String),        //整形
+    FLOAT(String),      //浮点数
     LPAREN,             // (
     RPAREN,             // )
+    WhiteSpace,         // ' ','\n','\r'
     EOF,                //EOF
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Operator {
     PLUS,  // +
     MINUS, // -
@@ -19,14 +23,13 @@ macro_rules! define_keywords {
     ($(
         $ident:ident = $string_keyword:expr
     ),*) => {
-        #[derive(Debug, PartialEq,Eq,Hash)]
+        #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
         pub enum Keyword {
-            NoKeyword,
             $($ident),*
         }
         $(pub const $ident: &'static str = $string_keyword;)*
         lazy_static! {
-            static ref KEYWORDS_MAP: HashMap<&'static str,Keyword> = {
+            pub static ref KEYWORDS_MAP: HashMap<&'static str,Keyword> = {
                 let mut mp = HashMap::new();
                 $(mp.insert($ident,Keyword::$ident);)*
                 mp
@@ -34,11 +37,8 @@ macro_rules! define_keywords {
         }
     };
 }
-define_keywords!(TESTA = "testa", TESTB = "testb");
+define_keywords!(FN = "fn");
 #[test]
 fn test_keyword_gen() {
-    println!(
-        "keyword_map: {:?} {:?}",
-        KEYWORDS_MAP["testa"], KEYWORDS_MAP["testb"]
-    );
+    println!("keyword_map: {:?}", KEYWORDS_MAP["fn"]);
 }
