@@ -1,14 +1,14 @@
+use super::pos::Range;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
-use super::pos::Range;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenType {
     Operator(Operator), // 运算符
     Keyword(Keyword),   // 关键字
-    String,     // 字符串
-    INT,        //整形
-    FLOAT,      //浮点数
+    String,             // 字符串
+    INT,                //整形
+    FLOAT,              //浮点数
     LPAREN,             // (
     RPAREN,             // )
     WhiteSpace,         // ' ','\r'
@@ -22,7 +22,6 @@ pub struct Token {
     pub value: String,
     pub range: Range,
 }
-
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Operator {

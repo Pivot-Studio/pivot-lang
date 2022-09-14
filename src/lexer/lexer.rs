@@ -4,12 +4,12 @@ use std::collections::HashMap;
 use lazy_static::lazy_static;
 
 use super::pos::Pos;
+use super::pos::Range;
 use super::types::Keyword;
 use super::types::Operator;
-use super::types::TokenType;
 use super::types::Token;
+use super::types::TokenType;
 use super::types::KEYWORDS_MAP;
-use super::pos::Range;
 use core::iter::Peekable;
 use core::str::Chars;
 #[derive(Debug)]
@@ -17,12 +17,11 @@ pub struct Lexer<'a> {
     tokens: Vec<Token>,
     input: &'a str,
     offsset: usize, // offset char 0 based
-    line: usize, // 1 based line
-    column: usize, // 1 based col
+    line: usize,    // 1 based line
+    column: usize,  // 1 based col
 }
 
-
-lazy_static!(
+lazy_static! {
     static ref TOKEN_MAP: HashMap<&'static char, TokenType> = {
         let mut mp = HashMap::new();
         mp.insert(&'+', TokenType::Operator(Operator::PLUS));
@@ -36,14 +35,20 @@ lazy_static!(
         mp.insert(&'\n', TokenType::NewLine);
         mp
     };
-);
+}
 
 impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Self {
         let mut peekable = input.chars().peekable();
         let mut tokens = vec![];
         let t = vec![];
-        let mut lexer = Lexer { input, tokens: t, offsset: 0, line: 1, column: 1 };
+        let mut lexer = Lexer {
+            input,
+            tokens: t,
+            offsset: 0,
+            line: 1,
+            column: 1,
+        };
         while let Ok(token) = lexer.next_token(&mut peekable) {
             let tp = token.token_type;
             tokens.push(token);
@@ -51,24 +56,38 @@ impl<'a> Lexer<'a> {
                 break;
             }
         }
-        
-        return  Lexer { input, tokens: tokens, offsset: 0, line: 1, column: 1 };
+
+        return Lexer {
+            input,
+            tokens: tokens,
+            offsset: 0,
+            line: 1,
+            column: 1,
+        };
     }
     // fn eat_token(expect_type: TokenType) -> Result<(), TokenizerError> {
     // }
 
     fn curr_pos(&self) -> Pos {
-        return  Pos { line: self.line, column: self.column, offset: self.offsset };
+        return Pos {
+            line: self.line,
+            column: self.column,
+            offset: self.offsset,
+        };
     }
 
     fn build_token(&self, token_type: TokenType, start: Pos, value: String) -> Token {
         let range = self.gen_range(start);
-        return Token { token_type, value, range };
+        return Token {
+            token_type,
+            value,
+            range,
+        };
     }
 
-    fn eat(& mut self,peekable: &mut Peekable<Chars<'_>>) {
+    fn eat(&mut self, peekable: &mut Peekable<Chars<'_>>) {
         let ch = peekable.next().unwrap();
-        
+
         self.offsset += 1;
         if ch == '\n' {
             self.line += 1;
@@ -83,7 +102,7 @@ impl<'a> Lexer<'a> {
         return Range { start, end };
     }
 
-    fn next_token(&mut self,peekable: &mut Peekable<Chars<'_>>) -> Result<Token, TokenizerError> {
+    fn next_token(&mut self, peekable: &mut Peekable<Chars<'_>>) -> Result<Token, TokenizerError> {
         if let Some(&ch) = peekable.peek() {
             let start = self.curr_pos();
             let tp = TOKEN_MAP.get(&ch);
@@ -144,7 +163,7 @@ impl<'a> Lexer<'a> {
             })
         } else {
             let start = self.curr_pos();
-            Ok( self.build_token(TokenType::EOF, start, "".to_string()))
+            Ok(self.build_token(TokenType::EOF, start, "".to_string()))
         }
     }
     fn is_letter(ch: char) -> bool {

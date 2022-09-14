@@ -1,8 +1,8 @@
 #[derive(Debug, PartialEq)]
 pub struct Pos {
-    pub line: usize,// 1based
-    pub column: usize,// 1based
-    pub offset: usize,// 0based
+    pub line: usize,   // 1based
+    pub column: usize, // 1based
+    pub offset: usize, // 0based
 }
 
 #[derive(Debug, PartialEq)]
