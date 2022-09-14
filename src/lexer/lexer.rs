@@ -3,6 +3,7 @@ use std::collections::HashMap;
 
 use lazy_static::lazy_static;
 
+use super::pos::Pos;
 use super::types::Keyword;
 use super::types::Operator;
 use super::types::TokenType;
@@ -13,7 +14,7 @@ use core::iter::Peekable;
 use core::str::Chars;
 #[derive(Debug)]
 pub struct Lexer<'a> {
-    tokens: Vec<TokenType>,
+    tokens: Vec<Token>,
     input: &'a str,
     offsset: usize, // offset char 0 based
     line: usize, // 1 based line
@@ -41,71 +42,109 @@ impl<'a> Lexer<'a> {
     pub fn new(input: &'a str) -> Self {
         let mut peekable = input.chars().peekable();
         let mut tokens = vec![];
-        while let Ok(token) = Self::next_token(&mut peekable) {
-            if token == TokenType::EOF {
-                tokens.push(token);
+        let t = vec![];
+        let mut lexer = Lexer { input, tokens: t, offsset: 0, line: 1, column: 1 };
+        while let Ok(token) = lexer.next_token(&mut peekable) {
+            let tp = token.token_type;
+            tokens.push(token);
+            if tp == TokenType::EOF {
                 break;
             }
-            tokens.push(token);
         }
-        Self { input, tokens, offsset: 0, line: 1, column: 1 }
+        
+        return  Lexer { input, tokens: tokens, offsset: 0, line: 1, column: 1 };
     }
     // fn eat_token(expect_type: TokenType) -> Result<(), TokenizerError> {
     // }
 
-    fn next_token(peekable: &mut Peekable<Chars<'_>>) -> Result<TokenType, TokenizerError> {
+    fn curr_pos(&self) -> Pos {
+        return  Pos { line: self.line, column: self.column, offset: self.offsset };
+    }
+
+    fn build_token(&self, token_type: TokenType, start: Pos, value: String) -> Token {
+        let range = self.gen_range(start);
+        return Token { token_type, value, range };
+    }
+
+    fn eat(& mut self,peekable: &mut Peekable<Chars<'_>>) {
+        let ch = peekable.next().unwrap();
+        
+        self.offsset += 1;
+        if ch == '\n' {
+            self.line += 1;
+            self.column = 1;
+        } else {
+            self.column += 1;
+        }
+    }
+
+    fn gen_range(&self, start: Pos) -> Range {
+        let end = self.curr_pos();
+        return Range { start, end };
+    }
+
+    fn next_token(&mut self,peekable: &mut Peekable<Chars<'_>>) -> Result<Token, TokenizerError> {
         if let Some(&ch) = peekable.peek() {
+            let start = self.curr_pos();
             let tp = TOKEN_MAP.get(&ch);
             if let Some(tp) = tp {
-                peekable.next();
-                return Ok(*tp);
+                self.eat(peekable);
+                let v = ch.to_string();
+                let token = self.build_token(*tp, start, v);
+                return Ok(token);
             }
             if Self::is_letter_or_underscore(ch) {
                 let mut str = String::new();
                 str.push(ch);
-                peekable.next();
+                self.eat(peekable);
                 while let Some(&ch) = peekable.peek() {
                     if !Self::is_letter_or_underscore(ch) && !Self::is_num(ch) {
                         break;
                     }
                     str.push(ch);
-                    peekable.next();
+                    self.eat(peekable);
                     continue;
                 }
                 if let Some(&keyword) = KEYWORDS_MAP.get(&str.as_str()) {
-                    return Ok(TokenType::Keyword(keyword));
+                    let tp = TokenType::Keyword(keyword);
+                    let token = self.build_token(tp, start, str);
+                    return Ok(token);
                 }
-                return Ok(TokenType::String);
+                let token = self.build_token(TokenType::String, start, str);
+                return Ok(token);
             }
             if Self::is_num(ch) {
                 let mut str = String::new();
                 str.push(ch);
-                peekable.next();
+                self.eat(peekable);
                 let mut is_float = false;
                 while let Some(&ch) = peekable.peek() {
                     if ch == '.' {
                         is_float = true;
                         str.push(ch);
-                        peekable.next();
+                        self.eat(peekable);
                         continue;
                     }
                     if !Self::is_num(ch) {
                         break;
                     }
                     str.push(ch);
-                    peekable.next();
+                    self.eat(peekable);
                     continue;
                 }
                 if is_float {
-                    return Ok(TokenType::FLOAT);
+                    let token = self.build_token(TokenType::FLOAT, start, str);
+                    return Ok(token);
                 }
-                return Ok(TokenType::INT);
+                let token = self.build_token(TokenType::INT, start, str);
+                return Ok(token);
             }
             Err(TokenizerError {
                 message: "unknown ch".to_string(),
             })
         } else {
-            Ok(TokenType::EOF)
+            let start = self.curr_pos();
+            Ok( self.build_token(TokenType::EOF, start, "".to_string()))
         }
     }
     fn is_letter(ch: char) -> bool {
@@ -127,6 +166,11 @@ impl fmt::Display for Lexer<'_> {
 fn test_token_vec_gen() {
     let lexer = Lexer::new("+-* / fn fnabc\n34\r3.145");
     let tokens = lexer.tokens;
+    let mut tps: Vec<TokenType> = vec![];
+    for tk in tokens.iter() {
+        let tp = tk.token_type;
+        tps.push(tp)
+    }
     let expected = vec![
         TokenType::Operator(Operator::PLUS),
         TokenType::Operator(Operator::MINUS),
@@ -143,7 +187,7 @@ fn test_token_vec_gen() {
         TokenType::FLOAT,
         TokenType::EOF,
     ];
-    assert_eq!(tokens, expected);
+    assert_eq!(tps, expected);
 }
 #[derive(Debug, PartialEq, Eq)]
 pub struct TokenizerError {
