@@ -52,10 +52,12 @@ macro_rules! handle_calc {
                 let lefte = left.as_any_value_enum();
                 let righte = right.as_any_value_enum();
                 if lefte.is_int_value() && righte.is_int_value() {
-                    return Some(Box::new($ctx.builder.[<build_int_$op>](lefte.into_int_value(), righte.into_int_value(), "addtmp")));
+                    return Some(Box::new($ctx.builder.[<build_int_$op>](
+                        lefte.into_int_value(), righte.into_int_value(), "addtmp")));
                 }
                 else if lefte.is_float_value() && righte.is_float_value() {
-                    return Some(Box::new($ctx.builder.[<build_$opf>](lefte.into_float_value(), righte.into_float_value(), "addtmp")));
+                    return Some(Box::new($ctx.builder.[<build_$opf>](
+                        lefte.into_float_value(), righte.into_float_value(), "addtmp")));
                 }
                 else{
                     panic!("not implemented")
@@ -64,9 +66,6 @@ macro_rules! handle_calc {
                 panic!("not implemented")
             }
         }
-    };
-    () => {
-
     };
 }
 
@@ -116,7 +115,6 @@ impl Node for UnaryOpNode {
     }
 }
 
-
 #[test]
 fn test_ast() {
     use crate::parser::Parser;
@@ -132,4 +130,3 @@ fn test_ast() {
         panic!("not implemented")
     }
 }
-
