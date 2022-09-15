@@ -59,14 +59,45 @@ impl<'a> Lexer<'a> {
 
         return Lexer {
             input,
-            tokens: tokens,
+            tokens,
             offsset: 0,
             line: 1,
             column: 1,
         };
     }
-    // fn eat_token(expect_type: TokenType) -> Result<(), TokenizerError> {
-    // }
+
+    pub fn eat_token_skip_whitespace(
+        &mut self,
+        expect_type: TokenType,
+    ) -> Result<Token, TokenizerError> {
+        self.skip_whitespace();
+        return self.eat_token(expect_type);
+    }
+
+    fn skip_whitespace(&mut self) {
+        let mut re = self.eat_token(TokenType::WhiteSpace);
+        while re.is_ok() {
+            re = self.eat_token(TokenType::WhiteSpace);
+        }
+    }
+
+    pub fn eat_token(&mut self, expect_type: TokenType) -> Result<Token, TokenizerError> {
+        if self.tokens.len() > self.offsset {
+            if self.tokens[self.offsset].token_type == expect_type {
+                let token = self.tokens[self.offsset].clone();
+                self.offsset += 1;
+                return Ok(token);
+            } else {
+                return Err(TokenizerError {
+                    message: "wrong token type".to_string(),
+                });
+            }
+        } else {
+            return Err(TokenizerError {
+                message: "expect token but EOF".to_string(),
+            });
+        }
+    }
 
     fn curr_pos(&self) -> Pos {
         return Pos {
@@ -181,6 +212,31 @@ impl fmt::Display for Lexer<'_> {
         write!(f, "{:?} {:?}", self.input, self.tokens)
     }
 }
+
+#[test]
+fn test_eat() {
+    let mut lexer = Lexer::new("+ - * / fn fnabc\n34\r3.145");
+
+    let re = lexer.eat_token_skip_whitespace(TokenType::EOF);
+    assert!(re.is_err());
+    let expected = vec![
+        TokenType::Operator(Operator::PLUS),
+        TokenType::Operator(Operator::MINUS),
+        TokenType::Operator(Operator::MUL),
+        TokenType::Operator(Operator::DIV),
+        TokenType::Keyword(Keyword::FN),
+        TokenType::String,
+        TokenType::NewLine,
+        TokenType::INT,
+        TokenType::FLOAT,
+        TokenType::EOF,
+    ];
+    for tp in expected.iter() {
+        let re = lexer.eat_token_skip_whitespace(*tp);
+        assert!(re.is_ok());
+    }
+}
+
 #[test]
 fn test_token_vec_gen() {
     let lexer = Lexer::new("+-* / fn fnabc\n34\r3.145");
