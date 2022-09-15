@@ -99,7 +99,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn curr_pos(&self) -> Pos {
+    pub fn curr_pos(&self) -> Pos {
         return Pos {
             line: self.line,
             column: self.column,
