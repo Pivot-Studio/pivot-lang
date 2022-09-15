@@ -74,6 +74,25 @@ impl<'a> Lexer<'a> {
         return self.eat_token(expect_type);
     }
 
+    pub fn peek_skip_whitespace(&mut self) -> Result<Token, TokenizerError> {
+        let pos = self.curr_pos();
+        self.skip_whitespace();
+        let re = self.peek();
+        self.go_back(pos);
+        return re;
+    }
+
+    pub fn peek(&mut self) -> Result<Token, TokenizerError> {
+        if self.tokens.len() > self.offsset {
+            let token = self.tokens[self.offsset].clone();
+            return Ok(token);
+        } else {
+            return Err(TokenizerError {
+                message: "expect token but EOF".to_string(),
+            });
+        }
+    }
+
     fn skip_whitespace(&mut self) {
         let mut re = self.eat_token(TokenType::WhiteSpace);
         while re.is_ok() {
@@ -105,6 +124,12 @@ impl<'a> Lexer<'a> {
             column: self.column,
             offset: self.offsset,
         };
+    }
+
+    pub fn go_back(&mut self, pos: Pos) {
+        self.column = pos.column;
+        self.line = pos.line;
+        self.offsset = pos.offset;
     }
 
     fn build_token(&self, token_type: TokenType, start: Pos, value: String) -> Token {
