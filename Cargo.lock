@@ -146,6 +146,7 @@ version = "0.1.0"
 dependencies = [
  "inkwell",
  "lazy_static",
+ "llvm-sys",
  "paste",
 ]
 

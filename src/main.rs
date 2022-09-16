@@ -1,6 +1,7 @@
 mod ast;
 mod lexer;
 mod parser;
+mod utils;
 
 fn main() {
     let lexer = lexer::lexer::Lexer::new("+-*/");
