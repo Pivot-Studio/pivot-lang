@@ -11,14 +11,14 @@
 ```ebnf
 addexp = 
     | mulexp
-    | addexp "+" mulexp
-    | addexp "-" mulexp
+    | mulexp "+" addexp
+    | mulexp "-" addexp
     ;
 
 mulexp = 
     | unaryexp
-    | mulexp "*" unaryexp
-    | mulexp "/" unaryexp
+    | unaryexp "*" mulexp
+    | unaryexp "/" mulexp
     ;
 
 unaryexp =
