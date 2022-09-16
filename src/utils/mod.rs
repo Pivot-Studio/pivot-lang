@@ -22,6 +22,7 @@ pub unsafe fn add_symbol(name: &str, ptr: *const ()) {
 
 // test block below
 
+use add_symbol_macro::is_runtime;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::execution_engine::{ExecutionEngine, JitFunction};
@@ -77,18 +78,21 @@ impl<'ctx> CodeGen<'ctx> {
     }
 }
 
-fn demo(a: u64, b: u64, c: u64) -> u64 {
-    println!("Hello, world!");
-    a + b + c
+struct Demo {}
+
+#[is_runtime]
+impl Demo {
+    pub fn demo(a: u64, b: u64, c: u64) -> u64 {
+        println!("Hello, world!");
+        a + b + c
+    }
 }
 
 #[test]
 fn test_add_symbol() -> Result<(), Box<dyn Error>> {
     let context = Context::create();
     let module = context.create_module("sum");
-    unsafe {
-        add_symbol("demo", demo as *const ());
-    }
+    Demo::add_symbol();
     unsafe {
         LLVM_InitializeNativeTarget();
     }

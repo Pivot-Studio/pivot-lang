@@ -1,5 +1,5 @@
 use self::ctx::Ctx;
-use crate::lexer::{types::Operator, pos::Range};
+use crate::lexer::{pos::Range, types::Operator};
 use inkwell::values::AnyValue;
 use paste::item;
 
@@ -8,20 +8,20 @@ pub mod ctx;
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct NumNode {
     pub value: Num,
-    pub range: Range
+    pub range: Range,
 }
 
 pub struct UnaryOpNode {
     pub op: Operator,
     pub exp: Box<dyn Node>,
-    pub range: Range
+    pub range: Range,
 }
 
 pub struct BinOpNode {
     pub left: Box<dyn Node>,
     pub op: Operator,
     pub right: Box<dyn Node>,
-    pub range: Range
+    pub range: Range,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]

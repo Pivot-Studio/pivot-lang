@@ -11,7 +11,10 @@ impl Parser<'_> {
         if re.is_ok() {
             let token = re.unwrap();
             let value = Num::INT(token.value.parse::<i64>().unwrap());
-            let tr = NumNode { value, range: token.range };
+            let tr = NumNode {
+                value,
+                range: token.range,
+            };
             return Ok(Box::new(tr));
         }
         return Err(ParseError {
@@ -78,7 +81,12 @@ impl Parser<'_> {
                 let range = left.range().start.to(right.range().end);
                 match opv.token_type {
                     Operator(x) => {
-                        let tr = BinOpNode { left, op: x, right, range  };
+                        let tr = BinOpNode {
+                            left,
+                            op: x,
+                            right,
+                            range,
+                        };
                         return Ok(Box::new(tr));
                     }
                     _ => (),
@@ -118,7 +126,12 @@ impl Parser<'_> {
                 match opv.token_type {
                     Operator(x) => {
                         let range = left.range().start.to(right.range().end);
-                        let tr = BinOpNode { left, op: x, right, range};
+                        let tr = BinOpNode {
+                            left,
+                            op: x,
+                            right,
+                            range,
+                        };
                         return Ok(Box::new(tr));
                     }
                     _ => (),

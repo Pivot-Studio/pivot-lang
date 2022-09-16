@@ -11,9 +11,11 @@ pub struct Range {
     pub end: Pos,
 }
 
-
 impl Pos {
     pub fn to(&self, end: Pos) -> Range {
-        Range { start: *self, end: end }
+        Range {
+            start: *self,
+            end: end,
+        }
     }
 }
