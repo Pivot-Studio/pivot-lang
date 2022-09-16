@@ -1,5 +1,5 @@
 use self::ctx::Ctx;
-use crate::lexer::types::Operator;
+use crate::lexer::{types::Operator, pos::Range};
 use inkwell::values::AnyValue;
 use paste::item;
 
@@ -8,17 +8,20 @@ pub mod ctx;
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct NumNode {
     pub value: Num,
+    pub range: Range
 }
 
 pub struct UnaryOpNode {
     pub op: Operator,
     pub exp: Box<dyn Node>,
+    pub range: Range
 }
 
 pub struct BinOpNode {
     pub left: Box<dyn Node>,
     pub op: Operator,
     pub right: Box<dyn Node>,
+    pub range: Range
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -30,6 +33,7 @@ pub enum Num {
 pub trait Node {
     fn print(&self);
     fn emit<'b>(&'b mut self, ctx: &'b Ctx) -> Option<Box<dyn AnyValue + 'b>>;
+    fn range(&self) -> Range;
 }
 
 impl Node for NumNode {
@@ -42,6 +46,9 @@ impl Node for NumNode {
             return Some(b);
         }
         panic!("not implemented")
+    }
+    fn range(&self) -> Range {
+        self.range
     }
 }
 
@@ -86,6 +93,9 @@ impl Node for BinOpNode {
             Operator::DIV => handle_calc!(ctx, signed_div, float_div, left, right),
         }
     }
+    fn range(&self) -> Range {
+        self.range
+    }
 }
 
 impl Node for UnaryOpNode {
@@ -112,6 +122,9 @@ impl Node for UnaryOpNode {
             }
         }
         panic!("not implemented")
+    }
+    fn range(&self) -> Range {
+        self.range
     }
 }
 

@@ -11,7 +11,7 @@ impl Parser<'_> {
         if re.is_ok() {
             let token = re.unwrap();
             let value = Num::INT(token.value.parse::<i64>().unwrap());
-            let tr = NumNode { value };
+            let tr = NumNode { value, range: token.range };
             return Ok(Box::new(tr));
         }
         return Err(ParseError {
@@ -75,9 +75,10 @@ impl Parser<'_> {
                 }
                 let left = re.unwrap();
                 let right = right.unwrap();
+                let range = left.range().start.to(right.range().end);
                 match opv.token_type {
                     Operator(x) => {
-                        let tr = BinOpNode { left, op: x, right };
+                        let tr = BinOpNode { left, op: x, right, range  };
                         return Ok(Box::new(tr));
                     }
                     _ => (),
@@ -116,7 +117,8 @@ impl Parser<'_> {
                 let right = right.unwrap();
                 match opv.token_type {
                     Operator(x) => {
-                        let tr = BinOpNode { left, op: x, right };
+                        let range = left.range().start.to(right.range().end);
+                        let tr = BinOpNode { left, op: x, right, range};
                         return Ok(Box::new(tr));
                     }
                     _ => (),
@@ -154,9 +156,12 @@ impl Parser<'_> {
                 msg: e.message,
             });
         }
+        let e = exp.unwrap();
+        let range = re.unwrap().range.start.to(e.range().end);
         return Ok(Box::new(UnaryOpNode {
             op: crate::lexer::types::Operator::MINUS,
-            exp: exp.unwrap(),
+            exp: e,
+            range,
         }));
     }
 }
