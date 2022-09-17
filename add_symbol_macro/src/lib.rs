@@ -1,23 +1,135 @@
+use std::fmt::Error;
+
 use proc_macro::TokenStream;
-use syn::{self, parse, parse_macro_input, ImplItem, ItemImpl, DeriveInput, ImplItemMethod, Ident};
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{quote, ToTokens, TokenStreamExt, __private::Literal, format_ident};
+use syn::{
+    self,
+    parse::{self, Parse, ParseStream},
+    parse_macro_input, AttributeArgs, DeriveInput, Ident, ImplItem, ImplItemMethod, ItemFn,
+    ItemImpl, ItemStatic,
+};
 
-
+/// The `#[is_runtime]` attribute.  
+///
+/// used to tag a function as a runtime function  
+/// or tag an impl block to indicate that all the pub fn in impl block are runtime functions  
+///
+/// those functions will be added to the llvm symbol table  
+///
+/// while tagging a function, you can specify the name of the function in the llvm symbol table like this:  
+///
+/// ```
+/// #[is_runtime("myfunc")]
+/// pub fn myfunc1() {
+///    // ...
+/// }
+/// ```
+/// if the name is not specified, the name of the function will be used as the name in the llvm symbol table.  
+///
+/// while tagging an impl block, the name of the function in the llvm symbol table will be like {block_type_name}__{fn_name}.  
+///
+/// ```
+/// #[is_runtime]
+/// impl MyStruct {
+///    pub fn myfunc1() {
+///       // ...
+///    }
+/// }
+/// ```
+/// the function myfunc1 will be added to the llvm symbol table with the name MyStruct__myfunc1
 #[proc_macro_attribute]
 pub fn is_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
     // Construct a representation of Rust code as a syntax tree
     // that we can manipulate
-    let mut input = parse_macro_input!(item as ItemImpl);
+
+    let input = parse_macro_input!(item as MacroInput);
+    let arg = parse_macro_input!(attr as AttrInput);
 
     // Build the trait implementation
-    impl_macro(& input)
+    match input.input {
+        AcceptInput::ItemFn(input) => {
+            let mut str1;
+            if let AcceptAttrInput::None = arg.input {
+                str1 = input.sig.ident.to_string();
+            } else if let AcceptAttrInput::Literal(arg) = arg.input {
+                str1 = arg.to_string();
+                str1.pop();
+                str1 = str1[1..].to_string();
+            } else {
+                panic!("error");
+            }
+
+            let initfnid = format_ident!("__add_symbol_{}", str1);
+            let fnid = input.sig.ident.clone();
+
+            return quote!(
+                #input
+                #[ctor::ctor]
+                fn #initfnid() {
+                    let ptr = #fnid as * const ();
+                    let name = #str1;
+                    unsafe{
+                        crate::utils::add_symbol(name, ptr);
+                    }
+                }
+            )
+            .into();
+        }
+        AcceptInput::ItemImpl(input) => impl_macro_impl(&input),
+    }
 }
 
+struct AttrInput {
+    input: AcceptAttrInput,
+}
 
+enum AcceptAttrInput {
+    Literal(Literal),
+    None,
+}
 
+impl Parse for AttrInput {
+    fn parse(input: ParseStream) -> Result<Self, syn::Error> {
+        let f = input.parse::<Literal>();
+        if let Ok(f) = f {
+            return Ok(AttrInput {
+                input: AcceptAttrInput::Literal(f),
+            });
+        }
+        return Ok(AttrInput {
+            input: AcceptAttrInput::None,
+        });
+    }
+}
 
+struct MacroInput {
+    input: AcceptInput,
+}
 
-fn impl_macro<'a>(ast: & ItemImpl) -> TokenStream {
+enum AcceptInput {
+    ItemFn(ItemFn),
+    ItemImpl(ItemImpl),
+}
+
+impl Parse for MacroInput {
+    fn parse(input: ParseStream) -> Result<Self, syn::Error> {
+        let f = input.parse::<ItemFn>();
+        if let Ok(f) = f {
+            return Ok(MacroInput {
+                input: AcceptInput::ItemFn(f),
+            });
+        }
+        let imp = input.parse::<ItemImpl>();
+        if let Ok(imp) = imp {
+            return Ok(MacroInput {
+                input: AcceptInput::ItemImpl(imp),
+            });
+        }
+        return Err(imp.err().unwrap());
+    }
+}
+
+fn impl_macro_impl<'a>(ast: &ItemImpl) -> TokenStream {
     let mut fnids = Vec::<Ident>::new();
     let mut fns = Vec::<String>::new();
     let ident = match &*ast.self_ty {
@@ -26,30 +138,30 @@ fn impl_macro<'a>(ast: & ItemImpl) -> TokenStream {
     };
 
     for i in ast.items.iter() {
-        if let ImplItem::Method(m) = i  {
+        if let ImplItem::Method(m) = i {
             if let syn::Visibility::Public(_) = m.vis {
                 let id = m.sig.ident.clone();
                 let str = id.to_string();
-                fns.push(str);
+                let tp = ident.to_string();
+                let fname = format!("{}__{}", tp, str);
+                fns.push(fname);
                 fnids.push(id);
             }
         }
     }
+    let initfnid = format_ident!("__add_symbol_impl_{}", ident);
     let gen = quote! {
         #ast
-        impl #ident {
-            pub fn add_symbol() {
-                #(
-                    let ptr = Self::#fnids as * const ();
-                    let name = #fns;
-                    unsafe{
-                        crate::utils::add_symbol(name, ptr);
-                    }
-                )*
-            }
+        #[ctor::ctor]
+        fn #initfnid() {
+            #(
+                let ptr = #ident::#fnids as * const ();
+                let name = #fns;
+                unsafe{
+                    crate::utils::add_symbol(name, ptr);
+                }
+            )*
         }
     };
     return gen.into();
 }
-
-

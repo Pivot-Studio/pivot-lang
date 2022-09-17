@@ -88,11 +88,17 @@ impl Demo {
     }
 }
 
+#[is_runtime("demo")]
+pub fn demo(a: u64, b: u64, c: u64) -> u64 {
+    println!("Hello, world!");
+    a + b + c
+}
+
 #[test]
 fn test_add_symbol() -> Result<(), Box<dyn Error>> {
     let context = Context::create();
     let module = context.create_module("sum");
-    Demo::add_symbol();
+
     unsafe {
         LLVM_InitializeNativeTarget();
     }
