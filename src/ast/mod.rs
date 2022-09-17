@@ -1,27 +1,28 @@
 use self::ctx::Ctx;
-use crate::lexer::{pos::Range, types::Operator};
+use crate::lexer::{
+    pos::{Range, RangeTrait},
+    types::Operator,
+};
 use inkwell::values::AnyValue;
 use paste::item;
+use range_marco::range;
 
 pub mod ctx;
-
+#[range]
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct NumNode {
     pub value: Num,
-    pub range: Range,
 }
-
+#[range]
 pub struct UnaryOpNode {
     pub op: Operator,
     pub exp: Box<dyn Node>,
-    pub range: Range,
 }
-
+#[range]
 pub struct BinOpNode {
     pub left: Box<dyn Node>,
     pub op: Operator,
     pub right: Box<dyn Node>,
-    pub range: Range,
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -30,10 +31,9 @@ pub enum Num {
     FLOAT(f64),
 }
 
-pub trait Node {
+pub trait Node: RangeTrait {
     fn print(&self);
     fn emit<'b>(&'b mut self, ctx: &'b Ctx) -> Option<Box<dyn AnyValue + 'b>>;
-    fn range(&self) -> Range;
 }
 
 impl Node for NumNode {
@@ -46,9 +46,6 @@ impl Node for NumNode {
             return Some(b);
         }
         panic!("not implemented")
-    }
-    fn range(&self) -> Range {
-        self.range
     }
 }
 
@@ -93,9 +90,6 @@ impl Node for BinOpNode {
             Operator::DIV => handle_calc!(ctx, signed_div, float_div, left, right),
         }
     }
-    fn range(&self) -> Range {
-        self.range
-    }
 }
 
 impl Node for UnaryOpNode {
@@ -122,9 +116,6 @@ impl Node for UnaryOpNode {
             }
         }
         panic!("not implemented")
-    }
-    fn range(&self) -> Range {
-        self.range
     }
 }
 
