@@ -1,12 +1,17 @@
 use std::fmt::Error;
 
+use inkwell::{context::Context, types::BasicMetadataTypeEnum};
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt, __private::Literal, format_ident};
+use quote::{
+    quote, ToTokens, TokenStreamExt,
+    __private::{Literal, Span},
+    format_ident,
+};
 use syn::{
     self,
     parse::{self, Parse, ParseStream},
-    parse_macro_input, AttributeArgs, DeriveInput, Ident, ImplItem, ImplItemMethod, ItemFn,
-    ItemImpl, ItemStatic,
+    parse_macro_input, AttributeArgs, DeriveInput, FnArg, Ident, ImplItem, ImplItemMethod, ItemFn,
+    ItemImpl, ItemStatic, Path, Type, TypePath,
 };
 
 /// The `#[is_runtime]` attribute.  
@@ -26,17 +31,19 @@ use syn::{
 /// ```
 /// if the name is not specified, the name of the function will be used as the name in the llvm symbol table.  
 ///
-/// while tagging an impl block, the name of the function in the llvm symbol table will be like {block_type_name}__{fn_name}.  
+/// while tagging an impl block, the name of the function in the llvm symbol table will be like {block_type_name}__{fn_name}.   
+///
+/// you can override the name of the block_type_name just like the function sample above.
 ///
 /// ```
-/// #[is_runtime]
+/// #[is_runtime("struct")]
 /// impl MyStruct {
 ///    pub fn myfunc1() {
 ///       // ...
 ///    }
 /// }
 /// ```
-/// the function myfunc1 will be added to the llvm symbol table with the name MyStruct__myfunc1
+/// the function myfunc1 will be added to the llvm symbol table with the name struct__myfunc1
 #[proc_macro_attribute]
 pub fn is_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
     // Construct a representation of Rust code as a syntax tree
@@ -56,7 +63,7 @@ pub fn is_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
                 str1.pop();
                 str1 = str1[1..].to_string();
             } else {
-                panic!("error");
+                panic!("failed to get annotated func/struct name");
             }
 
             let initfnid = format_ident!("__add_symbol_{}", str1);
@@ -75,7 +82,7 @@ pub fn is_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
             )
             .into();
         }
-        AcceptInput::ItemImpl(input) => impl_macro_impl(&input),
+        AcceptInput::ItemImpl(input) => impl_macro_impl(&arg.input, &input),
     }
 }
 
@@ -83,6 +90,7 @@ struct AttrInput {
     input: AcceptAttrInput,
 }
 
+#[derive(Debug, Clone)]
 enum AcceptAttrInput {
     Literal(Literal),
     None,
@@ -129,27 +137,35 @@ impl Parse for MacroInput {
     }
 }
 
-fn impl_macro_impl<'a>(ast: &ItemImpl) -> TokenStream {
+fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
     let mut fnids = Vec::<Ident>::new();
     let mut fns = Vec::<String>::new();
     let ident = match &*ast.self_ty {
         syn::Type::Path(tp) => tp.path.get_ident().unwrap(),
         _ => panic!("not supported tokens"),
     };
-
+    let mut tp;
+    if let AcceptAttrInput::None = arg {
+        tp = ident.to_string();
+    } else if let AcceptAttrInput::Literal(arg) = arg {
+        tp = arg.to_string();
+        tp.pop();
+        tp = tp[1..].to_string();
+    } else {
+        panic!("failed to get annotated func/struct name");
+    }
     for i in ast.items.iter() {
         if let ImplItem::Method(m) = i {
             if let syn::Visibility::Public(_) = m.vis {
                 let id = m.sig.ident.clone();
                 let str = id.to_string();
-                let tp = ident.to_string();
                 let fname = format!("{}__{}", tp, str);
                 fns.push(fname);
                 fnids.push(id);
             }
         }
     }
-    let initfnid = format_ident!("__add_symbol_impl_{}", ident);
+    let initfnid = format_ident!("__add_symbol_impl_{}_{}", tp, ident);
     let gen = quote! {
         #ast
         #[ctor::ctor]
