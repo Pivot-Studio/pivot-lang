@@ -27,10 +27,16 @@ unaryexp =
     ;
 
 primaryexp =
+    | float
     | number
     | "(" addexp ")"
+    | identifier
     ;
 
+float = number "." number ;
+
 number = [0-9]+ ;
+
+identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
 
 ```
