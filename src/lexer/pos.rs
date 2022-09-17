@@ -10,7 +10,9 @@ pub struct Range {
     pub start: Pos,
     pub end: Pos,
 }
-
+pub trait RangeTrait {
+    fn range(&self) -> Range;
+}
 impl Pos {
     pub fn to(&self, end: Pos) -> Range {
         Range {

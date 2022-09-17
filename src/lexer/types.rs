@@ -1,5 +1,5 @@
-use super::pos::Range;
 use lazy_static::lazy_static;
+use range_marco::range;
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -15,12 +15,11 @@ pub enum TokenType {
     NewLine,            // '\n'
     EOF,                //EOF
 }
-
+#[range]
 #[derive(Debug, PartialEq, Clone)]
 pub struct Token {
     pub token_type: TokenType,
     pub value: String,
-    pub range: Range,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

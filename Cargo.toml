@@ -11,4 +11,5 @@ lazy_static = "1.4.0"
 paste = "1.0"
 llvm-sys = "140"
 add_symbol_macro = { path = "./add_symbol_macro" }
+range_marco = { path = "./range_marco" }
 ctor = "0.1.23"
