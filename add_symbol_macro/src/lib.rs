@@ -14,14 +14,14 @@ use syn::{
     ItemImpl, ItemStatic, Path, Type, TypePath,
 };
 
-/// The `#[is_runtime]` attribute.  
+/// The `#[is_runtime]` attribute.
 ///
-/// used to tag a function as a runtime function  
-/// or tag an impl block to indicate that all the pub fn in impl block are runtime functions  
+/// used to tag a function as a runtime function
+/// or tag an impl block to indicate that all the pub fn in impl block are runtime functions
 ///
-/// those functions will be added to the llvm symbol table  
+/// those functions will be added to the llvm symbol table
 ///
-/// while tagging a function, you can specify the name of the function in the llvm symbol table like this:  
+/// while tagging a function, you can specify the name of the function in the llvm symbol table like this:
 ///
 /// ```
 /// #[is_runtime("myfunc")]
@@ -29,9 +29,9 @@ use syn::{
 ///    // ...
 /// }
 /// ```
-/// if the name is not specified, the name of the function will be used as the name in the llvm symbol table.  
+/// if the name is not specified, the name of the function will be used as the name in the llvm symbol table.
 ///
-/// while tagging an impl block, the name of the function in the llvm symbol table will be like {block_type_name}__{fn_name}.   
+/// while tagging an impl block, the name of the function in the llvm symbol table will be like {block_type_name}__{fn_name}.
 ///
 /// you can override the name of the block_type_name just like the function sample above.
 ///
