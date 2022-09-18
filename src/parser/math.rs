@@ -2,7 +2,7 @@ use super::{ParseError, Parser};
 use crate::parser::TokenType::Operator;
 use crate::{
     ast::{BinOpNode, Node, Num, NumNode, UnaryOpNode},
-    lexer::types::{Token, TokenType},
+    lexer::types::TokenType,
 };
 
 impl Parser<'_> {

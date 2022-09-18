@@ -5,7 +5,6 @@ use lazy_static::lazy_static;
 
 use super::pos::Pos;
 use super::pos::Range;
-use super::types::Keyword;
 use super::types::Operator;
 use super::types::Token;
 use super::types::TokenType;
@@ -240,6 +239,7 @@ impl fmt::Display for Lexer<'_> {
 
 #[test]
 fn test_eat() {
+    use super::types::Keyword;
     let mut lexer = Lexer::new("+ - * / fn fnabc\n34\r3.145");
 
     let re = lexer.eat_token_skip_whitespace(TokenType::EOF);
@@ -264,6 +264,7 @@ fn test_eat() {
 
 #[test]
 fn test_token_vec_gen() {
+    use super::types::Keyword;
     let lexer = Lexer::new("+-* / fn fnabc\n34\r3.145");
     let tokens = lexer.tokens;
     let mut tps: Vec<TokenType> = vec![];

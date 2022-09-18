@@ -1,19 +1,18 @@
-use add_symbol_macro::is_runtime;
+use add_symbol::is_runtime;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::execution_engine::{ExecutionEngine, JitFunction};
 use inkwell::module::Module;
-use inkwell::values::FunctionValue;
 use inkwell::OptimizationLevel;
-use llvm_sys::{support, LLVMType, LLVMValue};
 use llvm_sys::target::LLVM_InitializeNativeTarget;
+use llvm_sys::{support, LLVMType, LLVMValue};
 use std::error::Error;
 
 /// Convenience type alias for the `sum` function.
 ///
 /// Calling this is innately `unsafe` because there's no guarantee it doesn't
 /// do `unsafe` operations internally.
-type demoFunc = unsafe extern "C" fn(u64, u64, u64) -> u64;
+type DemoFunc = unsafe extern "C" fn(u64, u64, u64) -> u64;
 
 struct CodeGen<'ctx> {
     context: &'ctx Context,
@@ -23,7 +22,7 @@ struct CodeGen<'ctx> {
 }
 
 impl<'ctx> CodeGen<'ctx> {
-    fn jit_compile_fn(&self, fnname : &str) -> Option<JitFunction<demoFunc>> {
+    fn jit_compile_fn(&self, fnname: &str) -> Option<JitFunction<DemoFunc>> {
         let i64_type = self.context.i64_type();
         let fn_type = i64_type.fn_type(&[i64_type.into(), i64_type.into(), i64_type.into()], false);
         let function = self.module.add_function("sum", fn_type, None);
@@ -86,21 +85,21 @@ fn test_add_symbol() -> Result<(), Box<dyn Error>> {
         builder: context.create_builder(),
         execution_engine,
     };
-    let names = vec!["demo", "test_demo","test_demo1"];
+    let names = vec!["demo", "test_demo", "test_demo1"];
 
     for v in names {
         let demo = codegen
-        .jit_compile_fn(v)
-        .ok_or("Unable to JIT compile `sum`")?;
+            .jit_compile_fn(v)
+            .ok_or("Unable to JIT compile `sum`")?;
 
-    let x = 1u64;
-    let y = 2u64;
-    let z = 3u64;
+        let x = 1u64;
+        let y = 2u64;
+        let z = 3u64;
 
-    unsafe {
-        println!("{} + {} + {} = {}", x, y, z, demo.call(x, y, z));
-        assert_eq!(demo.call(x, y, z), x + y + z);
-    }   
+        unsafe {
+            println!("{} + {} + {} = {}", x, y, z, demo.call(x, y, z));
+            assert_eq!(demo.call(x, y, z), x + y + z);
+        }
     }
     return Ok(());
 }

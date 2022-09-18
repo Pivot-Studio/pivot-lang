@@ -2,7 +2,7 @@ use crate::ast::Node;
 use crate::lexer::pos::Pos;
 
 use super::lexer::lexer::Lexer;
-use super::lexer::types::{Token, TokenType};
+use super::lexer::types::TokenType;
 
 pub mod math;
 

@@ -1,0 +1,15 @@
+[package]
+name = "add_symbol"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ctor = "0.1.23"
+llvm-sys = "140"
+[dependencies.add_symbol_macro]
+path = "src/add_symbol_macro"
+
+[workspace]
+members = ["src/add_symbol_macro"]
