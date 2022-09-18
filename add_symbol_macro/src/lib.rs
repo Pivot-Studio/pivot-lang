@@ -1,6 +1,5 @@
 use std::fmt::Error;
 
-use inkwell::{context::Context, types::BasicMetadataTypeEnum};
 use proc_macro::TokenStream;
 use quote::{
     quote, ToTokens, TokenStreamExt,

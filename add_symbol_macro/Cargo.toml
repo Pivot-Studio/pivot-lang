@@ -9,7 +9,6 @@ edition = "2021"
 syn = {version = "1.0",features = ["full"]}
 quote = "1.0"
 llvm-sys = "140"
-inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm14-0"] }
 
 
 [lib]

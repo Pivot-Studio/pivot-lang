@@ -1,0 +1,42 @@
+kind: pipeline
+type: docker
+name: default
+trigger:
+  event:
+  - push
+  - pull_request
+  - tag
+  - promote
+  - rollback
+  - custom
+steps:
+  - name: code cov
+    image: registry.cn-hangzhou.aliyuncs.com/pivotstudio/rust-pl:latest
+    privileged: true
+    environment:
+      CODECOV_TOKEN:
+        from_secret: UPLOAD_TOKEN
+    when:
+      event:
+        - push
+      branch: 
+        - master
+    commands:
+      - mkdir ./.cargo/
+      - |
+        echo '[source.crates-io]
+        replace-with = "tuna"
+        [source.tuna]
+        registry = "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git"
+        [net]
+        retry = 2
+        git-fetch-with-cli = true' > ./.cargo/config.toml
+      - cargo test --all
+      - ls target/debug/deps
+      - bash -c 'for file in target/debug/deps/pivot_lang-*; do [ -x "$${file}" ] || continue; mkdir -p "target/cov/$(basename $file)"; /kcov-build/usr/local/bin/kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done'
+      - ls 
+      - ls target/cov/
+      - wget https://codecov.io/bash
+      - chmod +x bash
+      - /bin/bash "bash"
+      - echo "Uploaded code coverage"
