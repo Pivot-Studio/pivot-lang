@@ -1,8 +1,5 @@
 use self::ctx::Ctx;
-use crate::lexer::{
-    pos::{Range, RangeTrait},
-    types::Operator,
-};
+use crate::lexer::{pos::RangeTrait, types::Operator};
 use inkwell::values::AnyValue;
 use paste::item;
 use range_marco::range;
