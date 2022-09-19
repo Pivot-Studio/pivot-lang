@@ -4,8 +4,6 @@ use inkwell::values::AnyValue;
 use paste::item;
 use range_marco::range;
 
-
-
 pub mod ctx;
 #[range]
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -118,3 +116,18 @@ impl Node for UnaryOpNode {
     }
 }
 
+#[test]
+fn test_ast() {
+    use crate::parser::Parser;
+    use inkwell::context::Context;
+    let mut parser = Parser::new("4+11*(8--2)");
+    let mut node = parser.parse().unwrap();
+    let tp = &Context::create();
+    let context = ctx::Ctx::new(tp);
+    let re = node.emit(&context);
+    if let Some(re) = re {
+        assert!(re.print_to_string().to_string() == "i64 114")
+    } else {
+        panic!("not implemented")
+    }
+}
