@@ -17,8 +17,12 @@ steps:
       CODECOV_TOKEN:
         from_secret: UPLOAD_TOKEN
     when:
-      event:
-        - push
+      event: 
+        include:
+          - push
+          - pull_request
+          - custom
+          - tag
     commands:
       - mkdir ./.cargo/
       - |
