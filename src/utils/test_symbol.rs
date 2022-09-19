@@ -69,37 +69,3 @@ impl Demo {
 pub fn demo(a: u64, b: u64, c: u64) -> u64 {
     a + b + c
 }
-
-#[test]
-fn test_add_symbol() -> Result<(), Box<dyn Error>> {
-    let context = Context::create();
-    let module = context.create_module("sum");
-
-    unsafe {
-        LLVM_InitializeNativeTarget();
-    }
-    let execution_engine = module.create_jit_execution_engine(OptimizationLevel::None)?;
-    let codegen = CodeGen {
-        context: &context,
-        module,
-        builder: context.create_builder(),
-        execution_engine,
-    };
-    let names = vec!["demo", "test_demo", "test_demo1"];
-
-    for v in names {
-        let demo = codegen
-            .jit_compile_fn(v)
-            .ok_or("Unable to JIT compile `sum`")?;
-
-        let x = 1u64;
-        let y = 2u64;
-        let z = 3u64;
-
-        unsafe {
-            println!("{} + {} + {} = {}", x, y, z, demo.call(x, y, z));
-            assert_eq!(demo.call(x, y, z), x + y + z);
-        }
-    }
-    return Ok(());
-}
