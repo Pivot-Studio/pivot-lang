@@ -18,7 +18,7 @@ type Span<'a> = LocatedSpan<&'a str>;
 use nom::character::complete::char;
 
 use crate::{
-    ast::{Node, Num, NumNode, UnaryOpNode},
+    ast::{BinOpNode, Node, Num, NumNode, UnaryOpNode},
     lexer::{
         pos::{Pos, Range},
         types::Operator,
@@ -35,27 +35,75 @@ impl<'a> Parser<'a> {
         Parser { input: sp }
     }
 
+    pub fn parse(&mut self) -> IResult<Span, Box<dyn Node>> {
+        Self::add_exp(self.input)
+    }
+
     pub fn number(input: Span) -> IResult<Span, Box<dyn Node>> {
         let (input, _) = space0(input)?;
         let (re, node) = alt((float, decimal))(input)?;
         let range = Range::new(input, re);
-        let num = node.fragment().parse::<f64>();
+        let num = node.fragment().parse::<i64>();
         let value;
         if let Err(_) = num {
-            value = Num::INT(input.fragment().parse::<i64>().unwrap());
+            value = Num::FLOAT(input.fragment().parse::<f64>().unwrap());
         } else {
-            value = Num::FLOAT(num.unwrap());
+            value = Num::INT(num.unwrap());
         }
         let node = NumNode { value, range };
         Ok((re, Box::new(node)))
     }
 
     pub fn add_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
-        todo!()
+        delimited(
+            space0,
+            alt((
+                map_res(
+                    tuple((Self::mul_exp, alt((tag("+"), tag("-"))), Self::add_exp)),
+                    |(left, op, right)| {
+                        let range = left.range().start.to(right.range().end);
+                        Ok::<Box<dyn Node>, Error>(Box::new(BinOpNode {
+                            op: match op.fragment() {
+                                &"+" => Operator::PLUS,
+                                &"-" => Operator::MINUS,
+                                _ => panic!("unreachable"),
+                            },
+                            left,
+                            right,
+                            range,
+                        }) as Box<dyn Node>)
+                    },
+                ),
+                Self::mul_exp,
+            )),
+            space0,
+        )(input)
     }
 
     pub fn mul_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
-        todo!()
+        delimited(
+            space0,
+            alt((
+                map_res(
+                    tuple((Self::unary_exp, alt((tag("*"), tag("/"))), Self::mul_exp)),
+                    |(left, op, right)| {
+                        let range = left.range().start.to(right.range().end);
+                        Ok::<Box<dyn Node>, Error>(Box::new(BinOpNode {
+                            op: match op.fragment() {
+                                &"*" => Operator::MUL,
+                                &"/" => Operator::DIV,
+                                _ => panic!("unreachable"),
+                            },
+                            left,
+                            right,
+                            range,
+                        }) as Box<dyn Node>)
+                    },
+                ),
+                Self::unary_exp,
+            )),
+            space0,
+        )(input)
     }
 
     pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {

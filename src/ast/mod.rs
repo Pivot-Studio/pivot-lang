@@ -131,3 +131,19 @@ fn test_ast() {
         panic!("not implemented")
     }
 }
+
+#[test]
+fn test_nom() {
+    use crate::nomparser::Parser;
+    use inkwell::context::Context;
+    let mut parser = Parser::new("4+11*(8--2)");
+    let (_, mut node) = parser.parse().unwrap();
+    let tp = &Context::create();
+    let context = ctx::Ctx::new(tp);
+    let re = node.emit(&context);
+    if let Some(re) = re {
+        assert!(re.print_to_string().to_string() == "i64 114")
+    } else {
+        panic!("not implemented")
+    }
+}
