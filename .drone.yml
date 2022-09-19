@@ -19,8 +19,6 @@ steps:
     when:
       event:
         - push
-      branch: 
-        - master
     commands:
       - mkdir ./.cargo/
       - |
