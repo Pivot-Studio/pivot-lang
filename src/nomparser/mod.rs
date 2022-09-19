@@ -41,15 +41,15 @@ impl<'a> Parser<'a> {
 
     pub fn number(input: Span) -> IResult<Span, Box<dyn Node>> {
         let (input, _) = space0(input)?;
-        let (re, node) = alt((float, decimal))(input)?;
+        let (re, value) = alt((
+            map_res(float, |out| {
+                Ok::<Num, Error>(Num::FLOAT(out.fragment().parse::<f64>().unwrap()))
+            }),
+            map_res(decimal, |out| {
+                Ok::<Num, Error>(Num::INT(out.fragment().parse::<i64>().unwrap()))
+            }),
+        ))(input)?;
         let range = Range::new(input, re);
-        let num = node.fragment().parse::<i64>();
-        let value;
-        if let Err(_) = num {
-            value = Num::FLOAT(input.fragment().parse::<f64>().unwrap());
-        } else {
-            value = Num::INT(num.unwrap());
-        }
         let node = NumNode { value, range };
         Ok((re, Box::new(node)))
     }
@@ -59,13 +59,13 @@ impl<'a> Parser<'a> {
             space0,
             alt((
                 map_res(
-                    tuple((Self::mul_exp, alt((tag("+"), tag("-"))), Self::add_exp)),
+                    tuple((Self::mul_exp, one_of("+-"), Self::add_exp)),
                     |(left, op, right)| {
                         let range = left.range().start.to(right.range().end);
                         Ok::<Box<dyn Node>, Error>(Box::new(BinOpNode {
-                            op: match op.fragment() {
-                                &"+" => Operator::PLUS,
-                                &"-" => Operator::MINUS,
+                            op: match op {
+                                '+' => Operator::PLUS,
+                                '-' => Operator::MINUS,
                                 _ => panic!("unreachable"),
                             },
                             left,
@@ -85,13 +85,13 @@ impl<'a> Parser<'a> {
             space0,
             alt((
                 map_res(
-                    tuple((Self::unary_exp, alt((tag("*"), tag("/"))), Self::mul_exp)),
+                    tuple((Self::unary_exp, one_of("*/"), Self::mul_exp)),
                     |(left, op, right)| {
                         let range = left.range().start.to(right.range().end);
                         Ok::<Box<dyn Node>, Error>(Box::new(BinOpNode {
-                            op: match op.fragment() {
-                                &"*" => Operator::MUL,
-                                &"/" => Operator::DIV,
+                            op: match op {
+                                '*' => Operator::MUL,
+                                '/' => Operator::DIV,
                                 _ => panic!("unreachable"),
                             },
                             left,
