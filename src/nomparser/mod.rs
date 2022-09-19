@@ -1,13 +1,16 @@
+use std::fmt::Error;
+
 use nom::{
     branch::alt,
-    character::complete::{one_of, space0},
+    bytes::complete::tag,
+    character::complete::{multispace0, one_of, space0},
     combinator::{map_res, opt, recognize},
     multi::{many0, many1},
     number::{
         self,
         complete::{be_i64, double, i64},
     },
-    sequence::{preceded, terminated, tuple},
+    sequence::{delimited, preceded, terminated, tuple},
     IResult,
 };
 use nom_locate::{position, LocatedSpan};
@@ -15,8 +18,11 @@ type Span<'a> = LocatedSpan<&'a str>;
 use nom::character::complete::char;
 
 use crate::{
-    ast::{Node, Num, NumNode},
-    lexer::pos::{Pos, Range},
+    ast::{Node, Num, NumNode, UnaryOpNode},
+    lexer::{
+        pos::{Pos, Range},
+        types::Operator,
+    },
 };
 
 pub struct Parser<'a> {
@@ -30,7 +36,7 @@ impl<'a> Parser<'a> {
     }
 
     pub fn number(input: Span) -> IResult<Span, Box<dyn Node>> {
-        space0(input)?;
+        let (input, _) = space0(input)?;
         let (re, node) = alt((float, decimal))(input)?;
         let range = Range::new(input, re);
         let num = node.fragment().parse::<f64>();
@@ -42,6 +48,40 @@ impl<'a> Parser<'a> {
         }
         let node = NumNode { value, range };
         Ok((re, Box::new(node)))
+    }
+
+    pub fn add_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+        todo!()
+    }
+
+    pub fn mul_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+        todo!()
+    }
+
+    pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+        delimited(
+            space0,
+            alt((
+                Self::primary_exp,
+                map_res(preceded(tag("-"), Self::primary_exp), |out| {
+                    let range = out.range();
+                    Ok::<Box<dyn Node>, Error>(Box::new(UnaryOpNode {
+                        op: Operator::MINUS,
+                        exp: out,
+                        range,
+                    }) as Box<dyn Node>)
+                }),
+            )),
+            space0,
+        )(input)
+    }
+
+    pub fn primary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+        delimited(
+            space0,
+            alt((Self::number, delimited(tag("("), Self::add_exp, tag(")")))),
+            space0,
+        )(input)
     }
 }
 
