@@ -1,5 +1,6 @@
 mod ast;
 mod lexer;
+mod nomparser;
 mod parser;
 mod utils;
 

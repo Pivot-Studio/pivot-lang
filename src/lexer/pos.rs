@@ -1,3 +1,6 @@
+use nom_locate::{position, LocatedSpan};
+type Span<'a> = LocatedSpan<&'a str>;
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Pos {
     pub line: usize,   // 1based
@@ -18,6 +21,23 @@ impl Pos {
         Range {
             start: *self,
             end: end,
+        }
+    }
+}
+
+impl Range {
+    pub fn new(start: Span, end: Span) -> Range {
+        Range {
+            start: Pos {
+                line: start.location_line() as usize,
+                column: start.get_column(),
+                offset: start.location_offset(),
+            },
+            end: Pos {
+                line: end.location_line() as usize,
+                column: end.get_column(),
+                offset: end.location_offset(),
+            },
         }
     }
 }
