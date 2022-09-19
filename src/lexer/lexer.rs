@@ -237,59 +237,6 @@ impl fmt::Display for Lexer<'_> {
     }
 }
 
-#[test]
-fn test_eat() {
-    use super::types::Keyword;
-    let mut lexer = Lexer::new("+ - * / fn fnabc\n34\r3.145");
-
-    let re = lexer.eat_token_skip_whitespace(TokenType::EOF);
-    assert!(re.is_err());
-    let expected = vec![
-        TokenType::Operator(Operator::PLUS),
-        TokenType::Operator(Operator::MINUS),
-        TokenType::Operator(Operator::MUL),
-        TokenType::Operator(Operator::DIV),
-        TokenType::Keyword(Keyword::FN),
-        TokenType::String,
-        TokenType::NewLine,
-        TokenType::INT,
-        TokenType::FLOAT,
-        TokenType::EOF,
-    ];
-    for tp in expected.iter() {
-        let re = lexer.eat_token_skip_whitespace(*tp);
-        assert!(re.is_ok());
-    }
-}
-
-#[test]
-fn test_token_vec_gen() {
-    use super::types::Keyword;
-    let lexer = Lexer::new("+-* / fn fnabc\n34\r3.145");
-    let tokens = lexer.tokens;
-    let mut tps: Vec<TokenType> = vec![];
-    for tk in tokens.iter() {
-        let tp = tk.token_type;
-        tps.push(tp)
-    }
-    let expected = vec![
-        TokenType::Operator(Operator::PLUS),
-        TokenType::Operator(Operator::MINUS),
-        TokenType::Operator(Operator::MUL),
-        TokenType::WhiteSpace,
-        TokenType::Operator(Operator::DIV),
-        TokenType::WhiteSpace,
-        TokenType::Keyword(Keyword::FN),
-        TokenType::WhiteSpace,
-        TokenType::String,
-        TokenType::NewLine,
-        TokenType::INT,
-        TokenType::WhiteSpace,
-        TokenType::FLOAT,
-        TokenType::EOF,
-    ];
-    assert_eq!(tps, expected);
-}
 #[derive(Debug, PartialEq, Eq)]
 pub struct TokenizerError {
     pub message: String,
