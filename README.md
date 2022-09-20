@@ -15,15 +15,15 @@
 
 ```ebnf
 addexp = 
-    | mulexp
     | mulexp "+" addexp
     | mulexp "-" addexp
+    | mulexp
     ;
 
 mulexp = 
-    | unaryexp
     | unaryexp "*" mulexp
     | unaryexp "/" mulexp
+    | unaryexp
     ;
 
 unaryexp =
@@ -32,15 +32,32 @@ unaryexp =
     ;
 
 primaryexp =
-    | float
     | number
     | "(" addexp ")"
     | identifier
     ;
 
-float = number "." number ;
+assignment = identifier "=" addexp ;
 
-number = [0-9]+ ;
+newvariable = "let" identifier "=" addexp ;
+
+ifstatement = "if" addexp "{" statement* "}" ;
+
+whilestatement = "while" addexp "{" statement* "}" ;
+
+newline = "\n" | "\r\n" ;
+
+statement = 
+    | assignment newline
+    | newvariable newline
+    | ifstatement
+    | whilestatement
+    | newline
+    ;
+
+program = statement* EOF ;
+
+number = [0-9]+ | number "." number ;
 
 identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
 
