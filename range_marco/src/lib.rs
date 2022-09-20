@@ -10,7 +10,7 @@ pub fn range(_args: TokenStream, input: TokenStream) -> TokenStream {
                 syn::Fields::Named(fields) => {
                     fields.named.push(
                         syn::Field::parse_named
-                            .parse2(quote! { pub range : crate::lexer::pos::Range })
+                            .parse2(quote! { pub range : crate::ast::Range })
                             .unwrap(),
                     );
                 }
@@ -19,8 +19,8 @@ pub fn range(_args: TokenStream, input: TokenStream) -> TokenStream {
             let ident = &ast.ident;
             return quote! {
                 #ast
-                impl crate::lexer::pos::RangeTrait for #ident {
-                    fn range(&self) -> crate::lexer::pos::Range {
+                impl crate::ast::RangeTrait for #ident {
+                    fn range(&self) -> crate::ast::Range {
                         self.range
                     }
                 }

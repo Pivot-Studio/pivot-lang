@@ -1,17 +1,19 @@
 mod ast;
-mod lexer;
 mod nomparser;
-mod parser;
 mod utils;
-
+use ast::{ctx::Ctx, Value};
+use inkwell::context::Context;
+use inkwell::values::AnyValue;
+use nomparser::Parser;
 fn main() {
-    let lexer = lexer::lexer::Lexer::new("+-*/");
-    let mut parser = parser::Parser::new("-1+-2--4*(5+1)");
-    let n = parser.parse();
-    if let Err(e) = n {
-        println!("{:?}", e);
+    let mut parser = Parser::new("4+11*(8--2)");
+    let (_, mut node) = parser.parse().unwrap();
+    let tp = &Context::create();
+    let context = Ctx::new(tp);
+    let re = node.emit(&context);
+    if let Value::IntValue(re) = re {
+        assert!(re.print_to_string().to_string() == "i64 114")
     } else {
-        n.unwrap().print();
+        panic!("not implemented")
     }
-    println!("{:?}", lexer);
 }
