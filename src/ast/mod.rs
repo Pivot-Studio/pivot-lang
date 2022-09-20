@@ -42,6 +42,10 @@ impl Node for NumNode {
             let b = Box::new(ctx.context.i64_type().const_int(x as u64, false));
             return Some(b);
         }
+        else if let Num::FLOAT(x) = self.value {
+            let b = Box::new(ctx.context.f64_type().const_float(x));
+            return Some(b);
+        }
         panic!("not implemented")
     }
 }
