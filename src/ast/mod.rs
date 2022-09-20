@@ -1,6 +1,6 @@
 use self::ctx::Ctx;
 use crate::lexer::{pos::RangeTrait, types::Operator};
-use inkwell::values::AnyValue;
+use inkwell::values::{AnyValue, FloatValue, GenericValue, IntValue};
 use paste::item;
 use range_marco::range;
 
@@ -28,23 +28,33 @@ pub enum Num {
     FLOAT(f64),
 }
 
+/// # Value
+/// 表达每个ast在计算之后产生的值  
+/// 
+/// 只有expression才会产生值，而statement不会产生值。对于statement，
+/// 我们可以用None来表示
+pub enum Value<'a> {
+    IntValue(IntValue<'a>),
+    FloatValue(FloatValue<'a>),
+    None,
+}
+
 pub trait Node: RangeTrait {
     fn print(&self);
-    fn emit<'b>(&'b mut self, ctx: &'b Ctx) -> Option<Box<dyn AnyValue + 'b>>;
+    fn emit<'b>(&'b mut self, ctx: &'b Ctx) -> Value<'b>;
 }
 
 impl Node for NumNode {
     fn print(&self) {
         println!("{:?}", self.value)
     }
-    fn emit<'b>(&'b mut self, ctx: &'b Ctx) -> Option<Box<dyn AnyValue + 'b>> {
+    fn emit<'b>(&'b mut self, ctx: &'b Ctx) -> Value<'b> {
         if let Num::INT(x) = self.value {
-            let b = Box::new(ctx.context.i64_type().const_int(x as u64, false));
-            return Some(b);
-        }
-        else if let Num::FLOAT(x) = self.value {
-            let b = Box::new(ctx.context.f64_type().const_float(x));
-            return Some(b);
+            let b = ctx.context.i64_type().const_int(x as u64, false);
+            return Value::IntValue(b);
+        } else if let Num::FLOAT(x) = self.value {
+            let b = ctx.context.f64_type().const_float(x);
+            return Value::FloatValue(b);
         }
         panic!("not implemented")
     }
@@ -53,22 +63,16 @@ impl Node for NumNode {
 macro_rules! handle_calc {
     ($ctx:ident, $op:ident, $opf:ident  ,$left:ident, $right:ident) => {
         item! {
-            if let (Some(left), Some(right)) = ($left, $right) {
-                let lefte = left.as_any_value_enum();
-                let righte = right.as_any_value_enum();
-                if lefte.is_int_value() && righte.is_int_value() {
-                    return Some(Box::new($ctx.builder.[<build_int_$op>](
-                        lefte.into_int_value(), righte.into_int_value(), "addtmp")));
-                }
-                else if lefte.is_float_value() && righte.is_float_value() {
-                    return Some(Box::new($ctx.builder.[<build_$opf>](
-                        lefte.into_float_value(), righte.into_float_value(), "addtmp")));
-                }
-                else{
-                    panic!("not implemented")
-                }
-            }else {
-                panic!("not implemented")
+            match ($left, $right) {
+                (Value::IntValue(left), Value::IntValue(right)) => {
+                    return Value::IntValue($ctx.builder.[<build_int_$op>](
+                        left, right, "addtmp"));
+                },
+                (Value::FloatValue(left), Value::FloatValue(right)) => {
+                    return Value::FloatValue($ctx.builder.[<build_$opf>](
+                        left, right, "addtmp"));
+                },
+                _ => panic!("not implemented")
             }
         }
     };
@@ -81,7 +85,7 @@ impl Node for BinOpNode {
         println!("{:?}", self.op);
         self.right.print();
     }
-    fn emit<'b>(&'b mut self, ctx: &'b Ctx) -> Option<Box<dyn AnyValue + 'b>> {
+    fn emit<'b>(&'b mut self, ctx: &'b Ctx) -> Value<'b> {
         let left = self.left.emit(ctx);
         let right = self.right.emit(ctx);
         match self.op {
@@ -99,24 +103,13 @@ impl Node for UnaryOpNode {
         println!("{:?}", self.op);
         self.exp.print();
     }
-    fn emit<'b>(&'b mut self, ctx: &'b Ctx) -> Option<Box<dyn AnyValue + 'b>> {
+    fn emit<'b>(&'b mut self, ctx: &'b Ctx) -> Value<'b> {
         let exp = self.exp.emit(ctx);
-        if let Some(exp) = exp {
-            let exp = exp.as_any_value_enum();
-            if exp.is_int_value() {
-                return Some(Box::new(
-                    ctx.builder.build_int_neg(exp.into_int_value(), "negtmp"),
-                ));
-            } else if exp.is_float_value() {
-                return Some(Box::new(
-                    ctx.builder
-                        .build_float_neg(exp.into_float_value(), "negtmp"),
-                ));
-            } else {
-                panic!("not implemented")
-            }
-        }
-        panic!("not implemented")
+        return match exp {
+            Value::IntValue(exp) => Value::IntValue(ctx.builder.build_int_neg(exp, "negtmp")),
+            Value::FloatValue(exp) => Value::FloatValue(ctx.builder.build_float_neg(exp, "negtmp")),
+            _ => panic!("not implemented"),
+        };
     }
 }
 
@@ -129,7 +122,7 @@ fn test_ast() {
     let tp = &Context::create();
     let context = ctx::Ctx::new(tp);
     let re = node.emit(&context);
-    if let Some(re) = re {
+    if let Value::IntValue(re) = re {
         assert!(re.print_to_string().to_string() == "i64 114")
     } else {
         panic!("not implemented")
@@ -145,7 +138,7 @@ fn test_nom() {
     let tp = &Context::create();
     let context = ctx::Ctx::new(tp);
     let re = node.emit(&context);
-    if let Some(re) = re {
+    if let Value::IntValue(re) = re {
         assert!(re.print_to_string().to_string() == "i64 114")
     } else {
         panic!("not implemented")
