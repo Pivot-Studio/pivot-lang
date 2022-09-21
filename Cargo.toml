@@ -13,6 +13,7 @@ llvm-sys = "140"
 add_symbol = { path = "./add_symbol" }
 range_marco = { path = "./range_marco" }
 nom_locate = "4.0.0"
+as-any = "0.3.0"
 [dependencies.nom]
 version = "7"
 features = ["alloc"]

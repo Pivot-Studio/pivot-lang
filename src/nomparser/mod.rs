@@ -1,9 +1,13 @@
+use std::any::Any;
 use std::fmt::Error;
 
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{alpha1, alphanumeric1, one_of, space0},
+    character::{
+        complete::{alpha1, alphanumeric1, one_of, space0},
+        streaming::multispace0,
+    },
     combinator::{map_res, opt, recognize},
     error::ParseError,
     multi::{many0, many0_count, many1},
@@ -15,8 +19,8 @@ type Span<'a> = LocatedSpan<&'a str>;
 use nom::character::complete::char;
 
 use crate::{
-    ast::{BinOpNode, Node, Num, NumNode, UnaryOpNode},
-    ast::{Range, TokenType, VarNode},
+    ast::{AssignNode, DefNode, Range, TokenType, VarNode},
+    ast::{BinOpNode, Node, Num, NumNode, UnaryOpNode, StatementsNode},
 };
 
 fn res<T>(t: T) -> Result<Box<dyn Node>, Error>
@@ -37,6 +41,75 @@ impl<'a> PLParser<'a> {
 
     pub fn parse(&mut self) -> IResult<Span, Box<dyn Node>> {
         Self::add_exp(self.input)
+    }
+    /// ```ebnf
+    /// statement =
+    /// | assignment newline
+    /// | newvariable newline
+    /// | ifstatement
+    /// | whilestatement
+    /// | newline
+    /// ;
+    /// ```
+    pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+        alt((
+            terminated(Self::assignment, multispace0),
+            terminated(Self::new_variable, multispace0),
+            // Self::if_statement,
+            // Self::while_statement,
+            // Self::newline,
+        ))(input)
+    }
+
+    pub fn statements(input: Span) -> IResult<Span, Box<dyn Node>> {
+        map_res(many0(Self::statement), |v| {
+            let mut range = v[0].range();
+            let la = v.last();
+            if let Some(la) = la {
+                range = range.start.to(la.range().end);
+            }
+            res(StatementsNode { statements: v, range })
+        })(input)
+    }
+
+    pub fn new_variable(input: Span) -> IResult<Span, Box<dyn Node>> {
+        delspace(map_res(
+            preceded(
+                Self::tag_token(TokenType::LET),
+                tuple((
+                    Self::identifier,
+                    Self::tag_token(TokenType::ASSIGN),
+                    Self::add_exp,
+                )),
+            ),
+            |(out, _, v)| {
+                let a = out.as_any().downcast_ref::<VarNode>().unwrap().clone();
+                let range = out.range().start.to(v.range().end);
+                res(DefNode {
+                    var: a,
+                    exp: v,
+                    range,
+                })
+            },
+        ))(input)
+    }
+
+    pub fn assignment(input: Span) -> IResult<Span, Box<dyn Node>> {
+        delspace(map_res(
+            tuple((
+                Self::identifier,
+                Self::tag_token(TokenType::ASSIGN),
+                Self::add_exp,
+            )),
+            |(left, op, right)| {
+                let range = left.range().start.to(right.range().end);
+                res(AssignNode {
+                    var: left.as_any().downcast_ref::<VarNode>().unwrap().clone(),
+                    exp: right,
+                    range,
+                })
+            },
+        ))(input)
     }
 
     pub fn number(input: Span) -> IResult<Span, Box<dyn Node>> {

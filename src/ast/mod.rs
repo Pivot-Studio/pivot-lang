@@ -1,11 +1,16 @@
-use self::ctx::Ctx;
-use inkwell::values::{FloatValue, IntValue};
+use self::ctx::{Ctx, MutCtx};
+use as_any::AsAny;
+use inkwell::{
+    execution_engine::JitFunction,
+    types::BasicType,
+    values::{BasicValue, FloatValue, IntValue, PointerValue},
+};
 use nom_locate::LocatedSpan;
 use paste::item;
 use range_marco::range;
 type Span<'a> = LocatedSpan<&'a str>;
 use lazy_static::lazy_static;
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash, borrow::Cow};
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub struct Pos {
     pub line: usize,   // 1based
@@ -23,10 +28,7 @@ pub trait RangeTrait {
 }
 impl Pos {
     pub fn to(&self, end: Pos) -> Range {
-        Range {
-            start: *self,
-            end: end,
-        }
+        Range { start: *self, end }
     }
 }
 
@@ -70,7 +72,9 @@ define_tokens!(
     MUL : "*",    // *
     DIV : "/",    // /
     LPAREN : "(", // (
-    RPAREN : ")"// )
+    RPAREN : ")", // )
+    ASSIGN : "=", // =
+    LET : "let" // let
 );
 impl TokenType {
     pub fn get_str(&self) -> &'static str {
@@ -83,11 +87,42 @@ pub mod ctx;
 pub struct NumNode {
     pub value: Num,
 }
+
+#[range]
+pub struct StatementsNode {
+    pub statements: Vec<Box<dyn Node>>,
+}
 #[range]
 pub struct UnaryOpNode {
     pub op: TokenType,
     pub exp: Box<dyn Node>,
 }
+
+impl Node for StatementsNode {
+    fn print(&self) {
+        todo!()
+    }
+
+    fn emit<'a, 'b: 'a>(
+        &'b mut self,
+        ctx: &'b Ctx,
+        mutctx: Option<&'b mut MutCtx<'b, 'b>>,
+        immutctx: Option<MutCtx<'a, 'b>>,
+    ) -> Value<'b> {
+        let t = &mut mutctx.unwrap().table;
+        for m in self.statements.iter_mut() {
+            let mut n = MutCtx::new(ctx.context, ctx.module.clone());
+            n.table = t.clone();
+            m.emit(ctx, Some(& mut n), None);
+            for v in n.table.iter() {
+                t.insert(v.0.clone(), v.1.clone());
+            }
+        }
+        Value::None
+    }
+}
+
+
 #[range]
 pub struct BinOpNode {
     pub left: Box<dyn Node>,
@@ -96,16 +131,102 @@ pub struct BinOpNode {
 }
 
 #[range]
+#[derive(Debug, PartialEq, Clone)]
 pub struct VarNode {
     pub name: String,
+}
+
+#[range]
+pub struct DefNode {
+    pub var: VarNode,
+    pub exp: Box<dyn Node>,
+}
+
+impl Node for DefNode {
+    fn print(&self) {
+        todo!()
+    }
+
+    fn emit<'a, 'b: 'a>(
+        &'b mut self,
+        ctx: &'b Ctx,
+        mutctx: Option<&'b mut MutCtx<'b, 'b>>,
+        immutctx: Option<MutCtx<'a, 'b>>,
+    ) -> Value<'b> {
+        let c = mutctx.unwrap();
+        let immu = c.clone();
+        let pt;
+        let v = self.exp.emit(ctx, None, Some(immu));
+        match v {
+            Value::IntValue(v) => {
+                let p = ctx.builder.build_alloca(v.get_type(), &self.var.name);
+                pt = p.clone();
+                ctx.builder.build_store(pt, v);
+            }
+            Value::FloatValue(v) => {
+                let p = ctx.builder.build_alloca(v.get_type(), &self.var.name);
+                pt = p.clone();
+                ctx.builder.build_store(pt, v);
+            }
+            _ => todo!(),
+        }
+        c.add_symbol(&self.var.name, pt);
+        Value::None
+    }
+}
+
+#[range]
+pub struct AssignNode {
+    pub var: VarNode,
+    pub exp: Box<dyn Node>,
+}
+
+impl Node for AssignNode {
+    fn print(&self) {
+        todo!()
+    }
+
+    fn emit<'a, 'b: 'a>(
+        &'b mut self,
+        ctx: &'b Ctx,
+        mutctx: Option<&'b mut MutCtx<'b, 'b>>,
+        immutctx: Option<MutCtx<'a, 'b>>,
+    ) -> Value<'b> {
+        let immu = get_immut(mutctx, immutctx);
+        let pt = self.var.emit(ctx, None, immu.clone());
+        let value = self.exp.emit(ctx, None, immu);
+        if let Value::VarValue(ptr) = pt {
+            match value {
+                Value::IntValue(v) => {
+                    ctx.builder.build_store(ptr, v);
+                }
+                Value::FloatValue(v) => {
+                    ctx.builder.build_store(ptr, v);
+                }
+                _ => todo!(),
+            }
+        }
+
+        todo!()
+    }
 }
 
 impl Node for VarNode {
     fn print(&self) {
         println!("var: {}", self.name)
     }
-    fn emit<'b>(&'b mut self, _: &'b Ctx) -> Value<'b> {
-        Value::VarName(self.name.clone())
+    fn emit<'a, 'b: 'a>(
+        &'b mut self,
+        ctx: &'b Ctx,
+        mutctx: Option<&'b mut MutCtx<'b, 'b>>,
+        immutctx: Option<MutCtx<'a, 'b>>,
+    ) -> Value<'b> {
+        let c = get_immut(mutctx, immutctx).unwrap();
+        let v = c.get_symbol(&self.name);
+        if let Some(v) = v {
+            return Value::VarValue(*v);
+        }
+        todo!(); // TODO: 未定义的变量
     }
 }
 
@@ -123,20 +244,30 @@ pub enum Num {
 pub enum Value<'a> {
     IntValue(IntValue<'a>),
     FloatValue(FloatValue<'a>),
-    VarName(String),
+    VarValue(PointerValue<'a>),
     None,
 }
 
-pub trait Node: RangeTrait {
+pub trait Node: RangeTrait + AsAny {
     fn print(&self);
-    fn emit<'b>(&'b mut self, ctx: &'b Ctx) -> Value<'b>;
+    fn emit<'a, 'b: 'a>(
+        &'b mut self,
+        ctx: &'b Ctx,
+        mutctx: Option<&'b mut MutCtx<'b, 'b>>,
+        immutctx: Option<MutCtx<'a, 'b>>,
+    ) -> Value<'b>;
 }
 
 impl Node for NumNode {
     fn print(&self) {
         println!("{:?}", self.value)
     }
-    fn emit<'b>(&'b mut self, ctx: &'b Ctx) -> Value<'b> {
+    fn emit<'a, 'b: 'a>(
+        &'b mut self,
+        ctx: &'b Ctx,
+        mutctx: Option<&'b mut MutCtx<'b, 'b>>,
+        immutctx: Option<MutCtx<'a, 'b>>,
+    ) -> Value<'b> {
         if let Num::INT(x) = self.value {
             let b = ctx.context.i64_type().const_int(x as u64, false);
             return Value::IntValue(b);
@@ -173,9 +304,15 @@ impl Node for BinOpNode {
         println!("{:?}", self.op);
         self.right.print();
     }
-    fn emit<'b>(&'b mut self, ctx: &'b Ctx) -> Value<'b> {
-        let left = self.left.emit(ctx);
-        let right = self.right.emit(ctx);
+    fn emit<'a, 'b: 'a>(
+        &'b mut self,
+        ctx: &'b Ctx,
+        mutctx: Option<&'b mut MutCtx<'b, 'b>>,
+        immutctx: Option<MutCtx<'a, 'b>>,
+    ) -> Value<'b> {
+        let c = get_immut(mutctx, immutctx);
+        let left = self.left.emit(ctx, None, c.clone());
+        let right = self.right.emit(ctx, None, c);
         match self.op {
             TokenType::PLUS => handle_calc!(ctx, add, float_add, left, right),
             TokenType::MINUS => handle_calc!(ctx, sub, float_sub, left, right),
@@ -192,8 +329,13 @@ impl Node for UnaryOpNode {
         println!("{:?}", self.op);
         self.exp.print();
     }
-    fn emit<'b>(&'b mut self, ctx: &'b Ctx) -> Value<'b> {
-        let exp = self.exp.emit(ctx);
+    fn emit<'a, 'b: 'a>(
+        &'b mut self,
+        ctx: &'b Ctx,
+        mutctx: Option<&'b mut MutCtx<'b, 'b>>,
+        immutctx: Option<MutCtx<'a, 'b>>,
+    ) -> Value<'b> {
+        let exp = self.exp.emit(ctx, mutctx, immutctx);
         return match exp {
             Value::IntValue(exp) => Value::IntValue(ctx.builder.build_int_neg(exp, "negtmp")),
             Value::FloatValue(exp) => Value::FloatValue(ctx.builder.build_float_neg(exp, "negtmp")),
@@ -202,6 +344,16 @@ impl Node for UnaryOpNode {
     }
 }
 
+fn get_immut<'a, 'b: 'a>(
+    mutctx: Option<&'b mut MutCtx<'b, 'b>>,
+    immutctx: Option<MutCtx<'a, 'b>>,
+) -> Option<MutCtx<'a, 'b>> {
+    if let Some(x) = mutctx {
+        return Some(x.clone());
+    }
+    immutctx
+}
+type MainFunc = unsafe extern "C" fn() -> i64;
 #[test]
 fn test_nom() {
     use crate::nomparser::PLParser;
@@ -211,10 +363,20 @@ fn test_nom() {
     let (_, mut node) = parser.parse().unwrap();
     let tp = &Context::create();
     let context = ctx::Ctx::new(tp);
-    let re = node.emit(&context);
+    let mut mc = ctx::MutCtx::new(context.context.clone(), context.module.clone());
+    context.builder.position_at_end(mc.basic_block);
+    let re = node.emit(&context, Some(&mut mc), None);
     if let Value::IntValue(re) = re {
         assert!(re.print_to_string().to_string() == "i64 114")
     } else {
         panic!("not implemented")
+    }
+    let execution_engine = context
+        .module
+        .create_jit_execution_engine(inkwell::OptimizationLevel::None)
+        .unwrap();
+    unsafe {
+        let f = execution_engine.get_function::<MainFunc>("main").unwrap();
+        f.call();
     }
 }
