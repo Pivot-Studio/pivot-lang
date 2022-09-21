@@ -4,9 +4,9 @@ mod utils;
 use ast::{ctx::Ctx, Value};
 use inkwell::context::Context;
 use inkwell::values::AnyValue;
-use nomparser::Parser;
+use nomparser::PLParser;
 fn main() {
-    let mut parser = Parser::new("4+11*(8--2)");
+    let mut parser = PLParser::new("4+11*(8--2)");
     let (_, mut node) = parser.parse().unwrap();
     let tp = &Context::create();
     let context = Ctx::new(tp);

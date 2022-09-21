@@ -95,6 +95,20 @@ pub struct BinOpNode {
     pub right: Box<dyn Node>,
 }
 
+#[range]
+pub struct VarNode {
+    pub name: String,
+}
+
+impl Node for VarNode {
+    fn print(&self) {
+        println!("var: {}", self.name)
+    }
+    fn emit<'b>(&'b mut self, _: &'b Ctx) -> Value<'b> {
+        Value::VarName(self.name.clone())
+    }
+}
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Num {
     INT(i64),
@@ -109,6 +123,7 @@ pub enum Num {
 pub enum Value<'a> {
     IntValue(IntValue<'a>),
     FloatValue(FloatValue<'a>),
+    VarName(String),
     None,
 }
 
@@ -189,10 +204,10 @@ impl Node for UnaryOpNode {
 
 #[test]
 fn test_nom() {
-    use crate::nomparser::Parser;
+    use crate::nomparser::PLParser;
     use inkwell::context::Context;
     use inkwell::values::AnyValue;
-    let mut parser = Parser::new("4+11*(8--2)");
+    let mut parser = PLParser::new("4+11*(8--2)");
     let (_, mut node) = parser.parse().unwrap();
     let tp = &Context::create();
     let context = ctx::Ctx::new(tp);
