@@ -17,10 +17,12 @@ use crate::{
     ast::{BinOpNode, Node, Num, NumNode, UnaryOpNode},
     ast::{Range, TokenType},
 };
-macro_rules! res {
-    ($e:expr) => {
-        Ok::<Box<dyn Node>, Error>(Box::new($e))
-    };
+
+fn res<T>(t: T) -> Result<Box<dyn Node>, Error>
+where
+    T: Node + 'static,
+{
+    Ok::<Box<dyn Node>, Error>(Box::new(t))
 }
 pub struct Parser<'a> {
     input: Span<'a>,
@@ -66,7 +68,7 @@ impl<'a> Parser<'a> {
                     )),
                     |(left, op, right)| {
                         let range = left.range().start.to(right.range().end);
-                        res!(BinOpNode {
+                        res(BinOpNode {
                             op,
                             left,
                             right,
@@ -95,7 +97,7 @@ impl<'a> Parser<'a> {
                     )),
                     |(left, op, right)| {
                         let range = left.range().start.to(right.range().end);
-                        res!(BinOpNode {
+                        res(BinOpNode {
                             op,
                             left,
                             right,
@@ -118,7 +120,7 @@ impl<'a> Parser<'a> {
                     preceded(Self::tag_token(TokenType::MINUS), Self::primary_exp),
                     |out| {
                         let range = out.range();
-                        res!(UnaryOpNode {
+                        res(UnaryOpNode {
                             op: TokenType::MINUS,
                             exp: out,
                             range,
