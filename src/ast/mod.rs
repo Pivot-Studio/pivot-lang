@@ -1,9 +1,82 @@
 use self::ctx::Ctx;
-use crate::lexer::{pos::RangeTrait, types::Operator};
-use inkwell::values::{AnyValue, FloatValue, GenericValue, IntValue};
+use inkwell::values::{FloatValue, IntValue};
+use nom_locate::LocatedSpan;
 use paste::item;
 use range_marco::range;
+type Span<'a> = LocatedSpan<&'a str>;
+use lazy_static::lazy_static;
+use std::collections::HashMap;
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct Pos {
+    pub line: usize,   // 1based
+    pub column: usize, // 1based
+    pub offset: usize, // 0based
+}
 
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct Range {
+    pub start: Pos,
+    pub end: Pos,
+}
+pub trait RangeTrait {
+    fn range(&self) -> Range;
+}
+impl Pos {
+    pub fn to(&self, end: Pos) -> Range {
+        Range {
+            start: *self,
+            end: end,
+        }
+    }
+}
+
+impl Range {
+    pub fn new(start: Span, end: Span) -> Range {
+        Range {
+            start: Pos {
+                line: start.location_line() as usize,
+                column: start.get_column(),
+                offset: start.location_offset(),
+            },
+            end: Pos {
+                line: end.location_line() as usize,
+                column: end.get_column(),
+                offset: end.location_offset(),
+            },
+        }
+    }
+}
+macro_rules! define_tokens {
+    ($(
+        $ident:ident : $string_keyword:expr
+    ),*) => {
+        #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash)]
+        pub enum TokenType {
+            $($ident),*
+        }
+        $(pub const $ident: &'static str = $string_keyword;)*
+        lazy_static! {
+            pub static ref TOKEN_TYPE_MAP: HashMap<TokenType, &'static str> = {
+                let mut mp = HashMap::new();
+                $(mp.insert(TokenType::$ident, $ident);)*
+                mp
+            };
+        }
+    };
+}
+define_tokens!(
+    PLUS : "+",
+    MINUS : "-",  // -
+    MUL : "*",    // *
+    DIV : "/",    // /
+    LPAREN : "(", // (
+    RPAREN : ")"// )
+);
+impl TokenType {
+    pub fn get_str(&self) -> &'static str {
+        TOKEN_TYPE_MAP[self]
+    }
+}
 pub mod ctx;
 #[range]
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -12,13 +85,13 @@ pub struct NumNode {
 }
 #[range]
 pub struct UnaryOpNode {
-    pub op: Operator,
+    pub op: TokenType,
     pub exp: Box<dyn Node>,
 }
 #[range]
 pub struct BinOpNode {
     pub left: Box<dyn Node>,
-    pub op: Operator,
+    pub op: TokenType,
     pub right: Box<dyn Node>,
 }
 
@@ -30,7 +103,7 @@ pub enum Num {
 
 /// # Value
 /// 表达每个ast在计算之后产生的值  
-/// 
+///
 /// 只有expression才会产生值，而statement不会产生值。对于statement，
 /// 我们可以用None来表示
 pub enum Value<'a> {
@@ -89,10 +162,11 @@ impl Node for BinOpNode {
         let left = self.left.emit(ctx);
         let right = self.right.emit(ctx);
         match self.op {
-            Operator::PLUS => handle_calc!(ctx, add, float_add, left, right),
-            Operator::MINUS => handle_calc!(ctx, sub, float_sub, left, right),
-            Operator::MUL => handle_calc!(ctx, mul, float_mul, left, right),
-            Operator::DIV => handle_calc!(ctx, signed_div, float_div, left, right),
+            TokenType::PLUS => handle_calc!(ctx, add, float_add, left, right),
+            TokenType::MINUS => handle_calc!(ctx, sub, float_sub, left, right),
+            TokenType::MUL => handle_calc!(ctx, mul, float_mul, left, right),
+            TokenType::DIV => handle_calc!(ctx, signed_div, float_div, left, right),
+            op => panic!("expected op token but found {:?}", op),
         }
     }
 }
@@ -114,25 +188,10 @@ impl Node for UnaryOpNode {
 }
 
 #[test]
-fn test_ast() {
-    use crate::parser::Parser;
-    use inkwell::context::Context;
-    let mut parser = Parser::new("4+11*(8--2)");
-    let mut node = parser.parse().unwrap();
-    let tp = &Context::create();
-    let context = ctx::Ctx::new(tp);
-    let re = node.emit(&context);
-    if let Value::IntValue(re) = re {
-        assert!(re.print_to_string().to_string() == "i64 114")
-    } else {
-        panic!("not implemented")
-    }
-}
-
-#[test]
 fn test_nom() {
     use crate::nomparser::Parser;
     use inkwell::context::Context;
+    use inkwell::values::AnyValue;
     let mut parser = Parser::new("4+11*(8--2)");
     let (_, mut node) = parser.parse().unwrap();
     let tp = &Context::create();
