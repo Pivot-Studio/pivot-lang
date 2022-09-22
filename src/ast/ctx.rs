@@ -6,10 +6,10 @@ use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::values::PointerValue;
 
-pub struct Ctx<'ctx> {
+pub struct Ctx<'a, 'ctx> {
     pub context: &'ctx Context,
-    pub module: Module<'ctx>,
-    pub builder: Builder<'ctx>,
+    pub module: &'a Module<'ctx>,
+    pub builder: &'a Builder<'ctx>,
 }
 
 /// # MutCtx
@@ -20,13 +20,13 @@ pub struct Ctx<'ctx> {
 /// 被返回需要单独的生命周期
 #[derive(Debug, Clone)]
 pub struct MutCtx<'a, 'b> {
-    pub table:   HashMap<&'a str, PointerValue<'b>>,
+    pub table: HashMap<String, PointerValue<'b>>,
     pub father: Option<&'a MutCtx<'a, 'b>>,
     pub basic_block: BasicBlock<'b>,
 }
 
-impl<'ctx, 'c> MutCtx<'ctx, 'c> {
-    pub fn new<'a, 'b>(context: &'b Context, module: Module<'b>) -> MutCtx<'a, 'b> {
+impl<'b, 'c> MutCtx<'b, 'c> {
+    pub fn new(context: &'c Context, module: & Module<'c>) -> MutCtx<'b, 'c> {
         let i64_type = context.i64_type();
         let fn_type = i64_type.fn_type(&[], false);
         let function = module.add_function("main", fn_type, None);
@@ -37,7 +37,7 @@ impl<'ctx, 'c> MutCtx<'ctx, 'c> {
             basic_block,
         }
     }
-    pub fn new_child(&'ctx self) -> MutCtx<'ctx, 'c> {
+    pub fn new_child(&'c self) -> MutCtx<'b, 'c> {
         MutCtx {
             table: HashMap::new(),
             father: Some(self),
@@ -47,7 +47,7 @@ impl<'ctx, 'c> MutCtx<'ctx, 'c> {
 
     /// # get_symbol
     /// search in current and all father symbol tables
-    pub fn get_symbol(&'ctx self, name: &str) -> Option<&PointerValue<'c>> {
+    pub fn get_symbol(&'b self, name: &str) -> Option<&PointerValue<'c>> {
         let v = self.table.get(name);
         if let Some(pv) = v {
             return Some(pv);
@@ -58,22 +58,24 @@ impl<'ctx, 'c> MutCtx<'ctx, 'c> {
         None
     }
 
-    pub fn add_symbol(&'ctx mut self, name: &'ctx str, pv: PointerValue<'c>) {
-        if self.table.contains_key(name) {
+    pub fn add_symbol(&mut self, name: String, pv: PointerValue<'c>) {
+        if self.table.contains_key(&name) {
             todo!() // TODO 报错
         }
         self.table.insert(name, pv);
     }
 }
 
-impl Ctx<'_> {
-    pub fn new<'ctx>(context: &'ctx Context) -> Ctx<'ctx> {
-        let module = context.create_module("main");
-        let builder = context.create_builder();
+impl<'a, 'ctx> Ctx<'a, 'ctx> {
+    pub fn new(
+        context: &'ctx Context,
+        builder: &'a Builder<'ctx>,
+        module: &'a Module<'ctx>,
+    ) -> Ctx<'a, 'ctx> {
         Ctx {
             context,
-            module,
-            builder,
+            module: module,
+            builder: builder,
         }
     }
 }

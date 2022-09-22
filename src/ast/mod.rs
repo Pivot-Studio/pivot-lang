@@ -100,23 +100,19 @@ pub struct UnaryOpNode {
 
 impl Node for StatementsNode {
     fn print(&self) {
-        todo!()
+        println!("StatementsNode:");
+        for e in self.statements.iter() {
+            e.print();
+        }
     }
 
-    fn emit<'a, 'b>(&'b mut self, ctx: &'b Ctx, mutctx: &'a mut MutCtx<'a, 'b>) -> Value<'b> {
-        // for m in self.statements.iter_mut() {
-        //     m.emit(ctx, mutctx);
-        //     // mutctx.table.insert("name", ctx.builder.build_alloca(ctx.context.i32_type(), "name"));
-        // }
-        {
-            test(mutctx,self);
-            // let s = &mut self.statements[0];
-            // s.emit::<'a,'a>(ctx, mutctx);
-        }
-        {
-            test(mutctx,self);
-            // let s = &mut self.statements[0];
-            // s.emit::<'a,'a>(ctx, mutctx);
+    fn emit<'a, 'ctx>(
+        &'a mut self,
+        ctx: &'a Ctx<'a, 'ctx>,
+        mutctx: &mut MutCtx<'a, 'ctx>,
+    ) -> Value<'ctx> {
+        for m in self.statements.iter_mut() {
+            m.emit(ctx, mutctx);
         }
         Value::None
     }
@@ -135,9 +131,7 @@ pub struct VarNode {
     pub name: String,
 }
 
-fn test<'a,'b, 'c>( mutctx: &'c mut MutCtx,n : &'b mut StatementsNode) {
-    
-}
+// fn test<'a: 'c, 'b: 'c + 'd, 'c, 'd>(mutctx: &'a mut MutCtx< 'd>, n: &'b Box<dyn Node>) {}
 
 #[range]
 pub struct DefNode {
@@ -147,27 +141,35 @@ pub struct DefNode {
 
 impl Node for DefNode {
     fn print(&self) {
-        todo!()
+        println!("DefNode:");
+        self.var.print();
+        println!("=");
+        self.exp.print();
     }
 
-    fn emit<'a, 'b>(&'b mut self, ctx: &'b Ctx, mutctx: &'a mut MutCtx<'a, 'b>) -> Value<'b> {
+    fn emit<'a, 'ctx>(
+        &'a mut self,
+        ctx: &'a Ctx<'a, 'ctx>,
+        mutctx: &mut MutCtx<'a, 'ctx>,
+    ) -> Value<'ctx> {
         let pt;
-        let a = &mut mutctx.clone();
-        let v = self.exp.emit(ctx, a);
+        let v = self.exp.emit(ctx, mutctx);
         match v {
             Value::IntValue(v) => {
-                let p = ctx.builder.build_alloca(v.get_type(), &self.var.name);
-                pt = p.clone();
+                let tp = v.get_type();
+                let p = ctx.builder.build_alloca(tp, &self.var.name);
+                pt = p;
                 ctx.builder.build_store(pt, v);
             }
             Value::FloatValue(v) => {
                 let p = ctx.builder.build_alloca(v.get_type(), &self.var.name);
-                pt = p.clone();
+                pt = p;
                 ctx.builder.build_store(pt, v);
             }
             _ => todo!(),
         }
-        mutctx.add_symbol(&self.var.name, pt);
+
+        mutctx.add_symbol(self.var.name.clone(), pt);
         Value::None
     }
 }
@@ -180,12 +182,19 @@ pub struct AssignNode {
 
 impl Node for AssignNode {
     fn print(&self) {
-        todo!()
+        println!("AssignNode:");
+        self.var.print();
+        println!("=");
+        self.exp.print();
     }
 
-    fn emit<'a, 'b>(&'b mut self, ctx: &'b Ctx, mutctx: &'a mut MutCtx<'a, 'b>) -> Value<'b> {
-        let pt = self.var.emit(ctx, &mut mutctx.clone());
-        let value = self.exp.emit(ctx, &mut mutctx.clone());
+    fn emit<'a, 'ctx>(
+        &'a mut self,
+        ctx: &'a Ctx<'a, 'ctx>,
+        mutctx: &mut MutCtx<'a, 'ctx>,
+    ) -> Value<'ctx> {
+        let pt = self.var.emit(ctx, mutctx);
+        let value = self.exp.emit(ctx, mutctx);
         if let Value::VarValue(ptr) = pt {
             match value {
                 Value::IntValue(v) => {
@@ -204,9 +213,14 @@ impl Node for AssignNode {
 
 impl Node for VarNode {
     fn print(&self) {
-        println!("var: {}", self.name)
+        println!("VarNode:");
+        println!("{}", self.name)
     }
-    fn emit<'a, 'b>(&'b mut self, ctx: &'b Ctx, mutctx: &'a mut MutCtx<'a, 'b>) -> Value<'b> {
+    fn emit<'a, 'ctx>(
+        &'a mut self,
+        ctx: &'a Ctx<'a, 'ctx>,
+        mutctx: &mut MutCtx<'a, 'ctx>,
+    ) -> Value<'ctx> {
         let v = mutctx.get_symbol(&self.name);
         if let Some(v) = v {
             return Value::VarValue(*v);
@@ -235,14 +249,23 @@ pub enum Value<'a> {
 
 pub trait Node: RangeTrait + AsAny {
     fn print(&self);
-    fn emit<'a, 'b>(&'b mut self, ctx: &'b Ctx, mutctx: &'a mut MutCtx<'a, 'b>) -> Value<'b>;
+    fn emit<'a, 'ctx>(
+        &'a mut self,
+        ctx: &'a Ctx<'a, 'ctx>,
+        mutctx: &mut MutCtx<'a, 'ctx>,
+    ) -> Value<'ctx>;
 }
 
 impl Node for NumNode {
     fn print(&self) {
+        println!("NumNode:");
         println!("{:?}", self.value)
     }
-    fn emit<'a, 'b>(&'b mut self, ctx: &'b Ctx, mutctx: &'a mut MutCtx<'a, 'b>) -> Value<'b> {
+    fn emit<'a, 'ctx>(
+        &'a mut self,
+        ctx: &'a Ctx<'a, 'ctx>,
+        mutctx: &mut MutCtx<'a, 'ctx>,
+    ) -> Value<'ctx> {
         if let Num::INT(x) = self.value {
             let b = ctx.context.i64_type().const_int(x as u64, false);
             return Value::IntValue(b);
@@ -279,9 +302,13 @@ impl Node for BinOpNode {
         println!("{:?}", self.op);
         self.right.print();
     }
-    fn emit<'a, 'b>(&'b mut self, ctx: &'b Ctx, mutctx: &'a mut MutCtx<'a, 'b>) -> Value<'b> {
-        let left = self.left.emit(ctx, &mut mutctx.clone());
-        let right = self.right.emit(ctx, &mut mutctx.clone());
+    fn emit<'a, 'ctx>(
+        &'a mut self,
+        ctx: &'a Ctx<'a, 'ctx>,
+        mutctx: &mut MutCtx<'a, 'ctx>,
+    ) -> Value<'ctx> {
+        let left = self.left.emit(ctx, mutctx);
+        let right = self.right.emit(ctx, mutctx);
         match self.op {
             TokenType::PLUS => handle_calc!(ctx, add, float_add, left, right),
             TokenType::MINUS => handle_calc!(ctx, sub, float_sub, left, right),
@@ -298,7 +325,11 @@ impl Node for UnaryOpNode {
         println!("{:?}", self.op);
         self.exp.print();
     }
-    fn emit<'a, 'b>(&'b mut self, ctx: &'b Ctx, mutctx: &'a mut MutCtx<'a, 'b>) -> Value<'b> {
+    fn emit<'a, 'ctx>(
+        &'a mut self,
+        ctx: &'a Ctx<'a, 'ctx>,
+        mutctx: &mut MutCtx<'a, 'ctx>,
+    ) -> Value<'ctx> {
         let exp = self.exp.emit(ctx, mutctx);
         return match exp {
             Value::IntValue(exp) => Value::IntValue(ctx.builder.build_int_neg(exp, "negtmp")),
@@ -314,24 +345,38 @@ fn test_nom() {
     use crate::nomparser::PLParser;
     use inkwell::context::Context;
     use inkwell::values::AnyValue;
-    let mut parser = PLParser::new("4+11*(8--2)");
+    let mut parser = PLParser::new("let a = 2*(3+2)+5\n");
     let (_, mut node) = parser.parse().unwrap();
     let tp = &Context::create();
-    let context = ctx::Ctx::new(tp);
-    let mut mc = ctx::MutCtx::new(context.context.clone(), context.module.clone());
+    let bd = tp.create_builder();
+    let mo = tp.create_module("test");
+    let context = ctx::Ctx::new(tp, &bd, &mo);
+    let mut mc = ctx::MutCtx::new(context.context, context.module);
     context.builder.position_at_end(mc.basic_block);
-    let re = node.emit(&context, &mut mc);
-    if let Value::IntValue(re) = re {
-        assert!(re.print_to_string().to_string() == "i64 114")
-    } else {
-        panic!("not implemented")
-    }
-    // let execution_engine = context
-    //     .module
-    //     .create_jit_execution_engine(inkwell::OptimizationLevel::None)
-    //     .unwrap();
-    // unsafe {
-    //     let f = execution_engine.get_function::<MainFunc>("main").unwrap();
-    //     f.call();
+    let ctx = &context;
+    let m = &mut mc;
+    node.print();
+    let re = node.emit(ctx, m);
+    // if let Value::IntValue(re) = re {
+    //     assert!(re.print_to_string().to_string() == "i64 114")
+    // } else {
+    //     panic!("not implemented")
     // }
+    println!("emit succ");
+    let v = mc.get_symbol("a");
+    let v = v.unwrap();
+    let load = context.builder.build_load(*v, "load");
+    context.builder.build_return(Some(&load));
+    println!( "{}",context.module.to_string());
+    
+    let execution_engine = context
+        .module
+        .create_jit_execution_engine(inkwell::OptimizationLevel::None)
+        .unwrap();
+    unsafe {
+        let f = execution_engine.get_function::<MainFunc>("main").unwrap();
+        let ret = f.call();
+        println!("a = {}",ret);
+        assert_eq!(ret, 15)
+    }
 }

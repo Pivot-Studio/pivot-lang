@@ -34,13 +34,13 @@ pub struct PLParser<'a> {
 }
 
 impl<'a> PLParser<'a> {
-    pub fn new(input: &'a str) -> Self {
+    pub fn new(input: &'static str) -> Self {
         let sp = Span::from(input);
         PLParser { input: sp }
     }
 
     pub fn parse(&mut self) -> IResult<Span, Box<dyn Node>> {
-        Self::add_exp(self.input)
+        Self::statements(self.input)
     }
     /// ```ebnf
     /// statement =
@@ -53,8 +53,8 @@ impl<'a> PLParser<'a> {
     /// ```
     pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         alt((
-            terminated(Self::assignment, multispace0),
-            terminated(Self::new_variable, multispace0),
+            terminated(Self::new_variable, one_of(" \t\r\n")),
+            terminated(Self::assignment, one_of(" \t\r\n")),
             // Self::if_statement,
             // Self::while_statement,
             // Self::newline,
