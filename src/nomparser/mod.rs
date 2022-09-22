@@ -8,7 +8,7 @@ use nom::{
         complete::{alpha1, alphanumeric1, one_of, space0},
         streaming::multispace0,
     },
-    combinator::{map_res, opt, recognize},
+    combinator::{map_res, opt, recognize, eof},
     error::ParseError,
     multi::{many0, many0_count, many1},
     sequence::{delimited, pair, preceded, terminated, tuple},
@@ -34,7 +34,7 @@ pub struct PLParser<'a> {
 }
 
 impl<'a> PLParser<'a> {
-    pub fn new(input: &'static str) -> Self {
+    pub fn new(input: &'a str) -> Self {
         let sp = Span::from(input);
         PLParser { input: sp }
     }
@@ -53,8 +53,8 @@ impl<'a> PLParser<'a> {
     /// ```
     pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         alt((
-            terminated(Self::new_variable, one_of(" \t\r\n")),
-            terminated(Self::assignment, one_of(" \t\r\n")),
+            terminated(Self::new_variable, tuple((one_of(" \t\r\n"), opt(eof)))),
+            terminated(Self::assignment, tuple((one_of(" \t\r\n"),opt(eof)))),
             // Self::if_statement,
             // Self::while_statement,
             // Self::newline,

@@ -14,6 +14,7 @@ add_symbol = { path = "./add_symbol" }
 range_marco = { path = "./range_marco" }
 nom_locate = "4.0.0"
 as-any = "0.3.0"
+clap = { version = "3.2.22", features = ["derive"] }
 [dependencies.nom]
 version = "7"
 features = ["alloc"]

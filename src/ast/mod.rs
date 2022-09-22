@@ -1,9 +1,10 @@
 use self::ctx::{Ctx, MutCtx};
 use as_any::AsAny;
+pub mod compiler;
 use inkwell::{
     execution_engine::JitFunction,
     types::BasicType,
-    values::{BasicValue, FloatValue, IntValue, PointerValue},
+    values::{BasicValue, FloatValue, IntValue, PointerValue, BasicValueEnum},
 };
 use nom_locate::LocatedSpan;
 use paste::item;
@@ -205,6 +206,7 @@ impl Node for AssignNode {
                 }
                 _ => todo!(),
             }
+            return Value::None;
         }
 
         todo!()
@@ -295,6 +297,20 @@ macro_rules! handle_calc {
     };
 }
 
+fn try_load<'a, 'ctx>(ctx: &'a Ctx<'a, 'ctx>, v: Value<'ctx>) -> Value<'ctx> {
+    match v {
+        Value::VarValue(v) => {
+            let v = ctx.builder.build_load(v, "loadtmp");
+            match v {
+                BasicValueEnum::IntValue(v) => Value::IntValue(v),
+                BasicValueEnum::FloatValue(v) => Value::FloatValue(v),
+                _ => todo!(),
+            }
+        }
+        _ => v,
+    }
+}
+
 impl Node for BinOpNode {
     fn print(&self) {
         println!("BinOpNode");
@@ -307,8 +323,8 @@ impl Node for BinOpNode {
         ctx: &'a Ctx<'a, 'ctx>,
         mutctx: &mut MutCtx<'a, 'ctx>,
     ) -> Value<'ctx> {
-        let left = self.left.emit(ctx, mutctx);
-        let right = self.right.emit(ctx, mutctx);
+        let left = try_load(ctx,  self.left.emit(ctx, mutctx));
+        let right = try_load(ctx,self.right.emit(ctx, mutctx));
         match self.op {
             TokenType::PLUS => handle_calc!(ctx, add, float_add, left, right),
             TokenType::MINUS => handle_calc!(ctx, sub, float_sub, left, right),
