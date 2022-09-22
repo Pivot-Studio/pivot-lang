@@ -20,7 +20,7 @@ use nom::character::complete::char;
 
 use crate::{
     ast::{AssignNode, DefNode, Range, TokenType, VarNode},
-    ast::{BinOpNode, Node, Num, NumNode, UnaryOpNode, StatementsNode},
+    ast::{BinOpNode, Node, Num, NumNode, StatementsNode, UnaryOpNode},
 };
 
 fn res<T>(t: T) -> Result<Box<dyn Node>, Error>
@@ -68,7 +68,10 @@ impl<'a> PLParser<'a> {
             if let Some(la) = la {
                 range = range.start.to(la.range().end);
             }
-            res(StatementsNode { statements: v, range })
+            res(StatementsNode {
+                statements: v,
+                range,
+            })
         })(input)
     }
 

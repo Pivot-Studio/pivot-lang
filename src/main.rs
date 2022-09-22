@@ -12,7 +12,7 @@ fn main() {
     let tp = &Context::create();
     let context = Ctx::new(tp);
     let mut mc = MutCtx::new(context.context.clone(), context.module.clone());
-    let re = node.emit(&context, Some(&mut mc), None);
+    let re = node.emit(&context, &mut mc);
     if let Value::IntValue(re) = re {
         assert!(re.print_to_string().to_string() == "i64 114")
     } else {
