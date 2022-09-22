@@ -4,7 +4,7 @@ pub mod compiler;
 use inkwell::{
     execution_engine::JitFunction,
     types::BasicType,
-    values::{BasicValue, FloatValue, IntValue, PointerValue, BasicValueEnum},
+    values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue},
 };
 use nom_locate::LocatedSpan;
 use paste::item;
@@ -323,8 +323,8 @@ impl Node for BinOpNode {
         ctx: &'a Ctx<'a, 'ctx>,
         mutctx: &mut MutCtx<'a, 'ctx>,
     ) -> Value<'ctx> {
-        let left = try_load(ctx,  self.left.emit(ctx, mutctx));
-        let right = try_load(ctx,self.right.emit(ctx, mutctx));
+        let left = try_load(ctx, self.left.emit(ctx, mutctx));
+        let right = try_load(ctx, self.right.emit(ctx, mutctx));
         match self.op {
             TokenType::PLUS => handle_calc!(ctx, add, float_add, left, right),
             TokenType::MINUS => handle_calc!(ctx, sub, float_sub, left, right),
@@ -383,8 +383,8 @@ fn test_nom() {
     let v = v.unwrap();
     let load = context.builder.build_load(*v, "load");
     context.builder.build_return(Some(&load));
-    println!( "{}",context.module.to_string());
-    
+    println!("{}", context.module.to_string());
+
     let execution_engine = context
         .module
         .create_jit_execution_engine(inkwell::OptimizationLevel::None)
@@ -392,7 +392,7 @@ fn test_nom() {
     unsafe {
         let f = execution_engine.get_function::<MainFunc>("main").unwrap();
         let ret = f.call();
-        println!("a = {}",ret);
+        println!("a = {}", ret);
         assert_eq!(ret, 15)
     }
 }

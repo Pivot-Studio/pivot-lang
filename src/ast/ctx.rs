@@ -26,7 +26,7 @@ pub struct MutCtx<'a, 'b> {
 }
 
 impl<'b, 'c> MutCtx<'b, 'c> {
-    pub fn new(context: &'c Context, module: & Module<'c>) -> MutCtx<'b, 'c> {
+    pub fn new(context: &'c Context, module: &Module<'c>) -> MutCtx<'b, 'c> {
         let i64_type = context.i64_type();
         let fn_type = i64_type.fn_type(&[], false);
         let function = module.add_function("main", fn_type, None);

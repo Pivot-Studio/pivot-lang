@@ -8,7 +8,7 @@ use nom::{
         complete::{alpha1, alphanumeric1, one_of, space0},
         streaming::multispace0,
     },
-    combinator::{map_res, opt, recognize, eof},
+    combinator::{eof, map_res, opt, recognize},
     error::ParseError,
     multi::{many0, many0_count, many1},
     sequence::{delimited, pair, preceded, terminated, tuple},
@@ -54,7 +54,7 @@ impl<'a> PLParser<'a> {
     pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         alt((
             terminated(Self::new_variable, tuple((one_of(" \t\r\n"), opt(eof)))),
-            terminated(Self::assignment, tuple((one_of(" \t\r\n"),opt(eof)))),
+            terminated(Self::assignment, tuple((one_of(" \t\r\n"), opt(eof)))),
             // Self::if_statement,
             // Self::while_statement,
             // Self::newline,
