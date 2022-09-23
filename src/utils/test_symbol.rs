@@ -3,10 +3,6 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::execution_engine::{ExecutionEngine, JitFunction};
 use inkwell::module::Module;
-use inkwell::OptimizationLevel;
-use llvm_sys::target::LLVM_InitializeNativeTarget;
-use llvm_sys::{support, LLVMType, LLVMValue};
-use std::error::Error;
 
 /// Convenience type alias for the `sum` function.
 ///
@@ -71,7 +67,9 @@ pub fn demo(a: u64, b: u64, c: u64) -> u64 {
 }
 
 #[test]
-fn test_add_symbol() -> Result<(), Box<dyn Error>> {
+fn test_add_symbol() -> Result<(), Box<dyn std::error::Error>> {
+    use inkwell::OptimizationLevel;
+    use llvm_sys::target::LLVM_InitializeNativeTarget;
     let context = Context::create();
     let module = context.create_module("sum");
 

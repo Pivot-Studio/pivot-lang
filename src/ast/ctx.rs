@@ -1,21 +1,81 @@
+use crate::ast::node::Value;
+use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
-
-pub struct Ctx<'ctx> {
+use inkwell::values::BasicValueEnum;
+use inkwell::values::PointerValue;
+use std::collections::HashMap;
+#[derive(Debug, Clone)]
+pub struct Ctx<'a, 'ctx> {
+    pub table: HashMap<String, PointerValue<'ctx>>,
+    pub father: Option<&'a Ctx<'a, 'ctx>>,
+    pub basic_block: BasicBlock<'ctx>,
     pub context: &'ctx Context,
-    pub module: Module<'ctx>,
-    pub builder: Builder<'ctx>,
+    pub builder: &'a Builder<'ctx>,
+    pub module: &'a Module<'ctx>,
 }
 
-impl Ctx<'_> {
-    pub fn new<'ctx>(context: &'ctx Context) -> Ctx<'ctx> {
-        let module = context.create_module("main");
-        let builder = context.create_builder();
+impl<'a, 'ctx> Ctx<'a, 'ctx> {
+    pub fn new(
+        context: &'ctx Context,
+        module: &'a Module<'ctx>,
+        builder: &'a Builder<'ctx>,
+    ) -> Ctx<'a, 'ctx> {
+        let i64_type = context.i64_type();
+        let fn_type = i64_type.fn_type(&[], false);
+        let function = module.add_function("main", fn_type, None);
+        let basic_block = context.append_basic_block(function, "entry");
         Ctx {
+            table: HashMap::new(),
+            father: None,
+            basic_block,
             context,
             module,
             builder,
+        }
+    }
+    pub fn new_child(&'a self) -> Ctx<'a, 'ctx> {
+        Ctx {
+            table: HashMap::new(),
+            father: Some(self),
+            basic_block: self.basic_block,
+            context: self.context,
+            module: self.module,
+            builder: self.builder,
+        }
+    }
+
+    /// # get_symbol
+    /// search in current and all father symbol tables
+    pub fn get_symbol(&self, name: &str) -> Option<&PointerValue<'ctx>> {
+        let v = self.table.get(name);
+        if let Some(pv) = v {
+            return Some(pv);
+        }
+        if let Some(father) = self.father {
+            return father.get_symbol(name);
+        }
+        None
+    }
+
+    pub fn add_symbol(&mut self, name: String, pv: PointerValue<'ctx>) {
+        if self.table.contains_key(&name) {
+            todo!() // TODO 报错
+        }
+        self.table.insert(name, pv);
+    }
+    pub fn try_load(&mut self, v: Value<'ctx>) -> Value<'ctx> {
+        match v {
+            Value::VarValue(v) => {
+                let v = self.builder.build_load(v, "loadtmp");
+                match v {
+                    BasicValueEnum::IntValue(v) => Value::IntValue(v),
+                    BasicValueEnum::FloatValue(v) => Value::FloatValue(v),
+                    _ => todo!(),
+                }
+            }
+            _ => v,
         }
     }
 }
