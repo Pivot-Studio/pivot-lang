@@ -52,8 +52,8 @@ impl<'a> PLParser<'a> {
     /// ```
     pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         alt((
-            terminated(Self::new_variable, tuple((one_of(" \t\r\n"), opt(eof)))),
-            terminated(Self::assignment, tuple((one_of(" \t\r\n"), opt(eof)))),
+            terminated(Self::new_variable, many0(one_of(" \t\r\n"))),
+            terminated(Self::assignment, many0(one_of(" \t\r\n"))),
             // Self::if_statement,
             // Self::while_statement,
             // Self::newline,
