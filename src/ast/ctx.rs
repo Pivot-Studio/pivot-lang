@@ -1,53 +1,54 @@
-use std::collections::HashMap;
-
+use crate::ast::node::Value;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
+use inkwell::values::BasicValueEnum;
 use inkwell::values::PointerValue;
-
-pub struct Ctx<'a, 'ctx> {
-    pub context: &'ctx Context,
-    pub module: &'a Module<'ctx>,
-    pub builder: &'a Builder<'ctx>,
-}
-
-/// # MutCtx
-/// 存储可能需要变化的信息
-///
-/// 为了解决borrow问题，在只读的emit调用中应该clone
-/// mut的ctx并且传入只读ctx，而pointervalue因为可能会
-/// 被返回需要单独的生命周期
+use std::collections::HashMap;
 #[derive(Debug, Clone)]
-pub struct MutCtx<'a, 'b> {
-    pub table: HashMap<String, PointerValue<'b>>,
-    pub father: Option<&'a MutCtx<'a, 'b>>,
-    pub basic_block: BasicBlock<'b>,
+pub struct Ctx<'a, 'ctx> {
+    pub table: HashMap<String, PointerValue<'ctx>>,
+    pub father: Option<&'a Ctx<'a, 'ctx>>,
+    pub basic_block: BasicBlock<'ctx>,
+    pub context: &'ctx Context,
+    pub builder: &'a Builder<'ctx>,
+    pub module: &'a Module<'ctx>,
 }
 
-impl<'b, 'c> MutCtx<'b, 'c> {
-    pub fn new(context: &'c Context, module: &Module<'c>) -> MutCtx<'b, 'c> {
+impl<'a, 'ctx> Ctx<'a, 'ctx> {
+    pub fn new(
+        context: &'ctx Context,
+        module: &'a Module<'ctx>,
+        builder: &'a Builder<'ctx>,
+    ) -> Ctx<'a, 'ctx> {
         let i64_type = context.i64_type();
         let fn_type = i64_type.fn_type(&[], false);
         let function = module.add_function("main", fn_type, None);
         let basic_block = context.append_basic_block(function, "entry");
-        MutCtx {
+        Ctx {
             table: HashMap::new(),
             father: None,
             basic_block,
+            context,
+            module,
+            builder,
         }
     }
-    pub fn new_child(&'c self) -> MutCtx<'b, 'c> {
-        MutCtx {
+    pub fn new_child(&'a self) -> Ctx<'a, 'ctx> {
+        Ctx {
             table: HashMap::new(),
             father: Some(self),
             basic_block: self.basic_block,
+            context: self.context,
+            module: self.module,
+            builder: self.builder,
         }
     }
 
     /// # get_symbol
     /// search in current and all father symbol tables
-    pub fn get_symbol(&'b self, name: &str) -> Option<&PointerValue<'c>> {
+    pub fn get_symbol(&self, name: &str) -> Option<&PointerValue<'ctx>> {
         let v = self.table.get(name);
         if let Some(pv) = v {
             return Some(pv);
@@ -58,24 +59,23 @@ impl<'b, 'c> MutCtx<'b, 'c> {
         None
     }
 
-    pub fn add_symbol(&mut self, name: String, pv: PointerValue<'c>) {
+    pub fn add_symbol(&mut self, name: String, pv: PointerValue<'ctx>) {
         if self.table.contains_key(&name) {
             todo!() // TODO 报错
         }
         self.table.insert(name, pv);
     }
-}
-
-impl<'a, 'ctx> Ctx<'a, 'ctx> {
-    pub fn new(
-        context: &'ctx Context,
-        builder: &'a Builder<'ctx>,
-        module: &'a Module<'ctx>,
-    ) -> Ctx<'a, 'ctx> {
-        Ctx {
-            context,
-            module: module,
-            builder: builder,
+    pub fn try_load(&mut self, v: Value<'ctx>) -> Value<'ctx> {
+        match v {
+            Value::VarValue(v) => {
+                let v = self.builder.build_load(v, "loadtmp");
+                match v {
+                    BasicValueEnum::IntValue(v) => Value::IntValue(v),
+                    BasicValueEnum::FloatValue(v) => Value::FloatValue(v),
+                    _ => todo!(),
+                }
+            }
+            _ => v,
         }
     }
 }

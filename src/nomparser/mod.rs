@@ -1,13 +1,9 @@
-use std::any::Any;
 use std::fmt::Error;
 
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::{
-        complete::{alpha1, alphanumeric1, one_of, space0},
-        streaming::multispace0,
-    },
+    character::complete::{alpha1, alphanumeric1, one_of, space0},
     combinator::{eof, map_res, opt, recognize},
     error::ParseError,
     multi::{many0, many0_count, many1},
@@ -19,8 +15,11 @@ type Span<'a> = LocatedSpan<&'a str>;
 use nom::character::complete::char;
 
 use crate::{
-    ast::{AssignNode, DefNode, Range, TokenType, VarNode},
-    ast::{BinOpNode, Node, Num, NumNode, StatementsNode, UnaryOpNode},
+    ast::node::{
+        AssignNode, BinOpNode, DefNode, Node, Num, NumNode, StatementsNode, UnaryOpNode, VarNode,
+    },
+    ast::range::Range,
+    ast::tokens::TokenType,
 };
 
 fn res<T>(t: T) -> Result<Box<dyn Node>, Error>
@@ -104,7 +103,7 @@ impl<'a> PLParser<'a> {
                 Self::tag_token(TokenType::ASSIGN),
                 Self::add_exp,
             )),
-            |(left, op, right)| {
+            |(left, _op, right)| {
                 let range = left.range().start.to(right.range().end);
                 res(AssignNode {
                     var: left.as_any().downcast_ref::<VarNode>().unwrap().clone(),

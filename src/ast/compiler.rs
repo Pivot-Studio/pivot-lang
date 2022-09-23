@@ -29,20 +29,18 @@ impl<'a> Compiler<'a> {
     }
 
     pub fn compile(&mut self, file: &str) {
-        let tp = &Context::create();
-        let bd = tp.create_builder();
-        let mo = tp.create_module("test");
-        let context = ctx::Ctx::new(tp, &bd, &mo);
-        let mut mc = ctx::MutCtx::new(context.context, context.module);
-        context.builder.position_at_end(mc.basic_block);
-        let ctx = &context;
-        let m = &mut mc;
+        let context = &Context::create();
+        let builder = &context.create_builder();
+        let module = &context.create_module("test");
+        let mut ctx = ctx::Ctx::new(context, module, builder);
+        ctx.builder.position_at_end(ctx.basic_block);
+        let m = &mut ctx;
         let (_, mut node) = self.parser.parse().unwrap();
-        node.emit(ctx, m);
-        let v = mc.get_symbol("a");
+        node.emit(m);
+        let v = ctx.get_symbol("a");
         let v = v.unwrap();
-        let load = context.builder.build_load(*v, "load");
-        context.builder.build_return(Some(&load));
-        context.module.write_bitcode_to_path(Path::new(file));
+        let load = ctx.builder.build_load(*v, "load");
+        ctx.builder.build_return(Some(&load));
+        ctx.module.write_bitcode_to_path(Path::new(file));
     }
 }
