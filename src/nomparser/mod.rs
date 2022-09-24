@@ -55,6 +55,25 @@ fn create_bin(
     res_box(left)
 }
 
+macro_rules! parse_bin_ops {
+    ($exp:ident, $($op:ident),*) => {
+        delspace(map_res(
+            tuple((
+                Self::$exp,
+                many0(tuple((
+                    alt((
+                        $(
+                            Self::tag_token(TokenType::$op),
+                        )*
+                    )),
+                    Self::$exp,
+                ))),
+            )),
+            create_bin,
+        ))
+    };
+}
+
 pub struct PLParser<'a> {
     input: Span<'a>,
 }
@@ -157,35 +176,11 @@ impl<'a> PLParser<'a> {
     }
 
     pub fn add_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
-        delspace(map_res(
-            tuple((
-                Self::mul_exp,
-                many0(tuple((
-                    alt((
-                        Self::tag_token(TokenType::PLUS),
-                        Self::tag_token(TokenType::MINUS),
-                    )),
-                    Self::mul_exp,
-                ))),
-            )),
-            create_bin,
-        ))(input)
+        parse_bin_ops!(mul_exp, PLUS, MINUS)(input)
     }
 
     pub fn mul_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
-        delspace(map_res(
-            tuple((
-                Self::unary_exp,
-                many0(tuple((
-                    alt((
-                        Self::tag_token(TokenType::MUL),
-                        Self::tag_token(TokenType::DIV),
-                    )),
-                    Self::unary_exp,
-                ))),
-            )),
-            create_bin,
-        ))(input)
+        parse_bin_ops!(unary_exp, MUL, DIV)(input)
     }
 
     pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
