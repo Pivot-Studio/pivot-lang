@@ -157,21 +157,19 @@ impl<'a> PLParser<'a> {
     }
 
     pub fn add_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
-        delspace(
-            map_res(
-                tuple((
+        delspace(map_res(
+            tuple((
+                Self::mul_exp,
+                many0(tuple((
+                    alt((
+                        Self::tag_token(TokenType::PLUS),
+                        Self::tag_token(TokenType::MINUS),
+                    )),
                     Self::mul_exp,
-                    many0(tuple((
-                        alt((
-                            Self::tag_token(TokenType::PLUS),
-                            Self::tag_token(TokenType::MINUS),
-                        )),
-                        Self::mul_exp,
-                    ))),
-                )),
-                create_bin,
-            ),
-        )(input)
+                ))),
+            )),
+            create_bin,
+        ))(input)
     }
 
     pub fn mul_exp(input: Span) -> IResult<Span, Box<dyn Node>> {

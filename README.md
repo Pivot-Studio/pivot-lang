@@ -29,17 +29,31 @@ unaryexp =
 
 primaryexp =
     | number
-    | "(" addexp ")"
+    | boolconst
+    | "(" logicexp ")"
     | identifier
     ;
 
-assignment = identifier "=" addexp ;
+boolconst =
+    | "true"
+    | "false"
+    ;
 
-newvariable = "let" identifier "=" addexp ;
+compareexp =
+    | addexp (("<"｜"<="｜">"｜">="｜"=="｜"!=") addexp)*
+    ;
 
-ifstatement = "if" addexp "{" statement* "}" ;
+logicexp = 
+    | compareexp (("&&"｜"||") compareexp)*
+    ;
 
-whilestatement = "while" addexp "{" statement* "}" ;
+assignment = identifier "=" logicexp ;
+
+newvariable = "let" identifier "=" logicexp ;
+
+ifstatement = "if" logicexp "{" statement* "}" ;
+
+whilestatement = "while" logicexp "{" statement* "}" ;
 
 newline = "\n" | "\r\n" ;
 

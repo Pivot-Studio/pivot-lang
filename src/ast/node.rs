@@ -2,7 +2,7 @@ use crate::ast::ctx::Ctx;
 use crate::ast::range::RangeTrait;
 use crate::ast::tokens::TokenType;
 use as_any::AsAny;
-use inkwell::values::{FloatValue, IntValue, PointerValue};
+use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
 use paste::item;
 use range_marco::range;
 /// # Value
@@ -15,6 +15,17 @@ pub enum Value<'a> {
     FloatValue(FloatValue<'a>),
     VarValue(PointerValue<'a>),
     None,
+}
+
+impl<'a> Value<'a> {
+    fn as_basic_value_enum(&self) -> BasicValueEnum<'a> {
+        match self {
+            Value::IntValue(v) => v.as_basic_value_enum(),
+            Value::FloatValue(v) => v.as_basic_value_enum(),
+            Value::VarValue(v) => v.as_basic_value_enum(),
+            Value::None => panic!("not implemented"),
+        }
+    }
 }
 
 pub trait Node: RangeTrait + AsAny {
@@ -164,20 +175,11 @@ impl Node for DefNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let pt;
         let v = self.exp.emit(ctx);
-        match v {
-            Value::IntValue(v) => {
-                let tp = v.get_type();
-                let p = ctx.builder.build_alloca(tp, &self.var.name);
-                pt = p;
-                ctx.builder.build_store(pt, v);
-            }
-            Value::FloatValue(v) => {
-                let p = ctx.builder.build_alloca(v.get_type(), &self.var.name);
-                pt = p;
-                ctx.builder.build_store(pt, v);
-            }
-            _ => todo!(),
-        }
+        let e = v.as_basic_value_enum();
+        let tp = e.get_type();
+        let p = ctx.builder.build_alloca(tp, &self.var.name);
+        pt = p;
+        ctx.builder.build_store(pt, e);
 
         ctx.add_symbol(self.var.name.clone(), pt);
         Value::None
@@ -200,15 +202,8 @@ impl Node for AssignNode {
         let pt = self.var.emit(ctx);
         let value = self.exp.emit(ctx);
         if let Value::VarValue(ptr) = pt {
-            match value {
-                Value::IntValue(v) => {
-                    ctx.builder.build_store(ptr, v);
-                }
-                Value::FloatValue(v) => {
-                    ctx.builder.build_store(ptr, v);
-                }
-                _ => todo!(),
-            }
+            let e = value.as_basic_value_enum();
+            ctx.builder.build_store(ptr, e);
             return Value::None;
         }
 
