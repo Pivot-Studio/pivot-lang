@@ -8,7 +8,7 @@ fn test_nom() {
     use crate::nomparser::PLParser;
     use inkwell::context::Context;
     type MainFunc = unsafe extern "C" fn() -> i64;
-    let mut parser = PLParser::new("let a = 2*(3+2)+5\n");
+    let mut parser = PLParser::new("let a = 200/2*(10+200)\n");
     let (_, mut node) = parser.parse().unwrap();
     let context = &Context::create();
     let builder = &context.create_builder();
@@ -38,6 +38,6 @@ fn test_nom() {
         let f = execution_engine.get_function::<MainFunc>("main").unwrap();
         let ret = f.call();
         println!("a = {}", ret);
-        assert_eq!(ret, 15)
+        assert_eq!(ret, 21000)
     }
 }

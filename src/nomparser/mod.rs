@@ -26,8 +26,35 @@ fn res<T>(t: T) -> Result<Box<dyn Node>, Error>
 where
     T: Node + 'static,
 {
-    Ok::<Box<dyn Node>, Error>(Box::new(t))
+    res_box(box_node(t))
 }
+
+fn box_node<T>(t: T) -> Box<dyn Node>
+where
+    T: Node + 'static,
+{
+    Box::new(t)
+}
+
+fn res_box(i: Box<dyn Node>) -> Result<Box<dyn Node>, Error> {
+    Ok::<Box<dyn Node>, Error>(i)
+}
+
+fn create_bin(
+    (mut left, rights): (Box<dyn Node>, Vec<(TokenType, Box<dyn Node>)>),
+) -> Result<Box<dyn Node>, Error> {
+    for (op, right) in rights {
+        let range = left.range().start.to(right.range().end);
+        left = Box::new(BinOpNode {
+            op,
+            left,
+            right,
+            range,
+        });
+    }
+    res_box(left)
+}
+
 pub struct PLParser<'a> {
     input: Span<'a>,
 }
@@ -130,53 +157,37 @@ impl<'a> PLParser<'a> {
     }
 
     pub fn add_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
-        delspace(alt((
+        delspace(
             map_res(
                 tuple((
                     Self::mul_exp,
-                    alt((
-                        Self::tag_token(TokenType::PLUS),
-                        Self::tag_token(TokenType::MINUS),
-                    )),
-                    Self::add_exp,
+                    many0(tuple((
+                        alt((
+                            Self::tag_token(TokenType::PLUS),
+                            Self::tag_token(TokenType::MINUS),
+                        )),
+                        Self::mul_exp,
+                    ))),
                 )),
-                |(left, op, right)| {
-                    let range = left.range().start.to(right.range().end);
-                    res(BinOpNode {
-                        op,
-                        left,
-                        right,
-                        range,
-                    })
-                },
+                create_bin,
             ),
-            Self::mul_exp,
-        )))(input)
+        )(input)
     }
 
     pub fn mul_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
-        delspace(alt((
-            map_res(
-                tuple((
-                    Self::unary_exp,
+        delspace(map_res(
+            tuple((
+                Self::unary_exp,
+                many0(tuple((
                     alt((
                         Self::tag_token(TokenType::MUL),
                         Self::tag_token(TokenType::DIV),
                     )),
-                    Self::mul_exp,
-                )),
-                |(left, op, right)| {
-                    let range = left.range().start.to(right.range().end);
-                    res(BinOpNode {
-                        op,
-                        left,
-                        right,
-                        range,
-                    })
-                },
-            ),
-            Self::unary_exp,
-        )))(input)
+                    Self::unary_exp,
+                ))),
+            )),
+            create_bin,
+        ))(input)
     }
 
     pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
