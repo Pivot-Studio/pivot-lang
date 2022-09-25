@@ -9,7 +9,7 @@ use super::ctx;
 pub struct Compiler<'a> {
     parser: PLParser<'a>,
 }
-type MainFunc = unsafe extern "C" fn() -> i64;
+type MainFunc = unsafe extern "C" fn() -> bool;
 impl<'a> Compiler<'a> {
     pub fn new(input: &'a str) -> Self {
         let parser = PLParser::new(input);
@@ -42,5 +42,6 @@ impl<'a> Compiler<'a> {
         let load = ctx.builder.build_load(*v, "load");
         ctx.builder.build_return(Some(&load));
         ctx.module.write_bitcode_to_path(Path::new(file));
+        ctx.module.print_to_stderr();
     }
 }

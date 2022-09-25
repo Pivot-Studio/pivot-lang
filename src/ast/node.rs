@@ -3,6 +3,7 @@ use crate::ast::range::RangeTrait;
 use crate::ast::tokens::TokenType;
 use as_any::AsAny;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
+use inkwell::IntPredicate;
 use paste::item;
 use range_marco::range;
 /// # Value
@@ -10,7 +11,9 @@ use range_marco::range;
 ///
 /// 只有expression才会产生值，而statement不会产生值。对于statement，
 /// 我们可以用None来表示
+#[derive(Debug)]
 pub enum Value<'a> {
+    BoolValue(IntValue<'a>),
     IntValue(IntValue<'a>),
     FloatValue(FloatValue<'a>),
     VarValue(PointerValue<'a>),
@@ -23,6 +26,7 @@ impl<'a> Value<'a> {
             Value::IntValue(v) => v.as_basic_value_enum(),
             Value::FloatValue(v) => v.as_basic_value_enum(),
             Value::VarValue(v) => v.as_basic_value_enum(),
+            Value::BoolValue(v) => v.as_basic_value_enum(),
             Value::None => panic!("not implemented"),
         }
     }
@@ -49,9 +53,24 @@ macro_rules! handle_calc {
         }
     };
 }
+#[range]
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub struct BoolConstNode {
+    pub value: bool,
+}
+
+impl Node for BoolConstNode {
+    fn print(&self) {
+        println!("BoolConstNode:");
+        println!("{:?}", self.value)
+    }
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        Value::BoolValue(ctx.context.bool_type().const_int(self.value as u64, true))
+    }
+}
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Num {
-    INT(i64),
+    INT(u64),
     FLOAT(f64),
 }
 #[range]
@@ -66,7 +85,7 @@ impl Node for NumNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         if let Num::INT(x) = self.value {
-            let b = ctx.context.i64_type().const_int(x as u64, false);
+            let b = ctx.context.i64_type().const_int(x, true);
             return Value::IntValue(b);
         } else if let Num::FLOAT(x) = self.value {
             let b = ctx.context.f64_type().const_float(x);
@@ -107,10 +126,23 @@ impl Node for UnaryOpNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let exp = self.exp.emit(ctx);
-        return match exp {
-            Value::IntValue(exp) => Value::IntValue(ctx.builder.build_int_neg(exp, "negtmp")),
-            Value::FloatValue(exp) => Value::FloatValue(ctx.builder.build_float_neg(exp, "negtmp")),
-            _ => panic!("not implemented"),
+        let exp = ctx.try_load(exp);
+        return match (exp, self.op) {
+            (Value::IntValue(exp), TokenType::MINUS) => {
+                Value::IntValue(ctx.builder.build_int_neg(exp, "negtmp"))
+            }
+            (Value::FloatValue(exp), TokenType::MINUS) => {
+                Value::FloatValue(ctx.builder.build_float_neg(exp, "negtmp"))
+            }
+            (Value::BoolValue(exp), TokenType::NOT) => {
+                Value::BoolValue(ctx.builder.build_int_compare(
+                    IntPredicate::EQ,
+                    exp,
+                    ctx.context.bool_type().const_int(false as u64, true),
+                    "nottmp",
+                ))
+            }
+            (exp, op) => panic!("not implemented,get exp {:?},op {:?}", exp, op),
         };
     }
 }
@@ -137,6 +169,34 @@ impl Node for BinOpNode {
             TokenType::MINUS => handle_calc!(ctx, sub, float_sub, left, right),
             TokenType::MUL => handle_calc!(ctx, mul, float_mul, left, right),
             TokenType::DIV => handle_calc!(ctx, signed_div, float_div, left, right),
+            TokenType::EQ
+            | TokenType::NE
+            | TokenType::LEQ
+            | TokenType::GEQ
+            | TokenType::GREATER
+            | TokenType::LESS => match (left, right) {
+                (Value::IntValue(lhs), Value::IntValue(rhs)) => Value::BoolValue(
+                    ctx.builder
+                        .build_int_compare(self.op.get_op(), lhs, rhs, "cmptmp"),
+                ),
+                (Value::FloatValue(lhs), Value::FloatValue(rhs)) => Value::BoolValue(
+                    ctx.builder
+                        .build_float_compare(self.op.get_fop(), lhs, rhs, "cmptmp"),
+                ),
+                _ => panic!("not implemented"),
+            },
+            TokenType::AND => match (left, right) {
+                (Value::BoolValue(lhs), Value::BoolValue(rhs)) => {
+                    Value::BoolValue(ctx.builder.build_and(lhs, rhs, "andtmp"))
+                }
+                _ => panic!("not implemented"),
+            },
+            TokenType::OR => match (left, right) {
+                (Value::BoolValue(lhs), Value::BoolValue(rhs)) => {
+                    Value::BoolValue(ctx.builder.build_or(lhs, rhs, "ortmp"))
+                }
+                _ => panic!("not implemented"),
+            },
             op => panic!("expected op token but found {:?}", op),
         }
     }
@@ -173,15 +233,13 @@ impl Node for DefNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        let pt;
         let v = self.exp.emit(ctx);
         let e = v.as_basic_value_enum();
         let tp = e.get_type();
         let p = ctx.builder.build_alloca(tp, &self.var.name);
-        pt = p;
-        ctx.builder.build_store(pt, e);
+        ctx.builder.build_store(p, e);
 
-        ctx.add_symbol(self.var.name.clone(), pt);
+        ctx.add_symbol(self.var.name.clone(), p);
         Value::None
     }
 }
