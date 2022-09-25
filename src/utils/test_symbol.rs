@@ -74,7 +74,7 @@ fn test_add_symbol() -> Result<(), Box<dyn std::error::Error>> {
     for v in names {
         let context = Context::create();
         let module = context.create_module("sum");
-    
+
         unsafe {
             LLVM_InitializeNativeTarget();
         }
@@ -85,9 +85,7 @@ fn test_add_symbol() -> Result<(), Box<dyn std::error::Error>> {
             builder: context.create_builder(),
             execution_engine,
         };
-        let demo = codegen
-            .jit_compile_fn(v)
-            .ok_or("Unable to JIT compile")?;
+        let demo = codegen.jit_compile_fn(v).ok_or("Unable to JIT compile")?;
         let x = 1u64;
         let y = 2u64;
         let z = 3u64;

@@ -4,10 +4,11 @@ mod utils;
 use std::fs::read_to_string;
 use std::path::Path;
 
-use ast::compiler::Compiler;
+use ast::compiler::{self, Compiler};
 use clap::{Parser, Subcommand};
+use inkwell::OptimizationLevel;
 
-/// Simple program to greet a person
+/// Pivot Lang compiler program
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Cli {
@@ -18,6 +19,19 @@ struct Cli {
     /// output file
     #[clap(short, long, value_parser, default_value = "out.plb")]
     out: String,
+
+    /// verbose
+    #[clap(short, long)]
+    verbose: bool,
+
+    /// print ast
+    #[clap(long)]
+    printast: bool,
+
+    /// generate ir
+    #[clap(long)]
+    genir: bool,
+
     #[clap(subcommand)]
     command: Option<RunCommand>,
 }
@@ -28,6 +42,9 @@ enum RunCommand {
         /// Name of the compiled file
         #[clap(value_parser)]
         name: String,
+        /// optimization level, 0-3
+        #[clap(short, value_parser, default_value = "0")]
+        optimization: u64,
     },
 }
 
@@ -39,11 +56,25 @@ fn main() {
         let str = read_to_string(Path::new(name)).unwrap();
         let s = str.as_str();
         let mut c = Compiler::new(s);
-        c.compile(cli.out.as_str());
+        c.compile(
+            cli.out.as_str(),
+            compiler::Option {
+                verbose: cli.verbose,
+                genir: cli.genir,
+                printast: cli.printast,
+            },
+        );
     } else if let Some(command) = cli.command {
         match command {
-            RunCommand::Run { name } => {
-                Compiler::run(Path::new(name.as_str()));
+            RunCommand::Run { name, optimization } => {
+                let opt = match optimization {
+                    0 => OptimizationLevel::None,
+                    1 => OptimizationLevel::Less,
+                    2 => OptimizationLevel::Default,
+                    3 => OptimizationLevel::Aggressive,
+                    _ => panic!("optimization level must be 0-3"),
+                };
+                Compiler::run(Path::new(name.as_str()), opt);
             }
         }
     } else {
