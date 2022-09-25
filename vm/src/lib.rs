@@ -1,4 +1,5 @@
 use add_symbol::is_runtime;
+mod gc;
 
 #[is_runtime] // jit注册
 #[no_mangle] // 为静态编译做准备
