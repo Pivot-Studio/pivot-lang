@@ -70,7 +70,11 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             Value::VarValue(v) => {
                 let v = self.builder.build_load(v, "loadtmp");
                 match v {
-                    BasicValueEnum::IntValue(v) => Value::IntValue(v),
+                    BasicValueEnum::IntValue(v) => match v.get_type().get_bit_width() {
+                        1 => Value::BoolValue(v),
+                        64 => Value::IntValue(v),
+                        _ => todo!(),
+                    },
                     BasicValueEnum::FloatValue(v) => Value::FloatValue(v),
                     _ => todo!(),
                 }

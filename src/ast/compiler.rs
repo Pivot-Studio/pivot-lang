@@ -61,5 +61,6 @@ impl<'a> Compiler<'a> {
             println!("compile succ, time: {:?}", time);
         }
         ctx.module.write_bitcode_to_path(Path::new(file));
+        ctx.module.print_to_stderr();
     }
 }

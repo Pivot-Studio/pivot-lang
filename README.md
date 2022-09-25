@@ -15,7 +15,7 @@
 
 ```ebnf
 addexp = 
-    | mulexp ("+" mulexp)*
+    | mulexp ("+" | "-" mulexp)*
     ;
 
 mulexp = 
@@ -24,7 +24,7 @@ mulexp =
 
 unaryexp =
     | primaryexp
-    | "-" unaryexp
+    | ("-" | "!") primaryexp
     ;
 
 primaryexp =

@@ -4,7 +4,7 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::{alpha1, alphanumeric1, one_of, space0},
-    combinator::{eof, map_res, opt, recognize},
+    combinator::{map_res, opt, recognize},
     error::ParseError,
     multi::{many0, many0_count, many1},
     sequence::{delimited, pair, preceded, terminated, tuple},
@@ -16,7 +16,8 @@ use nom::character::complete::char;
 
 use crate::{
     ast::node::{
-        AssignNode, BinOpNode, DefNode, Node, Num, NumNode, StatementsNode, UnaryOpNode, VarNode,
+        AssignNode, BinOpNode, BoolConstNode, DefNode, Node, Num, NumNode, StatementsNode,
+        UnaryOpNode, VarNode,
     },
     ast::range::Range,
     ast::tokens::TokenType,
@@ -127,7 +128,7 @@ impl<'a> PLParser<'a> {
                 tuple((
                     Self::identifier,
                     Self::tag_token(TokenType::ASSIGN),
-                    Self::add_exp,
+                    Self::logic_exp,
                 )),
             ),
             |(out, _, v)| {
@@ -147,7 +148,7 @@ impl<'a> PLParser<'a> {
             tuple((
                 Self::identifier,
                 Self::tag_token(TokenType::ASSIGN),
-                Self::add_exp,
+                Self::logic_exp,
             )),
             |(left, _op, right)| {
                 let range = left.range().start.to(right.range().end);
@@ -167,7 +168,8 @@ impl<'a> PLParser<'a> {
                 Ok::<Num, Error>(Num::FLOAT(out.fragment().parse::<f64>().unwrap()))
             }),
             map_res(Self::decimal, |out| {
-                Ok::<Num, Error>(Num::INT(out.fragment().parse::<i64>().unwrap()))
+                // TODO:err tolerate
+                Ok::<Num, Error>(Num::INT(out.fragment().parse::<u64>().unwrap()))
             }),
         ))(input)?;
         let range = Range::new(input, re);
@@ -187,17 +189,25 @@ impl<'a> PLParser<'a> {
         delspace(alt((
             Self::primary_exp,
             map_res(
-                preceded(Self::tag_token(TokenType::MINUS), Self::primary_exp),
-                |out| {
-                    let range = out.range();
-                    res(UnaryOpNode {
-                        op: TokenType::MINUS,
-                        exp: out,
-                        range,
-                    })
+                tuple((
+                    alt((
+                        Self::tag_token(TokenType::MINUS),
+                        Self::tag_token(TokenType::NOT),
+                    )),
+                    Self::primary_exp,
+                )),
+                |(op, exp)| {
+                    let range = exp.range();
+                    res(UnaryOpNode { op, exp, range })
                 },
             ),
         )))(input)
+    }
+    pub fn compare_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+        parse_bin_ops!(add_exp, GEQ, LEQ, NE, EQ, LESS, GREATER)(input)
+    }
+    pub fn logic_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+        parse_bin_ops!(compare_exp, AND, OR)(input)
     }
     pub fn identifier(input: Span) -> IResult<Span, Box<dyn Node>> {
         delspace(map_res(
@@ -216,13 +226,30 @@ impl<'a> PLParser<'a> {
     pub fn primary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
         delspace(alt((
             Self::number,
+            Self::bool_const,
             delimited(
                 Self::tag_token(TokenType::LPAREN),
-                Self::add_exp,
+                Self::logic_exp,
                 Self::tag_token(TokenType::RPAREN),
             ),
             Self::identifier,
         )))(input)
+    }
+    fn bool_const(input: Span) -> IResult<Span, Box<dyn Node>> {
+        alt((
+            map_res(tag("true"), |out| {
+                res(BoolConstNode {
+                    value: true,
+                    range: Range::new(input, out),
+                })
+            }),
+            map_res(tag("false"), |out| {
+                res(BoolConstNode {
+                    value: false,
+                    range: Range::new(input, out),
+                })
+            }),
+        ))(input)
     }
     fn float(input: Span) -> IResult<Span, Span> {
         alt((
