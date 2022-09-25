@@ -33,8 +33,7 @@ impl<'ctx> CodeGen<'ctx> {
         let demo = self.module.add_function(fnname, fn_type, None);
         let sum = self
             .builder
-            .build_call(demo, &[x.into(), y.into(), z.into()], "xxx");
-
+            .build_call(demo, &[x.into(), y.into(), z.into()], fnname);
         self.builder
             .build_return(Some(&sum.try_as_basic_value().left().unwrap()));
         unsafe {
@@ -70,26 +69,25 @@ pub fn demo(a: u64, b: u64, c: u64) -> u64 {
 fn test_add_symbol() -> Result<(), Box<dyn std::error::Error>> {
     use inkwell::OptimizationLevel;
     use llvm_sys::target::LLVM_InitializeNativeTarget;
-    let context = Context::create();
-    let module = context.create_module("sum");
-
-    unsafe {
-        LLVM_InitializeNativeTarget();
-    }
-    let execution_engine = module.create_jit_execution_engine(OptimizationLevel::None)?;
-    let codegen = CodeGen {
-        context: &context,
-        module,
-        builder: context.create_builder(),
-        execution_engine,
-    };
-    let names = vec!["demo", "test_demo", "test_demo1"];
+    let names = vec!["demo", "test__demo", "test__demo1"];
 
     for v in names {
+        let context = Context::create();
+        let module = context.create_module("sum");
+    
+        unsafe {
+            LLVM_InitializeNativeTarget();
+        }
+        let execution_engine = module.create_jit_execution_engine(OptimizationLevel::None)?;
+        let codegen = CodeGen {
+            context: &context,
+            module,
+            builder: context.create_builder(),
+            execution_engine,
+        };
         let demo = codegen
             .jit_compile_fn(v)
-            .ok_or("Unable to JIT compile `sum`")?;
-
+            .ok_or("Unable to JIT compile")?;
         let x = 1u64;
         let y = 2u64;
         let z = 3u64;
