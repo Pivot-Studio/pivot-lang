@@ -1,4 +1,4 @@
-use add_symbol::is_runtime;
+use internal_macro::is_runtime;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::execution_engine::{ExecutionEngine, JitFunction};

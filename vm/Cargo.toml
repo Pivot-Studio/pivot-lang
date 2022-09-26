@@ -6,6 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-add_symbol = { path = "../add_symbol" }
+internal_macro = { path = "../internal_macro" }
 libc = "0.2"
 rand = "0.8"

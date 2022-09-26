@@ -5,7 +5,7 @@ use as_any::AsAny;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
 use inkwell::IntPredicate;
 use paste::item;
-use range_marco::range;
+use internal_macro::range;
 /// # Value
 /// 表达每个ast在计算之后产生的值  
 ///

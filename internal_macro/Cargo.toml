@@ -1,5 +1,5 @@
 [package]
-name = "add_symbol"
+name = "internal_macro"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,6 +10,5 @@ ctor = "0.1.23"
 llvm-sys = "140"
 [dependencies.add_symbol_macro]
 path = "src/add_symbol_macro"
-
-[workspace]
-members = ["src/add_symbol_macro"]
+[dependencies.range_macro]
+path = "src/range_macro"
