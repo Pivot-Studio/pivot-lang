@@ -193,7 +193,7 @@ fn test_complicated_gc() {
         let rustptr = &(ptr1 as i64) as *const _ as *mut c_void;
         for i in 0..1000 {
             let ptr = gc.malloc(64);
-            let n= rand::thread_rng().gen_range(0..2);
+            let n = rand::thread_rng().gen_range(0..2);
             if n == 0 {
                 size += 64;
                 let offset = rand::thread_rng().gen_range(0..8);
@@ -201,9 +201,13 @@ fn test_complicated_gc() {
                 ptr1 = ptr;
             }
         }
-        println!("allocated size: {}, amoung which {} should be chained to gc_root", 1001 * 64, size);
+        println!(
+            "allocated size: {}, amoung which {} should be chained to gc_root",
+            1001 * 64,
+            size
+        );
         println!("testing current gc size");
-        assert_eq!(gc.get_size(), 64*1001);
+        assert_eq!(gc.get_size(), 64 * 1001);
         println!("current gc size is correct: {}", gc.get_size());
         gc.add_root(rustptr);
         println!("try to force gc collect");
@@ -211,7 +215,10 @@ fn test_complicated_gc() {
         let now = Instant::now();
         gc.collect();
         let spent = now.elapsed();
-        println!("gc collect finished, time spent: {:#?}, testing gc size after collection", spent);
+        println!(
+            "gc collect finished, time spent: {:#?}, testing gc size after collection",
+            spent
+        );
         assert_eq!(gc.get_size(), size);
         println!("gc size after collection is correct: {}", gc.get_size());
     }

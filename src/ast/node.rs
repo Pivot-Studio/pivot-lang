@@ -113,6 +113,54 @@ impl Node for StatementsNode {
         Value::None
     }
 }
+
+#[range]
+pub struct NLNode {}
+
+impl Node for NLNode {
+    fn print(&self) {
+        println!("NLNode");
+    }
+
+    fn emit<'a, 'ctx>(&'a mut self, _: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        Value::None
+    }
+}
+
+#[range]
+pub struct WhileNode {
+    pub cond: Box<dyn Node>,
+    pub body: Box<dyn Node>,
+}
+
+impl Node for WhileNode {
+    fn print(&self) {
+        println!("WhileNode:");
+        self.cond.print();
+        self.body.print();
+    }
+
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        let cond_block = ctx.context.append_basic_block(ctx.function, "cond");
+        let body_block = ctx.context.append_basic_block(ctx.function, "body");
+        let after_block = ctx.context.append_basic_block(ctx.function, "after");
+        ctx.builder.build_unconditional_branch(cond_block);
+        ctx.builder.position_at_end(cond_block);
+        let cond = self.cond.emit(ctx);
+        let cond = match cond {
+            Value::BoolValue(v) => v,
+            _ => panic!("not implemented"),
+        };
+        ctx.builder
+            .build_conditional_branch(cond, body_block, after_block);
+        ctx.builder.position_at_end(body_block);
+        self.body.emit(ctx);
+        ctx.builder.build_unconditional_branch(cond_block);
+        ctx.builder.position_at_end(after_block);
+        Value::None
+    }
+}
+
 #[range]
 pub struct UnaryOpNode {
     pub op: TokenType,

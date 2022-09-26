@@ -19,8 +19,11 @@ use crate::{
         AssignNode, BinOpNode, BoolConstNode, DefNode, Node, Num, NumNode, StatementsNode,
         UnaryOpNode, VarNode,
     },
-    ast::range::Range,
     ast::tokens::TokenType,
+    ast::{
+        node::{NLNode, WhileNode},
+        range::Range,
+    },
 };
 
 fn res<T>(t: T) -> Result<Box<dyn Node>, Error>
@@ -88,6 +91,32 @@ impl<'a> PLParser<'a> {
     pub fn parse(&mut self) -> IResult<Span, Box<dyn Node>> {
         Self::statements(self.input)
     }
+
+    /// ```enbf
+    /// whilestatement = "while" logicexp statement_block ;
+    /// ```
+    pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+        map_res(
+            tuple((
+                Self::tag_token(TokenType::WHILE),
+                Self::logic_exp,
+                Self::statement_block,
+            )),
+            |(_, cond, body)| {
+                let range = cond.range().start.to(body.range().end);
+                res(WhileNode { cond, body, range })
+            },
+        )(input)
+    }
+
+    pub fn statement_block(input: Span) -> IResult<Span, Box<dyn Node>> {
+        delimited(
+            Self::tag_token(TokenType::LBRACE),
+            Self::statements,
+            Self::tag_token(TokenType::RBRACE),
+        )(input)
+    }
+
     /// ```ebnf
     /// statement =
     /// | assignment newline
@@ -99,12 +128,21 @@ impl<'a> PLParser<'a> {
     /// ```
     pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         alt((
-            terminated(Self::new_variable, many0(one_of(" \t\r\n"))),
-            terminated(Self::assignment, many0(one_of(" \t\r\n"))),
+            terminated(Self::new_variable, Self::newline),
+            terminated(Self::assignment, Self::newline),
             // Self::if_statement,
-            // Self::while_statement,
-            // Self::newline,
+            Self::while_statement,
+            // Self::eof,
+            Self::newline,
         ))(input)
+    }
+
+    pub fn newline(input: Span) -> IResult<Span, Box<dyn Node>> {
+        map_res(alt((tag("\n"), tag("\r\n"))), |_| {
+            res(NLNode {
+                range: Range::new(input, input),
+            })
+        })(input)
     }
 
     pub fn statements(input: Span) -> IResult<Span, Box<dyn Node>> {

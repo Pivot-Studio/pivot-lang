@@ -37,7 +37,10 @@ define_tokens!(
     EQ = "==",
     NE = "!=",
     AND = "&&",
-    OR = "||"
+    OR = "||",
+    LBRACE = "{",
+    RBRACE = "}",
+    WHILE = "while"
 );
 impl TokenType {
     pub fn get_str(&self) -> &'static str {

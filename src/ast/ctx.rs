@@ -4,16 +4,17 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::values::BasicValueEnum;
+use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
 use std::collections::HashMap;
 #[derive(Debug, Clone)]
 pub struct Ctx<'a, 'ctx> {
     pub table: HashMap<String, PointerValue<'ctx>>,
     pub father: Option<&'a Ctx<'a, 'ctx>>,
-    pub basic_block: BasicBlock<'ctx>,
     pub context: &'ctx Context,
     pub builder: &'a Builder<'ctx>,
     pub module: &'a Module<'ctx>,
+    pub function: FunctionValue<'ctx>,
 }
 
 impl<'a, 'ctx> Ctx<'a, 'ctx> {
@@ -26,23 +27,24 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         let fn_type = i64_type.fn_type(&[], false);
         let function = module.add_function("main", fn_type, None);
         let basic_block = context.append_basic_block(function, "entry");
+        builder.position_at_end(basic_block);
         Ctx {
             table: HashMap::new(),
             father: None,
-            basic_block,
             context,
             module,
             builder,
+            function,
         }
     }
     pub fn new_child(&'a self) -> Ctx<'a, 'ctx> {
         Ctx {
             table: HashMap::new(),
             father: Some(self),
-            basic_block: self.basic_block,
             context: self.context,
             module: self.module,
             builder: self.builder,
+            function: self.function,
         }
     }
 
