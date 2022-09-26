@@ -10,8 +10,7 @@ inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", feat
 lazy_static = "1.4.0"
 paste = "1.0"
 llvm-sys = "140"
-add_symbol = { path = "./add_symbol" }
-range_marco = { path = "./range_marco" }
+internal_macro = { path = "./internal_macro" }
 vm = { path = "./vm" }
 nom_locate = "4.0.0"
 as-any = "0.3.0"

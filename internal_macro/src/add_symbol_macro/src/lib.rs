@@ -16,7 +16,7 @@ use syn::{
 /// while tagging a function, you can specify the name of the function in the llvm symbol table like this:  
 ///
 /// ```no_run
-/// #[add_symbol::is_runtime("myfunc")]
+/// #[internal_macro::is_runtime("myfunc")]
 /// pub fn myfunc1() {
 ///    // ...
 /// }
@@ -29,7 +29,7 @@ use syn::{
 ///
 /// ```no_run
 /// struct MyStruct;
-/// #[add_symbol::is_runtime("struct")]
+/// #[internal_macro::is_runtime("struct")]
 /// impl MyStruct {
 ///    pub fn myfunc1() {
 ///       // ...
@@ -64,12 +64,12 @@ pub fn is_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             return quote!(
                 #input
-                #[add_symbol::ctor::ctor]
+                #[internal_macro::ctor::ctor]
                 fn #initfnid() {
                     let ptr = #fnid as * const ();
                     let name = #str1;
                     unsafe{
-                        add_symbol::add_symbol(name, ptr);
+                        internal_macro::add_symbol(name, ptr);
                     }
                 }
             )
@@ -161,13 +161,13 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
     let initfnid = format_ident!("add_symbol_impl_{}", tp.to_lowercase());
     let gen = quote! {
         #ast
-        #[add_symbol::ctor::ctor]
+        #[internal_macro::ctor::ctor]
         fn #initfnid() {
             #(
                 let ptr = #ident::#fnids as * const ();
                 let name = #fns;
                 unsafe{
-                    add_symbol::add_symbol(name, ptr);
+                    internal_macro::add_symbol(name, ptr);
                 }
             )*
         }

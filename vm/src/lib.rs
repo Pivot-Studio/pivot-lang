@@ -1,4 +1,4 @@
-use add_symbol::is_runtime;
+use internal_macro::is_runtime;
 mod gc;
 
 #[is_runtime] // jit注册
