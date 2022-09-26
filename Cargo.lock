@@ -455,6 +455,7 @@ name = "vm"
 version = "0.1.0"
 dependencies = [
  "add_symbol",
+ "libc",
 ]
 
 [[package]]
