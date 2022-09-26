@@ -22,5 +22,7 @@ pub unsafe fn add_symbol(name: &str, ptr: *const ()) {
 
 pub use add_symbol_macro::is_runtime;
 pub use range_macro::range;
+pub use test_parser_macro::test_parser;
+pub use test_parser_macro::test_parser_error;
 #[doc(hidden)]
 pub extern crate ctor;

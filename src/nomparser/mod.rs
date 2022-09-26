@@ -12,8 +12,6 @@ use nom::{
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
-use nom::character::complete::char;
-
 use crate::{
     ast::node::{
         AssignNode, BinOpNode, BoolConstNode, DefNode, Node, Num, NumNode, StatementsNode,
@@ -22,6 +20,8 @@ use crate::{
     ast::range::Range,
     ast::tokens::TokenType,
 };
+use internal_macro::{test_parser, test_parser_error};
+use nom::character::complete::char;
 
 fn res<T>(t: T) -> Result<Box<dyn Node>, Error>
 where
@@ -225,6 +225,10 @@ pub fn primary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
         identifier,
     )))(input)
 }
+#[test_parser(true)]
+#[test_parser(false)]
+#[test_parser_error(tru)]
+#[test_parser_error(fales)]
 fn bool_const(input: Span) -> IResult<Span, Box<dyn Node>> {
     alt((
         map_res(tag("true"), |out| {

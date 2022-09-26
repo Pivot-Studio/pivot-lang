@@ -12,3 +12,5 @@ llvm-sys = "140"
 path = "src/add_symbol_macro"
 [dependencies.range_macro]
 path = "src/range_macro"
+[dependencies.test_parser_macro]
+path = "src/test_parser_macro"

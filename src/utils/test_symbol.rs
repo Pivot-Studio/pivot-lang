@@ -1,8 +1,8 @@
-use internal_macro::is_runtime;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::execution_engine::{ExecutionEngine, JitFunction};
 use inkwell::module::Module;
+use internal_macro::is_runtime;
 
 /// Convenience type alias for the `sum` function.
 ///
