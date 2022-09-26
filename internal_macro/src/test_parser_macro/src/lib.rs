@@ -21,7 +21,8 @@ pub fn test_parser(args: TokenStream, input: TokenStream) -> TokenStream {
                     panic!("{:?}",e);
                 }
             }
-        }.into()
+        }
+        .into()
     }
 }
 #[proc_macro_attribute]
@@ -44,6 +45,7 @@ pub fn test_parser_error(args: TokenStream, input: TokenStream) -> TokenStream {
                     panic!("expected err but get ok , input is {:?}",arg);
                 }
             }
-        }.into()
+        }
+        .into()
     }
 }
