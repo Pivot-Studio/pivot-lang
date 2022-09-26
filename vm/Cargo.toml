@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 add_symbol = { path = "../add_symbol" }
+libc = "0.2"

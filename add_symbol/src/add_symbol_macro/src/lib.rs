@@ -59,7 +59,7 @@ pub fn is_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
                 panic!("failed to get annotated func/struct name");
             }
 
-            let initfnid = format_ident!("__add_symbol_{}", str1);
+            let initfnid = format_ident!("add_symbol_{}", str1);
             let fnid = input.sig.ident.clone();
 
             return quote!(
@@ -158,7 +158,7 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
             }
         }
     }
-    let initfnid = format_ident!("__add_symbol_impl_{}_{}", tp, ident);
+    let initfnid = format_ident!("add_symbol_impl_{}", tp.to_lowercase());
     let gen = quote! {
         #ast
         #[add_symbol::ctor::ctor]
