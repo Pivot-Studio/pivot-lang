@@ -138,7 +138,13 @@ impl DioGC {
         ⠀⠀⠀⠀⢀⣼⣁⠤⠖⠊⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣽⣴⡾⠟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
         ⠀⠀⢀⣠⠞⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣼⡟⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀";
         println!("{}", dio);
+        println!("        Dio gc");
     }
+}
+
+unsafe fn set_point_to(ptr1: *mut c_void, ptr2: *mut c_void, offset: i64) {
+    let v1 = ptr2 as i64;
+    *((ptr1 as *mut i64).offset(offset as isize)) = v1;
 }
 
 #[test]
@@ -157,8 +163,7 @@ fn test_basic_gc() {
         assert_eq!(size, 256);
         gc.add_root(rustptr);
         // set ptr1 point to ptr2
-        let v1 = ptr2 as i64;
-        *(ptr1 as *mut i64) = v1;
+        set_point_to(ptr1, ptr2, 0);
         gc.collect();
         assert_eq!(gc.get_size(), 128);
         // set ptr1 empty
@@ -169,5 +174,45 @@ fn test_basic_gc() {
         gc.rm_root(rustptr);
         gc.collect();
         assert_eq!(gc.get_size(), 0);
+    }
+}
+
+#[test]
+fn test_complicated_gc() {
+    // allocate 1001 pointers
+    // which randomly point to each other
+    use rand::Rng;
+    unsafe {
+        let mut gc = DioGC::new();
+        gc.about();
+        println!("start test_complicated_gc");
+        // allocate first pointers
+        let mut ptr1 = gc.malloc(64);
+        let mut size = 64;
+        // get rust stack pointer point to ptr1
+        let rustptr = &(ptr1 as i64) as *const _ as *mut c_void;
+        for i in 0..1000 {
+            let ptr = gc.malloc(64);
+            let n= rand::thread_rng().gen_range(0..2);
+            if n == 0 {
+                size += 64;
+                let offset = rand::thread_rng().gen_range(0..8);
+                set_point_to(ptr1, ptr, offset);
+                ptr1 = ptr;
+            }
+        }
+        println!("allocated size: {}, amoung which {} should be chained to gc_root", 1001 * 64, size);
+        println!("testing current gc size");
+        assert_eq!(gc.get_size(), 64*1001);
+        println!("current gc size is correct: {}", gc.get_size());
+        gc.add_root(rustptr);
+        println!("try to force gc collect");
+        use std::time::Instant;
+        let now = Instant::now();
+        gc.collect();
+        let spent = now.elapsed();
+        println!("gc collect finished, time spent: {:#?}, testing gc size after collection", spent);
+        assert_eq!(gc.get_size(), size);
+        println!("gc size after collection is correct: {}", gc.get_size());
     }
 }
