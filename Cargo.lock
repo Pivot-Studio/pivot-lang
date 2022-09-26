@@ -3,15 +3,6 @@
 version = 3
 
 [[package]]
-name = "add_symbol"
-version = "0.1.0"
-dependencies = [
- "add_symbol_macro",
- "ctor",
- "llvm-sys",
-]
-
-[[package]]
 name = "add_symbol_macro"
 version = "0.1.0"
 dependencies = [
@@ -196,6 +187,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "internal_macro"
+version = "0.1.0"
+dependencies = [
+ "add_symbol_macro",
+ "ctor",
+ "llvm-sys",
+ "range_macro",
+ "test_parser_macro",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -308,16 +310,15 @@ checksum = "b1de2e551fb905ac83f73f7aedf2f0cb4a0da7e35efa24a202a936269f1f18e1"
 name = "pivot-lang"
 version = "0.1.0"
 dependencies = [
- "add_symbol",
  "as-any",
  "clap",
  "inkwell",
+ "internal_macro",
  "lazy_static",
  "llvm-sys",
  "nom",
  "nom_locate",
  "paste",
- "range_marco",
  "vm",
 ]
 
@@ -400,7 +401,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "range_marco"
+name = "range_macro"
 version = "0.1.0"
 dependencies = [
  "quote",
@@ -478,6 +479,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "test_parser_macro"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "textwrap"
 version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -499,7 +508,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 name = "vm"
 version = "0.1.0"
 dependencies = [
- "add_symbol",
+ "internal_macro",
  "libc",
  "rand",
 ]

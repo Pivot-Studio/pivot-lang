@@ -3,19 +3,9 @@
 version = 3
 
 [[package]]
-name = "add_symbol"
-version = "0.1.0"
-dependencies = [
- "add_symbol_macro",
- "ctor",
- "llvm-sys",
-]
-
-[[package]]
 name = "add_symbol_macro"
 version = "0.1.0"
 dependencies = [
- "llvm-sys",
  "quote",
  "syn",
 ]
@@ -43,6 +33,17 @@ checksum = "cdffe87e1d521a10f9696f833fe502293ea446d7f256c06128293a4119bdf4cb"
 dependencies = [
  "quote",
  "syn",
+]
+
+[[package]]
+name = "internal_macro"
+version = "0.1.0"
+dependencies = [
+ "add_symbol_macro",
+ "ctor",
+ "llvm-sys",
+ "range_macro",
+ "test_parser_macro",
 ]
 
 [[package]]
@@ -95,6 +96,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "range_macro"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "regex"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -126,6 +135,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "test_parser_macro"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]

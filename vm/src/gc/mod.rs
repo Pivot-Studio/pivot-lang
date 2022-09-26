@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use add_symbol::is_runtime;
+use internal_macro::is_runtime;
 use libc::{c_void, malloc, memset, size_t};
 
 struct Mem {
