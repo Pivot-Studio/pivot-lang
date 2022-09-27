@@ -107,6 +107,27 @@ impl Node for StatementsNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        let child = & mut ctx.new_child();
+        for m in self.statements.iter_mut() {
+            m.emit(child);
+        }
+        Value::None
+    }
+}
+
+#[range]
+pub struct ProgramNode {
+    pub statements: Vec<Box<dyn Node>>,
+}
+impl Node for ProgramNode {
+    fn print(&self) {
+        println!("ProgramNode:");
+        for e in self.statements.iter() {
+            e.print();
+        }
+    }
+
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         for m in self.statements.iter_mut() {
             m.emit(ctx);
         }

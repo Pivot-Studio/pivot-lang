@@ -17,7 +17,7 @@ use crate::{
         AssignNode, BinOpNode, BoolConstNode, DefNode, Node, Num, NumNode, StatementsNode,
         UnaryOpNode, VarNode,
     },
-    ast::tokens::TokenType,
+    ast::{tokens::TokenType, node::ProgramNode},
     ast::{
         node::{NLNode, WhileNode},
         range::Range,
@@ -89,7 +89,7 @@ impl<'a> PLParser<'a> {
     }
 
     pub fn parse(&mut self) -> IResult<Span, Box<dyn Node>> {
-        statements(self.input)
+        program(self.input)
     }
 }
 
@@ -149,6 +149,21 @@ pub fn statements(input: Span) -> IResult<Span, Box<dyn Node>> {
             range = range.start.to(la.range().end);
         }
         res(StatementsNode {
+            statements: v,
+            range,
+        })
+    })(input)
+}
+
+
+pub fn program(input: Span) -> IResult<Span, Box<dyn Node>>{
+    map_res(many0(statement), |v| {
+        let mut range = v[0].range();
+        let la = v.last();
+        if let Some(la) = la {
+            range = range.start.to(la.range().end);
+        }
+        res(ProgramNode {
             statements: v,
             range,
         })
