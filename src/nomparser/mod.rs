@@ -19,7 +19,7 @@ use crate::{
     },
     ast::tokens::TokenType,
     ast::{
-        node::{NLNode, WhileNode},
+        node::{NLNode, WhileNode, IfNode},
         range::Range,
     },
 };
@@ -93,7 +93,19 @@ impl<'a> PLParser<'a> {
     }
 }
 
-/// ```enbf
+/// ```ebnf
+/// ifstatement = "if" logicexp statement_block ;
+/// ```
+pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+    map_res(
+        tuple((tag_token(TokenType::IF),logic_exp, statement_block)),
+    |(_, cond, then)| {
+        let range = cond.range().start.to(then.range().end);
+        res(IfNode { cond, then, range })
+    })(input)
+}
+
+/// ```ebnf
 /// whilestatement = "while" logicexp statement_block ;
 /// ```
 pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
@@ -127,7 +139,7 @@ pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     alt((
         terminated(new_variable, newline),
         terminated(assignment, newline),
-        // if_statement,
+        if_statement,
         while_statement,
         // eof,
         newline,

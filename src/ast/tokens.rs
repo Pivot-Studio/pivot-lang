@@ -28,7 +28,6 @@ define_tokens!(
     LPAREN = "(",
     RPAREN = ")",
     ASSIGN = "=",
-    LET = "let",
     NOT = "!",
     LESS = "<",
     GREATER = ">",
@@ -40,6 +39,8 @@ define_tokens!(
     OR = "||",
     LBRACE = "{",
     RBRACE = "}",
+    LET = "let",
+    IF = "if",
     WHILE = "while"
 );
 impl TokenType {
