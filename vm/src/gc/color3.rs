@@ -8,6 +8,7 @@ use add_symbol::is_runtime;
 use libc::{c_void, malloc, memset, size_t};
 use std::collections::{HashMap, HashSet};
 
+#[derive(Debug, Clone, Copy)]
 enum Color {
     White, // possible garbage
     Black, // reachable
@@ -101,8 +102,8 @@ impl Color3GC {
         color: Color,
     ) {
         // remove from old color set
-        let old_color = &memtable.get(&ptr).unwrap().marked;
-        colorset[*old_color as usize].remove(&ptr);
+        let old_color = memtable.get(&ptr).unwrap().marked;
+        colorset[old_color as usize].remove(&ptr);
         // add to new color set
         colorset[color as usize].insert(ptr);
         // update color
@@ -114,7 +115,6 @@ impl Color3GC {
         ptr: &*mut c_void,
     ) -> Vec<*mut c_void> {
         let mut children = Vec::new();
-        let mut i = 0;
         let mem = memtable.get_mut(ptr);
         if let Some(mem) = mem {
             let p = *ptr;

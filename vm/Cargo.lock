@@ -15,7 +15,6 @@ dependencies = [
 name = "add_symbol_macro"
 version = "0.1.0"
 dependencies = [
- "llvm-sys",
  "quote",
  "syn",
 ]
