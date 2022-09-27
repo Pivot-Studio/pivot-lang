@@ -14,7 +14,6 @@ fn test_nom() {
     let builder = &context.create_builder();
     let module = &context.create_module("test");
     let mut ctx = ctx::Ctx::new(context, module, builder);
-    ctx.builder.position_at_end(ctx.basic_block);
     let m = &mut ctx;
     node.print();
     let _re = node.emit(m);

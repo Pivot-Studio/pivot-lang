@@ -39,7 +39,6 @@ impl<'a> Compiler<'a> {
         let builder = &context.create_builder();
         let module = &context.create_module("test");
         let mut ctx = ctx::Ctx::new(context, module, builder);
-        ctx.builder.position_at_end(ctx.basic_block);
         let m = &mut ctx;
         let (_, mut node) = self.parser.parse().unwrap();
         if op.printast {

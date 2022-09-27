@@ -51,11 +51,15 @@ assignment = identifier "=" logicexp ;
 
 newvariable = "let" identifier "=" logicexp ;
 
-ifstatement = "if" logicexp "{" statement* "}" ;
+ifstatement = "if" logicexp statement_block ;
 
-whilestatement = "while" logicexp "{" statement* "}" ;
+whilestatement = "while" logicexp statement_block ;
+
+statement_block = "{" statements "}" ;
 
 newline = "\n" | "\r\n" ;
+
+statements = statement* ;
 
 statement = 
     | assignment newline
@@ -65,7 +69,7 @@ statement =
     | newline
     ;
 
-program = statement* EOF ;
+program = statements ;
 
 number = [0-9]+ | number "." number ;
 

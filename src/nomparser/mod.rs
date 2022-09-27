@@ -17,8 +17,11 @@ use crate::{
         AssignNode, BinOpNode, BoolConstNode, DefNode, Node, Num, NumNode, StatementsNode,
         UnaryOpNode, VarNode,
     },
-    ast::range::Range,
     ast::tokens::TokenType,
+    ast::{
+        node::{NLNode, WhileNode},
+        range::Range,
+    },
 };
 use internal_macro::{test_parser, test_parser_error};
 use nom::character::complete::char;
@@ -89,6 +92,28 @@ impl<'a> PLParser<'a> {
         statements(self.input)
     }
 }
+
+/// ```enbf
+/// whilestatement = "while" logicexp statement_block ;
+/// ```
+pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+    map_res(
+        tuple((tag_token(TokenType::WHILE), logic_exp, statement_block)),
+        |(_, cond, body)| {
+            let range = cond.range().start.to(body.range().end);
+            res(WhileNode { cond, body, range })
+        },
+    )(input)
+}
+
+pub fn statement_block(input: Span) -> IResult<Span, Box<dyn Node>> {
+    delimited(
+        tag_token(TokenType::LBRACE),
+        statements,
+        tag_token(TokenType::RBRACE),
+    )(input)
+}
+
 /// ```ebnf
 /// statement =
 /// | assignment newline
@@ -100,12 +125,20 @@ impl<'a> PLParser<'a> {
 /// ```
 pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     alt((
-        terminated(new_variable, many0(one_of(" \t\r\n"))),
-        terminated(assignment, many0(one_of(" \t\r\n"))),
+        terminated(new_variable, newline),
+        terminated(assignment, newline),
         // if_statement,
-        // while_statement,
-        // newline,
+        while_statement,
+        // eof,
+        newline,
     ))(input)
+}
+pub fn newline(input: Span) -> IResult<Span, Box<dyn Node>> {
+    map_res(delspace(alt((tag("\n"), tag("\r\n")))), |_| {
+        res(NLNode {
+            range: Range::new(input, input),
+        })
+    })(input)
 }
 
 pub fn statements(input: Span) -> IResult<Span, Box<dyn Node>> {
