@@ -1,3 +1,4 @@
+pub mod color3;
 use std::collections::{HashMap, HashSet};
 
 use add_symbol::is_runtime;
