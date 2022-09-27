@@ -110,28 +110,6 @@ impl Color3GC {
         memtable.get_mut(&ptr).unwrap().marked = color;
     }
 
-    pub unsafe fn get_children(
-        memtable: &mut HashMap<*mut c_void, Mem>,
-        ptr: &*mut c_void,
-    ) -> Vec<*mut c_void> {
-        let mut children = Vec::new();
-        let mem = memtable.get_mut(ptr);
-        if let Some(mem) = mem {
-            let p = *ptr;
-            let data = p as *mut i64;
-            let size = mem.size / 8;
-            for i in 0..size {
-                let ptr = data.offset(i as isize);
-                let i1 = *ptr;
-                let child_ptr = i1 as *mut c_void;
-                // if in memtable, mark as grey
-                if memtable.contains_key(&child_ptr) {
-                    children.push(child_ptr);
-                }
-            }
-        }
-        children
-    }
 
     pub fn print_color(colorset: Vec<HashSet<*mut c_void>>) {
         // print color set
@@ -163,9 +141,20 @@ impl Color3GC {
                 Color::Black,
             );
             // mark all children with grey
-            let children = Self::get_children(&mut self.memtable, ptr_addr);
-            for child in children.iter() {
-                Self::mark_object(&mut self.memtable, &mut self.colorset, *child, Color::Grey);
+            let mem = self.memtable.get_mut(ptr_addr);
+            if let Some(mem) = mem {
+                let p = *ptr_addr;
+                let data = p as *mut i64;
+                let size = mem.size / 8;
+                for i in 0..size {
+                    let ptr = data.offset(i as isize);
+                    let i1 = *ptr;
+                    let child_ptr = i1 as *mut c_void;
+                    // if in memtable, mark as grey
+                    if self.memtable.contains_key(&child_ptr) {
+                        Self::mark_object(&mut self.memtable, &mut self.colorset, child_ptr, Color::Grey);
+                    }
+                }
             }
         }
     }
