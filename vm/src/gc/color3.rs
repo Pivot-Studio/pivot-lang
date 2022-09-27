@@ -117,10 +117,6 @@ impl Color3GC {
         let mut i = 0;
         let mem = memtable.get_mut(ptr);
         if let Some(mem) = mem {
-            // if mem.is_marked() {
-            //     return;
-            // }
-            // mem.mark();
             let p = *ptr;
             let data = p as *mut i64;
             let size = mem.size / 8;
