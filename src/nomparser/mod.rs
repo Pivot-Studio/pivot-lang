@@ -134,7 +134,7 @@ pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     ))(input)
 }
 pub fn newline(input: Span) -> IResult<Span, Box<dyn Node>> {
-    map_res(alt((tag("\n"), tag("\r\n"))), |_| {
+    map_res(delspace(alt((tag("\n"), tag("\r\n")))), |_| {
         res(NLNode {
             range: Range::new(input, input),
         })
