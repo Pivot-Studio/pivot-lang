@@ -149,6 +149,40 @@ impl Node for NLNode {
 }
 
 #[range]
+pub struct IfNode {
+    pub cond: Box<dyn Node>,
+    pub then: Box<dyn Node>,
+}
+
+impl Node for IfNode {
+    fn print(&self) {
+        println!("IfNode:");
+        self.cond.print();
+        self.then.print();
+    }
+
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        let cond_block = ctx.context.append_basic_block(ctx.function, "cond");
+        let then_block = ctx.context.append_basic_block(ctx.function, "then");
+        let after_block = ctx.context.append_basic_block(ctx.function, "after");
+        ctx.builder.build_unconditional_branch(cond_block);
+        ctx.builder.position_at_end(cond_block);
+        let cond = self.cond.emit(ctx);
+        let cond = match cond {
+            Value::BoolValue(v) => v,
+            _ => panic!("not implemented"),
+        };
+        ctx.builder
+            .build_conditional_branch(cond, then_block, after_block);
+        ctx.builder.position_at_end(then_block);
+        self.then.emit(ctx);
+        ctx.builder.build_unconditional_branch(after_block);
+        ctx.builder.position_at_end(after_block);
+        Value::None
+    }
+}
+
+#[range]
 pub struct WhileNode {
     pub cond: Box<dyn Node>,
     pub body: Box<dyn Node>,

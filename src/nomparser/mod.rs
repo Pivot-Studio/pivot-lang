@@ -19,7 +19,7 @@ use crate::{
     },
     ast::{tokens::TokenType, node::ProgramNode},
     ast::{
-        node::{NLNode, WhileNode},
+        node::{IfNode, NLNode, WhileNode},
         range::Range,
     },
 };
@@ -93,12 +93,33 @@ impl<'a> PLParser<'a> {
     }
 }
 
-/// ```enbf
+/// ```ebnf
+/// ifstatement = "if" logicexp statement_block ;
+/// ```
+pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+    map_res(
+        delspace(tuple((
+            tag_token(TokenType::IF),
+            logic_exp,
+            statement_block,
+        ))),
+        |(_, cond, then)| {
+            let range = cond.range().start.to(then.range().end);
+            res(IfNode { cond, then, range })
+        },
+    )(input)
+}
+
+/// ```ebnf
 /// whilestatement = "while" logicexp statement_block ;
 /// ```
 pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     map_res(
-        tuple((tag_token(TokenType::WHILE), logic_exp, statement_block)),
+        delspace(tuple((
+            tag_token(TokenType::WHILE),
+            logic_exp,
+            statement_block,
+        ))),
         |(_, cond, body)| {
             let range = cond.range().start.to(body.range().end);
             res(WhileNode { cond, body, range })
@@ -127,7 +148,7 @@ pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     alt((
         terminated(new_variable, newline),
         terminated(assignment, newline),
-        // if_statement,
+        if_statement,
         while_statement,
         // eof,
         newline,
