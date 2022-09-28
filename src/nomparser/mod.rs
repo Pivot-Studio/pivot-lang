@@ -108,23 +108,16 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             )),
         ))),
         |(_, cond, then, els)| {
-            let mut range = cond.range().start.to(then.range().end);
-            if let Some(els) = els {
-                range = range.start.to(els.range().end);
-                res(IfNode {
-                    cond,
-                    then,
-                    els,
-                    range,
-                })
-            } else {
-                res(IfNode {
-                    cond,
-                    then,
-                    els: Box::new(NLNode { range }),
-                    range,
-                })
+            let range = cond.range().start.to(then.range().end);
+            if let Some(el) = &els {
+                range.start.to(el.range().end);
             }
+            res(IfNode {
+                cond,
+                then,
+                els,
+                range,
+            })
         },
     )(input)
 }
