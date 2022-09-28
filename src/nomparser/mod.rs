@@ -6,7 +6,7 @@ use nom::{
     character::complete::{alpha1, alphanumeric1, one_of, space0},
     combinator::{map_res, opt, recognize},
     error::ParseError,
-    multi::{many0, many0_count, many1},
+    multi::{many0, many0_count, many1, many_m_n},
     sequence::{delimited, pair, preceded, terminated, tuple},
     AsChar, IResult, InputTakeAtPosition, Parser,
 };
@@ -17,7 +17,7 @@ use crate::{
         AssignNode, BinOpNode, BoolConstNode, DefNode, Node, Num, NumNode, StatementsNode,
         UnaryOpNode, VarNode,
     },
-    ast::{tokens::TokenType, node::ProgramNode},
+    ast::{node::ProgramNode, tokens::TokenType},
     ast::{
         node::{IfNode, NLNode, WhileNode},
         range::Range,
@@ -94,7 +94,7 @@ impl<'a> PLParser<'a> {
 }
 
 /// ```ebnf
-/// ifstatement = "if" logicexp statement_block ;
+/// if_statement = "if" logic_exp statement_block (else_body | newline);
 /// ```
 pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     map_res(
@@ -102,16 +102,35 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             tag_token(TokenType::IF),
             logic_exp,
             statement_block,
+            many_m_n(0, 1, else_body),
         ))),
-        |(_, cond, then)| {
-            let range = cond.range().start.to(then.range().end);
-            res(IfNode { cond, then, range })
+        |(_, cond, then, els)| {
+            let mut range = cond.range().start.to(then.range().end);
+            if !els.is_empty() {
+                range = cond.range().start.to(els.last().unwrap().range().end);
+            }
+            res(IfNode {
+                cond,
+                then,
+                els,
+                range,
+            })
         },
     )(input)
 }
 
 /// ```ebnf
-/// whilestatement = "while" logicexp statement_block ;
+/// else_body = "else" (if_statement | statement_block) ;
+/// ```
+pub fn else_body(input: Span) -> IResult<Span, Box<dyn Node>> {
+    delspace(preceded(
+        tag_token(TokenType::ELSE),
+        alt((if_statement, statement_block)),
+    ))(input)
+}
+
+/// ```ebnf
+/// while_statement = "while" logic_exp statement_block ;
 /// ```
 pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     map_res(
@@ -128,31 +147,33 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
 }
 
 pub fn statement_block(input: Span) -> IResult<Span, Box<dyn Node>> {
-    delimited(
+    delspace(delimited(
         tag_token(TokenType::LBRACE),
         statements,
         tag_token(TokenType::RBRACE),
-    )(input)
+    ))(input)
 }
 
 /// ```ebnf
 /// statement =
+/// | new_variable newline
 /// | assignment newline
-/// | newvariable newline
-/// | ifstatement
-/// | whilestatement
+/// | if_else_statement
+/// | if_statement
+/// | while_statement
 /// | newline
 /// ;
 /// ```
 pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
-    alt((
+    delspace(alt((
         terminated(new_variable, newline),
         terminated(assignment, newline),
+        // if_else_statement,
         if_statement,
         while_statement,
         // eof,
         newline,
-    ))(input)
+    )))(input)
 }
 pub fn newline(input: Span) -> IResult<Span, Box<dyn Node>> {
     map_res(delspace(alt((tag("\n"), tag("\r\n")))), |_| {
@@ -176,8 +197,7 @@ pub fn statements(input: Span) -> IResult<Span, Box<dyn Node>> {
     })(input)
 }
 
-
-pub fn program(input: Span) -> IResult<Span, Box<dyn Node>>{
+pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
     map_res(many0(statement), |v| {
         let mut range = v[0].range();
         let la = v.last();
