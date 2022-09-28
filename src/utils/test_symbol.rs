@@ -1,6 +1,14 @@
+#[cfg(test)]
+#[cfg(feature = "jit")]
 use inkwell::builder::Builder;
+#[cfg(test)]
+#[cfg(feature = "jit")]
 use inkwell::context::Context;
+#[cfg(test)]
+#[cfg(feature = "jit")]
 use inkwell::execution_engine::{ExecutionEngine, JitFunction};
+#[cfg(test)]
+#[cfg(feature = "jit")]
 use inkwell::module::Module;
 use internal_macro::is_runtime;
 
@@ -8,15 +16,20 @@ use internal_macro::is_runtime;
 ///
 /// Calling this is innately `unsafe` because there's no guarantee it doesn't
 /// do `unsafe` operations internally.
+#[cfg(test)]
+#[cfg(test)]
+#[cfg(feature = "jit")]
 type DemoFunc = unsafe extern "C" fn(u64, u64, u64) -> u64;
-
+#[cfg(test)]
+#[cfg(feature = "jit")]
 struct CodeGen<'ctx> {
     context: &'ctx Context,
     module: Module<'ctx>,
     builder: Builder<'ctx>,
     execution_engine: ExecutionEngine<'ctx>,
 }
-
+#[cfg(test)]
+#[cfg(feature = "jit")]
 impl<'ctx> CodeGen<'ctx> {
     fn jit_compile_fn(&self, fnname: &str) -> Option<JitFunction<DemoFunc>> {
         let i64_type = self.context.i64_type();
@@ -47,9 +60,11 @@ impl<'ctx> CodeGen<'ctx> {
         }
     }
 }
-
+#[cfg(test)]
+#[cfg(feature = "jit")]
 struct Demo {}
-
+#[cfg(test)]
+#[cfg(feature = "jit")]
 #[is_runtime("test")]
 impl Demo {
     pub fn demo(a: u64, b: u64, c: u64) -> u64 {
@@ -66,6 +81,8 @@ fn demo(a: u64, b: u64, c: u64) -> u64 {
 }
 
 #[test]
+#[cfg(test)]
+#[cfg(feature = "jit")]
 fn test_add_symbol() -> Result<(), Box<dyn std::error::Error>> {
     use inkwell::OptimizationLevel;
     use llvm_sys::target::LLVM_InitializeNativeTarget;

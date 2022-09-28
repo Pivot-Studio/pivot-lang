@@ -179,7 +179,7 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
                 );
             } else {
                 let first = first.unwrap();
-                if let FnArg::Receiver(r) = first {
+                if let FnArg::Receiver(_) = first {
                     let inputs = inputs.skip(1);
                     cfn = quote!(
                         #[no_mangle]
@@ -220,7 +220,6 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
             #sigs
         )*
     };
-    dbg!(gen.clone().to_string());
     return gen.into();
 }
 

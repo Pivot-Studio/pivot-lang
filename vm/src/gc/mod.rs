@@ -21,6 +21,7 @@ impl Mem {
     }
 }
 
+#[repr(C)]
 pub struct DioGC {
     memtable: HashMap<*mut c_void, Mem>,
     size: i64,
@@ -35,6 +36,10 @@ impl DioGC {
             memtable: HashMap::new(),
             roots: HashSet::new(),
         }
+    }
+
+    pub unsafe fn new_ptr() -> *mut DioGC {
+        Box::into_raw(Box::new(DioGC::new()))
     }
 
     pub unsafe fn malloc(&mut self, size: i64) -> *mut c_void {
@@ -143,11 +148,12 @@ impl DioGC {
     }
 }
 
+#[cfg(test)]
 unsafe fn set_point_to(ptr1: *mut c_void, ptr2: *mut c_void, offset: i64) {
     let v1 = ptr2 as i64;
     *((ptr1 as *mut i64).offset(offset as isize)) = v1;
 }
-
+#[cfg(test)]
 #[test]
 fn test_basic_gc() {
     unsafe {
@@ -178,6 +184,7 @@ fn test_basic_gc() {
     }
 }
 
+#[cfg(test)]
 #[test]
 fn test_complicated_gc() {
     // allocate 1001 pointers
