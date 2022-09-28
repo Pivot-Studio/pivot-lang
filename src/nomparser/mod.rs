@@ -121,7 +121,13 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         },
     )(input)
 }
-
+#[test_parser("while true {
+    let a = b
+}")]
+#[test_parser_error("while true {
+    let a = b
+}
+")]
 /// ```ebnf
 /// while_statement = "while" logic_exp statement_block ;
 /// ```
@@ -305,10 +311,10 @@ pub fn primary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
         identifier,
     )))(input)
 }
-#[test_parser(true)]
-#[test_parser(false)]
-#[test_parser_error(tru)]
-#[test_parser_error(fales)]
+#[test_parser("true")]
+#[test_parser("false")]
+#[test_parser_error("tru")]
+#[test_parser_error("fales")]
 fn bool_const(input: Span) -> IResult<Span, Box<dyn Node>> {
     alt((
         map_res(tag("true"), |out| {
