@@ -3,7 +3,8 @@ use std::collections::{HashMap, HashSet};
 use internal_macro::is_runtime;
 use libc::{c_void, malloc, memset, size_t};
 
-struct Mem {
+#[repr(C)]
+pub struct Mem {
     size: i64,
     marked: bool,
 }
@@ -20,13 +21,13 @@ impl Mem {
     }
 }
 
-struct DioGC {
+pub struct DioGC {
     memtable: HashMap<*mut c_void, Mem>,
     size: i64,
     roots: HashSet<*mut c_void>,
 }
 
-#[is_runtime]
+#[is_runtime] // jit注册
 impl DioGC {
     pub fn new() -> DioGC {
         DioGC {

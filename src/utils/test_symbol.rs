@@ -61,7 +61,7 @@ impl Demo {
 }
 
 #[is_runtime("demo")]
-pub fn demo(a: u64, b: u64, c: u64) -> u64 {
+fn demo(a: u64, b: u64, c: u64) -> u64 {
     a + b + c
 }
 

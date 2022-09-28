@@ -9,3 +9,8 @@ edition = "2021"
 internal_macro = { path = "../internal_macro" }
 libc = "0.2"
 rand = "0.8"
+
+[lib]
+name = "vm"
+path = "src/lib.rs"
+crate-type = ["staticlib"]
