@@ -5,3 +5,4 @@ target
 *.ll
 *.out
 *.sh
+test.cpp

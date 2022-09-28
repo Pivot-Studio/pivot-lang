@@ -3,10 +3,13 @@ use quote::{__private::Literal, format_ident, quote};
 use syn::{
     self,
     parse::{Parse, ParseStream},
-    parse_macro_input, Ident, ImplItem, ItemFn, ItemImpl,
+    parse_macro_input, parse_quote,
+    punctuated::Punctuated,
+    token::Comma,
+    Expr, FnArg, Ident, ImplItem, ItemFn, ItemImpl,
 };
 
-/// The `#[is_runtime]` attribute.  
+/// # The `#[is_runtime]` attribute.  
 ///
 /// used to tag a function as a runtime function  
 /// or tag an impl block to indicate that all the pub fn in impl block are runtime functions  
@@ -63,7 +66,9 @@ pub fn is_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
             let fnid = input.sig.ident.clone();
 
             return quote!(
-                #input
+                #[no_mangle]
+                pub unsafe extern "C" #input
+                #[cfg(feature = "jit")]
                 #[internal_macro::ctor::ctor]
                 fn #initfnid() {
                     let ptr = #fnid as * const ();
@@ -133,6 +138,7 @@ impl Parse for MacroInput {
 fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
     let mut fnids = Vec::<Ident>::new();
     let mut fns = Vec::<String>::new();
+    let mut sigs = Vec::<quote::__private::TokenStream>::new();
     let ident = match &*ast.self_ty {
         syn::Type::Path(tp) => tp.path.get_ident().unwrap(),
         _ => panic!("not supported tokens"),
@@ -149,18 +155,57 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
     }
     for i in ast.items.iter() {
         if let ImplItem::Method(m) = i {
-            if let syn::Visibility::Public(_) = m.vis {
-                let id = m.sig.ident.clone();
-                let str = id.to_string();
-                let fname = format!("{}__{}", tp, str);
-                fns.push(fname);
-                fnids.push(id);
+            let mut clonedsig = m.sig.clone();
+            let id = m.sig.ident.clone();
+            let str = id.to_string();
+            let fname = format!("{}__{}", tp, str);
+            clonedsig.ident = format_ident!("{}", fname);
+            let findent = format_ident!("{}", fname);
+            let cl = clonedsig.inputs.clone();
+            let inputs = clonedsig.inputs.into_iter();
+
+            let expr = transform_params(cl);
+
+            let ret = clonedsig.output;
+            let sfty = ast.self_ty.clone();
+            let first = inputs.clone().nth(0);
+            let cfn;
+            if Option::is_none(&first) {
+                cfn = quote!(
+                    #[no_mangle]
+                    pub unsafe extern "C" fn #findent(#(#inputs,)*) #ret {
+                        #sfty::#id #expr
+                    }
+                );
+            } else {
+                let first = first.unwrap();
+                if let FnArg::Receiver(_) = first {
+                    let inputs = inputs.skip(1);
+                    cfn = quote!(
+                        #[no_mangle]
+                        pub unsafe extern "C" fn #findent(me: * mut #sfty,#(#inputs,)*) #ret {
+                            let me = &mut *me;
+                            me.#id #expr
+                        }
+                    );
+                } else {
+                    cfn = quote!(
+                        #[no_mangle]
+                        pub unsafe extern "C" fn #findent(#(#inputs,)*) #ret {
+                            #sfty::#id #expr
+                        }
+                    );
+                }
             }
+            sigs.push(cfn);
+            fns.push(fname);
+            fnids.push(id);
         }
     }
     let initfnid = format_ident!("add_symbol_impl_{}", tp.to_lowercase());
     let gen = quote! {
         #ast
+        #[cfg(feature = "jit")]
         #[internal_macro::ctor::ctor]
         fn #initfnid() {
             #(
@@ -171,6 +216,30 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
                 }
             )*
         }
+        #(
+            #sigs
+        )*
     };
     return gen.into();
+}
+
+fn transform_params(params: Punctuated<syn::FnArg, syn::token::Comma>) -> Expr {
+    // 1. Filter the params, so that only typed arguments remain
+    // 2. Extract the ident (in case the pattern type is ident)
+    let idents = params.iter().filter_map(|param| {
+        if let syn::FnArg::Typed(pat_type) = param {
+            if let syn::Pat::Ident(pat_ident) = *pat_type.pat.clone() {
+                return Some(pat_ident.ident);
+            }
+        }
+        None
+    });
+
+    // Add all idents to a Punctuated => param1, param2, ...
+    let mut punctuated: Punctuated<syn::Ident, Comma> = Punctuated::new();
+    idents.for_each(|ident| punctuated.push(ident));
+
+    // Generate expression from Punctuated (and wrap with parentheses)
+    let transformed_params = parse_quote!((#punctuated));
+    transformed_params
 }
