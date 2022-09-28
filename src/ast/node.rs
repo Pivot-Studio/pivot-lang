@@ -107,7 +107,7 @@ impl Node for StatementsNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        let child = & mut ctx.new_child();
+        let child = &mut ctx.new_child();
         for m in self.statements.iter_mut() {
             m.emit(child);
         }
@@ -152,6 +152,7 @@ impl Node for NLNode {
 pub struct IfNode {
     pub cond: Box<dyn Node>,
     pub then: Box<dyn Node>,
+    pub els: Box<dyn Node>,
 }
 
 impl Node for IfNode {
@@ -159,11 +160,13 @@ impl Node for IfNode {
         println!("IfNode:");
         self.cond.print();
         self.then.print();
+        self.els.print();
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let cond_block = ctx.context.append_basic_block(ctx.function, "cond");
         let then_block = ctx.context.append_basic_block(ctx.function, "then");
+        let else_block = ctx.context.append_basic_block(ctx.function, "else");
         let after_block = ctx.context.append_basic_block(ctx.function, "after");
         ctx.builder.build_unconditional_branch(cond_block);
         ctx.builder.position_at_end(cond_block);
@@ -173,9 +176,13 @@ impl Node for IfNode {
             _ => panic!("not implemented"),
         };
         ctx.builder
-            .build_conditional_branch(cond, then_block, after_block);
+            .build_conditional_branch(cond, then_block, else_block);
+        // then block
         ctx.builder.position_at_end(then_block);
         self.then.emit(ctx);
+        ctx.builder.build_unconditional_branch(after_block);
+        ctx.builder.position_at_end(else_block);
+        self.els.emit(ctx);
         ctx.builder.build_unconditional_branch(after_block);
         ctx.builder.position_at_end(after_block);
         Value::None

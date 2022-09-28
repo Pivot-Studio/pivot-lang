@@ -41,6 +41,7 @@ define_tokens!(
     RBRACE = "}",
     LET = "let",
     IF = "if",
+    ELSE = "else",
     WHILE = "while"
 );
 impl TokenType {
