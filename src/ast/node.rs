@@ -152,7 +152,7 @@ impl Node for NLNode {
 pub struct IfNode {
     pub cond: Box<dyn Node>,
     pub then: Box<dyn Node>,
-    pub els: Vec<Box<dyn Node>>,
+    pub els: Box<dyn Node>,
 }
 
 impl Node for IfNode {
@@ -160,9 +160,7 @@ impl Node for IfNode {
         println!("IfNode:");
         self.cond.print();
         self.then.print();
-        for el in self.els.iter() {
-            el.print();
-        }
+        self.els.print();
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
@@ -184,10 +182,7 @@ impl Node for IfNode {
         self.then.emit(ctx);
         ctx.builder.build_unconditional_branch(after_block);
         ctx.builder.position_at_end(else_block);
-        if !self.els.is_empty() {
-            // else block
-            self.els[0].emit(ctx);
-        }
+        self.els.emit(ctx);
         ctx.builder.build_unconditional_branch(after_block);
         ctx.builder.position_at_end(after_block);
         Value::None

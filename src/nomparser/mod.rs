@@ -6,7 +6,7 @@ use nom::{
     character::complete::{alpha1, alphanumeric1, one_of, space0},
     combinator::{map_res, opt, recognize},
     error::ParseError,
-    multi::{many0, many0_count, many1, many_m_n},
+    multi::{many0, many0_count, many1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     AsChar, IResult, InputTakeAtPosition, Parser,
 };
@@ -94,7 +94,7 @@ impl<'a> PLParser<'a> {
 }
 
 /// ```ebnf
-/// if_statement = "if" logic_exp statement_block (else_body | newline);
+/// if_statement = "if" logic_exp statement_block ("else" (if_statement | statement_block))? ;
 /// ```
 pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     map_res(
@@ -102,31 +102,31 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             tag_token(TokenType::IF),
             logic_exp,
             statement_block,
-            many_m_n(0, 1, else_body),
+            opt(preceded(
+                tag_token(TokenType::ELSE),
+                alt((if_statement, statement_block)),
+            )),
         ))),
         |(_, cond, then, els)| {
             let mut range = cond.range().start.to(then.range().end);
-            if !els.is_empty() {
-                range = cond.range().start.to(els.last().unwrap().range().end);
+            if let Some(els) = els {
+                range = range.start.to(els.range().end);
+                res(IfNode {
+                    cond,
+                    then,
+                    els,
+                    range,
+                })
+            } else {
+                res(IfNode {
+                    cond,
+                    then,
+                    els: Box::new(NLNode { range }),
+                    range,
+                })
             }
-            res(IfNode {
-                cond,
-                then,
-                els,
-                range,
-            })
         },
     )(input)
-}
-
-/// ```ebnf
-/// else_body = "else" (if_statement | statement_block) ;
-/// ```
-pub fn else_body(input: Span) -> IResult<Span, Box<dyn Node>> {
-    delspace(preceded(
-        tag_token(TokenType::ELSE),
-        alt((if_statement, statement_block)),
-    ))(input)
 }
 
 /// ```ebnf
@@ -158,7 +158,6 @@ pub fn statement_block(input: Span) -> IResult<Span, Box<dyn Node>> {
 /// statement =
 /// | new_variable newline
 /// | assignment newline
-/// | if_else_statement
 /// | if_statement
 /// | while_statement
 /// | newline
@@ -168,7 +167,6 @@ pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     delspace(alt((
         terminated(new_variable, newline),
         terminated(assignment, newline),
-        // if_else_statement,
         if_statement,
         while_statement,
         // eof,

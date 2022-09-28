@@ -14,46 +14,46 @@
 ## grammar
 
 ```ebnf
-addexp = 
-    | mulexp ("+" | "-" mulexp)*
+add_exp = 
+    | mul_exp ("+" | "-" mul_exp)*
     ;
 
-mulexp = 
-    | unaryexp ("*"｜"/" unaryexp)*
+mul_exp = 
+    | unary_exp ("*"｜"/" unary_exp)*
     ;
 
-unaryexp =
-    | primaryexp
-    | ("-" | "!") primaryexp
+unary_exp =
+    | primary_exp
+    | ("-" | "!") primary_exp
     ;
 
-primaryexp =
+primary_exp =
     | number
-    | boolconst
-    | "(" logicexp ")"
+    | bool_const
+    | "(" logic_exp ")"
     | identifier
     ;
 
-boolconst =
+bool_const =
     | "true"
     | "false"
     ;
 
-compareexp =
-    | addexp (("<"｜"<="｜">"｜">="｜"=="｜"!=") addexp)*
+compare_exp =
+    | add_exp (("<"｜"<="｜">"｜">="｜"=="｜"!=") add_exp)*
     ;
 
-logicexp = 
-    | compareexp (("&&"｜"||") compareexp)*
+logic_exp = 
+    | compare_exp (("&&"｜"||") compare_exp)*
     ;
 
-assignment = identifier "=" logicexp ;
+assignment = identifier "=" logic_exp ;
 
-newvariable = "let" identifier "=" logicexp ;
+new_variable = "let" identifier "=" logic_exp ;
 
-ifstatement = "if" logicexp statement_block ;
+if_statement = "if" logic_exp statement_block ("else" if_statement | statement_block)?;
 
-whilestatement = "while" logicexp statement_block ;
+while_statement = "while" logic_exp statement_block ;
 
 statement_block = "{" statements "}" ;
 
@@ -63,9 +63,9 @@ statements = statement* ;
 
 statement = 
     | assignment newline
-    | newvariable newline
-    | ifstatement
-    | whilestatement
+    | new_variable newline
+    | if_statement
+    | while_statement
     | newline
     ;
 
