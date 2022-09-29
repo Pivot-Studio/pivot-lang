@@ -150,11 +150,10 @@ impl Node for NLNode {
     }
 }
 
-fn position_at_end<'a,'b>(ctx: &mut Ctx<'b,'a>,block: BasicBlock<'a>) {
+fn position_at_end<'a, 'b>(ctx: &mut Ctx<'b, 'a>, block: BasicBlock<'a>) {
     ctx.builder.position_at_end(block);
     ctx.block = Some(block);
 }
-
 
 #[range]
 pub struct IfNode {
@@ -179,7 +178,7 @@ impl Node for IfNode {
         let else_block = ctx.context.append_basic_block(ctx.function, "else");
         let after_block = ctx.context.append_basic_block(ctx.function, "after");
         ctx.builder.build_unconditional_branch(cond_block);
-        position_at_end(ctx,cond_block);
+        position_at_end(ctx, cond_block);
         let cond = self.cond.emit(ctx);
         let cond = match cond {
             Value::BoolValue(v) => v,
@@ -188,15 +187,15 @@ impl Node for IfNode {
         ctx.builder
             .build_conditional_branch(cond, then_block, else_block);
         // then block
-        position_at_end(ctx,then_block);
+        position_at_end(ctx, then_block);
         self.then.emit(ctx);
         ctx.builder.build_unconditional_branch(after_block);
-        position_at_end(ctx,else_block);
+        position_at_end(ctx, else_block);
         if let Some(el) = &mut self.els {
             el.emit(ctx);
         }
         ctx.builder.build_unconditional_branch(after_block);
-        position_at_end(ctx,after_block);
+        position_at_end(ctx, after_block);
         Value::None
     }
 }
@@ -219,7 +218,7 @@ impl Node for WhileNode {
         let body_block = ctx.context.append_basic_block(ctx.function, "body");
         let after_block = ctx.context.append_basic_block(ctx.function, "after");
         ctx.builder.build_unconditional_branch(cond_block);
-        position_at_end(ctx,cond_block);
+        position_at_end(ctx, cond_block);
         let cond = self.cond.emit(ctx);
         let cond = match cond {
             Value::BoolValue(v) => v,
@@ -227,10 +226,10 @@ impl Node for WhileNode {
         };
         ctx.builder
             .build_conditional_branch(cond, body_block, after_block);
-        position_at_end(ctx,body_block);
+        position_at_end(ctx, body_block);
         self.body.emit(ctx);
         ctx.builder.build_unconditional_branch(cond_block);
-        position_at_end(ctx,after_block);
+        position_at_end(ctx, after_block);
         Value::None
     }
 }
@@ -342,7 +341,11 @@ impl Node for VarNode {
     }
 }
 
-fn alloc<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>, tp: BasicTypeEnum<'ctx>, name:&str) -> PointerValue<'ctx>{
+fn alloc<'a, 'ctx>(
+    ctx: &mut Ctx<'a, 'ctx>,
+    tp: BasicTypeEnum<'ctx>,
+    name: &str,
+) -> PointerValue<'ctx> {
     match ctx.function.get_first_basic_block() {
         Some(entry) => {
             ctx.builder.position_at_end(entry);
@@ -350,13 +353,13 @@ fn alloc<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>, tp: BasicTypeEnum<'ctx>, name:&str) 
             match ctx.block {
                 Some(block) => {
                     ctx.builder.position_at_end(block);
-                },
+                }
                 None => {
-                    println!("alloc ctx.block == None!")
+                    panic!("alloc ctx.block == None!")
                 }
             }
             p
-        },
+        }
         None => panic!("alloc get entry failed!"),
     }
 }
