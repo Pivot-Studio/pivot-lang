@@ -23,8 +23,8 @@ mul_exp =
     ;
 
 unary_exp =
-    | primary_exp
-    | ("-" | "!") primary_exp
+    | take_exp
+    | ("-" | "!") take_exp
     ;
 
 take_exp =
@@ -54,7 +54,9 @@ logic_exp =
     | compare_exp (("&&"｜"||") compare_exp)*
     ;
 
-assignment = variable "=" logic_exp ;
+assignee = identifier ("." identifier)*;
+
+assignment = assignee "=" logic_exp ;
 
 new_variable = "let" identifier "=" logic_exp ;
 
