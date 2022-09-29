@@ -13,17 +13,11 @@ use nom::{
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
-    ast::node::{
-        AssignNode, BinOpNode, BoolConstNode, DefNode, Node, Num, NumNode, StatementsNode,
-        UnaryOpNode, VarNode,
-    },
+    ast::node::*,
+    ast::range::Range,
     ast::{
-        node::{BreakNode, ContinueNode, ProgramNode},
+        node::{control::*, operator::*, primary::*, program::*, statement::*},
         tokens::TokenType,
-    },
-    ast::{
-        node::{IfNode, NLNode, WhileNode},
-        range::Range,
     },
 };
 use internal_macro::{test_parser, test_parser_error};
