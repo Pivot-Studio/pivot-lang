@@ -42,7 +42,9 @@ define_tokens!(
     LET = "let",
     IF = "if",
     ELSE = "else",
-    WHILE = "while"
+    WHILE = "while",
+    BREAK = "break",
+    CONTINUE = "continue"
 );
 impl TokenType {
     pub fn get_str(&self) -> &'static str {

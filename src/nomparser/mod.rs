@@ -4,7 +4,7 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::{alpha1, alphanumeric1, one_of, space0},
-    combinator::{map_res, opt, recognize},
+    combinator::{eof, map_res, opt, recognize},
     error::ParseError,
     multi::{many0, many0_count, many1},
     sequence::{delimited, pair, preceded, terminated, tuple},
@@ -17,7 +17,10 @@ use crate::{
         AssignNode, BinOpNode, BoolConstNode, DefNode, Node, Num, NumNode, StatementsNode,
         UnaryOpNode, VarNode,
     },
-    ast::{node::ProgramNode, tokens::TokenType},
+    ast::{
+        node::{BreakNode, ContinueNode, ProgramNode},
+        tokens::TokenType,
+    },
     ast::{
         node::{IfNode, NLNode, WhileNode},
         range::Range,
@@ -190,6 +193,8 @@ pub fn statement_block(input: Span) -> IResult<Span, Box<dyn Node>> {
 /// | assignment newline
 /// | if_statement
 /// | while_statement
+/// | break_statement
+/// | continue_statement
 /// | newline
 /// ;
 /// ```
@@ -199,7 +204,8 @@ pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         terminated(assignment, newline),
         if_statement,
         while_statement,
-        // eof,
+        break_statement,
+        continue_statement,
         newline,
     )))(input)
 }
@@ -226,7 +232,7 @@ pub fn statements(input: Span) -> IResult<Span, Box<dyn Node>> {
 }
 
 pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
-    map_res(many0(statement), |v| {
+    let (input, re) = map_res(many0(statement), |v| {
         let mut range = v[0].range();
         let la = v.last();
         if let Some(la) = la {
@@ -236,7 +242,9 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
             statements: v,
             range,
         })
-    })(input)
+    })(input)?;
+    eof(input)?;
+    Ok((input, re))
 }
 
 #[test_parser("let a = 1")]
@@ -303,6 +311,29 @@ pub fn add_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
 #[test_parser("1 / 1")]
 pub fn mul_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
     parse_bin_ops!(unary_exp, MUL, DIV)(input)
+}
+
+#[test_parser("break\n")]
+pub fn break_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+    terminated(
+        delspace(map_res(tag_token(TokenType::BREAK), |_| {
+            res(BreakNode {
+                range: Range::new(input, input),
+            })
+        })),
+        newline,
+    )(input)
+}
+#[test_parser("continue\n")]
+pub fn continue_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+    terminated(
+        delspace(map_res(tag_token(TokenType::CONTINUE), |_| {
+            res(ContinueNode {
+                range: Range::new(input, input),
+            })
+        })),
+        newline,
+    )(input)
 }
 
 #[test_parser("-1")]
