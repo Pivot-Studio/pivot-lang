@@ -27,12 +27,19 @@ unary_exp =
     | ("-" | "!") primary_exp
     ;
 
+take_exp =
+    | primary_exp ("." identifier)*
+    ;
+
 primary_exp =
     | number
     | bool_const
     | "(" logic_exp ")"
     | identifier
+    | struct_init
+    | call_function
     ;
+
 
 bool_const =
     | "true"
@@ -47,7 +54,7 @@ logic_exp =
     | compare_exp (("&&"｜"||") compare_exp)*
     ;
 
-assignment = identifier "=" logic_exp ;
+assignment = variable "=" logic_exp ;
 
 new_variable = "let" identifier "=" logic_exp ;
 
@@ -68,6 +75,7 @@ continue_statement = "continue" newline ;
 statement = 
     | assignment newline
     | new_variable newline
+    | return_statement
     | if_statement
     | while_statement
     | break_statement
@@ -75,10 +83,33 @@ statement =
     | newline
     ;
 
-program = statements ;
+toplevel_statement = 
+    | struct_def
+    | function_def
+    | newline
+    ;
+
+program = toplevel_statement* ;
+
 
 number = [0-9]+ | number "." number ;
 
 identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
+
+function = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" identifier statement_block? ;
+
+call_function = identifier "(" (logic_exp (","logic_exp)*)? ")" ;
+
+struct_def = "struct" identifier "{" struct_field* "}" ;
+
+typed_identifier = identifier ":" identifier ;
+
+struct_field = typed_identifier newline ;
+
+struct_init = identifier "{" struct_init_field* "}" ;
+
+struct_init_field = identifier ":" logic_exp newline ;
+
+return_statement = "return" logic_exp newline ;
 
 ```
