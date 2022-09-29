@@ -166,7 +166,8 @@ impl Node for BreakNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         if let Some(b) = ctx.break_block {
             ctx.builder.build_unconditional_branch(b);
-            position_at_end(ctx, ctx.context.append_basic_block(ctx.function, "break"));
+            // add dead block to avoid double br
+            position_at_end(ctx, ctx.context.append_basic_block(ctx.function, "dead"));
         } else {
             panic!("break not in loop");
         }
@@ -187,7 +188,8 @@ impl Node for ContinueNode {
             ctx.builder.build_unconditional_branch(b);
             position_at_end(
                 ctx,
-                ctx.context.append_basic_block(ctx.function, "continue"),
+                // add dead block to avoid double br
+                ctx.context.append_basic_block(ctx.function, "dead"),
             );
         } else {
             panic!("continue not in loop");
