@@ -93,6 +93,33 @@ impl<'a> PLParser<'a> {
     }
 }
 
+#[test_parser(
+    "if a > 1 { 
+    a = 1
+} else {
+    a = 2
+}"
+)]
+#[test_parser(
+    "if true {
+    a = 1
+} else if false {
+    a = 2
+} else {
+    a = 3
+}"
+)]
+#[test_parser_error(
+    "if true {
+    a = 1
+} else if false {
+    a = 2
+} else {
+    a = 3
+} else {
+    a = 4
+}"
+)]
 /// ```ebnf
 /// if_statement = "if" logic_exp statement_block ("else" (if_statement | statement_block))? ;
 /// ```
@@ -121,13 +148,17 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         },
     )(input)
 }
-#[test_parser("while true {
+#[test_parser(
+    "while true {
     let a = b
-}")]
-#[test_parser_error("while true {
+}"
+)]
+#[test_parser_error(
+    "while true {
     let a = b
 }
-")]
+"
+)]
 /// ```ebnf
 /// while_statement = "while" logic_exp statement_block ;
 /// ```
@@ -208,6 +239,7 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
     })(input)
 }
 
+#[test_parser("let a = 1")]
 pub fn new_variable(input: Span) -> IResult<Span, Box<dyn Node>> {
     delspace(map_res(
         preceded(
@@ -226,6 +258,7 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<dyn Node>> {
     ))(input)
 }
 
+#[test_parser("a = 1")]
 pub fn assignment(input: Span) -> IResult<Span, Box<dyn Node>> {
     delspace(map_res(
         tuple((identifier, tag_token(TokenType::ASSIGN), logic_exp)),
@@ -240,6 +273,10 @@ pub fn assignment(input: Span) -> IResult<Span, Box<dyn Node>> {
     ))(input)
 }
 
+#[test_parser(".10")]
+#[test_parser("10.")]
+#[test_parser("10.10")]
+#[test_parser("10")]
 pub fn number(input: Span) -> IResult<Span, Box<dyn Node>> {
     let (input, _) = space0(input)?;
     let (re, value) = alt((
@@ -256,14 +293,21 @@ pub fn number(input: Span) -> IResult<Span, Box<dyn Node>> {
     Ok((re, Box::new(node)))
 }
 
+#[test_parser("a + 1")]
+#[test_parser("a - 1")]
 pub fn add_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
     parse_bin_ops!(mul_exp, PLUS, MINUS)(input)
 }
 
+#[test_parser("1 * 1")]
+#[test_parser("1 / 1")]
 pub fn mul_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
     parse_bin_ops!(unary_exp, MUL, DIV)(input)
 }
 
+#[test_parser("-1")]
+#[test_parser("!a")]
+#[test_parser_error("+a")]
 pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
     delspace(alt((
         primary_exp,
@@ -279,9 +323,17 @@ pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
         ),
     )))(input)
 }
+#[test_parser("a>b")]
+#[test_parser("a>=b")]
+#[test_parser("a<b")]
+#[test_parser("a<=b")]
+#[test_parser("a==b")]
+#[test_parser("a!=b")]
 pub fn compare_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
     parse_bin_ops!(add_exp, GEQ, LEQ, NE, EQ, LESS, GREATER)(input)
 }
+#[test_parser("a&&b")]
+#[test_parser("a||b")]
 pub fn logic_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
     parse_bin_ops!(compare_exp, AND, OR)(input)
 }
