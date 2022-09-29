@@ -29,6 +29,11 @@ use crate::{
 use internal_macro::{test_parser, test_parser_error};
 use nom::character::complete::char;
 
+macro_rules! newline_or_eof {
+    () => {
+        alt((delspace(alt((tag("\n"), tag("\r\n")))), eof))
+    };
+}
 fn res<T>(t: T) -> Result<Box<dyn Node>, Error>
 where
     T: Node + 'static,
@@ -200,8 +205,8 @@ pub fn statement_block(input: Span) -> IResult<Span, Box<dyn Node>> {
 /// ```
 pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     delspace(alt((
-        terminated(new_variable, newline),
-        terminated(assignment, newline),
+        terminated(new_variable, newline_or_eof!()),
+        terminated(assignment, newline_or_eof!()),
         if_statement,
         while_statement,
         break_statement,
@@ -209,6 +214,7 @@ pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         newline,
     )))(input)
 }
+
 pub fn newline(input: Span) -> IResult<Span, Box<dyn Node>> {
     map_res(delspace(alt((tag("\n"), tag("\r\n")))), |_| {
         res(NLNode {
