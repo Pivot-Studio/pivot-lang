@@ -232,7 +232,7 @@ pub fn statements(input: Span) -> IResult<Span, Box<dyn Node>> {
 }
 
 pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
-    let (input, re) = map_res(many0(statement), |v| {
+    map_res(terminated(many0(statement), eof), |v| {
         let mut range = v[0].range();
         let la = v.last();
         if let Some(la) = la {
@@ -242,9 +242,7 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
             statements: v,
             range,
         })
-    })(input)?;
-    eof(input)?;
-    Ok((input, re))
+    })(input)
 }
 
 #[test_parser("let a = 1")]
