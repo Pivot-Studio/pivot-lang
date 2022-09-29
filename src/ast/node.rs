@@ -3,6 +3,7 @@ use crate::ast::range::RangeTrait;
 use crate::ast::tokens::TokenType;
 use as_any::AsAny;
 use inkwell::basic_block::BasicBlock;
+use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
 use inkwell::IntPredicate;
 use internal_macro::range;
@@ -340,6 +341,26 @@ impl Node for VarNode {
         todo!(); // TODO: 未定义的变量
     }
 }
+
+fn alloc<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>, tp: BasicTypeEnum<'ctx>, name:&str) -> PointerValue<'ctx>{
+    match ctx.function.get_first_basic_block() {
+        Some(entry) => {
+            ctx.builder.position_at_end(entry);
+            let p = ctx.builder.build_alloca(tp, name);
+            match ctx.block {
+                Some(block) => {
+                    ctx.builder.position_at_end(block);
+                },
+                None => {
+                    println!("alloc ctx.block == None!")
+                }
+            }
+            p
+        },
+        None => panic!("alloc get entry failed!"),
+    }
+}
+
 #[range]
 pub struct DefNode {
     pub var: VarNode,
@@ -357,7 +378,7 @@ impl Node for DefNode {
         let v = self.exp.emit(ctx);
         let e = v.as_basic_value_enum();
         let tp = e.get_type();
-        let p = ctx.builder.build_alloca(tp, &self.var.name);
+        let p = alloc(ctx, tp, &self.var.name);
         ctx.builder.build_store(p, e);
 
         ctx.add_symbol(self.var.name.clone(), p);

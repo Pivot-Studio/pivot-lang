@@ -44,8 +44,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             table: HashMap::new(),
             father: Some(self),
             context: self.context,
-            module: self.module,
             builder: self.builder,
+            module: self.module,
             function: self.function,
             block: self.block,
         }
