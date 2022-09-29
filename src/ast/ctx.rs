@@ -1,4 +1,5 @@
 use crate::ast::node::Value;
+use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
@@ -14,6 +15,7 @@ pub struct Ctx<'a, 'ctx> {
     pub builder: &'a Builder<'ctx>,
     pub module: &'a Module<'ctx>,
     pub function: FunctionValue<'ctx>,
+    pub block: Option<BasicBlock<'ctx>>,
 }
 
 impl<'a, 'ctx> Ctx<'a, 'ctx> {
@@ -34,6 +36,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             module,
             builder,
             function,
+            block: Some(basic_block),
         }
     }
     pub fn new_child(&'a self) -> Ctx<'a, 'ctx> {
@@ -41,9 +44,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             table: HashMap::new(),
             father: Some(self),
             context: self.context,
-            module: self.module,
             builder: self.builder,
+            module: self.module,
             function: self.function,
+            block: self.block,
         }
     }
 
