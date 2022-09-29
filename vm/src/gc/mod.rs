@@ -9,6 +9,9 @@ pub struct Mem {
     marked: bool,
 }
 
+// bypass rust warning
+pub fn reg() {}
+
 impl Mem {
     fn mark(&mut self) {
         self.marked = true;

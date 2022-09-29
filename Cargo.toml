@@ -11,7 +11,7 @@ lazy_static = "1.4.0"
 paste = "1.0"
 llvm-sys = "140"
 internal_macro = { path = "./internal_macro" }
-vm = { path = "./vm", optional = true }
+vm = { path = "./vm", optional = true, features = ["jit"] }
 nom_locate = "4.0.0"
 as-any = "0.3.0"
 clap = { version = "3.2.22", features = ["derive"] }

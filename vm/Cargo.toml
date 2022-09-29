@@ -13,7 +13,7 @@ rand = "0.8"
 [lib]
 name = "vm"
 path = "src/lib.rs"
-crate-type = ["staticlib"]
+crate-type = ["staticlib", "lib"]
 
 [features]
 jit = []

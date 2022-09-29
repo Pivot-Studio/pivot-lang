@@ -6,3 +6,4 @@ target
 *.out
 *.sh
 test.cpp
+*.bc
