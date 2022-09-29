@@ -2,6 +2,7 @@ use crate::ast::ctx::Ctx;
 use crate::ast::range::RangeTrait;
 use crate::ast::tokens::TokenType;
 use as_any::AsAny;
+use inkwell::basic_block::BasicBlock;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
 use inkwell::IntPredicate;
 use internal_macro::range;
@@ -148,6 +149,12 @@ impl Node for NLNode {
     }
 }
 
+fn position_at_end<'a,'b>(ctx: &mut Ctx<'b,'a>,block: BasicBlock<'a>) {
+    ctx.builder.position_at_end(block);
+    ctx.block = Some(block);
+}
+
+
 #[range]
 pub struct IfNode {
     pub cond: Box<dyn Node>,
@@ -171,7 +178,7 @@ impl Node for IfNode {
         let else_block = ctx.context.append_basic_block(ctx.function, "else");
         let after_block = ctx.context.append_basic_block(ctx.function, "after");
         ctx.builder.build_unconditional_branch(cond_block);
-        ctx.builder.position_at_end(cond_block);
+        position_at_end(ctx,cond_block);
         let cond = self.cond.emit(ctx);
         let cond = match cond {
             Value::BoolValue(v) => v,
@@ -180,15 +187,15 @@ impl Node for IfNode {
         ctx.builder
             .build_conditional_branch(cond, then_block, else_block);
         // then block
-        ctx.builder.position_at_end(then_block);
+        position_at_end(ctx,then_block);
         self.then.emit(ctx);
         ctx.builder.build_unconditional_branch(after_block);
-        ctx.builder.position_at_end(else_block);
+        position_at_end(ctx,else_block);
         if let Some(el) = &mut self.els {
             el.emit(ctx);
         }
         ctx.builder.build_unconditional_branch(after_block);
-        ctx.builder.position_at_end(after_block);
+        position_at_end(ctx,after_block);
         Value::None
     }
 }
@@ -211,7 +218,7 @@ impl Node for WhileNode {
         let body_block = ctx.context.append_basic_block(ctx.function, "body");
         let after_block = ctx.context.append_basic_block(ctx.function, "after");
         ctx.builder.build_unconditional_branch(cond_block);
-        ctx.builder.position_at_end(cond_block);
+        position_at_end(ctx,cond_block);
         let cond = self.cond.emit(ctx);
         let cond = match cond {
             Value::BoolValue(v) => v,
@@ -219,10 +226,10 @@ impl Node for WhileNode {
         };
         ctx.builder
             .build_conditional_branch(cond, body_block, after_block);
-        ctx.builder.position_at_end(body_block);
+        position_at_end(ctx,body_block);
         self.body.emit(ctx);
         ctx.builder.build_unconditional_branch(cond_block);
-        ctx.builder.position_at_end(after_block);
+        position_at_end(ctx,after_block);
         Value::None
     }
 }
