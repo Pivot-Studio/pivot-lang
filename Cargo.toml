@@ -22,3 +22,7 @@ features = ["alloc"]
 [features]
 default = ["jit"]
 jit = ["vm"]
+
+[[bin]]
+name = "plc"
+path = "src/main.rs"

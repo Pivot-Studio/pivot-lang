@@ -40,7 +40,7 @@ bool_const =
     ;
 
 compare_exp =
-    | add_exp (("<"｜"<="｜">"｜">="｜"=="｜"!=") add_exp)*
+    | add_exp (("<=" | "<"｜">="｜">"｜"=="｜"!=") add_exp)*
     ;
 
 logic_exp = 
@@ -61,11 +61,17 @@ newline = "\n" | "\r\n" ;
 
 statements = statement* ;
 
+break_statement = "break" newline ;
+
+continue_statement = "continue" newline ;
+
 statement = 
     | assignment newline
     | new_variable newline
     | if_statement
     | while_statement
+    | break_statement
+    | continue_statement
     | newline
     ;
 

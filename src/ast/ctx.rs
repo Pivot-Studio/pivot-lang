@@ -16,6 +16,8 @@ pub struct Ctx<'a, 'ctx> {
     pub module: &'a Module<'ctx>,
     pub function: FunctionValue<'ctx>,
     pub block: Option<BasicBlock<'ctx>>,
+    pub continue_block: Option<BasicBlock<'ctx>>,
+    pub break_block: Option<BasicBlock<'ctx>>,
 }
 
 impl<'a, 'ctx> Ctx<'a, 'ctx> {
@@ -37,6 +39,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             builder,
             function,
             block: Some(basic_block),
+            continue_block: None,
+            break_block: None,
         }
     }
     pub fn new_child(&'a self) -> Ctx<'a, 'ctx> {
@@ -48,6 +52,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             module: self.module,
             function: self.function,
             block: self.block,
+            continue_block: self.continue_block,
+            break_block: self.break_block,
         }
     }
 

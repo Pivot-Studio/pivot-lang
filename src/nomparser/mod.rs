@@ -4,7 +4,7 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::{alpha1, alphanumeric1, one_of, space0},
-    combinator::{map_res, opt, recognize},
+    combinator::{eof, map_res, opt, recognize},
     error::ParseError,
     multi::{many0, many0_count, many1},
     sequence::{delimited, pair, preceded, terminated, tuple},
@@ -17,7 +17,10 @@ use crate::{
         AssignNode, BinOpNode, BoolConstNode, DefNode, Node, Num, NumNode, StatementsNode,
         UnaryOpNode, VarNode,
     },
-    ast::{node::ProgramNode, tokens::TokenType},
+    ast::{
+        node::{BreakNode, ContinueNode, ProgramNode},
+        tokens::TokenType,
+    },
     ast::{
         node::{IfNode, NLNode, WhileNode},
         range::Range,
@@ -26,6 +29,11 @@ use crate::{
 use internal_macro::{test_parser, test_parser_error};
 use nom::character::complete::char;
 
+macro_rules! newline_or_eof {
+    () => {
+        alt((delspace(alt((tag("\n"), tag("\r\n")))), eof))
+    };
+}
 fn res<T>(t: T) -> Result<Box<dyn Node>, Error>
 where
     T: Node + 'static,
@@ -190,19 +198,23 @@ pub fn statement_block(input: Span) -> IResult<Span, Box<dyn Node>> {
 /// | assignment newline
 /// | if_statement
 /// | while_statement
+/// | break_statement
+/// | continue_statement
 /// | newline
 /// ;
 /// ```
 pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     delspace(alt((
-        terminated(new_variable, newline),
-        terminated(assignment, newline),
+        terminated(new_variable, newline_or_eof!()),
+        terminated(assignment, newline_or_eof!()),
         if_statement,
         while_statement,
-        // eof,
+        break_statement,
+        continue_statement,
         newline,
     )))(input)
 }
+
 pub fn newline(input: Span) -> IResult<Span, Box<dyn Node>> {
     map_res(delspace(alt((tag("\n"), tag("\r\n")))), |_| {
         res(NLNode {
@@ -226,7 +238,7 @@ pub fn statements(input: Span) -> IResult<Span, Box<dyn Node>> {
 }
 
 pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
-    map_res(many0(statement), |v| {
+    map_res(terminated(many0(statement), eof), |v| {
         let mut range = v[0].range();
         let la = v.last();
         if let Some(la) = la {
@@ -303,6 +315,29 @@ pub fn add_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
 #[test_parser("1 / 1")]
 pub fn mul_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
     parse_bin_ops!(unary_exp, MUL, DIV)(input)
+}
+
+#[test_parser("break\n")]
+pub fn break_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+    terminated(
+        delspace(map_res(tag_token(TokenType::BREAK), |_| {
+            res(BreakNode {
+                range: Range::new(input, input),
+            })
+        })),
+        newline,
+    )(input)
+}
+#[test_parser("continue\n")]
+pub fn continue_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+    terminated(
+        delspace(map_res(tag_token(TokenType::CONTINUE), |_| {
+            res(ContinueNode {
+                range: Range::new(input, input),
+            })
+        })),
+        newline,
+    )(input)
 }
 
 #[test_parser("-1")]

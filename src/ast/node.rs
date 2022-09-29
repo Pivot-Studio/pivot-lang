@@ -156,6 +156,49 @@ fn position_at_end<'a, 'b>(ctx: &mut Ctx<'b, 'a>, block: BasicBlock<'a>) {
 }
 
 #[range]
+pub struct BreakNode {}
+
+impl Node for BreakNode {
+    fn print(&self) {
+        println!("BreakNode");
+    }
+
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        if let Some(b) = ctx.break_block {
+            ctx.builder.build_unconditional_branch(b);
+            // add dead block to avoid double br
+            position_at_end(ctx, ctx.context.append_basic_block(ctx.function, "dead"));
+        } else {
+            panic!("break not in loop");
+        }
+        Value::None
+    }
+}
+
+#[range]
+pub struct ContinueNode {}
+
+impl Node for ContinueNode {
+    fn print(&self) {
+        println!("ContinueNode");
+    }
+
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        if let Some(b) = ctx.continue_block {
+            ctx.builder.build_unconditional_branch(b);
+            position_at_end(
+                ctx,
+                // add dead block to avoid double br
+                ctx.context.append_basic_block(ctx.function, "dead"),
+            );
+        } else {
+            panic!("continue not in loop");
+        }
+        Value::None
+    }
+}
+
+#[range]
 pub struct IfNode {
     pub cond: Box<dyn Node>,
     pub then: Box<dyn Node>,
@@ -217,6 +260,8 @@ impl Node for WhileNode {
         let cond_block = ctx.context.append_basic_block(ctx.function, "cond");
         let body_block = ctx.context.append_basic_block(ctx.function, "body");
         let after_block = ctx.context.append_basic_block(ctx.function, "after");
+        ctx.break_block = Some(after_block);
+        ctx.continue_block = Some(cond_block);
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, cond_block);
         let cond = self.cond.emit(ctx);
