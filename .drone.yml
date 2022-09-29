@@ -36,7 +36,7 @@ steps:
         git-fetch-with-cli = true' > ./.cargo/config.toml
       - cargo test --all
       - ls target/debug/deps
-      - bash -c 'for file in target/debug/deps/pivot_lang-*; do [ -x "$${file}" ] || continue; mkdir -p "target/cov/$(basename $file)"; /kcov-build/usr/local/bin/kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done'
+      - bash -c 'for file in target/debug/deps/plc-*; do [ -x "$${file}" ] || continue; mkdir -p "target/cov/$(basename $file)"; /kcov-build/usr/local/bin/kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done'
       - ls 
       - ls target/cov/
       - wget https://codecov.io/bash
