@@ -307,6 +307,7 @@ pub fn mul_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
 
 #[test_parser("-1")]
 #[test_parser("!a")]
+#[test_parser_error("+a")]
 pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
     delspace(alt((
         primary_exp,
