@@ -37,8 +37,7 @@ jobs:
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
-          profile: minimal
-          override: true
+          toolchain: stable
 
       - name: Cache LLVM and Clang
         id: cache-llvm
