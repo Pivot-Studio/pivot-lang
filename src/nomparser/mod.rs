@@ -14,7 +14,10 @@ use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
     ast::node::*,
-    ast::range::Range,
+    ast::{
+        node::types::{StructDefNode, TypeNameNode, TypeNode, TypedIdentifierNode},
+        range::Range,
+    },
     ast::{
         node::{control::*, operator::*, primary::*, program::*, statement::*},
         tokens::TokenType,
@@ -28,6 +31,12 @@ macro_rules! newline_or_eof {
         alt((delspace(alt((tag("\n"), tag("\r\n")))), eof))
     };
 }
+macro_rules! delnl {
+    ($parser:expr) => {
+        delimited(many0(newline), $parser, many0(newline))
+    };
+}
+
 fn res<T>(t: T) -> Result<Box<dyn Node>, Error>
 where
     T: Node + 'static,
@@ -35,15 +44,29 @@ where
     res_box(box_node(t))
 }
 
-fn box_node<T>(t: T) -> Box<dyn Node>
+fn res_ori<T>(t: T) -> Result<Box<T>, Error>
+where
+    T: Node + 'static,
+{
+    res_box(box_node(t))
+}
+
+fn restp<T>(t: T) -> Result<Box<dyn TypeNode>, Error>
+where
+    T: TypeNode + 'static,
+{
+    res_box(box_node(t))
+}
+
+fn box_node<T>(t: T) -> Box<T>
 where
     T: Node + 'static,
 {
     Box::new(t)
 }
 
-fn res_box(i: Box<dyn Node>) -> Result<Box<dyn Node>, Error> {
-    Ok::<Box<dyn Node>, Error>(i)
+fn res_box<T: ?Sized>(i: Box<T>) -> Result<Box<T>, Error> {
+    Ok::<_, Error>(i)
 }
 
 fn create_bin(
@@ -245,6 +268,10 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
     })(input)
 }
 
+fn cast_to_var(n: &Box<dyn Node>) -> VarNode {
+    n.as_any().downcast_ref::<VarNode>().unwrap().clone()
+}
+
 #[test_parser("let a = 1")]
 pub fn new_variable(input: Span) -> IResult<Span, Box<dyn Node>> {
     delspace(map_res(
@@ -253,7 +280,7 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<dyn Node>> {
             tuple((identifier, tag_token(TokenType::ASSIGN), logic_exp)),
         ),
         |(out, _, v)| {
-            let a = out.as_any().downcast_ref::<VarNode>().unwrap().clone();
+            let a = cast_to_var(&out);
             let range = out.range().start.to(v.range().end);
             res(DefNode {
                 var: a,
@@ -440,6 +467,66 @@ fn float(input: Span) -> IResult<Span, Span> {
         recognize(tuple((decimal, char('.'), opt(decimal)))),
     ))(input)
 }
+
+#[test_parser("kfsh")]
+fn type_name(input: Span) -> IResult<Span, Box<dyn TypeNode>> {
+    delspace(map_res(identifier, |o| {
+        let o = cast_to_var(&o);
+        restp(TypeNameNode {
+            id: o.name,
+            range: o.range,
+        })
+    }))(input)
+}
+
+#[test_parser("myname: int")]
+fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
+    delspace(map_res(
+        tuple((identifier, tag_token(TokenType::COLON), type_name)),
+        |(id, _, type_name)| {
+            let id = cast_to_var(&id);
+            let range = id.range.start.to(type_name.range().end);
+            res_ori(TypedIdentifierNode {
+                id: id.name,
+                tp: type_name,
+                range,
+            })
+        },
+    ))(input)
+}
+
+#[test_parser("jksa: int\n")]
+fn struct_field(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
+    delnl!(terminated(typed_identifier, newline))(input)
+}
+
+#[test_parser(
+    "struct mystruct {
+    myname: int
+    myname2: int
+}"
+)]
+fn struct_def(input: Span) -> IResult<Span, Box<dyn Node>> {
+    map_res(
+        tuple((
+            tag_token(TokenType::STRUCT),
+            identifier,
+            tag_token(TokenType::LBRACE),
+            many0(struct_field),
+            tag_token(TokenType::RBRACE),
+        )),
+        |(_, id, _, fields, _)| {
+            let id = cast_to_var(&id);
+            let range = id.range;
+            res(StructDefNode {
+                id: id.name,
+                fields,
+                range,
+            })
+        },
+    )(input)
+}
+
 fn decimal(input: Span) -> IResult<Span, Span> {
     recognize(many1(terminated(one_of("0123456789"), many0(char('_')))))(input)
 }
