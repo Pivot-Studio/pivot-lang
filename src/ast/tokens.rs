@@ -46,7 +46,9 @@ define_tokens!(
     BREAK = "break",
     CONTINUE = "continue",
     COLON = ":",
-    STRUCT = "struct"
+    STRUCT = "struct",
+    FN = "fn",
+    COMMA = ","
 );
 impl TokenType {
     pub fn get_str(&self) -> &'static str {
