@@ -6,6 +6,8 @@ use inkwell::basic_block::BasicBlock;
 use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
 
+use super::ctx::PLType;
+
 pub mod control;
 pub mod function;
 pub mod operator;
@@ -24,6 +26,7 @@ pub enum Value<'a> {
     IntValue(IntValue<'a>),
     FloatValue(FloatValue<'a>),
     VarValue(PointerValue<'a>),
+    TypeValue(PLType<'a>),
     None,
 }
 
@@ -35,6 +38,7 @@ impl<'a> Value<'a> {
             Value::VarValue(v) => v.as_basic_value_enum(),
             Value::BoolValue(v) => v.as_basic_value_enum(),
             Value::None => panic!("not implemented"),
+            Value::TypeValue(_) => panic!("not implemented"),
         }
     }
 }
