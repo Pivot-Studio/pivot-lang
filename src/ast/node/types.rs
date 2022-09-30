@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::*;
 use crate::ast::ctx::{Ctx, PLType, STType};
+use inkwell::types::BasicType;
 use internal_macro::range;
 
 #[range]
@@ -19,7 +20,7 @@ impl Node for TypeNameNode {
         println!("{}", self.id)
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        return Value::TypeValue(self.get_type(ctx).unwrap());
+        return Value::TypeValue(self.get_type(ctx).unwrap().get_basic_type());
     }
 }
 
@@ -47,7 +48,7 @@ impl Node for TypedIdentifierNode {
         self.tp.print();
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        return Value::TypeValue(self.get_type(ctx).unwrap().1);
+        return Value::TypeValue(self.get_type(ctx).unwrap().1.get_basic_type());
     }
 }
 
@@ -55,12 +56,6 @@ impl TypedIdentifierNode {
     fn get_type<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Option<(&str, PLType<'ctx>)> {
         let tp = self.tp.get_type(ctx)?;
         Some((self.id.as_str(), tp))
-    }
-}
-
-impl TypedIdentifierNode {
-    pub fn get_id(&self) -> &str {
-        self.id.as_str()
     }
 }
 
@@ -79,19 +74,12 @@ impl Node for StructDefNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        _ = self.gen_type(ctx);
-        Value::None
-    }
-}
-
-impl StructDefNode {
-    pub fn gen_type<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Result<PLType, &str> {
-        let mut fields = HashMap::<&str, PLType<'ctx>>::new();
+        let mut fields = HashMap::<String, PLType<'ctx>>::new();
         for field in self.fields.iter_mut() {
             if let Some((id, tp)) = field.get_type(ctx) {
-                fields.insert(id, tp);
+                fields.insert(id.to_string(), tp);
             } else {
-                return Err("type not found");
+                return Value::None;
             }
         }
         let name = self.id.as_str();
@@ -104,10 +92,12 @@ impl StructDefNode {
                 .collect::<Vec<_>>(),
             false,
         );
-        Ok(PLType::STRUCT(STType {
-            name,
+        let stu = PLType::STRUCT(STType {
+            name: name.to_string(),
             struct_type: st,
             fields: newf,
-        }))
+        });
+        ctx.add_type(name.to_string(), stu.clone());
+        Value::TypeValue(st.as_basic_type_enum())
     }
 }

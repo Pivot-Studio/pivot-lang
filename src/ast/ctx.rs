@@ -46,13 +46,13 @@ impl<'ctx> PLType<'ctx> {
 
 #[derive(Debug, Clone)]
 pub struct FNType<'ctx> {
-    pub name: &'ctx str,
+    pub name: String,
     pub fntype: FunctionType<'ctx>,
 }
 #[derive(Debug, Clone)]
 pub struct STType<'ctx> {
-    pub name: &'ctx str,
-    pub fields: HashMap<&'ctx str, PLType<'ctx>>,
+    pub name: String,
+    pub fields: HashMap<String, PLType<'ctx>>,
     pub struct_type: StructType<'ctx>,
 }
 
