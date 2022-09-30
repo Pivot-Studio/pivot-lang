@@ -53,11 +53,23 @@ jobs:
           cached: ${{ steps.cache-llvm.outputs.cache-hit }}
 
       - name: Cargo build
+        if: ${{ matrix.config.os != 'windows-latest' }}
         uses: actions-rs/cargo@v1
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
           LLVM_SYS_140_PREFIX: ${{ env.LLVM_PATH }}
         with:
+          command: build
+          args: --release
+
+      - name: Cargo build win
+        if: ${{ matrix.config.os == 'windows-latest' }}
+        uses: actions-rs/cargo@v1
+        env:
+          RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
+          LLVM_SYS_140_PREFIX: D:\\a\_temp\llvm
+        with:
+          run: echo ${{ env.LLVM_SYS_140_PREFIX }}
           command: build
           args: --release
 
