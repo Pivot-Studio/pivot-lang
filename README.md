@@ -98,17 +98,19 @@ number = [0-9]+ | number "." number ;
 
 identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
 
-function = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" identifier statement_block? ;
+function = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name statement_block? ;
 
 call_function = identifier "(" (logic_exp (","logic_exp)*)? ")" ;
 
 struct_def = "struct" identifier "{" struct_field* "}" ;
 
-typed_identifier = identifier ":" identifier ;
+type_name = identifier ;
+
+typed_identifier = identifier ":" type_name ;
 
 struct_field = typed_identifier newline ;
 
-struct_init = identifier "{" struct_init_field* "}" ;
+struct_init = type_name "{" struct_init_field* "}" ;
 
 struct_init_field = identifier ":" logic_exp newline ;
 
