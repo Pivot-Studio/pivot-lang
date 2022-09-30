@@ -43,7 +43,7 @@ jobs:
         id: cache-llvm
         uses: actions/cache@v2
         with:
-          path: ${{ env.LLVM_PATH }}
+          path: ${{ runner.temp }}/llvm
           key: llvm-14
       - name: Install LLVM and Clang
         uses: KyleMayes/install-llvm-action@v1
@@ -56,7 +56,7 @@ jobs:
         uses: actions-rs/cargo@v1
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
-          LLVM_SYS_140_PREFIX: ${{ runner.temp }}/llvm
+          LLVM_SYS_140_PREFIX: ${{ env.LLVM_PATH }}
         with:
           command: build
           args: --release
