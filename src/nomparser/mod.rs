@@ -15,12 +15,15 @@ type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
     ast::node::*,
     ast::{
-        node::types::{StructDefNode, TypeNameNode, TypeNode, TypedIdentifierNode},
-        range::Range,
-    },
-    ast::{
         node::{control::*, operator::*, primary::*, program::*, statement::*},
         tokens::TokenType,
+    },
+    ast::{
+        node::{
+            function::FuncDefNode,
+            types::{StructDefNode, TypeNameNode, TypeNode, TypedIdentifierNode},
+        },
+        range::Range,
     },
 };
 use internal_macro::{test_parser, test_parser_error};
@@ -493,6 +496,64 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
             })
         },
     ))(input)
+}
+
+/// ```ebnf
+/// function_def = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name (statement_block | newline) ;
+/// ```
+#[test_parser(
+    "fn f(x: int, y: int) int {
+        x = x+1
+        return 0
+    }"
+)]
+#[test_parser("fn f(x: int, y: int) int\n")]
+#[test_parser(
+    "fn f(x: int) int {
+        x = x+1
+        return 0
+    }"
+)]
+#[test_parser("fn f(x: int) int\n")]
+#[test_parser(
+    "fn f() int {
+        x = x+1
+        return 0
+    }"
+)]
+#[test_parser("fn f() int\n")]
+fn function_def(input: Span) -> IResult<Span, Box<dyn Node>> {
+    map_res(
+        tuple((
+            tag_token(TokenType::FN),
+            identifier,
+            tag_token(TokenType::LPAREN),
+            opt(tuple((
+                typed_identifier,
+                many0(preceded(tag_token(TokenType::COMMA), typed_identifier)),
+            ))),
+            tag_token(TokenType::RPAREN),
+            type_name,
+            alt((statement_block, newline)),
+        )),
+        |(_, id, _, paras, _, ret, body)| {
+            let id = cast_to_var(&id);
+            let mut paralist = None;
+            let range = id.range;
+            if let Some(para) = paras {
+                let mut par = vec![para.0];
+                par.extend(para.1);
+                paralist = Some(par);
+            }
+            res(FuncDefNode {
+                id: id.name,
+                paralist,
+                ret,
+                body,
+                range,
+            })
+        },
+    )(input)
 }
 
 #[test_parser("jksa: int\n")]

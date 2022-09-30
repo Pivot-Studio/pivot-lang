@@ -7,6 +7,7 @@ use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
 
 pub mod control;
+pub mod function;
 pub mod operator;
 pub mod primary;
 pub mod program;
