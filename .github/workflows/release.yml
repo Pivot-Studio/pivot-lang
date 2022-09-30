@@ -56,9 +56,19 @@ jobs:
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
+        if: ${{ matrix.config.os != windows-latest }}
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
           LLVM_SYS_140_PREFIX: ${{ runner.temp }}/llvm
+        with:
+          command: build
+          args: --release
+      - name: Cargo build win
+        uses: actions-rs/cargo@v1
+        if: ${{ matrix.config.os == windows-latest }}
+        env:
+          RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
+          LLVM_SYS_140_PREFIX: C:/Program Files/LLVM
         with:
           command: build
           args: --release
@@ -87,4 +97,4 @@ jobs:
         with:
           artifacts: ${{ matrix.config.dir }}/*
           commit: master
-          tag: ${{ env.COMMIT_SHA }}
+          tag: ${{ env.COMMIT_SHA }}-${{ matrix.config.os }}
