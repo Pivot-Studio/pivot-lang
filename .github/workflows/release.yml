@@ -86,3 +86,4 @@ jobs:
         name: upload
         with:
           artifacts: ${{ matrix.config.dir }}/*
+          commit: master
