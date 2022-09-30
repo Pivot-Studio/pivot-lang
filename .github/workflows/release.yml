@@ -87,3 +87,4 @@ jobs:
         with:
           artifacts: ${{ matrix.config.dir }}/*
           commit: master
+          tag: ${{ env.COMMIT_SHA }}
