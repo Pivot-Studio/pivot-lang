@@ -55,7 +55,7 @@ jobs:
       
       - name: set up win scoop
         if: ${{ matrix.config.os == 'windows-latest' }}
-        uses: MinoruSekine/setup-scoop@master
+        uses: MinoruSekine/setup-scoop@main
 
       - name: Install LLVM and Clang win
         if: ${{ matrix.config.os == 'windows-latest' }}
