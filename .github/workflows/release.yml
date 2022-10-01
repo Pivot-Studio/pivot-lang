@@ -65,9 +65,7 @@ jobs:
           wget https://github.com/Chronostasys/llvm-package-windows/releases/download/llvm14.0.6/llvm-14.0.6-windows-x64-msvc17.7z
           7z x llvm-14.0.6-windows-x64-msvc17.7z -y -o${{ runner.temp }}\llvm
   
-      - name: Add msbuild to PATH
-        uses: microsoft/setup-msbuild@v1.1
-        if: ${{ matrix.config.os == 'windows-latest' }}
+      - uses: seanmiddleditch/gha-setup-vsdevenv@master
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
