@@ -21,10 +21,10 @@ jobs:
             dir: linux64
             artifacts: "plc"
             RUSTFLAGS: "-Dwarnings"
-          # - os: "windows-latest" # win没有llvm-config，无法正常编译
-          #   dir: win64
-          #   artifacts: "plc.exe"
-          #   RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"
+          - os: "windows-latest" # win没有llvm-config，无法正常编译
+            dir: win64
+            artifacts: "plc.exe"
+            RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"
           - os: "macOS-latest"
             dir: osx64
             artifacts: "plc"
@@ -46,17 +46,26 @@ jobs:
           path: ${{ runner.temp }}/llvm
           key: llvm-14
       - name: Install LLVM and Clang
+        if: ${{ matrix.config.os != 'windows-latest' }}
         uses: KyleMayes/install-llvm-action@v1
         with:
           version: "14"
           directory: ${{ runner.temp }}/llvm
           cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+          
+      - name: Install LLVM and Clang win
+        if: ${{ matrix.config.os == 'windows-latest' }}
+        env:
+          OUT_DIR: ${{ runner.temp }}/llvm
+        run: |
+          wget https://github.com/Chronostasys/llvm-package-windows/releases/download/llvm14.0.6/llvm-14.0.6-windows-x64-msvc17.7z
+          7z x llvm-14.0.6-windows-x64-msvc17.7z -y -o$OUT_DIR
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
-          LLVM_SYS_140_PREFIX: ${{ env.LLVM_PATH }}
+          LLVM_SYS_140_PREFIX: ${{ runner.temp }}/llvm
         with:
           command: build
           args: --release
