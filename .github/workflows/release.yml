@@ -68,8 +68,6 @@ jobs:
       - name: Add msbuild to PATH
         uses: microsoft/setup-msbuild@v1.1
         if: ${{ matrix.config.os == 'windows-latest' }}
-        with:
-          vs-version: '[17.0,17.1)'
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
