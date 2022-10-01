@@ -59,19 +59,17 @@ jobs:
 
       - name: Install LLVM and Clang win
         if: ${{ matrix.config.os == 'windows-latest' }}
-        env:
-          OUT_DIR: ${{ runner.temp }}/llvm
         run: |
           scoop install 7zip
           scoop install wget
           wget https://github.com/Chronostasys/llvm-package-windows/releases/download/llvm14.0.6/llvm-14.0.6-windows-x64-msvc17.7z
-          7z x llvm-14.0.6-windows-x64-msvc17.7z -y -o$OUT_DIR
+          7z x llvm-14.0.6-windows-x64-msvc17.7z -y -o${{ runner.temp }}\llvm
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
-          LLVM_SYS_140_PREFIX: ${{ runner.temp }}/llvm
+          LLVM_SYS_140_PREFIX: ${{ runner.temp }}\llvm
         with:
           command: build
           args: --release
