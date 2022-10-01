@@ -45,6 +45,7 @@ define_tokens!(
     WHILE = "while",
     BREAK = "break",
     CONTINUE = "continue",
+    RETURN = "return",
     COLON = ":",
     STRUCT = "struct",
     FN = "fn",

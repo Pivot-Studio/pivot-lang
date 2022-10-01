@@ -1,4 +1,4 @@
-use std::fmt::Error;
+use std::{fmt::Error, option};
 
 use nom::{
     branch::alt,
@@ -13,6 +13,7 @@ use nom::{
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
+    ast::node::ret::RetNode,
     ast::node::*,
     ast::{
         node::{control::*, operator::*, primary::*, program::*, statement::*},
@@ -119,6 +120,57 @@ impl<'a> PLParser<'a> {
     pub fn parse(&mut self) -> IResult<Span, Box<dyn Node>> {
         program(self.input)
     }
+}
+#[test_parser(
+    "return 1
+    "
+)]
+#[test_parser(
+    "return 1.1
+    "
+)]
+#[test_parser(
+    "return true
+    "
+)]
+#[test_parser("return")]
+#[test_parser(
+    "return a
+    "
+)]
+#[test_parser(
+    "return 1 + 2
+    "
+)]
+#[test_parser_error(
+    "return a = 2
+    "
+)]
+// ```
+// return_statement = "return" logic_exp newline ;
+// ```
+pub fn return_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+    delspace(map_res(
+        tuple((
+            tag_token(TokenType::RETURN),
+            opt(logic_exp),
+            newline_or_eof!(),
+        )),
+        |(_ret, val, _)| {
+            if let Some(val) = val {
+                let range = val.range();
+                res(RetNode {
+                    value: Some(val),
+                    range,
+                })
+            } else {
+                res(RetNode {
+                    value: None,
+                    range: Range::new(input, input),
+                })
+            }
+        },
+    ))(input)
 }
 
 #[test_parser(
