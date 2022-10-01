@@ -130,7 +130,7 @@ jobs:
         with:
           artifacts: llvm-14.0.6-windows-x64-msvc17.7z
           commit: master
-          tag: ${{ env.COMMIT_SHA }}-llvm-${{ matrix.config.os }}
+          tag: llvm-${{ matrix.config.os }}
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
