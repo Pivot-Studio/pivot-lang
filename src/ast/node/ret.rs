@@ -2,7 +2,6 @@ use super::*;
 use crate::ast::ctx::Ctx;
 use internal_macro::range;
 
-
 #[range]
 pub struct RetNode {
     pub value: Option<Box<dyn Node>>,
@@ -13,7 +12,7 @@ impl Node for RetNode {
         println!("RetNode:");
         if let Some(ret) = &self.value {
             ret.print();
-        }else{
+        } else {
             println!("void");
         }
     }
@@ -26,6 +25,7 @@ impl Node for RetNode {
                 Value::BoolValue(v) => ctx.builder.build_return(Some(&v)),
                 Value::FloatValue(v) => ctx.builder.build_return(Some(&v)),
                 Value::VarValue(v) => ctx.builder.build_return(Some(&v)),
+                Value::TypeValue(_) => panic!("not impl"),
                 Value::None => ctx.builder.build_return(None),
             };
         } else {
@@ -34,4 +34,3 @@ impl Node for RetNode {
         Value::None
     }
 }
-
