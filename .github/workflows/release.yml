@@ -122,10 +122,15 @@ jobs:
               Remove-Item $source_dir -Force -Recurse -Confirm:$false
           }
 
-          build-msvc "msvc16" "Visual Studio 17 2022"
+          build-msvc "msvc17" "Visual Studio 17 2022"
           7z x llvm-14.0.6-windows-x64-msvc17.7z -y -o${{ runner.temp }}\llvm
   
-      - uses: seanmiddleditch/gha-setup-vsdevenv@master
+      - uses: ncipollo/release-action@v1
+        name: upload
+        with:
+          artifacts: llvm-14.0.6-windows-x64-msvc17.7z
+          commit: master
+          tag: ${{ env.COMMIT_SHA }}-llvm-${{ matrix.config.os }}
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
