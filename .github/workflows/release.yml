@@ -21,7 +21,7 @@ jobs:
             dir: linux64
             artifacts: "plc"
             RUSTFLAGS: "-Dwarnings"
-          - os: "windows-latest" # win没有llvm-config，无法正常编译
+          - os: "windows-latest"
             dir: win64
             artifacts: "plc.exe"
             RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"
@@ -52,12 +52,20 @@ jobs:
           version: "14"
           directory: ${{ runner.temp }}/llvm
           cached: ${{ steps.cache-llvm.outputs.cache-hit }}
-          
+      
+      - name: set up win scoop
+        if: ${{ matrix.config.os == 'windows-latest' }}
+        uses: MinoruSekine/setup-scoop@v1
+        with:
+          update_path: true
+
       - name: Install LLVM and Clang win
         if: ${{ matrix.config.os == 'windows-latest' }}
         env:
           OUT_DIR: ${{ runner.temp }}/llvm
         run: |
+          scoop install 7zip
+          scoop install wget
           wget https://github.com/Chronostasys/llvm-package-windows/releases/download/llvm14.0.6/llvm-14.0.6-windows-x64-msvc17.7z
           7z x llvm-14.0.6-windows-x64-msvc17.7z -y -o$OUT_DIR
 
