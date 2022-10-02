@@ -46,7 +46,7 @@ jobs:
           path: ${{ runner.temp }}/llvm
           key: llvm-14
       - name: Install LLVM and Clang
-        if: ${{ matrix.config.os != 'windows-latest' }}
+        if: ${{ matrix.config.os != 'windows-2019' }}
         uses: KyleMayes/install-llvm-action@v1
         with:
           version: "14"
@@ -54,11 +54,11 @@ jobs:
           cached: ${{ steps.cache-llvm.outputs.cache-hit }}
       
       - name: set up win scoop
-        if: ${{ matrix.config.os == 'windows-latest' }}
+        if: ${{ matrix.config.os == 'windows-2019' }}
         uses: MinoruSekine/setup-scoop@main
 
       - name: Install LLVM and Clang win
-        if: ${{ matrix.config.os == 'windows-latest' }}
+        if: ${{ matrix.config.os == 'windows-2019' }}
         run: |
           scoop install 7zip
           scoop install wget
@@ -119,12 +119,16 @@ jobs:
           )
           [Environment]::SetEnvironmentVariable('LLVM_SYS_140_PREFIX', '${{ runner.temp }}\llvm', 'User')
   
+      - name: Shorten commit SHA
+        run: echo "COMMIT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+  
       - uses: ncipollo/release-action@v1
         name: upload
+        if: ${{ matrix.config.os == 'windows-2019' }}
         with:
           artifacts: llvm-14.0.6-windows-x64-msvc16.7z
           commit: master
-          tag: llvm-14.0.6-windows-x64-msvc16
+          tag: llvm-14.0.6-windows-x64-msvc16-${{ env.COMMIT_SHA }}
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
@@ -151,8 +155,6 @@ jobs:
             os.rename(src, dst)
         shell: python
 
-      - name: Shorten commit SHA
-        run: echo "COMMIT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
 
       - uses: ncipollo/release-action@v1
         name: upload
