@@ -574,12 +574,11 @@ fn function_def(input: Span) -> IResult<Span, Box<dyn Node>> {
         )),
         |(_, id, _, paras, _, ret, body)| {
             let id = cast_to_var(&id);
-            let mut paralist = None;
+            let mut paralist = vec![];
             let range = id.range;
             if let Some(para) = paras {
-                let mut par = vec![para.0];
-                par.extend(para.1);
-                paralist = Some(par);
+                paralist.push(para.0);
+                paralist.extend(para.1);
             }
             res(FuncDefNode {
                 id: id.name,
