@@ -16,7 +16,7 @@ fn test_nom() {
     let module = &context.create_module("test");
     let mut ctx = ctx::Ctx::new(context, module, builder);
     let m = &mut ctx;
-    node.print();
+    println!("{}", node.string(0));
     let _re = node.emit(m);
     // if let Value::IntValue(re) = re {
     //     assert!(re.print_to_string().to_string() == "i64 114")

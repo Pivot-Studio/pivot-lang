@@ -1,6 +1,9 @@
 use super::*;
 use crate::ast::ctx::Ctx;
 use internal_macro::range;
+use crate::utils::tabs;
+
+use string_builder::Builder;
 
 #[range]
 pub struct RetNode {
@@ -8,13 +11,16 @@ pub struct RetNode {
 }
 
 impl Node for RetNode {
-    fn print(&self) {
-        println!("RetNode:");
-        if let Some(ret) = &self.value {
-            ret.print();
-        } else {
-            println!("void");
+    fn string(&self, tabs: usize) -> String {
+        let mut builder = Builder::default();
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append("(RetNode");
+        if let Some(value) = &self.value {
+            builder.append(value.string(tabs + 1));
         }
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append(")");
+        builder.string().unwrap()
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {

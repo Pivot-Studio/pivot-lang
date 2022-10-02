@@ -21,10 +21,10 @@ jobs:
             dir: linux64
             artifacts: "plc"
             RUSTFLAGS: "-Dwarnings"
-          # - os: "windows-latest" # win没有llvm-config，无法正常编译
-          #   dir: win64
-          #   artifacts: "plc.exe"
-          #   RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"
+          - os: "windows-2019"
+            dir: win64
+            artifacts: "plc.exe"
+            RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"
           - os: "macOS-latest"
             dir: osx64
             artifacts: "plc"
@@ -33,6 +33,10 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
+
+      - name: Shorten commit SHA
+        if: ${{ matrix.config.os != 'windows-2019' }}
+        run: echo "COMMIT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
@@ -46,17 +50,92 @@ jobs:
           path: ${{ runner.temp }}/llvm
           key: llvm-14
       - name: Install LLVM and Clang
+        if: ${{ matrix.config.os != 'windows-2019' }}
         uses: KyleMayes/install-llvm-action@v1
         with:
           version: "14"
           directory: ${{ runner.temp }}/llvm
           cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+      
+      - name: set up win scoop
+        if: ${{ matrix.config.os == 'windows-2019' }}
+        uses: MinoruSekine/setup-scoop@main
+
+      - name: Install LLVM and Clang win
+        if: ${{ matrix.config.os == 'windows-2019' }}
+        run: |
+          scoop install 7zip
+          scoop install wget
+          $llvm_version = "14.0.6"
+          # Check if scoop is installed
+          if (!(Get-Command "scoop" -errorAction SilentlyContinue)) {
+              Write-Error "scoop is not installed, get it at: https://https://scoop.sh/"
+          }
+          if (!(Get-Command "git" -errorAction SilentlyContinue)) {
+              Write-Output "git is not installed, installing with scoop"
+              scoop install git
+          }
+          if (!(Get-Command "cmake" -errorAction SilentlyContinue)) {
+              Write-Output "cmake is not installed, installing with scoop"
+              scoop install cmake
+          }
+          if (!(Get-Command "7z" -errorAction SilentlyContinue)) {
+              Write-Output "7z is not installed, installing with scoop"
+              scoop install 7zip
+          }
+          function build-msvc {
+              $msvc_version = $args[0]
+              $msvc_cmake_generator = $args[1]
+              $current_dir = (Get-Location)
+              $source_dir = "$current_dir\llvm"
+              $build_dir = "$source_dir\build"
+              $install_dir = "$current_dir\llvm-$llvm_version-windows-x64-$msvc_version"
+              # Clone the llvm repository
+              git clone --single-branch --branch "llvmorg-$llvm_version" --depth 1 "https://github.com/llvm/llvm-project.git" $source_dir
+              # Construct a build directory and run cmake
+              New-Item -ItemType "directory" -Force -Path $build_dir
+              cmake `
+                  -S "$source_dir\llvm" `
+                  -B $build_dir `
+                  -G $msvc_cmake_generator `
+                  -Thost=x64 `
+                  -A x64 `
+                  -DLLVM_ENABLE_PROJECTS="lld;clang" `
+                  -DCMAKE_BUILD_TYPE=Release `
+                  -DCMAKE_INSTALL_PREFIX="$install_dir" `
+              # Build the project
+              New-Item -ItemType "directory" -Force -Path $install_dir
+              cmake --build $build_dir --target INSTALL --config Release
+              # Create an archive from the installation
+              7z a -mx9 "llvm-$llvm_version-windows-x64-$msvc_version.7z" "$install_dir\*"
+              # Clean up all the directories
+              Get-ChildItem -Path $install_dir -Force -Recurse | Remove-Item -force -recurse -Confirm:$false
+              Get-ChildItem -Path $source_dir -Force -Recurse | Remove-Item -force -recurse -Confirm:$false
+              Remove-Item $install_dir -Force -Recurse -Confirm:$false
+              Remove-Item $source_dir -Force -Recurse -Confirm:$false
+          }
+          build-msvc "msvc16" "Visual Studio 16 2019"
+          7z x llvm-14.0.6-windows-x64-msvc16.7z -y -o${{ runner.temp }}\llvm
+          [Environment]::SetEnvironmentVariable(
+            "Path",
+            [Environment]::GetEnvironmentVariable("Path", "User") + ";${{ runner.temp }}\llvm\bin",
+            "User"
+          )
+          [Environment]::SetEnvironmentVariable('LLVM_SYS_140_PREFIX', '${{ runner.temp }}\llvm', 'User')
+  
+      - uses: ncipollo/release-action@v1
+        name: upload
+        if: ${{ matrix.config.os == 'windows-2019' }}
+        with:
+          artifacts: llvm-14.0.6-windows-x64-msvc16.7z
+          commit: master
+          tag: llvm-14.0.6-windows-x64-msvc16
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
-          LLVM_SYS_140_PREFIX: ${{ env.LLVM_PATH }}
+          LLVM_SYS_140_PREFIX: ${{ runner.temp }}/llvm
         with:
           command: build
           args: --release
@@ -77,12 +156,10 @@ jobs:
             os.rename(src, dst)
         shell: python
 
-      - name: Shorten commit SHA
-        run: echo "COMMIT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
 
       - uses: ncipollo/release-action@v1
         name: upload
         with:
           artifacts: ${{ matrix.config.dir }}/*
           commit: master
-          tag: ${{ env.COMMIT_SHA }}-${{ matrix.config.os }}
+          tag: ${{ matrix.config.os }}@${{ github.sha }}

@@ -13,6 +13,7 @@ pub mod primary;
 pub mod program;
 pub mod ret;
 pub mod statement;
+
 pub mod types;
 /// # Value
 /// 表达每个ast在计算之后产生的值  
@@ -43,9 +44,10 @@ impl<'a> Value<'a> {
 }
 
 pub trait Node: RangeTrait + AsAny {
-    fn print(&self);
+    fn string(&self, tabs: usize) -> String;
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx>;
 }
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Num {
     INT(u64),

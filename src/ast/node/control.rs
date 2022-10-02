@@ -1,6 +1,8 @@
 use super::*;
 use crate::ast::ctx::Ctx;
+use crate::utils::tabs;
 use internal_macro::range;
+use string_builder::Builder;
 
 #[range]
 pub struct IfNode {
@@ -10,13 +12,18 @@ pub struct IfNode {
 }
 
 impl Node for IfNode {
-    fn print(&self) {
-        println!("IfNode:");
-        self.cond.print();
-        self.then.print();
+    fn string(&self, tabs: usize) -> String {
+        let mut builder = Builder::default();
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append("(IfNode");
+        builder.append(self.cond.string(tabs + 1));
+        builder.append(self.then.string(tabs + 1));
         if let Some(el) = &self.els {
-            el.print();
+            builder.append(el.string(tabs + 1));
         }
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append(")");
+        builder.string().unwrap()
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
@@ -54,12 +61,16 @@ pub struct WhileNode {
 }
 
 impl Node for WhileNode {
-    fn print(&self) {
-        println!("WhileNode:");
-        self.cond.print();
-        self.body.print();
+    fn string(&self, tabs: usize) -> String {
+        let mut builder = Builder::default();
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append("(WhileNode");
+        builder.append(self.cond.string(tabs + 1));
+        builder.append(self.body.string(tabs + 1));
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append(")");   
+        builder.string().unwrap()
     }
-
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let cond_block = ctx.context.append_basic_block(ctx.function, "cond");
         let body_block = ctx.context.append_basic_block(ctx.function, "body");
@@ -87,8 +98,13 @@ impl Node for WhileNode {
 pub struct BreakNode {}
 
 impl Node for BreakNode {
-    fn print(&self) {
-        println!("BreakNode");
+    fn string(&self, tabs: usize)-> String {
+        let mut builder = Builder::default();
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append("(BreakNode)");
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append(")");
+        builder.string().unwrap()
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
@@ -107,8 +123,13 @@ impl Node for BreakNode {
 pub struct ContinueNode {}
 
 impl Node for ContinueNode {
-    fn print(&self) {
-        println!("ContinueNode");
+    fn string(&self, tabs: usize) -> String {
+        let mut builder = Builder::default();
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append("(ContinueNode)");
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append(")");
+        builder.string().unwrap()
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
