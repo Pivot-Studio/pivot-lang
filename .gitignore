@@ -7,3 +7,4 @@ target
 *.sh
 test.cpp
 *.bc
+.idea
