@@ -212,7 +212,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                         _ => todo!(),
                     },
                     BasicValueEnum::FloatValue(v) => Value::FloatValue(v),
-                    _ => todo!(),
+                    _ => Value::LoadValue(v),
                 }
             }
             _ => v,

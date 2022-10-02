@@ -27,6 +27,7 @@ pub enum Value<'a> {
     FloatValue(FloatValue<'a>),
     VarValue(PointerValue<'a>),
     TypeValue(BasicTypeEnum<'a>),
+    LoadValue(BasicValueEnum<'a>),
     None,
 }
 
@@ -39,6 +40,7 @@ impl<'a> Value<'a> {
             Value::BoolValue(v) => v.as_basic_value_enum(),
             Value::None => panic!("not implemented"),
             Value::TypeValue(_) => panic!("not implemented"),
+            Value::LoadValue(v) => *v,
         }
     }
 }

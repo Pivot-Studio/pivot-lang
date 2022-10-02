@@ -1,7 +1,7 @@
 use super::*;
 use crate::ast::ctx::Ctx;
-use internal_macro::range;
 use crate::utils::tabs;
+use internal_macro::range;
 
 use string_builder::Builder;
 
@@ -26,14 +26,8 @@ impl Node for RetNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         if let Some(ret) = &mut self.value {
             let ret = ret.emit(ctx);
-            match ret {
-                Value::IntValue(v) => ctx.builder.build_return(Some(&v)),
-                Value::BoolValue(v) => ctx.builder.build_return(Some(&v)),
-                Value::FloatValue(v) => ctx.builder.build_return(Some(&v)),
-                Value::VarValue(v) => ctx.builder.build_return(Some(&v)),
-                Value::TypeValue(_) => panic!("not impl"),
-                Value::None => ctx.builder.build_return(None),
-            };
+            let ret = ctx.try_load(ret);
+            ctx.builder.build_return(Some(&ret.as_basic_value_enum()));
         } else {
             ctx.builder.build_return(None);
         }

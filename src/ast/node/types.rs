@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
+use crate::utils::tabs;
 use inkwell::types::BasicType;
 use internal_macro::range;
-use crate::utils::tabs;
 
 use string_builder::Builder;
 
@@ -121,5 +121,21 @@ impl Node for StructDefNode {
         });
         ctx.add_type(name.to_string(), stu.clone());
         Value::TypeValue(st.as_basic_type_enum())
+    }
+}
+
+#[range]
+pub struct StructInitFieldNode {
+    pub id: String,
+    pub exp: Box<dyn Node>,
+}
+
+impl Node for StructInitFieldNode {
+    fn string(&self, tabs: usize) -> String {
+        todo!()
+    }
+
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        todo!()
     }
 }
