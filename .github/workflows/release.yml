@@ -37,10 +37,6 @@ jobs:
       - name: Shorten commit SHA
         if: ${{ matrix.config.os != 'windows-2019' }}
         run: echo "COMMIT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
-        
-      - name: Shorten commit SHA win
-        if: ${{ matrix.config.os == 'windows-2019' }}
-        run: '"COMMIT_SHA=${GITHUB_SHA:0:7}" >> $env:GITHUB_ENV'
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
@@ -166,4 +162,4 @@ jobs:
         with:
           artifacts: ${{ matrix.config.dir }}/*
           commit: master
-          tag: ${{ env.COMMIT_SHA }}-${{ matrix.config.os }}
+          tag: ${{ matrix.config.os }}@${{ github.sha }}
