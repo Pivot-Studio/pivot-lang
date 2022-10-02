@@ -17,8 +17,12 @@ use crate::{
     ast::node::*,
     ast::{
         node::{
-            control::*, operator::*, primary::*, program::*, statement::*,
-            types::StructInitFieldNode,
+            control::*,
+            operator::*,
+            primary::*,
+            program::*,
+            statement::*,
+            types::{StructInitFieldNode, StructInitNode},
         },
         tokens::TokenType,
     },
@@ -679,6 +683,37 @@ fn struct_init_field(input: Span) -> IResult<Span, Box<dyn Node>> {
         ),
         tag_token(TokenType::COMMA)
     ))(input)
+}
+
+#[test_parser("a{a : 1,}")]
+#[test_parser("a{a : 1,b:2,}")]
+#[test_parser("a{}")]
+/// ```enbf
+/// struct_init = type_name "{" struct_init_field "}" ;
+/// ```
+fn struct_init(input: Span) -> IResult<Span, Box<dyn Node>> {
+    map_res(
+        tuple((
+            identifier,
+            tag_token(TokenType::LBRACE),
+            many0(struct_init_field),
+            tag_token(TokenType::RBRACE),
+        )),
+        |(name, _, fields, _)| {
+            let name = cast_to_var(&name);
+            let range;
+            if let Some(last) = fields.last() {
+                range = name.range.start.to(last.range().end);
+            } else {
+                range = name.range;
+            }
+            res(StructInitNode {
+                id: name.name,
+                fields,
+                range,
+            })
+        },
+    )(input)
 }
 
 fn decimal(input: Span) -> IResult<Span, Span> {
