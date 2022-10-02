@@ -16,7 +16,10 @@ use crate::{
     ast::node::*,
     ast::{range::Range, node::ret::RetNode},
     ast::{
-        node::{control::*, operator::*, primary::*, program::*, statement::*},
+        node::{
+            control::*, operator::*, primary::*, program::*, statement::*,
+            types::StructInitFieldNode,
+        },
         tokens::TokenType,
     },
     ast::{
@@ -32,6 +35,16 @@ use nom::character::complete::char;
 macro_rules! newline_or_eof {
     () => {
         alt((delspace(alt((tag("\n"), tag("\r\n")))), eof))
+    };
+}
+
+macro_rules! del_newline_or_space {
+    ($e:expr) => {
+        delimited(
+            many0(delspace(alt((tag("\n"), tag("\r\n"))))),
+            $e,
+            many0(delspace(alt((tag("\n"), tag("\r\n"))))),
+        )
     };
 }
 macro_rules! delnl {
@@ -635,6 +648,29 @@ fn struct_def(input: Span) -> IResult<Span, Box<dyn Node>> {
             })
         },
     )(input)
+}
+
+#[test_parser("a : 1,")]
+/// ```enbf
+/// struct_init_field = identifier ":" logic_exp "," ;
+/// ```
+/// special: del newline or space
+fn struct_init_field(input: Span) -> IResult<Span, Box<dyn Node>> {
+    del_newline_or_space!(terminated(
+        map_res(
+            tuple((identifier, tag_token(TokenType::COLON), logic_exp)),
+            |(id, _, exp)| {
+                let id = cast_to_var(&id);
+                let range = id.range.start.to(exp.range().end);
+                res(StructInitFieldNode {
+                    id: id.name,
+                    exp,
+                    range,
+                })
+            },
+        ),
+        tag_token(TokenType::COMMA)
+    ))(input)
 }
 
 fn decimal(input: Span) -> IResult<Span, Span> {

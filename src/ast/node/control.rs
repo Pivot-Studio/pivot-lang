@@ -68,7 +68,7 @@ impl Node for WhileNode {
         builder.append(self.cond.string(tabs + 1));
         builder.append(self.body.string(tabs + 1));
         tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");   
+        builder.append(")");
         builder.string().unwrap()
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
@@ -98,7 +98,7 @@ impl Node for WhileNode {
 pub struct BreakNode {}
 
 impl Node for BreakNode {
-    fn string(&self, tabs: usize)-> String {
+    fn string(&self, tabs: usize) -> String {
         let mut builder = Builder::default();
         tabs::print_tabs(&mut builder, tabs);
         builder.append("(BreakNode)");

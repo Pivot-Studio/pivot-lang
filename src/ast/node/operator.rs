@@ -1,14 +1,15 @@
 use super::primary::VarNode;
 use super::*;
-use crate::ast::ctx::{Ctx, PLType};
-use crate::utils::tabs;
+use crate::ast::ctx::Ctx;
+use crate::ast::ctx::PLType;
 use crate::ast::tokens::TokenType;
+use crate::utils::tabs;
 
-use string_builder::Builder;
 use crate::handle_calc;
 use inkwell::IntPredicate;
 use internal_macro::range;
 use paste::item;
+use string_builder::Builder;
 
 #[range]
 pub struct UnaryOpNode {
