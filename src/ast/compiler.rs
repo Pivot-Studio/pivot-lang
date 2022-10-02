@@ -1,8 +1,15 @@
 use std::{fs, path::Path, time::Instant};
 
-use inkwell::{context::Context, module::Module, OptimizationLevel};
+use inkwell::{
+    context::Context,
+    module::Module,
+    support,
+    targets::{FileType, InitializationConfig, Target, TargetMachine},
+    OptimizationLevel,
+};
 
 use crate::nomparser::PLParser;
+use std::process::Command;
 
 use super::ctx;
 
@@ -14,6 +21,7 @@ pub struct Option {
     pub verbose: bool,
     pub genir: bool,
     pub printast: bool,
+    pub optimization: OptimizationLevel,
 }
 
 type MainFunc = unsafe extern "C" fn() -> i64;
@@ -61,6 +69,44 @@ impl<'a> Compiler<'a> {
         if op.verbose {
             println!("compile succ, time: {:?}", time);
         }
+        let triple = &TargetMachine::get_default_triple();
+        let s1 = TargetMachine::get_host_cpu_name();
+        let cpu = s1.to_str().unwrap();
+        let s2 = TargetMachine::get_host_cpu_features();
+        let features = s2.to_str().unwrap();
+        Target::initialize_native(&InitializationConfig::default()).unwrap();
+        let target = Target::from_triple(triple).unwrap();
+        let tm = target
+            .create_target_machine(
+                triple,
+                cpu,
+                features,
+                op.optimization,
+                inkwell::targets::RelocMode::Static,
+                inkwell::targets::CodeModel::Default,
+            )
+            .unwrap();
+        let mut f = file.to_string();
+        f.push_str(".o");
+        let mut fo = file.to_string();
+        fo.push_str(".out");
+        tm.write_to_file(ctx.module, FileType::Object, Path::new(&f))
+            .unwrap();
+        let link = Command::new("clang")
+            .arg(&f)
+            .arg("vm/target/release/libvm.a")
+            .arg("-o")
+            .arg(&fo)
+            .status();
+        if link.is_err() || !link.unwrap().success() {
+            println!(
+                "warning: link with pivot lang vm failed, could be caused by vm pkg not found."
+            );
+            println!("warning: you can build vm pkg by `cargo build --release` in vm dir.");
+        } else {
+            println!("link succ, output file: {}", fo);
+        }
+        //  TargetMachine::get_default_triple()
         ctx.module.write_bitcode_to_path(Path::new(file));
     }
 }
