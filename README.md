@@ -98,7 +98,7 @@ number = [0-9]+ | number "." number ;
 
 identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
 
-function = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name statement_block? ;
+function_def = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name (statement_block | newline) ;
 
 call_function = identifier "(" (logic_exp (","logic_exp)*)? ")" ;
 

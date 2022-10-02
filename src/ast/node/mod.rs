@@ -7,11 +7,14 @@ use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
 
 pub mod control;
+pub mod function;
 pub mod operator;
 pub mod primary;
 pub mod program;
+pub mod ret;
 pub mod statement;
 
+pub mod types;
 /// # Value
 /// 表达每个ast在计算之后产生的值  
 ///
@@ -23,6 +26,7 @@ pub enum Value<'a> {
     IntValue(IntValue<'a>),
     FloatValue(FloatValue<'a>),
     VarValue(PointerValue<'a>),
+    TypeValue(BasicTypeEnum<'a>),
     None,
 }
 
@@ -34,6 +38,7 @@ impl<'a> Value<'a> {
             Value::VarValue(v) => v.as_basic_value_enum(),
             Value::BoolValue(v) => v.as_basic_value_enum(),
             Value::None => panic!("not implemented"),
+            Value::TypeValue(_) => panic!("not implemented"),
         }
     }
 }
