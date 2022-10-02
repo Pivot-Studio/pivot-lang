@@ -1,4 +1,4 @@
-use std::{fmt::Error, option};
+use std::fmt::Error;
 
 use nom::{
     branch::alt,
@@ -602,6 +602,28 @@ fn function_def(input: Span) -> IResult<Span, Box<dyn Node>> {
                 paralist,
                 ret,
                 body,
+                range,
+            })
+        },
+    )(input)
+}
+
+#[test_parser("a.b.c")]
+fn take_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+    map_res(
+        tuple((
+            primary_exp,
+            many0(preceded(tag_token(TokenType::DOT), identifier)),
+        )),
+        |(a, b)| {
+            let mut ids = vec![];
+            let range = a.range().start.to(b.last().unwrap().range().end);
+            for v in b {
+                ids.push(Box::new(cast_to_var(&v)));
+            }
+            res(TakeOpNode {
+                head: a,
+                ids,
                 range,
             })
         },

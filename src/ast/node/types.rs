@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use super::*;
-use crate::ast::ctx::{Ctx, PLType, STType};
+use crate::ast::ctx::{Ctx, Field, PLType, STType};
 use inkwell::types::BasicType;
 use internal_macro::range;
 
@@ -74,13 +74,15 @@ impl Node for StructDefNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        let mut fields = HashMap::<String, PLType<'ctx>>::new();
+        let mut fields = HashMap::<String, Field<'ctx>>::new();
+        let mut i = 0;
         for field in self.fields.iter_mut() {
             if let Some((id, tp)) = field.get_type(ctx) {
-                fields.insert(id.to_string(), tp);
+                fields.insert(id.to_string(), Field { index: i, tp });
             } else {
                 return Value::None;
             }
+            i = i + 1;
         }
         let name = self.id.as_str();
         let st = ctx.context.opaque_struct_type(name);
@@ -88,7 +90,7 @@ impl Node for StructDefNode {
         st.set_body(
             &fields
                 .into_iter()
-                .map(|(_, v)| v.get_basic_type())
+                .map(|(_, v)| v.tp.get_basic_type())
                 .collect::<Vec<_>>(),
             false,
         );

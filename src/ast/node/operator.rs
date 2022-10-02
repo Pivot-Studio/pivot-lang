@@ -1,5 +1,6 @@
+use super::primary::VarNode;
 use super::*;
-use crate::ast::ctx::Ctx;
+use crate::ast::ctx::{Ctx, PLType};
 use crate::ast::tokens::TokenType;
 
 use crate::handle_calc;
@@ -93,5 +94,49 @@ impl Node for BinOpNode {
             },
             op => panic!("expected op token but found {:?}", op),
         }
+    }
+}
+
+#[range]
+pub struct TakeOpNode {
+    pub head: Box<dyn Node>,
+    pub ids: Vec<Box<VarNode>>,
+}
+
+impl Node for TakeOpNode {
+    fn print(&self) {
+        println!("TakeOpNode");
+        self.head.print();
+        for id in &self.ids {
+            println!("{}", id.name);
+        }
+    }
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        let head = self.head.emit(ctx);
+        let head = ctx.try_load(head);
+        let mut res = head;
+        for id in &self.ids {
+            res = match res {
+                Value::VarValue(s) => {
+                    let etype = s.get_type().get_element_type();
+                    let mut index = 0;
+                    if etype.is_struct_type() {
+                        let st = etype.into_struct_type();
+                        let tpname = st.get_name().unwrap().to_str().unwrap();
+                        let tp = ctx.get_type(tpname).unwrap();
+                        if let PLType::STRUCT(s) = tp {
+                            index = s.fields.get(&id.name).unwrap().index;
+                        } else {
+                            panic!("not implemented");
+                        }
+                    } else {
+                        panic!("not implemented")
+                    }
+                    Value::VarValue(ctx.builder.build_struct_gep(s, index, "structgep").unwrap())
+                }
+                _ => panic!("not implemented"),
+            }
+        }
+        res
     }
 }

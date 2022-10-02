@@ -49,7 +49,8 @@ define_tokens!(
     COLON = ":",
     STRUCT = "struct",
     FN = "fn",
-    COMMA = ","
+    COMMA = ",",
+    DOT = "."
 );
 impl TokenType {
     pub fn get_str(&self) -> &'static str {
