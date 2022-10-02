@@ -43,9 +43,10 @@ impl<'a> Value<'a> {
 }
 
 pub trait Node: RangeTrait + AsAny {
-    fn print(&self);
+    fn string(&self, tabs: usize) -> String;
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx>;
 }
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Num {
     INT(u64),

@@ -42,8 +42,9 @@ impl<'a> Compiler<'a> {
         let mut ctx = ctx::Ctx::new(context, module, builder);
         let m = &mut ctx;
         let (_, mut node) = self.parser.parse().unwrap();
+
         if op.printast {
-            node.print();
+            print!("{}", node.string(0));
         }
         node.emit(m);
         let v = ctx.get_symbol("a");
