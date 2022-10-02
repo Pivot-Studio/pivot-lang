@@ -34,6 +34,10 @@ jobs:
         with:
           submodules: true
 
+      - name: Shorten commit SHA
+        if: ${{ matrix.config.os != 'windows-2019' }}
+        run: echo "COMMIT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
         with:
@@ -119,16 +123,13 @@ jobs:
           )
           [Environment]::SetEnvironmentVariable('LLVM_SYS_140_PREFIX', '${{ runner.temp }}\llvm', 'User')
   
-      - name: Shorten commit SHA
-        run: echo "COMMIT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
-  
       - uses: ncipollo/release-action@v1
         name: upload
         if: ${{ matrix.config.os == 'windows-2019' }}
         with:
           artifacts: llvm-14.0.6-windows-x64-msvc16.7z
           commit: master
-          tag: llvm-14.0.6-windows-x64-msvc16-${{ env.COMMIT_SHA }}
+          tag: llvm-14.0.6-windows-x64-msvc16
 
       - name: Cargo build
         uses: actions-rs/cargo@v1
@@ -161,4 +162,4 @@ jobs:
         with:
           artifacts: ${{ matrix.config.dir }}/*
           commit: master
-          tag: ${{ env.COMMIT_SHA }}-${{ matrix.config.os }}
+          tag: ${{ matrix.config.os }}@${{ github.sha }}
