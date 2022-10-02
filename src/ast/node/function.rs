@@ -26,6 +26,10 @@ impl Node for FuncDefNode {
         for para in &self.paralist {
             builder.append(para.string(tabs + 1));
         }
+        builder.append(self.ret.string(tabs + 1));
+        builder.append(self.body.string(tabs + 1));
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append(")");
         builder.string().unwrap()
     }
     fn emit<'a, 'ctx>(

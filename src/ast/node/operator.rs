@@ -120,12 +120,18 @@ pub struct TakeOpNode {
 }
 
 impl Node for TakeOpNode {
-    fn print(&self) {
-        println!("TakeOpNode");
-        self.head.print();
+    fn string(&self, tabs: usize) -> String {
+        let mut builder = Builder::default();
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append("(TakeOpNode ");
+        builder.append(self.head.string(tabs + 1));
         for id in &self.ids {
-            println!("{}", id.name);
+            tabs::print_tabs(&mut builder, tabs + 1);
+            builder.append(id.string(tabs + 1));
         }
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append(")");
+        builder.string().unwrap()
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let head = self.head.emit(ctx);

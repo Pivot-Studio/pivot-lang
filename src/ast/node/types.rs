@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
-use crate::utils::tabs;
 use inkwell::types::BasicType;
 use internal_macro::range;
+use crate::utils::tabs;
 
 use string_builder::Builder;
 
@@ -18,9 +18,14 @@ pub trait TypeNode: Node {
 }
 
 impl Node for TypeNameNode {
-    fn print(&self) {
-        println!("TypeNameNode:");
-        println!("{}", self.id)
+    fn string(&self, tabs: usize) -> String {
+        let mut builder = Builder::default();
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append("(TypeNameNode");
+        builder.append(format!("id: {}", self.id));
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append(")");
+        builder.string().unwrap()
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         return Value::TypeValue(self.get_type(ctx).unwrap().get_basic_type());
@@ -45,11 +50,17 @@ pub struct TypedIdentifierNode {
 }
 
 impl Node for TypedIdentifierNode {
-    fn print(&self) {
-        println!("TypedIdentifierNode:");
-        println!("id: {}", self.id);
-        self.tp.print();
+    fn string(&self, tabs: usize) -> String {
+        let mut builder = Builder::default();
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append("(TypedIdentifierNode");
+        builder.append(format!("id: {}", self.id));
+        builder.append(self.tp.string(tabs + 1));
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append(")");
+        builder.string().unwrap()
     }
+
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         return Value::TypeValue(self.get_type(ctx).unwrap().1.get_basic_type());
     }
@@ -69,13 +80,19 @@ pub struct StructDefNode {
 }
 
 impl Node for StructDefNode {
-    fn print(&self) {
-        println!("StructDefNode:");
-        println!("id: {}", self.id);
+    fn string(&self, tabs: usize) -> String {
+        let mut builder = Builder::default();
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append("(StructDefNode");
+        builder.append(format!("id: {}", self.id));
         for field in &self.fields {
-            field.print();
+            builder.append(field.string(tabs + 1));
         }
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append(")");
+        builder.string().unwrap()
     }
+
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let mut fields = HashMap::<String, Field<'ctx>>::new();
         let mut i = 0;
