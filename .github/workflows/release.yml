@@ -122,13 +122,19 @@ jobs:
               Remove-Item $source_dir -Force -Recurse -Confirm:$false
           }
 
-          build-msvc "msvc17" "Visual Studio 17 2022"
-          7z x llvm-14.0.6-windows-x64-msvc17.7z -y -o${{ runner.temp }}\llvm
+          build-msvc "msvc16" "Visual Studio 16 2019"
+          7z x llvm-14.0.6-windows-x64-msvc16.7z -y -o${{ runner.temp }}\llvm
+          [Environment]::SetEnvironmentVariable(
+            "Path",
+            [Environment]::GetEnvironmentVariable("Path", "User") + ";${{ runner.temp }}\llvm\bin",
+            "User"
+          )
+          [Environment]::SetEnvironmentVariable('LLVM_SYS_130_PREFIX', '${{ runner.temp }}\llvm', 'User')
   
       - uses: ncipollo/release-action@v1
         name: upload
         with:
-          artifacts: llvm-14.0.6-windows-x64-msvc17.7z
+          artifacts: llvm-14.0.6-windows-x64-msvc16.7z
           commit: master
           tag: llvm-${{ matrix.config.os }}
 
