@@ -121,31 +121,13 @@ impl<'a> PLParser<'a> {
         program(self.input)
     }
 }
-#[test_parser(
-    "return 1
-    "
-)]
-#[test_parser(
-    "return 1.1
-    "
-)]
-#[test_parser(
-    "return true
-    "
-)]
-#[test_parser("return")]
-#[test_parser(
-    "return a
-    "
-)]
-#[test_parser(
-    "return 1 + 2
-    "
-)]
-#[test_parser_error(
-    "return a = 2
-    "
-)]
+#[test_parser("return 1\n")]
+#[test_parser("return 1.1\n")]
+#[test_parser("return true\n")]
+#[test_parser("return\n")]
+#[test_parser("return a\n")]
+#[test_parser("return 1 + 2\n")]
+#[test_parser_error("return a = 2\n")]
 // ```
 // return_statement = "return" logic_exp newline ;
 // ```
@@ -272,6 +254,7 @@ pub fn statement_block(input: Span) -> IResult<Span, Box<dyn Node>> {
 /// | while_statement
 /// | break_statement
 /// | continue_statement
+/// | return_statement
 /// | newline
 /// ;
 /// ```
@@ -283,6 +266,7 @@ pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         while_statement,
         break_statement,
         continue_statement,
+        return_statement,
         newline,
     )))(input)
 }
