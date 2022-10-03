@@ -10,12 +10,25 @@ fn test_nom() {
     use inkwell::context::Context;
     type MainFunc = unsafe extern "C" fn() -> i64;
     let mut parser = PLParser::new(
-        "fn test_vm_link() i64
-
-    fn main() i64 {
-        return 0
-    }
-    
+        "struct test {
+            a : i64
+            b : i64
+        }
+        
+        fn call() i64 {
+            return 55
+        }
+        
+        
+        fn main() i64 {
+            let x = 1
+            let s = test{a:10,b:100,}
+            if s.b>s.a {
+                x = s.a
+            }
+            return x
+        }
+        
     ",
     );
     let (_, mut node) = parser.parse().unwrap();
@@ -26,17 +39,8 @@ fn test_nom() {
     let m = &mut ctx;
     println!("{}", node.string(0));
     let _re = node.emit(m);
-    // if let Value::IntValue(re) = re {
-    //     assert!(re.print_to_string().to_string() == "i64 114")
-    // } else {
-    //     panic!("not implemented")
-    // }
     println!("emit succ");
     println!("{}", ctx.module.to_string());
-    let v = ctx.get_symbol("a");
-    let v = v.unwrap();
-    let load = ctx.builder.build_load(*v, "load");
-    ctx.builder.build_return(Some(&load));
 
     let execution_engine = ctx
         .module
@@ -45,7 +49,7 @@ fn test_nom() {
     unsafe {
         let f = execution_engine.get_function::<MainFunc>("main").unwrap();
         let ret = f.call();
-        println!("a = {}", ret);
-        assert_eq!(ret, 21000)
+        println!("ret = {}", ret);
+        assert_eq!(ret, 10)
     }
 }

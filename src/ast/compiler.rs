@@ -38,7 +38,7 @@ impl<'a> Compiler<'a> {
         let engine = re.create_jit_execution_engine(opt).unwrap();
         unsafe {
             let f = engine.get_function::<MainFunc>("main").unwrap();
-            println!("a = {}", f.call());
+            println!("ret = {}", f.call());
         }
     }
 

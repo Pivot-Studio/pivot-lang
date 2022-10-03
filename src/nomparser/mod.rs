@@ -646,21 +646,24 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
     "fn f(  x: int, y  : int  ) int {
         x = x+1
         return 0
-    }"
+    }
+    "
 )]
 #[test_parser("fn   f (x: int ,\n y: int) int\n")]
 #[test_parser(
     "fn f(x: int) int {
         x = x+1
         return 0
-    }"
+    }
+    "
 )]
 #[test_parser("             fn     f(x    :  int)    int\n")]
 #[test_parser(
     "fn f() int {
         x = x+1
         return 0
-    }"
+    }
+    "
 )]
 #[test_parser("fn f( \n) int\n")]
 fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
