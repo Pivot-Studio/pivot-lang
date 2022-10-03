@@ -18,6 +18,9 @@ impl Pos {
     pub fn to(&self, end: Pos) -> Range {
         Range { start: *self, end }
     }
+    pub fn from(&self, start: Pos) -> Range {
+        Range { start, end: *self }
+    }
 }
 
 impl Range {

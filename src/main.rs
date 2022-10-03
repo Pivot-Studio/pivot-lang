@@ -5,7 +5,7 @@ use std::fs::read_to_string;
 use std::path::Path;
 
 use ast::compiler::{self, Compiler};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use inkwell::OptimizationLevel;
 
 /// Pivot Lang compiler program
@@ -17,7 +17,7 @@ struct Cli {
     name: Option<String>,
 
     /// output file
-    #[clap(short, long, value_parser, default_value = "out.plb")]
+    #[clap(long, value_parser, default_value = "out.plb")]
     out: String,
 
     /// verbose
@@ -32,24 +32,33 @@ struct Cli {
     #[clap(long)]
     genir: bool,
 
+    /// optimization level, 0-3
+    #[clap(short, value_parser, default_value = "0")]
+    optimization: u64,
+
     #[clap(subcommand)]
     command: Option<RunCommand>,
 }
 
 #[derive(Subcommand)]
 enum RunCommand {
+    /// JIT run the compiled program
     Run {
         /// Name of the compiled file
         #[clap(value_parser)]
         name: String,
-        /// optimization level, 0-3
-        #[clap(short, value_parser, default_value = "0")]
-        optimization: u64,
     },
 }
 
 fn main() {
     let cli = Cli::parse();
+    let opt = match cli.optimization {
+        0 => OptimizationLevel::None,
+        1 => OptimizationLevel::Less,
+        2 => OptimizationLevel::Default,
+        3 => OptimizationLevel::Aggressive,
+        _ => panic!("optimization level must be 0-3"),
+    };
 
     // You can check the value provided by positional arguments, or option arguments
     if let Some(name) = cli.name.as_deref() {
@@ -62,22 +71,17 @@ fn main() {
                 verbose: cli.verbose,
                 genir: cli.genir,
                 printast: cli.printast,
+                optimization: opt,
             },
         );
     } else if let Some(command) = cli.command {
         match command {
-            RunCommand::Run { name, optimization } => {
-                let opt = match optimization {
-                    0 => OptimizationLevel::None,
-                    1 => OptimizationLevel::Less,
-                    2 => OptimizationLevel::Default,
-                    3 => OptimizationLevel::Aggressive,
-                    _ => panic!("optimization level must be 0-3"),
-                };
+            RunCommand::Run { name } => {
                 Compiler::run(Path::new(name.as_str()), opt);
             }
         }
     } else {
         println!("No file provided");
+        Cli::into_app().print_help().unwrap();
     }
 }

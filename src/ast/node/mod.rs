@@ -7,10 +7,13 @@ use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
 
 pub mod control;
+pub mod function;
 pub mod operator;
 pub mod primary;
 pub mod program;
+pub mod ret;
 pub mod statement;
+pub mod types;
 /// # Value
 /// 表达每个ast在计算之后产生的值  
 ///
@@ -22,25 +25,32 @@ pub enum Value<'a> {
     IntValue(IntValue<'a>),
     FloatValue(FloatValue<'a>),
     VarValue(PointerValue<'a>),
+    TypeValue(BasicTypeEnum<'a>),
+    LoadValue(BasicValueEnum<'a>),
+    StructFieldValue((String, BasicValueEnum<'a>)),
     None,
 }
 
 impl<'a> Value<'a> {
-    fn as_basic_value_enum(&self) -> BasicValueEnum<'a> {
+    pub fn as_basic_value_enum(&self) -> BasicValueEnum<'a> {
         match self {
             Value::IntValue(v) => v.as_basic_value_enum(),
             Value::FloatValue(v) => v.as_basic_value_enum(),
             Value::VarValue(v) => v.as_basic_value_enum(),
             Value::BoolValue(v) => v.as_basic_value_enum(),
             Value::None => panic!("not implemented"),
+            Value::TypeValue(_) => panic!("not implemented"),
+            Value::LoadValue(v) => *v,
+            Value::StructFieldValue((_, v)) => *v,
         }
     }
 }
 
 pub trait Node: RangeTrait + AsAny {
-    fn print(&self);
+    fn string(&self, tabs: usize) -> String;
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx>;
 }
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Num {
     INT(u64),
@@ -53,11 +63,11 @@ pub fn position_at_end<'a, 'b>(ctx: &mut Ctx<'b, 'a>, block: BasicBlock<'a>) {
 }
 
 pub fn alloc<'a, 'ctx>(
-    ctx: &mut Ctx<'a, 'ctx>,
+    ctx: &Ctx<'a, 'ctx>,
     tp: BasicTypeEnum<'ctx>,
     name: &str,
 ) -> PointerValue<'ctx> {
-    match ctx.function.get_first_basic_block() {
+    match ctx.function.unwrap().get_first_basic_block() {
         Some(entry) => {
             ctx.builder.position_at_end(entry);
             let p = ctx.builder.build_alloca(tp, name);

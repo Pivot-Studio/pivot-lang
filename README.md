@@ -64,6 +64,8 @@ if_statement = "if" logic_exp statement_block ("else" if_statement | statement_b
 
 while_statement = "while" logic_exp statement_block ;
 
+for_statement = "for" (assignment | new_variable) ";" logic_exp ";" assignment statement_block;
+
 statement_block = "{" statements "}" ;
 
 newline = "\n" | "\r\n" ;
@@ -82,6 +84,7 @@ statement =
     | while_statement
     | break_statement
     | continue_statement
+    | function_call
     | newline
     ;
 
@@ -98,7 +101,7 @@ number = [0-9]+ | number "." number ;
 
 identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
 
-function = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name statement_block? ;
+function_def = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name (statement_block | newline) ;
 
 call_function = identifier "(" (logic_exp (","logic_exp)*)? ")" ;
 
@@ -110,9 +113,9 @@ typed_identifier = identifier ":" type_name ;
 
 struct_field = typed_identifier newline ;
 
-struct_init = type_name "{" struct_init_field* "}" ;
+struct_init = type_name "{" struct_init_field "}" ;
 
-struct_init_field = identifier ":" logic_exp newline ;
+struct_init_field = identifier ":" logic_exp "," ;
 
 return_statement = "return" logic_exp newline ;
 
