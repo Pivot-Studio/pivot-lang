@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
+use crate::utils::tabs;
 use inkwell::types::BasicType;
 use internal_macro::range;
-use crate::utils::tabs;
 
 use string_builder::Builder;
 
@@ -121,5 +121,79 @@ impl Node for StructDefNode {
         });
         ctx.add_type(name.to_string(), stu.clone());
         Value::TypeValue(st.as_basic_type_enum())
+    }
+}
+
+#[range]
+pub struct StructInitFieldNode {
+    pub id: String,
+    pub exp: Box<dyn Node>,
+}
+
+impl Node for StructInitFieldNode {
+    fn string(&self, tabs: usize) -> String {
+        let mut builder = Builder::default();
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append("(StructInitFieldNode");
+        builder.append(format!("id: {}", self.id));
+        builder.append(self.exp.string(tabs + 1));
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append(")");
+        builder.string().unwrap()
+    }
+
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        return Value::StructFieldValue((
+            self.id.clone(),
+            self.exp.emit(ctx).as_basic_value_enum(),
+        ));
+    }
+}
+
+#[range]
+pub struct StructInitNode {
+    pub id: String,
+    pub fields: Vec<Box<dyn Node>>,
+}
+
+impl Node for StructInitNode {
+    fn string(&self, tabs: usize) -> String {
+        let mut builder = Builder::default();
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append("(StructInitFieldNode");
+        builder.append(format!("id: {}", self.id));
+        for field in &self.fields {
+            builder.append(field.string(tabs + 1));
+        }
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append(")");
+        builder.string().unwrap()
+    }
+
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        let mut fields = HashMap::<String, BasicValueEnum<'ctx>>::new();
+        for field in self.fields.iter_mut() {
+            if let Value::StructFieldValue((id, val)) = field.emit(ctx) {
+                fields.insert(id, val);
+            } else {
+                panic!("StructInitNode::emit: invalid field");
+            }
+        }
+        let st = ctx.get_type(self.id.as_str()).unwrap();
+        if let PLType::STRUCT(st) = st {
+            let et = st.struct_type.as_basic_type_enum();
+            let stv = alloc(ctx, et, "initstruct");
+            for (id, val) in fields {
+                let field = st.fields.get(&id).unwrap();
+                let ptr = ctx
+                    .builder
+                    .build_struct_gep(stv, field.index, "fieldptr")
+                    .unwrap();
+                ctx.builder.build_store(ptr, val);
+            }
+            return Value::VarValue(stv);
+        } else {
+            panic!("StructInitNode::emit: invalid type");
+        }
     }
 }

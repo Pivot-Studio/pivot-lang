@@ -16,8 +16,15 @@ use crate::{
     ast::node::ret::RetNode,
     ast::node::*,
     ast::{
-        node::{control::*, operator::*, primary::*, program::*, statement::*},
-        tokens::{TokenType, FOR},
+        node::{
+            control::*,
+            operator::*,
+            primary::*,
+            program::*,
+            statement::*,
+            types::{StructInitFieldNode, StructInitNode},
+        },
+        tokens::TokenType,
     },
     ast::{
         node::{
@@ -33,6 +40,16 @@ use nom::character::complete::char;
 macro_rules! newline_or_eof {
     () => {
         alt((delspace(alt((tag("\n"), tag("\r\n")))), eof))
+    };
+}
+
+macro_rules! del_newline_or_space {
+    ($e:expr) => {
+        delimited(
+            many0(delspace(alt((tag("\n"), tag("\r\n"))))),
+            $e,
+            many0(delspace(alt((tag("\n"), tag("\r\n"))))),
+        )
     };
 }
 macro_rules! delnl {
@@ -622,12 +639,11 @@ fn function_def(input: Span) -> IResult<Span, Box<dyn Node>> {
         )),
         |(_, id, _, paras, _, ret, body)| {
             let id = cast_to_var(&id);
-            let mut paralist = None;
+            let mut paralist = vec![];
             let range = id.range;
             if let Some(para) = paras {
-                let mut par = vec![para.0];
-                par.extend(para.1);
-                paralist = Some(par);
+                paralist.push(para.0);
+                paralist.extend(para.1);
             }
             res(FuncDefNode {
                 id: id.name,
@@ -687,6 +703,60 @@ fn struct_def(input: Span) -> IResult<Span, Box<dyn Node>> {
             let range = id.range;
             res(StructDefNode {
                 id: id.name,
+                fields,
+                range,
+            })
+        },
+    )(input)
+}
+
+#[test_parser("a : 1,")]
+/// ```enbf
+/// struct_init_field = identifier ":" logic_exp "," ;
+/// ```
+/// special: del newline or space
+fn struct_init_field(input: Span) -> IResult<Span, Box<dyn Node>> {
+    del_newline_or_space!(terminated(
+        map_res(
+            tuple((identifier, tag_token(TokenType::COLON), logic_exp)),
+            |(id, _, exp)| {
+                let id = cast_to_var(&id);
+                let range = id.range.start.to(exp.range().end);
+                res(StructInitFieldNode {
+                    id: id.name,
+                    exp,
+                    range,
+                })
+            },
+        ),
+        tag_token(TokenType::COMMA)
+    ))(input)
+}
+
+#[test_parser("a{a : 1,}")]
+#[test_parser("a{a : 1,b:2,}")]
+#[test_parser("a{}")]
+/// ```enbf
+/// struct_init = type_name "{" struct_init_field "}" ;
+/// ```
+fn struct_init(input: Span) -> IResult<Span, Box<dyn Node>> {
+    map_res(
+        tuple((
+            identifier,
+            tag_token(TokenType::LBRACE),
+            many0(struct_init_field),
+            tag_token(TokenType::RBRACE),
+        )),
+        |(name, _, fields, _)| {
+            let name = cast_to_var(&name);
+            let range;
+            if let Some(last) = fields.last() {
+                range = name.range.start.to(last.range().end);
+            } else {
+                range = name.range;
+            }
+            res(StructInitNode {
+                id: name.name,
                 fields,
                 range,
             })

@@ -112,9 +112,9 @@ typed_identifier = identifier ":" type_name ;
 
 struct_field = typed_identifier newline ;
 
-struct_init = type_name "{" struct_init_field* "}" ;
+struct_init = type_name "{" struct_init_field "}" ;
 
-struct_init_field = identifier ":" logic_exp newline ;
+struct_init_field = identifier ":" logic_exp "," ;
 
 return_statement = "return" logic_exp newline ;
 
