@@ -1,8 +1,6 @@
-use super::{
-    alloc,
-    types::{TypeNode, TypedIdentifierNode},
-    Node,
-};
+use std::fmt::format;
+
+use super::{types::*, *};
 use crate::utils::tabs;
 use inkwell::types::BasicType;
 use internal_macro::range;
@@ -65,5 +63,42 @@ impl Node for FuncDefNode {
         // emit body
         self.body.emit(ctx);
         super::Value::None
+    }
+}
+
+#[range]
+pub struct FuncCallNode {
+    pub id: String,
+    pub paralist: Vec<Box<dyn Node>>,
+}
+
+impl Node for FuncCallNode {
+    fn string(&self, tabs: usize) -> String {
+        let mut builder = Builder::default();
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append("(FuncCallNode");
+        builder.append(format!("id: {}", self.id));
+        for para in &self.paralist {
+            builder.append(para.string(tabs + 1));
+        }
+        tabs::print_tabs(&mut builder, tabs);
+        builder.append(")");
+        builder.string().unwrap()
+    }
+    fn emit<'a, 'ctx>(
+        &'a mut self,
+        ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
+    ) -> super::Value<'ctx> {
+        let mut para_values = Vec::new();
+        for para in self.paralist.iter_mut() {
+            para_values.push(para.emit(ctx).as_basic_value_enum().into());
+        }
+        let func = ctx.module.get_function(self.id.as_str()).unwrap();
+        let ret = ctx.builder.build_call(
+            func,
+            &para_values,
+            format(format_args!("call_{}", self.id)).as_str(),
+        );
+        Value::LoadValue(ret.try_as_basic_value().left().unwrap())
     }
 }
