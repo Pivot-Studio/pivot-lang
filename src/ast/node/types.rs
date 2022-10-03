@@ -14,7 +14,7 @@ pub struct TypeNameNode {
 }
 
 pub trait TypeNode: Node {
-    fn get_type<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Option<PLType<'ctx>>;
+    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<PLType<'ctx>>;
 }
 
 impl Node for TypeNameNode {
@@ -33,7 +33,7 @@ impl Node for TypeNameNode {
 }
 
 impl TypeNode for TypeNameNode {
-    fn get_type<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Option<PLType<'ctx>> {
+    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<PLType<'ctx>> {
         let tp = ctx.get_type(self.id.as_str());
         if let Some(tp) = tp {
             return Some(tp.clone());
@@ -67,7 +67,7 @@ impl Node for TypedIdentifierNode {
 }
 
 impl TypedIdentifierNode {
-    fn get_type<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Option<(&str, PLType<'ctx>)> {
+    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<(&str, PLType<'ctx>)> {
         let tp = self.tp.get_type(ctx)?;
         Some((self.id.as_str(), tp))
     }
@@ -94,9 +94,18 @@ impl Node for StructDefNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        self.get_type(ctx)
+    }
+}
+
+impl StructDefNode {
+    pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        if let Some(x) = ctx.get_type(self.id.as_str()) {
+            return Value::TypeValue(x.get_basic_type());
+        }
         let mut fields = HashMap::<String, Field<'ctx>>::new();
         let mut i = 0;
-        for field in self.fields.iter_mut() {
+        for field in self.fields.iter() {
             if let Some((id, tp)) = field.get_type(ctx) {
                 fields.insert(id.to_string(), Field { index: i, tp });
             } else {

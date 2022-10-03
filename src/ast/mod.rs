@@ -9,7 +9,15 @@ fn test_nom() {
     use crate::nomparser::PLParser;
     use inkwell::context::Context;
     type MainFunc = unsafe extern "C" fn() -> i64;
-    let mut parser = PLParser::new("let a = 200/2*(10+200)\n");
+    let mut parser = PLParser::new(
+        "fn test_vm_link() i64
+
+    fn main() i64 {
+        return 0
+    }
+    
+    ",
+    );
     let (_, mut node) = parser.parse().unwrap();
     let context = &Context::create();
     let builder = &context.create_builder();
@@ -24,11 +32,11 @@ fn test_nom() {
     //     panic!("not implemented")
     // }
     println!("emit succ");
+    println!("{}", ctx.module.to_string());
     let v = ctx.get_symbol("a");
     let v = v.unwrap();
     let load = ctx.builder.build_load(*v, "load");
     ctx.builder.build_return(Some(&load));
-    println!("{}", ctx.module.to_string());
 
     let execution_engine = ctx
         .module

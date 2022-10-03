@@ -32,7 +32,7 @@ pub enum Value<'a> {
 }
 
 impl<'a> Value<'a> {
-    fn as_basic_value_enum(&self) -> BasicValueEnum<'a> {
+    pub fn as_basic_value_enum(&self) -> BasicValueEnum<'a> {
         match self {
             Value::IntValue(v) => v.as_basic_value_enum(),
             Value::FloatValue(v) => v.as_basic_value_enum(),
@@ -67,7 +67,7 @@ pub fn alloc<'a, 'ctx>(
     tp: BasicTypeEnum<'ctx>,
     name: &str,
 ) -> PointerValue<'ctx> {
-    match ctx.function.get_first_basic_block() {
+    match ctx.function.unwrap().get_first_basic_block() {
         Some(entry) => {
             ctx.builder.position_at_end(entry);
             let p = ctx.builder.build_alloca(tp, name);

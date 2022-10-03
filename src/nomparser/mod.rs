@@ -16,7 +16,7 @@ use crate::{
     ast::node::ret::RetNode,
     ast::node::*,
     ast::node::{
-        function::{FuncCallNode, FuncDefNode},
+        function::{FuncCallNode, FuncDefNode, FuncTypeNode},
         types::{StructDefNode, TypeNameNode, TypeNode, TypedIdentifierNode},
     },
     ast::{node::types::StructInitNode, range::Range},
@@ -335,6 +335,18 @@ pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     )))(input)
 }
 
+enum TopLevel {
+    StructDef(StructDefNode),
+    FuncDef(FuncDefNode),
+}
+
+fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
+    delspace(alt((
+        del_newline_or_space!(function_def),
+        del_newline_or_space!(struct_def),
+    )))(input)
+}
+
 pub fn newline(input: Span) -> IResult<Span, Box<dyn Node>> {
     map_res(delspace(alt((tag("\n"), tag("\r\n")))), |_| {
         res(NLNode {
@@ -358,17 +370,44 @@ pub fn statements(input: Span) -> IResult<Span, Box<dyn Node>> {
 }
 
 pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
-    map_res(terminated(many0(statement), eof), |v| {
-        let mut range = v[0].range();
-        let la = v.last();
-        if let Some(la) = la {
-            range = range.start.to(la.range().end);
+    // map_res(terminated(many0(top_level_statement), eof), |v| {
+    //     let mut range = v[0].range();
+    //     let la = v.last();
+    //     if let Some(la) = la {
+    //         range = range.start.to(la.range().end);
+    //     }
+    //     res(ProgramNode {
+    //         statements: v,
+    //         range,
+    //     })
+    // })(input)
+    let old = input;
+    let mut input = input;
+    let mut fns = vec![];
+    let mut sts = vec![];
+    loop {
+        let top = top_level_statement(input);
+        if let Ok((i, t)) = top {
+            match *t {
+                TopLevel::FuncDef(f) => {
+                    fns.push(f);
+                }
+                TopLevel::StructDef(s) => {
+                    sts.push(s);
+                }
+            }
+            input = i;
+        } else {
+            eof(input)?;
+            break;
         }
-        res(ProgramNode {
-            statements: v,
-            range,
-        })
-    })(input)
+    }
+    let node: Box<dyn Node> = Box::new(ProgramNode {
+        fns,
+        structs: sts,
+        range: Range::new(old, input),
+    });
+    Ok((input, node))
 }
 
 fn cast_to_var(n: &Box<dyn Node>) -> VarNode {
@@ -397,11 +436,11 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<dyn Node>> {
 #[test_parser("a = 1")]
 pub fn assignment(input: Span) -> IResult<Span, Box<dyn Node>> {
     delspace(map_res(
-        tuple((identifier, tag_token(TokenType::ASSIGN), logic_exp)),
+        tuple((take_exp, tag_token(TokenType::ASSIGN), logic_exp)),
         |(left, _op, right)| {
             let range = left.range().start.to(right.range().end);
             res(AssignNode {
-                var: left.as_any().downcast_ref::<VarNode>().unwrap().clone(),
+                var: left,
                 exp: right,
                 range,
             })
@@ -469,11 +508,11 @@ pub fn continue_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
 #[test_parser_error("+a")]
 pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
     delspace(alt((
-        primary_exp,
+        take_exp,
         map_res(
             tuple((
                 alt((tag_token(TokenType::MINUS), tag_token(TokenType::NOT))),
-                primary_exp,
+                take_exp,
             )),
             |(op, exp)| {
                 let range = exp.range();
@@ -519,7 +558,8 @@ pub fn primary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
             logic_exp,
             tag_token(TokenType::RPAREN),
         ),
-        // TODO: function_call, // please finish the funcdef first
+        function_call,
+        struct_init,
         identifier,
     )))(input)
 }
@@ -623,7 +663,7 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
     }"
 )]
 #[test_parser("fn f( \n) int\n")]
-fn function_def(input: Span) -> IResult<Span, Box<dyn Node>> {
+fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     delspace(map_res(
         tuple((
             tag_token(TokenType::FN),
@@ -638,23 +678,27 @@ fn function_def(input: Span) -> IResult<Span, Box<dyn Node>> {
             )))),
             tag_token(TokenType::RPAREN),
             type_name,
-            alt((statement_block, newline)),
+            terminated(opt(statement_block), newline),
         )),
         |(_, id, _, paras, _, ret, body)| {
             let id = cast_to_var(&id);
             let mut paralist = vec![];
-            let range = id.range.start.to(body.range().end);
+            let range = id.range;
             if let Some(para) = paras {
                 paralist.push(para.0);
                 paralist.extend(para.1);
             }
-            res(FuncDefNode {
-                id: id.name,
-                paralist,
-                ret,
+
+            let node = FuncDefNode {
+                typenode: FuncTypeNode {
+                    id: id.name,
+                    paralist,
+                    ret,
+                },
                 body,
                 range,
-            })
+            };
+            Ok::<_, Error>(Box::new(TopLevel::FuncDef(node)))
         },
     ))(input)
 }
@@ -702,6 +746,9 @@ fn take_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
             many0(preceded(tag_token(TokenType::DOT), identifier)),
         )),
         |(a, b)| {
+            if b.is_empty() {
+                return res_box(a);
+            }
             let mut ids = vec![];
             let range = a.range().start.to(b.last().unwrap().range().end);
             for v in b {
@@ -727,7 +774,7 @@ fn struct_field(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
     myname2: int
 }"
 )]
-fn struct_def(input: Span) -> IResult<Span, Box<dyn Node>> {
+fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((
             tag_token(TokenType::STRUCT),
@@ -739,11 +786,11 @@ fn struct_def(input: Span) -> IResult<Span, Box<dyn Node>> {
         |(_, id, _, fields, _)| {
             let id = cast_to_var(&id);
             let range = id.range;
-            res(StructDefNode {
+            Ok::<_, Error>(Box::new(TopLevel::StructDef(StructDefNode {
                 id: id.name,
                 fields,
                 range,
-            })
+            })))
         },
     )(input)
 }

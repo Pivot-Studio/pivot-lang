@@ -19,7 +19,7 @@ pub struct Ctx<'a, 'ctx> {
     pub context: &'ctx Context,
     pub builder: &'a Builder<'ctx>,
     pub module: &'a Module<'ctx>,
-    pub function: FunctionValue<'ctx>,
+    pub function: Option<FunctionValue<'ctx>>,
     pub block: Option<BasicBlock<'ctx>>,
     pub continue_block: Option<BasicBlock<'ctx>>,
     pub break_block: Option<BasicBlock<'ctx>>,
@@ -36,6 +36,7 @@ impl<'ctx> PLType<'ctx> {
         match self {
             PLType::FN(f) => f
                 .fntype
+                .get_type()
                 .ptr_type(inkwell::AddressSpace::Global)
                 .as_basic_type_enum(),
             PLType::STRUCT(s) => s.struct_type.as_basic_type_enum(),
@@ -53,7 +54,7 @@ pub struct Field<'ctx> {
 #[derive(Debug, Clone)]
 pub struct FNType<'ctx> {
     pub name: String,
-    pub fntype: FunctionType<'ctx>,
+    pub fntype: FunctionValue<'ctx>,
 }
 #[derive(Debug, Clone)]
 pub struct STType<'ctx> {
@@ -128,9 +129,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     ) -> Ctx<'a, 'ctx> {
         let i64_type = context.i64_type();
         let fn_type = i64_type.fn_type(&[], false);
-        let function = module.add_function("main", fn_type, None);
-        let basic_block = context.append_basic_block(function, "entry");
-        builder.position_at_end(basic_block);
         let mut types = HashMap::new();
         add_primitive_types(context, &mut types);
         Ctx {
@@ -140,8 +138,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             context,
             module,
             builder,
-            function,
-            block: Some(basic_block),
+            function: None,
+            block: None,
             continue_block: None,
             break_block: None,
         }
@@ -202,8 +200,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn try_load(&mut self, v: Value<'ctx>) -> Value<'ctx> {
-        match v {
-            Value::VarValue(v) => {
+        match v.as_basic_value_enum() {
+            BasicValueEnum::PointerValue(v) => {
                 let v = self.builder.build_load(v, "loadtmp");
                 match v {
                     BasicValueEnum::IntValue(v) => match v.get_type().get_bit_width() {

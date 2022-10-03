@@ -55,10 +55,6 @@ impl<'a> Compiler<'a> {
             print!("{}", node.string(0));
         }
         node.emit(m);
-        let v = ctx.get_symbol("a");
-        let v = v.unwrap();
-        let load = ctx.builder.build_load(*v, "load");
-        ctx.builder.build_return(Some(&load));
         if op.genir {
             let mut s = file.to_string();
             s.push_str(".ll");

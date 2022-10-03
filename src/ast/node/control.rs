@@ -27,10 +27,18 @@ impl Node for IfNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        let cond_block = ctx.context.append_basic_block(ctx.function, "cond");
-        let then_block = ctx.context.append_basic_block(ctx.function, "then");
-        let else_block = ctx.context.append_basic_block(ctx.function, "else");
-        let after_block = ctx.context.append_basic_block(ctx.function, "after");
+        let cond_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), "cond");
+        let then_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), "then");
+        let else_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), "else");
+        let after_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), "after");
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, cond_block);
         let cond = self.cond.emit(ctx);
@@ -72,9 +80,15 @@ impl Node for WhileNode {
         builder.string().unwrap()
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        let cond_block = ctx.context.append_basic_block(ctx.function, "cond");
-        let body_block = ctx.context.append_basic_block(ctx.function, "body");
-        let after_block = ctx.context.append_basic_block(ctx.function, "after");
+        let cond_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), "cond");
+        let body_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), "body");
+        let after_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), "after");
         ctx.break_block = Some(after_block);
         ctx.continue_block = Some(cond_block);
         ctx.builder.build_unconditional_branch(cond_block);
@@ -120,11 +134,17 @@ impl Node for ForNode {
         builder.string().unwrap()
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        let pre_block = ctx.context.append_basic_block(ctx.function, "pre");
-        let cond_block = ctx.context.append_basic_block(ctx.function, "cond");
-        let opt_block = ctx.context.append_basic_block(ctx.function, "opt");
-        let body_block = ctx.context.append_basic_block(ctx.function, "body");
-        let after_block = ctx.context.append_basic_block(ctx.function, "after");
+        let pre_block = ctx.context.append_basic_block(ctx.function.unwrap(), "pre");
+        let cond_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), "cond");
+        let opt_block = ctx.context.append_basic_block(ctx.function.unwrap(), "opt");
+        let body_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), "body");
+        let after_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), "after");
         ctx.break_block = Some(after_block);
         ctx.continue_block = Some(cond_block);
         ctx.builder.build_unconditional_branch(pre_block);
@@ -171,7 +191,11 @@ impl Node for BreakNode {
         if let Some(b) = ctx.break_block {
             ctx.builder.build_unconditional_branch(b);
             // add dead block to avoid double br
-            position_at_end(ctx, ctx.context.append_basic_block(ctx.function, "dead"));
+            position_at_end(
+                ctx,
+                ctx.context
+                    .append_basic_block(ctx.function.unwrap(), "dead"),
+            );
         } else {
             panic!("break not in loop");
         }
@@ -198,7 +222,8 @@ impl Node for ContinueNode {
             position_at_end(
                 ctx,
                 // add dead block to avoid double br
-                ctx.context.append_basic_block(ctx.function, "dead"),
+                ctx.context
+                    .append_basic_block(ctx.function.unwrap(), "dead"),
             );
         } else {
             panic!("continue not in loop");

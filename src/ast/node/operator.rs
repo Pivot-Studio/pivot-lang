@@ -135,11 +135,11 @@ impl Node for TakeOpNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let head = self.head.emit(ctx);
-        let head = ctx.try_load(head);
+        // let head = ctx.try_load(head);
         let mut res = head;
         for id in &self.ids {
-            res = match res {
-                Value::VarValue(s) => {
+            res = match res.as_basic_value_enum() {
+                BasicValueEnum::PointerValue(s) => {
                     let etype = s.get_type().get_element_type();
                     let mut index = 0;
                     if etype.is_struct_type() {
@@ -156,7 +156,7 @@ impl Node for TakeOpNode {
                     }
                     Value::VarValue(ctx.builder.build_struct_gep(s, index, "structgep").unwrap())
                 }
-                _ => panic!("not implemented"),
+                _ => panic!("not implemented {:?}", res),
             }
         }
         res
