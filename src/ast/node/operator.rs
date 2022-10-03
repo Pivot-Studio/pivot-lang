@@ -126,7 +126,6 @@ impl Node for TakeOpNode {
         builder.append("(TakeOpNode ");
         builder.append(self.head.string(tabs + 1));
         for id in &self.ids {
-            tabs::print_tabs(&mut builder, tabs + 1);
             builder.append(id.string(tabs + 1));
         }
         tabs::print_tabs(&mut builder, tabs);

@@ -182,8 +182,6 @@ impl Node for BreakNode {
         let mut builder = Builder::default();
         tabs::print_tabs(&mut builder, tabs);
         builder.append("(BreakNode)");
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");
         builder.string().unwrap()
     }
 

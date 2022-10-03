@@ -31,6 +31,7 @@ impl Node for FuncDefNode {
         let mut builder = Builder::default();
         tabs::print_tabs(&mut builder, tabs);
         builder.append("(FuncDefNode");
+        tabs::print_tabs(&mut builder, tabs + 1);
         builder.append(format!("id: {}", self.typenode.id));
         for para in &self.typenode.paralist {
             builder.append(para.string(tabs + 1));
@@ -103,6 +104,7 @@ impl Node for FuncCallNode {
         let mut builder = Builder::default();
         tabs::print_tabs(&mut builder, tabs);
         builder.append("(FuncCallNode");
+        tabs::print_tabs(&mut builder, tabs + 1);
         builder.append(format!("id: {}", self.id));
         for para in &self.paralist {
             builder.append(para.string(tabs + 1));

@@ -22,9 +22,8 @@ impl Node for TypeNameNode {
     fn string(&self, tabs: usize) -> String {
         let mut builder = Builder::default();
         tabs::print_tabs(&mut builder, tabs);
-        builder.append("(TypeNameNode");
+        builder.append("(TypeNameNode ");
         builder.append(format!("id: {}", self.id));
-        tabs::print_tabs(&mut builder, tabs);
         builder.append(")");
         builder.string().unwrap()
     }
@@ -56,6 +55,7 @@ impl Node for TypedIdentifierNode {
         let mut builder = Builder::default();
         tabs::print_tabs(&mut builder, tabs);
         builder.append("(TypedIdentifierNode");
+        tabs::print_tabs(&mut builder, tabs + 1);
         builder.append(format!("id: {}", self.id));
         builder.append(self.tp.string(tabs + 1));
         tabs::print_tabs(&mut builder, tabs);
@@ -86,6 +86,7 @@ impl Node for StructDefNode {
         let mut builder = Builder::default();
         tabs::print_tabs(&mut builder, tabs);
         builder.append("(StructDefNode");
+        tabs::print_tabs(&mut builder, tabs + 1);
         builder.append(format!("id: {}", self.id));
         for field in &self.fields {
             builder.append(field.string(tabs + 1));
@@ -146,6 +147,7 @@ impl Node for StructInitFieldNode {
         let mut builder = Builder::default();
         tabs::print_tabs(&mut builder, tabs);
         builder.append("(StructInitFieldNode");
+        tabs::print_tabs(&mut builder, tabs + 1);
         builder.append(format!("id: {}", self.id));
         builder.append(self.exp.string(tabs + 1));
         tabs::print_tabs(&mut builder, tabs);
@@ -171,7 +173,8 @@ impl Node for StructInitNode {
     fn string(&self, tabs: usize) -> String {
         let mut builder = Builder::default();
         tabs::print_tabs(&mut builder, tabs);
-        builder.append("(StructInitFieldNode");
+        builder.append("(StructInitNode");
+        tabs::print_tabs(&mut builder, tabs + 1);
         builder.append(format!("id: {}", self.id));
         for field in &self.fields {
             builder.append(field.string(tabs + 1));

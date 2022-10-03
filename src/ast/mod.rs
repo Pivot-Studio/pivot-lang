@@ -29,7 +29,9 @@ fn test_nom() {
                     break
                 }else {
                     x = x + 1
+                    continue
                 }
+                x = 101
             }
             for let i = 0; i < 5; i = i + 1{
                 let b = 0
