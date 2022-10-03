@@ -88,6 +88,8 @@ impl<'a> Compiler<'a> {
         tm.write_to_file(ctx.module, FileType::Object, Path::new(&f))
             .unwrap();
         let link = Command::new("clang")
+            .arg("-pthread")
+            .arg("-ldl")
             .arg(&f)
             .arg("vm/target/release/libvm.a")
             .arg("-o")
