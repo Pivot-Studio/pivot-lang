@@ -134,10 +134,6 @@ impl Node for ForNode {
         builder.string().unwrap()
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        let current_block = match ctx.block {
-            Some(v) => v,
-            _ => panic!("no current block!"),
-        };
         let pre_block = ctx.context.append_basic_block(ctx.function.unwrap(), "pre");
         let cond_block = ctx
             .context

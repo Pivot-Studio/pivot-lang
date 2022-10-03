@@ -5,7 +5,7 @@ use std::fs::read_to_string;
 use std::path::Path;
 
 use ast::compiler::{self, Compiler};
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use inkwell::OptimizationLevel;
 
 /// Pivot Lang compiler program
@@ -17,7 +17,7 @@ struct Cli {
     name: Option<String>,
 
     /// output file
-    #[clap(short, long, value_parser, default_value = "out.plb")]
+    #[clap(long, value_parser, default_value = "out.plb")]
     out: String,
 
     /// verbose
@@ -42,6 +42,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum RunCommand {
+    /// JIT run the compiled program
     Run {
         /// Name of the compiled file
         #[clap(value_parser)]
@@ -58,6 +59,7 @@ fn main() {
         3 => OptimizationLevel::Aggressive,
         _ => panic!("optimization level must be 0-3"),
     };
+
     // You can check the value provided by positional arguments, or option arguments
     if let Some(name) = cli.name.as_deref() {
         let str = read_to_string(Path::new(name)).unwrap();
@@ -80,5 +82,6 @@ fn main() {
         }
     } else {
         println!("No file provided");
+        Cli::into_app().print_help().unwrap();
     }
 }

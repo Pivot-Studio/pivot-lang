@@ -72,6 +72,7 @@ impl Node for FuncDefNode {
                 para_tps.push(para_type);
             }
             // add block
+            let allocab = ctx.context.append_basic_block(func, "alloc");
             let entry = ctx.context.append_basic_block(func, "entry");
             ctx.block = Some(entry);
             ctx.builder.position_at_end(entry);
@@ -83,6 +84,8 @@ impl Node for FuncDefNode {
             }
             // emit body
             body.emit(ctx);
+            ctx.builder.position_at_end(allocab);
+            ctx.builder.build_unconditional_branch(entry);
             return super::Value::None;
         }
         super::Value::None

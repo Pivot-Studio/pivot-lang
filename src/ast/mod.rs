@@ -32,7 +32,9 @@ fn test_nom() {
                 }
             }
             for let i = 0; i < 5; i = i + 1{
-                
+                let b = 0
+                b = i
+                printi64ln(b)
             }
             printi64ln(x)
             printi64ln(call())

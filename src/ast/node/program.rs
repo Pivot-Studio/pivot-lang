@@ -53,35 +53,3 @@ impl Node for ProgramNode {
         Value::None
     }
 }
-
-// impl ProgramNode {
-//     fn type_reg<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-
-//         reg_structs(&self.structs, ctx);
-
-//         for statement in self.fns {
-//             statement.get_type(ctx);
-//         }
-
-//         Value::None
-//     }
-
-// }
-
-// fn reg_structs<'a, 'ctx>(sts: Vec<StructDefNode>, ctx: &mut Ctx<'a, 'ctx>) {
-//     if sts.len() == 0 {
-//         return;
-//     }
-//     let mut failedsts = vec![];
-//     let mut i = 0;
-//     for st in sts {
-//         let re = st.get_type(ctx);
-//         match re {
-//             Value::None => failedsts.push(st),
-//             _ => todo!(),
-//         }
-//         i = i + 1;
-//     }
-//     reg_structs(failedsts, ctx)
-
-// }
