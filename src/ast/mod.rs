@@ -28,8 +28,11 @@ fn test_nom() {
                 }else if x == 99 {
                     break
                 }else {
-                    x = x +1
+                    x = x + 1
                 }
+            }
+            for let i = 0; i < 5; i = i + 1{
+                
             }
             printi64ln(x)
             printi64ln(call())
@@ -53,7 +56,7 @@ fn test_nom() {
     println!("{}", node.string(0));
     let _re = node.emit(m);
     println!("emit succ");
-    // println!("{}", ctx.module.to_string());
+    println!("{}", ctx.module.to_string());
 
     let execution_engine = ctx
         .module

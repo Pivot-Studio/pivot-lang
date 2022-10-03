@@ -243,7 +243,7 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
 }
 
 #[test_parser(
-    "for ;true; {
+    " for ;true; {
     let a = b
 }"
 )]
@@ -261,6 +261,11 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     "for i = 1; i <= 5; i = i + 1{
     b = b + 1
 }"
+)]
+#[test_parser(
+    "for let i = 0; i < 5; i = i + 1{
+                
+    }"
 )]
 
 /// ```enbf
