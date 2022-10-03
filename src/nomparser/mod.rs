@@ -16,7 +16,7 @@ use crate::{
     ast::node::ret::RetNode,
     ast::node::*,
     ast::node::{
-        function::FuncDefNode,
+        function::{FuncCallNode, FuncDefNode},
         types::{StructDefNode, TypeNameNode, TypeNode, TypedIdentifierNode},
     },
     ast::{node::types::StructInitNode, range::Range},
@@ -25,7 +25,7 @@ use crate::{
             control::*, operator::*, primary::*, program::*, statement::*,
             types::StructInitFieldNode,
         },
-        tokens::{TokenType, FOR},
+        tokens::TokenType,
     },
 };
 use internal_macro::{test_parser, test_parser_error};
@@ -40,9 +40,9 @@ macro_rules! newline_or_eof {
 macro_rules! del_newline_or_space {
     ($e:expr) => {
         delimited(
-            many0(delspace(alt((tag("\n"), tag("\r\n"))))),
+            many0(alt((tag("\n"), tag("\r\n"), tag(" "), tag("\t")))),
             $e,
-            many0(delspace(alt((tag("\n"), tag("\r\n"))))),
+            many0(alt((tag("\n"), tag("\r\n"), tag(" "), tag("\t")))),
         )
     };
 }
@@ -519,6 +519,7 @@ pub fn primary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
             logic_exp,
             tag_token(TokenType::RPAREN),
         ),
+        // TODO: function_call, // please finish the funcdef first
         identifier,
     )))(input)
 }
@@ -602,36 +603,39 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
 /// function_def = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name (statement_block | newline) ;
 /// ```
 #[test_parser(
-    "fn f(x: int, y: int) int {
+    "fn f(  x: int, y  : int  ) int {
         x = x+1
         return 0
     }"
 )]
-#[test_parser("fn f(x: int, y: int) int\n")]
+#[test_parser("fn   f (x: int ,\n y: int) int\n")]
 #[test_parser(
     "fn f(x: int) int {
         x = x+1
         return 0
     }"
 )]
-#[test_parser("fn f(x: int) int\n")]
+#[test_parser("             fn     f(x    :  int)    int\n")]
 #[test_parser(
     "fn f() int {
         x = x+1
         return 0
     }"
 )]
-#[test_parser("fn f() int\n")]
+#[test_parser("fn f( \n) int\n")]
 fn function_def(input: Span) -> IResult<Span, Box<dyn Node>> {
-    map_res(
+    delspace(map_res(
         tuple((
             tag_token(TokenType::FN),
             identifier,
             tag_token(TokenType::LPAREN),
-            opt(tuple((
-                typed_identifier,
-                many0(preceded(tag_token(TokenType::COMMA), typed_identifier)),
-            ))),
+            del_newline_or_space!(opt(tuple((
+                del_newline_or_space!(typed_identifier),
+                many0(preceded(
+                    tag_token(TokenType::COMMA),
+                    del_newline_or_space!(typed_identifier)
+                )),
+            )))),
             tag_token(TokenType::RPAREN),
             type_name,
             alt((statement_block, newline)),
@@ -639,7 +643,7 @@ fn function_def(input: Span) -> IResult<Span, Box<dyn Node>> {
         |(_, id, _, paras, _, ret, body)| {
             let id = cast_to_var(&id);
             let mut paralist = vec![];
-            let range = id.range;
+            let range = id.range.start.to(body.range().end);
             if let Some(para) = paras {
                 paralist.push(para.0);
                 paralist.extend(para.1);
@@ -652,7 +656,42 @@ fn function_def(input: Span) -> IResult<Span, Box<dyn Node>> {
                 range,
             })
         },
-    )(input)
+    ))(input)
+}
+
+#[test_parser("     x    (   1\n,0             ,\n       1      )")]
+pub fn function_call(input: Span) -> IResult<Span, Box<dyn Node>> {
+    delspace(map_res(
+        tuple((
+            identifier,
+            tag_token(TokenType::LPAREN),
+            opt(tuple((
+                del_newline_or_space!(logic_exp),
+                many0(preceded(
+                    tag_token(TokenType::COMMA),
+                    del_newline_or_space!(logic_exp),
+                )),
+            ))),
+            tag_token(TokenType::RPAREN),
+        )),
+        |(id, _, paras, _)| {
+            let id = cast_to_var(&id);
+            let mut paralist = vec![];
+            let mut range = id.range;
+            if let Some(paras) = paras {
+                paralist.push(paras.0);
+                paralist.extend(paras.1);
+            }
+            for para in paralist.iter() {
+                range = range.start.to(para.range().end);
+            }
+            res(FuncCallNode {
+                id: id.name,
+                paralist,
+                range,
+            })
+        },
+    ))(input)
 }
 
 #[test_parser("a.b.c")]
