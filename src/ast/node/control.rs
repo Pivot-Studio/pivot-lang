@@ -151,6 +151,7 @@ impl Node for ForNode {
             .append_basic_block(ctx.function.unwrap(), "after");
         ctx.break_block = Some(after_block);
         ctx.continue_block = Some(cond_block);
+        ctx.builder.build_unconditional_branch(pre_block);
         position_at_end(ctx, pre_block);
         if let Some(pr) = &mut self.pre {
             pr.emit(ctx);
@@ -172,8 +173,6 @@ impl Node for ForNode {
             op.emit(ctx);
         }
         ctx.builder.build_unconditional_branch(cond_block);
-        position_at_end(ctx, current_block);
-        ctx.builder.build_unconditional_branch(pre_block);
         position_at_end(ctx, after_block);
         Value::None
     }
