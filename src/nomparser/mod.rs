@@ -16,15 +16,8 @@ use crate::{
     ast::node::*,
     ast::{range::Range, node::ret::RetNode},
     ast::{
-        node::{
-            control::*,
-            operator::*,
-            primary::*,
-            program::*,
-            statement::*,
-            types::{StructInitFieldNode, StructInitNode},
-        },
-        tokens::TokenType,
+        node::{control::*, operator::*, primary::*, program::*, statement::*, types::StructInitFieldNode},
+        tokens::{TokenType, FOR},
     },
     ast::{
         node::{
@@ -206,9 +199,9 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             )),
         ))),
         |(_, cond, then, els)| {
-            let range = cond.range().start.to(then.range().end);
+            let mut range = cond.range().start.to(then.range().end);
             if let Some(el) = &els {
-                range.start.to(el.range().end);
+                range = range.start.to(el.range().end);
             }
             res(IfNode {
                 cond,
@@ -247,6 +240,52 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     )(input)
 }
 
+#[test_parser(
+"for ;true; {
+    let a = b
+}"
+)]
+#[test_parser(
+"for;true; {
+    let a = b
+}"
+)]
+#[test_parser(
+"for i = 0; i < 3; i = i + 1 {
+    b = c + i
+}"
+)]
+#[test_parser(
+"for i = 1; i <= 5; i = i + 1{
+    b = b + 1
+}"
+)]
+    
+
+/// ```enbf
+/// for_statement = "for" (assignment | new_variable) ";" logic_exp ";" assignment statement_block;
+/// ```
+pub fn for_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+    map_res(
+        delspace(tuple((
+            tag_token(TokenType::FOR),
+            opt(alt((assignment, new_variable))),
+            delspace(tag_token(TokenType::SEMI)),
+            logic_exp,
+            delspace(tag_token(TokenType::SEMI)),
+            opt(assignment),
+            statement_block,
+        ))),
+        |(_, pre, _, cond, _, opt, body)| {
+            let mut range = cond.range().start.to(body.range().end);
+            if let Some(pre) = &pre {
+                range = range.end.from(pre.range().start);
+            }
+            res(ForNode { pre, cond, opt, body, range })
+        },
+    )(input)
+}
+
 pub fn statement_block(input: Span) -> IResult<Span, Box<dyn Node>> {
     delspace(delimited(
         tag_token(TokenType::LBRACE),
@@ -261,6 +300,7 @@ pub fn statement_block(input: Span) -> IResult<Span, Box<dyn Node>> {
 /// | assignment newline
 /// | if_statement
 /// | while_statement
+/// | for_statement
 /// | break_statement
 /// | continue_statement
 /// | return_statement
@@ -273,6 +313,7 @@ pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         terminated(assignment, newline_or_eof!()),
         if_statement,
         while_statement,
+        for_statement,
         break_statement,
         continue_statement,
         return_statement,
@@ -699,7 +740,7 @@ fn struct_init(input: Span) -> IResult<Span, Box<dyn Node>> {
             } else {
                 range = name.range;
             }
-            res(StructInitNode {
+            res(StructDefNode {
                 id: name.name,
                 fields,
                 range,

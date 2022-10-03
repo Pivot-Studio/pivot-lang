@@ -64,6 +64,8 @@ if_statement = "if" logic_exp statement_block ("else" if_statement | statement_b
 
 while_statement = "while" logic_exp statement_block ;
 
+for_statement = "for" (assignment | new_variable) ";" logic_exp ";" assignment statement_block;
+
 statement_block = "{" statements "}" ;
 
 newline = "\n" | "\r\n" ;
