@@ -9,6 +9,7 @@ use internal_macro::range;
 use string_builder::Builder;
 
 #[range]
+#[derive(Clone)]
 pub struct TypeNameNode {
     pub id: String,
 }
@@ -44,9 +45,10 @@ impl TypeNode for TypeNameNode {
 }
 
 #[range]
+#[derive(Clone)]
 pub struct TypedIdentifierNode {
     pub id: String,
-    pub tp: Box<dyn TypeNode>,
+    pub tp: Box<TypeNameNode>,
 }
 
 impl Node for TypedIdentifierNode {

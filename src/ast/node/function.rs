@@ -1,22 +1,23 @@
 use std::fmt::format;
 
+use super::types::*;
 use super::{
     alloc,
     types::{TypeNode, TypedIdentifierNode},
     Node,
 };
-use super::{types::*, *};
 use crate::ast::ctx::{FNType, PLType};
 use crate::utils::tabs;
-use inkwell::{types::BasicType, values::FunctionValue};
+use inkwell::values::FunctionValue;
 use internal_macro::range;
 
 use string_builder::Builder;
 
+#[derive(Clone)]
 pub struct FuncTypeNode {
     pub id: String,
     pub paralist: Vec<Box<TypedIdentifierNode>>,
-    pub ret: Box<dyn TypeNode>,
+    pub ret: Box<TypeNameNode>,
 }
 
 #[range]
@@ -52,7 +53,6 @@ impl Node for FuncDefNode {
             para_names.push(para.id.clone());
         }
         // add function
-        self.typenode.get_type(ctx);
         let func;
         if let Some(fu) = ctx.get_type(self.typenode.id.as_str()) {
             func = match fu {
@@ -104,7 +104,6 @@ impl Node for FuncCallNode {
         for para in &self.paralist {
             builder.append(para.string(tabs + 1));
         }
-        tabs::print_tabs(&mut builder, tabs);
         builder.append(")");
         builder.string().unwrap()
     }
@@ -114,7 +113,9 @@ impl Node for FuncCallNode {
     ) -> super::Value<'ctx> {
         let mut para_values = Vec::new();
         for para in self.paralist.iter_mut() {
-            para_values.push(para.emit(ctx).as_basic_value_enum().into());
+            let v = para.emit(ctx);
+            let load = ctx.try_load(v);
+            para_values.push(load.as_basic_value_enum().into());
         }
         let func = ctx.module.get_function(self.id.as_str()).unwrap();
         let ret = ctx.builder.build_call(
@@ -122,7 +123,11 @@ impl Node for FuncCallNode {
             &para_values,
             format(format_args!("call_{}", self.id)).as_str(),
         );
-        Value::LoadValue(ret.try_as_basic_value().left().unwrap())
+        if let Some(v) = ret.try_as_basic_value().left() {
+            return super::Value::LoadValue(v);
+        } else {
+            return super::Value::None;
+        }
     }
 }
 
@@ -143,7 +148,7 @@ impl FuncTypeNode {
         for para in self.paralist.iter() {
             para_types.push(para.tp.get_type(ctx).unwrap().get_basic_type().into());
         }
-        let ret_type = self.ret.get_type(ctx).unwrap().get_basic_type();
+        let ret_type = self.ret.get_type(ctx).unwrap().get_ret_type();
         let func_type = ret_type.fn_type(&para_types, false);
         let func = ctx.module.add_function(self.id.as_str(), func_type, None);
         ctx.add_type(

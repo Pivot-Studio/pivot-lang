@@ -3,7 +3,6 @@ use std::{fs, path::Path, time::Instant};
 use inkwell::{
     context::Context,
     module::Module,
-    support,
     targets::{FileType, InitializationConfig, Target, TargetMachine},
     OptimizationLevel,
 };
@@ -52,7 +51,7 @@ impl<'a> Compiler<'a> {
         let (_, mut node) = self.parser.parse().unwrap();
 
         if op.printast {
-            print!("{}", node.string(0));
+            println!("{}", node.string(0));
         }
         node.emit(m);
         if op.genir {

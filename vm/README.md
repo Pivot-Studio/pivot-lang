@@ -9,3 +9,11 @@
 
 - [gc](src/gc/) 一个简单gc
 
+
+## JIT invalid memory access issue
+
+在jit模式下使用runtime函数可能会出现`invalid memory access`错误，
+目前只在测试情况下出现过，不确认以后会不会在非测试情况下出现。   
+这个问题本质是rust编译的时候会优化掉不使用的module，导致jit时找不到对应runtime函数。所以建议每个
+mod加一个叫做`reg`的函数，里边什么都不做，这样在需要jit测试的时候调用使用模块的`reg`函数，就不会被优化掉了。
+

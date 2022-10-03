@@ -71,7 +71,6 @@ impl Node for NLNode {
         let mut builder = Builder::default();
         tabs::print_tabs(&mut builder, tabs);
         builder.append("(NLNode");
-        tabs::print_tabs(&mut builder, tabs);
         builder.append(")");
         builder.string().unwrap()
     }

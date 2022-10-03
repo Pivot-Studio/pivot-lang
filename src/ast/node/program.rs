@@ -1,4 +1,4 @@
-use super::function::FuncDefNode;
+use super::function::{FuncDefNode, FuncTypeNode};
 use super::types::StructDefNode;
 use super::*;
 use crate::ast::ctx::Ctx;
@@ -11,6 +11,7 @@ use internal_macro::range;
 pub struct ProgramNode {
     pub fns: Vec<FuncDefNode>,
     pub structs: Vec<StructDefNode>,
+    pub fntypes: Vec<FuncTypeNode>,
 }
 impl Node for ProgramNode {
     fn string(&self, tabs: usize) -> String {
@@ -42,9 +43,9 @@ impl Node for ProgramNode {
                 break;
             }
         }
-        // self.fns.iter().for_each(|x| {
-        //     x.get_type(ctx);
-        // });
+        self.fntypes.iter().for_each(|x| {
+            x.get_type(ctx);
+        });
         self.fns.iter_mut().for_each(|x| {
             x.emit(ctx);
         });

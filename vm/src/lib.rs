@@ -7,3 +7,10 @@ pub mod gc;
 fn test_vm_link() -> i64 {
     return 66;
 }
+
+#[is_runtime]
+fn printi64ln(i: i64) {
+    println!("{}", i);
+}
+
+pub fn reg() {}

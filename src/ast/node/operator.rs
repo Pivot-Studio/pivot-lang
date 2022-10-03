@@ -141,7 +141,7 @@ impl Node for TakeOpNode {
             res = match res.as_basic_value_enum() {
                 BasicValueEnum::PointerValue(s) => {
                     let etype = s.get_type().get_element_type();
-                    let mut index = 0;
+                    let index;
                     if etype.is_struct_type() {
                         let st = etype.into_struct_type();
                         let tpname = st.get_name().unwrap().to_str().unwrap();

@@ -84,6 +84,7 @@ statement =
     | while_statement
     | break_statement
     | continue_statement
+    | function_call
     | newline
     ;
 

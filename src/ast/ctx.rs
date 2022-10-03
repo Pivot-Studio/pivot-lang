@@ -3,10 +3,12 @@ use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
+use inkwell::types::BasicMetadataTypeEnum;
 use inkwell::types::BasicType;
 use inkwell::types::BasicTypeEnum;
 use inkwell::types::FunctionType;
 use inkwell::types::StructType;
+use inkwell::types::VoidType;
 use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
@@ -30,6 +32,7 @@ pub enum PLType<'ctx> {
     FN(FNType<'ctx>),
     STRUCT(STType<'ctx>),
     PRIMITIVE(BasicTypeEnum<'ctx>),
+    VOID(VoidType<'ctx>),
 }
 impl<'ctx> PLType<'ctx> {
     pub fn get_basic_type(&self) -> BasicTypeEnum<'ctx> {
@@ -41,6 +44,32 @@ impl<'ctx> PLType<'ctx> {
                 .as_basic_type_enum(),
             PLType::STRUCT(s) => s.struct_type.as_basic_type_enum(),
             PLType::PRIMITIVE(t) => *t,
+            PLType::VOID(_) => panic!("void type"),
+        }
+    }
+
+    pub fn get_ret_type(&self) -> RetTypeEnum<'ctx> {
+        match self {
+            PLType::VOID(x) => RetTypeEnum::VOID(*x),
+            _ => RetTypeEnum::BASIC(self.get_basic_type()),
+        }
+    }
+}
+
+pub enum RetTypeEnum<'ctx> {
+    VOID(VoidType<'ctx>),
+    BASIC(BasicTypeEnum<'ctx>),
+}
+
+impl<'ctx> RetTypeEnum<'ctx> {
+    pub fn fn_type(
+        &self,
+        param_types: &[BasicMetadataTypeEnum<'ctx>],
+        is_var_args: bool,
+    ) -> FunctionType<'ctx> {
+        match self {
+            RetTypeEnum::VOID(t) => t.fn_type(param_types, is_var_args),
+            RetTypeEnum::BASIC(t) => t.fn_type(param_types, is_var_args),
         }
     }
 }
@@ -119,6 +148,7 @@ fn add_primitive_types<'a, 'ctx>(
         "bool".to_string(),
         PLType::PRIMITIVE(context.bool_type().as_basic_type_enum()),
     );
+    table.insert("void".to_string(), PLType::VOID(context.void_type()));
 }
 
 impl<'a, 'ctx> Ctx<'a, 'ctx> {
@@ -127,8 +157,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         module: &'a Module<'ctx>,
         builder: &'a Builder<'ctx>,
     ) -> Ctx<'a, 'ctx> {
-        let i64_type = context.i64_type();
-        let fn_type = i64_type.fn_type(&[], false);
         let mut types = HashMap::new();
         add_primitive_types(context, &mut types);
         Ctx {

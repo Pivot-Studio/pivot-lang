@@ -17,7 +17,7 @@ use crate::{
     ast::node::*,
     ast::node::{
         function::{FuncCallNode, FuncDefNode, FuncTypeNode},
-        types::{StructDefNode, TypeNameNode, TypeNode, TypedIdentifierNode},
+        types::{StructDefNode, TypeNameNode, TypedIdentifierNode},
     },
     ast::{node::types::StructInitNode, range::Range},
     ast::{
@@ -62,13 +62,6 @@ where
 fn res_ori<T>(t: T) -> Result<Box<T>, Error>
 where
     T: Node + 'static,
-{
-    res_box(box_node(t))
-}
-
-fn restp<T>(t: T) -> Result<Box<dyn TypeNode>, Error>
-where
-    T: TypeNode + 'static,
 {
     res_box(box_node(t))
 }
@@ -330,6 +323,7 @@ pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         for_statement,
         break_statement,
         continue_statement,
+        terminated(function_call, newline_or_eof!()),
         return_statement,
         newline,
     )))(input)
@@ -385,11 +379,13 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
     let mut input = input;
     let mut fns = vec![];
     let mut sts = vec![];
+    let mut fntypes = vec![];
     loop {
         let top = top_level_statement(input);
         if let Ok((i, t)) = top {
             match *t {
                 TopLevel::FuncDef(f) => {
+                    fntypes.push(f.typenode.clone());
                     fns.push(f);
                 }
                 TopLevel::StructDef(s) => {
@@ -405,6 +401,7 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
     let node: Box<dyn Node> = Box::new(ProgramNode {
         fns,
         structs: sts,
+        fntypes,
         range: Range::new(old, input),
     });
     Ok((input, node))
@@ -613,10 +610,10 @@ fn float(input: Span) -> IResult<Span, Span> {
 }
 
 #[test_parser("kfsh")]
-fn type_name(input: Span) -> IResult<Span, Box<dyn TypeNode>> {
+fn type_name(input: Span) -> IResult<Span, Box<TypeNameNode>> {
     delspace(map_res(identifier, |o| {
         let o = cast_to_var(&o);
-        restp(TypeNameNode {
+        res_ori(TypeNameNode {
             id: o.name,
             range: o.range,
         })
@@ -629,7 +626,7 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
         tuple((identifier, tag_token(TokenType::COLON), type_name)),
         |(id, _, type_name)| {
             let id = cast_to_var(&id);
-            let range = id.range.start.to(type_name.range().end);
+            let range = id.range.start.to(type_name.range.end);
             res_ori(TypedIdentifierNode {
                 id: id.name,
                 tp: type_name,
@@ -653,6 +650,7 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
 #[test_parser(
     "fn f(x: int) int {
         x = x+1
+        call()
         return 0
     }
     "
@@ -707,6 +705,7 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
 }
 
 #[test_parser("     x    (   1\n,0             ,\n       1      )")]
+#[test_parser("     x    (   x)")]
 pub fn function_call(input: Span) -> IResult<Span, Box<dyn Node>> {
     delspace(map_res(
         tuple((
