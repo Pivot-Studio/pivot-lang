@@ -19,7 +19,7 @@ impl Pos {
         Range { start: *self, end }
     }
     pub fn from(&self, start: Pos) -> Range {
-        Range { start, end: *self}
+        Range { start, end: *self }
     }
 }
 

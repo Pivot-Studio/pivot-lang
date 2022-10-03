@@ -116,7 +116,7 @@ impl Node for ForNode {
         }
         builder.append(self.body.string(tabs + 1));
         tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");   
+        builder.append(")");
         builder.string().unwrap()
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {

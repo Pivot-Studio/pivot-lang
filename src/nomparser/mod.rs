@@ -15,23 +15,17 @@ type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
     ast::node::ret::RetNode,
     ast::node::*,
-    ast::{range::Range, node::ret::RetNode},
+    ast::node::{
+        function::FuncDefNode,
+        types::{StructDefNode, TypeNameNode, TypeNode, TypedIdentifierNode},
+    },
+    ast::{node::types::StructInitNode, range::Range},
     ast::{
-        node::{control::*, operator::*, primary::*, program::*, statement::*, types::StructInitFieldNode},
+        node::{
+            control::*, operator::*, primary::*, program::*, statement::*,
+            types::StructInitFieldNode,
+        },
         tokens::{TokenType, FOR},
-    },
-    ast::{
-        node::{
-            function::FuncDefNode,
-            types::{StructDefNode, TypeNameNode, TypeNode, TypedIdentifierNode},
-        },
-    },
-    ast::{
-        node::{
-            function::FuncDefNode,
-            types::{StructDefNode, TypeNameNode, TypeNode, TypedIdentifierNode},
-        },
-        range::Range,
     },
 };
 use internal_macro::{test_parser, test_parser_error};
@@ -150,15 +144,23 @@ impl<'a> PLParser<'a> {
 // ```
 pub fn return_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     delspace(map_res(
-        tuple((tag_token(TokenType::RETURN), 
-        opt(logic_exp), 
-        newline_or_eof!())),
-        |(_ret, val , _)| {
+        tuple((
+            tag_token(TokenType::RETURN),
+            opt(logic_exp),
+            newline_or_eof!(),
+        )),
+        |(_ret, val, _)| {
             if let Some(val) = val {
                 let range = val.range();
-                res(RetNode{value: Some(val),range})
+                res(RetNode {
+                    value: Some(val),
+                    range,
+                })
             } else {
-                res(RetNode { value: None, range: Range::new(input, input) })
+                res(RetNode {
+                    value: None,
+                    range: Range::new(input, input),
+                })
             }
         },
     ))(input)
@@ -248,26 +250,25 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
 }
 
 #[test_parser(
-"for ;true; {
+    "for ;true; {
     let a = b
 }"
 )]
 #[test_parser(
-"for;true; {
+    "for;true; {
     let a = b
 }"
 )]
 #[test_parser(
-"for i = 0; i < 3; i = i + 1 {
+    "for i = 0; i < 3; i = i + 1 {
     b = c + i
 }"
 )]
 #[test_parser(
-"for i = 1; i <= 5; i = i + 1{
+    "for i = 1; i <= 5; i = i + 1{
     b = b + 1
 }"
 )]
-    
 
 /// ```enbf
 /// for_statement = "for" (assignment | new_variable) ";" logic_exp ";" assignment statement_block;
@@ -288,7 +289,13 @@ pub fn for_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             if let Some(pre) = &pre {
                 range = range.end.from(pre.range().start);
             }
-            res(ForNode { pre, cond, opt, body, range })
+            res(ForNode {
+                pre,
+                cond,
+                opt,
+                body,
+                range,
+            })
         },
     )(input)
 }
@@ -747,7 +754,7 @@ fn struct_init(input: Span) -> IResult<Span, Box<dyn Node>> {
             } else {
                 range = name.range;
             }
-            res(StructDefNode {
+            res(StructInitNode {
                 id: name.name,
                 fields,
                 range,

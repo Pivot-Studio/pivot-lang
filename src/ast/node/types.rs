@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
+use crate::utils::tabs;
 use inkwell::types::BasicType;
 use internal_macro::range;
-use crate::utils::tabs;
 
 use string_builder::Builder;
 
