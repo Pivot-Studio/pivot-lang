@@ -49,7 +49,7 @@ impl<'a> Value<'a> {
 }
 
 pub trait Node: RangeTrait + AsAny {
-    fn string(&self, tabs: usize) -> String;
+    fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx>;
 }
 
@@ -72,6 +72,32 @@ impl<'a, 'ctx> Ctx<'ctx, 'a> {
             None,
         );
         self.builder.set_current_debug_location(self.context, loc);
+    }
+}
+pub fn deal_line(tabs: usize, line: &mut Vec<bool>, end: bool) {
+    if tabs>=line.len() {
+        line.push(true);
+    }
+    if end {
+        line[tabs]=false;
+    } else {
+        line[tabs]=true;
+    }
+}
+pub fn tab(tabs: usize, line: Vec<bool>, end: bool) {
+    for i in 0..tabs {
+        if line[i] {
+            print!(" │  ");
+        }
+        else {
+            print!("    ");
+        }
+    }
+    if end {
+        print!(" └─ ");
+    }
+    else {
+        print!(" ├─ ");
     }
 }
 

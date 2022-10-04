@@ -56,7 +56,7 @@ fn test_nom() {
     let (a, b, c, d, e, f) = create_ctx_info(context, "", "");
     let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e, &f);
     let m = &mut ctx;
-    println!("{}", node.string(0));
+    node.print(0, false, vec![]);
     let _re = node.emit(m);
     println!("emit succ");
     println!("{}", ctx.module.to_string());

@@ -7,7 +7,6 @@ authors = ["The pivot-lang Authors"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-string-builder = "0.2.0"
 inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm14-0"] }
 lazy_static = "1.4.0"
 paste = "1.0"

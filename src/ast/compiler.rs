@@ -80,7 +80,7 @@ impl Compiler {
         let (_, mut node) = parser.parse().unwrap();
 
         if op.printast {
-            println!("{}", node.string(0));
+            node.print(0, true, vec![]);
         }
 
         node.emit(m);

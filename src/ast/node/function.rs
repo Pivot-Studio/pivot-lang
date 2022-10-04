@@ -8,13 +8,12 @@ use super::{
     Node,
 };
 use crate::ast::ctx::{FNType, PLType};
-use crate::utils::tabs;
+use crate::ast::node::{tab, deal_line};
 use inkwell::debug_info::*;
 use inkwell::values::FunctionValue;
 use internal_macro::range;
 
 use lazy_static::__Deref;
-use string_builder::Builder;
 
 #[derive(Clone)]
 pub struct FuncTypeNode {
@@ -30,22 +29,20 @@ pub struct FuncDefNode {
 }
 
 impl Node for FuncDefNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(FuncDefNode");
-        tabs::print_tabs(&mut builder, tabs + 1);
-        builder.append(format!("id: {}", self.typenode.id));
-        for para in &self.typenode.paralist {
-            builder.append(para.string(tabs + 1));
-        }
-        builder.append(self.typenode.ret.string(tabs + 1));
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("FuncDefNode");
+        tab(tabs + 1, line.clone(), end);
+        println!("id: {}", self.typenode.id);
         if let Some(body) = &self.body {
-            builder.append(body.string(tabs + 1));
+            tab(tabs + 1, line.clone(), false);
+            println!("type: {}", self.typenode.ret.id);
+            body.print(tabs + 1, true, line.clone());
+        }else {
+            tab(tabs + 1, line, true);
+            println!("type: {}", self.typenode.ret.id);
         }
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");
-        builder.string().unwrap()
     }
     fn emit<'a, 'ctx>(
         &'a mut self,
@@ -150,17 +147,21 @@ pub struct FuncCallNode {
 }
 
 impl Node for FuncCallNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(FuncCallNode");
-        tabs::print_tabs(&mut builder, tabs + 1);
-        builder.append(format!("id: {}", self.id));
-        for para in &self.paralist {
-            builder.append(para.string(tabs + 1));
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("FuncCallNode");
+        if self.paralist.len() == 0 {
+            tab(tabs + 1, line.clone(), true);
+            println!("id: {}", self.id);
+        } else {
+            tab(tabs + 1, line.clone(), false);
+            println!("id: {}", self.id);
+            for para in self.paralist.iter().take(self.paralist.len() - 1) {
+                para.print(tabs + 1, false, line.clone());
+            }
+            self.paralist.last().unwrap().print(tabs + 1, true, line.clone());
         }
-        builder.append(")");
-        builder.string().unwrap()
     }
     fn emit<'a, 'ctx>(
         &'a mut self,
