@@ -7,14 +7,10 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Cargo launch",
-            "cargo": {
-                "args": [
-                    "build",
-                ]
-            },
-            "program": "${cargo:program}",
-            "args": []
+            "name": "Launch",
+            "program": "${workspaceFolder}/target/debug/plc",
+            "args": ["test.piv"],
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

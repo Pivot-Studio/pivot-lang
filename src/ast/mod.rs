@@ -8,7 +8,7 @@ pub mod tokens;
 #[cfg(feature = "jit")]
 fn test_nom() {
     vm::reg();
-    use crate::nomparser::PLParser;
+    use crate::{ast::ctx::create_ctx_info, nomparser::PLParser};
     use inkwell::context::Context;
     let mut parser = PLParser::new(
         "struct test {
@@ -53,9 +53,8 @@ fn test_nom() {
     );
     let (_, mut node) = parser.parse().unwrap();
     let context = &Context::create();
-    let builder = &context.create_builder();
-    let module = &context.create_module("test");
-    let mut ctx = ctx::Ctx::new(context, module, builder);
+    let (a, b, c, d, e) = create_ctx_info(context, "", "");
+    let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e);
     let m = &mut ctx;
     println!("{}", node.string(0));
     let _re = node.emit(m);

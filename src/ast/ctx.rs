@@ -2,7 +2,12 @@ use crate::ast::node::Value;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
+use inkwell::debug_info::DICompileUnit;
+use inkwell::debug_info::DWARFEmissionKind;
+use inkwell::debug_info::DWARFSourceLanguage;
+use inkwell::debug_info::DebugInfoBuilder;
 use inkwell::module::Module;
+use inkwell::targets::TargetMachine;
 use inkwell::types::BasicMetadataTypeEnum;
 use inkwell::types::BasicType;
 use inkwell::types::BasicTypeEnum;
@@ -13,28 +18,34 @@ use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
 use std::collections::HashMap;
+
+use super::compiler::get_target_machine;
+use super::node::types::TypeNameNode;
 #[derive(Debug, Clone)]
 pub struct Ctx<'a, 'ctx> {
     pub table: HashMap<String, PointerValue<'ctx>>,
-    pub types: HashMap<String, PLType<'ctx>>,
+    pub types: HashMap<String, PLType<'a, 'ctx>>,
     pub father: Option<&'a Ctx<'a, 'ctx>>,
     pub context: &'ctx Context,
     pub builder: &'a Builder<'ctx>,
     pub module: &'a Module<'ctx>,
+    pub dibuilder: &'a DebugInfoBuilder<'ctx>,
+    pub diunit: &'a DICompileUnit<'ctx>,
     pub function: Option<FunctionValue<'ctx>>,
     pub block: Option<BasicBlock<'ctx>>,
     pub continue_block: Option<BasicBlock<'ctx>>,
     pub break_block: Option<BasicBlock<'ctx>>,
+    pub targetmachine: &'a TargetMachine,
 }
 
 #[derive(Debug, Clone)]
-pub enum PLType<'ctx> {
+pub enum PLType<'a, 'ctx> {
     FN(FNType<'ctx>),
-    STRUCT(STType<'ctx>),
+    STRUCT(STType<'a, 'ctx>),
     PRIMITIVE(BasicTypeEnum<'ctx>),
     VOID(VoidType<'ctx>),
 }
-impl<'ctx> PLType<'ctx> {
+impl<'a, 'ctx> PLType<'a, 'ctx> {
     pub fn get_basic_type(&self) -> BasicTypeEnum<'ctx> {
         match self {
             PLType::FN(f) => f
@@ -75,9 +86,10 @@ impl<'ctx> RetTypeEnum<'ctx> {
 }
 
 #[derive(Debug, Clone)]
-pub struct Field<'ctx> {
+pub struct Field<'a, 'ctx> {
     pub index: u32,
-    pub tp: PLType<'ctx>,
+    pub tp: PLType<'a, 'ctx>,
+    pub typename: &'a TypeNameNode,
 }
 
 #[derive(Debug, Clone)]
@@ -86,16 +98,14 @@ pub struct FNType<'ctx> {
     pub fntype: FunctionValue<'ctx>,
 }
 #[derive(Debug, Clone)]
-pub struct STType<'ctx> {
+pub struct STType<'a, 'ctx> {
     pub name: String,
-    pub fields: HashMap<String, Field<'ctx>>,
+    pub fields: HashMap<String, Field<'a, 'ctx>>,
     pub struct_type: StructType<'ctx>,
 }
 
-fn add_primitive_types<'a, 'ctx>(
-    context: &'ctx Context,
-    table: &'a mut HashMap<String, PLType<'ctx>>,
-) {
+fn add_primitive_types<'a, 'ctx>(context: &'ctx Context) -> HashMap<String, PLType<'a, 'ctx>> {
+    let mut table = HashMap::<String, PLType<'a, 'ctx>>::new();
     table.insert(
         "i8".to_string(),
         PLType::PRIMITIVE(context.i8_type().as_basic_type_enum()),
@@ -149,6 +159,41 @@ fn add_primitive_types<'a, 'ctx>(
         PLType::PRIMITIVE(context.bool_type().as_basic_type_enum()),
     );
     table.insert("void".to_string(), PLType::VOID(context.void_type()));
+    table
+}
+
+pub fn create_ctx_info<'ctx>(
+    context: &'ctx Context,
+    dir: &str,
+    file: &str,
+) -> (
+    Module<'ctx>,
+    Builder<'ctx>,
+    DebugInfoBuilder<'ctx>,
+    DICompileUnit<'ctx>,
+    TargetMachine,
+) {
+    let builder = context.create_builder();
+    let module = context.create_module("main");
+    let (dibuilder, compile_unit) = module.create_debug_info_builder(
+        true,
+        DWARFSourceLanguage::C,
+        file,
+        dir,
+        "plc frontend",
+        false,
+        "",
+        0,
+        "",
+        DWARFEmissionKind::Full,
+        0,
+        false,
+        false,
+        "",
+        "",
+    );
+    let tm = get_target_machine(inkwell::OptimizationLevel::None);
+    (module, builder, dibuilder, compile_unit, tm)
 }
 
 impl<'a, 'ctx> Ctx<'a, 'ctx> {
@@ -156,9 +201,11 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         context: &'ctx Context,
         module: &'a Module<'ctx>,
         builder: &'a Builder<'ctx>,
+        dibuilder: &'a DebugInfoBuilder<'ctx>,
+        diunit: &'a DICompileUnit<'ctx>,
+        tm: &'a TargetMachine,
     ) -> Ctx<'a, 'ctx> {
-        let mut types = HashMap::new();
-        add_primitive_types(context, &mut types);
+        let types = add_primitive_types(context);
         Ctx {
             table: HashMap::new(),
             types,
@@ -170,11 +217,13 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             block: None,
             continue_block: None,
             break_block: None,
+            dibuilder,
+            diunit,
+            targetmachine: tm,
         }
     }
     pub fn new_child(&'a self) -> Ctx<'a, 'ctx> {
-        let mut types = HashMap::new();
-        add_primitive_types(self.context, &mut types);
+        let types = add_primitive_types(self.context);
         Ctx {
             table: HashMap::new(),
             types,
@@ -186,6 +235,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             block: self.block,
             continue_block: self.continue_block,
             break_block: self.break_block,
+            dibuilder: self.dibuilder,
+            diunit: self.diunit,
+            targetmachine: self.targetmachine,
         }
     }
 
@@ -209,7 +261,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.table.insert(name, pv);
     }
 
-    pub fn get_type(&self, name: &str) -> Option<&PLType<'ctx>> {
+    pub fn get_type(&self, name: &str) -> Option<&PLType<'a, 'ctx>> {
         let v = self.types.get(name);
         if let Some(pv) = v {
             return Some(pv);
@@ -220,7 +272,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         None
     }
 
-    pub fn add_type(&mut self, name: String, tp: PLType<'ctx>) {
+    pub fn add_type(&mut self, name: String, tp: PLType<'a, 'ctx>) {
         if self.types.contains_key(&name) {
             todo!() // TODO 报错
         }

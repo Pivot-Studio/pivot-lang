@@ -8,9 +8,11 @@ use super::{
 };
 use crate::ast::ctx::{FNType, PLType};
 use crate::utils::tabs;
+use inkwell::debug_info::*;
 use inkwell::values::FunctionValue;
 use internal_macro::range;
 
+use lazy_static::__Deref;
 use string_builder::Builder;
 
 #[derive(Clone)]
@@ -48,14 +50,41 @@ impl Node for FuncDefNode {
         &'a mut self,
         ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
     ) -> super::Value<'ctx> {
+        let mut typenode = self.typenode.clone();
+        // build debug info
+        let params = self
+            .typenode
+            .paralist
+            .iter()
+            .map(|para| para.deref().tp.get_debug_type(ctx).unwrap())
+            .collect::<Vec<_>>();
+        let subroutine_type = ctx.dibuilder.create_subroutine_type(
+            ctx.diunit.get_file(),
+            self.typenode.ret.get_debug_type(ctx),
+            &params,
+            DIFlags::PUBLIC,
+        );
+        let subprogram = ctx.dibuilder.create_function(
+            ctx.diunit.as_debug_info_scope(),
+            self.typenode.id.as_str(),
+            None,
+            ctx.diunit.get_file(),
+            self.range.start.line as u32,
+            subroutine_type,
+            true,
+            true,
+            0,
+            DIFlags::PUBLIC,
+            false,
+        );
         // get the para's type vec & copy the para's name vec
         let mut para_names = Vec::new();
-        for para in self.typenode.paralist.iter_mut() {
+        for para in typenode.paralist.iter_mut() {
             para_names.push(para.id.clone());
         }
         // add function
         let func;
-        if let Some(fu) = ctx.get_type(self.typenode.id.as_str()) {
+        if let Some(fu) = ctx.get_type(typenode.id.as_str()) {
             func = match fu {
                 PLType::FN(fu) => fu.fntype,
                 _ => panic!("type error"),
@@ -63,6 +92,7 @@ impl Node for FuncDefNode {
         } else {
             panic!("fn not found");
         }
+        func.set_subprogram(subprogram);
         ctx.function = Some(func);
 
         if let Some(body) = self.body.as_mut() {

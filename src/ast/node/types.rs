@@ -3,19 +3,20 @@ use std::collections::HashMap;
 use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
 use crate::utils::tabs;
+use inkwell::debug_info::*;
 use inkwell::types::BasicType;
 use internal_macro::range;
 
 use string_builder::Builder;
 
 #[range]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct TypeNameNode {
     pub id: String,
 }
 
 pub trait TypeNode: Node {
-    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<PLType<'ctx>>;
+    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<PLType<'a, 'ctx>>;
 }
 
 impl Node for TypeNameNode {
@@ -32,8 +33,59 @@ impl Node for TypeNameNode {
     }
 }
 
+impl TypeNameNode {
+    pub fn get_debug_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
+        let tp = self.get_type(ctx).unwrap();
+        let td = ctx.targetmachine.get_target_data();
+
+        match tp {
+            PLType::FN(_) => todo!(),
+            PLType::STRUCT(x) => {
+                let m = x
+                    .fields
+                    .iter()
+                    .map(|(_, v)| v.typename.get_debug_type(ctx).unwrap())
+                    .collect::<Vec<_>>();
+
+                return Some(
+                    ctx.dibuilder
+                        .create_struct_type(
+                            ctx.diunit.as_debug_info_scope(),
+                            self.id.as_str(),
+                            ctx.diunit.get_file(),
+                            self.range.start.line as u32,
+                            td.get_bit_size(&x.struct_type),
+                            td.get_abi_alignment(&x.struct_type),
+                            DIFlags::PUBLIC,
+                            None,
+                            &m,
+                            0,
+                            None,
+                            self.id.as_str(),
+                        )
+                        .as_type(),
+                );
+            }
+            PLType::PRIMITIVE(_) => {
+                return Some(
+                    ctx.dibuilder
+                        .create_basic_type(
+                            self.id.as_str(),
+                            td.get_bit_size(&tp.get_basic_type()),
+                            td.get_abi_alignment(&tp.get_basic_type()),
+                            DIFlags::PUBLIC,
+                        )
+                        .unwrap()
+                        .as_type(),
+                );
+            }
+            PLType::VOID(_) => None,
+        }
+    }
+}
+
 impl TypeNode for TypeNameNode {
-    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<PLType<'ctx>> {
+    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<PLType<'a, 'ctx>> {
         let tp = ctx.get_type(self.id.as_str());
         if let Some(tp) = tp {
             return Some(tp.clone());
@@ -69,7 +121,7 @@ impl Node for TypedIdentifierNode {
 }
 
 impl TypedIdentifierNode {
-    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<(&str, PLType<'ctx>)> {
+    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<(&str, PLType<'a, 'ctx>)> {
         let tp = self.tp.get_type(ctx)?;
         Some((self.id.as_str(), tp))
     }
@@ -106,11 +158,18 @@ impl StructDefNode {
         if let Some(x) = ctx.get_type(self.id.as_str()) {
             return Value::TypeValue(x.get_basic_type());
         }
-        let mut fields = HashMap::<String, Field<'ctx>>::new();
+        let mut fields = HashMap::<String, Field<'a, 'ctx>>::new();
         let mut i = 0;
         for field in self.fields.iter() {
             if let Some((id, tp)) = field.get_type(ctx) {
-                fields.insert(id.to_string(), Field { index: i, tp });
+                fields.insert(
+                    id.to_string(),
+                    Field {
+                        index: i,
+                        tp,
+                        typename: &field.tp,
+                    },
+                );
             } else {
                 return Value::None;
             }
