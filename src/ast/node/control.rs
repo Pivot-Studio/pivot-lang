@@ -1,9 +1,7 @@
 use super::statement::StatementsNode;
 use super::*;
 use crate::ast::ctx::Ctx;
-use crate::utils::tabs;
 use internal_macro::range;
-use string_builder::Builder;
 
 #[range]
 pub struct IfNode {
@@ -13,20 +11,18 @@ pub struct IfNode {
 }
 
 impl Node for IfNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(IfNode");
-        builder.append(self.cond.string(tabs + 1));
-        builder.append(self.then.string(tabs + 1));
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("IfNode");
+        self.cond.print(tabs + 1, false, line.clone());
         if let Some(el) = &self.els {
-            builder.append(el.string(tabs + 1));
+            self.then.print(tabs + 1, false, line.clone());
+            el.print(tabs + 1, true, line.clone());
+        } else {
+            self.then.print(tabs + 1, true, line.clone());
         }
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");
-        builder.string().unwrap()
     }
-
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let cond_block = ctx
             .context
@@ -71,15 +67,12 @@ pub struct WhileNode {
 }
 
 impl Node for WhileNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(WhileNode");
-        builder.append(self.cond.string(tabs + 1));
-        builder.append(self.body.string(tabs + 1));
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");
-        builder.string().unwrap()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("WhileNode");
+        self.cond.print(tabs + 1, false, line.clone());
+        self.body.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let ctx = &mut ctx.new_child(self.range.start);
@@ -122,21 +115,18 @@ pub struct ForNode {
 }
 
 impl Node for ForNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(ForNode");
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("ForNode");
         if let Some(pre) = &self.pre {
-            builder.append(pre.string(tabs + 1));
+            pre.print(tabs + 1, false, line.clone());
         }
-        builder.append(self.cond.string(tabs + 1));
+        self.cond.print(tabs + 1, false, line.clone());
         if let Some(opt) = &self.opt {
-            builder.append(opt.string(tabs + 1));
+            opt.print(tabs + 1, false, line.clone());
         }
-        builder.append(self.body.string(tabs + 1));
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");
-        builder.string().unwrap()
+        self.body.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let ctx = &mut ctx.new_child(self.range.start);
@@ -194,11 +184,10 @@ impl Node for ForNode {
 pub struct BreakNode {}
 
 impl Node for BreakNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(BreakNode)");
-        builder.string().unwrap()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line, end);
+        println!("BreakNode");
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
@@ -221,13 +210,10 @@ impl Node for BreakNode {
 pub struct ContinueNode {}
 
 impl Node for ContinueNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(ContinueNode)");
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");
-        builder.string().unwrap()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line, end);
+        println!("ContinueNode");
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {

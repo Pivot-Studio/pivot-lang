@@ -2,8 +2,6 @@ use super::function::{FuncDefNode, FuncTypeNode};
 use super::types::StructDefNode;
 use super::*;
 use crate::ast::ctx::Ctx;
-use crate::utils::tabs;
-use string_builder::Builder;
 
 use internal_macro::range;
 
@@ -14,21 +12,20 @@ pub struct ProgramNode {
     pub fntypes: Vec<FuncTypeNode>,
 }
 impl Node for ProgramNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(ProgramNode");
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        println!("ProgramNode");
+        let mut i = 0;
+        let len = self.fns.len()+self.structs.len();
         for statement in &self.fns {
-            builder.append(statement.string(tabs + 1));
+            i += 1;
+            statement.print(tabs, i==len, line.clone());
         }
         for statement in &self.structs {
-            builder.append(statement.string(tabs + 1));
+            i += 1;
+            statement.print(tabs, i==len, line.clone());
         }
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");
-        builder.string().unwrap()
     }
-
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         loop {
             let mut i = 0;

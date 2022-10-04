@@ -2,12 +2,10 @@ use std::collections::HashMap;
 
 use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
-use crate::utils::tabs;
 use inkwell::debug_info::*;
 use inkwell::types::BasicType;
 use internal_macro::range;
 
-use string_builder::Builder;
 // TODO: match all case
 // const DW_ATE_UTF: u32 = 0x10;
 const DW_ATE_BOOLEAN: u32 = 0x02;
@@ -36,13 +34,12 @@ pub trait TypeNode: Node {
 }
 
 impl Node for TypeNameNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(TypeNameNode ");
-        builder.append(format!("id: {}", self.id));
-        builder.append(")");
-        builder.string().unwrap()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("TypeNameNode");
+        tab(tabs + 1, line.clone(), true);
+        println!("id: {}", self.id);
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         return Value::TypeValue(self.get_type(ctx).unwrap().get_basic_type());
@@ -118,18 +115,14 @@ pub struct TypedIdentifierNode {
 }
 
 impl Node for TypedIdentifierNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(TypedIdentifierNode");
-        tabs::print_tabs(&mut builder, tabs + 1);
-        builder.append(format!("id: {}", self.id));
-        builder.append(self.tp.string(tabs + 1));
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");
-        builder.string().unwrap()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("TypedIdentifierNode");
+        tab(tabs + 1, line.clone(), false);
+        println!("id: {}", self.id);
+        self.tp.print(tabs + 1, true, line.clone());
     }
-
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         return Value::TypeValue(self.get_type(ctx).unwrap().1.get_basic_type());
     }
@@ -149,20 +142,18 @@ pub struct StructDefNode {
 }
 
 impl Node for StructDefNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(StructDefNode");
-        tabs::print_tabs(&mut builder, tabs + 1);
-        builder.append(format!("id: {}", self.id));
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("StructDefNode");
+        tab(tabs + 1, line.clone(), false);
+        println!("id: {}", self.id);
+        let mut i = self.fields.len();
         for field in &self.fields {
-            builder.append(field.string(tabs + 1));
+            i-=1;
+            field.print(tabs + 1, i==0, line.clone());
         }
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");
-        builder.string().unwrap()
     }
-
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         self.get_type(ctx)
     }
@@ -218,18 +209,14 @@ pub struct StructInitFieldNode {
 }
 
 impl Node for StructInitFieldNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(StructInitFieldNode");
-        tabs::print_tabs(&mut builder, tabs + 1);
-        builder.append(format!("id: {}", self.id));
-        builder.append(self.exp.string(tabs + 1));
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");
-        builder.string().unwrap()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("StructInitFieldNode");
+        tab(tabs + 1, line.clone(), false);
+        println!("id: {}", self.id);
+        self.exp.print(tabs + 1, true, line.clone());
     }
-
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         return Value::StructFieldValue((
             self.id.clone(),
@@ -245,20 +232,18 @@ pub struct StructInitNode {
 }
 
 impl Node for StructInitNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(StructInitNode");
-        tabs::print_tabs(&mut builder, tabs + 1);
-        builder.append(format!("id: {}", self.id));
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("StructInitNode");
+        tab(tabs + 1, line.clone(), false);
+        println!("id: {}", self.id);
+        let mut i = self.fields.len();
         for field in &self.fields {
-            builder.append(field.string(tabs + 1));
+            i-=1;
+            field.print(tabs + 1, i==0, line.clone());
         }
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");
-        builder.string().unwrap()
     }
-
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let mut fields = HashMap::<String, BasicValueEnum<'ctx>>::new();
         for field in self.fields.iter_mut() {

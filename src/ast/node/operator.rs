@@ -3,13 +3,11 @@ use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::ctx::PLType;
 use crate::ast::tokens::TokenType;
-use crate::utils::tabs;
 
 use crate::handle_calc;
 use inkwell::IntPredicate;
 use internal_macro::range;
 use paste::item;
-use string_builder::Builder;
 
 #[range]
 pub struct UnaryOpNode {
@@ -17,16 +15,13 @@ pub struct UnaryOpNode {
     pub exp: Box<dyn Node>,
 }
 impl Node for UnaryOpNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(UnaryOpNode ");
-        tabs::print_tabs(&mut builder, tabs + 1);
-        builder.append(format!("{:?}", self.op));
-        builder.append(self.exp.string(tabs + 1));
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");
-        builder.string().unwrap()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("UnaryOpNode");
+        tab(tabs + 1, line.clone(), end);
+        println!("{:?}", self.op);
+        self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let exp = self.exp.emit(ctx);
@@ -50,6 +45,7 @@ impl Node for UnaryOpNode {
         };
     }
 }
+
 #[range]
 pub struct BinOpNode {
     pub left: Box<dyn Node>,
@@ -57,19 +53,15 @@ pub struct BinOpNode {
     pub right: Box<dyn Node>,
 }
 impl Node for BinOpNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(BinOpNode ");
-        builder.append(self.left.string(tabs + 1));
-        tabs::print_tabs(&mut builder, tabs + 1);
-        builder.append(format!("{:?}", self.op));
-        builder.append(self.right.string(tabs + 1));
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");
-        builder.string().unwrap()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("BinOpNode");
+        self.left.print(tabs + 1, false, line.clone());
+        tab(tabs + 1, line.clone(), false);
+        println!("{:?}", self.op);
+        self.right.print(tabs + 1, true, line.clone());
     }
-
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let lv = self.left.emit(ctx);
         let left = ctx.try_load(lv);
@@ -120,17 +112,19 @@ pub struct TakeOpNode {
 }
 
 impl Node for TakeOpNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(TakeOpNode ");
-        builder.append(self.head.string(tabs + 1));
-        for id in &self.ids {
-            builder.append(id.string(tabs + 1));
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("TakeOpNode");
+        if self.ids.is_empty() {
+            self.head.print(tabs + 1, true, line.clone());
+        } else {
+            self.head.print(tabs + 1, false, line.clone());
+            for id in self.ids.iter().take(self.ids.len() - 1) {
+                id.print(tabs + 1, false, line.clone());
+            };
+            self.ids.last().unwrap().print(tabs + 1, true, line.clone());
         }
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");
-        builder.string().unwrap()
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let head = self.head.emit(ctx);
