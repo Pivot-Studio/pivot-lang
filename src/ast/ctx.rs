@@ -14,6 +14,7 @@ use inkwell::types::VoidType;
 use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use super::compiler::get_target_machine;
@@ -94,21 +95,24 @@ pub struct Field<'a, 'ctx> {
 }
 
 impl<'a, 'ctx> Field<'a, 'ctx> {
-    pub fn get_di_type(&self, ctx: &mut Ctx<'a, 'ctx>) -> DIType<'ctx> {
+    pub fn get_di_type(&self, ctx: &mut Ctx<'a, 'ctx>, offset: u64) -> (DIType<'ctx>, u64) {
         let tp = self.typename.get_debug_type(ctx).unwrap();
-        ctx.dibuilder
-            .create_member_type(
-                ctx.discope,
-                &self.name,
-                ctx.diunit.get_file(),
-                self.typename.range.start.line as u32,
-                tp.get_size_in_bits(),
-                tp.get_align_in_bits(),
-                tp.get_offset_in_bits(),
-                DIFlags::PUBLIC,
-                tp,
-            )
-            .as_type()
+        (
+            ctx.dibuilder
+                .create_member_type(
+                    ctx.discope,
+                    &self.name,
+                    ctx.diunit.get_file(),
+                    self.typename.range.start.line as u32,
+                    tp.get_size_in_bits(),
+                    tp.get_align_in_bits(),
+                    offset + tp.get_offset_in_bits(),
+                    DIFlags::PUBLIC,
+                    tp,
+                )
+                .as_type(),
+            offset + tp.get_size_in_bits(),
+        )
     }
 }
 
@@ -120,8 +124,9 @@ pub struct FNType<'ctx> {
 #[derive(Debug, Clone)]
 pub struct STType<'a, 'ctx> {
     pub name: String,
-    pub fields: HashMap<String, Field<'a, 'ctx>>,
+    pub fields: BTreeMap<String, Field<'a, 'ctx>>,
     pub struct_type: StructType<'ctx>,
+    pub ordered_fields: Vec<Field<'a, 'ctx>>,
 }
 
 fn add_primitive_types<'a, 'ctx>(context: &'ctx Context) -> HashMap<String, PLType<'a, 'ctx>> {

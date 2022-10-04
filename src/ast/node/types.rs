@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
@@ -57,10 +57,15 @@ impl TypeNameNode {
         match tp {
             PLType::FN(_) => todo!(),
             PLType::STRUCT(x) => {
+                let mut offset = 0;
                 let m = x
-                    .fields
+                    .ordered_fields
                     .iter()
-                    .map(|(_, v)| v.get_di_type(ctx))
+                    .map(|v| {
+                        let (tp, off) = v.get_di_type(ctx, offset);
+                        offset = off;
+                        tp
+                    })
                     .collect::<Vec<_>>();
                 return Some(
                     ctx.dibuilder
@@ -173,7 +178,8 @@ impl StructDefNode {
         if let Some(x) = ctx.get_type(self.id.as_str()) {
             return Value::TypeValue(x.get_basic_type());
         }
-        let mut fields = HashMap::<String, Field<'a, 'ctx>>::new();
+        let mut fields = BTreeMap::<String, Field<'a, 'ctx>>::new();
+        let mut order_fields = Vec::<Field<'a, 'ctx>>::new();
         let mut i = 0;
         for field in self.fields.iter() {
             if let Some((id, tp)) = field.get_type(ctx) {
@@ -181,11 +187,17 @@ impl StructDefNode {
                     id.to_string(),
                     Field {
                         index: i,
-                        tp,
+                        tp: tp.clone(),
                         typename: &field.tp,
                         name: field.id.clone(),
                     },
                 );
+                order_fields.push(Field {
+                    index: i,
+                    tp,
+                    typename: &field.tp,
+                    name: field.id.clone(),
+                });
             } else {
                 return Value::None;
             }
@@ -193,18 +205,19 @@ impl StructDefNode {
         }
         let name = self.id.as_str();
         let st = ctx.context.opaque_struct_type(name);
-        let newf = fields.clone();
+        let newf = order_fields.clone();
         st.set_body(
-            &fields
+            &order_fields
                 .into_iter()
-                .map(|(_, v)| v.tp.get_basic_type())
+                .map(|v| v.tp.get_basic_type())
                 .collect::<Vec<_>>(),
             false,
         );
         let stu = PLType::STRUCT(STType {
             name: name.to_string(),
             struct_type: st,
-            fields: newf,
+            fields,
+            ordered_fields: newf,
         });
         ctx.add_type(name.to_string(), stu.clone());
         Value::TypeValue(st.as_basic_type_enum())
