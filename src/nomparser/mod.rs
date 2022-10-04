@@ -1,5 +1,6 @@
 use std::fmt::Error;
 
+use colored::Colorize;
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -34,6 +35,23 @@ use nom::character::complete::char;
 macro_rules! newline_or_eof {
     () => {
         alt((delspace(alt((tag("\n"), tag("\r\n")))), eof))
+    };
+}
+
+macro_rules! fail_now {
+    ($e:expr) => {
+        |input| {
+            let a = $e(input);
+            if let Err(a) = a {
+                return match a {
+                    nom::Err::Incomplete(_) => todo!(),
+                    nom::Err::Error(e) => Err(nom::Err::Failure(e)),
+                    nom::Err::Failure(e) => Err(nom::Err::Failure(e)),
+                };
+            } else {
+                return a;
+            }
+        }
     };
 }
 
@@ -103,7 +121,7 @@ macro_rules! parse_bin_ops {
                             tag_token(TokenType::$op),
                         )*
                     )),
-                    $exp,
+                    fail_now!($exp),
                 ))),
             )),
             create_bin,
@@ -113,16 +131,39 @@ macro_rules! parse_bin_ops {
 
 pub struct PLParser<'a> {
     input: Span<'a>,
+    file: &'a str,
 }
 
 impl<'a> PLParser<'a> {
-    pub fn new(input: &'a str) -> Self {
+    pub fn new(input: &'a str, file: &'a str) -> Self {
         let sp = Span::from(input);
-        PLParser { input: sp }
+        PLParser { input: sp, file }
     }
 
-    pub fn parse(&mut self) -> IResult<Span, Box<dyn Node>> {
-        program(self.input)
+    pub fn parse(&mut self) -> Result<Box<dyn Node>, String> {
+        let re = program(self.input);
+        if let Err(e) = re {
+            let mut line = 0;
+            let mut col = 0;
+            let mut ecode = nom::error::ErrorKind::Fail;
+
+            e.map(|e| {
+                line = e.input.location_line();
+                col = e.input.get_utf8_column();
+                ecode = e.code;
+            });
+            let sline = self.input.lines().nth(line as usize - 1);
+            let err = format!(
+                "parse error at: {}:{}:{}\n{}\ncode: {:?}",
+                self.file,
+                line,
+                col,
+                sline.unwrap().red(),
+                ecode
+            );
+            return Err(err);
+        }
+        Ok(re.unwrap().1)
     }
 }
 #[test_parser("return 1\n")]
@@ -370,17 +411,6 @@ pub fn statements(input: Span) -> IResult<Span, StatementsNode> {
 }
 
 pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
-    // map_res(terminated(many0(top_level_statement), eof), |v| {
-    //     let mut range = v[0].range();
-    //     let la = v.last();
-    //     if let Some(la) = la {
-    //         range = range.start.to(la.range().end);
-    //     }
-    //     res(ProgramNode {
-    //         statements: v,
-    //         range,
-    //     })
-    // })(input)
     let old = input;
     let mut input = input;
     let mut fns = vec![];
@@ -399,9 +429,15 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
                 }
             }
             input = i;
-        } else {
-            eof(input)?;
-            break;
+        } else if let Err(err) = top {
+            let e: Result<
+                (LocatedSpan<&str>, LocatedSpan<&str>),
+                nom::Err<nom::error::Error<Span>>,
+            > = eof(input);
+            if e.is_ok() {
+                break;
+            }
+            return Err(err);
         }
     }
     let node: Box<dyn Node> = Box::new(ProgramNode {

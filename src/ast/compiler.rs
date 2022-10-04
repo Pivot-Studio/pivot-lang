@@ -76,9 +76,13 @@ impl Compiler {
         let m = &mut ctx;
         let str = read_to_string(filepath).unwrap();
         let input = str.as_str();
-        let mut parser = PLParser::new(input);
-        let (_, mut node) = parser.parse().unwrap();
-
+        let mut parser = PLParser::new(input, abs.to_str().unwrap());
+        let parse_result = parser.parse();
+        if let Err(e) = parse_result {
+            println!("{}", e);
+            return;
+        }
+        let mut node = parse_result.unwrap();
         if op.printast {
             node.print(0, true, vec![]);
         }

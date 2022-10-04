@@ -16,6 +16,7 @@ vm = { path = "./vm", optional = true, features = ["jit"] }
 nom_locate = "4.0.0"
 as-any = "0.3.0"
 clap = { version = "3.2.22", features = ["derive"] }
+colored = "2.0.0"
 [dependencies.nom]
 version = "7"
 features = ["alloc"]

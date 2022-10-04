@@ -50,8 +50,9 @@ fn test_nom() {
         
         fn printi64ln(i: i64) void
     ",
+        "",
     );
-    let (_, mut node) = parser.parse().unwrap();
+    let mut node = parser.parse().unwrap();
     let context = &Context::create();
     let (a, b, c, d, e, f) = create_ctx_info(context, "", "");
     let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e, &f);
