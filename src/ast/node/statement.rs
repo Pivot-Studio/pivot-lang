@@ -107,3 +107,15 @@ impl Node for StatementsNode {
         Value::None
     }
 }
+
+impl StatementsNode {
+    pub fn emit_child<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        let child = ctx;
+        for m in self.statements.iter_mut() {
+            let pos = m.range().start;
+            child.build_dbg_location(pos);
+            m.emit(child);
+        }
+        Value::None
+    }
+}

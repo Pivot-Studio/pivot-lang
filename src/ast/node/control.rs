@@ -1,3 +1,4 @@
+use super::statement::StatementsNode;
 use super::*;
 use crate::ast::ctx::Ctx;
 use crate::utils::tabs;
@@ -65,7 +66,7 @@ impl Node for IfNode {
 #[range]
 pub struct WhileNode {
     pub cond: Box<dyn Node>,
-    pub body: Box<dyn Node>,
+    pub body: Box<StatementsNode>,
 }
 
 impl Node for WhileNode {
@@ -80,6 +81,7 @@ impl Node for WhileNode {
         builder.string().unwrap()
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        let ctx = &mut ctx.new_child(self.range.start);
         let cond_block = ctx
             .context
             .append_basic_block(ctx.function.unwrap(), "while.cond");
@@ -93,6 +95,7 @@ impl Node for WhileNode {
         ctx.continue_block = Some(cond_block);
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, cond_block);
+        let start = self.cond.range().start;
         let cond = self.cond.emit(ctx);
         let cond = match cond {
             Value::BoolValue(v) => v,
@@ -101,7 +104,8 @@ impl Node for WhileNode {
         ctx.builder
             .build_conditional_branch(cond, body_block, after_block);
         position_at_end(ctx, body_block);
-        self.body.emit(ctx);
+        self.body.emit_child(ctx);
+        ctx.build_dbg_location(start);
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, after_block);
         Value::None
@@ -113,7 +117,7 @@ pub struct ForNode {
     pub pre: Option<Box<dyn Node>>,
     pub cond: Box<dyn Node>,
     pub opt: Option<Box<dyn Node>>,
-    pub body: Box<dyn Node>,
+    pub body: Box<StatementsNode>,
 }
 
 impl Node for ForNode {
@@ -134,6 +138,7 @@ impl Node for ForNode {
         builder.string().unwrap()
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        let ctx = &mut ctx.new_child(self.range.start);
         let pre_block = ctx
             .context
             .append_basic_block(ctx.function.unwrap(), "for.pre");
@@ -160,11 +165,13 @@ impl Node for ForNode {
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, cond_block);
         ctx.build_dbg_location(self.cond.range().start);
+        let cond_start = self.cond.range().start;
         let cond = self.cond.emit(ctx);
         let cond = match cond {
             Value::BoolValue(v) => v,
             _ => panic!("not implemented"),
         };
+        ctx.build_dbg_location(self.body.range().start);
         ctx.builder
             .build_conditional_branch(cond, body_block, after_block);
         position_at_end(ctx, opt_block);
@@ -172,9 +179,10 @@ impl Node for ForNode {
             ctx.build_dbg_location(op.range().start);
             op.emit(ctx);
         }
+        ctx.build_dbg_location(cond_start);
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, body_block);
-        self.body.emit(ctx);
+        self.body.emit_child(ctx);
         ctx.builder.build_unconditional_branch(opt_block);
         position_at_end(ctx, after_block);
         Value::None

@@ -194,17 +194,17 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             statement_block,
             opt(preceded(
                 tag_token(TokenType::ELSE),
-                alt((if_statement, statement_block)),
+                alt((if_statement, map_res(statement_block, |n| res(n)))),
             )),
         ))),
         |(_, cond, then, els)| {
-            let mut range = cond.range().start.to(then.range().end);
+            let mut range = cond.range().start.to(then.range.end);
             if let Some(el) = &els {
                 range = range.start.to(el.range().end);
             }
             res(IfNode {
                 cond,
-                then,
+                then: Box::new(then),
                 els,
                 range,
             })
@@ -233,8 +233,12 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             statement_block,
         ))),
         |(_, cond, body)| {
-            let range = cond.range().start.to(body.range().end);
-            res(WhileNode { cond, body, range })
+            let range = cond.range().start.to(body.range.end);
+            res(WhileNode {
+                cond,
+                body: Box::new(body),
+                range,
+            })
         },
     )(input)
 }
@@ -280,7 +284,7 @@ pub fn for_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             statement_block,
         ))),
         |(_, pre, _, cond, _, opt, body)| {
-            let mut range = cond.range().start.to(body.range().end);
+            let mut range = cond.range().start.to(body.range.end);
             if let Some(pre) = &pre {
                 range = range.end.from(pre.range().start);
             }
@@ -288,14 +292,14 @@ pub fn for_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
                 pre,
                 cond,
                 opt,
-                body,
+                body: Box::new(body),
                 range,
             })
         },
     )(input)
 }
 
-pub fn statement_block(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
     delspace(delimited(
         tag_token(TokenType::LBRACE),
         statements,
@@ -351,14 +355,14 @@ pub fn newline(input: Span) -> IResult<Span, Box<dyn Node>> {
     })(input)
 }
 
-pub fn statements(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn statements(input: Span) -> IResult<Span, StatementsNode> {
     map_res(many0(statement), |v| {
         let mut range = v[0].range();
         let la = v.last();
         if let Some(la) = la {
             range = range.start.to(la.range().end);
         }
-        res(StatementsNode {
+        Ok::<_, Error>(StatementsNode {
             statements: v,
             range,
         })
@@ -691,7 +695,7 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 paralist.push(para.0);
                 paralist.extend(para.1);
             }
-
+            let body: Option<StatementsNode> = body;
             let node = FuncDefNode {
                 typenode: FuncTypeNode {
                     id: id.name,

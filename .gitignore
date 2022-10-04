@@ -10,3 +10,4 @@ test.cpp
 .idea
 *.o
 .vscode
+*.plist

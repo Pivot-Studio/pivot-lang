@@ -1,5 +1,6 @@
 use std::fmt::format;
 
+use super::statement::StatementsNode;
 use super::types::*;
 use super::{
     alloc,
@@ -25,7 +26,7 @@ pub struct FuncTypeNode {
 #[range]
 pub struct FuncDefNode {
     pub typenode: FuncTypeNode,
-    pub body: Option<Box<dyn Node>>,
+    pub body: Option<StatementsNode>,
 }
 
 impl Node for FuncDefNode {
