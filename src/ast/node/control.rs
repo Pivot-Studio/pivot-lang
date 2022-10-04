@@ -29,16 +29,16 @@ impl Node for IfNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let cond_block = ctx
             .context
-            .append_basic_block(ctx.function.unwrap(), "cond");
+            .append_basic_block(ctx.function.unwrap(), "if.cond");
         let then_block = ctx
             .context
-            .append_basic_block(ctx.function.unwrap(), "then");
+            .append_basic_block(ctx.function.unwrap(), "if.then");
         let else_block = ctx
             .context
-            .append_basic_block(ctx.function.unwrap(), "else");
+            .append_basic_block(ctx.function.unwrap(), "if.else");
         let after_block = ctx
             .context
-            .append_basic_block(ctx.function.unwrap(), "after");
+            .append_basic_block(ctx.function.unwrap(), "if.after");
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, cond_block);
         let cond = self.cond.emit(ctx);
@@ -82,13 +82,13 @@ impl Node for WhileNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
         let cond_block = ctx
             .context
-            .append_basic_block(ctx.function.unwrap(), "cond");
+            .append_basic_block(ctx.function.unwrap(), "while.cond");
         let body_block = ctx
             .context
-            .append_basic_block(ctx.function.unwrap(), "body");
+            .append_basic_block(ctx.function.unwrap(), "while.body");
         let after_block = ctx
             .context
-            .append_basic_block(ctx.function.unwrap(), "after");
+            .append_basic_block(ctx.function.unwrap(), "while.after");
         ctx.break_block = Some(after_block);
         ctx.continue_block = Some(cond_block);
         ctx.builder.build_unconditional_branch(cond_block);
@@ -134,26 +134,32 @@ impl Node for ForNode {
         builder.string().unwrap()
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        let pre_block = ctx.context.append_basic_block(ctx.function.unwrap(), "pre");
+        let pre_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), "for.pre");
         let cond_block = ctx
             .context
-            .append_basic_block(ctx.function.unwrap(), "cond");
-        let opt_block = ctx.context.append_basic_block(ctx.function.unwrap(), "opt");
+            .append_basic_block(ctx.function.unwrap(), "for.cond");
+        let opt_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), "for.opt");
         let body_block = ctx
             .context
-            .append_basic_block(ctx.function.unwrap(), "body");
+            .append_basic_block(ctx.function.unwrap(), "for.body");
         let after_block = ctx
             .context
-            .append_basic_block(ctx.function.unwrap(), "after");
+            .append_basic_block(ctx.function.unwrap(), "for.after");
         ctx.break_block = Some(after_block);
         ctx.continue_block = Some(cond_block);
-        ctx.builder.build_unconditional_branch(pre_block);
+        ctx.nodebug_builder.build_unconditional_branch(pre_block);
+        // ctx.builder.build_unconditional_branch(pre_block);
         position_at_end(ctx, pre_block);
         if let Some(pr) = &mut self.pre {
             pr.emit(ctx);
         }
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, cond_block);
+        ctx.build_dbg_location(self.cond.range().start);
         let cond = self.cond.emit(ctx);
         let cond = match cond {
             Value::BoolValue(v) => v,
@@ -163,6 +169,7 @@ impl Node for ForNode {
             .build_conditional_branch(cond, body_block, after_block);
         position_at_end(ctx, opt_block);
         if let Some(op) = &mut self.opt {
+            ctx.build_dbg_location(op.range().start);
             op.emit(ctx);
         }
         ctx.builder.build_unconditional_branch(cond_block);

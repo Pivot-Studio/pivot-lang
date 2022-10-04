@@ -6,6 +6,8 @@ use inkwell::basic_block::BasicBlock;
 use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
 
+use super::range::Pos;
+
 pub mod control;
 pub mod function;
 pub mod operator;
@@ -57,9 +59,26 @@ pub enum Num {
     FLOAT(f64),
 }
 
+impl<'a, 'ctx> Ctx<'ctx, 'a> {
+    pub fn position_at_end(&mut self, block: BasicBlock<'a>) {
+        position_at_end(self, block)
+    }
+    pub fn build_dbg_location(&mut self, pos: Pos) {
+        let loc = self.dibuilder.create_debug_location(
+            self.context,
+            pos.line as u32,
+            pos.column as u32,
+            self.discope,
+            None,
+        );
+        self.builder.set_current_debug_location(self.context, loc);
+    }
+}
+
 pub fn position_at_end<'a, 'b>(ctx: &mut Ctx<'b, 'a>, block: BasicBlock<'a>) {
     ctx.builder.position_at_end(block);
     ctx.block = Some(block);
+    ctx.nodebug_builder.position_at_end(block);
 }
 
 pub fn alloc<'a, 'ctx>(

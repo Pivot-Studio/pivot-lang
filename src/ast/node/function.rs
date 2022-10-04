@@ -106,8 +106,7 @@ impl Node for FuncDefNode {
             // add block
             let allocab = ctx.context.append_basic_block(func, "alloc");
             let entry = ctx.context.append_basic_block(func, "entry");
-            ctx.block = Some(entry);
-            ctx.builder.position_at_end(entry);
+            ctx.position_at_end(entry);
             // alloc para
             for (i, para) in para_tps.iter_mut().enumerate() {
                 let alloca = alloc(ctx, para.get_type(), &para_names[i]);
