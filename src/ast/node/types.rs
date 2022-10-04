@@ -8,7 +8,23 @@ use inkwell::types::BasicType;
 use internal_macro::range;
 
 use string_builder::Builder;
-
+// TODO: match all case
+// const DW_ATE_UTF: u32 = 0x10;
+const DW_ATE_BOOLEAN: u32 = 0x02;
+const DW_ATE_FLOAT: u32 = 0x04;
+const DW_ATE_SIGNED: u32 = 0x05;
+// const DW_ATE_UNSIGNED: u32 = 0x07;
+fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
+    match basetype {
+        BasicTypeEnum::FloatType(_) => DW_ATE_FLOAT,
+        BasicTypeEnum::IntType(i) => match i.get_bit_width() {
+            1 => DW_ATE_BOOLEAN,
+            64 => DW_ATE_SIGNED,
+            _ => todo!(),
+        },
+        _ => todo!(),
+    }
+}
 #[range]
 #[derive(Debug, Clone)]
 pub struct TypeNameNode {
@@ -72,7 +88,7 @@ impl TypeNameNode {
                         .create_basic_type(
                             self.id.as_str(),
                             td.get_bit_size(&tp.get_basic_type()),
-                            td.get_abi_alignment(&tp.get_basic_type()),
+                            get_dw_ate_encoding(&tp.get_basic_type()),
                             DIFlags::PUBLIC,
                         )
                         .unwrap()

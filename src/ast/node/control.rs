@@ -43,6 +43,7 @@ impl Node for IfNode {
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, cond_block);
         let cond = self.cond.emit(ctx);
+        let cond = ctx.try_load(cond);
         let cond = match cond {
             Value::BoolValue(v) => v,
             _ => panic!("not implemented"),
