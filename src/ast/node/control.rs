@@ -161,14 +161,14 @@ impl Node for ForNode {
         };
         ctx.builder
             .build_conditional_branch(cond, body_block, after_block);
-        position_at_end(ctx, body_block);
-        self.body.emit(ctx);
-        ctx.builder.build_unconditional_branch(opt_block);
         position_at_end(ctx, opt_block);
         if let Some(op) = &mut self.opt {
             op.emit(ctx);
         }
         ctx.builder.build_unconditional_branch(cond_block);
+        position_at_end(ctx, body_block);
+        self.body.emit(ctx);
+        ctx.builder.build_unconditional_branch(opt_block);
         position_at_end(ctx, after_block);
         Value::None
     }

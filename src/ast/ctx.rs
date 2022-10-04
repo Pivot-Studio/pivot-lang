@@ -2,7 +2,9 @@ use crate::ast::node::Value;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
+use inkwell::debug_info::AsDIScope;
 use inkwell::debug_info::DICompileUnit;
+use inkwell::debug_info::DIScope;
 use inkwell::debug_info::DWARFEmissionKind;
 use inkwell::debug_info::DWARFSourceLanguage;
 use inkwell::debug_info::DebugInfoBuilder;
@@ -21,6 +23,7 @@ use std::collections::HashMap;
 
 use super::compiler::get_target_machine;
 use super::node::types::TypeNameNode;
+use super::range::Pos;
 #[derive(Debug, Clone)]
 pub struct Ctx<'a, 'ctx> {
     pub table: HashMap<String, PointerValue<'ctx>>,
@@ -36,6 +39,8 @@ pub struct Ctx<'a, 'ctx> {
     pub continue_block: Option<BasicBlock<'ctx>>,
     pub break_block: Option<BasicBlock<'ctx>>,
     pub targetmachine: &'a TargetMachine,
+    pub discope: DIScope<'ctx>,
+    pub nodebug_builder: &'a Builder<'ctx>,
 }
 
 #[derive(Debug, Clone)]
@@ -172,6 +177,7 @@ pub fn create_ctx_info<'ctx>(
     DebugInfoBuilder<'ctx>,
     DICompileUnit<'ctx>,
     TargetMachine,
+    Builder<'ctx>,
 ) {
     let builder = context.create_builder();
     let module = context.create_module("main");
@@ -193,7 +199,14 @@ pub fn create_ctx_info<'ctx>(
         "",
     );
     let tm = get_target_machine(inkwell::OptimizationLevel::None);
-    (module, builder, dibuilder, compile_unit, tm)
+    (
+        module,
+        builder,
+        dibuilder,
+        compile_unit,
+        tm,
+        context.create_builder(),
+    )
 }
 
 impl<'a, 'ctx> Ctx<'a, 'ctx> {
@@ -204,6 +217,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         dibuilder: &'a DebugInfoBuilder<'ctx>,
         diunit: &'a DICompileUnit<'ctx>,
         tm: &'a TargetMachine,
+        nodbg_builder: &'a Builder<'ctx>,
     ) -> Ctx<'a, 'ctx> {
         let types = add_primitive_types(context);
         Ctx {
@@ -220,9 +234,11 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             dibuilder,
             diunit,
             targetmachine: tm,
+            discope: diunit.as_debug_info_scope(),
+            nodebug_builder: nodbg_builder,
         }
     }
-    pub fn new_child(&'a self) -> Ctx<'a, 'ctx> {
+    pub fn new_child(&'a self, start: Pos) -> Ctx<'a, 'ctx> {
         let types = add_primitive_types(self.context);
         Ctx {
             table: HashMap::new(),
@@ -238,6 +254,16 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             dibuilder: self.dibuilder,
             diunit: self.diunit,
             targetmachine: self.targetmachine,
+            discope: self
+                .dibuilder
+                .create_lexical_block(
+                    self.discope,
+                    self.diunit.get_file(),
+                    start.line as u32,
+                    start.column as u32,
+                )
+                .as_debug_info_scope(),
+            nodebug_builder: self.nodebug_builder,
         }
     }
 

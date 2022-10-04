@@ -9,3 +9,4 @@ test.cpp
 *.bc
 .idea
 *.o
+.vscode

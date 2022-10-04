@@ -98,8 +98,17 @@ impl Node for StatementsNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        let child = &mut ctx.new_child();
+        let child = &mut ctx.new_child(self.range.start);
         for m in self.statements.iter_mut() {
+            let pos = m.range().start;
+            let loc = child.dibuilder.create_debug_location(
+                child.context,
+                pos.line as u32,
+                pos.column as u32,
+                child.discope,
+                None,
+            );
+            child.builder.set_current_debug_location(ctx.context, loc);
             m.emit(child);
         }
         Value::None

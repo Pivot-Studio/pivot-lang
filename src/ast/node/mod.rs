@@ -67,18 +67,11 @@ pub fn alloc<'a, 'ctx>(
     tp: BasicTypeEnum<'ctx>,
     name: &str,
 ) -> PointerValue<'ctx> {
+    let builder = ctx.nodebug_builder;
     match ctx.function.unwrap().get_first_basic_block() {
         Some(entry) => {
-            ctx.builder.position_at_end(entry);
-            let p = ctx.builder.build_alloca(tp, name);
-            match ctx.block {
-                Some(block) => {
-                    ctx.builder.position_at_end(block);
-                }
-                None => {
-                    panic!("alloc ctx.block == None!")
-                }
-            }
+            builder.position_at_end(entry);
+            let p = builder.build_alloca(tp, name);
             p
         }
         None => panic!("alloc get entry failed!"),

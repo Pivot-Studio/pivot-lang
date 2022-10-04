@@ -53,8 +53,8 @@ fn test_nom() {
     );
     let (_, mut node) = parser.parse().unwrap();
     let context = &Context::create();
-    let (a, b, c, d, e) = create_ctx_info(context, "", "");
-    let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e);
+    let (a, b, c, d, e, f) = create_ctx_info(context, "", "");
+    let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e, &f);
     let m = &mut ctx;
     println!("{}", node.string(0));
     let _re = node.emit(m);

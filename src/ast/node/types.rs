@@ -50,7 +50,7 @@ impl TypeNameNode {
                 return Some(
                     ctx.dibuilder
                         .create_struct_type(
-                            ctx.diunit.as_debug_info_scope(),
+                            ctx.discope,
                             self.id.as_str(),
                             ctx.diunit.get_file(),
                             self.range.start.line as u32,

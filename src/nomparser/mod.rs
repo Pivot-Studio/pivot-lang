@@ -8,7 +8,7 @@ use nom::{
     error::ParseError,
     multi::{many0, many0_count, many1},
     sequence::{delimited, pair, preceded, terminated, tuple},
-    AsChar, IResult, InputTakeAtPosition, Parser,
+    AsChar, IResult, InputTake, InputTakeAtPosition, Parser,
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
@@ -78,9 +78,9 @@ fn res_box<T: ?Sized>(i: Box<T>) -> Result<Box<T>, Error> {
 }
 
 fn create_bin(
-    (mut left, rights): (Box<dyn Node>, Vec<(TokenType, Box<dyn Node>)>),
+    (mut left, rights): (Box<dyn Node>, Vec<((TokenType, Range), Box<dyn Node>)>),
 ) -> Result<Box<dyn Node>, Error> {
-    for (op, right) in rights {
+    for ((op, _), right) in rights {
         let range = left.range().start.to(right.range().end);
         left = Box::new(BinOpNode {
             op,
@@ -142,7 +142,7 @@ pub fn return_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             opt(logic_exp),
             newline_or_eof!(),
         )),
-        |(_ret, val, _)| {
+        |((_, range), val, _)| {
             if let Some(val) = val {
                 let range = val.range();
                 res(RetNode {
@@ -150,10 +150,7 @@ pub fn return_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
                     range,
                 })
             } else {
-                res(RetNode {
-                    value: None,
-                    range: Range::new(input, input),
-                })
+                res(RetNode { value: None, range })
             }
         },
     ))(input)
@@ -516,7 +513,7 @@ pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
                 alt((tag_token(TokenType::MINUS), tag_token(TokenType::NOT))),
                 take_exp,
             )),
-            |(op, exp)| {
+            |((op, _), exp)| {
                 let range = exp.range();
                 res(UnaryOpNode { op, exp, range })
             },
@@ -546,7 +543,7 @@ pub fn identifier(input: Span) -> IResult<Span, Box<dyn Node>> {
         |out| {
             res(VarNode {
                 name: out.to_string(),
-                range: Range::new(input, out),
+                range: Range::new(out, out.take(out.len())),
             })
         },
     ))(input)
@@ -728,18 +725,14 @@ pub fn function_call(input: Span) -> IResult<Span, Box<dyn Node>> {
         |(id, _, paras, _)| {
             let id = cast_to_var(&id);
             let mut paralist = vec![];
-            let mut range = id.range;
             if let Some(paras) = paras {
                 paralist.push(paras.0);
                 paralist.extend(paras.1);
             }
-            for para in paralist.iter() {
-                range = range.start.to(para.range().end);
-            }
             res(FuncCallNode {
                 id: id.name,
                 paralist,
-                range,
+                range: id.range,
             })
         },
     ))(input)
@@ -859,8 +852,13 @@ fn struct_init(input: Span) -> IResult<Span, Box<dyn Node>> {
 fn decimal(input: Span) -> IResult<Span, Span> {
     recognize(many1(terminated(one_of("0123456789"), many0(char('_')))))(input)
 }
-fn tag_token(token: TokenType) -> impl Fn(Span) -> IResult<Span, TokenType> {
-    move |input| map_res(tag(token.get_str()), |_out| Ok::<TokenType, Error>(token))(input)
+fn tag_token(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
+    move |input| {
+        map_res(tag(token.get_str()), |_out: Span| {
+            let end = _out.take(token.get_str().len());
+            Ok::<(TokenType, Range), Error>((token, Range::new(_out, end)))
+        })(input)
+    }
 }
 fn delspace<I, O, E, G>(parser: G) -> impl FnMut(I) -> IResult<I, O, E>
 where

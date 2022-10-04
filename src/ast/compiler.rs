@@ -71,8 +71,8 @@ impl Compiler {
         let dir = abs.parent().unwrap().to_str().unwrap();
         let fname = abs.file_name().unwrap().to_str().unwrap();
 
-        let (a, b, c, d, e) = create_ctx_info(context, dir, fname);
-        let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e);
+        let (a, b, c, d, e, f) = create_ctx_info(context, dir, fname);
+        let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e, &f);
         let m = &mut ctx;
         let str = read_to_string(filepath).unwrap();
         let input = str.as_str();
@@ -93,6 +93,7 @@ impl Compiler {
             let llp = Path::new(&s[..]);
             fs::write(llp, ctx.module.to_string()).unwrap();
         }
+        // m.module.verify().unwrap();
         let time = now.elapsed();
         if op.verbose {
             println!("compile succ, time: {:?}", time);

@@ -65,7 +65,7 @@ impl Node for FuncDefNode {
             DIFlags::PUBLIC,
         );
         let subprogram = ctx.dibuilder.create_function(
-            ctx.diunit.as_debug_info_scope(),
+            ctx.discope,
             self.typenode.id.as_str(),
             None,
             ctx.diunit.get_file(),
@@ -73,7 +73,7 @@ impl Node for FuncDefNode {
             subroutine_type,
             true,
             true,
-            0,
+            self.range.start.line as u32,
             DIFlags::PUBLIC,
             false,
         );
@@ -93,6 +93,7 @@ impl Node for FuncDefNode {
             panic!("fn not found");
         }
         func.set_subprogram(subprogram);
+        ctx.discope = subprogram.as_debug_info_scope();
         ctx.function = Some(func);
 
         if let Some(body) = self.body.as_mut() {
@@ -115,8 +116,8 @@ impl Node for FuncDefNode {
             }
             // emit body
             body.emit(ctx);
-            ctx.builder.position_at_end(allocab);
-            ctx.builder.build_unconditional_branch(entry);
+            ctx.nodebug_builder.position_at_end(allocab);
+            ctx.nodebug_builder.build_unconditional_branch(entry);
             return super::Value::None;
         }
         super::Value::None
