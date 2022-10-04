@@ -6,10 +6,30 @@
 
 ![codecov](https://codecov.io/gh/Pivot-Studio/pivot-lang/branch/master/graphs/sunburst.svg?token=CA17PWK0EG)
 
+此项目目前处于早期开发阶段，不建议用于生产环境。  
+
 ## dependencies
 - [llvm-14](https://github.com/llvm/llvm-project/releases/tag/llvmorg-14.0.6)
 - [rust](https://www.rust-lang.org/)
 
+## 特点
+- 同时支持aot和jit两种模式
+- 极其方便的rust互操作
+
+## 近期开发计划
+- [ ] vsc debug
+  - [x] 断点
+  - [ ] 变量表
+    - [x] 函数参数
+    - [ ] 普通变量
+- [ ] 代码高亮
+- [ ] lsp支持
+
+## 项目结构
+
+- [vm](vm) 包含rumtime
+- [src](src) 编译器源码所在
+- [internal_macro](internal_macro) 内部过程宏
 
 ## grammar
 
