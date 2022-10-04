@@ -155,8 +155,8 @@ impl Node for StructDefNode {
         println!("id: {}", self.id);
         let mut i = self.fields.len();
         for field in &self.fields {
-            i-=1;
-            field.print(tabs + 1, i==0, line.clone());
+            i -= 1;
+            field.print(tabs + 1, i == 0, line.clone());
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
@@ -253,8 +253,8 @@ impl Node for StructInitNode {
         println!("id: {}", self.id);
         let mut i = self.fields.len();
         for field in &self.fields {
-            i-=1;
-            field.print(tabs + 1, i==0, line.clone());
+            i -= 1;
+            field.print(tabs + 1, i == 0, line.clone());
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {

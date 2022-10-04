@@ -122,7 +122,7 @@ impl Node for TakeOpNode {
             self.head.print(tabs + 1, false, line.clone());
             for id in self.ids.iter().take(self.ids.len() - 1) {
                 id.print(tabs + 1, false, line.clone());
-            };
+            }
             self.ids.last().unwrap().print(tabs + 1, true, line.clone());
         }
     }

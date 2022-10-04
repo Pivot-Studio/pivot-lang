@@ -78,8 +78,8 @@ impl Node for StatementsNode {
         println!("StatementsNode");
         let mut i = self.statements.len();
         for statement in self.statements.iter() {
-            i-=1;
-            statement.print(tabs + 1, i==0, line.clone());
+            i -= 1;
+            statement.print(tabs + 1, i == 0, line.clone());
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
