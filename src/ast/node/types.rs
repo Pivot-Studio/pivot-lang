@@ -44,9 +44,8 @@ impl TypeNameNode {
                 let m = x
                     .fields
                     .iter()
-                    .map(|(_, v)| v.typename.get_debug_type(ctx).unwrap())
+                    .map(|(_, v)| v.get_di_type(ctx))
                     .collect::<Vec<_>>();
-
                 return Some(
                     ctx.dibuilder
                         .create_struct_type(
@@ -168,6 +167,7 @@ impl StructDefNode {
                         index: i,
                         tp,
                         typename: &field.tp,
+                        name: field.id.clone(),
                     },
                 );
             } else {

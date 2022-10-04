@@ -2,12 +2,7 @@ use crate::ast::node::Value;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
-use inkwell::debug_info::AsDIScope;
-use inkwell::debug_info::DICompileUnit;
-use inkwell::debug_info::DIScope;
-use inkwell::debug_info::DWARFEmissionKind;
-use inkwell::debug_info::DWARFSourceLanguage;
-use inkwell::debug_info::DebugInfoBuilder;
+use inkwell::debug_info::*;
 use inkwell::module::Module;
 use inkwell::targets::TargetMachine;
 use inkwell::types::BasicMetadataTypeEnum;
@@ -95,6 +90,26 @@ pub struct Field<'a, 'ctx> {
     pub index: u32,
     pub tp: PLType<'a, 'ctx>,
     pub typename: &'a TypeNameNode,
+    pub name: String,
+}
+
+impl<'a, 'ctx> Field<'a, 'ctx> {
+    pub fn get_di_type(&self, ctx: &mut Ctx<'a, 'ctx>) -> DIType<'ctx> {
+        let tp = self.typename.get_debug_type(ctx).unwrap();
+        ctx.dibuilder
+            .create_member_type(
+                ctx.discope,
+                &self.name,
+                ctx.diunit.get_file(),
+                self.typename.range.start.line as u32,
+                tp.get_size_in_bits(),
+                tp.get_align_in_bits(),
+                tp.get_offset_in_bits(),
+                DIFlags::PUBLIC,
+                tp,
+            )
+            .as_type()
+    }
 }
 
 #[derive(Debug, Clone)]
