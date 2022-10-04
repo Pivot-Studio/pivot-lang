@@ -53,7 +53,7 @@ impl Node for FuncDefNode {
     ) -> super::Value<'ctx> {
         let mut typenode = self.typenode.clone();
         // build debug info
-        let params = self
+        let param_ditypes = self
             .typenode
             .paralist
             .iter()
@@ -62,7 +62,7 @@ impl Node for FuncDefNode {
         let subroutine_type = ctx.dibuilder.create_subroutine_type(
             ctx.diunit.get_file(),
             self.typenode.ret.get_debug_type(ctx),
-            &params,
+            &param_ditypes,
             DIFlags::PUBLIC,
         );
         let subprogram = ctx.dibuilder.create_function(
@@ -111,6 +111,25 @@ impl Node for FuncDefNode {
             // alloc para
             for (i, para) in para_tps.iter_mut().enumerate() {
                 let alloca = alloc(ctx, para.get_type(), &para_names[i]);
+                // add alloc var debug info
+                let divar = ctx.dibuilder.create_parameter_variable(
+                    ctx.discope,
+                    para_names[i].as_str(),
+                    i as u32,
+                    ctx.diunit.get_file(),
+                    self.range.start.line as u32,
+                    param_ditypes[i],
+                    false,
+                    DIFlags::PUBLIC,
+                );
+                ctx.build_dbg_location(self.typenode.paralist[i].range.start);
+                ctx.dibuilder.insert_declare_at_end(
+                    alloca,
+                    Some(divar),
+                    None,
+                    ctx.builder.get_current_debug_location().unwrap(),
+                    allocab,
+                );
                 ctx.builder.build_store(alloca, *para);
                 ctx.add_symbol(para_names[i].clone(), alloca);
             }
