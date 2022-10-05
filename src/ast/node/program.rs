@@ -31,13 +31,12 @@ impl Node for ProgramNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        // top level parser
         loop {
             let mut i = 0;
             self.structs.iter().for_each(|x| {
-                let re = x.get_type(ctx);
-                match re {
-                    Value::None => i = i + 1,
-                    _ => {}
+                if !x.emit_struct_def(ctx) {
+                    i = i + 1;
                 }
             });
             if i == 0 {
@@ -45,8 +44,9 @@ impl Node for ProgramNode {
             }
         }
         self.fntypes.iter().for_each(|x| {
-            x.get_type(ctx);
+            x.emit_func_type(ctx);
         });
+        // node parser
         self.fns.iter_mut().for_each(|x| {
             x.emit(ctx);
         });

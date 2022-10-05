@@ -29,9 +29,7 @@ pub struct TypeNameNode {
     pub id: String,
 }
 
-pub trait TypeNode: Node {
-    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<PLType<'a, 'ctx>>;
-}
+
 
 impl Node for TypeNameNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -41,8 +39,8 @@ impl Node for TypeNameNode {
         tab(tabs + 1, line.clone(), true);
         println!("id: {}", self.id);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        return Value::TypeValue(self.get_type(ctx).unwrap().get_basic_type());
+    fn emit<'a, 'ctx>(&'a mut self, _ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        return Value::None;
     }
 }
 
@@ -101,8 +99,8 @@ impl TypeNameNode {
     }
 }
 
-impl TypeNode for TypeNameNode {
-    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<PLType<'a, 'ctx>> {
+impl TypeNameNode {
+    pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<PLType<'a, 'ctx>> {
         let tp = ctx.get_type(self.id.as_str());
         if let Some(tp) = tp {
             return Some(tp.clone());
@@ -128,8 +126,8 @@ impl Node for TypedIdentifierNode {
         println!("id: {}", self.id);
         self.tp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        return Value::TypeValue(self.get_type(ctx).unwrap().1.get_basic_type());
+    fn emit<'a, 'ctx>(&'a mut self, _ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        return Value::None;
     }
 }
 
@@ -159,15 +157,15 @@ impl Node for StructDefNode {
             field.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        self.get_type(ctx)
+    fn emit<'a, 'ctx>(&'a mut self, _ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+        Value::None
     }
 }
 
 impl StructDefNode {
-    pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        if let Some(x) = ctx.get_type(self.id.as_str()) {
-            return Value::TypeValue(x.get_basic_type());
+    pub fn emit_struct_def<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> bool {
+        if ctx.get_type(self.id.as_str()).is_some() {
+            return true;
         }
         let mut fields = BTreeMap::<String, Field<'a, 'ctx>>::new();
         let mut order_fields = Vec::<Field<'a, 'ctx>>::new();
@@ -190,7 +188,7 @@ impl StructDefNode {
                     name: field.id.clone(),
                 });
             } else {
-                return Value::None;
+                return false;
             }
             i = i + 1;
         }
@@ -211,7 +209,7 @@ impl StructDefNode {
             ordered_fields: newf,
         });
         ctx.add_type(name.to_string(), stu.clone());
-        Value::TypeValue(st.as_basic_type_enum())
+        true
     }
 }
 

@@ -4,7 +4,7 @@ use super::statement::StatementsNode;
 use super::types::*;
 use super::{
     alloc,
-    types::{TypeNode, TypedIdentifierNode},
+    types::TypedIdentifierNode,
     Node,
 };
 use crate::ast::ctx::{FNType, PLType};
@@ -14,13 +14,6 @@ use inkwell::values::FunctionValue;
 use internal_macro::range;
 
 use lazy_static::__Deref;
-
-#[derive(Clone)]
-pub struct FuncTypeNode {
-    pub id: String,
-    pub paralist: Vec<Box<TypedIdentifierNode>>,
-    pub ret: Box<TypeNameNode>,
-}
 
 #[range]
 pub struct FuncDefNode {
@@ -185,9 +178,14 @@ impl Node for FuncCallNode {
         }
     }
 }
-
+#[derive(Clone)]
+pub struct FuncTypeNode {
+    pub id: String,
+    pub paralist: Vec<Box<TypedIdentifierNode>>,
+    pub ret: Box<TypeNameNode>,
+}
 impl FuncTypeNode {
-    pub fn get_type<'a, 'ctx>(
+    pub fn emit_func_type<'a, 'ctx>(
         &'a self,
         ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
     ) -> FunctionValue<'ctx> {
