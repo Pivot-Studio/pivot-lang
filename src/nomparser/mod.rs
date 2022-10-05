@@ -1,6 +1,5 @@
 use std::fmt::Error;
 
-use colored::Colorize;
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -32,26 +31,13 @@ use crate::{
 use internal_macro::{test_parser, test_parser_error};
 use nom::character::complete::char;
 
+use self::error::{alt_except, except};
+
+pub mod error;
+
 macro_rules! newline_or_eof {
     () => {
         alt((delspace(alt((tag("\n"), tag("\r\n")))), eof))
-    };
-}
-
-macro_rules! fail_now {
-    ($e:expr) => {
-        |input| {
-            let a = $e(input);
-            if let Err(a) = a {
-                return match a {
-                    nom::Err::Incomplete(_) => todo!(),
-                    nom::Err::Error(e) => Err(nom::Err::Failure(e)),
-                    nom::Err::Failure(e) => Err(nom::Err::Failure(e)),
-                };
-            } else {
-                return a;
-            }
-        }
     };
 }
 
@@ -121,7 +107,7 @@ macro_rules! parse_bin_ops {
                             tag_token(TokenType::$op),
                         )*
                     )),
-                    fail_now!($exp),
+                    $exp,
                 ))),
             )),
             create_bin,
@@ -131,37 +117,18 @@ macro_rules! parse_bin_ops {
 
 pub struct PLParser<'a> {
     input: Span<'a>,
-    file: &'a str,
 }
 
 impl<'a> PLParser<'a> {
-    pub fn new(input: &'a str, file: &'a str) -> Self {
+    pub fn new(input: &'a str) -> Self {
         let sp = Span::from(input);
-        PLParser { input: sp, file }
+        PLParser { input: sp }
     }
 
     pub fn parse(&mut self) -> Result<Box<dyn Node>, String> {
         let re = program(self.input);
         if let Err(e) = re {
-            let mut line = 0;
-            let mut col = 0;
-            let mut ecode = nom::error::ErrorKind::Fail;
-
-            e.map(|e| {
-                line = e.input.location_line();
-                col = e.input.get_utf8_column();
-                ecode = e.code;
-            });
-            let sline = self.input.lines().nth(line as usize - 1);
-            let err = format!(
-                "parse error at: {}:{}:{}\n{}\ncode: {:?}",
-                self.file,
-                line,
-                col,
-                sline.unwrap().red(),
-                ecode
-            );
-            return Err(err);
+            return Err(format!("{:?}", e));
         }
         Ok(re.unwrap().1)
     }
@@ -270,7 +237,7 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     map_res(
         delspace(tuple((
             tag_token(TokenType::WHILE),
-            logic_exp,
+            alt_except(logic_exp, "{", "failed to parse while condition"),
             statement_block,
         ))),
         |(_, cond, body)| {
@@ -373,18 +340,24 @@ pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         terminated(function_call, newline_or_eof!()),
         return_statement,
         newline,
+        del_newline_or_space!(except("\n\r}", "failed to parse statement")),
     )))(input)
 }
 
 enum TopLevel {
     StructDef(StructDefNode),
     FuncDef(FuncDefNode),
+    ErrNode(Box<dyn Node>),
 }
 
 fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
     delspace(alt((
         del_newline_or_space!(function_def),
         del_newline_or_space!(struct_def),
+        map_res(
+            del_newline_or_space!(except("\n\r", "failed to parse top level statement")),
+            |e| Ok::<_, Error>(Box::new(TopLevel::ErrNode(e))),
+        ),
     )))(input)
 }
 
@@ -416,6 +389,7 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
     let mut fns = vec![];
     let mut sts = vec![];
     let mut fntypes = vec![];
+    let mut errs = vec![];
     loop {
         let top = top_level_statement(input);
         if let Ok((i, t)) = top {
@@ -426,6 +400,9 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
                 }
                 TopLevel::StructDef(s) => {
                     sts.push(s);
+                }
+                TopLevel::ErrNode(e) => {
+                    errs.push(e);
                 }
             }
             input = i;
@@ -445,6 +422,7 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
         structs: sts,
         fntypes,
         range: Range::new(old, input),
+        errs,
     });
     Ok((input, node))
 }
@@ -583,7 +561,7 @@ pub fn identifier(input: Span) -> IResult<Span, Box<dyn Node>> {
         |out| {
             res(VarNode {
                 name: out.to_string(),
-                range: Range::new(out, out.take(out.len())),
+                range: Range::new(out, out.take_split(out.len()).0),
             })
         },
     ))(input)
@@ -895,7 +873,7 @@ fn decimal(input: Span) -> IResult<Span, Span> {
 fn tag_token(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
     move |input| {
         map_res(tag(token.get_str()), |_out: Span| {
-            let end = _out.take(token.get_str().len());
+            let end = _out.take_split(token.get_str().len()).0;
             Ok::<(TokenType, Range), Error>((token, Range::new(_out, end)))
         })(input)
     }

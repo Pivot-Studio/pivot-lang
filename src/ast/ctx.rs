@@ -14,6 +14,7 @@ use inkwell::types::VoidType;
 use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
@@ -37,6 +38,23 @@ pub struct Ctx<'a, 'ctx> {
     pub targetmachine: &'a TargetMachine,
     pub discope: DIScope<'ctx>,
     pub nodebug_builder: &'a Builder<'ctx>,
+    pub src_file_path: &'a str,
+    pub errs: &'a RefCell<Vec<PLErr>>,
+}
+
+#[derive(Debug, Clone)]
+pub enum PLErr {
+    SyntaxError(String),
+}
+
+impl PLErr {
+    pub fn print(&self) {
+        match self {
+            PLErr::SyntaxError(s) => {
+                println!("{}", s);
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -238,6 +256,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         diunit: &'a DICompileUnit<'ctx>,
         tm: &'a TargetMachine,
         nodbg_builder: &'a Builder<'ctx>,
+        src_file_path: &'a str,
+        errs: &'a RefCell<Vec<PLErr>>,
     ) -> Ctx<'a, 'ctx> {
         let types = add_primitive_types(context);
         Ctx {
@@ -256,6 +276,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             targetmachine: tm,
             discope: diunit.as_debug_info_scope(),
             nodebug_builder: nodbg_builder,
+            src_file_path,
+            errs,
         }
     }
     pub fn new_child(&'a self, start: Pos) -> Ctx<'a, 'ctx> {
@@ -284,6 +306,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 )
                 .as_debug_info_scope(),
             nodebug_builder: self.nodebug_builder,
+            src_file_path: self.src_file_path,
+            errs: self.errs,
         }
     }
 
@@ -323,6 +347,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             todo!() // TODO 报错
         }
         self.types.insert(name, tp);
+    }
+
+    pub fn add_err(&mut self, err: PLErr) {
+        self.errs.borrow_mut().push(err);
     }
 
     pub fn try_load(&mut self, v: Value<'ctx>) -> Value<'ctx> {

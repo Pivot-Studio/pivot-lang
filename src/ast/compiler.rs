@@ -1,9 +1,11 @@
 use std::{
+    cell::RefCell,
     fs::{self, read_to_string},
     path::Path,
     time::Instant,
 };
 
+use colored::Colorize;
 use inkwell::{
     context::Context,
     module::Module,
@@ -72,11 +74,12 @@ impl Compiler {
         let fname = abs.file_name().unwrap().to_str().unwrap();
 
         let (a, b, c, d, e, f) = create_ctx_info(context, dir, fname);
-        let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e, &f);
+        let v = RefCell::new(Vec::new());
+        let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e, &f, abs.to_str().unwrap(), &v);
         let m = &mut ctx;
         let str = read_to_string(filepath).unwrap();
         let input = str.as_str();
-        let mut parser = PLParser::new(input, abs.to_str().unwrap());
+        let mut parser = PLParser::new(input);
         let parse_result = parser.parse();
         if let Err(e) = parse_result {
             println!("{}", e);
@@ -88,6 +91,24 @@ impl Compiler {
         }
 
         node.emit(m);
+        let errs = m.errs.borrow();
+        if errs.len() > 0 {
+            for e in errs.iter() {
+                e.print();
+            }
+            if errs.len() == 1 {
+                println!(
+                    "{}",
+                    format!("compile failed: there is {} error", errs.len()).bright_red()
+                );
+                return;
+            }
+            println!(
+                "{}",
+                format!("compile failed: there are {} errors", errs.len()).bright_red()
+            );
+            return;
+        }
         if op.optimization == OptimizationLevel::None {
             m.dibuilder.finalize();
         }

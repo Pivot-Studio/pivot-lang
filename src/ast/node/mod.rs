@@ -6,9 +6,11 @@ use inkwell::basic_block::BasicBlock;
 use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
 
+use super::ctx::PLErr;
 use super::range::Pos;
 
 pub mod control;
+pub mod error;
 pub mod function;
 pub mod operator;
 pub mod primary;
@@ -31,6 +33,7 @@ pub enum Value<'a> {
     LoadValue(BasicValueEnum<'a>),
     StructFieldValue((String, BasicValueEnum<'a>)),
     None,
+    Err(PLErr),
 }
 
 impl<'a> Value<'a> {
@@ -44,6 +47,7 @@ impl<'a> Value<'a> {
             Value::TypeValue(_) => panic!("not implemented"),
             Value::LoadValue(v) => *v,
             Value::StructFieldValue((_, v)) => *v,
+            Value::Err(_) => panic!("not implemented"),
         }
     }
 }

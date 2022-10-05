@@ -10,12 +10,13 @@ pub struct ProgramNode {
     pub fns: Vec<FuncDefNode>,
     pub structs: Vec<StructDefNode>,
     pub fntypes: Vec<FuncTypeNode>,
+    pub errs: Vec<Box<dyn Node>>,
 }
 impl Node for ProgramNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         println!("ProgramNode");
-        let mut i = self.fns.len() + self.structs.len();
+        let mut i = self.fns.len() + self.structs.len() + self.errs.len();
         for statement in &self.fns {
             i -= 1;
             statement.print(tabs, i == 0, line.clone());
@@ -23,6 +24,10 @@ impl Node for ProgramNode {
         for statement in &self.structs {
             i -= 1;
             statement.print(tabs, i == 0, line.clone());
+        }
+        for err in &self.errs {
+            i -= 1;
+            err.print(tabs, i == 0, line.clone());
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
@@ -45,6 +50,9 @@ impl Node for ProgramNode {
         self.fns.iter_mut().for_each(|x| {
             x.emit(ctx);
         });
+        for e in self.errs.iter_mut() {
+            e.emit(ctx);
+        }
 
         Value::None
     }
