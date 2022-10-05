@@ -116,14 +116,11 @@ impl Node for TakeOpNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("TakeOpNode");
-        if self.ids.is_empty() {
-            self.head.print(tabs + 1, true, line.clone());
-        } else {
-            self.head.print(tabs + 1, false, line.clone());
-            for id in self.ids.iter().take(self.ids.len() - 1) {
-                id.print(tabs + 1, false, line.clone());
-            }
-            self.ids.last().unwrap().print(tabs + 1, true, line.clone());
+        let mut i = self.ids.len();
+        self.head.print(tabs + 1, i == 0, line.clone());
+        for id in &self.ids {
+            i -= 1;
+            id.print(tabs + 1, i == 0, line.clone());
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {

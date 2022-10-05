@@ -15,15 +15,14 @@ impl Node for ProgramNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         println!("ProgramNode");
-        let mut i = 0;
-        let len = self.fns.len() + self.structs.len();
+        let mut i = self.fns.len() + self.structs.len();
         for statement in &self.fns {
-            i += 1;
-            statement.print(tabs, i == len, line.clone());
+            i -= 1;
+            statement.print(tabs, i == 0, line.clone());
         }
         for statement in &self.structs {
-            i += 1;
-            statement.print(tabs, i == len, line.clone());
+            i -= 1;
+            statement.print(tabs, i == 0, line.clone());
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {

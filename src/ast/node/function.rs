@@ -40,7 +40,7 @@ impl Node for FuncDefNode {
         }
         if let Some(body) = &self.body {
             tab(tabs + 1, line.clone(), false);
-            println!("rettype: {}", self.typenode.ret.id);
+            println!("type: {}", self.typenode.ret.id);
             body.print(tabs + 1, true, line.clone());
         } else {
             tab(tabs + 1, line, true);
@@ -154,19 +154,12 @@ impl Node for FuncCallNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("FuncCallNode");
-        if self.paralist.len() == 0 {
-            tab(tabs + 1, line.clone(), true);
-            println!("id: {}", self.id);
-        } else {
-            tab(tabs + 1, line.clone(), false);
-            println!("id: {}", self.id);
-            for para in self.paralist.iter().take(self.paralist.len() - 1) {
-                para.print(tabs + 1, false, line.clone());
-            }
-            self.paralist
-                .last()
-                .unwrap()
-                .print(tabs + 1, true, line.clone());
+        let mut i = self.paralist.len();
+        tab(tabs + 1, line.clone(), i == 0);
+        println!("id: {}", self.id);
+        for para in &self.paralist {
+            i -= 1;
+            para.print(tabs + 1, i == 0, line.clone());
         }
     }
     fn emit<'a, 'ctx>(

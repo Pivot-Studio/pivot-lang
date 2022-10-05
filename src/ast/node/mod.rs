@@ -75,21 +75,18 @@ impl<'a, 'ctx> Ctx<'ctx, 'a> {
     }
 }
 pub fn deal_line(tabs: usize, line: &mut Vec<bool>, end: bool) {
-    if tabs >= line.len() {
-        line.push(true);
-    }
-    if end {
-        line[tabs] = false;
+    if tabs == line.len() {
+        line.push(end);
     } else {
-        line[tabs] = true;
+        line[tabs] = end;
     }
 }
 pub fn tab(tabs: usize, line: Vec<bool>, end: bool) {
     for i in 0..tabs {
         if line[i] {
-            print!(" │  ");
-        } else {
             print!("    ");
+        } else {
+            print!(" │  ");
         }
     }
     if end {

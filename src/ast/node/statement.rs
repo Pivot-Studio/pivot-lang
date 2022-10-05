@@ -77,7 +77,7 @@ impl Node for StatementsNode {
         tab(tabs, line.clone(), end);
         println!("StatementsNode");
         let mut i = self.statements.len();
-        for statement in self.statements.iter() {
+        for statement in &self.statements {
             i -= 1;
             statement.print(tabs + 1, i == 0, line.clone());
         }
