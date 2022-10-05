@@ -1,17 +1,13 @@
-use std::fmt::format;
-
 use super::statement::StatementsNode;
 use super::types::*;
-use super::{
-    alloc,
-    types::TypedIdentifierNode,
-    Node,
-};
+use super::*;
+use super::{alloc, types::TypedIdentifierNode, Node};
 use crate::ast::ctx::{FNType, PLType};
 use crate::ast::node::{deal_line, tab};
 use inkwell::debug_info::*;
 use inkwell::values::FunctionValue;
 use internal_macro::range;
+use std::fmt::format;
 
 use lazy_static::__Deref;
 
@@ -43,8 +39,8 @@ impl Node for FuncDefNode {
     fn emit<'a, 'ctx>(
         &'a mut self,
         ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
-    ) -> super::Value<'ctx> {
-        let mut typenode = self.typenode.clone();
+    ) -> (Value<'ctx>, Option<String>) {
+        let typenode = self.typenode.clone();
         // build debug info
         let param_ditypes = self
             .typenode
@@ -71,9 +67,14 @@ impl Node for FuncDefNode {
             DIFlags::PUBLIC,
             false,
         );
+        let para_pltype_ids: Vec<&String> = typenode
+            .paralist
+            .iter()
+            .map(|para| para.pltype.as_ref().unwrap())
+            .collect();
         // get the para's type vec & copy the para's name vec
         let mut para_names = Vec::new();
-        for para in typenode.paralist.iter_mut() {
+        for para in typenode.paralist.iter() {
             para_names.push(para.id.clone());
         }
         // add function
@@ -124,15 +125,15 @@ impl Node for FuncDefNode {
                     allocab,
                 );
                 ctx.builder.build_store(alloca, *para);
-                ctx.add_symbol(para_names[i].clone(), alloca);
+                ctx.add_symbol(para_names[i].clone(), alloca, para_pltype_ids[i].clone());
             }
             // emit body
             body.emit(ctx);
             ctx.nodebug_builder.position_at_end(allocab);
             ctx.nodebug_builder.build_unconditional_branch(entry);
-            return super::Value::None;
+            return (Value::None, None);
         }
-        super::Value::None
+        (Value::None, None)
     }
 }
 
@@ -155,13 +156,10 @@ impl Node for FuncCallNode {
             para.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(
-        &'a mut self,
-        ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
-    ) -> super::Value<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         let mut para_values = Vec::new();
         for para in self.paralist.iter_mut() {
-            let v = para.emit(ctx);
+            let (v, _) = para.emit(ctx);
             let load = ctx.try_load(v);
             para_values.push(load.as_basic_value_enum().into());
         }
@@ -171,11 +169,14 @@ impl Node for FuncCallNode {
             &para_values,
             format(format_args!("call_{}", self.id)).as_str(),
         );
-        if let Some(v) = ret.try_as_basic_value().left() {
-            return super::Value::LoadValue(v);
-        } else {
-            return super::Value::None;
+        if let PLType::FN(fv) = ctx.get_type(&self.id).unwrap() {
+            match (fv.ret_pltype.as_ref(), ret.try_as_basic_value().left()) {
+                (Some(pltype), Some(v)) => return (Value::LoadValue(v), Some(pltype.clone())),
+                (None, None) => return (Value::None, None),
+                _ => todo!(),
+            }
         }
+        todo!();
     }
 }
 #[derive(Clone)]
@@ -209,6 +210,7 @@ impl FuncTypeNode {
             PLType::FN(FNType {
                 name: self.id.clone(),
                 fntype: func,
+                ret_pltype: Some(self.ret.id.clone()),
             }),
         );
         func

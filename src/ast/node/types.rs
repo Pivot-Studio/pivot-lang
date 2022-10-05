@@ -29,8 +29,6 @@ pub struct TypeNameNode {
     pub id: String,
 }
 
-
-
 impl Node for TypeNameNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -39,8 +37,8 @@ impl Node for TypeNameNode {
         tab(tabs + 1, line.clone(), true);
         println!("id: {}", self.id);
     }
-    fn emit<'a, 'ctx>(&'a mut self, _ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        return Value::None;
+    fn emit<'a, 'ctx>(&'a mut self, _ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+        return (Value::None, Some(self.id.clone()));
     }
 }
 
@@ -115,6 +113,7 @@ impl TypeNameNode {
 pub struct TypedIdentifierNode {
     pub id: String,
     pub tp: Box<TypeNameNode>,
+    pub pltype: Option<String>,
 }
 
 impl Node for TypedIdentifierNode {
@@ -126,8 +125,11 @@ impl Node for TypedIdentifierNode {
         println!("id: {}", self.id);
         self.tp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, _ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        return Value::None;
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+        let (_, tp) = self.tp.emit(ctx);
+        let tp = tp.unwrap();
+        self.pltype = Some(tp.clone());
+        return (Value::None, Some(tp.clone()));
     }
 }
 
@@ -157,8 +159,8 @@ impl Node for StructDefNode {
             field.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, _ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        Value::None
+    fn emit<'a, 'ctx>(&'a mut self, _ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+        (Value::None, Some(self.id.clone()))
     }
 }
 
@@ -228,11 +230,12 @@ impl Node for StructInitFieldNode {
         println!("id: {}", self.id);
         self.exp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        return Value::StructFieldValue((
-            self.id.clone(),
-            self.exp.emit(ctx).as_basic_value_enum(),
-        ));
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+        let (v, tp) = self.exp.emit(ctx);
+        return (
+            Value::StructFieldValue((self.id.clone(), v.as_basic_value_enum())),
+            tp,
+        );
     }
 }
 
@@ -255,10 +258,10 @@ impl Node for StructInitNode {
             field.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         let mut fields = HashMap::<String, BasicValueEnum<'ctx>>::new();
         for field in self.fields.iter_mut() {
-            if let Value::StructFieldValue((id, val)) = field.emit(ctx) {
+            if let (Value::StructFieldValue((id, val)), _) = field.emit(ctx) {
                 fields.insert(id, val);
             } else {
                 panic!("StructInitNode::emit: invalid field");
@@ -276,7 +279,7 @@ impl Node for StructInitNode {
                     .unwrap();
                 ctx.builder.build_store(ptr, val);
             }
-            return Value::VarValue(stv);
+            return (Value::VarValue(stv), Some(self.id.clone()));
         } else {
             panic!("StructInitNode::emit: invalid type");
         }

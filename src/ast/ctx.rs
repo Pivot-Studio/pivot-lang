@@ -23,7 +23,7 @@ use super::node::types::TypeNameNode;
 use super::range::Pos;
 #[derive(Debug, Clone)]
 pub struct Ctx<'a, 'ctx> {
-    pub table: HashMap<String, PointerValue<'ctx>>,
+    pub table: HashMap<String, (PointerValue<'ctx>, String)>,
     pub types: HashMap<String, PLType<'a, 'ctx>>,
     pub father: Option<&'a Ctx<'a, 'ctx>>,
     pub context: &'ctx Context,
@@ -138,6 +138,7 @@ impl<'a, 'ctx> Field<'a, 'ctx> {
 pub struct FNType<'ctx> {
     pub name: String,
     pub fntype: FunctionValue<'ctx>,
+    pub ret_pltype: Option<String>,
 }
 #[derive(Debug, Clone)]
 pub struct STType<'a, 'ctx> {
@@ -313,10 +314,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     /// # get_symbol
     /// search in current and all father symbol tables
-    pub fn get_symbol(&self, name: &str) -> Option<&PointerValue<'ctx>> {
+    pub fn get_symbol(&self, name: &str) -> Option<(&PointerValue<'ctx>, String)> {
         let v = self.table.get(name);
-        if let Some(pv) = v {
-            return Some(pv);
+        if let Some((pv, pltype)) = v {
+            return Some((pv, pltype.to_string()));
         }
         if let Some(father) = self.father {
             return father.get_symbol(name);
@@ -324,11 +325,11 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         None
     }
 
-    pub fn add_symbol(&mut self, name: String, pv: PointerValue<'ctx>) {
+    pub fn add_symbol(&mut self, name: String, pv: PointerValue<'ctx>, tp: String) {
         if self.table.contains_key(&name) {
             todo!() // TODO 报错
         }
-        self.table.insert(name, pv);
+        self.table.insert(name, (pv, tp));
     }
 
     pub fn get_type(&self, name: &str) -> Option<&PLType<'a, 'ctx>> {

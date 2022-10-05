@@ -17,15 +17,15 @@ impl Node for DefNode {
         self.var.print(tabs + 1, false, line.clone());
         self.exp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        let v = self.exp.emit(ctx);
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+        let (v, pltype) = self.exp.emit(ctx);
         let e = ctx.try_load(v).as_basic_value_enum();
         let tp = e.get_type();
         let p = alloc(ctx, tp, &self.var.name);
         ctx.builder.build_store(p, e);
-
-        ctx.add_symbol(self.var.name.clone(), p);
-        Value::None
+        let pltype = pltype.unwrap();
+        ctx.add_symbol(self.var.name.clone(), p, pltype.clone());
+        (Value::None, Some(pltype))
     }
 }
 #[range]
@@ -41,13 +41,13 @@ impl Node for AssignNode {
         self.var.print(tabs + 1, false, line.clone());
         self.exp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        let pt = self.var.emit(ctx);
-        let value = self.exp.emit(ctx);
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+        let (pt, _) = self.var.emit(ctx);
+        let (value, _) = self.exp.emit(ctx);
         if let Value::VarValue(ptr) = pt {
             let load = ctx.try_load(value);
             ctx.builder.build_store(ptr, load.as_basic_value_enum());
-            return Value::None;
+            return (Value::None, None);
         }
         todo!()
     }
@@ -62,8 +62,8 @@ impl Node for NLNode {
         tab(tabs, line.clone(), end);
         println!("NLNode");
     }
-    fn emit<'a, 'ctx>(&'a mut self, _: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        Value::None
+    fn emit<'a, 'ctx>(&'a mut self, _: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+        (Value::None, None)
     }
 }
 
@@ -82,25 +82,28 @@ impl Node for StatementsNode {
             statement.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         let child = &mut ctx.new_child(self.range.start);
         for m in self.statements.iter_mut() {
             let pos = m.range().start;
             child.build_dbg_location(pos);
             m.emit(child);
         }
-        Value::None
+        (Value::None, None)
     }
 }
 
 impl StatementsNode {
-    pub fn emit_child<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+    pub fn emit_child<'a, 'ctx>(
+        &'a mut self,
+        ctx: &mut Ctx<'a, 'ctx>,
+    ) -> (Value<'ctx>, Option<String>) {
         let child = ctx;
         for m in self.statements.iter_mut() {
             let pos = m.range().start;
             child.build_dbg_location(pos);
             m.emit(child);
         }
-        Value::None
+        (Value::None, None)
     }
 }

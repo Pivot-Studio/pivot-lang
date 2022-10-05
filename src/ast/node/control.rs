@@ -23,7 +23,7 @@ impl Node for IfNode {
             self.then.print(tabs + 1, true, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         let cond_block = ctx
             .context
             .append_basic_block(ctx.function.unwrap(), "if.cond");
@@ -38,7 +38,7 @@ impl Node for IfNode {
             .append_basic_block(ctx.function.unwrap(), "if.after");
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, cond_block);
-        let cond = self.cond.emit(ctx);
+        let (cond, _) = self.cond.emit(ctx);
         let cond = ctx.try_load(cond);
         let cond = match cond {
             Value::BoolValue(v) => v,
@@ -56,7 +56,7 @@ impl Node for IfNode {
         }
         ctx.builder.build_unconditional_branch(after_block);
         position_at_end(ctx, after_block);
-        Value::None
+        (Value::None, None)
     }
 }
 
@@ -74,7 +74,7 @@ impl Node for WhileNode {
         self.cond.print(tabs + 1, false, line.clone());
         self.body.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         let ctx = &mut ctx.new_child(self.range.start);
         let cond_block = ctx
             .context
@@ -92,7 +92,7 @@ impl Node for WhileNode {
         let start = self.cond.range().start;
         let cond = self.cond.emit(ctx);
         let cond = match cond {
-            Value::BoolValue(v) => v,
+            (Value::BoolValue(v), _) => v,
             _ => panic!("not implemented"),
         };
         ctx.builder
@@ -102,7 +102,7 @@ impl Node for WhileNode {
         ctx.build_dbg_location(start);
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, after_block);
-        Value::None
+        (Value::None, None)
     }
 }
 
@@ -128,7 +128,7 @@ impl Node for ForNode {
         }
         self.body.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         let ctx = &mut ctx.new_child(self.range.start);
         let pre_block = ctx
             .context
@@ -159,7 +159,7 @@ impl Node for ForNode {
         let cond_start = self.cond.range().start;
         let cond = self.cond.emit(ctx);
         let cond = match cond {
-            Value::BoolValue(v) => v,
+            (Value::BoolValue(v), _) => v,
             _ => panic!("not implemented"),
         };
         ctx.build_dbg_location(self.body.range().start);
@@ -176,7 +176,7 @@ impl Node for ForNode {
         self.body.emit_child(ctx);
         ctx.builder.build_unconditional_branch(opt_block);
         position_at_end(ctx, after_block);
-        Value::None
+        (Value::None, None)
     }
 }
 
@@ -190,7 +190,7 @@ impl Node for BreakNode {
         println!("BreakNode");
     }
 
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         if let Some(b) = ctx.break_block {
             ctx.builder.build_unconditional_branch(b);
             // add dead block to avoid double br
@@ -202,7 +202,7 @@ impl Node for BreakNode {
         } else {
             panic!("break not in loop");
         }
-        Value::None
+        (Value::None, None)
     }
 }
 
@@ -216,7 +216,7 @@ impl Node for ContinueNode {
         println!("ContinueNode");
     }
 
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         if let Some(b) = ctx.continue_block {
             ctx.builder.build_unconditional_branch(b);
             position_at_end(
@@ -228,6 +228,6 @@ impl Node for ContinueNode {
         } else {
             panic!("continue not in loop");
         }
-        Value::None
+        (Value::None, None)
     }
 }

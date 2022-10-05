@@ -52,7 +52,7 @@ impl<'a> Value<'a> {
 
 pub trait Node: RangeTrait + AsAny {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx>;
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>);
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -127,12 +127,12 @@ macro_rules! handle_calc {
         item! {
             match ($left, $right) {
                 (Value::IntValue(left), Value::IntValue(right)) => {
-                    return Value::IntValue($ctx.builder.[<build_int_$op>](
-                        left, right, "addtmp"));
+                    return (Value::IntValue($ctx.builder.[<build_int_$op>](
+                        left, right, "addtmp")),None);
                 },
                 (Value::FloatValue(left), Value::FloatValue(right)) => {
-                    return Value::FloatValue($ctx.builder.[<build_$opf>](
-                        left, right, "addtmp"));
+                    return (Value::FloatValue($ctx.builder.[<build_$opf>](
+                        left, right, "addtmp")),None);
                 },
                 _ => panic!("not implemented")
             }

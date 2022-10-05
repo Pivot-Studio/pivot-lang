@@ -651,6 +651,7 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
                 id: id.name,
                 tp: type_name,
                 range,
+                pltype: None,
             })
         },
     ))(input)

@@ -15,8 +15,11 @@ impl Node for BoolConstNode {
         tab(tabs, line, end);
         println!("BoolConstNode: {}", self.value);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        Value::BoolValue(ctx.context.bool_type().const_int(self.value as u64, true))
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+        (
+            Value::BoolValue(ctx.context.bool_type().const_int(self.value as u64, true)),
+            None,
+        )
     }
 }
 
@@ -31,13 +34,13 @@ impl Node for NumNode {
         tab(tabs, line, end);
         println!("NumNode: {:?}", self.value);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         if let Num::INT(x) = self.value {
             let b = ctx.context.i64_type().const_int(x, true);
-            return Value::IntValue(b);
+            return (Value::IntValue(b), None);
         } else if let Num::FLOAT(x) = self.value {
             let b = ctx.context.f64_type().const_float(x);
-            return Value::FloatValue(b);
+            return (Value::FloatValue(b), None);
         }
         panic!("not implemented")
     }
@@ -54,10 +57,10 @@ impl Node for VarNode {
         tab(tabs, line.clone(), end);
         println!("VarNode: {}", self.name);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         let v = ctx.get_symbol(&self.name);
-        if let Some(v) = v {
-            return Value::VarValue(*v);
+        if let Some((v, pltype)) = v {
+            return (Value::VarValue(*v), Some(pltype));
         }
         todo!(); // TODO: 未定义的变量
     }
