@@ -18,7 +18,7 @@ impl Node for BoolConstNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         (
             Value::BoolValue(ctx.context.bool_type().const_int(self.value as u64, true)),
-            None,
+            Some("bool".to_string()),
         )
     }
 }
@@ -37,10 +37,10 @@ impl Node for NumNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         if let Num::INT(x) = self.value {
             let b = ctx.context.i64_type().const_int(x, true);
-            return (Value::IntValue(b), None);
+            return (Value::IntValue(b), Some("i64".to_string()));
         } else if let Num::FLOAT(x) = self.value {
             let b = ctx.context.f64_type().const_float(x);
-            return (Value::FloatValue(b), None);
+            return (Value::FloatValue(b), Some("f64".to_string()));
         }
         panic!("not implemented")
     }

@@ -17,8 +17,8 @@ pub struct FuncDefNode {
     pub body: Option<StatementsNode>,
 }
 
-impl Node for FuncDefNode {
-    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+impl FuncDefNode {
+    pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("FuncDefNode");
@@ -36,7 +36,7 @@ impl Node for FuncDefNode {
             println!("type: {}", self.typenode.ret.id);
         }
     }
-    fn emit<'a, 'ctx>(
+    pub fn emit_func_def<'a, 'ctx>(
         &'a mut self,
         ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
     ) -> (Value<'ctx>, Option<String>) {
@@ -67,11 +67,8 @@ impl Node for FuncDefNode {
             DIFlags::PUBLIC,
             false,
         );
-        let para_pltype_ids: Vec<&String> = typenode
-            .paralist
-            .iter()
-            .map(|para| para.pltype.as_ref().unwrap())
-            .collect();
+        let para_pltype_ids: Vec<&String> =
+            typenode.paralist.iter().map(|para| &para.tp.id).collect();
         // get the para's type vec & copy the para's name vec
         let mut para_names = Vec::new();
         for para in typenode.paralist.iter() {
@@ -187,7 +184,7 @@ pub struct FuncTypeNode {
 }
 impl FuncTypeNode {
     pub fn emit_func_type<'a, 'ctx>(
-        &'a self,
+        &'a mut self,
         ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
     ) -> FunctionValue<'ctx> {
         if let Some(func) = ctx.get_type(self.id.as_str()) {
@@ -197,12 +194,11 @@ impl FuncTypeNode {
             };
             return f;
         }
-
         let mut para_types = Vec::new();
         for para in self.paralist.iter() {
-            para_types.push(para.tp.get_type(ctx).unwrap().get_basic_type().into());
+            para_types.push(ctx.get_type(&para.id).unwrap().get_basic_type().into());
         }
-        let ret_type = self.ret.get_type(ctx).unwrap().get_ret_type();
+        let ret_type = ctx.get_type(&self.ret.id).unwrap().get_ret_type();
         let func_type = ret_type.fn_type(&para_types, false);
         let func = ctx.module.add_function(self.id.as_str(), func_type, None);
         ctx.add_type(

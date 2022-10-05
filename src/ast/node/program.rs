@@ -43,12 +43,12 @@ impl Node for ProgramNode {
                 break;
             }
         }
-        self.fntypes.iter().for_each(|x| {
+        self.fntypes.iter_mut().for_each(|x| {
             x.emit_func_type(ctx);
         });
         // node parser
         self.fns.iter_mut().for_each(|x| {
-            x.emit(ctx);
+            x.emit_func_def(ctx);
         });
         for e in self.errs.iter_mut() {
             e.emit(ctx);
