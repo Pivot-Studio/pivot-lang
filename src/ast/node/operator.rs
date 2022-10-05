@@ -151,7 +151,7 @@ impl Node for TakeOpNode {
                     if etype.is_struct_type() {
                         let st = etype.into_struct_type();
                         let tpname = st.get_name().unwrap().to_str().unwrap();
-                        let tp = ctx.get_type(tpname).unwrap();
+                        let (tp, _) = ctx.get_type(tpname).unwrap();
                         if let PLType::STRUCT(s) = tp {
                             let field = s.fields.get(&id.name).unwrap();
                             index = field.index;

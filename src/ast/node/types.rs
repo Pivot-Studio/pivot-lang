@@ -41,7 +41,7 @@ impl TypeNameNode {
 
 impl TypeNameNode {
     pub fn get_debug_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
-        let tp = ctx.get_type(&self.id).unwrap().clone();
+        let (tp, _) = ctx.get_type(&self.id).unwrap().clone();
         let td = ctx.targetmachine.get_target_data();
 
         match tp {
@@ -142,7 +142,7 @@ impl StructDefNode {
         let mut order_fields = Vec::<Field<'a, 'ctx>>::new();
         let mut i = 0;
         for field in self.fields.iter() {
-            if let (id, Some(tp)) = (field.id.clone(), ctx.get_type(&field.id)) {
+            if let (id, Some((tp, _))) = (field.id.clone(), ctx.get_type(&field.id)) {
                 fields.insert(
                     id.to_string(),
                     Field {
@@ -178,6 +178,7 @@ impl StructDefNode {
             struct_type: st,
             fields,
             ordered_fields: newf,
+            line_no: self.range().start.line as u32,
         });
         ctx.add_type(name.to_string(), stu.clone());
         true
@@ -236,7 +237,7 @@ impl Node for StructInitNode {
                 panic!("StructInitNode::emit: invalid field");
             }
         }
-        let st = ctx.get_type(self.id.as_str()).unwrap();
+        let (st, _) = ctx.get_type(self.id.as_str()).unwrap();
         if let PLType::STRUCT(st) = st {
             let et = st.struct_type.as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");

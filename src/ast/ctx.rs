@@ -21,10 +21,27 @@ use std::collections::HashMap;
 use super::compiler::get_target_machine;
 use super::node::types::TypeNameNode;
 use super::range::Pos;
+// TODO: match all case
+// const DW_ATE_UTF: u32 = 0x10;
+const DW_ATE_BOOLEAN: u32 = 0x02;
+const DW_ATE_FLOAT: u32 = 0x04;
+const DW_ATE_SIGNED: u32 = 0x05;
+// const DW_ATE_UNSIGNED: u32 = 0x07;
+fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
+    match basetype {
+        BasicTypeEnum::FloatType(_) => DW_ATE_FLOAT,
+        BasicTypeEnum::IntType(i) => match i.get_bit_width() {
+            1 => DW_ATE_BOOLEAN,
+            64 => DW_ATE_SIGNED,
+            _ => todo!(),
+        },
+        _ => todo!(),
+    }
+}
 #[derive(Debug, Clone)]
 pub struct Ctx<'a, 'ctx> {
     pub table: HashMap<String, (PointerValue<'ctx>, String)>,
-    pub types: HashMap<String, PLType<'a, 'ctx>>,
+    pub types: HashMap<String, (PLType<'a, 'ctx>, DIType<'ctx>)>,
     pub father: Option<&'a Ctx<'a, 'ctx>>,
     pub context: &'ctx Context,
     pub builder: &'a Builder<'ctx>,
@@ -61,8 +78,13 @@ impl PLErr {
 pub enum PLType<'a, 'ctx> {
     FN(FNType<'ctx>),
     STRUCT(STType<'a, 'ctx>),
-    PRIMITIVE(BasicTypeEnum<'ctx>),
+    PRIMITIVE(PriType<'ctx>),
     VOID(VoidType<'ctx>),
+}
+#[derive(Debug, Clone)]
+pub struct PriType<'ctx> {
+    basetype: BasicTypeEnum<'ctx>,
+    id: String,
 }
 impl<'a, 'ctx> PLType<'a, 'ctx> {
     pub fn get_basic_type(&self) -> BasicTypeEnum<'ctx> {
@@ -73,7 +95,7 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
                 .ptr_type(inkwell::AddressSpace::Global)
                 .as_basic_type_enum(),
             PLType::STRUCT(s) => s.struct_type.as_basic_type_enum(),
-            PLType::PRIMITIVE(t) => *t,
+            PLType::PRIMITIVE(t) => t.basetype,
             PLType::VOID(_) => panic!("void type"),
         }
     }
@@ -82,6 +104,57 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
         match self {
             PLType::VOID(x) => RetTypeEnum::VOID(*x),
             _ => RetTypeEnum::BASIC(self.get_basic_type()),
+        }
+    }
+
+    pub fn get_ditype(&self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
+        let td = ctx.targetmachine.get_target_data();
+        match self {
+            PLType::FN(_) => todo!(),
+            PLType::STRUCT(x) => {
+                let mut offset = 0;
+                let m = x
+                    .ordered_fields
+                    .iter()
+                    .map(|v| {
+                        let (tp, off) = v.get_di_type(ctx, offset);
+                        offset = off;
+                        tp
+                    })
+                    .collect::<Vec<_>>();
+                return Some(
+                    ctx.dibuilder
+                        .create_struct_type(
+                            ctx.discope,
+                            &x.name,
+                            ctx.diunit.get_file(),
+                            x.line_no,
+                            td.get_bit_size(&x.struct_type),
+                            td.get_abi_alignment(&x.struct_type),
+                            DIFlags::PUBLIC,
+                            None,
+                            &m,
+                            0,
+                            None,
+                            &x.name,
+                        )
+                        .as_type(),
+                );
+            }
+            PLType::PRIMITIVE(pt) => {
+                return Some(
+                    ctx.dibuilder
+                        .create_basic_type(
+                            &pt.id,
+                            td.get_bit_size(&self.get_basic_type()),
+                            get_dw_ate_encoding(&self.get_basic_type()),
+                            DIFlags::PUBLIC,
+                        )
+                        .unwrap()
+                        .as_type(),
+                );
+            }
+            PLType::VOID(_) => None,
         }
     }
 }
@@ -146,64 +219,38 @@ pub struct STType<'a, 'ctx> {
     pub fields: BTreeMap<String, Field<'a, 'ctx>>,
     pub struct_type: StructType<'ctx>,
     pub ordered_fields: Vec<Field<'a, 'ctx>>,
+    pub line_no: u32,
 }
 
-fn add_primitive_types<'a, 'ctx>(context: &'ctx Context) -> HashMap<String, PLType<'a, 'ctx>> {
-    let mut table = HashMap::<String, PLType<'a, 'ctx>>::new();
-    table.insert(
-        "i8".to_string(),
-        PLType::PRIMITIVE(context.i8_type().as_basic_type_enum()),
-    );
-    table.insert(
-        "i16".to_string(),
-        PLType::PRIMITIVE(context.i16_type().as_basic_type_enum()),
-    );
-    table.insert(
-        "i32".to_string(),
-        PLType::PRIMITIVE(context.i32_type().as_basic_type_enum()),
-    );
-    table.insert(
-        "i64".to_string(),
-        PLType::PRIMITIVE(context.i64_type().as_basic_type_enum()),
-    );
-    table.insert(
-        "i128".to_string(),
-        PLType::PRIMITIVE(context.i128_type().as_basic_type_enum()),
-    );
-    table.insert(
-        "u8".to_string(),
-        PLType::PRIMITIVE(context.i8_type().as_basic_type_enum()),
-    );
-    table.insert(
-        "u16".to_string(),
-        PLType::PRIMITIVE(context.i16_type().as_basic_type_enum()),
-    );
-    table.insert(
-        "u32".to_string(),
-        PLType::PRIMITIVE(context.i32_type().as_basic_type_enum()),
-    );
-    table.insert(
-        "u64".to_string(),
-        PLType::PRIMITIVE(context.i64_type().as_basic_type_enum()),
-    );
-    table.insert(
-        "u128".to_string(),
-        PLType::PRIMITIVE(context.i128_type().as_basic_type_enum()),
-    );
-    table.insert(
-        "f32".to_string(),
-        PLType::PRIMITIVE(context.f32_type().as_basic_type_enum()),
-    );
-    table.insert(
-        "f64".to_string(),
-        PLType::PRIMITIVE(context.f64_type().as_basic_type_enum()),
-    );
-    table.insert(
-        "bool".to_string(),
-        PLType::PRIMITIVE(context.bool_type().as_basic_type_enum()),
-    );
-    table.insert("void".to_string(), PLType::VOID(context.void_type()));
-    table
+fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
+    let pltype_i64 = PLType::PRIMITIVE(PriType {
+        basetype: ctx.context.i64_type().as_basic_type_enum(),
+        id: "i64".to_string(),
+    });
+    let ditype_i64 = pltype_i64.get_ditype(ctx).unwrap();
+    ctx.types
+        .insert("i64".to_string(), (pltype_i64.clone(), ditype_i64));
+
+    let pltype_f64 = PLType::PRIMITIVE(PriType {
+        basetype: ctx.context.f64_type().as_basic_type_enum(),
+        id: "f64".to_string(),
+    });
+    let ditype_f64 = pltype_f64.get_ditype(ctx).unwrap();
+    ctx.types
+        .insert("f64".to_string(), (pltype_f64.clone(), ditype_f64));
+
+    let pltype_bool = PLType::PRIMITIVE(PriType {
+        basetype: ctx.context.bool_type().as_basic_type_enum(),
+        id: "bool".to_string(),
+    });
+    let ditype_bool = pltype_bool.get_ditype(ctx).unwrap();
+    ctx.types
+        .insert("bool".to_string(), (pltype_bool.clone(), ditype_bool));
+
+    let pltype_void = PLType::VOID(ctx.context.void_type());
+    let ditype_void = pltype_void.get_ditype(ctx).unwrap();
+    ctx.types
+        .insert("void".to_string(), (pltype_void.clone(), ditype_void));
 }
 
 pub fn create_ctx_info<'ctx>(
@@ -260,10 +307,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         src_file_path: &'a str,
         errs: &'a RefCell<Vec<PLErr>>,
     ) -> Ctx<'a, 'ctx> {
-        let types = add_primitive_types(context);
-        Ctx {
+        let mut ctx = Ctx {
             table: HashMap::new(),
-            types,
+            types: HashMap::new(),
             father: None,
             context,
             module,
@@ -279,13 +325,14 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             nodebug_builder: nodbg_builder,
             src_file_path,
             errs,
-        }
+        };
+        add_primitive_types(&mut ctx);
+        ctx
     }
     pub fn new_child(&'a self, start: Pos) -> Ctx<'a, 'ctx> {
-        let types = add_primitive_types(self.context);
-        Ctx {
+        let mut ctx = Ctx {
             table: HashMap::new(),
-            types,
+            types: HashMap::new(),
             father: Some(self),
             context: self.context,
             builder: self.builder,
@@ -309,7 +356,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             nodebug_builder: self.nodebug_builder,
             src_file_path: self.src_file_path,
             errs: self.errs,
-        }
+        };
+        add_primitive_types(&mut ctx);
+        ctx
     }
 
     /// # get_symbol
@@ -332,7 +381,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.table.insert(name, (pv, tp));
     }
 
-    pub fn get_type(&self, name: &str) -> Option<&PLType<'a, 'ctx>> {
+    pub fn get_type(&self, name: &str) -> Option<&(PLType<'a, 'ctx>, DIType<'ctx>)> {
         let v = self.types.get(name);
         if let Some(pv) = v {
             return Some(pv);
@@ -347,7 +396,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if self.types.contains_key(&name) {
             todo!() // TODO 报错
         }
-        self.types.insert(name, tp);
+        let ditype = tp.get_ditype(self).unwrap();
+        self.types.insert(name, (tp.clone(), ditype));
     }
 
     pub fn add_err(&mut self, err: PLErr) {

@@ -76,7 +76,7 @@ impl FuncDefNode {
         }
         // add function
         let func;
-        if let Some(fu) = ctx.get_type(typenode.id.as_str()) {
+        if let Some((fu, _)) = ctx.get_type(typenode.id.as_str()) {
             func = match fu {
                 PLType::FN(fu) => fu.fntype,
                 _ => panic!("type error"),
@@ -166,7 +166,7 @@ impl Node for FuncCallNode {
             &para_values,
             format(format_args!("call_{}", self.id)).as_str(),
         );
-        if let PLType::FN(fv) = ctx.get_type(&self.id).unwrap() {
+        if let (PLType::FN(fv), _) = ctx.get_type(&self.id).unwrap() {
             match (fv.ret_pltype.as_ref(), ret.try_as_basic_value().left()) {
                 (Some(pltype), Some(v)) => return (Value::LoadValue(v), Some(pltype.clone())),
                 (None, None) => return (Value::None, None),
@@ -187,7 +187,7 @@ impl FuncTypeNode {
         &'a mut self,
         ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
     ) -> FunctionValue<'ctx> {
-        if let Some(func) = ctx.get_type(self.id.as_str()) {
+        if let Some((func, _)) = ctx.get_type(self.id.as_str()) {
             let f = match func {
                 PLType::FN(func) => func.fntype,
                 _ => panic!("type error"),
@@ -196,9 +196,9 @@ impl FuncTypeNode {
         }
         let mut para_types = Vec::new();
         for para in self.paralist.iter() {
-            para_types.push(ctx.get_type(&para.id).unwrap().get_basic_type().into());
+            para_types.push(ctx.get_type(&para.id).unwrap().0.get_basic_type().into());
         }
-        let ret_type = ctx.get_type(&self.ret.id).unwrap().get_ret_type();
+        let ret_type = ctx.get_type(&self.ret.id).unwrap().0.get_ret_type();
         let func_type = ret_type.fn_type(&para_types, false);
         let func = ctx.module.add_function(self.id.as_str(), func_type, None);
         ctx.add_type(
