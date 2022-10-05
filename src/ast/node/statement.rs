@@ -1,7 +1,7 @@
 use super::primary::*;
 use super::*;
 use crate::ast::ctx::Ctx;
-
+use inkwell::debug_info::*;
 use internal_macro::range;
 
 #[range]
@@ -24,6 +24,17 @@ impl Node for DefNode {
         let p = alloc(ctx, tp, &self.var.name);
         ctx.builder.build_store(p, e);
         let pltype = pltype.unwrap();
+        let (_, ditype) = ctx.get_type(pltype.as_str()).unwrap();
+        ctx.dibuilder.create_auto_variable(
+            ctx.discope,
+            &self.var.name,
+            ctx.diunit.get_file(),
+            self.var.range().start.line as u32,
+            *ditype,
+            true,
+            DIFlags::PUBLIC,
+            ditype.get_align_in_bits(),
+        );
         ctx.add_symbol(self.var.name.clone(), p, pltype.clone());
         (Value::None, Some(pltype))
     }
