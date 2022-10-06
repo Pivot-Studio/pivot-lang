@@ -17,7 +17,7 @@ impl Node for ErrorNode {
         tab(tabs + 1, line, true);
         println!("Src: {}", format!("{:?}", self.src).red());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         let err = format!(
             "syntax error at {}\n{}\n{}",
             format!(
@@ -30,6 +30,6 @@ impl Node for ErrorNode {
         );
         let err = PLErr::SyntaxError(err);
         ctx.add_err(err.clone());
-        Value::Err(err)
+        (Value::Err(err), None)
     }
 }

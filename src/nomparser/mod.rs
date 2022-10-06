@@ -63,13 +63,6 @@ where
     res_box(box_node(t))
 }
 
-fn res_ori<T>(t: T) -> Result<Box<T>, Error>
-where
-    T: Node + 'static,
-{
-    res_box(box_node(t))
-}
-
 fn box_node<T>(t: T) -> Box<T>
 where
     T: Node + 'static,
@@ -633,10 +626,10 @@ fn float(input: Span) -> IResult<Span, Span> {
 fn type_name(input: Span) -> IResult<Span, Box<TypeNameNode>> {
     delspace(map_res(identifier, |o| {
         let o = cast_to_var(&o);
-        res_ori(TypeNameNode {
+        res_box(Box::new(TypeNameNode {
             id: o.name,
             range: o.range,
-        })
+        }))
     }))(input)
 }
 
@@ -647,11 +640,11 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
         |(id, _, type_name)| {
             let id = cast_to_var(&id);
             let range = id.range.start.to(type_name.range.end);
-            res_ori(TypedIdentifierNode {
+            res_box(Box::new(TypedIdentifierNode {
                 id: id.name,
                 tp: type_name,
                 range,
-            })
+            }))
         },
     ))(input)
 }

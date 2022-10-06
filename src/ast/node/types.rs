@@ -29,11 +29,7 @@ pub struct TypeNameNode {
     pub id: String,
 }
 
-pub trait TypeNode: Node {
-    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<PLType<'a, 'ctx>>;
-}
-
-impl Node for TypeNameNode {
+impl TypeNameNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -41,14 +37,11 @@ impl Node for TypeNameNode {
         tab(tabs + 1, line.clone(), true);
         println!("id: {}", self.id);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        return Value::TypeValue(self.get_type(ctx).unwrap().get_basic_type());
-    }
 }
 
 impl TypeNameNode {
     pub fn get_debug_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
-        let tp = self.get_type(ctx).unwrap();
+        let (tp, _) = ctx.get_type(&self.id).unwrap().clone();
         let td = ctx.targetmachine.get_target_data();
 
         match tp {
@@ -101,17 +94,6 @@ impl TypeNameNode {
     }
 }
 
-impl TypeNode for TypeNameNode {
-    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<PLType<'a, 'ctx>> {
-        let tp = ctx.get_type(self.id.as_str());
-        if let Some(tp) = tp {
-            return Some(tp.clone());
-        } else {
-            return None;
-        }
-    }
-}
-
 #[range]
 #[derive(Clone)]
 pub struct TypedIdentifierNode {
@@ -119,24 +101,14 @@ pub struct TypedIdentifierNode {
     pub tp: Box<TypeNameNode>,
 }
 
-impl Node for TypedIdentifierNode {
-    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+impl TypedIdentifierNode {
+    pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("TypedIdentifierNode");
         tab(tabs + 1, line.clone(), false);
         println!("id: {}", self.id);
         self.tp.print(tabs + 1, true, line.clone());
-    }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        return Value::TypeValue(self.get_type(ctx).unwrap().1.get_basic_type());
-    }
-}
-
-impl TypedIdentifierNode {
-    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<(&str, PLType<'a, 'ctx>)> {
-        let tp = self.tp.get_type(ctx)?;
-        Some((self.id.as_str(), tp))
     }
 }
 
@@ -146,8 +118,8 @@ pub struct StructDefNode {
     pub fields: Vec<Box<TypedIdentifierNode>>,
 }
 
-impl Node for StructDefNode {
-    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+impl StructDefNode {
+    pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("StructDefNode");
@@ -159,21 +131,18 @@ impl Node for StructDefNode {
             field.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        self.get_type(ctx)
-    }
 }
 
 impl StructDefNode {
-    pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        if let Some(x) = ctx.get_type(self.id.as_str()) {
-            return Value::TypeValue(x.get_basic_type());
+    pub fn emit_struct_def<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> bool {
+        if ctx.get_type(self.id.as_str()).is_some() {
+            return true;
         }
         let mut fields = BTreeMap::<String, Field<'a, 'ctx>>::new();
         let mut order_fields = Vec::<Field<'a, 'ctx>>::new();
         let mut i = 0;
         for field in self.fields.iter() {
-            if let Some((id, tp)) = field.get_type(ctx) {
+            if let (id, Some((tp, _))) = (field.id.clone(), ctx.get_type(&field.tp.id)) {
                 fields.insert(
                     id.to_string(),
                     Field {
@@ -185,12 +154,12 @@ impl StructDefNode {
                 );
                 order_fields.push(Field {
                     index: i,
-                    tp,
+                    tp: tp.clone(),
                     typename: &field.tp,
                     name: field.id.clone(),
                 });
             } else {
-                return Value::None;
+                return false;
             }
             i = i + 1;
         }
@@ -209,9 +178,10 @@ impl StructDefNode {
             struct_type: st,
             fields,
             ordered_fields: newf,
+            line_no: self.range().start.line as u32,
         });
         ctx.add_type(name.to_string(), stu.clone());
-        Value::TypeValue(st.as_basic_type_enum())
+        true
     }
 }
 
@@ -230,11 +200,12 @@ impl Node for StructInitFieldNode {
         println!("id: {}", self.id);
         self.exp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        return Value::StructFieldValue((
-            self.id.clone(),
-            self.exp.emit(ctx).as_basic_value_enum(),
-        ));
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+        let (v, tp) = self.exp.emit(ctx);
+        return (
+            Value::StructFieldValue((self.id.clone(), v.as_basic_value_enum())),
+            tp,
+        );
     }
 }
 
@@ -257,16 +228,16 @@ impl Node for StructInitNode {
             field.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         let mut fields = HashMap::<String, BasicValueEnum<'ctx>>::new();
         for field in self.fields.iter_mut() {
-            if let Value::StructFieldValue((id, val)) = field.emit(ctx) {
+            if let (Value::StructFieldValue((id, val)), _) = field.emit(ctx) {
                 fields.insert(id, val);
             } else {
                 panic!("StructInitNode::emit: invalid field");
             }
         }
-        let st = ctx.get_type(self.id.as_str()).unwrap();
+        let (st, _) = ctx.get_type(self.id.as_str()).unwrap();
         if let PLType::STRUCT(st) = st {
             let et = st.struct_type.as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");
@@ -278,7 +249,7 @@ impl Node for StructInitNode {
                     .unwrap();
                 ctx.builder.build_store(ptr, val);
             }
-            return Value::VarValue(stv);
+            return (Value::VarValue(stv), Some(self.id.clone()));
         } else {
             panic!("StructInitNode::emit: invalid type");
         }

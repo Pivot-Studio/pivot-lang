@@ -29,7 +29,6 @@ pub enum Value<'a> {
     IntValue(IntValue<'a>),
     FloatValue(FloatValue<'a>),
     VarValue(PointerValue<'a>),
-    TypeValue(BasicTypeEnum<'a>),
     LoadValue(BasicValueEnum<'a>),
     StructFieldValue((String, BasicValueEnum<'a>)),
     None,
@@ -43,18 +42,17 @@ impl<'a> Value<'a> {
             Value::FloatValue(v) => v.as_basic_value_enum(),
             Value::VarValue(v) => v.as_basic_value_enum(),
             Value::BoolValue(v) => v.as_basic_value_enum(),
-            Value::None => panic!("not implemented"),
-            Value::TypeValue(_) => panic!("not implemented"),
             Value::LoadValue(v) => *v,
             Value::StructFieldValue((_, v)) => *v,
             Value::Err(_) => panic!("not implemented"),
+            Value::None => panic!("not implemented"),
         }
     }
 }
 
 pub trait Node: RangeTrait + AsAny {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx>;
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>);
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -129,12 +127,12 @@ macro_rules! handle_calc {
         item! {
             match ($left, $right) {
                 (Value::IntValue(left), Value::IntValue(right)) => {
-                    return Value::IntValue($ctx.builder.[<build_int_$op>](
-                        left, right, "addtmp"));
+                    return (Value::IntValue($ctx.builder.[<build_int_$op>](
+                        left, right, "addtmp")),None);
                 },
                 (Value::FloatValue(left), Value::FloatValue(right)) => {
-                    return Value::FloatValue($ctx.builder.[<build_$opf>](
-                        left, right, "addtmp"));
+                    return (Value::FloatValue($ctx.builder.[<build_$opf>](
+                        left, right, "addtmp")),None);
                 },
                 _ => panic!("not implemented")
             }
