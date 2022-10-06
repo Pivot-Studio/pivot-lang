@@ -17,6 +17,10 @@ nom_locate = "4.0.0"
 as-any = "0.3.0"
 clap = { version = "3.2.22", features = ["derive"] }
 colored = "2.0.0"
+serde = "1.0.145"
+lsp-types = "0.93.1"
+lsp-server = "0.6.0"
+serde_json = "1.0.85"
 [dependencies.nom]
 version = "7"
 features = ["alloc"]
@@ -28,3 +32,7 @@ jit = ["vm"]
 [[bin]]
 name = "plc"
 path = "src/main.rs"
+
+[[bin]]
+name = "plsp"
+path = "src/lsp/main.rs"
