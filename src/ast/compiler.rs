@@ -131,6 +131,7 @@ impl Compiler {
         tm.write_to_file(ctx.module, FileType::Object, Path::new(&f))
             .unwrap();
         let link = Command::new("clang")
+            .arg(format!("-O{}", op.optimization as u32))
             .arg("-pthread")
             .arg("-ldl")
             .arg(&f)
