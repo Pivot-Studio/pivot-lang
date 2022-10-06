@@ -142,7 +142,7 @@ impl StructDefNode {
         let mut order_fields = Vec::<Field<'a, 'ctx>>::new();
         let mut i = 0;
         for field in self.fields.iter() {
-            if let (id, Some((tp, _))) = (field.id.clone(), ctx.get_type(&field.id)) {
+            if let (id, Some((tp, _))) = (field.id.clone(), ctx.get_type(&field.tp.id)) {
                 fields.insert(
                     id.to_string(),
                     Field {

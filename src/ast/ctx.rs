@@ -41,7 +41,7 @@ fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
 #[derive(Debug, Clone)]
 pub struct Ctx<'a, 'ctx> {
     pub table: HashMap<String, (PointerValue<'ctx>, String)>,
-    pub types: HashMap<String, (PLType<'a, 'ctx>, DIType<'ctx>)>,
+    pub types: HashMap<String, (PLType<'a, 'ctx>, Option<DIType<'ctx>>)>,
     pub father: Option<&'a Ctx<'a, 'ctx>>,
     pub context: &'ctx Context,
     pub builder: &'a Builder<'ctx>,
@@ -110,7 +110,7 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
     pub fn get_ditype(&self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
         let td = ctx.targetmachine.get_target_data();
         match self {
-            PLType::FN(_) => todo!(),
+            PLType::FN(_) => None,
             PLType::STRUCT(x) => {
                 let mut offset = 0;
                 let m = x
@@ -227,7 +227,7 @@ fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
         basetype: ctx.context.i64_type().as_basic_type_enum(),
         id: "i64".to_string(),
     });
-    let ditype_i64 = pltype_i64.get_ditype(ctx).unwrap();
+    let ditype_i64 = pltype_i64.get_ditype(ctx);
     ctx.types
         .insert("i64".to_string(), (pltype_i64.clone(), ditype_i64));
 
@@ -235,7 +235,7 @@ fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
         basetype: ctx.context.f64_type().as_basic_type_enum(),
         id: "f64".to_string(),
     });
-    let ditype_f64 = pltype_f64.get_ditype(ctx).unwrap();
+    let ditype_f64 = pltype_f64.get_ditype(ctx);
     ctx.types
         .insert("f64".to_string(), (pltype_f64.clone(), ditype_f64));
 
@@ -243,12 +243,12 @@ fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
         basetype: ctx.context.bool_type().as_basic_type_enum(),
         id: "bool".to_string(),
     });
-    let ditype_bool = pltype_bool.get_ditype(ctx).unwrap();
+    let ditype_bool = pltype_bool.get_ditype(ctx);
     ctx.types
         .insert("bool".to_string(), (pltype_bool.clone(), ditype_bool));
 
     let pltype_void = PLType::VOID(ctx.context.void_type());
-    let ditype_void = pltype_void.get_ditype(ctx).unwrap();
+    let ditype_void = pltype_void.get_ditype(ctx);
     ctx.types
         .insert("void".to_string(), (pltype_void.clone(), ditype_void));
 }
@@ -381,7 +381,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.table.insert(name, (pv, tp));
     }
 
-    pub fn get_type(&self, name: &str) -> Option<&(PLType<'a, 'ctx>, DIType<'ctx>)> {
+    pub fn get_type(&self, name: &str) -> Option<&(PLType<'a, 'ctx>, Option<DIType<'ctx>>)> {
         let v = self.types.get(name);
         if let Some(pv) = v {
             return Some(pv);
@@ -396,7 +396,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if self.types.contains_key(&name) {
             todo!() // TODO 报错
         }
-        let ditype = tp.get_ditype(self).unwrap();
+        let ditype = tp.get_ditype(self);
         self.types.insert(name, (tp.clone(), ditype));
     }
 

@@ -22,21 +22,31 @@ impl Node for DefNode {
         let e = ctx.try_load(v).as_basic_value_enum();
         let tp = e.get_type();
         let p = alloc(ctx, tp, &self.var.name);
-        ctx.builder.build_store(p, e);
         let pltype = pltype.unwrap();
-        let (_, ditype) = ctx.get_type(pltype.as_str()).unwrap();
-        ctx.dibuilder.create_auto_variable(
-            ctx.discope,
-            &self.var.name,
-            ctx.diunit.get_file(),
-            self.var.range().start.line as u32,
-            *ditype,
-            true,
-            DIFlags::PUBLIC,
-            ditype.get_align_in_bits(),
-        );
-        ctx.add_symbol(self.var.name.clone(), p, pltype.clone());
-        (Value::None, Some(pltype))
+        if let (_, Some(ditype)) = ctx.get_type(pltype.as_str()).unwrap() {
+            let var_info = ctx.dibuilder.create_auto_variable(
+                ctx.discope,
+                &self.var.name,
+                ctx.diunit.get_file(),
+                self.var.range.start.line as u32,
+                *ditype,
+                true,
+                DIFlags::PUBLIC,
+                ditype.get_align_in_bits(),
+            );
+            ctx.build_dbg_location(self.var.range.start);
+            ctx.dibuilder.insert_declare_at_end(
+                p,
+                Some(var_info),
+                None,
+                ctx.builder.get_current_debug_location().unwrap(),
+                ctx.function.unwrap().get_first_basic_block().unwrap(),
+            );
+            ctx.add_symbol(self.var.name.clone(), p, pltype.clone());
+            ctx.builder.build_store(p, e);
+            return (Value::None, Some(pltype));
+        }
+        todo!()
     }
 }
 #[range]

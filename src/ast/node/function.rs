@@ -167,9 +167,9 @@ impl Node for FuncCallNode {
             format(format_args!("call_{}", self.id)).as_str(),
         );
         if let (PLType::FN(fv), _) = ctx.get_type(&self.id).unwrap() {
-            match (fv.ret_pltype.as_ref(), ret.try_as_basic_value().left()) {
-                (Some(pltype), Some(v)) => return (Value::LoadValue(v), Some(pltype.clone())),
-                (None, None) => return (Value::None, None),
+            match (ret.try_as_basic_value().left(), fv.ret_pltype.as_ref()) {
+                (Some(v), Some(pltype)) => return (Value::LoadValue(v), Some(pltype.clone())),
+                (None, Some(pltype)) => return (Value::None, Some(pltype.clone())),
                 _ => todo!(),
             }
         }
@@ -196,7 +196,7 @@ impl FuncTypeNode {
         }
         let mut para_types = Vec::new();
         for para in self.paralist.iter() {
-            para_types.push(ctx.get_type(&para.id).unwrap().0.get_basic_type().into());
+            para_types.push(ctx.get_type(&para.tp.id).unwrap().0.get_basic_type().into());
         }
         let ret_type = ctx.get_type(&self.ret.id).unwrap().0.get_ret_type();
         let func_type = ret_type.fn_type(&para_types, false);
