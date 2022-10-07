@@ -41,6 +41,17 @@ impl FuncDefNode {
         ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
     ) -> (Value<'ctx>, Option<String>) {
         let typenode = self.typenode.clone();
+        for p in typenode.paralist.iter() {
+            if p.tp.id == "void" {
+                return (
+                    Value::Err(ctx.add_err(
+                        p.range,
+                        crate::ast::error::ErrorCode::VOID_TYPE_CANNOT_BE_PARAMETER,
+                    )),
+                    None,
+                );
+            }
+        }
         // build debug info
         let param_ditypes = self
             .typenode
@@ -79,10 +90,10 @@ impl FuncDefNode {
         if let Some((fu, _)) = ctx.get_type(typenode.id.as_str()) {
             func = match fu {
                 PLType::FN(fu) => fu.fntype,
-                _ => panic!("type error"),
+                _ => panic!("type error"), // 理论上这两个Panic不可能触发
             };
         } else {
-            panic!("fn not found");
+            panic!("fn not found"); // 理论上这两个Panic不可能触发
         }
         func.set_subprogram(subprogram);
         ctx.discope = subprogram.as_debug_info_scope();
@@ -122,7 +133,13 @@ impl FuncDefNode {
                     allocab,
                 );
                 ctx.builder.build_store(alloca, *para);
-                ctx.add_symbol(para_names[i].clone(), alloca, para_pltype_ids[i].clone());
+                ctx.add_symbol(
+                    para_names[i].clone(),
+                    alloca,
+                    para_pltype_ids[i].clone(),
+                    self.range,
+                )
+                .unwrap();
             }
             // emit body
             body.emit(ctx);
@@ -155,25 +172,61 @@ impl Node for FuncCallNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         let mut para_values = Vec::new();
-        for para in self.paralist.iter_mut() {
+        let func = ctx.module.get_function(self.id.as_str()).unwrap();
+        if func.count_params() != self.paralist.len() as u32 {
+            return (
+                Value::Err(ctx.add_err(
+                    self.range,
+                    crate::ast::error::ErrorCode::PARAMETER_LENGTH_NOT_MATCH,
+                )),
+                None,
+            );
+        }
+        for (i, para) in self.paralist.iter_mut().enumerate() {
+            let pararange = para.range();
             let (v, _) = para.emit(ctx);
             let load = ctx.try_load(v);
+            let param = func.get_nth_param(i as u32).unwrap();
+            let be = load.as_basic_value_enum_op();
+            if be.is_none() {
+                return (load, None);
+            }
+            if be.unwrap().get_type() != param.get_type() {
+                return (
+                    Value::Err(ctx.add_err(
+                        pararange,
+                        crate::ast::error::ErrorCode::PARAMETER_TYPE_NOT_MATCH,
+                    )),
+                    None,
+                );
+            }
             para_values.push(load.as_basic_value_enum().into());
         }
-        let func = ctx.module.get_function(self.id.as_str()).unwrap();
         let ret = ctx.builder.build_call(
             func,
             &para_values,
             format(format_args!("call_{}", self.id)).as_str(),
         );
-        if let (PLType::FN(fv), _) = ctx.get_type(&self.id).unwrap() {
+        let fntp = ctx.get_type(&self.id);
+        if fntp.is_none() {
+            return (
+                Value::Err(
+                    ctx.add_err(self.range, crate::ast::error::ErrorCode::FUNCTION_NOT_FOUND),
+                ),
+                None,
+            );
+        }
+        if let (PLType::FN(fv), _) = fntp.unwrap() {
             match (ret.try_as_basic_value().left(), fv.ret_pltype.as_ref()) {
                 (Some(v), Some(pltype)) => return (Value::LoadValue(v), Some(pltype.clone())),
                 (None, Some(pltype)) => return (Value::None, Some(pltype.clone())),
                 _ => todo!(),
             }
         }
-        todo!();
+        return (
+            Value::Err(ctx.add_err(self.range, crate::ast::error::ErrorCode::NOT_A_FUNCTION)),
+            None,
+        );
     }
 }
 #[derive(Clone)]

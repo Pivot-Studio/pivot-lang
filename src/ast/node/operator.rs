@@ -44,7 +44,13 @@ impl Node for UnaryOpNode {
                 )),
                 pltype,
             ),
-            (exp, op) => panic!("not implemented,get exp {:?},op {:?}", exp, op),
+            (_exp, _op) => (
+                Value::Err(ctx.add_err(
+                    self.range,
+                    crate::ast::error::ErrorCode::INVALID_UNARY_EXPRESSION,
+                )),
+                None,
+            ),
         };
     }
 }
@@ -70,7 +76,15 @@ impl Node for BinOpNode {
         let left = ctx.try_load(lv);
         let (rv, rpltype) = self.right.emit(ctx);
         let right = ctx.try_load(rv);
-        assert_eq!(lpltype, rpltype);
+        if lpltype != rpltype {
+            return (
+                Value::Err(ctx.add_err(
+                    self.range,
+                    crate::ast::error::ErrorCode::BIN_OP_TYPE_MISMATCH,
+                )),
+                None,
+            );
+        }
         match self.op {
             TokenType::PLUS => handle_calc!(ctx, add, float_add, left, right),
             TokenType::MINUS => handle_calc!(ctx, sub, float_sub, left, right),
@@ -100,23 +114,45 @@ impl Node for BinOpNode {
                     )),
                     Some("bool".to_string()),
                 ),
-                _ => panic!("not implemented"),
+                _ => (
+                    Value::Err(ctx.add_err(
+                        self.range,
+                        crate::ast::error::ErrorCode::VALUE_NOT_COMPARABLE,
+                    )),
+                    None,
+                ),
             },
             TokenType::AND => match (left, right) {
                 (Value::BoolValue(lhs), Value::BoolValue(rhs)) => (
                     Value::BoolValue(ctx.builder.build_and(lhs, rhs, "andtmp")),
                     Some("bool".to_string()),
                 ),
-                _ => panic!("not implemented"),
+                _ => (
+                    Value::Err(
+                        ctx.add_err(self.range, crate::ast::error::ErrorCode::LOGIC_OP_NOT_BOOL),
+                    ),
+                    None,
+                ),
             },
             TokenType::OR => match (left, right) {
                 (Value::BoolValue(lhs), Value::BoolValue(rhs)) => (
                     Value::BoolValue(ctx.builder.build_or(lhs, rhs, "ortmp")),
                     Some("bool".to_string()),
                 ),
-                _ => panic!("not implemented"),
+                _ => (
+                    Value::Err(
+                        ctx.add_err(self.range, crate::ast::error::ErrorCode::LOGIC_OP_NOT_BOOL),
+                    ),
+                    None,
+                ),
             },
-            op => panic!("expected op token but found {:?}", op),
+            _ => (
+                Value::Err(ctx.add_err(
+                    self.range,
+                    crate::ast::error::ErrorCode::UNRECOGNIZED_BIN_OPERATOR,
+                )),
+                None,
+            ),
         }
     }
 }
@@ -153,14 +189,30 @@ impl Node for TakeOpNode {
                         let tpname = st.get_name().unwrap().to_str().unwrap();
                         let (tp, _) = ctx.get_type(tpname).unwrap();
                         if let PLType::STRUCT(s) = tp {
-                            let field = s.fields.get(&id.name).unwrap();
-                            index = field.index;
-                            pltype = Some(field.typename.id.clone());
+                            let field = s.fields.get(&id.name);
+                            if let Some(field) = field {
+                                index = field.index;
+                                pltype = Some(field.typename.id.clone());
+                            } else {
+                                return (
+                                    Value::Err(ctx.add_err(
+                                        id.range,
+                                        crate::ast::error::ErrorCode::STRUCT_FIELD_NOT_FOUND,
+                                    )),
+                                    None,
+                                );
+                            }
                         } else {
                             panic!("not implemented");
                         }
                     } else {
-                        panic!("not implemented")
+                        return (
+                            Value::Err(ctx.add_err(
+                                id.range,
+                                crate::ast::error::ErrorCode::INVALID_GET_FIELD,
+                            )),
+                            None,
+                        );
                     }
                     Value::VarValue(ctx.builder.build_struct_gep(s, index, "structgep").unwrap())
                 }

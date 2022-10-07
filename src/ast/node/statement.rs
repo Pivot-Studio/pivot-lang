@@ -42,7 +42,10 @@ impl Node for DefNode {
                 ctx.builder.get_current_debug_location().unwrap(),
                 ctx.function.unwrap().get_first_basic_block().unwrap(),
             );
-            ctx.add_symbol(self.var.name.clone(), p, pltype.clone());
+            let re = ctx.add_symbol(self.var.name.clone(), p, pltype.clone(), self.var.range);
+            if re.is_err() {
+                return (Value::Err(re.unwrap_err()), None);
+            }
             ctx.builder.build_store(p, e);
             return (Value::None, Some(pltype));
         }

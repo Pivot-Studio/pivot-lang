@@ -1,4 +1,5 @@
 use crate::ast::node::Value;
+use colored::Colorize;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
@@ -66,7 +67,7 @@ pub struct Ctx<'a, 'ctx> {
 
 #[derive(Debug, Clone)]
 pub enum PLDiag {
-    SyntaxError(Err),
+    Error(Err),
 }
 
 #[derive(Debug, Clone)]
@@ -80,17 +81,28 @@ const PL_DIAG_SOURCE: &str = "plsp";
 impl PLDiag {
     pub fn print(&self) {
         match self {
-            PLDiag::SyntaxError(s) => {
-                println!("{}", s.msg);
+            PLDiag::Error(s) => {
+                let err = format!(
+                    "error at {}\n\t{}",
+                    format!(
+                        "{}:{}:{}",
+                        s.msg,
+                        s.diag.range.start.line + 1,
+                        s.diag.range.start.character + 1
+                    )
+                    .yellow(),
+                    format!("{}", s.diag.message.blue().bold()),
+                );
+                println!("{}", err);
             }
         }
     }
     pub fn get_diagnostic(&self) -> Diagnostic {
         match self {
-            PLDiag::SyntaxError(s) => s.diag.clone(),
+            PLDiag::Error(s) => s.diag.clone(),
         }
     }
-    pub fn new_syntax_error(msg: String, range: Range, code: ErrorCode) -> Self {
+    pub fn new_error(file: String, range: Range, code: ErrorCode) -> Self {
         let diag = Diagnostic::new_with_code_number(
             range.to_diag_range(),
             DiagnosticSeverity::ERROR,
@@ -98,7 +110,7 @@ impl PLDiag {
             Some(PL_DIAG_SOURCE.to_string()),
             ERR_MSG[&code].to_string(),
         );
-        PLDiag::SyntaxError(Err { msg, diag })
+        PLDiag::Error(Err { msg: file, diag })
     }
 }
 
@@ -116,15 +128,19 @@ pub struct PriType<'ctx> {
 }
 impl<'a, 'ctx> PLType<'a, 'ctx> {
     pub fn get_basic_type(&self) -> BasicTypeEnum<'ctx> {
+        self.get_basic_type_op().unwrap()
+    }
+    pub fn get_basic_type_op(&self) -> Option<BasicTypeEnum<'ctx>> {
         match self {
-            PLType::FN(f) => f
-                .fntype
-                .get_type()
-                .ptr_type(inkwell::AddressSpace::Global)
-                .as_basic_type_enum(),
-            PLType::STRUCT(s) => s.struct_type.as_basic_type_enum(),
-            PLType::PRIMITIVE(t) => t.basetype,
-            PLType::VOID(_) => panic!("void type"),
+            PLType::FN(f) => Some(
+                f.fntype
+                    .get_type()
+                    .ptr_type(inkwell::AddressSpace::Global)
+                    .as_basic_type_enum(),
+            ),
+            PLType::STRUCT(s) => Some(s.struct_type.as_basic_type_enum()),
+            PLType::PRIMITIVE(t) => Some(t.basetype),
+            PLType::VOID(_) => None,
         }
     }
 
@@ -402,11 +418,18 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         None
     }
 
-    pub fn add_symbol(&mut self, name: String, pv: PointerValue<'ctx>, tp: String) {
+    pub fn add_symbol(
+        &mut self,
+        name: String,
+        pv: PointerValue<'ctx>,
+        tp: String,
+        range: Range,
+    ) -> Result<(), PLDiag> {
         if self.table.contains_key(&name) {
-            todo!() // TODO 报错
+            return Err(self.add_err(range, ErrorCode::REDECLARATION));
         }
         self.table.insert(name, (pv, tp));
+        Ok(())
     }
 
     pub fn get_type(&self, name: &str) -> Option<&(PLType<'a, 'ctx>, Option<DIType<'ctx>>)> {
@@ -428,8 +451,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.types.insert(name, (tp.clone(), ditype));
     }
 
-    pub fn add_err(&mut self, err: PLDiag) {
-        self.errs.borrow_mut().push(err);
+    pub fn add_err(&mut self, range: Range, code: ErrorCode) -> PLDiag {
+        let dia = PLDiag::new_error(self.src_file_path.to_string(), range, code);
+        self.errs.borrow_mut().push(dia.clone());
+        dia
     }
 
     pub fn try_load(&mut self, v: Value<'ctx>) -> Value<'ctx> {

@@ -1,6 +1,7 @@
 use super::statement::StatementsNode;
 use super::*;
 use crate::ast::ctx::Ctx;
+use crate::ast::error::ErrorCode;
 use internal_macro::range;
 
 #[range]
@@ -40,12 +41,16 @@ impl Node for IfNode {
         position_at_end(ctx, cond_block);
         let (cond, _) = self.cond.emit(ctx);
         let cond = ctx.try_load(cond);
-        let cond = match cond {
-            Value::BoolValue(v) => v,
-            _ => panic!("not implemented"),
-        };
+        let con;
+        if let Value::BoolValue(value) = cond {
+            con = value;
+        } else {
+            let err = ctx.add_err(self.range, ErrorCode::IF_CONDITION_MUST_BE_BOOL);
+            return (Value::Err(err), None);
+        }
+
         ctx.builder
-            .build_conditional_branch(cond, then_block, else_block);
+            .build_conditional_branch(con, then_block, else_block);
         // then block
         position_at_end(ctx, then_block);
         self.then.emit(ctx);
@@ -91,12 +96,15 @@ impl Node for WhileNode {
         position_at_end(ctx, cond_block);
         let start = self.cond.range().start;
         let cond = self.cond.emit(ctx);
-        let cond = match cond {
-            (Value::BoolValue(v), _) => v,
-            _ => panic!("not implemented"),
-        };
+        let con;
+        if let Value::BoolValue(value) = cond.0 {
+            con = value;
+        } else {
+            let err = ctx.add_err(self.range, ErrorCode::WHILE_CONDITION_MUST_BE_BOOL);
+            return (Value::Err(err), None);
+        }
         ctx.builder
-            .build_conditional_branch(cond, body_block, after_block);
+            .build_conditional_branch(con, body_block, after_block);
         position_at_end(ctx, body_block);
         self.body.emit_child(ctx);
         ctx.build_dbg_location(start);
@@ -158,13 +166,16 @@ impl Node for ForNode {
         ctx.build_dbg_location(self.cond.range().start);
         let cond_start = self.cond.range().start;
         let cond = self.cond.emit(ctx);
-        let cond = match cond {
-            (Value::BoolValue(v), _) => v,
-            _ => panic!("not implemented"),
-        };
+        let con;
+        if let Value::BoolValue(value) = cond.0 {
+            con = value;
+        } else {
+            let err = ctx.add_err(self.range, ErrorCode::IF_CONDITION_MUST_BE_BOOL);
+            return (Value::Err(err), None);
+        }
         ctx.build_dbg_location(self.body.range().start);
         ctx.builder
-            .build_conditional_branch(cond, body_block, after_block);
+            .build_conditional_branch(con, body_block, after_block);
         position_at_end(ctx, opt_block);
         if let Some(op) = &mut self.opt {
             ctx.build_dbg_location(op.range().start);
@@ -200,7 +211,8 @@ impl Node for BreakNode {
                     .append_basic_block(ctx.function.unwrap(), "dead"),
             );
         } else {
-            panic!("break not in loop");
+            let err = ctx.add_err(self.range, ErrorCode::BREAK_MUST_BE_IN_LOOP);
+            return (Value::Err(err), None);
         }
         (Value::None, None)
     }
@@ -226,7 +238,8 @@ impl Node for ContinueNode {
                     .append_basic_block(ctx.function.unwrap(), "dead"),
             );
         } else {
-            panic!("continue not in loop");
+            let err = ctx.add_err(self.range, ErrorCode::CONTINUE_MUST_BE_IN_LOOP);
+            return (Value::Err(err), None);
         }
         (Value::None, None)
     }

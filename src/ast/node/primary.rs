@@ -1,5 +1,5 @@
 use super::*;
-use crate::ast::ctx::Ctx;
+use crate::ast::{ctx::Ctx, error::ErrorCode};
 
 use internal_macro::range;
 
@@ -62,6 +62,9 @@ impl Node for VarNode {
         if let Some((v, pltype)) = v {
             return (Value::VarValue(*v), Some(pltype));
         }
-        todo!(); // TODO: 未定义的变量
+        (
+            Value::Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND)),
+            None,
+        )
     }
 }

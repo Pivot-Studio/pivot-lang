@@ -23,5 +23,23 @@ macro_rules! define_error {
 define_error!(
     SYNTAX_ERROR_STATEMENT = "failed to parse statement",
     SYNTAX_ERROR_TOP_STATEMENT = "failed to parse top level statement",
-    WHILE_CONDITION_MUST_BE_BOOL = "while condition must be bool"
+    WHILE_CONDITION_MUST_BE_BOOL = "while condition must be bool",
+    IF_CONDITION_MUST_BE_BOOL = "if condition must be bool",
+    BREAK_MUST_BE_IN_LOOP = "break statement must be in loop",
+    CONTINUE_MUST_BE_IN_LOOP = "continue statement must be in loop",
+    VOID_TYPE_CANNOT_BE_PARAMETER = "void type cannot be function parameter",
+    PARAMETER_TYPE_NOT_MATCH = "parameter type not match",
+    PARAMETER_LENGTH_NOT_MATCH = "parameter length not match",
+    FUNCTION_NOT_FOUND = "function not found",
+    NOT_A_FUNCTION = "not a function",
+    BIN_OP_TYPE_MISMATCH = "binary operation type mismatch",
+    VALUE_NOT_COMPARABLE = "value not comparable",
+    LOGIC_OP_NOT_BOOL = "logic operation parameters must be bool",
+    UNRECOGNIZED_BIN_OPERATOR = "unrecognized binary operator",
+    UNRECOGNIZED_UNARY_OPERATOR = "unrecognized unary operator",
+    INVALID_UNARY_EXPRESSION = "invalid unary expression",
+    STRUCT_FIELD_NOT_FOUND = "struct field not found",
+    INVALID_GET_FIELD = "cannot get field from non struct type",
+    VAR_NOT_FOUND = "variable not found",
+    REDECLARATION = "redeclaration of variable"
 );

@@ -37,15 +37,18 @@ pub enum Value<'a> {
 
 impl<'a> Value<'a> {
     pub fn as_basic_value_enum(&self) -> BasicValueEnum<'a> {
+        self.as_basic_value_enum_op().unwrap()
+    }
+    pub fn as_basic_value_enum_op(&self) -> Option<BasicValueEnum<'a>> {
         match self {
-            Value::IntValue(v) => v.as_basic_value_enum(),
-            Value::FloatValue(v) => v.as_basic_value_enum(),
-            Value::VarValue(v) => v.as_basic_value_enum(),
-            Value::BoolValue(v) => v.as_basic_value_enum(),
-            Value::LoadValue(v) => *v,
-            Value::StructFieldValue((_, v)) => *v,
-            Value::Err(_) => panic!("not implemented"),
-            Value::None => panic!("not implemented"),
+            Value::IntValue(v) => Some(v.as_basic_value_enum()),
+            Value::FloatValue(v) => Some(v.as_basic_value_enum()),
+            Value::VarValue(v) => Some(v.as_basic_value_enum()),
+            Value::BoolValue(v) => Some(v.as_basic_value_enum()),
+            Value::LoadValue(v) => Some(*v),
+            Value::StructFieldValue((_, v)) => Some(*v),
+            Value::Err(_) => None,
+            Value::None => None,
         }
     }
 }
