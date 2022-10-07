@@ -82,7 +82,7 @@ impl Compiler {
         let mut parser = PLParser::new(input);
         let parse_result = parser.parse();
         if let Err(e) = parse_result {
-            println!("{}", e);
+            eprintln!("{}", e);
             return;
         }
         let mut node = parse_result.unwrap();
