@@ -16,6 +16,7 @@ use super::{box_node, Span};
 pub fn except<'a, E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt::Error>>(
     except: &'static str,
     msg: &'static str,
+    code: crate::ast::error::ErrorCode,
 ) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, Box<dyn Node>, E> {
     move |i| {
         let (mut i, sp) = recognize(is_not(Span::from(except)))(i)?;
@@ -47,6 +48,7 @@ pub fn except<'a, E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt
             msg,
             src,
             range: Range::new(sp, end),
+            code,
         });
         Ok((i, node))
     }
@@ -56,12 +58,13 @@ pub fn alt_except<'a, E, F>(
     parser: F,
     ex: &'static str,
     msg: &'static str,
+    code: crate::ast::error::ErrorCode,
 ) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, Box<dyn Node>, E>
 where
     E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt::Error>,
     F: FnMut(Span<'a>) -> IResult<Span<'a>, Box<dyn Node>, E>,
 {
-    alt((parser, except(ex, msg)))
+    alt((parser, except(ex, msg, code)))
 }
 
 // pub fn expect<'a, E,F>(

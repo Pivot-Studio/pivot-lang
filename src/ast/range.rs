@@ -38,4 +38,17 @@ impl Range {
             },
         }
     }
+
+    pub fn to_diag_range(&self) -> lsp_types::Range {
+        lsp_types::Range {
+            start: lsp_types::Position {
+                line: self.start.line as u32 - 1,
+                character: self.start.column as u32 - 1,
+            },
+            end: lsp_types::Position {
+                line: self.end.line as u32 - 1,
+                character: self.end.column as u32 - 1,
+            },
+        }
+    }
 }

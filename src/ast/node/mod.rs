@@ -6,7 +6,7 @@ use inkwell::basic_block::BasicBlock;
 use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
 
-use super::ctx::PLErr;
+use super::ctx::PLDiag;
 use super::range::Pos;
 
 pub mod control;
@@ -32,7 +32,7 @@ pub enum Value<'a> {
     LoadValue(BasicValueEnum<'a>),
     StructFieldValue((String, BasicValueEnum<'a>)),
     None,
-    Err(PLErr),
+    Err(PLDiag),
 }
 
 impl<'a> Value<'a> {

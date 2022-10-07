@@ -1,4 +1,5 @@
 mod ast;
+mod lsp;
 mod nomparser;
 mod utils;
 use std::path::Path;
@@ -6,6 +7,7 @@ use std::path::Path;
 use ast::compiler::{self, Compiler};
 use clap::{CommandFactory, Parser, Subcommand};
 use inkwell::OptimizationLevel;
+use lsp::start_lsp;
 
 /// Pivot Lang compiler program
 #[derive(Parser)]
@@ -47,6 +49,8 @@ enum RunCommand {
         #[clap(value_parser)]
         name: String,
     },
+    /// Start the language server
+    Lsp {},
 }
 
 fn main() {
@@ -64,8 +68,9 @@ fn main() {
         let c = Compiler::new();
         c.compile(
             name,
+            lsp::mem_docs::MemDocs::new(),
             &cli.out,
-            compiler::Option {
+            compiler::Options {
                 verbose: cli.verbose,
                 genir: cli.genir,
                 printast: cli.printast,
@@ -79,6 +84,9 @@ fn main() {
                 Compiler::run(Path::new(name.as_str()), opt);
                 #[cfg(not(feature = "jit"))]
                 println!("feature jit is not enabled, cannot use run command");
+            }
+            RunCommand::Lsp {} => {
+                start_lsp().unwrap();
             }
         }
     } else {

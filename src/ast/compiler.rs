@@ -1,26 +1,27 @@
-use std::{
-    cell::RefCell,
-    fs::{self, read_to_string},
-    path::Path,
-    time::Instant,
-};
+use std::{cell::RefCell, fs, path::Path, time::Instant};
 
 use colored::Colorize;
+use crossbeam_channel::Sender;
 use inkwell::{
     context::Context,
     module::Module,
     targets::{FileType, InitializationConfig, Target, TargetMachine},
     OptimizationLevel,
 };
+use lsp_server::Message;
 
-use crate::nomparser::PLParser;
+use crate::{
+    lsp::{diagnostics::send_diagnostics, mem_docs::MemDocs},
+    nomparser::PLParser,
+};
 use std::process::Command;
 
 use super::ctx::{self, create_ctx_info};
 
 pub struct Compiler {}
 
-pub struct Option {
+#[derive(Debug, Clone, Default)]
+pub struct Options {
     pub verbose: bool,
     pub genir: bool,
     pub printast: bool,
@@ -65,7 +66,36 @@ impl Compiler {
         }
     }
 
-    pub fn compile(&self, file: &str, out: &str, op: Option) {
+    pub fn compile_dry(&self, file: &str, docs: &MemDocs, op: Options, sender: &Sender<Message>) {
+        let context = &Context::create();
+        let filepath = Path::new(file);
+        let abs = fs::canonicalize(filepath).unwrap();
+        let dir = abs.parent().unwrap().to_str().unwrap();
+        let fname = abs.file_name().unwrap().to_str().unwrap();
+
+        let (a, b, c, d, e, f) = create_ctx_info(context, dir, fname);
+        let v = RefCell::new(Vec::new());
+        let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e, &f, abs.to_str().unwrap(), &v);
+        let m = &mut ctx;
+        let str = docs.get_file_content(file).unwrap();
+        let input = str.as_str();
+        let mut parser = PLParser::new(input);
+        let parse_result = parser.parse();
+        if let Err(e) = parse_result {
+            println!("{}", e);
+            return;
+        }
+        let mut node = parse_result.unwrap();
+        if op.printast {
+            node.print(0, true, vec![]);
+        }
+
+        node.emit(m);
+        let vs = v.borrow().iter().map(|v| v.get_diagnostic()).collect();
+        send_diagnostics(&sender, file.to_string(), vs)
+    }
+
+    pub fn compile(&self, file: &str, docs: MemDocs, out: &str, op: Options) {
         let now = Instant::now();
         let context = &Context::create();
         let filepath = Path::new(file);
@@ -77,7 +107,7 @@ impl Compiler {
         let v = RefCell::new(Vec::new());
         let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e, &f, abs.to_str().unwrap(), &v);
         let m = &mut ctx;
-        let str = read_to_string(filepath).unwrap();
+        let str = docs.get_file_content(file).unwrap();
         let input = str.as_str();
         let mut parser = PLParser::new(input);
         let parse_result = parser.parse();

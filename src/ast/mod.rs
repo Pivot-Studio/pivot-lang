@@ -1,5 +1,6 @@
 pub mod compiler;
 pub mod ctx;
+pub mod error;
 pub mod node;
 pub mod range;
 pub mod tokens;

@@ -1,5 +1,5 @@
 use super::*;
-use crate::ast::ctx::Ctx;
+use crate::ast::{ctx::Ctx, error::ErrorCode};
 use colored::Colorize;
 use internal_macro::range;
 
@@ -7,6 +7,7 @@ use internal_macro::range;
 pub struct ErrorNode {
     pub msg: String,
     pub src: String,
+    pub code: ErrorCode,
 }
 
 impl Node for ErrorNode {
@@ -28,7 +29,8 @@ impl Node for ErrorNode {
             format!("{}", self.src.red().underline()),
             format!("{}", self.msg.blue().bold()),
         );
-        let err = PLErr::SyntaxError(err);
+
+        let err = PLDiag::new_syntax_error(err, self.range, self.code);
         ctx.add_err(err.clone());
         (Value::Err(err), None)
     }

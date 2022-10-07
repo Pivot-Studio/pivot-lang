@@ -1,16 +1,22 @@
 use std::error::Error;
 
+pub mod diagnostics;
+pub mod mem_docs;
+
 use lsp_types::{
-    notification::{DidChangeTextDocument, DidOpenTextDocument, Notification, PublishDiagnostics},
+    notification::{DidChangeTextDocument, DidOpenTextDocument},
     request::GotoDefinition,
-    Diagnostic, GotoDefinitionResponse, InitializeParams, OneOf, Position,
-    PublishDiagnosticsParams, ServerCapabilities, TextDocumentEdit, TextDocumentSyncKind,
+    GotoDefinitionResponse, InitializeParams, OneOf, ServerCapabilities, TextDocumentSyncKind,
     TextDocumentSyncOptions,
 };
 
 use lsp_server::{Connection, ExtractError, Message, Request, RequestId, Response};
 
-fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
+use mem_docs::MemDocs;
+
+use crate::ast::compiler::{Compiler, Options};
+
+pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
     // Note that  we must have our logging only write out to stderr.
     eprintln!("starting generic LSP server");
 
@@ -23,7 +29,7 @@ fn main() -> Result<(), Box<dyn Error + Sync + Send>> {
         definition_provider: Some(OneOf::Left(true)),
         text_document_sync: Some(lsp_types::TextDocumentSyncCapability::Options(
             TextDocumentSyncOptions {
-                change: Some(TextDocumentSyncKind::INCREMENTAL),
+                change: Some(TextDocumentSyncKind::FULL), // TODO incremental
                 ..Default::default()
             },
         )),
@@ -45,7 +51,9 @@ fn main_loop(
     params: serde_json::Value,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
     let _params: InitializeParams = serde_json::from_value(params).unwrap();
+    let mut docs = MemDocs::new();
     eprintln!("starting example main loop");
+    let c = Compiler::new();
     for msg in &connection.receiver {
         eprintln!("got msg: {:?}", msg);
         match msg {
@@ -81,30 +89,23 @@ fn main_loop(
                 match cast_noti::<DidChangeTextDocument>(not.clone()) {
                     Ok(params) => {
                         eprintln!("got doc edit noti: {:?}", params);
-                        let result = vec![Diagnostic::new_simple(
-                            lsp_types::Range {
-                                start: Position {
-                                    line: 1,
-                                    character: 1,
-                                },
-                                end: Position {
-                                    line: 1,
-                                    character: 2,
-                                },
+                        let f = params
+                            .text_document
+                            .uri
+                            .to_file_path()
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string();
+                        docs.insert(f.clone(), params.content_changes[0].text.clone());
+                        c.compile_dry(
+                            &f,
+                            &docs,
+                            Options {
+                                ..Default::default()
                             },
-                            "test diag".to_string(),
-                        )];
-                        let resp =
-                            PublishDiagnosticsParams::new(params.text_document.uri, result, None);
-                        let result = serde_json::to_value(&resp).unwrap();
-                        connection.sender.send(
-                            lsp_server::Notification::new(
-                                PublishDiagnostics::METHOD.to_string(),
-                                result,
-                            )
-                            .into(),
-                        )?;
-                        eprintln!("diag sent");
+                            &connection.sender,
+                        );
                         continue;
                     }
                     Err(e) => {
@@ -113,31 +114,24 @@ fn main_loop(
                 }
                 match cast_noti::<DidOpenTextDocument>(not) {
                     Ok(params) => {
-                        eprintln!("got doc edit noti: {:?}", params);
-                        let result = vec![Diagnostic::new_simple(
-                            lsp_types::Range {
-                                start: Position {
-                                    line: 1,
-                                    character: 1,
-                                },
-                                end: Position {
-                                    line: 1,
-                                    character: 2,
-                                },
+                        eprintln!("got doc open noti: {:?}", params);
+                        let f = params
+                            .text_document
+                            .uri
+                            .to_file_path()
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string();
+                        docs.insert(f.clone(), params.text_document.text);
+                        c.compile_dry(
+                            &f,
+                            &docs,
+                            Options {
+                                ..Default::default()
                             },
-                            "test diag".to_string(),
-                        )];
-                        let resp =
-                            PublishDiagnosticsParams::new(params.text_document.uri, result, None);
-                        let result = serde_json::to_value(&resp).unwrap();
-                        connection.sender.send(
-                            lsp_server::Notification::new(
-                                PublishDiagnostics::METHOD.to_string(),
-                                result,
-                            )
-                            .into(),
-                        )?;
-                        eprintln!("diag sent");
+                            &connection.sender,
+                        );
                         continue;
                     }
                     Err(e) => {

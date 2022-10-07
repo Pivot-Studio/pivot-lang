@@ -14,13 +14,18 @@ use inkwell::types::VoidType;
 use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
+use lsp_types::Diagnostic;
+use lsp_types::DiagnosticSeverity;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use super::compiler::get_target_machine;
+use super::error::ErrorCode;
+use super::error::ERR_MSG;
 use super::node::types::TypeNameNode;
 use super::range::Pos;
+use super::range::Range;
 // TODO: match all case
 // const DW_ATE_UTF: u32 = 0x10;
 const DW_ATE_BOOLEAN: u32 = 0x02;
@@ -56,21 +61,44 @@ pub struct Ctx<'a, 'ctx> {
     pub discope: DIScope<'ctx>,
     pub nodebug_builder: &'a Builder<'ctx>,
     pub src_file_path: &'a str,
-    pub errs: &'a RefCell<Vec<PLErr>>,
+    pub errs: &'a RefCell<Vec<PLDiag>>,
 }
 
 #[derive(Debug, Clone)]
-pub enum PLErr {
-    SyntaxError(String),
+pub enum PLDiag {
+    SyntaxError(Err),
 }
 
-impl PLErr {
+#[derive(Debug, Clone)]
+pub struct Err {
+    pub msg: String,
+    pub diag: Diagnostic,
+}
+
+const PL_DIAG_SOURCE: &str = "plsp";
+
+impl PLDiag {
     pub fn print(&self) {
         match self {
-            PLErr::SyntaxError(s) => {
-                println!("{}", s);
+            PLDiag::SyntaxError(s) => {
+                println!("{}", s.msg);
             }
         }
+    }
+    pub fn get_diagnostic(&self) -> Diagnostic {
+        match self {
+            PLDiag::SyntaxError(s) => s.diag.clone(),
+        }
+    }
+    pub fn new_syntax_error(msg: String, range: Range, code: ErrorCode) -> Self {
+        let diag = Diagnostic::new_with_code_number(
+            range.to_diag_range(),
+            DiagnosticSeverity::ERROR,
+            code as i32,
+            Some(PL_DIAG_SOURCE.to_string()),
+            ERR_MSG[&code].to_string(),
+        );
+        PLDiag::SyntaxError(Err { msg, diag })
     }
 }
 
@@ -305,7 +333,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         tm: &'a TargetMachine,
         nodbg_builder: &'a Builder<'ctx>,
         src_file_path: &'a str,
-        errs: &'a RefCell<Vec<PLErr>>,
+        errs: &'a RefCell<Vec<PLDiag>>,
     ) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
             table: HashMap::new(),
@@ -400,7 +428,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.types.insert(name, (tp.clone(), ditype));
     }
 
-    pub fn add_err(&mut self, err: PLErr) {
+    pub fn add_err(&mut self, err: PLDiag) {
         self.errs.borrow_mut().push(err);
     }
 

@@ -15,9 +15,12 @@ type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
     ast::node::ret::RetNode,
     ast::node::*,
-    ast::node::{
-        function::{FuncCallNode, FuncDefNode, FuncTypeNode},
-        types::{StructDefNode, TypeNameNode, TypedIdentifierNode},
+    ast::{
+        error::ErrorCode,
+        node::{
+            function::{FuncCallNode, FuncDefNode, FuncTypeNode},
+            types::{StructDefNode, TypeNameNode, TypedIdentifierNode},
+        },
     },
     ast::{node::types::StructInitNode, range::Range},
     ast::{
@@ -230,7 +233,12 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     map_res(
         delspace(tuple((
             tag_token(TokenType::WHILE),
-            alt_except(logic_exp, "{", "failed to parse while condition"),
+            alt_except(
+                logic_exp,
+                "{",
+                "failed to parse while condition",
+                ErrorCode::WHILE_CONDITION_MUST_BE_BOOL,
+            ),
             statement_block,
         ))),
         |(_, cond, body)| {
@@ -333,7 +341,11 @@ pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         terminated(function_call, newline_or_eof!()),
         return_statement,
         newline,
-        del_newline_or_space!(except("\n\r}", "failed to parse statement")),
+        del_newline_or_space!(except(
+            "\n\r}",
+            "failed to parse statement",
+            ErrorCode::SYNTAX_ERROR_STATEMENT
+        )),
     )))(input)
 }
 
@@ -348,7 +360,11 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
         del_newline_or_space!(function_def),
         del_newline_or_space!(struct_def),
         map_res(
-            del_newline_or_space!(except("\n\r", "failed to parse top level statement")),
+            del_newline_or_space!(except(
+                "\n\r",
+                "failed to parse top level statement",
+                ErrorCode::SYNTAX_ERROR_TOP_STATEMENT
+            )),
             |e| Ok::<_, Error>(Box::new(TopLevel::ErrNode(e))),
         ),
     )))(input)
