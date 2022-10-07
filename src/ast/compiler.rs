@@ -1,5 +1,11 @@
-use std::{fs, path::Path, time::Instant};
+use std::{
+    cell::RefCell,
+    fs::{self, read_to_string},
+    path::Path,
+    time::Instant,
+};
 
+use colored::Colorize;
 use inkwell::{
     context::Context,
     module::Module,
@@ -10,11 +16,9 @@ use inkwell::{
 use crate::nomparser::PLParser;
 use std::process::Command;
 
-use super::ctx;
+use super::ctx::{self, create_ctx_info};
 
-pub struct Compiler<'a> {
-    parser: PLParser<'a>,
-}
+pub struct Compiler {}
 
 pub struct Option {
     pub verbose: bool,
@@ -24,10 +28,30 @@ pub struct Option {
 }
 
 type MainFunc = unsafe extern "C" fn() -> i64;
-impl<'a> Compiler<'a> {
-    pub fn new(input: &'a str) -> Self {
-        let parser = PLParser::new(input);
-        Compiler { parser }
+
+pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
+    let triple = &TargetMachine::get_default_triple();
+    let s1 = TargetMachine::get_host_cpu_name();
+    let cpu = s1.to_str().unwrap();
+    let s2 = TargetMachine::get_host_cpu_features();
+    let features = s2.to_str().unwrap();
+    Target::initialize_native(&InitializationConfig::default()).unwrap();
+    let target = Target::from_triple(triple).unwrap();
+    target
+        .create_target_machine(
+            triple,
+            cpu,
+            features,
+            level,
+            inkwell::targets::RelocMode::Static,
+            inkwell::targets::CodeModel::Default,
+        )
+        .unwrap()
+}
+
+impl Compiler {
+    pub fn new() -> Self {
+        Compiler {}
     }
     #[cfg(feature = "jit")]
     pub fn run(p: &Path, opt: OptimizationLevel) {
@@ -41,53 +65,73 @@ impl<'a> Compiler<'a> {
         }
     }
 
-    pub fn compile(&mut self, file: &str, op: Option) {
+    pub fn compile(&self, file: &str, out: &str, op: Option) {
         let now = Instant::now();
         let context = &Context::create();
-        let builder = &context.create_builder();
-        let module = &context.create_module("test");
-        let mut ctx = ctx::Ctx::new(context, module, builder);
-        let m = &mut ctx;
-        let (_, mut node) = self.parser.parse().unwrap();
+        let filepath = Path::new(file);
+        let abs = fs::canonicalize(filepath).unwrap();
+        let dir = abs.parent().unwrap().to_str().unwrap();
+        let fname = abs.file_name().unwrap().to_str().unwrap();
 
-        if op.printast {
-            println!("{}", node.string(0));
+        let (a, b, c, d, e, f) = create_ctx_info(context, dir, fname);
+        let v = RefCell::new(Vec::new());
+        let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e, &f, abs.to_str().unwrap(), &v);
+        let m = &mut ctx;
+        let str = read_to_string(filepath).unwrap();
+        let input = str.as_str();
+        let mut parser = PLParser::new(input);
+        let parse_result = parser.parse();
+        if let Err(e) = parse_result {
+            println!("{}", e);
+            return;
         }
+        let mut node = parse_result.unwrap();
+        if op.printast {
+            node.print(0, true, vec![]);
+        }
+
         node.emit(m);
+        let errs = m.errs.borrow();
+        if errs.len() > 0 {
+            for e in errs.iter() {
+                e.print();
+            }
+            if errs.len() == 1 {
+                println!(
+                    "{}",
+                    format!("compile failed: there is {} error", errs.len()).bright_red()
+                );
+                return;
+            }
+            println!(
+                "{}",
+                format!("compile failed: there are {} errors", errs.len()).bright_red()
+            );
+            return;
+        }
+        if op.optimization == OptimizationLevel::None {
+            m.dibuilder.finalize();
+        }
         if op.genir {
-            let mut s = file.to_string();
+            let mut s = out.to_string();
             s.push_str(".ll");
             let llp = Path::new(&s[..]);
             fs::write(llp, ctx.module.to_string()).unwrap();
         }
+        // m.module.verify().unwrap();
         let time = now.elapsed();
         if op.verbose {
             println!("compile succ, time: {:?}", time);
         }
-        let triple = &TargetMachine::get_default_triple();
-        let s1 = TargetMachine::get_host_cpu_name();
-        let cpu = s1.to_str().unwrap();
-        let s2 = TargetMachine::get_host_cpu_features();
-        let features = s2.to_str().unwrap();
-        Target::initialize_native(&InitializationConfig::default()).unwrap();
-        let target = Target::from_triple(triple).unwrap();
-        let tm = target
-            .create_target_machine(
-                triple,
-                cpu,
-                features,
-                op.optimization,
-                inkwell::targets::RelocMode::Static,
-                inkwell::targets::CodeModel::Default,
-            )
-            .unwrap();
-        let mut f = file.to_string();
+        let tm = get_target_machine(op.optimization);
+        let mut f = out.to_string();
         f.push_str(".o");
-        let mut fo = file.to_string();
+        let mut fo = out.to_string();
         fo.push_str(".out");
         tm.write_to_file(ctx.module, FileType::Object, Path::new(&f))
             .unwrap();
         let link = Command::new("clang")
+            .arg(format!("-O{}", op.optimization as u32))
             .arg("-pthread")
             .arg("-ldl")
             .arg(&f)
@@ -104,6 +148,6 @@ impl<'a> Compiler<'a> {
             println!("link succ, output file: {}", fo);
         }
         //  TargetMachine::get_default_triple()
-        ctx.module.write_bitcode_to_path(Path::new(file));
+        ctx.module.write_bitcode_to_path(Path::new(out));
     }
 }

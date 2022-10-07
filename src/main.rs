@@ -1,7 +1,6 @@
 mod ast;
 mod nomparser;
 mod utils;
-use std::fs::read_to_string;
 use std::path::Path;
 
 use ast::compiler::{self, Compiler};
@@ -62,11 +61,10 @@ fn main() {
 
     // You can check the value provided by positional arguments, or option arguments
     if let Some(name) = cli.name.as_deref() {
-        let str = read_to_string(Path::new(name)).unwrap();
-        let s = str.as_str();
-        let mut c = Compiler::new(s);
+        let c = Compiler::new();
         c.compile(
-            cli.out.as_str(),
+            name,
+            &cli.out,
             compiler::Option {
                 verbose: cli.verbose,
                 genir: cli.genir,
@@ -77,7 +75,10 @@ fn main() {
     } else if let Some(command) = cli.command {
         match command {
             RunCommand::Run { name } => {
+                #[cfg(feature = "jit")]
                 Compiler::run(Path::new(name.as_str()), opt);
+                #[cfg(not(feature = "jit"))]
+                println!("feature jit is not enabled, cannot use run command");
             }
         }
     } else {

@@ -8,7 +8,7 @@ use nom::{
     error::ParseError,
     multi::{many0, many0_count, many1},
     sequence::{delimited, pair, preceded, terminated, tuple},
-    AsChar, IResult, InputTakeAtPosition, Parser,
+    AsChar, IResult, InputTake, InputTakeAtPosition, Parser,
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
@@ -30,6 +30,10 @@ use crate::{
 };
 use internal_macro::{test_parser, test_parser_error};
 use nom::character::complete::char;
+
+use self::error::{alt_except, except};
+
+pub mod error;
 
 macro_rules! newline_or_eof {
     () => {
@@ -59,13 +63,6 @@ where
     res_box(box_node(t))
 }
 
-fn res_ori<T>(t: T) -> Result<Box<T>, Error>
-where
-    T: Node + 'static,
-{
-    res_box(box_node(t))
-}
-
 fn box_node<T>(t: T) -> Box<T>
 where
     T: Node + 'static,
@@ -78,9 +75,9 @@ fn res_box<T: ?Sized>(i: Box<T>) -> Result<Box<T>, Error> {
 }
 
 fn create_bin(
-    (mut left, rights): (Box<dyn Node>, Vec<(TokenType, Box<dyn Node>)>),
+    (mut left, rights): (Box<dyn Node>, Vec<((TokenType, Range), Box<dyn Node>)>),
 ) -> Result<Box<dyn Node>, Error> {
-    for (op, right) in rights {
+    for ((op, _), right) in rights {
         let range = left.range().start.to(right.range().end);
         left = Box::new(BinOpNode {
             op,
@@ -121,8 +118,12 @@ impl<'a> PLParser<'a> {
         PLParser { input: sp }
     }
 
-    pub fn parse(&mut self) -> IResult<Span, Box<dyn Node>> {
-        program(self.input)
+    pub fn parse(&mut self) -> Result<Box<dyn Node>, String> {
+        let re = program(self.input);
+        if let Err(e) = re {
+            return Err(format!("{:?}", e));
+        }
+        Ok(re.unwrap().1)
     }
 }
 #[test_parser("return 1\n")]
@@ -142,7 +143,7 @@ pub fn return_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             opt(logic_exp),
             newline_or_eof!(),
         )),
-        |(_ret, val, _)| {
+        |((_, range), val, _)| {
             if let Some(val) = val {
                 let range = val.range();
                 res(RetNode {
@@ -150,10 +151,7 @@ pub fn return_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
                     range,
                 })
             } else {
-                res(RetNode {
-                    value: None,
-                    range: Range::new(input, input),
-                })
+                res(RetNode { value: None, range })
             }
         },
     ))(input)
@@ -197,17 +195,17 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             statement_block,
             opt(preceded(
                 tag_token(TokenType::ELSE),
-                alt((if_statement, statement_block)),
+                alt((if_statement, map_res(statement_block, |n| res(n)))),
             )),
         ))),
         |(_, cond, then, els)| {
-            let mut range = cond.range().start.to(then.range().end);
+            let mut range = cond.range().start.to(then.range.end);
             if let Some(el) = &els {
                 range = range.start.to(el.range().end);
             }
             res(IfNode {
                 cond,
-                then,
+                then: Box::new(then),
                 els,
                 range,
             })
@@ -232,12 +230,16 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
     map_res(
         delspace(tuple((
             tag_token(TokenType::WHILE),
-            logic_exp,
+            alt_except(logic_exp, "{", "failed to parse while condition"),
             statement_block,
         ))),
         |(_, cond, body)| {
-            let range = cond.range().start.to(body.range().end);
-            res(WhileNode { cond, body, range })
+            let range = cond.range().start.to(body.range.end);
+            res(WhileNode {
+                cond,
+                body: Box::new(body),
+                range,
+            })
         },
     )(input)
 }
@@ -283,7 +285,7 @@ pub fn for_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             statement_block,
         ))),
         |(_, pre, _, cond, _, opt, body)| {
-            let mut range = cond.range().start.to(body.range().end);
+            let mut range = cond.range().start.to(body.range.end);
             if let Some(pre) = &pre {
                 range = range.end.from(pre.range().start);
             }
@@ -291,14 +293,14 @@ pub fn for_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
                 pre,
                 cond,
                 opt,
-                body,
+                body: Box::new(body),
                 range,
             })
         },
     )(input)
 }
 
-pub fn statement_block(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
     delspace(delimited(
         tag_token(TokenType::LBRACE),
         statements,
@@ -331,18 +333,24 @@ pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         terminated(function_call, newline_or_eof!()),
         return_statement,
         newline,
+        del_newline_or_space!(except("\n\r}", "failed to parse statement")),
     )))(input)
 }
 
 enum TopLevel {
     StructDef(StructDefNode),
     FuncDef(FuncDefNode),
+    ErrNode(Box<dyn Node>),
 }
 
 fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
     delspace(alt((
         del_newline_or_space!(function_def),
         del_newline_or_space!(struct_def),
+        map_res(
+            del_newline_or_space!(except("\n\r", "failed to parse top level statement")),
+            |e| Ok::<_, Error>(Box::new(TopLevel::ErrNode(e))),
+        ),
     )))(input)
 }
 
@@ -354,14 +362,14 @@ pub fn newline(input: Span) -> IResult<Span, Box<dyn Node>> {
     })(input)
 }
 
-pub fn statements(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn statements(input: Span) -> IResult<Span, StatementsNode> {
     map_res(many0(statement), |v| {
         let mut range = v[0].range();
         let la = v.last();
         if let Some(la) = la {
             range = range.start.to(la.range().end);
         }
-        res(StatementsNode {
+        Ok::<_, Error>(StatementsNode {
             statements: v,
             range,
         })
@@ -369,22 +377,12 @@ pub fn statements(input: Span) -> IResult<Span, Box<dyn Node>> {
 }
 
 pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
-    // map_res(terminated(many0(top_level_statement), eof), |v| {
-    //     let mut range = v[0].range();
-    //     let la = v.last();
-    //     if let Some(la) = la {
-    //         range = range.start.to(la.range().end);
-    //     }
-    //     res(ProgramNode {
-    //         statements: v,
-    //         range,
-    //     })
-    // })(input)
     let old = input;
     let mut input = input;
     let mut fns = vec![];
     let mut sts = vec![];
     let mut fntypes = vec![];
+    let mut errs = vec![];
     loop {
         let top = top_level_statement(input);
         if let Ok((i, t)) = top {
@@ -396,11 +394,20 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
                 TopLevel::StructDef(s) => {
                     sts.push(s);
                 }
+                TopLevel::ErrNode(e) => {
+                    errs.push(e);
+                }
             }
             input = i;
-        } else {
-            eof(input)?;
-            break;
+        } else if let Err(err) = top {
+            let e: Result<
+                (LocatedSpan<&str>, LocatedSpan<&str>),
+                nom::Err<nom::error::Error<Span>>,
+            > = eof(input);
+            if e.is_ok() {
+                break;
+            }
+            return Err(err);
         }
     }
     let node: Box<dyn Node> = Box::new(ProgramNode {
@@ -408,6 +415,7 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
         structs: sts,
         fntypes,
         range: Range::new(old, input),
+        errs,
     });
     Ok((input, node))
 }
@@ -516,7 +524,7 @@ pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
                 alt((tag_token(TokenType::MINUS), tag_token(TokenType::NOT))),
                 take_exp,
             )),
-            |(op, exp)| {
+            |((op, _), exp)| {
                 let range = exp.range();
                 res(UnaryOpNode { op, exp, range })
             },
@@ -546,7 +554,7 @@ pub fn identifier(input: Span) -> IResult<Span, Box<dyn Node>> {
         |out| {
             res(VarNode {
                 name: out.to_string(),
-                range: Range::new(input, out),
+                range: Range::new(out, out.take_split(out.len()).0),
             })
         },
     ))(input)
@@ -618,10 +626,10 @@ fn float(input: Span) -> IResult<Span, Span> {
 fn type_name(input: Span) -> IResult<Span, Box<TypeNameNode>> {
     delspace(map_res(identifier, |o| {
         let o = cast_to_var(&o);
-        res_ori(TypeNameNode {
+        res_box(Box::new(TypeNameNode {
             id: o.name,
             range: o.range,
-        })
+        }))
     }))(input)
 }
 
@@ -632,11 +640,11 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
         |(id, _, type_name)| {
             let id = cast_to_var(&id);
             let range = id.range.start.to(type_name.range.end);
-            res_ori(TypedIdentifierNode {
+            res_box(Box::new(TypedIdentifierNode {
                 id: id.name,
                 tp: type_name,
                 range,
-            })
+            }))
         },
     ))(input)
 }
@@ -694,7 +702,7 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 paralist.push(para.0);
                 paralist.extend(para.1);
             }
-
+            let body: Option<StatementsNode> = body;
             let node = FuncDefNode {
                 typenode: FuncTypeNode {
                     id: id.name,
@@ -728,18 +736,14 @@ pub fn function_call(input: Span) -> IResult<Span, Box<dyn Node>> {
         |(id, _, paras, _)| {
             let id = cast_to_var(&id);
             let mut paralist = vec![];
-            let mut range = id.range;
             if let Some(paras) = paras {
                 paralist.push(paras.0);
                 paralist.extend(paras.1);
             }
-            for para in paralist.iter() {
-                range = range.start.to(para.range().end);
-            }
             res(FuncCallNode {
                 id: id.name,
                 paralist,
-                range,
+                range: id.range,
             })
         },
     ))(input)
@@ -859,8 +863,13 @@ fn struct_init(input: Span) -> IResult<Span, Box<dyn Node>> {
 fn decimal(input: Span) -> IResult<Span, Span> {
     recognize(many1(terminated(one_of("0123456789"), many0(char('_')))))(input)
 }
-fn tag_token(token: TokenType) -> impl Fn(Span) -> IResult<Span, TokenType> {
-    move |input| map_res(tag(token.get_str()), |_out| Ok::<TokenType, Error>(token))(input)
+fn tag_token(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
+    move |input| {
+        map_res(tag(token.get_str()), |_out: Span| {
+            let end = _out.take_split(token.get_str().len()).0;
+            Ok::<(TokenType, Range), Error>((token, Range::new(_out, end)))
+        })(input)
+    }
 }
 fn delspace<I, O, E, G>(parser: G) -> impl FnMut(I) -> IResult<I, O, E>
 where

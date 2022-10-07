@@ -8,13 +8,15 @@ pub mod tokens;
 #[cfg(feature = "jit")]
 fn test_nom() {
     vm::reg();
-    use crate::nomparser::PLParser;
+    use std::cell::RefCell;
+
+    use crate::{ast::ctx::create_ctx_info, nomparser::PLParser};
     use inkwell::context::Context;
     let mut parser = PLParser::new(
         "struct test {
             a : i64
             b : i64
-        }
+        }let a = 0
         
         fn main() i64 {
             let x = 1
@@ -51,13 +53,13 @@ fn test_nom() {
         fn printi64ln(i: i64) void
     ",
     );
-    let (_, mut node) = parser.parse().unwrap();
+    let mut node = parser.parse().unwrap();
     let context = &Context::create();
-    let builder = &context.create_builder();
-    let module = &context.create_module("test");
-    let mut ctx = ctx::Ctx::new(context, module, builder);
+    let (a, b, c, d, e, f) = create_ctx_info(context, "", "");
+    let v = RefCell::new(Vec::new());
+    let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e, &f, "test", &v);
     let m = &mut ctx;
-    println!("{}", node.string(0));
+    node.print(0, false, vec![]);
     let _re = node.emit(m);
     println!("emit succ");
     println!("{}", ctx.module.to_string());

@@ -6,7 +6,11 @@ use inkwell::basic_block::BasicBlock;
 use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
 
+use super::ctx::PLErr;
+use super::range::Pos;
+
 pub mod control;
+pub mod error;
 pub mod function;
 pub mod operator;
 pub mod primary;
@@ -25,10 +29,10 @@ pub enum Value<'a> {
     IntValue(IntValue<'a>),
     FloatValue(FloatValue<'a>),
     VarValue(PointerValue<'a>),
-    TypeValue(BasicTypeEnum<'a>),
     LoadValue(BasicValueEnum<'a>),
     StructFieldValue((String, BasicValueEnum<'a>)),
     None,
+    Err(PLErr),
 }
 
 impl<'a> Value<'a> {
@@ -38,17 +42,17 @@ impl<'a> Value<'a> {
             Value::FloatValue(v) => v.as_basic_value_enum(),
             Value::VarValue(v) => v.as_basic_value_enum(),
             Value::BoolValue(v) => v.as_basic_value_enum(),
-            Value::None => panic!("not implemented"),
-            Value::TypeValue(_) => panic!("not implemented"),
             Value::LoadValue(v) => *v,
             Value::StructFieldValue((_, v)) => *v,
+            Value::Err(_) => panic!("not implemented"),
+            Value::None => panic!("not implemented"),
         }
     }
 }
 
 pub trait Node: RangeTrait + AsAny {
-    fn string(&self, tabs: usize) -> String;
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx>;
+    fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>);
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -57,9 +61,47 @@ pub enum Num {
     FLOAT(f64),
 }
 
+impl<'a, 'ctx> Ctx<'ctx, 'a> {
+    pub fn position_at_end(&mut self, block: BasicBlock<'a>) {
+        position_at_end(self, block)
+    }
+    pub fn build_dbg_location(&mut self, pos: Pos) {
+        let loc = self.dibuilder.create_debug_location(
+            self.context,
+            pos.line as u32,
+            pos.column as u32,
+            self.discope,
+            None,
+        );
+        self.builder.set_current_debug_location(self.context, loc);
+    }
+}
+pub fn deal_line(tabs: usize, line: &mut Vec<bool>, end: bool) {
+    if tabs == line.len() {
+        line.push(end);
+    } else {
+        line[tabs] = end;
+    }
+}
+pub fn tab(tabs: usize, line: Vec<bool>, end: bool) {
+    for i in 0..tabs {
+        if line[i] {
+            print!("    ");
+        } else {
+            print!(" │  ");
+        }
+    }
+    if end {
+        print!(" └─ ");
+    } else {
+        print!(" ├─ ");
+    }
+}
+
 pub fn position_at_end<'a, 'b>(ctx: &mut Ctx<'b, 'a>, block: BasicBlock<'a>) {
     ctx.builder.position_at_end(block);
     ctx.block = Some(block);
+    ctx.nodebug_builder.position_at_end(block);
 }
 
 pub fn alloc<'a, 'ctx>(
@@ -67,18 +109,12 @@ pub fn alloc<'a, 'ctx>(
     tp: BasicTypeEnum<'ctx>,
     name: &str,
 ) -> PointerValue<'ctx> {
+    let builder = ctx.nodebug_builder;
     match ctx.function.unwrap().get_first_basic_block() {
         Some(entry) => {
-            ctx.builder.position_at_end(entry);
-            let p = ctx.builder.build_alloca(tp, name);
-            match ctx.block {
-                Some(block) => {
-                    ctx.builder.position_at_end(block);
-                }
-                None => {
-                    panic!("alloc ctx.block == None!")
-                }
-            }
+            builder.position_at_end(entry);
+            let p = builder.build_alloca(tp, name);
+            builder.position_at_end(ctx.block.unwrap());
             p
         }
         None => panic!("alloc get entry failed!"),
@@ -91,12 +127,12 @@ macro_rules! handle_calc {
         item! {
             match ($left, $right) {
                 (Value::IntValue(left), Value::IntValue(right)) => {
-                    return Value::IntValue($ctx.builder.[<build_int_$op>](
-                        left, right, "addtmp"));
+                    return (Value::IntValue($ctx.builder.[<build_int_$op>](
+                        left, right, "addtmp")),None);
                 },
                 (Value::FloatValue(left), Value::FloatValue(right)) => {
-                    return Value::FloatValue($ctx.builder.[<build_$opf>](
-                        left, right, "addtmp"));
+                    return (Value::FloatValue($ctx.builder.[<build_$opf>](
+                        left, right, "addtmp")),None);
                 },
                 _ => panic!("not implemented")
             }

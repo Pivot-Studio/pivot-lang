@@ -1,7 +1,5 @@
 use super::*;
 use crate::ast::ctx::Ctx;
-use crate::utils::tabs;
-use string_builder::Builder;
 
 use internal_macro::range;
 
@@ -12,17 +10,16 @@ pub struct BoolConstNode {
 }
 
 impl Node for BoolConstNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(BoolConstNode ");
-        builder.append(self.value.to_string());
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append(")");
-        builder.string().unwrap()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line, end);
+        println!("BoolConstNode: {}", self.value);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
-        Value::BoolValue(ctx.context.bool_type().const_int(self.value as u64, true))
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+        (
+            Value::BoolValue(ctx.context.bool_type().const_int(self.value as u64, true)),
+            Some("bool".to_string()),
+        )
     }
 }
 
@@ -32,22 +29,18 @@ pub struct NumNode {
     pub value: Num,
 }
 impl Node for NumNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(NumNode ");
-        builder.append(format!("{:?}", self.value));
-        builder.append(")");
-        builder.string().unwrap()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line, end);
+        println!("NumNode: {:?}", self.value);
     }
-
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         if let Num::INT(x) = self.value {
             let b = ctx.context.i64_type().const_int(x, true);
-            return Value::IntValue(b);
+            return (Value::IntValue(b), Some("i64".to_string()));
         } else if let Num::FLOAT(x) = self.value {
             let b = ctx.context.f64_type().const_float(x);
-            return Value::FloatValue(b);
+            return (Value::FloatValue(b), Some("f64".to_string()));
         }
         panic!("not implemented")
     }
@@ -59,19 +52,15 @@ pub struct VarNode {
     pub name: String,
 }
 impl Node for VarNode {
-    fn string(&self, tabs: usize) -> String {
-        let mut builder = Builder::default();
-        tabs::print_tabs(&mut builder, tabs);
-        builder.append("(VarNode ");
-        builder.append(self.name.clone());
-        builder.append(")");
-        builder.string().unwrap()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("VarNode: {}", self.name);
     }
-
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Value<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
         let v = ctx.get_symbol(&self.name);
-        if let Some(v) = v {
-            return Value::VarValue(*v);
+        if let Some((v, pltype)) = v {
+            return (Value::VarValue(*v), Some(pltype));
         }
         todo!(); // TODO: 未定义的变量
     }
