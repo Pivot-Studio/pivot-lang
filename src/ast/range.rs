@@ -1,12 +1,12 @@
 type Span<'a> = nom_locate::LocatedSpan<&'a str>;
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Default)]
 pub struct Pos {
     pub line: usize,   // 1based
     pub column: usize, // 1based
     pub offset: usize, // 0based
 }
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Default)]
 pub struct Range {
     pub start: Pos,
     pub end: Pos,

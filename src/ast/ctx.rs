@@ -1,5 +1,6 @@
 use crate::ast::node::Value;
 use colored::Colorize;
+use crossbeam_channel::Sender;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
@@ -15,6 +16,8 @@ use inkwell::types::VoidType;
 use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
+use lsp_server::Message;
+use lsp_server::RequestId;
 use lsp_types::Diagnostic;
 use lsp_types::DiagnosticSeverity;
 use std::cell::RefCell;
@@ -63,6 +66,8 @@ pub struct Ctx<'a, 'ctx> {
     pub nodebug_builder: &'a Builder<'ctx>,
     pub src_file_path: &'a str,
     pub errs: &'a RefCell<Vec<PLDiag>>,
+    pub sender: Option<&'a Sender<Message>>,
+    pub completion: Option<(Pos, RequestId)>,
 }
 
 #[derive(Debug, Clone)]
@@ -350,6 +355,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         nodbg_builder: &'a Builder<'ctx>,
         src_file_path: &'a str,
         errs: &'a RefCell<Vec<PLDiag>>,
+        sender: Option<&'a Sender<Message>>,
+        completion: Option<(Pos, RequestId)>,
     ) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
             table: HashMap::new(),
@@ -369,6 +376,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             nodebug_builder: nodbg_builder,
             src_file_path,
             errs,
+            sender,
+            completion,
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -400,6 +409,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             nodebug_builder: self.nodebug_builder,
             src_file_path: self.src_file_path,
             errs: self.errs,
+            sender: self.sender,
+            completion: self.completion.clone(),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -432,15 +443,23 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         Ok(())
     }
 
-    pub fn get_type(&self, name: &str) -> Option<&(PLType<'a, 'ctx>, Option<DIType<'ctx>>)> {
+    pub fn get_type(
+        &self,
+        name: &str,
+        range: Range,
+    ) -> Result<&(PLType<'a, 'ctx>, Option<DIType<'ctx>>), PLDiag> {
         let v = self.types.get(name);
         if let Some(pv) = v {
-            return Some(pv);
+            return Ok(pv);
         }
         if let Some(father) = self.father {
-            return father.get_type(name);
+            return father.get_type(name, range);
         }
-        None
+        Err(PLDiag::new_error(
+            self.src_file_path.to_string(),
+            range,
+            ErrorCode::UNDEFINED_TYPE,
+        ))
     }
 
     pub fn add_type(&mut self, name: String, tp: PLType<'a, 'ctx>) {
@@ -455,6 +474,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         let dia = PLDiag::new_error(self.src_file_path.to_string(), range, code);
         self.errs.borrow_mut().push(dia.clone());
         dia
+    }
+
+    pub fn add_diag(&mut self, dia: PLDiag) {
+        self.errs.borrow_mut().push(dia);
     }
 
     pub fn try_load(&mut self, v: Value<'ctx>) -> Value<'ctx> {

@@ -341,6 +341,7 @@ pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         terminated(function_call, newline_or_eof!()),
         return_statement,
         newline,
+        terminated(take_exp, newline_or_eof!()), // for completion
         del_newline_or_space!(except(
             "\n\r}",
             "failed to parse statement",
@@ -462,7 +463,7 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<dyn Node>> {
 #[test_parser("a = 1")]
 pub fn assignment(input: Span) -> IResult<Span, Box<dyn Node>> {
     delspace(map_res(
-        tuple((take_exp, tag_token(TokenType::ASSIGN), logic_exp)),
+        tuple((take_exp, delspace(tag_token(TokenType::ASSIGN)), logic_exp)),
         |(left, _op, right)| {
             let range = left.range().start.to(right.range().end);
             res(AssignNode {
@@ -724,6 +725,7 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                     id: id.name,
                     paralist,
                     ret,
+                    range,
                 },
                 body,
                 range,
@@ -767,27 +769,36 @@ pub fn function_call(input: Span) -> IResult<Span, Box<dyn Node>> {
 
 #[test_parser("a.b.c")]
 fn take_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
-    map_res(
-        tuple((
-            primary_exp,
-            many0(preceded(tag_token(TokenType::DOT), identifier)),
-        )),
-        |(a, b)| {
-            if b.is_empty() {
-                return res_box(a);
-            }
-            let mut ids = vec![];
-            let range = a.range().start.to(b.last().unwrap().range().end);
-            for v in b {
-                ids.push(Box::new(cast_to_var(&v)));
-            }
-            res(TakeOpNode {
-                head: a,
-                ids,
-                range,
-            })
-        },
-    )(input)
+    let re = delspace(tuple((
+        primary_exp,
+        many0(preceded(tag_token(TokenType::DOT), identifier)),
+    )))(input);
+    if let Err(e) = re {
+        return Err(e);
+    }
+    let (mut input, (a, b)) = re.unwrap();
+    let r = a.range();
+    let mut node = TakeOpNode {
+        head: a,
+        ids: Vec::new(),
+        range: r,
+        complete: true,
+    };
+    if input.take(1).to_string().as_str() == "." {
+        input = input.take_split(1).0;
+        node.complete = false;
+    }
+    if b.is_empty() {
+        return Ok((input, box_node(node)));
+    }
+    node.range = r.start.to(b.last().unwrap().range().end);
+    let mut ids = vec![];
+    for v in b {
+        ids.push(Box::new(cast_to_var(&v)));
+    }
+    node.ids = ids;
+
+    Ok((input, box_node(node)))
 }
 
 #[test_parser("jksa: int\n")]

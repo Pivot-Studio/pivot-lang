@@ -126,7 +126,7 @@ pub fn alloc<'a, 'ctx>(
 
 #[macro_export]
 macro_rules! handle_calc {
-    ($ctx:ident, $op:ident, $opf:ident  ,$left:ident, $right:ident) => {
+    ($ctx:ident, $op:ident, $opf:ident  ,$left:ident, $right:ident, $range: expr) => {
         item! {
             match ($left, $right) {
                 (Value::IntValue(left), Value::IntValue(right)) => {
@@ -137,7 +137,10 @@ macro_rules! handle_calc {
                     return Ok((Value::FloatValue($ctx.builder.[<build_$opf>](
                         left, right, "addtmp")),None));
                 },
-                _ => panic!("not implemented")
+                _ =>  return Err($ctx.add_err(
+                    $range,
+                    crate::ast::error::ErrorCode::UNRECOGNIZED_BIN_OPERATOR,
+                ))
             }
         }
     };

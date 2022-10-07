@@ -42,5 +42,10 @@ define_error!(
     INVALID_GET_FIELD = "cannot get field from non struct type",
     VAR_NOT_FOUND = "variable not found",
     REDECLARATION = "redeclaration of variable",
-    FOR_CONDITION_MUST_BE_BOOL = "for condition must be bool"
+    FOR_CONDITION_MUST_BE_BOOL = "for condition must be bool",
+    COMPLETION = "exp not complete",
+    ASSIGN_TYPE_MISMATCH = "assign type mismatch",
+    NOT_ASSIGNABLE = "left value is not assignable",
+    INVALID_STRUCT_DEF = "invalid struct definition",
+    UNDEFINED_TYPE = "undefined type"
 );

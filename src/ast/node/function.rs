@@ -54,7 +54,14 @@ impl FuncDefNode {
             .typenode
             .paralist
             .iter()
-            .map(|para| para.deref().tp.get_debug_type(ctx).unwrap())
+            .map(|para| {
+                let ditp = para.deref().tp.get_debug_type(ctx);
+                if ditp.is_none() {
+                    return ctx.get_type("i64", Default::default()).unwrap().1.unwrap();
+                }
+                let ditp = ditp.unwrap();
+                ditp
+            })
             .collect::<Vec<_>>();
         let subroutine_type = ctx.dibuilder.create_subroutine_type(
             ctx.diunit.get_file(),
@@ -84,17 +91,15 @@ impl FuncDefNode {
         }
         // add function
         let func;
-        if let Some((fu, _)) = ctx.get_type(typenode.id.as_str()) {
-            func = match fu {
-                PLType::FN(fu) => fu.fntype,
-                _ => panic!("type error"), // 理论上这两个Panic不可能触发
-            };
-        } else {
-            panic!("fn not found"); // 理论上这两个Panic不可能触发
-        }
+        let (fu, _) = ctx.get_type(typenode.id.as_str(), self.range)?;
+        func = match fu {
+            PLType::FN(fu) => fu.fntype,
+            _ => panic!("type error"), // 理论上这两个Panic不可能触发
+        };
         func.set_subprogram(subprogram);
         ctx.discope = subprogram.as_debug_info_scope();
         ctx.function = Some(func);
+        let mut ctx = ctx.new_child(self.range.start);
 
         if let Some(body) = self.body.as_mut() {
             // copy para type
@@ -109,7 +114,7 @@ impl FuncDefNode {
             ctx.position_at_end(entry);
             // alloc para
             for (i, para) in para_tps.iter_mut().enumerate() {
-                let alloca = alloc(ctx, para.get_type(), &para_names[i]);
+                let alloca = alloc(&mut ctx, para.get_type(), &para_names[i]);
                 // add alloc var debug info
                 let divar = ctx.dibuilder.create_parameter_variable(
                     ctx.discope,
@@ -139,7 +144,7 @@ impl FuncDefNode {
                 .unwrap();
             }
             // emit body
-            _ = body.emit(ctx);
+            _ = body.emit_child(&mut ctx);
             ctx.nodebug_builder.position_at_end(allocab);
             ctx.nodebug_builder.build_unconditional_branch(entry);
             return Ok((Value::None, None));
@@ -169,7 +174,11 @@ impl Node for FuncCallNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut para_values = Vec::new();
-        let func = ctx.module.get_function(self.id.as_str()).unwrap();
+        let func = ctx.module.get_function(self.id.as_str());
+        if func.is_none() {
+            return Err(ctx.add_err(self.range, crate::ast::error::ErrorCode::FUNCTION_NOT_FOUND));
+        }
+        let func = func.unwrap();
         if func.count_params() != self.paralist.len() as u32 {
             return Err(ctx.add_err(
                 self.range,
@@ -198,11 +207,8 @@ impl Node for FuncCallNode {
             &para_values,
             format(format_args!("call_{}", self.id)).as_str(),
         );
-        let fntp = ctx.get_type(&self.id);
-        if fntp.is_none() {
-            return Err(ctx.add_err(self.range, crate::ast::error::ErrorCode::FUNCTION_NOT_FOUND));
-        }
-        if let (PLType::FN(fv), _) = fntp.unwrap() {
+        let fntp = ctx.get_type(&self.id, self.range)?;
+        if let (PLType::FN(fv), _) = fntp {
             match (ret.try_as_basic_value().left(), fv.ret_pltype.as_ref()) {
                 (Some(v), Some(pltype)) => return Ok((Value::LoadValue(v), Some(pltype.clone()))),
                 (None, Some(pltype)) => return Ok((Value::None, Some(pltype.clone()))),
@@ -212,6 +218,7 @@ impl Node for FuncCallNode {
         return Err(ctx.add_err(self.range, crate::ast::error::ErrorCode::NOT_A_FUNCTION));
     }
 }
+#[range]
 #[derive(Clone)]
 pub struct FuncTypeNode {
     pub id: String,
@@ -222,19 +229,20 @@ impl FuncTypeNode {
     pub fn emit_func_type<'a, 'ctx>(
         &'a mut self,
         ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
-    ) -> FunctionValue<'ctx> {
-        if let Some((func, _)) = ctx.get_type(self.id.as_str()) {
+    ) -> Result<FunctionValue<'ctx>, PLDiag> {
+        if let Ok((func, _)) = ctx.get_type(self.id.as_str(), self.range) {
             let f = match func {
                 PLType::FN(func) => func.fntype,
                 _ => panic!("type error"),
             };
-            return f;
+            return Ok(f);
         }
         let mut para_types = Vec::new();
         for para in self.paralist.iter() {
-            para_types.push(ctx.get_type(&para.tp.id).unwrap().0.get_basic_type().into());
+            let paramtps = ctx.get_type(&para.tp.id, para.range)?;
+            para_types.push(paramtps.0.get_basic_type().into());
         }
-        let ret_type = ctx.get_type(&self.ret.id).unwrap().0.get_ret_type();
+        let ret_type = ctx.get_type(&self.ret.id, self.ret.range)?.0.get_ret_type();
         let func_type = ret_type.fn_type(&para_types, false);
         let func = ctx.module.add_function(self.id.as_str(), func_type, None);
         ctx.add_type(
@@ -245,6 +253,6 @@ impl FuncTypeNode {
                 ret_pltype: Some(self.ret.id.clone()),
             }),
         );
-        func
+        Ok(func)
     }
 }

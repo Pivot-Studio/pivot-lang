@@ -41,7 +41,11 @@ impl TypeNameNode {
 
 impl TypeNameNode {
     pub fn get_debug_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
-        let (tp, _) = ctx.get_type(&self.id).unwrap().clone();
+        let a = ctx.get_type(&self.id, self.range);
+        if a.is_err() {
+            return None;
+        }
+        let (tp, _) = a.unwrap().clone();
         let td = ctx.targetmachine.get_target_data();
 
         match tp {
@@ -135,14 +139,14 @@ impl StructDefNode {
 
 impl StructDefNode {
     pub fn emit_struct_def<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> bool {
-        if ctx.get_type(self.id.as_str()).is_some() {
+        if ctx.get_type(self.id.as_str(), self.range).is_ok() {
             return true;
         }
         let mut fields = BTreeMap::<String, Field<'a, 'ctx>>::new();
         let mut order_fields = Vec::<Field<'a, 'ctx>>::new();
         let mut i = 0;
         for field in self.fields.iter() {
-            if let (id, Some((tp, _))) = (field.id.clone(), ctx.get_type(&field.tp.id)) {
+            if let (id, Ok((tp, _))) = (field.id.clone(), ctx.get_type(&field.tp.id, self.range)) {
                 fields.insert(
                     id.to_string(),
                     Field {
@@ -237,7 +241,7 @@ impl Node for StructInitNode {
                 panic!("StructInitNode::emit: invalid field");
             }
         }
-        let (st, _) = ctx.get_type(self.id.as_str()).unwrap();
+        let (st, _) = ctx.get_type(self.id.as_str(), self.range)?;
         if let PLType::STRUCT(st) = st {
             let et = st.struct_type.as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");

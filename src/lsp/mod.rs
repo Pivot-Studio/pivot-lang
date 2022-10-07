@@ -5,16 +5,19 @@ pub mod mem_docs;
 
 use lsp_types::{
     notification::{DidChangeTextDocument, DidOpenTextDocument},
-    request::GotoDefinition,
-    GotoDefinitionResponse, InitializeParams, OneOf, ServerCapabilities, TextDocumentSyncKind,
-    TextDocumentSyncOptions,
+    request::{Completion, GotoDefinition},
+    GotoDefinitionResponse, InitializeParams, OneOf, ServerCapabilities,
+    TextDocumentSyncKind, TextDocumentSyncOptions,
 };
 
 use lsp_server::{Connection, ExtractError, Message, Request, RequestId, Response};
 
 use mem_docs::MemDocs;
 
-use crate::ast::compiler::{Compiler, Options};
+use crate::ast::{
+    compiler::{Compiler, Options},
+    range::Pos,
+};
 
 pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
     // Note that  we must have our logging only write out to stderr.
@@ -33,7 +36,12 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
                 ..Default::default()
             },
         )),
-
+        completion_provider: Some(lsp_types::CompletionOptions {
+            trigger_characters: Some(vec![".".to_string()]),
+            resolve_provider: None,
+            work_done_progress_options: Default::default(),
+            all_commit_characters: None,
+        }),
         ..Default::default()
     })
     .unwrap();
@@ -62,7 +70,7 @@ fn main_loop(
                     return Ok(());
                 }
                 eprintln!("got request: {:?}", req);
-                match cast::<GotoDefinition>(req) {
+                match cast::<GotoDefinition>(req.clone()) {
                     Ok((id, params)) => {
                         eprintln!("got gotoDefinition request #{}: {:?}", id, params);
                         let result = Some(GotoDefinitionResponse::Array(Vec::new()));
@@ -73,6 +81,39 @@ fn main_loop(
                             error: None,
                         };
                         connection.sender.send(Message::Response(resp))?;
+                        continue;
+                    }
+                    Err(err @ ExtractError::JsonError { .. }) => panic!("{:?}", err),
+                    Err(ExtractError::MethodMismatch(req)) => req,
+                };
+                match cast::<Completion>(req) {
+                    Ok((id, params)) => {
+                        eprintln!("got completion request #{}: {:?}", id, params);
+                        let uri = params
+                            .text_document_position
+                            .text_document
+                            .uri
+                            .to_file_path()
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string();
+                        let line = params.text_document_position.position.line as usize + 1;
+                        let column = params.text_document_position.position.character as usize + 1;
+                        let pos = Pos {
+                            line,
+                            column,
+                            offset: 0,
+                        };
+                        c.compile_dry(
+                            &uri,
+                            &docs,
+                            Options {
+                                ..Default::default()
+                            },
+                            &connection.sender,
+                            Some((pos, id)),
+                        );
                         continue;
                     }
                     Err(err @ ExtractError::JsonError { .. }) => panic!("{:?}", err),
@@ -105,6 +146,7 @@ fn main_loop(
                                 ..Default::default()
                             },
                             &connection.sender,
+                            None,
                         );
                         continue;
                     }
@@ -131,6 +173,7 @@ fn main_loop(
                                 ..Default::default()
                             },
                             &connection.sender,
+                            None,
                         );
                         continue;
                     }

@@ -5,8 +5,12 @@ use crate::ast::ctx::PLType;
 use crate::ast::tokens::TokenType;
 
 use crate::handle_calc;
+use crate::lsp::diagnostics::send_completions;
 use inkwell::IntPredicate;
 use internal_macro::range;
+use lsp_types::CompletionItem;
+use lsp_types::CompletionItemKind;
+use lsp_types::InsertTextFormat;
 use paste::item;
 
 #[range]
@@ -82,10 +86,10 @@ impl Node for BinOpNode {
             ));
         }
         Ok(match self.op {
-            TokenType::PLUS => handle_calc!(ctx, add, float_add, left, right),
-            TokenType::MINUS => handle_calc!(ctx, sub, float_sub, left, right),
-            TokenType::MUL => handle_calc!(ctx, mul, float_mul, left, right),
-            TokenType::DIV => handle_calc!(ctx, signed_div, float_div, left, right),
+            TokenType::PLUS => handle_calc!(ctx, add, float_add, left, right, self.range),
+            TokenType::MINUS => handle_calc!(ctx, sub, float_sub, left, right, self.range),
+            TokenType::MUL => handle_calc!(ctx, mul, float_mul, left, right, self.range),
+            TokenType::DIV => handle_calc!(ctx, signed_div, float_div, left, right, self.range),
             TokenType::EQ
             | TokenType::NE
             | TokenType::LEQ
@@ -153,6 +157,7 @@ impl Node for BinOpNode {
 pub struct TakeOpNode {
     pub head: Box<dyn Node>,
     pub ids: Vec<Box<VarNode>>,
+    pub complete: bool,
 }
 
 impl Node for TakeOpNode {
@@ -179,7 +184,7 @@ impl Node for TakeOpNode {
                     if etype.is_struct_type() {
                         let st = etype.into_struct_type();
                         let tpname = st.get_name().unwrap().to_str().unwrap();
-                        let (tp, _) = ctx.get_type(tpname).unwrap();
+                        let (tp, _) = ctx.get_type(tpname, self.range).unwrap();
                         if let PLType::STRUCT(s) = tp {
                             let field = s.fields.get(&id.name);
                             if let Some(field) = field {
@@ -203,6 +208,35 @@ impl Node for TakeOpNode {
                 }
                 _ => panic!("not implemented {:?}", res),
             }
+        }
+        if !self.complete {
+            // end with ".", gen completions
+            eprintln!("completions");
+            if let Some(sender) = ctx.sender {
+                if let Some((pos, id)) = &ctx.completion {
+                    if pos.line == self.range.end.line {
+                        let (tp, _) = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
+                        if let PLType::STRUCT(s) = tp {
+                            let mut completions = Vec::new();
+                            for (name, _) in &s.fields {
+                                completions.push(CompletionItem {
+                                    kind: Some(CompletionItemKind::FIELD),
+                                    label: name.clone(),
+                                    detail: Some("field".to_string()),
+                                    insert_text: Some(name.clone()),
+                                    insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+                                    ..Default::default()
+                                });
+                            }
+                            eprintln!("completions: {:?}", completions);
+                            send_completions(sender, id.clone(), completions);
+                            eprintln!("sent completions");
+                        }
+                    }
+                }
+            }
+
+            return Err(ctx.add_err(self.range, crate::ast::error::ErrorCode::COMPLETION));
         }
         Ok((res, pltype))
     }

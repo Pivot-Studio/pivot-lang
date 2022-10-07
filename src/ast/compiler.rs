@@ -8,7 +8,7 @@ use inkwell::{
     targets::{FileType, InitializationConfig, Target, TargetMachine},
     OptimizationLevel,
 };
-use lsp_server::Message;
+use lsp_server::{Message, RequestId};
 
 use crate::{
     lsp::{diagnostics::send_diagnostics, mem_docs::MemDocs},
@@ -16,7 +16,10 @@ use crate::{
 };
 use std::process::Command;
 
-use super::ctx::{self, create_ctx_info};
+use super::{
+    ctx::{self, create_ctx_info},
+    range::Pos,
+};
 
 pub struct Compiler {}
 
@@ -66,7 +69,14 @@ impl Compiler {
         }
     }
 
-    pub fn compile_dry(&self, file: &str, docs: &MemDocs, op: Options, sender: &Sender<Message>) {
+    pub fn compile_dry(
+        &self,
+        file: &str,
+        docs: &MemDocs,
+        op: Options,
+        sender: &Sender<Message>,
+        completion: Option<(Pos, RequestId)>,
+    ) {
         let context = &Context::create();
         let filepath = Path::new(file);
         let abs = fs::canonicalize(filepath).unwrap();
@@ -75,7 +85,19 @@ impl Compiler {
 
         let (a, b, c, d, e, f) = create_ctx_info(context, dir, fname);
         let v = RefCell::new(Vec::new());
-        let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e, &f, abs.to_str().unwrap(), &v);
+        let mut ctx = ctx::Ctx::new(
+            context,
+            &a,
+            &b,
+            &c,
+            &d,
+            &e,
+            &f,
+            abs.to_str().unwrap(),
+            &v,
+            Some(sender),
+            completion,
+        );
         let m = &mut ctx;
         let str = docs.get_file_content(file).unwrap();
         let input = str.as_str();
@@ -105,7 +127,19 @@ impl Compiler {
 
         let (a, b, c, d, e, f) = create_ctx_info(context, dir, fname);
         let v = RefCell::new(Vec::new());
-        let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e, &f, abs.to_str().unwrap(), &v);
+        let mut ctx = ctx::Ctx::new(
+            context,
+            &a,
+            &b,
+            &c,
+            &d,
+            &e,
+            &f,
+            abs.to_str().unwrap(),
+            &v,
+            None,
+            None,
+        );
         let m = &mut ctx;
         let str = docs.get_file_content(file).unwrap();
         let input = str.as_str();

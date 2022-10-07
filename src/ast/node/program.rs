@@ -2,6 +2,7 @@ use super::function::{FuncDefNode, FuncTypeNode};
 use super::types::StructDefNode;
 use super::*;
 use crate::ast::ctx::Ctx;
+use crate::ast::error::ErrorCode;
 
 use internal_macro::range;
 
@@ -32,6 +33,7 @@ impl Node for ProgramNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         // top level parser
+        let mut prev = 1000000;
         loop {
             let mut i = 0;
             self.structs.iter().for_each(|x| {
@@ -42,9 +44,21 @@ impl Node for ProgramNode {
             if i == 0 {
                 break;
             }
+            if i == prev {
+                self.structs.iter().for_each(|x| {
+                    if !x.emit_struct_def(ctx) {
+                        ctx.add_err(x.range, ErrorCode::INVALID_STRUCT_DEF);
+                    }
+                });
+                break;
+            }
+            prev = i;
         }
         self.fntypes.iter_mut().for_each(|x| {
-            x.emit_func_type(ctx);
+            let re = x.emit_func_type(ctx);
+            if re.is_err() {
+                ctx.add_diag(re.err().unwrap());
+            }
         });
         // node parser
         self.fns.iter_mut().for_each(|x| {

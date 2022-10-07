@@ -1,7 +1,9 @@
 use super::primary::*;
 use super::*;
 use crate::ast::ctx::Ctx;
+use crate::ast::error::ErrorCode;
 use inkwell::debug_info::*;
+use inkwell::types::AnyType;
 use internal_macro::range;
 
 #[range]
@@ -23,7 +25,7 @@ impl Node for DefNode {
         let tp = e.get_type();
         let p = alloc(ctx, tp, &self.var.name);
         let pltype = pltype.unwrap();
-        if let (_, Some(ditype)) = ctx.get_type(pltype.as_str()).unwrap() {
+        if let (_, Some(ditype)) = ctx.get_type(pltype.as_str(), self.range).unwrap() {
             let var_info = ctx.dibuilder.create_auto_variable(
                 ctx.discope,
                 &self.var.name,
@@ -66,14 +68,20 @@ impl Node for AssignNode {
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let vrange = self.var.range();
         let (pt, _) = self.var.emit(ctx)?;
         let (value, _) = self.exp.emit(ctx)?;
         if let Value::VarValue(ptr) = pt {
             let load = ctx.try_load(value);
+            if ptr.get_type().get_element_type()
+                != load.as_basic_value_enum().get_type().as_any_type_enum()
+            {
+                return Err(ctx.add_err(self.range, ErrorCode::ASSIGN_TYPE_MISMATCH));
+            }
             ctx.builder.build_store(ptr, load.as_basic_value_enum());
             return Ok((Value::None, None));
         }
-        todo!()
+        Err(ctx.add_err(vrange, ErrorCode::NOT_ASSIGNABLE))
     }
 }
 
