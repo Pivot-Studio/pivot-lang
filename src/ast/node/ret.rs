@@ -16,14 +16,14 @@ impl Node for RetNode {
             value.print(tabs + 1, true, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if let Some(ret) = &mut self.value {
-            let (ret, _) = ret.emit(ctx);
+            let (ret, _) = ret.emit(ctx)?;
             let ret = ctx.try_load(ret);
             ctx.builder.build_return(Some(&ret.as_basic_value_enum()));
         } else {
             ctx.builder.build_return(None);
         }
-        (Value::None, None)
+        Ok((Value::None, None))
     }
 }

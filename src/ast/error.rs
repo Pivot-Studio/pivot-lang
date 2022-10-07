@@ -41,5 +41,6 @@ define_error!(
     STRUCT_FIELD_NOT_FOUND = "struct field not found",
     INVALID_GET_FIELD = "cannot get field from non struct type",
     VAR_NOT_FOUND = "variable not found",
-    REDECLARATION = "redeclaration of variable"
+    REDECLARATION = "redeclaration of variable",
+    FOR_CONDITION_MUST_BE_BOOL = "for condition must be bool"
 );

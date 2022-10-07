@@ -18,8 +18,8 @@ impl Node for ErrorNode {
         tab(tabs + 1, line, true);
         println!("Src: {}", format!("{:?}", self.src).red());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let err = ctx.add_err(self.range, self.code);
-        (Value::Err(err), None)
+        Err(err)
     }
 }

@@ -24,7 +24,7 @@ impl Node for IfNode {
             self.then.print(tabs + 1, true, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let cond_block = ctx
             .context
             .append_basic_block(ctx.function.unwrap(), "if.cond");
@@ -39,29 +39,30 @@ impl Node for IfNode {
             .append_basic_block(ctx.function.unwrap(), "if.after");
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, cond_block);
-        let (cond, _) = self.cond.emit(ctx);
+        let condrange = self.cond.range();
+        let (cond, _) = self.cond.emit(ctx)?;
         let cond = ctx.try_load(cond);
         let con;
         if let Value::BoolValue(value) = cond {
             con = value;
         } else {
-            let err = ctx.add_err(self.range, ErrorCode::IF_CONDITION_MUST_BE_BOOL);
-            return (Value::Err(err), None);
+            let err = ctx.add_err(condrange, ErrorCode::IF_CONDITION_MUST_BE_BOOL);
+            return Err(err);
         }
 
         ctx.builder
             .build_conditional_branch(con, then_block, else_block);
         // then block
         position_at_end(ctx, then_block);
-        self.then.emit(ctx);
+        _ = self.then.emit(ctx);
         ctx.builder.build_unconditional_branch(after_block);
         position_at_end(ctx, else_block);
         if let Some(el) = &mut self.els {
-            el.emit(ctx);
+            _ = el.emit(ctx);
         }
         ctx.builder.build_unconditional_branch(after_block);
         position_at_end(ctx, after_block);
-        (Value::None, None)
+        Ok((Value::None, None))
     }
 }
 
@@ -79,7 +80,7 @@ impl Node for WhileNode {
         self.cond.print(tabs + 1, false, line.clone());
         self.body.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let ctx = &mut ctx.new_child(self.range.start);
         let cond_block = ctx
             .context
@@ -94,23 +95,24 @@ impl Node for WhileNode {
         ctx.continue_block = Some(cond_block);
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, cond_block);
+        let condrange = self.cond.range();
         let start = self.cond.range().start;
-        let cond = self.cond.emit(ctx);
+        let cond = self.cond.emit(ctx)?;
         let con;
         if let Value::BoolValue(value) = cond.0 {
             con = value;
         } else {
-            let err = ctx.add_err(self.range, ErrorCode::WHILE_CONDITION_MUST_BE_BOOL);
-            return (Value::Err(err), None);
+            let err = ctx.add_err(condrange, ErrorCode::WHILE_CONDITION_MUST_BE_BOOL);
+            return Err(err);
         }
         ctx.builder
             .build_conditional_branch(con, body_block, after_block);
         position_at_end(ctx, body_block);
-        self.body.emit_child(ctx);
+        _ = self.body.emit_child(ctx);
         ctx.build_dbg_location(start);
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, after_block);
-        (Value::None, None)
+        Ok((Value::None, None))
     }
 }
 
@@ -136,7 +138,7 @@ impl Node for ForNode {
         }
         self.body.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let ctx = &mut ctx.new_child(self.range.start);
         let pre_block = ctx
             .context
@@ -159,19 +161,20 @@ impl Node for ForNode {
         // ctx.builder.build_unconditional_branch(pre_block);
         position_at_end(ctx, pre_block);
         if let Some(pr) = &mut self.pre {
-            pr.emit(ctx);
+            _ = pr.emit(ctx);
         }
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, cond_block);
         ctx.build_dbg_location(self.cond.range().start);
+        let condrange = self.cond.range();
         let cond_start = self.cond.range().start;
-        let cond = self.cond.emit(ctx);
+        let cond = self.cond.emit(ctx)?;
         let con;
         if let Value::BoolValue(value) = cond.0 {
             con = value;
         } else {
-            let err = ctx.add_err(self.range, ErrorCode::IF_CONDITION_MUST_BE_BOOL);
-            return (Value::Err(err), None);
+            let err = ctx.add_err(condrange, ErrorCode::FOR_CONDITION_MUST_BE_BOOL);
+            return Err(err);
         }
         ctx.build_dbg_location(self.body.range().start);
         ctx.builder
@@ -179,15 +182,15 @@ impl Node for ForNode {
         position_at_end(ctx, opt_block);
         if let Some(op) = &mut self.opt {
             ctx.build_dbg_location(op.range().start);
-            op.emit(ctx);
+            _ = op.emit(ctx);
         }
         ctx.build_dbg_location(cond_start);
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, body_block);
-        self.body.emit_child(ctx);
+        _ = self.body.emit_child(ctx);
         ctx.builder.build_unconditional_branch(opt_block);
         position_at_end(ctx, after_block);
-        (Value::None, None)
+        Ok((Value::None, None))
     }
 }
 
@@ -201,7 +204,7 @@ impl Node for BreakNode {
         println!("BreakNode");
     }
 
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if let Some(b) = ctx.break_block {
             ctx.builder.build_unconditional_branch(b);
             // add dead block to avoid double br
@@ -212,9 +215,9 @@ impl Node for BreakNode {
             );
         } else {
             let err = ctx.add_err(self.range, ErrorCode::BREAK_MUST_BE_IN_LOOP);
-            return (Value::Err(err), None);
+            return Err(err);
         }
-        (Value::None, None)
+        Ok((Value::None, None))
     }
 }
 
@@ -228,7 +231,7 @@ impl Node for ContinueNode {
         println!("ContinueNode");
     }
 
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if let Some(b) = ctx.continue_block {
             ctx.builder.build_unconditional_branch(b);
             position_at_end(
@@ -239,8 +242,8 @@ impl Node for ContinueNode {
             );
         } else {
             let err = ctx.add_err(self.range, ErrorCode::CONTINUE_MUST_BE_IN_LOOP);
-            return (Value::Err(err), None);
+            return Err(err);
         }
-        (Value::None, None)
+        Ok((Value::None, None))
     }
 }

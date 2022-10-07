@@ -30,7 +30,7 @@ impl Node for ProgramNode {
             err.print(tabs, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         // top level parser
         loop {
             let mut i = 0;
@@ -48,12 +48,12 @@ impl Node for ProgramNode {
         });
         // node parser
         self.fns.iter_mut().for_each(|x| {
-            x.emit_func_def(ctx);
+            _ = x.emit_func_def(ctx);
         });
         for e in self.errs.iter_mut() {
-            e.emit(ctx);
+            _ = e.emit(ctx);
         }
 
-        (Value::None, None)
+        Ok((Value::None, None))
     }
 }

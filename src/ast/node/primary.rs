@@ -15,11 +15,11 @@ impl Node for BoolConstNode {
         tab(tabs, line, end);
         println!("BoolConstNode: {}", self.value);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
-        (
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        Ok((
             Value::BoolValue(ctx.context.bool_type().const_int(self.value as u64, true)),
             Some("bool".to_string()),
-        )
+        ))
     }
 }
 
@@ -34,13 +34,13 @@ impl Node for NumNode {
         tab(tabs, line, end);
         println!("NumNode: {:?}", self.value);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if let Num::INT(x) = self.value {
             let b = ctx.context.i64_type().const_int(x, true);
-            return (Value::IntValue(b), Some("i64".to_string()));
+            return Ok((Value::IntValue(b), Some("i64".to_string())));
         } else if let Num::FLOAT(x) = self.value {
             let b = ctx.context.f64_type().const_float(x);
-            return (Value::FloatValue(b), Some("f64".to_string()));
+            return Ok((Value::FloatValue(b), Some("f64".to_string())));
         }
         panic!("not implemented")
     }
@@ -57,14 +57,11 @@ impl Node for VarNode {
         tab(tabs, line.clone(), end);
         println!("VarNode: {}", self.name);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let v = ctx.get_symbol(&self.name);
         if let Some((v, pltype)) = v {
-            return (Value::VarValue(*v), Some(pltype));
+            return Ok((Value::VarValue(*v), Some(pltype)));
         }
-        (
-            Value::Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND)),
-            None,
-        )
+        Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND))
     }
 }

@@ -90,7 +90,7 @@ impl Compiler {
             node.print(0, true, vec![]);
         }
 
-        node.emit(m);
+        _ = node.emit(m);
         let vs = v.borrow().iter().map(|v| v.get_diagnostic()).collect();
         send_diagnostics(&sender, file.to_string(), vs)
     }
@@ -120,7 +120,7 @@ impl Compiler {
             node.print(0, true, vec![]);
         }
 
-        node.emit(m);
+        _ = node.emit(m);
         let errs = m.errs.borrow();
         if errs.len() > 0 {
             for e in errs.iter() {

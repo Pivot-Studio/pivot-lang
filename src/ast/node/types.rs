@@ -200,12 +200,12 @@ impl Node for StructInitFieldNode {
         println!("id: {}", self.id);
         self.exp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
-        let (v, tp) = self.exp.emit(ctx);
-        return (
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let (v, tp) = self.exp.emit(ctx)?;
+        return Ok((
             Value::StructFieldValue((self.id.clone(), v.as_basic_value_enum())),
             tp,
-        );
+        ));
     }
 }
 
@@ -228,10 +228,10 @@ impl Node for StructInitNode {
             field.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut fields = HashMap::<String, BasicValueEnum<'ctx>>::new();
         for field in self.fields.iter_mut() {
-            if let (Value::StructFieldValue((id, val)), _) = field.emit(ctx) {
+            if let (Value::StructFieldValue((id, val)), _) = field.emit(ctx)? {
                 fields.insert(id, val);
             } else {
                 panic!("StructInitNode::emit: invalid field");
@@ -249,7 +249,7 @@ impl Node for StructInitNode {
                     .unwrap();
                 ctx.builder.build_store(ptr, val);
             }
-            return (Value::VarValue(stv), Some(self.id.clone()));
+            return Ok((Value::VarValue(stv), Some(self.id.clone())));
         } else {
             panic!("StructInitNode::emit: invalid type");
         }

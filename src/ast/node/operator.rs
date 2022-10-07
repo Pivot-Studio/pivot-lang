@@ -23,10 +23,10 @@ impl Node for UnaryOpNode {
         println!("{:?}", self.op);
         self.exp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
-        let (exp, pltype) = self.exp.emit(ctx);
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let (exp, pltype) = self.exp.emit(ctx)?;
         let exp = ctx.try_load(exp);
-        return match (exp, self.op) {
+        return Ok(match (exp, self.op) {
             (Value::IntValue(exp), TokenType::MINUS) => (
                 Value::IntValue(ctx.builder.build_int_neg(exp, "negtmp")),
                 pltype,
@@ -44,14 +44,13 @@ impl Node for UnaryOpNode {
                 )),
                 pltype,
             ),
-            (_exp, _op) => (
-                Value::Err(ctx.add_err(
+            (_exp, _op) => {
+                return Err(ctx.add_err(
                     self.range,
                     crate::ast::error::ErrorCode::INVALID_UNARY_EXPRESSION,
-                )),
-                None,
-            ),
-        };
+                ));
+            }
+        });
     }
 }
 
@@ -71,21 +70,18 @@ impl Node for BinOpNode {
         println!("{:?}", self.op);
         self.right.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
-        let (lv, lpltype) = self.left.emit(ctx);
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let (lv, lpltype) = self.left.emit(ctx)?;
         let left = ctx.try_load(lv);
-        let (rv, rpltype) = self.right.emit(ctx);
+        let (rv, rpltype) = self.right.emit(ctx)?;
         let right = ctx.try_load(rv);
         if lpltype != rpltype {
-            return (
-                Value::Err(ctx.add_err(
-                    self.range,
-                    crate::ast::error::ErrorCode::BIN_OP_TYPE_MISMATCH,
-                )),
-                None,
-            );
+            return Err(ctx.add_err(
+                self.range,
+                crate::ast::error::ErrorCode::BIN_OP_TYPE_MISMATCH,
+            ));
         }
-        match self.op {
+        Ok(match self.op {
             TokenType::PLUS => handle_calc!(ctx, add, float_add, left, right),
             TokenType::MINUS => handle_calc!(ctx, sub, float_sub, left, right),
             TokenType::MUL => handle_calc!(ctx, mul, float_mul, left, right),
@@ -114,46 +110,42 @@ impl Node for BinOpNode {
                     )),
                     Some("bool".to_string()),
                 ),
-                _ => (
-                    Value::Err(ctx.add_err(
+                _ => {
+                    return Err(ctx.add_err(
                         self.range,
                         crate::ast::error::ErrorCode::VALUE_NOT_COMPARABLE,
-                    )),
-                    None,
-                ),
+                    ))
+                }
             },
             TokenType::AND => match (left, right) {
                 (Value::BoolValue(lhs), Value::BoolValue(rhs)) => (
                     Value::BoolValue(ctx.builder.build_and(lhs, rhs, "andtmp")),
                     Some("bool".to_string()),
                 ),
-                _ => (
-                    Value::Err(
-                        ctx.add_err(self.range, crate::ast::error::ErrorCode::LOGIC_OP_NOT_BOOL),
-                    ),
-                    None,
-                ),
+                _ => {
+                    return Err(
+                        ctx.add_err(self.range, crate::ast::error::ErrorCode::LOGIC_OP_NOT_BOOL)
+                    )
+                }
             },
             TokenType::OR => match (left, right) {
                 (Value::BoolValue(lhs), Value::BoolValue(rhs)) => (
                     Value::BoolValue(ctx.builder.build_or(lhs, rhs, "ortmp")),
                     Some("bool".to_string()),
                 ),
-                _ => (
-                    Value::Err(
-                        ctx.add_err(self.range, crate::ast::error::ErrorCode::LOGIC_OP_NOT_BOOL),
-                    ),
-                    None,
-                ),
+                _ => {
+                    return Err(
+                        ctx.add_err(self.range, crate::ast::error::ErrorCode::LOGIC_OP_NOT_BOOL)
+                    )
+                }
             },
-            _ => (
-                Value::Err(ctx.add_err(
+            _ => {
+                return Err(ctx.add_err(
                     self.range,
                     crate::ast::error::ErrorCode::UNRECOGNIZED_BIN_OPERATOR,
-                )),
-                None,
-            ),
-        }
+                ))
+            }
+        })
     }
 }
 
@@ -175,8 +167,8 @@ impl Node for TakeOpNode {
             id.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
-        let head = self.head.emit(ctx);
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let head = self.head.emit(ctx)?;
         // let head = ctx.try_load(head);
         let (mut res, mut pltype) = head;
         for id in &self.ids {
@@ -194,24 +186,17 @@ impl Node for TakeOpNode {
                                 index = field.index;
                                 pltype = Some(field.typename.id.clone());
                             } else {
-                                return (
-                                    Value::Err(ctx.add_err(
-                                        id.range,
-                                        crate::ast::error::ErrorCode::STRUCT_FIELD_NOT_FOUND,
-                                    )),
-                                    None,
-                                );
+                                return Err(ctx.add_err(
+                                    id.range,
+                                    crate::ast::error::ErrorCode::STRUCT_FIELD_NOT_FOUND,
+                                ));
                             }
                         } else {
                             panic!("not implemented");
                         }
                     } else {
-                        return (
-                            Value::Err(ctx.add_err(
-                                id.range,
-                                crate::ast::error::ErrorCode::INVALID_GET_FIELD,
-                            )),
-                            None,
+                        return Err(
+                            ctx.add_err(id.range, crate::ast::error::ErrorCode::INVALID_GET_FIELD)
                         );
                     }
                     Value::VarValue(ctx.builder.build_struct_gep(s, index, "structgep").unwrap())
@@ -219,6 +204,6 @@ impl Node for TakeOpNode {
                 _ => panic!("not implemented {:?}", res),
             }
         }
-        (res, pltype)
+        Ok((res, pltype))
     }
 }
