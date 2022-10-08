@@ -1,5 +1,8 @@
 use super::*;
-use crate::ast::{ctx::Ctx, error::ErrorCode};
+use crate::{
+    ast::{ctx::Ctx, error::ErrorCode},
+    lsp::diagnostics::send_completions,
+};
 
 use internal_macro::range;
 
@@ -62,6 +65,10 @@ impl Node for VarNode {
         if let Some((v, pltype)) = v {
             return Ok((Value::VarValue(*v), Some(pltype)));
         }
+        ctx.if_completion(|ctx, a| {
+            let completions = ctx.get_completions();
+            send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
+        });
         Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND))
     }
 }

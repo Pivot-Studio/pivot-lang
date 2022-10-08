@@ -75,7 +75,7 @@ impl Compiler {
         docs: &MemDocs,
         op: Options,
         sender: &Sender<Message>,
-        completion: Option<(Pos, RequestId)>,
+        completion: Option<(Pos, RequestId, Option<String>)>,
     ) {
         let context = &Context::create();
         let filepath = Path::new(file);

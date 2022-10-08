@@ -6,8 +6,8 @@ pub mod mem_docs;
 use lsp_types::{
     notification::{DidChangeTextDocument, DidOpenTextDocument},
     request::{Completion, GotoDefinition},
-    GotoDefinitionResponse, InitializeParams, OneOf, ServerCapabilities,
-    TextDocumentSyncKind, TextDocumentSyncOptions,
+    GotoDefinitionResponse, InitializeParams, OneOf, ServerCapabilities, TextDocumentSyncKind,
+    TextDocumentSyncOptions,
 };
 
 use lsp_server::{Connection, ExtractError, Message, Request, RequestId, Response};
@@ -63,16 +63,13 @@ fn main_loop(
     eprintln!("starting example main loop");
     let c = Compiler::new();
     for msg in &connection.receiver {
-        eprintln!("got msg: {:?}", msg);
         match msg {
             Message::Request(req) => {
                 if connection.handle_shutdown(&req)? {
                     return Ok(());
                 }
-                eprintln!("got request: {:?}", req);
                 match cast::<GotoDefinition>(req.clone()) {
-                    Ok((id, params)) => {
-                        eprintln!("got gotoDefinition request #{}: {:?}", id, params);
+                    Ok((id, _)) => {
                         let result = Some(GotoDefinitionResponse::Array(Vec::new()));
                         let result = serde_json::to_value(&result).unwrap();
                         let resp = Response {
@@ -88,7 +85,6 @@ fn main_loop(
                 };
                 match cast::<Completion>(req) {
                     Ok((id, params)) => {
-                        eprintln!("got completion request #{}: {:?}", id, params);
                         let uri = params
                             .text_document_position
                             .text_document
@@ -105,6 +101,10 @@ fn main_loop(
                             column,
                             offset: 0,
                         };
+                        let mut trigger = None;
+                        if params.context.is_some() {
+                            trigger = params.context.unwrap().trigger_character;
+                        }
                         c.compile_dry(
                             &uri,
                             &docs,
@@ -112,7 +112,7 @@ fn main_loop(
                                 ..Default::default()
                             },
                             &connection.sender,
-                            Some((pos, id)),
+                            Some((pos, id, trigger)),
                         );
                         continue;
                     }
@@ -121,15 +121,10 @@ fn main_loop(
                 };
                 // ...
             }
-            Message::Response(resp) => {
-                eprintln!("got response: {:?}", resp);
-            }
+            Message::Response(_) => {}
             Message::Notification(not) => {
-                eprintln!("got notification: {:?}", not);
-
                 match cast_noti::<DidChangeTextDocument>(not.clone()) {
                     Ok(params) => {
-                        eprintln!("got doc edit noti: {:?}", params);
                         let f = params
                             .text_document
                             .uri
@@ -156,7 +151,6 @@ fn main_loop(
                 }
                 match cast_noti::<DidOpenTextDocument>(not) {
                     Ok(params) => {
-                        eprintln!("got doc open noti: {:?}", params);
                         let f = params
                             .text_document
                             .uri

@@ -18,8 +18,11 @@ use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
 use lsp_server::Message;
 use lsp_server::RequestId;
+use lsp_types::CompletionItem;
+use lsp_types::CompletionItemKind;
 use lsp_types::Diagnostic;
 use lsp_types::DiagnosticSeverity;
+use lsp_types::InsertTextFormat;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -49,8 +52,8 @@ fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
 }
 #[derive(Debug, Clone)]
 pub struct Ctx<'a, 'ctx> {
-    pub table: HashMap<String, (PointerValue<'ctx>, String)>,
-    pub types: HashMap<String, (PLType<'a, 'ctx>, Option<DIType<'ctx>>)>,
+    pub table: HashMap<String, (PointerValue<'ctx>, String)>, // variable table
+    pub types: HashMap<String, (PLType<'a, 'ctx>, Option<DIType<'ctx>>)>, // func and types
     pub father: Option<&'a Ctx<'a, 'ctx>>,
     pub context: &'ctx Context,
     pub builder: &'a Builder<'ctx>,
@@ -67,7 +70,7 @@ pub struct Ctx<'a, 'ctx> {
     pub src_file_path: &'a str,
     pub errs: &'a RefCell<Vec<PLDiag>>,
     pub sender: Option<&'a Sender<Message>>,
-    pub completion: Option<(Pos, RequestId)>,
+    pub completion: Option<(Pos, RequestId, Option<String>)>,
 }
 
 #[derive(Debug, Clone)]
@@ -271,6 +274,23 @@ pub struct STType<'a, 'ctx> {
     pub line_no: u32,
 }
 
+impl STType<'_, '_> {
+    pub fn get_completions(&self) -> Vec<CompletionItem> {
+        let mut completions = Vec::new();
+        for (name, _) in &self.fields {
+            completions.push(CompletionItem {
+                kind: Some(CompletionItemKind::FIELD),
+                label: name.clone(),
+                detail: Some("field".to_string()),
+                insert_text: Some(name.clone()),
+                insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+                ..Default::default()
+            });
+        }
+        completions
+    }
+}
+
 fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
     let pltype_i64 = PLType::PRIMITIVE(PriType {
         basetype: ctx.context.i64_type().as_basic_type_enum(),
@@ -356,7 +376,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         src_file_path: &'a str,
         errs: &'a RefCell<Vec<PLDiag>>,
         sender: Option<&'a Sender<Message>>,
-        completion: Option<(Pos, RequestId)>,
+        completion: Option<(Pos, RequestId, Option<String>)>,
     ) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
             table: HashMap::new(),
@@ -496,5 +516,41 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             }
             _ => v,
         }
+    }
+
+    pub fn if_completion(&self, c: impl FnOnce(&Ctx, &(Pos, RequestId, Option<String>))) {
+        if let Some(_) = self.sender {
+            if let Some(comp) = &self.completion {
+                c(self, comp);
+            }
+        }
+    }
+    pub fn get_completions(&self) -> Vec<CompletionItem> {
+        let mut v = Vec::new();
+        for (k, _) in self.table.iter() {
+            v.push(CompletionItem {
+                label: k.to_string(),
+                kind: Some(CompletionItemKind::VARIABLE),
+                ..Default::default()
+            });
+        }
+        for (k, (f, _)) in self.types.iter() {
+            let tp = match f {
+                PLType::FN(_) => CompletionItemKind::FUNCTION,
+                PLType::STRUCT(_) => CompletionItemKind::STRUCT,
+                PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
+                PLType::VOID(_) => CompletionItemKind::KEYWORD,
+            };
+            v.push(CompletionItem {
+                label: k.to_string(),
+                kind: Some(tp),
+                ..Default::default()
+            });
+        }
+
+        if let Some(father) = self.father {
+            v.extend(father.get_completions());
+        }
+        v
     }
 }

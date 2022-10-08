@@ -1,5 +1,8 @@
 use super::*;
-use crate::ast::{ctx::Ctx, error::ErrorCode};
+use crate::{
+    ast::{ctx::Ctx, error::ErrorCode},
+    lsp::diagnostics::send_completions,
+};
 use colored::Colorize;
 use internal_macro::range;
 
@@ -20,6 +23,13 @@ impl Node for ErrorNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let err = ctx.add_err(self.range, self.code);
+        ctx.if_completion(|ctx, a| {
+            if a.0.line >= self.range.start.line && a.0.line <= self.range.end.line {
+                let completions = ctx.get_completions();
+                send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
+            }
+        });
+
         Err(err)
     }
 }

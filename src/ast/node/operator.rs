@@ -8,9 +8,6 @@ use crate::handle_calc;
 use crate::lsp::diagnostics::send_completions;
 use inkwell::IntPredicate;
 use internal_macro::range;
-use lsp_types::CompletionItem;
-use lsp_types::CompletionItemKind;
-use lsp_types::InsertTextFormat;
 use paste::item;
 
 #[range]
@@ -211,30 +208,20 @@ impl Node for TakeOpNode {
         }
         if !self.complete {
             // end with ".", gen completions
-            eprintln!("completions");
-            if let Some(sender) = ctx.sender {
-                if let Some((pos, id)) = &ctx.completion {
-                    if pos.line == self.range.end.line {
-                        let (tp, _) = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
-                        if let PLType::STRUCT(s) = tp {
-                            let mut completions = Vec::new();
-                            for (name, _) in &s.fields {
-                                completions.push(CompletionItem {
-                                    kind: Some(CompletionItemKind::FIELD),
-                                    label: name.clone(),
-                                    detail: Some("field".to_string()),
-                                    insert_text: Some(name.clone()),
-                                    insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
-                                    ..Default::default()
-                                });
-                            }
-                            eprintln!("completions: {:?}", completions);
-                            send_completions(sender, id.clone(), completions);
-                            eprintln!("sent completions");
-                        }
+            ctx.if_completion(|ctx, (pos, id, trigger)| {
+                let sender = ctx.sender.unwrap();
+                if pos.line <= self.range.end.line
+                    && pos.line >= self.range.start.line
+                    && trigger.is_some()
+                    && trigger.as_ref().unwrap() == "."
+                {
+                    let (tp, _) = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
+                    if let PLType::STRUCT(s) = tp {
+                        let completions = s.get_completions();
+                        send_completions(sender, id.clone(), completions);
                     }
                 }
-            }
+            });
 
             return Err(ctx.add_err(self.range, crate::ast::error::ErrorCode::COMPLETION));
         }
