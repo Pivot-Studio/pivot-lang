@@ -1,5 +1,6 @@
 use crate::ast::node::Value;
 use crate::lsp::diagnostics::send_completions;
+use crate::lsp::diagnostics::send_goto_def;
 use colored::Colorize;
 use crossbeam_channel::Sender;
 use inkwell::basic_block::BasicBlock;
@@ -17,19 +18,22 @@ use inkwell::types::VoidType;
 use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
-use internal_macro::range;
 use lsp_server::Message;
 use lsp_server::RequestId;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::Diagnostic;
 use lsp_types::DiagnosticSeverity;
+use lsp_types::GotoDefinitionResponse;
 use lsp_types::InsertTextFormat;
+use lsp_types::Location;
+use lsp_types::Url;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
 use super::compiler::get_target_machine;
+use super::compiler::ActionType;
 use super::error::ErrorCode;
 use super::error::ERR_MSG;
 use super::node::types::TypeNameNode;
@@ -72,7 +76,7 @@ pub struct Ctx<'a, 'ctx> {
     pub src_file_path: &'a str,
     pub errs: &'a RefCell<Vec<PLDiag>>,
     pub sender: Option<&'a Sender<Message>>,
-    pub completion: Option<(Pos, RequestId, Option<String>)>,
+    pub completion: Option<(Pos, RequestId, Option<String>, ActionType)>,
 }
 
 #[derive(Debug, Clone)]
@@ -140,6 +144,15 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
     pub fn get_basic_type(&self) -> BasicTypeEnum<'ctx> {
         self.get_basic_type_op().unwrap()
     }
+    pub fn get_range(&self) -> Option<Range> {
+        match self {
+            PLType::FN(f) => Some(f.range.clone()),
+            PLType::STRUCT(s) => Some(s.range.clone()),
+            PLType::PRIMITIVE(_) => None,
+            PLType::VOID(_) => None,
+        }
+    }
+
     pub fn get_basic_type_op(&self) -> Option<BasicTypeEnum<'ctx>> {
         match self {
             PLType::FN(f) => Some(
@@ -380,7 +393,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         src_file_path: &'a str,
         errs: &'a RefCell<Vec<PLDiag>>,
         sender: Option<&'a Sender<Message>>,
-        completion: Option<(Pos, RequestId, Option<String>)>,
+        completion: Option<(Pos, RequestId, Option<String>, ActionType)>,
     ) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
             table: HashMap::new(),
@@ -442,9 +455,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     /// # get_symbol
     /// search in current and all father symbol tables
-    pub fn get_symbol(&self, name: &str) -> Option<(&PointerValue<'ctx>, String,Range)> {
+    pub fn get_symbol(&self, name: &str) -> Option<(&PointerValue<'ctx>, String, Range)> {
         let v = self.table.get(name);
-        if let Some((pv, pltype,range)) = v {
+        if let Some((pv, pltype, range)) = v {
             return Some((pv, pltype.to_string(), range.clone()));
         }
         if let Some(father) = self.father {
@@ -463,7 +476,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if self.table.contains_key(&name) {
             return Err(self.add_err(range, ErrorCode::REDECLARATION));
         }
-        self.table.insert(name, (pv, tp,range));
+        self.table.insert(name, (pv, tp, range));
         Ok(())
     }
 
@@ -474,10 +487,19 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     ) -> Result<&(PLType<'a, 'ctx>, Option<DIType<'ctx>>), PLDiag> {
         let v = self.types.get(name);
         if let Some(pv) = v {
+            if let Some(dst) = pv.0.get_range() {
+                self.send_if_go_to_def(range, dst);
+            }
             return Ok(pv);
         }
         if let Some(father) = self.father {
-            return father.get_type(name, range);
+            let re = father.get_type(name, range);
+            if let Ok((pv, _)) = re {
+                if let Some(dst) = pv.get_range() {
+                    self.send_if_go_to_def(range, dst);
+                }
+            }
+            return re;
         }
         self.if_completion(|ctx, a| {
             if range.start.line > a.0.line || a.0.line > range.end.line {
@@ -538,10 +560,29 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn if_completion(&self, c: impl FnOnce(&Ctx, &(Pos, RequestId, Option<String>))) {
         if let Some(_) = self.sender {
             if let Some(comp) = &self.completion {
-                c(self, comp);
+                if comp.3 == ActionType::Completion {
+                    c(self, &(comp.0, comp.1.clone(), comp.2.clone()));
+                }
             }
         }
     }
+
+    pub fn send_if_go_to_def(&self, range: Range, destrange: Range) {
+        if let Some(_) = self.sender {
+            if let Some(comp) = &self.completion {
+                if comp.3 == ActionType::GotoDef {
+                    if comp.0.is_in(range) {
+                        let resp = GotoDefinitionResponse::Scalar(Location {
+                            uri: Url::from_file_path(self.src_file_path).unwrap(),
+                            range: destrange.to_diag_range(),
+                        });
+                        send_goto_def(self.sender.unwrap(), comp.1.clone(), resp);
+                    }
+                }
+            }
+        }
+    }
+
     pub fn get_completions(&self) -> Vec<CompletionItem> {
         let mut m = HashMap::new();
         self.get_var_completions(&mut m);

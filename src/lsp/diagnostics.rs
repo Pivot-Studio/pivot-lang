@@ -28,3 +28,16 @@ pub fn send_completions(
         )))
         .unwrap();
 }
+
+pub fn send_goto_def(
+    sender: &Sender<Message>,
+    id: RequestId,
+    goto_def: lsp_types::GotoDefinitionResponse,
+) {
+    sender
+        .send(Message::Response(lsp_server::Response::new_ok(
+            id,
+            Some(serde_json::to_value(goto_def).unwrap()),
+        )))
+        .unwrap();
+}

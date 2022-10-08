@@ -6,16 +6,15 @@ pub mod mem_docs;
 use lsp_types::{
     notification::{DidChangeTextDocument, DidOpenTextDocument},
     request::{Completion, GotoDefinition},
-    GotoDefinitionResponse, InitializeParams, OneOf, ServerCapabilities, TextDocumentSyncKind,
-    TextDocumentSyncOptions,
+    InitializeParams, OneOf, ServerCapabilities, TextDocumentSyncKind, TextDocumentSyncOptions,
 };
 
-use lsp_server::{Connection, ExtractError, Message, Request, RequestId, Response};
+use lsp_server::{Connection, ExtractError, Message, Request, RequestId};
 
 use mem_docs::MemDocs;
 
 use crate::ast::{
-    compiler::{Compiler, Options},
+    compiler::{ActionType, Compiler, Options},
     range::Pos,
 };
 
@@ -69,15 +68,27 @@ fn main_loop(
                     return Ok(());
                 }
                 match cast::<GotoDefinition>(req.clone()) {
-                    Ok((id, _)) => {
-                        let result = Some(GotoDefinitionResponse::Array(Vec::new()));
-                        let result = serde_json::to_value(&result).unwrap();
-                        let resp = Response {
-                            id,
-                            result: Some(result),
-                            error: None,
-                        };
-                        connection.sender.send(Message::Response(resp))?;
+                    Ok((id, params)) => {
+                        let uri = params
+                            .text_document_position_params
+                            .text_document
+                            .uri
+                            .to_file_path()
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string();
+                        let pos =
+                            Pos::from_diag_pos(&params.text_document_position_params.position);
+                        c.compile_dry(
+                            &uri,
+                            &docs,
+                            Options {
+                                ..Default::default()
+                            },
+                            &connection.sender,
+                            Some((pos, id, None, ActionType::GotoDef)),
+                        );
                         continue;
                     }
                     Err(err @ ExtractError::JsonError { .. }) => panic!("{:?}", err),
@@ -94,13 +105,7 @@ fn main_loop(
                             .to_str()
                             .unwrap()
                             .to_string();
-                        let line = params.text_document_position.position.line as usize + 1;
-                        let column = params.text_document_position.position.character as usize + 1;
-                        let pos = Pos {
-                            line,
-                            column,
-                            offset: 0,
-                        };
+                        let pos = Pos::from_diag_pos(&params.text_document_position.position);
                         let mut trigger = None;
                         if params.context.is_some() {
                             trigger = params.context.unwrap().trigger_character;
@@ -112,7 +117,7 @@ fn main_loop(
                                 ..Default::default()
                             },
                             &connection.sender,
-                            Some((pos, id, trigger)),
+                            Some((pos, id, trigger, ActionType::Completion)),
                         );
                         continue;
                     }

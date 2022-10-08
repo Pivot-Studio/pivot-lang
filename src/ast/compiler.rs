@@ -53,6 +53,12 @@ pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
         .unwrap()
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ActionType {
+    Completion,
+    GotoDef,
+}
+
 impl Compiler {
     pub fn new() -> Self {
         Compiler {}
@@ -75,7 +81,7 @@ impl Compiler {
         docs: &MemDocs,
         op: Options,
         sender: &Sender<Message>,
-        completion: Option<(Pos, RequestId, Option<String>)>,
+        completion: Option<(Pos, RequestId, Option<String>, ActionType)>,
     ) {
         let context = &Context::create();
         let filepath = Path::new(file);
