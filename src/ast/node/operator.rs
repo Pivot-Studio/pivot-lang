@@ -170,6 +170,7 @@ impl Node for TakeOpNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let mut range = self.head.range();
         let head = self.head.emit(ctx)?;
         // let head = ctx.try_load(head);
         let (mut res, mut pltype) = head;
@@ -181,12 +182,14 @@ impl Node for TakeOpNode {
                     if etype.is_struct_type() {
                         let st = etype.into_struct_type();
                         let tpname = st.get_name().unwrap().to_str().unwrap();
-                        let (tp, _) = ctx.get_type(tpname, self.range).unwrap();
+                        let (tp, _) = ctx.get_type(tpname, range).unwrap();
+                        range = id.range();
                         if let PLType::STRUCT(s) = tp {
                             let field = s.fields.get(&id.name);
                             if let Some(field) = field {
                                 index = field.index;
                                 pltype = Some(field.typename.id.clone());
+                                ctx.send_if_go_to_def(range, field.range);
                             } else {
                                 return Err(ctx.add_err(
                                     id.range,

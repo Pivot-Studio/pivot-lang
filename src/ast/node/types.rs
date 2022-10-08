@@ -157,6 +157,7 @@ impl StructDefNode {
                     tp: tp.clone(),
                     typename: &field.tp,
                     name: field.id.clone(),
+                    range: field.range,
                 },
             );
             order_fields.push(Field {
@@ -164,6 +165,7 @@ impl StructDefNode {
                 tp: tp.clone(),
                 typename: &field.tp,
                 name: field.id.clone(),
+                range: field.range,
             });
             i = i + 1;
         }

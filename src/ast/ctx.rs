@@ -250,6 +250,7 @@ pub struct Field<'a, 'ctx> {
     pub tp: PLType<'a, 'ctx>,
     pub typename: &'a TypeNameNode,
     pub name: String,
+    pub range: Range,
 }
 
 impl<'a, 'ctx> Field<'a, 'ctx> {
