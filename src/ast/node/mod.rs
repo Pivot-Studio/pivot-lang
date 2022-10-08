@@ -131,11 +131,11 @@ macro_rules! handle_calc {
             match ($left, $right) {
                 (Value::IntValue(left), Value::IntValue(right)) => {
                     return Ok((Value::IntValue($ctx.builder.[<build_int_$op>](
-                        left, right, "addtmp")),None));
+                        left, right, "addtmp")),Some("i64".to_string())));
                 },
                 (Value::FloatValue(left), Value::FloatValue(right)) => {
                     return Ok((Value::FloatValue($ctx.builder.[<build_$opf>](
-                        left, right, "addtmp")),None));
+                        left, right, "addtmp")),Some("f64".to_string())));
                 },
                 _ =>  return Err($ctx.add_err(
                     $range,

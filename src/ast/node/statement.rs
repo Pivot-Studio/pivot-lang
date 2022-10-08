@@ -24,7 +24,11 @@ impl Node for DefNode {
         let e = ctx.try_load(v).as_basic_value_enum();
         let tp = e.get_type();
         let p = alloc(ctx, tp, &self.var.name);
-        let pltype = pltype.unwrap();
+        let mut tp = "i64".to_string();
+        if pltype.is_some() {
+            tp = pltype.unwrap();
+        }
+        let pltype = tp;
         if let (_, Some(ditype)) = ctx.get_type(pltype.as_str(), self.range).unwrap() {
             let var_info = ctx.dibuilder.create_auto_variable(
                 ctx.discope,
