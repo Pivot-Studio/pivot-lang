@@ -784,8 +784,9 @@ fn take_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
         range: r,
         complete: true,
     };
-    if input.take(1).to_string().as_str() == "." {
-        input = input.take_split(1).0;
+    let re = take_utf8_split(&input);
+    if re.1.to_string().as_str() == "." {
+        input = re.0;
         node.complete = false;
     }
     if b.is_empty() {
@@ -906,4 +907,16 @@ where
     <I as InputTakeAtPosition>::Item: AsChar + Clone,
 {
     delimited(space0, parser, space0)
+}
+
+pub fn take_utf8_split<'a>(sp: &Span<'a>) -> (Span<'a>, Span<'a>) {
+    let mut i = 1;
+    let l = sp.len();
+    if l == 0 {
+        return sp.take_split(0);
+    }
+    while !sp.is_char_boundary(i) {
+        i = i + 1;
+    }
+    sp.take_split(i)
 }

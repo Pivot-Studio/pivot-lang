@@ -11,7 +11,7 @@ use crate::ast::{
     range::Range,
 };
 
-use super::{box_node, Span};
+use super::{box_node, take_utf8_split, Span};
 
 pub fn except<'a, E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt::Error>>(
     except: &'static str,
@@ -35,9 +35,10 @@ pub fn except<'a, E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt
             if i.len() == 0 {
                 break;
             }
-            (i, next) = i.take_split(1);
-            let nextch = next.fragment().chars().next().unwrap();
-            src.push(next.fragment().chars().next().unwrap());
+
+            (i, next) = take_utf8_split(&i);
+            let nextch = next.fragment().char_indices().next().unwrap().1;
+            src.push(next.fragment().char_indices().next().unwrap().1);
             if nextch == '{' {
                 r.push('}');
             }
