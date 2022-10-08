@@ -17,6 +17,7 @@ use inkwell::types::VoidType;
 use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
+use internal_macro::range;
 use lsp_server::Message;
 use lsp_server::RequestId;
 use lsp_types::CompletionItem;
@@ -53,7 +54,7 @@ fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
 }
 #[derive(Debug, Clone)]
 pub struct Ctx<'a, 'ctx> {
-    pub table: HashMap<String, (PointerValue<'ctx>, String)>, // variable table
+    pub table: HashMap<String, (PointerValue<'ctx>, String, Range)>, // variable table
     pub types: HashMap<String, (PLType<'a, 'ctx>, Option<DIType<'ctx>>)>, // func and types
     pub father: Option<&'a Ctx<'a, 'ctx>>,
     pub context: &'ctx Context,
@@ -181,7 +182,7 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
                             ctx.discope,
                             &x.name,
                             ctx.diunit.get_file(),
-                            x.line_no,
+                            x.range.start.line as u32 + 1,
                             td.get_bit_size(&x.struct_type),
                             td.get_abi_alignment(&x.struct_type),
                             DIFlags::PUBLIC,
@@ -265,14 +266,16 @@ pub struct FNType<'ctx> {
     pub name: String,
     pub fntype: FunctionValue<'ctx>,
     pub ret_pltype: Option<String>,
+    pub range: Range,
 }
+
 #[derive(Debug, Clone)]
 pub struct STType<'a, 'ctx> {
     pub name: String,
     pub fields: BTreeMap<String, Field<'a, 'ctx>>,
     pub struct_type: StructType<'ctx>,
     pub ordered_fields: Vec<Field<'a, 'ctx>>,
-    pub line_no: u32,
+    pub range: Range,
 }
 
 impl STType<'_, '_> {
@@ -439,10 +442,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     /// # get_symbol
     /// search in current and all father symbol tables
-    pub fn get_symbol(&self, name: &str) -> Option<(&PointerValue<'ctx>, String)> {
+    pub fn get_symbol(&self, name: &str) -> Option<(&PointerValue<'ctx>, String,Range)> {
         let v = self.table.get(name);
-        if let Some((pv, pltype)) = v {
-            return Some((pv, pltype.to_string()));
+        if let Some((pv, pltype,range)) = v {
+            return Some((pv, pltype.to_string(), range.clone()));
         }
         if let Some(father) = self.father {
             return father.get_symbol(name);
@@ -460,7 +463,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if self.table.contains_key(&name) {
             return Err(self.add_err(range, ErrorCode::REDECLARATION));
         }
-        self.table.insert(name, (pv, tp));
+        self.table.insert(name, (pv, tp,range));
         Ok(())
     }
 
@@ -481,7 +484,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 return;
             }
             let completions = self.get_type_completions();
-            eprintln!("tpcompletion");
             send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
         });
         Err(PLDiag::new_error(
@@ -491,12 +493,18 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         ))
     }
 
-    pub fn add_type(&mut self, name: String, tp: PLType<'a, 'ctx>) {
+    pub fn add_type(
+        &mut self,
+        name: String,
+        tp: PLType<'a, 'ctx>,
+        range: Range,
+    ) -> Result<(), PLDiag> {
         if self.types.contains_key(&name) {
-            todo!() // TODO 报错
+            return Err(self.add_err(range, ErrorCode::UNDEFINED_TYPE));
         }
         let ditype = tp.get_ditype(self);
         self.types.insert(name, (tp.clone(), ditype));
+        Ok(())
     }
 
     pub fn add_err(&mut self, range: Range, code: ErrorCode) -> PLDiag {

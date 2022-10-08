@@ -251,13 +251,15 @@ impl FuncTypeNode {
         let ret_type = ctx.get_type(&self.ret.id, self.ret.range)?.0.get_ret_type();
         let func_type = ret_type.fn_type(&para_types, false);
         let func = ctx.module.add_function(self.id.as_str(), func_type, None);
-        ctx.add_type(
+        _ = ctx.add_type(
             self.id.clone(),
             PLType::FN(FNType {
                 name: self.id.clone(),
                 fntype: func,
                 ret_pltype: Some(self.ret.id.clone()),
+                range: self.range,
             }),
+            self.range,
         );
         Ok(func)
     }

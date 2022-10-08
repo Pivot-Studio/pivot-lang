@@ -62,7 +62,7 @@ impl Node for VarNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let v = ctx.get_symbol(&self.name);
-        if let Some((v, pltype)) = v {
+        if let Some((v, pltype,_)) = v {
             return Ok((Value::VarValue(*v), Some(pltype)));
         }
         ctx.if_completion(|ctx, a| {

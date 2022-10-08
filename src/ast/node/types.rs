@@ -182,9 +182,9 @@ impl StructDefNode {
             struct_type: st,
             fields,
             ordered_fields: newf,
-            line_no: self.range().start.line as u32,
+            range: self.range(),
         });
-        ctx.add_type(name.to_string(), stu.clone());
+        _ = ctx.add_type(name.to_string(), stu.clone(), self.range);
         Ok(())
     }
 }
