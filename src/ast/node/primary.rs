@@ -63,8 +63,9 @@ impl Node for VarNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let v = ctx.get_symbol(&self.name);
         if let Some((v, pltype, dst)) = v {
+            let o = Ok((Value::VarValue(v.clone()), Some(pltype)));
             ctx.send_if_go_to_def(self.range, dst);
-            return Ok((Value::VarValue(*v), Some(pltype)));
+            return o;
         }
         ctx.if_completion(|ctx, a| {
             if a.0.line < self.range.start.line || a.0.line > self.range.end.line {

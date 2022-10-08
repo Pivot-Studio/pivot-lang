@@ -488,18 +488,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     ) -> Result<&(PLType<'a, 'ctx>, Option<DIType<'ctx>>), PLDiag> {
         let v = self.types.get(name);
         if let Some(pv) = v {
-            if let Some(dst) = pv.0.get_range() {
-                self.send_if_go_to_def(range, dst);
-            }
             return Ok(pv);
         }
         if let Some(father) = self.father {
             let re = father.get_type(name, range);
-            if let Ok((pv, _)) = re {
-                if let Some(dst) = pv.get_range() {
-                    self.send_if_go_to_def(range, dst);
-                }
-            }
             return re;
         }
         self.if_completion(|ctx, a| {
@@ -568,7 +560,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }
     }
 
-    pub fn send_if_go_to_def(&self, range: Range, destrange: Range) {
+    pub fn send_if_go_to_def(&mut self, range: Range, destrange: Range) {
         if let Some(_) = self.sender {
             if let Some(comp) = &self.completion {
                 if comp.3 == ActionType::GotoDef {
@@ -578,6 +570,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                             range: destrange.to_diag_range(),
                         });
                         send_goto_def(self.sender.unwrap(), comp.1.clone(), resp);
+                        self.sender = None // set sender to None so it won't be sent again
                     }
                 }
             }

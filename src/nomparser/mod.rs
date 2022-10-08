@@ -866,13 +866,12 @@ fn struct_init_field(input: Span) -> IResult<Span, Box<dyn Node>> {
 fn struct_init(input: Span) -> IResult<Span, Box<dyn Node>> {
     map_res(
         tuple((
-            identifier,
+            type_name,
             tag_token(TokenType::LBRACE),
             many0(struct_init_field),
             tag_token(TokenType::RBRACE),
         )),
         |(name, _, fields, _)| {
-            let name = cast_to_var(&name);
             let range;
             if let Some(last) = fields.last() {
                 range = name.range.start.to(last.range().end);
@@ -880,7 +879,7 @@ fn struct_init(input: Span) -> IResult<Span, Box<dyn Node>> {
                 range = name.range;
             }
             res(StructInitNode {
-                id: name.name,
+                tp: name,
                 fields,
                 range,
             })

@@ -139,7 +139,7 @@ impl FuncDefNode {
                     para_names[i].clone(),
                     alloca,
                     para_pltype_ids[i].clone(),
-                    self.range,
+                    typenode.paralist[i].range,
                 )
                 .unwrap();
             }
@@ -215,11 +215,13 @@ impl Node for FuncCallNode {
         );
         let fntp = ctx.get_type(&self.id, self.range)?;
         if let (PLType::FN(fv), _) = fntp {
-            match (ret.try_as_basic_value().left(), fv.ret_pltype.as_ref()) {
-                (Some(v), Some(pltype)) => return Ok((Value::LoadValue(v), Some(pltype.clone()))),
-                (None, Some(pltype)) => return Ok((Value::None, Some(pltype.clone()))),
+            let o = match (ret.try_as_basic_value().left(), fv.ret_pltype.as_ref()) {
+                (Some(v), Some(pltype)) => Ok((Value::LoadValue(v.clone()), Some(pltype.clone()))),
+                (None, Some(pltype)) => Ok((Value::None, Some(pltype.clone()))),
                 _ => todo!(),
-            }
+            };
+            ctx.send_if_go_to_def(self.range, fv.range);
+            return o;
         }
         return Err(ctx.add_err(self.range, crate::ast::error::ErrorCode::NOT_A_FUNCTION));
     }
@@ -245,10 +247,10 @@ impl FuncTypeNode {
         }
         let mut para_types = Vec::new();
         for para in self.paralist.iter() {
-            let paramtps = ctx.get_type(&para.tp.id, para.range)?;
+            let paramtps = para.tp.get_type(ctx)?;
             para_types.push(paramtps.0.get_basic_type().into());
         }
-        let ret_type = ctx.get_type(&self.ret.id, self.ret.range)?.0.get_ret_type();
+        let ret_type = self.ret.get_type(ctx)?.0.get_ret_type();
         let func_type = ret_type.fn_type(&para_types, false);
         let func = ctx.module.add_function(self.id.as_str(), func_type, None);
         _ = ctx.add_type(

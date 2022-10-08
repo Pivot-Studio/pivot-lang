@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
+use crate::ast::range::Range;
 use inkwell::debug_info::*;
 use inkwell::types::BasicType;
 use internal_macro::range;
@@ -36,6 +37,16 @@ impl TypeNameNode {
         println!("TypeNameNode");
         tab(tabs + 1, line.clone(), true);
         println!("id: {}", self.id);
+    }
+    pub fn get_type<'a, 'ctx>(
+        &'a self,
+        ctx: &mut Ctx<'a, 'ctx>,
+    ) -> Result<(PLType<'a, 'ctx>, Option<DIType<'ctx>>), PLDiag> {
+        let re = ctx.get_type(&self.id, self.range)?.clone();
+        if let Some(dst) = re.0.get_range() {
+            ctx.send_if_go_to_def(self.range, dst);
+        }
+        Ok(re)
     }
 }
 
@@ -146,10 +157,7 @@ impl StructDefNode {
         let mut order_fields = Vec::<Field<'a, 'ctx>>::new();
         let mut i = 0;
         for field in self.fields.iter() {
-            let (id, (tp, _)) = (
-                field.id.clone(),
-                ctx.get_type(&field.tp.id, field.tp.range)?,
-            );
+            let (id, (tp, _)) = (field.id.clone(), field.tp.get_type(ctx)?);
             fields.insert(
                 id.to_string(),
                 Field {
@@ -217,7 +225,7 @@ impl Node for StructInitFieldNode {
 
 #[range]
 pub struct StructInitNode {
-    pub id: String,
+    pub tp: Box<TypeNameNode>,
     pub fields: Vec<Box<dyn Node>>,
 }
 
@@ -227,7 +235,8 @@ impl Node for StructInitNode {
         tab(tabs, line.clone(), end);
         println!("StructInitNode");
         tab(tabs + 1, line.clone(), false);
-        println!("id: {}", self.id);
+        self.tp
+            .print(tabs + 1, self.fields.len() == 0, line.clone());
         let mut i = self.fields.len();
         for field in &self.fields {
             i -= 1;
@@ -235,15 +244,16 @@ impl Node for StructInitNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let mut fields = HashMap::<String, BasicValueEnum<'ctx>>::new();
+        let mut fields = HashMap::<String, (BasicValueEnum<'ctx>, Range)>::new();
         for field in self.fields.iter_mut() {
+            let range = field.range();
             if let (Value::StructFieldValue((id, val)), _) = field.emit(ctx)? {
-                fields.insert(id, val);
+                fields.insert(id, (val, range));
             } else {
                 panic!("StructInitNode::emit: invalid field");
             }
         }
-        let (st, _) = ctx.get_type(self.id.as_str(), self.range)?;
+        let (st, _) = self.tp.get_type(ctx)?;
         if let PLType::STRUCT(st) = st {
             let et = st.struct_type.as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");
@@ -253,9 +263,10 @@ impl Node for StructInitNode {
                     .builder
                     .build_struct_gep(stv, field.index, "fieldptr")
                     .unwrap();
-                ctx.builder.build_store(ptr, val);
+                ctx.builder.build_store(ptr, val.0);
+                ctx.send_if_go_to_def(val.1, field.range)
             }
-            return Ok((Value::VarValue(stv), Some(self.id.clone())));
+            return Ok((Value::VarValue(stv), Some(st.name)));
         } else {
             panic!("StructInitNode::emit: invalid type");
         }
