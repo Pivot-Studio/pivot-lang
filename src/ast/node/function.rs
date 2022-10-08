@@ -145,6 +145,12 @@ impl FuncDefNode {
             }
             // emit body
             _ = body.emit_child(&mut ctx);
+            if ctx.block.unwrap().get_terminator().is_none() {
+                return Err(ctx.add_err(
+                    self.range,
+                    crate::ast::error::ErrorCode::FUNCTION_MUST_HAVE_RETURN,
+                ));
+            }
             ctx.nodebug_builder.position_at_end(allocab);
             ctx.nodebug_builder.build_unconditional_branch(entry);
             return Ok((Value::None, None));

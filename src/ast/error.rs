@@ -47,5 +47,9 @@ define_error!(
     ASSIGN_TYPE_MISMATCH = "assign type mismatch",
     NOT_ASSIGNABLE = "left value is not assignable",
     INVALID_STRUCT_DEF = "invalid struct definition",
-    UNDEFINED_TYPE = "undefined type"
+    UNDEFINED_TYPE = "undefined type",
+    RETURN_VALUE_IN_VOID_FUNCTION = "return value in void function",
+    RETURN_TYPE_MISMATCH = "return type mismatch",
+    NO_RETURN_VALUE_IN_NON_VOID_FUNCTION = "non void function must have a return value",
+    FUNCTION_MUST_HAVE_RETURN = "function must have a return value"
 );

@@ -21,6 +21,7 @@ pub fn send_completions(
     id: RequestId,
     completions: Vec<lsp_types::CompletionItem>,
 ) {
+    eprintln!("completions: {:?}", completions);
     sender
         .send(Message::Response(lsp_server::Response::new_ok(
             id,

@@ -66,6 +66,9 @@ impl Node for VarNode {
             return Ok((Value::VarValue(*v), Some(pltype)));
         }
         ctx.if_completion(|ctx, a| {
+            if a.0.line < self.range.start.line || a.0.line > self.range.end.line {
+                return;
+            }
             let completions = ctx.get_completions();
             send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
         });

@@ -49,7 +49,7 @@ impl TypeNameNode {
         let td = ctx.targetmachine.get_target_data();
 
         match tp {
-            PLType::FN(_) => todo!(),
+            PLType::FN(_) => None,
             PLType::STRUCT(x) => {
                 let mut offset = 0;
                 let m = x
@@ -138,33 +138,33 @@ impl StructDefNode {
 }
 
 impl StructDefNode {
-    pub fn emit_struct_def<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> bool {
+    pub fn emit_struct_def<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
         if ctx.get_type(self.id.as_str(), self.range).is_ok() {
-            return true;
+            return Ok(());
         }
         let mut fields = BTreeMap::<String, Field<'a, 'ctx>>::new();
         let mut order_fields = Vec::<Field<'a, 'ctx>>::new();
         let mut i = 0;
         for field in self.fields.iter() {
-            if let (id, Ok((tp, _))) = (field.id.clone(), ctx.get_type(&field.tp.id, self.range)) {
-                fields.insert(
-                    id.to_string(),
-                    Field {
-                        index: i,
-                        tp: tp.clone(),
-                        typename: &field.tp,
-                        name: field.id.clone(),
-                    },
-                );
-                order_fields.push(Field {
+            let (id, (tp, _)) = (
+                field.id.clone(),
+                ctx.get_type(&field.tp.id, field.tp.range)?,
+            );
+            fields.insert(
+                id.to_string(),
+                Field {
                     index: i,
                     tp: tp.clone(),
                     typename: &field.tp,
                     name: field.id.clone(),
-                });
-            } else {
-                return false;
-            }
+                },
+            );
+            order_fields.push(Field {
+                index: i,
+                tp: tp.clone(),
+                typename: &field.tp,
+                name: field.id.clone(),
+            });
             i = i + 1;
         }
         let name = self.id.as_str();
@@ -185,7 +185,7 @@ impl StructDefNode {
             line_no: self.range().start.line as u32,
         });
         ctx.add_type(name.to_string(), stu.clone());
-        true
+        Ok(())
     }
 }
 

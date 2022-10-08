@@ -2,7 +2,6 @@ use super::function::{FuncDefNode, FuncTypeNode};
 use super::types::StructDefNode;
 use super::*;
 use crate::ast::ctx::Ctx;
-use crate::ast::error::ErrorCode;
 
 use internal_macro::range;
 
@@ -37,7 +36,7 @@ impl Node for ProgramNode {
         loop {
             let mut i = 0;
             self.structs.iter().for_each(|x| {
-                if !x.emit_struct_def(ctx) {
+                if x.emit_struct_def(ctx).is_err() {
                     i = i + 1;
                 }
             });
@@ -46,8 +45,8 @@ impl Node for ProgramNode {
             }
             if i == prev {
                 self.structs.iter().for_each(|x| {
-                    if !x.emit_struct_def(ctx) {
-                        ctx.add_err(x.range, ErrorCode::INVALID_STRUCT_DEF);
+                    if let Err(e) = x.emit_struct_def(ctx) {
+                        ctx.add_diag(e);
                     }
                 });
                 break;

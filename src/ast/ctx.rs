@@ -1,4 +1,5 @@
 use crate::ast::node::Value;
+use crate::lsp::diagnostics::send_completions;
 use colored::Colorize;
 use crossbeam_channel::Sender;
 use inkwell::basic_block::BasicBlock;
@@ -475,6 +476,14 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if let Some(father) = self.father {
             return father.get_type(name, range);
         }
+        self.if_completion(|ctx, a| {
+            if range.start.line > a.0.line || a.0.line > range.end.line {
+                return;
+            }
+            let completions = self.get_type_completions();
+            eprintln!("tpcompletion");
+            send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
+        });
         Err(PLDiag::new_error(
             self.src_file_path.to_string(),
             range,
@@ -526,14 +535,60 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }
     }
     pub fn get_completions(&self) -> Vec<CompletionItem> {
-        let mut v = Vec::new();
-        for (k, _) in self.table.iter() {
-            v.push(CompletionItem {
-                label: k.to_string(),
-                kind: Some(CompletionItemKind::VARIABLE),
-                ..Default::default()
-            });
+        let mut m = HashMap::new();
+        self.get_var_completions(&mut m);
+        self.get_pltp_completions(&mut m);
+        self.get_keyword_completions(&mut m);
+
+        let cm = m.iter().map(|(_, v)| v.clone()).collect();
+        cm
+    }
+
+    pub fn get_type_completions(&self) -> Vec<CompletionItem> {
+        let mut m = HashMap::new();
+        self.get_tp_completions(&mut m);
+        m.iter().map(|(_, v)| v.clone()).collect()
+    }
+
+    fn get_tp_completions(&self, m: &mut HashMap<String, CompletionItem>) {
+        for (k, (f, _)) in self.types.iter() {
+            let tp = match f {
+                PLType::FN(_) => continue,
+                PLType::STRUCT(_) => CompletionItemKind::STRUCT,
+                PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
+                PLType::VOID(_) => CompletionItemKind::KEYWORD,
+            };
+            m.insert(
+                k.to_string(),
+                CompletionItem {
+                    label: k.to_string(),
+                    kind: Some(tp),
+                    ..Default::default()
+                },
+            );
         }
+        if let Some(father) = self.father {
+            father.get_tp_completions(m);
+        }
+    }
+
+    fn get_var_completions(&self, vmap: &mut HashMap<String, CompletionItem>) {
+        for (k, _) in self.table.iter() {
+            vmap.insert(
+                k.to_string(),
+                CompletionItem {
+                    label: k.to_string(),
+                    kind: Some(CompletionItemKind::VARIABLE),
+                    ..Default::default()
+                },
+            );
+        }
+        if let Some(father) = self.father {
+            father.get_var_completions(vmap);
+        }
+    }
+
+    fn get_pltp_completions(&self, vmap: &mut HashMap<String, CompletionItem>) {
         for (k, (f, _)) in self.types.iter() {
             let tp = match f {
                 PLType::FN(_) => CompletionItemKind::FUNCTION,
@@ -541,16 +596,59 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::VOID(_) => CompletionItemKind::KEYWORD,
             };
-            v.push(CompletionItem {
-                label: k.to_string(),
-                kind: Some(tp),
-                ..Default::default()
-            });
+            vmap.insert(
+                k.to_string(),
+                CompletionItem {
+                    label: k.to_string(),
+                    kind: Some(tp),
+                    ..Default::default()
+                },
+            );
         }
-
         if let Some(father) = self.father {
-            v.extend(father.get_completions());
+            father.get_pltp_completions(vmap);
         }
-        v
+    }
+    fn get_keyword_completions(&self, vmap: &mut HashMap<String, CompletionItem>) {
+        let keywords = vec![
+            "if", "else", "while", "for", "return", "struct", "let", "true", "false",
+        ];
+        let loopkeys = vec!["break", "continue"];
+        let toplevel = vec!["fn", "struct"];
+        if self.father.is_none() {
+            for k in toplevel {
+                vmap.insert(
+                    k.to_string(),
+                    CompletionItem {
+                        label: k.to_string(),
+                        kind: Some(CompletionItemKind::KEYWORD),
+                        ..Default::default()
+                    },
+                );
+            }
+        } else {
+            for k in keywords {
+                vmap.insert(
+                    k.to_string(),
+                    CompletionItem {
+                        label: k.to_string(),
+                        kind: Some(CompletionItemKind::KEYWORD),
+                        ..Default::default()
+                    },
+                );
+            }
+        }
+        if self.break_block.is_some() && self.continue_block.is_some() {
+            for k in loopkeys {
+                vmap.insert(
+                    k.to_string(),
+                    CompletionItem {
+                        label: k.to_string(),
+                        kind: Some(CompletionItemKind::KEYWORD),
+                        ..Default::default()
+                    },
+                );
+            }
+        }
     }
 }
