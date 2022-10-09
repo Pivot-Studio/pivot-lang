@@ -5,7 +5,7 @@ pub mod mem_docs;
 
 use lsp_types::{
     notification::{DidChangeTextDocument, DidOpenTextDocument},
-    request::{Completion, GotoDefinition},
+    request::{Completion, GotoDefinition, References},
     InitializeParams, OneOf, ServerCapabilities, TextDocumentSyncKind, TextDocumentSyncOptions,
 };
 
@@ -41,6 +41,7 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
             work_done_progress_options: Default::default(),
             all_commit_characters: None,
         }),
+        references_provider: Some(OneOf::Left(true)),
         ..Default::default()
     })
     .unwrap();
@@ -88,6 +89,32 @@ fn main_loop(
                             },
                             &connection.sender,
                             Some((pos, id, None, ActionType::GotoDef)),
+                        );
+                        continue;
+                    }
+                    Err(err @ ExtractError::JsonError { .. }) => panic!("{:?}", err),
+                    Err(ExtractError::MethodMismatch(req)) => req,
+                };
+                match cast::<References>(req.clone()) {
+                    Ok((id, params)) => {
+                        let uri = params
+                            .text_document_position
+                            .text_document
+                            .uri
+                            .to_file_path()
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string();
+                        let pos = Pos::from_diag_pos(&params.text_document_position.position);
+                        c.compile_dry(
+                            &uri,
+                            &docs,
+                            Options {
+                                ..Default::default()
+                            },
+                            &connection.sender,
+                            Some((pos, id.clone(), None, ActionType::FindReferences)),
                         );
                         continue;
                     }

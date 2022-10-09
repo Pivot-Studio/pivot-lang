@@ -1,4 +1,6 @@
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
+use std::rc::Rc;
 
 use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
@@ -48,6 +50,7 @@ impl TypeNameNode {
         if let Some(dst) = re.0.get_range() {
             ctx.send_if_go_to_def(self.range, dst);
         }
+        ctx.set_if_refs_tp(&re.0, self.range);
         Ok(re)
     }
 }
@@ -195,7 +198,9 @@ impl StructDefNode {
             fields,
             ordered_fields: newf,
             range: self.range(),
+            refs: Rc::new(RefCell::new(vec![])),
         });
+        ctx.set_if_refs_tp(&stu, self.range);
         _ = ctx.add_type(name.to_string(), stu.clone(), self.range);
         Ok(())
     }
@@ -262,7 +267,7 @@ impl Node for StructInitNode {
             for (id, val) in fields {
                 let field = st.fields.get(&id);
                 if field.is_none() {
-                    ctx.if_completion(|ctx,a|{
+                    ctx.if_completion(|ctx, a| {
                         if a.0.is_in(self.range) {
                             let completions = st.get_completions();
                             send_completions(ctx.sender.unwrap(), a.1.clone(), completions);

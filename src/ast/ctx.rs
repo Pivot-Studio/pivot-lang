@@ -28,9 +28,11 @@ use lsp_types::GotoDefinitionResponse;
 use lsp_types::InsertTextFormat;
 use lsp_types::Location;
 use lsp_types::Url;
+use std::cell::Cell;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use super::compiler::get_target_machine;
 use super::compiler::ActionType;
@@ -56,9 +58,17 @@ fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
         _ => todo!(),
     }
 }
-#[derive(Debug, Clone)]
+
 pub struct Ctx<'a, 'ctx> {
-    pub table: HashMap<String, (PointerValue<'ctx>, String, Range)>, // variable table
+    pub table: HashMap<
+        String,
+        (
+            PointerValue<'ctx>,
+            String,
+            Range,
+            Rc<RefCell<Vec<Location>>>,
+        ),
+    >, // variable table
     pub types: HashMap<String, (PLType<'a, 'ctx>, Option<DIType<'ctx>>)>, // func and types
     pub father: Option<&'a Ctx<'a, 'ctx>>,
     pub context: &'ctx Context,
@@ -77,6 +87,7 @@ pub struct Ctx<'a, 'ctx> {
     pub errs: &'a RefCell<Vec<PLDiag>>,
     pub sender: Option<&'a Sender<Message>>,
     pub completion: Option<(Pos, RequestId, Option<String>, ActionType)>,
+    pub refs: Rc<Cell<Option<Rc<RefCell<Vec<Location>>>>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -141,6 +152,15 @@ pub struct PriType<'ctx> {
     id: String,
 }
 impl<'a, 'ctx> PLType<'a, 'ctx> {
+    pub fn get_refs(&self) -> Option<Rc<RefCell<Vec<Location>>>> {
+        match self {
+            PLType::FN(f) => Some(f.refs.clone()),
+            PLType::STRUCT(s) => Some(s.refs.clone()),
+            PLType::PRIMITIVE(_) => None,
+            PLType::VOID(_) => None,
+        }
+    }
+
     pub fn get_basic_type(&self) -> BasicTypeEnum<'ctx> {
         self.get_basic_type_op().unwrap()
     }
@@ -281,6 +301,7 @@ pub struct FNType<'ctx> {
     pub fntype: FunctionValue<'ctx>,
     pub ret_pltype: Option<String>,
     pub range: Range,
+    pub refs: Rc<RefCell<Vec<Location>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -290,6 +311,7 @@ pub struct STType<'a, 'ctx> {
     pub struct_type: StructType<'ctx>,
     pub ordered_fields: Vec<Field<'a, 'ctx>>,
     pub range: Range,
+    pub refs: Rc<RefCell<Vec<Location>>>,
 }
 
 impl STType<'_, '_> {
@@ -416,6 +438,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             errs,
             sender,
             completion,
+            refs: Rc::new(Cell::new(None)),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -449,6 +472,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             errs: self.errs,
             sender: self.sender,
             completion: self.completion.clone(),
+            refs: self.refs.clone(),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -456,10 +480,18 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     /// # get_symbol
     /// search in current and all father symbol tables
-    pub fn get_symbol(&self, name: &str) -> Option<(&PointerValue<'ctx>, String, Range)> {
+    pub fn get_symbol(
+        &self,
+        name: &str,
+    ) -> Option<(
+        &PointerValue<'ctx>,
+        String,
+        Range,
+        Rc<RefCell<Vec<Location>>>,
+    )> {
         let v = self.table.get(name);
-        if let Some((pv, pltype, range)) = v {
-            return Some((pv, pltype.to_string(), range.clone()));
+        if let Some((pv, pltype, range, refs)) = v {
+            return Some((pv, pltype.to_string(), range.clone(), refs.clone()));
         }
         if let Some(father) = self.father {
             return father.get_symbol(name);
@@ -477,7 +509,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if self.table.contains_key(&name) {
             return Err(self.add_err(range, ErrorCode::REDECLARATION));
         }
-        self.table.insert(name, (pv, tp, range));
+        let refs = Rc::new(RefCell::new(vec![]));
+        self.table.insert(name, (pv, tp, range, refs.clone()));
+        self.set_if_refs(refs, range);
         Ok(())
     }
 
@@ -514,7 +548,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         range: Range,
     ) -> Result<(), PLDiag> {
         if self.types.contains_key(&name) {
-            return Err(self.add_err(range, ErrorCode::UNDEFINED_TYPE));
+            return Err(self.add_err(range, ErrorCode::REDFINE_TYPE));
         }
         let ditype = tp.get_ditype(self);
         self.types.insert(name, (tp.clone(), ditype));
@@ -559,13 +593,50 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }
     }
 
+    pub fn get_file_url(&self) -> Url {
+        Url::from_file_path(self.src_file_path).unwrap()
+    }
+
+    pub fn get_location(&self, range: Range) -> Location {
+        Location::new(self.get_file_url(), range.to_diag_range())
+    }
+
+    pub fn set_if_refs_tp(&self, tp: &PLType, range: Range) {
+        if let Some(_) = self.sender {
+            if let Some(comp) = &self.completion {
+                if comp.3 == ActionType::FindReferences {
+                    let tprefs = tp.get_refs();
+                    if let Some(tprefs) = tprefs {
+                        tprefs.borrow_mut().push(self.get_location(range));
+                        if comp.0.is_in(range) {
+                            self.refs.set(Some(tprefs));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn set_if_refs(&self, refs: Rc<RefCell<Vec<Location>>>, range: Range) {
+        if let Some(_) = self.sender {
+            if let Some(comp) = &self.completion {
+                if comp.3 == ActionType::FindReferences {
+                    refs.borrow_mut().push(self.get_location(range));
+                    if comp.0.is_in(range) {
+                        self.refs.set(Some(refs));
+                    }
+                }
+            }
+        }
+    }
+
     pub fn send_if_go_to_def(&mut self, range: Range, destrange: Range) {
         if let Some(_) = self.sender {
             if let Some(comp) = &self.completion {
                 if comp.3 == ActionType::GotoDef {
                     if comp.0.is_in(range) {
                         let resp = GotoDefinitionResponse::Scalar(Location {
-                            uri: Url::from_file_path(self.src_file_path).unwrap(),
+                            uri: self.get_file_url(),
                             range: destrange.to_diag_range(),
                         });
                         send_goto_def(self.sender.unwrap(), comp.1.clone(), resp);

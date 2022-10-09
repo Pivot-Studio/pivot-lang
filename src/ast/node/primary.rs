@@ -68,9 +68,10 @@ impl Node for VarNode {
                 send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
             }
         });
-        if let Some((v, pltype, dst)) = v {
+        if let Some((v, pltype, dst, refs)) = v {
             let o = Ok((Value::VarValue(v.clone()), Some(pltype)));
             ctx.send_if_go_to_def(self.range, dst);
+            ctx.set_if_refs(refs, self.range);
             return o;
         }
         Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND))

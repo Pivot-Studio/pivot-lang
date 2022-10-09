@@ -41,3 +41,16 @@ pub fn send_goto_def(
         )))
         .unwrap();
 }
+
+pub fn send_references(
+    sender: &Sender<Message>,
+    id: RequestId,
+    references: &Vec<lsp_types::Location>,
+) {
+    sender
+        .send(Message::Response(lsp_server::Response::new_ok(
+            id,
+            Some(serde_json::to_value(references).unwrap()),
+        )))
+        .unwrap();
+}

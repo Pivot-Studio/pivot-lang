@@ -11,7 +11,10 @@ use inkwell::{
 use lsp_server::{Message, RequestId};
 
 use crate::{
-    lsp::{diagnostics::send_diagnostics, mem_docs::MemDocs},
+    lsp::{
+        diagnostics::{send_diagnostics, send_references},
+        mem_docs::MemDocs,
+    },
     nomparser::PLParser,
 };
 use std::process::Command;
@@ -57,6 +60,7 @@ pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
 pub enum ActionType {
     Completion,
     GotoDef,
+    FindReferences,
 }
 
 impl Compiler {
@@ -120,7 +124,11 @@ impl Compiler {
 
         _ = node.emit(m);
         let vs = v.borrow().iter().map(|v| v.get_diagnostic()).collect();
-        send_diagnostics(&sender, file.to_string(), vs)
+        send_diagnostics(&sender, file.to_string(), vs);
+        if let Some(c) = ctx.refs.take() {
+            let c = c.borrow();
+            send_references(&sender, ctx.completion.unwrap().1, &c);
+        }
     }
 
     pub fn compile(&self, file: &str, docs: MemDocs, out: &str, op: Options) {

@@ -7,7 +7,9 @@ use crate::ast::node::{deal_line, tab};
 use inkwell::debug_info::*;
 use inkwell::values::FunctionValue;
 use internal_macro::range;
+use std::cell::RefCell;
 use std::fmt::format;
+use std::rc::Rc;
 
 use lazy_static::__Deref;
 
@@ -220,6 +222,7 @@ impl Node for FuncCallNode {
                 (None, Some(pltype)) => Ok((Value::None, Some(pltype.clone()))),
                 _ => todo!(),
             };
+            ctx.set_if_refs_tp(&fntp.0, self.range);
             ctx.send_if_go_to_def(self.range, fv.range);
             return o;
         }
@@ -253,16 +256,16 @@ impl FuncTypeNode {
         let ret_type = self.ret.get_type(ctx)?.0.get_ret_type();
         let func_type = ret_type.fn_type(&para_types, false);
         let func = ctx.module.add_function(self.id.as_str(), func_type, None);
-        _ = ctx.add_type(
-            self.id.clone(),
-            PLType::FN(FNType {
-                name: self.id.clone(),
-                fntype: func,
-                ret_pltype: Some(self.ret.id.clone()),
-                range: self.range,
-            }),
-            self.range,
-        );
+        let refs = vec![];
+        let ftp = PLType::FN(FNType {
+            name: self.id.clone(),
+            fntype: func,
+            ret_pltype: Some(self.ret.id.clone()),
+            range: self.range,
+            refs: Rc::new(RefCell::new(refs)),
+        });
+        ctx.set_if_refs_tp(&ftp, self.range);
+        _ = ctx.add_type(self.id.clone(), ftp, self.range);
         Ok(func)
     }
 }
