@@ -487,6 +487,12 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         range: Range,
     ) -> Result<&(PLType<'a, 'ctx>, Option<DIType<'ctx>>), PLDiag> {
         let v = self.types.get(name);
+        self.if_completion(|ctx, a| {
+            if a.0.is_in(range) {
+                let completions = self.get_type_completions();
+                send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
+            }
+        });
         if let Some(pv) = v {
             return Ok(pv);
         }
@@ -494,13 +500,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             let re = father.get_type(name, range);
             return re;
         }
-        self.if_completion(|ctx, a| {
-            if range.start.line > a.0.line || a.0.line > range.end.line {
-                return;
-            }
-            let completions = self.get_type_completions();
-            send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
-        });
         Err(PLDiag::new_error(
             self.src_file_path.to_string(),
             range,

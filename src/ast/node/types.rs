@@ -4,8 +4,9 @@ use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
 use crate::ast::error::ErrorCode;
 use crate::ast::range::Range;
+use crate::lsp::diagnostics::send_completions;
 use inkwell::debug_info::*;
-use inkwell::types::BasicType;
+use inkwell::types::{AnyType, BasicType};
 use internal_macro::range;
 
 // TODO: match all case
@@ -261,6 +262,12 @@ impl Node for StructInitNode {
             for (id, val) in fields {
                 let field = st.fields.get(&id);
                 if field.is_none() {
+                    ctx.if_completion(|ctx,a|{
+                        if a.0.is_in(self.range) {
+                            let completions = st.get_completions();
+                            send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
+                        }
+                    });
                     return Err(ctx.add_err(val.1, ErrorCode::STRUCT_FIELD_NOT_FOUND));
                 }
                 let field = field.unwrap();
@@ -268,6 +275,9 @@ impl Node for StructInitNode {
                     .builder
                     .build_struct_gep(stv, field.index, "fieldptr")
                     .unwrap();
+                if ptr.get_type().get_element_type() != val.0.get_type().as_any_type_enum() {
+                    return Err(ctx.add_err(val.1, ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH));
+                }
                 ctx.builder.build_store(ptr, val.0);
                 ctx.send_if_go_to_def(val.1, field.range)
             }

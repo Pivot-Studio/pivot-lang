@@ -183,6 +183,21 @@ impl Node for TakeOpNode {
                         let st = etype.into_struct_type();
                         let tpname = st.get_name().unwrap().to_str().unwrap();
                         let (tp, _) = ctx.get_type(tpname, range).unwrap();
+                        // end with ".", gen completions
+                        ctx.if_completion(|ctx, (pos, rid, trigger)| {
+                            let sender = ctx.sender.unwrap();
+                            if pos.column == id.range().start.column
+                                && pos.line == id.range().start.line
+                                && trigger.is_some()
+                                && trigger.as_ref().unwrap() == "."
+                            {
+                                let (tp, _) = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
+                                if let PLType::STRUCT(s) = tp {
+                                    let completions = s.get_completions();
+                                    send_completions(sender, rid.clone(), completions);
+                                }
+                            }
+                        });
                         range = id.range();
                         if let PLType::STRUCT(s) = tp {
                             let field = s.fields.get(&id.name);
@@ -213,11 +228,7 @@ impl Node for TakeOpNode {
             // end with ".", gen completions
             ctx.if_completion(|ctx, (pos, id, trigger)| {
                 let sender = ctx.sender.unwrap();
-                if pos.line <= self.range.end.line
-                    && pos.line >= self.range.start.line
-                    && trigger.is_some()
-                    && trigger.as_ref().unwrap() == "."
-                {
+                if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
                     let (tp, _) = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
                     if let PLType::STRUCT(s) = tp {
                         let completions = s.get_completions();

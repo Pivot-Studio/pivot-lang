@@ -788,11 +788,15 @@ fn take_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
     if re.1.to_string().as_str() == "." {
         input = re.0;
         node.complete = false;
+        node.range.end.column += 1;
     }
     if b.is_empty() {
         return Ok((input, box_node(node)));
     }
     node.range = r.start.to(b.last().unwrap().range().end);
+    if !node.complete {
+        node.range.end.column += 1;
+    }
     let mut ids = vec![];
     for v in b {
         ids.push(Box::new(cast_to_var(&v)));
