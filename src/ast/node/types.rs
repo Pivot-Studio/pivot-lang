@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
+use crate::ast::error::ErrorCode;
 use crate::ast::range::Range;
 use inkwell::debug_info::*;
 use inkwell::types::BasicType;
@@ -258,7 +259,11 @@ impl Node for StructInitNode {
             let et = st.struct_type.as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");
             for (id, val) in fields {
-                let field = st.fields.get(&id).unwrap();
+                let field = st.fields.get(&id);
+                if field.is_none() {
+                    return Err(ctx.add_err(val.1, ErrorCode::STRUCT_FIELD_NOT_FOUND));
+                }
+                let field = field.unwrap();
                 let ptr = ctx
                     .builder
                     .build_struct_gep(stv, field.index, "fieldptr")
