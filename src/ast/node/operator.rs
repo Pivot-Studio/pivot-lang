@@ -5,7 +5,7 @@ use crate::ast::ctx::PLType;
 use crate::ast::tokens::TokenType;
 
 use crate::handle_calc;
-use crate::lsp::diagnostics::send_completions;
+use crate::lsp::helpers::send_completions;
 use inkwell::IntPredicate;
 use internal_macro::range;
 use paste::item;

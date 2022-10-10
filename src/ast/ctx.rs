@@ -1,6 +1,6 @@
 use crate::ast::node::Value;
-use crate::lsp::diagnostics::send_completions;
-use crate::lsp::diagnostics::send_goto_def;
+use crate::lsp::helpers::send_completions;
+use crate::lsp::helpers::send_goto_def;
 use colored::Colorize;
 use crossbeam_channel::Sender;
 use inkwell::basic_block::BasicBlock;
@@ -59,6 +59,8 @@ fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
     }
 }
 
+/// # Ctx
+/// Context for code generation
 pub struct Ctx<'a, 'ctx> {
     pub table: HashMap<
         String,
@@ -70,31 +72,36 @@ pub struct Ctx<'a, 'ctx> {
         ),
     >, // variable table
     pub types: HashMap<String, (PLType<'a, 'ctx>, Option<DIType<'ctx>>)>, // func and types
-    pub father: Option<&'a Ctx<'a, 'ctx>>,
-    pub context: &'ctx Context,
-    pub builder: &'a Builder<'ctx>,
-    pub module: &'a Module<'ctx>,
-    pub dibuilder: &'a DebugInfoBuilder<'ctx>,
-    pub diunit: &'a DICompileUnit<'ctx>,
-    pub function: Option<FunctionValue<'ctx>>,
-    pub block: Option<BasicBlock<'ctx>>,
-    pub continue_block: Option<BasicBlock<'ctx>>,
-    pub break_block: Option<BasicBlock<'ctx>>,
-    pub targetmachine: &'a TargetMachine,
-    pub discope: DIScope<'ctx>,
-    pub nodebug_builder: &'a Builder<'ctx>,
-    pub src_file_path: &'a str,
-    pub errs: &'a RefCell<Vec<PLDiag>>,
-    pub sender: Option<&'a Sender<Message>>,
-    pub completion: Option<(Pos, RequestId, Option<String>, ActionType)>,
-    pub refs: Rc<Cell<Option<Rc<RefCell<Vec<Location>>>>>>, // thank you, Rust!
+    pub father: Option<&'a Ctx<'a, 'ctx>>, // father context, for symbol lookup
+    pub context: &'ctx Context,            // llvm context
+    pub builder: &'a Builder<'ctx>,        // llvm builder
+    pub module: &'a Module<'ctx>,          // llvm module
+    pub dibuilder: &'a DebugInfoBuilder<'ctx>, // debug info builder
+    pub diunit: &'a DICompileUnit<'ctx>,   // debug info unit
+    pub function: Option<FunctionValue<'ctx>>, // current function
+    pub block: Option<BasicBlock<'ctx>>,   // current block
+    pub continue_block: Option<BasicBlock<'ctx>>, // the block to jump when continue
+    pub break_block: Option<BasicBlock<'ctx>>, // the block to jump to when break
+    pub targetmachine: &'a TargetMachine,  // might be used in debug info
+    pub discope: DIScope<'ctx>,            // debug info scope
+    pub nodebug_builder: &'a Builder<'ctx>, // builder without debug info
+    pub src_file_path: &'a str,            // source file path
+    pub errs: &'a RefCell<Vec<PLDiag>>,    // diagnostic list
+    pub sender: Option<&'a Sender<Message>>, // lsp sender
+    pub lspparams: Option<(Pos, RequestId, Option<String>, ActionType)>, // lsp params
+    pub refs: Rc<Cell<Option<Rc<RefCell<Vec<Location>>>>>>, // hold the find references result (thank you, Rust!)
 }
 
+/// # PLDiag
+/// Diagnostic for pivot-lang
+/// TODO: warning, info
 #[derive(Debug, Clone)]
 pub enum PLDiag {
     Error(Err),
 }
 
+/// # Err
+/// Error for pivot-lang
 #[derive(Debug, Clone)]
 pub struct Err {
     pub msg: String,
@@ -139,6 +146,9 @@ impl PLDiag {
     }
 }
 
+/// # PLType
+/// Type for pivot-lang
+/// including primitive type, struct type, function type, void type
 #[derive(Debug, Clone)]
 pub enum PLType<'a, 'ctx> {
     FN(FNType<'ctx>),
@@ -146,12 +156,20 @@ pub enum PLType<'a, 'ctx> {
     PRIMITIVE(PriType<'ctx>),
     VOID(VoidType<'ctx>),
 }
+
+/// # PriType
+/// Primitive type for pivot-lang
 #[derive(Debug, Clone)]
 pub struct PriType<'ctx> {
     basetype: BasicTypeEnum<'ctx>,
     id: String,
 }
+
 impl<'a, 'ctx> PLType<'a, 'ctx> {
+    /// # get_refs
+    /// get the references of the type
+    /// used in find references
+    /// void type and primitive types has no references
     pub fn get_refs(&self) -> Option<Rc<RefCell<Vec<Location>>>> {
         match self {
             PLType::FN(f) => Some(f.refs.clone()),
@@ -161,9 +179,16 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
         }
     }
 
+    /// # get_basic_type
+    /// get the basic type of the type
+    /// used in code generation
+    /// may panic if the type is void type
     pub fn get_basic_type(&self) -> BasicTypeEnum<'ctx> {
         self.get_basic_type_op().unwrap()
     }
+
+    /// # get_range
+    /// get the defination range of the type
     pub fn get_range(&self) -> Option<Range> {
         match self {
             PLType::FN(f) => Some(f.range.clone()),
@@ -173,6 +198,9 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
         }
     }
 
+    /// # get_basic_type_op
+    /// get the basic type of the type
+    /// used in code generation
     pub fn get_basic_type_op(&self) -> Option<BasicTypeEnum<'ctx>> {
         match self {
             PLType::FN(f) => Some(
@@ -187,6 +215,8 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
         }
     }
 
+    /// # get_ret_type
+    /// get the return type, which is void type or primitive type
     pub fn get_ret_type(&self) -> RetTypeEnum<'ctx> {
         match self {
             PLType::VOID(x) => RetTypeEnum::VOID(*x),
@@ -194,6 +224,8 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
         }
     }
 
+    /// # get_ditype
+    /// get the debug info type of the pltype
     pub fn get_ditype(&self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
         let td = ctx.targetmachine.get_target_data();
         match self {
@@ -438,7 +470,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             src_file_path,
             errs,
             sender,
-            completion,
+            lspparams: completion,
             refs: Rc::new(Cell::new(None)),
         };
         add_primitive_types(&mut ctx);
@@ -472,7 +504,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             src_file_path: self.src_file_path,
             errs: self.errs,
             sender: self.sender,
-            completion: self.completion.clone(),
+            lspparams: self.lspparams.clone(),
             refs: self.refs.clone(),
         };
         add_primitive_types(&mut ctx);
@@ -586,7 +618,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     pub fn if_completion(&self, c: impl FnOnce(&Ctx, &(Pos, RequestId, Option<String>))) {
         if let Some(_) = self.sender {
-            if let Some(comp) = &self.completion {
+            if let Some(comp) = &self.lspparams {
                 if comp.3 == ActionType::Completion {
                     c(self, &(comp.0, comp.1.clone(), comp.2.clone()));
                 }
@@ -604,7 +636,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     pub fn set_if_refs_tp(&self, tp: &PLType, range: Range) {
         if let Some(_) = self.sender {
-            if let Some(comp) = &self.completion {
+            if let Some(comp) = &self.lspparams {
                 if comp.3 == ActionType::FindReferences {
                     let tprefs = tp.get_refs();
                     if let Some(tprefs) = tprefs {
@@ -620,7 +652,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     pub fn set_if_refs(&self, refs: Rc<RefCell<Vec<Location>>>, range: Range) {
         if let Some(_) = self.sender {
-            if let Some(comp) = &self.completion {
+            if let Some(comp) = &self.lspparams {
                 if comp.3 == ActionType::FindReferences {
                     refs.borrow_mut().push(self.get_location(range));
                     if comp.0.is_in(range) {
@@ -633,7 +665,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     pub fn send_if_go_to_def(&mut self, range: Range, destrange: Range) {
         if let Some(_) = self.sender {
-            if let Some(comp) = &self.completion {
+            if let Some(comp) = &self.lspparams {
                 if comp.3 == ActionType::GotoDef {
                     if comp.0.is_in(range) {
                         let resp = GotoDefinitionResponse::Scalar(Location {

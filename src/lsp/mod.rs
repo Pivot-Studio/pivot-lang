@@ -1,6 +1,13 @@
+//! # lsp
+//! pivot-lang language server entry
+//! current features:
+//! - diagnostics
+//! - completion
+//! - goto definition
+//! - find references
 use std::error::Error;
 
-pub mod diagnostics;
+pub mod helpers;
 pub mod mem_docs;
 
 use lsp_types::{
@@ -20,7 +27,7 @@ use crate::ast::{
 
 pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
     // Note that  we must have our logging only write out to stderr.
-    eprintln!("starting generic LSP server");
+    eprintln!("starting pivot-lang LSP server");
 
     // Create the transport. Includes the stdio (stdin and stdout) versions but this could
     // also be implemented to use sockets or HTTP.
@@ -60,7 +67,7 @@ fn main_loop(
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
     let _params: InitializeParams = serde_json::from_value(params).unwrap();
     let mut docs = MemDocs::new();
-    eprintln!("starting example main loop");
+    eprintln!("starting main loop");
     let c = Compiler::new();
     for msg in &connection.receiver {
         match msg {

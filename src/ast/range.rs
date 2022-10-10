@@ -1,6 +1,9 @@
 use lsp_types::Position;
 
 type Span<'a> = nom_locate::LocatedSpan<&'a str>;
+
+/// # Pos
+/// source code position in file
 #[derive(Debug, PartialEq, Clone, Copy, Default)]
 pub struct Pos {
     pub line: usize,   // 1based
@@ -70,6 +73,8 @@ fn test_pos_in() {
     assert!(!pos.is_in(range));
 }
 
+/// # Range
+/// source code range in file
 impl Range {
     pub fn new(start: Span, end: Span) -> Range {
         Range {

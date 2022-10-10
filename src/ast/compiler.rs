@@ -12,7 +12,7 @@ use lsp_server::{Message, RequestId};
 
 use crate::{
     lsp::{
-        diagnostics::{send_diagnostics, send_references},
+        helpers::{send_diagnostics, send_references},
         mem_docs::MemDocs,
     },
     nomparser::PLParser,
@@ -56,6 +56,8 @@ pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
         .unwrap()
 }
 
+/// # ActionType
+/// lsp action type
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ActionType {
     Completion,
@@ -63,6 +65,8 @@ pub enum ActionType {
     FindReferences,
 }
 
+/// # Compiler
+/// pivot-lang single file compiler
 impl Compiler {
     pub fn new() -> Self {
         Compiler {}
@@ -127,8 +131,8 @@ impl Compiler {
         send_diagnostics(&sender, file.to_string(), vs);
         if let Some(c) = ctx.refs.take() {
             let c = c.borrow();
-            send_references(&sender, ctx.completion.unwrap().1, &c);
-        } else if let Some(c) = ctx.completion.take() {
+            send_references(&sender, ctx.lspparams.unwrap().1, &c);
+        } else if let Some(c) = ctx.lspparams.take() {
             if c.3 == ActionType::FindReferences {
                 send_references(&sender, c.1, &vec![]); // 任何情况都应该回复findref请求
             }

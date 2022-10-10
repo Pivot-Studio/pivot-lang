@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     ast::{ctx::Ctx, error::ErrorCode},
-    lsp::diagnostics::send_completions,
+    lsp::helpers::send_completions,
 };
 use colored::Colorize;
 use internal_macro::range;
