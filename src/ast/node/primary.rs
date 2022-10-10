@@ -20,7 +20,7 @@ impl Node for BoolConstNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         Ok((
-            Value::BoolValue(ctx.context.bool_type().const_int(self.value as u64, true)),
+            Value::BoolValue(ctx.context.i8_type().const_int(self.value as u64, true)),
             Some("bool".to_string()),
         ))
     }

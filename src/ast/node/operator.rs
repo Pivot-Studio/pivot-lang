@@ -37,12 +37,16 @@ impl Node for UnaryOpNode {
                 pltype,
             ),
             (Value::BoolValue(exp), TokenType::NOT) => (
-                Value::BoolValue(ctx.builder.build_int_compare(
-                    IntPredicate::EQ,
-                    exp,
-                    ctx.context.bool_type().const_int(false as u64, true),
-                    "nottmp",
-                )),
+                Value::BoolValue({
+                    let bool_origin = ctx.builder.build_int_compare(
+                        IntPredicate::EQ,
+                        exp,
+                        ctx.context.i8_type().const_int(false as u64, true),
+                        "nottmp",
+                    );
+                    ctx.builder
+                        .build_int_z_extend(bool_origin, ctx.context.i8_type(), "zexttemp")
+                }),
                 pltype,
             ),
             (_exp, _op) => {
@@ -94,21 +98,29 @@ impl Node for BinOpNode {
             | TokenType::GREATER
             | TokenType::LESS => match (left, right) {
                 (Value::IntValue(lhs), Value::IntValue(rhs)) => (
-                    Value::BoolValue(ctx.builder.build_int_compare(
-                        self.op.get_op(),
-                        lhs,
-                        rhs,
-                        "cmptmp",
-                    )),
+                    Value::BoolValue({
+                        let bool_origin =
+                            ctx.builder
+                                .build_int_compare(self.op.get_op(), lhs, rhs, "cmptmp");
+                        ctx.builder.build_int_z_extend(
+                            bool_origin,
+                            ctx.context.i8_type(),
+                            "zexttemp",
+                        )
+                    }),
                     Some("bool".to_string()),
                 ),
                 (Value::FloatValue(lhs), Value::FloatValue(rhs)) => (
-                    Value::BoolValue(ctx.builder.build_float_compare(
-                        self.op.get_fop(),
-                        lhs,
-                        rhs,
-                        "cmptmp",
-                    )),
+                    Value::BoolValue({
+                        let bool_origin =
+                            ctx.builder
+                                .build_float_compare(self.op.get_fop(), lhs, rhs, "cmptmp");
+                        ctx.builder.build_int_z_extend(
+                            bool_origin,
+                            ctx.context.i8_type(),
+                            "zexttemp",
+                        )
+                    }),
                     Some("bool".to_string()),
                 ),
                 _ => {
@@ -120,7 +132,14 @@ impl Node for BinOpNode {
             },
             TokenType::AND => match (left, right) {
                 (Value::BoolValue(lhs), Value::BoolValue(rhs)) => (
-                    Value::BoolValue(ctx.builder.build_and(lhs, rhs, "andtmp")),
+                    Value::BoolValue({
+                        let bool_origin = ctx.builder.build_and(lhs, rhs, "andtmp");
+                        ctx.builder.build_int_z_extend(
+                            bool_origin,
+                            ctx.context.i8_type(),
+                            "zext_temp",
+                        )
+                    }),
                     Some("bool".to_string()),
                 ),
                 _ => {
@@ -131,7 +150,14 @@ impl Node for BinOpNode {
             },
             TokenType::OR => match (left, right) {
                 (Value::BoolValue(lhs), Value::BoolValue(rhs)) => (
-                    Value::BoolValue(ctx.builder.build_or(lhs, rhs, "ortmp")),
+                    Value::BoolValue({
+                        let bool_origin = ctx.builder.build_or(lhs, rhs, "ortmp");
+                        ctx.builder.build_int_z_extend(
+                            bool_origin,
+                            ctx.context.i8_type(),
+                            "zext_temp",
+                        )
+                    }),
                     Some("bool".to_string()),
                 ),
                 _ => {

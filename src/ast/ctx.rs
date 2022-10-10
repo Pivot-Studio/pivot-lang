@@ -51,7 +51,7 @@ fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
     match basetype {
         BasicTypeEnum::FloatType(_) => DW_ATE_FLOAT,
         BasicTypeEnum::IntType(i) => match i.get_bit_width() {
-            1 => DW_ATE_BOOLEAN,
+            8 => DW_ATE_BOOLEAN,
             64 => DW_ATE_SIGNED,
             _ => todo!(),
         },
@@ -382,7 +382,7 @@ fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
         .insert("f64".to_string(), (pltype_f64.clone(), ditype_f64));
 
     let pltype_bool = PLType::PRIMITIVE(PriType {
-        basetype: ctx.context.bool_type().as_basic_type_enum(),
+        basetype: ctx.context.i8_type().as_basic_type_enum(),
         id: "bool".to_string(),
     });
     let ditype_bool = pltype_bool.get_ditype(ctx);
@@ -604,7 +604,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 let v = self.builder.build_load(v, "loadtmp");
                 match v {
                     BasicValueEnum::IntValue(v) => match v.get_type().get_bit_width() {
-                        1 => Value::BoolValue(v),
+                        8 => Value::BoolValue(v),
                         64 => Value::IntValue(v),
                         _ => todo!(),
                     },
