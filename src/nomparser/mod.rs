@@ -658,7 +658,7 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
             let id = cast_to_var(&id);
             let range = id.range.start.to(type_name.range.end);
             res_box(Box::new(TypedIdentifierNode {
-                id: id.name,
+                id,
                 tp: type_name,
                 range,
             }))

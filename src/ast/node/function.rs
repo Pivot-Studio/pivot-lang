@@ -116,11 +116,11 @@ impl FuncDefNode {
             ctx.position_at_end(entry);
             // alloc para
             for (i, para) in para_tps.iter_mut().enumerate() {
-                let alloca = alloc(&mut ctx, para.get_type(), &para_names[i]);
+                let alloca = alloc(&mut ctx, para.get_type(), &para_names[i].name);
                 // add alloc var debug info
                 let divar = ctx.dibuilder.create_parameter_variable(
                     ctx.discope,
-                    para_names[i].as_str(),
+                    para_names[i].name.as_str(),
                     i as u32,
                     ctx.diunit.get_file(),
                     self.range.start.line as u32,
@@ -138,10 +138,10 @@ impl FuncDefNode {
                 );
                 ctx.builder.build_store(alloca, *para);
                 ctx.add_symbol(
-                    para_names[i].clone(),
+                    para_names[i].name.clone(),
                     alloca,
                     para_pltype_ids[i].clone(),
-                    typenode.paralist[i].range,
+                    typenode.paralist[i].id.range,
                 )
                 .unwrap();
             }

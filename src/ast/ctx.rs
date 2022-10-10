@@ -87,7 +87,7 @@ pub struct Ctx<'a, 'ctx> {
     pub errs: &'a RefCell<Vec<PLDiag>>,
     pub sender: Option<&'a Sender<Message>>,
     pub completion: Option<(Pos, RequestId, Option<String>, ActionType)>,
-    pub refs: Rc<Cell<Option<Rc<RefCell<Vec<Location>>>>>>,
+    pub refs: Rc<Cell<Option<Rc<RefCell<Vec<Location>>>>>>, // thank you, Rust!
 }
 
 #[derive(Debug, Clone)]
@@ -271,6 +271,7 @@ pub struct Field<'a, 'ctx> {
     pub typename: &'a TypeNameNode,
     pub name: String,
     pub range: Range,
+    pub refs: Rc<RefCell<Vec<Location>>>,
 }
 
 impl<'a, 'ctx> Field<'a, 'ctx> {

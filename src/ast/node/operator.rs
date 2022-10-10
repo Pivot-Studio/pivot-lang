@@ -204,6 +204,7 @@ impl Node for TakeOpNode {
                             if let Some(field) = field {
                                 index = field.index;
                                 pltype = Some(field.typename.id.clone());
+                                ctx.set_if_refs(field.refs.clone(), range);
                                 ctx.send_if_go_to_def(range, field.range);
                             } else {
                                 return Err(ctx.add_err(

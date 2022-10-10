@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
+use super::primary::VarNode;
 use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
 use crate::ast::error::ErrorCode;
@@ -117,7 +118,7 @@ impl TypeNameNode {
 #[range]
 #[derive(Clone)]
 pub struct TypedIdentifierNode {
-    pub id: String,
+    pub id: VarNode,
     pub tp: Box<TypeNameNode>,
 }
 
@@ -127,7 +128,7 @@ impl TypedIdentifierNode {
         tab(tabs, line.clone(), end);
         println!("TypedIdentifierNode");
         tab(tabs + 1, line.clone(), false);
-        println!("id: {}", self.id);
+        println!("id: {}", self.id.name);
         self.tp.print(tabs + 1, true, line.clone());
     }
 }
@@ -163,23 +164,18 @@ impl StructDefNode {
         let mut i = 0;
         for field in self.fields.iter() {
             let (id, (tp, _)) = (field.id.clone(), field.tp.get_type(ctx)?);
-            fields.insert(
-                id.to_string(),
-                Field {
-                    index: i,
-                    tp: tp.clone(),
-                    typename: &field.tp,
-                    name: field.id.clone(),
-                    range: field.range,
-                },
-            );
-            order_fields.push(Field {
+            let f = Field {
                 index: i,
                 tp: tp.clone(),
                 typename: &field.tp,
-                name: field.id.clone(),
-                range: field.range,
-            });
+                name: field.id.name.clone(),
+                range: field.id.range,
+                refs: Rc::new(RefCell::new(vec![])),
+            };
+            ctx.set_if_refs(f.refs.clone(), field.id.range);
+            fields.insert(id.name.to_string(), f.clone());
+            order_fields.push(f);
+
             i = i + 1;
         }
         let name = self.id.as_str();

@@ -128,6 +128,10 @@ impl Compiler {
         if let Some(c) = ctx.refs.take() {
             let c = c.borrow();
             send_references(&sender, ctx.completion.unwrap().1, &c);
+        } else if let Some(c) = ctx.completion.take() {
+            if c.3 == ActionType::FindReferences {
+                send_references(&sender, c.1, &vec![]); // 任何情况都应该回复findref请求
+            }
         }
     }
 
