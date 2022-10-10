@@ -543,6 +543,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             return Err(self.add_err(range, ErrorCode::REDECLARATION));
         }
         let refs = Rc::new(RefCell::new(vec![]));
+        self.send_if_go_to_def(range, range);
         self.table.insert(name, (pv, tp, range, refs.clone()));
         self.set_if_refs(refs, range);
         Ok(())
@@ -584,6 +585,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             return Err(self.add_err(range, ErrorCode::REDFINE_TYPE));
         }
         let ditype = tp.get_ditype(self);
+        self.send_if_go_to_def(range, range);
         self.types.insert(name, (tp.clone(), ditype));
         Ok(())
     }

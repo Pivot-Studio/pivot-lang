@@ -172,6 +172,7 @@ impl StructDefNode {
                 range: field.id.range,
                 refs: Rc::new(RefCell::new(vec![])),
             };
+            ctx.send_if_go_to_def(f.range, f.range);
             ctx.set_if_refs(f.refs.clone(), field.id.range);
             fields.insert(id.name.to_string(), f.clone());
             order_fields.push(f);
