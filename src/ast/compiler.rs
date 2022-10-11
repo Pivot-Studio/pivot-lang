@@ -12,8 +12,8 @@ use lsp_server::{Message, RequestId};
 
 use crate::{
     lsp::{
-        helpers::{send_diagnostics, send_references},
-        mem_docs::MemDocs,
+        helpers::{send_diagnostics, send_references, send_semantic_tokens},
+        mem_docs::MemDocs, semantic_tokens::SemanticTokensBuilder,
     },
     nomparser::PLParser,
 };
@@ -63,6 +63,7 @@ pub enum ActionType {
     Completion,
     GotoDef,
     FindReferences,
+    SemanticTokensFull,
 }
 
 /// # Compiler
@@ -135,6 +136,10 @@ impl Compiler {
         } else if let Some(c) = ctx.lspparams.take() {
             if c.3 == ActionType::FindReferences {
                 send_references(&sender, c.1, &vec![]); // 任何情况都应该回复findref请求
+            }else if c.3 == ActionType::SemanticTokensFull {
+                let b = ctx.semantic_tokens_builder.borrow().build();
+                eprintln!("semantic tokens builder: {:?}", b);
+                send_semantic_tokens(&sender, c.1,  b);
             }
         }
     }

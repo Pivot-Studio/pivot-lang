@@ -61,7 +61,7 @@ impl Node for ProgramNode {
         });
         // node parser
         self.fns.iter_mut().for_each(|x| {
-            _ = x.emit_func_def(ctx);
+            _ = x.emit(ctx);
         });
         for e in self.errs.iter_mut() {
             _ = e.emit(ctx);

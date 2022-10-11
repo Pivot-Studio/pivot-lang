@@ -19,8 +19,8 @@ pub struct FuncDefNode {
     pub body: Option<StatementsNode>,
 }
 
-impl FuncDefNode {
-    pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+impl Node for FuncDefNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("FuncDefNode");
@@ -38,7 +38,7 @@ impl FuncDefNode {
             println!("type: {}", self.typenode.ret.id);
         }
     }
-    pub fn emit_func_def<'a, 'ctx>(
+    fn emit<'a, 'ctx>(
         &'a mut self,
         ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
     ) -> NodeResult<'ctx> {

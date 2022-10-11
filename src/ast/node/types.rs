@@ -134,13 +134,14 @@ impl TypedIdentifierNode {
 }
 
 #[range]
+#[derive(Clone)]
 pub struct StructDefNode {
     pub id: String,
     pub fields: Vec<Box<TypedIdentifierNode>>,
 }
 
-impl StructDefNode {
-    pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+impl Node for StructDefNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("StructDefNode");
@@ -151,6 +152,13 @@ impl StructDefNode {
             i -= 1;
             field.print(tabs + 1, i == 0, line.clone());
         }
+    }
+
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        if let Ok((PLType::STRUCT(x),_))= ctx.get_type(self.id.as_str(), self.range) {
+            return Ok((Value::None,None));
+        }
+        todo!()
     }
 }
 

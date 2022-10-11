@@ -1,6 +1,7 @@
 use crate::ast::node::Value;
 use crate::lsp::helpers::send_completions;
 use crate::lsp::helpers::send_goto_def;
+use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use colored::Colorize;
 use crossbeam_channel::Sender;
 use inkwell::basic_block::BasicBlock;
@@ -90,6 +91,7 @@ pub struct Ctx<'a, 'ctx> {
     pub sender: Option<&'a Sender<Message>>, // lsp sender
     pub lspparams: Option<(Pos, RequestId, Option<String>, ActionType)>, // lsp params
     pub refs: Rc<Cell<Option<Rc<RefCell<Vec<Location>>>>>>, // hold the find references result (thank you, Rust!)
+    pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
 }
 
 /// # PLDiag
@@ -472,6 +474,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             sender,
             lspparams: completion,
             refs: Rc::new(Cell::new(None)),
+            semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(src_file_path.to_string())))),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -506,6 +509,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             sender: self.sender,
             lspparams: self.lspparams.clone(),
             refs: self.refs.clone(),
+            semantic_tokens_builder: self.semantic_tokens_builder.clone(),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -589,6 +593,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.types.insert(name, (tp.clone(), ditype));
         Ok(())
     }
+
 
     pub fn add_err(&mut self, range: Range, code: ErrorCode) -> PLDiag {
         let dia = PLDiag::new_error(self.src_file_path.to_string(), range, code);
