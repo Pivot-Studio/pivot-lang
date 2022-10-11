@@ -8,6 +8,7 @@ use crate::handle_calc;
 use crate::lsp::helpers::send_completions;
 use inkwell::IntPredicate;
 use internal_macro::range;
+use lsp_types::SemanticTokenType;
 use paste::item;
 
 #[range]
@@ -225,6 +226,7 @@ impl Node for TakeOpNode {
                             }
                         });
                         range = id.range();
+                        ctx.push_semantic_token(range, SemanticTokenType::PROPERTY, 0);
                         if let PLType::STRUCT(s) = tp {
                             let field = s.fields.get(&id.name);
                             if let Some(field) = field {

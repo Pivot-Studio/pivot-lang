@@ -1,5 +1,5 @@
 //! Semantic Tokens helpers
-
+#![allow(dead_code)]
 use std::ops;
 
 use lsp_types::{
@@ -142,7 +142,10 @@ pub struct ModifierSet(pub u32);
 
 impl ops::BitOrAssign<SemanticTokenModifier> for ModifierSet {
     fn bitor_assign(&mut self, rhs: SemanticTokenModifier) {
-        let idx = SUPPORTED_MODIFIERS.iter().position(|it| it == &rhs).unwrap();
+        let idx = SUPPORTED_MODIFIERS
+            .iter()
+            .position(|it| it == &rhs)
+            .unwrap();
         self.0 |= 1 << idx;
     }
 }
@@ -159,7 +162,12 @@ pub struct SemanticTokensBuilder {
 
 impl SemanticTokensBuilder {
     pub(crate) fn new(id: String) -> Self {
-        SemanticTokensBuilder { id, prev_line: 0, prev_char: 0, data: Default::default() }
+        SemanticTokensBuilder {
+            id,
+            prev_line: 0,
+            prev_char: 0,
+            data: Default::default(),
+        }
     }
 
     /// Push a new token onto the builder
@@ -168,9 +176,6 @@ impl SemanticTokensBuilder {
         let mut push_char = range.start.character as u32;
 
         if !self.data.is_empty() {
-            if self.prev_line>push_line {
-                eprint!("");
-            }
             push_line -= self.prev_line;
             if push_line == 0 {
                 push_char -= self.prev_char;
@@ -195,18 +200,29 @@ impl SemanticTokensBuilder {
     }
 
     pub(crate) fn build(&self) -> SemanticTokens {
-        SemanticTokens { result_id: Some(self.id.clone()), data: self.data.clone() }
+        SemanticTokens {
+            result_id: Some(self.id.clone()),
+            data: self.data.clone(),
+        }
     }
 }
 
 pub(crate) fn diff_tokens(old: &[SemanticToken], new: &[SemanticToken]) -> Vec<SemanticTokensEdit> {
-    let offset = new.iter().zip(old.iter()).take_while(|&(n, p)| n == p).count();
+    let offset = new
+        .iter()
+        .zip(old.iter())
+        .take_while(|&(n, p)| n == p)
+        .count();
 
     let (_, old) = old.split_at(offset);
     let (_, new) = new.split_at(offset);
 
-    let offset_from_end =
-        new.iter().rev().zip(old.iter().rev()).take_while(|&(n, p)| n == p).count();
+    let offset_from_end = new
+        .iter()
+        .rev()
+        .zip(old.iter().rev())
+        .take_while(|&(n, p)| n == p)
+        .count();
 
     let (old, _) = old.split_at(old.len() - offset_from_end);
     let (new, _) = new.split_at(new.len() - offset_from_end);
@@ -230,7 +246,10 @@ pub fn type_index(ty: SemanticTokenType) -> u32 {
 }
 
 pub fn modifier_index(modifier: SemanticTokenModifier) -> u32 {
-    SUPPORTED_MODIFIERS.iter().position(|it| *it == modifier).unwrap() as u32
+    SUPPORTED_MODIFIERS
+        .iter()
+        .position(|it| *it == modifier)
+        .unwrap() as u32
 }
 
 #[cfg(test)]
@@ -250,7 +269,11 @@ mod tests {
     #[test]
     fn test_diff_insert_at_end() {
         let before = [from((1, 2, 3, 4, 5)), from((6, 7, 8, 9, 10))];
-        let after = [from((1, 2, 3, 4, 5)), from((6, 7, 8, 9, 10)), from((11, 12, 13, 14, 15))];
+        let after = [
+            from((1, 2, 3, 4, 5)),
+            from((6, 7, 8, 9, 10)),
+            from((11, 12, 13, 14, 15)),
+        ];
 
         let edits = diff_tokens(&before, &after);
         assert_eq!(
@@ -266,7 +289,11 @@ mod tests {
     #[test]
     fn test_diff_insert_at_beginning() {
         let before = [from((1, 2, 3, 4, 5)), from((6, 7, 8, 9, 10))];
-        let after = [from((11, 12, 13, 14, 15)), from((1, 2, 3, 4, 5)), from((6, 7, 8, 9, 10))];
+        let after = [
+            from((11, 12, 13, 14, 15)),
+            from((1, 2, 3, 4, 5)),
+            from((6, 7, 8, 9, 10)),
+        ];
 
         let edits = diff_tokens(&before, &after);
         assert_eq!(
@@ -295,27 +322,52 @@ mod tests {
             SemanticTokensEdit {
                 start: 5,
                 delete_count: 0,
-                data: Some(vec![from((10, 20, 30, 40, 50)), from((60, 70, 80, 90, 100))])
+                data: Some(vec![
+                    from((10, 20, 30, 40, 50)),
+                    from((60, 70, 80, 90, 100))
+                ])
             }
         );
     }
 
     #[test]
     fn test_diff_remove_from_end() {
-        let before = [from((1, 2, 3, 4, 5)), from((6, 7, 8, 9, 10)), from((11, 12, 13, 14, 15))];
+        let before = [
+            from((1, 2, 3, 4, 5)),
+            from((6, 7, 8, 9, 10)),
+            from((11, 12, 13, 14, 15)),
+        ];
         let after = [from((1, 2, 3, 4, 5)), from((6, 7, 8, 9, 10))];
 
         let edits = diff_tokens(&before, &after);
-        assert_eq!(edits[0], SemanticTokensEdit { start: 10, delete_count: 5, data: Some(vec![]) });
+        assert_eq!(
+            edits[0],
+            SemanticTokensEdit {
+                start: 10,
+                delete_count: 5,
+                data: Some(vec![])
+            }
+        );
     }
 
     #[test]
     fn test_diff_remove_from_beginning() {
-        let before = [from((11, 12, 13, 14, 15)), from((1, 2, 3, 4, 5)), from((6, 7, 8, 9, 10))];
+        let before = [
+            from((11, 12, 13, 14, 15)),
+            from((1, 2, 3, 4, 5)),
+            from((6, 7, 8, 9, 10)),
+        ];
         let after = [from((1, 2, 3, 4, 5)), from((6, 7, 8, 9, 10))];
 
         let edits = diff_tokens(&before, &after);
-        assert_eq!(edits[0], SemanticTokensEdit { start: 0, delete_count: 5, data: Some(vec![]) });
+        assert_eq!(
+            edits[0],
+            SemanticTokensEdit {
+                start: 0,
+                delete_count: 5,
+                data: Some(vec![])
+            }
+        );
     }
 
     #[test]
@@ -329,6 +381,13 @@ mod tests {
         let after = [from((1, 2, 3, 4, 5)), from((6, 7, 8, 9, 10))];
 
         let edits = diff_tokens(&before, &after);
-        assert_eq!(edits[0], SemanticTokensEdit { start: 5, delete_count: 10, data: Some(vec![]) });
+        assert_eq!(
+            edits[0],
+            SemanticTokensEdit {
+                start: 5,
+                delete_count: 10,
+                data: Some(vec![])
+            }
+        );
     }
 }

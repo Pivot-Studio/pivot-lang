@@ -55,12 +55,7 @@ pub fn send_references(
         .unwrap();
 }
 
-
-pub fn send_semantic_tokens(
-    sender: &Sender<Message>,
-    id: RequestId,
-    tokens: SemanticTokens,
-) {
+pub fn send_semantic_tokens(sender: &Sender<Message>, id: RequestId, tokens: SemanticTokens) {
     sender
         .send(Message::Response(lsp_server::Response::new_ok(
             id,

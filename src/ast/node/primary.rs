@@ -5,6 +5,7 @@ use crate::{
 };
 
 use internal_macro::range;
+use lsp_types::SemanticTokenType;
 
 #[range]
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -19,6 +20,7 @@ impl Node for BoolConstNode {
         println!("BoolConstNode: {}", self.value);
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        ctx.push_semantic_token(self.range, SemanticTokenType::KEYWORD, 0);
         Ok((
             Value::BoolValue(ctx.context.i8_type().const_int(self.value as u64, true)),
             Some("bool".to_string()),
@@ -38,6 +40,7 @@ impl Node for NumNode {
         println!("NumNode: {:?}", self.value);
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        ctx.push_semantic_token(self.range, SemanticTokenType::NUMBER, 0);
         if let Num::INT(x) = self.value {
             let b = ctx.context.i64_type().const_int(x, true);
             return Ok((Value::IntValue(b), Some("i64".to_string())));
@@ -62,6 +65,7 @@ impl Node for VarNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let v = ctx.get_symbol(&self.name);
+        ctx.push_semantic_token(self.range, SemanticTokenType::VARIABLE, 0);
         ctx.if_completion(|ctx, a| {
             if a.0.is_in(self.range) {
                 let completions = ctx.get_completions();

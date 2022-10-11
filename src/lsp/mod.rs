@@ -14,7 +14,8 @@ pub mod semantic_tokens;
 use lsp_types::{
     notification::{DidChangeTextDocument, DidOpenTextDocument},
     request::{Completion, GotoDefinition, References, SemanticTokensFullRequest},
-    InitializeParams, OneOf, ServerCapabilities, TextDocumentSyncKind, TextDocumentSyncOptions, SemanticTokensOptions, SemanticTokenType, SemanticTokenModifier, SemanticToken, SemanticTokensResult,
+    InitializeParams, OneOf, SemanticTokenModifier, SemanticTokenType, SemanticTokensOptions,
+    ServerCapabilities, TextDocumentSyncKind, TextDocumentSyncOptions,
 };
 
 use lsp_server::{Connection, ExtractError, Message, Request, RequestId};
@@ -50,49 +51,51 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
             all_commit_characters: None,
         }),
         references_provider: Some(OneOf::Left(true)),
-        semantic_tokens_provider: Some(lsp_types::SemanticTokensServerCapabilities::SemanticTokensOptions(
-            SemanticTokensOptions{
-                work_done_progress_options: Default::default(),
-                legend: lsp_types::SemanticTokensLegend{
-                    token_types: vec![
-                        SemanticTokenType::NAMESPACE,
-                        SemanticTokenType::TYPE,
-                        SemanticTokenType::CLASS,
-                        SemanticTokenType::ENUM,
-                        SemanticTokenType::INTERFACE,
-                        SemanticTokenType::STRUCT,
-                        SemanticTokenType::TYPE_PARAMETER,
-                        SemanticTokenType::FUNCTION,
-                        SemanticTokenType::METHOD,
-                        SemanticTokenType::PROPERTY,
-                        SemanticTokenType::MACRO,
-                        SemanticTokenType::VARIABLE,
-                        SemanticTokenType::PARAMETER,
-                        SemanticTokenType::ENUM_MEMBER,
-                        SemanticTokenType::STRING,
-                        SemanticTokenType::NUMBER,
-                        SemanticTokenType::KEYWORD,
-                        SemanticTokenType::MODIFIER,
-                        SemanticTokenType::COMMENT,
-                        SemanticTokenType::REGEXP,
-                        SemanticTokenType::OPERATOR,
-                    ],
-                    token_modifiers: vec![
-                        SemanticTokenModifier::DECLARATION,
-                        SemanticTokenModifier::DEFINITION,
-                        SemanticTokenModifier::READONLY,
-                        SemanticTokenModifier::STATIC,
-                        SemanticTokenModifier::ABSTRACT,
-                        SemanticTokenModifier::DEPRECATED,
-                        SemanticTokenModifier::ASYNC,
-                        SemanticTokenModifier::MODIFICATION,
-                        SemanticTokenModifier::DOCUMENTATION,
-                    ],
+        semantic_tokens_provider: Some(
+            lsp_types::SemanticTokensServerCapabilities::SemanticTokensOptions(
+                SemanticTokensOptions {
+                    work_done_progress_options: Default::default(),
+                    legend: lsp_types::SemanticTokensLegend {
+                        token_types: vec![
+                            SemanticTokenType::NAMESPACE,
+                            SemanticTokenType::TYPE,
+                            SemanticTokenType::CLASS,
+                            SemanticTokenType::ENUM,
+                            SemanticTokenType::INTERFACE,
+                            SemanticTokenType::STRUCT,
+                            SemanticTokenType::TYPE_PARAMETER,
+                            SemanticTokenType::FUNCTION,
+                            SemanticTokenType::METHOD,
+                            SemanticTokenType::PROPERTY,
+                            SemanticTokenType::MACRO,
+                            SemanticTokenType::VARIABLE,
+                            SemanticTokenType::PARAMETER,
+                            SemanticTokenType::ENUM_MEMBER,
+                            SemanticTokenType::STRING,
+                            SemanticTokenType::NUMBER,
+                            SemanticTokenType::KEYWORD,
+                            SemanticTokenType::MODIFIER,
+                            SemanticTokenType::COMMENT,
+                            SemanticTokenType::REGEXP,
+                            SemanticTokenType::OPERATOR,
+                        ],
+                        token_modifiers: vec![
+                            SemanticTokenModifier::DECLARATION,
+                            SemanticTokenModifier::DEFINITION,
+                            SemanticTokenModifier::READONLY,
+                            SemanticTokenModifier::STATIC,
+                            SemanticTokenModifier::ABSTRACT,
+                            SemanticTokenModifier::DEPRECATED,
+                            SemanticTokenModifier::ASYNC,
+                            SemanticTokenModifier::MODIFICATION,
+                            SemanticTokenModifier::DOCUMENTATION,
+                        ],
+                    },
+                    range: Some(true),
+                    full: Some(lsp_types::SemanticTokensFullOptions::Bool(true)),
                 },
-                range: Some(true),
-                full: Some(lsp_types::SemanticTokensFullOptions::Bool(true)),
-            }
-        )),
+            ),
+        ),
         ..Default::default()
     })
     .unwrap();
@@ -219,7 +222,14 @@ fn main_loop(
                                 ..Default::default()
                             },
                             &connection.sender,
-                            Some((Pos{..Default::default()}, id, None, ActionType::SemanticTokensFull)),
+                            Some((
+                                Pos {
+                                    ..Default::default()
+                                },
+                                id,
+                                None,
+                                ActionType::SemanticTokensFull,
+                            )),
                         );
                         continue;
                     }

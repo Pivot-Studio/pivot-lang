@@ -1,6 +1,6 @@
 use crate::ast::node::Value;
-use crate::lsp::helpers::send_completions;
 use crate::lsp::helpers::send_goto_def;
+use crate::lsp::semantic_tokens::type_index;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use colored::Colorize;
 use crossbeam_channel::Sender;
@@ -28,6 +28,7 @@ use lsp_types::DiagnosticSeverity;
 use lsp_types::GotoDefinitionResponse;
 use lsp_types::InsertTextFormat;
 use lsp_types::Location;
+use lsp_types::SemanticTokenType;
 use lsp_types::Url;
 use std::cell::Cell;
 use std::cell::RefCell;
@@ -474,7 +475,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             sender,
             lspparams: completion,
             refs: Rc::new(Cell::new(None)),
-            semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(src_file_path.to_string())))),
+            semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
+                src_file_path.to_string(),
+            )))),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -587,7 +590,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.types.insert(name, (tp.clone(), ditype));
         Ok(())
     }
-
 
     pub fn add_err(&mut self, range: Range, code: ErrorCode) -> PLDiag {
         let dia = PLDiag::new_error(self.src_file_path.to_string(), range, code);
@@ -756,6 +758,15 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             father.get_pltp_completions(vmap);
         }
     }
+
+    pub fn push_semantic_token(&self, range: Range, tp: SemanticTokenType, modifiers: u32) {
+        self.semantic_tokens_builder.borrow_mut().push(
+            range.to_diag_range(),
+            type_index(tp),
+            modifiers,
+        )
+    }
+
     fn get_keyword_completions(&self, vmap: &mut HashMap<String, CompletionItem>) {
         let keywords = vec![
             "if", "else", "while", "for", "return", "struct", "let", "true", "false",

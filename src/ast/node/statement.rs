@@ -5,6 +5,7 @@ use crate::ast::error::ErrorCode;
 use inkwell::debug_info::*;
 use inkwell::types::AnyType;
 use internal_macro::range;
+use lsp_types::SemanticTokenType;
 
 #[range]
 pub struct DefNode {
@@ -20,6 +21,7 @@ impl Node for DefNode {
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
         let (v, pltype) = self.exp.emit(ctx)?;
         let e = ctx.try_load(v).as_basic_value_enum();
         let tp = e.get_type();

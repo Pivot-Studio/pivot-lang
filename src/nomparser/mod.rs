@@ -396,23 +396,23 @@ pub fn statements(input: Span) -> IResult<Span, StatementsNode> {
 pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
     let old = input;
     let mut input = input;
-    let mut fns = vec![];
+    let mut nodes = vec![];
     let mut sts = vec![];
     let mut fntypes = vec![];
-    let mut errs = vec![];
     loop {
         let top = top_level_statement(input);
         if let Ok((i, t)) = top {
             match *t {
                 TopLevel::FuncDef(f) => {
                     fntypes.push(f.typenode.clone());
-                    fns.push(f);
+                    nodes.push(Box::new(f) as Box<dyn Node>);
                 }
                 TopLevel::StructDef(s) => {
-                    sts.push(s);
+                    sts.push(s.clone());
+                    nodes.push(Box::new(s) as Box<dyn Node>);
                 }
                 TopLevel::ErrNode(e) => {
-                    errs.push(e);
+                    nodes.push(e);
                 }
             }
             input = i;
@@ -428,11 +428,10 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
         }
     }
     let node: Box<dyn Node> = Box::new(ProgramNode {
-        fns,
+        nodes,
         structs: sts,
         fntypes,
         range: Range::new(old, input),
-        errs,
     });
     Ok((input, node))
 }

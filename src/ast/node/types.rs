@@ -11,6 +11,7 @@ use crate::lsp::helpers::send_completions;
 use inkwell::debug_info::*;
 use inkwell::types::{AnyType, BasicType};
 use internal_macro::range;
+use lsp_types::SemanticTokenType;
 
 // TODO: match all case
 // const DW_ATE_UTF: u32 = 0x10;
@@ -53,6 +54,7 @@ impl TypeNameNode {
                 send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
             }
         });
+        ctx.push_semantic_token(self.range, SemanticTokenType::TYPE, 0);
         let re = ctx.get_type(&self.id, self.range)?.clone();
         if let Some(dst) = re.0.get_range() {
             ctx.send_if_go_to_def(self.range, dst);
@@ -161,8 +163,13 @@ impl Node for StructDefNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        if let Ok((PLType::STRUCT(x),_))= ctx.get_type(self.id.as_str(), self.range) {
-            return Ok((Value::None,None));
+        if let Ok((PLType::STRUCT(x), _)) = ctx.get_type(self.id.as_str(), self.range) {
+            ctx.push_semantic_token(x.range, SemanticTokenType::STRUCT, 0);
+            for f in x.ordered_fields.clone() {
+                ctx.push_semantic_token(f.range, SemanticTokenType::PROPERTY, 0);
+                ctx.push_semantic_token(f.typename.range, SemanticTokenType::TYPE, 0);
+            }
+            return Ok((Value::None, None));
         }
         todo!()
     }
@@ -262,6 +269,7 @@ impl Node for StructInitNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        ctx.push_semantic_token(self.tp.range, SemanticTokenType::STRUCT, 0);
         let mut fields = HashMap::<String, (BasicValueEnum<'ctx>, Range)>::new();
         for field in self.fields.iter_mut() {
             let range = field.range();

@@ -7,6 +7,7 @@ use crate::ast::node::{deal_line, tab};
 use inkwell::debug_info::*;
 use inkwell::values::FunctionValue;
 use internal_macro::range;
+use lsp_types::SemanticTokenType;
 use std::cell::RefCell;
 use std::fmt::format;
 use std::rc::Rc;
@@ -38,12 +39,13 @@ impl Node for FuncDefNode {
             println!("type: {}", self.typenode.ret.id);
         }
     }
-    fn emit<'a, 'ctx>(
-        &'a mut self,
-        ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
-    ) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let typenode = self.typenode.clone();
+        ctx.push_semantic_token(typenode.range, SemanticTokenType::FUNCTION, 0);
         for p in typenode.paralist.iter() {
+            ctx.push_semantic_token(p.id.range, SemanticTokenType::PARAMETER, 0);
+            ctx.push_semantic_token(p.tp.range, SemanticTokenType::TYPE, 0);
+
             if p.tp.id == "void" {
                 return Err(ctx.add_err(
                     p.range,
@@ -51,6 +53,7 @@ impl Node for FuncDefNode {
                 ));
             }
         }
+        ctx.push_semantic_token(typenode.ret.range, SemanticTokenType::TYPE, 0);
         // build debug info
         let param_ditypes = self
             .typenode
@@ -181,6 +184,7 @@ impl Node for FuncCallNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
         let mut para_values = Vec::new();
         let func = ctx.module.get_function(self.id.as_str());
         if func.is_none() {

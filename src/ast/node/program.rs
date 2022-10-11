@@ -1,33 +1,28 @@
-use super::function::{FuncDefNode, FuncTypeNode};
+use std::cell::RefCell;
+use std::rc::Rc;
+
+use super::function::FuncTypeNode;
 use super::types::StructDefNode;
 use super::*;
 use crate::ast::ctx::Ctx;
+use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 
 use internal_macro::range;
 
 #[range]
 pub struct ProgramNode {
-    pub fns: Vec<FuncDefNode>,
+    pub nodes: Vec<Box<dyn Node>>,
     pub structs: Vec<StructDefNode>,
     pub fntypes: Vec<FuncTypeNode>,
-    pub errs: Vec<Box<dyn Node>>,
 }
 impl Node for ProgramNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         println!("ProgramNode");
-        let mut i = self.fns.len() + self.structs.len() + self.errs.len();
-        for statement in &self.fns {
+        let mut i = self.nodes.len();
+        for statement in &self.nodes {
             i -= 1;
             statement.print(tabs, i == 0, line.clone());
-        }
-        for statement in &self.structs {
-            i -= 1;
-            statement.print(tabs, i == 0, line.clone());
-        }
-        for err in &self.errs {
-            i -= 1;
-            err.print(tabs, i == 0, line.clone());
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
@@ -59,13 +54,13 @@ impl Node for ProgramNode {
                 ctx.add_diag(re.err().unwrap());
             }
         });
+        ctx.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
+            ctx.src_file_path.to_string(),
+        ))));
         // node parser
-        self.fns.iter_mut().for_each(|x| {
+        self.nodes.iter_mut().for_each(|x| {
             _ = x.emit(ctx);
         });
-        for e in self.errs.iter_mut() {
-            _ = e.emit(ctx);
-        }
 
         Ok((Value::None, None))
     }
