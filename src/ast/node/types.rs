@@ -47,6 +47,12 @@ impl TypeNameNode {
         &'a self,
         ctx: &mut Ctx<'a, 'ctx>,
     ) -> Result<(PLType<'a, 'ctx>, Option<DIType<'ctx>>), PLDiag> {
+        ctx.if_completion(|ctx, a| {
+            if a.0.is_in(self.range) {
+                let completions = ctx.get_type_completions();
+                send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
+            }
+        });
         let re = ctx.get_type(&self.id, self.range)?.clone();
         if let Some(dst) = re.0.get_range() {
             ctx.send_if_go_to_def(self.range, dst);

@@ -559,12 +559,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         range: Range,
     ) -> Result<&(PLType<'a, 'ctx>, Option<DIType<'ctx>>), PLDiag> {
         let v = self.types.get(name);
-        self.if_completion(|ctx, a| {
-            if a.0.is_in(range) {
-                let completions = self.get_type_completions();
-                send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
-            }
-        });
         if let Some(pv) = v {
             return Ok(pv);
         }
