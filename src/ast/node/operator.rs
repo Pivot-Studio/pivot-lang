@@ -27,8 +27,11 @@ impl Node for UnaryOpNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let (exp, pltype) = self.exp.emit(ctx)?;
-        if let (&Value::VarValue(exp), TokenType::REF) = (&exp, self.op) {
-            return Ok((Value::RefValue(exp), pltype));
+        if let (&Value::VarValue(_), TokenType::REF) = (&exp, self.op) {
+            if let Value::VarValue(exp) = ctx.try_load1(exp) {
+                return Ok((Value::RefValue(exp), pltype));
+            }
+            todo!()
         }
         let exp = ctx.try_load2(exp);
         return Ok(match (exp, self.op) {

@@ -132,7 +132,7 @@ struct_def = "struct" identifier "{" struct_field* "}" ;
 
 type_name = identifier ;
 
-typed_identifier = identifier ":" type_name ;
+typed_identifier = identifier ":" ("&")? type_name ;
 
 struct_field = typed_identifier newline ;
 

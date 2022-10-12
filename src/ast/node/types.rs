@@ -128,6 +128,7 @@ impl TypeNameNode {
 pub struct TypedIdentifierNode {
     pub id: VarNode,
     pub tp: Box<TypeNameNode>,
+    pub is_ref: bool,
 }
 
 impl TypedIdentifierNode {

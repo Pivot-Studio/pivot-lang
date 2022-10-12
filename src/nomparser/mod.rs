@@ -655,15 +655,22 @@ fn type_name(input: Span) -> IResult<Span, Box<TypeNameNode>> {
 }
 
 #[test_parser("myname: int")]
+#[test_parser("myname: &int")]
 fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
     delspace(map_res(
-        tuple((identifier, tag_token(TokenType::COLON), type_name)),
-        |(id, _, type_name)| {
+        tuple((
+            identifier,
+            tag_token(TokenType::COLON),
+            del_newline_or_space!(opt(tag_token(TokenType::REF))),
+            type_name,
+        )),
+        |(id, _, is_ref, type_name)| {
             let id = cast_to_var(&id);
             let range = id.range.start.to(type_name.range.end);
             res_box(Box::new(TypedIdentifierNode {
                 id,
                 tp: type_name,
+                is_ref: is_ref.is_some(),
                 range,
             }))
         },

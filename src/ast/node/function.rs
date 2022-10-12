@@ -5,6 +5,7 @@ use super::{alloc, types::TypedIdentifierNode, Node};
 use crate::ast::ctx::{FNType, PLType};
 use crate::ast::node::{deal_line, tab};
 use inkwell::debug_info::*;
+use inkwell::types::BasicType;
 use inkwell::values::FunctionValue;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
@@ -199,14 +200,18 @@ impl Node for FuncCallNode {
         }
         for (i, para) in self.paralist.iter_mut().enumerate() {
             let pararange = para.range();
-            let (v, _) = para.emit(ctx)?;
-            let load = ctx.try_load2(v);
-            let param = func.get_nth_param(i as u32).unwrap();
-            let be = load.as_basic_value_enum_op();
-            if be.is_none() {
-                return Ok((load, None));
+            let (value, _) = para.emit(ctx)?;
+            let load_op = if let Value::RefValue(ptr) = value {
+                Some(ptr.as_basic_value_enum())
+            } else {
+                ctx.try_load2(value).as_basic_value_enum_op()
+            };
+            if load_op.is_none() {
+                return Ok((Value::None, None));
             }
-            if be.unwrap().get_type() != param.get_type() {
+            let param = func.get_nth_param(i as u32).unwrap();
+            let load = load_op.unwrap();
+            if load.get_type() != param.get_type() {
                 return Err(ctx.add_err(
                     pararange,
                     crate::ast::error::ErrorCode::PARAMETER_TYPE_NOT_MATCH,
@@ -254,8 +259,15 @@ impl FuncTypeNode {
         }
         let mut para_types = Vec::new();
         for para in self.paralist.iter() {
-            let paramtps = para.tp.get_type(ctx)?;
-            para_types.push(paramtps.0.get_basic_type().into());
+            let (paramtype, _) = para.tp.get_type(ctx)?;
+            para_types.push(if para.is_ref {
+                paramtype
+                    .get_basic_type()
+                    .ptr_type(inkwell::AddressSpace::Generic)
+                    .into()
+            } else {
+                paramtype.get_basic_type().into()
+            });
         }
         let ret_type = self.ret.get_type(ctx)?.0.get_ret_type();
         let func_type = ret_type.fn_type(&para_types, false);
