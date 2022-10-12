@@ -1,6 +1,6 @@
 use crossbeam_channel::Sender;
 use lsp_server::{Message, RequestId};
-use lsp_types::{Diagnostic, SemanticTokens};
+use lsp_types::{Diagnostic, SemanticTokens, Url};
 
 pub fn send_diagnostics(sender: &Sender<Message>, uri: String, diagnostics: Vec<Diagnostic>) {
     sender
@@ -75,4 +75,7 @@ pub fn position_to_offset(doc: &String, pos: lsp_types::Position) -> usize {
         offset += l.len() + 1;
     }
     offset
+}
+pub fn url_to_path(url: Url) -> String {
+    url.to_file_path().unwrap().to_str().unwrap().to_string()
 }

@@ -7,6 +7,7 @@
 //! - find references
 use std::error::Error;
 
+pub mod dispatcher;
 pub mod helpers;
 pub mod mem_docs;
 pub mod semantic_tokens;
@@ -18,13 +19,16 @@ use lsp_types::{
     ServerCapabilities, TextDocumentSyncKind, TextDocumentSyncOptions,
 };
 
-use lsp_server::{Connection, ExtractError, Message, Request, RequestId};
+use lsp_server::{Connection, Message};
 
 use mem_docs::MemDocs;
 
-use crate::ast::{
-    compiler::{ActionType, Compiler, Options},
-    range::Pos,
+use crate::{
+    ast::{
+        compiler::{ActionType, Compiler, Options},
+        range::Pos,
+    },
+    lsp::{dispatcher::Dispatcher, helpers::url_to_path},
 };
 
 pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
@@ -118,224 +122,101 @@ fn main_loop(
     eprintln!("starting main loop");
     let c = Compiler::new();
     for msg in &connection.receiver {
-        match msg {
-            Message::Request(req) => {
-                if connection.handle_shutdown(&req)? {
-                    return Ok(());
-                }
-                match cast::<GotoDefinition>(req.clone()) {
-                    Ok((id, params)) => {
-                        let uri = params
-                            .text_document_position_params
-                            .text_document
-                            .uri
-                            .to_file_path()
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .to_string();
-                        let pos =
-                            Pos::from_diag_pos(&params.text_document_position_params.position);
-                        c.compile_dry(
-                            &uri,
-                            &docs,
-                            Options {
-                                ..Default::default()
-                            },
-                            &connection.sender,
-                            Some((pos, id, None, ActionType::GotoDef)),
-                        );
-                        continue;
-                    }
-                    Err(err @ ExtractError::JsonError { .. }) => panic!("{:?}", err),
-                    Err(ExtractError::MethodMismatch(req)) => req,
-                };
-                match cast::<References>(req.clone()) {
-                    Ok((id, params)) => {
-                        let uri = params
-                            .text_document_position
-                            .text_document
-                            .uri
-                            .to_file_path()
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .to_string();
-                        let pos = Pos::from_diag_pos(&params.text_document_position.position);
-                        c.compile_dry(
-                            &uri,
-                            &docs,
-                            Options {
-                                ..Default::default()
-                            },
-                            &connection.sender,
-                            Some((pos, id.clone(), None, ActionType::FindReferences)),
-                        );
-                        continue;
-                    }
-                    Err(err @ ExtractError::JsonError { .. }) => panic!("{:?}", err),
-                    Err(ExtractError::MethodMismatch(req)) => req,
-                };
-                match cast::<Completion>(req.clone()) {
-                    Ok((id, params)) => {
-                        let uri = params
-                            .text_document_position
-                            .text_document
-                            .uri
-                            .to_file_path()
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .to_string();
-                        let pos = Pos::from_diag_pos(&params.text_document_position.position);
-                        let mut trigger = None;
-                        if params.context.is_some() {
-                            trigger = params.context.unwrap().trigger_character;
-                        }
-                        c.compile_dry(
-                            &uri,
-                            &docs,
-                            Options {
-                                ..Default::default()
-                            },
-                            &connection.sender,
-                            Some((pos, id, trigger, ActionType::Completion)),
-                        );
-                        continue;
-                    }
-                    Err(err @ ExtractError::JsonError { .. }) => panic!("{:?}", err),
-                    Err(ExtractError::MethodMismatch(req)) => req,
-                };
-                match cast::<SemanticTokensFullRequest>(req) {
-                    Ok((id, params)) => {
-                        let uri = params
-                            .text_document
-                            .uri
-                            .to_file_path()
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .to_string();
-                        c.compile_dry(
-                            &uri,
-                            &docs,
-                            Options {
-                                ..Default::default()
-                            },
-                            &connection.sender,
-                            Some((
-                                Pos {
-                                    ..Default::default()
-                                },
-                                id,
-                                None,
-                                ActionType::SemanticTokensFull,
-                            )),
-                        );
-                        continue;
-                    }
-                    Err(err @ ExtractError::JsonError { .. }) => panic!("{:?}", err),
-                    Err(ExtractError::MethodMismatch(req)) => req,
-                };
-                // ...
-            }
-            Message::Response(_) => {}
-            Message::Notification(not) => {
-                match cast_noti::<DidChangeTextDocument>(not.clone()) {
-                    Ok(params) => {
-                        let f = params
-                            .text_document
-                            .uri
-                            .to_file_path()
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .to_string();
-                        // docs.insert(f.clone(), params.content_changes[0].text.clone());
-                        for content_change in params.content_changes.iter() {
-                            docs.change(
-                                content_change.range.unwrap().clone(),
-                                f.clone(),
-                                content_change.text.clone(),
-                            );
-                        }
-                        c.compile_dry(
-                            &f,
-                            &docs,
-                            Options {
-                                ..Default::default()
-                            },
-                            &connection.sender,
-                            None,
-                        );
-                        continue;
-                    }
-                    Err(e) => {
-                        eprintln!("{:?}", e)
-                    }
-                }
-                match cast_noti::<DidOpenTextDocument>(not.clone()) {
-                    Ok(params) => {
-                        let f = params
-                            .text_document
-                            .uri
-                            .to_file_path()
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .to_string();
-                        docs.insert(f.clone(), params.text_document.text);
-                        c.compile_dry(
-                            &f,
-                            &docs,
-                            Options {
-                                ..Default::default()
-                            },
-                            &connection.sender,
-                            None,
-                        );
-                        continue;
-                    }
-                    Err(e) => {
-                        eprintln!("{:?}", e)
-                    }
-                }
-                match cast_noti::<DidCloseTextDocument>(not) {
-                    Ok(params) => {
-                        let f = params
-                            .text_document
-                            .uri
-                            .to_file_path()
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .to_string();
-                        docs.remove(&f);
-                        continue;
-                    }
-                    Err(e) => {
-                        eprintln!("{:?}", e)
-                    }
-                }
+        let di = Dispatcher::new(msg.clone());
+        if let Message::Request(req) = &msg {
+            if connection.handle_shutdown(req)? {
+                return Ok(());
             }
         }
+        di.on::<GotoDefinition, _>(|id, params| {
+            let uri = url_to_path(params.text_document_position_params.text_document.uri);
+            let pos = Pos::from_diag_pos(&params.text_document_position_params.position);
+            c.compile_dry(
+                &uri,
+                &docs,
+                Options {
+                    ..Default::default()
+                },
+                &connection.sender,
+                Some((pos, id, None, ActionType::GotoDef)),
+            );
+        })
+        .on::<References, _>(|id, params| {
+            let uri = url_to_path(params.text_document_position.text_document.uri);
+            let pos = Pos::from_diag_pos(&params.text_document_position.position);
+            c.compile_dry(
+                &uri,
+                &docs,
+                Options {
+                    ..Default::default()
+                },
+                &connection.sender,
+                Some((pos, id.clone(), None, ActionType::FindReferences)),
+            );
+        })
+        .on::<Completion, _>(|id, params| {
+            let uri = url_to_path(params.text_document_position.text_document.uri);
+            let pos = Pos::from_diag_pos(&params.text_document_position.position);
+            let mut trigger = None;
+            if params.context.is_some() {
+                trigger = params.context.unwrap().trigger_character;
+            }
+            c.compile_dry(
+                &uri,
+                &docs,
+                Options {
+                    ..Default::default()
+                },
+                &connection.sender,
+                Some((pos, id, trigger, ActionType::Completion)),
+            );
+        })
+        .on::<SemanticTokensFullRequest, _>(|id, params| {
+            let uri = url_to_path(params.text_document.uri);
+            c.compile_dry(
+                &uri,
+                &docs,
+                Options {
+                    ..Default::default()
+                },
+                &connection.sender,
+                Some((
+                    Pos {
+                        ..Default::default()
+                    },
+                    id,
+                    None,
+                    ActionType::SemanticTokensFull,
+                )),
+            );
+        })
+        .on_noti::<DidChangeTextDocument, _>(|params| {
+            let f = url_to_path(params.text_document.uri);
+            for content_change in params.content_changes.iter() {
+                docs.change(
+                    content_change.range.unwrap().clone(),
+                    f.clone(),
+                    content_change.text.clone(),
+                );
+            }
+        })
+        .on_noti::<DidOpenTextDocument, _>(|params| {
+            let f = url_to_path(params.text_document.uri);
+            docs.insert(f.clone(), params.text_document.text);
+            c.compile_dry(
+                &f,
+                &docs,
+                Options {
+                    ..Default::default()
+                },
+                &connection.sender,
+                None,
+            );
+        })
+        .on_noti::<DidCloseTextDocument, _>(|params| {
+            let f = url_to_path(params.text_document.uri);
+            docs.remove(&f);
+        });
     }
     Ok(())
-}
-
-fn cast<R>(req: Request) -> Result<(RequestId, R::Params), ExtractError<Request>>
-where
-    R: lsp_types::request::Request,
-    R::Params: serde::de::DeserializeOwned,
-{
-    req.extract(R::METHOD)
-}
-fn cast_noti<R>(
-    req: lsp_server::Notification,
-) -> Result<R::Params, ExtractError<lsp_server::Notification>>
-where
-    R: lsp_types::notification::Notification,
-    R::Params: serde::de::DeserializeOwned,
-{
-    req.extract(R::METHOD)
 }
