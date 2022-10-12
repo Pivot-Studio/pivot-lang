@@ -181,7 +181,7 @@ impl SemanticTokensBuilder {
             }
             push_line -= self.prev_line;
             if push_line == 0 {
-                if self.prev_line > push_line {
+                if self.prev_char > push_char {
                     return;
                 }
                 push_char -= self.prev_char;

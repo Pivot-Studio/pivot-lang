@@ -163,12 +163,10 @@ impl Node for StructDefNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        if let Ok((PLType::STRUCT(x), _)) = ctx.get_type(self.id.as_str(), self.range) {
-            ctx.push_semantic_token(x.range, SemanticTokenType::STRUCT, 0);
-            for f in x.ordered_fields.clone() {
-                ctx.push_semantic_token(f.range, SemanticTokenType::PROPERTY, 0);
-                ctx.push_semantic_token(f.typename.range, SemanticTokenType::TYPE, 0);
-            }
+        ctx.push_semantic_token(self.range, SemanticTokenType::STRUCT, 0);
+        for f in self.fields.clone() {
+            ctx.push_semantic_token(f.id.range, SemanticTokenType::PROPERTY, 0);
+            ctx.push_semantic_token(f.tp.range, SemanticTokenType::TYPE, 0);
         }
         Ok((Value::None, None))
     }

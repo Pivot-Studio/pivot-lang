@@ -50,7 +50,7 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
             },
         )),
         completion_provider: Some(lsp_types::CompletionOptions {
-            trigger_characters: Some(vec![".".to_string()]),
+            trigger_characters: Some(vec![".".to_string(), ":".to_string()]),
             resolve_provider: None,
             work_done_progress_options: Default::default(),
             all_commit_characters: None,
