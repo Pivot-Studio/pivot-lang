@@ -48,6 +48,7 @@ use super::range::Range;
 const DW_ATE_BOOLEAN: u32 = 0x02;
 const DW_ATE_FLOAT: u32 = 0x04;
 const DW_ATE_SIGNED: u32 = 0x05;
+const DW_TAG_REFERENCE_TYPE: u32 = 16;
 // const DW_ATE_UNSIGNED: u32 = 0x07;
 fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
     match basetype {
@@ -278,6 +279,13 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
             }
             PLType::VOID(_) => None,
         }
+    }
+    pub fn get_di_ref_type(&self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIDerivedType<'ctx>> {
+        let ditype = self.get_ditype(ctx)?;
+        Some(
+            ctx.dibuilder
+                .create_reference_type(ditype, DW_TAG_REFERENCE_TYPE),
+        )
     }
 }
 

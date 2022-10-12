@@ -22,53 +22,54 @@ impl Node for DefNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
-        let (value, pltype) = self.exp.emit(ctx)?;
-        let base_value = if let Value::RefValue(ref_value) = value {
-            ref_value.as_basic_value_enum()
+        let (value, pltype_opt) = self.exp.emit(ctx)?;
+        // for err tolerate
+        let mut tp = "i64".to_string();
+        if pltype_opt.is_some() {
+            tp = pltype_opt.unwrap();
+        }
+        let pltype_name = tp;
+        let (pltype, ditype) = ctx.get_type(pltype_name.as_str(), self.range).unwrap();
+        let (base_value, debug_type) = if let Value::RefValue(ref_value) = value {
+            (
+                ref_value.as_basic_value_enum(),
+                Some(pltype.clone().get_di_ref_type(ctx).unwrap().as_type()),
+            )
         } else {
-            ctx.try_load2(value).as_basic_value_enum()
+            let ditype = ditype.clone();
+            (ctx.try_load2(value).as_basic_value_enum(), ditype)
         };
         let base_type = base_value.get_type();
         let ptr2value = alloc(ctx, base_type, &self.var.name);
-        // for err tolerate
-        let mut tp = "i64".to_string();
-        if pltype.is_some() {
-            tp = pltype.unwrap();
+        let debug_var_info = ctx.dibuilder.create_auto_variable(
+            ctx.discope,
+            &self.var.name,
+            ctx.diunit.get_file(),
+            self.var.range.start.line as u32,
+            debug_type.unwrap(),
+            true,
+            DIFlags::PUBLIC,
+            debug_type.unwrap().get_align_in_bits(),
+        );
+        ctx.build_dbg_location(self.var.range.start);
+        ctx.dibuilder.insert_declare_at_end(
+            ptr2value,
+            Some(debug_var_info),
+            None,
+            ctx.builder.get_current_debug_location().unwrap(),
+            ctx.function.unwrap().get_first_basic_block().unwrap(),
+        );
+        let re = ctx.add_symbol(
+            self.var.name.clone(),
+            ptr2value,
+            pltype_name.clone(),
+            self.var.range,
+        );
+        if re.is_err() {
+            return Err(re.unwrap_err());
         }
-        let pltype = tp;
-
-        if let (_, Some(ditype)) = ctx.get_type(pltype.as_str(), self.range).unwrap() {
-            let var_info = ctx.dibuilder.create_auto_variable(
-                ctx.discope,
-                &self.var.name,
-                ctx.diunit.get_file(),
-                self.var.range.start.line as u32,
-                *ditype,
-                true,
-                DIFlags::PUBLIC,
-                ditype.get_align_in_bits(),
-            );
-            ctx.build_dbg_location(self.var.range.start);
-            ctx.dibuilder.insert_declare_at_end(
-                ptr2value,
-                Some(var_info),
-                None,
-                ctx.builder.get_current_debug_location().unwrap(),
-                ctx.function.unwrap().get_first_basic_block().unwrap(),
-            );
-            let re = ctx.add_symbol(
-                self.var.name.clone(),
-                ptr2value,
-                pltype.clone(),
-                self.var.range,
-            );
-            if re.is_err() {
-                return Err(re.unwrap_err());
-            }
-            ctx.builder.build_store(ptr2value, base_value);
-            return Ok((Value::None, None));
-        }
-        todo!()
+        ctx.builder.build_store(ptr2value, base_value);
+        return Ok((Value::None, None));
     }
 }
 #[range]
