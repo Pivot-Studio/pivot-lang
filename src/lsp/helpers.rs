@@ -63,3 +63,16 @@ pub fn send_semantic_tokens(sender: &Sender<Message>, id: RequestId, tokens: Sem
         )))
         .unwrap();
 }
+
+pub fn position_to_offset(doc: &String, pos: lsp_types::Position) -> usize {
+    let (line, col) = (pos.line as usize, pos.character as usize);
+    let mut offset = 0;
+    for (i, l) in doc.lines().enumerate() {
+        if i == line {
+            offset += l.char_indices().nth(col).unwrap().0;
+            break;
+        }
+        offset += l.len() + 1;
+    }
+    offset
+}

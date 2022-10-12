@@ -12,7 +12,7 @@ pub mod mem_docs;
 pub mod semantic_tokens;
 
 use lsp_types::{
-    notification::{DidChangeTextDocument, DidOpenTextDocument},
+    notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
     request::{Completion, GotoDefinition, References, SemanticTokensFullRequest},
     InitializeParams, OneOf, SemanticTokenModifier, SemanticTokenType, SemanticTokensOptions,
     ServerCapabilities, TextDocumentSyncKind, TextDocumentSyncOptions,
@@ -40,7 +40,8 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
         definition_provider: Some(OneOf::Left(true)),
         text_document_sync: Some(lsp_types::TextDocumentSyncCapability::Options(
             TextDocumentSyncOptions {
-                change: Some(TextDocumentSyncKind::FULL), // TODO incremental
+                change: Some(TextDocumentSyncKind::INCREMENTAL), // TODO incremental
+                open_close: Some(true),
                 ..Default::default()
             },
         )),
@@ -250,7 +251,14 @@ fn main_loop(
                             .to_str()
                             .unwrap()
                             .to_string();
-                        docs.insert(f.clone(), params.content_changes[0].text.clone());
+                        // docs.insert(f.clone(), params.content_changes[0].text.clone());
+                        for content_change in params.content_changes.iter() {
+                            docs.change(
+                                content_change.range.unwrap().clone(),
+                                f.clone(),
+                                content_change.text.clone(),
+                            );
+                        }
                         c.compile_dry(
                             &f,
                             &docs,
@@ -266,7 +274,7 @@ fn main_loop(
                         eprintln!("{:?}", e)
                     }
                 }
-                match cast_noti::<DidOpenTextDocument>(not) {
+                match cast_noti::<DidOpenTextDocument>(not.clone()) {
                     Ok(params) => {
                         let f = params
                             .text_document
@@ -286,6 +294,23 @@ fn main_loop(
                             &connection.sender,
                             None,
                         );
+                        continue;
+                    }
+                    Err(e) => {
+                        eprintln!("{:?}", e)
+                    }
+                }
+                match cast_noti::<DidCloseTextDocument>(not) {
+                    Ok(params) => {
+                        let f = params
+                            .text_document
+                            .uri
+                            .to_file_path()
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string();
+                        docs.remove(&f);
                         continue;
                     }
                     Err(e) => {
