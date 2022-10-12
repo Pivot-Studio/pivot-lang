@@ -200,7 +200,7 @@ impl Node for FuncCallNode {
         for (i, para) in self.paralist.iter_mut().enumerate() {
             let pararange = para.range();
             let (v, _) = para.emit(ctx)?;
-            let load = ctx.try_load(v);
+            let load = ctx.try_load2(v);
             let param = func.get_nth_param(i as u32).unwrap();
             let be = load.as_basic_value_enum_op();
             if be.is_none() {

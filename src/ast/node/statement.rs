@@ -22,15 +22,21 @@ impl Node for DefNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
-        let (v, pltype) = self.exp.emit(ctx)?;
-        let e = ctx.try_load(v).as_basic_value_enum();
-        let tp = e.get_type();
-        let p = alloc(ctx, tp, &self.var.name);
+        let (value, pltype) = self.exp.emit(ctx)?;
+        let base_value = if let Value::RefValue(ref_value) = value {
+            ref_value.as_basic_value_enum()
+        } else {
+            ctx.try_load2(value).as_basic_value_enum()
+        };
+        let base_type = base_value.get_type();
+        let ptr2value = alloc(ctx, base_type, &self.var.name);
+        // for err tolerate
         let mut tp = "i64".to_string();
         if pltype.is_some() {
             tp = pltype.unwrap();
         }
         let pltype = tp;
+
         if let (_, Some(ditype)) = ctx.get_type(pltype.as_str(), self.range).unwrap() {
             let var_info = ctx.dibuilder.create_auto_variable(
                 ctx.discope,
@@ -44,18 +50,23 @@ impl Node for DefNode {
             );
             ctx.build_dbg_location(self.var.range.start);
             ctx.dibuilder.insert_declare_at_end(
-                p,
+                ptr2value,
                 Some(var_info),
                 None,
                 ctx.builder.get_current_debug_location().unwrap(),
                 ctx.function.unwrap().get_first_basic_block().unwrap(),
             );
-            let re = ctx.add_symbol(self.var.name.clone(), p, pltype.clone(), self.var.range);
+            let re = ctx.add_symbol(
+                self.var.name.clone(),
+                ptr2value,
+                pltype.clone(),
+                self.var.range,
+            );
             if re.is_err() {
                 return Err(re.unwrap_err());
             }
-            ctx.builder.build_store(p, e);
-            return Ok((Value::None, Some(pltype)));
+            ctx.builder.build_store(ptr2value, base_value);
+            return Ok((Value::None, None));
         }
         todo!()
     }
@@ -75,10 +86,11 @@ impl Node for AssignNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let vrange = self.var.range();
-        let (pt, _) = self.var.emit(ctx)?;
+        let (ptr, _) = self.var.emit(ctx)?;
         let (value, _) = self.exp.emit(ctx)?;
-        if let Value::VarValue(ptr) = pt {
-            let load = ctx.try_load(value);
+        let ptr = ctx.try_load1(ptr);
+        if let Value::VarValue(ptr) = ptr {
+            let load = ctx.try_load2(value);
             if ptr.get_type().get_element_type()
                 != load.as_basic_value_enum().get_type().as_any_type_enum()
             {

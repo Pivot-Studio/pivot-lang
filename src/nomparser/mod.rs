@@ -531,13 +531,18 @@ pub fn continue_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
 
 #[test_parser("-1")]
 #[test_parser("!a")]
+#[test_parser("&a")]
 #[test_parser_error("+a")]
 pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
     delspace(alt((
         take_exp,
         map_res(
             tuple((
-                alt((tag_token(TokenType::MINUS), tag_token(TokenType::NOT))),
+                alt((
+                    tag_token(TokenType::MINUS),
+                    tag_token(TokenType::NOT),
+                    tag_token(TokenType::REF),
+                )),
                 take_exp,
             )),
             |((op, _), exp)| {

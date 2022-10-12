@@ -27,7 +27,10 @@ impl Node for UnaryOpNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let (exp, pltype) = self.exp.emit(ctx)?;
-        let exp = ctx.try_load(exp);
+        if let (&Value::VarValue(exp), TokenType::REF) = (&exp, self.op) {
+            return Ok((Value::RefValue(exp), pltype));
+        }
+        let exp = ctx.try_load2(exp);
         return Ok(match (exp, self.op) {
             (Value::IntValue(exp), TokenType::MINUS) => (
                 Value::IntValue(ctx.builder.build_int_neg(exp, "negtmp")),
@@ -78,9 +81,9 @@ impl Node for BinOpNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let (lv, lpltype) = self.left.emit(ctx)?;
-        let left = ctx.try_load(lv);
+        let left = ctx.try_load2(lv);
         let (rv, rpltype) = self.right.emit(ctx)?;
-        let right = ctx.try_load(rv);
+        let right = ctx.try_load2(rv);
         if lpltype != rpltype {
             return Err(ctx.add_err(
                 self.range,

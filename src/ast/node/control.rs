@@ -41,7 +41,7 @@ impl Node for IfNode {
         position_at_end(ctx, cond_block);
         let condrange = self.cond.range();
         let (cond, _) = self.cond.emit(ctx)?;
-        let cond = ctx.try_load(cond);
+        let cond = ctx.try_load2(cond);
         let con;
         if let Value::BoolValue(value) = cond {
             con = value;

@@ -30,6 +30,7 @@ pub enum Value<'a> {
     FloatValue(FloatValue<'a>),
     VarValue(PointerValue<'a>),
     LoadValue(BasicValueEnum<'a>),
+    RefValue(PointerValue<'a>),
     StructFieldValue((String, BasicValueEnum<'a>)),
     None,
 }
@@ -43,6 +44,7 @@ impl<'a> Value<'a> {
             Value::IntValue(v) => Some(v.as_basic_value_enum()),
             Value::FloatValue(v) => Some(v.as_basic_value_enum()),
             Value::VarValue(v) => Some(v.as_basic_value_enum()),
+            Value::RefValue(v) => Some(v.as_basic_value_enum()),
             Value::BoolValue(v) => Some(v.as_basic_value_enum()),
             Value::LoadValue(v) => Some(*v),
             Value::StructFieldValue((_, v)) => Some(*v),

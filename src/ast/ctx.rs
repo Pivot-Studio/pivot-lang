@@ -600,8 +600,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn add_diag(&mut self, dia: PLDiag) {
         self.errs.borrow_mut().push(dia);
     }
-
-    pub fn try_load(&mut self, v: Value<'ctx>) -> Value<'ctx> {
+    // load type** and type* to type
+    pub fn try_load2(&mut self, v: Value<'ctx>) -> Value<'ctx> {
         match v.as_basic_value_enum() {
             BasicValueEnum::PointerValue(v) => {
                 let v = self.builder.build_load(v, "loadtmp");
@@ -612,10 +612,25 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                         _ => todo!(),
                     },
                     BasicValueEnum::FloatValue(v) => Value::FloatValue(v),
+                    BasicValueEnum::PointerValue(v) => self.try_load2(Value::VarValue(v)),
                     _ => Value::LoadValue(v),
                 }
             }
             _ => v,
+        }
+    }
+    // load type** and type* to type*
+    pub fn try_load1(&mut self, v: Value<'ctx>) -> Value<'ctx> {
+        match v.as_basic_value_enum() {
+            BasicValueEnum::PointerValue(ptr2value) => {
+                if ptr2value.get_type().get_element_type().is_pointer_type() {
+                    let value = self.builder.build_load(ptr2value, "loadtmp");
+                    Value::VarValue(value.into_pointer_value())
+                } else {
+                    Value::VarValue(ptr2value)
+                }
+            }
+            _ => todo!(),
         }
     }
 

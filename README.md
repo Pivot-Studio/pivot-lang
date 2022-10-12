@@ -47,7 +47,7 @@ mul_exp =
 
 unary_exp =
     | take_exp
-    | ("-" | "!") take_exp
+    | ("-" | "!" | "&") take_exp
     ;
 
 take_exp =
