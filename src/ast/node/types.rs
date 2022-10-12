@@ -169,9 +169,8 @@ impl Node for StructDefNode {
                 ctx.push_semantic_token(f.range, SemanticTokenType::PROPERTY, 0);
                 ctx.push_semantic_token(f.typename.range, SemanticTokenType::TYPE, 0);
             }
-            return Ok((Value::None, None));
         }
-        todo!()
+        Ok((Value::None, None))
     }
 }
 

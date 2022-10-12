@@ -176,8 +176,14 @@ impl SemanticTokensBuilder {
         let mut push_char = range.start.character as u32;
 
         if !self.data.is_empty() {
+            if self.prev_line > push_line {
+                return;
+            }
             push_line -= self.prev_line;
             if push_line == 0 {
+                if self.prev_line > push_line {
+                    return;
+                }
                 push_char -= self.prev_char;
             }
         }

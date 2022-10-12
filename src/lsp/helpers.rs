@@ -64,18 +64,50 @@ pub fn send_semantic_tokens(sender: &Sender<Message>, id: RequestId, tokens: Sem
         .unwrap();
 }
 
+pub fn url_to_path(url: Url) -> String {
+    url.to_file_path().unwrap().to_str().unwrap().to_string()
+}
+
 pub fn position_to_offset(doc: &String, pos: lsp_types::Position) -> usize {
+    let le = LinesWithEndings::from(doc);
     let (line, col) = (pos.line as usize, pos.character as usize);
     let mut offset = 0;
-    for (i, l) in doc.lines().enumerate() {
+    for (i, l) in le.enumerate() {
         if i == line {
             offset += l.char_indices().nth(col).unwrap().0;
             break;
         }
-        offset += l.len() + 1;
+        offset += l.len();
     }
     offset
 }
-pub fn url_to_path(url: Url) -> String {
-    url.to_file_path().unwrap().to_str().unwrap().to_string()
+
+/// Iterator yielding every line in a string. The line includes newline character(s).
+pub struct LinesWithEndings<'a> {
+    input: &'a str,
+}
+
+impl<'a> LinesWithEndings<'a> {
+    pub fn from(input: &'a str) -> LinesWithEndings<'a> {
+        LinesWithEndings { input }
+    }
+}
+
+impl<'a> Iterator for LinesWithEndings<'a> {
+    type Item = &'a str;
+
+    #[inline]
+    fn next(&mut self) -> Option<&'a str> {
+        if self.input.is_empty() {
+            return None;
+        }
+        let split = self
+            .input
+            .find('\n')
+            .map(|i| i + 1)
+            .unwrap_or(self.input.len());
+        let (line, rest) = self.input.split_at(split);
+        self.input = rest;
+        Some(line)
+    }
 }
