@@ -192,6 +192,7 @@ impl StructDefNode {
                 typename: &field.tp,
                 name: field.id.name.clone(),
                 range: field.id.range,
+                is_ref: field.is_ref,
                 refs: Rc::new(RefCell::new(vec![])),
             };
             ctx.send_if_go_to_def(f.range, f.range);
@@ -207,7 +208,17 @@ impl StructDefNode {
         st.set_body(
             &order_fields
                 .into_iter()
-                .map(|v| v.tp.get_basic_type())
+                .map(|order_field| {
+                    if order_field.is_ref {
+                        order_field
+                            .tp
+                            .get_basic_type()
+                            .ptr_type(inkwell::AddressSpace::Generic)
+                            .as_basic_type_enum()
+                    } else {
+                        order_field.tp.get_basic_type()
+                    }
+                })
                 .collect::<Vec<_>>(),
             false,
         );
@@ -242,10 +253,12 @@ impl Node for StructInitFieldNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let (v, tp) = self.exp.emit(ctx)?;
-        return Ok((
-            Value::StructFieldValue((self.id.clone(), v.as_basic_value_enum())),
-            tp,
-        ));
+        let value = if let Value::RefValue(_) = v {
+            v.as_basic_value_enum()
+        } else {
+            ctx.try_load2(v).as_basic_value_enum()
+        };
+        return Ok((Value::StructFieldValue((self.id.clone(), value)), tp));
     }
 }
 
@@ -284,7 +297,7 @@ impl Node for StructInitNode {
         if let PLType::STRUCT(st) = st {
             let et = st.struct_type.as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");
-            for (id, val) in fields {
+            for (id, (val, range)) in fields {
                 let field = st.fields.get(&id);
                 if field.is_none() {
                     ctx.if_completion(|ctx, a| {
@@ -293,18 +306,18 @@ impl Node for StructInitNode {
                             send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
                         }
                     });
-                    return Err(ctx.add_err(val.1, ErrorCode::STRUCT_FIELD_NOT_FOUND));
+                    return Err(ctx.add_err(range, ErrorCode::STRUCT_FIELD_NOT_FOUND));
                 }
                 let field = field.unwrap();
                 let ptr = ctx
                     .builder
                     .build_struct_gep(stv, field.index, "fieldptr")
                     .unwrap();
-                if ptr.get_type().get_element_type() != val.0.get_type().as_any_type_enum() {
-                    return Err(ctx.add_err(val.1, ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH));
+                if ptr.get_type().get_element_type() != val.get_type().as_any_type_enum() {
+                    return Err(ctx.add_err(range, ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH));
                 }
-                ctx.builder.build_store(ptr, val.0);
-                ctx.send_if_go_to_def(val.1, field.range)
+                ctx.builder.build_store(ptr, val);
+                ctx.send_if_go_to_def(range, field.range)
             }
             return Ok((Value::VarValue(stv), Some(st.name)));
         } else {

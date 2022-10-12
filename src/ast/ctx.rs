@@ -306,6 +306,7 @@ pub struct Field<'a, 'ctx> {
     pub typename: &'a TypeNameNode,
     pub name: String,
     pub range: Range,
+    pub is_ref: bool,
     pub refs: Rc<RefCell<Vec<Location>>>,
 }
 
