@@ -381,7 +381,7 @@ pub fn newline(input: Span) -> IResult<Span, Box<dyn Node>> {
 
 pub fn statements(input: Span) -> IResult<Span, StatementsNode> {
     map_res(many0(statement), |v| {
-        let mut range = v[0].range();
+        let mut range = Range::new(input, input);
         let la = v.last();
         if let Some(la) = la {
             range = range.start.to(la.range().end);
