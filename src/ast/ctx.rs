@@ -320,7 +320,14 @@ pub struct Field<'a, 'ctx> {
 
 impl<'a, 'ctx> Field<'a, 'ctx> {
     pub fn get_di_type(&self, ctx: &mut Ctx<'a, 'ctx>, offset: u64) -> (DIType<'ctx>, u64) {
-        let tp = self.typename.get_debug_type(ctx).unwrap();
+        let (pltype, di_type) = ctx
+            .get_type(&self.typename.id, self.typename.range)
+            .unwrap();
+        let debug_type = if self.is_ref {
+            pltype.clone().get_di_ref_type(ctx).unwrap().as_type()
+        } else {
+            di_type.unwrap()
+        };
         (
             ctx.dibuilder
                 .create_member_type(
@@ -328,14 +335,14 @@ impl<'a, 'ctx> Field<'a, 'ctx> {
                     &self.name,
                     ctx.diunit.get_file(),
                     self.typename.range.start.line as u32,
-                    tp.get_size_in_bits(),
-                    tp.get_align_in_bits(),
-                    offset + tp.get_offset_in_bits(),
+                    debug_type.get_size_in_bits(),
+                    debug_type.get_align_in_bits(),
+                    offset + debug_type.get_offset_in_bits(),
                     DIFlags::PUBLIC,
-                    tp,
+                    debug_type,
                 )
                 .as_type(),
-            offset + tp.get_size_in_bits(),
+            offset + debug_type.get_size_in_bits(),
         )
     }
 }

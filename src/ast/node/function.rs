@@ -61,12 +61,18 @@ impl Node for FuncDefNode {
             .paralist
             .iter()
             .map(|para| {
-                let ditp = para.deref().tp.get_debug_type(ctx);
-                if ditp.is_none() {
+                let res = ctx.get_type(&para.tp.id, para.range());
+                if res.is_err() {
                     return ctx.get_type("i64", Default::default()).unwrap().1.unwrap();
                 }
-                let ditp = ditp.unwrap();
-                ditp
+                let (pltype, di_type) = res.unwrap();
+                let di_type = di_type.unwrap();
+                let di_ref_type = pltype.clone().get_di_ref_type(ctx).unwrap();
+                if para.is_ref {
+                    di_ref_type.as_type()
+                } else {
+                    di_type
+                }
             })
             .collect::<Vec<_>>();
         let subroutine_type = ctx.dibuilder.create_subroutine_type(

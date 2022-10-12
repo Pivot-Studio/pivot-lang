@@ -70,59 +70,9 @@ impl TypeNameNode {
         if a.is_err() {
             return None;
         }
-        let (tp, _) = a.unwrap().clone();
-        let td = ctx.targetmachine.get_target_data();
-
-        match tp {
-            PLType::FN(_) => None,
-            PLType::STRUCT(x) => {
-                let mut offset = 0;
-                let m = x
-                    .ordered_fields
-                    .iter()
-                    .map(|v| {
-                        let (tp, off) = v.get_di_type(ctx, offset);
-                        offset = off;
-                        tp
-                    })
-                    .collect::<Vec<_>>();
-                return Some(
-                    ctx.dibuilder
-                        .create_struct_type(
-                            ctx.discope,
-                            self.id.as_str(),
-                            ctx.diunit.get_file(),
-                            self.range.start.line as u32,
-                            td.get_bit_size(&x.struct_type),
-                            td.get_abi_alignment(&x.struct_type),
-                            DIFlags::PUBLIC,
-                            None,
-                            &m,
-                            0,
-                            None,
-                            self.id.as_str(),
-                        )
-                        .as_type(),
-                );
-            }
-            PLType::PRIMITIVE(_) => {
-                return Some(
-                    ctx.dibuilder
-                        .create_basic_type(
-                            self.id.as_str(),
-                            td.get_bit_size(&tp.get_basic_type()),
-                            get_dw_ate_encoding(&tp.get_basic_type()),
-                            DIFlags::PUBLIC,
-                        )
-                        .unwrap()
-                        .as_type(),
-                );
-            }
-            PLType::VOID(_) => None,
-        }
+        return a.unwrap().1;
     }
 }
-
 #[range]
 #[derive(Clone)]
 pub struct TypedIdentifierNode {
