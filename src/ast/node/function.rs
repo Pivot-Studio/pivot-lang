@@ -166,7 +166,14 @@ impl Node for FuncDefNode {
             }
             // emit body
             _ = body.emit_child(&mut ctx);
-            if ctx.block.unwrap().get_terminator().is_none() {
+            if !ctx
+                .block
+                .unwrap()
+                .get_name()
+                .to_str()
+                .unwrap()
+                .contains("retdead")
+            {
                 return Err(ctx.add_err(
                     self.range,
                     crate::ast::error::ErrorCode::FUNCTION_MUST_HAVE_RETURN,

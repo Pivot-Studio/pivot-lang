@@ -49,7 +49,9 @@ impl Node for IfNode {
             let err = ctx.add_err(condrange, ErrorCode::IF_CONDITION_MUST_BE_BOOL);
             return Err(err);
         }
-
+        let con = ctx
+            .builder
+            .build_int_truncate(con, ctx.context.bool_type(), "trunctemp");
         ctx.builder
             .build_conditional_branch(con, then_block, else_block);
         // then block
@@ -105,6 +107,9 @@ impl Node for WhileNode {
             let err = ctx.add_err(condrange, ErrorCode::WHILE_CONDITION_MUST_BE_BOOL);
             return Err(err);
         }
+        let con = ctx
+            .builder
+            .build_int_truncate(con, ctx.context.bool_type(), "trunctemp");
         ctx.builder
             .build_conditional_branch(con, body_block, after_block);
         position_at_end(ctx, body_block);
@@ -158,7 +163,6 @@ impl Node for ForNode {
         ctx.break_block = Some(after_block);
         ctx.continue_block = Some(cond_block);
         ctx.nodebug_builder.build_unconditional_branch(pre_block);
-        // ctx.builder.build_unconditional_branch(pre_block);
         position_at_end(ctx, pre_block);
         if let Some(pr) = &mut self.pre {
             _ = pr.emit(ctx);
@@ -176,6 +180,9 @@ impl Node for ForNode {
             let err = ctx.add_err(condrange, ErrorCode::FOR_CONDITION_MUST_BE_BOOL);
             return Err(err);
         }
+        let con = ctx
+            .builder
+            .build_int_truncate(con, ctx.context.bool_type(), "trunctemp");
         ctx.build_dbg_location(self.body.range().start);
         ctx.builder
             .build_conditional_branch(con, body_block, after_block);

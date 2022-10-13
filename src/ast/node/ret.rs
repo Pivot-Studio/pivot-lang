@@ -41,6 +41,11 @@ impl Node for RetNode {
             }
             ctx.builder.build_return(None);
         }
+        position_at_end(
+            ctx,
+            ctx.context
+                .append_basic_block(ctx.function.unwrap(), "retdead"),
+        );
         Ok((Value::None, None))
     }
 }
