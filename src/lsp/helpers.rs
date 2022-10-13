@@ -1,6 +1,6 @@
 use crossbeam_channel::Sender;
 use lsp_server::{Message, RequestId};
-use lsp_types::{Diagnostic, SemanticTokens};
+use lsp_types::{Diagnostic, SemanticTokens, Url};
 
 pub fn send_diagnostics(sender: &Sender<Message>, uri: String, diagnostics: Vec<Diagnostic>) {
     sender
@@ -62,4 +62,56 @@ pub fn send_semantic_tokens(sender: &Sender<Message>, id: RequestId, tokens: Sem
             Some(serde_json::to_value(tokens).unwrap()),
         )))
         .unwrap();
+}
+
+pub fn url_to_path(url: Url) -> String {
+    url.to_file_path().unwrap().to_str().unwrap().to_string()
+}
+
+pub fn position_to_offset(doc: &String, pos: lsp_types::Position) -> usize {
+    let le = LinesWithEndings::from(doc);
+    let (line, col) = (pos.line as usize, pos.character as usize);
+    let mut offset = 0;
+    for (i, l) in le.enumerate() {
+        if i == line {
+            if let Some(a) = l.char_indices().nth(col) {
+                offset += a.0;
+            } else {
+                offset += l.chars().count();
+            }
+            break;
+        }
+        offset += l.len();
+    }
+    offset
+}
+
+/// Iterator yielding every line in a string. The line includes newline character(s).
+pub struct LinesWithEndings<'a> {
+    input: &'a str,
+}
+
+impl<'a> LinesWithEndings<'a> {
+    pub fn from(input: &'a str) -> LinesWithEndings<'a> {
+        LinesWithEndings { input }
+    }
+}
+
+impl<'a> Iterator for LinesWithEndings<'a> {
+    type Item = &'a str;
+
+    #[inline]
+    fn next(&mut self) -> Option<&'a str> {
+        if self.input.is_empty() {
+            return None;
+        }
+        let split = self
+            .input
+            .find('\n')
+            .map(|i| i + 1)
+            .unwrap_or(self.input.len());
+        let (line, rest) = self.input.split_at(split);
+        self.input = rest;
+        Some(line)
+    }
 }

@@ -381,7 +381,7 @@ pub fn newline(input: Span) -> IResult<Span, Box<dyn Node>> {
 
 pub fn statements(input: Span) -> IResult<Span, StatementsNode> {
     map_res(many0(statement), |v| {
-        let mut range = v[0].range();
+        let mut range = Range::new(input, input);
         let la = v.last();
         if let Some(la) = la {
             range = range.start.to(la.range().end);
@@ -665,15 +665,24 @@ fn type_name(input: Span) -> IResult<Span, Box<TypeNameNode>> {
 #[test_parser("myname: int")]
 fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
     delspace(map_res(
-        tuple((identifier, tag_token(TokenType::COLON), type_name)),
+        tuple((identifier, tag_token(TokenType::COLON), opt(type_name))),
         |(id, _, type_name)| {
             let id = cast_to_var(&id);
-            let range = id.range.start.to(type_name.range.end);
-            res_box(Box::new(TypedIdentifierNode {
-                id,
-                tp: type_name,
-                range,
-            }))
+            let mut range = id.range;
+            let mut tprange = range;
+            tprange.end.column += 1;
+            tprange.start = tprange.end;
+            let mut tp = Box::new(TypeNameNode {
+                id: "".to_string(),
+                range: tprange,
+            });
+
+            if let Some(type_name) = type_name {
+                range = id.range.start.to(type_name.range.end);
+                tp = type_name;
+            }
+
+            res_box(Box::new(TypedIdentifierNode { id, tp, range }))
         },
     ))(input)
 }
