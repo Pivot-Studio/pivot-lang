@@ -227,6 +227,13 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
             _ => RetTypeEnum::BASIC(self.get_basic_type()),
         }
     }
+    pub fn is_void(&self) -> bool {
+        if let PLType::VOID(_) = self {
+            true
+        } else {
+            false
+        }
+    }
 
     /// # get_ditype
     /// get the debug info type of the pltype
@@ -647,7 +654,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                     Value::VarValue(ptr2value)
                 }
             }
-            _ => todo!(),
+            _ => v,
         }
     }
 

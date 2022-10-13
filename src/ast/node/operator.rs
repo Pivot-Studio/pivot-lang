@@ -205,8 +205,8 @@ impl Node for TakeOpNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut range = self.head.range();
         let head = self.head.emit(ctx)?;
-        // let head = ctx.try_load(head);
         let (mut res, mut pltype) = head;
+        res = ctx.try_load1(res);
         for id in &self.ids {
             res = match res.as_basic_value_enum() {
                 BasicValueEnum::PointerValue(s) => {

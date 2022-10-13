@@ -2,7 +2,7 @@ use super::statement::StatementsNode;
 use super::types::*;
 use super::*;
 use super::{alloc, types::TypedIdentifierNode, Node};
-use crate::ast::ctx::{FNType, PLType, RetTypeEnum};
+use crate::ast::ctx::{FNType, PLType};
 use crate::ast::node::{deal_line, tab};
 use inkwell::debug_info::*;
 use inkwell::types::BasicType;
@@ -76,15 +76,18 @@ impl Node for FuncDefNode {
         let subroutine_type = ctx.dibuilder.create_subroutine_type(
             ctx.diunit.get_file(),
             {
-                let (pltype, di_type) = ctx
-                    .get_type(&self.typenode.ret.id, self.typenode.ret.range)
-                    .unwrap();
-                let di_type = di_type.unwrap();
-                let di_ref_type = pltype.clone().get_di_ref_type(ctx).unwrap();
-                if self.typenode.ret.is_ref {
-                    Some(di_ref_type.as_type())
+                let res = ctx.get_type(&self.typenode.ret.id, self.typenode.ret.range);
+                if res.is_err() {
+                    ctx.get_type("i64", Default::default()).unwrap().1
                 } else {
-                    Some(di_type)
+                    let (pltype, di_type) = res.unwrap();
+                    let di_type = di_type.clone();
+                    let di_ref_type = pltype.clone().get_di_ref_type(ctx);
+                    if self.typenode.ret.is_ref {
+                        di_ref_type.and_then(|v| Some(v.as_type()))
+                    } else {
+                        di_type
+                    }
                 }
             },
             &param_ditypes,
@@ -301,16 +304,21 @@ impl FuncTypeNode {
             });
         }
         let (pltype, _) = self.ret.get_type(ctx)?;
-        let ret_base_type = if self.ret.is_ref {
-            pltype
-                .get_basic_type()
-                .ptr_type(inkwell::AddressSpace::Generic)
-                .as_basic_type_enum()
+        let func_type = if pltype.is_void() {
+            // void type
+            ctx.context.void_type().fn_type(&para_types, false)
         } else {
-            pltype.get_basic_type()
+            // is ref
+            if self.ret.is_ref {
+                pltype
+                    .get_basic_type()
+                    .ptr_type(inkwell::AddressSpace::Generic)
+                    .as_basic_type_enum()
+                    .fn_type(&para_types, false)
+            } else {
+                pltype.get_basic_type().fn_type(&para_types, false)
+            }
         };
-        let ret_type = RetTypeEnum::BASIC(ret_base_type);
-        let func_type = ret_type.fn_type(&para_types, false);
         let func = ctx.module.add_function(self.id.as_str(), func_type, None);
         let refs = vec![];
         let ftp = PLType::FN(FNType {
