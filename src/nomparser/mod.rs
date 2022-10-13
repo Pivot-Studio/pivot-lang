@@ -675,6 +675,7 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
             let mut tp = Box::new(TypeNameNode {
                 id: "".to_string(),
                 range: tprange,
+                is_ref: false,
             });
 
             if let Some(type_name) = type_name {
