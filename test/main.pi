@@ -1,8 +1,10 @@
-struct A {
-    x:&i64
+fn change(x:&i64) &i64 {
+    x = x + 1
+    return &x
 }
 fn main() i64 {
-    let a = 100
-    let t = A{x:&a,}
+    let a = 1
+    let b = change(&a)
+    b = 99
     return 0
 }

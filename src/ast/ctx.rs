@@ -354,6 +354,7 @@ pub struct FNType<'ctx> {
     pub ret_pltype: Option<String>,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
+    pub is_ref: bool,
 }
 
 #[derive(Debug, Clone)]

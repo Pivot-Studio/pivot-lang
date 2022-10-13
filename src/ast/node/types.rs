@@ -12,28 +12,11 @@ use inkwell::debug_info::*;
 use inkwell::types::{AnyType, BasicType};
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
-
-// TODO: match all case
-// const DW_ATE_UTF: u32 = 0x10;
-const DW_ATE_BOOLEAN: u32 = 0x02;
-const DW_ATE_FLOAT: u32 = 0x04;
-const DW_ATE_SIGNED: u32 = 0x05;
-// const DW_ATE_UNSIGNED: u32 = 0x07;
-fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
-    match basetype {
-        BasicTypeEnum::FloatType(_) => DW_ATE_FLOAT,
-        BasicTypeEnum::IntType(i) => match i.get_bit_width() {
-            1 => DW_ATE_BOOLEAN,
-            64 => DW_ATE_SIGNED,
-            _ => todo!(),
-        },
-        _ => todo!(),
-    }
-}
 #[range]
 #[derive(Debug, Clone)]
 pub struct TypeNameNode {
     pub id: String,
+    pub is_ref: bool,
 }
 
 impl TypeNameNode {
@@ -63,22 +46,11 @@ impl TypeNameNode {
         Ok(re)
     }
 }
-
-impl TypeNameNode {
-    pub fn get_debug_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
-        let a = ctx.get_type(&self.id, self.range);
-        if a.is_err() {
-            return None;
-        }
-        return a.unwrap().1;
-    }
-}
 #[range]
 #[derive(Clone)]
 pub struct TypedIdentifierNode {
     pub id: VarNode,
     pub tp: Box<TypeNameNode>,
-    pub is_ref: bool,
 }
 
 impl TypedIdentifierNode {
@@ -142,7 +114,7 @@ impl StructDefNode {
                 typename: &field.tp,
                 name: field.id.name.clone(),
                 range: field.id.range,
-                is_ref: field.is_ref,
+                is_ref: field.tp.is_ref,
                 refs: Rc::new(RefCell::new(vec![])),
             };
             ctx.send_if_go_to_def(f.range, f.range);

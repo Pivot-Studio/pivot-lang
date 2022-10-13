@@ -2,7 +2,7 @@ use super::statement::StatementsNode;
 use super::types::*;
 use super::*;
 use super::{alloc, types::TypedIdentifierNode, Node};
-use crate::ast::ctx::{FNType, PLType};
+use crate::ast::ctx::{FNType, PLType, RetTypeEnum};
 use crate::ast::node::{deal_line, tab};
 use inkwell::debug_info::*;
 use inkwell::types::BasicType;
@@ -12,8 +12,6 @@ use lsp_types::SemanticTokenType;
 use std::cell::RefCell;
 use std::fmt::format;
 use std::rc::Rc;
-
-use lazy_static::__Deref;
 
 #[range]
 pub struct FuncDefNode {
@@ -68,7 +66,7 @@ impl Node for FuncDefNode {
                 let (pltype, di_type) = res.unwrap();
                 let di_type = di_type.unwrap();
                 let di_ref_type = pltype.clone().get_di_ref_type(ctx).unwrap();
-                if para.is_ref {
+                if para.tp.is_ref {
                     di_ref_type.as_type()
                 } else {
                     di_type
@@ -77,7 +75,18 @@ impl Node for FuncDefNode {
             .collect::<Vec<_>>();
         let subroutine_type = ctx.dibuilder.create_subroutine_type(
             ctx.diunit.get_file(),
-            self.typenode.ret.get_debug_type(ctx),
+            {
+                let (pltype, di_type) = ctx
+                    .get_type(&self.typenode.ret.id, self.typenode.ret.range)
+                    .unwrap();
+                let di_type = di_type.unwrap();
+                let di_ref_type = pltype.clone().get_di_ref_type(ctx).unwrap();
+                if self.typenode.ret.is_ref {
+                    Some(di_ref_type.as_type())
+                } else {
+                    Some(di_type)
+                }
+            },
             &param_ditypes,
             DIFlags::PUBLIC,
         );
@@ -233,7 +242,16 @@ impl Node for FuncCallNode {
         let fntp = ctx.get_type(&self.id, self.range)?;
         if let (PLType::FN(fv), _) = fntp {
             let o = match (ret.try_as_basic_value().left(), fv.ret_pltype.as_ref()) {
-                (Some(v), Some(pltype)) => Ok((Value::LoadValue(v.clone()), Some(pltype.clone()))),
+                (Some(v), Some(pltype)) => {
+                    if v.is_pointer_value() {
+                        Ok((
+                            Value::RefValue(v.into_pointer_value()),
+                            Some(pltype.clone()),
+                        ))
+                    } else {
+                        Ok((Value::LoadValue(v), Some(pltype.clone())))
+                    }
+                }
                 (None, Some(pltype)) => Ok((Value::None, Some(pltype.clone()))),
                 _ => todo!(),
             };
@@ -266,7 +284,7 @@ impl FuncTypeNode {
         let mut para_types = Vec::new();
         for para in self.paralist.iter() {
             let (paramtype, _) = para.tp.get_type(ctx)?;
-            para_types.push(if para.is_ref {
+            para_types.push(if para.tp.is_ref {
                 paramtype
                     .get_basic_type()
                     .ptr_type(inkwell::AddressSpace::Generic)
@@ -275,7 +293,16 @@ impl FuncTypeNode {
                 paramtype.get_basic_type().into()
             });
         }
-        let ret_type = self.ret.get_type(ctx)?.0.get_ret_type();
+        let (pltype, _) = self.ret.get_type(ctx)?;
+        let ret_base_type = if self.ret.is_ref {
+            pltype
+                .get_basic_type()
+                .ptr_type(inkwell::AddressSpace::Generic)
+                .as_basic_type_enum()
+        } else {
+            pltype.get_basic_type()
+        };
+        let ret_type = RetTypeEnum::BASIC(ret_base_type);
         let func_type = ret_type.fn_type(&para_types, false);
         let func = ctx.module.add_function(self.id.as_str(), func_type, None);
         let refs = vec![];
@@ -285,6 +312,7 @@ impl FuncTypeNode {
             ret_pltype: Some(self.ret.id.clone()),
             range: self.range,
             refs: Rc::new(RefCell::new(refs)),
+            is_ref: self.ret.is_ref,
         });
         ctx.set_if_refs_tp(&ftp, self.range);
         _ = ctx.add_type(self.id.clone(), ftp, self.range);
