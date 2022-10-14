@@ -161,7 +161,11 @@ impl StatementsNode {
             }
             let pos = m.range().start;
             child.build_dbg_location(pos);
-            let (_, _, terminator_res) = m.emit(child)?;
+            let re = m.emit(child);
+            if re.is_err() {
+                continue;
+            }
+            let (_, _, terminator_res) = re.unwrap();
             terminator = terminator_res;
         }
         Ok((Value::None, None, terminator))

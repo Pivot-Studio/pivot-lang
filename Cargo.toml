@@ -25,6 +25,7 @@ rustc-hash = "1.1.0"
 crossbeam-channel = "0.5.6"
 salsa = { package = "salsa-2022", git = "https://github.com/salsa-rs/salsa", branch = "master" }
 enum_dispatch = "0.3.8"
+threadpool = "1.8.1"
 [dependencies.nom]
 version = "7"
 features = ["alloc"]

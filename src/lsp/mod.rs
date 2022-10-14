@@ -5,7 +5,7 @@
 //! - completion
 //! - goto definition
 //! - find references
-use std::{cell::RefCell, error::Error, sync::Arc, time::Instant};
+use std::{cell::RefCell, error::Error, sync::Arc, thread::available_parallelism, time::Instant};
 
 pub mod dispatcher;
 pub mod helpers;
@@ -14,14 +14,18 @@ pub mod semantic_tokens;
 
 use lsp_types::{
     notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
-    request::{Completion, GotoDefinition, References, SemanticTokensFullRequest},
-    InitializeParams, OneOf, SemanticTokenModifier, SemanticTokenType, SemanticTokensOptions,
-    ServerCapabilities, TextDocumentSyncKind, TextDocumentSyncOptions,
+    request::{
+        Completion, GotoDefinition, References, SemanticTokensFullDeltaRequest,
+        SemanticTokensFullRequest,
+    },
+    InitializeParams, OneOf, SemanticTokenModifier, SemanticTokenType, SemanticTokensDelta,
+    SemanticTokensOptions, ServerCapabilities, TextDocumentSyncKind, TextDocumentSyncOptions,
 };
 
 use lsp_server::{Connection, Message};
 
 use mem_docs::MemDocs;
+use threadpool::ThreadPool;
 
 use crate::{
     ast::{
@@ -34,9 +38,10 @@ use crate::{
         dispatcher::Dispatcher,
         helpers::{
             send_completions, send_diagnostics, send_goto_def, send_references,
-            send_semantic_tokens, url_to_path,
+            send_semantic_tokens, send_semantic_tokens_edit, url_to_path,
         },
         mem_docs::MemDocsInput,
+        semantic_tokens::diff_tokens,
     },
 };
 
@@ -105,8 +110,8 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
                             SemanticTokenModifier::DOCUMENTATION,
                         ],
                     },
-                    range: Some(true),
-                    full: Some(lsp_types::SemanticTokensFullOptions::Bool(true)),
+                    range: Some(false),
+                    full: Some(lsp_types::SemanticTokensFullOptions::Delta { delta: Some(true) }),
                 },
             ),
         ),
@@ -126,10 +131,13 @@ fn main_loop(
     connection: Connection,
     params: serde_json::Value,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
+    let n_workers = available_parallelism().unwrap().get();
+    let pool = ThreadPool::new(n_workers);
     let mut db = db::Database::default();
     let _params: InitializeParams = serde_json::from_value(params).unwrap();
     let docs = Arc::new(RefCell::new(MemDocs::new()));
     let docin = MemDocsInput::new(&db, docs.clone(), "".to_string());
+    let mut tokens = vec![];
 
     eprintln!("starting main loop");
     for msg in &connection.receiver {
@@ -162,8 +170,11 @@ fn main_loop(
                 ActionType::GotoDef,
                 Some((pos, id.clone(), None, ActionType::GotoDef)),
             );
+            let sender = connection.sender.clone();
             if !defs.is_empty() {
-                send_goto_def(&connection.sender, id, defs[0].clone());
+                pool.execute(move || {
+                    send_goto_def(&sender, id, defs[0].clone());
+                });
             }
         })
         .on::<References, _>(|id, params| {
@@ -188,7 +199,10 @@ fn main_loop(
                 ActionType::FindReferences,
                 Some((pos, id.clone(), None, ActionType::FindReferences)),
             );
-            send_references(&connection.sender, id, &refs);
+            let sender = connection.sender.clone();
+            pool.execute(move || {
+                send_references(&sender, id, &refs);
+            });
         })
         .on::<Completion, _>(|id, params| {
             let uri = url_to_path(params.text_document_position.text_document.uri);
@@ -217,13 +231,16 @@ fn main_loop(
                 Some((pos, id.clone(), trigger, ActionType::Completion)),
             );
             if !completions.is_empty() {
-                send_completions(&connection.sender, id, completions[0].clone());
+                let sender = connection.sender.clone();
+                pool.execute(move || {
+                    send_completions(&sender, id, completions[0].clone());
+                });
             }
         })
         .on::<SemanticTokensFullRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
             docin.set_file(&mut db).to(uri);
-            compile_dry(
+            let newtokens = compile_dry::accumulated::<PLSemanticTokens>(
                 &db,
                 docin,
                 Options {
@@ -239,7 +256,16 @@ fn main_loop(
                     ActionType::SemanticTokensFull,
                 )),
             );
-            let tokens = compile_dry::accumulated::<PLSemanticTokens>(
+            tokens = newtokens[0].data.clone();
+            let sender = connection.sender.clone();
+            pool.execute(move || {
+                send_semantic_tokens(&sender, id, newtokens[0].clone());
+            });
+        })
+        .on::<SemanticTokensFullDeltaRequest, _>(|id, params| {
+            let uri = url_to_path(params.text_document.uri);
+            docin.set_file(&mut db).to(uri);
+            let newtokens = compile_dry::accumulated::<PLSemanticTokens>(
                 &db,
                 docin,
                 Options {
@@ -255,9 +281,19 @@ fn main_loop(
                     ActionType::SemanticTokensFull,
                 )),
             );
-            if !tokens.is_empty() {
-                send_semantic_tokens(&connection.sender, id, tokens[0].clone());
-            }
+            let delta = diff_tokens(&tokens, &newtokens[0].data);
+            tokens = newtokens[0].data.clone();
+            let sender = connection.sender.clone();
+            pool.execute(move || {
+                send_semantic_tokens_edit(
+                    &sender,
+                    id,
+                    SemanticTokensDelta {
+                        result_id: None,
+                        edits: delta,
+                    },
+                );
+            });
         })
         .on_noti::<DidChangeTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
@@ -268,26 +304,29 @@ fn main_loop(
                     content_change.text.clone(),
                 );
                 docin.set_docs(&mut db).to(docs.clone());
-                compile_dry(
-                    &db,
-                    docin,
-                    Options {
-                        ..Default::default()
-                    },
-                    ActionType::Diagnostic,
-                    None,
-                );
-                let diags = compile_dry::accumulated::<Diagnostics>(
-                    &db,
-                    docin,
-                    Options {
-                        ..Default::default()
-                    },
-                    ActionType::Diagnostic,
-                    None,
-                );
-                send_diagnostics(&connection.sender, f.clone(), diags.clone());
             }
+            compile_dry(
+                &db,
+                docin,
+                Options {
+                    ..Default::default()
+                },
+                ActionType::Diagnostic,
+                None,
+            );
+            let diags = compile_dry::accumulated::<Diagnostics>(
+                &db,
+                docin,
+                Options {
+                    ..Default::default()
+                },
+                ActionType::Diagnostic,
+                None,
+            );
+            let sender = connection.sender.clone();
+            pool.execute(move || {
+                send_diagnostics(&sender, f, diags.clone());
+            });
         })
         .on_noti::<DidOpenTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
@@ -313,7 +352,10 @@ fn main_loop(
                 ActionType::Diagnostic,
                 None,
             );
-            send_diagnostics(&connection.sender, f, diags.clone());
+            let sender = connection.sender.clone();
+            pool.execute(move || {
+                send_diagnostics(&sender, f.clone(), diags.clone());
+            });
         })
         .on_noti::<DidCloseTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
