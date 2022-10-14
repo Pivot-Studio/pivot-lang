@@ -139,10 +139,9 @@ pub fn compile_dry(
     }
 
     _ = node.emit(m);
-    _ = v
-        .borrow()
-        .iter()
-        .map(|v| Diagnostics::push(db, v.get_diagnostic()));
+    for d in v.borrow().iter() {
+        Diagnostics::push(db, d.get_diagnostic());
+    }
     if let Some(c) = ctx.refs.take() {
         let c = c.borrow();
         for refe in c.iter() {
