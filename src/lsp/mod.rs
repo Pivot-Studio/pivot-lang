@@ -5,7 +5,7 @@
 //! - completion
 //! - goto definition
 //! - find references
-use std::{cell::RefCell, error::Error, sync::Arc};
+use std::{cell::RefCell, error::Error, sync::Arc, time::Instant};
 
 pub mod dispatcher;
 pub mod helpers;
@@ -133,6 +133,7 @@ fn main_loop(
 
     eprintln!("starting main loop");
     for msg in &connection.receiver {
+        let now = Instant::now();
         let di = Dispatcher::new(msg.clone());
         if let Message::Request(req) = &msg {
             if connection.handle_shutdown(req)? {
@@ -319,6 +320,8 @@ fn main_loop(
             docs.borrow_mut().remove(&f);
             docin.set_docs(&mut db).to(docs.clone());
         });
+        let elapsed = now.elapsed();
+        eprintln!("req finished, time: {:?}", elapsed);
     }
     Ok(())
 }
