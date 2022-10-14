@@ -1,7 +1,7 @@
 pub mod accumulators;
 pub mod compiler;
 pub mod ctx;
-pub mod error;
+pub mod diag;
 pub mod node;
 pub mod range;
 pub mod tokens;

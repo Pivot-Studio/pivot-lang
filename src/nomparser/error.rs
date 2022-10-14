@@ -16,7 +16,7 @@ use super::{take_utf8_split, Span};
 pub fn except<'a, E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt::Error>>(
     except: &'static str,
     msg: &'static str,
-    code: crate::ast::error::ErrorCode,
+    code: crate::ast::diag::ErrorCode,
 ) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, Box<NodeEnum>, E> {
     move |i| {
         let (mut i, sp) = recognize(is_not(Span::from(except)))(i)?;
@@ -65,7 +65,7 @@ pub fn alt_except<'a, E, F>(
     parser: F,
     ex: &'static str,
     msg: &'static str,
-    code: crate::ast::error::ErrorCode,
+    code: crate::ast::diag::ErrorCode,
 ) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, Box<NodeEnum>, E>
 where
     E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt::Error>,

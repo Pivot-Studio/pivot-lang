@@ -1,5 +1,6 @@
 use super::*;
-use crate::ast::{ctx::Ctx, error::ErrorCode};
+use crate::ast::{ctx::Ctx, diag::ErrorCode};
+
 use colored::Colorize;
 use internal_macro::range;
 

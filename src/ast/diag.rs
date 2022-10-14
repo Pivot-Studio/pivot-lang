@@ -55,3 +55,26 @@ define_error!(
     REDFINE_TYPE = "redefine type",
     STRUCT_FIELD_TYPE_NOT_MATCH = "struct field type not match"
 );
+macro_rules! define_warn {
+    ($(
+        $ident:ident = $string_keyword:expr
+    ),*) => {
+        #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash)]
+        #[allow(non_camel_case_types, dead_code)]
+        pub enum WarnCode {
+            UNKNOWN = 1919810,
+            $($ident),*
+        }
+        $(pub const $ident: &'static str = $string_keyword;)*
+        lazy_static! {
+            pub static ref WARN_MSG: HashMap<WarnCode, &'static str> = {
+                let mut mp = HashMap::new();
+                $(mp.insert(WarnCode::$ident, $ident);)*
+                mp
+            };
+        }
+    };
+}
+define_warn! {
+    UNREACHABLE_STATEMENT= "unreachable statement"
+}

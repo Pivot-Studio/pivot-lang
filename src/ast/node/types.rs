@@ -5,34 +5,17 @@ use std::rc::Rc;
 use super::primary::VarNode;
 use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
-use crate::ast::error::ErrorCode;
+use crate::ast::diag::ErrorCode;
 use crate::ast::range::Range;
 use inkwell::debug_info::*;
 use inkwell::types::{AnyType, BasicType};
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
-
-// TODO: match all case
-// const DW_ATE_UTF: u32 = 0x10;
-const DW_ATE_BOOLEAN: u32 = 0x02;
-const DW_ATE_FLOAT: u32 = 0x04;
-const DW_ATE_SIGNED: u32 = 0x05;
-// const DW_ATE_UNSIGNED: u32 = 0x07;
-fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
-    match basetype {
-        BasicTypeEnum::FloatType(_) => DW_ATE_FLOAT,
-        BasicTypeEnum::IntType(i) => match i.get_bit_width() {
-            1 => DW_ATE_BOOLEAN,
-            64 => DW_ATE_SIGNED,
-            _ => todo!(),
-        },
-        _ => todo!(),
-    }
-}
 #[range]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeNameNode {
     pub id: String,
+    pub is_ref: bool,
 }
 
 impl TypeNameNode {
@@ -62,66 +45,6 @@ impl TypeNameNode {
         Ok(re)
     }
 }
-
-impl TypeNameNode {
-    pub fn get_debug_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
-        let a = ctx.get_type(&self.id, self.range);
-        if a.is_err() {
-            return None;
-        }
-        let (tp, _) = a.unwrap().clone();
-        let td = ctx.targetmachine.get_target_data();
-
-        match tp {
-            PLType::FN(_) => None,
-            PLType::STRUCT(x) => {
-                let mut offset = 0;
-                let m = x
-                    .ordered_fields
-                    .iter()
-                    .map(|v| {
-                        let (tp, off) = v.get_di_type(ctx, offset);
-                        offset = off;
-                        tp
-                    })
-                    .collect::<Vec<_>>();
-                return Some(
-                    ctx.dibuilder
-                        .create_struct_type(
-                            ctx.discope,
-                            self.id.as_str(),
-                            ctx.diunit.get_file(),
-                            self.range.start.line as u32,
-                            td.get_bit_size(&x.struct_type),
-                            td.get_abi_alignment(&x.struct_type),
-                            DIFlags::PUBLIC,
-                            None,
-                            &m,
-                            0,
-                            None,
-                            self.id.as_str(),
-                        )
-                        .as_type(),
-                );
-            }
-            PLType::PRIMITIVE(_) => {
-                return Some(
-                    ctx.dibuilder
-                        .create_basic_type(
-                            self.id.as_str(),
-                            td.get_bit_size(&tp.get_basic_type()),
-                            get_dw_ate_encoding(&tp.get_basic_type()),
-                            DIFlags::PUBLIC,
-                        )
-                        .unwrap()
-                        .as_type(),
-                );
-            }
-            PLType::VOID(_) => None,
-        }
-    }
-}
-
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TypedIdentifierNode {
@@ -167,7 +90,7 @@ impl Node for StructDefNode {
             ctx.push_semantic_token(f.id.range, SemanticTokenType::PROPERTY, 0);
             ctx.push_semantic_token(f.tp.range, SemanticTokenType::TYPE, 0);
         }
-        Ok((Value::None, None))
+        Ok((Value::None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -187,6 +110,7 @@ impl StructDefNode {
                 typename: &field.tp,
                 name: field.id.name.clone(),
                 range: field.id.range,
+                is_ref: field.tp.is_ref,
                 refs: Rc::new(RefCell::new(vec![])),
             };
             ctx.send_if_go_to_def(f.range, f.range);
@@ -202,7 +126,17 @@ impl StructDefNode {
         st.set_body(
             &order_fields
                 .into_iter()
-                .map(|v| v.tp.get_basic_type())
+                .map(|order_field| {
+                    if order_field.is_ref {
+                        order_field
+                            .tp
+                            .get_basic_type()
+                            .ptr_type(inkwell::AddressSpace::Generic)
+                            .as_basic_type_enum()
+                    } else {
+                        order_field.tp.get_basic_type()
+                    }
+                })
                 .collect::<Vec<_>>(),
             false,
         );
@@ -237,10 +171,16 @@ impl Node for StructInitFieldNode {
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let (v, tp) = self.exp.emit(ctx)?;
+        let (v, tp, _) = self.exp.emit(ctx)?;
+        let value = if let Value::RefValue(_) = v {
+            v.as_basic_value_enum()
+        } else {
+            ctx.try_load2(v).as_basic_value_enum()
+        };
         return Ok((
-            Value::StructFieldValue((self.id.clone(), v.as_basic_value_enum())),
+            Value::StructFieldValue((self.id.clone(), value)),
             tp,
+            TerminatorEnum::NONE,
         ));
     }
 }
@@ -271,7 +211,7 @@ impl Node for StructInitNode {
         let mut fields = HashMap::<String, (BasicValueEnum<'ctx>, Range)>::new();
         for field in self.fields.iter_mut() {
             let range = field.range();
-            if let (Value::StructFieldValue((id, val)), _) = field.emit(ctx)? {
+            if let (Value::StructFieldValue((id, val)), _, _) = field.emit(ctx)? {
                 fields.insert(id, (val, range));
             } else {
                 panic!("StructInitNode::emit: invalid field");
@@ -281,7 +221,7 @@ impl Node for StructInitNode {
         if let PLType::STRUCT(st) = st {
             let et = st.struct_type.as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");
-            for (id, val) in fields {
+            for (id, (val, range)) in fields {
                 let field = st.fields.get(&id);
                 if field.is_none() {
                     ctx.if_completion(|ctx, a| {
@@ -290,20 +230,20 @@ impl Node for StructInitNode {
                             ctx.completion_items.set(completions);
                         }
                     });
-                    return Err(ctx.add_err(val.1, ErrorCode::STRUCT_FIELD_NOT_FOUND));
+                    return Err(ctx.add_err(range, ErrorCode::STRUCT_FIELD_NOT_FOUND));
                 }
                 let field = field.unwrap();
                 let ptr = ctx
                     .builder
                     .build_struct_gep(stv, field.index, "fieldptr")
                     .unwrap();
-                if ptr.get_type().get_element_type() != val.0.get_type().as_any_type_enum() {
-                    return Err(ctx.add_err(val.1, ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH));
+                if ptr.get_type().get_element_type() != val.get_type().as_any_type_enum() {
+                    return Err(ctx.add_err(range, ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH));
                 }
-                ctx.builder.build_store(ptr, val.0);
-                ctx.send_if_go_to_def(val.1, field.range)
+                ctx.builder.build_store(ptr, val);
+                ctx.send_if_go_to_def(range, field.range)
             }
-            return Ok((Value::VarValue(stv), Some(st.name)));
+            return Ok((Value::VarValue(stv), Some(st.name), TerminatorEnum::NONE));
         } else {
             panic!("StructInitNode::emit: invalid type");
         }

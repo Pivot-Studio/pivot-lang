@@ -16,7 +16,7 @@ use crate::{
     ast::node::ret::RetNode,
     ast::node::*,
     ast::{
-        error::ErrorCode,
+        diag::ErrorCode,
         node::{
             function::{FuncCallNode, FuncDefNode, FuncTypeNode},
             types::{StructDefNode, TypeNameNode, TypedIdentifierNode},
@@ -566,13 +566,18 @@ pub fn continue_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 
 #[test_parser("-1")]
 #[test_parser("!a")]
+#[test_parser("&a")]
 #[test_parser_error("+a")]
 pub fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
         take_exp,
         map_res(
             tuple((
-                alt((tag_token(TokenType::MINUS), tag_token(TokenType::NOT))),
+                alt((
+                    tag_token(TokenType::MINUS),
+                    tag_token(TokenType::NOT),
+                    tag_token(TokenType::REF),
+                )),
                 take_exp,
             )),
             |((op, _), exp)| {
@@ -683,14 +688,22 @@ fn float(input: Span) -> IResult<Span, Span> {
 }
 
 #[test_parser("kfsh")]
+#[test_parser("&kfsh")]
 fn type_name(input: Span) -> IResult<Span, Box<TypeNameNode>> {
-    delspace(map_res(identifier, |o| {
-        let o = cast_to_var(&o);
-        res_box(Box::new(TypeNameNode {
-            id: o.name,
-            range: o.range,
-        }))
-    }))(input)
+    delspace(map_res(
+        tuple((
+            del_newline_or_space!(opt(tag_token(TokenType::REF))),
+            identifier,
+        )),
+        |(is_ref, o)| {
+            let o = cast_to_var(&o);
+            res_box(Box::new(TypeNameNode {
+                id: o.name,
+                is_ref: is_ref.is_some(),
+                range: o.range,
+            }))
+        },
+    ))(input)
 }
 
 #[test_parser("myname: int")]
@@ -706,6 +719,7 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
             let mut tp = Box::new(TypeNameNode {
                 id: "".to_string(),
                 range: tprange,
+                is_ref: false,
             });
 
             if let Some(type_name) = type_name {

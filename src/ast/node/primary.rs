@@ -1,5 +1,6 @@
 use super::*;
-use crate::ast::{ctx::Ctx, error::ErrorCode};
+use crate::ast::ctx::Ctx;
+use crate::ast:: diag::ErrorCode;
 
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
@@ -21,6 +22,7 @@ impl Node for BoolConstNode {
         Ok((
             Value::BoolValue(ctx.context.i8_type().const_int(self.value as u64, true)),
             Some("bool".to_string()),
+            TerminatorEnum::NONE,
         ))
     }
 }
@@ -40,10 +42,18 @@ impl Node for NumNode {
         ctx.push_semantic_token(self.range, SemanticTokenType::NUMBER, 0);
         if let Num::INT(x) = self.value {
             let b = ctx.context.i64_type().const_int(x, true);
-            return Ok((Value::IntValue(b), Some("i64".to_string())));
+            return Ok((
+                Value::IntValue(b),
+                Some("i64".to_string()),
+                TerminatorEnum::NONE,
+            ));
         } else if let Num::FLOAT(x) = self.value {
             let b = ctx.context.f64_type().const_float(x);
-            return Ok((Value::FloatValue(b), Some("f64".to_string())));
+            return Ok((
+                Value::FloatValue(b),
+                Some("f64".to_string()),
+                TerminatorEnum::NONE,
+            ));
         }
         panic!("not implemented")
     }
@@ -70,7 +80,11 @@ impl Node for VarNode {
             }
         });
         if let Some((v, pltype, dst, refs)) = v {
-            let o = Ok((Value::VarValue(v.clone()), Some(pltype)));
+            let o = Ok((
+                Value::VarValue(v.clone()),
+                Some(pltype),
+                TerminatorEnum::NONE,
+            ));
             ctx.send_if_go_to_def(self.range, dst);
             ctx.set_if_refs(refs, self.range);
             return o;
