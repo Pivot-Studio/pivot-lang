@@ -38,8 +38,8 @@ use std::rc::Rc;
 
 use super::compiler::get_target_machine;
 use super::compiler::ActionType;
-use super::error::ErrorCode;
-use super::error::ERR_MSG;
+use super::diag::{ErrorCode, WarnCode};
+use super::diag::{ERR_MSG, WARN_MSG};
 use super::node::types::TypeNameNode;
 use super::range::Pos;
 use super::range::Range;
@@ -48,6 +48,7 @@ use super::range::Range;
 const DW_ATE_BOOLEAN: u32 = 0x02;
 const DW_ATE_FLOAT: u32 = 0x04;
 const DW_ATE_SIGNED: u32 = 0x05;
+const DW_TAG_REFERENCE_TYPE: u32 = 16;
 // const DW_ATE_UNSIGNED: u32 = 0x07;
 fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
     match basetype {
@@ -101,12 +102,18 @@ pub struct Ctx<'a, 'ctx> {
 #[derive(Debug, Clone)]
 pub enum PLDiag {
     Error(Err),
+    Warn(Warn),
 }
 
 /// # Err
 /// Error for pivot-lang
 #[derive(Debug, Clone)]
 pub struct Err {
+    pub msg: String,
+    pub diag: Diagnostic,
+}
+#[derive(Debug, Clone)]
+pub struct Warn {
     pub msg: String,
     pub diag: Diagnostic,
 }
@@ -125,6 +132,20 @@ impl PLDiag {
                         s.diag.range.start.line + 1,
                         s.diag.range.start.character + 1
                     )
+                    .red(),
+                    format!("{}", s.diag.message.blue().bold()),
+                );
+                println!("{}", err);
+            }
+            PLDiag::Warn(s) => {
+                let err = format!(
+                    "warn at {}\n\t{}",
+                    format!(
+                        "{}:{}:{}",
+                        s.msg,
+                        s.diag.range.start.line + 1,
+                        s.diag.range.start.character + 1
+                    )
                     .yellow(),
                     format!("{}", s.diag.message.blue().bold()),
                 );
@@ -132,9 +153,17 @@ impl PLDiag {
             }
         }
     }
+    pub fn is_err(&self) -> bool {
+        if let PLDiag::Error(_) = self {
+            true
+        } else {
+            false
+        }
+    }
     pub fn get_diagnostic(&self) -> Diagnostic {
         match self {
-            PLDiag::Error(s) => s.diag.clone(),
+            PLDiag::Error(e) => e.diag.clone(),
+            PLDiag::Warn(w) => w.diag.clone(),
         }
     }
     pub fn new_error(file: String, range: Range, code: ErrorCode) -> Self {
@@ -146,6 +175,16 @@ impl PLDiag {
             ERR_MSG[&code].to_string(),
         );
         PLDiag::Error(Err { msg: file, diag })
+    }
+    pub fn new_warn(file: String, range: Range, code: WarnCode) -> Self {
+        let diag = Diagnostic::new_with_code_number(
+            range.to_diag_range(),
+            DiagnosticSeverity::WARNING,
+            code as i32,
+            Some(PL_DIAG_SOURCE.to_string()),
+            WARN_MSG[&code].to_string(),
+        );
+        PLDiag::Warn(Warn { msg: file, diag })
     }
 }
 
@@ -226,6 +265,13 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
             _ => RetTypeEnum::BASIC(self.get_basic_type()),
         }
     }
+    pub fn is_void(&self) -> bool {
+        if let PLType::VOID(_) = self {
+            true
+        } else {
+            false
+        }
+    }
 
     /// # get_ditype
     /// get the debug info type of the pltype
@@ -279,6 +325,13 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
             PLType::VOID(_) => None,
         }
     }
+    pub fn get_di_ref_type(&self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIDerivedType<'ctx>> {
+        let ditype = self.get_ditype(ctx)?;
+        Some(
+            ctx.dibuilder
+                .create_reference_type(ditype, DW_TAG_REFERENCE_TYPE),
+        )
+    }
 }
 
 pub enum RetTypeEnum<'ctx> {
@@ -306,12 +359,20 @@ pub struct Field<'a, 'ctx> {
     pub typename: &'a TypeNameNode,
     pub name: String,
     pub range: Range,
+    pub is_ref: bool,
     pub refs: Rc<RefCell<Vec<Location>>>,
 }
 
 impl<'a, 'ctx> Field<'a, 'ctx> {
     pub fn get_di_type(&self, ctx: &mut Ctx<'a, 'ctx>, offset: u64) -> (DIType<'ctx>, u64) {
-        let tp = self.typename.get_debug_type(ctx).unwrap();
+        let (pltype, di_type) = ctx
+            .get_type(&self.typename.id, self.typename.range)
+            .unwrap();
+        let debug_type = if self.is_ref {
+            pltype.clone().get_di_ref_type(ctx).unwrap().as_type()
+        } else {
+            di_type.unwrap()
+        };
         (
             ctx.dibuilder
                 .create_member_type(
@@ -319,14 +380,14 @@ impl<'a, 'ctx> Field<'a, 'ctx> {
                     &self.name,
                     ctx.diunit.get_file(),
                     self.typename.range.start.line as u32,
-                    tp.get_size_in_bits(),
-                    tp.get_align_in_bits(),
-                    offset + tp.get_offset_in_bits(),
+                    debug_type.get_size_in_bits(),
+                    debug_type.get_align_in_bits(),
+                    offset + debug_type.get_offset_in_bits(),
                     DIFlags::PUBLIC,
-                    tp,
+                    debug_type,
                 )
                 .as_type(),
-            offset + tp.get_size_in_bits(),
+            offset + debug_type.get_size_in_bits(),
         )
     }
 }
@@ -338,6 +399,7 @@ pub struct FNType<'ctx> {
     pub ret_pltype: Option<String>,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
+    pub is_ref: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -596,12 +658,17 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.errs.borrow_mut().push(dia.clone());
         dia
     }
+    pub fn add_warn(&mut self, range: Range, code: WarnCode) -> PLDiag {
+        let dia = PLDiag::new_warn(self.src_file_path.to_string(), range, code);
+        self.errs.borrow_mut().push(dia.clone());
+        dia
+    }
 
     pub fn add_diag(&mut self, dia: PLDiag) {
         self.errs.borrow_mut().push(dia);
     }
-
-    pub fn try_load(&mut self, v: Value<'ctx>) -> Value<'ctx> {
+    // load type** and type* to type
+    pub fn try_load2(&mut self, v: Value<'ctx>) -> Value<'ctx> {
         match v.as_basic_value_enum() {
             BasicValueEnum::PointerValue(v) => {
                 let v = self.builder.build_load(v, "loadtmp");
@@ -612,7 +679,22 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                         _ => todo!(),
                     },
                     BasicValueEnum::FloatValue(v) => Value::FloatValue(v),
+                    BasicValueEnum::PointerValue(v) => self.try_load2(Value::VarValue(v)),
                     _ => Value::LoadValue(v),
+                }
+            }
+            _ => v,
+        }
+    }
+    // load type** and type* to type*
+    pub fn try_load1(&mut self, v: Value<'ctx>) -> Value<'ctx> {
+        match v.as_basic_value_enum() {
+            BasicValueEnum::PointerValue(ptr2value) => {
+                if ptr2value.get_type().get_element_type().is_pointer_type() {
+                    let value = self.builder.build_load(ptr2value, "loadtmp");
+                    Value::VarValue(value.into_pointer_value())
+                } else {
+                    Value::VarValue(ptr2value)
                 }
             }
             _ => v,

@@ -1,5 +1,5 @@
 use super::*;
-use crate::ast::{ctx::Ctx, error::ErrorCode};
+use crate::ast::{ctx::Ctx, diag::ErrorCode};
 use internal_macro::range;
 
 #[range]
@@ -23,8 +23,12 @@ impl Node for RetNode {
                 let err = ctx.add_err(self.range, ErrorCode::RETURN_VALUE_IN_VOID_FUNCTION);
                 return Err(err);
             }
-            let (ret, _) = ret.emit(ctx)?;
-            let ret = ctx.try_load(ret);
+            let (ret, _, _) = ret.emit(ctx)?;
+            let ret = if rettp.unwrap().is_pointer_type() {
+                ctx.try_load1(ret)
+            } else {
+                ctx.try_load2(ret)
+            };
             if ret.as_basic_value_enum().get_type() != rettp.unwrap() {
                 let err = ctx.add_err(self.range, ErrorCode::RETURN_TYPE_MISMATCH);
                 return Err(err);
@@ -37,6 +41,6 @@ impl Node for RetNode {
             }
             ctx.builder.build_return(None);
         }
-        Ok((Value::None, None))
+        Ok((Value::None, None, TerminatorEnum::RETURN))
     }
 }

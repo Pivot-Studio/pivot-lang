@@ -26,16 +26,24 @@ impl Node for UnaryOpNode {
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let (exp, pltype) = self.exp.emit(ctx)?;
-        let exp = ctx.try_load(exp);
+        let (exp, pltype, _) = self.exp.emit(ctx)?;
+        if let (&Value::VarValue(_), TokenType::REF) = (&exp, self.op) {
+            if let Value::VarValue(exp) = ctx.try_load1(exp) {
+                return Ok((Value::RefValue(exp), pltype, TerminatorEnum::NONE));
+            }
+            todo!()
+        }
+        let exp = ctx.try_load2(exp);
         return Ok(match (exp, self.op) {
             (Value::IntValue(exp), TokenType::MINUS) => (
                 Value::IntValue(ctx.builder.build_int_neg(exp, "negtmp")),
                 pltype,
+                TerminatorEnum::NONE,
             ),
             (Value::FloatValue(exp), TokenType::MINUS) => (
                 Value::FloatValue(ctx.builder.build_float_neg(exp, "negtmp")),
                 pltype,
+                TerminatorEnum::NONE,
             ),
             (Value::BoolValue(exp), TokenType::NOT) => (
                 Value::BoolValue({
@@ -49,11 +57,12 @@ impl Node for UnaryOpNode {
                         .build_int_z_extend(bool_origin, ctx.context.i8_type(), "zexttemp")
                 }),
                 pltype,
+                TerminatorEnum::NONE,
             ),
             (_exp, _op) => {
                 return Err(ctx.add_err(
                     self.range,
-                    crate::ast::error::ErrorCode::INVALID_UNARY_EXPRESSION,
+                    crate::ast::diag::ErrorCode::INVALID_UNARY_EXPRESSION,
                 ));
             }
         });
@@ -77,14 +86,14 @@ impl Node for BinOpNode {
         self.right.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let (lv, lpltype) = self.left.emit(ctx)?;
-        let left = ctx.try_load(lv);
-        let (rv, rpltype) = self.right.emit(ctx)?;
-        let right = ctx.try_load(rv);
+        let (lv, lpltype, _) = self.left.emit(ctx)?;
+        let left = ctx.try_load2(lv);
+        let (rv, rpltype, _) = self.right.emit(ctx)?;
+        let right = ctx.try_load2(rv);
         if lpltype != rpltype {
             return Err(ctx.add_err(
                 self.range,
-                crate::ast::error::ErrorCode::BIN_OP_TYPE_MISMATCH,
+                crate::ast::diag::ErrorCode::BIN_OP_TYPE_MISMATCH,
             ));
         }
         Ok(match self.op {
@@ -110,6 +119,7 @@ impl Node for BinOpNode {
                         )
                     }),
                     Some("bool".to_string()),
+                    TerminatorEnum::NONE,
                 ),
                 (Value::FloatValue(lhs), Value::FloatValue(rhs)) => (
                     Value::BoolValue({
@@ -123,11 +133,12 @@ impl Node for BinOpNode {
                         )
                     }),
                     Some("bool".to_string()),
+                    TerminatorEnum::NONE,
                 ),
                 _ => {
                     return Err(ctx.add_err(
                         self.range,
-                        crate::ast::error::ErrorCode::VALUE_NOT_COMPARABLE,
+                        crate::ast::diag::ErrorCode::VALUE_NOT_COMPARABLE,
                     ))
                 }
             },
@@ -142,10 +153,11 @@ impl Node for BinOpNode {
                         )
                     }),
                     Some("bool".to_string()),
+                    TerminatorEnum::NONE,
                 ),
                 _ => {
                     return Err(
-                        ctx.add_err(self.range, crate::ast::error::ErrorCode::LOGIC_OP_NOT_BOOL)
+                        ctx.add_err(self.range, crate::ast::diag::ErrorCode::LOGIC_OP_NOT_BOOL)
                     )
                 }
             },
@@ -160,17 +172,18 @@ impl Node for BinOpNode {
                         )
                     }),
                     Some("bool".to_string()),
+                    TerminatorEnum::NONE,
                 ),
                 _ => {
                     return Err(
-                        ctx.add_err(self.range, crate::ast::error::ErrorCode::LOGIC_OP_NOT_BOOL)
+                        ctx.add_err(self.range, crate::ast::diag::ErrorCode::LOGIC_OP_NOT_BOOL)
                     )
                 }
             },
             _ => {
                 return Err(ctx.add_err(
                     self.range,
-                    crate::ast::error::ErrorCode::UNRECOGNIZED_BIN_OPERATOR,
+                    crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR,
                 ))
             }
         })
@@ -199,8 +212,10 @@ impl Node for TakeOpNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut range = self.head.range();
         let head = self.head.emit(ctx)?;
-        // let head = ctx.try_load(head);
-        let (mut res, mut pltype) = head;
+        let (mut res, mut pltype, _) = head;
+        if self.ids.len() != 0 {
+            res = ctx.try_load1(res);
+        }
         for id in &self.ids {
             res = match res.as_basic_value_enum() {
                 BasicValueEnum::PointerValue(s) => {
@@ -237,7 +252,7 @@ impl Node for TakeOpNode {
                             } else {
                                 return Err(ctx.add_err(
                                     id.range,
-                                    crate::ast::error::ErrorCode::STRUCT_FIELD_NOT_FOUND,
+                                    crate::ast::diag::ErrorCode::STRUCT_FIELD_NOT_FOUND,
                                 ));
                             }
                         } else {
@@ -245,7 +260,7 @@ impl Node for TakeOpNode {
                         }
                     } else {
                         return Err(
-                            ctx.add_err(id.range, crate::ast::error::ErrorCode::INVALID_GET_FIELD)
+                            ctx.add_err(id.range, crate::ast::diag::ErrorCode::INVALID_GET_FIELD)
                         );
                     }
                     Value::VarValue(ctx.builder.build_struct_gep(s, index, "structgep").unwrap())
@@ -266,8 +281,8 @@ impl Node for TakeOpNode {
                 }
             });
 
-            return Err(ctx.add_err(self.range, crate::ast::error::ErrorCode::COMPLETION));
+            return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
         }
-        Ok((res, pltype))
+        Ok((res, pltype, TerminatorEnum::NONE))
     }
 }

@@ -18,6 +18,29 @@ pub mod program;
 pub mod ret;
 pub mod statement;
 pub mod types;
+#[derive(Debug, Clone, Copy)]
+pub enum TerminatorEnum {
+    NONE,
+    RETURN,
+    BREAK,
+    CONTINUE,
+}
+impl TerminatorEnum {
+    pub fn is_none(self) -> bool {
+        if let TerminatorEnum::NONE = self {
+            true
+        } else {
+            false
+        }
+    }
+    pub fn is_return(self) -> bool {
+        if let TerminatorEnum::RETURN = self {
+            true
+        } else {
+            false
+        }
+    }
+}
 /// # Value
 /// 表达每个ast在计算之后产生的值  
 ///
@@ -30,6 +53,7 @@ pub enum Value<'a> {
     FloatValue(FloatValue<'a>),
     VarValue(PointerValue<'a>),
     LoadValue(BasicValueEnum<'a>),
+    RefValue(PointerValue<'a>),
     StructFieldValue((String, BasicValueEnum<'a>)),
     None,
 }
@@ -43,6 +67,7 @@ impl<'a> Value<'a> {
             Value::IntValue(v) => Some(v.as_basic_value_enum()),
             Value::FloatValue(v) => Some(v.as_basic_value_enum()),
             Value::VarValue(v) => Some(v.as_basic_value_enum()),
+            Value::RefValue(v) => Some(v.as_basic_value_enum()),
             Value::BoolValue(v) => Some(v.as_basic_value_enum()),
             Value::LoadValue(v) => Some(*v),
             Value::StructFieldValue((_, v)) => Some(*v),
@@ -56,7 +81,7 @@ pub trait Node: RangeTrait + AsAny {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
 }
 
-type NodeResult<'ctx> = Result<(Value<'ctx>, Option<String>), PLDiag>;
+type NodeResult<'ctx> = Result<(Value<'ctx>, Option<String>, TerminatorEnum), PLDiag>;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Num {
@@ -131,15 +156,15 @@ macro_rules! handle_calc {
             match ($left, $right) {
                 (Value::IntValue(left), Value::IntValue(right)) => {
                     return Ok((Value::IntValue($ctx.builder.[<build_int_$op>](
-                        left, right, "addtmp")),Some("i64".to_string())));
+                        left, right, "addtmp")),Some("i64".to_string()),TerminatorEnum::NONE));
                 },
                 (Value::FloatValue(left), Value::FloatValue(right)) => {
                     return Ok((Value::FloatValue($ctx.builder.[<build_$opf>](
-                        left, right, "addtmp")),Some("f64".to_string())));
+                        left, right, "addtmp")),Some("f64".to_string()),TerminatorEnum::NONE));
                 },
                 _ =>  return Err($ctx.add_err(
                     $range,
-                    crate::ast::error::ErrorCode::UNRECOGNIZED_BIN_OPERATOR,
+                    crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR,
                 ))
             }
         }

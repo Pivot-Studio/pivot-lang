@@ -182,22 +182,28 @@ impl Compiler {
 
         _ = node.emit(m);
         let errs = m.errs.borrow();
+        let mut errs_num = 0;
         if errs.len() > 0 {
             for e in errs.iter() {
                 e.print();
+                if e.is_err() {
+                    errs_num = errs_num + 1
+                }
             }
-            if errs.len() == 1 {
+            if errs_num > 0 {
+                if errs_num == 1 {
+                    println!(
+                        "{}",
+                        format!("compile failed: there is {} error", errs.len()).bright_red()
+                    );
+                    return;
+                }
                 println!(
                     "{}",
-                    format!("compile failed: there is {} error", errs.len()).bright_red()
+                    format!("compile failed: there are {} errors", errs.len()).bright_red()
                 );
                 return;
             }
-            println!(
-                "{}",
-                format!("compile failed: there are {} errors", errs.len()).bright_red()
-            );
-            return;
         }
         if op.optimization == OptimizationLevel::None {
             m.dibuilder.finalize();
