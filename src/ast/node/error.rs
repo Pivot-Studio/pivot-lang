@@ -1,12 +1,11 @@
 use super::*;
-use crate::{
-    ast::{ctx::Ctx, diag::ErrorCode},
-    lsp::helpers::send_completions,
-};
+use crate::ast::{ctx::Ctx, diag::ErrorCode};
+
 use colored::Colorize;
 use internal_macro::range;
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ErrorNode {
     pub msg: String,
     pub src: String,
@@ -26,7 +25,7 @@ impl Node for ErrorNode {
         ctx.if_completion(|ctx, a| {
             if a.0.line >= self.range.start.line && a.0.line <= self.range.end.line {
                 let completions = ctx.get_completions();
-                send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
+                ctx.completion_items.set(completions);
             }
         });
 

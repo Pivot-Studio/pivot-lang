@@ -1,13 +1,39 @@
+#[salsa::jar(db = Db)]
+pub struct Jar(
+    nomparser::SourceProgram,
+    nomparser::parse,
+    mem_docs::MemDocsInput,
+    mem_docs::MemDocsInput_get_file_content,
+    compiler::compile,
+    compiler::compile_dry,
+    accumulators::Diagnostics,
+    accumulators::PLReferences,
+    accumulators::GotoDef,
+    accumulators::Completions,
+    accumulators::PLSemanticTokens,
+);
+
+pub trait Db: salsa::DbWithJar<Jar> {}
+
+impl<DB> Db for DB where DB: ?Sized + salsa::DbWithJar<Jar> {}
+
 mod ast;
+mod db;
 mod lsp;
 mod nomparser;
 mod utils;
-use std::path::Path;
+use std::{cell::RefCell, fs, path::Path, sync::Arc};
 
-use ast::compiler::{self, Compiler};
+use ast::{
+    accumulators,
+    compiler::{self, HashOptimizationLevel},
+};
 use clap::{CommandFactory, Parser, Subcommand};
-use inkwell::OptimizationLevel;
-use lsp::start_lsp;
+use db::Database;
+use lsp::{
+    mem_docs::{self, MemDocsInput},
+    start_lsp,
+};
 
 /// Pivot Lang compiler program
 #[derive(Parser)]
@@ -56,20 +82,27 @@ enum RunCommand {
 fn main() {
     let cli = Cli::parse();
     let opt = match cli.optimization {
-        0 => OptimizationLevel::None,
-        1 => OptimizationLevel::Less,
-        2 => OptimizationLevel::Default,
-        3 => OptimizationLevel::Aggressive,
+        0 => HashOptimizationLevel::None,
+        1 => HashOptimizationLevel::Less,
+        2 => HashOptimizationLevel::Default,
+        3 => HashOptimizationLevel::Aggressive,
         _ => panic!("optimization level must be 0-3"),
     };
 
     // You can check the value provided by positional arguments, or option arguments
     if let Some(name) = cli.name.as_deref() {
-        let c = Compiler::new();
-        c.compile(
-            name,
-            lsp::mem_docs::MemDocs::new(),
-            &cli.out,
+        let db = Database::default();
+        let filepath = Path::new(name);
+        let abs = fs::canonicalize(filepath).unwrap();
+        let mem = MemDocsInput::new(
+            &db,
+            Arc::new(RefCell::new(mem_docs::MemDocs::new())),
+            abs.to_str().unwrap().to_string(),
+        );
+        compiler::compile(
+            &db,
+            mem,
+            cli.out.clone(),
             compiler::Options {
                 verbose: cli.verbose,
                 genir: cli.genir,
@@ -81,7 +114,7 @@ fn main() {
         match command {
             RunCommand::Run { name } => {
                 #[cfg(feature = "jit")]
-                Compiler::run(Path::new(name.as_str()), opt);
+                compiler::run(Path::new(name.as_str()), opt.to_llvm());
                 #[cfg(not(feature = "jit"))]
                 println!("feature jit is not enabled, cannot use run command");
             }

@@ -1,14 +1,12 @@
 use super::*;
-use crate::{
-    ast::{ctx::Ctx, diag::ErrorCode},
-    lsp::helpers::send_completions,
-};
+use crate::ast::ctx::Ctx;
+use crate::ast::diag::ErrorCode;
 
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 
 #[range]
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct BoolConstNode {
     pub value: bool,
 }
@@ -30,7 +28,7 @@ impl Node for BoolConstNode {
 }
 
 #[range]
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct NumNode {
     pub value: Num,
 }
@@ -62,7 +60,7 @@ impl Node for NumNode {
 }
 
 #[range]
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct VarNode {
     pub name: String,
 }
@@ -78,7 +76,7 @@ impl Node for VarNode {
         ctx.if_completion(|ctx, a| {
             if a.0.is_in(self.range) {
                 let completions = ctx.get_completions();
-                send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
+                ctx.completion_items.set(completions);
             }
         });
         if let Some((v, pltype, dst, refs)) = v {

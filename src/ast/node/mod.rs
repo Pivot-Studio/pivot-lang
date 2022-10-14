@@ -1,13 +1,22 @@
 use crate::ast::ctx::Ctx;
-use crate::ast::range::RangeTrait;
 
 use as_any::AsAny;
+use enum_dispatch::enum_dispatch;
 use inkwell::basic_block::BasicBlock;
 use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
 
+use self::control::*;
+use self::error::*;
+use self::function::*;
+use self::operator::*;
+use self::primary::*;
+use self::ret::*;
+use self::statement::*;
+use self::types::*;
+
 use super::ctx::PLDiag;
-use super::range::Pos;
+use super::range::{Pos, Range};
 
 pub mod control;
 pub mod error;
@@ -76,6 +85,40 @@ impl<'a> Value<'a> {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[enum_dispatch(Node, RangeTrait)]
+pub enum NodeEnum {
+    Def(DefNode),
+    Ret(RetNode),
+    Assign(AssignNode),
+    If(IfNode),
+    While(WhileNode),
+    For(ForNode),
+    Break(BreakNode),
+    Continue(ContinueNode),
+    Expr(BinOpNode),
+    FuncDef(FuncDefNode),
+    FuncCall(FuncCallNode),
+    StructDef(StructDefNode),
+    StructInit(StructInitNode),
+    Take(TakeOpNode),
+    Un(UnaryOpNode),
+    Num(NumNode),
+    Bool(BoolConstNode),
+    Var(VarNode),
+    Err(ErrorNode),
+    STS(StatementsNode),
+    NL(NLNode),
+    Program(program::ProgramNode),
+    STInitField(StructInitFieldNode),
+}
+
+#[enum_dispatch]
+pub trait RangeTrait {
+    fn range(&self) -> Range;
+}
+
+#[enum_dispatch]
 pub trait Node: RangeTrait + AsAny {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
@@ -87,6 +130,10 @@ type NodeResult<'ctx> = Result<(Value<'ctx>, Option<String>, TerminatorEnum), PL
 pub enum Num {
     INT(u64),
     FLOAT(f64),
+}
+
+impl Eq for Num {
+    // FIXME: NaN https://stackoverflow.com/questions/39638363/how-can-i-use-a-hashmap-with-f64-as-key-in-rust
 }
 
 impl<'a, 'ctx> Ctx<'ctx, 'a> {

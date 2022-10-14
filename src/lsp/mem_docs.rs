@@ -1,11 +1,33 @@
-use std::fs::read_to_string;
+use std::{cell::RefCell, fs::read_to_string, sync::Arc};
 
 use rustc_hash::FxHashMap;
 
+use crate::{nomparser::SourceProgram, Db};
+
 use super::helpers::position_to_offset;
 
+#[derive(Debug, Clone)]
 pub struct MemDocs {
     docs: FxHashMap<String, String>,
+}
+
+#[salsa::input]
+pub struct MemDocsInput {
+    pub docs: Arc<RefCell<MemDocs>>,
+    #[return_ref]
+    pub file: String,
+}
+#[salsa::tracked]
+impl MemDocsInput {
+    #[salsa::tracked]
+    pub fn get_file_content(self, db: &dyn Db) -> Option<SourceProgram> {
+        let re = self.docs(db).borrow().get_file_content(self.file(db));
+        if let Some(c) = re {
+            Some(SourceProgram::new(db, c))
+        } else {
+            None
+        }
+    }
 }
 
 impl MemDocs {

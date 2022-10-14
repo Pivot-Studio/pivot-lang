@@ -5,16 +5,16 @@ use crate::ast::ctx::PLType;
 use crate::ast::tokens::TokenType;
 
 use crate::handle_calc;
-use crate::lsp::helpers::send_completions;
 use inkwell::IntPredicate;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 use paste::item;
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UnaryOpNode {
     pub op: TokenType,
-    pub exp: Box<dyn Node>,
+    pub exp: Box<NodeEnum>,
 }
 impl Node for UnaryOpNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -70,10 +70,11 @@ impl Node for UnaryOpNode {
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BinOpNode {
-    pub left: Box<dyn Node>,
+    pub left: Box<NodeEnum>,
     pub op: TokenType,
-    pub right: Box<dyn Node>,
+    pub right: Box<NodeEnum>,
 }
 impl Node for BinOpNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -191,8 +192,9 @@ impl Node for BinOpNode {
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TakeOpNode {
-    pub head: Box<dyn Node>,
+    pub head: Box<NodeEnum>,
     pub ids: Vec<Box<VarNode>>,
     pub complete: bool,
 }
@@ -226,8 +228,7 @@ impl Node for TakeOpNode {
                         let tpname = st.get_name().unwrap().to_str().unwrap();
                         let (tp, _) = ctx.get_type(tpname, range).unwrap();
                         // end with ".", gen completions
-                        ctx.if_completion(|ctx, (pos, rid, trigger)| {
-                            let sender = ctx.sender.unwrap();
+                        ctx.if_completion(|ctx, (pos, _, trigger)| {
                             if pos.column == id.range().start.column
                                 && pos.line == id.range().start.line
                                 && trigger.is_some()
@@ -236,7 +237,7 @@ impl Node for TakeOpNode {
                                 let (tp, _) = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
                                 if let PLType::STRUCT(s) = tp {
                                     let completions = s.get_completions();
-                                    send_completions(sender, rid.clone(), completions);
+                                    ctx.completion_items.set(completions);
                                 }
                             }
                         });
@@ -270,13 +271,12 @@ impl Node for TakeOpNode {
         }
         if !self.complete {
             // end with ".", gen completions
-            ctx.if_completion(|ctx, (pos, id, trigger)| {
-                let sender = ctx.sender.unwrap();
+            ctx.if_completion(|ctx, (pos, _, trigger)| {
                 if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
                     let (tp, _) = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
                     if let PLType::STRUCT(s) = tp {
                         let completions = s.get_completions();
-                        send_completions(sender, id.clone(), completions);
+                        ctx.completion_items.set(completions);
                     }
                 }
             });

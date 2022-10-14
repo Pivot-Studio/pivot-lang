@@ -6,11 +6,11 @@ impl Dispatcher {
     pub fn new(msg: Message) -> Self {
         Dispatcher(msg)
     }
-    pub fn on<R, F>(&self, f: F) -> &Dispatcher
+    pub fn on<R, F>(&self, mut f: F) -> &Dispatcher
     where
         R: lsp_types::request::Request,
         R::Params: serde::de::DeserializeOwned,
-        F: Fn(RequestId, R::Params),
+        F: FnMut(RequestId, R::Params),
     {
         if let Message::Request(req) = self.0.clone() {
             let params = cast::<R>(req).map_err(|_| ());

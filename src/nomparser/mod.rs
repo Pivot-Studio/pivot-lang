@@ -30,6 +30,7 @@ use crate::{
         },
         tokens::TokenType,
     },
+    Db,
 };
 use internal_macro::{test_parser, test_parser_error};
 use nom::character::complete::char;
@@ -59,11 +60,8 @@ macro_rules! delnl {
     };
 }
 
-fn res<T>(t: T) -> Result<Box<dyn Node>, Error>
-where
-    T: Node + 'static,
-{
-    res_box(box_node(t))
+fn res_enum(t: NodeEnum) -> Result<Box<NodeEnum>, Error> {
+    res_box(Box::new(t))
 }
 
 fn box_node<T>(t: T) -> Box<T>
@@ -78,16 +76,19 @@ fn res_box<T: ?Sized>(i: Box<T>) -> Result<Box<T>, Error> {
 }
 
 fn create_bin(
-    (mut left, rights): (Box<dyn Node>, Vec<((TokenType, Range), Box<dyn Node>)>),
-) -> Result<Box<dyn Node>, Error> {
+    (mut left, rights): (Box<NodeEnum>, Vec<((TokenType, Range), Box<NodeEnum>)>),
+) -> Result<Box<NodeEnum>, Error> {
     for ((op, _), right) in rights {
         let range = left.range().start.to(right.range().end);
-        left = Box::new(BinOpNode {
-            op,
-            left,
-            right,
-            range,
-        });
+        left = Box::new(
+            BinOpNode {
+                op,
+                left,
+                right,
+                range,
+            }
+            .into(),
+        );
     }
     res_box(left)
 }
@@ -111,23 +112,20 @@ macro_rules! parse_bin_ops {
     };
 }
 
-pub struct PLParser<'a> {
-    input: Span<'a>,
+#[salsa::tracked]
+pub struct SourceProgram {
+    #[return_ref]
+    pub text: String,
 }
 
-impl<'a> PLParser<'a> {
-    pub fn new(input: &'a str) -> Self {
-        let sp = Span::from(input);
-        PLParser { input: sp }
+#[salsa::tracked]
+pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<Box<NodeEnum>, String> {
+    let text = source.text(db);
+    let re = program(Span::new(text));
+    if let Err(e) = re {
+        return Err(format!("{:?}", e));
     }
-
-    pub fn parse(&mut self) -> Result<Box<dyn Node>, String> {
-        let re = program(self.input);
-        if let Err(e) = re {
-            return Err(format!("{:?}", e));
-        }
-        Ok(re.unwrap().1)
-    }
+    Ok(re.unwrap().1)
 }
 #[test_parser("return 1\n")]
 #[test_parser("return 1.1\n")]
@@ -139,7 +137,7 @@ impl<'a> PLParser<'a> {
 // ```
 // return_statement = "return" logic_exp newline ;
 // ```
-pub fn return_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
             tag_token(TokenType::RETURN),
@@ -149,12 +147,15 @@ pub fn return_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         |((_, range), val, _)| {
             if let Some(val) = val {
                 let range = val.range();
-                res(RetNode {
-                    value: Some(val),
-                    range,
-                })
+                res_enum(
+                    RetNode {
+                        value: Some(val),
+                        range,
+                    }
+                    .into(),
+                )
             } else {
-                res(RetNode { value: None, range })
+                res_enum(RetNode { value: None, range }.into())
             }
         },
     ))(input)
@@ -190,7 +191,7 @@ pub fn return_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
 /// ```ebnf
 /// if_statement = "if" logic_exp statement_block ("else" (if_statement | statement_block))? ;
 /// ```
-pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
             tag_token(TokenType::IF),
@@ -198,7 +199,10 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             statement_block,
             opt(preceded(
                 tag_token(TokenType::ELSE),
-                alt((if_statement, map_res(statement_block, |n| res(n)))),
+                alt((
+                    if_statement,
+                    map_res(statement_block, |n| res_enum(n.into())),
+                )),
             )),
         ))),
         |(_, cond, then, els)| {
@@ -206,12 +210,15 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             if let Some(el) = &els {
                 range = range.start.to(el.range().end);
             }
-            res(IfNode {
-                cond,
-                then: Box::new(then),
-                els,
-                range,
-            })
+            res_enum(
+                IfNode {
+                    cond,
+                    then: Box::new(then.into()),
+                    els,
+                    range,
+                }
+                .into(),
+            )
         },
     )(input)
 }
@@ -229,7 +236,7 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
 /// ```ebnf
 /// while_statement = "while" logic_exp statement_block ;
 /// ```
-pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn while_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
             tag_token(TokenType::WHILE),
@@ -243,11 +250,14 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
         ))),
         |(_, cond, body)| {
             let range = cond.range().start.to(body.range.end);
-            res(WhileNode {
-                cond,
-                body: Box::new(body),
-                range,
-            })
+            res_enum(
+                WhileNode {
+                    cond,
+                    body: Box::new(body),
+                    range,
+                }
+                .into(),
+            )
         },
     )(input)
 }
@@ -281,7 +291,7 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
 /// ```enbf
 /// for_statement = "for" (assignment | new_variable) ";" logic_exp ";" assignment statement_block;
 /// ```
-pub fn for_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn for_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
             tag_token(TokenType::FOR),
@@ -297,13 +307,16 @@ pub fn for_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             if let Some(pre) = &pre {
                 range = range.end.from(pre.range().start);
             }
-            res(ForNode {
-                pre,
-                cond,
-                opt,
-                body: Box::new(body),
-                range,
-            })
+            res_enum(
+                ForNode {
+                    pre,
+                    cond,
+                    opt,
+                    body: Box::new(body),
+                    range,
+                }
+                .into(),
+            )
         },
     )(input)
 }
@@ -329,7 +342,7 @@ pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
 /// | newline
 /// ;
 /// ```
-pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
         terminated(new_variable, newline_or_eof!()),
         terminated(assignment, newline_or_eof!()),
@@ -353,7 +366,7 @@ pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
 enum TopLevel {
     StructDef(StructDefNode),
     FuncDef(FuncDefNode),
-    ErrNode(Box<dyn Node>),
+    ErrNode(Box<NodeEnum>),
 }
 
 fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
@@ -371,11 +384,14 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
     )))(input)
 }
 
-pub fn newline(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn newline(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(delspace(alt((tag("\n"), tag("\r\n")))), |_| {
-        res(NLNode {
-            range: Range::new(input, input),
-        })
+        res_enum(
+            NLNode {
+                range: Range::new(input, input),
+            }
+            .into(),
+        )
     })(input)
 }
 
@@ -393,7 +409,7 @@ pub fn statements(input: Span) -> IResult<Span, StatementsNode> {
     })(input)
 }
 
-pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let old = input;
     let mut input = input;
     let mut nodes = vec![];
@@ -405,11 +421,11 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
             match *t {
                 TopLevel::FuncDef(f) => {
                     fntypes.push(f.typenode.clone());
-                    nodes.push(Box::new(f) as Box<dyn Node>);
+                    nodes.push(Box::new(f.into()));
                 }
                 TopLevel::StructDef(s) => {
                     sts.push(s.clone());
-                    nodes.push(Box::new(s) as Box<dyn Node>);
+                    nodes.push(Box::new(s.into()));
                 }
                 TopLevel::ErrNode(e) => {
                     nodes.push(e);
@@ -427,21 +443,28 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
             return Err(err);
         }
     }
-    let node: Box<dyn Node> = Box::new(ProgramNode {
-        nodes,
-        structs: sts,
-        fntypes,
-        range: Range::new(old, input),
-    });
+    let node: Box<NodeEnum> = Box::new(
+        ProgramNode {
+            nodes,
+            structs: sts,
+            fntypes,
+            range: Range::new(old, input),
+        }
+        .into(),
+    );
     Ok((input, node))
 }
 
-fn cast_to_var(n: &Box<dyn Node>) -> VarNode {
-    n.as_any().downcast_ref::<VarNode>().unwrap().clone()
+fn cast_to_var(n: &Box<NodeEnum>) -> VarNode {
+    if let NodeEnum::Var(v) = &**n {
+        v.clone()
+    } else {
+        panic!("not a var node");
+    }
 }
 
 #[test_parser("let a = 1")]
-pub fn new_variable(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         preceded(
             tag_token(TokenType::LET),
@@ -450,26 +473,32 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<dyn Node>> {
         |(out, _, v)| {
             let a = cast_to_var(&out);
             let range = out.range().start.to(v.range().end);
-            res(DefNode {
-                var: a,
-                exp: v,
-                range,
-            })
+            res_enum(
+                DefNode {
+                    var: a,
+                    exp: v,
+                    range,
+                }
+                .into(),
+            )
         },
     ))(input)
 }
 
 #[test_parser("a = 1")]
-pub fn assignment(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn assignment(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((take_exp, delspace(tag_token(TokenType::ASSIGN)), logic_exp)),
         |(left, _op, right)| {
             let range = left.range().start.to(right.range().end);
-            res(AssignNode {
-                var: left,
-                exp: right,
-                range,
-            })
+            res_enum(
+                AssignNode {
+                    var: left,
+                    exp: right,
+                    range,
+                }
+                .into(),
+            )
         },
     ))(input)
 }
@@ -478,7 +507,7 @@ pub fn assignment(input: Span) -> IResult<Span, Box<dyn Node>> {
 #[test_parser("10.")]
 #[test_parser("10.10")]
 #[test_parser("10")]
-pub fn number(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn number(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let (input, _) = space0(input)?;
     let (re, value) = alt((
         map_res(float, |out| {
@@ -491,39 +520,45 @@ pub fn number(input: Span) -> IResult<Span, Box<dyn Node>> {
     ))(input)?;
     let range = Range::new(input, re);
     let node = NumNode { value, range };
-    Ok((re, Box::new(node)))
+    Ok((re, Box::new(node.into())))
 }
 
 #[test_parser("a + 1")]
 #[test_parser("a - 1")]
-pub fn add_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn add_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     parse_bin_ops!(mul_exp, PLUS, MINUS)(input)
 }
 
 #[test_parser("1 * 1")]
 #[test_parser("1 / 1")]
-pub fn mul_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn mul_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     parse_bin_ops!(unary_exp, MUL, DIV)(input)
 }
 
 #[test_parser("break\n")]
-pub fn break_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn break_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     terminated(
         delspace(map_res(tag_token(TokenType::BREAK), |_| {
-            res(BreakNode {
-                range: Range::new(input, input),
-            })
+            res_enum(
+                BreakNode {
+                    range: Range::new(input, input),
+                }
+                .into(),
+            )
         })),
         newline,
     )(input)
 }
 #[test_parser("continue\n")]
-pub fn continue_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn continue_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     terminated(
         delspace(map_res(tag_token(TokenType::CONTINUE), |_| {
-            res(ContinueNode {
-                range: Range::new(input, input),
-            })
+            res_enum(
+                ContinueNode {
+                    range: Range::new(input, input),
+                }
+                .into(),
+            )
         })),
         newline,
     )(input)
@@ -533,7 +568,7 @@ pub fn continue_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
 #[test_parser("!a")]
 #[test_parser("&a")]
 #[test_parser_error("+a")]
-pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
         take_exp,
         map_res(
@@ -547,7 +582,7 @@ pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
             )),
             |((op, _), exp)| {
                 let range = exp.range();
-                res(UnaryOpNode { op, exp, range })
+                res_enum(UnaryOpNode { op, exp, range }.into())
             },
         ),
     )))(input)
@@ -558,29 +593,32 @@ pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
 #[test_parser("a<=b")]
 #[test_parser("a==b")]
 #[test_parser("a!=b")]
-pub fn compare_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn compare_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     parse_bin_ops!(add_exp, GEQ, LEQ, NE, EQ, LESS, GREATER)(input)
 }
 #[test_parser("a&&b")]
 #[test_parser("a||b")]
-pub fn logic_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn logic_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     parse_bin_ops!(compare_exp, AND, OR)(input)
 }
-pub fn identifier(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         recognize(pair(
             alt((alpha1::<Span, nom::error::Error<Span>>, tag("_"))),
             many0_count(alt((alphanumeric1, tag("_")))),
         )),
         |out| {
-            res(VarNode {
-                name: out.to_string(),
-                range: Range::new(out, out.take_split(out.len()).0),
-            })
+            res_enum(
+                VarNode {
+                    name: out.to_string(),
+                    range: Range::new(out, out.take_split(out.len()).0),
+                }
+                .into(),
+            )
         },
     ))(input)
 }
-pub fn primary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
         number,
         bool_const,
@@ -598,19 +636,25 @@ pub fn primary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
 #[test_parser("false")]
 #[test_parser_error("tru")]
 #[test_parser_error("fales")]
-fn bool_const(input: Span) -> IResult<Span, Box<dyn Node>> {
+fn bool_const(input: Span) -> IResult<Span, Box<NodeEnum>> {
     alt((
         map_res(tag("true"), |out| {
-            res(BoolConstNode {
-                value: true,
-                range: Range::new(input, out),
-            })
+            res_enum(
+                BoolConstNode {
+                    value: true,
+                    range: Range::new(input, out),
+                }
+                .into(),
+            )
         }),
         map_res(tag("false"), |out| {
-            res(BoolConstNode {
-                value: false,
-                range: Range::new(input, out),
-            })
+            res_enum(
+                BoolConstNode {
+                    value: false,
+                    range: Range::new(input, out),
+                }
+                .into(),
+            )
         }),
     ))(input)
 }
@@ -759,7 +803,7 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
 
 #[test_parser("     x    (   1\n,0             ,\n       1      )")]
 #[test_parser("     x    (   x)")]
-pub fn function_call(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn function_call(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
             identifier,
@@ -780,17 +824,20 @@ pub fn function_call(input: Span) -> IResult<Span, Box<dyn Node>> {
                 paralist.push(paras.0);
                 paralist.extend(paras.1);
             }
-            res(FuncCallNode {
-                id: id.name,
-                paralist,
-                range: id.range,
-            })
+            res_enum(
+                FuncCallNode {
+                    id: id.name,
+                    paralist,
+                    range: id.range,
+                }
+                .into(),
+            )
         },
     ))(input)
 }
 
 #[test_parser("a.b.c")]
-fn take_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+fn take_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let re = delspace(tuple((
         primary_exp,
         many0(preceded(tag_token(TokenType::DOT), identifier)),
@@ -813,7 +860,7 @@ fn take_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
         node.range.end.column += 1;
     }
     if b.is_empty() {
-        return Ok((input, box_node(node)));
+        return Ok((input, box_node(node.into())));
     }
     node.range = r.start.to(b.last().unwrap().range().end);
     if !node.complete {
@@ -825,7 +872,7 @@ fn take_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
     }
     node.ids = ids;
 
-    Ok((input, box_node(node)))
+    Ok((input, box_node(node.into())))
 }
 
 #[test_parser("jksa: int\n")]
@@ -865,18 +912,21 @@ fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
 /// struct_init_field = identifier ":" logic_exp "," ;
 /// ```
 /// special: del newline or space
-fn struct_init_field(input: Span) -> IResult<Span, Box<dyn Node>> {
+fn struct_init_field(input: Span) -> IResult<Span, Box<NodeEnum>> {
     del_newline_or_space!(terminated(
         map_res(
             tuple((identifier, tag_token(TokenType::COLON), logic_exp)),
             |(id, _, exp)| {
                 let id = cast_to_var(&id);
                 let range = id.range.start.to(exp.range().end);
-                res(StructInitFieldNode {
-                    id: id.name,
-                    exp,
-                    range,
-                })
+                res_enum(
+                    StructInitFieldNode {
+                        id: id.name,
+                        exp,
+                        range,
+                    }
+                    .into(),
+                )
             },
         ),
         tag_token(TokenType::COMMA)
@@ -889,7 +939,7 @@ fn struct_init_field(input: Span) -> IResult<Span, Box<dyn Node>> {
 /// ```enbf
 /// struct_init = type_name "{" struct_init_field "}" ;
 /// ```
-fn struct_init(input: Span) -> IResult<Span, Box<dyn Node>> {
+fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
             type_name,
@@ -904,11 +954,14 @@ fn struct_init(input: Span) -> IResult<Span, Box<dyn Node>> {
             } else {
                 range = name.range;
             }
-            res(StructInitNode {
-                tp: name,
-                fields,
-                range,
-            })
+            res_enum(
+                StructInitNode {
+                    tp: name,
+                    fields,
+                    range,
+                }
+                .into(),
+            )
         },
     )(input)
 }

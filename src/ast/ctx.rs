@@ -1,9 +1,7 @@
 use crate::ast::node::Value;
-use crate::lsp::helpers::send_goto_def;
 use crate::lsp::semantic_tokens::type_index;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use colored::Colorize;
-use crossbeam_channel::Sender;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
@@ -19,7 +17,6 @@ use inkwell::types::VoidType;
 use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
-use lsp_server::Message;
 use lsp_server::RequestId;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
@@ -90,10 +87,12 @@ pub struct Ctx<'a, 'ctx> {
     pub nodebug_builder: &'a Builder<'ctx>, // builder without debug info
     pub src_file_path: &'a str,            // source file path
     pub errs: &'a RefCell<Vec<PLDiag>>,    // diagnostic list
-    pub sender: Option<&'a Sender<Message>>, // lsp sender
+    pub sender: Option<ActionType>,        // lsp sender
     pub lspparams: Option<(Pos, RequestId, Option<String>, ActionType)>, // lsp params
     pub refs: Rc<Cell<Option<Rc<RefCell<Vec<Location>>>>>>, // hold the find references result (thank you, Rust!)
     pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
+    pub goto_def: Rc<Cell<Option<GotoDefinitionResponse>>>, // hold the goto definition result
+    pub completion_items: Rc<Cell<Vec<CompletionItem>>>,    // hold the completion items
 }
 
 /// # PLDiag
@@ -325,11 +324,17 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
             PLType::VOID(_) => None,
         }
     }
-    pub fn get_di_ref_type(&self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIDerivedType<'ctx>> {
-        let ditype = self.get_ditype(ctx)?;
+    pub fn get_di_ref_type(
+        &self,
+        ctx: &mut Ctx<'a, 'ctx>,
+        ditype: Option<DIType<'ctx>>,
+    ) -> Option<DIDerivedType<'ctx>> {
+        if ditype.is_none() {
+            return None;
+        }
         Some(
             ctx.dibuilder
-                .create_reference_type(ditype, DW_TAG_REFERENCE_TYPE),
+                .create_reference_type(ditype.unwrap(), DW_TAG_REFERENCE_TYPE),
         )
     }
 }
@@ -369,7 +374,11 @@ impl<'a, 'ctx> Field<'a, 'ctx> {
             .get_type(&self.typename.id, self.typename.range)
             .unwrap();
         let debug_type = if self.is_ref {
-            pltype.clone().get_di_ref_type(ctx).unwrap().as_type()
+            pltype
+                .clone()
+                .get_di_ref_type(ctx, di_type.clone())
+                .unwrap()
+                .as_type()
         } else {
             di_type.unwrap()
         };
@@ -513,7 +522,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         nodbg_builder: &'a Builder<'ctx>,
         src_file_path: &'a str,
         errs: &'a RefCell<Vec<PLDiag>>,
-        sender: Option<&'a Sender<Message>>,
+        sender: Option<ActionType>,
         completion: Option<(Pos, RequestId, Option<String>, ActionType)>,
     ) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
@@ -540,6 +549,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
                 src_file_path.to_string(),
             )))),
+            goto_def: Rc::new(Cell::new(None)),
+            completion_items: Rc::new(Cell::new(Vec::new())),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -575,6 +586,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             lspparams: self.lspparams.clone(),
             refs: self.refs.clone(),
             semantic_tokens_builder: self.semantic_tokens_builder.clone(),
+            goto_def: self.goto_def.clone(),
+            completion_items: self.completion_items.clone(),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -757,7 +770,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                             uri: self.get_file_url(),
                             range: destrange.to_diag_range(),
                         });
-                        send_goto_def(self.sender.unwrap(), comp.1.clone(), resp);
+                        self.goto_def.set(Some(resp));
                         self.sender = None // set sender to None so it won't be sent again
                     }
                 }

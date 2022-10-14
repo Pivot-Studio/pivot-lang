@@ -1,37 +1,55 @@
+use crate::{ast::node::Node, lsp::mem_docs::MemDocsInput, nomparser::parse, Db};
 use std::{cell::RefCell, fs, path::Path, time::Instant};
 
 use colored::Colorize;
-use crossbeam_channel::Sender;
 use inkwell::{
     context::Context,
     module::Module,
     targets::{FileType, InitializationConfig, Target, TargetMachine},
     OptimizationLevel,
 };
-use lsp_server::{Message, RequestId};
-
-use crate::{
-    lsp::{
-        helpers::{send_diagnostics, send_references, send_semantic_tokens},
-        mem_docs::MemDocs,
-    },
-    nomparser::PLParser,
-};
+use lsp_server::RequestId;
 use std::process::Command;
 
 use super::{
+    accumulators::{Completions, Diagnostics, GotoDef, PLReferences, PLSemanticTokens},
     ctx::{self, create_ctx_info},
     range::Pos,
 };
 
-pub struct Compiler {}
-
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct Options {
     pub verbose: bool,
     pub genir: bool,
     pub printast: bool,
-    pub optimization: OptimizationLevel,
+    pub optimization: HashOptimizationLevel,
+}
+
+#[repr(u32)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
+pub enum HashOptimizationLevel {
+    None = 0,
+    Less = 1,
+    Default = 2,
+    Aggressive = 3,
+}
+
+impl Default for HashOptimizationLevel {
+    /// Returns the default value for `OptimizationLevel`, namely `OptimizationLevel::Default`.
+    fn default() -> Self {
+        HashOptimizationLevel::Default
+    }
+}
+
+impl HashOptimizationLevel {
+    pub fn to_llvm(&self) -> OptimizationLevel {
+        match self {
+            HashOptimizationLevel::None => OptimizationLevel::None,
+            HashOptimizationLevel::Less => OptimizationLevel::Less,
+            HashOptimizationLevel::Default => OptimizationLevel::Default,
+            HashOptimizationLevel::Aggressive => OptimizationLevel::Aggressive,
+        }
+    }
 }
 
 type MainFunc = unsafe extern "C" fn() -> i64;
@@ -58,192 +76,187 @@ pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
 
 /// # ActionType
 /// lsp action type
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
 pub enum ActionType {
     Completion,
     GotoDef,
     FindReferences,
     SemanticTokensFull,
+    Diagnostic,
 }
 
-/// # Compiler
-/// pivot-lang single file compiler
-impl Compiler {
-    pub fn new() -> Self {
-        Compiler {}
+#[cfg(feature = "jit")]
+pub fn run(p: &Path, opt: OptimizationLevel) {
+    vm::gc::reg();
+    let ctx = &Context::create();
+    let re = Module::parse_bitcode_from_path(p, ctx).unwrap();
+    let engine = re.create_jit_execution_engine(opt).unwrap();
+    unsafe {
+        let f = engine.get_function::<MainFunc>("main").unwrap();
+        println!("ret = {}", f.call());
     }
-    #[cfg(feature = "jit")]
-    pub fn run(p: &Path, opt: OptimizationLevel) {
-        vm::gc::reg();
-        let ctx = &Context::create();
-        let re = Module::parse_bitcode_from_path(p, ctx).unwrap();
-        let engine = re.create_jit_execution_engine(opt).unwrap();
-        unsafe {
-            let f = engine.get_function::<MainFunc>("main").unwrap();
-            println!("ret = {}", f.call());
-        }
+}
+
+#[salsa::tracked]
+pub fn compile_dry(
+    db: &dyn Db,
+    docs: MemDocsInput,
+    op: Options,
+    sender: ActionType,
+    completion: Option<(Pos, RequestId, Option<String>, ActionType)>,
+) {
+    let context = &Context::create();
+    let filepath = Path::new(docs.file(db));
+    let abs = fs::canonicalize(filepath).unwrap();
+    let dir = abs.parent().unwrap().to_str().unwrap();
+    let fname = abs.file_name().unwrap().to_str().unwrap();
+
+    let (a, b, c, d, e, f) = create_ctx_info(context, dir, fname);
+    let v = RefCell::new(Vec::new());
+    let mut ctx = ctx::Ctx::new(
+        context,
+        &a,
+        &b,
+        &c,
+        &d,
+        &e,
+        &f,
+        abs.to_str().unwrap(),
+        &v,
+        Some(sender),
+        completion,
+    );
+    let m = &mut ctx;
+    let src = docs.get_file_content(db).unwrap();
+    let parse_result = parse(db, src);
+    if let Err(e) = parse_result {
+        eprintln!("{}", e);
+        return;
+    }
+    let mut node = parse_result.unwrap();
+    if op.printast {
+        node.print(0, true, vec![]);
     }
 
-    pub fn compile_dry(
-        &self,
-        file: &str,
-        docs: &MemDocs,
-        op: Options,
-        sender: &Sender<Message>,
-        completion: Option<(Pos, RequestId, Option<String>, ActionType)>,
-    ) {
-        let context = &Context::create();
-        let filepath = Path::new(file);
-        let abs = fs::canonicalize(filepath).unwrap();
-        let dir = abs.parent().unwrap().to_str().unwrap();
-        let fname = abs.file_name().unwrap().to_str().unwrap();
-
-        let (a, b, c, d, e, f) = create_ctx_info(context, dir, fname);
-        let v = RefCell::new(Vec::new());
-        let mut ctx = ctx::Ctx::new(
-            context,
-            &a,
-            &b,
-            &c,
-            &d,
-            &e,
-            &f,
-            abs.to_str().unwrap(),
-            &v,
-            Some(sender),
-            completion,
-        );
-        let m = &mut ctx;
-        let str = docs.get_file_content(file).unwrap();
-        let input = str.as_str();
-        let mut parser = PLParser::new(input);
-        let parse_result = parser.parse();
-        if let Err(e) = parse_result {
-            eprintln!("{}", e);
-            return;
+    _ = node.emit(m);
+    for d in v.borrow().iter() {
+        Diagnostics::push(db, d.get_diagnostic());
+    }
+    if let Some(c) = ctx.refs.take() {
+        let c = c.borrow();
+        for refe in c.iter() {
+            PLReferences::push(db, refe.clone());
         }
-        let mut node = parse_result.unwrap();
-        if op.printast {
-            node.print(0, true, vec![]);
+    } else if let Some(c) = ctx.lspparams.take() {
+        if c.3 == ActionType::SemanticTokensFull {
+            let b = ctx.semantic_tokens_builder.borrow().build();
+            PLSemanticTokens::push(db, b);
         }
+    }
+    let ci = ctx.completion_items.take();
+    Completions::push(db, ci);
+    if let Some(c) = ctx.goto_def.take() {
+        GotoDef::push(db, c);
+    }
+}
 
-        _ = node.emit(m);
-        let vs = v.borrow().iter().map(|v| v.get_diagnostic()).collect();
-        send_diagnostics(&sender, file.to_string(), vs);
-        if let Some(c) = ctx.refs.take() {
-            let c = c.borrow();
-            send_references(&sender, ctx.lspparams.unwrap().1, &c);
-        } else if let Some(c) = ctx.lspparams.take() {
-            if c.3 == ActionType::FindReferences {
-                send_references(&sender, c.1, &vec![]); // 任何情况都应该回复findref请求
-            } else if c.3 == ActionType::SemanticTokensFull {
-                let b = ctx.semantic_tokens_builder.borrow().build();
-                send_semantic_tokens(&sender, c.1, b);
+#[salsa::tracked]
+pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
+    let now = Instant::now();
+    let context = &Context::create();
+    let filepath = Path::new(docs.file(db));
+    let abs = fs::canonicalize(filepath).unwrap();
+    let dir = abs.parent().unwrap().to_str().unwrap();
+    let fname = abs.file_name().unwrap().to_str().unwrap();
+
+    let (a, b, c, d, e, f) = create_ctx_info(context, dir, fname);
+    let v = RefCell::new(Vec::new());
+    let mut ctx = ctx::Ctx::new(
+        context,
+        &a,
+        &b,
+        &c,
+        &d,
+        &e,
+        &f,
+        abs.to_str().unwrap(),
+        &v,
+        None,
+        None,
+    );
+    let m = &mut ctx;
+    let src = docs.get_file_content(db).unwrap();
+    let parse_result = parse(db, src);
+    if let Err(e) = parse_result {
+        println!("{}", e);
+        return;
+    }
+    let mut node = parse_result.unwrap();
+    if op.printast {
+        node.print(0, true, vec![]);
+    }
+
+    _ = node.emit(m);
+    let errs = m.errs.borrow();
+    let mut errs_num = 0;
+    if errs.len() > 0 {
+        for e in errs.iter() {
+            e.print();
+            if e.is_err() {
+                errs_num = errs_num + 1
             }
         }
-    }
-
-    pub fn compile(&self, file: &str, docs: MemDocs, out: &str, op: Options) {
-        let now = Instant::now();
-        let context = &Context::create();
-        let filepath = Path::new(file);
-        let abs = fs::canonicalize(filepath).unwrap();
-        let dir = abs.parent().unwrap().to_str().unwrap();
-        let fname = abs.file_name().unwrap().to_str().unwrap();
-
-        let (a, b, c, d, e, f) = create_ctx_info(context, dir, fname);
-        let v = RefCell::new(Vec::new());
-        let mut ctx = ctx::Ctx::new(
-            context,
-            &a,
-            &b,
-            &c,
-            &d,
-            &e,
-            &f,
-            abs.to_str().unwrap(),
-            &v,
-            None,
-            None,
-        );
-        let m = &mut ctx;
-        let str = docs.get_file_content(file).unwrap();
-        let input = str.as_str();
-        let mut parser = PLParser::new(input);
-        let parse_result = parser.parse();
-        if let Err(e) = parse_result {
-            println!("{}", e);
-            return;
-        }
-        let mut node = parse_result.unwrap();
-        if op.printast {
-            node.print(0, true, vec![]);
-        }
-
-        _ = node.emit(m);
-        let errs = m.errs.borrow();
-        let mut errs_num = 0;
-        if errs.len() > 0 {
-            for e in errs.iter() {
-                e.print();
-                if e.is_err() {
-                    errs_num = errs_num + 1
-                }
-            }
-            if errs_num > 0 {
-                if errs_num == 1 {
-                    println!(
-                        "{}",
-                        format!("compile failed: there is {} error", errs.len()).bright_red()
-                    );
-                    return;
-                }
+        if errs_num > 0 {
+            if errs_num == 1 {
                 println!(
                     "{}",
-                    format!("compile failed: there are {} errors", errs.len()).bright_red()
+                    format!("compile failed: there is {} error", errs.len()).bright_red()
                 );
                 return;
             }
-        }
-        if op.optimization == OptimizationLevel::None {
-            m.dibuilder.finalize();
-        }
-        if op.genir {
-            let mut s = out.to_string();
-            s.push_str(".ll");
-            let llp = Path::new(&s[..]);
-            fs::write(llp, ctx.module.to_string()).unwrap();
-        }
-        // m.module.verify().unwrap();
-        let time = now.elapsed();
-        if op.verbose {
-            println!("compile succ, time: {:?}", time);
-        }
-        let tm = get_target_machine(op.optimization);
-        let mut f = out.to_string();
-        f.push_str(".o");
-        let mut fo = out.to_string();
-        fo.push_str(".out");
-        tm.write_to_file(ctx.module, FileType::Object, Path::new(&f))
-            .unwrap();
-        let link = Command::new("clang")
-            .arg(format!("-O{}", op.optimization as u32))
-            .arg("-pthread")
-            .arg("-ldl")
-            .arg(&f)
-            .arg("vm/target/release/libvm.a")
-            .arg("-o")
-            .arg(&fo)
-            .status();
-        if link.is_err() || !link.unwrap().success() {
             println!(
-                "warning: link with pivot lang vm failed, could be caused by vm pkg not found."
+                "{}",
+                format!("compile failed: there are {} errors", errs.len()).bright_red()
             );
-            println!("warning: you can build vm pkg by `cargo build --release` in vm dir.");
-        } else {
-            println!("link succ, output file: {}", fo);
+            return;
         }
-        //  TargetMachine::get_default_triple()
-        ctx.module.write_bitcode_to_path(Path::new(out));
     }
+    if op.optimization.to_llvm() == OptimizationLevel::None {
+        m.dibuilder.finalize();
+    }
+    if op.genir {
+        let mut s = out.to_string();
+        s.push_str(".ll");
+        let llp = Path::new(&s[..]);
+        fs::write(llp, ctx.module.to_string()).unwrap();
+    }
+    // m.module.verify().unwrap();
+    let time = now.elapsed();
+    if op.verbose {
+        println!("compile succ, time: {:?}", time);
+    }
+    let tm = get_target_machine(op.optimization.to_llvm());
+    let mut f = out.to_string();
+    f.push_str(".o");
+    let mut fo = out.to_string();
+    fo.push_str(".out");
+    tm.write_to_file(ctx.module, FileType::Object, Path::new(&f))
+        .unwrap();
+    let link = Command::new("clang")
+        .arg(format!("-O{}", op.optimization as u32))
+        .arg("-pthread")
+        .arg("-ldl")
+        .arg(&f)
+        .arg("vm/target/release/libvm.a")
+        .arg("-o")
+        .arg(&fo)
+        .status();
+    if link.is_err() || !link.unwrap().success() {
+        println!("warning: link with pivot lang vm failed, could be caused by vm pkg not found.");
+        println!("warning: you can build vm pkg by `cargo build --release` in vm dir.");
+    } else {
+        println!("link succ, output file: {}", fo);
+    }
+    //  TargetMachine::get_default_triple()
+    ctx.module.write_bitcode_to_path(Path::new(&out));
 }

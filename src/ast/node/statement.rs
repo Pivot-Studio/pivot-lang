@@ -1,4 +1,3 @@
-use super::primary::*;
 use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
@@ -7,9 +6,10 @@ use inkwell::types::AnyType;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct DefNode {
     pub var: VarNode,
-    pub exp: Box<dyn Node>,
+    pub exp: Box<NodeEnum>,
 }
 impl Node for DefNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -32,7 +32,13 @@ impl Node for DefNode {
         let (base_value, debug_type) = if let Value::RefValue(ref_value) = value {
             (
                 ref_value.as_basic_value_enum(),
-                Some(pltype.clone().get_di_ref_type(ctx).unwrap().as_type()),
+                Some(
+                    pltype
+                        .clone()
+                        .get_di_ref_type(ctx, ditype.clone())
+                        .unwrap()
+                        .as_type(),
+                ),
             )
         } else {
             let ditype = ditype.clone();
@@ -72,9 +78,10 @@ impl Node for DefNode {
     }
 }
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AssignNode {
-    pub var: Box<dyn Node>,
-    pub exp: Box<dyn Node>,
+    pub var: Box<NodeEnum>,
+    pub exp: Box<NodeEnum>,
 }
 impl Node for AssignNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -104,6 +111,7 @@ impl Node for AssignNode {
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct NLNode {}
 
 impl Node for NLNode {
@@ -118,8 +126,9 @@ impl Node for NLNode {
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StatementsNode {
-    pub statements: Vec<Box<dyn Node>>,
+    pub statements: Vec<Box<NodeEnum>>,
 }
 impl Node for StatementsNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -143,17 +152,21 @@ impl StatementsNode {
         let child = ctx;
         let mut terminator = TerminatorEnum::NONE;
         for m in self.statements.iter_mut() {
-            let is_nl = (&*m).as_ref().as_any().is::<NLNode>();
-            if (!terminator.is_none()) && (!is_nl) {
+            if let NodeEnum::NL(_) = **m {
+                continue;
+            }
+            if !terminator.is_none() {
                 child.add_warn(m.range(), WarnCode::UNREACHABLE_STATEMENT);
                 continue;
             }
             let pos = m.range().start;
             child.build_dbg_location(pos);
-            let (_, _, terminator_res) = m.emit(child)?;
-            if !is_nl {
-                terminator = terminator_res;
+            let re = m.emit(child);
+            if re.is_err() {
+                continue;
             }
+            let (_, _, terminator_res) = re.unwrap();
+            terminator = terminator_res;
         }
         Ok((Value::None, None, terminator))
     }

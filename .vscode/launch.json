@@ -7,6 +7,17 @@
     "configurations": [
         {
             "type": "lldb",
+            "request": "launch",
+            "name": "debug compile",
+            "cargo": {
+                "args": [
+                    "build"
+                ]
+            },
+            "args": ["test/main.pi"]
+        },
+        {
+            "type": "lldb",
             "request": "attach",
             "name": "debug lsp",
             "program": "plc",

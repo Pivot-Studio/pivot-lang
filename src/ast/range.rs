@@ -4,20 +4,17 @@ type Span<'a> = nom_locate::LocatedSpan<&'a str>;
 
 /// # Pos
 /// source code position in file
-#[derive(Debug, PartialEq, Clone, Copy, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Hash)]
 pub struct Pos {
     pub line: usize,   // 1based
     pub column: usize, // 1based
     pub offset: usize, // 0based
 }
 
-#[derive(Debug, PartialEq, Clone, Copy, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
 pub struct Range {
     pub start: Pos,
     pub end: Pos,
-}
-pub trait RangeTrait {
-    fn range(&self) -> Range;
 }
 impl Pos {
     pub fn to(&self, end: Pos) -> Range {
