@@ -1,4 +1,3 @@
-use super::primary::*;
 use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::error::ErrorCode;
@@ -8,9 +7,10 @@ use internal_macro::range;
 use lsp_types::SemanticTokenType;
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct DefNode {
     pub var: VarNode,
-    pub exp: Box<dyn Node>,
+    pub exp: Box<NodeEnum>,
 }
 impl Node for DefNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -61,9 +61,10 @@ impl Node for DefNode {
     }
 }
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AssignNode {
-    pub var: Box<dyn Node>,
-    pub exp: Box<dyn Node>,
+    pub var: Box<NodeEnum>,
+    pub exp: Box<NodeEnum>,
 }
 impl Node for AssignNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -92,6 +93,7 @@ impl Node for AssignNode {
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct NLNode {}
 
 impl Node for NLNode {
@@ -106,8 +108,9 @@ impl Node for NLNode {
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StatementsNode {
-    pub statements: Vec<Box<dyn Node>>,
+    pub statements: Vec<Box<NodeEnum>>,
 }
 impl Node for StatementsNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {

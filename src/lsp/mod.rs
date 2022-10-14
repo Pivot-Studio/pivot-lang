@@ -5,7 +5,7 @@
 //! - completion
 //! - goto definition
 //! - find references
-use std::error::Error;
+use std::{cell::RefCell, error::Error, sync::Arc};
 
 pub mod dispatcher;
 pub mod helpers;
@@ -25,10 +25,19 @@ use mem_docs::MemDocs;
 
 use crate::{
     ast::{
-        compiler::{ActionType, Compiler, Options},
+        accumulators::{Completions, Diagnostics, GotoDef, PLReferences, PLSemanticTokens},
+        compiler::{compile_dry, ActionType, Options},
         range::Pos,
     },
-    lsp::{dispatcher::Dispatcher, helpers::url_to_path},
+    db,
+    lsp::{
+        dispatcher::Dispatcher,
+        helpers::{
+            send_completions, send_diagnostics, send_goto_def, send_references,
+            send_semantic_tokens, url_to_path,
+        },
+        mem_docs::MemDocsInput,
+    },
 };
 
 pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
@@ -117,10 +126,12 @@ fn main_loop(
     connection: Connection,
     params: serde_json::Value,
 ) -> Result<(), Box<dyn Error + Sync + Send>> {
+    let mut db = db::Database::default();
     let _params: InitializeParams = serde_json::from_value(params).unwrap();
-    let mut docs = MemDocs::new();
+    let docs = Arc::new(RefCell::new(MemDocs::new()));
+    let docin = MemDocsInput::new(&db, docs.clone(), "".to_string());
+
     eprintln!("starting main loop");
-    let c = Compiler::new();
     for msg in &connection.receiver {
         let di = Dispatcher::new(msg.clone());
         if let Message::Request(req) = &msg {
@@ -131,28 +142,52 @@ fn main_loop(
         di.on::<GotoDefinition, _>(|id, params| {
             let uri = url_to_path(params.text_document_position_params.text_document.uri);
             let pos = Pos::from_diag_pos(&params.text_document_position_params.position);
-            c.compile_dry(
-                &uri,
-                &docs,
+            docin.set_file(&mut db).to(uri);
+            compile_dry(
+                &db,
+                docin,
                 Options {
                     ..Default::default()
                 },
-                &connection.sender,
-                Some((pos, id, None, ActionType::GotoDef)),
+                ActionType::GotoDef,
+                Some((pos, id.clone(), None, ActionType::GotoDef)),
             );
+            let defs = compile_dry::accumulated::<GotoDef>(
+                &db,
+                docin,
+                Options {
+                    ..Default::default()
+                },
+                ActionType::GotoDef,
+                Some((pos, id.clone(), None, ActionType::GotoDef)),
+            );
+            if !defs.is_empty() {
+                send_goto_def(&connection.sender, id, defs[0].clone());
+            }
         })
         .on::<References, _>(|id, params| {
             let uri = url_to_path(params.text_document_position.text_document.uri);
             let pos = Pos::from_diag_pos(&params.text_document_position.position);
-            c.compile_dry(
-                &uri,
-                &docs,
+            docin.set_file(&mut db).to(uri);
+            compile_dry(
+                &db,
+                docin,
                 Options {
                     ..Default::default()
                 },
-                &connection.sender,
+                ActionType::FindReferences,
                 Some((pos, id.clone(), None, ActionType::FindReferences)),
             );
+            let refs = compile_dry::accumulated::<PLReferences>(
+                &db,
+                docin,
+                Options {
+                    ..Default::default()
+                },
+                ActionType::FindReferences,
+                Some((pos, id.clone(), None, ActionType::FindReferences)),
+            );
+            send_references(&connection.sender, id, &refs);
         })
         .on::<Completion, _>(|id, params| {
             let uri = url_to_path(params.text_document_position.text_document.uri);
@@ -161,61 +196,128 @@ fn main_loop(
             if params.context.is_some() {
                 trigger = params.context.unwrap().trigger_character;
             }
-            c.compile_dry(
-                &uri,
-                &docs,
+            docin.set_file(&mut db).to(uri);
+            compile_dry(
+                &db,
+                docin,
                 Options {
                     ..Default::default()
                 },
-                &connection.sender,
-                Some((pos, id, trigger, ActionType::Completion)),
+                ActionType::Completion,
+                Some((pos, id.clone(), trigger.clone(), ActionType::Completion)),
             );
+            let completions = compile_dry::accumulated::<Completions>(
+                &db,
+                docin,
+                Options {
+                    ..Default::default()
+                },
+                ActionType::Completion,
+                Some((pos, id.clone(), trigger, ActionType::Completion)),
+            );
+            if !completions.is_empty() {
+                send_completions(&connection.sender, id, completions[0].clone());
+            }
         })
         .on::<SemanticTokensFullRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
-            c.compile_dry(
-                &uri,
-                &docs,
+            docin.set_file(&mut db).to(uri);
+            compile_dry(
+                &db,
+                docin,
                 Options {
                     ..Default::default()
                 },
-                &connection.sender,
+                ActionType::SemanticTokensFull,
                 Some((
                     Pos {
                         ..Default::default()
                     },
-                    id,
+                    id.clone(),
                     None,
                     ActionType::SemanticTokensFull,
                 )),
             );
+            let tokens = compile_dry::accumulated::<PLSemanticTokens>(
+                &db,
+                docin,
+                Options {
+                    ..Default::default()
+                },
+                ActionType::SemanticTokensFull,
+                Some((
+                    Pos {
+                        ..Default::default()
+                    },
+                    id.clone(),
+                    None,
+                    ActionType::SemanticTokensFull,
+                )),
+            );
+            if !tokens.is_empty() {
+                send_semantic_tokens(&connection.sender, id, tokens[0].clone());
+            }
         })
         .on_noti::<DidChangeTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
             for content_change in params.content_changes.iter() {
-                docs.change(
+                docs.borrow_mut().change(
                     content_change.range.unwrap().clone(),
                     f.clone(),
                     content_change.text.clone(),
                 );
+                docin.set_docs(&mut db).to(docs.clone());
+                compile_dry(
+                    &db,
+                    docin,
+                    Options {
+                        ..Default::default()
+                    },
+                    ActionType::Diagnostic,
+                    None,
+                );
+                let diags = compile_dry::accumulated::<Diagnostics>(
+                    &db,
+                    docin,
+                    Options {
+                        ..Default::default()
+                    },
+                    ActionType::Diagnostic,
+                    None,
+                );
+                send_diagnostics(&connection.sender, f.clone(), diags.clone());
             }
         })
         .on_noti::<DidOpenTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
-            docs.insert(f.clone(), params.text_document.text);
-            c.compile_dry(
-                &f,
-                &docs,
+            docs.borrow_mut()
+                .insert(f.clone(), params.text_document.text);
+            docin.set_docs(&mut db).to(docs.clone());
+            docin.set_file(&mut db).to(f.clone());
+            compile_dry(
+                &db,
+                docin,
                 Options {
                     ..Default::default()
                 },
-                &connection.sender,
+                ActionType::Diagnostic,
                 None,
             );
+            let diags = compile_dry::accumulated::<Diagnostics>(
+                &db,
+                docin,
+                Options {
+                    ..Default::default()
+                },
+                ActionType::Diagnostic,
+                None,
+            );
+            send_diagnostics(&connection.sender, f, diags.clone());
         })
         .on_noti::<DidCloseTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
-            docs.remove(&f);
+            docs.borrow_mut().remove(&f);
+            docin.set_docs(&mut db).to(docs.clone());
         });
     }
     Ok(())

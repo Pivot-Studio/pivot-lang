@@ -1,5 +1,4 @@
 use super::statement::StatementsNode;
-use super::types::*;
 use super::*;
 use super::{alloc, types::TypedIdentifierNode, Node};
 use crate::ast::ctx::{FNType, PLType};
@@ -15,6 +14,7 @@ use std::rc::Rc;
 use lazy_static::__Deref;
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncDefNode {
     pub typenode: FuncTypeNode,
     pub body: Option<StatementsNode>,
@@ -165,9 +165,10 @@ impl Node for FuncDefNode {
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncCallNode {
     pub id: String,
-    pub paralist: Vec<Box<dyn Node>>,
+    pub paralist: Vec<Box<NodeEnum>>,
 }
 
 impl Node for FuncCallNode {
@@ -234,7 +235,7 @@ impl Node for FuncCallNode {
     }
 }
 #[range]
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncTypeNode {
     pub id: String,
     pub paralist: Vec<Box<TypedIdentifierNode>>,

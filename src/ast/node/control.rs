@@ -5,10 +5,11 @@ use crate::ast::error::ErrorCode;
 use internal_macro::range;
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct IfNode {
-    pub cond: Box<dyn Node>,
-    pub then: Box<dyn Node>,
-    pub els: Option<Box<dyn Node>>,
+    pub cond: Box<NodeEnum>,
+    pub then: Box<NodeEnum>,
+    pub els: Option<Box<NodeEnum>>,
 }
 
 impl Node for IfNode {
@@ -67,8 +68,9 @@ impl Node for IfNode {
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct WhileNode {
-    pub cond: Box<dyn Node>,
+    pub cond: Box<NodeEnum>,
     pub body: Box<StatementsNode>,
 }
 
@@ -117,10 +119,11 @@ impl Node for WhileNode {
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ForNode {
-    pub pre: Option<Box<dyn Node>>,
-    pub cond: Box<dyn Node>,
-    pub opt: Option<Box<dyn Node>>,
+    pub pre: Option<Box<NodeEnum>>,
+    pub cond: Box<NodeEnum>,
+    pub opt: Option<Box<NodeEnum>>,
     pub body: Box<StatementsNode>,
 }
 
@@ -195,6 +198,7 @@ impl Node for ForNode {
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BreakNode {}
 
 impl Node for BreakNode {
@@ -222,6 +226,7 @@ impl Node for BreakNode {
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ContinueNode {}
 
 impl Node for ContinueNode {

@@ -19,7 +19,7 @@ pub fn range(_args: TokenStream, input: TokenStream) -> TokenStream {
             let ident = &ast.ident;
             return quote! {
                 #ast
-                impl crate::ast::range::RangeTrait for #ident {
+                impl crate::ast::node::RangeTrait for #ident {
                     fn range(&self) -> crate::ast::range::Range {
                         self.range
                     }

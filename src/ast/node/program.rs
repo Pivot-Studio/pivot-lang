@@ -10,8 +10,9 @@ use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use internal_macro::range;
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ProgramNode {
-    pub nodes: Vec<Box<dyn Node>>,
+    pub nodes: Vec<Box<NodeEnum>>,
     pub structs: Vec<StructDefNode>,
     pub fntypes: Vec<FuncTypeNode>,
 }

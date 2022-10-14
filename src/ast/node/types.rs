@@ -7,7 +7,6 @@ use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
 use crate::ast::error::ErrorCode;
 use crate::ast::range::Range;
-use crate::lsp::helpers::send_completions;
 use inkwell::debug_info::*;
 use inkwell::types::{AnyType, BasicType};
 use internal_macro::range;
@@ -31,7 +30,7 @@ fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
     }
 }
 #[range]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeNameNode {
     pub id: String,
 }
@@ -51,7 +50,7 @@ impl TypeNameNode {
         ctx.if_completion(|ctx, a| {
             if a.0.is_in(self.range) {
                 let completions = ctx.get_type_completions();
-                send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
+                ctx.completion_items.set(completions);
             }
         });
         ctx.push_semantic_token(self.range, SemanticTokenType::TYPE, 0);
@@ -124,7 +123,7 @@ impl TypeNameNode {
 }
 
 #[range]
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TypedIdentifierNode {
     pub id: VarNode,
     pub tp: Box<TypeNameNode>,
@@ -142,7 +141,7 @@ impl TypedIdentifierNode {
 }
 
 #[range]
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructDefNode {
     pub id: String,
     pub fields: Vec<Box<TypedIdentifierNode>>,
@@ -222,9 +221,10 @@ impl StructDefNode {
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitFieldNode {
     pub id: String,
-    pub exp: Box<dyn Node>,
+    pub exp: Box<NodeEnum>,
 }
 
 impl Node for StructInitFieldNode {
@@ -246,9 +246,10 @@ impl Node for StructInitFieldNode {
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitNode {
     pub tp: Box<TypeNameNode>,
-    pub fields: Vec<Box<dyn Node>>,
+    pub fields: Vec<Box<NodeEnum>>,
 }
 
 impl Node for StructInitNode {
@@ -286,7 +287,7 @@ impl Node for StructInitNode {
                     ctx.if_completion(|ctx, a| {
                         if a.0.is_in(self.range) {
                             let completions = st.get_completions();
-                            send_completions(ctx.sender.unwrap(), a.1.clone(), completions);
+                            ctx.completion_items.set(completions);
                         }
                     });
                     return Err(ctx.add_err(val.1, ErrorCode::STRUCT_FIELD_NOT_FOUND));

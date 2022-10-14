@@ -3,8 +3,9 @@ use crate::ast::{ctx::Ctx, error::ErrorCode};
 use internal_macro::range;
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RetNode {
-    pub value: Option<Box<dyn Node>>,
+    pub value: Option<Box<NodeEnum>>,
 }
 
 impl Node for RetNode {

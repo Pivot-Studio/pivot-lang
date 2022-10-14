@@ -1,3 +1,4 @@
+pub mod accumulators;
 pub mod compiler;
 pub mod ctx;
 pub mod error;
@@ -11,10 +12,13 @@ fn test_nom() {
     vm::reg();
     use std::cell::RefCell;
 
-    use crate::{ast::ctx::create_ctx_info, nomparser::PLParser};
+    use crate::{
+        ast::{ctx::create_ctx_info, node::Node},
+        db,
+        nomparser::{parse, SourceProgram},
+    };
     use inkwell::context::Context;
-    let mut parser = PLParser::new(
-        "struct test {
+    let input = "struct test {
             a : i64
             b : i64
             c : name
@@ -66,9 +70,11 @@ fn test_nom() {
         
         fn printi64ln(i: i64) void
         
-    ",
-    );
-    let mut node = parser.parse().unwrap();
+    ";
+
+    let db = db::Database::default();
+    let parse_result = parse(&db, SourceProgram::new(&db, input.to_string()));
+    let mut node = parse_result.unwrap();
     let context = &Context::create();
     let (a, b, c, d, e, f) = create_ctx_info(context, "", "");
     let v = RefCell::new(Vec::new());
