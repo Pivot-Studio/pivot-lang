@@ -32,7 +32,13 @@ impl Node for DefNode {
         let (base_value, debug_type) = if let Value::RefValue(ref_value) = value {
             (
                 ref_value.as_basic_value_enum(),
-                Some(pltype.clone().get_di_ref_type(ctx).unwrap().as_type()),
+                Some(
+                    pltype
+                        .clone()
+                        .get_di_ref_type(ctx, ditype.clone())
+                        .unwrap()
+                        .as_type(),
+                ),
             )
         } else {
             let ditype = ditype.clone();

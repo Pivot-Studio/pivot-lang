@@ -324,11 +324,17 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
             PLType::VOID(_) => None,
         }
     }
-    pub fn get_di_ref_type(&self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIDerivedType<'ctx>> {
-        let ditype = self.get_ditype(ctx)?;
+    pub fn get_di_ref_type(
+        &self,
+        ctx: &mut Ctx<'a, 'ctx>,
+        ditype: Option<DIType<'ctx>>,
+    ) -> Option<DIDerivedType<'ctx>> {
+        if ditype.is_none() {
+            return None;
+        }
         Some(
             ctx.dibuilder
-                .create_reference_type(ditype, DW_TAG_REFERENCE_TYPE),
+                .create_reference_type(ditype.unwrap(), DW_TAG_REFERENCE_TYPE),
         )
     }
 }
@@ -368,7 +374,11 @@ impl<'a, 'ctx> Field<'a, 'ctx> {
             .get_type(&self.typename.id, self.typename.range)
             .unwrap();
         let debug_type = if self.is_ref {
-            pltype.clone().get_di_ref_type(ctx).unwrap().as_type()
+            pltype
+                .clone()
+                .get_di_ref_type(ctx, di_type.clone())
+                .unwrap()
+                .as_type()
         } else {
             di_type.unwrap()
         };

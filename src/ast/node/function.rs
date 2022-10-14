@@ -64,8 +64,11 @@ impl Node for FuncDefNode {
                     return ctx.get_type("i64", Default::default()).unwrap().1.unwrap();
                 }
                 let (pltype, di_type) = res.unwrap();
+                if di_type.is_none() {
+                    return ctx.get_type("i64", Default::default()).unwrap().1.unwrap();
+                }
                 let di_type = di_type.unwrap();
-                let di_ref_type = pltype.clone().get_di_ref_type(ctx).unwrap();
+                let di_ref_type = pltype.clone().get_di_ref_type(ctx, Some(di_type)).unwrap();
                 if para.tp.is_ref {
                     di_ref_type.as_type()
                 } else {
@@ -82,7 +85,7 @@ impl Node for FuncDefNode {
                 } else {
                     let (pltype, di_type) = res.unwrap();
                     let di_type = di_type.clone();
-                    let di_ref_type = pltype.clone().get_di_ref_type(ctx);
+                    let di_ref_type = pltype.clone().get_di_ref_type(ctx, di_type);
                     if self.typenode.ret.is_ref {
                         di_ref_type.and_then(|v| Some(v.as_type()))
                     } else {

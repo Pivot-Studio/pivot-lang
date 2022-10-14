@@ -1,6 +1,6 @@
 use super::*;
 use crate::ast::ctx::Ctx;
-use crate::ast:: diag::ErrorCode;
+use crate::ast::diag::ErrorCode;
 
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
