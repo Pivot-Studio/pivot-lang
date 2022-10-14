@@ -38,8 +38,8 @@ use std::rc::Rc;
 
 use super::compiler::get_target_machine;
 use super::compiler::ActionType;
-use super::error::ErrorCode;
-use super::error::ERR_MSG;
+use super::diag::{ErrorCode, WarnCode};
+use super::diag::{ERR_MSG, WARN_MSG};
 use super::node::types::TypeNameNode;
 use super::range::Pos;
 use super::range::Range;
@@ -102,12 +102,18 @@ pub struct Ctx<'a, 'ctx> {
 #[derive(Debug, Clone)]
 pub enum PLDiag {
     Error(Err),
+    Warn(Warn),
 }
 
 /// # Err
 /// Error for pivot-lang
 #[derive(Debug, Clone)]
 pub struct Err {
+    pub msg: String,
+    pub diag: Diagnostic,
+}
+#[derive(Debug, Clone)]
+pub struct Warn {
     pub msg: String,
     pub diag: Diagnostic,
 }
@@ -126,6 +132,20 @@ impl PLDiag {
                         s.diag.range.start.line + 1,
                         s.diag.range.start.character + 1
                     )
+                    .red(),
+                    format!("{}", s.diag.message.blue().bold()),
+                );
+                println!("{}", err);
+            }
+            PLDiag::Warn(s) => {
+                let err = format!(
+                    "warn at {}\n\t{}",
+                    format!(
+                        "{}:{}:{}",
+                        s.msg,
+                        s.diag.range.start.line + 1,
+                        s.diag.range.start.character + 1
+                    )
                     .yellow(),
                     format!("{}", s.diag.message.blue().bold()),
                 );
@@ -133,9 +153,17 @@ impl PLDiag {
             }
         }
     }
+    pub fn is_err(&self) -> bool {
+        if let PLDiag::Error(_) = self {
+            true
+        } else {
+            false
+        }
+    }
     pub fn get_diagnostic(&self) -> Diagnostic {
         match self {
-            PLDiag::Error(s) => s.diag.clone(),
+            PLDiag::Error(e) => e.diag.clone(),
+            PLDiag::Warn(w) => w.diag.clone(),
         }
     }
     pub fn new_error(file: String, range: Range, code: ErrorCode) -> Self {
@@ -147,6 +175,16 @@ impl PLDiag {
             ERR_MSG[&code].to_string(),
         );
         PLDiag::Error(Err { msg: file, diag })
+    }
+    pub fn new_warn(file: String, range: Range, code: WarnCode) -> Self {
+        let diag = Diagnostic::new_with_code_number(
+            range.to_diag_range(),
+            DiagnosticSeverity::WARNING,
+            code as i32,
+            Some(PL_DIAG_SOURCE.to_string()),
+            WARN_MSG[&code].to_string(),
+        );
+        PLDiag::Warn(Warn { msg: file, diag })
     }
 }
 
@@ -617,6 +655,11 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     pub fn add_err(&mut self, range: Range, code: ErrorCode) -> PLDiag {
         let dia = PLDiag::new_error(self.src_file_path.to_string(), range, code);
+        self.errs.borrow_mut().push(dia.clone());
+        dia
+    }
+    pub fn add_warn(&mut self, range: Range, code: WarnCode) -> PLDiag {
+        let dia = PLDiag::new_warn(self.src_file_path.to_string(), range, code);
         self.errs.borrow_mut().push(dia.clone());
         dia
     }

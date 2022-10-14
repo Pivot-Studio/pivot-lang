@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    ast::{ctx::Ctx, error::ErrorCode},
+    ast::{ctx::Ctx, diag::ErrorCode},
     lsp::helpers::send_completions,
 };
 use colored::Colorize;

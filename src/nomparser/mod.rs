@@ -16,7 +16,7 @@ use crate::{
     ast::node::ret::RetNode,
     ast::node::*,
     ast::{
-        error::ErrorCode,
+        diag::ErrorCode,
         node::{
             function::{FuncCallNode, FuncDefNode, FuncTypeNode},
             types::{StructDefNode, TypeNameNode, TypedIdentifierNode},

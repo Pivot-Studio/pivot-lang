@@ -1,5 +1,5 @@
 use super::*;
-use crate::ast::{ctx::Ctx, error::ErrorCode};
+use crate::ast::{ctx::Ctx, diag::ErrorCode};
 use internal_macro::range;
 
 #[range]
@@ -23,7 +23,7 @@ impl Node for RetNode {
                 let err = ctx.add_err(self.range, ErrorCode::RETURN_VALUE_IN_VOID_FUNCTION);
                 return Err(err);
             }
-            let (ret, _) = ret.emit(ctx)?;
+            let (ret, _, _) = ret.emit(ctx)?;
             let ret = if rettp.unwrap().is_pointer_type() {
                 ctx.try_load1(ret)
             } else {
@@ -41,11 +41,6 @@ impl Node for RetNode {
             }
             ctx.builder.build_return(None);
         }
-        position_at_end(
-            ctx,
-            ctx.context
-                .append_basic_block(ctx.function.unwrap(), "retdead"),
-        );
-        Ok((Value::None, None))
+        Ok((Value::None, None, TerminatorEnum::RETURN))
     }
 }

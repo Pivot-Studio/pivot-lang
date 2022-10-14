@@ -1,12 +1,11 @@
 use super::primary::*;
 use super::*;
 use crate::ast::ctx::Ctx;
-use crate::ast::error::ErrorCode;
+use crate::ast::diag::{ErrorCode, WarnCode};
 use inkwell::debug_info::*;
 use inkwell::types::AnyType;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
-
 #[range]
 pub struct DefNode {
     pub var: VarNode,
@@ -22,7 +21,7 @@ impl Node for DefNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
-        let (value, pltype_opt) = self.exp.emit(ctx)?;
+        let (value, pltype_opt, _) = self.exp.emit(ctx)?;
         // for err tolerate
         let mut tp = "i64".to_string();
         if pltype_opt.is_some() {
@@ -69,7 +68,7 @@ impl Node for DefNode {
             return Err(re.unwrap_err());
         }
         ctx.builder.build_store(ptr2value, base_value);
-        return Ok((Value::None, None));
+        return Ok((Value::None, None, TerminatorEnum::NONE));
     }
 }
 #[range]
@@ -87,8 +86,8 @@ impl Node for AssignNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let vrange = self.var.range();
-        let (ptr, _) = self.var.emit(ctx)?;
-        let (value, _) = self.exp.emit(ctx)?;
+        let (ptr, _, _) = self.var.emit(ctx)?;
+        let (value, _, _) = self.exp.emit(ctx)?;
         let ptr = ctx.try_load1(ptr);
         if let Value::VarValue(ptr) = ptr {
             let load = ctx.try_load2(value);
@@ -98,7 +97,7 @@ impl Node for AssignNode {
                 return Err(ctx.add_err(self.range, ErrorCode::ASSIGN_TYPE_MISMATCH));
             }
             ctx.builder.build_store(ptr, load.as_basic_value_enum());
-            return Ok((Value::None, None));
+            return Ok((Value::None, None, TerminatorEnum::NONE));
         }
         Err(ctx.add_err(vrange, ErrorCode::NOT_ASSIGNABLE))
     }
@@ -114,7 +113,7 @@ impl Node for NLNode {
         println!("NLNode");
     }
     fn emit<'a, 'ctx>(&'a mut self, _: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        Ok((Value::None, None))
+        Ok((Value::None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -135,23 +134,27 @@ impl Node for StatementsNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let child = &mut ctx.new_child(self.range.start);
-        for m in self.statements.iter_mut() {
-            let pos = m.range().start;
-            child.build_dbg_location(pos);
-            _ = m.emit(child);
-        }
-        Ok((Value::None, None))
+        self.emit_child(child)
     }
 }
 
 impl StatementsNode {
     pub fn emit_child<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let child = ctx;
+        let mut terminator = TerminatorEnum::NONE;
         for m in self.statements.iter_mut() {
+            let is_nl = (&*m).as_ref().as_any().is::<NLNode>();
+            if (!terminator.is_none()) && (!is_nl) {
+                child.add_warn(m.range(), WarnCode::UNREACHABLE_STATEMENT);
+                continue;
+            }
             let pos = m.range().start;
             child.build_dbg_location(pos);
-            _ = m.emit(child);
+            let (_, _, terminator_res) = m.emit(child)?;
+            if !is_nl {
+                terminator = terminator_res;
+            }
         }
-        Ok((Value::None, None))
+        Ok((Value::None, None, terminator))
     }
 }

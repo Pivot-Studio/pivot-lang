@@ -48,7 +48,7 @@ impl Node for FuncDefNode {
             if p.tp.id == "void" {
                 return Err(ctx.add_err(
                     p.range,
-                    crate::ast::error::ErrorCode::VOID_TYPE_CANNOT_BE_PARAMETER,
+                    crate::ast::diag::ErrorCode::VOID_TYPE_CANNOT_BE_PARAMETER,
                 ));
             }
         }
@@ -168,25 +168,18 @@ impl Node for FuncDefNode {
                 .unwrap();
             }
             // emit body
-            _ = body.emit_child(&mut ctx);
-            if !ctx
-                .block
-                .unwrap()
-                .get_name()
-                .to_str()
-                .unwrap()
-                .contains("retdead")
-            {
+            let (_, _, terminator) = body.emit_child(&mut ctx)?;
+            if !terminator.is_return() {
                 return Err(ctx.add_err(
                     self.range,
-                    crate::ast::error::ErrorCode::FUNCTION_MUST_HAVE_RETURN,
+                    crate::ast::diag::ErrorCode::FUNCTION_MUST_HAVE_RETURN,
                 ));
             }
             ctx.nodebug_builder.position_at_end(allocab);
             ctx.nodebug_builder.build_unconditional_branch(entry);
-            return Ok((Value::None, None));
+            return Ok((Value::None, None, TerminatorEnum::NONE));
         }
-        Ok((Value::None, None))
+        Ok((Value::None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -214,32 +207,32 @@ impl Node for FuncCallNode {
         let mut para_values = Vec::new();
         let func = ctx.module.get_function(self.id.as_str());
         if func.is_none() {
-            return Err(ctx.add_err(self.range, crate::ast::error::ErrorCode::FUNCTION_NOT_FOUND));
+            return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::FUNCTION_NOT_FOUND));
         }
         let func = func.unwrap();
         if func.count_params() != self.paralist.len() as u32 {
             return Err(ctx.add_err(
                 self.range,
-                crate::ast::error::ErrorCode::PARAMETER_LENGTH_NOT_MATCH,
+                crate::ast::diag::ErrorCode::PARAMETER_LENGTH_NOT_MATCH,
             ));
         }
         for (i, para) in self.paralist.iter_mut().enumerate() {
             let pararange = para.range();
-            let (value, _) = para.emit(ctx)?;
+            let (value, _, _) = para.emit(ctx)?;
             let load_op = if let Value::RefValue(ptr) = value {
                 Some(ptr.as_basic_value_enum())
             } else {
                 ctx.try_load2(value).as_basic_value_enum_op()
             };
             if load_op.is_none() {
-                return Ok((Value::None, None));
+                return Ok((Value::None, None, TerminatorEnum::NONE));
             }
             let param = func.get_nth_param(i as u32).unwrap();
             let load = load_op.unwrap();
             if load.get_type() != param.get_type() {
                 return Err(ctx.add_err(
                     pararange,
-                    crate::ast::error::ErrorCode::PARAMETER_TYPE_NOT_MATCH,
+                    crate::ast::diag::ErrorCode::PARAMETER_TYPE_NOT_MATCH,
                 ));
             }
             para_values.push(load.as_basic_value_enum().into());
@@ -257,19 +250,26 @@ impl Node for FuncCallNode {
                         Ok((
                             Value::RefValue(v.into_pointer_value()),
                             Some(pltype.clone()),
+                            TerminatorEnum::NONE,
                         ))
                     } else {
-                        Ok((Value::LoadValue(v), Some(pltype.clone())))
+                        Ok((
+                            Value::LoadValue(v),
+                            Some(pltype.clone()),
+                            TerminatorEnum::NONE,
+                        ))
                     }
                 }
-                (None, Some(pltype)) => Ok((Value::None, Some(pltype.clone()))),
+                (None, Some(pltype)) => {
+                    Ok((Value::None, Some(pltype.clone()), TerminatorEnum::NONE))
+                }
                 _ => todo!(),
             };
             ctx.set_if_refs_tp(&fntp.0, self.range);
             ctx.send_if_go_to_def(self.range, fv.range);
             return o;
         }
-        return Err(ctx.add_err(self.range, crate::ast::error::ErrorCode::NOT_A_FUNCTION));
+        return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::NOT_A_FUNCTION));
     }
 }
 #[range]

@@ -62,6 +62,6 @@ impl Node for ProgramNode {
             _ = x.emit(ctx);
         });
 
-        Ok((Value::None, None))
+        Ok((Value::None, None, TerminatorEnum::NONE))
     }
 }

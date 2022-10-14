@@ -5,7 +5,7 @@ use std::rc::Rc;
 use super::primary::VarNode;
 use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
-use crate::ast::error::ErrorCode;
+use crate::ast::diag::ErrorCode;
 use crate::ast::range::Range;
 use crate::lsp::helpers::send_completions;
 use inkwell::debug_info::*;
@@ -91,7 +91,7 @@ impl Node for StructDefNode {
             ctx.push_semantic_token(f.id.range, SemanticTokenType::PROPERTY, 0);
             ctx.push_semantic_token(f.tp.range, SemanticTokenType::TYPE, 0);
         }
-        Ok((Value::None, None))
+        Ok((Value::None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -171,13 +171,17 @@ impl Node for StructInitFieldNode {
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let (v, tp) = self.exp.emit(ctx)?;
+        let (v, tp, _) = self.exp.emit(ctx)?;
         let value = if let Value::RefValue(_) = v {
             v.as_basic_value_enum()
         } else {
             ctx.try_load2(v).as_basic_value_enum()
         };
-        return Ok((Value::StructFieldValue((self.id.clone(), value)), tp));
+        return Ok((
+            Value::StructFieldValue((self.id.clone(), value)),
+            tp,
+            TerminatorEnum::NONE,
+        ));
     }
 }
 
@@ -206,7 +210,7 @@ impl Node for StructInitNode {
         let mut fields = HashMap::<String, (BasicValueEnum<'ctx>, Range)>::new();
         for field in self.fields.iter_mut() {
             let range = field.range();
-            if let (Value::StructFieldValue((id, val)), _) = field.emit(ctx)? {
+            if let (Value::StructFieldValue((id, val)), _, _) = field.emit(ctx)? {
                 fields.insert(id, (val, range));
             } else {
                 panic!("StructInitNode::emit: invalid field");
@@ -238,7 +242,7 @@ impl Node for StructInitNode {
                 ctx.builder.build_store(ptr, val);
                 ctx.send_if_go_to_def(range, field.range)
             }
-            return Ok((Value::VarValue(stv), Some(st.name)));
+            return Ok((Value::VarValue(stv), Some(st.name), TerminatorEnum::NONE));
         } else {
             panic!("StructInitNode::emit: invalid type");
         }
