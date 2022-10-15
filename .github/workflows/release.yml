@@ -122,7 +122,7 @@ jobs:
         run: |
           import os
           src = "vm/target/release/libvm.a"
-          dst = os.environ['OUT_DIR'] + "/" + libvm.a
+          dst = os.environ['OUT_DIR'] + "/" + "libvm.a"
           os.rename(src, dst)
         shell: python
 
