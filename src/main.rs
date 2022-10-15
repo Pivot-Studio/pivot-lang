@@ -22,7 +22,7 @@ mod db;
 mod lsp;
 mod nomparser;
 mod utils;
-use std::{cell::RefCell, fs, path::Path, sync::Arc};
+use std::{cell::RefCell, path::Path, sync::Arc};
 
 use ast::{
     accumulators,
@@ -93,7 +93,7 @@ fn main() {
     if let Some(name) = cli.name.as_deref() {
         let db = Database::default();
         let filepath = Path::new(name);
-        let abs = fs::canonicalize(filepath).unwrap();
+        let abs = dunce::canonicalize(filepath).unwrap();
         let mem = MemDocsInput::new(
             &db,
             Arc::new(RefCell::new(mem_docs::MemDocs::new())),

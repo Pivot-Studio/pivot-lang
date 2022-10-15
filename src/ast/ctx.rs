@@ -6,6 +6,7 @@ use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::debug_info::*;
+use inkwell::module::FlagBehavior;
 use inkwell::module::Module;
 use inkwell::targets::TargetMachine;
 use inkwell::types::BasicMetadataTypeEnum;
@@ -14,6 +15,7 @@ use inkwell::types::BasicTypeEnum;
 use inkwell::types::FunctionType;
 use inkwell::types::StructType;
 use inkwell::types::VoidType;
+use inkwell::values::BasicMetadataValueEnum;
 use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
@@ -496,10 +498,20 @@ pub fn create_ctx_info<'ctx>(
         DWARFEmissionKind::Full,
         0,
         false,
-        false,
+        true,
         "",
         "",
     );
+
+    let metav = context.metadata_node(&[BasicMetadataValueEnum::IntValue(
+        context.i32_type().const_int(3, false),
+    )]);
+    let metacv = context.metadata_node(&[BasicMetadataValueEnum::IntValue(
+        context.i32_type().const_int(1, false),
+    )]);
+    module.add_metadata_flag("Debug Info Version", FlagBehavior::Warning, metav);
+    module.add_metadata_flag("CodeView", FlagBehavior::Warning, metacv);
+    // module.add_metadata_flag("CodeView", FlagBehavior::Require, BasicMetadataValueEnum::IntValue(context.i32_type().const_int(1, false)).into_metadata_value());
     let tm = get_target_machine(inkwell::OptimizationLevel::None);
     (
         module,

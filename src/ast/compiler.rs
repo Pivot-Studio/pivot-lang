@@ -107,7 +107,7 @@ pub fn compile_dry(
 ) {
     let context = &Context::create();
     let filepath = Path::new(docs.file(db));
-    let abs = fs::canonicalize(filepath).unwrap();
+    let abs = dunce::canonicalize(filepath).unwrap();
     let dir = abs.parent().unwrap().to_str().unwrap();
     let fname = abs.file_name().unwrap().to_str().unwrap();
 
@@ -165,7 +165,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let now = Instant::now();
     let context = &Context::create();
     let filepath = Path::new(docs.file(db));
-    let abs = fs::canonicalize(filepath).unwrap();
+    let abs = dunce::canonicalize(filepath).unwrap();
     let dir = abs.parent().unwrap().to_str().unwrap();
     let fname = abs.file_name().unwrap().to_str().unwrap();
 
@@ -185,6 +185,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         None,
     );
     let m = &mut ctx;
+    m.module.set_triple(&TargetMachine::get_default_triple());
     let src = docs.get_file_content(db).unwrap();
     let parse_result = parse(db, src);
     if let Err(e) = parse_result {
