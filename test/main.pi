@@ -61,6 +61,17 @@ fn test_struct_ref() void {
     printi64ln(ref_struct.ref)
     return 
 }
+fn test_ref_struct() void {
+    let s = struct_father{a:1,b:1,c:struct_child{a:1,},}
+    let b = &s
+    b.a = 2
+    b.b = 2
+    b.c.a = 2
+    printi64ln(s.a)
+    printi64ln(s.b)
+    printi64ln(s.c.a)
+    return 
+}
 fn test_if_else() void {
     test_if_only(true)
     test_if_else_ret(true)
@@ -73,12 +84,16 @@ fn test_if_only(judge:bool) void {
     if judge {
         return 
     }
+    return
 }
 fn test_if_else_ret(judge:bool) void {
     if judge {
         return 
     } else {
-        return 
+        if true {
+            return
+        }
+        return
     }
 }
 fn test_if_ret_only(judge:bool) void {
@@ -133,6 +148,8 @@ fn main() i64 {
     test_ret_ref()
     printline()
     test_struct_ref()
+    printline()
+    test_ref_struct()
     printline()
     test_if_else()
     printline()
