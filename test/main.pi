@@ -88,6 +88,7 @@ fn test_if_only(judge:bool) void {
     if judge {
         return ;
     }
+    return;
 }
 fn test_if_else_ret(judge:bool) void {
     if judge {//12354121
