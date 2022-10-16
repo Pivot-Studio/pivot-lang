@@ -680,7 +680,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         range: Range,
     ) -> Result<(), PLDiag> {
         if self.types.contains_key(&name) {
-            return Err(self.add_err(range, ErrorCode::REDFINE_TYPE));
+            return Err(self.add_err(range, ErrorCode::REDEFINE_TYPE));
         }
         let ditype = tp.get_ditype(self);
         self.send_if_go_to_def(range, range);

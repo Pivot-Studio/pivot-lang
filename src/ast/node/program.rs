@@ -55,10 +55,7 @@ impl Node for ProgramNode {
             prev = i;
         }
         self.fntypes.iter_mut().for_each(|x| {
-            let re = x.emit_func_type(ctx);
-            if re.is_err() {
-                ctx.add_diag(re.err().unwrap());
-            }
+            _ = x.emit_func_type(ctx);
         });
         ctx.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
             ctx.src_file_path.to_string(),

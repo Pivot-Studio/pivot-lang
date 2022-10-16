@@ -52,9 +52,11 @@ define_error!(
     RETURN_TYPE_MISMATCH = "return type mismatch",
     NO_RETURN_VALUE_IN_NON_VOID_FUNCTION = "non void function must have a return value",
     FUNCTION_MUST_HAVE_RETURN = "function must have a return value",
-    REDFINE_TYPE = "redefine type",
+    REDEFINE_TYPE = "redefine type",
     STRUCT_FIELD_TYPE_NOT_MATCH = "struct field type not match",
-    MISSING_SEMI = "missing semicolon"
+    MISSING_SEMI = "missing semicolon",
+    EXPECT_TYPE = "expect type",
+    REDEFINE_SYMBOL = "redefine symbol"
 );
 macro_rules! define_warn {
     ($(

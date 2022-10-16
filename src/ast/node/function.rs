@@ -2,6 +2,7 @@ use super::statement::StatementsNode;
 use super::*;
 use super::{alloc, types::TypedIdentifierNode, Node};
 use crate::ast::ctx::{FNType, PLType};
+use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 use inkwell::debug_info::*;
 use inkwell::types::BasicType;
@@ -138,8 +139,14 @@ impl Node for FuncDefNode {
             // copy para type
             let mut para_tps = Vec::new();
             for i in 0..para_names.len() {
-                let para_type = func.get_nth_param(i as u32).unwrap();
-                para_tps.push(para_type);
+                let para_type = func.get_nth_param(i as u32);
+                if para_type.is_none() {
+                    return Err(ctx.add_err(
+                        self.typenode.paralist[i].range,
+                        crate::ast::diag::ErrorCode::EXPECT_TYPE,
+                    ));
+                }
+                para_tps.push(para_type.unwrap());
             }
             // add block
             let allocab = ctx.context.append_basic_block(func, "alloc");
@@ -325,12 +332,8 @@ impl FuncTypeNode {
         &'a mut self,
         ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
     ) -> Result<FunctionValue<'ctx>, PLDiag> {
-        if let Ok((func, _)) = ctx.get_type(self.id.as_str(), self.range) {
-            let f = match func {
-                PLType::FN(func) => func.fntype,
-                _ => panic!("type error"),
-            };
-            return Ok(f);
+        if let Ok(_) = ctx.get_type(self.id.as_str(), self.range) {
+            return Err(ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL));
         }
         let mut para_types = Vec::new();
         for para in self.paralist.iter() {

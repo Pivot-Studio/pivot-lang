@@ -29,7 +29,13 @@ struct struct_child {
 // *hello*
 // 123
 // ```pivot-lang
-// let a = b
+// fn test_struct() void {
+//     let s = struct_father{a:2,b:2,c:struct_child{a:2,},};
+//     printi64ln(s.a);
+//     printi64ln(s.a);
+//     printi64ln(s.c.a);
+//     return ;
+// }
 // ```
 fn test_struct() void {
     let s = struct_father{a:2,b:2,c:struct_child{a:2,},};
