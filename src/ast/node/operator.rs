@@ -28,12 +28,12 @@ impl Node for UnaryOpNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let (exp, pltype, _) = self.exp.emit(ctx)?;
         if let (&Value::VarValue(_), TokenType::REF) = (&exp, self.op) {
-            if let Value::VarValue(exp) = ctx.try_load1(exp) {
+            if let Value::VarValue(exp) = ctx.try_load2ptr(exp) {
                 return Ok((Value::RefValue(exp), pltype, TerminatorEnum::NONE));
             }
             todo!()
         }
-        let exp = ctx.try_load2(exp);
+        let exp = ctx.try_load2var(exp);
         return Ok(match (exp, self.op) {
             (Value::IntValue(exp), TokenType::MINUS) => (
                 Value::IntValue(ctx.builder.build_int_neg(exp, "negtmp")),
@@ -88,9 +88,9 @@ impl Node for BinOpNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let (lv, lpltype, _) = self.left.emit(ctx)?;
-        let left = ctx.try_load2(lv);
+        let left = ctx.try_load2var(lv);
         let (rv, rpltype, _) = self.right.emit(ctx)?;
-        let right = ctx.try_load2(rv);
+        let right = ctx.try_load2var(rv);
         if lpltype != rpltype {
             return Err(ctx.add_err(
                 self.range,
@@ -216,7 +216,7 @@ impl Node for TakeOpNode {
         let head = self.head.emit(ctx)?;
         let (mut res, mut pltype, _) = head;
         if self.ids.len() != 0 {
-            res = ctx.try_load1(res);
+            res = ctx.try_load2ptr(res);
         }
         for id in &self.ids {
             res = match res.as_basic_value_enum() {

@@ -82,12 +82,13 @@ pub struct Ctx<'a, 'ctx> {
     pub block: Option<BasicBlock<'ctx>>,   // current block
     pub continue_block: Option<BasicBlock<'ctx>>, // the block to jump when continue
     pub break_block: Option<BasicBlock<'ctx>>, // the block to jump to when break
-    pub targetmachine: &'a TargetMachine,  // might be used in debug info
-    pub discope: DIScope<'ctx>,            // debug info scope
+    pub return_block: Option<(BasicBlock<'ctx>, Option<PointerValue<'ctx>>)>, // the block to jump to when return and value
+    pub targetmachine: &'a TargetMachine, // might be used in debug info
+    pub discope: DIScope<'ctx>,           // debug info scope
     pub nodebug_builder: &'a Builder<'ctx>, // builder without debug info
-    pub src_file_path: &'a str,            // source file path
-    pub errs: &'a RefCell<Vec<PLDiag>>,    // diagnostic list
-    pub sender: Option<ActionType>,        // lsp sender
+    pub src_file_path: &'a str,           // source file path
+    pub errs: &'a RefCell<Vec<PLDiag>>,   // diagnostic list
+    pub sender: Option<ActionType>,       // lsp sender
     pub lspparams: Option<(Pos, RequestId, Option<String>, ActionType)>, // lsp params
     pub refs: Rc<Cell<Option<Rc<RefCell<Vec<Location>>>>>>, // hold the find references result (thank you, Rust!)
     pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
@@ -536,6 +537,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             block: None,
             continue_block: None,
             break_block: None,
+            return_block: None,
             dibuilder,
             diunit,
             targetmachine: tm,
@@ -567,6 +569,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             block: self.block,
             continue_block: self.continue_block,
             break_block: self.break_block,
+            return_block: self.return_block,
             dibuilder: self.dibuilder,
             diunit: self.diunit,
             targetmachine: self.targetmachine,
@@ -681,7 +684,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.errs.borrow_mut().push(dia);
     }
     // load type** and type* to type
-    pub fn try_load2(&mut self, v: Value<'ctx>) -> Value<'ctx> {
+    pub fn try_load2var(&mut self, v: Value<'ctx>) -> Value<'ctx> {
         match v.as_basic_value_enum() {
             BasicValueEnum::PointerValue(v) => {
                 let v = self.builder.build_load(v, "loadtmp");
@@ -692,7 +695,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                         _ => todo!(),
                     },
                     BasicValueEnum::FloatValue(v) => Value::FloatValue(v),
-                    BasicValueEnum::PointerValue(v) => self.try_load2(Value::VarValue(v)),
+                    BasicValueEnum::PointerValue(v) => self.try_load2var(Value::VarValue(v)),
                     _ => Value::LoadValue(v),
                 }
             }
@@ -700,7 +703,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }
     }
     // load type** and type* to type*
-    pub fn try_load1(&mut self, v: Value<'ctx>) -> Value<'ctx> {
+    pub fn try_load2ptr(&mut self, v: Value<'ctx>) -> Value<'ctx> {
         match v.as_basic_value_enum() {
             BasicValueEnum::PointerValue(ptr2value) => {
                 if ptr2value.get_type().get_element_type().is_pointer_type() {
@@ -713,7 +716,16 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             _ => v,
         }
     }
-
+    // load type* to type load type** to type*
+    pub fn try_load1(&mut self, v: Value<'ctx>) -> Value<'ctx> {
+        match v.as_basic_value_enum() {
+            BasicValueEnum::PointerValue(ptr2value) => {
+                let v = self.builder.build_load(ptr2value, "loadtmp");
+                Value::LoadValue(v)
+            }
+            _ => v,
+        }
+    }
     pub fn if_completion(&self, c: impl FnOnce(&Ctx, &(Pos, RequestId, Option<String>))) {
         if let Some(_) = self.sender {
             if let Some(comp) = &self.lspparams {

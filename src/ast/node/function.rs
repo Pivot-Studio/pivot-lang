@@ -138,6 +138,35 @@ impl Node for FuncDefNode {
             // add block
             let allocab = ctx.context.append_basic_block(func, "alloc");
             let entry = ctx.context.append_basic_block(func, "entry");
+            let return_block = ctx.context.append_basic_block(func, "return");
+            ctx.position_at_end(return_block);
+            let ret_value_ptr = func.get_type().get_return_type().and_then(|_| {
+                let res = ctx.get_type(&self.typenode.ret.id, self.typenode.ret.range);
+                let ret_type = if res.is_err() {
+                    ctx.get_type("i64", Default::default())
+                        .unwrap()
+                        .0
+                        .get_basic_type()
+                } else {
+                    res.unwrap().0.get_basic_type()
+                };
+                let ret_type = if self.typenode.ret.is_ref {
+                    ret_type
+                        .ptr_type(inkwell::AddressSpace::Generic)
+                        .as_basic_type_enum()
+                } else {
+                    ret_type
+                };
+                Some(alloc(&mut ctx, ret_type, "retvalue"))
+            });
+
+            ctx.return_block = Some((return_block, ret_value_ptr));
+            if let Some(ptr) = ret_value_ptr {
+                let value = ctx.try_load1(Value::VarValue(ptr)).as_basic_value_enum();
+                ctx.builder.build_return(Some(&value));
+            } else {
+                ctx.builder.build_return(None);
+            };
             ctx.position_at_end(entry);
             // alloc para
             for (i, para) in para_tps.iter_mut().enumerate() {
@@ -226,7 +255,7 @@ impl Node for FuncCallNode {
             let load_op = if let Value::RefValue(ptr) = value {
                 Some(ptr.as_basic_value_enum())
             } else {
-                ctx.try_load2(value).as_basic_value_enum_op()
+                ctx.try_load2var(value).as_basic_value_enum_op()
             };
             if load_op.is_none() {
                 return Ok((Value::None, None, TerminatorEnum::NONE));

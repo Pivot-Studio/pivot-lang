@@ -42,7 +42,7 @@ impl Node for DefNode {
             )
         } else {
             let ditype = ditype.clone();
-            (ctx.try_load2(value).as_basic_value_enum(), ditype)
+            (ctx.try_load2var(value).as_basic_value_enum(), ditype)
         };
         let base_type = base_value.get_type();
         let ptr2value = alloc(ctx, base_type, &self.var.name);
@@ -95,9 +95,9 @@ impl Node for AssignNode {
         let vrange = self.var.range();
         let (ptr, _, _) = self.var.emit(ctx)?;
         let (value, _, _) = self.exp.emit(ctx)?;
-        let ptr = ctx.try_load1(ptr);
+        let ptr = ctx.try_load2ptr(ptr);
         if let Value::VarValue(ptr) = ptr {
-            let load = ctx.try_load2(value);
+            let load = ctx.try_load2var(value);
             if ptr.get_type().get_element_type()
                 != load.as_basic_value_enum().get_type().as_any_type_enum()
             {

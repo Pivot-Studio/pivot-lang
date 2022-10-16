@@ -26,21 +26,27 @@ impl Node for RetNode {
             }
             let (ret, _, _) = ret.emit(ctx)?;
             let ret = if rettp.unwrap().is_pointer_type() {
-                ctx.try_load1(ret)
+                ctx.try_load2ptr(ret)
             } else {
-                ctx.try_load2(ret)
+                ctx.try_load2var(ret)
             };
             if ret.as_basic_value_enum().get_type() != rettp.unwrap() {
                 let err = ctx.add_err(self.range, ErrorCode::RETURN_TYPE_MISMATCH);
                 return Err(err);
             }
-            ctx.builder.build_return(Some(&ret.as_basic_value_enum()));
+            ctx.builder.build_store(
+                ctx.return_block.unwrap().1.unwrap(),
+                ret.as_basic_value_enum(),
+            );
+            ctx.builder
+                .build_unconditional_branch(ctx.return_block.unwrap().0);
         } else {
             if rettp.is_some() {
                 let err = ctx.add_err(self.range, ErrorCode::NO_RETURN_VALUE_IN_NON_VOID_FUNCTION);
                 return Err(err);
             }
-            ctx.builder.build_return(None);
+            ctx.builder
+                .build_unconditional_branch(ctx.return_block.unwrap().0);
         }
         Ok((Value::None, None, TerminatorEnum::RETURN))
     }
