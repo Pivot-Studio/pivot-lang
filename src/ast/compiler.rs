@@ -228,9 +228,9 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         let mut s = out.to_string();
         s.push_str(".ll");
         let llp = Path::new(&s[..]);
-        fs::write(llp, ctx.module.to_string()).unwrap();
+        fs::write(llp, m.module.to_string()).unwrap();
     }
-    // m.module.verify().unwrap();
+    m.module.verify().unwrap();
     let time = now.elapsed();
     if op.verbose {
         println!("compile succ, time: {:?}", time);

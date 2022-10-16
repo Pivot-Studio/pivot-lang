@@ -53,81 +53,81 @@ impl Node for FuncDefNode {
             }
         }
         ctx.push_semantic_token(typenode.ret.range, SemanticTokenType::TYPE, 0);
-        // build debug info
-        let param_ditypes = self
-            .typenode
-            .paralist
-            .iter()
-            .map(|para| {
-                let res = ctx.get_type(&para.tp.id, para.range());
-                if res.is_err() {
-                    return ctx.get_type("i64", Default::default()).unwrap().1.unwrap();
-                }
-                let (pltype, di_type) = res.unwrap();
-                if di_type.is_none() {
-                    return ctx.get_type("i64", Default::default()).unwrap().1.unwrap();
-                }
-                let di_type = di_type.unwrap();
-                let di_ref_type = pltype.clone().get_di_ref_type(ctx, Some(di_type)).unwrap();
-                if para.tp.is_ref {
-                    di_ref_type.as_type()
-                } else {
-                    di_type
-                }
-            })
-            .collect::<Vec<_>>();
-        let subroutine_type = ctx.dibuilder.create_subroutine_type(
-            ctx.diunit.get_file(),
-            {
-                let res = ctx.get_type(&self.typenode.ret.id, self.typenode.ret.range);
-                if res.is_err() {
-                    ctx.get_type("i64", Default::default()).unwrap().1
-                } else {
+        if let Some(body) = self.body.as_mut() {
+            // build debug info
+            let param_ditypes = self
+                .typenode
+                .paralist
+                .iter()
+                .map(|para| {
+                    let res = ctx.get_type(&para.tp.id, para.range());
+                    if res.is_err() {
+                        return ctx.get_type("i64", Default::default()).unwrap().1.unwrap();
+                    }
                     let (pltype, di_type) = res.unwrap();
-                    let di_type = di_type.clone();
-                    let di_ref_type = pltype.clone().get_di_ref_type(ctx, di_type);
-                    if self.typenode.ret.is_ref {
-                        di_ref_type.and_then(|v| Some(v.as_type()))
+                    if di_type.is_none() {
+                        return ctx.get_type("i64", Default::default()).unwrap().1.unwrap();
+                    }
+                    let di_type = di_type.unwrap();
+                    let di_ref_type = pltype.clone().get_di_ref_type(ctx, Some(di_type)).unwrap();
+                    if para.tp.is_ref {
+                        di_ref_type.as_type()
                     } else {
                         di_type
                     }
-                }
-            },
-            &param_ditypes,
-            DIFlags::PUBLIC,
-        );
-        let subprogram = ctx.dibuilder.create_function(
-            ctx.diunit.get_file().as_debug_info_scope(),
-            self.typenode.id.as_str(),
-            None,
-            ctx.diunit.get_file(),
-            self.range.start.line as u32,
-            subroutine_type,
-            true,
-            true,
-            self.range.start.line as u32,
-            DIFlags::PUBLIC,
-            false,
-        );
-        let para_pltype_ids: Vec<&String> =
-            typenode.paralist.iter().map(|para| &para.tp.id).collect();
-        // get the para's type vec & copy the para's name vec
-        let mut para_names = Vec::new();
-        for para in typenode.paralist.iter() {
-            para_names.push(para.id.clone());
-        }
-        // add function
-        let func;
-        let (fu, _) = ctx.get_type(typenode.id.as_str(), self.range)?;
-        func = match fu {
-            PLType::FN(fu) => fu.fntype,
-            _ => panic!("type error"), // 理论上这两个Panic不可能触发
-        };
-        func.set_subprogram(subprogram);
-        ctx.function = Some(func);
-        let mut ctx = ctx.new_child(self.range.start);
-        ctx.discope = subprogram.as_debug_info_scope();
-        if let Some(body) = self.body.as_mut() {
+                })
+                .collect::<Vec<_>>();
+            let subroutine_type = ctx.dibuilder.create_subroutine_type(
+                ctx.diunit.get_file(),
+                {
+                    let res = ctx.get_type(&self.typenode.ret.id, self.typenode.ret.range);
+                    if res.is_err() {
+                        ctx.get_type("i64", Default::default()).unwrap().1
+                    } else {
+                        let (pltype, di_type) = res.unwrap();
+                        let di_type = di_type.clone();
+                        let di_ref_type = pltype.clone().get_di_ref_type(ctx, di_type);
+                        if self.typenode.ret.is_ref {
+                            di_ref_type.and_then(|v| Some(v.as_type()))
+                        } else {
+                            di_type
+                        }
+                    }
+                },
+                &param_ditypes,
+                DIFlags::PUBLIC,
+            );
+            let subprogram = ctx.dibuilder.create_function(
+                ctx.diunit.get_file().as_debug_info_scope(),
+                self.typenode.id.as_str(),
+                None,
+                ctx.diunit.get_file(),
+                self.range.start.line as u32,
+                subroutine_type,
+                true,
+                true,
+                self.range.start.line as u32,
+                DIFlags::PUBLIC,
+                false,
+            );
+            let para_pltype_ids: Vec<&String> =
+                typenode.paralist.iter().map(|para| &para.tp.id).collect();
+            // get the para's type vec & copy the para's name vec
+            let mut para_names = Vec::new();
+            for para in typenode.paralist.iter() {
+                para_names.push(para.id.clone());
+            }
+            // add function
+            let func;
+            let (fu, _) = ctx.get_type(typenode.id.as_str(), self.range)?;
+            func = match fu {
+                PLType::FN(fu) => fu.fntype,
+                _ => panic!("type error"), // 理论上这两个Panic不可能触发
+            };
+            func.set_subprogram(subprogram);
+            ctx.function = Some(func);
+            let mut ctx = ctx.new_child(self.range.start);
+            ctx.discope = subprogram.as_debug_info_scope();
             // copy para type
             let mut para_tps = Vec::new();
             for i in 0..para_names.len() {
