@@ -19,9 +19,11 @@ use crate::{
         diag::ErrorCode,
         node::{
             comment::CommentNode,
+            error::{ErrorNode, STErrorNode},
             function::{FuncCallNode, FuncDefNode, FuncTypeNode},
             types::{StructDefNode, TypeNameNode, TypedIdentifierNode},
         },
+        tokens::TOKEN_STR_MAP,
     },
     ast::{node::types::StructInitNode, range::Range},
     ast::{
@@ -55,6 +57,7 @@ macro_rules! del_newline_or_space {
         )
     };
 }
+
 // macro_rules! delnl {
 //     ($parser:expr) => {
 //         delimited(many0(newline), $parser, many0(newline))
@@ -119,14 +122,15 @@ pub struct SourceProgram {
     pub text: String,
 }
 
-#[salsa::tracked]
-pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<Box<NodeEnum>, String> {
+#[salsa::tracked(lru = 32)]
+pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, String> {
     let text = source.text(db);
     let re = program(Span::new(text));
     if let Err(e) = re {
         return Err(format!("{:?}", e));
     }
-    Ok(re.unwrap().1)
+    eprintln!("parse");
+    Ok(ProgramNodeWrapper::new(db, re.unwrap().1))
 }
 #[test_parser("return 1;")]
 #[test_parser("return 1.1;")]
@@ -355,12 +359,39 @@ pub fn comment(input: Span) -> IResult<Span, Box<NodeEnum>> {
     )(input)
 }
 
+#[test_parser("{let a = 1;}")]
+#[test_parser("{}")]
+#[test_parser(
+    "{
+
+}"
+)]
 pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
     delspace(delimited(
-        tag_token(TokenType::LBRACE),
+        del_newline_or_space!(tag_token(TokenType::LBRACE)),
         statements,
-        tag_token(TokenType::RBRACE),
+        del_newline_or_space!(tag_token(TokenType::RBRACE)),
     ))(input)
+}
+
+macro_rules! semi_statement {
+    ($e:expr) => {
+        alt((terminated($e, tag_token(TokenType::SEMI)), map_res(tuple(($e,recognize(many0(alt((tag("\n"), tag("\r\n"), tag(" "), tag("\t"))))))), |(node,e)|{
+            let range = node.range();
+            let r = Range::new(e,e);
+            eprintln!("{:?}",r);
+            res_enum(STErrorNode{
+                range: range,
+                st: node,
+                err:ErrorNode{
+                    range: r,//Range{start: range.end, end: range.end},
+                    msg: "missing semi".to_string(),
+                    code: ErrorCode::MISSING_SEMI,
+                    src:"".to_string(),
+                },
+            }.into())
+        })))
+    };
 }
 
 /// ```ebnf
@@ -378,23 +409,23 @@ pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
 /// ```
 pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
-        terminated(new_variable, tag_token(TokenType::SEMI)),
-        terminated(assignment, tag_token(TokenType::SEMI)),
+        semi_statement!(new_variable),
+        semi_statement!(assignment),
         if_statement,
         while_statement,
         for_statement,
         break_statement,
         continue_statement,
         return_statement,
-        terminated(function_call, tag_token(TokenType::SEMI)),
-        terminated(take_exp, tag_token(TokenType::SEMI)), // for completion
+        semi_statement!(function_call),
+        semi_statement!(take_exp), // for completion
         empty_statement,
         comment,
-        del_newline_or_space!(except(
+        except(
             "\n\r}",
             "failed to parse statement",
-            ErrorCode::SYNTAX_ERROR_STATEMENT
-        )),
+            ErrorCode::SYNTAX_ERROR_STATEMENT,
+        ),
     )))(input)
 }
 
@@ -639,6 +670,10 @@ pub fn identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
             many0_count(alt((alphanumeric1, tag("_")))),
         )),
         |out| {
+            let a = TOKEN_STR_MAP.get(out.fragment());
+            if a.is_some() {
+                return Err(Error {});
+            }
             res_enum(
                 VarNode {
                     name: out.to_string(),
@@ -807,7 +842,7 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((
             many0(comment),
-            tag_token_with_nl(TokenType::FN),
+            tag_token(TokenType::FN),
             identifier,
             tag_token(TokenType::LPAREN),
             del_newline_or_space!(opt(tuple((
@@ -833,12 +868,12 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 paralist.extend(para.1);
             }
             let node = FuncDefNode {
-                doc,
                 typenode: FuncTypeNode {
                     id: id.name,
                     paralist,
                     ret,
                     range,
+                    doc,
                 },
                 body,
                 range,
@@ -924,7 +959,7 @@ fn take_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 
 #[test_parser("jksa: int;")]
 fn struct_field(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
-    delspace(terminated(typed_identifier, tag_token(TokenType::SEMI)))(input)
+    del_newline_or_space!(terminated(typed_identifier, tag_token(TokenType::SEMI)))(input)
 }
 
 #[test_parser(
@@ -937,7 +972,7 @@ fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((
             many0(comment),
-            tag_token_with_nl(TokenType::STRUCT),
+            tag_token(TokenType::STRUCT),
             identifier,
             tag_token(TokenType::LBRACE),
             many0(map_res(tuple((struct_field, opt(comment))), |(f, c)| {
@@ -1031,14 +1066,6 @@ fn decimal(input: Span) -> IResult<Span, Span> {
     recognize(many1(terminated(one_of("0123456789"), many0(char('_')))))(input)
 }
 fn tag_token(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
-    move |input| {
-        map_res(del_newline_or_space!(tag(token.get_str())), |_out: Span| {
-            let end = _out.take_split(token.get_str().len()).0;
-            Ok::<(TokenType, Range), Error>((token, Range::new(_out, end)))
-        })(input)
-    }
-}
-fn tag_token_with_nl(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
     move |input| {
         map_res(delspace(tag(token.get_str())), |_out: Span| {
             let end = _out.take_split(token.get_str().len()).0;

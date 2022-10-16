@@ -77,6 +77,15 @@ pub fn send_semantic_tokens(sender: &Sender<Message>, id: RequestId, tokens: Sem
         .unwrap();
 }
 
+pub fn send_hover(sender: &Sender<Message>, id: RequestId, hover: lsp_types::Hover) {
+    sender
+        .send(Message::Response(lsp_server::Response::new_ok(
+            id,
+            Some(serde_json::to_value(hover).unwrap()),
+        )))
+        .unwrap();
+}
+
 pub fn url_to_path(url: Url) -> String {
     url.to_file_path().unwrap().to_str().unwrap().to_string()
 }

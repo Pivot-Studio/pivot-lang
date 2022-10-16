@@ -76,16 +76,24 @@ fn test_nom() {
     let db = db::Database::default();
     let mut mem = MemDocs::new();
     mem.insert("test".to_string(), input.to_string());
-    let memin = MemDocsInput::new(&db, Arc::new(RefCell::new(mem)), "test".to_string());
+    let memin = MemDocsInput::new(
+        &db,
+        Arc::new(RefCell::new(mem)),
+        "test".to_string(),
+        Default::default(),
+        compiler::ActionType::Diagnostic,
+        None,
+    );
     let parse_result = parse(&db, memin.get_file_content(&db).unwrap());
-    let mut node = parse_result.unwrap();
+    let node = parse_result.unwrap();
     let context = &Context::create();
     let (a, b, c, d, e, f) = create_ctx_info(context, "", "");
     let v = RefCell::new(Vec::new());
     let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e, &f, "test", &v, None, None);
     let m = &mut ctx;
-    node.print(0, false, vec![]);
-    let _re = node.emit(m);
+    node.node(&db).print(0, false, vec![]);
+    let mut nn = node.node(&db);
+    let _re = nn.emit(m);
     println!("emit succ");
     println!("{}", ctx.module.to_string());
 

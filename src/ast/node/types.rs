@@ -161,9 +161,11 @@ impl StructDefNode {
             ordered_fields: newf,
             range: self.range(),
             refs: Rc::new(RefCell::new(vec![])),
+            doc: self.doc.clone(),
         });
         ctx.set_if_refs_tp(&stu, self.range);
         _ = ctx.add_type(name.to_string(), stu.clone(), self.range);
+        ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
         Ok(())
     }
 }
@@ -203,7 +205,7 @@ impl Node for StructInitFieldNode {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitNode {
     pub tp: Box<TypeNameNode>,
-    pub fields: Vec<Box<NodeEnum>>,
+    pub fields: Vec<Box<NodeEnum>>, // TODO: comment db and salsa comment struct
 }
 
 impl Node for StructInitNode {
@@ -232,6 +234,7 @@ impl Node for StructInitNode {
         }
         let (st, _) = self.tp.get_type(ctx)?;
         if let PLType::STRUCT(st) = st {
+            ctx.save_if_comment_doc_hover(self.tp.range, Some(st.doc.clone()));
             let et = st.struct_type.as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");
             for (id, (val, range)) in fields {

@@ -114,6 +114,7 @@ pub enum NodeEnum {
     Comment(CommentNode),
     Program(program::ProgramNode),
     STInitField(StructInitFieldNode),
+    STErrorNode(STErrorNode),
 }
 
 #[enum_dispatch]

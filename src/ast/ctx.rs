@@ -19,14 +19,16 @@ use inkwell::values::BasicMetadataValueEnum;
 use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
-use lsp_server::RequestId;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::Diagnostic;
 use lsp_types::DiagnosticSeverity;
 use lsp_types::GotoDefinitionResponse;
+use lsp_types::Hover;
+use lsp_types::HoverContents;
 use lsp_types::InsertTextFormat;
 use lsp_types::Location;
+use lsp_types::MarkedString;
 use lsp_types::SemanticTokenType;
 use lsp_types::Url;
 use std::cell::Cell;
@@ -40,6 +42,7 @@ use super::compiler::ActionType;
 use super::diag::{ErrorCode, WarnCode};
 use super::diag::{ERR_MSG, WARN_MSG};
 use super::node::types::TypeNameNode;
+use super::node::NodeEnum;
 use super::range::Pos;
 use super::range::Range;
 // TODO: match all case
@@ -90,11 +93,12 @@ pub struct Ctx<'a, 'ctx> {
     pub src_file_path: &'a str,            // source file path
     pub errs: &'a RefCell<Vec<PLDiag>>,    // diagnostic list
     pub sender: Option<ActionType>,        // lsp sender
-    pub lspparams: Option<(Pos, RequestId, Option<String>, ActionType)>, // lsp params
+    pub lspparams: Option<(Pos, Option<String>, ActionType)>, // lsp params
     pub refs: Rc<Cell<Option<Rc<RefCell<Vec<Location>>>>>>, // hold the find references result (thank you, Rust!)
     pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
     pub goto_def: Rc<Cell<Option<GotoDefinitionResponse>>>, // hold the goto definition result
     pub completion_items: Rc<Cell<Vec<CompletionItem>>>,    // hold the completion items
+    pub hover: Rc<Cell<Option<Hover>>>,                     // hold the hover result
 }
 
 /// # PLDiag
@@ -411,6 +415,7 @@ pub struct FNType<'ctx> {
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub is_ref: bool,
+    pub doc: Vec<Box<NodeEnum>>,
 }
 
 #[derive(Debug, Clone)]
@@ -421,6 +426,7 @@ pub struct STType<'a, 'ctx> {
     pub ordered_fields: Vec<Field<'a, 'ctx>>,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
+    pub doc: Vec<Box<NodeEnum>>,
 }
 
 impl STType<'_, '_> {
@@ -534,7 +540,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         src_file_path: &'a str,
         errs: &'a RefCell<Vec<PLDiag>>,
         sender: Option<ActionType>,
-        completion: Option<(Pos, RequestId, Option<String>, ActionType)>,
+        completion: Option<(Pos, Option<String>, ActionType)>,
     ) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
             table: HashMap::new(),
@@ -562,6 +568,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             )))),
             goto_def: Rc::new(Cell::new(None)),
             completion_items: Rc::new(Cell::new(Vec::new())),
+            hover: Rc::new(Cell::new(None)),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -599,6 +606,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             semantic_tokens_builder: self.semantic_tokens_builder.clone(),
             goto_def: self.goto_def.clone(),
             completion_items: self.completion_items.clone(),
+            hover: self.hover.clone(),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -725,11 +733,11 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }
     }
 
-    pub fn if_completion(&self, c: impl FnOnce(&Ctx, &(Pos, RequestId, Option<String>))) {
+    pub fn if_completion(&self, c: impl FnOnce(&Ctx, &(Pos, Option<String>))) {
         if let Some(_) = self.sender {
             if let Some(comp) = &self.lspparams {
-                if comp.3 == ActionType::Completion {
-                    c(self, &(comp.0, comp.1.clone(), comp.2.clone()));
+                if comp.2 == ActionType::Completion {
+                    c(self, &(comp.0, comp.1.clone()));
                 }
             }
         }
@@ -746,7 +754,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn set_if_refs_tp(&self, tp: &PLType, range: Range) {
         if let Some(_) = self.sender {
             if let Some(comp) = &self.lspparams {
-                if comp.3 == ActionType::FindReferences {
+                if comp.2 == ActionType::FindReferences {
                     let tprefs = tp.get_refs();
                     if let Some(tprefs) = tprefs {
                         tprefs.borrow_mut().push(self.get_location(range));
@@ -762,7 +770,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn set_if_refs(&self, refs: Rc<RefCell<Vec<Location>>>, range: Range) {
         if let Some(_) = self.sender {
             if let Some(comp) = &self.lspparams {
-                if comp.3 == ActionType::FindReferences {
+                if comp.2 == ActionType::FindReferences {
                     refs.borrow_mut().push(self.get_location(range));
                     if comp.0.is_in(range) {
                         self.refs.set(Some(refs));
@@ -775,7 +783,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn send_if_go_to_def(&mut self, range: Range, destrange: Range) {
         if let Some(_) = self.sender {
             if let Some(comp) = &self.lspparams {
-                if comp.3 == ActionType::GotoDef {
+                if comp.2 == ActionType::GotoDef {
                     if comp.0.is_in(range) {
                         let resp = GotoDefinitionResponse::Scalar(Location {
                             uri: self.get_file_url(),
@@ -912,6 +920,37 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                         ..Default::default()
                     },
                 );
+            }
+        }
+    }
+
+    pub fn save_if_comment_doc_hover(&self, range: Range, docs: Option<Vec<Box<NodeEnum>>>) {
+        let mut content = vec![];
+        let mut string = String::new();
+        if let Some(docs) = docs {
+            for doc in docs {
+                if let NodeEnum::Comment(c) = *doc {
+                    string.push_str(&c.comment);
+                    string.push('\n');
+                }
+            }
+        }
+        content.push(MarkedString::String(string));
+        self.save_if_hover(range, HoverContents::Array(content))
+    }
+
+    pub fn save_if_hover(&self, range: Range, value: HoverContents) {
+        if let Some(act) = self.sender {
+            if let Some(comp) = &self.lspparams {
+                if act == ActionType::Hover {
+                    if comp.0.is_in(range) {
+                        let hover = Hover {
+                            contents: value,
+                            range: None,
+                        };
+                        self.hover.set(Some(hover));
+                    }
+                }
             }
         }
     }

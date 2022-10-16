@@ -17,6 +17,11 @@ macro_rules! define_tokens {
                 $(mp.insert(TokenType::$ident, $ident);)*
                 mp
             };
+            pub static ref TOKEN_STR_MAP: HashMap<&'static str, TokenType> = {
+                let mut mp = HashMap::new();
+                $(mp.insert($ident,TokenType::$ident);)*
+                mp
+            };
         }
     };
 }

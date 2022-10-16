@@ -228,7 +228,7 @@ impl Node for TakeOpNode {
                         let tpname = st.get_name().unwrap().to_str().unwrap();
                         let (tp, _) = ctx.get_type(tpname, range).unwrap();
                         // end with ".", gen completions
-                        ctx.if_completion(|ctx, (pos, _, trigger)| {
+                        ctx.if_completion(|ctx, (pos, trigger)| {
                             if pos.column == id.range().start.column
                                 && pos.line == id.range().start.line
                                 && trigger.is_some()
@@ -271,7 +271,7 @@ impl Node for TakeOpNode {
         }
         if !self.complete {
             // end with ".", gen completions
-            ctx.if_completion(|ctx, (pos, _, trigger)| {
+            ctx.if_completion(|ctx, (pos, trigger)| {
                 if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
                     let (tp, _) = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
                     if let PLType::STRUCT(s) = tp {
