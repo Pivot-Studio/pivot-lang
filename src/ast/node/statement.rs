@@ -42,7 +42,7 @@ impl Node for DefNode {
             )
         } else {
             let ditype = ditype.clone();
-            (ctx.try_load2(value).as_basic_value_enum(), ditype)
+            (ctx.try_load2var(value).as_basic_value_enum(), ditype)
         };
         let base_type = base_value.get_type();
         let ptr2value = alloc(ctx, base_type, &self.var.name);
@@ -95,9 +95,9 @@ impl Node for AssignNode {
         let vrange = self.var.range();
         let (ptr, _, _) = self.var.emit(ctx)?;
         let (value, _, _) = self.exp.emit(ctx)?;
-        let ptr = ctx.try_load1(ptr);
+        let ptr = ctx.try_load2ptr(ptr);
         if let Value::VarValue(ptr) = ptr {
-            let load = ctx.try_load2(value);
+            let load = ctx.try_load2var(value);
             if ptr.get_type().get_element_type()
                 != load.as_basic_value_enum().get_type().as_any_type_enum()
             {
@@ -142,14 +142,6 @@ impl Node for StatementsNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let child = &mut ctx.new_child(self.range.start);
-        self.emit_child(child)
-    }
-}
-
-impl StatementsNode {
-    pub fn emit_child<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let child = ctx;
         let mut terminator = TerminatorEnum::NONE;
         for m in self.statements.iter_mut() {
             if let NodeEnum::Empty(_) = **m {
@@ -157,15 +149,15 @@ impl StatementsNode {
             }
             if !terminator.is_none() {
                 if let NodeEnum::Comment(c) = &**m {
-                    child.push_semantic_token(c.range, SemanticTokenType::COMMENT, 0);
+                    ctx.push_semantic_token(c.range, SemanticTokenType::COMMENT, 0);
                     continue;
                 }
-                child.add_warn(m.range(), WarnCode::UNREACHABLE_STATEMENT);
+                ctx.add_warn(m.range(), WarnCode::UNREACHABLE_STATEMENT);
                 continue;
             }
             let pos = m.range().start;
-            child.build_dbg_location(pos);
-            let re = m.emit(child);
+            ctx.build_dbg_location(pos);
+            let re = m.emit(ctx);
             if re.is_err() {
                 continue;
             }
@@ -173,5 +165,12 @@ impl StatementsNode {
             terminator = terminator_res;
         }
         Ok((Value::None, None, terminator))
+    }
+}
+
+impl StatementsNode {
+    pub fn emit_child<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let child = &mut ctx.new_child(self.range.start);
+        self.emit(child)
     }
 }

@@ -191,7 +191,7 @@ impl Node for StructInitFieldNode {
         let value = if let Value::RefValue(_) = v {
             v.as_basic_value_enum()
         } else {
-            ctx.try_load2(v).as_basic_value_enum()
+            ctx.try_load2var(v).as_basic_value_enum()
         };
         return Ok((
             Value::StructFieldValue((self.id.clone(), value)),

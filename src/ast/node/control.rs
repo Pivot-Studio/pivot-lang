@@ -42,7 +42,7 @@ impl Node for IfNode {
         position_at_end(ctx, cond_block);
         let condrange = self.cond.range();
         let (cond, _, _) = self.cond.emit(ctx)?;
-        let cond = ctx.try_load2(cond);
+        let cond = ctx.try_load2var(cond);
         let con;
         if let Value::BoolValue(value) = cond {
             con = value;
@@ -58,24 +58,24 @@ impl Node for IfNode {
         // then block
         position_at_end(ctx, then_block);
         let (_, _, then_terminator) = self.then.emit(ctx)?;
-        let mut terminator = then_terminator;
         if then_terminator.is_none() {
             ctx.builder.build_unconditional_branch(after_block);
         }
         position_at_end(ctx, else_block);
-        if let Some(el) = &mut self.els {
+        let terminator = if let Some(el) = &mut self.els {
             let (_, _, else_terminator) = el.emit(ctx)?;
             if else_terminator.is_none() {
                 ctx.builder.build_unconditional_branch(after_block);
             }
-            terminator = if then_terminator.is_return() && else_terminator.is_return() {
+            if then_terminator.is_return() && else_terminator.is_return() {
                 TerminatorEnum::RETURN
             } else {
                 TerminatorEnum::NONE
-            };
+            }
         } else {
             ctx.builder.build_unconditional_branch(after_block);
-        }
+            TerminatorEnum::NONE
+        };
         position_at_end(ctx, after_block);
         if terminator.is_return() {
             ctx.builder.build_unconditional_branch(after_block);
