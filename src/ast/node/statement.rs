@@ -112,13 +112,13 @@ impl Node for AssignNode {
 
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct NLNode {}
+pub struct EmptyNode {}
 
-impl Node for NLNode {
+impl Node for EmptyNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
-        println!("NLNode");
+        println!("EmptyNode");
     }
     fn emit<'a, 'ctx>(&'a mut self, _: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         Ok((Value::None, None, TerminatorEnum::NONE))
@@ -152,10 +152,14 @@ impl StatementsNode {
         let child = ctx;
         let mut terminator = TerminatorEnum::NONE;
         for m in self.statements.iter_mut() {
-            if let NodeEnum::NL(_) = **m {
+            if let NodeEnum::Empty(_) = **m {
                 continue;
             }
             if !terminator.is_none() {
+                if let NodeEnum::Comment(c) = &**m {
+                    child.push_semantic_token(c.range, SemanticTokenType::COMMENT, 0);
+                    continue;
+                }
                 child.add_warn(m.range(), WarnCode::UNREACHABLE_STATEMENT);
                 continue;
             }
