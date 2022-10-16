@@ -226,7 +226,6 @@ impl Node for TakeOpNode {
                     if etype.is_struct_type() {
                         let st = etype.into_struct_type();
                         let tpname = st.get_name().unwrap().to_str().unwrap();
-                        let (tp, _) = ctx.get_type(tpname, range).unwrap();
                         // end with ".", gen completions
                         ctx.if_completion(|ctx, (pos, trigger)| {
                             if pos.column == id.range().start.column
@@ -238,9 +237,11 @@ impl Node for TakeOpNode {
                                 if let PLType::STRUCT(s) = tp {
                                     let completions = s.get_completions();
                                     ctx.completion_items.set(completions);
+                                    ctx.action = None;
                                 }
                             }
                         });
+                        let (tp, _) = ctx.get_type(tpname, range).unwrap();
                         range = id.range();
                         ctx.push_semantic_token(range, SemanticTokenType::PROPERTY, 0);
                         if let PLType::STRUCT(s) = tp {
@@ -277,6 +278,7 @@ impl Node for TakeOpNode {
                     if let PLType::STRUCT(s) = tp {
                         let completions = s.get_completions();
                         ctx.completion_items.set(completions);
+                        ctx.action = None;
                     }
                 }
             });

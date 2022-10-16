@@ -22,9 +22,8 @@ impl Node for ErrorNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let err = ctx.add_err(self.range, self.code);
-        eprintln!("{:?}", self.range);
         ctx.if_completion(|ctx, a| {
-            if a.0.line >= self.range.start.line && a.0.line <= self.range.end.line {
+            if a.0.is_in(self.range) {
                 let completions = ctx.get_completions();
                 ctx.completion_items.set(completions);
             }
@@ -34,6 +33,8 @@ impl Node for ErrorNode {
     }
 }
 
+/// # STErrorNode
+/// 表现一个因为缺少分号而错误的statement
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct STErrorNode {
@@ -47,7 +48,7 @@ impl Node for STErrorNode {
         tab(tabs, line.clone(), end);
         println!("STErrorNode");
         self.st.print(tabs + 1, false, line.clone());
-        self.err.print(tabs + 1, false, line);
+        self.err.print(tabs + 1, true, line);
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         _ = self.st.emit(ctx);

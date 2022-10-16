@@ -19,8 +19,8 @@ use lsp_types::{
         SemanticTokensFullRequest,
     },
     Hover, HoverContents, InitializeParams, MarkedString, OneOf, SemanticTokenModifier,
-    SemanticTokenType, SemanticTokensDelta, SemanticTokensOptions, ServerCapabilities,
-    TextDocumentSyncKind, TextDocumentSyncOptions,
+    SemanticTokenType, SemanticTokens, SemanticTokensDelta, SemanticTokensOptions,
+    ServerCapabilities, TextDocumentSyncKind, TextDocumentSyncOptions,
 };
 
 use lsp_server::{Connection, Message};
@@ -252,7 +252,10 @@ fn main_loop(
                 None,
                 ActionType::SemanticTokensFull,
             )));
-            let newtokens = compile_dry::accumulated::<PLSemanticTokens>(&db, docin);
+            let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(&db, docin);
+            if newtokens.is_empty() {
+                newtokens.push(SemanticTokens::default());
+            }
             tokens = newtokens[0].data.clone();
             let sender = connection.sender.clone();
             pool.execute(move || {
@@ -262,7 +265,10 @@ fn main_loop(
         .on::<SemanticTokensFullDeltaRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
             docin.set_file(&mut db).to(uri);
-            let newtokens = compile_dry::accumulated::<PLSemanticTokens>(&db, docin);
+            let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(&db, docin);
+            if newtokens.is_empty() {
+                newtokens.push(SemanticTokens::default());
+            }
             let delta = diff_tokens(&tokens, &newtokens[0].data);
             tokens = newtokens[0].data.clone();
             let sender = connection.sender.clone();

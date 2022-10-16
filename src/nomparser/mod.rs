@@ -379,7 +379,6 @@ macro_rules! semi_statement {
         alt((terminated($e, tag_token(TokenType::SEMI)), map_res(tuple(($e,recognize(many0(alt((tag("\n"), tag("\r\n"), tag(" "), tag("\t"))))))), |(node,e)|{
             let range = node.range();
             let r = Range::new(e,e);
-            eprintln!("{:?}",r);
             res_enum(STErrorNode{
                 range: range,
                 st: node,

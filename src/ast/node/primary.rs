@@ -71,14 +71,14 @@ impl Node for VarNode {
         println!("VarNode: {}", self.name);
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let v = ctx.get_symbol(&self.name);
-        ctx.push_semantic_token(self.range, SemanticTokenType::VARIABLE, 0);
         ctx.if_completion(|ctx, a| {
             if a.0.is_in(self.range) {
                 let completions = ctx.get_completions();
                 ctx.completion_items.set(completions);
             }
         });
+        let v = ctx.get_symbol(&self.name);
+        ctx.push_semantic_token(self.range, SemanticTokenType::VARIABLE, 0);
         if let Some((v, pltype, dst, refs)) = v {
             let o = Ok((
                 Value::VarValue(v.clone()),

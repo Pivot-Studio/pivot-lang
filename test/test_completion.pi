@@ -1,0 +1,18 @@
+struct test {
+    a:bool;
+    b:f64;
+    c:i64;
+    d:;
+}
+
+fn name(args:test1) void {
+    args.
+    t
+    return;
+}
+
+struct test1 {
+    a:bool;
+    b:f64;
+    c:i64;
+}

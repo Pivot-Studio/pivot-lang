@@ -93,7 +93,7 @@ pub struct Ctx<'a, 'ctx> {
     pub nodebug_builder: &'a Builder<'ctx>, // builder without debug info
     pub src_file_path: &'a str,           // source file path
     pub errs: &'a RefCell<Vec<PLDiag>>,   // diagnostic list
-    pub sender: Option<ActionType>,       // lsp sender
+    pub action: Option<ActionType>,       // lsp sender
     pub lspparams: Option<(Pos, Option<String>, ActionType)>, // lsp params
     pub refs: Rc<Cell<Option<Rc<RefCell<Vec<Location>>>>>>, // hold the find references result (thank you, Rust!)
     pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
@@ -562,7 +562,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             nodebug_builder: nodbg_builder,
             src_file_path,
             errs,
-            sender,
+            action: sender,
             lspparams: completion,
             refs: Rc::new(Cell::new(None)),
             semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
@@ -603,7 +603,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             nodebug_builder: self.nodebug_builder,
             src_file_path: self.src_file_path,
             errs: self.errs,
-            sender: self.sender,
+            action: self.action,
             lspparams: self.lspparams.clone(),
             refs: self.refs.clone(),
             semantic_tokens_builder: self.semantic_tokens_builder.clone(),
@@ -736,10 +736,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }
     }
 
-    pub fn if_completion(&self, c: impl FnOnce(&Ctx, &(Pos, Option<String>))) {
-        if let Some(_) = self.sender {
+    pub fn if_completion(&mut self, c: impl FnOnce(&mut Ctx, &(Pos, Option<String>))) {
+        if let Some(tp) = self.action {
             if let Some(comp) = &self.lspparams {
-                if comp.2 == ActionType::Completion {
+                if tp == ActionType::Completion {
                     c(self, &(comp.0, comp.1.clone()));
                 }
             }
@@ -755,7 +755,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn set_if_refs_tp(&self, tp: &PLType, range: Range) {
-        if let Some(_) = self.sender {
+        if let Some(_) = self.action {
             if let Some(comp) = &self.lspparams {
                 if comp.2 == ActionType::FindReferences {
                     let tprefs = tp.get_refs();
@@ -771,7 +771,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn set_if_refs(&self, refs: Rc<RefCell<Vec<Location>>>, range: Range) {
-        if let Some(_) = self.sender {
+        if let Some(_) = self.action {
             if let Some(comp) = &self.lspparams {
                 if comp.2 == ActionType::FindReferences {
                     refs.borrow_mut().push(self.get_location(range));
@@ -784,7 +784,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn send_if_go_to_def(&mut self, range: Range, destrange: Range) {
-        if let Some(_) = self.sender {
+        if let Some(_) = self.action {
             if let Some(comp) = &self.lspparams {
                 if comp.2 == ActionType::GotoDef {
                     if comp.0.is_in(range) {
@@ -793,7 +793,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                             range: destrange.to_diag_range(),
                         });
                         self.goto_def.set(Some(resp));
-                        self.sender = None // set sender to None so it won't be sent again
+                        self.action = None // set sender to None so it won't be sent again
                     }
                 }
             }
@@ -943,7 +943,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn save_if_hover(&self, range: Range, value: HoverContents) {
-        if let Some(act) = self.sender {
+        if let Some(act) = self.action {
             if let Some(comp) = &self.lspparams {
                 if act == ActionType::Hover {
                     if comp.0.is_in(range) {
