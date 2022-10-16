@@ -15,6 +15,7 @@ use std::rc::Rc;
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncDefNode {
+    pub doc: Vec<Box<NodeEnum>>,
     pub typenode: FuncTypeNode,
     pub body: Option<StatementsNode>,
 }
@@ -26,6 +27,9 @@ impl Node for FuncDefNode {
         println!("FuncDefNode");
         tab(tabs + 1, line.clone(), end);
         println!("id: {}", self.typenode.id);
+        for c in self.doc.iter() {
+            c.print(tabs + 1, false, line.clone());
+        }
         for p in self.typenode.paralist.iter() {
             p.print(tabs + 1, false, line.clone());
         }
@@ -40,6 +44,9 @@ impl Node for FuncDefNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let typenode = self.typenode.clone();
+        for c in self.doc.iter_mut() {
+            c.emit(ctx)?;
+        }
         ctx.push_semantic_token(typenode.range, SemanticTokenType::FUNCTION, 0);
         for p in typenode.paralist.iter() {
             ctx.push_semantic_token(p.id.range, SemanticTokenType::PARAMETER, 0);

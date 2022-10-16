@@ -50,6 +50,7 @@ impl TypeNameNode {
 pub struct TypedIdentifierNode {
     pub id: VarNode,
     pub tp: Box<TypeNameNode>,
+    pub doc: Option<CommentNode>,
 }
 
 impl TypedIdentifierNode {
@@ -59,6 +60,9 @@ impl TypedIdentifierNode {
         println!("TypedIdentifierNode");
         tab(tabs + 1, line.clone(), false);
         println!("id: {}", self.id.name);
+        if let Some(doc) = &self.doc {
+            doc.print(tabs + 1, false, line.clone());
+        }
         self.tp.print(tabs + 1, true, line.clone());
     }
 }
@@ -66,6 +70,7 @@ impl TypedIdentifierNode {
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructDefNode {
+    pub doc: Vec<Box<NodeEnum>>,
     pub id: String,
     pub fields: Vec<Box<TypedIdentifierNode>>,
 }
@@ -77,6 +82,9 @@ impl Node for StructDefNode {
         println!("StructDefNode");
         tab(tabs + 1, line.clone(), false);
         println!("id: {}", self.id);
+        for c in self.doc.iter() {
+            c.print(tabs + 1, false, line.clone());
+        }
         let mut i = self.fields.len();
         for field in &self.fields {
             i -= 1;
@@ -85,10 +93,16 @@ impl Node for StructDefNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        for c in self.doc.iter() {
+            ctx.push_semantic_token(c.range(), SemanticTokenType::COMMENT, 0);
+        }
         ctx.push_semantic_token(self.range, SemanticTokenType::STRUCT, 0);
         for f in self.fields.clone() {
             ctx.push_semantic_token(f.id.range, SemanticTokenType::PROPERTY, 0);
             ctx.push_semantic_token(f.tp.range, SemanticTokenType::TYPE, 0);
+            if let Some(doc) = f.doc {
+                ctx.push_semantic_token(doc.range, SemanticTokenType::COMMENT, 0);
+            }
         }
         Ok((Value::None, None, TerminatorEnum::NONE))
     }
@@ -197,7 +211,6 @@ impl Node for StructInitNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("StructInitNode");
-        tab(tabs + 1, line.clone(), false);
         self.tp
             .print(tabs + 1, self.fields.len() == 0, line.clone());
         let mut i = self.fields.len();
