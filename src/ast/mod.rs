@@ -10,12 +10,13 @@ pub mod tokens;
 #[cfg(feature = "jit")]
 fn test_nom() {
     vm::reg();
-    use std::cell::RefCell;
+    use std::{cell::RefCell, sync::Arc};
 
     use crate::{
         ast::{ctx::create_ctx_info, node::Node},
         db,
-        nomparser::{parse, SourceProgram},
+        lsp::mem_docs::{MemDocs, MemDocsInput},
+        nomparser::parse,
     };
     use inkwell::context::Context;
     let input = "struct test {
@@ -73,7 +74,10 @@ fn test_nom() {
     ";
 
     let db = db::Database::default();
-    let parse_result = parse(&db, SourceProgram::new(&db, input.to_string()));
+    let mut mem = MemDocs::new();
+    mem.insert("test".to_string(), input.to_string());
+    let memin = MemDocsInput::new(&db, Arc::new(RefCell::new(mem)), "test".to_string());
+    let parse_result = parse(&db, memin.get_file_content(&db).unwrap());
     let mut node = parse_result.unwrap();
     let context = &Context::create();
     let (a, b, c, d, e, f) = create_ctx_info(context, "", "");
