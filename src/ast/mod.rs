@@ -10,78 +10,90 @@ pub mod tokens;
 #[cfg(feature = "jit")]
 fn test_nom() {
     vm::reg();
-    use std::cell::RefCell;
+    use std::{cell::RefCell, sync::Arc};
 
     use crate::{
         ast::{ctx::create_ctx_info, node::Node},
         db,
-        nomparser::{parse, SourceProgram},
+        lsp::mem_docs::{MemDocs, MemDocsInput},
+        nomparser::parse,
     };
     use inkwell::context::Context;
     let input = "struct test {
-            a : i64
-            b : i64
-            c : name
+            a : i64;
+            b : i64;
+            c : name;
         }
         
         struct name {
-            a : i64
+            a : i64;
         }
         
         fn add(a: test) i64 {
             for let i = 0; i < 5; i = i + 1{
-                a.a = a.a + 1
+                a.a = a.a + 1;
             }
-            return a.a+a.b
+            return a.a+a.b;
         }
         
         fn main() i64 {
-            printi64ln(0)
-            let s = test{a:10,b:100,}
-            printi64ln(add(s))
-            let sb = s.c.a
-            sb = 0
-            let x = 1
-            let xx = (2+2)>0
+            printi64ln(0);
+            let s = test{a:10,b:100,};
+            printi64ln(add(s));
+            let sb = s.c.a;
+            sb = 0;
+            let x = 1;
+            let xx = (2+2)>0;
             if 2  > 0 {
-                x = s.a
+                x = s.a;
             }
             while x<10 {
-                x = x + 1
-                printi64ln(x)
+                x = x + 1;
+                printi64ln(x);
             }
             for let i = 0; i < 5; i = i + 1{
-                let x = 0
-                x = i
-                printi64ln(x)
+                let x = 0;
+                x = i;
+                printi64ln(x);
             }
-            printi64ln(x)
-            printi64ln(call())
-            return test_vm_link()
+            printi64ln(x);
+            printi64ln(call());
+            return test_vm_link();
         }
-        fn test_vm_link() i64
+        fn test_vm_link() i64;
         
         fn call() i64 {
-            printi64ln(99)
-            return 55
+            printi64ln(99);
+            return 55;
         }
         
         
         
-        fn printi64ln(i: i64) void
+        fn printi64ln(i: i64) void;
         
     ";
 
     let db = db::Database::default();
-    let parse_result = parse(&db, SourceProgram::new(&db, input.to_string()));
-    let mut node = parse_result.unwrap();
+    let mut mem = MemDocs::new();
+    mem.insert("test".to_string(), input.to_string());
+    let memin = MemDocsInput::new(
+        &db,
+        Arc::new(RefCell::new(mem)),
+        "test".to_string(),
+        Default::default(),
+        compiler::ActionType::Diagnostic,
+        None,
+    );
+    let parse_result = parse(&db, memin.get_file_content(&db).unwrap());
+    let node = parse_result.unwrap();
     let context = &Context::create();
     let (a, b, c, d, e, f) = create_ctx_info(context, "", "");
     let v = RefCell::new(Vec::new());
     let mut ctx = ctx::Ctx::new(context, &a, &b, &c, &d, &e, &f, "test", &v, None, None);
     let m = &mut ctx;
-    node.print(0, false, vec![]);
-    let _re = node.emit(m);
+    node.node(&db).print(0, false, vec![]);
+    let mut nn = node.node(&db);
+    let _re = nn.emit(m);
     println!("emit succ");
     println!("{}", ctx.module.to_string());
 

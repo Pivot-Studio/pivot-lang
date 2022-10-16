@@ -7,10 +7,15 @@ edition = "2021"
 
 [dependencies]
 ctor = "0.1.23"
-llvm-sys = "140"
+llvm-sys = { version = "140", optional = true }
 [dependencies.add_symbol_macro]
 path = "src/add_symbol_macro"
 [dependencies.range_macro]
 path = "src/range_macro"
 [dependencies.test_parser_macro]
 path = "src/test_parser_macro"
+
+[features]
+default = ["jit"]
+jit = ["llvm-sys"]
+static = []

@@ -2,7 +2,14 @@ use std::{cell::RefCell, fs::read_to_string, sync::Arc};
 
 use rustc_hash::FxHashMap;
 
-use crate::{nomparser::SourceProgram, Db};
+use crate::{
+    ast::{
+        compiler::{ActionType, Options},
+        range::Pos,
+    },
+    nomparser::SourceProgram,
+    Db,
+};
 
 use super::helpers::position_to_offset;
 
@@ -11,15 +18,26 @@ pub struct MemDocs {
     docs: FxHashMap<String, String>,
 }
 
+#[salsa::tracked]
+pub struct EmitParams {
+    #[return_ref]
+    pub file: String,
+    pub action: ActionType,
+    pub params: Option<(Pos, Option<String>, ActionType)>,
+}
+
 #[salsa::input]
 pub struct MemDocsInput {
     pub docs: Arc<RefCell<MemDocs>>,
     #[return_ref]
     pub file: String,
+    pub op: Options,
+    pub action: ActionType,
+    pub params: Option<(Pos, Option<String>, ActionType)>,
 }
 #[salsa::tracked]
 impl MemDocsInput {
-    #[salsa::tracked]
+    #[salsa::tracked(lru = 32)]
     pub fn get_file_content(self, db: &dyn Db) -> Option<SourceProgram> {
         let re = self.docs(db).borrow().get_file_content(self.file(db));
         if let Some(c) = re {
@@ -27,6 +45,13 @@ impl MemDocsInput {
         } else {
             None
         }
+    }
+    #[salsa::tracked(lru = 32)]
+    pub fn get_emit_params(self, db: &dyn Db) -> EmitParams {
+        let file = self.file(db);
+        let action = self.action(db);
+        let params = self.params(db);
+        EmitParams::new(db, file.clone(), action, params)
     }
 }
 

@@ -224,6 +224,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "dunce"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bd4b30a6560bbd9b4620f4de34c3f14f60848e58a9b7216801afcb4c7b31c3c"
+
+[[package]]
 name = "either"
 version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -546,6 +552,7 @@ dependencies = [
  "clap",
  "colored",
  "crossbeam-channel",
+ "dunce",
  "enum_dispatch",
  "inkwell",
  "internal_macro",

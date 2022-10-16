@@ -6,6 +6,7 @@ use inkwell::basic_block::BasicBlock;
 use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
 
+use self::comment::CommentNode;
 use self::control::*;
 use self::error::*;
 use self::function::*;
@@ -18,6 +19,7 @@ use self::types::*;
 use super::ctx::PLDiag;
 use super::range::{Pos, Range};
 
+pub mod comment;
 pub mod control;
 pub mod error;
 pub mod function;
@@ -108,9 +110,11 @@ pub enum NodeEnum {
     Var(VarNode),
     Err(ErrorNode),
     STS(StatementsNode),
-    NL(NLNode),
+    Empty(EmptyNode),
+    Comment(CommentNode),
     Program(program::ProgramNode),
     STInitField(StructInitFieldNode),
+    STErrorNode(STErrorNode),
 }
 
 #[enum_dispatch]

@@ -1,4 +1,9 @@
-use crate::{ast::node::Node, lsp::mem_docs::MemDocsInput, nomparser::parse, Db};
+use crate::{
+    ast::node::{program::Program, Node},
+    lsp::mem_docs::MemDocsInput,
+    nomparser::parse,
+    Db,
+};
 use std::{cell::RefCell, fs, path::Path, time::Instant};
 
 use colored::Colorize;
@@ -8,16 +13,11 @@ use inkwell::{
     targets::{FileType, InitializationConfig, Target, TargetMachine},
     OptimizationLevel,
 };
-use lsp_server::RequestId;
 use std::process::Command;
 
-use super::{
-    accumulators::{Completions, Diagnostics, GotoDef, PLReferences, PLSemanticTokens},
-    ctx::{self, create_ctx_info},
-    range::Pos,
-};
+use super::ctx::{self, create_ctx_info};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Copy)]
 pub struct Options {
     pub verbose: bool,
     pub genir: bool,
@@ -83,6 +83,7 @@ pub enum ActionType {
     FindReferences,
     SemanticTokensFull,
     Diagnostic,
+    Hover,
 }
 
 #[cfg(feature = "jit")]
@@ -97,67 +98,17 @@ pub fn run(p: &Path, opt: OptimizationLevel) {
     }
 }
 
-#[salsa::tracked]
-pub fn compile_dry(
-    db: &dyn Db,
-    docs: MemDocsInput,
-    op: Options,
-    sender: ActionType,
-    completion: Option<(Pos, RequestId, Option<String>, ActionType)>,
-) {
-    let context = &Context::create();
-    let filepath = Path::new(docs.file(db));
-    let abs = fs::canonicalize(filepath).unwrap();
-    let dir = abs.parent().unwrap().to_str().unwrap();
-    let fname = abs.file_name().unwrap().to_str().unwrap();
-
-    let (a, b, c, d, e, f) = create_ctx_info(context, dir, fname);
-    let v = RefCell::new(Vec::new());
-    let mut ctx = ctx::Ctx::new(
-        context,
-        &a,
-        &b,
-        &c,
-        &d,
-        &e,
-        &f,
-        abs.to_str().unwrap(),
-        &v,
-        Some(sender),
-        completion,
-    );
-    let m = &mut ctx;
+#[salsa::tracked(lru = 32)]
+pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
     let src = docs.get_file_content(db).unwrap();
     let parse_result = parse(db, src);
     if let Err(e) = parse_result {
         eprintln!("{}", e);
         return;
     }
-    let mut node = parse_result.unwrap();
-    if op.printast {
-        node.print(0, true, vec![]);
-    }
-
-    _ = node.emit(m);
-    for d in v.borrow().iter() {
-        Diagnostics::push(db, d.get_diagnostic());
-    }
-    if let Some(c) = ctx.refs.take() {
-        let c = c.borrow();
-        for refe in c.iter() {
-            PLReferences::push(db, refe.clone());
-        }
-    } else if let Some(c) = ctx.lspparams.take() {
-        if c.3 == ActionType::SemanticTokensFull {
-            let b = ctx.semantic_tokens_builder.borrow().build();
-            PLSemanticTokens::push(db, b);
-        }
-    }
-    let ci = ctx.completion_items.take();
-    Completions::push(db, ci);
-    if let Some(c) = ctx.goto_def.take() {
-        GotoDef::push(db, c);
-    }
+    let node = parse_result.unwrap();
+    let program = Program::new(db, node, docs.get_emit_params(db));
+    program.emit(db);
 }
 
 #[salsa::tracked]
@@ -165,7 +116,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let now = Instant::now();
     let context = &Context::create();
     let filepath = Path::new(docs.file(db));
-    let abs = fs::canonicalize(filepath).unwrap();
+    let abs = dunce::canonicalize(filepath).unwrap();
     let dir = abs.parent().unwrap().to_str().unwrap();
     let fname = abs.file_name().unwrap().to_str().unwrap();
 
@@ -185,18 +136,19 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         None,
     );
     let m = &mut ctx;
+    m.module.set_triple(&TargetMachine::get_default_triple());
     let src = docs.get_file_content(db).unwrap();
     let parse_result = parse(db, src);
     if let Err(e) = parse_result {
         println!("{}", e);
         return;
     }
-    let mut node = parse_result.unwrap();
+    let node = parse_result.unwrap();
     if op.printast {
-        node.print(0, true, vec![]);
+        node.node(db).print(0, true, vec![]);
     }
-
-    _ = node.emit(m);
+    let mut nn = node.node(db);
+    _ = nn.emit(m);
     let errs = m.errs.borrow();
     let mut errs_num = 0;
     if errs.len() > 0 {

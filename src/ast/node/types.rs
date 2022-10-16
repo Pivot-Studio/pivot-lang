@@ -50,6 +50,7 @@ impl TypeNameNode {
 pub struct TypedIdentifierNode {
     pub id: VarNode,
     pub tp: Box<TypeNameNode>,
+    pub doc: Option<CommentNode>,
 }
 
 impl TypedIdentifierNode {
@@ -59,6 +60,9 @@ impl TypedIdentifierNode {
         println!("TypedIdentifierNode");
         tab(tabs + 1, line.clone(), false);
         println!("id: {}", self.id.name);
+        if let Some(doc) = &self.doc {
+            doc.print(tabs + 1, false, line.clone());
+        }
         self.tp.print(tabs + 1, true, line.clone());
     }
 }
@@ -66,6 +70,7 @@ impl TypedIdentifierNode {
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructDefNode {
+    pub doc: Vec<Box<NodeEnum>>,
     pub id: String,
     pub fields: Vec<Box<TypedIdentifierNode>>,
 }
@@ -77,6 +82,9 @@ impl Node for StructDefNode {
         println!("StructDefNode");
         tab(tabs + 1, line.clone(), false);
         println!("id: {}", self.id);
+        for c in self.doc.iter() {
+            c.print(tabs + 1, false, line.clone());
+        }
         let mut i = self.fields.len();
         for field in &self.fields {
             i -= 1;
@@ -85,10 +93,16 @@ impl Node for StructDefNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        for c in self.doc.iter() {
+            ctx.push_semantic_token(c.range(), SemanticTokenType::COMMENT, 0);
+        }
         ctx.push_semantic_token(self.range, SemanticTokenType::STRUCT, 0);
         for f in self.fields.clone() {
             ctx.push_semantic_token(f.id.range, SemanticTokenType::PROPERTY, 0);
             ctx.push_semantic_token(f.tp.range, SemanticTokenType::TYPE, 0);
+            if let Some(doc) = f.doc {
+                ctx.push_semantic_token(doc.range, SemanticTokenType::COMMENT, 0);
+            }
         }
         Ok((Value::None, None, TerminatorEnum::NONE))
     }
@@ -147,9 +161,11 @@ impl StructDefNode {
             ordered_fields: newf,
             range: self.range(),
             refs: Rc::new(RefCell::new(vec![])),
+            doc: self.doc.clone(),
         });
         ctx.set_if_refs_tp(&stu, self.range);
         _ = ctx.add_type(name.to_string(), stu.clone(), self.range);
+        ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
         Ok(())
     }
 }
@@ -189,7 +205,7 @@ impl Node for StructInitFieldNode {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitNode {
     pub tp: Box<TypeNameNode>,
-    pub fields: Vec<Box<NodeEnum>>,
+    pub fields: Vec<Box<NodeEnum>>, // TODO: comment db and salsa comment struct
 }
 
 impl Node for StructInitNode {
@@ -197,7 +213,6 @@ impl Node for StructInitNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("StructInitNode");
-        tab(tabs + 1, line.clone(), false);
         self.tp
             .print(tabs + 1, self.fields.len() == 0, line.clone());
         let mut i = self.fields.len();
@@ -219,6 +234,7 @@ impl Node for StructInitNode {
         }
         let (st, _) = self.tp.get_type(ctx)?;
         if let PLType::STRUCT(st) = st {
+            ctx.save_if_comment_doc_hover(self.tp.range, Some(st.doc.clone()));
             let et = st.struct_type.as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");
             for (id, (val, range)) in fields {

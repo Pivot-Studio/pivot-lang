@@ -1,12 +1,17 @@
 use std::cell::RefCell;
+use std::path::Path;
 use std::rc::Rc;
 
 use super::function::FuncTypeNode;
 use super::types::StructDefNode;
 use super::*;
-use crate::ast::ctx::Ctx;
+use crate::ast::accumulators::*;
+use crate::ast::ctx::{self, create_ctx_info, Ctx};
+use crate::lsp::mem_docs::EmitParams;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
+use crate::Db;
 
+use inkwell::context::Context;
 use internal_macro::range;
 
 #[range]
@@ -65,4 +70,66 @@ impl Node for ProgramNode {
 
         Ok((Value::None, None, TerminatorEnum::NONE))
     }
+}
+
+#[salsa::tracked]
+pub struct Program {
+    pub node: ProgramNodeWrapper,
+    pub params: EmitParams,
+}
+
+#[salsa::tracked]
+impl Program {
+    #[salsa::tracked(lru = 32)]
+    pub fn emit(self, db: &dyn Db) {
+        eprintln!("emit");
+        let context = &Context::create();
+        let filepath = Path::new(self.params(db).file(db));
+        let abs = dunce::canonicalize(filepath).unwrap();
+        let dir = abs.parent().unwrap().to_str().unwrap();
+        let fname = abs.file_name().unwrap().to_str().unwrap();
+        let (a, b, c, d, e, f) = create_ctx_info(context, dir, fname);
+        let v = RefCell::new(Vec::new());
+        let mut ctx = ctx::Ctx::new(
+            context,
+            &a,
+            &b,
+            &c,
+            &d,
+            &e,
+            &f,
+            abs.to_str().unwrap(),
+            &v,
+            Some(self.params(db).action(db)),
+            self.params(db).params(db),
+        );
+        let m = &mut ctx;
+        let node = self.node(db);
+        let mut nn = node.node(db);
+        let _ = nn.emit(m);
+        for d in v.borrow().iter() {
+            Diagnostics::push(db, d.get_diagnostic());
+        }
+        if let Some(c) = ctx.refs.take() {
+            let c = c.borrow();
+            for refe in c.iter() {
+                PLReferences::push(db, refe.clone());
+            }
+        }
+        let b = ctx.semantic_tokens_builder.borrow().build();
+        PLSemanticTokens::push(db, b);
+        let ci = ctx.completion_items.take();
+        Completions::push(db, ci);
+        if let Some(c) = ctx.goto_def.take() {
+            GotoDef::push(db, c);
+        }
+        if let Some(c) = ctx.hover.take() {
+            PLHover::push(db, c);
+        }
+    }
+}
+
+#[salsa::tracked]
+pub struct ProgramNodeWrapper {
+    pub node: Box<NodeEnum>,
 }

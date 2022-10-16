@@ -3,7 +3,7 @@ use nom::{
     bytes::complete::is_not,
     combinator::*,
     error::{FromExternalError, ParseError},
-    IResult, InputTake,
+    IResult,
 };
 
 use crate::ast::{
@@ -47,12 +47,12 @@ pub fn except<'a, E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt
             }
         }
         let msg = msg.to_string();
-        let end = sp.take_split(sp.len()).0;
+        // let end = sp.take_split(sp.len()).0;
         let node = Box::new(
             ErrorNode {
                 msg,
                 src,
-                range: Range::new(sp, end),
+                range: Range::new(sp, i),
                 code,
             }
             .into(),

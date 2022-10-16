@@ -26,6 +26,9 @@ impl Node for FuncDefNode {
         println!("FuncDefNode");
         tab(tabs + 1, line.clone(), end);
         println!("id: {}", self.typenode.id);
+        for c in self.typenode.doc.iter() {
+            c.print(tabs + 1, false, line.clone());
+        }
         for p in self.typenode.paralist.iter() {
             p.print(tabs + 1, false, line.clone());
         }
@@ -39,7 +42,11 @@ impl Node for FuncDefNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        ctx.save_if_comment_doc_hover(self.range, Some(self.typenode.doc.clone()));
         let typenode = self.typenode.clone();
+        for c in self.typenode.doc.iter_mut() {
+            c.emit(ctx)?;
+        }
         ctx.push_semantic_token(typenode.range, SemanticTokenType::FUNCTION, 0);
         for p in typenode.paralist.iter() {
             ctx.push_semantic_token(p.id.range, SemanticTokenType::PARAMETER, 0);
@@ -276,6 +283,7 @@ impl Node for FuncCallNode {
         );
         let fntp = ctx.get_type(&self.id, self.range)?;
         if let (PLType::FN(fv), _) = fntp {
+            ctx.save_if_comment_doc_hover(self.range, Some(fv.doc.clone()));
             let o = match (ret.try_as_basic_value().left(), fv.ret_pltype.as_ref()) {
                 (Some(v), Some(pltype)) => {
                     if v.is_pointer_value() {
@@ -310,6 +318,7 @@ pub struct FuncTypeNode {
     pub id: String,
     pub paralist: Vec<Box<TypedIdentifierNode>>,
     pub ret: Box<TypeNameNode>,
+    pub doc: Vec<Box<NodeEnum>>,
 }
 impl FuncTypeNode {
     pub fn emit_func_type<'a, 'ctx>(
@@ -360,6 +369,7 @@ impl FuncTypeNode {
             range: self.range,
             refs: Rc::new(RefCell::new(refs)),
             is_ref: self.ret.is_ref,
+            doc: self.doc.clone(),
         });
         ctx.set_if_refs_tp(&ftp, self.range);
         _ = ctx.add_type(self.id.clone(), ftp, self.range);

@@ -6,9 +6,10 @@
 	"recommendations": [
 		"rust-lang.rust-analyzer",
 		"pivot-langauthors.pivot-lang-support",
-		"vadimcn.vscode-lldb"
+		"vadimcn.vscode-lldb",
+		"ms-vscode.cpptools"
 	],
 	// List of extensions recommended by VS Code that should not be recommended for users of this workspace.
 	"unwantedRecommendations": [
-	]
+	],
 }

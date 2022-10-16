@@ -26,11 +26,21 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "launch test.pi debug",
+            "name": "(Unix based system)launch test.pi debug",
             "program": "${workspaceFolder}/out.plb.out",
             "args": [],
             "cwd": "${workspaceFolder}",
-            "preLaunchTask": "compile main.pi"
+        },
+        {
+            "name": "(Windows) Launch",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/out.plb.out",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "preLaunchTask": "windows link"
         }
 
     ]

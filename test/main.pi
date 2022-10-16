@@ -1,168 +1,166 @@
 fn change(x:&i64) void {
-    x = x + 1
-    return
+    x = x + 1;
+    return;
 }
 fn ret_ref(x:&i64) &i64 {
-    return &x
+    return &x;
 }
 struct ref_struct {
-    ref : &i64
+    ref : &i64;
 }
 struct struct_father {
-    a : i64
-    b : i64
-    c : struct_child
+    a : i64;
+    b : i64;
+    c : struct_child; // 124548
 }
 
+// # 1545145211
+// 1. a
+// 2. b
 struct struct_child {
-    a : i64
+    a : i64;
 }
 
+
+
+// 123
+
+// # 123
+// *hello*
+// 123
+// ```pivot-lang
+// let a = b
+// ```
 fn test_struct() void {
-    let s = struct_father{a:2,b:2,c:struct_child{a:2,},}
-    printi64ln(s.a)
-    printi64ln(s.b)
-    printi64ln(s.c.a)
-    return 
+    let s = struct_father{a:2,b:2,c:struct_child{a:2,},};
+    printi64ln(s.a);
+    printi64ln(s.a);
+    printi64ln(s.c.a);
+    return ;
 }
 fn test_vm() void {
-    printi64ln(test_vm_link())
-    return 
+    printi64ln(test_vm_link());//165445451
+    return ;
 }
 fn test_var_ref() void {
-    let a = 1
-    let b = &a 
-    b = b + 1
-    printi64ln(a)
-    printi64ln(b)
-    return 
+    let a = 1;
+    let b = &a ;
+    b = b + 1;
+    printi64ln(a);
+    printi64ln(b);
+    //4156545
+    return ;//16541
+    //1515
 }
 fn test_fn_ref() void {
-    let a = 1
-    let b = &a
-    change(&b)
-    printi64ln(a)
-    printi64ln(b)
-    return 
+    let a = 1;
+    let b = &a;
+    change(&b);
+    printi64ln(a);
+    printi64ln(b);
+    return ;
 }
 fn test_ret_ref() void {
-    let a = 1
-    let b = ret_ref(&a)
-    b = b + 1
-    printi64ln(a)
-    printi64ln(b)
-    return
+    let a = 1;
+    let b = ret_ref(&a);
+    b = b + 1;
+    printi64ln(a);
+    printi64ln(b);
+    return;
 }
 fn test_struct_ref() void {
-    let a = 1
-    let ref_struct = ref_struct{ref:&a,}
-    ref_struct.ref = ref_struct.ref + 1
-    printi64ln(a)
-    printi64ln(ref_struct.ref)
-    return 
-}
-fn test_ref_struct() void {
-    let s = struct_father{a:1,b:1,c:struct_child{a:1,},}
-    let b = &s
-    b.a = 2
-    b.b = 2
-    b.c.a = 2
-    printi64ln(s.a)
-    printi64ln(s.b)
-    printi64ln(s.c.a)
-    return 
+    let a = 1;
+    let ref_struct = ref_struct{ref:&a,};
+    ref_struct.ref = ref_struct.ref + 1;
+    printi64ln(a);
+    printi64ln(ref_struct.ref);
+    return ;
 }
 fn test_if_else() void {
-    test_if_only(true)
-    test_if_else_ret(true)
-    test_if_ret_only(true)
-    test_else_ret_only(true)
-    test_not_ret(true)
-    return    
+    test_if_only(true);
+    test_if_else_ret(true);
+    test_if_ret_only(true);
+    test_else_ret_only(true);
+    test_not_ret(true);
+    return    ;
 }
 fn test_if_only(judge:bool) void {
     if judge {
-        return 
+        return ;
     }
-    return
 }
 fn test_if_else_ret(judge:bool) void {
-    if judge {
-        return 
-    } else {
-        if true {
-            return
-        }
-        return
+    if judge {//12354121
+        return ;
+    } else {//123145212
+        return ;
     }
 }
 fn test_if_ret_only(judge:bool) void {
     if judge {
-        return 
+        return ;
     } else {
-
+        //156411
     }
-    return 
+    return ;
 }
 fn test_else_ret_only(judge:bool) void {
     if judge {
-        
+        ;
     } else {
-        return
+        return;
     }
-    return 
-}
+    return ;
+}//135132123
 fn test_not_ret(judge:bool) void {
     if judge {
-
+;
     } else {
 
-    }
-    return
+    }//156541
+    return;
 }
 fn test_complex() void {
-    let res = get(get(get(get(2))))
-    printi64ln(res)
-    let b = true && !(res > 3 || res < 10)
+    let res = get(get(get(get(2))));
+    printi64ln(res);
+    let b = true && !(res > 3 || res < 10);
     if b {
-        printi64ln(res)
+        printi64ln(res);
     }
-    return
+    return;
 }
 fn get(x:i64) i64 {
-    return ((x+1)*3 + (x/2))/5
+    return ((x+1)*3 + (x/2))/5;
 }
 fn test_warn() void {
-    return
-    let x = 1
+    return;
+    let x = 1;//15154212
 }
 fn main() i64 {
-    test_struct()
-    printline()
-    test_vm()
-    printline()
-    test_var_ref()
-    printline()
-    test_fn_ref()
-    printline()
-    test_ret_ref()
-    printline()
-    test_struct_ref()
-    printline()
-    test_ref_struct()
-    printline()
-    test_if_else()
-    printline()
-    test_complex()
-    printline()
-    test_warn()
-    return 0
+    test_struct();
+    printline();
+    test_vm();
+    printline();
+    test_var_ref();
+    printline();
+    test_fn_ref();
+    printline();
+    test_ret_ref();
+    printline();
+    test_struct_ref();
+    printline();
+    test_if_else();
+    printline();
+    test_complex();
+    printline();
+    test_warn();
+    return 0;
 }
 
 
-fn test_vm_link() i64
-fn printi64ln(i: i64) void
+fn test_vm_link() i64;
+fn printi64ln(i: i64) void;//415642154
 fn printline() void {
-    printi64ln(100000000)
-    return
+    printi64ln(100000000);
+    return;
 }

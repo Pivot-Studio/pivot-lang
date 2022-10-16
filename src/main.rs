@@ -4,6 +4,8 @@ pub struct Jar(
     nomparser::parse,
     mem_docs::MemDocsInput,
     mem_docs::MemDocsInput_get_file_content,
+    mem_docs::MemDocsInput_get_emit_params,
+    mem_docs::EmitParams,
     compiler::compile,
     compiler::compile_dry,
     accumulators::Diagnostics,
@@ -11,6 +13,10 @@ pub struct Jar(
     accumulators::GotoDef,
     accumulators::Completions,
     accumulators::PLSemanticTokens,
+    accumulators::PLHover,
+    program::Program,
+    program::Program_emit,
+    program::ProgramNodeWrapper,
 );
 
 pub trait Db: salsa::DbWithJar<Jar> {}
@@ -22,11 +28,12 @@ mod db;
 mod lsp;
 mod nomparser;
 mod utils;
-use std::{cell::RefCell, fs, path::Path, sync::Arc};
+use std::{cell::RefCell, path::Path, sync::Arc};
 
 use ast::{
     accumulators,
-    compiler::{self, HashOptimizationLevel},
+    compiler::{self, ActionType, HashOptimizationLevel},
+    node::program,
 };
 use clap::{CommandFactory, Parser, Subcommand};
 use db::Database;
@@ -93,23 +100,22 @@ fn main() {
     if let Some(name) = cli.name.as_deref() {
         let db = Database::default();
         let filepath = Path::new(name);
-        let abs = fs::canonicalize(filepath).unwrap();
+        let abs = dunce::canonicalize(filepath).unwrap();
+        let op = compiler::Options {
+            verbose: cli.verbose,
+            genir: cli.genir,
+            printast: cli.printast,
+            optimization: opt,
+        };
         let mem = MemDocsInput::new(
             &db,
             Arc::new(RefCell::new(mem_docs::MemDocs::new())),
             abs.to_str().unwrap().to_string(),
+            op,
+            ActionType::Diagnostic,
+            None,
         );
-        compiler::compile(
-            &db,
-            mem,
-            cli.out.clone(),
-            compiler::Options {
-                verbose: cli.verbose,
-                genir: cli.genir,
-                printast: cli.printast,
-                optimization: opt,
-            },
-        );
+        compiler::compile(&db, mem, cli.out.clone(), op);
     } else if let Some(command) = cli.command {
         match command {
             RunCommand::Run { name } => {

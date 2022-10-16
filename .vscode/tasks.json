@@ -6,7 +6,7 @@
             "command": "plc",
             "args": ["${workspaceFolder}/test/main.pi"],
             "type": "shell",
-            "dependsOn":["compile vm", "install plc"]
+            "dependsOn":["compile vm"]
         },
         {
             "label": "compile vm",
@@ -24,6 +24,13 @@
             "label": "install debug plc",
             "command": "cargo",
             "args": ["install", "--path", "${workspaceFolder}", "--debug"],
+            "type": "shell",
+        },
+        {
+            "label": "windows link",
+            "command": "clang",
+            "args": ["-o", "${workspaceFolder}/out.plb.out", "-g", "-O0", "${workspaceFolder}/out.plb.o","${workspaceFolder}/vm/target/release/vm.lib",
+             "-lws2_32", "-lbcrypt","-luserenv","-ladvapi32"],
             "type": "shell",
         }
     ]
