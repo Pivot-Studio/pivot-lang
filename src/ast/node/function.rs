@@ -97,7 +97,7 @@ impl Node for FuncDefNode {
             DIFlags::PUBLIC,
         );
         let subprogram = ctx.dibuilder.create_function(
-            ctx.discope,
+            ctx.diunit.get_file().as_debug_info_scope(),
             self.typenode.id.as_str(),
             None,
             ctx.diunit.get_file(),
@@ -124,10 +124,9 @@ impl Node for FuncDefNode {
             _ => panic!("type error"), // 理论上这两个Panic不可能触发
         };
         func.set_subprogram(subprogram);
-        ctx.discope = subprogram.as_debug_info_scope();
         ctx.function = Some(func);
         let mut ctx = ctx.new_child(self.range.start);
-
+        ctx.discope = subprogram.as_debug_info_scope();
         if let Some(body) = self.body.as_mut() {
             // copy para type
             let mut para_tps = Vec::new();
@@ -162,10 +161,10 @@ impl Node for FuncDefNode {
 
             ctx.return_block = Some((return_block, ret_value_ptr));
             if let Some(ptr) = ret_value_ptr {
-                let value = ctx.try_load1(Value::VarValue(ptr)).as_basic_value_enum();
-                ctx.builder.build_return(Some(&value));
+                let value = ctx.nodebug_builder.build_load(ptr, "load_ret_tmp");
+                ctx.nodebug_builder.build_return(Some(&value));
             } else {
-                ctx.builder.build_return(None);
+                ctx.nodebug_builder.build_return(None);
             };
             ctx.position_at_end(entry);
             // alloc para
@@ -200,7 +199,7 @@ impl Node for FuncDefNode {
                 .unwrap();
             }
             // emit body
-            let (_, _, terminator) = body.emit_child(&mut ctx)?;
+            let (_, _, terminator) = body.emit(&mut ctx)?;
             if !terminator.is_return() {
                 return Err(ctx.add_err(
                     self.range,

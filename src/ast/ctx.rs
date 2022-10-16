@@ -541,7 +541,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             dibuilder,
             diunit,
             targetmachine: tm,
-            discope: diunit.as_debug_info_scope(),
+            discope: diunit.get_file().as_debug_info_scope(),
             nodebug_builder: nodbg_builder,
             src_file_path,
             errs,
@@ -712,16 +712,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 } else {
                     Value::VarValue(ptr2value)
                 }
-            }
-            _ => v,
-        }
-    }
-    // load type* to type load type** to type*
-    pub fn try_load1(&mut self, v: Value<'ctx>) -> Value<'ctx> {
-        match v.as_basic_value_enum() {
-            BasicValueEnum::PointerValue(ptr2value) => {
-                let v = self.builder.build_load(ptr2value, "loadtmp");
-                Value::LoadValue(v)
             }
             _ => v,
         }

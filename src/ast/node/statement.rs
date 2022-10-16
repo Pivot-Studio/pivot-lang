@@ -142,26 +142,18 @@ impl Node for StatementsNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let child = &mut ctx.new_child(self.range.start);
-        self.emit_child(child)
-    }
-}
-
-impl StatementsNode {
-    pub fn emit_child<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let child = ctx;
         let mut terminator = TerminatorEnum::NONE;
         for m in self.statements.iter_mut() {
             if let NodeEnum::NL(_) = **m {
                 continue;
             }
             if !terminator.is_none() {
-                child.add_warn(m.range(), WarnCode::UNREACHABLE_STATEMENT);
+                ctx.add_warn(m.range(), WarnCode::UNREACHABLE_STATEMENT);
                 continue;
             }
             let pos = m.range().start;
-            child.build_dbg_location(pos);
-            let re = m.emit(child);
+            ctx.build_dbg_location(pos);
+            let re = m.emit(ctx);
             if re.is_err() {
                 continue;
             }
@@ -169,5 +161,12 @@ impl StatementsNode {
             terminator = terminator_res;
         }
         Ok((Value::None, None, terminator))
+    }
+}
+
+impl StatementsNode {
+    pub fn emit_child<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let child = &mut ctx.new_child(self.range.start);
+        self.emit(child)
     }
 }
