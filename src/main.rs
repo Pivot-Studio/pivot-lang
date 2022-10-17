@@ -27,6 +27,10 @@ struct Cli {
     #[clap(long)]
     printast: bool,
 
+    /// print source fmt
+    #[clap(long)]
+    gensource: bool,
+
     /// generate ir
     #[clap(long)]
     genir: bool,
@@ -69,6 +73,7 @@ fn main() {
                 verbose: cli.verbose,
                 genir: cli.genir,
                 printast: cli.printast,
+                gensource: cli.gensource,
                 optimization: opt,
             },
         );

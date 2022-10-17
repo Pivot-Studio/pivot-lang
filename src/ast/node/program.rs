@@ -13,6 +13,22 @@ pub struct ProgramNode {
     pub errs: Vec<Box<dyn Node>>,
 }
 impl Node for ProgramNode {
+    fn format(&self, tabs: usize, prefix: &str) {
+        println!("hello program xxx ");
+        let mut i = self.fns.len() + self.structs.len() + self.errs.len();
+        // for statement in &self.fns {
+        //     i -= 1;
+        //     statement.format();
+        // }
+        for statement in &self.structs {
+            i -= 1;
+            statement.format(tabs, prefix);
+        }
+        // for err in &self.errs {
+        //     i -= 1;
+        //     err.format();
+        // }
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         println!("ProgramNode");

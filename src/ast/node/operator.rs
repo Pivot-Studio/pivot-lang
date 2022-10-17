@@ -15,6 +15,9 @@ pub struct UnaryOpNode {
     pub exp: Box<dyn Node>,
 }
 impl Node for UnaryOpNode {
+    fn format(&self, tabs: usize, prefix: &str) {
+        println!("hello");
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -56,6 +59,9 @@ pub struct BinOpNode {
     pub right: Box<dyn Node>,
 }
 impl Node for BinOpNode {
+    fn format(&self, tabs: usize, prefix: &str) {
+        println!("hello");
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -128,6 +134,9 @@ pub struct TakeOpNode {
 }
 
 impl Node for TakeOpNode {
+    fn format(&self, tabs: usize, prefix: &str) {
+        println!("hello");
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

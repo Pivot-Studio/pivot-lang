@@ -95,13 +95,16 @@ impl TypeNameNode {
 }
 
 #[range]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TypedIdentifierNode {
     pub id: String,
     pub tp: Box<TypeNameNode>,
 }
 
 impl TypedIdentifierNode {
+    pub fn format(&self, tabs: usize, prefix: &str) {
+        println!("{}{}: {}", prefix.repeat(tabs), &self.id, &self.tp.id)
+    }
     pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -119,6 +122,15 @@ pub struct StructDefNode {
 }
 
 impl StructDefNode {
+    pub fn format(&self, tabs: usize, prefix: &str) {
+        let mut i = self.fields.len();
+        println!("{}struct {} {{", prefix.repeat(tabs), &self.id);
+        for field in &self.fields {
+            i -= 1;
+            field.format(tabs + 1, prefix);
+        }
+        println!("{}}}", prefix.repeat(tabs));
+    }
     pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -192,6 +204,9 @@ pub struct StructInitFieldNode {
 }
 
 impl Node for StructInitFieldNode {
+    fn format(&self, tabs: usize, prefix: &str) {
+        println!("hello");
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -216,6 +231,9 @@ pub struct StructInitNode {
 }
 
 impl Node for StructInitNode {
+    fn format(&self, tabs: usize, prefix: &str) {
+        println!("hello");
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

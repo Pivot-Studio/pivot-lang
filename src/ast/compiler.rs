@@ -25,6 +25,7 @@ pub struct Option {
     pub genir: bool,
     pub printast: bool,
     pub optimization: OptimizationLevel,
+    pub gensource: bool,
 }
 
 type MainFunc = unsafe extern "C" fn() -> i64;
@@ -86,6 +87,11 @@ impl Compiler {
             return;
         }
         let mut node = parse_result.unwrap();
+
+        if op.gensource {
+            node.format(0, "    ")
+        }
+
         if op.printast {
             node.print(0, true, vec![]);
         }

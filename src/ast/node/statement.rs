@@ -10,6 +10,9 @@ pub struct DefNode {
     pub exp: Box<dyn Node>,
 }
 impl Node for DefNode {
+    fn format(&self, tabs: usize, prefix: &str) {
+        println!("hello");
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -55,6 +58,9 @@ pub struct AssignNode {
     pub exp: Box<dyn Node>,
 }
 impl Node for AssignNode {
+    fn format(&self, tabs: usize, prefix: &str) {
+        println!("hello");
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -78,6 +84,9 @@ impl Node for AssignNode {
 pub struct NLNode {}
 
 impl Node for NLNode {
+    fn format(&self, tabs: usize, prefix: &str) {
+        println!("hello");
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -93,6 +102,9 @@ pub struct StatementsNode {
     pub statements: Vec<Box<dyn Node>>,
 }
 impl Node for StatementsNode {
+    fn format(&self, tabs: usize, prefix: &str) {
+        println!("hello");
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

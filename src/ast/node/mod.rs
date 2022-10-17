@@ -49,8 +49,8 @@ impl<'a> Value<'a> {
         }
     }
 }
-
 pub trait Node: RangeTrait + AsAny {
+    fn format(&self, tabs: usize, prefix: &str);
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>);
 }
