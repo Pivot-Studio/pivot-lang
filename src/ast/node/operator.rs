@@ -7,12 +7,14 @@ use crate::ast::tokens::TokenType;
 use crate::handle_calc;
 use inkwell::IntPredicate;
 use internal_macro::range;
+use lsp_types::SemanticTokenType;
 use paste::item;
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UnaryOpNode {
     pub op: TokenType,
-    pub exp: Box<dyn Node>,
+    pub exp: Box<NodeEnum>,
 }
 impl Node for UnaryOpNode {
     fn format(&self, tabs: usize, prefix: &str) {
@@ -26,37 +28,56 @@ impl Node for UnaryOpNode {
         println!("{:?}", self.op);
         self.exp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
-        let (exp, pltype) = self.exp.emit(ctx);
-        let exp = ctx.try_load(exp);
-        return match (exp, self.op) {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let (exp, pltype, _) = self.exp.emit(ctx)?;
+        if let (&Value::VarValue(_), TokenType::REF) = (&exp, self.op) {
+            if let Value::VarValue(exp) = ctx.try_load2ptr(exp) {
+                return Ok((Value::RefValue(exp), pltype, TerminatorEnum::NONE));
+            }
+            todo!()
+        }
+        let exp = ctx.try_load2var(exp);
+        return Ok(match (exp, self.op) {
             (Value::IntValue(exp), TokenType::MINUS) => (
                 Value::IntValue(ctx.builder.build_int_neg(exp, "negtmp")),
                 pltype,
+                TerminatorEnum::NONE,
             ),
             (Value::FloatValue(exp), TokenType::MINUS) => (
                 Value::FloatValue(ctx.builder.build_float_neg(exp, "negtmp")),
                 pltype,
+                TerminatorEnum::NONE,
             ),
             (Value::BoolValue(exp), TokenType::NOT) => (
-                Value::BoolValue(ctx.builder.build_int_compare(
-                    IntPredicate::EQ,
-                    exp,
-                    ctx.context.bool_type().const_int(false as u64, true),
-                    "nottmp",
-                )),
+                Value::BoolValue({
+                    let bool_origin = ctx.builder.build_int_compare(
+                        IntPredicate::EQ,
+                        exp,
+                        ctx.context.i8_type().const_int(false as u64, true),
+                        "nottmp",
+                    );
+                    ctx.builder
+                        .build_int_z_extend(bool_origin, ctx.context.i8_type(), "zexttemp")
+                }),
                 pltype,
+                TerminatorEnum::NONE,
             ),
-            (exp, op) => panic!("not implemented,get exp {:?},op {:?}", exp, op),
-        };
+            (_exp, _op) => {
+                return Err(ctx.add_err(
+                    self.range,
+                    crate::ast::diag::ErrorCode::INVALID_UNARY_EXPRESSION,
+                ));
+            }
+        });
     }
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BinOpNode {
-    pub left: Box<dyn Node>,
+    pub left: Box<NodeEnum>,
     pub op: TokenType,
-    pub right: Box<dyn Node>,
+    pub right: Box<NodeEnum>,
 }
 impl Node for BinOpNode {
     fn format(&self, tabs: usize, prefix: &str) {
@@ -71,17 +92,22 @@ impl Node for BinOpNode {
         println!("{:?}", self.op);
         self.right.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
-        let (lv, lpltype) = self.left.emit(ctx);
-        let left = ctx.try_load(lv);
-        let (rv, rpltype) = self.right.emit(ctx);
-        let right = ctx.try_load(rv);
-        assert_eq!(lpltype, rpltype);
-        match self.op {
-            TokenType::PLUS => handle_calc!(ctx, add, float_add, left, right),
-            TokenType::MINUS => handle_calc!(ctx, sub, float_sub, left, right),
-            TokenType::MUL => handle_calc!(ctx, mul, float_mul, left, right),
-            TokenType::DIV => handle_calc!(ctx, signed_div, float_div, left, right),
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let (lv, lpltype, _) = self.left.emit(ctx)?;
+        let left = ctx.try_load2var(lv);
+        let (rv, rpltype, _) = self.right.emit(ctx)?;
+        let right = ctx.try_load2var(rv);
+        if lpltype != rpltype {
+            return Err(ctx.add_err(
+                self.range,
+                crate::ast::diag::ErrorCode::BIN_OP_TYPE_MISMATCH,
+            ));
+        }
+        Ok(match self.op {
+            TokenType::PLUS => handle_calc!(ctx, add, float_add, left, right, self.range),
+            TokenType::MINUS => handle_calc!(ctx, sub, float_sub, left, right, self.range),
+            TokenType::MUL => handle_calc!(ctx, mul, float_mul, left, right, self.range),
+            TokenType::DIV => handle_calc!(ctx, signed_div, float_div, left, right, self.range),
             TokenType::EQ
             | TokenType::NE
             | TokenType::LEQ
@@ -89,48 +115,94 @@ impl Node for BinOpNode {
             | TokenType::GREATER
             | TokenType::LESS => match (left, right) {
                 (Value::IntValue(lhs), Value::IntValue(rhs)) => (
-                    Value::BoolValue(ctx.builder.build_int_compare(
-                        self.op.get_op(),
-                        lhs,
-                        rhs,
-                        "cmptmp",
-                    )),
+                    Value::BoolValue({
+                        let bool_origin =
+                            ctx.builder
+                                .build_int_compare(self.op.get_op(), lhs, rhs, "cmptmp");
+                        ctx.builder.build_int_z_extend(
+                            bool_origin,
+                            ctx.context.i8_type(),
+                            "zexttemp",
+                        )
+                    }),
                     Some("bool".to_string()),
+                    TerminatorEnum::NONE,
                 ),
                 (Value::FloatValue(lhs), Value::FloatValue(rhs)) => (
-                    Value::BoolValue(ctx.builder.build_float_compare(
-                        self.op.get_fop(),
-                        lhs,
-                        rhs,
-                        "cmptmp",
-                    )),
+                    Value::BoolValue({
+                        let bool_origin =
+                            ctx.builder
+                                .build_float_compare(self.op.get_fop(), lhs, rhs, "cmptmp");
+                        ctx.builder.build_int_z_extend(
+                            bool_origin,
+                            ctx.context.i8_type(),
+                            "zexttemp",
+                        )
+                    }),
                     Some("bool".to_string()),
+                    TerminatorEnum::NONE,
                 ),
-                _ => panic!("not implemented"),
+                _ => {
+                    return Err(ctx.add_err(
+                        self.range,
+                        crate::ast::diag::ErrorCode::VALUE_NOT_COMPARABLE,
+                    ))
+                }
             },
             TokenType::AND => match (left, right) {
                 (Value::BoolValue(lhs), Value::BoolValue(rhs)) => (
-                    Value::BoolValue(ctx.builder.build_and(lhs, rhs, "andtmp")),
+                    Value::BoolValue({
+                        let bool_origin = ctx.builder.build_and(lhs, rhs, "andtmp");
+                        ctx.builder.build_int_z_extend(
+                            bool_origin,
+                            ctx.context.i8_type(),
+                            "zext_temp",
+                        )
+                    }),
                     Some("bool".to_string()),
+                    TerminatorEnum::NONE,
                 ),
-                _ => panic!("not implemented"),
+                _ => {
+                    return Err(
+                        ctx.add_err(self.range, crate::ast::diag::ErrorCode::LOGIC_OP_NOT_BOOL)
+                    )
+                }
             },
             TokenType::OR => match (left, right) {
                 (Value::BoolValue(lhs), Value::BoolValue(rhs)) => (
-                    Value::BoolValue(ctx.builder.build_or(lhs, rhs, "ortmp")),
+                    Value::BoolValue({
+                        let bool_origin = ctx.builder.build_or(lhs, rhs, "ortmp");
+                        ctx.builder.build_int_z_extend(
+                            bool_origin,
+                            ctx.context.i8_type(),
+                            "zext_temp",
+                        )
+                    }),
                     Some("bool".to_string()),
+                    TerminatorEnum::NONE,
                 ),
-                _ => panic!("not implemented"),
+                _ => {
+                    return Err(
+                        ctx.add_err(self.range, crate::ast::diag::ErrorCode::LOGIC_OP_NOT_BOOL)
+                    )
+                }
             },
-            op => panic!("expected op token but found {:?}", op),
-        }
+            _ => {
+                return Err(ctx.add_err(
+                    self.range,
+                    crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR,
+                ))
+            }
+        })
     }
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TakeOpNode {
-    pub head: Box<dyn Node>,
+    pub head: Box<NodeEnum>,
     pub ids: Vec<Box<VarNode>>,
+    pub complete: bool,
 }
 
 impl Node for TakeOpNode {
@@ -148,10 +220,13 @@ impl Node for TakeOpNode {
             id.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
-        let head = self.head.emit(ctx);
-        // let head = ctx.try_load(head);
-        let (mut res, mut pltype) = head;
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let mut range = self.head.range();
+        let head = self.head.emit(ctx)?;
+        let (mut res, mut pltype, _) = head;
+        if self.ids.len() != 0 {
+            res = ctx.try_load2ptr(res);
+        }
         for id in &self.ids {
             res = match res.as_basic_value_enum() {
                 BasicValueEnum::PointerValue(s) => {
@@ -160,22 +235,65 @@ impl Node for TakeOpNode {
                     if etype.is_struct_type() {
                         let st = etype.into_struct_type();
                         let tpname = st.get_name().unwrap().to_str().unwrap();
-                        let (tp, _) = ctx.get_type(tpname).unwrap();
+                        // end with ".", gen completions
+                        ctx.if_completion(|ctx, (pos, trigger)| {
+                            if pos.column == id.range().start.column
+                                && pos.line == id.range().start.line
+                                && trigger.is_some()
+                                && trigger.as_ref().unwrap() == "."
+                            {
+                                let (tp, _) = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
+                                if let PLType::STRUCT(s) = tp {
+                                    let completions = s.get_completions();
+                                    ctx.completion_items.set(completions);
+                                    ctx.action = None;
+                                }
+                            }
+                        });
+                        let (tp, _) = ctx.get_type(tpname, range).unwrap();
+                        range = id.range();
+                        ctx.push_semantic_token(range, SemanticTokenType::PROPERTY, 0);
                         if let PLType::STRUCT(s) = tp {
-                            let field = s.fields.get(&id.name).unwrap();
-                            index = field.index;
-                            pltype = Some(field.typename.id.clone());
+                            let field = s.fields.get(&id.name);
+                            if let Some(field) = field {
+                                index = field.index;
+                                pltype = Some(field.typename.id.clone());
+                                ctx.set_if_refs(field.refs.clone(), range);
+                                ctx.send_if_go_to_def(range, field.range);
+                            } else {
+                                return Err(ctx.add_err(
+                                    id.range,
+                                    crate::ast::diag::ErrorCode::STRUCT_FIELD_NOT_FOUND,
+                                ));
+                            }
                         } else {
                             panic!("not implemented");
                         }
                     } else {
-                        panic!("not implemented")
+                        return Err(
+                            ctx.add_err(id.range, crate::ast::diag::ErrorCode::INVALID_GET_FIELD)
+                        );
                     }
                     Value::VarValue(ctx.builder.build_struct_gep(s, index, "structgep").unwrap())
                 }
                 _ => panic!("not implemented {:?}", res),
             }
         }
-        (res, pltype)
+        if !self.complete {
+            // end with ".", gen completions
+            ctx.if_completion(|ctx, (pos, trigger)| {
+                if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
+                    let (tp, _) = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
+                    if let PLType::STRUCT(s) = tp {
+                        let completions = s.get_completions();
+                        ctx.completion_items.set(completions);
+                        ctx.action = None;
+                    }
+                }
+            });
+
+            return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
+        }
+        Ok((res, pltype, TerminatorEnum::NONE))
     }
 }

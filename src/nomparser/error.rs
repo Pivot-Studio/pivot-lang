@@ -3,20 +3,21 @@ use nom::{
     bytes::complete::is_not,
     combinator::*,
     error::{FromExternalError, ParseError},
-    IResult, InputTake,
+    IResult,
 };
 
 use crate::ast::{
-    node::{error::ErrorNode, Node},
+    node::{error::ErrorNode, NodeEnum},
     range::Range,
 };
 
-use super::{box_node, Span};
+use super::{take_utf8_split, Span};
 
 pub fn except<'a, E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt::Error>>(
     except: &'static str,
     msg: &'static str,
-) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, Box<dyn Node>, E> {
+    code: crate::ast::diag::ErrorCode,
+) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, Box<NodeEnum>, E> {
     move |i| {
         let (mut i, sp) = recognize(is_not(Span::from(except)))(i)?;
         let mut r = vec![];
@@ -31,9 +32,13 @@ pub fn except<'a, E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt
         let mut src = sp.fragment().to_string();
         let mut next;
         while r.len() > 0 {
-            (i, next) = i.take_split(1);
-            let nextch = next.fragment().chars().next().unwrap();
-            src.push(next.fragment().chars().next().unwrap());
+            if i.len() == 0 {
+                break;
+            }
+
+            (i, next) = take_utf8_split(&i);
+            let nextch = next.fragment().char_indices().next().unwrap().1;
+            src.push(next.fragment().char_indices().next().unwrap().1);
             if nextch == '{' {
                 r.push('}');
             }
@@ -42,12 +47,16 @@ pub fn except<'a, E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt
             }
         }
         let msg = msg.to_string();
-        let end = sp.take_split(sp.len()).0;
-        let node = box_node(ErrorNode {
-            msg,
-            src,
-            range: Range::new(sp, end),
-        });
+        // let end = sp.take_split(sp.len()).0;
+        let node = Box::new(
+            ErrorNode {
+                msg,
+                src,
+                range: Range::new(sp, i),
+                code,
+            }
+            .into(),
+        );
         Ok((i, node))
     }
 }
@@ -56,24 +65,25 @@ pub fn alt_except<'a, E, F>(
     parser: F,
     ex: &'static str,
     msg: &'static str,
-) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, Box<dyn Node>, E>
+    code: crate::ast::diag::ErrorCode,
+) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, Box<NodeEnum>, E>
 where
     E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt::Error>,
-    F: FnMut(Span<'a>) -> IResult<Span<'a>, Box<dyn Node>, E>,
+    F: FnMut(Span<'a>) -> IResult<Span<'a>, Box<NodeEnum>, E>,
 {
-    alt((parser, except(ex, msg)))
+    alt((parser, except(ex, msg, code)))
 }
 
 // pub fn expect<'a, E,F>(
 //     parser: F,
 //     ex: &'static str,
 //     msg: &'static str,
-// ) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, Box<dyn Node>, E>
+// ) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, Box<NodeEnum>, E>
 // where E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt::Error>,
-//       F: FnMut(Span<'a>) -> IResult<Span<'a>, Box<dyn Node>, E>, {
+//       F: FnMut(Span<'a>) -> IResult<Span<'a>, Box<NodeEnum>, E>, {
 //     alt((
 //         parser,
-//         move |i:Span<'a>|->IResult<Span, Box<dyn Node>, E>{
+//         move |i:Span<'a>|->IResult<Span, Box<NodeEnum>, E>{
 //             let msg = msg.to_string();
 //             let src = i.fragment().to_string();
 //             let (i,out) = recognize(is_not(Span::from(ex)))(i)?;

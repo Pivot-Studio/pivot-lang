@@ -2,7 +2,7 @@ use std::fmt::Error;
 
 use nom::{
     branch::alt,
-    bytes::complete::tag,
+    bytes::complete::{tag, take_until},
     character::complete::{alpha1, alphanumeric1, one_of, space0},
     combinator::{eof, map_res, opt, recognize},
     error::ParseError,
@@ -15,9 +15,15 @@ type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
     ast::node::ret::RetNode,
     ast::node::*,
-    ast::node::{
-        function::{FuncCallNode, FuncDefNode, FuncTypeNode},
-        types::{StructDefNode, TypeNameNode, TypedIdentifierNode},
+    ast::{
+        diag::ErrorCode,
+        node::{
+            comment::CommentNode,
+            error::{ErrorNode, STErrorNode},
+            function::{FuncCallNode, FuncDefNode, FuncTypeNode},
+            types::{StructDefNode, TypeNameNode, TypedIdentifierNode},
+        },
+        tokens::TOKEN_STR_MAP,
     },
     ast::{node::types::StructInitNode, range::Range},
     ast::{
@@ -27,6 +33,7 @@ use crate::{
         },
         tokens::TokenType,
     },
+    Db,
 };
 use internal_macro::{test_parser, test_parser_error};
 use nom::character::complete::char;
@@ -35,11 +42,11 @@ use self::error::{alt_except, except};
 
 pub mod error;
 
-macro_rules! newline_or_eof {
-    () => {
-        alt((delspace(alt((tag("\n"), tag("\r\n")))), eof))
-    };
-}
+// macro_rules! newline_or_eof {
+//     () => {
+//         alt((delspace(alt((tag("\n"), tag("\r\n")))), eof))
+//     };
+// }
 
 macro_rules! del_newline_or_space {
     ($e:expr) => {
@@ -50,17 +57,15 @@ macro_rules! del_newline_or_space {
         )
     };
 }
-macro_rules! delnl {
-    ($parser:expr) => {
-        delimited(many0(newline), $parser, many0(newline))
-    };
-}
 
-fn res<T>(t: T) -> Result<Box<dyn Node>, Error>
-where
-    T: Node + 'static,
-{
-    res_box(box_node(t))
+// macro_rules! delnl {
+//     ($parser:expr) => {
+//         delimited(many0(newline), $parser, many0(newline))
+//     };
+// }
+
+fn res_enum(t: NodeEnum) -> Result<Box<NodeEnum>, Error> {
+    res_box(Box::new(t))
 }
 
 fn box_node<T>(t: T) -> Box<T>
@@ -75,16 +80,19 @@ fn res_box<T: ?Sized>(i: Box<T>) -> Result<Box<T>, Error> {
 }
 
 fn create_bin(
-    (mut left, rights): (Box<dyn Node>, Vec<((TokenType, Range), Box<dyn Node>)>),
-) -> Result<Box<dyn Node>, Error> {
+    (mut left, rights): (Box<NodeEnum>, Vec<((TokenType, Range), Box<NodeEnum>)>),
+) -> Result<Box<NodeEnum>, Error> {
     for ((op, _), right) in rights {
         let range = left.range().start.to(right.range().end);
-        left = Box::new(BinOpNode {
-            op,
-            left,
-            right,
-            range,
-        });
+        left = Box::new(
+            BinOpNode {
+                op,
+                left,
+                right,
+                range,
+            }
+            .into(),
+        );
     }
     res_box(left)
 }
@@ -108,50 +116,51 @@ macro_rules! parse_bin_ops {
     };
 }
 
-pub struct PLParser<'a> {
-    input: Span<'a>,
+#[salsa::tracked]
+pub struct SourceProgram {
+    #[return_ref]
+    pub text: String,
 }
 
-impl<'a> PLParser<'a> {
-    pub fn new(input: &'a str) -> Self {
-        let sp = Span::from(input);
-        PLParser { input: sp }
+#[salsa::tracked(lru = 32)]
+pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, String> {
+    let text = source.text(db);
+    let re = program(Span::new(text));
+    if let Err(e) = re {
+        return Err(format!("{:?}", e));
     }
-
-    pub fn parse(&mut self) -> Result<Box<dyn Node>, String> {
-        let re = program(self.input);
-        if let Err(e) = re {
-            return Err(format!("{:?}", e));
-        }
-        Ok(re.unwrap().1)
-    }
+    eprintln!("parse");
+    Ok(ProgramNodeWrapper::new(db, re.unwrap().1))
 }
-#[test_parser("return 1\n")]
-#[test_parser("return 1.1\n")]
-#[test_parser("return true\n")]
-#[test_parser("return\n")]
-#[test_parser("return a\n")]
-#[test_parser("return 1 + 2\n")]
-#[test_parser_error("return a = 2\n")]
+#[test_parser("return 1;")]
+#[test_parser("return 1.1;")]
+#[test_parser("return true;")]
+#[test_parser("return;")]
+#[test_parser("return a;")]
+#[test_parser("return 1 + 2;")]
+#[test_parser_error("return a = 2;")]
 // ```
 // return_statement = "return" logic_exp newline ;
 // ```
-pub fn return_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
             tag_token(TokenType::RETURN),
             opt(logic_exp),
-            newline_or_eof!(),
+            tag_token(TokenType::SEMI),
         )),
         |((_, range), val, _)| {
             if let Some(val) = val {
                 let range = val.range();
-                res(RetNode {
-                    value: Some(val),
-                    range,
-                })
+                res_enum(
+                    RetNode {
+                        value: Some(val),
+                        range,
+                    }
+                    .into(),
+                )
             } else {
-                res(RetNode { value: None, range })
+                res_enum(RetNode { value: None, range }.into())
             }
         },
     ))(input)
@@ -159,35 +168,35 @@ pub fn return_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
 
 #[test_parser(
     "if a > 1 { 
-    a = 1
+    a = 1;
 } else {
-    a = 2
+    a = 2;
 }"
 )]
 #[test_parser(
     "if true {
-    a = 1
+    a = 1;
 } else if false {
-    a = 2
+    a = 2;
 } else {
-    a = 3
+    a = 3;
 }"
 )]
 #[test_parser_error(
     "if true {
-    a = 1
+    a = 1;
 } else if false {
-    a = 2
+    a = 2;
 } else {
-    a = 3
+    a = 3;
 } else {
-    a = 4
+    a = 4;
 }"
 )]
 /// ```ebnf
 /// if_statement = "if" logic_exp statement_block ("else" (if_statement | statement_block))? ;
 /// ```
-pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
             tag_token(TokenType::IF),
@@ -195,7 +204,10 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             statement_block,
             opt(preceded(
                 tag_token(TokenType::ELSE),
-                alt((if_statement, map_res(statement_block, |n| res(n)))),
+                alt((
+                    if_statement,
+                    map_res(statement_block, |n| res_enum(n.into())),
+                )),
             )),
         ))),
         |(_, cond, then, els)| {
@@ -203,65 +215,76 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             if let Some(el) = &els {
                 range = range.start.to(el.range().end);
             }
-            res(IfNode {
-                cond,
-                then: Box::new(then),
-                els,
-                range,
-            })
+            res_enum(
+                IfNode {
+                    cond,
+                    then: Box::new(then.into()),
+                    els,
+                    range,
+                }
+                .into(),
+            )
         },
     )(input)
 }
 #[test_parser(
     "while true {
-    let a = b
+    let a = b;
 }"
 )]
-#[test_parser_error(
+#[test_parser(
     "while true {
-    let a = b
+    let a = b;
 }
 "
 )]
 /// ```ebnf
 /// while_statement = "while" logic_exp statement_block ;
 /// ```
-pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn while_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
             tag_token(TokenType::WHILE),
-            alt_except(logic_exp, "{", "failed to parse while condition"),
+            alt_except(
+                logic_exp,
+                "{",
+                "failed to parse while condition",
+                ErrorCode::WHILE_CONDITION_MUST_BE_BOOL,
+            ),
             statement_block,
         ))),
         |(_, cond, body)| {
             let range = cond.range().start.to(body.range.end);
-            res(WhileNode {
-                cond,
-                body: Box::new(body),
-                range,
-            })
+            res_enum(
+                WhileNode {
+                    cond,
+                    body: Box::new(body),
+                    range,
+                }
+                .into(),
+            )
         },
     )(input)
 }
 
 #[test_parser(
     " for ;true; {
-    let a = b
+    let a = b;
 }"
 )]
 #[test_parser(
     "for;true; {
-    let a = b
+    let a = b;
 }"
 )]
 #[test_parser(
     "for i = 0; i < 3; i = i + 1 {
-    b = c + i
+    b = c + i;
 }"
 )]
 #[test_parser(
     "for i = 1; i <= 5; i = i + 1{
-    b = b + 1
+    b = b + 1;
 }"
 )]
 #[test_parser(
@@ -273,14 +296,14 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
 /// ```enbf
 /// for_statement = "for" (assignment | new_variable) ";" logic_exp ";" assignment statement_block;
 /// ```
-pub fn for_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn for_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
             tag_token(TokenType::FOR),
             opt(alt((assignment, new_variable))),
-            delspace(tag_token(TokenType::SEMI)),
+            tag_token(TokenType::SEMI),
             logic_exp,
-            delspace(tag_token(TokenType::SEMI)),
+            tag_token(TokenType::SEMI),
             opt(assignment),
             statement_block,
         ))),
@@ -289,23 +312,85 @@ pub fn for_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
             if let Some(pre) = &pre {
                 range = range.end.from(pre.range().start);
             }
-            res(ForNode {
-                pre,
-                cond,
-                opt,
-                body: Box::new(body),
-                range,
-            })
+            res_enum(
+                ForNode {
+                    pre,
+                    cond,
+                    opt,
+                    body: Box::new(body),
+                    range,
+                }
+                .into(),
+            )
         },
     )(input)
 }
 
+pub fn empty_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    map_res(tag_token(TokenType::SEMI), |_| {
+        res_enum(
+            EmptyNode {
+                range: Range::new(input, input),
+            }
+            .into(),
+        )
+    })(input)
+}
+
+pub fn comment(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    map_res(
+        delimited(
+            tag("//"),
+            recognize(alt((
+                alpha1::<Span, nom::error::Error<Span>>,
+                take_until("\n"),
+            ))),
+            tag("\n"),
+        ),
+        |c| {
+            res_enum(
+                CommentNode {
+                    comment: c.to_string(),
+                    range: Range::new(input, c.take_split(c.len()).0),
+                }
+                .into(),
+            )
+        },
+    )(input)
+}
+
+#[test_parser("{let a = 1;}")]
+#[test_parser("{}")]
+#[test_parser(
+    "{
+
+}"
+)]
 pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
     delspace(delimited(
-        tag_token(TokenType::LBRACE),
+        del_newline_or_space!(tag_token(TokenType::LBRACE)),
         statements,
-        tag_token(TokenType::RBRACE),
+        del_newline_or_space!(tag_token(TokenType::RBRACE)),
     ))(input)
+}
+
+macro_rules! semi_statement {
+    ($e:expr) => {
+        alt((terminated($e, tag_token(TokenType::SEMI)), map_res(tuple(($e,recognize(many0(alt((tag("\n"), tag("\r\n"), tag(" "), tag("\t"))))))), |(node,e)|{
+            let range = node.range();
+            let r = Range::new(e,e);
+            res_enum(STErrorNode{
+                range: range,
+                st: node,
+                err:ErrorNode{
+                    range: r,//Range{start: range.end, end: range.end},
+                    msg: "missing semi".to_string(),
+                    code: ErrorCode::MISSING_SEMI,
+                    src:"".to_string(),
+                },
+            }.into())
+        })))
+    };
 }
 
 /// ```ebnf
@@ -321,50 +406,56 @@ pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
 /// | newline
 /// ;
 /// ```
-pub fn statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
-        terminated(new_variable, newline_or_eof!()),
-        terminated(assignment, newline_or_eof!()),
+        semi_statement!(new_variable),
+        semi_statement!(assignment),
         if_statement,
         while_statement,
         for_statement,
         break_statement,
         continue_statement,
-        terminated(function_call, newline_or_eof!()),
         return_statement,
-        newline,
-        del_newline_or_space!(except("\n\r}", "failed to parse statement")),
+        semi_statement!(function_call),
+        semi_statement!(take_exp), // for completion
+        empty_statement,
+        comment,
+        except(
+            "\n\r}",
+            "failed to parse statement",
+            ErrorCode::SYNTAX_ERROR_STATEMENT,
+        ),
     )))(input)
 }
 
 enum TopLevel {
     StructDef(StructDefNode),
     FuncDef(FuncDefNode),
-    ErrNode(Box<dyn Node>),
+    Comment(Box<NodeEnum>),
+    ErrNode(Box<NodeEnum>),
 }
 
 fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
     delspace(alt((
         del_newline_or_space!(function_def),
         del_newline_or_space!(struct_def),
+        map_res(del_newline_or_space!(comment), |c| {
+            Ok::<_, Error>(Box::new(TopLevel::Comment(c)))
+        }),
         map_res(
-            del_newline_or_space!(except("\n\r", "failed to parse top level statement")),
+            del_newline_or_space!(except(
+                "\n\r",
+                "failed to parse top level statement",
+                ErrorCode::SYNTAX_ERROR_TOP_STATEMENT
+            )),
             |e| Ok::<_, Error>(Box::new(TopLevel::ErrNode(e))),
         ),
     )))(input)
 }
 
-pub fn newline(input: Span) -> IResult<Span, Box<dyn Node>> {
-    map_res(delspace(alt((tag("\n"), tag("\r\n")))), |_| {
-        res(NLNode {
-            range: Range::new(input, input),
-        })
-    })(input)
-}
-
 pub fn statements(input: Span) -> IResult<Span, StatementsNode> {
-    map_res(many0(statement), |v| {
-        let mut range = v[0].range();
+    map_res(many0(del_newline_or_space!(statement)), |v| {
+        let mut range = Range::new(input, input);
         let la = v.last();
         if let Some(la) = la {
             range = range.start.to(la.range().end);
@@ -376,26 +467,29 @@ pub fn statements(input: Span) -> IResult<Span, StatementsNode> {
     })(input)
 }
 
-pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let old = input;
     let mut input = input;
-    let mut fns = vec![];
+    let mut nodes = vec![];
     let mut sts = vec![];
     let mut fntypes = vec![];
-    let mut errs = vec![];
     loop {
         let top = top_level_statement(input);
         if let Ok((i, t)) = top {
             match *t {
                 TopLevel::FuncDef(f) => {
                     fntypes.push(f.typenode.clone());
-                    fns.push(f);
+                    nodes.push(Box::new(f.into()));
                 }
                 TopLevel::StructDef(s) => {
-                    sts.push(s);
+                    sts.push(s.clone());
+                    nodes.push(Box::new(s.into()));
+                }
+                TopLevel::Comment(c) => {
+                    nodes.push(c);
                 }
                 TopLevel::ErrNode(e) => {
-                    errs.push(e);
+                    nodes.push(e);
                 }
             }
             input = i;
@@ -410,22 +504,28 @@ pub fn program(input: Span) -> IResult<Span, Box<dyn Node>> {
             return Err(err);
         }
     }
-    let node: Box<dyn Node> = Box::new(ProgramNode {
-        fns,
-        structs: sts,
-        fntypes,
-        range: Range::new(old, input),
-        errs,
-    });
+    let node: Box<NodeEnum> = Box::new(
+        ProgramNode {
+            nodes,
+            structs: sts,
+            fntypes,
+            range: Range::new(old, input),
+        }
+        .into(),
+    );
     Ok((input, node))
 }
 
-fn cast_to_var(n: &Box<dyn Node>) -> VarNode {
-    n.as_any().downcast_ref::<VarNode>().unwrap().clone()
+fn cast_to_var(n: &Box<NodeEnum>) -> VarNode {
+    if let NodeEnum::Var(v) = &**n {
+        v.clone()
+    } else {
+        panic!("not a var node");
+    }
 }
 
 #[test_parser("let a = 1")]
-pub fn new_variable(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         preceded(
             tag_token(TokenType::LET),
@@ -434,26 +534,32 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<dyn Node>> {
         |(out, _, v)| {
             let a = cast_to_var(&out);
             let range = out.range().start.to(v.range().end);
-            res(DefNode {
-                var: a,
-                exp: v,
-                range,
-            })
+            res_enum(
+                DefNode {
+                    var: a,
+                    exp: v,
+                    range,
+                }
+                .into(),
+            )
         },
     ))(input)
 }
 
 #[test_parser("a = 1")]
-pub fn assignment(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn assignment(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((take_exp, tag_token(TokenType::ASSIGN), logic_exp)),
         |(left, _op, right)| {
             let range = left.range().start.to(right.range().end);
-            res(AssignNode {
-                var: left,
-                exp: right,
-                range,
-            })
+            res_enum(
+                AssignNode {
+                    var: left,
+                    exp: right,
+                    range,
+                }
+                .into(),
+            )
         },
     ))(input)
 }
@@ -462,7 +568,7 @@ pub fn assignment(input: Span) -> IResult<Span, Box<dyn Node>> {
 #[test_parser("10.")]
 #[test_parser("10.10")]
 #[test_parser("10")]
-pub fn number(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn number(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let (input, _) = space0(input)?;
     let (re, value) = alt((
         map_res(float, |out| {
@@ -475,58 +581,69 @@ pub fn number(input: Span) -> IResult<Span, Box<dyn Node>> {
     ))(input)?;
     let range = Range::new(input, re);
     let node = NumNode { value, range };
-    Ok((re, Box::new(node)))
+    Ok((re, Box::new(node.into())))
 }
 
 #[test_parser("a + 1")]
 #[test_parser("a - 1")]
-pub fn add_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn add_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     parse_bin_ops!(mul_exp, PLUS, MINUS)(input)
 }
 
 #[test_parser("1 * 1")]
 #[test_parser("1 / 1")]
-pub fn mul_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn mul_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     parse_bin_ops!(unary_exp, MUL, DIV)(input)
 }
 
-#[test_parser("break\n")]
-pub fn break_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+#[test_parser("break;")]
+pub fn break_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     terminated(
-        delspace(map_res(tag_token(TokenType::BREAK), |_| {
-            res(BreakNode {
-                range: Range::new(input, input),
-            })
-        })),
-        newline,
+        map_res(tag_token(TokenType::BREAK), |_| {
+            res_enum(
+                BreakNode {
+                    range: Range::new(input, input),
+                }
+                .into(),
+            )
+        }),
+        tag_token(TokenType::SEMI),
     )(input)
 }
-#[test_parser("continue\n")]
-pub fn continue_statement(input: Span) -> IResult<Span, Box<dyn Node>> {
+#[test_parser("continue;")]
+pub fn continue_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     terminated(
-        delspace(map_res(tag_token(TokenType::CONTINUE), |_| {
-            res(ContinueNode {
-                range: Range::new(input, input),
-            })
-        })),
-        newline,
+        map_res(tag_token(TokenType::CONTINUE), |_| {
+            res_enum(
+                ContinueNode {
+                    range: Range::new(input, input),
+                }
+                .into(),
+            )
+        }),
+        tag_token(TokenType::SEMI),
     )(input)
 }
 
 #[test_parser("-1")]
 #[test_parser("!a")]
+#[test_parser("&a")]
 #[test_parser_error("+a")]
-pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
         take_exp,
         map_res(
             tuple((
-                alt((tag_token(TokenType::MINUS), tag_token(TokenType::NOT))),
+                alt((
+                    tag_token(TokenType::MINUS),
+                    tag_token(TokenType::NOT),
+                    tag_token(TokenType::REF),
+                )),
                 take_exp,
             )),
             |((op, _), exp)| {
                 let range = exp.range();
-                res(UnaryOpNode { op, exp, range })
+                res_enum(UnaryOpNode { op, exp, range }.into())
             },
         ),
     )))(input)
@@ -537,29 +654,36 @@ pub fn unary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
 #[test_parser("a<=b")]
 #[test_parser("a==b")]
 #[test_parser("a!=b")]
-pub fn compare_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn compare_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     parse_bin_ops!(add_exp, GEQ, LEQ, NE, EQ, LESS, GREATER)(input)
 }
 #[test_parser("a&&b")]
 #[test_parser("a||b")]
-pub fn logic_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn logic_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     parse_bin_ops!(compare_exp, AND, OR)(input)
 }
-pub fn identifier(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         recognize(pair(
             alt((alpha1::<Span, nom::error::Error<Span>>, tag("_"))),
             many0_count(alt((alphanumeric1, tag("_")))),
         )),
         |out| {
-            res(VarNode {
-                name: out.to_string(),
-                range: Range::new(out, out.take_split(out.len()).0),
-            })
+            let a = TOKEN_STR_MAP.get(out.fragment());
+            if a.is_some() {
+                return Err(Error {});
+            }
+            res_enum(
+                VarNode {
+                    name: out.to_string(),
+                    range: Range::new(out, out.take_split(out.len()).0),
+                }
+                .into(),
+            )
         },
     ))(input)
 }
-pub fn primary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
         number,
         bool_const,
@@ -577,19 +701,25 @@ pub fn primary_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
 #[test_parser("false")]
 #[test_parser_error("tru")]
 #[test_parser_error("fales")]
-fn bool_const(input: Span) -> IResult<Span, Box<dyn Node>> {
+fn bool_const(input: Span) -> IResult<Span, Box<NodeEnum>> {
     alt((
         map_res(tag("true"), |out| {
-            res(BoolConstNode {
-                value: true,
-                range: Range::new(input, out),
-            })
+            res_enum(
+                BoolConstNode {
+                    value: true,
+                    range: Range::new(input, out),
+                }
+                .into(),
+            )
         }),
         map_res(tag("false"), |out| {
-            res(BoolConstNode {
-                value: false,
-                range: Range::new(input, out),
-            })
+            res_enum(
+                BoolConstNode {
+                    value: false,
+                    range: Range::new(input, out),
+                }
+                .into(),
+            )
         }),
     ))(input)
 }
@@ -623,28 +753,58 @@ fn float(input: Span) -> IResult<Span, Span> {
 }
 
 #[test_parser("kfsh")]
+#[test_parser("&kfsh")]
 fn type_name(input: Span) -> IResult<Span, Box<TypeNameNode>> {
-    delspace(map_res(identifier, |o| {
-        let o = cast_to_var(&o);
-        res_box(Box::new(TypeNameNode {
-            id: o.name,
-            range: o.range,
-        }))
-    }))(input)
+    delspace(map_res(
+        tuple((
+            del_newline_or_space!(opt(tag_token(TokenType::REF))),
+            identifier,
+        )),
+        |(is_ref, o)| {
+            let o = cast_to_var(&o);
+            res_box(Box::new(TypeNameNode {
+                id: o.name,
+                is_ref: is_ref.is_some(),
+                range: o.range,
+            }))
+        },
+    ))(input)
 }
 
 #[test_parser("myname: int")]
 fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
     delspace(map_res(
-        tuple((identifier, tag_token(TokenType::COLON), type_name)),
-        |(id, _, type_name)| {
+        tuple((
+            identifier,
+            tag_token(TokenType::COLON),
+            opt(type_name),
+            opt(comment),
+        )),
+        |(id, _, type_name, d)| {
             let id = cast_to_var(&id);
-            let range = id.range.start.to(type_name.range.end);
-            res_box(Box::new(TypedIdentifierNode {
-                id: id.name,
-                tp: type_name,
-                range,
-            }))
+            let mut range = id.range;
+            let mut tprange = range;
+            tprange.end.column += 1;
+            tprange.start = tprange.end;
+            let mut tp = Box::new(TypeNameNode {
+                id: "".to_string(),
+                range: tprange,
+                is_ref: false,
+            });
+
+            let mut doc = None;
+            if let Some(d1) = d {
+                if let NodeEnum::Comment(d1) = *d1 {
+                    doc = Some(d1);
+                }
+            }
+
+            if let Some(type_name) = type_name {
+                range = id.range.start.to(type_name.range.end);
+                tp = type_name;
+            }
+
+            res_box(Box::new(TypedIdentifierNode { id, tp, doc, range }))
         },
     ))(input)
 }
@@ -654,32 +814,33 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
 /// ```
 #[test_parser(
     "fn f(  x: int, y  : int  ) int {
-        x = x+1
-        return 0
+        x = x+1;
+        return 0;
     }
     "
 )]
-#[test_parser("fn   f (x: int ,\n y: int) int\n")]
+#[test_parser("fn   f (x: int ,\n y: int) int;")]
 #[test_parser(
     "fn f(x: int) int {
-        x = x+1
-        call()
-        return 0
+        x = x+1;
+        call();
+        return 0;
     }
     "
 )]
-#[test_parser("             fn     f(x    :  int)    int\n")]
+#[test_parser("             fn     f(x    :  int)    int;")]
 #[test_parser(
     "fn f() int {
-        x = x+1
-        return 0
+        x = x+1;
+        return 0;
     }
     "
 )]
-#[test_parser("fn f( \n) int\n")]
+#[test_parser("fn f( \n) int;")]
 fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
-    delspace(map_res(
+    map_res(
         tuple((
+            many0(comment),
             tag_token(TokenType::FN),
             identifier,
             tag_token(TokenType::LPAREN),
@@ -692,9 +853,12 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             )))),
             tag_token(TokenType::RPAREN),
             type_name,
-            terminated(opt(statement_block), newline),
+            alt((
+                map_res(statement_block, |b| Ok::<_, Error>(Some(b))),
+                map_res(tag_token(TokenType::SEMI), |_| Ok::<_, Error>(None)),
+            )),
         )),
-        |(_, id, _, paras, _, ret, body)| {
+        |(doc, _, id, _, paras, _, ret, body)| {
             let id = cast_to_var(&id);
             let mut paralist = vec![];
             let range = id.range;
@@ -702,24 +866,25 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 paralist.push(para.0);
                 paralist.extend(para.1);
             }
-            let body: Option<StatementsNode> = body;
             let node = FuncDefNode {
                 typenode: FuncTypeNode {
                     id: id.name,
                     paralist,
                     ret,
+                    range,
+                    doc,
                 },
                 body,
                 range,
             };
             Ok::<_, Error>(Box::new(TopLevel::FuncDef(node)))
         },
-    ))(input)
+    )(input)
 }
 
 #[test_parser("     x    (   1\n,0             ,\n       1      )")]
 #[test_parser("     x    (   x)")]
-pub fn function_call(input: Span) -> IResult<Span, Box<dyn Node>> {
+pub fn function_call(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
             identifier,
@@ -740,66 +905,97 @@ pub fn function_call(input: Span) -> IResult<Span, Box<dyn Node>> {
                 paralist.push(paras.0);
                 paralist.extend(paras.1);
             }
-            res(FuncCallNode {
-                id: id.name,
-                paralist,
-                range: id.range,
-            })
+            res_enum(
+                FuncCallNode {
+                    id: id.name,
+                    paralist,
+                    range: id.range,
+                }
+                .into(),
+            )
         },
     ))(input)
 }
 
 #[test_parser("a.b.c")]
-fn take_exp(input: Span) -> IResult<Span, Box<dyn Node>> {
-    map_res(
-        tuple((
-            primary_exp,
-            many0(preceded(tag_token(TokenType::DOT), identifier)),
-        )),
-        |(a, b)| {
-            if b.is_empty() {
-                return res_box(a);
-            }
-            let mut ids = vec![];
-            let range = a.range().start.to(b.last().unwrap().range().end);
-            for v in b {
-                ids.push(Box::new(cast_to_var(&v)));
-            }
-            res(TakeOpNode {
-                head: a,
-                ids,
-                range,
-            })
-        },
-    )(input)
+fn take_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    let re = delspace(tuple((
+        primary_exp,
+        many0(preceded(tag_token(TokenType::DOT), identifier)),
+    )))(input);
+    if let Err(e) = re {
+        return Err(e);
+    }
+    let (mut input, (a, b)) = re.unwrap();
+    let r = a.range();
+    let mut node = TakeOpNode {
+        head: a,
+        ids: Vec::new(),
+        range: r,
+        complete: true,
+    };
+    let re = take_utf8_split(&input);
+    if re.1.to_string().as_str() == "." {
+        input = re.0;
+        node.complete = false;
+        node.range.end.column += 1;
+    }
+    if b.is_empty() {
+        return Ok((input, box_node(node.into())));
+    }
+    node.range = r.start.to(b.last().unwrap().range().end);
+    if !node.complete {
+        node.range.end.column += 1;
+    }
+    let mut ids = vec![];
+    for v in b {
+        ids.push(Box::new(cast_to_var(&v)));
+    }
+    node.ids = ids;
+
+    Ok((input, box_node(node.into())))
 }
 
-#[test_parser("jksa: int\n")]
+#[test_parser("jksa: int;")]
 fn struct_field(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
-    delnl!(terminated(typed_identifier, newline))(input)
+    del_newline_or_space!(terminated(typed_identifier, tag_token(TokenType::SEMI)))(input)
 }
 
 #[test_parser(
     "struct mystruct {
-    myname: int
-    myname2: int
+    myname: int;//123
+    myname2: int;
 }"
 )]
 fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((
+            many0(comment),
             tag_token(TokenType::STRUCT),
             identifier,
             tag_token(TokenType::LBRACE),
-            many0(struct_field),
+            many0(map_res(tuple((struct_field, opt(comment))), |(f, c)| {
+                Ok::<_, Error>((f, c))
+            })),
             tag_token(TokenType::RBRACE),
         )),
-        |(_, id, _, fields, _)| {
+        |(doc, _, id, _, fields, _)| {
             let id = cast_to_var(&id);
             let range = id.range;
+            let mut fieldlist = vec![];
+            for mut f in fields {
+                f.0.doc = None;
+                if let Some(c) = &f.1 {
+                    if let NodeEnum::Comment(c) = *c.clone() {
+                        f.0.doc = Some(c);
+                    }
+                }
+                fieldlist.push(f.0.clone());
+            }
             Ok::<_, Error>(Box::new(TopLevel::StructDef(StructDefNode {
+                doc,
                 id: id.name,
-                fields,
+                fields: fieldlist,
                 range,
             })))
         },
@@ -811,18 +1007,21 @@ fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
 /// struct_init_field = identifier ":" logic_exp "," ;
 /// ```
 /// special: del newline or space
-fn struct_init_field(input: Span) -> IResult<Span, Box<dyn Node>> {
+fn struct_init_field(input: Span) -> IResult<Span, Box<NodeEnum>> {
     del_newline_or_space!(terminated(
         map_res(
             tuple((identifier, tag_token(TokenType::COLON), logic_exp)),
             |(id, _, exp)| {
                 let id = cast_to_var(&id);
                 let range = id.range.start.to(exp.range().end);
-                res(StructInitFieldNode {
-                    id: id.name,
-                    exp,
-                    range,
-                })
+                res_enum(
+                    StructInitFieldNode {
+                        id: id.name,
+                        exp,
+                        range,
+                    }
+                    .into(),
+                )
             },
         ),
         tag_token(TokenType::COMMA)
@@ -835,27 +1034,29 @@ fn struct_init_field(input: Span) -> IResult<Span, Box<dyn Node>> {
 /// ```enbf
 /// struct_init = type_name "{" struct_init_field "}" ;
 /// ```
-fn struct_init(input: Span) -> IResult<Span, Box<dyn Node>> {
+fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
-            identifier,
+            type_name,
             tag_token(TokenType::LBRACE),
             many0(struct_init_field),
             tag_token(TokenType::RBRACE),
         )),
         |(name, _, fields, _)| {
-            let name = cast_to_var(&name);
             let range;
             if let Some(last) = fields.last() {
                 range = name.range.start.to(last.range().end);
             } else {
                 range = name.range;
             }
-            res(StructInitNode {
-                id: name.name,
-                fields,
-                range,
-            })
+            res_enum(
+                StructInitNode {
+                    tp: name,
+                    fields,
+                    range,
+                }
+                .into(),
+            )
         },
     )(input)
 }
@@ -865,7 +1066,7 @@ fn decimal(input: Span) -> IResult<Span, Span> {
 }
 fn tag_token(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
     move |input| {
-        map_res(tag(token.get_str()), |_out: Span| {
+        map_res(delspace(tag(token.get_str())), |_out: Span| {
             let end = _out.take_split(token.get_str().len()).0;
             Ok::<(TokenType, Range), Error>((token, Range::new(_out, end)))
         })(input)
@@ -879,4 +1080,16 @@ where
     <I as InputTakeAtPosition>::Item: AsChar + Clone,
 {
     delimited(space0, parser, space0)
+}
+
+pub fn take_utf8_split<'a>(sp: &Span<'a>) -> (Span<'a>, Span<'a>) {
+    let mut i = 1;
+    let l = sp.len();
+    if l == 0 {
+        return sp.take_split(0);
+    }
+    while !sp.is_char_boundary(i) {
+        i = i + 1;
+    }
+    sp.take_split(i)
 }
