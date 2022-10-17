@@ -141,8 +141,13 @@ pub struct StatementsNode {
 }
 impl Node for StatementsNode {
     fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+        let mut i = self.statements.len();
+        for statement in &self.statements {
+            i -= 1;
+            statement.format(tabs, prefix);
+        }
     }
+
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

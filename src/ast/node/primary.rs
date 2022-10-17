@@ -1,9 +1,11 @@
 use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
+use crate::ast::node;
 
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
+use vm::printi64ln;
 
 #[range]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -37,7 +39,11 @@ pub struct NumNode {
 }
 impl Node for NumNode {
     fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+        if let Num::INT(x) = self.value {
+            println!("{}", x)
+        } else if let Num::FLOAT(x) = self.value {
+            println!("{}", x)
+        }
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

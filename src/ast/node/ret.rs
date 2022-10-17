@@ -10,8 +10,14 @@ pub struct RetNode {
 
 impl Node for RetNode {
     fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+        if let Some(value) = &self.value {
+            println!("{}return ", prefix.repeat(tabs));
+            value.format(tabs, prefix)
+        } else {
+            println!("return;");
+        }
     }
+
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

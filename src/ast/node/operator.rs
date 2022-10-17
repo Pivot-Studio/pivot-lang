@@ -207,7 +207,7 @@ pub struct TakeOpNode {
 
 impl Node for TakeOpNode {
     fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+        &self.head.format(tabs, prefix);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

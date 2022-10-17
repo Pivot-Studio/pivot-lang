@@ -21,7 +21,22 @@ pub struct FuncDefNode {
 }
 
 impl Node for FuncDefNode {
-    fn format(&self, tabs: usize, prefix: &str) {}
+    fn format(&self, tabs: usize, prefix: &str) {
+        let paralist = &self.typenode.paralist;
+        let params_print = print_params(&paralist);
+        println!(
+            "{}fn {}({}) {} {{",
+            prefix.repeat(tabs),
+            &self.typenode.id,
+            &params_print,
+            &self.typenode.ret.id
+        );
+        for body in &self.body {
+            body.format(tabs + 1, prefix)
+        }
+        println!("{}}}", prefix.repeat(tabs));
+    }
+
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -43,6 +58,7 @@ impl Node for FuncDefNode {
             println!("type: {}", self.typenode.ret.id);
         }
     }
+
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.save_if_comment_doc_hover(self.range, Some(self.typenode.doc.clone()));
         let typenode = self.typenode.clone();

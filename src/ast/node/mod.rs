@@ -183,7 +183,22 @@ pub fn position_at_end<'a, 'b>(ctx: &mut Ctx<'b, 'a>, block: BasicBlock<'a>) {
     ctx.block = Some(block);
     ctx.nodebug_builder.position_at_end(block);
 }
-
+pub fn print_params(paralist: &Vec<Box<TypedIdentifierNode>>) -> String {
+    let mut str = String::new();
+    let mut len = 0;
+    for param in paralist.iter() {
+        let name = &param.id.name;
+        let id = &param.tp.id;
+        str.push_str(name);
+        str.push_str(": ");
+        str.push_str(id);
+        len += 1;
+        if len < paralist.len() {
+            str.push_str(",")
+        }
+    }
+    return str;
+}
 pub fn alloc<'a, 'ctx>(
     ctx: &Ctx<'a, 'ctx>,
     tp: BasicTypeEnum<'ctx>,
