@@ -55,7 +55,7 @@ pub struct TypedIdentifierNode {
 
 impl TypedIdentifierNode {
     pub fn format(&self, tabs: usize, prefix: &str) {
-        // println!("{}{}: {}", prefix.repeat(tabs), &self.id, &self.tp.id)
+        println!("{}{}: {}", prefix.repeat(tabs), &self.id.name, &self.tp.id)
     }
     pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

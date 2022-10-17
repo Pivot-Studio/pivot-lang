@@ -24,12 +24,12 @@ pub struct ProgramNode {
 impl Node for ProgramNode {
     fn format(&self, tabs: usize, prefix: &str) {
         println!("hello program xxx ");
-        let mut i = self.fns.len() + self.structs.len() + self.errs.len();
+        let mut i = self.nodes.len();
         // for statement in &self.fns {
         //     i -= 1;
         //     statement.format();
         // }
-        for statement in &self.structs {
+        for statement in &self.nodes {
             i -= 1;
             statement.format(tabs, prefix);
         }

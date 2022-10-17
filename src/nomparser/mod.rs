@@ -129,7 +129,7 @@ pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, S
     if let Err(e) = re {
         return Err(format!("{:?}", e));
     }
-    eprintln!("parse");
+    // eprintln!("parse");
     Ok(ProgramNodeWrapper::new(db, re.unwrap().1))
 }
 #[test_parser("return 1;")]
