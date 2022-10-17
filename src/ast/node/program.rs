@@ -13,6 +13,7 @@ use crate::Db;
 
 use inkwell::context::Context;
 use internal_macro::range;
+use rustc_hash::FxHashSet;
 
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -34,13 +35,19 @@ impl Node for ProgramNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         // top level parser
         let mut prev = 1000000;
+        let mut idxs = FxHashSet::default();
         loop {
             let mut i = 0;
-            self.structs.iter().for_each(|x| {
-                if x.emit_struct_def(ctx).is_err() {
-                    i = i + 1;
+            for (idx, def) in self.structs.iter().enumerate() {
+                if idxs.contains(&idx) {
+                    continue;
                 }
-            });
+                if def.emit_struct_def(ctx).is_err() {
+                    i = i + 1;
+                } else {
+                    idxs.insert(idx);
+                }
+            }
             if i == 0 {
                 break;
             }

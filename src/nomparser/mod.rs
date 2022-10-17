@@ -973,11 +973,11 @@ fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             many0(comment),
             tag_token(TokenType::STRUCT),
             identifier,
-            tag_token(TokenType::LBRACE),
+            del_newline_or_space!(tag_token(TokenType::LBRACE)),
             many0(map_res(tuple((struct_field, opt(comment))), |(f, c)| {
                 Ok::<_, Error>((f, c))
             })),
-            tag_token(TokenType::RBRACE),
+            del_newline_or_space!(tag_token(TokenType::RBRACE)),
         )),
         |(doc, _, id, _, fields, _)| {
             let id = cast_to_var(&id);

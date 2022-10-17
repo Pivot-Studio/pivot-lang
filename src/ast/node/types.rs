@@ -111,6 +111,7 @@ impl Node for StructDefNode {
 impl StructDefNode {
     pub fn emit_struct_def<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
         if ctx.get_type(self.id.as_str(), self.range).is_ok() {
+            ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL);
             return Ok(());
         }
         let mut fields = BTreeMap::<String, Field<'a, 'ctx>>::new();
