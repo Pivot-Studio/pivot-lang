@@ -21,20 +21,25 @@ pub struct FuncDefNode {
 }
 
 impl Node for FuncDefNode {
-    fn format(&self, tabs: usize, prefix: &str) {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
         let paralist = &self.typenode.paralist;
         let params_print = print_params(&paralist);
-        println!(
-            "{}fn {}({}) {} {{",
-            prefix.repeat(tabs),
-            &self.typenode.id,
-            &params_print,
-            &self.typenode.ret.id
-        );
+        let mut format_res = String::from("\n\r");
+        format_res.push_str(&prefix.repeat(tabs));
+        format_res.push_str("fn ");
+        format_res.push_str(&self.typenode.id);
+        format_res.push_str("(");
+        format_res.push_str(&params_print);
+        format_res.push_str(") ");
+        format_res.push_str(&self.typenode.ret.id);
+        format_res.push_str(" {");
         for body in &self.body {
-            body.format(tabs + 1, prefix)
+            format_res.push_str(&body.format(tabs + 1, prefix));
         }
-        println!("{}}}", prefix.repeat(tabs));
+        format_res.push_str("\n\r");
+        format_res.push_str(&prefix.repeat(tabs));
+        format_res.push_str("}");
+        return format_res;
     }
 
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -253,8 +258,8 @@ pub struct FuncCallNode {
 }
 
 impl Node for FuncCallNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

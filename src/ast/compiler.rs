@@ -149,7 +149,8 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         node.node(db).print(0, true, vec![]);
     }
     if op.gensource {
-        node.node(db).format(0, "    ")
+        let format_res = node.node(db).format(0, "    ");
+        println!("{}", format_res);
     }
     let mut nn = node.node(db);
     _ = nn.emit(m);

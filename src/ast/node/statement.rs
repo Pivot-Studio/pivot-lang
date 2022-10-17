@@ -12,8 +12,8 @@ pub struct DefNode {
     pub exp: Box<NodeEnum>,
 }
 impl Node for DefNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -87,8 +87,8 @@ pub struct AssignNode {
     pub exp: Box<NodeEnum>,
 }
 impl Node for AssignNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -121,8 +121,8 @@ impl Node for AssignNode {
 pub struct EmptyNode {}
 
 impl Node for EmptyNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -140,12 +140,14 @@ pub struct StatementsNode {
     pub statements: Vec<Box<NodeEnum>>,
 }
 impl Node for StatementsNode {
-    fn format(&self, tabs: usize, prefix: &str) {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
         let mut i = self.statements.len();
+        let mut format_res = String::from("\n\r");
         for statement in &self.statements {
             i -= 1;
-            statement.format(tabs, prefix);
+            format_res.push_str(&statement.format(tabs, prefix));
         }
+        return format_res;
     }
 
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {

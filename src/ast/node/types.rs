@@ -54,8 +54,13 @@ pub struct TypedIdentifierNode {
 }
 
 impl TypedIdentifierNode {
-    pub fn format(&self, tabs: usize, prefix: &str) {
-        println!("{}{}: {}", prefix.repeat(tabs), &self.id.name, &self.tp.id)
+    pub fn format(&self, tabs: usize, prefix: &str) -> String {
+        let mut format_res = String::from("\n\r");
+        format_res.push_str(&prefix.repeat(tabs));
+        format_res.push_str(&self.id.name);
+        format_res.push_str(": ");
+        format_res.push_str(&self.tp.id);
+        return format_res;
     }
     pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -79,14 +84,21 @@ pub struct StructDefNode {
 }
 
 impl Node for StructDefNode {
-    fn format(&self, tabs: usize, prefix: &str) {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
         let mut i = self.fields.len();
-        println!("{}struct {} {{", prefix.repeat(tabs), &self.id);
+        let mut format_res = String::from("\n\r");
+        format_res.push_str(&prefix.repeat(tabs));
+        format_res.push_str("struct ");
+        format_res.push_str(&self.id);
+        format_res.push_str(" {");
         for field in &self.fields {
             i -= 1;
-            field.format(tabs + 1, prefix);
+            format_res.push_str(&field.format(tabs + 1, prefix));
         }
-        println!("{}}}", prefix.repeat(tabs));
+        format_res.push_str("\n\r");
+        format_res.push_str(&prefix.repeat(tabs));
+        format_res.push_str("}");
+        return format_res;
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -190,8 +202,8 @@ pub struct StructInitFieldNode {
 }
 
 impl Node for StructInitFieldNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -224,8 +236,8 @@ pub struct StructInitNode {
 }
 
 impl Node for StructInitNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

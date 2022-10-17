@@ -17,8 +17,8 @@ pub struct UnaryOpNode {
     pub exp: Box<NodeEnum>,
 }
 impl Node for UnaryOpNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -80,8 +80,8 @@ pub struct BinOpNode {
     pub right: Box<NodeEnum>,
 }
 impl Node for BinOpNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -206,8 +206,8 @@ pub struct TakeOpNode {
 }
 
 impl Node for TakeOpNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        &self.head.format(tabs, prefix);
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return self.head.format(tabs, prefix);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

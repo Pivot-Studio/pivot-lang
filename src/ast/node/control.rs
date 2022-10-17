@@ -13,8 +13,8 @@ pub struct IfNode {
 }
 
 impl Node for IfNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -95,8 +95,8 @@ pub struct WhileNode {
 }
 
 impl Node for WhileNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -162,8 +162,8 @@ pub struct ForNode {
 }
 
 impl Node for ForNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -249,8 +249,8 @@ impl Node for ForNode {
 pub struct BreakNode {}
 
 impl Node for BreakNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -280,8 +280,8 @@ impl Node for BreakNode {
 pub struct ContinueNode {}
 
 impl Node for ContinueNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

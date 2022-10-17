@@ -124,7 +124,7 @@ pub trait RangeTrait {
 
 #[enum_dispatch]
 pub trait Node: RangeTrait + AsAny {
-    fn format(&self, tabs: usize, prefix: &str);
+    fn format(&self, tabs: usize, prefix: &str) -> String;
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
 }
@@ -183,6 +183,7 @@ pub fn position_at_end<'a, 'b>(ctx: &mut Ctx<'b, 'a>, block: BasicBlock<'a>) {
     ctx.block = Some(block);
     ctx.nodebug_builder.position_at_end(block);
 }
+
 pub fn print_params(paralist: &Vec<Box<TypedIdentifierNode>>) -> String {
     let mut str = String::new();
     let mut len = 0;
@@ -199,6 +200,7 @@ pub fn print_params(paralist: &Vec<Box<TypedIdentifierNode>>) -> String {
     }
     return str;
 }
+
 pub fn alloc<'a, 'ctx>(
     ctx: &Ctx<'a, 'ctx>,
     tp: BasicTypeEnum<'ctx>,

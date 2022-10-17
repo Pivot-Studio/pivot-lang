@@ -9,13 +9,16 @@ pub struct RetNode {
 }
 
 impl Node for RetNode {
-    fn format(&self, tabs: usize, prefix: &str) {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let mut format_res = String::new();
+        format_res.push_str(&prefix.repeat(tabs));
         if let Some(value) = &self.value {
-            println!("{}return ", prefix.repeat(tabs));
-            value.format(tabs, prefix)
+            format_res.push_str("return ");
+            format_res.push_str(&value.format(tabs, prefix));
         } else {
-            println!("return;");
+            format_res.push_str("return;");
         }
+        return format_res;
     }
 
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {

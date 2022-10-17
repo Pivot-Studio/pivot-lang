@@ -14,8 +14,8 @@ pub struct BoolConstNode {
 }
 
 impl Node for BoolConstNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -38,12 +38,13 @@ pub struct NumNode {
     pub value: Num,
 }
 impl Node for NumNode {
-    fn format(&self, tabs: usize, prefix: &str) {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
         if let Num::INT(x) = self.value {
-            println!("{}", x)
+            return x.to_string();
         } else if let Num::FLOAT(x) = self.value {
-            println!("{}", x)
+            return x.to_string();
         }
+        panic!("not implemented")
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -77,8 +78,8 @@ pub struct VarNode {
     pub name: String,
 }
 impl Node for VarNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

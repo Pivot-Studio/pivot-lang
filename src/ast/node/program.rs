@@ -22,12 +22,14 @@ pub struct ProgramNode {
     pub fntypes: Vec<FuncTypeNode>,
 }
 impl Node for ProgramNode {
-    fn format(&self, tabs: usize, prefix: &str) {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
         let mut i = self.nodes.len();
+        let mut format_res = String::from("\n\r");
         for statement in &self.nodes {
             i -= 1;
-            statement.format(tabs, prefix);
+            format_res.push_str(&statement.format(tabs, prefix));
         }
+        return format_res;
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

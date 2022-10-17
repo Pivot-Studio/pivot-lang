@@ -13,8 +13,8 @@ pub struct ErrorNode {
 }
 
 impl Node for ErrorNode {
-    fn format(&self, tabs: usize, prefix: &str) {
-        println!("hello");
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -46,7 +46,9 @@ pub struct STErrorNode {
 }
 
 impl Node for STErrorNode {
-    fn format(&self, tabs: usize, prefix: &str) {}
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello err".to_string();
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
