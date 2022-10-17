@@ -28,7 +28,11 @@ mod db;
 mod lsp;
 mod nomparser;
 mod utils;
-use std::{cell::RefCell, path::Path, sync::Arc};
+use std::{
+    cell::RefCell,
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 use ast::{
     accumulators,
@@ -109,7 +113,7 @@ fn main() {
         };
         let mem = MemDocsInput::new(
             &db,
-            Arc::new(RefCell::new(mem_docs::MemDocs::new())),
+            Arc::new(Mutex::new(RefCell::new(mem_docs::MemDocs::new()))),
             abs.to_str().unwrap().to_string(),
             op,
             ActionType::Diagnostic,

@@ -11,7 +11,10 @@ pub mod tokens;
 #[cfg(feature = "jit")]
 fn test_nom() {
     vm::reg();
-    use std::{cell::RefCell, sync::Arc};
+    use std::{
+        cell::RefCell,
+        sync::{Arc, Mutex},
+    };
 
     use crate::{
         ast::{ctx::create_ctx_info, node::Node},
@@ -79,7 +82,7 @@ fn test_nom() {
     mem.insert("test".to_string(), input.to_string());
     let memin = MemDocsInput::new(
         &db,
-        Arc::new(RefCell::new(mem)),
+        Arc::new(Mutex::new(RefCell::new(mem))),
         "test".to_string(),
         Default::default(),
         compiler::ActionType::Diagnostic,

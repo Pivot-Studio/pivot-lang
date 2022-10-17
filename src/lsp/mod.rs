@@ -5,7 +5,13 @@
 //! - completion
 //! - goto definition
 //! - find references
-use std::{cell::RefCell, error::Error, sync::Arc, thread::available_parallelism, time::Instant};
+use std::{
+    cell::RefCell,
+    error::Error,
+    sync::{Arc, Mutex},
+    thread::available_parallelism,
+    time::Instant,
+};
 
 pub mod dispatcher;
 pub mod helpers;
@@ -139,7 +145,7 @@ fn main_loop(
     let pool = ThreadPool::new(n_workers);
     let mut db = db::Database::default();
     let _params: InitializeParams = serde_json::from_value(params).unwrap();
-    let docs = Arc::new(RefCell::new(MemDocs::new()));
+    let docs = Arc::new(Mutex::new(RefCell::new(MemDocs::new())));
     let docin = MemDocsInput::new(
         &db,
         docs.clone(),
@@ -286,7 +292,7 @@ fn main_loop(
         .on_noti::<DidChangeTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
             for content_change in params.content_changes.iter() {
-                docs.borrow_mut().change(
+                docs.lock().unwrap().borrow_mut().change(
                     content_change.range.unwrap().clone(),
                     f.clone(),
                     content_change.text.clone(),
@@ -305,7 +311,9 @@ fn main_loop(
         })
         .on_noti::<DidOpenTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
-            docs.borrow_mut()
+            docs.lock()
+                .unwrap()
+                .borrow_mut()
                 .insert(f.clone(), params.text_document.text);
             docin.set_docs(&mut db).to(docs.clone());
             docin.set_file(&mut db).to(f.clone());
@@ -320,7 +328,7 @@ fn main_loop(
         })
         .on_noti::<DidCloseTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
-            docs.borrow_mut().remove(&f);
+            docs.lock().unwrap().borrow_mut().remove(&f);
             docin.set_docs(&mut db).to(docs.clone());
         });
         let elapsed = now.elapsed();

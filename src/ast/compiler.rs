@@ -217,7 +217,10 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
 
 #[cfg(test)]
 mod test {
-    use std::{cell::RefCell, sync::Arc};
+    use std::{
+        cell::RefCell,
+        sync::{Arc, Mutex},
+    };
 
     use crate::{
         ast::{accumulators::Completions, range::Pos},
@@ -234,7 +237,7 @@ mod test {
         let db = Database::default();
         let input = MemDocsInput::new(
             &db,
-            Arc::new(RefCell::new(docs)),
+            Arc::new(Mutex::new(RefCell::new(docs))),
             file.to_string(),
             Default::default(),
             ActionType::Completion,
@@ -264,7 +267,7 @@ mod test {
         let db = Database::default();
         let input = MemDocsInput::new(
             &db,
-            Arc::new(RefCell::new(docs)),
+            Arc::new(Mutex::new(RefCell::new(docs))),
             file.to_string(),
             Default::default(),
             ActionType::Completion,
@@ -293,7 +296,7 @@ mod test {
         let db = Database::default();
         let input = MemDocsInput::new(
             &db,
-            Arc::new(RefCell::new(docs)),
+            Arc::new(Mutex::new(RefCell::new(docs))),
             file.to_string(),
             Default::default(),
             ActionType::Completion,

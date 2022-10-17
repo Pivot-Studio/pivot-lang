@@ -1,4 +1,8 @@
-use std::{cell::RefCell, fs::read_to_string, sync::Arc};
+use std::{
+    cell::RefCell,
+    fs::read_to_string,
+    sync::{Arc, Mutex},
+};
 
 use rustc_hash::FxHashMap;
 
@@ -28,7 +32,7 @@ pub struct EmitParams {
 
 #[salsa::input]
 pub struct MemDocsInput {
-    pub docs: Arc<RefCell<MemDocs>>,
+    pub docs: Arc<Mutex<RefCell<MemDocs>>>,
     #[return_ref]
     pub file: String,
     pub op: Options,
@@ -39,7 +43,12 @@ pub struct MemDocsInput {
 impl MemDocsInput {
     #[salsa::tracked(lru = 32)]
     pub fn get_file_content(self, db: &dyn Db) -> Option<SourceProgram> {
-        let re = self.docs(db).borrow().get_file_content(self.file(db));
+        let re = self
+            .docs(db)
+            .lock()
+            .unwrap()
+            .borrow()
+            .get_file_content(self.file(db));
         if let Some(c) = re {
             Some(SourceProgram::new(db, c))
         } else {
