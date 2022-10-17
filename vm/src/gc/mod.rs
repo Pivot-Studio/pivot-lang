@@ -96,9 +96,9 @@ impl DioGC {
 
     pub unsafe fn mark(&mut self) {
         for ptr in self.roots.iter() {
-            let pointto = *(*ptr as *mut i64);
-            let p = pointto as *mut c_void;
-            Self::mark_ptr(&mut self.memtable, &p);
+            let p = *ptr;
+            let pointto = *(p as *mut *mut c_void);
+            Self::mark_ptr(&mut self.memtable, &pointto);
         }
     }
     pub unsafe fn mark_ptr(memtable: &mut HashMap<*mut c_void, Mem>, ptr: &*mut c_void) {
@@ -109,12 +109,10 @@ impl DioGC {
             }
             mem.mark();
             let p = *ptr;
-            let data = p as *mut i64;
+            let data = p as *mut *mut c_void;
             let size = mem.size / 8;
             for i in 0..size {
-                let ptr = data.offset(i as isize);
-                let i1 = *ptr;
-                let ptr = i1 as *mut c_void;
+                let ptr = data.offset(i as isize).read();
                 Self::mark_ptr(memtable, &ptr);
             }
         }
@@ -153,8 +151,7 @@ impl DioGC {
 
 #[cfg(test)]
 unsafe fn set_point_to(ptr1: *mut c_void, ptr2: *mut c_void, offset: i64) {
-    let v1 = ptr2 as i64;
-    *((ptr1 as *mut i64).offset(offset as isize)) = v1;
+    (ptr1 as *mut *mut c_void).offset(offset as isize).write(ptr2);
 }
 #[cfg(test)]
 #[test]
@@ -163,13 +160,13 @@ fn test_basic_gc() {
         let mut gc = DioGC::new();
         gc.about();
         // allocate 4 pointers
-        let ptr1 = gc.malloc(64);
+        let mut ptr1 = gc.malloc(64);
         let ptr2 = gc.malloc(64);
-        let ptr3 = gc.malloc(64);
-        let ptr4 = gc.malloc(64);
+        let _ = gc.malloc(64);
+        let _ = gc.malloc(64);
         let size = gc.get_size();
         // get rust stack pointer point to ptr1
-        let rustptr = &(ptr1 as i64) as *const _ as *mut c_void;
+        let rustptr = (&mut ptr1) as *mut *mut c_void as *mut c_void;
         assert_eq!(size, 256);
         gc.add_root(rustptr);
         // set ptr1 point to ptr2
@@ -199,10 +196,17 @@ fn test_complicated_gc() {
         println!("start test_complicated_gc");
         // allocate first pointers
         let mut ptr1 = gc.malloc(64);
+        println!("mark ptr: {:p}", ptr1);
         let mut size = 64;
         // get rust stack pointer point to ptr1
-        let rustptr = &(ptr1 as i64) as *const _ as *mut c_void;
-        for i in 0..1000 {
+        let rustptr = (&mut ptr1) as *mut *mut c_void as *mut c_void;
+        println!("stack ptr: {:p}", rustptr);
+        println!("mark ptr: {:p}", *(rustptr as *mut *mut c_void));
+        // important!
+        // 如果直接给ptr1赋值，会写入原本的栈指针指向的空间，导致测试的gcroot指向最后一个赋值对象
+        // 而不是第一个ptr1，所以这里在栈上声明一个新的ptr1
+        let mut ptr1 = ptr1;
+        for _ in 0..1000 {
             let ptr = gc.malloc(64);
             let n = rand::thread_rng().gen_range(0..2);
             if n == 0 {
@@ -210,6 +214,7 @@ fn test_complicated_gc() {
                 let offset = rand::thread_rng().gen_range(0..8);
                 set_point_to(ptr1, ptr, offset);
                 ptr1 = ptr;
+                println!("mark ptr: {:p}", ptr1);
             }
         }
         println!(
