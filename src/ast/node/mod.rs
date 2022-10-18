@@ -203,12 +203,11 @@ pub fn print_params(paralist: &Vec<Box<TypedIdentifierNode>>) -> String {
         str.push_str(&id);
         len += 1;
         if len < paralist.len() {
-            str.push_str(",")
+            str.push_str(", ")
         }
     }
     return str;
 }
-
 
 pub fn alloc<'a, 'ctx>(
     ctx: &Ctx<'a, 'ctx>,

@@ -278,7 +278,7 @@ impl Node for FuncCallNode {
                     len += 1;
                     param_str.push_str(&param.format(tabs, prefix));
                     if len < paralist.len() {
-                        param_str.push_str(",");
+                        param_str.push_str(", ");
                     }
                 }
             }
