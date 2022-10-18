@@ -476,6 +476,7 @@ enum TopLevel {
     FuncDef(FuncDefNode),
     GlobalDef(GlobalNode),
     Common(Box<NodeEnum>),
+    Use(Box<NodeEnum>),
 }
 
 fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
@@ -496,7 +497,7 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
             Ok::<_, Error>(Box::new(TopLevel::Common(c)))
         }),
         map_res(del_newline_or_space!(semi_statement!(use_statement)), |c| {
-            Ok::<_, Error>(Box::new(TopLevel::Common(c)))
+            Ok::<_, Error>(Box::new(TopLevel::Use(c)))
         }),
         map_res(
             del_newline_or_space!(except(
@@ -530,6 +531,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let mut structs = vec![];
     let mut fntypes = vec![];
     let mut globaldefs = vec![];
+    let mut uses = vec![];
     loop {
         let top = top_level_statement(input);
         if let Ok((i, t)) = top {
@@ -548,6 +550,10 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 TopLevel::GlobalDef(g) => {
                     globaldefs.push(g.clone());
                     nodes.push(Box::new(g.into()));
+                }
+                TopLevel::Use(b) => {
+                    uses.push(b.clone());
+                    nodes.push(b);
                 }
             }
             input = i;
@@ -569,6 +575,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
             fntypes,
             globaldefs,
             range: Range::new(old, input),
+            uses,
         }
         .into(),
     );

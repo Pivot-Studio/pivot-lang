@@ -1,7 +1,7 @@
 use super::dot;
 use crate::{
     ast::node::{program::Program, Node},
-    lsp::mem_docs::MemDocsInput,
+    lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
     Db,
 };
@@ -100,6 +100,12 @@ pub fn run(p: &Path, opt: OptimizationLevel) {
 
 #[salsa::tracked(lru = 32)]
 pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
+    let input = FileCompileInput::new(db, docs.file(db).to_string(), docs);
+    compile_dry_file(db, input)
+}
+
+#[salsa::tracked(lru = 32)]
+pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) {
     let src = docs.get_file_content(db).unwrap();
     let parse_result = parse(db, src);
     if let Err(e) = parse_result {
@@ -107,7 +113,7 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
         return;
     }
     let node = parse_result.unwrap();
-    let program = Program::new(db, node, docs.get_emit_params(db));
+    let program = Program::new(db, node, docs.get_emit_params(db), docs.docs(db));
     program.emit(db);
 }
 
