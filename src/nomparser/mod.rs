@@ -22,6 +22,7 @@ use crate::{
             error::{ErrorNode, STErrorNode},
             function::{FuncCallNode, FuncDefNode, FuncTypeNode},
             global::GlobalNode,
+            pkg::UseNode,
             types::{StructDefNode, TypeNameNode, TypedIdentifierNode},
         },
         tokens::TOKEN_STR_MAP,
@@ -133,6 +134,42 @@ pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, S
     eprintln!("parse");
     Ok(ProgramNodeWrapper::new(db, re.unwrap().1))
 }
+
+/// ```enbf
+/// use_statement = "use" identifier ("::" identifier)* ;
+/// ```
+#[test_parser("use a::b")]
+#[test_parser("use a::")]
+#[test_parser("use a")]
+pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    map_res(
+        preceded(
+            tag_token(TokenType::USE),
+            delspace(tuple((
+                identifier,
+                many0(preceded(tag_token(TokenType::DOUBLE_COLON), identifier)),
+                opt(tag_token(TokenType::DOUBLE_COLON)),
+            ))),
+        ),
+        |(first, rest, opt)| {
+            let mut path = vec![first];
+            path.extend(rest);
+            let range = path
+                .first()
+                .unwrap()
+                .range()
+                .start
+                .to(path.last().unwrap().range().end);
+            let ids = path.iter().map(|s| Box::new(cast_to_var(s))).collect();
+            res_enum(NodeEnum::UseNode(UseNode {
+                ids,
+                range,
+                complete: opt.is_none(),
+            }))
+        },
+    )(input)
+}
+
 #[test_parser("return 1;")]
 #[test_parser("return 1.1;")]
 #[test_parser("return true;")]
@@ -371,7 +408,12 @@ pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
         del_newline_or_space!(tag_token(TokenType::RBRACE)),
     ))(input)
 }
-
+/// # semi_statement
+/// 将原始parser接上一个分号
+///
+/// 对缺少分号的情况能自动进行错误容忍
+///
+/// 所有分号结尾的statement都应该使用这个宏来处理分号
 macro_rules! semi_statement {
     ($e:expr) => {
         alt((terminated($e, tag_token(TokenType::SEMI)), map_res(tuple(($e,recognize(many0(alt((tag("\n"), tag("\r\n"), tag(" "), tag("\t"))))))), |(node,e)|{
@@ -430,8 +472,7 @@ enum TopLevel {
     StructDef(StructDefNode),
     FuncDef(FuncDefNode),
     GlobalDef(GlobalNode),
-    Comment(Box<NodeEnum>),
-    ErrNode(Box<NodeEnum>),
+    Common(Box<NodeEnum>),
 }
 
 fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
@@ -444,12 +485,15 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
                 Ok::<_, Error>(Box::new(if let NodeEnum::Global(g) = *node {
                     TopLevel::GlobalDef(g)
                 } else {
-                    TopLevel::ErrNode(node)
+                    TopLevel::Common(node)
                 }))
             },
         ),
         map_res(del_newline_or_space!(comment), |c| {
-            Ok::<_, Error>(Box::new(TopLevel::Comment(c)))
+            Ok::<_, Error>(Box::new(TopLevel::Common(c)))
+        }),
+        map_res(del_newline_or_space!(semi_statement!(use_statement)), |c| {
+            Ok::<_, Error>(Box::new(TopLevel::Common(c)))
         }),
         map_res(
             del_newline_or_space!(except(
@@ -457,7 +501,7 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
                 "failed to parse top level statement",
                 ErrorCode::SYNTAX_ERROR_TOP_STATEMENT
             )),
-            |e| Ok::<_, Error>(Box::new(TopLevel::ErrNode(e))),
+            |e| Ok::<_, Error>(Box::new(TopLevel::Common(e))),
         ),
     )))(input)
 }
@@ -495,11 +539,8 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     structs.push(s.clone());
                     nodes.push(Box::new(s.into()));
                 }
-                TopLevel::Comment(c) => {
+                TopLevel::Common(c) => {
                     nodes.push(c);
-                }
-                TopLevel::ErrNode(e) => {
-                    nodes.push(e);
                 }
                 TopLevel::GlobalDef(g) => {
                     globaldefs.push(g.clone());

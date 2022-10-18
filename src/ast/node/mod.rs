@@ -12,6 +12,7 @@ use self::error::*;
 use self::function::*;
 use self::global::*;
 use self::operator::*;
+use self::pkg::UseNode;
 use self::primary::*;
 use self::ret::*;
 use self::statement::*;
@@ -26,6 +27,7 @@ pub mod error;
 pub mod function;
 pub mod global;
 pub mod operator;
+pub mod pkg;
 pub mod primary;
 pub mod program;
 pub mod ret;
@@ -118,6 +120,7 @@ pub enum NodeEnum {
     STInitField(StructInitFieldNode),
     STErrorNode(STErrorNode),
     Global(GlobalNode),
+    UseNode(UseNode),
 }
 
 #[enum_dispatch]
