@@ -183,16 +183,24 @@ pub fn position_at_end<'a, 'b>(ctx: &mut Ctx<'b, 'a>, block: BasicBlock<'a>) {
     ctx.block = Some(block);
     ctx.nodebug_builder.position_at_end(block);
 }
-
+/**
+ * 函数参数format
+ */
 pub fn print_params(paralist: &Vec<Box<TypedIdentifierNode>>) -> String {
     let mut str = String::new();
     let mut len = 0;
     for param in paralist.iter() {
         let name = &param.id.name;
-        let id = &param.tp.id;
+        let mut id = String::new();
+        if param.tp.is_ref {
+            let ref_id = format!("&{}", &param.tp.id);
+            id.push_str(&ref_id);
+        } else {
+            id.push_str(&param.tp.id)
+        }
         str.push_str(name);
         str.push_str(": ");
-        str.push_str(id);
+        str.push_str(&id);
         len += 1;
         if len < paralist.len() {
             str.push_str(",")
@@ -200,6 +208,7 @@ pub fn print_params(paralist: &Vec<Box<TypedIdentifierNode>>) -> String {
     }
     return str;
 }
+
 
 pub fn alloc<'a, 'ctx>(
     ctx: &Ctx<'a, 'ctx>,

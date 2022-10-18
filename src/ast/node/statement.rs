@@ -88,7 +88,11 @@ pub struct AssignNode {
 }
 impl Node for AssignNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        return "hello".to_string();
+        let mut format_res = String::new();
+        format_res.push_str(&self.var.format(tabs, prefix));
+        format_res.push_str(" = ");
+        format_res.push_str(&self.exp.format(tabs, prefix));
+        format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -142,9 +146,11 @@ pub struct StatementsNode {
 impl Node for StatementsNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
         let mut i = self.statements.len();
-        let mut format_res = String::from("\n\r");
+        let mut format_res = String::new();
         for statement in &self.statements {
             i -= 1;
+            format_res.push_str("\n\r");
+            format_res.push_str(&prefix.repeat(tabs));
             format_res.push_str(&statement.format(tabs, prefix));
         }
         return format_res;

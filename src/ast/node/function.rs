@@ -25,13 +25,20 @@ impl Node for FuncDefNode {
         let paralist = &self.typenode.paralist;
         let params_print = print_params(&paralist);
         let mut format_res = String::from("\n\r");
+        let mut ret_type = String::new();
+        if self.typenode.ret.is_ref {
+            let ref_id = format!("&{}", &self.typenode.ret.id);
+            ret_type.push_str(&ref_id);
+        } else {
+            ret_type.push_str(&self.typenode.ret.id);
+        }
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str("fn ");
         format_res.push_str(&self.typenode.id);
         format_res.push_str("(");
         format_res.push_str(&params_print);
         format_res.push_str(") ");
-        format_res.push_str(&self.typenode.ret.id);
+        format_res.push_str(&ret_type);
         format_res.push_str(" {");
         for body in &self.body {
             format_res.push_str(&body.format(tabs + 1, prefix));

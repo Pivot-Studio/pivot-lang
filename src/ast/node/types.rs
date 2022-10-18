@@ -56,10 +56,18 @@ pub struct TypedIdentifierNode {
 impl TypedIdentifierNode {
     pub fn format(&self, tabs: usize, prefix: &str) -> String {
         let mut format_res = String::from("\n\r");
+        let mut id = String::new();
+        if self.tp.is_ref {
+            let ref_id = format!("&{}", &self.tp.id);
+            id.push_str(&ref_id);
+
+        } else {
+            id.push_str(&self.tp.id);
+        }
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str(&self.id.name);
         format_res.push_str(": ");
-        format_res.push_str(&self.tp.id);
+        format_res.push_str(&id);
         return format_res;
     }
     pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -98,7 +106,7 @@ impl Node for StructDefNode {
         format_res.push_str("\n\r");
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str("}");
-        return format_res;
+        format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

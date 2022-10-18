@@ -78,8 +78,9 @@ pub struct VarNode {
     pub name: String,
 }
 impl Node for VarNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        return "hello".to_string();
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
+        let name = &self.name;
+        return name.to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
