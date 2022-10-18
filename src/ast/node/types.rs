@@ -19,6 +19,10 @@ pub struct TypeNameNode {
 }
 
 impl TypeNameNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let id = &self.id;
+        return id.to_string();
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -60,7 +64,6 @@ impl TypedIdentifierNode {
         if self.tp.is_ref {
             let ref_id = format!("&{}", &self.tp.id);
             id.push_str(&ref_id);
-
         } else {
             id.push_str(&self.tp.id);
         }
@@ -211,7 +214,11 @@ pub struct StructInitFieldNode {
 
 impl Node for StructInitFieldNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        return "hello".to_string();
+        let mut format_res = String::from(prefix.repeat(tabs));
+        format_res.push_str(&self.id);
+        format_res.push_str(": ");
+        format_res.push_str(&self.exp.format(tabs, prefix));
+        format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -245,7 +252,29 @@ pub struct StructInitNode {
 
 impl Node for StructInitNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        return "hello".to_string();
+        let mut format_str = String::new();
+        let mut field_str = String::new();
+        match Some(&self.fields) {
+            Some(fields) => {
+                let mut len = 0;
+                field_str.push_str("{\n\r");
+                for field in fields {
+                    len += 1;
+                    field_str.push_str(&field.format(tabs + 1, prefix));
+                    if len < fields.len() {
+                        field_str.push_str(",\n\r")
+                    } else {
+                        field_str.push_str("\n\r")
+                    }
+                }
+                field_str.push_str(&prefix.repeat(tabs));
+                field_str.push_str("}");
+            }
+            _ => (),
+        }
+        format_str.push_str(&self.tp.format(tabs, prefix));
+        format_str.push_str(&field_str);
+        format_str
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
