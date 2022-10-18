@@ -7,7 +7,7 @@ use super::types::StructDefNode;
 use super::*;
 use crate::ast::accumulators::*;
 use crate::ast::ctx::{self, create_ctx_info, Ctx};
-use crate::lsp::mem_docs::EmitParams;
+use crate::lsp::mem_docs::{EmitParams, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::Db;
 
@@ -22,6 +22,7 @@ pub struct ProgramNode {
     pub structs: Vec<StructDefNode>,
     pub fntypes: Vec<FuncTypeNode>,
     pub globaldefs: Vec<GlobalNode>,
+    pub uses: Vec<Box<NodeEnum>>,
 }
 impl Node for ProgramNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -99,6 +100,7 @@ impl Node for ProgramNode {
 pub struct Program {
     pub node: ProgramNodeWrapper,
     pub params: EmitParams,
+    pub docs: MemDocsInput,
 }
 
 #[salsa::tracked]
@@ -106,6 +108,12 @@ impl Program {
     #[salsa::tracked(lru = 32)]
     pub fn emit(self, db: &dyn Db) {
         eprintln!("emit");
+        let n = *self.node(db).node(db);
+        let prog = match n {
+            NodeEnum::Program(p) => p,
+            _ => panic!("not a program"),
+        };
+
         let context = &Context::create();
         let filepath = Path::new(self.params(db).file(db));
         let abs = dunce::canonicalize(filepath).unwrap();

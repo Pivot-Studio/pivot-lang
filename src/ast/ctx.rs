@@ -31,6 +31,7 @@ use lsp_types::Location;
 use lsp_types::MarkedString;
 use lsp_types::SemanticTokenType;
 use lsp_types::Url;
+use rustc_hash::FxHashMap;
 use std::cell::Cell;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
@@ -67,7 +68,7 @@ fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
 /// # Ctx
 /// Context for code generation
 pub struct Ctx<'a, 'ctx> {
-    pub table: HashMap<
+    pub table: FxHashMap<
         String,
         (
             PointerValue<'ctx>,
@@ -77,7 +78,7 @@ pub struct Ctx<'a, 'ctx> {
             bool,
         ),
     >, // variable table
-    pub types: HashMap<String, (PLType<'a, 'ctx>, Option<DIType<'ctx>>)>, // func and types
+    pub types: FxHashMap<String, (PLType<'a, 'ctx>, Option<DIType<'ctx>>)>, // func and types
     pub father: Option<&'a Ctx<'a, 'ctx>>, // father context, for symbol lookup
     pub context: &'ctx Context,            // llvm context
     pub builder: &'a Builder<'ctx>,        // llvm builder
@@ -102,6 +103,30 @@ pub struct Ctx<'a, 'ctx> {
     pub completion_items: Rc<Cell<Vec<CompletionItem>>>,    // hold the completion items
     pub hover: Rc<Cell<Option<Hover>>>,                     // hold the hover result
     pub init_func: Option<FunctionValue<'ctx>>,             //init function,call first in main
+                                                            // pub modmap: Arc<Mutex<RefCell<>>>
+}
+
+/// # Mod
+/// Represent a module
+pub struct Mod<'a, 'ctx> {
+    /// mod name
+    name: String,
+    /// file path of the module
+    path: String,
+    /// variable table
+    pub table: FxHashMap<
+        String,
+        (
+            PointerValue<'ctx>,
+            String,
+            Range,
+            Rc<RefCell<Vec<Location>>>,
+        ),
+    >,
+    /// func and types
+    pub types: FxHashMap<String, (PLType<'a, 'ctx>, Option<DIType<'ctx>>)>,
+    /// sub mods
+    pub submods: FxHashMap<String, Mod<'a, 'ctx>>,
 }
 
 /// # PLDiag
@@ -546,8 +571,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         completion: Option<(Pos, Option<String>, ActionType)>,
     ) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
-            table: HashMap::new(),
-            types: HashMap::new(),
+            table: FxHashMap::default(),
+            types: FxHashMap::default(),
             father: None,
             context,
             module,
@@ -580,8 +605,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
     pub fn new_child(&'a self, start: Pos) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
-            table: HashMap::new(),
-            types: HashMap::new(),
+            table: FxHashMap::default(),
+            types: FxHashMap::default(),
             father: Some(self),
             context: self.context,
             builder: self.builder,
