@@ -67,7 +67,7 @@ impl Node for ProgramNode {
             _ = x.emit_func_type(ctx);
         });
         ctx.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
-            ctx.src_file_path.to_string(),
+            ctx.plmod.path.to_string(),
         ))));
         // init global
         ctx.function = Some(ctx.module.add_function(

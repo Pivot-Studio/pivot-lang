@@ -36,6 +36,7 @@ use std::cell::Cell;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::path::Path;
 use std::rc::Rc;
 
 use super::compiler::get_target_machine;
@@ -68,17 +69,7 @@ fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
 /// # Ctx
 /// Context for code generation
 pub struct Ctx<'a, 'ctx> {
-    pub table: FxHashMap<
-        String,
-        (
-            PointerValue<'ctx>,
-            String,
-            Range,
-            Rc<RefCell<Vec<Location>>>,
-            bool,
-        ),
-    >, // variable table
-    pub types: FxHashMap<String, (PLType<'a, 'ctx>, Option<DIType<'ctx>>)>, // func and types
+    pub plmod: Mod<'a, 'ctx>,
     pub father: Option<&'a Ctx<'a, 'ctx>>, // father context, for symbol lookup
     pub context: &'ctx Context,            // llvm context
     pub builder: &'a Builder<'ctx>,        // llvm builder
@@ -93,7 +84,6 @@ pub struct Ctx<'a, 'ctx> {
     pub targetmachine: &'a TargetMachine, // might be used in debug info
     pub discope: DIScope<'ctx>,           // debug info scope
     pub nodebug_builder: &'a Builder<'ctx>, // builder without debug info
-    pub src_file_path: &'a str,           // source file path
     pub errs: &'a RefCell<Vec<PLDiag>>,   // diagnostic list
     pub action: Option<ActionType>,       // lsp sender
     pub lspparams: Option<(Pos, Option<String>, ActionType)>, // lsp params
@@ -110,9 +100,9 @@ pub struct Ctx<'a, 'ctx> {
 /// Represent a module
 pub struct Mod<'a, 'ctx> {
     /// mod name
-    name: String,
+    pub name: String,
     /// file path of the module
-    path: String,
+    pub path: String,
     /// variable table
     pub table: FxHashMap<
         String,
@@ -121,12 +111,34 @@ pub struct Mod<'a, 'ctx> {
             String,
             Range,
             Rc<RefCell<Vec<Location>>>,
+            bool,
         ),
     >,
     /// func and types
     pub types: FxHashMap<String, (PLType<'a, 'ctx>, Option<DIType<'ctx>>)>,
     /// sub mods
-    pub submods: FxHashMap<String, Mod<'a, 'ctx>>,
+    pub submods: Rc<FxHashMap<String, Mod<'a, 'ctx>>>,
+}
+
+impl<'a, 'ctx> Mod<'a, 'ctx> {
+    pub fn new(name: String, path: String) -> Self {
+        Self {
+            name,
+            path,
+            table: FxHashMap::default(),
+            types: FxHashMap::default(),
+            submods: Rc::new(FxHashMap::default()),
+        }
+    }
+    pub fn new_child(&self) -> Self {
+        Mod {
+            name: self.name.clone(),
+            path: self.path.clone(),
+            table: FxHashMap::default(),
+            types: FxHashMap::default(),
+            submods: self.submods.clone(),
+        }
+    }
 }
 
 /// # PLDiag
@@ -480,7 +492,8 @@ fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
         id: "i64".to_string(),
     });
     let ditype_i64 = pltype_i64.get_ditype(ctx);
-    ctx.types
+    ctx.plmod
+        .types
         .insert("i64".to_string(), (pltype_i64.clone(), ditype_i64));
 
     let pltype_f64 = PLType::PRIMITIVE(PriType {
@@ -488,7 +501,8 @@ fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
         id: "f64".to_string(),
     });
     let ditype_f64 = pltype_f64.get_ditype(ctx);
-    ctx.types
+    ctx.plmod
+        .types
         .insert("f64".to_string(), (pltype_f64.clone(), ditype_f64));
 
     let pltype_bool = PLType::PRIMITIVE(PriType {
@@ -496,12 +510,14 @@ fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
         id: "bool".to_string(),
     });
     let ditype_bool = pltype_bool.get_ditype(ctx);
-    ctx.types
+    ctx.plmod
+        .types
         .insert("bool".to_string(), (pltype_bool.clone(), ditype_bool));
 
     let pltype_void = PLType::VOID(ctx.context.void_type());
     let ditype_void = pltype_void.get_ditype(ctx);
-    ctx.types
+    ctx.plmod
+        .types
         .insert("void".to_string(), (pltype_void.clone(), ditype_void));
 }
 
@@ -570,9 +586,15 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         sender: Option<ActionType>,
         completion: Option<(Pos, Option<String>, ActionType)>,
     ) -> Ctx<'a, 'ctx> {
+        let f = Path::new(src_file_path)
+            .file_name()
+            .take()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
         let mut ctx = Ctx {
-            table: FxHashMap::default(),
-            types: FxHashMap::default(),
+            plmod: Mod::new(f, src_file_path.to_string()),
             father: None,
             context,
             module,
@@ -587,7 +609,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             targetmachine: tm,
             discope: diunit.get_file().as_debug_info_scope(),
             nodebug_builder: nodbg_builder,
-            src_file_path,
             errs,
             action: sender,
             lspparams: completion,
@@ -605,8 +626,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
     pub fn new_child(&'a self, start: Pos) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
-            table: FxHashMap::default(),
-            types: FxHashMap::default(),
+            plmod: self.plmod.new_child(),
             father: Some(self),
             context: self.context,
             builder: self.builder,
@@ -629,7 +649,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 )
                 .as_debug_info_scope(),
             nodebug_builder: self.nodebug_builder,
-            src_file_path: self.src_file_path,
             errs: self.errs,
             action: self.action,
             lspparams: self.lspparams.clone(),
@@ -656,7 +675,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         Rc<RefCell<Vec<Location>>>,
         bool,
     )> {
-        let v = self.table.get(name);
+        let v = self.plmod.table.get(name);
         if let Some((pv, pltype, range, refs, is_const)) = v {
             return Some((
                 pv,
@@ -680,12 +699,13 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         range: Range,
         is_const: bool,
     ) -> Result<(), PLDiag> {
-        if self.table.contains_key(&name) {
+        if self.plmod.table.contains_key(&name) {
             return Err(self.add_err(range, ErrorCode::REDECLARATION));
         }
         let refs = Rc::new(RefCell::new(vec![]));
         self.send_if_go_to_def(range, range);
-        self.table
+        self.plmod
+            .table
             .insert(name, (pv, tp, range, refs.clone(), is_const));
         self.set_if_refs(refs, range);
         Ok(())
@@ -696,7 +716,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         name: &str,
         range: Range,
     ) -> Result<&(PLType<'a, 'ctx>, Option<DIType<'ctx>>), PLDiag> {
-        let v = self.types.get(name);
+        let v = self.plmod.types.get(name);
         if let Some(pv) = v {
             return Ok(pv);
         }
@@ -705,7 +725,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             return re;
         }
         Err(PLDiag::new_error(
-            self.src_file_path.to_string(),
+            self.plmod.path.clone(),
             range,
             ErrorCode::UNDEFINED_TYPE,
         ))
@@ -717,22 +737,22 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         tp: PLType<'a, 'ctx>,
         range: Range,
     ) -> Result<(), PLDiag> {
-        if self.types.contains_key(&name) {
+        if self.plmod.types.contains_key(&name) {
             return Err(self.add_err(range, ErrorCode::REDEFINE_TYPE));
         }
         let ditype = tp.get_ditype(self);
         self.send_if_go_to_def(range, range);
-        self.types.insert(name, (tp.clone(), ditype));
+        self.plmod.types.insert(name, (tp.clone(), ditype));
         Ok(())
     }
 
     pub fn add_err(&mut self, range: Range, code: ErrorCode) -> PLDiag {
-        let dia = PLDiag::new_error(self.src_file_path.to_string(), range, code);
+        let dia = PLDiag::new_error(self.plmod.path.to_string(), range, code);
         self.errs.borrow_mut().push(dia.clone());
         dia
     }
     pub fn add_warn(&mut self, range: Range, code: WarnCode) -> PLDiag {
-        let dia = PLDiag::new_warn(self.src_file_path.to_string(), range, code);
+        let dia = PLDiag::new_warn(self.plmod.path.to_string(), range, code);
         self.errs.borrow_mut().push(dia.clone());
         dia
     }
@@ -782,7 +802,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn get_file_url(&self) -> Url {
-        Url::from_file_path(self.src_file_path).unwrap()
+        Url::from_file_path(self.plmod.path.clone()).unwrap()
     }
 
     pub fn get_location(&self, range: Range) -> Location {
@@ -852,7 +872,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     fn get_tp_completions(&self, m: &mut HashMap<String, CompletionItem>) {
-        for (k, (f, _)) in self.types.iter() {
+        for (k, (f, _)) in self.plmod.types.iter() {
             let tp = match f {
                 PLType::FN(_) => continue,
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
@@ -874,7 +894,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     fn get_var_completions(&self, vmap: &mut HashMap<String, CompletionItem>) {
-        for (k, _) in self.table.iter() {
+        for (k, _) in self.plmod.table.iter() {
             vmap.insert(
                 k.to_string(),
                 CompletionItem {
@@ -890,7 +910,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     fn get_pltp_completions(&self, vmap: &mut HashMap<String, CompletionItem>) {
-        for (k, (f, _)) in self.types.iter() {
+        for (k, (f, _)) in self.plmod.types.iter() {
             let tp = match f {
                 PLType::FN(_) => CompletionItemKind::FUNCTION,
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
