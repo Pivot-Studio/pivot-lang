@@ -39,13 +39,16 @@ impl Node for FuncDefNode {
         format_res.push_str(&params_print);
         format_res.push_str(") ");
         format_res.push_str(&ret_type);
-        format_res.push_str(" {");
-        for body in &self.body {
-            format_res.push_str(&body.format(tabs + 1, prefix));
+        match &self.body {
+            Some(body) => {
+                format_res.push_str(" {");
+                format_res.push_str(&body.format(tabs + 1, prefix));
+                format_res.push_str("\n\r");
+                format_res.push_str(&prefix.repeat(tabs));
+                format_res.push_str("}");
+            }
+            None => (),
         }
-        format_res.push_str("\n\r");
-        format_res.push_str(&prefix.repeat(tabs));
-        format_res.push_str("}");
         return format_res;
     }
 
