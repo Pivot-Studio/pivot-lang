@@ -17,16 +17,36 @@
 - 极其方便的rust互操作
 
 ## 近期开发计划
-- [ ] vsc debug
+- [x] vsc debug
   - [x] 断点
   - [x] 变量表
     - [x] 函数参数
     - [x] 普通变量
-- [ ] 代码高亮
-- [ ] lsp支持
-  - [ ] 错误容忍
+- [x] 代码高亮
+- [x] lsp支持
+  - [x] 错误容忍
     - [x] parser错误容忍
-    - [ ] ast错误容忍
+    - [x] ast错误容忍
+  - [ ] 代码提示
+    - [x] 普通变量
+    - [x] 函数参数
+    - [x] 函数
+    - [x] 类型
+    - [ ] 模块
+    - [ ] 语法
+  - [ ] 代码跳转
+    - [x] 普通变量
+    - [x] 函数参数
+    - [x] 函数
+    - [x] 类型
+    - [ ] 模块
+  - [ ] 引用查找
+    - [x] 普通变量
+    - [x] 函数参数
+    - [x] 函数
+    - [x] 类型
+    - [ ] 模块
+  - [x] 语法高亮
 
 ## 项目结构
 
@@ -93,31 +113,29 @@ for_statement = "for" (assignment | new_variable) ";" logic_exp ";" assignment s
 
 statement_block = "{" statements "}" ;
 
-newline = "\n" | "\r\n" ;
 
 statements = statement* ;
 
-break_statement = "break" newline ;
+break_statement = "break" ";" ;
 
-continue_statement = "continue" newline ;
+continue_statement = "continue" ";" ;
 
 statement = 
-    | assignment newline
-    | new_variable newline
+    | assignment ";"
+    | new_variable ";"
     | return_statement
     | if_statement
     | while_statement
     | break_statement
     | continue_statement
     | function_call
-    | newline
     ;
 
 toplevel_statement = 
     | struct_def
     | function_def
-    | newline
     | global_variable
+    | use_statement ";"
     ;
 
 program = toplevel_statement* ;
@@ -127,7 +145,7 @@ number = [0-9]+ | number "." number ;
 
 identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
 
-function_def = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name (statement_block | newline) ;
+function_def = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name (statement_block | ";") ;
 
 call_function = identifier "(" (logic_exp (","logic_exp)*)? ")" ;
 
@@ -137,12 +155,14 @@ type_name = ("&")? identifier ;
 
 typed_identifier = identifier ":" type_name ;
 
-struct_field = typed_identifier newline ;
+struct_field = typed_identifier ";" ;
 
 struct_init = type_name "{" struct_init_field "}" ;
 
 struct_init_field = identifier ":" logic_exp "," ;
 
-return_statement = "return" logic_exp newline ;
+return_statement = "return" logic_exp ";" ;
+
+use_statement = "use" identifier ("::" identifier)* ";" ;
 
 ```
