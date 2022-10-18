@@ -269,7 +269,26 @@ pub struct FuncCallNode {
 
 impl Node for FuncCallNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        return "hello".to_string();
+        let mut format_res = String::new();
+        let mut param_str = String::new();
+        match Some(&self.paralist) {
+            Some(paralist) => {
+                let mut len = 0;
+                for param in paralist {
+                    len += 1;
+                    param_str.push_str(&param.format(tabs, prefix));
+                    if len < paralist.len() {
+                        param_str.push_str(",");
+                    }
+                }
+            }
+            None => (),
+        }
+        format_res.push_str(&self.id);
+        format_res.push_str("(");
+        format_res.push_str(&param_str);
+        format_res.push_str(")");
+        format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
