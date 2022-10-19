@@ -7,7 +7,6 @@ use super::*;
 use crate::ast::ctx::{Ctx, Field, PLType, STType};
 use crate::ast::diag::ErrorCode;
 use crate::ast::range::Range;
-use inkwell::debug_info::*;
 use inkwell::types::{AnyType, BasicType};
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
