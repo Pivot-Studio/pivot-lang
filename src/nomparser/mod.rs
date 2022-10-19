@@ -803,7 +803,7 @@ pub fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
         ),
         function_call,
         struct_init,
-        identifier,
+        extern_identifier,
     )))(input)
 }
 #[test_parser("true")]
@@ -996,7 +996,7 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
 pub fn function_call(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
-            identifier,
+            extern_identifier,
             tag_token(TokenType::LPAREN),
             opt(tuple((
                 del_newline_or_space!(logic_exp),
@@ -1008,7 +1008,11 @@ pub fn function_call(input: Span) -> IResult<Span, Box<NodeEnum>> {
             tag_token(TokenType::RPAREN),
         )),
         |(id, _, paras, _)| {
-            let id = cast_to_var(&id);
+            let range = id.range();
+            let id = match *id {
+                NodeEnum::ExternIDNode(id) => id,
+                _ => unreachable!(),
+            };
             let mut paralist = vec![];
             if let Some(paras) = paras {
                 paralist.push(paras.0);
@@ -1016,9 +1020,9 @@ pub fn function_call(input: Span) -> IResult<Span, Box<NodeEnum>> {
             }
             res_enum(
                 FuncCallNode {
-                    id: id.name,
+                    id,
                     paralist,
-                    range: id.range,
+                    range,
                 }
                 .into(),
             )

@@ -3,8 +3,10 @@ use crate::ast::ctx::Ctx;
 use as_any::AsAny;
 use enum_dispatch::enum_dispatch;
 use inkwell::basic_block::BasicBlock;
-use inkwell::types::BasicTypeEnum;
-use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
+use inkwell::types::{BasicTypeEnum, StructType};
+use inkwell::values::{
+    BasicValue, BasicValueEnum, FloatValue, FunctionValue, IntValue, PointerValue,
+};
 
 use self::comment::CommentNode;
 use self::control::*;
@@ -70,6 +72,8 @@ pub enum Value<'a> {
     LoadValue(BasicValueEnum<'a>),
     RefValue(PointerValue<'a>),
     StructFieldValue((String, BasicValueEnum<'a>)),
+    FnValue(FunctionValue<'a>),
+    STValue(StructType<'a>),
     None,
 }
 
@@ -86,6 +90,8 @@ impl<'a> Value<'a> {
             Value::BoolValue(v) => Some(v.as_basic_value_enum()),
             Value::LoadValue(v) => Some(*v),
             Value::StructFieldValue((_, v)) => Some(*v),
+            Value::STValue(_) => None,
+            Value::FnValue(_) => None,
             Value::None => None,
         }
     }
@@ -135,7 +141,15 @@ pub trait Node: RangeTrait + AsAny {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
 }
 
-type NodeResult<'ctx> = Result<(Value<'ctx>, Option<String>, TerminatorEnum, bool), PLDiag>;
+type NodeResult<'ctx> = Result<
+    (
+        Value<'ctx>,
+        Option<String>, //type
+        TerminatorEnum,
+        bool, // isconst
+    ),
+    PLDiag,
+>;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Num {

@@ -7,6 +7,7 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::debug_info::*;
 use inkwell::module::FlagBehavior;
+use inkwell::module::Linkage;
 use inkwell::module::Module;
 use inkwell::targets::TargetMachine;
 use inkwell::types::BasicMetadataTypeEnum;
@@ -105,6 +106,13 @@ pub struct Ctx<'a, 'ctx> {
     >, // variable table
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GlobalVar {
+    pub tp: String,
+    pub range: Range,
+    pub loc: Rc<RefCell<Vec<Location>>>,
+}
+
 /// # Mod
 /// Represent a module
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,7 +126,7 @@ pub struct Mod {
     /// sub mods
     pub submods: Rc<FxHashMap<String, Mod>>,
     // global variable table
-    pub global_table: FxHashMap<String, (String, Range, Rc<RefCell<Vec<Location>>>)>,
+    pub global_table: FxHashMap<String, GlobalVar>,
 }
 
 impl Mod {
@@ -140,15 +148,8 @@ impl Mod {
             global_table: FxHashMap::default(),
         }
     }
-    pub fn get_global_symbol(
-        &self,
-        name: &str,
-    ) -> Option<(String, Range, Rc<RefCell<Vec<Location>>>)> {
-        let v = self.global_table.get(name);
-        if let Some((pltype, range, refs)) = v {
-            return Some((pltype.to_string(), range.clone(), refs.clone()));
-        }
-        None
+    pub fn get_global_symbol(&self, name: &str) -> Option<&GlobalVar> {
+        self.global_table.get(name)
     }
     pub fn add_global_symbol(
         &mut self,
@@ -164,8 +165,28 @@ impl Mod {
                 ErrorCode::UNDEFINED_TYPE,
             ));
         }
-        self.global_table.insert(name, (tp, range, refs.clone()));
+        self.global_table.insert(
+            name,
+            GlobalVar {
+                tp,
+                range,
+                loc: refs,
+            },
+        );
         Ok(())
+    }
+    pub fn get_type(&self, name: &str) -> Option<PLType> {
+        let v = self.types.get(name);
+        if let Some(pv) = v {
+            return Some(pv.clone());
+        }
+        if let Some(x) = PriType::try_from_str(name) {
+            return Some(PLType::PRIMITIVE(x));
+        }
+        if name == "void" {
+            return Some(PLType::VOID);
+        }
+        None
     }
 }
 
@@ -272,6 +293,19 @@ pub enum PLType {
     VOID,
 }
 
+fn pri_ty<'ctx>(s: &str, ctx: &'ctx Context) -> BasicTypeEnum<'ctx> {
+    match s {
+        "i32" => ctx.i32_type().as_basic_type_enum(),
+        "i64" => ctx.i64_type().as_basic_type_enum(),
+        "i8" | "bool" => ctx.i8_type().as_basic_type_enum(),
+        "i16" => ctx.i16_type().as_basic_type_enum(),
+        "i1" => ctx.bool_type().as_basic_type_enum(),
+        "f32" => ctx.f32_type().as_basic_type_enum(),
+        "f64" => ctx.f64_type().as_basic_type_enum(),
+        _ => panic!("unknown type {}", s),
+    }
+}
+
 /// # PriType
 /// Primitive type for pivot-lang
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -281,16 +315,14 @@ pub struct PriType {
 }
 impl PriType {
     pub fn get_basic_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> BasicTypeEnum<'ctx> {
-        match self.id.as_str() {
-            "i32" => ctx.context.i32_type().as_basic_type_enum(),
-            "i64" => ctx.context.i64_type().as_basic_type_enum(),
-            "i8" | "bool" => ctx.context.i8_type().as_basic_type_enum(),
-            "i16" => ctx.context.i16_type().as_basic_type_enum(),
-            "i1" => ctx.context.bool_type().as_basic_type_enum(),
-            "f32" => ctx.context.f32_type().as_basic_type_enum(),
-            "f64" => ctx.context.f64_type().as_basic_type_enum(),
-            "void" => panic!("void type"),
-            _ => panic!("unknown type {}", self.id),
+        pri_ty(&self.id, ctx.context)
+    }
+    pub fn try_from_str(s: &str) -> Option<Self> {
+        match s {
+            "i32" | "i64" | "i8" | "bool" | "i16" | "i1" | "f32" | "f64" => {
+                Some(PriType { id: s.to_string() })
+            }
+            _ => None,
         }
     }
 }
@@ -505,7 +537,7 @@ pub struct FNType {
 impl FNType {
     /// try get function value from module
     ///
-    /// if not found, create a new one
+    /// if not found, create a declaration
     pub fn get_value<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> FunctionValue<'ctx> {
         if let Some(v) = ctx.module.get_function(&self.name) {
             return v;
@@ -520,6 +552,7 @@ impl FNType {
         }
         let fn_type = ret_pltype.get_ret_type(ctx).fn_type(&param_types, false);
         let fn_value = ctx.module.add_function(&self.name, fn_type, None);
+        fn_value.set_linkage(Linkage::External);
         fn_value
     }
 }
@@ -775,7 +808,12 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if let Some(father) = self.father {
             return father.get_symbol(name);
         }
-        if let Some((pltype, range, refs)) = self.plmod.get_global_symbol(name) {
+        if let Some(GlobalVar {
+            tp: pltype,
+            range,
+            loc: refs,
+        }) = self.plmod.get_global_symbol(name)
+        {
             return Some((
                 self.module.get_global(name).unwrap().as_pointer_value(),
                 pltype.to_string(),
@@ -824,6 +862,21 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             range,
             ErrorCode::UNDEFINED_TYPE,
         ))
+    }
+    /// 用来获取外部模块的全局变量
+    /// 如果没在当前module的全局变量表中找到，将会生成一个
+    /// 该全局变量的声明
+    pub fn get_or_add_global(&self, name: &str, m: &Mod, tp: &str) -> PointerValue<'ctx> {
+        let global = self.module.get_global(name);
+        if global.is_none() {
+            let pltype = m.get_type(tp).unwrap();
+            let global = self
+                .module
+                .add_global(pltype.get_basic_type(self), None, name);
+            global.set_linkage(Linkage::External);
+            return global.as_pointer_value();
+        }
+        global.unwrap().as_pointer_value()
     }
 
     pub fn add_type(&mut self, name: String, tp: PLType, range: Range) -> Result<(), PLDiag> {
