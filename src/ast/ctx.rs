@@ -70,7 +70,7 @@ fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
 /// # Ctx
 /// Context for code generation
 pub struct Ctx<'a, 'ctx> {
-    pub plmod: Mod<'ctx>,
+    pub plmod: Mod,
     pub father: Option<&'a Ctx<'a, 'ctx>>, // father context, for symbol lookup
     pub context: &'ctx Context,            // llvm context
     pub builder: &'a Builder<'ctx>,        // llvm builder
@@ -94,17 +94,6 @@ pub struct Ctx<'a, 'ctx> {
     pub completion_items: Rc<Cell<Vec<CompletionItem>>>,    // hold the completion items
     pub hover: Rc<Cell<Option<Hover>>>,                     // hold the hover result
     pub init_func: Option<FunctionValue<'ctx>>,             //init function,call first in main
-                                                            // pub modmap: Arc<Mutex<RefCell<>>>
-}
-
-/// # Mod
-/// Represent a module
-pub struct Mod<'ctx> {
-    /// mod name
-    pub name: String,
-    /// file path of the module
-    pub path: String,
-    /// variable table
     pub table: FxHashMap<
         String,
         (
@@ -112,33 +101,70 @@ pub struct Mod<'ctx> {
             String,
             Range,
             Rc<RefCell<Vec<Location>>>,
-            bool,
         ),
-    >,
+    >, // variable table
+}
+
+/// # Mod
+/// Represent a module
+pub struct Mod {
+    /// mod name
+    pub name: String,
+    /// file path of the module
+    pub path: String,
     /// func and types
     pub types: FxHashMap<String, PLType>,
     /// sub mods
-    pub submods: Rc<FxHashMap<String, Mod<'ctx>>>,
+    pub submods: Rc<FxHashMap<String, Mod>>,
+    // global variable table
+    pub global_table: FxHashMap<String, (String, Range, Rc<RefCell<Vec<Location>>>)>,
 }
 
-impl<'ctx> Mod<'ctx> {
+impl Mod {
     pub fn new(name: String, path: String) -> Self {
         Self {
             name,
             path,
-            table: FxHashMap::default(),
             types: FxHashMap::default(),
             submods: Rc::new(FxHashMap::default()),
+            global_table: FxHashMap::default(),
         }
     }
     pub fn new_child(&self) -> Self {
         Mod {
             name: self.name.clone(),
             path: self.path.clone(),
-            table: FxHashMap::default(),
             types: FxHashMap::default(),
             submods: self.submods.clone(),
+            global_table: FxHashMap::default(),
         }
+    }
+    pub fn get_global_symbol(
+        &self,
+        name: &str,
+    ) -> Option<(String, Range, Rc<RefCell<Vec<Location>>>)> {
+        let v = self.global_table.get(name);
+        if let Some((pltype, range, refs)) = v {
+            return Some((pltype.to_string(), range.clone(), refs.clone()));
+        }
+        None
+    }
+    pub fn add_global_symbol(
+        &mut self,
+        name: String,
+        tp: String,
+        range: Range,
+        refs: Rc<RefCell<Vec<Location>>>,
+    ) -> Result<(), PLDiag> {
+        if self.global_table.contains_key(&name) {
+            return Err(PLDiag::new_error(
+                self.path.clone(),
+                range,
+                ErrorCode::UNDEFINED_TYPE,
+            ));
+        }
+        self.global_table.insert(name, (tp, range, refs.clone()));
+        Ok(())
     }
 }
 
@@ -678,6 +704,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             completion_items: Rc::new(Cell::new(Vec::new())),
             hover: Rc::new(Cell::new(None)),
             init_func: None,
+            table: FxHashMap::default(),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -716,6 +743,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             completion_items: self.completion_items.clone(),
             hover: self.hover.clone(),
             init_func: self.init_func,
+            table: FxHashMap::default(),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -727,24 +755,33 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         &self,
         name: &str,
     ) -> Option<(
-        &PointerValue<'ctx>,
+        PointerValue<'ctx>,
         String,
         Range,
         Rc<RefCell<Vec<Location>>>,
         bool,
     )> {
-        let v = self.plmod.table.get(name);
-        if let Some((pv, pltype, range, refs, is_const)) = v {
+        let v = self.table.get(name);
+        if let Some((pv, pltype, range, refs)) = v {
             return Some((
-                pv,
+                pv.clone(),
                 pltype.to_string(),
                 range.clone(),
                 refs.clone(),
-                *is_const,
+                false,
             ));
         }
         if let Some(father) = self.father {
             return father.get_symbol(name);
+        }
+        if let Some((pltype, range, refs)) = self.plmod.get_global_symbol(name) {
+            return Some((
+                self.module.get_global(name).unwrap().as_pointer_value(),
+                pltype.to_string(),
+                range.clone(),
+                refs.clone(),
+                true,
+            ));
         }
         None
     }
@@ -757,14 +794,17 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         range: Range,
         is_const: bool,
     ) -> Result<(), PLDiag> {
-        if self.plmod.table.contains_key(&name) {
+        if self.table.contains_key(&name) {
             return Err(self.add_err(range, ErrorCode::REDECLARATION));
         }
         let refs = Rc::new(RefCell::new(vec![]));
+        if is_const {
+            self.plmod
+                .add_global_symbol(name, tp, range, refs.clone())?;
+        } else {
+            self.table.insert(name, (pv, tp, range, refs.clone()));
+        }
         self.send_if_go_to_def(range, range);
-        self.plmod
-            .table
-            .insert(name, (pv, tp, range, refs.clone(), is_const));
         self.set_if_refs(refs, range);
         Ok(())
     }
@@ -942,7 +982,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     fn get_var_completions(&self, vmap: &mut HashMap<String, CompletionItem>) {
-        for (k, _) in self.plmod.table.iter() {
+        for (k, _) in self.table.iter() {
             vmap.insert(
                 k.to_string(),
                 CompletionItem {

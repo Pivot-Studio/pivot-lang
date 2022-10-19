@@ -109,7 +109,7 @@ impl Program {
     pub fn emit(self, db: &dyn Db) {
         eprintln!("emit");
         let n = *self.node(db).node(db);
-        let prog = match n {
+        let _prog = match n {
             NodeEnum::Program(p) => p,
             _ => panic!("not a program"),
         };
