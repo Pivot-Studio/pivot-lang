@@ -47,7 +47,9 @@ impl Node for FuncDefNode {
                 format_res.push_str(&prefix.repeat(tabs));
                 format_res.push_str("}");
             }
-            None => (),
+            None => {
+                format_res.push_str(";");
+            }
         }
         return format_res;
     }
@@ -288,6 +290,7 @@ impl Node for FuncCallNode {
         format_res.push_str("(");
         format_res.push_str(&param_str);
         format_res.push_str(")");
+        format_res.push_str(";");
         format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {

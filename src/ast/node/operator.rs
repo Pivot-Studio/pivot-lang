@@ -218,7 +218,13 @@ pub struct TakeOpNode {
 
 impl Node for TakeOpNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        return self.head.format(tabs, prefix);
+        let mut format_res = String::new();
+        format_res.push_str(&self.head.format(tabs, prefix));
+        for id in &self.ids {
+            format_res.push_str(".");
+            format_res.push_str(&id.format(tabs, prefix));
+        }
+        format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

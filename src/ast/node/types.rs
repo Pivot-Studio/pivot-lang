@@ -71,6 +71,7 @@ impl TypedIdentifierNode {
         format_res.push_str(&self.id.name);
         format_res.push_str(": ");
         format_res.push_str(&id);
+        format_res.push_str(";");
         return format_res;
     }
     pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -252,7 +253,7 @@ pub struct StructInitNode {
 
 impl Node for StructInitNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_str = String::new();
+        let mut format_res = String::new();
         let mut field_str = String::new();
         match Some(&self.fields) {
             Some(fields) => {
@@ -272,9 +273,10 @@ impl Node for StructInitNode {
             }
             _ => (),
         }
-        format_str.push_str(&self.tp.format(tabs, prefix));
-        format_str.push_str(&field_str);
-        format_str
+        format_res.push_str(&self.tp.format(tabs, prefix));
+        format_res.push_str(&field_str);
+        format_res.push_str(";");
+        format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
