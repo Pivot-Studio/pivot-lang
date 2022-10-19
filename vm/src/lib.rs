@@ -13,4 +13,6 @@ fn printi64ln(i: i64) {
     println!("{}", i);
 }
 
-pub fn reg() {}
+pub fn reg() {
+    gc::reg();
+}
