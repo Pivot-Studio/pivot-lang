@@ -91,7 +91,6 @@ impl Node for BinOpNode {
         format_res.push_str(TokenType::get_str(&self.op));
         format_res.push_str(" ");
         format_res.push_str(&self.right.format(tabs, prefix));
-        format_res.push_str(";");
         return format_res;
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {

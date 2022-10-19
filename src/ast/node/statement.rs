@@ -18,6 +18,7 @@ impl Node for DefNode {
         format_res.push_str(&self.var.format(tabs, prefix));
         format_res.push_str(" = ");
         format_res.push_str(&self.exp.format(tabs, prefix));
+
         format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -157,6 +158,7 @@ impl Node for StatementsNode {
             format_res.push_str("\n\r");
             format_res.push_str(&prefix.repeat(tabs));
             format_res.push_str(&statement.format(tabs, prefix));
+            format_res.push_str(";");
         }
         return format_res;
     }

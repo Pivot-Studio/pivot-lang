@@ -290,7 +290,6 @@ impl Node for FuncCallNode {
         format_res.push_str("(");
         format_res.push_str(&param_str);
         format_res.push_str(")");
-        format_res.push_str(";");
         format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {

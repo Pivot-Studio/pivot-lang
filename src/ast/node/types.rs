@@ -275,7 +275,6 @@ impl Node for StructInitNode {
         }
         format_res.push_str(&self.tp.format(tabs, prefix));
         format_res.push_str(&field_str);
-        format_res.push_str(";");
         format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {

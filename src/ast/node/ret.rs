@@ -14,9 +14,8 @@ impl Node for RetNode {
         if let Some(value) = &self.value {
             format_res.push_str("return ");
             format_res.push_str(&value.format(tabs, prefix));
-            format_res.push_str(";");
         } else {
-            format_res.push_str("return;");
+            format_res.push_str("return");
         }
         return format_res;
     }
