@@ -58,6 +58,9 @@ impl Node for ExternIDNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        if self.ns.is_empty() {
+            return self.id.emit(ctx);
+        }
         for id in &self.ns {
             ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
         }
