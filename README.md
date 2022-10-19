@@ -165,4 +165,6 @@ return_statement = "return" logic_exp ";" ;
 
 use_statement = "use" identifier ("::" identifier)* ";" ;
 
+extern_identifier = (identifier "::")* ;
+
 ```

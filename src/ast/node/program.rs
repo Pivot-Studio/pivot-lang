@@ -6,7 +6,7 @@ use super::function::FuncTypeNode;
 use super::types::StructDefNode;
 use super::*;
 use crate::ast::accumulators::*;
-use crate::ast::ctx::{self, create_ctx_info, Ctx};
+use crate::ast::ctx::{self, create_ctx_info, Ctx, Mod};
 use crate::lsp::mem_docs::{EmitParams, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::Db;
@@ -163,4 +163,9 @@ impl Program {
 #[salsa::tracked]
 pub struct ProgramNodeWrapper {
     pub node: Box<NodeEnum>,
+}
+
+#[salsa::tracked]
+pub struct ModWrapper {
+    pub plmod: Mod,
 }

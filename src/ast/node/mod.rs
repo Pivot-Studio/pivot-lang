@@ -12,7 +12,7 @@ use self::error::*;
 use self::function::*;
 use self::global::*;
 use self::operator::*;
-use self::pkg::UseNode;
+use self::pkg::{ExternIDNode, UseNode};
 use self::primary::*;
 use self::ret::*;
 use self::statement::*;
@@ -121,6 +121,7 @@ pub enum NodeEnum {
     STErrorNode(STErrorNode),
     Global(GlobalNode),
     UseNode(UseNode),
+    ExternIDNode(ExternIDNode),
 }
 
 #[enum_dispatch]

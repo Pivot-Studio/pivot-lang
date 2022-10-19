@@ -107,6 +107,7 @@ pub struct Ctx<'a, 'ctx> {
 
 /// # Mod
 /// Represent a module
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mod {
     /// mod name
     pub name: String,
@@ -263,7 +264,7 @@ impl PLDiag {
 /// # PLType
 /// Type for pivot-lang
 /// including primitive type, struct type, function type, void type
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PLType {
     FN(FNType),
     STRUCT(STType),
@@ -273,7 +274,7 @@ pub enum PLType {
 
 /// # PriType
 /// Primitive type for pivot-lang
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PriType {
     // basetype: BasicTypeEnum<'ctx>,
     id: String,
@@ -445,7 +446,7 @@ impl<'ctx> RetTypeEnum<'ctx> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field {
     pub index: u32,
     pub tp: PLType,
@@ -490,7 +491,7 @@ impl Field {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FNType {
     pub name: String,
     pub fntype: FuncTypeNode,
@@ -523,7 +524,7 @@ impl FNType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct STType {
     pub name: String,
     pub fields: BTreeMap<String, Field>,

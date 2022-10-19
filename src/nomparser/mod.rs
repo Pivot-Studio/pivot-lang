@@ -22,7 +22,7 @@ use crate::{
             error::{ErrorNode, STErrorNode},
             function::{FuncCallNode, FuncDefNode, FuncTypeNode},
             global::GlobalNode,
-            pkg::UseNode,
+            pkg::{ExternIDNode, UseNode},
             types::{StructDefNode, TypeNameNode, TypedIdentifierNode},
         },
         tokens::TOKEN_STR_MAP,
@@ -612,7 +612,7 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     ))(input)
 }
 
-#[test_parser("a = 1")]
+#[test_parser("const a = 1")]
 fn global_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
@@ -706,6 +706,35 @@ pub fn continue_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
         }),
         tag_token(TokenType::SEMI),
     )(input)
+}
+
+#[test_parser("a::a")]
+#[test_parser("b::c::b")]
+#[test_parser("a")]
+/// extern_identifier = (identifier "::")* ;
+fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    delspace(map_res(
+        pair(
+            many0(terminated(
+                delspace(identifier),
+                tag_token(TokenType::DOUBLE_COLON),
+            )),
+            identifier,
+        ),
+        |(a, b)| {
+            let ns = a.iter().map(|x| Box::new(cast_to_var(x))).collect();
+            let id = cast_to_var(&b);
+            let range = id.range();
+            res_enum(
+                ExternIDNode {
+                    ns,
+                    id: Box::new(id),
+                    range,
+                }
+                .into(),
+            )
+        },
+    ))(input)
 }
 
 #[test_parser("-1")]
