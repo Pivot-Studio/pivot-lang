@@ -77,7 +77,8 @@ impl Node for FuncDefNode {
                 .iter()
                 .map(|para| {
                     let res = ctx.get_type(&para.tp.id, para.range())?;
-                    let (pltype, di_type) = res;
+                    let pltype = res;
+                    let di_type = pltype.get_ditype(ctx);
                     let di_type = di_type.unwrap();
                     let di_ref_type = pltype.clone().get_di_ref_type(ctx, Some(di_type)).unwrap();
                     if para.tp.is_ref {
@@ -105,8 +106,8 @@ impl Node for FuncDefNode {
                         ctx.add_diag(diag.clone());
                         return Err(diag);
                     }
-                    let (pltype, di_type) = res.unwrap();
-                    let di_type = di_type.clone();
+                    let pltype = res.unwrap();
+                    let di_type = pltype.get_ditype(ctx);
                     let di_ref_type = pltype.clone().get_di_ref_type(ctx, di_type);
                     if self.typenode.ret.is_ref {
                         di_ref_type.and_then(|v| Some(v.as_type()))
@@ -145,7 +146,7 @@ impl Node for FuncDefNode {
                 ctx.add_diag(diag.clone());
                 return Err(diag);
             }
-            let (fu, _) = res.unwrap();
+            let fu = res.unwrap();
             func = match fu {
                 PLType::FN(fu) => fu.get_value(ctx),
                 _ => panic!("type error"), // 理论上这两个Panic不可能触发
@@ -178,7 +179,7 @@ impl Node for FuncDefNode {
                     return Err(diag);
                 }
                 let ret_type = {
-                    let op = res?.0.get_basic_type_op(&ctx);
+                    let op = res?.get_basic_type_op(&ctx);
                     if op.is_none() {
                         return Ok((Value::None, None, TerminatorEnum::NONE, false));
                     }
@@ -308,7 +309,7 @@ impl Node for FuncCallNode {
             format(format_args!("call_{}", self.id)).as_str(),
         );
         let fntp = ctx.get_type(&self.id, self.range)?;
-        if let (PLType::FN(fv), _) = fntp {
+        if let PLType::FN(fv) = fntp {
             ctx.save_if_comment_doc_hover(self.range, Some(fv.doc.clone()));
             let o = match (ret.try_as_basic_value().left(), fv.ret_pltype.as_ref()) {
                 (Some(v), Some(pltype)) => {
@@ -336,7 +337,7 @@ impl Node for FuncCallNode {
                 )),
                 _ => todo!(),
             };
-            ctx.set_if_refs_tp(&fntp.0, self.range);
+            ctx.set_if_refs_tp(&fntp, self.range);
             ctx.send_if_go_to_def(self.range, fv.range);
             return o;
         }
@@ -361,7 +362,7 @@ impl FuncTypeNode {
         }
         let mut para_types = Vec::new();
         for para in self.paralist.iter() {
-            let (paramtype, _) = para.tp.get_type(ctx)?;
+            let paramtype = para.tp.get_type(ctx)?;
             para_types.push(if para.tp.is_ref {
                 paramtype
                     .get_basic_type(&ctx)
@@ -371,7 +372,7 @@ impl FuncTypeNode {
                 paramtype.get_basic_type(&ctx).into()
             });
         }
-        let (pltype, _) = self.ret.get_type(ctx)?;
+        let pltype = self.ret.get_type(ctx)?;
         let func_type = if pltype.is_void() {
             // void type
             ctx.context.void_type().fn_type(&para_types, false)

@@ -240,7 +240,7 @@ impl Node for TakeOpNode {
                                 && trigger.is_some()
                                 && trigger.as_ref().unwrap() == "."
                             {
-                                let (tp, _) = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
+                                let tp = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
                                 if let PLType::STRUCT(s) = tp {
                                     let completions = s.get_completions();
                                     ctx.completion_items.set(completions);
@@ -248,7 +248,7 @@ impl Node for TakeOpNode {
                                 }
                             }
                         });
-                        let (tp, _) = ctx.get_type(tpname, range).unwrap();
+                        let tp = ctx.get_type(tpname, range).expect(tpname);
                         range = id.range();
                         ctx.push_semantic_token(range, SemanticTokenType::PROPERTY, 0);
                         if let PLType::STRUCT(s) = tp {
@@ -281,7 +281,7 @@ impl Node for TakeOpNode {
             // end with ".", gen completions
             ctx.if_completion(|ctx, (pos, trigger)| {
                 if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
-                    let (tp, _) = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
+                    let tp = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
                     if let PLType::STRUCT(s) = tp {
                         let completions = s.get_completions();
                         ctx.completion_items.set(completions);

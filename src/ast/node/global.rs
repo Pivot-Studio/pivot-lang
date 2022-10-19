@@ -38,7 +38,8 @@ impl GlobalNode {
             return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
         }
         let pltype_name = pltype_opt.unwrap();
-        let (pltype, ditype) = ctx.get_type(pltype_name.as_str(), self.range).unwrap();
+        let pltype = ctx.get_type(pltype_name.as_str(), self.range).unwrap();
+        let ditype = pltype.get_ditype(ctx);
         let (base_value, debug_type) = if let Value::RefValue(ref_value) = value {
             (
                 ref_value.as_basic_value_enum(),
