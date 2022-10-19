@@ -149,11 +149,11 @@ impl StructDefNode {
                     if order_field.is_ref {
                         order_field
                             .tp
-                            .get_basic_type()
+                            .get_basic_type(&ctx)
                             .ptr_type(inkwell::AddressSpace::Generic)
                             .as_basic_type_enum()
                     } else {
-                        order_field.tp.get_basic_type()
+                        order_field.tp.get_basic_type(&ctx)
                     }
                 })
                 .collect::<Vec<_>>(),
