@@ -18,6 +18,17 @@
         },
         {
             "type": "lldb",
+            "request": "launch",
+            "name": "debug jit",
+            "cargo": {
+                "args": [
+                    "build"
+                ]
+            },
+            "args": ["run","out.plb"]
+        },
+        {
+            "type": "lldb",
             "request": "attach",
             "name": "debug lsp",
             "program": "plc",

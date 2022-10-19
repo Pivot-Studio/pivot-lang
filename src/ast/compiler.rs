@@ -88,7 +88,7 @@ pub enum ActionType {
 
 #[cfg(feature = "jit")]
 pub fn run(p: &Path, opt: OptimizationLevel) {
-    vm::gc::reg();
+    vm::reg();
     let ctx = &Context::create();
     let re = Module::parse_bitcode_from_path(p, ctx).unwrap();
     let engine = re.create_jit_execution_engine(opt).unwrap();
