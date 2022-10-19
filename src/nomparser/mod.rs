@@ -342,13 +342,10 @@ pub fn comment(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delimited(
             tag("//"),
-            recognize(alt((
-                alpha1::<Span, nom::error::Error<Span>>,
-                take_until("\n"),
-            ))),
+            take_until("\n"),
             tag("\n"),
         ),
-        |c| {
+        |c : LocatedSpan<&str>| {
             res_enum(
                 CommentNode {
                     comment: c.to_string(),
