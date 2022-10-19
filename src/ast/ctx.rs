@@ -43,6 +43,7 @@ use super::compiler::get_target_machine;
 use super::compiler::ActionType;
 use super::diag::{ErrorCode, WarnCode};
 use super::diag::{ERR_MSG, WARN_MSG};
+use super::node::function::FuncTypeNode;
 use super::node::types::TypeNameNode;
 use super::node::NodeEnum;
 use super::range::Pos;
@@ -238,7 +239,7 @@ impl PLDiag {
 /// including primitive type, struct type, function type, void type
 #[derive(Debug, Clone)]
 pub enum PLType<'a, 'ctx> {
-    FN(FNType<'ctx>),
+    FN(FNType),
     STRUCT(STType<'a, 'ctx>),
     PRIMITIVE(PriType<'ctx>),
     VOID(VoidType<'ctx>),
@@ -270,8 +271,8 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
     /// get the basic type of the type
     /// used in code generation
     /// may panic if the type is void type
-    pub fn get_basic_type(&self) -> BasicTypeEnum<'ctx> {
-        self.get_basic_type_op().unwrap()
+    pub fn get_basic_type(&self, ctx: &Ctx<'a, 'ctx>) -> BasicTypeEnum<'ctx> {
+        self.get_basic_type_op(ctx).unwrap()
     }
 
     /// # get_range
@@ -288,10 +289,10 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
     /// # get_basic_type_op
     /// get the basic type of the type
     /// used in code generation
-    pub fn get_basic_type_op(&self) -> Option<BasicTypeEnum<'ctx>> {
+    pub fn get_basic_type_op(&self, ctx: &Ctx<'a, 'ctx>) -> Option<BasicTypeEnum<'ctx>> {
         match self {
             PLType::FN(f) => Some(
-                f.fntype
+                f.get_value(ctx)
                     .get_type()
                     .ptr_type(inkwell::AddressSpace::Global)
                     .as_basic_type_enum(),
@@ -304,10 +305,10 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
 
     /// # get_ret_type
     /// get the return type, which is void type or primitive type
-    pub fn get_ret_type(&self) -> RetTypeEnum<'ctx> {
+    pub fn get_ret_type(&self, ctx: &Ctx<'a, 'ctx>) -> RetTypeEnum<'ctx> {
         match self {
             PLType::VOID(x) => RetTypeEnum::VOID(*x),
-            _ => RetTypeEnum::BASIC(self.get_basic_type()),
+            _ => RetTypeEnum::BASIC(self.get_basic_type(ctx)),
         }
     }
     pub fn is_void(&self) -> bool {
@@ -359,8 +360,8 @@ impl<'a, 'ctx> PLType<'a, 'ctx> {
                     ctx.dibuilder
                         .create_basic_type(
                             &pt.id,
-                            td.get_bit_size(&self.get_basic_type()),
-                            get_dw_ate_encoding(&self.get_basic_type()),
+                            td.get_bit_size(&self.get_basic_type(ctx)),
+                            get_dw_ate_encoding(&self.get_basic_type(ctx)),
                             DIFlags::PUBLIC,
                         )
                         .unwrap()
@@ -448,14 +449,36 @@ impl<'a, 'ctx> Field<'a, 'ctx> {
 }
 
 #[derive(Debug, Clone)]
-pub struct FNType<'ctx> {
+pub struct FNType {
     pub name: String,
-    pub fntype: FunctionValue<'ctx>,
+    pub fntype: FuncTypeNode,
     pub ret_pltype: Option<String>,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub is_ref: bool,
     pub doc: Vec<Box<NodeEnum>>,
+}
+
+impl FNType {
+    /// try get function value from module
+    ///
+    /// if not found, create a new one
+    pub fn get_value<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> FunctionValue<'ctx> {
+        if let Some(v) = ctx.module.get_function(&self.name) {
+            return v;
+        }
+        let (ret_pltype, _) = ctx
+            .get_type(&self.ret_pltype.as_ref().unwrap(), self.range)
+            .unwrap();
+        let mut param_types = vec![];
+        for param in self.fntype.paralist.iter() {
+            let (pltype, _) = ctx.get_type(&param.tp.id, param.tp.range).unwrap();
+            param_types.push(pltype.get_basic_type(ctx).into());
+        }
+        let fn_type = ret_pltype.get_ret_type(ctx).fn_type(&param_types, false);
+        let fn_value = ctx.module.add_function(&self.name, fn_type, None);
+        fn_value
+    }
 }
 
 #[derive(Debug, Clone)]

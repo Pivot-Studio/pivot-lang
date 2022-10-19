@@ -147,7 +147,7 @@ impl Node for FuncDefNode {
             }
             let (fu, _) = res.unwrap();
             func = match fu {
-                PLType::FN(fu) => fu.fntype,
+                PLType::FN(fu) => fu.get_value(ctx),
                 _ => panic!("type error"), // 理论上这两个Panic不可能触发
             };
             func.set_subprogram(subprogram);
@@ -178,7 +178,7 @@ impl Node for FuncDefNode {
                     return Err(diag);
                 }
                 let ret_type = {
-                    let op = res?.0.get_basic_type_op();
+                    let op = res?.0.get_basic_type_op(&ctx);
                     if op.is_none() {
                         return Ok((Value::None, None, TerminatorEnum::NONE, false));
                     }
@@ -364,11 +364,11 @@ impl FuncTypeNode {
             let (paramtype, _) = para.tp.get_type(ctx)?;
             para_types.push(if para.tp.is_ref {
                 paramtype
-                    .get_basic_type()
+                    .get_basic_type(&ctx)
                     .ptr_type(inkwell::AddressSpace::Generic)
                     .into()
             } else {
-                paramtype.get_basic_type().into()
+                paramtype.get_basic_type(&ctx).into()
             });
         }
         let (pltype, _) = self.ret.get_type(ctx)?;
@@ -379,19 +379,19 @@ impl FuncTypeNode {
             // is ref
             if self.ret.is_ref {
                 pltype
-                    .get_basic_type()
+                    .get_basic_type(&ctx)
                     .ptr_type(inkwell::AddressSpace::Generic)
                     .as_basic_type_enum()
                     .fn_type(&para_types, false)
             } else {
-                pltype.get_basic_type().fn_type(&para_types, false)
+                pltype.get_basic_type(&ctx).fn_type(&para_types, false)
             }
         };
         let func = ctx.module.add_function(self.id.as_str(), func_type, None);
         let refs = vec![];
         let ftp = PLType::FN(FNType {
             name: self.id.clone(),
-            fntype: func,
+            fntype: self.clone(),
             ret_pltype: Some(self.ret.id.clone()),
             range: self.range,
             refs: Rc::new(RefCell::new(refs)),
