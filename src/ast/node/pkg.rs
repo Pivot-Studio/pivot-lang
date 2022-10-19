@@ -2,7 +2,8 @@ use internal_macro::range;
 use lsp_types::SemanticTokenType;
 
 use crate::ast::{
-    ctx::Ctx,
+    ctx::{Ctx, PLType},
+    diag::ErrorCode,
     node::{deal_line, tab},
 };
 
@@ -50,17 +51,60 @@ impl Node for ExternIDNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("ExternIDNode");
-        let mut i = self.ns.len();
         for id in &self.ns {
-            i -= 1;
-            id.print(tabs + 1, i == 0, line.clone());
+            id.print(tabs + 1, false, line.clone());
         }
+        self.id.print(tabs + 1, true, line.clone());
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         for id in &self.ns {
             ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
         }
-        Ok((Value::None, None, TerminatorEnum::NONE, false))
+        let mut plmod = &ctx.plmod;
+        for ns in self.ns.iter() {
+            let re = plmod.submods.get(&ns.name);
+            if let Some(re) = re {
+                plmod = re;
+            } else {
+                return Err(ctx.add_err(ns.range, ErrorCode::UNRESOLVED_MODULE));
+            }
+        }
+        let symbol = plmod.get_global_symbol(&self.id.name);
+        if let Some(symbol) = symbol {
+            ctx.push_semantic_token(self.id.range, SemanticTokenType::VARIABLE, 0);
+
+            let g = ctx.get_or_add_global(&self.id.name, &plmod, &symbol.tp);
+            return Ok((
+                Value::VarValue(g),
+                Some(symbol.tp.to_string()),
+                TerminatorEnum::NONE,
+                true,
+            ));
+        }
+        if let Some(tp) = plmod.get_type(&self.id.name) {
+            match tp {
+                PLType::FN(f) => {
+                    ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
+                    return Ok((
+                        Value::FnValue(f.get_value(ctx)),
+                        Some(f.name.clone()),
+                        TerminatorEnum::NONE,
+                        true,
+                    ));
+                }
+                PLType::STRUCT(s) => {
+                    ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
+                    return Ok((
+                        Value::STValue(s.struct_type(ctx)),
+                        Some(s.name.clone()),
+                        TerminatorEnum::NONE,
+                        true,
+                    ));
+                }
+                _ => unreachable!(),
+            }
+        }
+        Err(ctx.add_err(self.range, ErrorCode::SYMBOL_NOT_FOUND))
     }
 }

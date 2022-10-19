@@ -257,7 +257,7 @@ impl Node for FuncDefNode {
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncCallNode {
-    pub id: String,
+    pub id: ExternIDNode,
     pub paralist: Vec<Box<NodeEnum>>,
 }
 
@@ -267,8 +267,7 @@ impl Node for FuncCallNode {
         tab(tabs, line.clone(), end);
         println!("FuncCallNode");
         let mut i = self.paralist.len();
-        tab(tabs + 1, line.clone(), i == 0);
-        println!("id: {}", self.id);
+        self.id.print(tabs + 1, false, line.clone());
         for para in &self.paralist {
             i -= 1;
             para.print(tabs + 1, i == 0, line.clone());
@@ -277,7 +276,9 @@ impl Node for FuncCallNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
         let mut para_values = Vec::new();
-        let func = ctx.module.get_function(self.id.as_str());
+        let (_, id, _, _) = self.id.emit(ctx)?;
+        let id = id.unwrap();
+        let func = ctx.module.get_function(id.as_str());
         if func.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND));
         }
@@ -306,9 +307,9 @@ impl Node for FuncCallNode {
         let ret = ctx.builder.build_call(
             func,
             &para_values,
-            format(format_args!("call_{}", self.id)).as_str(),
+            format(format_args!("call_{}", id)).as_str(),
         );
-        let fntp = ctx.get_type(&self.id, self.range)?;
+        let fntp = ctx.get_type(&id, self.range)?;
         if let PLType::FN(fv) = fntp {
             ctx.save_if_comment_doc_hover(self.range, Some(fv.doc.clone()));
             let o = match (ret.try_as_basic_value().left(), fv.ret_pltype.as_ref()) {

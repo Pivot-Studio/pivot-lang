@@ -106,7 +106,7 @@ pub struct Program {
 #[salsa::tracked]
 impl Program {
     #[salsa::tracked(lru = 32)]
-    pub fn emit(self, db: &dyn Db) {
+    pub fn emit(self, db: &dyn Db) -> ModWrapper {
         eprintln!("emit");
         let n = *self.node(db).node(db);
         let _prog = match n {
@@ -157,6 +157,7 @@ impl Program {
         if let Some(c) = ctx.hover.take() {
             PLHover::push(db, c);
         }
+        ModWrapper::new(db, ctx.plmod)
     }
 }
 

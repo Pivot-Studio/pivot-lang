@@ -78,7 +78,7 @@ primary_exp =
     | number
     | bool_const
     | "(" logic_exp ")"
-    | identifier
+    | extern_identifier
     | struct_init
     | call_function
     ;
@@ -147,7 +147,7 @@ identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
 
 function_def = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name (statement_block | ";") ;
 
-call_function = identifier "(" (logic_exp (","logic_exp)*)? ")" ;
+call_function = extern_identifier "(" (logic_exp (","logic_exp)*)? ")" ;
 
 struct_def = "struct" identifier "{" struct_field* "}" ;
 

@@ -58,7 +58,9 @@ define_error!(
     STRUCT_FIELD_TYPE_NOT_MATCH = "struct field type not match",
     MISSING_SEMI = "missing semicolon",
     EXPECT_TYPE = "expect type",
-    REDEFINE_SYMBOL = "redefine symbol"
+    REDEFINE_SYMBOL = "redefine symbol",
+    SYMBOL_NOT_FOUND = "symbol not found",
+    UNRESOLVED_MODULE = "unresolved module"
 );
 macro_rules! define_warn {
     ($(
