@@ -66,7 +66,7 @@ impl FileCompileInput {
     #[salsa::tracked(lru = 32)]
     pub fn get_emit_params(self, db: &dyn Db) -> EmitParams {
         let file = self.file(db);
-        if self.docs(db).file(db) == file {
+        if self.docs(db).file(db) != file {
             return EmitParams::new(
                 db,
                 file.clone(),
