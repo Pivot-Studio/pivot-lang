@@ -21,6 +21,7 @@ pub struct ProgramNode {
     pub nodes: Vec<Box<NodeEnum>>,
     pub structs: Vec<StructDefNode>,
     pub fntypes: Vec<FuncTypeNode>,
+    pub globaldefs: Vec<GlobalNode>,
 }
 impl Node for ProgramNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -67,12 +68,30 @@ impl Node for ProgramNode {
         ctx.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
             ctx.src_file_path.to_string(),
         ))));
+        // init global
+        ctx.function = Some(ctx.module.add_function(
+            "__init_global",
+            ctx.context.void_type().fn_type(&vec![], false),
+            None,
+        ));
+        let entry = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), "entry");
+        ctx.position_at_end(entry);
+        self.globaldefs.iter_mut().for_each(|x| {
+            _ = x.emit_global(ctx);
+        });
+        ctx.nodebug_builder.build_return(None);
+        ctx.init_func = Some(ctx.function.unwrap());
         // node parser
         self.nodes.iter_mut().for_each(|x| {
-            _ = x.emit(ctx);
+            if let NodeEnum::Global(_) = **x {
+            } else {
+                _ = x.emit(ctx);
+            }
         });
 
-        Ok((Value::None, None, TerminatorEnum::NONE))
+        Ok((Value::None, None, TerminatorEnum::NONE, false))
     }
 }
 

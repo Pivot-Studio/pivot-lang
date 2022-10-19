@@ -21,6 +21,7 @@ use crate::{
             comment::CommentNode,
             error::{ErrorNode, STErrorNode},
             function::{FuncCallNode, FuncDefNode, FuncTypeNode},
+            global::GlobalNode,
             types::{StructDefNode, TypeNameNode, TypedIdentifierNode},
         },
         tokens::TOKEN_STR_MAP,
@@ -431,6 +432,7 @@ pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 enum TopLevel {
     StructDef(StructDefNode),
     FuncDef(FuncDefNode),
+    GlobalDef(GlobalNode),
     Comment(Box<NodeEnum>),
     ErrNode(Box<NodeEnum>),
 }
@@ -439,6 +441,16 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
     delspace(alt((
         del_newline_or_space!(function_def),
         del_newline_or_space!(struct_def),
+        map_res(
+            del_newline_or_space!(semi_statement!(global_variable)),
+            |node| {
+                Ok::<_, Error>(Box::new(if let NodeEnum::Global(g) = *node {
+                    TopLevel::GlobalDef(g)
+                } else {
+                    TopLevel::ErrNode(node)
+                }))
+            },
+        ),
         map_res(del_newline_or_space!(comment), |c| {
             Ok::<_, Error>(Box::new(TopLevel::Comment(c)))
         }),
@@ -471,8 +483,9 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let old = input;
     let mut input = input;
     let mut nodes = vec![];
-    let mut sts = vec![];
+    let mut structs = vec![];
     let mut fntypes = vec![];
+    let mut globaldefs = vec![];
     loop {
         let top = top_level_statement(input);
         if let Ok((i, t)) = top {
@@ -482,7 +495,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     nodes.push(Box::new(f.into()));
                 }
                 TopLevel::StructDef(s) => {
-                    sts.push(s.clone());
+                    structs.push(s.clone());
                     nodes.push(Box::new(s.into()));
                 }
                 TopLevel::Comment(c) => {
@@ -490,6 +503,10 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 }
                 TopLevel::ErrNode(e) => {
                     nodes.push(e);
+                }
+                TopLevel::GlobalDef(g) => {
+                    globaldefs.push(g.clone());
+                    nodes.push(Box::new(g.into()));
                 }
             }
             input = i;
@@ -507,8 +524,9 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let node: Box<NodeEnum> = Box::new(
         ProgramNode {
             nodes,
-            structs: sts,
+            structs,
             fntypes,
+            globaldefs,
             range: Range::new(old, input),
         }
         .into(),
@@ -542,6 +560,23 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 }
                 .into(),
             )
+        },
+    ))(input)
+}
+
+#[test_parser("a = 1")]
+fn global_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    delspace(map_res(
+        tuple((
+            tag_token(TokenType::CONST),
+            identifier,
+            tag_token(TokenType::ASSIGN),
+            logic_exp,
+        )),
+        |(_, out, _, exp)| {
+            let var = cast_to_var(&out);
+            let range = out.range().start.to(exp.range().end);
+            res_enum(GlobalNode { var, exp, range }.into())
         },
     ))(input)
 }

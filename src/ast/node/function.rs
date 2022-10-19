@@ -35,14 +35,22 @@ impl Node for FuncDefNode {
         }
         if let Some(body) = &self.body {
             tab(tabs + 1, line.clone(), false);
-            println!("type: {}", self.typenode.ret.id);
+            if self.typenode.ret.is_ref {
+                println!("type: &{}", self.typenode.ret.id);
+            } else {
+                println!("type: {}", self.typenode.ret.id);
+            }
             body.print(tabs + 1, true, line.clone());
         } else {
             tab(tabs + 1, line, true);
-            println!("type: {}", self.typenode.ret.id);
+            if self.typenode.ret.is_ref {
+                println!("type: &{}", self.typenode.ret.id);
+            } else {
+                println!("type: {}", self.typenode.ret.id);
+            }
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.save_if_comment_doc_hover(self.range, Some(self.typenode.doc.clone()));
         let typenode = self.typenode.clone();
         for c in self.typenode.doc.iter_mut() {
@@ -63,43 +71,37 @@ impl Node for FuncDefNode {
         ctx.push_semantic_token(typenode.ret.range, SemanticTokenType::TYPE, 0);
         if let Some(body) = self.body.as_mut() {
             // build debug info
-            let param_ditypes = self
+            let param_ditypes_res = self
                 .typenode
                 .paralist
                 .iter()
                 .map(|para| {
-                    let res = ctx.get_type(&para.tp.id, para.range());
-                    if res.is_err() {
-                        return ctx.get_type("i64", Default::default()).unwrap().1.unwrap();
-                    }
-                    let (pltype, di_type) = res.unwrap();
-                    if di_type.is_none() {
-                        return ctx.get_type("i64", Default::default()).unwrap().1.unwrap();
-                    }
+                    let res = ctx.get_type(&para.tp.id, para.range())?;
+                    let (pltype, di_type) = res;
                     let di_type = di_type.unwrap();
                     let di_ref_type = pltype.clone().get_di_ref_type(ctx, Some(di_type)).unwrap();
                     if para.tp.is_ref {
-                        di_ref_type.as_type()
+                        Ok(di_ref_type.as_type())
                     } else {
-                        di_type
+                        Ok(di_type)
                     }
                 })
                 .collect::<Vec<_>>();
+            let mut param_ditypes = vec![];
+            for v in param_ditypes_res {
+                param_ditypes.push(v?);
+            }
             let subroutine_type = ctx.dibuilder.create_subroutine_type(
                 ctx.diunit.get_file(),
                 {
-                    let res = ctx.get_type(&self.typenode.ret.id, self.typenode.ret.range);
-                    if res.is_err() {
-                        ctx.get_type("i64", Default::default()).unwrap().1
+                    let res = ctx.get_type(&self.typenode.ret.id, self.typenode.ret.range)?;
+                    let (pltype, di_type) = res;
+                    let di_type = di_type.clone();
+                    let di_ref_type = pltype.clone().get_di_ref_type(ctx, di_type);
+                    if self.typenode.ret.is_ref {
+                        di_ref_type.and_then(|v| Some(v.as_type()))
                     } else {
-                        let (pltype, di_type) = res.unwrap();
-                        let di_type = di_type.clone();
-                        let di_ref_type = pltype.clone().get_di_ref_type(ctx, di_type);
-                        if self.typenode.ret.is_ref {
-                            di_ref_type.and_then(|v| Some(v.as_type()))
-                        } else {
-                            di_type
-                        }
+                        di_type
                     }
                 },
                 &param_ditypes,
@@ -141,10 +143,9 @@ impl Node for FuncDefNode {
             for i in 0..para_names.len() {
                 let para_type = func.get_nth_param(i as u32);
                 if para_type.is_none() {
-                    return Err(ctx.add_err(
-                        self.typenode.paralist[i].range,
-                        crate::ast::diag::ErrorCode::EXPECT_TYPE,
-                    ));
+                    return Err(
+                        ctx.add_err(self.typenode.paralist[i].range, ErrorCode::EXPECT_TYPE)
+                    );
                 }
                 para_tps.push(para_type.unwrap());
             }
@@ -153,15 +154,14 @@ impl Node for FuncDefNode {
             let entry = ctx.context.append_basic_block(func, "entry");
             let return_block = ctx.context.append_basic_block(func, "return");
             ctx.position_at_end(return_block);
-            let ret_value_ptr = func.get_type().get_return_type().and_then(|_| {
+            let ret_value_ptr = if func.get_type().get_return_type().is_some() {
                 let res = ctx.get_type(&self.typenode.ret.id, self.typenode.ret.range);
-                let ret_type = if res.is_err() {
-                    ctx.get_type("i64", Default::default())
-                        .unwrap()
-                        .0
-                        .get_basic_type()
-                } else {
-                    res.unwrap().0.get_basic_type()
+                let ret_type = {
+                    let op = res?.0.get_basic_type_op();
+                    if op.is_none() {
+                        return Ok((Value::None, None, TerminatorEnum::NONE, false));
+                    }
+                    op.unwrap()
                 };
                 let ret_type = if self.typenode.ret.is_ref {
                     ret_type
@@ -171,7 +171,9 @@ impl Node for FuncDefNode {
                     ret_type
                 };
                 Some(alloc(&mut ctx, ret_type, "retvalue"))
-            });
+            } else {
+                None
+            };
 
             ctx.return_block = Some((return_block, ret_value_ptr));
             if let Some(ptr) = ret_value_ptr {
@@ -209,22 +211,24 @@ impl Node for FuncDefNode {
                     alloca,
                     para_pltype_ids[i].clone(),
                     typenode.paralist[i].id.range,
+                    false,
                 )
                 .unwrap();
             }
             // emit body
-            let (_, _, terminator) = body.emit(&mut ctx)?;
+            if self.typenode.id == "main" {
+                ctx.nodebug_builder
+                    .build_call(ctx.init_func.unwrap(), &vec![], "init_call");
+            }
+            let (_, _, terminator, _) = body.emit(&mut ctx)?;
             if !terminator.is_return() {
-                return Err(ctx.add_err(
-                    self.range,
-                    crate::ast::diag::ErrorCode::FUNCTION_MUST_HAVE_RETURN,
-                ));
+                return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_MUST_HAVE_RETURN));
             }
             ctx.nodebug_builder.position_at_end(allocab);
             ctx.nodebug_builder.build_unconditional_branch(entry);
-            return Ok((Value::None, None, TerminatorEnum::NONE));
+            return Ok((Value::None, None, TerminatorEnum::NONE, false));
         }
-        Ok((Value::None, None, TerminatorEnum::NONE))
+        Ok((Value::None, None, TerminatorEnum::NONE, false))
     }
 }
 
@@ -253,33 +257,27 @@ impl Node for FuncCallNode {
         let mut para_values = Vec::new();
         let func = ctx.module.get_function(self.id.as_str());
         if func.is_none() {
-            return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::FUNCTION_NOT_FOUND));
+            return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND));
         }
         let func = func.unwrap();
         if func.count_params() != self.paralist.len() as u32 {
-            return Err(ctx.add_err(
-                self.range,
-                crate::ast::diag::ErrorCode::PARAMETER_LENGTH_NOT_MATCH,
-            ));
+            return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
         }
         for (i, para) in self.paralist.iter_mut().enumerate() {
             let pararange = para.range();
-            let (value, _, _) = para.emit(ctx)?;
+            let (value, _, _, _) = para.emit(ctx)?;
             let load_op = if let Value::RefValue(ptr) = value {
                 Some(ptr.as_basic_value_enum())
             } else {
                 ctx.try_load2var(value).as_basic_value_enum_op()
             };
             if load_op.is_none() {
-                return Ok((Value::None, None, TerminatorEnum::NONE));
+                return Ok((Value::None, None, TerminatorEnum::NONE, false));
             }
             let param = func.get_nth_param(i as u32).unwrap();
             let load = load_op.unwrap();
             if load.get_type() != param.get_type() {
-                return Err(ctx.add_err(
-                    pararange,
-                    crate::ast::diag::ErrorCode::PARAMETER_TYPE_NOT_MATCH,
-                ));
+                return Err(ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH));
             }
             para_values.push(load.as_basic_value_enum().into());
         }
@@ -298,25 +296,30 @@ impl Node for FuncCallNode {
                             Value::RefValue(v.into_pointer_value()),
                             Some(pltype.clone()),
                             TerminatorEnum::NONE,
+                            false,
                         ))
                     } else {
                         Ok((
                             Value::LoadValue(v),
                             Some(pltype.clone()),
                             TerminatorEnum::NONE,
+                            false,
                         ))
                     }
                 }
-                (None, Some(pltype)) => {
-                    Ok((Value::None, Some(pltype.clone()), TerminatorEnum::NONE))
-                }
+                (None, Some(pltype)) => Ok((
+                    Value::None,
+                    Some(pltype.clone()),
+                    TerminatorEnum::NONE,
+                    false,
+                )),
                 _ => todo!(),
             };
             ctx.set_if_refs_tp(&fntp.0, self.range);
             ctx.send_if_go_to_def(self.range, fv.range);
             return o;
         }
-        return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::NOT_A_FUNCTION));
+        return Err(ctx.add_err(self.range, ErrorCode::NOT_A_FUNCTION));
     }
 }
 #[range]
@@ -375,7 +378,7 @@ impl FuncTypeNode {
             doc: self.doc.clone(),
         });
         ctx.set_if_refs_tp(&ftp, self.range);
-        _ = ctx.add_type(self.id.clone(), ftp, self.range);
+        ctx.add_type(self.id.clone(), ftp, self.range)?;
         Ok(func)
     }
 }

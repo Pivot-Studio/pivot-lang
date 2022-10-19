@@ -83,6 +83,8 @@ assignment = assignee "=" logic_exp ;
 
 new_variable = "let" identifier "=" logic_exp ;
 
+global_variable = "const" identifier "=" logic_exp ;
+
 if_statement = "if" logic_exp statement_block ("else" if_statement | statement_block)?;
 
 while_statement = "while" logic_exp statement_block ;
@@ -115,6 +117,7 @@ toplevel_statement =
     | struct_def
     | function_def
     | newline
+    | global_variable
     ;
 
 program = toplevel_statement* ;

@@ -4,12 +4,12 @@ use crate::ast::ctx::Ctx;
 use crate::ast::ctx::PLType;
 use crate::ast::tokens::TokenType;
 
+use crate::ast::diag::ErrorCode;
 use crate::handle_calc;
 use inkwell::IntPredicate;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 use paste::item;
-
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UnaryOpNode {
@@ -26,10 +26,13 @@ impl Node for UnaryOpNode {
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let (exp, pltype, _) = self.exp.emit(ctx)?;
+        let (exp, pltype, _, is_const) = self.exp.emit(ctx)?;
         if let (&Value::VarValue(_), TokenType::REF) = (&exp, self.op) {
+            if is_const {
+                return Err(ctx.add_err(self.range, ErrorCode::REF_CONST));
+            }
             if let Value::VarValue(exp) = ctx.try_load2ptr(exp) {
-                return Ok((Value::RefValue(exp), pltype, TerminatorEnum::NONE));
+                return Ok((Value::RefValue(exp), pltype, TerminatorEnum::NONE, false));
             }
             todo!()
         }
@@ -39,11 +42,13 @@ impl Node for UnaryOpNode {
                 Value::IntValue(ctx.builder.build_int_neg(exp, "negtmp")),
                 pltype,
                 TerminatorEnum::NONE,
+                is_const,
             ),
             (Value::FloatValue(exp), TokenType::MINUS) => (
                 Value::FloatValue(ctx.builder.build_float_neg(exp, "negtmp")),
                 pltype,
                 TerminatorEnum::NONE,
+                is_const,
             ),
             (Value::BoolValue(exp), TokenType::NOT) => (
                 Value::BoolValue({
@@ -58,12 +63,10 @@ impl Node for UnaryOpNode {
                 }),
                 pltype,
                 TerminatorEnum::NONE,
+                is_const,
             ),
             (_exp, _op) => {
-                return Err(ctx.add_err(
-                    self.range,
-                    crate::ast::diag::ErrorCode::INVALID_UNARY_EXPRESSION,
-                ));
+                return Err(ctx.add_err(self.range, ErrorCode::INVALID_UNARY_EXPRESSION));
             }
         });
     }
@@ -87,9 +90,9 @@ impl Node for BinOpNode {
         self.right.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let (lv, lpltype, _) = self.left.emit(ctx)?;
+        let (lv, lpltype, _, _) = self.left.emit(ctx)?;
         let left = ctx.try_load2var(lv);
-        let (rv, rpltype, _) = self.right.emit(ctx)?;
+        let (rv, rpltype, _, _) = self.right.emit(ctx)?;
         let right = ctx.try_load2var(rv);
         if lpltype != rpltype {
             return Err(ctx.add_err(
@@ -121,6 +124,7 @@ impl Node for BinOpNode {
                     }),
                     Some("bool".to_string()),
                     TerminatorEnum::NONE,
+                    true,
                 ),
                 (Value::FloatValue(lhs), Value::FloatValue(rhs)) => (
                     Value::BoolValue({
@@ -135,6 +139,7 @@ impl Node for BinOpNode {
                     }),
                     Some("bool".to_string()),
                     TerminatorEnum::NONE,
+                    true,
                 ),
                 _ => {
                     return Err(ctx.add_err(
@@ -155,6 +160,7 @@ impl Node for BinOpNode {
                     }),
                     Some("bool".to_string()),
                     TerminatorEnum::NONE,
+                    true,
                 ),
                 _ => {
                     return Err(
@@ -174,6 +180,7 @@ impl Node for BinOpNode {
                     }),
                     Some("bool".to_string()),
                     TerminatorEnum::NONE,
+                    true,
                 ),
                 _ => {
                     return Err(
@@ -214,7 +221,7 @@ impl Node for TakeOpNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut range = self.head.range();
         let head = self.head.emit(ctx)?;
-        let (mut res, mut pltype, _) = head;
+        let (mut res, mut pltype, _, is_const) = head;
         if self.ids.len() != 0 {
             res = ctx.try_load2ptr(res);
         }
@@ -285,6 +292,6 @@ impl Node for TakeOpNode {
 
             return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
         }
-        Ok((res, pltype, TerminatorEnum::NONE))
+        Ok((res, pltype, TerminatorEnum::NONE, is_const))
     }
 }

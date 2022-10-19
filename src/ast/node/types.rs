@@ -19,12 +19,16 @@ pub struct TypeNameNode {
 }
 
 impl TypeNameNode {
-    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+    pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("TypeNameNode");
         tab(tabs + 1, line.clone(), true);
-        println!("id: {}", self.id);
+        if self.is_ref {
+            println!("id: &{}", self.id);
+        } else {
+            println!("id: {}", self.id);
+        }
     }
     pub fn get_type<'a, 'ctx>(
         &'a self,
@@ -104,7 +108,7 @@ impl Node for StructDefNode {
                 ctx.push_semantic_token(doc.range, SemanticTokenType::COMMENT, 0);
             }
         }
-        Ok((Value::None, None, TerminatorEnum::NONE))
+        Ok((Value::None, None, TerminatorEnum::NONE, false))
     }
 }
 
@@ -188,7 +192,7 @@ impl Node for StructInitFieldNode {
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let (v, tp, _) = self.exp.emit(ctx)?;
+        let (v, tp, _, _) = self.exp.emit(ctx)?;
         let value = if let Value::RefValue(_) = v {
             v.as_basic_value_enum()
         } else {
@@ -198,6 +202,7 @@ impl Node for StructInitFieldNode {
             Value::StructFieldValue((self.id.clone(), value)),
             tp,
             TerminatorEnum::NONE,
+            false,
         ));
     }
 }
@@ -227,7 +232,7 @@ impl Node for StructInitNode {
         let mut fields = HashMap::<String, (BasicValueEnum<'ctx>, Range)>::new();
         for field in self.fields.iter_mut() {
             let range = field.range();
-            if let (Value::StructFieldValue((id, val)), _, _) = field.emit(ctx)? {
+            if let (Value::StructFieldValue((id, val)), _, _, _) = field.emit(ctx)? {
                 fields.insert(id, (val, range));
             } else {
                 panic!("StructInitNode::emit: invalid field");
@@ -260,7 +265,12 @@ impl Node for StructInitNode {
                 ctx.builder.build_store(ptr, val);
                 ctx.send_if_go_to_def(range, field.range)
             }
-            return Ok((Value::VarValue(stv), Some(st.name), TerminatorEnum::NONE));
+            return Ok((
+                Value::VarValue(stv),
+                Some(st.name),
+                TerminatorEnum::NONE,
+                false,
+            ));
         } else {
             panic!("StructInitNode::emit: invalid type");
         }

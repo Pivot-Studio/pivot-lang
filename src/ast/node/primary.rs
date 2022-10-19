@@ -23,6 +23,7 @@ impl Node for BoolConstNode {
             Value::BoolValue(ctx.context.i8_type().const_int(self.value as u64, true)),
             Some("bool".to_string()),
             TerminatorEnum::NONE,
+            true,
         ))
     }
 }
@@ -46,6 +47,7 @@ impl Node for NumNode {
                 Value::IntValue(b),
                 Some("i64".to_string()),
                 TerminatorEnum::NONE,
+                true,
             ));
         } else if let Num::FLOAT(x) = self.value {
             let b = ctx.context.f64_type().const_float(x);
@@ -53,6 +55,7 @@ impl Node for NumNode {
                 Value::FloatValue(b),
                 Some("f64".to_string()),
                 TerminatorEnum::NONE,
+                true,
             ));
         }
         panic!("not implemented")
@@ -79,11 +82,12 @@ impl Node for VarNode {
         });
         let v = ctx.get_symbol(&self.name);
         ctx.push_semantic_token(self.range, SemanticTokenType::VARIABLE, 0);
-        if let Some((v, pltype, dst, refs)) = v {
+        if let Some((v, pltype, dst, refs, is_const)) = v {
             let o = Ok((
                 Value::VarValue(v.clone()),
                 Some(pltype),
                 TerminatorEnum::NONE,
+                is_const,
             ));
             ctx.send_if_go_to_def(self.range, dst);
             ctx.set_if_refs(refs, self.range);

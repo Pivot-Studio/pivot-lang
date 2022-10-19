@@ -58,7 +58,8 @@ define_tokens!(
     RETURN = "return",
     DOT = ".",
     SEMI = ";",
-    REF = "&"
+    REF = "&",
+    CONST = "const"
 );
 impl TokenType {
     pub fn get_str(&self) -> &'static str {

@@ -41,7 +41,7 @@ impl Node for IfNode {
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, cond_block);
         let condrange = self.cond.range();
-        let (cond, _, _) = self.cond.emit(ctx)?;
+        let (cond, _, _, _) = self.cond.emit(ctx)?;
         let cond = ctx.try_load2var(cond);
         let con;
         if let Value::BoolValue(value) = cond {
@@ -57,13 +57,13 @@ impl Node for IfNode {
             .build_conditional_branch(con, then_block, else_block);
         // then block
         position_at_end(ctx, then_block);
-        let (_, _, then_terminator) = self.then.emit(ctx)?;
+        let (_, _, then_terminator, _) = self.then.emit(ctx)?;
         if then_terminator.is_none() {
             ctx.builder.build_unconditional_branch(after_block);
         }
         position_at_end(ctx, else_block);
         let terminator = if let Some(el) = &mut self.els {
-            let (_, _, else_terminator) = el.emit(ctx)?;
+            let (_, _, else_terminator, _) = el.emit(ctx)?;
             if else_terminator.is_none() {
                 ctx.builder.build_unconditional_branch(after_block);
             }
@@ -80,7 +80,7 @@ impl Node for IfNode {
         if terminator.is_return() {
             ctx.builder.build_unconditional_branch(after_block);
         }
-        Ok((Value::None, None, terminator))
+        Ok((Value::None, None, terminator, false))
     }
 }
 
@@ -130,7 +130,7 @@ impl Node for WhileNode {
         ctx.builder
             .build_conditional_branch(con, body_block, after_block);
         position_at_end(ctx, body_block);
-        let (_, _, terminator) = self.body.emit_child(ctx)?;
+        let (_, _, terminator, _) = self.body.emit_child(ctx)?;
         ctx.build_dbg_location(start);
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, after_block);
@@ -142,6 +142,7 @@ impl Node for WhileNode {
             } else {
                 TerminatorEnum::NONE
             },
+            false,
         ))
     }
 }
@@ -220,7 +221,7 @@ impl Node for ForNode {
         ctx.build_dbg_location(cond_start);
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, body_block);
-        let (_, _, terminator) = self.body.emit_child(ctx)?;
+        let (_, _, terminator, _) = self.body.emit_child(ctx)?;
         ctx.builder.build_unconditional_branch(opt_block);
         position_at_end(ctx, after_block);
         Ok((
@@ -231,6 +232,7 @@ impl Node for ForNode {
             } else {
                 TerminatorEnum::NONE
             },
+            false,
         ))
     }
 }
@@ -259,7 +261,7 @@ impl Node for BreakNode {
             let err = ctx.add_err(self.range, ErrorCode::BREAK_MUST_BE_IN_LOOP);
             return Err(err);
         }
-        Ok((Value::None, None, TerminatorEnum::BREAK))
+        Ok((Value::None, None, TerminatorEnum::BREAK, false))
     }
 }
 
@@ -287,6 +289,6 @@ impl Node for ContinueNode {
             let err = ctx.add_err(self.range, ErrorCode::CONTINUE_MUST_BE_IN_LOOP);
             return Err(err);
         }
-        Ok((Value::None, None, TerminatorEnum::CONTINUE))
+        Ok((Value::None, None, TerminatorEnum::CONTINUE, false))
     }
 }

@@ -10,6 +10,7 @@ use self::comment::CommentNode;
 use self::control::*;
 use self::error::*;
 use self::function::*;
+use self::global::*;
 use self::operator::*;
 use self::primary::*;
 use self::ret::*;
@@ -23,6 +24,7 @@ pub mod comment;
 pub mod control;
 pub mod error;
 pub mod function;
+pub mod global;
 pub mod operator;
 pub mod primary;
 pub mod program;
@@ -115,6 +117,7 @@ pub enum NodeEnum {
     Program(program::ProgramNode),
     STInitField(StructInitFieldNode),
     STErrorNode(STErrorNode),
+    Global(GlobalNode),
 }
 
 #[enum_dispatch]
@@ -128,7 +131,7 @@ pub trait Node: RangeTrait + AsAny {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
 }
 
-type NodeResult<'ctx> = Result<(Value<'ctx>, Option<String>, TerminatorEnum), PLDiag>;
+type NodeResult<'ctx> = Result<(Value<'ctx>, Option<String>, TerminatorEnum, bool), PLDiag>;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Num {
@@ -207,11 +210,11 @@ macro_rules! handle_calc {
             match ($left, $right) {
                 (Value::IntValue(left), Value::IntValue(right)) => {
                     return Ok((Value::IntValue($ctx.builder.[<build_int_$op>](
-                        left, right, "addtmp")),Some("i64".to_string()),TerminatorEnum::NONE));
+                        left, right, "addtmp")),Some("i64".to_string()),TerminatorEnum::NONE,false));
                 },
                 (Value::FloatValue(left), Value::FloatValue(right)) => {
                     return Ok((Value::FloatValue($ctx.builder.[<build_$opf>](
-                        left, right, "addtmp")),Some("f64".to_string()),TerminatorEnum::NONE));
+                        left, right, "addtmp")),Some("f64".to_string()),TerminatorEnum::NONE,false));
                 },
                 _ =>  return Err($ctx.add_err(
                     $range,
