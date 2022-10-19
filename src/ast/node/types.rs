@@ -30,10 +30,7 @@ impl TypeNameNode {
             println!("id: {}", self.id);
         }
     }
-    pub fn get_type<'a, 'ctx>(
-        &'a self,
-        ctx: &mut Ctx<'a, 'ctx>,
-    ) -> Result<(PLType<'a, 'ctx>, Option<DIType<'ctx>>), PLDiag> {
+    pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Result<PLType, PLDiag> {
         ctx.if_completion(|ctx, a| {
             if a.0.is_in(self.range) {
                 let completions = ctx.get_type_completions();
@@ -42,10 +39,10 @@ impl TypeNameNode {
         });
         ctx.push_semantic_token(self.range, SemanticTokenType::TYPE, 0);
         let re = ctx.get_type(&self.id, self.range)?.clone();
-        if let Some(dst) = re.0.get_range() {
+        if let Some(dst) = re.get_range() {
             ctx.send_if_go_to_def(self.range, dst);
         }
-        ctx.set_if_refs_tp(&re.0, self.range);
+        ctx.set_if_refs_tp(&re, self.range);
         Ok(re)
     }
 }
@@ -118,15 +115,15 @@ impl StructDefNode {
             ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL);
             return Ok(());
         }
-        let mut fields = BTreeMap::<String, Field<'a, 'ctx>>::new();
-        let mut order_fields = Vec::<Field<'a, 'ctx>>::new();
+        let mut fields = BTreeMap::<String, Field>::new();
+        let mut order_fields = Vec::<Field>::new();
         let mut i = 0;
         for field in self.fields.iter() {
-            let (id, (tp, _)) = (field.id.clone(), field.tp.get_type(ctx)?);
+            let (id, tp) = (field.id.clone(), field.tp.get_type(ctx)?);
             let f = Field {
                 index: i,
                 tp: tp.clone(),
-                typename: &field.tp,
+                typename: field.tp.clone(),
                 name: field.id.name.clone(),
                 range: field.id.range,
                 is_ref: field.tp.is_ref,
@@ -161,7 +158,6 @@ impl StructDefNode {
         );
         let stu = PLType::STRUCT(STType {
             name: name.to_string(),
-            struct_type: st,
             fields,
             ordered_fields: newf,
             range: self.range(),
@@ -238,10 +234,10 @@ impl Node for StructInitNode {
                 panic!("StructInitNode::emit: invalid field");
             }
         }
-        let (st, _) = self.tp.get_type(ctx)?;
+        let st = self.tp.get_type(ctx)?;
         if let PLType::STRUCT(st) = st {
             ctx.save_if_comment_doc_hover(self.tp.range, Some(st.doc.clone()));
-            let et = st.struct_type.as_basic_type_enum();
+            let et = st.struct_type(ctx).as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");
             for (id, (val, range)) in fields {
                 let field = st.fields.get(&id);
