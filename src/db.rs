@@ -52,12 +52,12 @@ impl salsa::Database for Database {
 // ANCHOR_END: db_impl
 
 // ANCHOR: par_db_impl
-impl salsa::ParallelDatabase for Database {
-    fn snapshot(&self) -> salsa::Snapshot<Self> {
-        salsa::Snapshot::new(Database {
-            storage: self.storage.snapshot(),
-            logs: self.logs.clone(),
-        })
-    }
-}
+// impl salsa::ParallelDatabase for Database {
+//     fn snapshot(&self) -> salsa::Snapshot<Self> {
+//         salsa::Snapshot::new(Database {
+//             storage: self.storage.snapshot(),
+//             logs: self.logs.clone(),
+//         })
+//     }
+// }
 // ANCHOR_END: par_db_impl

@@ -37,3 +37,30 @@ impl Node for UseNode {
         Ok((Value::None, None, TerminatorEnum::NONE, false))
     }
 }
+
+#[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ExternIDNode {
+    pub ns: Vec<Box<VarNode>>,
+    pub id: Box<VarNode>,
+}
+
+impl Node for ExternIDNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("ExternIDNode");
+        let mut i = self.ns.len();
+        for id in &self.ns {
+            i -= 1;
+            id.print(tabs + 1, i == 0, line.clone());
+        }
+    }
+
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        for id in &self.ns {
+            ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
+        }
+        Ok((Value::None, None, TerminatorEnum::NONE, false))
+    }
+}
