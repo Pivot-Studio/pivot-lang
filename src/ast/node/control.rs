@@ -14,7 +14,29 @@ pub struct IfNode {
 
 impl Node for IfNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        return "hello".to_string();
+        dbg!(&self);
+        let mut format_res = String::new();
+        // format_res.push_str(&prefix.repeat(tabs));
+        format_res.push_str("if ");
+        format_res.push_str(&self.cond.format(tabs, prefix));
+        format_res.push_str(" {");
+        if let Some(el) = &self.els {
+            format_res.push_str(&self.then.format(tabs + 1, prefix));
+            format_res.push_str("\n\r");
+            format_res.push_str(&prefix.repeat(tabs));
+            format_res.push_str("} else {");
+            format_res.push_str(&prefix.repeat(tabs));
+            format_res.push_str(&el.format(tabs + 1, prefix));
+            format_res.push_str("\n\r");
+            format_res.push_str(&prefix.repeat(tabs));
+            format_res.push_str("}")
+        } else {
+            format_res.push_str(&self.then.format(tabs + 1, prefix));
+            format_res.push_str("\n\r");
+            format_res.push_str(&prefix.repeat(tabs));
+            format_res.push_str("}");
+        }
+        format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

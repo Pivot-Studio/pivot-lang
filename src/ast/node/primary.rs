@@ -15,7 +15,7 @@ pub struct BoolConstNode {
 
 impl Node for BoolConstNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        return "hello".to_string();
+        return self.value.to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

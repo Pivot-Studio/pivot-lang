@@ -131,8 +131,8 @@ impl Node for AssignNode {
 pub struct EmptyNode {}
 
 impl Node for EmptyNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        return "hello".to_string();
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
+        return String::new();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
