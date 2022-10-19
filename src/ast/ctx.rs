@@ -74,6 +74,7 @@ pub struct Ctx<'a, 'ctx> {
             String,
             Range,
             Rc<RefCell<Vec<Location>>>,
+            bool,
         ),
     >, // variable table
     pub types: HashMap<String, (PLType<'a, 'ctx>, Option<DIType<'ctx>>)>, // func and types
@@ -100,6 +101,7 @@ pub struct Ctx<'a, 'ctx> {
     pub goto_def: Rc<Cell<Option<GotoDefinitionResponse>>>, // hold the goto definition result
     pub completion_items: Rc<Cell<Vec<CompletionItem>>>,    // hold the completion items
     pub hover: Rc<Cell<Option<Hover>>>,                     // hold the hover result
+    pub init_func: Option<FunctionValue<'ctx>>,             //init function,call first in main
 }
 
 /// # PLDiag
@@ -571,6 +573,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             goto_def: Rc::new(Cell::new(None)),
             completion_items: Rc::new(Cell::new(Vec::new())),
             hover: Rc::new(Cell::new(None)),
+            init_func: None,
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -610,6 +613,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             goto_def: self.goto_def.clone(),
             completion_items: self.completion_items.clone(),
             hover: self.hover.clone(),
+            init_func: self.init_func,
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -625,10 +629,17 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         String,
         Range,
         Rc<RefCell<Vec<Location>>>,
+        bool,
     )> {
         let v = self.table.get(name);
-        if let Some((pv, pltype, range, refs)) = v {
-            return Some((pv, pltype.to_string(), range.clone(), refs.clone()));
+        if let Some((pv, pltype, range, refs, is_const)) = v {
+            return Some((
+                pv,
+                pltype.to_string(),
+                range.clone(),
+                refs.clone(),
+                *is_const,
+            ));
         }
         if let Some(father) = self.father {
             return father.get_symbol(name);
@@ -642,13 +653,15 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         pv: PointerValue<'ctx>,
         tp: String,
         range: Range,
+        is_const: bool,
     ) -> Result<(), PLDiag> {
         if self.table.contains_key(&name) {
             return Err(self.add_err(range, ErrorCode::REDECLARATION));
         }
         let refs = Rc::new(RefCell::new(vec![]));
         self.send_if_go_to_def(range, range);
-        self.table.insert(name, (pv, tp, range, refs.clone()));
+        self.table
+            .insert(name, (pv, tp, range, refs.clone(), is_const));
         self.set_if_refs(refs, range);
         Ok(())
     }
@@ -705,18 +718,15 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     // load type** and type* to type
     pub fn try_load2var(&mut self, v: Value<'ctx>) -> Value<'ctx> {
         match v.as_basic_value_enum() {
-            BasicValueEnum::PointerValue(v) => {
-                let v = self.builder.build_load(v, "loadtmp");
-                match v {
-                    BasicValueEnum::IntValue(v) => match v.get_type().get_bit_width() {
-                        8 => Value::BoolValue(v),
-                        64 => Value::IntValue(v),
-                        _ => todo!(),
-                    },
-                    BasicValueEnum::FloatValue(v) => Value::FloatValue(v),
-                    BasicValueEnum::PointerValue(v) => self.try_load2var(Value::VarValue(v)),
-                    _ => Value::LoadValue(v),
-                }
+            BasicValueEnum::IntValue(v) => match v.get_type().get_bit_width() {
+                8 => Value::BoolValue(v),
+                64 => Value::IntValue(v),
+                _ => todo!(),
+            },
+            BasicValueEnum::FloatValue(v) => Value::FloatValue(v),
+            BasicValueEnum::PointerValue(ptr2v) => {
+                let loadv = self.builder.build_load(ptr2v, "loadtmp");
+                self.try_load2var(Value::LoadValue(loadv))
             }
             _ => v,
         }

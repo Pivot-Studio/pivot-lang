@@ -199,6 +199,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let link = Command::new("clang")
         .arg(format!("-O{}", op.optimization as u32))
         .arg("-pthread")
+        .arg("-ltinfo")
         .arg("-ldl")
         .arg(&f)
         .arg("vm/target/release/libvm.a")

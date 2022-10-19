@@ -46,6 +46,8 @@ define_error!(
     COMPLETION = "exp not complete",
     ASSIGN_TYPE_MISMATCH = "assign type mismatch",
     NOT_ASSIGNABLE = "left value is not assignable",
+    ASSIGN_CONST = "try assigning to a const value",
+    REF_CONST = "try referencing to a const value",
     INVALID_STRUCT_DEF = "invalid struct definition",
     UNDEFINED_TYPE = "undefined type",
     RETURN_VALUE_IN_VOID_FUNCTION = "return value in void function",
