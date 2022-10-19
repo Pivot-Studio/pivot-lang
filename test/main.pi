@@ -1,3 +1,4 @@
+const a = 100;
 fn change(x:&i64) void {
     x = x + 1;
     return;
@@ -143,6 +144,10 @@ fn test_warn() void {
     return;
     let x = 1;//15154212
 }
+fn test_const() void {
+    printi64ln(a);
+    return;
+}
 fn main() i64 {
     test_struct();
     printline();
@@ -160,7 +165,7 @@ fn main() i64 {
     printline();
     test_complex();
     printline();
-    test_warn();
+    test_const();
     return 0;
 }
 

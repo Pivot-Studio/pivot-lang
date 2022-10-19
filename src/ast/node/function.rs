@@ -71,7 +71,7 @@ impl Node for FuncDefNode {
         ctx.push_semantic_token(typenode.ret.range, SemanticTokenType::TYPE, 0);
         if let Some(body) = self.body.as_mut() {
             // build debug info
-            let param_ditypes_res = self
+            let param_ditypes_res: Vec<Result<DIType, PLDiag>> = self
                 .typenode
                 .paralist
                 .iter()
@@ -89,13 +89,23 @@ impl Node for FuncDefNode {
                 .collect::<Vec<_>>();
             let mut param_ditypes = vec![];
             for v in param_ditypes_res {
-                param_ditypes.push(v?);
+                if v.is_err() {
+                    let diag = v.unwrap_err();
+                    ctx.add_diag(diag.clone());
+                    return Err(diag);
+                }
+                param_ditypes.push(v.unwrap());
             }
             let subroutine_type = ctx.dibuilder.create_subroutine_type(
                 ctx.diunit.get_file(),
                 {
-                    let res = ctx.get_type(&self.typenode.ret.id, self.typenode.ret.range)?;
-                    let (pltype, di_type) = res;
+                    let res = ctx.get_type(&self.typenode.ret.id, self.typenode.ret.range);
+                    if res.is_err() {
+                        let diag = res.unwrap_err();
+                        ctx.add_diag(diag.clone());
+                        return Err(diag);
+                    }
+                    let (pltype, di_type) = res.unwrap();
                     let di_type = di_type.clone();
                     let di_ref_type = pltype.clone().get_di_ref_type(ctx, di_type);
                     if self.typenode.ret.is_ref {
@@ -129,7 +139,13 @@ impl Node for FuncDefNode {
             }
             // add function
             let func;
-            let (fu, _) = ctx.get_type(typenode.id.as_str(), self.range)?;
+            let res = ctx.get_type(typenode.id.as_str(), self.range);
+            if res.is_err() {
+                let diag = res.unwrap_err();
+                ctx.add_diag(diag.clone());
+                return Err(diag);
+            }
+            let (fu, _) = res.unwrap();
             func = match fu {
                 PLType::FN(fu) => fu.fntype,
                 _ => panic!("type error"), // 理论上这两个Panic不可能触发
@@ -156,6 +172,11 @@ impl Node for FuncDefNode {
             ctx.position_at_end(return_block);
             let ret_value_ptr = if func.get_type().get_return_type().is_some() {
                 let res = ctx.get_type(&self.typenode.ret.id, self.typenode.ret.range);
+                if res.is_err() {
+                    let diag = res.unwrap_err();
+                    ctx.add_diag(diag.clone());
+                    return Err(diag);
+                }
                 let ret_type = {
                     let op = res?.0.get_basic_type_op();
                     if op.is_none() {
