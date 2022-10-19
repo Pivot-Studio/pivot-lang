@@ -34,6 +34,6 @@ impl Node for UseNode {
         for id in &self.ids {
             ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
         }
-        Ok((Value::None, None, TerminatorEnum::NONE))
+        Ok((Value::None, None, TerminatorEnum::NONE, false))
     }
 }
