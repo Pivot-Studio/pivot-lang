@@ -377,12 +377,8 @@ pub fn empty_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 
 pub fn comment(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
-        delimited(
-            tag("//"),
-            take_until("\n"),
-            tag("\n"),
-        ),
-        |c : LocatedSpan<&str>| {
+        delimited(tag("//"), take_until("\n"), tag("\n")),
+        |c: LocatedSpan<&str>| {
             res_enum(
                 CommentNode {
                     comment: c.to_string(),

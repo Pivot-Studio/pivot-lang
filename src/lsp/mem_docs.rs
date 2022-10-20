@@ -9,6 +9,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     ast::{
         compiler::{ActionType, Options},
+        ctx::Mod,
         range::Pos,
     },
     nomparser::SourceProgram,
@@ -45,11 +46,14 @@ pub struct FileCompileInput {
     #[return_ref]
     pub file: String,
     pub docs: MemDocsInput,
+    pub submods: FxHashMap<String, Mod>,
 }
 #[salsa::tracked]
 impl FileCompileInput {
     #[salsa::tracked(lru = 32)]
     pub fn get_file_content(self, db: &dyn Db) -> Option<SourceProgram> {
+        let f = self.file(db);
+        eprintln!("get_file_content {}", f);
         let re = self
             .docs(db)
             .docs(db)

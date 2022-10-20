@@ -1,3 +1,4 @@
+use mod1;
 const a = 100;
 fn change(x:&i64) void {
     x = x + 1;
@@ -43,6 +44,7 @@ fn test_struct() void {
     printi64ln(s.a);
     printi64ln(s.a);
     printi64ln(s.c.a);
+    mod1::test_mod(a);
     return ;
 }
 fn test_vm() void {
@@ -75,6 +77,7 @@ fn test_ret_ref() void {
     printi64ln(b);
     return;
 }
+
 fn test_struct_ref() void {
     let a = 1;
     let ref_struct = ref_struct{ref:&a,};

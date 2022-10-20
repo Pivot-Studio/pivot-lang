@@ -1,4 +1,4 @@
-use super::dot;
+use super::{dot, node::program::ModWrapper};
 use crate::{
     ast::node::{program::Program, Node},
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
@@ -100,21 +100,22 @@ pub fn run(p: &Path, opt: OptimizationLevel) {
 
 #[salsa::tracked(lru = 32)]
 pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
-    let input = FileCompileInput::new(db, docs.file(db).to_string(), docs);
-    compile_dry_file(db, input)
+    let input = FileCompileInput::new(db, docs.file(db).to_string(), docs, Default::default());
+    compile_dry_file(db, input);
 }
 
 #[salsa::tracked(lru = 32)]
-pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) {
+pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrapper> {
+    // eprintln!("compile_dry_file: {:?}", docs.debug_all(db));
     let src = docs.get_file_content(db).unwrap();
     let parse_result = parse(db, src);
     if let Err(e) = parse_result {
         eprintln!("{}", e);
-        return;
+        return None;
     }
     let node = parse_result.unwrap();
     let program = Program::new(db, node, docs.get_emit_params(db), docs.docs(db));
-    program.emit(db);
+    Some(program.emit(db))
 }
 
 #[salsa::tracked]

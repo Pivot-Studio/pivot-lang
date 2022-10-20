@@ -6,14 +6,15 @@ use super::function::FuncTypeNode;
 use super::types::StructDefNode;
 use super::*;
 use crate::ast::accumulators::*;
+use crate::ast::compiler::compile_dry_file;
 use crate::ast::ctx::{self, create_ctx_info, Ctx, Mod};
-use crate::lsp::mem_docs::{EmitParams, MemDocsInput};
+use crate::lsp::mem_docs::{EmitParams, FileCompileInput, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::Db;
 
 use inkwell::context::Context;
 use internal_macro::range;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -109,56 +110,124 @@ impl Program {
     pub fn emit(self, db: &dyn Db) -> ModWrapper {
         eprintln!("emit");
         let n = *self.node(db).node(db);
-        let _prog = match n {
+        let prog = match n {
             NodeEnum::Program(p) => p,
             _ => panic!("not a program"),
         };
-
-        let context = &Context::create();
         let filepath = Path::new(self.params(db).file(db));
+
+        let mut modmap = FxHashMap::<String, Mod>::default();
+        let mut submod;
+        for u in prog.uses {
+            let u = match *u {
+                NodeEnum::UseNode(p) => p,
+                _ => unreachable!("not a use"),
+            };
+            if u.ids.is_empty() || !u.complete {
+                continue;
+            }
+            let mut path = filepath.to_path_buf().parent().unwrap().to_path_buf();
+            let mut submodmap = &mut modmap;
+            for p in u.ids[0..u.ids.len() - 1].iter() {
+                path = path.join(p.name.clone());
+                if submodmap.contains_key(&p.name) {
+                    submod = submodmap.get_mut(&p.name).unwrap();
+                    submodmap = &mut submod.submods;
+                } else {
+                    let m = Mod::new(
+                        p.name.clone(),
+                        path.with_extension("pi").to_str().unwrap().to_string(),
+                    );
+                    submodmap.insert(p.name.clone(), m);
+                    submod = submodmap.get_mut(&p.name).unwrap();
+                    submodmap = &mut submod.submods;
+                }
+            }
+            path = path.join(u.ids.last().unwrap().name.clone());
+            path = path.with_extension("pi");
+            let f = path.to_str().unwrap().to_string();
+            eprintln!("use {}", f.clone());
+            let f = FileCompileInput::new(db, f, self.docs(db).clone(), Default::default());
+            let m = compile_dry_file(db, f);
+            if m.is_none() {
+                continue;
+            }
+            let m = m.unwrap();
+            submodmap.insert(u.ids.last().unwrap().name.clone(), m.plmod(db));
+        }
+
         let abs = dunce::canonicalize(filepath).unwrap();
         let dir = abs.parent().unwrap().to_str().unwrap();
         let fname = abs.file_name().unwrap().to_str().unwrap();
-        let (a, b, c, d, e, f) = create_ctx_info(context, dir, fname);
-        let v = RefCell::new(Vec::new());
-        let mut ctx = ctx::Ctx::new(
-            context,
-            &a,
-            &b,
-            &c,
-            &d,
-            &e,
-            &f,
-            abs.to_str().unwrap(),
-            &v,
-            Some(self.params(db).action(db)),
-            self.params(db).params(db),
+
+        let p = ProgramEmitParam::new(
+            db,
+            self.node(db),
+            dir.to_string(),
+            fname.to_string(),
+            self.params(db),
+            modmap,
         );
-        let m = &mut ctx;
-        let node = self.node(db);
-        let mut nn = node.node(db);
-        let _ = nn.emit(m);
-        for d in v.borrow().iter() {
-            Diagnostics::push(db, d.get_diagnostic());
-        }
-        if let Some(c) = ctx.refs.take() {
-            let c = c.borrow();
-            for refe in c.iter() {
-                PLReferences::push(db, refe.clone());
-            }
-        }
-        let b = ctx.semantic_tokens_builder.borrow().build();
-        PLSemanticTokens::push(db, b);
-        let ci = ctx.completion_items.take();
-        Completions::push(db, ci);
-        if let Some(c) = ctx.goto_def.take() {
-            GotoDef::push(db, c);
-        }
-        if let Some(c) = ctx.hover.take() {
-            PLHover::push(db, c);
-        }
-        ModWrapper::new(db, ctx.plmod)
+
+        emit_file(db, p)
     }
+}
+
+#[salsa::tracked]
+pub struct ProgramEmitParam {
+    pub node: ProgramNodeWrapper,
+    #[return_ref]
+    pub dir: String,
+    #[return_ref]
+    pub file: String,
+    #[return_ref]
+    pub params: EmitParams,
+    pub submods: FxHashMap<String, Mod>,
+}
+
+#[salsa::tracked]
+pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
+    let context = &Context::create();
+    let (a, b, c, d, e, f) = create_ctx_info(context, params.dir(db), params.file(db));
+    let v = RefCell::new(Vec::new());
+    let mut ctx = ctx::Ctx::new(
+        context,
+        &a,
+        &b,
+        &c,
+        &d,
+        &e,
+        &f,
+        params.file(db),
+        &v,
+        Some(params.params(db).action(db)),
+        params.params(db).params(db),
+    );
+    ctx.plmod.submods = params.submods(db);
+    let m = &mut ctx;
+    let node = params.node(db);
+    let mut nn = node.node(db);
+    let _ = nn.emit(m);
+    for d in v.borrow().iter() {
+        Diagnostics::push(db, d.get_diagnostic());
+    }
+    if let Some(c) = ctx.refs.take() {
+        let c = c.borrow();
+        for refe in c.iter() {
+            PLReferences::push(db, refe.clone());
+        }
+    }
+    let b = ctx.semantic_tokens_builder.borrow().build();
+    PLSemanticTokens::push(db, b);
+    let ci = ctx.completion_items.take();
+    Completions::push(db, ci);
+    if let Some(c) = ctx.goto_def.take() {
+        GotoDef::push(db, c);
+    }
+    if let Some(c) = ctx.hover.take() {
+        PLHover::push(db, c);
+    }
+    ModWrapper::new(db, ctx.plmod)
 }
 
 #[salsa::tracked]

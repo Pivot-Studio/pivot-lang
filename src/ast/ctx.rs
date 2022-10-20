@@ -124,7 +124,7 @@ pub struct Mod {
     /// func and types
     pub types: FxHashMap<String, PLType>,
     /// sub mods
-    pub submods: Rc<FxHashMap<String, Mod>>,
+    pub submods: FxHashMap<String, Mod>,
     // global variable table
     pub global_table: FxHashMap<String, GlobalVar>,
 }
@@ -135,7 +135,7 @@ impl Mod {
             name,
             path,
             types: FxHashMap::default(),
-            submods: Rc::new(FxHashMap::default()),
+            submods: FxHashMap::default(),
             global_table: FxHashMap::default(),
         }
     }

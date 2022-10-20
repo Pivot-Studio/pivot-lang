@@ -22,6 +22,8 @@ pub struct Jar(
     program::Program_emit,
     program::ProgramNodeWrapper,
     program::ModWrapper,
+    program::ProgramEmitParam,
+    program::emit_file,
 );
 
 pub trait Db: salsa::DbWithJar<Jar> {}
