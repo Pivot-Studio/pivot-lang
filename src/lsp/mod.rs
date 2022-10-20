@@ -306,7 +306,9 @@ fn main_loop(
             let diags = compile_dry::accumulated::<Diagnostics>(&db, docin);
             let sender = connection.sender.clone();
             pool.execute(move || {
-                send_diagnostics(&sender, f, diags.clone());
+                for (p, diags) in diags {
+                    send_diagnostics(&sender, p, diags);
+                }
             });
         })
         .on_noti::<DidOpenTextDocument, _>(|params| {
@@ -323,7 +325,9 @@ fn main_loop(
             let diags = compile_dry::accumulated::<Diagnostics>(&db, docin);
             let sender = connection.sender.clone();
             pool.execute(move || {
-                send_diagnostics(&sender, f.clone(), diags.clone());
+                for (p, diags) in diags {
+                    send_diagnostics(&sender, p, diags);
+                }
             });
         })
         .on_noti::<DidCloseTextDocument, _>(|params| {

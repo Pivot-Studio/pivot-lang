@@ -159,7 +159,7 @@ impl Program {
 
         let abs = dunce::canonicalize(filepath).unwrap();
         let dir = abs.parent().unwrap().to_str().unwrap();
-        let fname = abs.file_name().unwrap().to_str().unwrap();
+        let fname = abs.to_str().unwrap();
 
         let p = ProgramEmitParam::new(
             db,
@@ -209,9 +209,13 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     let node = params.node(db);
     let mut nn = node.node(db);
     let _ = nn.emit(m);
-    for d in v.borrow().iter() {
-        Diagnostics::push(db, d.get_diagnostic());
-    }
+    Diagnostics::push(
+        db,
+        (
+            params.file(db).clone(),
+            v.borrow().iter().map(|x| x.get_diagnostic()).collect(),
+        ),
+    );
     if let Some(c) = ctx.refs.take() {
         let c = c.borrow();
         for refe in c.iter() {

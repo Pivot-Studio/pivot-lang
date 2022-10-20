@@ -3,7 +3,7 @@ use lsp_types::{
 };
 
 #[salsa::accumulator]
-pub struct Diagnostics(Diagnostic);
+pub struct Diagnostics((String, Vec<Diagnostic>));
 
 #[salsa::accumulator]
 pub struct PLReferences(Location);
