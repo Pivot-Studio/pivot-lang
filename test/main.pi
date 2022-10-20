@@ -1,5 +1,6 @@
 use mod1;
 use sub::mod;
+use mod2;
 const a = 100;
 fn change(x:&i64) void {
     x = x + 1;
@@ -45,6 +46,7 @@ fn test_struct() void {
     printi64ln(s.a);
     printi64ln(s.c.a);
     mod1::test_mod(a);
+    mod2::test_mod(a);
     return ;
 }
 fn test_vm() void {

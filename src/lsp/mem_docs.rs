@@ -27,6 +27,8 @@ pub struct MemDocs {
 pub struct EmitParams {
     #[return_ref]
     pub file: String,
+    #[return_ref]
+    pub modpath: String,
     pub action: ActionType,
     pub params: Option<(Pos, Option<String>, ActionType)>,
 }
@@ -45,6 +47,8 @@ pub struct MemDocsInput {
 pub struct FileCompileInput {
     #[return_ref]
     pub file: String,
+    #[return_ref]
+    pub modpath: String,
     pub docs: MemDocsInput,
     pub submods: FxHashMap<String, Mod>,
 }
@@ -74,13 +78,14 @@ impl FileCompileInput {
             return EmitParams::new(
                 db,
                 file.clone(),
+                self.modpath(db).clone(),
                 ActionType::Diagnostic,
                 Some((Default::default(), None, ActionType::Diagnostic)),
             );
         }
         let action = self.docs(db).action(db);
         let params = self.docs(db).params(db);
-        EmitParams::new(db, file.clone(), action, params)
+        EmitParams::new(db, file.clone(), self.modpath(db).clone(), action, params)
     }
 }
 
@@ -99,13 +104,6 @@ impl MemDocsInput {
         } else {
             None
         }
-    }
-    #[salsa::tracked(lru = 32)]
-    pub fn get_emit_params(self, db: &dyn Db) -> EmitParams {
-        let file = self.file(db);
-        let action = self.action(db);
-        let params = self.params(db);
-        EmitParams::new(db, file.clone(), action, params)
     }
 }
 

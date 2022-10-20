@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use lsp_types::{
     CompletionItem, Diagnostic, GotoDefinitionResponse, Hover, Location, SemanticTokens,
 };
@@ -6,7 +8,7 @@ use lsp_types::{
 pub struct Diagnostics((String, Vec<Diagnostic>));
 
 #[salsa::accumulator]
-pub struct PLReferences(Location);
+pub struct PLReferences(Rc<RefCell<Vec<Location>>>);
 
 #[salsa::accumulator]
 pub struct GotoDef(GotoDefinitionResponse);

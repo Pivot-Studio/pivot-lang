@@ -39,7 +39,7 @@ impl TypeNameNode {
         ctx.push_semantic_token(self.range, SemanticTokenType::TYPE, 0);
         let re = ctx.get_type(&self.id, self.range)?.clone();
         if let Some(dst) = re.get_range() {
-            ctx.send_if_go_to_def(self.range, dst);
+            ctx.send_if_go_to_def(self.range, dst, ctx.plmod.path.clone());
         }
         ctx.set_if_refs_tp(&re, self.range);
         Ok(re)
@@ -128,7 +128,7 @@ impl StructDefNode {
                 is_ref: field.tp.is_ref,
                 refs: Rc::new(RefCell::new(vec![])),
             };
-            ctx.send_if_go_to_def(f.range, f.range);
+            ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
             ctx.set_if_refs(f.refs.clone(), field.id.range);
             fields.insert(id.name.to_string(), f.clone());
             order_fields.push(f);
@@ -258,7 +258,7 @@ impl Node for StructInitNode {
                     return Err(ctx.add_err(range, ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH));
                 }
                 ctx.builder.build_store(ptr, val);
-                ctx.send_if_go_to_def(range, field.range)
+                ctx.send_if_go_to_def(range, field.range, ctx.plmod.path.clone())
             }
             return Ok((
                 Value::VarValue(stv),

@@ -223,8 +223,14 @@ fn main_loop(
             compile_dry(&db, docin);
             let refs = compile_dry::accumulated::<PLReferences>(&db, docin);
             let sender = connection.sender.clone();
+            let mut rf = vec![];
+            for r in refs {
+                for r in r.borrow().iter() {
+                    rf.push(r.clone());
+                }
+            }
             pool.execute(move || {
-                send_references(&sender, id, &refs);
+                send_references(&sender, id, &rf);
             });
         })
         .on::<Completion, _>(|id, params| {
@@ -258,7 +264,10 @@ fn main_loop(
                 ActionType::SemanticTokensFull,
             )));
             compile_dry(&db, docin);
-            let newtokens = compile_dry::accumulated::<PLSemanticTokens>(&db, docin);
+            let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(&db, docin);
+            if newtokens.is_empty() {
+                newtokens.push(SemanticTokens::default());
+            }
             _ = tokens.insert(uri.clone(), newtokens[0].clone());
             let sender = connection.sender.clone();
             pool.execute(move || {

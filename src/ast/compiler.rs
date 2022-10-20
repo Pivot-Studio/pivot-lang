@@ -13,8 +13,8 @@ use inkwell::{
     targets::{FileType, InitializationConfig, Target, TargetMachine},
     OptimizationLevel,
 };
-use std::process::Command;
 use std::{cell::RefCell, fs, path::Path, time::Instant};
+use std::{path::PathBuf, process::Command};
 
 use super::ctx::{self, create_ctx_info};
 
@@ -108,14 +108,29 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
     }
     let config = re.unwrap();
     let file = config.entry;
-    let input = FileCompileInput::new(db, file, docs, Default::default());
+    let input = FileCompileInput::new(
+        db,
+        file.clone(),
+        PathBuf::from(file)
+            .parent()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string(),
+        docs,
+        Default::default(),
+    );
     compile_dry_file(db, input);
 }
 
 #[salsa::tracked(lru = 32)]
 pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrapper> {
     // eprintln!("compile_dry_file: {:?}", docs.debug_all(db));
-    let src = docs.get_file_content(db).unwrap();
+    let re = docs.get_file_content(db);
+    if re.is_none() {
+        return None;
+    }
+    let src = re.unwrap();
     let parse_result = parse(db, src);
     if let Err(e) = parse_result {
         eprintln!("{}", e);

@@ -339,7 +339,7 @@ impl Node for FuncCallNode {
                 _ => todo!(),
             };
             ctx.set_if_refs_tp(&fntp, self.range);
-            ctx.send_if_go_to_def(self.range, fv.range);
+            ctx.send_if_go_to_def(self.range, fv.range, ctx.plmod.path.clone());
             return o;
         }
         return Err(ctx.add_err(self.range, ErrorCode::NOT_A_FUNCTION));

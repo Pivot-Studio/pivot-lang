@@ -89,7 +89,7 @@ impl Node for VarNode {
                 TerminatorEnum::NONE,
                 is_const,
             ));
-            ctx.send_if_go_to_def(self.range, dst);
+            ctx.send_if_go_to_def(self.range, dst, ctx.plmod.path.clone());
             ctx.set_if_refs(refs, self.range);
             return o;
         }

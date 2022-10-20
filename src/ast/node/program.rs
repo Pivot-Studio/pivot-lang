@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use super::function::FuncTypeNode;
@@ -113,7 +113,6 @@ impl Program {
             NodeEnum::Program(p) => p,
             _ => panic!("not a program"),
         };
-        let filepath = Path::new(self.params(db).file(db));
 
         let mut modmap = FxHashMap::<String, Mod>::default();
         let mut submod;
@@ -126,7 +125,7 @@ impl Program {
             if u.ids.is_empty() || !u.complete {
                 continue;
             }
-            let mut path = filepath.to_path_buf().parent().unwrap().to_path_buf();
+            let mut path = PathBuf::from(self.params(db).modpath(db));
             let mut submodmap = &mut modmap;
             for p in u.ids[0..u.ids.len() - 1].iter() {
                 path = path.join(p.name.clone());
@@ -147,7 +146,13 @@ impl Program {
             path = path.with_extension("pi");
             let f = path.to_str().unwrap().to_string();
             eprintln!("use {}", f.clone());
-            let f = FileCompileInput::new(db, f, self.docs(db).clone(), Default::default());
+            let f = FileCompileInput::new(
+                db,
+                f,
+                self.params(db).modpath(db).clone(),
+                self.docs(db).clone(),
+                Default::default(),
+            );
             let m = compile_dry_file(db, f);
             if m.is_none() {
                 continue;
@@ -155,16 +160,17 @@ impl Program {
             let m = m.unwrap();
             submodmap.insert(u.ids.last().unwrap().name.clone(), m.plmod(db));
         }
-
+        let filepath = Path::new(self.params(db).file(db));
         let abs = dunce::canonicalize(filepath).unwrap();
         let dir = abs.parent().unwrap().to_str().unwrap();
-        let fname = abs.to_str().unwrap();
+        let fname = abs.file_name().unwrap().to_str().unwrap();
 
         let p = ProgramEmitParam::new(
             db,
             self.node(db),
             dir.to_string(),
             fname.to_string(),
+            abs.to_str().unwrap().to_string(),
             self.params(db),
             modmap,
         );
@@ -180,6 +186,8 @@ pub struct ProgramEmitParam {
     pub dir: String,
     #[return_ref]
     pub file: String,
+    #[return_ref]
+    pub fullpath: String,
     #[return_ref]
     pub params: EmitParams,
     pub submods: FxHashMap<String, Mod>,
@@ -198,7 +206,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         &d,
         &e,
         &f,
-        params.file(db),
+        params.fullpath(db),
         &v,
         Some(params.params(db).action(db)),
         params.params(db).params(db),
@@ -211,22 +219,19 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     Diagnostics::push(
         db,
         (
-            params.file(db).clone(),
+            params.fullpath(db).clone(),
             v.borrow().iter().map(|x| x.get_diagnostic()).collect(),
         ),
     );
     if let Some(c) = ctx.refs.take() {
-        let c = c.borrow();
-        for refe in c.iter() {
-            PLReferences::push(db, refe.clone());
-        }
+        PLReferences::push(db, c.clone());
     }
-    if ctx.action.is_some()&&ctx.action.unwrap() == ActionType::SemanticTokensFull {
+    if ctx.action.is_some() && ctx.action.unwrap() == ActionType::SemanticTokensFull {
         let b = ctx.semantic_tokens_builder.borrow().build();
         PLSemanticTokens::push(db, b);
     }
 
-    if ctx.action.is_some()&&ctx.action.unwrap() == ActionType::Completion {
+    if ctx.action.is_some() && ctx.action.unwrap() == ActionType::Completion {
         let ci = ctx.completion_items.take();
         Completions::push(db, ci);
     }

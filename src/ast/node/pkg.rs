@@ -86,6 +86,10 @@ impl Node for ExternIDNode {
             ));
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
+            ctx.set_if_refs_tp(&tp, self.range);
+            if let Some(range) = tp.get_range() {
+                ctx.send_if_go_to_def(self.range, range, plmod.path.clone());
+            }
             match tp {
                 PLType::FN(f) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);

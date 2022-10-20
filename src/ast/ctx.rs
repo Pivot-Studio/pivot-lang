@@ -843,7 +843,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         } else {
             self.table.insert(name, (pv, tp, range, refs.clone()));
         }
-        self.send_if_go_to_def(range, range);
+        self.send_if_go_to_def(range, range, self.plmod.path.clone());
         self.set_if_refs(refs, range);
         Ok(())
     }
@@ -883,7 +883,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if self.plmod.types.contains_key(&name) {
             return Err(self.add_err(range, ErrorCode::REDEFINE_TYPE));
         }
-        self.send_if_go_to_def(range, range);
+        self.send_if_go_to_def(range, range, self.plmod.path.clone());
         self.plmod.types.insert(name, tp.clone());
         Ok(())
     }
@@ -954,13 +954,11 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn set_if_refs_tp(&self, tp: &PLType, range: Range) {
         if let Some(_) = self.action {
             if let Some(comp) = &self.lspparams {
-                if comp.2 == ActionType::FindReferences {
-                    let tprefs = tp.get_refs();
-                    if let Some(tprefs) = tprefs {
-                        tprefs.borrow_mut().push(self.get_location(range));
-                        if comp.0.is_in(range) {
-                            self.refs.set(Some(tprefs));
-                        }
+                let tprefs = tp.get_refs();
+                if let Some(tprefs) = tprefs {
+                    tprefs.borrow_mut().push(self.get_location(range));
+                    if comp.0.is_in(range) {
+                        self.refs.set(Some(tprefs));
                     }
                 }
             }
@@ -970,23 +968,21 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn set_if_refs(&self, refs: Rc<RefCell<Vec<Location>>>, range: Range) {
         if let Some(_) = self.action {
             if let Some(comp) = &self.lspparams {
-                if comp.2 == ActionType::FindReferences {
-                    refs.borrow_mut().push(self.get_location(range));
-                    if comp.0.is_in(range) {
-                        self.refs.set(Some(refs));
-                    }
+                refs.borrow_mut().push(self.get_location(range));
+                if comp.0.is_in(range) {
+                    self.refs.set(Some(refs));
                 }
             }
         }
     }
 
-    pub fn send_if_go_to_def(&mut self, range: Range, destrange: Range) {
+    pub fn send_if_go_to_def(&mut self, range: Range, destrange: Range, file: String) {
         if let Some(_) = self.action {
             if let Some(comp) = &self.lspparams {
                 if comp.2 == ActionType::GotoDef {
                     if comp.0.is_in(range) {
                         let resp = GotoDefinitionResponse::Scalar(Location {
-                            uri: self.get_file_url(),
+                            uri: Url::from_file_path(file).unwrap(),
                             range: destrange.to_diag_range(),
                         });
                         self.goto_def.set(Some(resp));
