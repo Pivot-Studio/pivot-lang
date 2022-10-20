@@ -226,8 +226,10 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         PLSemanticTokens::push(db, b);
     }
 
-    let ci = ctx.completion_items.take();
-    Completions::push(db, ci);
+    if ctx.action.is_some()&&ctx.action.unwrap() == ActionType::Completion {
+        let ci = ctx.completion_items.take();
+        Completions::push(db, ci);
+    }
     if let Some(c) = ctx.goto_def.take() {
         GotoDef::push(db, c);
     }
