@@ -184,7 +184,24 @@ pub struct ForNode {
 
 impl Node for ForNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        return "hello".to_string();
+        let mut format_res = String::new();
+        format_res.push_str("for ");
+        if let Some(pre) = &self.pre {
+            format_res.push_str(&pre.format(tabs, prefix));
+        }
+        format_res.push_str("; ");
+        format_res.push_str(&self.cond.format(tabs, prefix));
+        if let Some(opt) = &self.opt {
+            format_res.push_str("; ");
+            format_res.push_str(&opt.format(tabs, prefix));
+        }
+        format_res.push_str(" {");
+        format_res.push_str(&self.body.format(tabs + 1, prefix));
+        format_res.push_str("\n\r");
+        format_res.push_str(&prefix.repeat(tabs));
+        format_res.push_str("}");
+
+        format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -270,8 +287,8 @@ impl Node for ForNode {
 pub struct BreakNode {}
 
 impl Node for BreakNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        return "hello".to_string();
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
+        return "break".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -301,8 +318,8 @@ impl Node for BreakNode {
 pub struct ContinueNode {}
 
 impl Node for ContinueNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        return "hello".to_string();
+    fn format(&self, _tabs: usize, prefix: &str) -> String {
+        return "continue".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

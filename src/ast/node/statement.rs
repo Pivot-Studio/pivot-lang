@@ -151,14 +151,17 @@ pub struct StatementsNode {
 }
 impl Node for StatementsNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut i = self.statements.len();
         let mut format_res = String::new();
         for statement in &self.statements {
-            i -= 1;
             format_res.push_str("\n\r");
             format_res.push_str(&prefix.repeat(tabs));
             format_res.push_str(&statement.format(tabs, prefix));
-            format_res.push_str(";");
+            match &**statement {
+                NodeEnum::For(_) => (),
+                _ => {
+                    format_res.push_str(";");
+                }
+            }
         }
         return format_res;
     }
