@@ -119,9 +119,10 @@ impl Program {
         let mut modmap = FxHashMap::<String, Mod>::default();
         let mut submod;
         for u in prog.uses {
-            let u = match *u {
-                NodeEnum::UseNode(p) => p,
-                _ => unreachable!("not a use"),
+            let u = if let NodeEnum::UseNode(p) = *u {
+                p
+            } else {
+                continue;
             };
             if u.ids.is_empty() || !u.complete {
                 continue;

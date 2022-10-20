@@ -3,6 +3,7 @@ use crate::{
     ast::node::{program::Program, Node},
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
+    utils::read_config::{get_config, ConfigEntry},
     Db,
 };
 use colored::Colorize;
@@ -100,7 +101,14 @@ pub fn run(p: &Path, opt: OptimizationLevel) {
 
 #[salsa::tracked(lru = 32)]
 pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
-    let input = FileCompileInput::new(db, docs.file(db).to_string(), docs, Default::default());
+    let re = get_config(db, ConfigEntry::new(db, docs.file(db).to_string()));
+    if re.is_err() {
+        eprintln!("lsp error: {}", re.err().unwrap());
+        return;
+    }
+    let config = re.unwrap();
+    let file = config.entry;
+    let input = FileCompileInput::new(db, file, docs, Default::default());
     compile_dry_file(db, input);
 }
 

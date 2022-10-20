@@ -1,4 +1,5 @@
 use mod1;
+use sub::mod;
 const a = 100;
 fn change(x:&i64) void {
     x = x + 1;
@@ -22,7 +23,6 @@ struct struct_father {
 struct struct_child {
     a : i64;
 }
-
 
 
 // 123
