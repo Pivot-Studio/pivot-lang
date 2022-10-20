@@ -1,11 +1,10 @@
 use std::path::PathBuf;
-#[warn(unused_must_use)]
-pub fn get_config_path(current: &str) -> String {
+
+pub fn get_config_path(current: String) -> Result<String, &'static str> {
     let mut cur_path = PathBuf::from(current);
     if cur_path.is_file() {
         if cur_path.pop() == false {
-            println!("找不到配置文件～");
-            return "".to_string();
+            return Err("找不到配置文件～");
         }
     }
     let dir = cur_path.read_dir().unwrap();
@@ -13,20 +12,23 @@ pub fn get_config_path(current: &str) -> String {
         if let Ok(path) = x {
             if path.file_name().eq("Kagari.toml") {
                 if let Some(p) = cur_path.to_str() {
-                    return p.to_string();
+                    let res = String::from(p.to_string());
+                    return Ok(res);
                 } else {
-                    println!("找不到配置文件～")
+                    return Err("找不到配置文件～");
                 }
             }
         }
     }
     if cur_path.pop() == false {
-        println!("找不到配置文件～");
-        return "".to_string();
+        return Err("找不到配置文件～");
     }
     let mut next_path = String::new();
-    if let Some(p) = cur_path.to_str() {
-        next_path.push_str(&p.to_string());
+
+    if let Some(p) = &cur_path.to_str() {
+        next_path.push_str(&p);
+    } else {
+        return Err("找不到配置文件～");
     }
-    return get_config_path(&next_path);
+    return get_config_path(next_path);
 }
