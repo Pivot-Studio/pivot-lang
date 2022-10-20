@@ -163,7 +163,15 @@ fn main() i64 {
     test_warn();
     return 0;
 }
-
+fn for_loop() void {
+    for let i = 0; i < 10; i = i + 1 {
+        if i==2 {
+            break;
+        }
+        printi64ln(i);
+    }
+    return;
+}
 
 fn test_vm_link() i64;
 fn printi64ln(i: i64) void;//415642154
