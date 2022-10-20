@@ -978,6 +978,7 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                     ret,
                     range,
                     doc,
+                    declare: body.is_none(),
                 },
                 body,
                 range,

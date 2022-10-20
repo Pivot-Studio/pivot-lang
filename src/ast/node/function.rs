@@ -148,7 +148,7 @@ impl Node for FuncDefNode {
             }
             let fu = res.unwrap();
             func = match fu {
-                PLType::FN(fu) => fu.get_value(ctx),
+                PLType::FN(fu) => fu.get_value(ctx,&ctx.plmod),
                 _ => panic!("type error"), // 理论上这两个Panic不可能触发
             };
             func.set_subprogram(subprogram);
@@ -276,13 +276,16 @@ impl Node for FuncCallNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
         let mut para_values = Vec::new();
-        let (_, id, _, _) = self.id.emit(ctx)?;
+        let (v, id, _, _) = self.id.emit(ctx)?;
         let id = id.unwrap();
-        let func = ctx.module.get_function(id.as_str());
+        let func = match v {
+            Value::ExFnValue(f)=> Some(f),
+            _ => None
+        };
         if func.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND));
         }
-        let func = func.unwrap();
+        let (func,fntp) = func.unwrap();
         if func.count_params() != self.paralist.len() as u32 {
             return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
         }
@@ -309,8 +312,7 @@ impl Node for FuncCallNode {
             &para_values,
             format(format_args!("call_{}", id)).as_str(),
         );
-        let fntp = ctx.get_type(&id, self.range)?;
-        if let PLType::FN(fv) = fntp {
+        if let PLType::FN(fv) = &fntp {
             ctx.save_if_comment_doc_hover(self.range, Some(fv.doc.clone()));
             let o = match (ret.try_as_basic_value().left(), fv.ret_pltype.as_ref()) {
                 (Some(v), Some(pltype)) => {
@@ -352,6 +354,7 @@ pub struct FuncTypeNode {
     pub paralist: Vec<Box<TypedIdentifierNode>>,
     pub ret: Box<TypeNameNode>,
     pub doc: Vec<Box<NodeEnum>>,
+    pub declare: bool,
 }
 impl FuncTypeNode {
     pub fn emit_func_type<'a, 'ctx>(
@@ -389,7 +392,12 @@ impl FuncTypeNode {
                 pltype.get_basic_type(&ctx).fn_type(&para_types, false)
             }
         };
-        let func = ctx.module.add_function(self.id.as_str(), func_type, None);
+        let mut name = self.id.clone();
+        if !self.declare {
+            let full = ctx.plmod.get_full_name( self.id.as_str());
+            name = full;
+        }
+        let func = ctx.module.add_function(&name, func_type, None);
         let refs = vec![];
         let ftp = PLType::FN(FNType {
             name: self.id.clone(),

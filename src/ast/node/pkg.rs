@@ -87,30 +87,33 @@ impl Node for ExternIDNode {
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
             ctx.set_if_refs_tp(&tp, self.range);
-            if let Some(range) = tp.get_range() {
-                ctx.send_if_go_to_def(self.range, range, plmod.path.clone());
-            }
-            match tp {
+            let range = tp.get_range();
+            let re =  match tp {
                 PLType::FN(f) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
-                    return Ok((
-                        Value::FnValue(f.get_value(ctx)),
-                        Some(f.name.clone()),
+                    let n = f.name.clone();
+                    Ok((
+                        Value::ExFnValue((f.get_value(ctx,plmod), PLType::FN(f))),
+                        Some(n),
                         TerminatorEnum::NONE,
                         true,
-                    ));
+                    ))
                 }
                 PLType::STRUCT(s) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
-                    return Ok((
+                    Ok((
                         Value::STValue(s.struct_type(ctx)),
                         Some(s.name.clone()),
                         TerminatorEnum::NONE,
                         true,
-                    ));
+                    ))
                 }
                 _ => unreachable!(),
+            };
+            if let Some(range) = range {
+                ctx.send_if_go_to_def(self.range, range, plmod.path.clone());
             }
+            return  re;
         }
         Err(ctx.add_err(self.range, ErrorCode::SYMBOL_NOT_FOUND))
     }

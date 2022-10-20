@@ -188,6 +188,16 @@ impl Mod {
         }
         None
     }
+
+    /// 获取llvm名称
+    /// 
+    /// module路径+类型名
+    pub fn get_full_name(&self, name: &str) -> String {
+        if name=="main"{
+            return name.to_string();
+        }
+        format!("{}.{}", self.path, name)
+    }
 }
 
 /// # PLDiag
@@ -366,7 +376,7 @@ impl PLType {
     pub fn get_basic_type_op<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Option<BasicTypeEnum<'ctx>> {
         match self {
             PLType::FN(f) => Some(
-                f.get_value(ctx)
+                f.get_value(ctx,&ctx.plmod)
                     .get_type()
                     .ptr_type(inkwell::AddressSpace::Global)
                     .as_basic_type_enum(),
@@ -538,7 +548,10 @@ impl FNType {
     /// try get function value from module
     ///
     /// if not found, create a declaration
-    pub fn get_value<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> FunctionValue<'ctx> {
+    pub fn get_value<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, m: &Mod) -> FunctionValue<'ctx> {
+        if let Some(v) = ctx.module.get_function(&m.get_full_name( &self.name)) {
+            return v;
+        }
         if let Some(v) = ctx.module.get_function(&self.name) {
             return v;
         }
@@ -547,11 +560,11 @@ impl FNType {
             .unwrap();
         let mut param_types = vec![];
         for param in self.fntype.paralist.iter() {
-            let pltype = ctx.get_type(&param.tp.id, param.tp.range).unwrap();
+            let pltype = m.get_type(&param.tp.id).unwrap();
             param_types.push(pltype.get_basic_type(ctx).into());
         }
         let fn_type = ret_pltype.get_ret_type(ctx).fn_type(&param_types, false);
-        let fn_value = ctx.module.add_function(&self.name, fn_type, None);
+        let fn_value = ctx.module.add_function(&m.get_full_name( &self.name), fn_type, None);
         fn_value.set_linkage(Linkage::External);
         fn_value
     }

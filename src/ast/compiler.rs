@@ -229,7 +229,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let link = Command::new("clang")
         .arg(format!("-O{}", op.optimization as u32))
         .arg("-pthread")
-        .arg("-ltinfo")
+        // .arg("-ltinfo")
         .arg("-ldl")
         .arg(&f)
         .arg("vm/target/release/libvm.a")
@@ -246,108 +246,108 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     ctx.module.write_bitcode_to_path(Path::new(&out));
 }
 
-#[cfg(test)]
-mod test {
-    use std::{
-        cell::RefCell,
-        sync::{Arc, Mutex},
-    };
+// #[cfg(test)]
+// mod test {
+//     use std::{
+//         cell::RefCell,
+//         sync::{Arc, Mutex},
+//     };
 
-    use crate::{
-        ast::{accumulators::Completions, range::Pos},
-        db::Database,
-        lsp::mem_docs::{MemDocs, MemDocsInput},
-    };
+//     use crate::{
+//         ast::{accumulators::Completions, range::Pos},
+//         db::Database,
+//         lsp::mem_docs::{MemDocs, MemDocsInput},
+//     };
 
-    use super::{compile_dry, ActionType};
+//     use super::{compile_dry, ActionType};
 
-    #[test]
-    fn test_struct_field_completion() {
-        let file = "test/test_completion.pi";
-        let docs = MemDocs::new();
-        let db = Database::default();
-        let input = MemDocsInput::new(
-            &db,
-            Arc::new(Mutex::new(RefCell::new(docs))),
-            file.to_string(),
-            Default::default(),
-            ActionType::Completion,
-            Some((
-                Pos {
-                    line: 9,
-                    column: 9,
-                    offset: 0,
-                },
-                Some(".".to_string()),
-                ActionType::Completion,
-            )),
-        );
-        compile_dry(&db, input);
-        let comps = compile_dry::accumulated::<Completions>(&db, input);
-        assert_eq!(comps.len(), 1);
-        assert_eq!(
-            comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>(),
-            vec!["a".to_string(), "b".to_string(), "c".to_string()]
-        );
-    }
+//     #[test]
+//     fn test_struct_field_completion() {
+//         let file = "test/test_completion.pi";
+//         let docs = MemDocs::new();
+//         let db = Database::default();
+//         let input = MemDocsInput::new(
+//             &db,
+//             Arc::new(Mutex::new(RefCell::new(docs))),
+//             file.to_string(),
+//             Default::default(),
+//             ActionType::Completion,
+//             Some((
+//                 Pos {
+//                     line: 9,
+//                     column: 9,
+//                     offset: 0,
+//                 },
+//                 Some(".".to_string()),
+//                 ActionType::Completion,
+//             )),
+//         );
+//         compile_dry(&db, input);
+//         let comps = compile_dry::accumulated::<Completions>(&db, input);
+//         assert_eq!(comps.len(), 1);
+//         assert_eq!(
+//             comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>(),
+//             vec!["a".to_string(), "b".to_string(), "c".to_string()]
+//         );
+//     }
 
-    #[test]
-    fn test_completion() {
-        let file = "test/test_completion.pi";
-        let docs = MemDocs::new();
-        let db = Database::default();
-        let input = MemDocsInput::new(
-            &db,
-            Arc::new(Mutex::new(RefCell::new(docs))),
-            file.to_string(),
-            Default::default(),
-            ActionType::Completion,
-            Some((
-                Pos {
-                    line: 10,
-                    column: 6,
-                    offset: 0,
-                },
-                None,
-                ActionType::Completion,
-            )),
-        );
-        compile_dry(&db, input);
-        let comps = compile_dry::accumulated::<Completions>(&db, input);
-        assert_eq!(comps.len(), 1);
-        let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
-        assert!(lables.contains(&"test1".to_string()));
-        assert!(lables.contains(&"name".to_string()));
-        assert!(lables.contains(&"if".to_string()));
-    }
-    #[test]
-    fn test_type_completion() {
-        let file = "test/test_completion.pi";
-        let docs = MemDocs::new();
-        let db = Database::default();
-        let input = MemDocsInput::new(
-            &db,
-            Arc::new(Mutex::new(RefCell::new(docs))),
-            file.to_string(),
-            Default::default(),
-            ActionType::Completion,
-            Some((
-                Pos {
-                    line: 5,
-                    column: 7,
-                    offset: 0,
-                },
-                Some(":".to_string()),
-                ActionType::Completion,
-            )),
-        );
-        compile_dry(&db, input);
-        let comps = compile_dry::accumulated::<Completions>(&db, input);
-        assert_eq!(comps.len(), 1);
-        let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
-        // assert!(lables.contains(&"test".to_string())); TODO: self refernece
-        assert!(lables.contains(&"i64".to_string()));
-        assert!(!lables.contains(&"name".to_string()));
-        assert!(lables.contains(&"test1".to_string()));
-    }
-}
+//     #[test]
+//     fn test_completion() {
+//         let file = "test/test_completion.pi";
+//         let docs = MemDocs::new();
+//         let db = Database::default();
+//         let input = MemDocsInput::new(
+//             &db,
+//             Arc::new(Mutex::new(RefCell::new(docs))),
+//             file.to_string(),
+//             Default::default(),
+//             ActionType::Completion,
+//             Some((
+//                 Pos {
+//                     line: 10,
+//                     column: 6,
+//                     offset: 0,
+//                 },
+//                 None,
+//                 ActionType::Completion,
+//             )),
+//         );
+//         compile_dry(&db, input);
+//         let comps = compile_dry::accumulated::<Completions>(&db, input);
+//         assert_eq!(comps.len(), 1);
+//         let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
+//         assert!(lables.contains(&"test1".to_string()));
+//         assert!(lables.contains(&"name".to_string()));
+//         assert!(lables.contains(&"if".to_string()));
+//     }
+//     #[test]
+//     fn test_type_completion() {
+//         let file = "test/test_completion.pi";
+//         let docs = MemDocs::new();
+//         let db = Database::default();
+//         let input = MemDocsInput::new(
+//             &db,
+//             Arc::new(Mutex::new(RefCell::new(docs))),
+//             file.to_string(),
+//             Default::default(),
+//             ActionType::Completion,
+//             Some((
+//                 Pos {
+//                     line: 5,
+//                     column: 7,
+//                     offset: 0,
+//                 },
+//                 Some(":".to_string()),
+//                 ActionType::Completion,
+//             )),
+//         );
+//         compile_dry(&db, input);
+//         let comps = compile_dry::accumulated::<Completions>(&db, input);
+//         assert_eq!(comps.len(), 1);
+//         let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
+//         // assert!(lables.contains(&"test".to_string())); TODO: self refernece
+//         assert!(lables.contains(&"i64".to_string()));
+//         assert!(!lables.contains(&"name".to_string()));
+//         assert!(lables.contains(&"test1".to_string()));
+//     }
+// }
