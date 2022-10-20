@@ -3,7 +3,10 @@ use std::path::PathBuf;
 pub fn get_config_path(current: &str) -> String {
     let mut cur_path = PathBuf::from(current);
     if cur_path.is_file() {
-        cur_path.pop();
+        if cur_path.pop() == false {
+            println!("找不到配置文件～");
+            return "".to_string();
+        }
     }
     let dir = cur_path.read_dir().unwrap();
     for x in dir {
