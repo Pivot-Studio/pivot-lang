@@ -14,7 +14,7 @@ pub struct BoolConstNode {
 }
 
 impl Node for BoolConstNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
         return self.value.to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -38,7 +38,7 @@ pub struct NumNode {
     pub value: Num,
 }
 impl Node for NumNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
         if let Num::INT(x) = self.value {
             return x.to_string();
         } else if let Num::FLOAT(x) = self.value {

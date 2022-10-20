@@ -173,6 +173,13 @@ fn for_loop() void {
     return;
 }
 
+fn while_loop(i: i64) void {
+   while i < 5 {
+    let a = 1;
+   }
+   return;
+}
+
 fn test_vm_link() i64;
 fn printi64ln(i: i64) void;//415642154
 fn printline() void {

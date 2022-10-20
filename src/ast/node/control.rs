@@ -21,17 +21,16 @@ impl Node for IfNode {
         format_res.push_str(" {");
         if let Some(el) = &self.els {
             format_res.push_str(&self.then.format(tabs + 1, prefix));
-            format_res.push_str("\n\r");
             format_res.push_str(&prefix.repeat(tabs));
             format_res.push_str("} else {");
-            format_res.push_str(&prefix.repeat(tabs));
-            format_res.push_str(&el.format(tabs + 1, prefix));
-            format_res.push_str("\n\r");
-            format_res.push_str(&prefix.repeat(tabs));
+            let el_str = &el.format(tabs + 1, prefix);
+            format_res.push_str(&el_str);
+            if el_str.bytes().len() > 0 {
+                format_res.push_str(&prefix.repeat(tabs));
+            }
             format_res.push_str("}")
         } else {
             format_res.push_str(&self.then.format(tabs + 1, prefix));
-            format_res.push_str("\n\r");
             format_res.push_str(&prefix.repeat(tabs));
             format_res.push_str("}");
         }
@@ -117,7 +116,14 @@ pub struct WhileNode {
 
 impl Node for WhileNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        return "hello".to_string();
+        let mut format_res = String::new();
+        format_res.push_str("while ");
+        format_res.push_str(&self.cond.format(tabs, prefix));
+        format_res.push_str(" {");
+        format_res.push_str(&self.body.format(tabs + 1, prefix));
+        format_res.push_str(&prefix.repeat(tabs));
+        format_res.push_str("}");
+        format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -197,7 +203,6 @@ impl Node for ForNode {
         }
         format_res.push_str(" {");
         format_res.push_str(&self.body.format(tabs + 1, prefix));
-        format_res.push_str("\n\r");
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str("}");
 
@@ -318,7 +323,7 @@ impl Node for BreakNode {
 pub struct ContinueNode {}
 
 impl Node for ContinueNode {
-    fn format(&self, _tabs: usize, prefix: &str) -> String {
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
         return "continue".to_string();
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {

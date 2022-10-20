@@ -18,7 +18,6 @@ impl Node for DefNode {
         format_res.push_str(&self.var.format(tabs, prefix));
         format_res.push_str(" = ");
         format_res.push_str(&self.exp.format(tabs, prefix));
-
         format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -152,17 +151,22 @@ pub struct StatementsNode {
 impl Node for StatementsNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
         let mut format_res = String::new();
+        if self.statements.len() == 0 {
+            return "".to_string();
+        }
         for statement in &self.statements {
             format_res.push_str("\n\r");
             format_res.push_str(&prefix.repeat(tabs));
             format_res.push_str(&statement.format(tabs, prefix));
             match &**statement {
                 NodeEnum::For(_) => (),
+                NodeEnum::While(_) => (),
                 _ => {
                     format_res.push_str(";");
                 }
             }
         }
+        format_res.push_str("\n\r");
         return format_res;
     }
 

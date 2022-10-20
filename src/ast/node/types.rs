@@ -19,7 +19,7 @@ pub struct TypeNameNode {
 }
 
 impl TypeNameNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
         let id = &self.id;
         return id.to_string();
     }

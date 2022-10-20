@@ -49,7 +49,6 @@ impl Node for FuncDefNode {
             Some(body) => {
                 format_res.push_str(" {");
                 format_res.push_str(&body.format(tabs + 1, prefix));
-                format_res.push_str("\n\r");
                 format_res.push_str(&prefix.repeat(tabs));
                 format_res.push_str("}");
             }
