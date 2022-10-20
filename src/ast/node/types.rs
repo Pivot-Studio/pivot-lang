@@ -72,6 +72,9 @@ impl TypedIdentifierNode {
         format_res.push_str(": ");
         format_res.push_str(&id);
         format_res.push_str(";");
+        if let Some(doc) = &self.doc {
+            format_res.push_str(&doc.format(tabs, prefix));
+        }
         return format_res;
     }
     pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -97,14 +100,18 @@ pub struct StructDefNode {
 
 impl Node for StructDefNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut i = self.fields.len();
         let mut format_res = String::from("\n\r");
+        let mut doc_str = String::new();
+        for c in self.doc.iter() {
+            doc_str.push_str(&c.format(tabs, prefix));
+            doc_str.push_str("\n\r");
+        }
+        format_res.push_str(&doc_str);
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str("struct ");
         format_res.push_str(&self.id);
         format_res.push_str(" {");
         for field in &self.fields {
-            i -= 1;
             format_res.push_str(&field.format(tabs + 1, prefix));
         }
         format_res.push_str("\n\r");

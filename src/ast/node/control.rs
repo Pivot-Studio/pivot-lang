@@ -14,7 +14,6 @@ pub struct IfNode {
 
 impl Node for IfNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        dbg!(&self);
         let mut format_res = String::new();
         // format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str("if ");

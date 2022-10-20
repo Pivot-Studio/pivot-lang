@@ -9,8 +9,10 @@ pub struct CommentNode {
 }
 
 impl Node for CommentNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        return "hello".to_string();
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
+        let mut format_res = String::from("//");
+        format_res.push_str(&self.comment);
+        format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

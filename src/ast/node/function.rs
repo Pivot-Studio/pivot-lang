@@ -24,6 +24,11 @@ impl Node for FuncDefNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
         let paralist = &self.typenode.paralist;
         let params_print = print_params(&paralist);
+        let mut doc_str = String::new();
+        for c in self.typenode.doc.iter() {
+            doc_str.push_str(&c.format(tabs, prefix));
+            doc_str.push_str("\n\r");
+        }
         let mut format_res = String::from("\n\r");
         let mut ret_type = String::new();
         if self.typenode.ret.is_ref {
@@ -32,6 +37,7 @@ impl Node for FuncDefNode {
         } else {
             ret_type.push_str(&self.typenode.ret.id);
         }
+        format_res.push_str(&doc_str);
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str("fn ");
         format_res.push_str(&self.typenode.id);
