@@ -6,7 +6,7 @@ use super::function::FuncTypeNode;
 use super::types::StructDefNode;
 use super::*;
 use crate::ast::accumulators::*;
-use crate::ast::compiler::compile_dry_file;
+use crate::ast::compiler::{compile_dry_file, ActionType};
 use crate::ast::ctx::{self, create_ctx_info, Ctx, Mod};
 use crate::lsp::mem_docs::{EmitParams, FileCompileInput, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
@@ -108,7 +108,6 @@ pub struct Program {
 impl Program {
     #[salsa::tracked(lru = 32)]
     pub fn emit(self, db: &dyn Db) -> ModWrapper {
-        eprintln!("emit");
         let n = *self.node(db).node(db);
         let prog = match n {
             NodeEnum::Program(p) => p,
@@ -222,8 +221,11 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
             PLReferences::push(db, refe.clone());
         }
     }
-    let b = ctx.semantic_tokens_builder.borrow().build();
-    PLSemanticTokens::push(db, b);
+    if ctx.action.is_some()&&ctx.action.unwrap() == ActionType::SemanticTokensFull {
+        let b = ctx.semantic_tokens_builder.borrow().build();
+        PLSemanticTokens::push(db, b);
+    }
+
     let ci = ctx.completion_items.take();
     Completions::push(db, ci);
     if let Some(c) = ctx.goto_def.take() {

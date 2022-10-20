@@ -32,6 +32,7 @@ use lsp_types::{
 use lsp_server::{Connection, Message};
 
 use mem_docs::MemDocs;
+use rustc_hash::FxHashMap;
 use threadpool::ThreadPool;
 
 use crate::{
@@ -154,7 +155,7 @@ fn main_loop(
         ActionType::Diagnostic,
         None,
     );
-    let mut tokens = vec![];
+    let mut tokens = FxHashMap::default();
 
     eprintln!("starting main loop");
     for msg in &connection.receiver {
@@ -249,20 +250,16 @@ fn main_loop(
         })
         .on::<SemanticTokensFullRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
-            if docin.file(&db).eq(&uri) {
-                docin.set_file(&mut db).to(uri);
-            }
+            docin.set_file(&mut db).to(uri.clone());
             docin.set_action(&mut db).to(ActionType::SemanticTokensFull);
             docin.set_params(&mut db).to(Some((
                 Default::default(),
                 None,
                 ActionType::SemanticTokensFull,
             )));
-            let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(&db, docin);
-            if newtokens.is_empty() {
-                newtokens.push(SemanticTokens::default());
-            }
-            tokens = newtokens[0].data.clone();
+            compile_dry(&db, docin);
+            let newtokens = compile_dry::accumulated::<PLSemanticTokens>(&db, docin);
+            _ = tokens.insert(uri.clone(), newtokens[0].clone());
             let sender = connection.sender.clone();
             pool.execute(move || {
                 send_semantic_tokens(&sender, id, newtokens[0].clone());
@@ -270,13 +267,20 @@ fn main_loop(
         })
         .on::<SemanticTokensFullDeltaRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
-            docin.set_file(&mut db).to(uri);
+            docin.set_file(&mut db).to(uri.clone());
+            docin.set_action(&mut db).to(ActionType::SemanticTokensFull);
+            docin.set_params(&mut db).to(Some((
+                Default::default(),
+                None,
+                ActionType::SemanticTokensFull,
+            )));
+            compile_dry(&db, docin);
             let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(&db, docin);
             if newtokens.is_empty() {
                 newtokens.push(SemanticTokens::default());
             }
-            let delta = diff_tokens(&tokens, &newtokens[0].data);
-            tokens = newtokens[0].data.clone();
+            let old = tokens.insert(uri.clone(), newtokens[0].clone());
+            let delta = diff_tokens(&old.unwrap().data, &newtokens[0].data);
             let sender = connection.sender.clone();
             pool.execute(move || {
                 send_semantic_tokens_edit(
