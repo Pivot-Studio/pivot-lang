@@ -25,7 +25,6 @@ impl Node for GlobalNode {
 }
 impl GlobalNode {
     pub fn emit_global<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
-        ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
         if ctx.get_symbol(&self.var.name).is_some() {
             return Err(ctx.add_err(self.var.range, ErrorCode::REDEFINE_SYMBOL));
         }

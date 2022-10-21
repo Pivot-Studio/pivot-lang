@@ -68,9 +68,6 @@ impl Node for ProgramNode {
         self.fntypes.iter_mut().for_each(|x| {
             _ = x.emit_func_type(ctx);
         });
-        ctx.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
-            ctx.plmod.path.to_string(),
-        ))));
         // init global
         ctx.function = Some(ctx.module.add_function(
             &ctx.plmod.get_full_name("__init_global"),
@@ -86,12 +83,12 @@ impl Node for ProgramNode {
         });
         ctx.nodebug_builder.build_return(None);
         ctx.init_func = Some(ctx.function.unwrap());
+        ctx.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
+            ctx.plmod.path.to_string(),
+        ))));
         // node parser
         self.nodes.iter_mut().for_each(|x| {
-            if let NodeEnum::Global(_) = **x {
-            } else {
-                _ = x.emit(ctx);
-            }
+            _ = x.emit(ctx);
         });
 
         Ok((Value::None, None, TerminatorEnum::NONE, false))

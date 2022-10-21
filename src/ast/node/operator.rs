@@ -232,7 +232,9 @@ impl Node for TakeOpNode {
                     let index;
                     if etype.is_struct_type() {
                         let st = etype.into_struct_type();
-                        let tpname = st.get_name().unwrap().to_str().unwrap();
+                        let tpname = &ctx
+                            .plmod
+                            .get_short_name(st.get_name().unwrap().to_str().unwrap());
                         // end with ".", gen completions
                         ctx.if_completion(|ctx, (pos, trigger)| {
                             if pos.column == id.range().start.column

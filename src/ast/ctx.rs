@@ -192,7 +192,17 @@ impl Mod {
         if name == "main" {
             return name.to_string();
         }
-        format!("{}.{}", self.path, name)
+        format!("{}..{}", self.path, name)
+    }
+    pub fn get_short_name(&self, name: &str) -> String {
+        if name == "main" {
+            return name.to_string();
+        }
+        let re = name.split_once("..");
+        if let Some((_, v)) = re {
+            return v.to_string();
+        }
+        name.to_string()
     }
 }
 
