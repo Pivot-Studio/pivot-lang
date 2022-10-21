@@ -190,10 +190,10 @@ impl Mod {
     }
 
     /// 获取llvm名称
-    /// 
+    ///
     /// module路径+类型名
     pub fn get_full_name(&self, name: &str) -> String {
-        if name=="main"{
+        if name == "main" {
             return name.to_string();
         }
         format!("{}.{}", self.path, name)
@@ -301,6 +301,7 @@ pub enum PLType {
     STRUCT(STType),
     PRIMITIVE(PriType),
     VOID,
+    NAMESPACE(Mod),
 }
 
 fn pri_ty<'ctx>(s: &str, ctx: &'ctx Context) -> BasicTypeEnum<'ctx> {
@@ -348,6 +349,7 @@ impl PLType {
             PLType::STRUCT(s) => Some(s.refs.clone()),
             PLType::PRIMITIVE(_) => None,
             PLType::VOID => None,
+            PLType::NAMESPACE(_) => None,
         }
     }
 
@@ -367,6 +369,7 @@ impl PLType {
             PLType::STRUCT(s) => Some(s.range.clone()),
             PLType::PRIMITIVE(_) => None,
             PLType::VOID => None,
+            PLType::NAMESPACE(_) => None,
         }
     }
 
@@ -376,7 +379,7 @@ impl PLType {
     pub fn get_basic_type_op<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Option<BasicTypeEnum<'ctx>> {
         match self {
             PLType::FN(f) => Some(
-                f.get_value(ctx,&ctx.plmod)
+                f.get_value(ctx, &ctx.plmod)
                     .get_type()
                     .ptr_type(inkwell::AddressSpace::Global)
                     .as_basic_type_enum(),
@@ -384,6 +387,7 @@ impl PLType {
             PLType::STRUCT(s) => Some(s.struct_type(&ctx).as_basic_type_enum()),
             PLType::PRIMITIVE(t) => Some(t.get_basic_type(ctx)),
             PLType::VOID => None,
+            PLType::NAMESPACE(_) => None,
         }
     }
 
@@ -453,6 +457,7 @@ impl PLType {
                 );
             }
             PLType::VOID => None,
+            PLType::NAMESPACE(_) => None,
         }
     }
     pub fn get_di_ref_type<'a, 'ctx>(
@@ -549,7 +554,7 @@ impl FNType {
     ///
     /// if not found, create a declaration
     pub fn get_value<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, m: &Mod) -> FunctionValue<'ctx> {
-        if let Some(v) = ctx.module.get_function(&m.get_full_name( &self.name)) {
+        if let Some(v) = ctx.module.get_function(&m.get_full_name(&self.name)) {
             return v;
         }
         if let Some(v) = ctx.module.get_function(&self.name) {
@@ -564,7 +569,9 @@ impl FNType {
             param_types.push(pltype.get_basic_type(ctx).into());
         }
         let fn_type = ret_pltype.get_ret_type(ctx).fn_type(&param_types, false);
-        let fn_value = ctx.module.add_function(&m.get_full_name( &self.name), fn_type, None);
+        let fn_value = ctx
+            .module
+            .add_function(&m.get_full_name(&self.name), fn_type, None);
         fn_value.set_linkage(Linkage::External);
         fn_value
     }
@@ -1029,6 +1036,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::VOID => CompletionItemKind::KEYWORD,
+                PLType::NAMESPACE(_) => todo!(),
             };
             m.insert(
                 k.to_string(),
@@ -1067,6 +1075,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::VOID => CompletionItemKind::KEYWORD,
+                PLType::NAMESPACE(_) => todo!(),
             };
             vmap.insert(
                 k.to_string(),

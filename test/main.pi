@@ -47,6 +47,7 @@ fn test_struct() void {
     printi64ln(s.c.a);
     mod1::test_mod(a);
     mod2::test_mod(a);
+    mod::name();
     return ;
 }
 fn test_vm() void {

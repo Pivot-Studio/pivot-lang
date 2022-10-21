@@ -115,7 +115,6 @@ impl Program {
         };
 
         let mut modmap = FxHashMap::<String, Mod>::default();
-        let mut submod;
         for u in prog.uses {
             let u = if let NodeEnum::UseNode(p) = *u {
                 p
@@ -126,21 +125,8 @@ impl Program {
                 continue;
             }
             let mut path = PathBuf::from(self.params(db).modpath(db));
-            let mut submodmap = &mut modmap;
             for p in u.ids[0..u.ids.len() - 1].iter() {
                 path = path.join(p.name.clone());
-                if submodmap.contains_key(&p.name) {
-                    submod = submodmap.get_mut(&p.name).unwrap();
-                    submodmap = &mut submod.submods;
-                } else {
-                    let m = Mod::new(
-                        p.name.clone(),
-                        path.with_extension("pi").to_str().unwrap().to_string(),
-                    );
-                    submodmap.insert(p.name.clone(), m);
-                    submod = submodmap.get_mut(&p.name).unwrap();
-                    submodmap = &mut submod.submods;
-                }
             }
             path = path.join(u.ids.last().unwrap().name.clone());
             path = path.with_extension("pi");
@@ -158,7 +144,7 @@ impl Program {
                 continue;
             }
             let m = m.unwrap();
-            submodmap.insert(u.ids.last().unwrap().name.clone(), m.plmod(db));
+            modmap.insert(u.ids.last().unwrap().name.clone(), m.plmod(db));
         }
         let filepath = Path::new(self.params(db).file(db));
         let abs = dunce::canonicalize(filepath).unwrap();
