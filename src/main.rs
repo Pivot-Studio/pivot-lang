@@ -17,6 +17,7 @@ pub struct Jar(
     accumulators::Completions,
     accumulators::PLSemanticTokens,
     accumulators::PLHover,
+    accumulators::ModBuffer,
     program::Program,
     program::Program_emit,
     program::ProgramNodeWrapper,
@@ -123,7 +124,7 @@ fn main() {
             Arc::new(Mutex::new(RefCell::new(mem_docs::MemDocs::new()))),
             abs.to_str().unwrap().to_string(),
             op,
-            ActionType::Diagnostic,
+            ActionType::Compile,
             None,
         );
         compiler::compile(&db, mem, cli.out.clone(), op);

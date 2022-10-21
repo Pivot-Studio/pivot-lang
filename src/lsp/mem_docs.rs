@@ -56,8 +56,8 @@ pub struct FileCompileInput {
 impl FileCompileInput {
     #[salsa::tracked(lru = 32)]
     pub fn get_file_content(self, db: &dyn Db) -> Option<SourceProgram> {
-        let f = self.file(db);
-        eprintln!("get_file_content {}", f);
+        // let f = self.file(db);
+        // eprintln!("get_file_content {}", f);
         let re = self
             .docs(db)
             .docs(db)
@@ -75,12 +75,17 @@ impl FileCompileInput {
     pub fn get_emit_params(self, db: &dyn Db) -> EmitParams {
         let file = self.file(db);
         if self.docs(db).file(db) != file {
+            let action = if self.docs(db).action(db) == ActionType::Compile {
+                ActionType::Compile
+            } else {
+                ActionType::Diagnostic
+            };
             return EmitParams::new(
                 db,
                 file.clone(),
                 self.modpath(db).clone(),
-                ActionType::Diagnostic,
-                Some((Default::default(), None, ActionType::Diagnostic)),
+                action,
+                Some((Default::default(), None, action)),
             );
         }
         let action = self.docs(db).action(db);

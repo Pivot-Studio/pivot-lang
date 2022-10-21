@@ -13,6 +13,7 @@ use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::Db;
 
 use inkwell::context::Context;
+use inkwell::targets::TargetMachine;
 use internal_macro::range;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -72,7 +73,7 @@ impl Node for ProgramNode {
         ))));
         // init global
         ctx.function = Some(ctx.module.add_function(
-            "__init_global",
+            &ctx.plmod.get_full_name("__init_global"),
             ctx.context.void_type().fn_type(&vec![], false),
             None,
         ));
@@ -131,7 +132,7 @@ impl Program {
             path = path.join(u.ids.last().unwrap().name.clone());
             path = path.with_extension("pi");
             let f = path.to_str().unwrap().to_string();
-            eprintln!("use {}", f.clone());
+            // eprintln!("use {}", f.clone());
             let f = FileCompileInput::new(
                 db,
                 f,
@@ -199,6 +200,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     );
     ctx.plmod.submods = params.submods(db);
     let m = &mut ctx;
+    m.module.set_triple(&TargetMachine::get_default_triple());
     let node = params.node(db);
     let mut nn = node.node(db);
     let _ = nn.emit(m);
@@ -206,7 +208,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         db,
         (
             params.fullpath(db).clone(),
-            v.borrow().iter().map(|x| x.get_diagnostic()).collect(),
+            v.borrow().iter().map(|x| x.clone()).collect(),
         ),
     );
     if let Some(c) = ctx.refs.take() {
@@ -226,6 +228,13 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     }
     if let Some(c) = ctx.hover.take() {
         PLHover::push(db, c);
+    }
+    if ctx.action.is_some() && ctx.action.unwrap() == ActionType::Compile {
+        ctx.dibuilder.finalize();
+        let pp = Path::new(params.file(db)).with_extension("bc");
+        let p = pp.as_path();
+        ctx.module.write_bitcode_to_path(p);
+        ModBuffer::push(db, p.clone().to_path_buf());
     }
     ModWrapper::new(db, ctx.plmod)
 }

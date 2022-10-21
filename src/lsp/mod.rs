@@ -320,7 +320,11 @@ fn main_loop(
             let sender = connection.sender.clone();
             pool.execute(move || {
                 for (p, diags) in diags {
-                    send_diagnostics(&sender, p, diags);
+                    send_diagnostics(
+                        &sender,
+                        p,
+                        diags.iter().map(|x| x.get_diagnostic()).collect(),
+                    );
                 }
             });
         })
@@ -339,7 +343,11 @@ fn main_loop(
             let sender = connection.sender.clone();
             pool.execute(move || {
                 for (p, diags) in diags {
-                    send_diagnostics(&sender, p, diags);
+                    send_diagnostics(
+                        &sender,
+                        p,
+                        diags.iter().map(|x| x.get_diagnostic()).collect(),
+                    );
                 }
             });
         })

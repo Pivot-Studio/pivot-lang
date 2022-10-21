@@ -159,11 +159,7 @@ impl Mod {
         refs: Rc<RefCell<Vec<Location>>>,
     ) -> Result<(), PLDiag> {
         if self.global_table.contains_key(&name) {
-            return Err(PLDiag::new_error(
-                self.path.clone(),
-                range,
-                ErrorCode::UNDEFINED_TYPE,
-            ));
+            return Err(PLDiag::new_error(range, ErrorCode::UNDEFINED_TYPE));
         }
         self.global_table.insert(
             name,
@@ -213,26 +209,24 @@ pub enum PLDiag {
 /// Error for pivot-lang
 #[derive(Debug, Clone)]
 pub struct Err {
-    pub msg: String,
     pub diag: Diagnostic,
 }
 #[derive(Debug, Clone)]
 pub struct Warn {
-    pub msg: String,
     pub diag: Diagnostic,
 }
 
 const PL_DIAG_SOURCE: &str = "plsp";
 
 impl PLDiag {
-    pub fn print(&self) {
+    pub fn print(&self, path: &str) {
         match self {
             PLDiag::Error(s) => {
                 let err = format!(
                     "error at {}\n\t{}",
                     format!(
                         "{}:{}:{}",
-                        s.msg,
+                        path,
                         s.diag.range.start.line + 1,
                         s.diag.range.start.character + 1
                     )
@@ -246,7 +240,7 @@ impl PLDiag {
                     "warn at {}\n\t{}",
                     format!(
                         "{}:{}:{}",
-                        s.msg,
+                        path,
                         s.diag.range.start.line + 1,
                         s.diag.range.start.character + 1
                     )
@@ -270,7 +264,7 @@ impl PLDiag {
             PLDiag::Warn(w) => w.diag.clone(),
         }
     }
-    pub fn new_error(file: String, range: Range, code: ErrorCode) -> Self {
+    pub fn new_error(range: Range, code: ErrorCode) -> Self {
         let diag = Diagnostic::new_with_code_number(
             range.to_diag_range(),
             DiagnosticSeverity::ERROR,
@@ -278,9 +272,9 @@ impl PLDiag {
             Some(PL_DIAG_SOURCE.to_string()),
             ERR_MSG[&code].to_string(),
         );
-        PLDiag::Error(Err { msg: file, diag })
+        PLDiag::Error(Err { diag })
     }
-    pub fn new_warn(file: String, range: Range, code: WarnCode) -> Self {
+    pub fn new_warn(range: Range, code: WarnCode) -> Self {
         let diag = Diagnostic::new_with_code_number(
             range.to_diag_range(),
             DiagnosticSeverity::WARNING,
@@ -288,7 +282,7 @@ impl PLDiag {
             Some(PL_DIAG_SOURCE.to_string()),
             WARN_MSG[&code].to_string(),
         );
-        PLDiag::Warn(Warn { msg: file, diag })
+        PLDiag::Warn(Warn { diag })
     }
 }
 
@@ -569,10 +563,11 @@ impl FNType {
             param_types.push(pltype.get_basic_type(ctx).into());
         }
         let fn_type = ret_pltype.get_ret_type(ctx).fn_type(&param_types, false);
-        let fn_value = ctx
-            .module
-            .add_function(&m.get_full_name(&self.name), fn_type, None);
-        fn_value.set_linkage(Linkage::External);
+        let fn_value = ctx.module.add_function(
+            &m.get_full_name(&self.name),
+            fn_type,
+            Some(Linkage::External),
+        );
         fn_value
     }
 }
@@ -877,11 +872,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             let re = father.get_type(name, range);
             return re;
         }
-        Err(PLDiag::new_error(
-            self.plmod.path.clone(),
-            range,
-            ErrorCode::UNDEFINED_TYPE,
-        ))
+        Err(PLDiag::new_error(range, ErrorCode::UNDEFINED_TYPE))
     }
     /// 用来获取外部模块的全局变量
     /// 如果没在当前module的全局变量表中找到，将会生成一个
@@ -909,12 +900,12 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn add_err(&mut self, range: Range, code: ErrorCode) -> PLDiag {
-        let dia = PLDiag::new_error(self.plmod.path.to_string(), range, code);
+        let dia = PLDiag::new_error(range, code);
         self.errs.borrow_mut().push(dia.clone());
         dia
     }
     pub fn add_warn(&mut self, range: Range, code: WarnCode) -> PLDiag {
-        let dia = PLDiag::new_warn(self.plmod.path.to_string(), range, code);
+        let dia = PLDiag::new_warn(range, code);
         self.errs.borrow_mut().push(dia.clone());
         dia
     }

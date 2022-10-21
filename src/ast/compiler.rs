@@ -1,6 +1,9 @@
 use super::{dot, node::program::ModWrapper};
 use crate::{
-    ast::node::{program::Program, Node},
+    ast::{
+        accumulators::{Diagnostics, ModBuffer},
+        node::program::Program,
+    },
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
     utils::read_config::{get_config, ConfigEntry},
@@ -13,10 +16,8 @@ use inkwell::{
     targets::{FileType, InitializationConfig, Target, TargetMachine},
     OptimizationLevel,
 };
-use std::{cell::RefCell, fs, path::Path, time::Instant};
+use std::{fs, path::Path, time::Instant};
 use std::{path::PathBuf, process::Command};
-
-use super::ctx::{self, create_ctx_info};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Copy)]
 pub struct Options {
@@ -85,6 +86,7 @@ pub enum ActionType {
     SemanticTokensFull,
     Diagnostic,
     Hover,
+    Compile,
 }
 
 #[cfg(feature = "jit")]
@@ -144,48 +146,17 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
 #[salsa::tracked]
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let now = Instant::now();
-    let context = &Context::create();
-    let filepath = Path::new(docs.file(db));
-    let abs = dunce::canonicalize(filepath).unwrap();
-    let dir = abs.parent().unwrap().to_str().unwrap();
-    let fname = abs.file_name().unwrap().to_str().unwrap();
-
-    let (a, b, c, d, e, f) = create_ctx_info(context, dir, fname);
-    let v = RefCell::new(Vec::new());
-    let mut ctx = ctx::Ctx::new(
-        context,
-        &a,
-        &b,
-        &c,
-        &d,
-        &e,
-        &f,
-        abs.to_str().unwrap(),
-        &v,
-        None,
-        None,
-    );
-    let m = &mut ctx;
-    m.module.set_triple(&TargetMachine::get_default_triple());
-    let src = docs.get_file_content(db).unwrap();
-    let parse_result = parse(db, src);
-    if let Err(e) = parse_result {
-        println!("{}", e);
-        return;
-    }
-    let node = parse_result.unwrap();
-    if op.printast {
-        node.node(db).print(0, true, vec![]);
-    }
-    let mut nn = node.node(db);
-    _ = nn.emit(m);
-    let errs = m.errs.borrow();
+    compile_dry(db, docs);
+    let errs = compile_dry::accumulated::<Diagnostics>(db, docs);
     let mut errs_num = 0;
     if errs.len() > 0 {
         for e in errs.iter() {
-            e.print();
-            if e.is_err() {
-                errs_num = errs_num + 1
+            let path = &e.0;
+            for e in e.1.iter() {
+                e.print(&path);
+                if e.is_err() {
+                    errs_num = errs_num + 1
+                }
             }
         }
         if errs_num > 0 {
@@ -205,27 +176,28 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
             return;
         }
     }
-    if op.optimization.to_llvm() == OptimizationLevel::None {
-        m.dibuilder.finalize();
+    let mut mods = compile_dry::accumulated::<ModBuffer>(db, docs);
+    let ctx = Context::create();
+    let m = mods.pop().unwrap();
+    let llvmmod = Module::parse_bitcode_from_path(m, &ctx).unwrap();
+    for m in mods {
+        _ = llvmmod.link_in_module(Module::parse_bitcode_from_path(m, &ctx).unwrap());
     }
     if op.genir {
         let mut s = out.to_string();
         s.push_str(".ll");
         let llp = Path::new(&s[..]);
-        fs::write(llp, m.module.to_string()).unwrap();
+        fs::write(llp, llvmmod.to_string()).unwrap();
     }
-    m.module.verify().unwrap();
-    let time = now.elapsed();
-    if op.verbose {
-        println!("compile succ, time: {:?}", time);
-    }
+    llvmmod.verify().unwrap();
     let tm = get_target_machine(op.optimization.to_llvm());
     let mut f = out.to_string();
-    f.push_str(".o");
+    f.push_str(".asm");
+    tm.write_to_file(&llvmmod, FileType::Assembly, Path::new(&f))
+        .unwrap();
     let mut fo = out.to_string();
     fo.push_str(".out");
-    tm.write_to_file(ctx.module, FileType::Object, Path::new(&f))
-        .unwrap();
+    llvmmod.write_bitcode_to_path(Path::new(&out));
     let link = Command::new("clang")
         .arg(format!("-O{}", op.optimization as u32))
         .arg("-pthread")
@@ -235,6 +207,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         .arg("vm/target/release/libvm.a")
         .arg("-o")
         .arg(&fo)
+        .arg("-g")
         .status();
     if link.is_err() || !link.unwrap().success() {
         println!("warning: link with pivot lang vm failed, could be caused by vm pkg not found.");
@@ -242,8 +215,9 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     } else {
         println!("link succ, output file: {}", fo);
     }
-    //  TargetMachine::get_default_triple()
-    ctx.module.write_bitcode_to_path(Path::new(&out));
+    // //  TargetMachine::get_default_triple()
+    let time = now.elapsed();
+    println!("compile succ, time: {:?}", time);
 }
 
 // #[cfg(test)]
