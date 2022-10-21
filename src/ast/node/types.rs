@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 
 use super::primary::VarNode;
@@ -10,6 +9,7 @@ use crate::ast::range::Range;
 use inkwell::types::{AnyType, BasicType};
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
+use rustc_hash::FxHashMap;
 #[range]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeNameNode {
@@ -114,7 +114,7 @@ impl StructDefNode {
             ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL);
             return Ok(());
         }
-        let mut fields = BTreeMap::<String, Field>::new();
+        let mut fields = FxHashMap::<String, Field>::default();
         let mut order_fields = Vec::<Field>::new();
         let mut i = 0;
         for field in self.fields.iter() {
@@ -226,7 +226,7 @@ impl Node for StructInitNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.push_semantic_token(self.tp.range, SemanticTokenType::STRUCT, 0);
-        let mut fields = HashMap::<String, (BasicValueEnum<'ctx>, Range)>::new();
+        let mut fields = FxHashMap::<String, (BasicValueEnum<'ctx>, Range)>::default();
         for field in self.fields.iter_mut() {
             let range = field.range();
             if let (Value::StructFieldValue((id, val)), _, _, _) = field.emit(ctx)? {

@@ -35,9 +35,8 @@ use lsp_types::Url;
 use rustc_hash::FxHashMap;
 use std::cell::Cell;
 use std::cell::RefCell;
-use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::path::Path;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use super::compiler::get_target_machine;
@@ -204,6 +203,52 @@ impl Mod {
         }
         name.to_string()
     }
+    fn get_ns_completions_pri(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
+        for (k, _) in self.submods.iter() {
+            vmap.insert(
+                k.to_string(),
+                CompletionItem {
+                    label: k.to_string(),
+                    kind: Some(CompletionItemKind::MODULE),
+                    ..Default::default()
+                },
+            );
+        }
+    }
+    pub fn get_ns_completions(&self) -> Vec<CompletionItem> {
+        let mut m = FxHashMap::default();
+        self.get_ns_completions_pri(&mut m);
+        let cm = m.iter().map(|(_, v)| v.clone()).collect();
+        cm
+    }
+}
+
+fn get_ns_path_completions_pri(path: &str, vmap: &mut FxHashMap<String, CompletionItem>) {
+    for k in PathBuf::from(path).read_dir().unwrap() {
+        if let Ok(d) = k {
+            let buf = d.path();
+            if !buf.is_dir() && buf.extension().is_some() && buf.extension().unwrap() != "pi" {
+                continue;
+            }
+            let buf = PathBuf::from(d.path().file_stem().unwrap().to_str().unwrap());
+            let x = buf.file_name().unwrap().to_str().unwrap();
+            vmap.insert(
+                x.to_string(),
+                CompletionItem {
+                    label: x.to_string(),
+                    kind: Some(CompletionItemKind::MODULE),
+                    ..Default::default()
+                },
+            );
+        }
+    }
+}
+
+pub fn get_ns_path_completions(path: &str) -> Vec<CompletionItem> {
+    let mut m = FxHashMap::default();
+    get_ns_path_completions_pri(path, &mut m);
+    let cm = m.iter().map(|(_, v)| v.clone()).collect();
+    cm
 }
 
 /// # PLDiag
@@ -585,7 +630,7 @@ impl FNType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct STType {
     pub name: String,
-    pub fields: BTreeMap<String, Field>,
+    pub fields: FxHashMap<String, Field>,
     pub ordered_fields: Vec<Field>,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
@@ -733,7 +778,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         sender: Option<ActionType>,
         completion: Option<(Pos, Option<String>, ActionType)>,
     ) -> Ctx<'a, 'ctx> {
-        let f = Path::new(src_file_path)
+        let f = Path::new(Path::new(src_file_path).file_stem().unwrap())
             .file_name()
             .take()
             .unwrap()
@@ -1023,22 +1068,24 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn get_completions(&self) -> Vec<CompletionItem> {
-        let mut m = HashMap::new();
+        let mut m = FxHashMap::default();
         self.get_var_completions(&mut m);
         self.get_pltp_completions(&mut m);
         self.get_keyword_completions(&mut m);
+        self.plmod.get_ns_completions_pri(&mut m);
 
         let cm = m.iter().map(|(_, v)| v.clone()).collect();
         cm
     }
 
     pub fn get_type_completions(&self) -> Vec<CompletionItem> {
-        let mut m = HashMap::new();
+        let mut m = FxHashMap::default();
         self.get_tp_completions(&mut m);
+        self.plmod.get_ns_completions_pri(&mut m);
         m.iter().map(|(_, v)| v.clone()).collect()
     }
 
-    fn get_tp_completions(&self, m: &mut HashMap<String, CompletionItem>) {
+    fn get_tp_completions(&self, m: &mut FxHashMap<String, CompletionItem>) {
         for (k, f) in self.plmod.types.iter() {
             let tp = match f {
                 PLType::FN(_) => continue,
@@ -1061,7 +1108,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }
     }
 
-    fn get_var_completions(&self, vmap: &mut HashMap<String, CompletionItem>) {
+    fn get_var_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         for (k, _) in self.table.iter() {
             vmap.insert(
                 k.to_string(),
@@ -1077,7 +1124,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }
     }
 
-    fn get_pltp_completions(&self, vmap: &mut HashMap<String, CompletionItem>) {
+    fn get_pltp_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         for (k, f) in self.plmod.types.iter() {
             let tp = match f {
                 PLType::FN(_) => CompletionItemKind::FUNCTION,
@@ -1108,12 +1155,12 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         )
     }
 
-    fn get_keyword_completions(&self, vmap: &mut HashMap<String, CompletionItem>) {
+    fn get_keyword_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         let keywords = vec![
             "if", "else", "while", "for", "return", "struct", "let", "true", "false",
         ];
         let loopkeys = vec!["break", "continue"];
-        let toplevel = vec!["fn", "struct"];
+        let toplevel = vec!["fn", "struct", "const", "use"];
         if self.father.is_none() {
             for k in toplevel {
                 vmap.insert(

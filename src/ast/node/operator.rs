@@ -237,8 +237,7 @@ impl Node for TakeOpNode {
                             .get_short_name(st.get_name().unwrap().to_str().unwrap());
                         // end with ".", gen completions
                         ctx.if_completion(|ctx, (pos, trigger)| {
-                            if pos.column == id.range().start.column
-                                && pos.line == id.range().start.line
+                            if pos.is_in(id.range)
                                 && trigger.is_some()
                                 && trigger.as_ref().unwrap() == "."
                             {

@@ -1,8 +1,10 @@
+use std::path::PathBuf;
+
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 
 use crate::ast::{
-    ctx::{Ctx, PLType},
+    ctx::{get_ns_path_completions, Ctx, PLType},
     diag::ErrorCode,
     node::{deal_line, tab},
 };
@@ -17,6 +19,7 @@ pub struct UseNode {
     /// use a::b 完整
     /// use a::b:: 不完整
     pub complete: bool,
+    pub siglecolon: bool,
 }
 
 impl Node for UseNode {
@@ -32,8 +35,42 @@ impl Node for UseNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let pb = PathBuf::from(&ctx.plmod.path);
+        let mut path = pb.parent().unwrap().to_path_buf();
+        let mut fullpath = path.clone();
+        let mut i = 0;
         for id in &self.ids {
             ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
+            if !self.complete {
+                path = path.join(&self.ids[i].name);
+            } else if i > 0 && self.complete {
+                path = path.join(&self.ids[i - 1].name);
+            }
+            fullpath = fullpath.join(&self.ids[i].name);
+            i = i + 1;
+        }
+        if !fullpath.with_extension("pi").exists() {
+            ctx.add_err(self.range, crate::ast::diag::ErrorCode::UNRESOLVED_MODULE);
+        }
+        let mname = ctx.plmod.name.clone();
+        ctx.if_completion(|a, (pos, _)| {
+            if pos.is_in(self.range) {
+                a.action = None;
+                if self.siglecolon {
+                    return;
+                }
+                let mut completions = get_ns_path_completions(path.to_str().unwrap());
+                if self.ids.len() < 2 {
+                    completions = completions
+                        .into_iter()
+                        .filter(|a| a.label != mname)
+                        .collect();
+                }
+                a.completion_items.set(completions);
+            }
+        });
+        if !self.complete {
+            return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
         }
         Ok((Value::None, None, TerminatorEnum::NONE, false))
     }

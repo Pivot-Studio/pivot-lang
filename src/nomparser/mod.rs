@@ -141,6 +141,7 @@ pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, S
 #[test_parser("use a::b")]
 #[test_parser("use a::")]
 #[test_parser("use a")]
+#[test_parser("use a:")]
 pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         preceded(
@@ -149,22 +150,30 @@ pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 identifier,
                 many0(preceded(tag_token(TokenType::DOUBLE_COLON), identifier)),
                 opt(tag_token(TokenType::DOUBLE_COLON)),
+                opt(tag_token(TokenType::COLON)),
             ))),
         ),
-        |(first, rest, opt)| {
+        |(first, rest, opt, opt2)| {
             let mut path = vec![first];
             path.extend(rest);
-            let range = path
-                .first()
+            let mut range = path.first().unwrap().range().start.to(path
+                .last()
                 .unwrap()
                 .range()
-                .start
-                .to(path.last().unwrap().range().end);
+                .end);
+            if opt.is_some() {
+                range = range.start.to(opt.unwrap().1.end);
+            }
+            if opt2.is_some() {
+                range = range.start.to(opt2.unwrap().1.end);
+            }
+
             let ids = path.iter().map(|s| Box::new(cast_to_var(s))).collect();
             res_enum(NodeEnum::UseNode(UseNode {
                 ids,
                 range,
-                complete: opt.is_none(),
+                complete: opt.is_none() && opt2.is_none(),
+                siglecolon: opt2.is_some(),
             }))
         },
     )(input)
