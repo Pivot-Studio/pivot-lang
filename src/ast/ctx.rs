@@ -584,11 +584,15 @@ pub struct STType {
 
 impl STType {
     pub fn struct_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> StructType<'ctx> {
-        let st = ctx.module.get_struct_type(&self.name);
+        let st = ctx
+            .module
+            .get_struct_type(&ctx.plmod.get_full_name(&self.name));
         if let Some(st) = st {
             return st;
         }
-        let st = ctx.context.opaque_struct_type(&self.name);
+        let st = ctx
+            .context
+            .opaque_struct_type(&ctx.plmod.get_full_name(&self.name));
         st.set_body(
             &self
                 .ordered_fields
@@ -915,7 +919,11 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
     // load type** and type* to type
     pub fn try_load2var(&mut self, v: Value<'ctx>) -> Value<'ctx> {
-        match v.as_basic_value_enum() {
+        let basic_value_op = v.as_basic_value_enum_op();
+        if basic_value_op.is_none() {
+            return Value::None;
+        }
+        match basic_value_op.unwrap() {
             BasicValueEnum::IntValue(v) => match v.get_type().get_bit_width() {
                 8 => Value::BoolValue(v),
                 64 => Value::IntValue(v),

@@ -21,6 +21,7 @@ impl Node for DefNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
+        let exp_range = self.exp.range();
         let (value, pltype_opt, _, _) = self.exp.emit(ctx)?;
         // for err tolerate
         if pltype_opt.is_none() {
@@ -42,7 +43,11 @@ impl Node for DefNode {
             )
         } else {
             let ditype = ditype.clone();
-            (ctx.try_load2var(value).as_basic_value_enum(), ditype)
+            let loadv = ctx.try_load2var(value);
+            if let Value::None = loadv {
+                return Err(ctx.add_err(exp_range, ErrorCode::UNDEFINED_TYPE));
+            }
+            (loadv.as_basic_value_enum(), ditype)
         };
         let base_type = base_value.get_type();
         let ptr2value = alloc(ctx, base_type, &self.var.name);

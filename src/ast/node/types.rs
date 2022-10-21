@@ -136,7 +136,9 @@ impl StructDefNode {
             i = i + 1;
         }
         let name = self.id.as_str();
-        let st = ctx.context.opaque_struct_type(name);
+        let st = ctx
+            .context
+            .opaque_struct_type(&ctx.plmod.get_full_name(name));
         let newf = order_fields.clone();
         st.set_body(
             &order_fields
