@@ -43,3 +43,40 @@ steps:
       - chmod +x bash
       - /bin/bash "bash"
       - echo "Uploaded code coverage"
+
+---
+kind: pipeline
+type: docker
+name: book
+trigger:
+  branch: 
+    - gh-pages
+steps:
+  - name: docker  
+    image: plugins/docker
+    settings:
+      username: 
+        from_secret: "docker_user_name"
+      password: 
+        from_secret: "docker_pass"
+      repo: registry.cn-hangzhou.aliyuncs.com/pivotstudio/lang-docs
+      registry: registry.cn-hangzhou.aliyuncs.com
+      mirror: https://jtkrmusq.mirror.aliyuncs.com
+      tags:
+        - latest
+        - build-${DRONE_BUILD_NUMBER} 
+    when:
+      branch:
+       - master
+      event:
+      - push
+  - name: k8s cd
+    image: ghcr.io/bh90210/dron8s:latest
+    pull: if-not-exists
+    depends_on:
+      - "docker"
+    settings:
+      yaml: book.yaml
+      build_tag: build-${DRONE_BUILD_NUMBER}
+      kubeconfig: 
+        from_secret: KUBE_CONFIG_RAW
