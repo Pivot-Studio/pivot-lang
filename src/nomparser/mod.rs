@@ -715,17 +715,20 @@ pub fn continue_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("a")]
 #[test_parser("a:")]
 #[test_parser("a::")]
-/// extern_identifier = (identifier "::")* ;
 fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
-        tuple((pair(
-            identifier,
-            many0(preceded(
-                tag_token(TokenType::DOUBLE_COLON),
-                delspace(identifier),
-            )),
-        ),opt(tag_token(TokenType::DOUBLE_COLON)),opt(tag_token(TokenType::COLON)))),
-        |((a, mut b),opt,opt2)| {
+        tuple((
+            pair(
+                identifier,
+                many0(preceded(
+                    tag_token(TokenType::DOUBLE_COLON),
+                    delspace(identifier),
+                )),
+            ),
+            opt(tag_token(TokenType::DOUBLE_COLON)), // 容忍未写完的语句
+            opt(tag_token(TokenType::COLON)),        // 容忍未写完的语句
+        )),
+        |((a, mut b), opt, opt2)| {
             b.insert(0, a);
             let mut ns: Vec<Box<VarNode>> = b.iter().map(|x| Box::new(cast_to_var(x))).collect();
             let id = ns.pop().unwrap();

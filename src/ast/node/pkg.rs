@@ -76,6 +76,11 @@ impl Node for UseNode {
     }
 }
 
+
+/// # ExternIDNode
+/// 外部符号节点，可能会退化为内部符号节点（VarNode）
+/// 
+/// TODO: 区分该节点与ExternTypeName节点，该节点不生成类型，只生成函数与变量/常量
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ExternIDNode {
@@ -99,11 +104,15 @@ impl Node for ExternIDNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if self.ns.is_empty() {
             if self.complete {
+                // 如果该节点只有一个id，且完整，那么就是一个普通的包内符号，直接调用idnode
                 return self.id.emit(ctx);
             }
             ctx.if_completion(|a, (pos, _)| {
                 if pos.is_in(self.range) {
+                    // 如果completion请求对应的区域在本节点内
+                    // 那么将action设成None防止外层节点生成错误的completion
                     a.action = None;
+                    // 如果是单冒号，不要生成auto complete
                     if self.singlecolon {
                         return;
                     }
