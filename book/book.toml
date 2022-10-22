@@ -1,0 +1,6 @@
+[book]
+authors = ["The pivot-lang Authors"]
+language = "en"
+multilingual = true
+src = "src"
+title = "Pivot Lang"
