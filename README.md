@@ -7,6 +7,7 @@
 ![codecov](https://codecov.io/gh/Pivot-Studio/pivot-lang/branch/master/graphs/sunburst.svg?token=CA17PWK0EG)
 
 此项目目前处于早期开发阶段，不建议用于生产环境。  
+[项目地址](https://github.com/Pivot-Studio/pivot-lang)
 
 ## dependencies
 - [llvm-14](https://github.com/llvm/llvm-project/releases/tag/llvmorg-14.0.6)
