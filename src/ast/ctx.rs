@@ -1078,6 +1078,55 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         cm
     }
 
+    pub fn get_completions_in_ns(&self, ns: &str) -> Vec<CompletionItem> {
+        let mut m = FxHashMap::default();
+        // self.get_var_completions_in_ns(ns, &mut m);
+        // self.get_pltp_completions_in_ns(ns, &mut m);
+        // self.get_keyword_completions_in_ns(ns, &mut m);
+        // self.plmod.get_ns_completions_pri_in_ns(ns, &mut m);
+        self.get_const_completions_in_ns(ns,&mut m);
+        self.get_type_completions_in_ns(ns,&mut m);
+
+        let cm = m.iter().map(|(_, v)| v.clone()).collect();
+        cm
+    }
+
+
+    fn get_const_completions_in_ns(&self, ns: &str, m: &mut FxHashMap<String, CompletionItem>) {
+        let ns = self.plmod.submods.get(ns);
+        if let Some(ns) = ns {
+            for (k, v) in ns.global_table.iter() {
+                let mut item =  CompletionItem {
+                    label: k.to_string(),
+                    kind: Some(CompletionItemKind::CONSTANT),
+                    ..Default::default()
+                };
+                item.detail = Some(v.tp.to_string());
+                m.insert(k.clone(), item);
+            }
+        }
+    }
+
+    fn get_type_completions_in_ns(&self, ns: &str, m: &mut FxHashMap<String, CompletionItem>) {
+        let ns = self.plmod.submods.get(ns);
+        if let Some(ns) = ns {
+            for (k, v) in ns.types.iter() {
+                let tp = match v {
+                    PLType::STRUCT(_) => CompletionItemKind::STRUCT,
+                    PLType::FN(_) => CompletionItemKind::FUNCTION,
+                    _ => continue,// skip completion for primary types
+                };
+                let mut item =  CompletionItem {
+                    label: k.to_string(),
+                    kind: Some(tp),
+                    ..Default::default()
+                };
+                item.detail = Some(k.to_string());
+                m.insert(k.clone(), item);
+            }
+        }
+    }
+
     pub fn get_type_completions(&self) -> Vec<CompletionItem> {
         let mut m = FxHashMap::default();
         self.get_tp_completions(&mut m);

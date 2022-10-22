@@ -19,7 +19,7 @@ pub struct UseNode {
     /// use a::b 完整
     /// use a::b:: 不完整
     pub complete: bool,
-    pub siglecolon: bool,
+    pub singlecolon: bool,
 }
 
 impl Node for UseNode {
@@ -56,7 +56,7 @@ impl Node for UseNode {
         ctx.if_completion(|a, (pos, _)| {
             if pos.is_in(self.range) {
                 a.action = None;
-                if self.siglecolon {
+                if self.singlecolon {
                     return;
                 }
                 let mut completions = get_ns_path_completions(path.to_str().unwrap());
@@ -81,6 +81,8 @@ impl Node for UseNode {
 pub struct ExternIDNode {
     pub ns: Vec<Box<VarNode>>,
     pub id: Box<VarNode>,
+    pub complete: bool,
+    pub singlecolon: bool,
 }
 
 impl Node for ExternIDNode {
@@ -96,7 +98,21 @@ impl Node for ExternIDNode {
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if self.ns.is_empty() {
-            return self.id.emit(ctx);
+            if self.complete {
+                return self.id.emit(ctx);
+            }
+            ctx.if_completion(|a, (pos, _)| {
+                if pos.is_in(self.range) {
+                    a.action = None;
+                    if self.singlecolon {
+                        return;
+                    }
+                    let completions = a.get_completions_in_ns(&self.id.name);
+                    // eprintln!("comp {:?}", completions);
+                    a.completion_items.set(completions);
+                }
+            });
+            return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
         }
         for id in &self.ns {
             ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);

@@ -173,7 +173,7 @@ pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 ids,
                 range,
                 complete: opt.is_none() && opt2.is_none(),
-                siglecolon: opt2.is_some(),
+                singlecolon: opt2.is_some(),
             }))
         },
     )(input)
@@ -713,25 +713,36 @@ pub fn continue_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("a::a")]
 #[test_parser("b::c::b")]
 #[test_parser("a")]
+#[test_parser("a:")]
+#[test_parser("a::")]
 /// extern_identifier = (identifier "::")* ;
 fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
-        pair(
-            many0(terminated(
-                delspace(identifier),
-                tag_token(TokenType::DOUBLE_COLON),
-            )),
+        tuple((pair(
             identifier,
-        ),
-        |(a, b)| {
-            let ns = a.iter().map(|x| Box::new(cast_to_var(x))).collect();
-            let id = cast_to_var(&b);
-            let range = id.range();
+            many0(preceded(
+                tag_token(TokenType::DOUBLE_COLON),
+                delspace(identifier),
+            )),
+        ),opt(tag_token(TokenType::DOUBLE_COLON)),opt(tag_token(TokenType::COLON)))),
+        |((a, mut b),opt,opt2)| {
+            b.insert(0, a);
+            let mut ns: Vec<Box<VarNode>> = b.iter().map(|x| Box::new(cast_to_var(x))).collect();
+            let id = ns.pop().unwrap();
+            let mut range = id.range();
+            if opt.is_some() {
+                range = range.start.to(opt.unwrap().1.end);
+            }
+            if opt2.is_some() {
+                range = range.start.to(opt2.unwrap().1.end);
+            }
             res_enum(
                 ExternIDNode {
                     ns,
-                    id: Box::new(id),
+                    id,
                     range,
+                    complete: opt.is_none() && opt2.is_none(),
+                    singlecolon: opt2.is_some(),
                 }
                 .into(),
             )

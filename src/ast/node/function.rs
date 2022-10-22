@@ -274,7 +274,6 @@ impl Node for FuncCallNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
         let mut para_values = Vec::new();
         let (v, id, _, _) = self.id.emit(ctx)?;
         let id = id.unwrap();
