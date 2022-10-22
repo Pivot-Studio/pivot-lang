@@ -9,6 +9,9 @@ trigger:
   - promote
   - rollback
   - custom
+  branch: 
+    exclude:
+      - "gh-pages"
 steps:
   - name: code cov
     image: registry.cn-hangzhou.aliyuncs.com/pivotstudio/rust-pl:latest
