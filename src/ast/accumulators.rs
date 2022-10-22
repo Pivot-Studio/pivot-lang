@@ -1,12 +1,14 @@
-use lsp_types::{
-    CompletionItem, Diagnostic, GotoDefinitionResponse, Hover, Location, SemanticTokens,
-};
+use std::{cell::RefCell, path::PathBuf, rc::Rc};
+
+use lsp_types::{CompletionItem, GotoDefinitionResponse, Hover, Location, SemanticTokens};
+
+use super::ctx::PLDiag;
 
 #[salsa::accumulator]
-pub struct Diagnostics(Diagnostic);
+pub struct Diagnostics((String, Vec<PLDiag>));
 
 #[salsa::accumulator]
-pub struct PLReferences(Location);
+pub struct PLReferences(Rc<RefCell<Vec<Location>>>);
 
 #[salsa::accumulator]
 pub struct GotoDef(GotoDefinitionResponse);
@@ -19,3 +21,6 @@ pub struct PLSemanticTokens(SemanticTokens);
 
 #[salsa::accumulator]
 pub struct PLHover(Hover);
+
+#[salsa::accumulator]
+pub struct ModBuffer(PathBuf);

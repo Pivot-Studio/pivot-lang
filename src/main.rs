@@ -4,19 +4,27 @@ pub struct Jar(
     nomparser::parse,
     mem_docs::MemDocsInput,
     mem_docs::MemDocsInput_get_file_content,
-    mem_docs::MemDocsInput_get_emit_params,
     mem_docs::EmitParams,
+    mem_docs::FileCompileInput,
+    mem_docs::FileCompileInput_get_file_content,
+    mem_docs::FileCompileInput_get_emit_params,
     compiler::compile,
     compiler::compile_dry,
+    compiler::compile_dry_file,
     accumulators::Diagnostics,
     accumulators::PLReferences,
     accumulators::GotoDef,
     accumulators::Completions,
     accumulators::PLSemanticTokens,
     accumulators::PLHover,
+    accumulators::ModBuffer,
     program::Program,
     program::Program_emit,
     program::ProgramNodeWrapper,
+    program::ModWrapper,
+    program::ProgramEmitParam,
+    program::emit_file,
+    utils::read_config::ConfigEntry,
 );
 
 pub trait Db: salsa::DbWithJar<Jar> {}
@@ -28,7 +36,11 @@ mod db;
 mod lsp;
 mod nomparser;
 mod utils;
-use std::{cell::RefCell, path::Path, sync::Arc};
+use std::{
+    cell::RefCell,
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 use ast::{
     accumulators,
@@ -114,10 +126,10 @@ fn main() {
         };
         let mem = MemDocsInput::new(
             &db,
-            Arc::new(RefCell::new(mem_docs::MemDocs::new())),
+            Arc::new(Mutex::new(RefCell::new(mem_docs::MemDocs::new()))),
             abs.to_str().unwrap().to_string(),
             op,
-            ActionType::Diagnostic,
+            ActionType::Compile,
             None,
         );
         compiler::compile(&db, mem, cli.out.clone(), op);

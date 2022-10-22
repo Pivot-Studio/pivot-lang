@@ -5,7 +5,13 @@
 //! - completion
 //! - goto definition
 //! - find references
-use std::{cell::RefCell, error::Error, sync::Arc, thread::available_parallelism, time::Instant};
+use std::{
+    cell::RefCell,
+    error::Error,
+    sync::{Arc, Mutex},
+    thread::available_parallelism,
+    time::Instant,
+};
 
 pub mod dispatcher;
 pub mod helpers;
@@ -26,6 +32,7 @@ use lsp_types::{
 use lsp_server::{Connection, Message};
 
 use mem_docs::MemDocs;
+use rustc_hash::FxHashMap;
 use threadpool::ThreadPool;
 
 use crate::{
@@ -139,7 +146,7 @@ fn main_loop(
     let pool = ThreadPool::new(n_workers);
     let mut db = db::Database::default();
     let _params: InitializeParams = serde_json::from_value(params).unwrap();
-    let docs = Arc::new(RefCell::new(MemDocs::new()));
+    let docs = Arc::new(Mutex::new(RefCell::new(MemDocs::new())));
     let docin = MemDocsInput::new(
         &db,
         docs.clone(),
@@ -148,7 +155,7 @@ fn main_loop(
         ActionType::Diagnostic,
         None,
     );
-    let mut tokens = vec![];
+    let mut tokens = FxHashMap::default();
 
     eprintln!("starting main loop");
     for msg in &connection.receiver {
@@ -216,8 +223,14 @@ fn main_loop(
             compile_dry(&db, docin);
             let refs = compile_dry::accumulated::<PLReferences>(&db, docin);
             let sender = connection.sender.clone();
+            let mut rf = vec![];
+            for r in refs {
+                for r in r.borrow().iter() {
+                    rf.push(r.clone());
+                }
+            }
             pool.execute(move || {
-                send_references(&sender, id, &refs);
+                send_references(&sender, id, &rf);
             });
         })
         .on::<Completion, _>(|id, params| {
@@ -243,20 +256,19 @@ fn main_loop(
         })
         .on::<SemanticTokensFullRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
-            if docin.file(&db).eq(&uri) {
-                docin.set_file(&mut db).to(uri);
-            }
+            docin.set_file(&mut db).to(uri.clone());
             docin.set_action(&mut db).to(ActionType::SemanticTokensFull);
             docin.set_params(&mut db).to(Some((
                 Default::default(),
                 None,
                 ActionType::SemanticTokensFull,
             )));
+            compile_dry(&db, docin);
             let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(&db, docin);
             if newtokens.is_empty() {
                 newtokens.push(SemanticTokens::default());
             }
-            tokens = newtokens[0].data.clone();
+            _ = tokens.insert(uri.clone(), newtokens[0].clone());
             let sender = connection.sender.clone();
             pool.execute(move || {
                 send_semantic_tokens(&sender, id, newtokens[0].clone());
@@ -264,13 +276,20 @@ fn main_loop(
         })
         .on::<SemanticTokensFullDeltaRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
-            docin.set_file(&mut db).to(uri);
+            docin.set_file(&mut db).to(uri.clone());
+            docin.set_action(&mut db).to(ActionType::SemanticTokensFull);
+            docin.set_params(&mut db).to(Some((
+                Default::default(),
+                None,
+                ActionType::SemanticTokensFull,
+            )));
+            compile_dry(&db, docin);
             let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(&db, docin);
             if newtokens.is_empty() {
                 newtokens.push(SemanticTokens::default());
             }
-            let delta = diff_tokens(&tokens, &newtokens[0].data);
-            tokens = newtokens[0].data.clone();
+            let old = tokens.insert(uri.clone(), newtokens[0].clone());
+            let delta = diff_tokens(&old.unwrap().data, &newtokens[0].data);
             let sender = connection.sender.clone();
             pool.execute(move || {
                 send_semantic_tokens_edit(
@@ -286,7 +305,7 @@ fn main_loop(
         .on_noti::<DidChangeTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
             for content_change in params.content_changes.iter() {
-                docs.borrow_mut().change(
+                docs.lock().unwrap().borrow_mut().change(
                     content_change.range.unwrap().clone(),
                     f.clone(),
                     content_change.text.clone(),
@@ -300,12 +319,20 @@ fn main_loop(
             let diags = compile_dry::accumulated::<Diagnostics>(&db, docin);
             let sender = connection.sender.clone();
             pool.execute(move || {
-                send_diagnostics(&sender, f, diags.clone());
+                for (p, diags) in diags {
+                    send_diagnostics(
+                        &sender,
+                        p,
+                        diags.iter().map(|x| x.get_diagnostic()).collect(),
+                    );
+                }
             });
         })
         .on_noti::<DidOpenTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
-            docs.borrow_mut()
+            docs.lock()
+                .unwrap()
+                .borrow_mut()
                 .insert(f.clone(), params.text_document.text);
             docin.set_docs(&mut db).to(docs.clone());
             docin.set_file(&mut db).to(f.clone());
@@ -315,12 +342,18 @@ fn main_loop(
             let diags = compile_dry::accumulated::<Diagnostics>(&db, docin);
             let sender = connection.sender.clone();
             pool.execute(move || {
-                send_diagnostics(&sender, f.clone(), diags.clone());
+                for (p, diags) in diags {
+                    send_diagnostics(
+                        &sender,
+                        p,
+                        diags.iter().map(|x| x.get_diagnostic()).collect(),
+                    );
+                }
             });
         })
         .on_noti::<DidCloseTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
-            docs.borrow_mut().remove(&f);
+            docs.lock().unwrap().borrow_mut().remove(&f);
             docin.set_docs(&mut db).to(docs.clone());
         });
         let elapsed = now.elapsed();

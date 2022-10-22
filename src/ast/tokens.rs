@@ -7,6 +7,7 @@ macro_rules! define_tokens {
         $ident:ident = $string_keyword:expr
     ),*) => {
         #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash)]
+        #[allow(non_camel_case_types)]
         pub enum TokenType {
             $($ident),*
         }
@@ -58,7 +59,10 @@ define_tokens!(
     RETURN = "return",
     DOT = ".",
     SEMI = ";",
-    REF = "&"
+    REF = "&",
+    CONST = "const",
+    USE = "use",
+    DOUBLE_COLON = "::"
 );
 impl TokenType {
     pub fn get_str(&self) -> &'static str {

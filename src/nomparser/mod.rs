@@ -21,6 +21,8 @@ use crate::{
             comment::CommentNode,
             error::{ErrorNode, STErrorNode},
             function::{FuncCallNode, FuncDefNode, FuncTypeNode},
+            global::GlobalNode,
+            pkg::{ExternIDNode, UseNode},
             types::{StructDefNode, TypeNameNode, TypedIdentifierNode},
         },
         tokens::TOKEN_STR_MAP,
@@ -129,8 +131,54 @@ pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, S
     if let Err(e) = re {
         return Err(format!("{:?}", e));
     }
+    // eprintln!("parse");
     Ok(ProgramNodeWrapper::new(db, re.unwrap().1))
 }
+
+/// ```enbf
+/// use_statement = "use" identifier ("::" identifier)* ;
+/// ```
+#[test_parser("use a::b")]
+#[test_parser("use a::")]
+#[test_parser("use a")]
+#[test_parser("use a:")]
+pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    map_res(
+        preceded(
+            tag_token(TokenType::USE),
+            delspace(tuple((
+                identifier,
+                many0(preceded(tag_token(TokenType::DOUBLE_COLON), identifier)),
+                opt(tag_token(TokenType::DOUBLE_COLON)),
+                opt(tag_token(TokenType::COLON)),
+            ))),
+        ),
+        |(first, rest, opt, opt2)| {
+            let mut path = vec![first];
+            path.extend(rest);
+            let mut range = path.first().unwrap().range().start.to(path
+                .last()
+                .unwrap()
+                .range()
+                .end);
+            if opt.is_some() {
+                range = range.start.to(opt.unwrap().1.end);
+            }
+            if opt2.is_some() {
+                range = range.start.to(opt2.unwrap().1.end);
+            }
+
+            let ids = path.iter().map(|s| Box::new(cast_to_var(s))).collect();
+            res_enum(NodeEnum::UseNode(UseNode {
+                ids,
+                range,
+                complete: opt.is_none() && opt2.is_none(),
+                singlecolon: opt2.is_some(),
+            }))
+        },
+    )(input)
+}
+
 #[test_parser("return 1;")]
 #[test_parser("return 1.1;")]
 #[test_parser("return true;")]
@@ -338,15 +386,8 @@ pub fn empty_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 
 pub fn comment(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
-        delimited(
-            tag("//"),
-            recognize(alt((
-                alpha1::<Span, nom::error::Error<Span>>,
-                take_until("\n"),
-            ))),
-            tag("\n"),
-        ),
-        |c| {
+        delimited(tag("//"), take_until("\n"), tag("\n")),
+        |c: LocatedSpan<&str>| {
             res_enum(
                 CommentNode {
                     comment: c.to_string(),
@@ -372,7 +413,12 @@ pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
         del_newline_or_space!(tag_token(TokenType::RBRACE)),
     ))(input)
 }
-
+/// # semi_statement
+/// 将原始parser接上一个分号
+///
+/// 对缺少分号的情况能自动进行错误容忍
+///
+/// 所有分号结尾的statement都应该使用这个宏来处理分号
 macro_rules! semi_statement {
     ($e:expr) => {
         alt((terminated($e, tag_token(TokenType::SEMI)), map_res(tuple(($e,recognize(many0(alt((tag("\n"), tag("\r\n"), tag(" "), tag("\t"))))))), |(node,e)|{
@@ -430,16 +476,30 @@ pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 enum TopLevel {
     StructDef(StructDefNode),
     FuncDef(FuncDefNode),
-    Comment(Box<NodeEnum>),
-    ErrNode(Box<NodeEnum>),
+    GlobalDef(GlobalNode),
+    Common(Box<NodeEnum>),
+    Use(Box<NodeEnum>),
 }
 
 fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
     delspace(alt((
         del_newline_or_space!(function_def),
         del_newline_or_space!(struct_def),
+        map_res(
+            del_newline_or_space!(semi_statement!(global_variable)),
+            |node| {
+                Ok::<_, Error>(Box::new(if let NodeEnum::Global(g) = *node {
+                    TopLevel::GlobalDef(g)
+                } else {
+                    TopLevel::Common(node)
+                }))
+            },
+        ),
         map_res(del_newline_or_space!(comment), |c| {
-            Ok::<_, Error>(Box::new(TopLevel::Comment(c)))
+            Ok::<_, Error>(Box::new(TopLevel::Common(c)))
+        }),
+        map_res(del_newline_or_space!(semi_statement!(use_statement)), |c| {
+            Ok::<_, Error>(Box::new(TopLevel::Use(c)))
         }),
         map_res(
             del_newline_or_space!(except(
@@ -447,7 +507,7 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
                 "failed to parse top level statement",
                 ErrorCode::SYNTAX_ERROR_TOP_STATEMENT
             )),
-            |e| Ok::<_, Error>(Box::new(TopLevel::ErrNode(e))),
+            |e| Ok::<_, Error>(Box::new(TopLevel::Common(e))),
         ),
     )))(input)
 }
@@ -470,8 +530,10 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let old = input;
     let mut input = input;
     let mut nodes = vec![];
-    let mut sts = vec![];
+    let mut structs = vec![];
     let mut fntypes = vec![];
+    let mut globaldefs = vec![];
+    let mut uses = vec![];
     loop {
         let top = top_level_statement(input);
         if let Ok((i, t)) = top {
@@ -481,14 +543,19 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     nodes.push(Box::new(f.into()));
                 }
                 TopLevel::StructDef(s) => {
-                    sts.push(s.clone());
+                    structs.push(s.clone());
                     nodes.push(Box::new(s.into()));
                 }
-                TopLevel::Comment(c) => {
+                TopLevel::Common(c) => {
                     nodes.push(c);
                 }
-                TopLevel::ErrNode(e) => {
-                    nodes.push(e);
+                TopLevel::GlobalDef(g) => {
+                    globaldefs.push(g.clone());
+                    nodes.push(Box::new(g.into()));
+                }
+                TopLevel::Use(b) => {
+                    uses.push(b.clone());
+                    nodes.push(b);
                 }
             }
             input = i;
@@ -506,9 +573,11 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let node: Box<NodeEnum> = Box::new(
         ProgramNode {
             nodes,
-            structs: sts,
+            structs,
             fntypes,
+            globaldefs,
             range: Range::new(old, input),
+            uses,
         }
         .into(),
     );
@@ -541,6 +610,23 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 }
                 .into(),
             )
+        },
+    ))(input)
+}
+
+#[test_parser("const a = 1")]
+fn global_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    delspace(map_res(
+        tuple((
+            tag_token(TokenType::CONST),
+            identifier,
+            tag_token(TokenType::ASSIGN),
+            logic_exp,
+        )),
+        |(_, out, _, exp)| {
+            let var = cast_to_var(&out);
+            let range = out.range().start.to(exp.range().end);
+            res_enum(GlobalNode { var, exp, range }.into())
         },
     ))(input)
 }
@@ -624,6 +710,49 @@ pub fn continue_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     )(input)
 }
 
+#[test_parser("a::a")]
+#[test_parser("b::c::b")]
+#[test_parser("a")]
+#[test_parser("a:")]
+#[test_parser("a::")]
+fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    delspace(map_res(
+        tuple((
+            pair(
+                identifier,
+                many0(preceded(
+                    tag_token(TokenType::DOUBLE_COLON),
+                    delspace(identifier),
+                )),
+            ),
+            opt(tag_token(TokenType::DOUBLE_COLON)), // 容忍未写完的语句
+            opt(tag_token(TokenType::COLON)),        // 容忍未写完的语句
+        )),
+        |((a, mut b), opt, opt2)| {
+            b.insert(0, a);
+            let mut ns: Vec<Box<VarNode>> = b.iter().map(|x| Box::new(cast_to_var(x))).collect();
+            let id = ns.pop().unwrap();
+            let mut range = id.range();
+            if opt.is_some() {
+                range = range.start.to(opt.unwrap().1.end);
+            }
+            if opt2.is_some() {
+                range = range.start.to(opt2.unwrap().1.end);
+            }
+            res_enum(
+                ExternIDNode {
+                    ns,
+                    id,
+                    range,
+                    complete: opt.is_none() && opt2.is_none(),
+                    singlecolon: opt2.is_some(),
+                }
+                .into(),
+            )
+        },
+    ))(input)
+}
+
 #[test_parser("-1")]
 #[test_parser("!a")]
 #[test_parser("&a")]
@@ -693,7 +822,7 @@ pub fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
         ),
         function_call,
         struct_init,
-        identifier,
+        extern_identifier,
     )))(input)
 }
 #[test_parser("true")]
@@ -872,6 +1001,7 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                     ret,
                     range,
                     doc,
+                    declare: body.is_none(),
                 },
                 body,
                 range,
@@ -886,7 +1016,7 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
 pub fn function_call(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
-            identifier,
+            extern_identifier,
             tag_token(TokenType::LPAREN),
             opt(tuple((
                 del_newline_or_space!(logic_exp),
@@ -898,7 +1028,11 @@ pub fn function_call(input: Span) -> IResult<Span, Box<NodeEnum>> {
             tag_token(TokenType::RPAREN),
         )),
         |(id, _, paras, _)| {
-            let id = cast_to_var(&id);
+            let range = id.range();
+            let id = match *id {
+                NodeEnum::ExternIDNode(id) => id,
+                _ => unreachable!(),
+            };
             let mut paralist = vec![];
             if let Some(paras) = paras {
                 paralist.push(paras.0);
@@ -906,9 +1040,9 @@ pub fn function_call(input: Span) -> IResult<Span, Box<NodeEnum>> {
             }
             res_enum(
                 FuncCallNode {
-                    id: id.name,
+                    id,
                     paralist,
-                    range: id.range,
+                    range,
                 }
                 .into(),
             )
@@ -972,11 +1106,11 @@ fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             many0(comment),
             tag_token(TokenType::STRUCT),
             identifier,
-            tag_token(TokenType::LBRACE),
+            del_newline_or_space!(tag_token(TokenType::LBRACE)),
             many0(map_res(tuple((struct_field, opt(comment))), |(f, c)| {
                 Ok::<_, Error>((f, c))
             })),
-            tag_token(TokenType::RBRACE),
+            del_newline_or_space!(tag_token(TokenType::RBRACE)),
         )),
         |(doc, _, id, _, fields, _)| {
             let id = cast_to_var(&id);

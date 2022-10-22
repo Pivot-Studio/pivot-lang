@@ -29,14 +29,15 @@ impl Node for DefNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
-        let (value, pltype_opt, _) = self.exp.emit(ctx)?;
+        let exp_range = self.exp.range();
+        let (value, pltype_opt, _, _) = self.exp.emit(ctx)?;
         // for err tolerate
-        let mut tp = "i64".to_string();
-        if pltype_opt.is_some() {
-            tp = pltype_opt.unwrap();
+        if pltype_opt.is_none() {
+            return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
         }
-        let pltype_name = tp;
-        let (pltype, ditype) = ctx.get_type(pltype_name.as_str(), self.range).unwrap();
+        let pltype_name = pltype_opt.unwrap();
+        let pltype = ctx.get_type(pltype_name.as_str(), self.range).unwrap();
+        let ditype = pltype.get_ditype(ctx);
         let (base_value, debug_type) = if let Value::RefValue(ref_value) = value {
             (
                 ref_value.as_basic_value_enum(),
@@ -50,7 +51,11 @@ impl Node for DefNode {
             )
         } else {
             let ditype = ditype.clone();
-            (ctx.try_load2var(value).as_basic_value_enum(), ditype)
+            let loadv = ctx.try_load2var(value);
+            if let Value::None = loadv {
+                return Err(ctx.add_err(exp_range, ErrorCode::UNDEFINED_TYPE));
+            }
+            (loadv.as_basic_value_enum(), ditype)
         };
         let base_type = base_value.get_type();
         let ptr2value = alloc(ctx, base_type, &self.var.name);
@@ -77,12 +82,13 @@ impl Node for DefNode {
             ptr2value,
             pltype_name.clone(),
             self.var.range,
+            false,
         );
         if re.is_err() {
             return Err(re.unwrap_err());
         }
         ctx.builder.build_store(ptr2value, base_value);
-        return Ok((Value::None, None, TerminatorEnum::NONE));
+        return Ok((Value::None, None, TerminatorEnum::NONE, false));
     }
 }
 #[range]
@@ -108,8 +114,11 @@ impl Node for AssignNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let vrange = self.var.range();
-        let (ptr, _, _) = self.var.emit(ctx)?;
-        let (value, _, _) = self.exp.emit(ctx)?;
+        let (ptr, _, _, is_const) = self.var.emit(ctx)?;
+        if is_const {
+            return Err(ctx.add_err(vrange, ErrorCode::ASSIGN_CONST));
+        }
+        let (value, _, _, _) = self.exp.emit(ctx)?;
         let ptr = ctx.try_load2ptr(ptr);
         if let Value::VarValue(ptr) = ptr {
             let load = ctx.try_load2var(value);
@@ -119,7 +128,7 @@ impl Node for AssignNode {
                 return Err(ctx.add_err(self.range, ErrorCode::ASSIGN_TYPE_MISMATCH));
             }
             ctx.builder.build_store(ptr, load.as_basic_value_enum());
-            return Ok((Value::None, None, TerminatorEnum::NONE));
+            return Ok((Value::None, None, TerminatorEnum::NONE, false));
         }
         Err(ctx.add_err(vrange, ErrorCode::NOT_ASSIGNABLE))
     }
@@ -139,7 +148,7 @@ impl Node for EmptyNode {
         println!("EmptyNode");
     }
     fn emit<'a, 'ctx>(&'a mut self, _: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        Ok((Value::None, None, TerminatorEnum::NONE))
+        Ok((Value::None, None, TerminatorEnum::NONE, false))
     }
 }
 
@@ -200,10 +209,10 @@ impl Node for StatementsNode {
             if re.is_err() {
                 continue;
             }
-            let (_, _, terminator_res) = re.unwrap();
+            let (_, _, terminator_res, _) = re.unwrap();
             terminator = terminator_res;
         }
-        Ok((Value::None, None, terminator))
+        Ok((Value::None, None, terminator, false))
     }
 }
 

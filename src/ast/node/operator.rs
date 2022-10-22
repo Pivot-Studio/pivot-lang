@@ -4,12 +4,12 @@ use crate::ast::ctx::Ctx;
 use crate::ast::ctx::PLType;
 use crate::ast::tokens::TokenType;
 
+use crate::ast::diag::ErrorCode;
 use crate::handle_calc;
 use inkwell::IntPredicate;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 use paste::item;
-
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UnaryOpNode {
@@ -33,10 +33,13 @@ impl Node for UnaryOpNode {
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let (exp, pltype, _) = self.exp.emit(ctx)?;
+        let (exp, pltype, _, is_const) = self.exp.emit(ctx)?;
         if let (&Value::VarValue(_), TokenType::REF) = (&exp, self.op) {
+            if is_const {
+                return Err(ctx.add_err(self.range, ErrorCode::REF_CONST));
+            }
             if let Value::VarValue(exp) = ctx.try_load2ptr(exp) {
-                return Ok((Value::RefValue(exp), pltype, TerminatorEnum::NONE));
+                return Ok((Value::RefValue(exp), pltype, TerminatorEnum::NONE, false));
             }
             todo!()
         }
@@ -46,11 +49,13 @@ impl Node for UnaryOpNode {
                 Value::IntValue(ctx.builder.build_int_neg(exp, "negtmp")),
                 pltype,
                 TerminatorEnum::NONE,
+                is_const,
             ),
             (Value::FloatValue(exp), TokenType::MINUS) => (
                 Value::FloatValue(ctx.builder.build_float_neg(exp, "negtmp")),
                 pltype,
                 TerminatorEnum::NONE,
+                is_const,
             ),
             (Value::BoolValue(exp), TokenType::NOT) => (
                 Value::BoolValue({
@@ -65,12 +70,10 @@ impl Node for UnaryOpNode {
                 }),
                 pltype,
                 TerminatorEnum::NONE,
+                is_const,
             ),
             (_exp, _op) => {
-                return Err(ctx.add_err(
-                    self.range,
-                    crate::ast::diag::ErrorCode::INVALID_UNARY_EXPRESSION,
-                ));
+                return Err(ctx.add_err(self.range, ErrorCode::INVALID_UNARY_EXPRESSION));
             }
         });
     }
@@ -103,9 +106,9 @@ impl Node for BinOpNode {
         self.right.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let (lv, lpltype, _) = self.left.emit(ctx)?;
+        let (lv, lpltype, _, _) = self.left.emit(ctx)?;
         let left = ctx.try_load2var(lv);
-        let (rv, rpltype, _) = self.right.emit(ctx)?;
+        let (rv, rpltype, _, _) = self.right.emit(ctx)?;
         let right = ctx.try_load2var(rv);
         if lpltype != rpltype {
             return Err(ctx.add_err(
@@ -137,6 +140,7 @@ impl Node for BinOpNode {
                     }),
                     Some("bool".to_string()),
                     TerminatorEnum::NONE,
+                    true,
                 ),
                 (Value::FloatValue(lhs), Value::FloatValue(rhs)) => (
                     Value::BoolValue({
@@ -151,6 +155,7 @@ impl Node for BinOpNode {
                     }),
                     Some("bool".to_string()),
                     TerminatorEnum::NONE,
+                    true,
                 ),
                 _ => {
                     return Err(ctx.add_err(
@@ -171,6 +176,7 @@ impl Node for BinOpNode {
                     }),
                     Some("bool".to_string()),
                     TerminatorEnum::NONE,
+                    true,
                 ),
                 _ => {
                     return Err(
@@ -190,6 +196,7 @@ impl Node for BinOpNode {
                     }),
                     Some("bool".to_string()),
                     TerminatorEnum::NONE,
+                    true,
                 ),
                 _ => {
                     return Err(
@@ -239,7 +246,7 @@ impl Node for TakeOpNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut range = self.head.range();
         let head = self.head.emit(ctx)?;
-        let (mut res, mut pltype, _) = head;
+        let (mut res, mut pltype, _, is_const) = head;
         if self.ids.len() != 0 {
             res = ctx.try_load2ptr(res);
         }
@@ -250,15 +257,16 @@ impl Node for TakeOpNode {
                     let index;
                     if etype.is_struct_type() {
                         let st = etype.into_struct_type();
-                        let tpname = st.get_name().unwrap().to_str().unwrap();
+                        let tpname = &ctx
+                            .plmod
+                            .get_short_name(st.get_name().unwrap().to_str().unwrap());
                         // end with ".", gen completions
                         ctx.if_completion(|ctx, (pos, trigger)| {
-                            if pos.column == id.range().start.column
-                                && pos.line == id.range().start.line
+                            if pos.is_in(id.range)
                                 && trigger.is_some()
                                 && trigger.as_ref().unwrap() == "."
                             {
-                                let (tp, _) = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
+                                let tp = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
                                 if let PLType::STRUCT(s) = tp {
                                     let completions = s.get_completions();
                                     ctx.completion_items.set(completions);
@@ -266,7 +274,7 @@ impl Node for TakeOpNode {
                                 }
                             }
                         });
-                        let (tp, _) = ctx.get_type(tpname, range).unwrap();
+                        let tp = ctx.get_type(tpname, range).expect(tpname);
                         range = id.range();
                         ctx.push_semantic_token(range, SemanticTokenType::PROPERTY, 0);
                         if let PLType::STRUCT(s) = tp {
@@ -275,7 +283,7 @@ impl Node for TakeOpNode {
                                 index = field.index;
                                 pltype = Some(field.typename.id.clone());
                                 ctx.set_if_refs(field.refs.clone(), range);
-                                ctx.send_if_go_to_def(range, field.range);
+                                ctx.send_if_go_to_def(range, field.range, ctx.plmod.path.clone());
                             } else {
                                 return Err(ctx.add_err(
                                     id.range,
@@ -299,7 +307,7 @@ impl Node for TakeOpNode {
             // end with ".", gen completions
             ctx.if_completion(|ctx, (pos, trigger)| {
                 if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
-                    let (tp, _) = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
+                    let tp = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
                     if let PLType::STRUCT(s) = tp {
                         let completions = s.get_completions();
                         ctx.completion_items.set(completions);
@@ -310,6 +318,6 @@ impl Node for TakeOpNode {
 
             return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
         }
-        Ok((res, pltype, TerminatorEnum::NONE))
+        Ok((res, pltype, TerminatorEnum::NONE, is_const))
     }
 }

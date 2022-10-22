@@ -1,5 +1,5 @@
 use super::*;
-use crate::ast::ctx::Ctx;
+use crate::ast::ctx::{Ctx, PLType};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node;
 
@@ -28,6 +28,7 @@ impl Node for BoolConstNode {
             Value::BoolValue(ctx.context.i8_type().const_int(self.value as u64, true)),
             Some("bool".to_string()),
             TerminatorEnum::NONE,
+            true,
         ))
     }
 }
@@ -59,6 +60,7 @@ impl Node for NumNode {
                 Value::IntValue(b),
                 Some("i64".to_string()),
                 TerminatorEnum::NONE,
+                true,
             ));
         } else if let Num::FLOAT(x) = self.value {
             let b = ctx.context.f64_type().const_float(x);
@@ -66,6 +68,7 @@ impl Node for NumNode {
                 Value::FloatValue(b),
                 Some("f64".to_string()),
                 TerminatorEnum::NONE,
+                true,
             ));
         }
         panic!("not implemented")
@@ -95,16 +98,36 @@ impl Node for VarNode {
             }
         });
         let v = ctx.get_symbol(&self.name);
-        ctx.push_semantic_token(self.range, SemanticTokenType::VARIABLE, 0);
-        if let Some((v, pltype, dst, refs)) = v {
+        if let Some((v, pltype, dst, refs, is_const)) = v {
+            ctx.push_semantic_token(self.range, SemanticTokenType::VARIABLE, 0);
             let o = Ok((
                 Value::VarValue(v.clone()),
                 Some(pltype),
                 TerminatorEnum::NONE,
+                is_const,
             ));
-            ctx.send_if_go_to_def(self.range, dst);
+            ctx.send_if_go_to_def(self.range, dst, ctx.plmod.path.clone());
             ctx.set_if_refs(refs, self.range);
             return o;
+        }
+        if let Ok(tp) = ctx.get_type(&self.name, self.range) {
+            if let PLType::FN(f) = tp {
+                ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
+                return Ok((
+                    Value::ExFnValue((f.get_value(ctx, &ctx.plmod), PLType::FN(f.clone()))),
+                    Some(f.name.clone()),
+                    TerminatorEnum::NONE,
+                    true,
+                ));
+            } else if let PLType::STRUCT(s) = tp {
+                ctx.push_semantic_token(self.range, SemanticTokenType::STRUCT, 0);
+                return Ok((
+                    Value::STValue(s.struct_type(ctx)),
+                    Some(s.name.clone()),
+                    TerminatorEnum::NONE,
+                    true,
+                ));
+            }
         }
         Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND))
     }

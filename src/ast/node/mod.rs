@@ -3,27 +3,33 @@ use crate::ast::ctx::Ctx;
 use as_any::AsAny;
 use enum_dispatch::enum_dispatch;
 use inkwell::basic_block::BasicBlock;
-use inkwell::types::BasicTypeEnum;
-use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
+use inkwell::types::{BasicTypeEnum, StructType};
+use inkwell::values::{
+    BasicValue, BasicValueEnum, FloatValue, FunctionValue, IntValue, PointerValue,
+};
 
 use self::comment::CommentNode;
 use self::control::*;
 use self::error::*;
 use self::function::*;
+use self::global::*;
 use self::operator::*;
+use self::pkg::{ExternIDNode, UseNode};
 use self::primary::*;
 use self::ret::*;
 use self::statement::*;
 use self::types::*;
 
-use super::ctx::PLDiag;
+use super::ctx::{PLDiag, PLType};
 use super::range::{Pos, Range};
 
 pub mod comment;
 pub mod control;
 pub mod error;
 pub mod function;
+pub mod global;
 pub mod operator;
+pub mod pkg;
 pub mod primary;
 pub mod program;
 pub mod ret;
@@ -66,6 +72,9 @@ pub enum Value<'a> {
     LoadValue(BasicValueEnum<'a>),
     RefValue(PointerValue<'a>),
     StructFieldValue((String, BasicValueEnum<'a>)),
+    FnValue(FunctionValue<'a>),
+    STValue(StructType<'a>),
+    ExFnValue((FunctionValue<'a>, PLType)),
     None,
 }
 
@@ -82,6 +91,9 @@ impl<'a> Value<'a> {
             Value::BoolValue(v) => Some(v.as_basic_value_enum()),
             Value::LoadValue(v) => Some(*v),
             Value::StructFieldValue((_, v)) => Some(*v),
+            Value::STValue(_) => None,
+            Value::FnValue(_) => None,
+            Value::ExFnValue(_) => None,
             Value::None => None,
         }
     }
@@ -115,6 +127,9 @@ pub enum NodeEnum {
     Program(program::ProgramNode),
     STInitField(StructInitFieldNode),
     STErrorNode(STErrorNode),
+    Global(GlobalNode),
+    UseNode(UseNode),
+    ExternIDNode(ExternIDNode),
 }
 
 #[enum_dispatch]
@@ -129,7 +144,15 @@ pub trait Node: RangeTrait + AsAny {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
 }
 
-type NodeResult<'ctx> = Result<(Value<'ctx>, Option<String>, TerminatorEnum), PLDiag>;
+type NodeResult<'ctx> = Result<
+    (
+        Value<'ctx>,
+        Option<String>, //type
+        TerminatorEnum,
+        bool, // isconst
+    ),
+    PLDiag,
+>;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Num {
@@ -233,11 +256,11 @@ macro_rules! handle_calc {
             match ($left, $right) {
                 (Value::IntValue(left), Value::IntValue(right)) => {
                     return Ok((Value::IntValue($ctx.builder.[<build_int_$op>](
-                        left, right, "addtmp")),Some("i64".to_string()),TerminatorEnum::NONE));
+                        left, right, "addtmp")),Some("i64".to_string()),TerminatorEnum::NONE,false));
                 },
                 (Value::FloatValue(left), Value::FloatValue(right)) => {
                     return Ok((Value::FloatValue($ctx.builder.[<build_$opf>](
-                        left, right, "addtmp")),Some("f64".to_string()),TerminatorEnum::NONE));
+                        left, right, "addtmp")),Some("f64".to_string()),TerminatorEnum::NONE,false));
                 },
                 _ =>  return Err($ctx.add_err(
                     $range,
