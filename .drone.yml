@@ -68,11 +68,6 @@ steps:
       tags:
         - latest
         - build-${DRONE_BUILD_NUMBER} 
-    when:
-      branch:
-       - master
-      event:
-      - push
   - name: k8s cd
     image: ghcr.io/bh90210/dron8s:latest
     pull: if-not-exists
