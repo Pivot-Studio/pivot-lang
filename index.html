@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Chapter 1 - Pivot Lang</title>
+        <title>About - Pivot Lang</title>
                 
 
         <!-- Custom HTML head -->
@@ -82,7 +82,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="chapter_1.html"><strong aria-hidden="true">1.</strong> Chapter 1</a></li></ol>            </div>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Getting Started</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> basic project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> vsc support</a></li></ol></li></ol>            </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
@@ -143,13 +143,233 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="chapter-1"><a class="header" href="#chapter-1">Chapter 1</a></h1>
+                        <h1 id="pivot-lang"><a class="header" href="#pivot-lang">Pivot-lang</a></h1>
+<p><a href="https://codecov.io/gh/Pivot-Studio/pivot-lang"><img src="https://codecov.io/gh/Pivot-Studio/pivot-lang/branch/master/graph/badge.svg?token=CA17PWK0EG" alt="codecov" /></a> 
+<a href="https://drone.pivotstudio.cn/Pivot-Studio/pivot-lang"><img src="https://drone.pivotstudio.cn/api/badges/Pivot-Studio/pivot-lang/status.svg" alt="Build Status" /></a></p>
+<p><img src="https://codecov.io/gh/Pivot-Studio/pivot-lang/branch/master/graphs/sunburst.svg?token=CA17PWK0EG" alt="codecov" /></p>
+<p>此项目目前处于早期开发阶段，不建议用于生产环境。<br />
+<a href="https://github.com/Pivot-Studio/pivot-lang">项目地址</a></p>
+<h2 id="dependencies"><a class="header" href="#dependencies">dependencies</a></h2>
+<ul>
+<li><a href="https://github.com/llvm/llvm-project/releases/tag/llvmorg-14.0.6">llvm-14</a></li>
+<li><a href="https://www.rust-lang.org/">rust</a></li>
+</ul>
+<h2 id="特点"><a class="header" href="#特点">特点</a></h2>
+<ul>
+<li>同时支持aot和jit两种模式</li>
+<li>极其方便的rust互操作</li>
+</ul>
+<h2 id="近期开发计划"><a class="header" href="#近期开发计划">近期开发计划</a></h2>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+vsc debug
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+断点</li>
+<li><input disabled="" type="checkbox" checked=""/>
+变量表
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+函数参数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+普通变量</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+代码高亮</li>
+<li><input disabled="" type="checkbox" checked=""/>
+lsp支持
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+错误容忍
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+parser错误容忍</li>
+<li><input disabled="" type="checkbox" checked=""/>
+ast错误容忍</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"/>
+代码提示
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+普通变量</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数参数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+类型</li>
+<li><input disabled="" type="checkbox"/>
+模块</li>
+<li><input disabled="" type="checkbox"/>
+语法</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"/>
+代码跳转
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+普通变量</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数参数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+类型</li>
+<li><input disabled="" type="checkbox"/>
+模块</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"/>
+引用查找
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+普通变量</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数参数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+类型</li>
+<li><input disabled="" type="checkbox"/>
+模块</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+语法高亮</li>
+</ul>
+</li>
+</ul>
+<h2 id="项目结构"><a class="header" href="#项目结构">项目结构</a></h2>
+<ul>
+<li><a href="vm">vm</a> 包含rumtime</li>
+<li><a href="src">src</a> 编译器源码所在</li>
+<li><a href="internal_macro">internal_macro</a> 内部过程宏</li>
+</ul>
+<h2 id="grammar"><a class="header" href="#grammar">grammar</a></h2>
+<pre><code class="language-ebnf">add_exp = 
+    | mul_exp (&quot;+&quot; | &quot;-&quot; mul_exp)*
+    ;
+
+mul_exp = 
+    | unary_exp (&quot;*&quot;｜&quot;/&quot; unary_exp)*
+    ;
+
+unary_exp =
+    | take_exp
+    | (&quot;-&quot; | &quot;!&quot; | &quot;&amp;&quot;) take_exp
+    ;
+
+take_exp =
+    | primary_exp (&quot;.&quot; identifier)*
+    ;
+
+primary_exp =
+    | number
+    | bool_const
+    | &quot;(&quot; logic_exp &quot;)&quot;
+    | extern_identifier
+    | struct_init
+    | call_function
+    ;
+
+
+bool_const =
+    | &quot;true&quot;
+    | &quot;false&quot;
+    ;
+
+compare_exp =
+    | add_exp ((&quot;&lt;=&quot; | &quot;&lt;&quot;｜&quot;&gt;=&quot;｜&quot;&gt;&quot;｜&quot;==&quot;｜&quot;!=&quot;) add_exp)*
+    ;
+
+logic_exp = 
+    | compare_exp ((&quot;&amp;&amp;&quot;｜&quot;||&quot;) compare_exp)*
+    ;
+
+assignee = identifier (&quot;.&quot; identifier)*;
+
+assignment = assignee &quot;=&quot; logic_exp ;
+
+new_variable = &quot;let&quot; identifier &quot;=&quot; logic_exp ;
+
+global_variable = &quot;const&quot; identifier &quot;=&quot; logic_exp ;
+
+if_statement = &quot;if&quot; logic_exp statement_block (&quot;else&quot; if_statement | statement_block)?;
+
+while_statement = &quot;while&quot; logic_exp statement_block ;
+
+for_statement = &quot;for&quot; (assignment | new_variable) &quot;;&quot; logic_exp &quot;;&quot; assignment statement_block;
+
+statement_block = &quot;{&quot; statements &quot;}&quot; ;
+
+
+statements = statement* ;
+
+break_statement = &quot;break&quot; &quot;;&quot; ;
+
+continue_statement = &quot;continue&quot; &quot;;&quot; ;
+
+statement = 
+    | assignment &quot;;&quot;
+    | new_variable &quot;;&quot;
+    | return_statement
+    | if_statement
+    | while_statement
+    | break_statement
+    | continue_statement
+    | function_call
+    ;
+
+toplevel_statement = 
+    | struct_def
+    | function_def
+    | global_variable
+    | use_statement &quot;;&quot;
+    ;
+
+program = toplevel_statement* ;
+
+
+number = [0-9]+ | number &quot;.&quot; number ;
+
+identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
+
+function_def = &quot;fn&quot; identifier &quot;(&quot; (typed_identifier (&quot;,&quot;typed_identifier)*)? &quot;)&quot; type_name (statement_block | &quot;;&quot;) ;
+
+call_function = extern_identifier &quot;(&quot; (logic_exp (&quot;,&quot;logic_exp)*)? &quot;)&quot; ;
+
+struct_def = &quot;struct&quot; identifier &quot;{&quot; struct_field* &quot;}&quot; ;
+
+type_name = (&quot;&amp;&quot;)? identifier ;
+
+typed_identifier = identifier &quot;:&quot; type_name ;
+
+struct_field = typed_identifier &quot;;&quot; ;
+
+struct_init = type_name &quot;{&quot; struct_init_field &quot;}&quot; ;
+
+struct_init_field = identifier &quot;:&quot; logic_exp &quot;,&quot; ;
+
+return_statement = &quot;return&quot; logic_exp &quot;;&quot; ;
+
+use_statement = &quot;use&quot; identifier (&quot;::&quot; identifier)* &quot;;&quot; ;
+
+extern_identifier = (identifier &quot;::&quot;)* ;
+
+</code></pre>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
                         
+                                                    <a rel="next" href="tutorial/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
                         
                         <div style="clear: both"></div>
                     </nav>
@@ -158,6 +378,9 @@
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
                 
+                                    <a rel="next" href="tutorial/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
                             </nav>
 
         </div>

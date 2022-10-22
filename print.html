@@ -83,7 +83,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="chapter_1.html"><strong aria-hidden="true">1.</strong> Chapter 1</a></li></ol>            </div>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Getting Started</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> basic project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> vsc support</a></li></ol></li></ol>            </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
@@ -144,7 +144,387 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="chapter-1"><a class="header" href="#chapter-1">Chapter 1</a></h1>
+                        <h1 id="pivot-lang"><a class="header" href="#pivot-lang">Pivot-lang</a></h1>
+<p><a href="https://codecov.io/gh/Pivot-Studio/pivot-lang"><img src="https://codecov.io/gh/Pivot-Studio/pivot-lang/branch/master/graph/badge.svg?token=CA17PWK0EG" alt="codecov" /></a> 
+<a href="https://drone.pivotstudio.cn/Pivot-Studio/pivot-lang"><img src="https://drone.pivotstudio.cn/api/badges/Pivot-Studio/pivot-lang/status.svg" alt="Build Status" /></a></p>
+<p><img src="https://codecov.io/gh/Pivot-Studio/pivot-lang/branch/master/graphs/sunburst.svg?token=CA17PWK0EG" alt="codecov" /></p>
+<p>此项目目前处于早期开发阶段，不建议用于生产环境。<br />
+<a href="https://github.com/Pivot-Studio/pivot-lang">项目地址</a></p>
+<h2 id="dependencies"><a class="header" href="#dependencies">dependencies</a></h2>
+<ul>
+<li><a href="https://github.com/llvm/llvm-project/releases/tag/llvmorg-14.0.6">llvm-14</a></li>
+<li><a href="https://www.rust-lang.org/">rust</a></li>
+</ul>
+<h2 id="特点"><a class="header" href="#特点">特点</a></h2>
+<ul>
+<li>同时支持aot和jit两种模式</li>
+<li>极其方便的rust互操作</li>
+</ul>
+<h2 id="近期开发计划"><a class="header" href="#近期开发计划">近期开发计划</a></h2>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+vsc debug
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+断点</li>
+<li><input disabled="" type="checkbox" checked=""/>
+变量表
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+函数参数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+普通变量</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+代码高亮</li>
+<li><input disabled="" type="checkbox" checked=""/>
+lsp支持
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+错误容忍
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+parser错误容忍</li>
+<li><input disabled="" type="checkbox" checked=""/>
+ast错误容忍</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"/>
+代码提示
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+普通变量</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数参数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+类型</li>
+<li><input disabled="" type="checkbox"/>
+模块</li>
+<li><input disabled="" type="checkbox"/>
+语法</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"/>
+代码跳转
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+普通变量</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数参数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+类型</li>
+<li><input disabled="" type="checkbox"/>
+模块</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"/>
+引用查找
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+普通变量</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数参数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+类型</li>
+<li><input disabled="" type="checkbox"/>
+模块</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+语法高亮</li>
+</ul>
+</li>
+</ul>
+<h2 id="项目结构"><a class="header" href="#项目结构">项目结构</a></h2>
+<ul>
+<li><a href="../../vm">vm</a> 包含rumtime</li>
+<li><a href="../../src">src</a> 编译器源码所在</li>
+<li><a href="../../internal_macro">internal_macro</a> 内部过程宏</li>
+</ul>
+<h2 id="grammar"><a class="header" href="#grammar">grammar</a></h2>
+<pre><code class="language-ebnf">add_exp = 
+    | mul_exp (&quot;+&quot; | &quot;-&quot; mul_exp)*
+    ;
+
+mul_exp = 
+    | unary_exp (&quot;*&quot;｜&quot;/&quot; unary_exp)*
+    ;
+
+unary_exp =
+    | take_exp
+    | (&quot;-&quot; | &quot;!&quot; | &quot;&amp;&quot;) take_exp
+    ;
+
+take_exp =
+    | primary_exp (&quot;.&quot; identifier)*
+    ;
+
+primary_exp =
+    | number
+    | bool_const
+    | &quot;(&quot; logic_exp &quot;)&quot;
+    | extern_identifier
+    | struct_init
+    | call_function
+    ;
+
+
+bool_const =
+    | &quot;true&quot;
+    | &quot;false&quot;
+    ;
+
+compare_exp =
+    | add_exp ((&quot;&lt;=&quot; | &quot;&lt;&quot;｜&quot;&gt;=&quot;｜&quot;&gt;&quot;｜&quot;==&quot;｜&quot;!=&quot;) add_exp)*
+    ;
+
+logic_exp = 
+    | compare_exp ((&quot;&amp;&amp;&quot;｜&quot;||&quot;) compare_exp)*
+    ;
+
+assignee = identifier (&quot;.&quot; identifier)*;
+
+assignment = assignee &quot;=&quot; logic_exp ;
+
+new_variable = &quot;let&quot; identifier &quot;=&quot; logic_exp ;
+
+global_variable = &quot;const&quot; identifier &quot;=&quot; logic_exp ;
+
+if_statement = &quot;if&quot; logic_exp statement_block (&quot;else&quot; if_statement | statement_block)?;
+
+while_statement = &quot;while&quot; logic_exp statement_block ;
+
+for_statement = &quot;for&quot; (assignment | new_variable) &quot;;&quot; logic_exp &quot;;&quot; assignment statement_block;
+
+statement_block = &quot;{&quot; statements &quot;}&quot; ;
+
+
+statements = statement* ;
+
+break_statement = &quot;break&quot; &quot;;&quot; ;
+
+continue_statement = &quot;continue&quot; &quot;;&quot; ;
+
+statement = 
+    | assignment &quot;;&quot;
+    | new_variable &quot;;&quot;
+    | return_statement
+    | if_statement
+    | while_statement
+    | break_statement
+    | continue_statement
+    | function_call
+    ;
+
+toplevel_statement = 
+    | struct_def
+    | function_def
+    | global_variable
+    | use_statement &quot;;&quot;
+    ;
+
+program = toplevel_statement* ;
+
+
+number = [0-9]+ | number &quot;.&quot; number ;
+
+identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
+
+function_def = &quot;fn&quot; identifier &quot;(&quot; (typed_identifier (&quot;,&quot;typed_identifier)*)? &quot;)&quot; type_name (statement_block | &quot;;&quot;) ;
+
+call_function = extern_identifier &quot;(&quot; (logic_exp (&quot;,&quot;logic_exp)*)? &quot;)&quot; ;
+
+struct_def = &quot;struct&quot; identifier &quot;{&quot; struct_field* &quot;}&quot; ;
+
+type_name = (&quot;&amp;&quot;)? identifier ;
+
+typed_identifier = identifier &quot;:&quot; type_name ;
+
+struct_field = typed_identifier &quot;;&quot; ;
+
+struct_init = type_name &quot;{&quot; struct_init_field &quot;}&quot; ;
+
+struct_init_field = identifier &quot;:&quot; logic_exp &quot;,&quot; ;
+
+return_statement = &quot;return&quot; logic_exp &quot;;&quot; ;
+
+use_statement = &quot;use&quot; identifier (&quot;::&quot; identifier)* &quot;;&quot; ;
+
+extern_identifier = (identifier &quot;::&quot;)* ;
+
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="tutorial-a-short-introduction-to-the-language"><a class="header" href="#tutorial-a-short-introduction-to-the-language">Tutorial: A short introduction to the language</a></h1>
+<blockquote>
+<p>重要：Pivot lang尚属于早期开发阶段，可能会经常发生breaking change，因此不建议在生产环境中使用。</p>
+</blockquote>
+<p>本教程将会从安装出发，简单介绍Pivot lang的语法，以及一些基本的使用规则。</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="installation"><a class="header" href="#installation">Installation</a></h1>
+<h2 id="选择你需要的编译模型"><a class="header" href="#选择你需要的编译模型">选择你需要的编译模型</a></h2>
+<p>Pivot Lang存在两种不同的编译方案：</p>
+<ul>
+<li>静态编译：编译器会将源码编译成一个可执行文件，能给在操作系统上原生运行</li>
+<li>jit编译：编译器会将源码编译成一个字节码文件，然后在运行时使用编译器指令进行解释执行</li>
+</ul>
+<p>目前这两种方案使用的编译器是同一个可执行文件（plc），然而他们在依赖和功能上存在一些差别，
+下方是一个简单的对比图：</p>
+<table><thead><tr><th></th><th>jit</th><th>静态编译</th></tr></thead><tbody>
+<tr><td>完整的pivot lang功能支持</td><td>✅</td><td>✅</td></tr>
+<tr><td>生成可执行文件</td><td>❌</td><td>✅</td></tr>
+<tr><td>启动速度</td><td>❌</td><td>✅</td></tr>
+<tr><td>依赖llvm</td><td>❌</td><td>✅</td></tr>
+<tr><td>依赖预编译的pivot lang系统库</td><td>❌</td><td>✅</td></tr>
+<tr><td>运行时优化</td><td>✅</td><td>❌</td></tr>
+<tr><td>支持debug</td><td>❌</td><td>✅</td></tr>
+</tbody></table>
+<p>可以看出，just in time模式的编译器依赖比静态编译少很多，因此如果你不需要debug功能，建议使用jit模式。如果你想要体验完整功能，建议使用静态编译。</p>
+<blockquote>
+<p>注意：目前静态编译模式主要是内部使用，如果你很想体验，请在github上联系我们</p>
+</blockquote>
+<h2 id="windows"><a class="header" href="#windows">Windows</a></h2>
+<p>TODO</p>
+<h2 id="linux"><a class="header" href="#linux">Linux</a></h2>
+<p>目前我们对Ubuntu 20.04 LTS 和 Ubuntu 22.04 LTS提供了预编译的pivot lang编译器，你可以在我们的<a href="https://github.com/Pivot-Studio/pivot-lang/releases">release页面</a>进行下载。编译器也许也能在别的发行版上运行，但是我们并没有测试过。</p>
+<p>在release中，<code>plc</code>程序是编译器可执行文件，下载后请将它添加到<code>PATH</code>环境变量中，之后即可运行<code>plc -h</code>进行验证。</p>
+<h2 id="macos"><a class="header" href="#macos">MacOS</a></h2>
+<p>目前最新版macOS上的编译器可以在我们的<a href="https://github.com/Pivot-Studio/pivot-lang/releases">release页面</a>进行下载，它也许能在老版本MacOS上运行，但是我们并没有测试过。</p>
+<p>在release中，<code>plc</code>程序是编译器可执行文件，下载后请将它添加到<code>PATH</code>环境变量中，之后即可运行<code>plc -h</code>进行验证。</p>
+<h2 id="docker"><a class="header" href="#docker">Docker</a></h2>
+<p>TODO</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="基础项目"><a class="header" href="#基础项目">基础项目</a></h1>
+<h2 id="项目结构-1"><a class="header" href="#项目结构-1">项目结构</a></h2>
+<p>一个最基础的pivot lang项目由一个配置文件和一个源文件组成。配置文件用于指定项目的一些基本信息，源文件用于编写pivot lang代码。其结构如下：</p>
+<pre><code>.
+├── Kagari.toml
+└── main.pi
+</code></pre>
+<h3 id="配置文件"><a class="header" href="#配置文件">配置文件</a></h3>
+<p>一个pl项目的根目录必须有一个名为<code>Kagari.toml</code>的配置文件。示例配置文件的内容如下：</p>
+<pre><code class="language-toml">entry = &quot;main.pi&quot;
+</code></pre>
+<p>entry指定了该项目的入口文件，即编译器将从该文件开始编译。如果缺少该配置<code>plc</code>将无法编译该项目</p>
+<h3 id="源文件"><a class="header" href="#源文件">源文件</a></h3>
+<p>示例项目中的<code>main.pi</code>为源文件。其内容如下：</p>
+<pre><code class="language-pl">fn main() i64 {
+    printi64ln(666);
+    return 0;
+}
+
+fn printi64ln(i: i64) void;
+</code></pre>
+<p>源文件的后缀名必须为<code>.pi</code>。<br />
+在示例中，我们声明了一个外部函数<code>printi64ln</code>，该函数用于打印一个i64类型的值并换行。此源代码编译后执行会输出<code>666</code>。</p>
+<blockquote>
+<p>重要：<code>printi64ln</code>函数是目前pl runtime中的一个测试用内置函数，内置函数在未来将有别的引入方法，并且此方法可能会在未来移除</p>
+</blockquote>
+<h2 id="编译"><a class="header" href="#编译">编译</a></h2>
+<p>如果你已经安装了<code>plc</code>，那么你可以在项目根目录下执行<code>plc main.pi</code>命令来编译该项目。此指令会生成一个名叫<code>out.plb</code>的文件，还有一些中间文件</p>
+<blockquote>
+<p>如果你配置了镜头编译环境，还会生成一个叫做<code>out.plb.out</code>的文件，该文件是一个可执行文件，可以直接运行
+而如果你只有jit环境，该文件不会生成，并且编译命令会输出一个clang报错和两行warning，这是正常现象</p>
+</blockquote>
+<h2 id="jit运行"><a class="header" href="#jit运行">jit运行</a></h2>
+<p>编译后输入<code>plc run out.plb</code>可以jit运行该项目，其输出结果如下：</p>
+<pre><code>666
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="visual-studio-code-support"><a class="header" href="#visual-studio-code-support">Visual Studio Code support</a></h1>
+<p>我们建议开发者使用Visual Studio Code作为开发工具，因为我们提供了丰富的插件支持。</p>
+<h2 id="vsc插件安装"><a class="header" href="#vsc插件安装">vsc插件安装</a></h2>
+<p>在vsc插件市场搜索<code>pivot-lang support</code>，安装第一个即可
+<img src="tutorial/2022-10-23-00-17-08.png" alt="" /></p>
+<blockquote>
+<p>注意：pivot-lang support插件依赖于plc命令，你必须确保plc文件安装路径在环境变量<code>PATH</code>中</p>
+</blockquote>
+<h2 id="支持功能"><a class="header" href="#支持功能">支持功能</a></h2>
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+vsc debug
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+断点</li>
+<li><input disabled="" type="checkbox" checked=""/>
+变量表
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+函数参数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+普通变量</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+代码高亮</li>
+<li><input disabled="" type="checkbox" checked=""/>
+lsp支持
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+错误容忍
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+parser错误容忍</li>
+<li><input disabled="" type="checkbox" checked=""/>
+ast错误容忍</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+代码提示
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+普通变量</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数参数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+类型</li>
+<li><input disabled="" type="checkbox" checked=""/>
+模块</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"/>
+代码跳转
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+普通变量</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数参数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+类型</li>
+<li><input disabled="" type="checkbox"/>
+模块</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox"/>
+引用查找
+<ul>
+<li><input disabled="" type="checkbox" checked=""/>
+普通变量</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数参数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+函数</li>
+<li><input disabled="" type="checkbox" checked=""/>
+类型</li>
+<li><input disabled="" type="checkbox"/>
+模块</li>
+</ul>
+</li>
+<li><input disabled="" type="checkbox" checked=""/>
+语法高亮</li>
+</ul>
+</li>
+</ul>
 
                     </main>
 
