@@ -224,6 +224,10 @@ impl Mod {
 }
 
 fn get_ns_path_completions_pri(path: &str, vmap: &mut FxHashMap<String, CompletionItem>) {
+    let dirs = PathBuf::from(path).read_dir();
+    if dirs.is_err() {
+        return;
+    }
     for k in PathBuf::from(path).read_dir().unwrap() {
         if let Ok(d) = k {
             let buf = d.path();
