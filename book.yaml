@@ -54,8 +54,8 @@ status: {}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: gateway
-  namespace: kubernetes-dashboard
+  name: lang-docs
+  namespace: lang
   annotations:
     kubernetes.io/ingress.class: "nginx"
     # 开启use-regex，启用path的正则匹配 
