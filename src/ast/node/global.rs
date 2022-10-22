@@ -10,6 +10,9 @@ pub struct GlobalNode {
     pub exp: Box<NodeEnum>,
 }
 impl Node for GlobalNode {
+    fn format(&self,tabs:usize,prefix: &str) -> String {
+        return "global hello".to_string();
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

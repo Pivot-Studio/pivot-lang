@@ -23,6 +23,9 @@ pub struct UseNode {
 }
 
 impl Node for UseNode {
+    fn format(&self,tabs:usize,prefix: &str) -> String {
+        return "use hello".to_string();
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -91,6 +94,9 @@ pub struct ExternIDNode {
 }
 
 impl Node for ExternIDNode {
+    fn format(&self,tabs:usize,prefix: &str) -> String {
+        return "externId hello".to_string();
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

@@ -316,7 +316,7 @@ impl Node for FuncCallNode {
             }
             None => (),
         }
-        format_res.push_str(&self.id);
+        format_res.push_str(&self.id.format(tabs, prefix));
         format_res.push_str("(");
         format_res.push_str(&param_str);
         format_res.push_str(")");
