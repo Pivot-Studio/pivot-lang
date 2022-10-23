@@ -280,7 +280,7 @@ impl Node for FuncCallNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut para_values = Vec::new();
-        let (v, id, _, _) = self.id.emit(ctx)?;
+        let (v, id, _, _) = self.id.get_type(ctx)?;
         let id = id.unwrap();
         let func = match v {
             Value::ExFnValue(f) => Some(f),

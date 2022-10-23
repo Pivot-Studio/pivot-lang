@@ -67,13 +67,13 @@ impl Node for NumNode {
 pub struct VarNode {
     pub name: String,
 }
-impl Node for VarNode {
-    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+impl VarNode {
+    pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("VarNode: {}", self.name);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.if_completion(|ctx, a| {
             if a.0.is_in(self.range) {
                 let completions = ctx.get_completions();

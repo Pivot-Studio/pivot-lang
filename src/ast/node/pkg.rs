@@ -100,10 +100,15 @@ impl Node for ExternIDNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        self.get_type(ctx)
+    }
+}
+impl ExternIDNode {
+    pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if self.ns.is_empty() {
             if self.complete {
                 // 如果该节点只有一个id，且完整，那么就是一个普通的包内符号，直接调用idnode
-                return self.id.emit(ctx);
+                return self.id.get_type(ctx);
             }
             ctx.if_completion(|a, (pos, _)| {
                 if pos.is_in(self.range) {

@@ -119,7 +119,6 @@ pub enum NodeEnum {
     Un(UnaryOpNode),
     Num(NumNode),
     Bool(BoolConstNode),
-    Var(VarNode),
     Err(ErrorNode),
     STS(StatementsNode),
     Empty(EmptyNode),
