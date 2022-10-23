@@ -121,10 +121,9 @@ impl StructDefNode {
             let (id, tp) = (field.id.clone(), field.tp.get_type(ctx)?);
             let f = Field {
                 index: i,
-                tp: tp.clone(),
-                typename: field.tp.clone(),
+                pltype: tp.clone(),
                 name: field.id.name.clone(),
-                range: field.id.range,
+                range: field.range,
                 is_ref: field.tp.is_ref,
                 refs: Rc::new(RefCell::new(vec![])),
             };
@@ -146,12 +145,12 @@ impl StructDefNode {
                 .map(|order_field| {
                     if order_field.is_ref {
                         order_field
-                            .tp
+                            .pltype
                             .get_basic_type(&ctx)
                             .ptr_type(inkwell::AddressSpace::Generic)
                             .as_basic_type_enum()
                     } else {
-                        order_field.tp.get_basic_type(&ctx)
+                        order_field.pltype.get_basic_type(&ctx)
                     }
                 })
                 .collect::<Vec<_>>(),

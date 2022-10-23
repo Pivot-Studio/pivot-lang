@@ -258,7 +258,7 @@ impl Node for TakeOpNode {
                                 index = field.index;
                                 ctx.set_if_refs(field.refs.clone(), range);
                                 ctx.send_if_go_to_def(range, field.range, ctx.plmod.path.clone());
-                                pltype = Some(field.typename.get_type(ctx)?);
+                                pltype = Some(field.pltype.clone());
                             } else {
                                 return Err(ctx.add_err(
                                     id.range,

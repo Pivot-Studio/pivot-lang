@@ -318,31 +318,30 @@ impl Node for FuncCallNode {
         );
         if let PLType::FN(fv) = &fntp {
             ctx.save_if_comment_doc_hover(self.range, Some(fv.doc.clone()));
-            let o = match (ret.try_as_basic_value().left(), fv.ret_pltype.as_ref()) {
-                (Some(v), Some(pltype)) => {
+            let o = match ret.try_as_basic_value().left() {
+                Some(v) => {
                     if v.is_pointer_value() {
                         Ok((
                             Value::RefValue(v.into_pointer_value()),
-                            Some(*pltype.clone()),
+                            Some(*fv.ret_pltype.clone()),
                             TerminatorEnum::NONE,
                             false,
                         ))
                     } else {
                         Ok((
                             Value::LoadValue(v),
-                            Some(*pltype.clone()),
+                            Some(*fv.ret_pltype.clone()),
                             TerminatorEnum::NONE,
                             false,
                         ))
                     }
                 }
-                (None, Some(pltype)) => Ok((
+                None => Ok((
                     Value::None,
-                    Some(*pltype.clone()),
+                    Some(*fv.ret_pltype.clone()),
                     TerminatorEnum::NONE,
                     false,
                 )),
-                _ => todo!(),
             };
             ctx.set_if_refs_tp(&fntp, self.range);
             ctx.send_if_go_to_def(self.range, fv.range, ctx.plmod.path.clone());
@@ -369,8 +368,10 @@ impl FuncTypeNode {
             return Err(ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL));
         }
         let mut para_types = Vec::new();
+        let mut param_pltypes = Vec::new();
         for para in self.paralist.iter() {
             let paramtype = para.tp.get_type(ctx)?;
+            param_pltypes.push(paramtype.clone());
             para_types.push(if para.tp.is_ref {
                 paramtype
                     .get_basic_type(&ctx)
@@ -405,8 +406,8 @@ impl FuncTypeNode {
         let refs = vec![];
         let ftp = PLType::FN(FNType {
             name: self.id.clone(),
-            fntype: self.clone(),
-            ret_pltype: Some(Box::new(self.ret.get_type(ctx)?)),
+            ret_pltype: Box::new(self.ret.get_type(ctx)?),
+            param_pltypes,
             range: self.range,
             refs: Rc::new(RefCell::new(refs)),
             is_ref: self.ret.is_ref,

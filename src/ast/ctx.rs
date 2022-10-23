@@ -44,8 +44,6 @@ use super::compiler::get_target_machine;
 use super::compiler::ActionType;
 use super::diag::{ErrorCode, WarnCode};
 use super::diag::{ERR_MSG, WARN_MSG};
-use super::node::function::FuncTypeNode;
-use super::node::types::TypeNameNode;
 use super::node::NodeEnum;
 use super::range::Pos;
 use super::range::Range;
@@ -561,8 +559,7 @@ impl<'ctx> RetTypeEnum<'ctx> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field {
     pub index: u32,
-    pub tp: PLType,
-    pub typename: Box<TypeNameNode>,
+    pub pltype: PLType,
     pub name: String,
     pub range: Range,
     pub is_ref: bool,
@@ -571,12 +568,9 @@ pub struct Field {
 
 impl Field {
     pub fn get_di_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, offset: u64) -> (DIType<'ctx>, u64) {
-        let pltype = ctx
-            .get_type(&self.typename.id, self.typename.range)
-            .unwrap();
-        let di_type = pltype.get_ditype(ctx);
+        let di_type = self.pltype.get_ditype(ctx);
         let debug_type = if self.is_ref {
-            pltype
+            self.pltype
                 .clone()
                 .get_di_ref_type(ctx, di_type.clone())
                 .unwrap()
@@ -590,7 +584,7 @@ impl Field {
                     ctx.discope,
                     &self.name,
                     ctx.diunit.get_file(),
-                    self.typename.range.start.line as u32,
+                    self.range.start.line as u32,
                     debug_type.get_size_in_bits(),
                     debug_type.get_align_in_bits(),
                     offset + debug_type.get_offset_in_bits(),
@@ -606,8 +600,8 @@ impl Field {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FNType {
     pub name: String,
-    pub fntype: FuncTypeNode,
-    pub ret_pltype: Option<Box<PLType>>,
+    pub param_pltypes: Vec<PLType>,
+    pub ret_pltype: Box<PLType>,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub is_ref: bool,
@@ -625,13 +619,14 @@ impl FNType {
         if let Some(v) = ctx.module.get_function(&self.name) {
             return v;
         }
-        let ret_pltype = self.ret_pltype.as_ref().unwrap();
         let mut param_types = vec![];
-        for param in self.fntype.paralist.iter() {
-            let pltype = m.get_type(&param.tp.id).unwrap();
-            param_types.push(pltype.get_basic_type(ctx).into());
+        for param_pltype in self.param_pltypes.iter() {
+            param_types.push(param_pltype.get_basic_type(ctx).into());
         }
-        let fn_type = ret_pltype.get_ret_type(ctx).fn_type(&param_types, false);
+        let fn_type = self
+            .ret_pltype
+            .get_ret_type(ctx)
+            .fn_type(&param_types, false);
         let fn_value = ctx.module.add_function(
             &m.get_full_name(&self.name),
             fn_type,
@@ -670,12 +665,12 @@ impl STType {
                 .map(|order_field| {
                     if order_field.is_ref {
                         order_field
-                            .tp
+                            .pltype
                             .get_basic_type(&ctx)
                             .ptr_type(inkwell::AddressSpace::Generic)
                             .as_basic_type_enum()
                     } else {
-                        order_field.tp.get_basic_type(&ctx)
+                        order_field.pltype.get_basic_type(&ctx)
                     }
                 })
                 .collect::<Vec<_>>(),
