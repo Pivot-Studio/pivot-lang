@@ -114,6 +114,7 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
         "".to_string(),
         docs,
         Default::default(),
+        Default::default(),
     );
 
     let re = get_config(db, confinput.get_file_content(db).unwrap());
@@ -122,14 +123,11 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
         return;
     }
     let mut config = re.unwrap();
-    config.entry = PathBuf::from(path.unwrap())
-        .parent()
-        .unwrap()
-        .join(config.entry)
-        .to_str()
-        .unwrap()
-        .to_string();
-    let file = config.entry;
+    let buf = PathBuf::from(path.unwrap());
+    let parant = buf.parent().unwrap();
+    config.entry = parant.join(config.entry).to_str().unwrap().to_string();
+    let file = config.entry.clone();
+    config.root = parant.to_str().unwrap().to_string();
     let input = FileCompileInput::new(
         db,
         file.clone(),
@@ -141,6 +139,7 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
             .to_string(),
         docs,
         Default::default(),
+        config,
     );
     compile_dry_file(db, input);
 }
@@ -159,7 +158,13 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
         return None;
     }
     let node = parse_result.unwrap();
-    let program = Program::new(db, node, docs.get_emit_params(db), docs.docs(db));
+    let program = Program::new(
+        db,
+        node,
+        docs.get_emit_params(db),
+        docs.docs(db),
+        docs.config(db),
+    );
     Some(program.emit(db))
 }
 

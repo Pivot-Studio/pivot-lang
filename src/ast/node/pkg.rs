@@ -35,8 +35,7 @@ impl Node for UseNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let pb = PathBuf::from(&ctx.plmod.path);
-        let mut path = pb.parent().unwrap().to_path_buf();
+        let mut path = PathBuf::from(&ctx.config.root);
         let mut fullpath = path.clone();
         let mut i = 0;
         for id in &self.ids {

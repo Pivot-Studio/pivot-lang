@@ -10,6 +10,7 @@ use crate::ast::compiler::{compile_dry_file, ActionType};
 use crate::ast::ctx::{self, create_ctx_info, Ctx, Mod};
 use crate::lsp::mem_docs::{EmitParams, FileCompileInput, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
+use crate::utils::read_config::Config;
 use crate::Db;
 
 use inkwell::context::Context;
@@ -100,6 +101,7 @@ pub struct Program {
     pub node: ProgramNodeWrapper,
     pub params: EmitParams,
     pub docs: MemDocsInput,
+    pub config: Config,
 }
 
 #[salsa::tracked]
@@ -122,7 +124,7 @@ impl Program {
             if u.ids.is_empty() || !u.complete {
                 continue;
             }
-            let mut path = PathBuf::from(self.params(db).modpath(db));
+            let mut path = PathBuf::from(self.config(db).root);
             for p in u.ids[0..u.ids.len() - 1].iter() {
                 path = path.join(p.name.clone());
             }
@@ -136,6 +138,7 @@ impl Program {
                 self.params(db).modpath(db).clone(),
                 self.docs(db).clone(),
                 Default::default(),
+                self.config(db),
             );
             let m = compile_dry_file(db, f);
             if m.is_none() {
@@ -195,6 +198,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         &v,
         Some(params.params(db).action(db)),
         params.params(db).params(db),
+        params.params(db).config(db),
     );
     ctx.plmod.submods = params.submods(db);
     let m = &mut ctx;

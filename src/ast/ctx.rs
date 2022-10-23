@@ -1,6 +1,7 @@
 use crate::ast::node::Value;
 use crate::lsp::semantic_tokens::type_index;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
+use crate::utils::read_config::Config;
 use colored::Colorize;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
@@ -103,6 +104,7 @@ pub struct Ctx<'a, 'ctx> {
             Rc<RefCell<Vec<Location>>>,
         ),
     >, // variable table
+    pub config: Config,                                     // config
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -781,6 +783,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         errs: &'a RefCell<Vec<PLDiag>>,
         sender: Option<ActionType>,
         completion: Option<(Pos, Option<String>, ActionType)>,
+        config: Config,
     ) -> Ctx<'a, 'ctx> {
         let f = Path::new(Path::new(src_file_path).file_stem().unwrap())
             .file_name()
@@ -817,6 +820,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             hover: Rc::new(Cell::new(None)),
             init_func: None,
             table: FxHashMap::default(),
+            config,
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -856,6 +860,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             hover: self.hover.clone(),
             init_func: self.init_func,
             table: FxHashMap::default(),
+            config: self.config.clone(),
         };
         add_primitive_types(&mut ctx);
         ctx
