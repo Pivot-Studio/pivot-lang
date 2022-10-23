@@ -1,1 +1,6 @@
 entry = "main.pi"
+
+
+[deps]
+test = { path = "sub2" }
+

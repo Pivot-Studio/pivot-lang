@@ -1,4 +1,6 @@
 use std::cell::RefCell;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -10,7 +12,7 @@ use crate::ast::compiler::{compile_dry_file, ActionType};
 use crate::ast::ctx::{self, create_ctx_info, Ctx, Mod};
 use crate::lsp::mem_docs::{EmitParams, FileCompileInput, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
-use crate::utils::read_config::Config;
+use crate::utils::read_config::{get_config, Config};
 use crate::Db;
 
 use inkwell::context::Context;
@@ -125,10 +127,39 @@ impl Program {
                 continue;
             }
             let mut path = PathBuf::from(self.config(db).root);
-            for p in u.ids[0..u.ids.len() - 1].iter() {
+            let mut config = self.config(db);
+            let mut start = 0;
+            if let Some(cm) = self.config(db).deps {
+                if let Some(dep) = cm.get(&u.ids[0].name) {
+                    path = PathBuf::from(dep.path.clone());
+                    let input = FileCompileInput::new(
+                        db,
+                        path.join("/Kagari.toml")
+                            .clone()
+                            .to_str()
+                            .unwrap()
+                            .to_string(),
+                        "".to_string(),
+                        self.docs(db),
+                        Default::default(),
+                        Default::default(),
+                    );
+                    let f = input.get_file_content(db);
+                    if f.is_none() {
+                        continue;
+                    }
+                    let re = get_config(db, f.unwrap());
+                    if re.is_err() {
+                        continue;
+                    }
+                    config = re.unwrap();
+
+                    start = 1;
+                }
+            }
+            for p in u.ids[start..].iter() {
                 path = path.join(p.name.clone());
             }
-            path = path.join(u.ids.last().unwrap().name.clone());
             path = path.with_extension("pi");
             let f = path.to_str().unwrap().to_string();
             // eprintln!("use {}", f.clone());
@@ -136,9 +167,9 @@ impl Program {
                 db,
                 f,
                 self.params(db).modpath(db).clone(),
-                self.docs(db).clone(),
+                self.docs(db),
                 Default::default(),
-                self.config(db),
+                config,
             );
             let m = compile_dry_file(db, f);
             if m.is_none() {
@@ -232,7 +263,17 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     }
     if ctx.action.is_some() && ctx.action.unwrap() == ActionType::Compile {
         ctx.dibuilder.finalize();
-        let pp = Path::new(params.file(db)).with_extension("bc");
+        let mut hasher = DefaultHasher::new();
+        params.fullpath(db).hash(&mut hasher);
+        let hashed = format!(
+            "{}_{:x}",
+            Path::new(&params.file(db))
+                .with_extension("")
+                .to_str()
+                .unwrap(),
+            hasher.finish()
+        );
+        let pp = Path::new(&hashed).with_extension("bc");
         let p = pp.as_path();
         ctx.module.write_bitcode_to_path(p);
         ModBuffer::push(db, p.clone().to_path_buf());

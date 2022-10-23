@@ -16,7 +16,12 @@ use inkwell::{
     targets::{FileType, InitializationConfig, Target, TargetMachine},
     OptimizationLevel,
 };
-use std::{fs, path::Path, time::Instant};
+use rustc_hash::FxHashSet;
+use std::{
+    fs::{self, remove_file},
+    path::Path,
+    time::Instant,
+};
 use std::{path::PathBuf, process::Command};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Copy)]
@@ -204,9 +209,18 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let mut mods = compile_dry::accumulated::<ModBuffer>(db, docs);
     let ctx = Context::create();
     let m = mods.pop().unwrap();
-    let llvmmod = Module::parse_bitcode_from_path(m, &ctx).unwrap();
+    let llvmmod = Module::parse_bitcode_from_path(m.clone(), &ctx).unwrap();
+    let mut set = FxHashSet::default();
+    set.insert(m.clone());
+    _ = remove_file(m);
     for m in mods {
-        _ = llvmmod.link_in_module(Module::parse_bitcode_from_path(m, &ctx).unwrap());
+        if set.contains(&m) {
+            continue;
+        }
+        set.insert(m.clone());
+
+        _ = llvmmod.link_in_module(Module::parse_bitcode_from_path(m.clone(), &ctx).unwrap());
+        _ = remove_file(m);
     }
     if op.genir {
         let mut s = out.to_string();

@@ -1,0 +1,4 @@
+fn test() void {
+    
+    return;
+}
