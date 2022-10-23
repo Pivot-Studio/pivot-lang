@@ -1,5 +1,5 @@
 use super::*;
-use crate::ast::ctx::{Ctx, PLType};
+use crate::ast::ctx::{Ctx, PLType, PriType};
 use crate::ast::diag::ErrorCode;
 
 use internal_macro::range;
@@ -21,7 +21,7 @@ impl Node for BoolConstNode {
         ctx.push_semantic_token(self.range, SemanticTokenType::KEYWORD, 0);
         Ok((
             Value::BoolValue(ctx.context.i8_type().const_int(self.value as u64, true)),
-            Some("bool".to_string()),
+            Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
             TerminatorEnum::NONE,
             true,
         ))
@@ -45,7 +45,7 @@ impl Node for NumNode {
             let b = ctx.context.i64_type().const_int(x, true);
             return Ok((
                 Value::IntValue(b),
-                Some("i64".to_string()),
+                Some(PLType::PRIMITIVE(PriType::try_from_str("i64").unwrap())),
                 TerminatorEnum::NONE,
                 true,
             ));
@@ -53,7 +53,7 @@ impl Node for NumNode {
             let b = ctx.context.f64_type().const_float(x);
             return Ok((
                 Value::FloatValue(b),
-                Some("f64".to_string()),
+                Some(PLType::PRIMITIVE(PriType::try_from_str("f64").unwrap())),
                 TerminatorEnum::NONE,
                 true,
             ));
@@ -98,7 +98,7 @@ impl Node for VarNode {
                 ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
                 return Ok((
                     Value::ExFnValue((f.get_value(ctx, &ctx.plmod), PLType::FN(f.clone()))),
-                    Some(f.name.clone()),
+                    Some(tp.clone()),
                     TerminatorEnum::NONE,
                     true,
                 ));
@@ -106,7 +106,7 @@ impl Node for VarNode {
                 ctx.push_semantic_token(self.range, SemanticTokenType::STRUCT, 0);
                 return Ok((
                     Value::STValue(s.struct_type(ctx)),
-                    Some(s.name.clone()),
+                    Some(tp.clone()),
                     TerminatorEnum::NONE,
                     true,
                 ));

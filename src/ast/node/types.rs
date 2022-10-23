@@ -29,7 +29,7 @@ impl TypeNameNode {
             println!("id: {}", self.id);
         }
     }
-    pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Result<PLType, PLDiag> {
+    pub fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> Result<PLType, PLDiag> {
         ctx.if_completion(|ctx, a| {
             if a.0.is_in(self.range) {
                 let completions = ctx.get_type_completions();
@@ -235,8 +235,8 @@ impl Node for StructInitNode {
                 panic!("StructInitNode::emit: invalid field");
             }
         }
-        let st = self.tp.get_type(ctx)?;
-        if let PLType::STRUCT(st) = st {
+        let tp = self.tp.get_type(ctx)?;
+        if let PLType::STRUCT(st) = &tp {
             ctx.save_if_comment_doc_hover(self.tp.range, Some(st.doc.clone()));
             let et = st.struct_type(ctx).as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");
@@ -262,12 +262,7 @@ impl Node for StructInitNode {
                 ctx.builder.build_store(ptr, val);
                 ctx.send_if_go_to_def(range, field.range, ctx.plmod.path.clone())
             }
-            return Ok((
-                Value::VarValue(stv),
-                Some(st.name),
-                TerminatorEnum::NONE,
-                false,
-            ));
+            return Ok((Value::VarValue(stv), Some(tp), TerminatorEnum::NONE, false));
         } else {
             panic!("StructInitNode::emit: invalid type");
         }

@@ -137,24 +137,23 @@ impl Node for ExternIDNode {
         if let Some(symbol) = symbol {
             ctx.push_semantic_token(self.id.range, SemanticTokenType::VARIABLE, 0);
 
-            let g = ctx.get_or_add_global(&self.id.name, &plmod, &symbol.tp);
+            let g = ctx.get_or_add_global(&self.id.name, &plmod, symbol.tp.clone());
             return Ok((
                 Value::VarValue(g),
-                Some(symbol.tp.to_string()),
+                Some(symbol.tp.clone()),
                 TerminatorEnum::NONE,
                 true,
             ));
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
             ctx.set_if_refs_tp(&tp, self.range);
-            let range = tp.get_range();
-            let re = match tp {
+            let range = &tp.get_range();
+            let re = match &tp {
                 PLType::FN(f) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
-                    let n = f.name.clone();
                     Ok((
-                        Value::ExFnValue((f.get_value(ctx, plmod), PLType::FN(f))),
-                        Some(n),
+                        Value::ExFnValue((f.get_value(ctx, plmod), PLType::FN(f.clone()))),
+                        Some(tp),
                         TerminatorEnum::NONE,
                         true,
                     ))
@@ -163,7 +162,7 @@ impl Node for ExternIDNode {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
                     Ok((
                         Value::STValue(s.struct_type(ctx)),
-                        Some(s.name.clone()),
+                        Some(tp.clone()),
                         TerminatorEnum::NONE,
                         true,
                     ))
@@ -171,7 +170,7 @@ impl Node for ExternIDNode {
                 _ => unreachable!(),
             };
             if let Some(range) = range {
-                ctx.send_if_go_to_def(self.range, range, plmod.path.clone());
+                ctx.send_if_go_to_def(self.range, *range, plmod.path.clone());
             }
             return re;
         }

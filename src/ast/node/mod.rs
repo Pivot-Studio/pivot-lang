@@ -146,7 +146,7 @@ pub trait Node: RangeTrait + AsAny {
 type NodeResult<'ctx> = Result<
     (
         Value<'ctx>,
-        Option<String>, //type
+        Option<PLType>, //type
         TerminatorEnum,
         bool, // isconst
     ),
@@ -230,11 +230,11 @@ macro_rules! handle_calc {
             match ($left, $right) {
                 (Value::IntValue(left), Value::IntValue(right)) => {
                     return Ok((Value::IntValue($ctx.builder.[<build_int_$op>](
-                        left, right, "addtmp")),Some("i64".to_string()),TerminatorEnum::NONE,false));
+                        left, right, "addtmp")),Some(PLType::PRIMITIVE(PriType::try_from_str("i64").unwrap())),TerminatorEnum::NONE,false));
                 },
                 (Value::FloatValue(left), Value::FloatValue(right)) => {
                     return Ok((Value::FloatValue($ctx.builder.[<build_$opf>](
-                        left, right, "addtmp")),Some("f64".to_string()),TerminatorEnum::NONE,false));
+                        left, right, "addtmp")),Some(PLType::PRIMITIVE(PriType::try_from_str("f64").unwrap())),TerminatorEnum::NONE,false));
                 },
                 _ =>  return Err($ctx.add_err(
                     $range,

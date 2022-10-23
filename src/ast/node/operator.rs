@@ -2,6 +2,7 @@ use super::primary::VarNode;
 use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::ctx::PLType;
+use crate::ast::ctx::PriType;
 use crate::ast::tokens::TokenType;
 
 use crate::ast::diag::ErrorCode;
@@ -122,7 +123,7 @@ impl Node for BinOpNode {
                             "zexttemp",
                         )
                     }),
-                    Some("bool".to_string()),
+                    Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
                     TerminatorEnum::NONE,
                     true,
                 ),
@@ -137,7 +138,7 @@ impl Node for BinOpNode {
                             "zexttemp",
                         )
                     }),
-                    Some("bool".to_string()),
+                    Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
                     TerminatorEnum::NONE,
                     true,
                 ),
@@ -158,7 +159,7 @@ impl Node for BinOpNode {
                             "zext_temp",
                         )
                     }),
-                    Some("bool".to_string()),
+                    Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
                     TerminatorEnum::NONE,
                     true,
                 ),
@@ -178,7 +179,7 @@ impl Node for BinOpNode {
                             "zext_temp",
                         )
                     }),
-                    Some("bool".to_string()),
+                    Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
                     TerminatorEnum::NONE,
                     true,
                 ),
@@ -241,24 +242,23 @@ impl Node for TakeOpNode {
                                 && trigger.is_some()
                                 && trigger.as_ref().unwrap() == "."
                             {
-                                let tp = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
-                                if let PLType::STRUCT(s) = tp {
+                                if let PLType::STRUCT(s) = pltype.unwrap() {
                                     let completions = s.get_completions();
                                     ctx.completion_items.set(completions);
                                     ctx.action = None;
                                 }
                             }
                         });
-                        let tp = ctx.get_type(tpname, range).expect(tpname);
+                        let tp = ctx.get_type(tpname, range).expect(tpname).clone();
                         range = id.range();
                         ctx.push_semantic_token(range, SemanticTokenType::PROPERTY, 0);
                         if let PLType::STRUCT(s) = tp {
                             let field = s.fields.get(&id.name);
                             if let Some(field) = field {
                                 index = field.index;
-                                pltype = Some(field.typename.id.clone());
                                 ctx.set_if_refs(field.refs.clone(), range);
                                 ctx.send_if_go_to_def(range, field.range, ctx.plmod.path.clone());
+                                pltype = Some(field.typename.get_type(ctx)?);
                             } else {
                                 return Err(ctx.add_err(
                                     id.range,
@@ -282,8 +282,7 @@ impl Node for TakeOpNode {
             // end with ".", gen completions
             ctx.if_completion(|ctx, (pos, trigger)| {
                 if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
-                    let tp = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
-                    if let PLType::STRUCT(s) = tp {
+                    if let PLType::STRUCT(s) = pltype.unwrap() {
                         let completions = s.get_completions();
                         ctx.completion_items.set(completions);
                         ctx.action = None;

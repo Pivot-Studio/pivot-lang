@@ -12,6 +12,7 @@ use lsp_types::SemanticTokenType;
 use std::cell::RefCell;
 use std::fmt::format;
 use std::rc::Rc;
+use std::vec;
 
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -74,6 +75,7 @@ impl Node for FuncDefNode {
             let param_ditypes_res: Vec<Result<DIType, PLDiag>> = self
                 .typenode
                 .paralist
+                .clone()
                 .iter()
                 .map(|para| {
                     let res = ctx.get_type(&para.tp.id, para.range())?;
@@ -131,8 +133,11 @@ impl Node for FuncDefNode {
                 DIFlags::PUBLIC,
                 false,
             );
-            let para_pltype_ids: Vec<&String> =
-                typenode.paralist.iter().map(|para| &para.tp.id).collect();
+            let mut para_pltype_ids = Vec::new();
+            for para in typenode.paralist.iter() {
+                para_pltype_ids.push(para.tp.get_type(ctx)?.clone());
+            }
+
             // get the para's type vec & copy the para's name vec
             let mut para_names = Vec::new();
             for para in typenode.paralist.iter() {
@@ -309,7 +314,7 @@ impl Node for FuncCallNode {
         let ret = ctx.builder.build_call(
             func,
             &para_values,
-            format(format_args!("call_{}", id)).as_str(),
+            format(format_args!("call_{}", id.get_name().unwrap())).as_str(),
         );
         if let PLType::FN(fv) = &fntp {
             ctx.save_if_comment_doc_hover(self.range, Some(fv.doc.clone()));
@@ -318,14 +323,14 @@ impl Node for FuncCallNode {
                     if v.is_pointer_value() {
                         Ok((
                             Value::RefValue(v.into_pointer_value()),
-                            Some(pltype.clone()),
+                            Some(*pltype.clone()),
                             TerminatorEnum::NONE,
                             false,
                         ))
                     } else {
                         Ok((
                             Value::LoadValue(v),
-                            Some(pltype.clone()),
+                            Some(*pltype.clone()),
                             TerminatorEnum::NONE,
                             false,
                         ))
@@ -333,7 +338,7 @@ impl Node for FuncCallNode {
                 }
                 (None, Some(pltype)) => Ok((
                     Value::None,
-                    Some(pltype.clone()),
+                    Some(*pltype.clone()),
                     TerminatorEnum::NONE,
                     false,
                 )),
@@ -401,7 +406,7 @@ impl FuncTypeNode {
         let ftp = PLType::FN(FNType {
             name: self.id.clone(),
             fntype: self.clone(),
-            ret_pltype: Some(self.ret.id.clone()),
+            ret_pltype: Some(Box::new(self.ret.get_type(ctx)?)),
             range: self.range,
             refs: Rc::new(RefCell::new(refs)),
             is_ref: self.ret.is_ref,

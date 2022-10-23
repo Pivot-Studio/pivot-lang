@@ -99,7 +99,7 @@ pub struct Ctx<'a, 'ctx> {
         String,
         (
             PointerValue<'ctx>,
-            String,
+            PLType,
             Range,
             Rc<RefCell<Vec<Location>>>,
         ),
@@ -109,7 +109,7 @@ pub struct Ctx<'a, 'ctx> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobalVar {
-    pub tp: String,
+    pub tp: PLType,
     pub range: Range,
     pub loc: Rc<RefCell<Vec<Location>>>,
 }
@@ -155,7 +155,7 @@ impl Mod {
     pub fn add_global_symbol(
         &mut self,
         name: String,
-        tp: String,
+        tp: PLType,
         range: Range,
         refs: Rc<RefCell<Vec<Location>>>,
     ) -> Result<(), PLDiag> {
@@ -416,6 +416,16 @@ impl PLType {
         self.get_basic_type_op(ctx).unwrap()
     }
 
+    pub fn get_name<'a, 'ctx>(&self) -> Option<String> {
+        match self {
+            PLType::FN(fu) => Some(fu.name.clone()),
+            PLType::STRUCT(st) => Some(st.name.clone()),
+            PLType::PRIMITIVE(pri) => Some(pri.id.clone()),
+            PLType::VOID => Some("void".to_string()),
+            PLType::NAMESPACE(_) => None,
+        }
+    }
+
     /// # get_range
     /// get the defination range of the type
     pub fn get_range(&self) -> Option<Range> {
@@ -597,7 +607,7 @@ impl Field {
 pub struct FNType {
     pub name: String,
     pub fntype: FuncTypeNode,
-    pub ret_pltype: Option<String>,
+    pub ret_pltype: Option<Box<PLType>>,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub is_ref: bool,
@@ -615,9 +625,7 @@ impl FNType {
         if let Some(v) = ctx.module.get_function(&self.name) {
             return v;
         }
-        let ret_pltype = ctx
-            .get_type(&self.ret_pltype.as_ref().unwrap(), self.range)
-            .unwrap();
+        let ret_pltype = self.ret_pltype.as_ref().unwrap();
         let mut param_types = vec![];
         for param in self.fntype.paralist.iter() {
             let pltype = m.get_type(&param.tp.id).unwrap();
@@ -873,7 +881,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         name: &str,
     ) -> Option<(
         PointerValue<'ctx>,
-        String,
+        PLType,
         Range,
         Rc<RefCell<Vec<Location>>>,
         bool,
@@ -882,7 +890,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if let Some((pv, pltype, range, refs)) = v {
             return Some((
                 pv.clone(),
-                pltype.to_string(),
+                pltype.clone(),
                 range.clone(),
                 refs.clone(),
                 false,
@@ -899,7 +907,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         {
             return Some((
                 self.module.get_global(name).unwrap().as_pointer_value(),
-                pltype.to_string(),
+                pltype.clone(),
                 range.clone(),
                 refs.clone(),
                 true,
@@ -912,7 +920,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         &mut self,
         name: String,
         pv: PointerValue<'ctx>,
-        tp: String,
+        tp: PLType,
         range: Range,
         is_const: bool,
     ) -> Result<(), PLDiag> {
@@ -945,10 +953,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     /// 用来获取外部模块的全局变量
     /// 如果没在当前module的全局变量表中找到，将会生成一个
     /// 该全局变量的声明
-    pub fn get_or_add_global(&self, name: &str, m: &Mod, tp: &str) -> PointerValue<'ctx> {
+    pub fn get_or_add_global(&self, name: &str, _m: &Mod, pltype: PLType) -> PointerValue<'ctx> {
         let global = self.module.get_global(name);
         if global.is_none() {
-            let pltype = m.get_type(tp).unwrap();
             let global = self
                 .module
                 .add_global(pltype.get_basic_type(self), None, name);
@@ -1109,7 +1116,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                     kind: Some(CompletionItemKind::CONSTANT),
                     ..Default::default()
                 };
-                item.detail = Some(v.tp.to_string());
+                item.detail = v.tp.get_name();
                 m.insert(k.clone(), item);
             }
         }
