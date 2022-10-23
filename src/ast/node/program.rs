@@ -180,6 +180,7 @@ pub struct ProgramEmitParam {
 #[salsa::tracked]
 pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     let context = &Context::create();
+    let action = params.params(db).action(db);
     let (a, b, c, d, e, f) = create_ctx_info(context, params.dir(db), params.file(db));
     let v = RefCell::new(Vec::new());
     let mut ctx = ctx::Ctx::new(
@@ -215,9 +216,10 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let b = ctx.semantic_tokens_builder.borrow().build();
         PLSemanticTokens::push(db, b);
     }
-
-    let ci = ctx.completion_items.take();
-    Completions::push(db, ci);
+    if action == ActionType::Completion {
+        let ci = ctx.completion_items.take();
+        Completions::push(db, ci);
+    }
     if let Some(c) = ctx.goto_def.take() {
         GotoDef::push(db, c);
     }

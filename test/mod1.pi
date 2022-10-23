@@ -1,5 +1,6 @@
 
 fn test_mod(args:i64) void {
+    
     printi64ln(999999);
     return;
 }

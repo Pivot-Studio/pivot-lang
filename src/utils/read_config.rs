@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use rustc_hash::FxHashMap;
 use serde::Deserialize;
 
 use crate::Db;
@@ -40,6 +41,13 @@ pub fn get_config_path(current: String) -> Result<String, &'static str> {
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct Config {
     pub entry: String,
+    pub deps: Option<FxHashMap<String, Dependency>>,
+}
+
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Dependency {
+    pub version: Option<String>,
+    pub path: String,
 }
 
 #[salsa::tracked]
