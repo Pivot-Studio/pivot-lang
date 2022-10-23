@@ -6,7 +6,7 @@ use crate::{
     },
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
-    utils::read_config::{get_config, ConfigEntry},
+    utils::read_config::{get_config, get_config_path},
     Db,
 };
 use colored::Colorize;
@@ -103,12 +103,32 @@ pub fn run(p: &Path, opt: OptimizationLevel) {
 
 #[salsa::tracked(lru = 32)]
 pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
-    let re = get_config(db, ConfigEntry::new(db, docs.file(db).to_string()));
+    let path = get_config_path(docs.file(db).to_string());
+    if path.is_err() {
+        eprintln!("lsp error: {}", path.err().unwrap());
+        return;
+    }
+    let confinput = FileCompileInput::new(
+        db,
+        path.clone().unwrap(),
+        "".to_string(),
+        docs,
+        Default::default(),
+    );
+
+    let re = get_config(db, confinput.get_file_content(db).unwrap());
     if re.is_err() {
         eprintln!("lsp error: {}", re.err().unwrap());
         return;
     }
-    let config = re.unwrap();
+    let mut config = re.unwrap();
+    config.entry = PathBuf::from(path.unwrap())
+        .parent()
+        .unwrap()
+        .join(config.entry)
+        .to_str()
+        .unwrap()
+        .to_string();
     let file = config.entry;
     let input = FileCompileInput::new(
         db,

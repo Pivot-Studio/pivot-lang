@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use rustc_hash::FxHashMap;
 use serde::Deserialize;
 
-use crate::Db;
+use crate::{nomparser::SourceProgram, Db};
 
 pub fn get_config_path(current: String) -> Result<String, &'static str> {
     let mut cur_path = PathBuf::from(current);
@@ -18,7 +18,7 @@ pub fn get_config_path(current: String) -> Result<String, &'static str> {
             if path.file_name().eq("Kagari.toml") {
                 if let Some(p) = cur_path.to_str() {
                     let res = String::from(p.to_string());
-                    return Ok(res);
+                    return Ok(res + "/Kagari.toml");
                 } else {
                     return Err("找不到配置文件～");
                 }
@@ -50,25 +50,12 @@ pub struct Dependency {
     pub path: String,
 }
 
-#[salsa::tracked]
-pub struct ConfigEntry {
-    pub current: String,
-}
-
-pub fn get_config(db: &dyn Db, entry: ConfigEntry) -> Result<Config, String> {
-    let folder = get_config_path(entry.current(db))?;
-    let path = folder.clone() + "/Kagari.toml";
-    eprintln!("config path: {}", path);
-    let config = std::fs::read_to_string(path).unwrap();
+pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
+    let config = entry.text(db);
     let re = toml::from_str(&config);
     if let Err(re) = re {
         return Err(format!("配置文件解析错误:{:?}", re));
     }
-    let mut config: Config = re.unwrap();
-    config.entry = PathBuf::from(folder)
-        .join(config.entry)
-        .to_str()
-        .unwrap()
-        .to_string();
+    let config: Config = re.unwrap();
     Ok(config)
 }
