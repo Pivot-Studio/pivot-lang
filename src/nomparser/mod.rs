@@ -167,10 +167,8 @@ pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
             if opt2.is_some() {
                 range = range.start.to(opt2.unwrap().1.end);
             }
-
-            let ids = path.iter().map(|s| Box::new(cast_to_var(s))).collect();
             res_enum(NodeEnum::UseNode(UseNode {
-                ids,
+                ids: path,
                 range,
                 complete: opt.is_none() && opt2.is_none(),
                 singlecolon: opt2.is_some(),
@@ -584,14 +582,6 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     Ok((input, node))
 }
 
-fn cast_to_var(n: &Box<NodeEnum>) -> VarNode {
-    if let NodeEnum::Var(v) = &**n {
-        v.clone()
-    } else {
-        panic!("not a var node");
-    }
-}
-
 #[test_parser("let a = 1")]
 pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
@@ -599,12 +589,11 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
             tag_token(TokenType::LET),
             tuple((identifier, tag_token(TokenType::ASSIGN), logic_exp)),
         ),
-        |(out, _, v)| {
-            let a = cast_to_var(&out);
-            let range = out.range().start.to(v.range().end);
+        |(a, _, v)| {
+            let range = a.range().start.to(v.range().end);
             res_enum(
                 DefNode {
-                    var: a,
+                    var: *a,
                     exp: v,
                     range,
                 }
@@ -623,10 +612,16 @@ fn global_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
             tag_token(TokenType::ASSIGN),
             logic_exp,
         )),
-        |(_, out, _, exp)| {
-            let var = cast_to_var(&out);
-            let range = out.range().start.to(exp.range().end);
-            res_enum(GlobalNode { var, exp, range }.into())
+        |(_, var, _, exp)| {
+            let range = var.range().start.to(exp.range().end);
+            res_enum(
+                GlobalNode {
+                    var: *var,
+                    exp,
+                    range,
+                }
+                .into(),
+            )
         },
     ))(input)
 }
@@ -728,9 +723,8 @@ fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
             opt(tag_token(TokenType::DOUBLE_COLON)), // 容忍未写完的语句
             opt(tag_token(TokenType::COLON)),        // 容忍未写完的语句
         )),
-        |((a, mut b), opt, opt2)| {
-            b.insert(0, a);
-            let mut ns: Vec<Box<VarNode>> = b.iter().map(|x| Box::new(cast_to_var(x))).collect();
+        |((a, mut ns), opt, opt2)| {
+            ns.insert(0, a);
             let id = ns.pop().unwrap();
             let mut range = id.range();
             if opt.is_some() {
@@ -790,7 +784,7 @@ pub fn compare_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 pub fn logic_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     parse_bin_ops!(compare_exp, AND, OR)(input)
 }
-pub fn identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
+pub fn identifier(input: Span) -> IResult<Span, Box<VarNode>> {
     delspace(map_res(
         recognize(pair(
             alt((alpha1::<Span, nom::error::Error<Span>>, tag("_"))),
@@ -801,13 +795,10 @@ pub fn identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
             if a.is_some() {
                 return Err(Error {});
             }
-            res_enum(
-                VarNode {
-                    name: out.to_string(),
-                    range: Range::new(out, out.take_split(out.len()).0),
-                }
-                .into(),
-            )
+            Ok(Box::new(VarNode {
+                name: out.to_string(),
+                range: Range::new(out, out.take_split(out.len()).0),
+            }))
         },
     ))(input)
 }
@@ -886,14 +877,18 @@ fn type_name(input: Span) -> IResult<Span, Box<TypeNameNode>> {
     delspace(map_res(
         tuple((
             del_newline_or_space!(opt(tag_token(TokenType::REF))),
-            identifier,
+            extern_identifier,
         )),
-        |(is_ref, o)| {
-            let o = cast_to_var(&o);
+        |(is_ref, exid)| {
+            let exid = match *exid {
+                NodeEnum::ExternIDNode(exid) => exid,
+                _ => unreachable!(),
+            };
+            let range = exid.range;
             res_box(Box::new(TypeNameNode {
-                id: o.name,
+                id: Some(exid),
                 is_ref: is_ref.is_some(),
-                range: o.range,
+                range,
             }))
         },
     ))(input)
@@ -909,13 +904,12 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
             opt(comment),
         )),
         |(id, _, type_name, d)| {
-            let id = cast_to_var(&id);
             let mut range = id.range;
             let mut tprange = range;
             tprange.end.column += 1;
             tprange.start = tprange.end;
             let mut tp = Box::new(TypeNameNode {
-                id: "".to_string(),
+                id: None,
                 range: tprange,
                 is_ref: false,
             });
@@ -932,7 +926,12 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
                 tp = type_name;
             }
 
-            res_box(Box::new(TypedIdentifierNode { id, tp, doc, range }))
+            res_box(Box::new(TypedIdentifierNode {
+                id: *id,
+                tp,
+                doc,
+                range,
+            }))
         },
     ))(input)
 }
@@ -987,7 +986,6 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             )),
         )),
         |(doc, _, id, _, paras, _, ret, body)| {
-            let id = cast_to_var(&id);
             let mut paralist = vec![];
             let range = id.range;
             if let Some(para) = paras {
@@ -1080,18 +1078,9 @@ fn take_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     if !node.complete {
         node.range.end.column += 1;
     }
-    let mut ids = vec![];
-    for v in b {
-        ids.push(Box::new(cast_to_var(&v)));
-    }
-    node.ids = ids;
+    node.ids = b;
 
     Ok((input, box_node(node.into())))
-}
-
-#[test_parser("jksa: int;")]
-fn struct_field(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
-    del_newline_or_space!(terminated(typed_identifier, tag_token(TokenType::SEMI)))(input)
 }
 
 #[test_parser(
@@ -1107,23 +1096,24 @@ fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             tag_token(TokenType::STRUCT),
             identifier,
             del_newline_or_space!(tag_token(TokenType::LBRACE)),
-            many0(map_res(tuple((struct_field, opt(comment))), |(f, c)| {
-                Ok::<_, Error>((f, c))
-            })),
+            many0(tuple((
+                del_newline_or_space!(typed_identifier),
+                opt(tag_token(TokenType::SEMI)),
+                opt(comment),
+            ))),
             del_newline_or_space!(tag_token(TokenType::RBRACE)),
         )),
         |(doc, _, id, _, fields, _)| {
-            let id = cast_to_var(&id);
             let range = id.range;
             let mut fieldlist = vec![];
             for mut f in fields {
                 f.0.doc = None;
-                if let Some(c) = &f.1 {
+                if let Some(c) = &f.2 {
                     if let NodeEnum::Comment(c) = *c.clone() {
                         f.0.doc = Some(c);
                     }
                 }
-                fieldlist.push(f.0.clone());
+                fieldlist.push((f.0.clone(), f.1.is_some()));
             }
             Ok::<_, Error>(Box::new(TopLevel::StructDef(StructDefNode {
                 doc,
@@ -1141,23 +1131,25 @@ fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
 /// ```
 /// special: del newline or space
 fn struct_init_field(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    del_newline_or_space!(terminated(
-        map_res(
-            tuple((identifier, tag_token(TokenType::COLON), logic_exp)),
-            |(id, _, exp)| {
-                let id = cast_to_var(&id);
-                let range = id.range.start.to(exp.range().end);
-                res_enum(
-                    StructInitFieldNode {
-                        id: id.name,
-                        exp,
-                        range,
-                    }
-                    .into(),
-                )
-            },
-        ),
-        tag_token(TokenType::COMMA)
+    del_newline_or_space!(map_res(
+        tuple((
+            identifier,
+            tag_token(TokenType::COLON),
+            logic_exp,
+            opt(tag_token(TokenType::COMMA))
+        )),
+        |(id, _, exp, has_comma)| {
+            let range = id.range.start.to(exp.range().end);
+            res_enum(
+                StructInitFieldNode {
+                    id: *id,
+                    exp,
+                    range,
+                    has_comma: has_comma.is_some(),
+                }
+                .into(),
+            )
+        },
     ))(input)
 }
 

@@ -100,10 +100,15 @@ impl Node for ExternIDNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        self.get_type(ctx)
+    }
+}
+impl ExternIDNode {
+    pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if self.ns.is_empty() {
             if self.complete {
                 // 如果该节点只有一个id，且完整，那么就是一个普通的包内符号，直接调用idnode
-                return self.id.emit(ctx);
+                return self.id.get_type(ctx);
             }
             ctx.if_completion(|a, (pos, _)| {
                 if pos.is_in(self.range) {
@@ -119,7 +124,7 @@ impl Node for ExternIDNode {
                     a.completion_items.set(completions);
                 }
             });
-            return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
+            return Err(ctx.add_err(self.range, ErrorCode::COMPLETION));
         }
         for id in &self.ns {
             ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
@@ -137,24 +142,23 @@ impl Node for ExternIDNode {
         if let Some(symbol) = symbol {
             ctx.push_semantic_token(self.id.range, SemanticTokenType::VARIABLE, 0);
 
-            let g = ctx.get_or_add_global(&self.id.name, &plmod, &symbol.tp);
+            let g = ctx.get_or_add_global(&self.id.name, &plmod, symbol.tp.clone());
             return Ok((
                 Value::VarValue(g),
-                Some(symbol.tp.to_string()),
+                Some(symbol.tp.clone()),
                 TerminatorEnum::NONE,
                 true,
             ));
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
             ctx.set_if_refs_tp(&tp, self.range);
-            let range = tp.get_range();
-            let re = match tp {
+            let range = &tp.get_range();
+            let re = match &tp {
                 PLType::FN(f) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
-                    let n = f.name.clone();
                     Ok((
-                        Value::ExFnValue((f.get_value(ctx, plmod), PLType::FN(f))),
-                        Some(n),
+                        Value::ExFnValue((f.get_value(ctx, plmod), PLType::FN(f.clone()))),
+                        Some(tp),
                         TerminatorEnum::NONE,
                         true,
                     ))
@@ -163,7 +167,7 @@ impl Node for ExternIDNode {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
                     Ok((
                         Value::STValue(s.struct_type(ctx)),
-                        Some(s.name.clone()),
+                        Some(tp.clone()),
                         TerminatorEnum::NONE,
                         true,
                     ))
@@ -171,7 +175,7 @@ impl Node for ExternIDNode {
                 _ => unreachable!(),
             };
             if let Some(range) = range {
-                ctx.send_if_go_to_def(self.range, range, plmod.path.clone());
+                ctx.send_if_go_to_def(self.range, *range, plmod.path.clone());
             }
             return re;
         }

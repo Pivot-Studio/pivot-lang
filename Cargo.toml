@@ -15,7 +15,7 @@ internal_macro = { path = "./internal_macro" }
 vm = { path = "./vm", optional = true, features = ["jit"] }
 nom_locate = "4.0.0"
 as-any = "0.3.0"
-clap = { version = "3.2.22", features = ["derive"] }
+clap = { version = "4.0.18", features = ["derive"] }
 colored = "2.0.0"
 serde = "1.0.145"
 lsp-types = "0.93.1"

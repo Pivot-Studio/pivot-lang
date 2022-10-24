@@ -1,5 +1,5 @@
 use super::*;
-use crate::ast::ctx::{Ctx, PLType};
+use crate::ast::ctx::{Ctx, PLType, PriType};
 use crate::ast::diag::ErrorCode;
 
 use internal_macro::range;
@@ -21,7 +21,7 @@ impl Node for BoolConstNode {
         ctx.push_semantic_token(self.range, SemanticTokenType::KEYWORD, 0);
         Ok((
             Value::BoolValue(ctx.context.i8_type().const_int(self.value as u64, true)),
-            Some("bool".to_string()),
+            Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
             TerminatorEnum::NONE,
             true,
         ))
@@ -45,7 +45,7 @@ impl Node for NumNode {
             let b = ctx.context.i64_type().const_int(x, true);
             return Ok((
                 Value::IntValue(b),
-                Some("i64".to_string()),
+                Some(PLType::PRIMITIVE(PriType::try_from_str("i64").unwrap())),
                 TerminatorEnum::NONE,
                 true,
             ));
@@ -53,7 +53,7 @@ impl Node for NumNode {
             let b = ctx.context.f64_type().const_float(x);
             return Ok((
                 Value::FloatValue(b),
-                Some("f64".to_string()),
+                Some(PLType::PRIMITIVE(PriType::try_from_str("f64").unwrap())),
                 TerminatorEnum::NONE,
                 true,
             ));
@@ -67,13 +67,13 @@ impl Node for NumNode {
 pub struct VarNode {
     pub name: String,
 }
-impl Node for VarNode {
-    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+impl VarNode {
+    pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("VarNode: {}", self.name);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.if_completion(|ctx, a| {
             if a.0.is_in(self.range) {
                 let completions = ctx.get_completions();
@@ -94,22 +94,34 @@ impl Node for VarNode {
             return o;
         }
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
-            if let PLType::FN(f) = tp {
-                ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
-                return Ok((
-                    Value::ExFnValue((f.get_value(ctx, &ctx.plmod), PLType::FN(f.clone()))),
-                    Some(f.name.clone()),
-                    TerminatorEnum::NONE,
-                    true,
-                ));
-            } else if let PLType::STRUCT(s) = tp {
-                ctx.push_semantic_token(self.range, SemanticTokenType::STRUCT, 0);
-                return Ok((
-                    Value::STValue(s.struct_type(ctx)),
-                    Some(s.name.clone()),
-                    TerminatorEnum::NONE,
-                    true,
-                ));
+            match tp {
+                PLType::FN(f) => {
+                    ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
+                    return Ok((
+                        Value::ExFnValue((f.get_value(ctx, &ctx.plmod), PLType::FN(f.clone()))),
+                        Some(tp.clone()),
+                        TerminatorEnum::NONE,
+                        true,
+                    ));
+                }
+                PLType::STRUCT(s) => {
+                    ctx.push_semantic_token(self.range, SemanticTokenType::STRUCT, 0);
+                    return Ok((
+                        Value::STValue(s.struct_type(ctx)),
+                        Some(tp.clone()),
+                        TerminatorEnum::NONE,
+                        true,
+                    ));
+                }
+                PLType::PRIMITIVE(_) => {
+                    ctx.push_semantic_token(self.range, SemanticTokenType::TYPE, 0);
+                    return Ok((Value::None, Some(tp.clone()), TerminatorEnum::NONE, true));
+                }
+                PLType::VOID => {
+                    ctx.push_semantic_token(self.range, SemanticTokenType::TYPE, 0);
+                    return Ok((Value::None, Some(tp.clone()), TerminatorEnum::NONE, true));
+                }
+                _ => return Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND)),
             }
         }
         Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND))

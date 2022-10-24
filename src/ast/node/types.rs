@@ -13,7 +13,7 @@ use rustc_hash::FxHashMap;
 #[range]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeNameNode {
-    pub id: String,
+    pub id: Option<ExternIDNode>,
     pub is_ref: bool,
 }
 
@@ -23,11 +23,11 @@ impl TypeNameNode {
         tab(tabs, line.clone(), end);
         println!("TypeNameNode");
         tab(tabs + 1, line.clone(), true);
-        if self.is_ref {
-            println!("id: &{}", self.id);
-        } else {
-            println!("id: {}", self.id);
-        }
+        // if self.is_ref {
+        //     println!("id: &{}", self.id);
+        // } else {
+        //     println!("id: {}", self.id);
+        // }
     }
     pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Result<PLType, PLDiag> {
         ctx.if_completion(|ctx, a| {
@@ -36,13 +36,16 @@ impl TypeNameNode {
                 ctx.completion_items.set(completions);
             }
         });
-        ctx.push_semantic_token(self.range, SemanticTokenType::TYPE, 0);
-        let re = ctx.get_type(&self.id, self.range)?.clone();
-        if let Some(dst) = re.get_range() {
+        if self.id.is_none() {
+            return Err(ctx.add_err(self.range, ErrorCode::EXPECT_TYPE));
+        }
+        let (_, pltype, _, _) = self.id.as_ref().unwrap().get_type(ctx)?;
+        let pltype = pltype.unwrap();
+        if let Some(dst) = pltype.get_range() {
             ctx.send_if_go_to_def(self.range, dst, ctx.plmod.path.clone());
         }
-        ctx.set_if_refs_tp(&re, self.range);
-        Ok(re)
+        ctx.set_if_refs_tp(&pltype, self.range);
+        Ok(pltype)
     }
 }
 #[range]
@@ -72,7 +75,7 @@ impl TypedIdentifierNode {
 pub struct StructDefNode {
     pub doc: Vec<Box<NodeEnum>>,
     pub id: String,
-    pub fields: Vec<Box<TypedIdentifierNode>>,
+    pub fields: Vec<(Box<TypedIdentifierNode>, bool)>,
 }
 
 impl Node for StructDefNode {
@@ -86,7 +89,7 @@ impl Node for StructDefNode {
             c.print(tabs + 1, false, line.clone());
         }
         let mut i = self.fields.len();
-        for field in &self.fields {
+        for (field, _) in &self.fields {
             i -= 1;
             field.print(tabs + 1, i == 0, line.clone());
         }
@@ -97,10 +100,13 @@ impl Node for StructDefNode {
             ctx.push_semantic_token(c.range(), SemanticTokenType::COMMENT, 0);
         }
         ctx.push_semantic_token(self.range, SemanticTokenType::STRUCT, 0);
-        for f in self.fields.clone() {
-            ctx.push_semantic_token(f.id.range, SemanticTokenType::PROPERTY, 0);
-            ctx.push_semantic_token(f.tp.range, SemanticTokenType::TYPE, 0);
-            if let Some(doc) = f.doc {
+        for (field, has_semi) in self.fields.iter() {
+            ctx.push_semantic_token(field.id.range, SemanticTokenType::PROPERTY, 0);
+            field.tp.get_type(ctx)?;
+            if !has_semi {
+                return Err(ctx.add_err(field.range, ErrorCode::COMPLETION));
+            }
+            if let Some(doc) = &field.doc {
                 ctx.push_semantic_token(doc.range, SemanticTokenType::COMMENT, 0);
             }
         }
@@ -117,14 +123,16 @@ impl StructDefNode {
         let mut fields = FxHashMap::<String, Field>::default();
         let mut order_fields = Vec::<Field>::new();
         let mut i = 0;
-        for field in self.fields.iter() {
+        for (field, has_semi) in self.fields.iter() {
+            if !has_semi {
+                return Err(ctx.add_err(field.range, ErrorCode::COMPLETION));
+            }
             let (id, tp) = (field.id.clone(), field.tp.get_type(ctx)?);
             let f = Field {
                 index: i,
-                tp: tp.clone(),
-                typename: field.tp.clone(),
+                pltype: tp.clone(),
                 name: field.id.name.clone(),
-                range: field.id.range,
+                range: field.range,
                 is_ref: field.tp.is_ref,
                 refs: Rc::new(RefCell::new(vec![])),
             };
@@ -146,12 +154,12 @@ impl StructDefNode {
                 .map(|order_field| {
                     if order_field.is_ref {
                         order_field
-                            .tp
+                            .pltype
                             .get_basic_type(&ctx)
                             .ptr_type(inkwell::AddressSpace::Generic)
                             .as_basic_type_enum()
                     } else {
-                        order_field.tp.get_basic_type(&ctx)
+                        order_field.pltype.get_basic_type(&ctx)
                     }
                 })
                 .collect::<Vec<_>>(),
@@ -159,6 +167,7 @@ impl StructDefNode {
         );
         let stu = PLType::STRUCT(STType {
             name: name.to_string(),
+            path: ctx.plmod.path.clone(),
             fields,
             ordered_fields: newf,
             range: self.range(),
@@ -175,8 +184,9 @@ impl StructDefNode {
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitFieldNode {
-    pub id: String,
+    pub id: VarNode,
     pub exp: Box<NodeEnum>,
+    pub has_comma: bool,
 }
 
 impl Node for StructInitFieldNode {
@@ -185,18 +195,27 @@ impl Node for StructInitFieldNode {
         tab(tabs, line.clone(), end);
         println!("StructInitFieldNode");
         tab(tabs + 1, line.clone(), false);
-        println!("id: {}", self.id);
+        // println!("id: {}", self.id);
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let range = self.exp.range();
         let (v, tp, _, _) = self.exp.emit(ctx)?;
+        if !self.has_comma {
+            return Err(ctx.add_err(self.range, ErrorCode::COMPLETION));
+        }
         let value = if let Value::RefValue(_) = v {
             v.as_basic_value_enum()
         } else {
-            ctx.try_load2var(v).as_basic_value_enum()
+            let v = ctx.try_load2var(v);
+            let vop = v.as_basic_value_enum_op();
+            if vop.is_none() {
+                return Err(ctx.add_err(range, ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH));
+            }
+            vop.unwrap()
         };
         return Ok((
-            Value::StructFieldValue((self.id.clone(), value)),
+            Value::StructFieldValue((self.id.name.clone(), value)),
             tp,
             TerminatorEnum::NONE,
             false,
@@ -225,8 +244,8 @@ impl Node for StructInitNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        ctx.push_semantic_token(self.tp.range, SemanticTokenType::STRUCT, 0);
         let mut fields = FxHashMap::<String, (BasicValueEnum<'ctx>, Range)>::default();
+        let tp = self.tp.get_type(ctx)?;
         for field in self.fields.iter_mut() {
             let range = field.range();
             if let (Value::StructFieldValue((id, val)), _, _, _) = field.emit(ctx)? {
@@ -235,8 +254,7 @@ impl Node for StructInitNode {
                 panic!("StructInitNode::emit: invalid field");
             }
         }
-        let st = self.tp.get_type(ctx)?;
-        if let PLType::STRUCT(st) = st {
+        if let PLType::STRUCT(st) = &tp {
             ctx.save_if_comment_doc_hover(self.tp.range, Some(st.doc.clone()));
             let et = st.struct_type(ctx).as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");
@@ -260,14 +278,10 @@ impl Node for StructInitNode {
                     return Err(ctx.add_err(range, ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH));
                 }
                 ctx.builder.build_store(ptr, val);
-                ctx.send_if_go_to_def(range, field.range, ctx.plmod.path.clone())
+                ctx.set_if_refs(field.refs.clone(), range);
+                ctx.send_if_go_to_def(range, field.range, st.path.clone())
             }
-            return Ok((
-                Value::VarValue(stv),
-                Some(st.name),
-                TerminatorEnum::NONE,
-                false,
-            ));
+            return Ok((Value::VarValue(stv), Some(tp), TerminatorEnum::NONE, false));
         } else {
             panic!("StructInitNode::emit: invalid type");
         }

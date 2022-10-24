@@ -56,6 +56,7 @@ impl Node for ProgramNode {
                 }
             }
             if i == 0 {
+                ctx.errs.borrow_mut().clear();
                 break;
             }
             if i == prev {
@@ -67,6 +68,7 @@ impl Node for ProgramNode {
                 break;
             }
             prev = i;
+            ctx.errs.borrow_mut().clear();
         }
         self.fntypes.iter_mut().for_each(|x| {
             _ = x.emit_func_type(ctx);

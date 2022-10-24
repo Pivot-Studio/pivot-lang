@@ -1,4 +1,4 @@
-
+use mod2;
 fn test_mod(args:i64) void {
     
     printi64ln(999999);
@@ -6,3 +6,8 @@ fn test_mod(args:i64) void {
 }
 
 fn printi64ln(i: i64) void;//415642154
+
+struct Mod1 {
+    x:i64;
+    y:mod2::Mod2;
+}

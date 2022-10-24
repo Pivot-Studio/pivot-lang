@@ -12,6 +12,7 @@ use lsp_types::SemanticTokenType;
 use std::cell::RefCell;
 use std::fmt::format;
 use std::rc::Rc;
+use std::vec;
 
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -35,78 +36,61 @@ impl Node for FuncDefNode {
         }
         if let Some(body) = &self.body {
             tab(tabs + 1, line.clone(), false);
-            if self.typenode.ret.is_ref {
-                println!("type: &{}", self.typenode.ret.id);
-            } else {
-                println!("type: {}", self.typenode.ret.id);
-            }
+            // if self.typenode.ret.is_ref {
+            //     println!("type: &{}", self.typenode.ret.id);
+            // } else {
+            //     println!("type: {}", self.typenode.ret.id);
+            // }
             body.print(tabs + 1, true, line.clone());
         } else {
             tab(tabs + 1, line, true);
-            if self.typenode.ret.is_ref {
-                println!("type: &{}", self.typenode.ret.id);
-            } else {
-                println!("type: {}", self.typenode.ret.id);
-            }
+            // if self.typenode.ret.is_ref {
+            //     println!("type: &{}", self.typenode.ret.id);
+            // } else {
+            //     println!("type: {}", self.typenode.ret.id);
+            // }
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.save_if_comment_doc_hover(self.range, Some(self.typenode.doc.clone()));
-        let typenode = self.typenode.clone();
         for c in self.typenode.doc.iter_mut() {
             c.emit(ctx)?;
         }
-        ctx.push_semantic_token(typenode.range, SemanticTokenType::FUNCTION, 0);
-        for p in typenode.paralist.iter() {
-            ctx.push_semantic_token(p.id.range, SemanticTokenType::PARAMETER, 0);
-            ctx.push_semantic_token(p.tp.range, SemanticTokenType::TYPE, 0);
-
-            if p.tp.id == "void" {
-                return Err(ctx.add_err(
-                    p.range,
-                    crate::ast::diag::ErrorCode::VOID_TYPE_CANNOT_BE_PARAMETER,
-                ));
-            }
-        }
-        ctx.push_semantic_token(typenode.ret.range, SemanticTokenType::TYPE, 0);
-        if let Some(body) = self.body.as_mut() {
-            // build debug info
-            let param_ditypes_res: Vec<Result<DIType, PLDiag>> = self
-                .typenode
-                .paralist
-                .iter()
-                .map(|para| {
-                    let res = ctx.get_type(&para.tp.id, para.range())?;
-                    let pltype = res;
+        let mut para_pltypes = Vec::new();
+        let mut para_names = Vec::new();
+        let mut param_ditypes = Vec::new();
+        ctx.push_semantic_token(self.typenode.range, SemanticTokenType::FUNCTION, 0);
+        for para in self.typenode.paralist.iter() {
+            ctx.push_semantic_token(para.id.range, SemanticTokenType::PARAMETER, 0);
+            ctx.push_semantic_token(para.tp.range, SemanticTokenType::TYPE, 0);
+            para_names.push(para.id.clone());
+            let pltype = para.tp.get_type(ctx)?;
+            match pltype {
+                PLType::VOID => {
+                    return Err(ctx.add_err(
+                        para.range,
+                        crate::ast::diag::ErrorCode::VOID_TYPE_CANNOT_BE_PARAMETER,
+                    ))
+                }
+                pltype => {
+                    para_pltypes.push(pltype.clone());
                     let di_type = pltype.get_ditype(ctx);
                     let di_type = di_type.unwrap();
                     let di_ref_type = pltype.clone().get_di_ref_type(ctx, Some(di_type)).unwrap();
-                    if para.tp.is_ref {
-                        Ok(di_ref_type.as_type())
+                    param_ditypes.push(if para.tp.is_ref {
+                        di_ref_type.as_type()
                     } else {
-                        Ok(di_type)
-                    }
-                })
-                .collect::<Vec<_>>();
-            let mut param_ditypes = vec![];
-            for v in param_ditypes_res {
-                if v.is_err() {
-                    let diag = v.unwrap_err();
-                    ctx.add_diag(diag.clone());
-                    return Err(diag);
+                        di_type
+                    });
                 }
-                param_ditypes.push(v.unwrap());
             }
+        }
+        ctx.push_semantic_token(self.typenode.ret.range, SemanticTokenType::TYPE, 0);
+        if let Some(body) = self.body.as_mut() {
             let subroutine_type = ctx.dibuilder.create_subroutine_type(
                 ctx.diunit.get_file(),
                 {
-                    let res = ctx.get_type(&self.typenode.ret.id, self.typenode.ret.range);
-                    if res.is_err() {
-                        let diag = res.unwrap_err();
-                        ctx.add_diag(diag.clone());
-                        return Err(diag);
-                    }
-                    let pltype = res.unwrap();
+                    let pltype = self.typenode.ret.get_type(ctx)?;
                     let di_type = pltype.get_ditype(ctx);
                     let di_ref_type = pltype.clone().get_di_ref_type(ctx, di_type);
                     if self.typenode.ret.is_ref {
@@ -131,16 +115,9 @@ impl Node for FuncDefNode {
                 DIFlags::PUBLIC,
                 false,
             );
-            let para_pltype_ids: Vec<&String> =
-                typenode.paralist.iter().map(|para| &para.tp.id).collect();
-            // get the para's type vec & copy the para's name vec
-            let mut para_names = Vec::new();
-            for para in typenode.paralist.iter() {
-                para_names.push(para.id.clone());
-            }
             // add function
             let func;
-            let res = ctx.get_type(typenode.id.as_str(), self.range);
+            let res = ctx.get_type(self.typenode.id.as_str(), self.range);
             if res.is_err() {
                 let diag = res.unwrap_err();
                 ctx.add_diag(diag.clone());
@@ -172,14 +149,9 @@ impl Node for FuncDefNode {
             let return_block = ctx.context.append_basic_block(func, "return");
             ctx.position_at_end(return_block);
             let ret_value_ptr = if func.get_type().get_return_type().is_some() {
-                let res = ctx.get_type(&self.typenode.ret.id, self.typenode.ret.range);
-                if res.is_err() {
-                    let diag = res.unwrap_err();
-                    ctx.add_diag(diag.clone());
-                    return Err(diag);
-                }
+                let pltype = self.typenode.ret.get_type(&mut ctx)?;
                 let ret_type = {
-                    let op = res?.get_basic_type_op(&ctx);
+                    let op = pltype.get_basic_type_op(&ctx);
                     if op.is_none() {
                         return Ok((Value::None, None, TerminatorEnum::NONE, false));
                     }
@@ -231,8 +203,8 @@ impl Node for FuncDefNode {
                 ctx.add_symbol(
                     para_names[i].name.clone(),
                     alloca,
-                    para_pltype_ids[i].clone(),
-                    typenode.paralist[i].id.range,
+                    para_pltypes[i].clone(),
+                    self.typenode.paralist[i].id.range,
                     false,
                 )
                 .unwrap();
@@ -275,7 +247,7 @@ impl Node for FuncCallNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut para_values = Vec::new();
-        let (v, id, _, _) = self.id.emit(ctx)?;
+        let (v, id, _, _) = self.id.get_type(ctx)?;
         let id = id.unwrap();
         let func = match v {
             Value::ExFnValue(f) => Some(f),
@@ -309,35 +281,34 @@ impl Node for FuncCallNode {
         let ret = ctx.builder.build_call(
             func,
             &para_values,
-            format(format_args!("call_{}", id)).as_str(),
+            format(format_args!("call_{}", id.get_name().unwrap())).as_str(),
         );
         if let PLType::FN(fv) = &fntp {
             ctx.save_if_comment_doc_hover(self.range, Some(fv.doc.clone()));
-            let o = match (ret.try_as_basic_value().left(), fv.ret_pltype.as_ref()) {
-                (Some(v), Some(pltype)) => {
+            let o = match ret.try_as_basic_value().left() {
+                Some(v) => {
                     if v.is_pointer_value() {
                         Ok((
                             Value::RefValue(v.into_pointer_value()),
-                            Some(pltype.clone()),
+                            Some(*fv.ret_pltype.clone()),
                             TerminatorEnum::NONE,
                             false,
                         ))
                     } else {
                         Ok((
                             Value::LoadValue(v),
-                            Some(pltype.clone()),
+                            Some(*fv.ret_pltype.clone()),
                             TerminatorEnum::NONE,
                             false,
                         ))
                     }
                 }
-                (None, Some(pltype)) => Ok((
+                None => Ok((
                     Value::None,
-                    Some(pltype.clone()),
+                    Some(*fv.ret_pltype.clone()),
                     TerminatorEnum::NONE,
                     false,
                 )),
-                _ => todo!(),
             };
             ctx.set_if_refs_tp(&fntp, self.range);
             ctx.send_if_go_to_def(self.range, fv.range, ctx.plmod.path.clone());
@@ -364,8 +335,10 @@ impl FuncTypeNode {
             return Err(ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL));
         }
         let mut para_types = Vec::new();
+        let mut param_pltypes = Vec::new();
         for para in self.paralist.iter() {
             let paramtype = para.tp.get_type(ctx)?;
+            param_pltypes.push(paramtype.clone());
             para_types.push(if para.tp.is_ref {
                 paramtype
                     .get_basic_type(&ctx)
@@ -400,8 +373,8 @@ impl FuncTypeNode {
         let refs = vec![];
         let ftp = PLType::FN(FNType {
             name: self.id.clone(),
-            fntype: self.clone(),
-            ret_pltype: Some(self.ret.id.clone()),
+            ret_pltype: Box::new(self.ret.get_type(ctx)?),
+            param_pltypes,
             range: self.range,
             refs: Rc::new(RefCell::new(refs)),
             is_ref: self.ret.is_ref,

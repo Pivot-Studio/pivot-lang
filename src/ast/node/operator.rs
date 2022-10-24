@@ -2,6 +2,7 @@ use super::primary::VarNode;
 use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::ctx::PLType;
+use crate::ast::ctx::PriType;
 use crate::ast::tokens::TokenType;
 
 use crate::ast::diag::ErrorCode;
@@ -122,7 +123,7 @@ impl Node for BinOpNode {
                             "zexttemp",
                         )
                     }),
-                    Some("bool".to_string()),
+                    Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
                     TerminatorEnum::NONE,
                     true,
                 ),
@@ -137,7 +138,7 @@ impl Node for BinOpNode {
                             "zexttemp",
                         )
                     }),
-                    Some("bool".to_string()),
+                    Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
                     TerminatorEnum::NONE,
                     true,
                 ),
@@ -158,7 +159,7 @@ impl Node for BinOpNode {
                             "zext_temp",
                         )
                     }),
-                    Some("bool".to_string()),
+                    Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
                     TerminatorEnum::NONE,
                     true,
                 ),
@@ -178,7 +179,7 @@ impl Node for BinOpNode {
                             "zext_temp",
                         )
                     }),
-                    Some("bool".to_string()),
+                    Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
                     TerminatorEnum::NONE,
                     true,
                 ),
@@ -219,9 +220,13 @@ impl Node for TakeOpNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let mut range = self.head.range();
+        let mut range;
         let head = self.head.emit(ctx)?;
-        let (mut res, mut pltype, _, is_const) = head;
+        let (mut res, pltype, _, is_const) = head;
+        if pltype.is_none() {
+            return Err(ctx.add_err(self.range, ErrorCode::INVALID_GET_FIELD));
+        }
+        let mut pltype = pltype.unwrap();
         if self.ids.len() != 0 {
             res = ctx.try_load2ptr(res);
         }
@@ -231,47 +236,38 @@ impl Node for TakeOpNode {
                     let etype = s.get_type().get_element_type();
                     let index;
                     if etype.is_struct_type() {
-                        let st = etype.into_struct_type();
-                        let tpname = &ctx
-                            .plmod
-                            .get_short_name(st.get_name().unwrap().to_str().unwrap());
                         // end with ".", gen completions
                         ctx.if_completion(|ctx, (pos, trigger)| {
                             if pos.is_in(id.range)
                                 && trigger.is_some()
                                 && trigger.as_ref().unwrap() == "."
                             {
-                                let tp = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
-                                if let PLType::STRUCT(s) = tp {
+                                if let PLType::STRUCT(s) = pltype.clone() {
                                     let completions = s.get_completions();
                                     ctx.completion_items.set(completions);
                                     ctx.action = None;
                                 }
                             }
                         });
-                        let tp = ctx.get_type(tpname, range).expect(tpname);
                         range = id.range();
                         ctx.push_semantic_token(range, SemanticTokenType::PROPERTY, 0);
-                        if let PLType::STRUCT(s) = tp {
+                        if let PLType::STRUCT(s) = pltype {
                             let field = s.fields.get(&id.name);
                             if let Some(field) = field {
                                 index = field.index;
-                                pltype = Some(field.typename.id.clone());
                                 ctx.set_if_refs(field.refs.clone(), range);
-                                ctx.send_if_go_to_def(range, field.range, ctx.plmod.path.clone());
+                                ctx.send_if_go_to_def(range, field.range, s.path);
+                                pltype = field.pltype.clone();
                             } else {
-                                return Err(ctx.add_err(
-                                    id.range,
-                                    crate::ast::diag::ErrorCode::STRUCT_FIELD_NOT_FOUND,
-                                ));
+                                return Err(
+                                    ctx.add_err(id.range, ErrorCode::STRUCT_FIELD_NOT_FOUND)
+                                );
                             }
                         } else {
-                            panic!("not implemented");
+                            unreachable!()
                         }
                     } else {
-                        return Err(
-                            ctx.add_err(id.range, crate::ast::diag::ErrorCode::INVALID_GET_FIELD)
-                        );
+                        return Err(ctx.add_err(id.range, ErrorCode::INVALID_GET_FIELD));
                     }
                     Value::VarValue(ctx.builder.build_struct_gep(s, index, "structgep").unwrap())
                 }
@@ -282,8 +278,7 @@ impl Node for TakeOpNode {
             // end with ".", gen completions
             ctx.if_completion(|ctx, (pos, trigger)| {
                 if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
-                    let tp = ctx.get_type(&pltype.unwrap(), self.range).unwrap();
-                    if let PLType::STRUCT(s) = tp {
+                    if let PLType::STRUCT(s) = pltype {
                         let completions = s.get_completions();
                         ctx.completion_items.set(completions);
                         ctx.action = None;
@@ -293,6 +288,6 @@ impl Node for TakeOpNode {
 
             return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
         }
-        Ok((res, pltype, TerminatorEnum::NONE, is_const))
+        Ok((res, Some(pltype.clone()), TerminatorEnum::NONE, is_const))
     }
 }
