@@ -75,7 +75,7 @@ impl TypedIdentifierNode {
 pub struct StructDefNode {
     pub doc: Vec<Box<NodeEnum>>,
     pub id: String,
-    pub fields: Vec<Box<TypedIdentifierNode>>,
+    pub fields: Vec<(Box<TypedIdentifierNode>, bool)>,
 }
 
 impl Node for StructDefNode {
@@ -89,7 +89,7 @@ impl Node for StructDefNode {
             c.print(tabs + 1, false, line.clone());
         }
         let mut i = self.fields.len();
-        for field in &self.fields {
+        for (field, _) in &self.fields {
             i -= 1;
             field.print(tabs + 1, i == 0, line.clone());
         }
@@ -100,10 +100,13 @@ impl Node for StructDefNode {
             ctx.push_semantic_token(c.range(), SemanticTokenType::COMMENT, 0);
         }
         ctx.push_semantic_token(self.range, SemanticTokenType::STRUCT, 0);
-        for f in self.fields.iter() {
-            ctx.push_semantic_token(f.id.range, SemanticTokenType::PROPERTY, 0);
-            f.tp.get_type(ctx)?;
-            if let Some(doc) = &f.doc {
+        for (field, has_semi) in self.fields.iter() {
+            ctx.push_semantic_token(field.id.range, SemanticTokenType::PROPERTY, 0);
+            field.tp.get_type(ctx)?;
+            if !has_semi {
+                return Err(ctx.add_err(field.range, ErrorCode::COMPLETION));
+            }
+            if let Some(doc) = &field.doc {
                 ctx.push_semantic_token(doc.range, SemanticTokenType::COMMENT, 0);
             }
         }
@@ -120,7 +123,10 @@ impl StructDefNode {
         let mut fields = FxHashMap::<String, Field>::default();
         let mut order_fields = Vec::<Field>::new();
         let mut i = 0;
-        for field in self.fields.iter() {
+        for (field, has_semi) in self.fields.iter() {
+            if !has_semi {
+                return Err(ctx.add_err(field.range, ErrorCode::COMPLETION));
+            }
             let (id, tp) = (field.id.clone(), field.tp.get_type(ctx)?);
             let f = Field {
                 index: i,
@@ -180,6 +186,7 @@ impl StructDefNode {
 pub struct StructInitFieldNode {
     pub id: VarNode,
     pub exp: Box<NodeEnum>,
+    pub has_comma: bool,
 }
 
 impl Node for StructInitFieldNode {
@@ -194,6 +201,9 @@ impl Node for StructInitFieldNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let range = self.exp.range();
         let (v, tp, _, _) = self.exp.emit(ctx)?;
+        if !self.has_comma {
+            return Err(ctx.add_err(self.range, ErrorCode::COMPLETION));
+        }
         let value = if let Value::RefValue(_) = v {
             v.as_basic_value_enum()
         } else {

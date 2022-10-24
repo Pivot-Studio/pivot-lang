@@ -1083,11 +1083,6 @@ fn take_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     Ok((input, box_node(node.into())))
 }
 
-#[test_parser("jksa: int;")]
-fn struct_field(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
-    del_newline_or_space!(terminated(typed_identifier, tag_token(TokenType::SEMI)))(input)
-}
-
 #[test_parser(
     "struct mystruct {
     myname: int;//123
@@ -1101,9 +1096,11 @@ fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             tag_token(TokenType::STRUCT),
             identifier,
             del_newline_or_space!(tag_token(TokenType::LBRACE)),
-            many0(map_res(tuple((struct_field, opt(comment))), |(f, c)| {
-                Ok::<_, Error>((f, c))
-            })),
+            many0(tuple((
+                del_newline_or_space!(typed_identifier),
+                opt(tag_token(TokenType::SEMI)),
+                opt(comment),
+            ))),
             del_newline_or_space!(tag_token(TokenType::RBRACE)),
         )),
         |(doc, _, id, _, fields, _)| {
@@ -1111,12 +1108,12 @@ fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             let mut fieldlist = vec![];
             for mut f in fields {
                 f.0.doc = None;
-                if let Some(c) = &f.1 {
+                if let Some(c) = &f.2 {
                     if let NodeEnum::Comment(c) = *c.clone() {
                         f.0.doc = Some(c);
                     }
                 }
-                fieldlist.push(f.0.clone());
+                fieldlist.push((f.0.clone(), f.1.is_some()));
             }
             Ok::<_, Error>(Box::new(TopLevel::StructDef(StructDefNode {
                 doc,
@@ -1134,22 +1131,25 @@ fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
 /// ```
 /// special: del newline or space
 fn struct_init_field(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    del_newline_or_space!(terminated(
-        map_res(
-            tuple((identifier, tag_token(TokenType::COLON), logic_exp)),
-            |(id, _, exp)| {
-                let range = id.range.start.to(exp.range().end);
-                res_enum(
-                    StructInitFieldNode {
-                        id: *id,
-                        exp,
-                        range,
-                    }
-                    .into(),
-                )
-            },
-        ),
-        tag_token(TokenType::COMMA)
+    del_newline_or_space!(map_res(
+        tuple((
+            identifier,
+            tag_token(TokenType::COLON),
+            logic_exp,
+            opt(tag_token(TokenType::COMMA))
+        )),
+        |(id, _, exp, has_comma)| {
+            let range = id.range.start.to(exp.range().end);
+            res_enum(
+                StructInitFieldNode {
+                    id: *id,
+                    exp,
+                    range,
+                    has_comma: has_comma.is_some(),
+                }
+                .into(),
+            )
+        },
     ))(input)
 }
 
