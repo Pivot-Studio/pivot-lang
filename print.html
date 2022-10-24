@@ -83,7 +83,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Getting Started</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> basic project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> vsc support</a></li></ol></li></ol>            </div>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Getting Started</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> basic project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> vsc support</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the compiler works internally</li><li class="chapter-item expanded "><a href="compiler/index.html"><strong aria-hidden="true">3.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compiler/parser.html"><strong aria-hidden="true">3.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="compiler/ast.html"><strong aria-hidden="true">3.2.</strong> AST</a></li></ol></li></ol>            </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
@@ -528,6 +528,144 @@ ast错误容忍</li>
 </ul>
 </li>
 </ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="compiler"><a class="header" href="#compiler">Compiler</a></h1>
+<p>pivot-lang编译器（以下简称编译器）主要由三个部分组成：nom分析器、ast和llvm后端。</p>
+<h2 id="nom-parser"><a class="header" href="#nom-parser">Nom parser</a></h2>
+<p>nom parser包含了编译器的词法分析和语法分析部分。nom parser的主要功能是使用递归下降法将pivot-lang源代码转换为ast。</p>
+<h2 id="ast"><a class="header" href="#ast">AST</a></h2>
+<p>AST是抽象语法树的简称，是编译器的中间表示。AST是由nom parser生成的，它是一个树形结构，每个节点都是一个结构体，包含了节点的类型、子节点、行号、列号等信息。</p>
+<h2 id="llvm-backend"><a class="header" href="#llvm-backend">LLVM backend</a></h2>
+<p>本编译器使用llvm来生成目标代码，llvm的jit部分会被包含在我们的编译器可执行文件中，然而静态编译不行。因此静态编译相比jit会多一个llvm的依赖。</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="parser"><a class="header" href="#parser">Parser</a></h1>
+<p>parser源代码位置位于<code>src/nomparser</code>目录下，包含了词法分析和语法分析部分。</p>
+<h2 id="nom"><a class="header" href="#nom">nom</a></h2>
+<p><a href="https://github.com/Geal/nom">nom</a>是一个用rust编写的parser combinator库，它不像lr分析器一样提供生成代码的功能，而是
+提供一组函数，这些函数可以用来组合出各种parser。</p>
+<p>相比于lr分析器，nom的优点是它的parser combinator非常灵活，熟练后可以快速组合出各种parser，
+而且可自定义性非常的强，看起来也很直观，相比很多ir生成器的语法并没有复杂多少，但是带来了更好的
+语法支持（一般的ir分析生成器的语法定义文件不会有编程语言那么好的语法支持）。</p>
+<p>会使用nom是读懂编译器parser代码的重要前提，这里强烈推荐两个nom文档：</p>
+<ul>
+<li><a href="https://github.com/Geal/nom/blob/main/doc/nom_recipes.md">Nom Recipes</a></li>
+<li><a href="https://github.com/Geal/nom/blob/main/doc/choosing_a_combinator.md">choosing a combinator</a></li>
+</ul>
+<h2 id="parser结构"><a class="header" href="#parser结构">parser结构</a></h2>
+<p>parser的主要功能是使用递归下降法将pivot-lang源代码转换为ast。如果你不了解递归下降法，可以先看看<a href="https://ruslanspivak.com/lsbasi-part1/">这篇文章</a>。</p>
+<p>对于pivot lang的每一条语法规则，都会在parser里对应一个分析函数，这些分析函数可能会调用其他分析函数，最终最上层的分析函数可以将完整的源代码转换为ast。</p>
+<p>pivot lang的完整语法规则见<a href="compiler/../../../#grammar">这里</a></p>
+<p>parser最顶层的函数是<code>parse</code>，它接受一个源文件输出一个AST根节点。</p>
+<pre><code class="language-rust no_run noplayground">#[salsa::tracked(lru = 32)]
+pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNodeWrapper, String&gt; {
+    let text = source.text(db);
+    let re = program(Span::new(text));
+    if let Err(e) = re {
+        return Err(format!(&quot;{:?}&quot;, e));
+    }
+    // eprintln!(&quot;parse&quot;);
+    Ok(ProgramNodeWrapper::new(db, re.unwrap().1))
+}
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="ast-1"><a class="header" href="#ast-1">AST</a></h1>
+<p>抽象语法树是目前编译器中最复杂的部分，它是编译器的中间表示，也是编译器的核心。本节将介绍AST的设计和实现。</p>
+<h2 id="ast的设计"><a class="header" href="#ast的设计">AST的设计</a></h2>
+<p>基本上，所有源代码中的基础单位都会对应抽象语法树中的一个节点。抽象语法树有很多类型的节点，他们可能会相互引用。</p>
+<p>所有的节点都必须实现<code>Node</code> trait，这个trait定义了节点的基本行为。</p>
+<pre><code class="language-rust no_run noplayground">#[enum_dispatch]
+pub trait Node: RangeTrait + AsAny {
+    fn print(&amp;self, tabs: usize, end: bool, line: Vec&lt;bool&gt;);
+    fn emit&lt;'a, 'ctx&gt;(&amp;'a mut self, ctx: &amp;mut Ctx&lt;'a, 'ctx&gt;) -&gt; NodeResult&lt;'ctx&gt;;
+}
+</code></pre>
+<p>你可能注意到了，<code>Node</code>trait继承了<code>RangeTrait</code>，这个trait定义了节点的位置信息。</p>
+<pre><code class="language-rust no_run noplayground">#[enum_dispatch]
+pub trait RangeTrait {
+    fn range(&amp;self) -&gt; Range;
+}
+</code></pre>
+<p>一般来说，<code>RangeTrait</code>的实现通过<code>#[range]</code>宏来自动生成，你不需要手动实现它。</p>
+<p><code>Node</code>接口中的<code>print</code>函数用于打印节点的信息，它会被用于调试。<code>print</code>打印的结果和<code>tree</code>的输出非常像，你需要用一些工具函数来
+格式化输出。以<code>ifnode</code>的<code>print</code>函数为例：</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>    fn print(&amp;self, tabs: usize, end: bool, mut line: Vec&lt;bool&gt;) {
+        deal_line(tabs, &amp;mut line, end);
+        tab(tabs, line.clone(), end);
+        println!(&quot;IfNode&quot;);
+        self.cond.print(tabs + 1, false, line.clone());
+        if let Some(el) = &amp;self.els {
+            self.then.print(tabs + 1, false, line.clone());
+            el.print(tabs + 1, true, line.clone());
+        } else {
+            self.then.print(tabs + 1, true, line.clone());
+        }
+    }
+<span class="boring">}
+</span></code></pre></pre>
+<p><code>emit</code>函数是生成llvm代码的核心，它会调用llvm api构造自己对应的llvm ir。在编译的时候，最上层节点的<code>emit</code>会被调用，
+该函数会递归的调用自己的子节点的<code>emit</code>函数，最终生成整个程序的llvm ir。<br />
+下方是<code>ifnode</code>的<code>emit</code>函数：</p>
+<pre><code class="language-rust no_run noplayground">    fn emit&lt;'a, 'ctx&gt;(&amp;'a mut self, ctx: &amp;mut Ctx&lt;'a, 'ctx&gt;) -&gt; NodeResult&lt;'ctx&gt; {
+        let cond_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), &quot;if.cond&quot;);
+        let then_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), &quot;if.then&quot;);
+        let else_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), &quot;if.else&quot;);
+        let after_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), &quot;if.after&quot;);
+        ctx.builder.build_unconditional_branch(cond_block);
+        position_at_end(ctx, cond_block);
+        let condrange = self.cond.range();
+        let (cond, _, _, _) = self.cond.emit(ctx)?;
+        let cond = ctx.try_load2var(cond);
+        let con;
+        if let Value::BoolValue(value) = cond {
+            con = value;
+        } else {
+            let err = ctx.add_err(condrange, ErrorCode::IF_CONDITION_MUST_BE_BOOL);
+            return Err(err);
+        }
+        let con = ctx
+            .builder
+            .build_int_truncate(con, ctx.context.bool_type(), &quot;trunctemp&quot;);
+        ctx.builder
+            .build_conditional_branch(con, then_block, else_block);
+        // then block
+        position_at_end(ctx, then_block);
+        let (_, _, then_terminator, _) = self.then.emit(ctx)?;
+        if then_terminator.is_none() {
+            ctx.builder.build_unconditional_branch(after_block);
+        }
+        position_at_end(ctx, else_block);
+        let terminator = if let Some(el) = &amp;mut self.els {
+            let (_, _, else_terminator, _) = el.emit(ctx)?;
+            if else_terminator.is_none() {
+                ctx.builder.build_unconditional_branch(after_block);
+            }
+            if then_terminator.is_return() &amp;&amp; else_terminator.is_return() {
+                TerminatorEnum::RETURN
+            } else {
+                TerminatorEnum::NONE
+            }
+        } else {
+            ctx.builder.build_unconditional_branch(after_block);
+            TerminatorEnum::NONE
+        };
+        position_at_end(ctx, after_block);
+        if terminator.is_return() {
+            ctx.builder.build_unconditional_branch(after_block);
+        }
+        Ok((Value::None, None, terminator, false))
+    }
+</code></pre>
+<p>emit函数的参数是节点自身，第二个参数是编译上下文。编译上下文中会包含一些需要透传的信息，比如符号表，llvmbuilder，lsp参数等。</p>
+<h2 id="打印ast结构"><a class="header" href="#打印ast结构">打印AST结构</a></h2>
+<p>TODO</p>
 
                     </main>
 

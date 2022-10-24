@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>basic project - Pivot Lang</title>
+        <title>AST - Pivot Lang</title>
                 
 
         <!-- Custom HTML head -->
@@ -82,7 +82,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Getting Started</li><li class="chapter-item expanded "><a href="../tutorial/index.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="../tutorial/basicproject.html" class="active"><strong aria-hidden="true">2.2.</strong> basic project</a></li><li class="chapter-item expanded "><a href="../tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> vsc support</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the compiler works internally</li><li class="chapter-item expanded "><a href="../compiler/index.html"><strong aria-hidden="true">3.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../compiler/parser.html"><strong aria-hidden="true">3.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="../compiler/ast.html"><strong aria-hidden="true">3.2.</strong> AST</a></li></ol></li></ol>            </div>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Getting Started</li><li class="chapter-item expanded "><a href="../tutorial/index.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="../tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> basic project</a></li><li class="chapter-item expanded "><a href="../tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> vsc support</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the compiler works internally</li><li class="chapter-item expanded "><a href="../compiler/index.html"><strong aria-hidden="true">3.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../compiler/parser.html"><strong aria-hidden="true">3.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="../compiler/ast.html" class="active"><strong aria-hidden="true">3.2.</strong> AST</a></li></ol></li></ol>            </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
@@ -120,7 +120,7 @@
                                                                         <a href="https://github.com/Pivot-Studio/pivot-lang" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                                                                        <a href="https://github.com/Pivot-Studio/pivot-lang/master/book/src/tutorial/basicproject.md" title="Suggest an edit" aria-label="Suggest an edit">
+                                                                        <a href="https://github.com/Pivot-Studio/pivot-lang/master/book/src/compiler/ast.md" title="Suggest an edit" aria-label="Suggest an edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
                         
@@ -149,54 +149,116 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="基础项目"><a class="header" href="#基础项目">基础项目</a></h1>
-<h2 id="项目结构"><a class="header" href="#项目结构">项目结构</a></h2>
-<p>一个最基础的pivot lang项目由一个配置文件和一个源文件组成。配置文件用于指定项目的一些基本信息，源文件用于编写pivot lang代码。其结构如下：</p>
-<pre><code>.
-├── Kagari.toml
-└── main.pi
-</code></pre>
-<h3 id="配置文件"><a class="header" href="#配置文件">配置文件</a></h3>
-<p>一个pl项目的根目录必须有一个名为<code>Kagari.toml</code>的配置文件。示例配置文件的内容如下：</p>
-<pre><code class="language-toml">entry = &quot;main.pi&quot;
-</code></pre>
-<p>entry指定了该项目的入口文件，即编译器将从该文件开始编译。如果缺少该配置<code>plc</code>将无法编译该项目</p>
-<h3 id="源文件"><a class="header" href="#源文件">源文件</a></h3>
-<p>示例项目中的<code>main.pi</code>为源文件。其内容如下：</p>
-<pre><code class="language-pl">fn main() i64 {
-    printi64ln(666);
-    return 0;
+                        <h1 id="ast"><a class="header" href="#ast">AST</a></h1>
+<p>抽象语法树是目前编译器中最复杂的部分，它是编译器的中间表示，也是编译器的核心。本节将介绍AST的设计和实现。</p>
+<h2 id="ast的设计"><a class="header" href="#ast的设计">AST的设计</a></h2>
+<p>基本上，所有源代码中的基础单位都会对应抽象语法树中的一个节点。抽象语法树有很多类型的节点，他们可能会相互引用。</p>
+<p>所有的节点都必须实现<code>Node</code> trait，这个trait定义了节点的基本行为。</p>
+<pre><code class="language-rust no_run noplayground">#[enum_dispatch]
+pub trait Node: RangeTrait + AsAny {
+    fn print(&amp;self, tabs: usize, end: bool, line: Vec&lt;bool&gt;);
+    fn emit&lt;'a, 'ctx&gt;(&amp;'a mut self, ctx: &amp;mut Ctx&lt;'a, 'ctx&gt;) -&gt; NodeResult&lt;'ctx&gt;;
 }
-
-fn printi64ln(i: i64) void;
 </code></pre>
-<p>源文件的后缀名必须为<code>.pi</code>。<br />
-在示例中，我们声明了一个外部函数<code>printi64ln</code>，该函数用于打印一个i64类型的值并换行。此源代码编译后执行会输出<code>666</code>。</p>
-<blockquote>
-<p>重要：<code>printi64ln</code>函数是目前pl runtime中的一个测试用内置函数，内置函数在未来将有别的引入方法，并且此方法可能会在未来移除</p>
-</blockquote>
-<h2 id="编译"><a class="header" href="#编译">编译</a></h2>
-<p>如果你已经安装了<code>plc</code>，那么你可以在项目根目录下执行<code>plc main.pi</code>命令来编译该项目。此指令会生成一个名叫<code>out.plb</code>的文件，还有一些中间文件</p>
-<blockquote>
-<p>如果你配置了镜头编译环境，还会生成一个叫做<code>out.plb.out</code>的文件，该文件是一个可执行文件，可以直接运行
-而如果你只有jit环境，该文件不会生成，并且编译命令会输出一个clang报错和两行warning，这是正常现象</p>
-</blockquote>
-<h2 id="jit运行"><a class="header" href="#jit运行">jit运行</a></h2>
-<p>编译后输入<code>plc run out.plb</code>可以jit运行该项目，其输出结果如下：</p>
-<pre><code>666
+<p>你可能注意到了，<code>Node</code>trait继承了<code>RangeTrait</code>，这个trait定义了节点的位置信息。</p>
+<pre><code class="language-rust no_run noplayground">#[enum_dispatch]
+pub trait RangeTrait {
+    fn range(&amp;self) -&gt; Range;
+}
 </code></pre>
+<p>一般来说，<code>RangeTrait</code>的实现通过<code>#[range]</code>宏来自动生成，你不需要手动实现它。</p>
+<p><code>Node</code>接口中的<code>print</code>函数用于打印节点的信息，它会被用于调试。<code>print</code>打印的结果和<code>tree</code>的输出非常像，你需要用一些工具函数来
+格式化输出。以<code>ifnode</code>的<code>print</code>函数为例：</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>    fn print(&amp;self, tabs: usize, end: bool, mut line: Vec&lt;bool&gt;) {
+        deal_line(tabs, &amp;mut line, end);
+        tab(tabs, line.clone(), end);
+        println!(&quot;IfNode&quot;);
+        self.cond.print(tabs + 1, false, line.clone());
+        if let Some(el) = &amp;self.els {
+            self.then.print(tabs + 1, false, line.clone());
+            el.print(tabs + 1, true, line.clone());
+        } else {
+            self.then.print(tabs + 1, true, line.clone());
+        }
+    }
+<span class="boring">}
+</span></code></pre></pre>
+<p><code>emit</code>函数是生成llvm代码的核心，它会调用llvm api构造自己对应的llvm ir。在编译的时候，最上层节点的<code>emit</code>会被调用，
+该函数会递归的调用自己的子节点的<code>emit</code>函数，最终生成整个程序的llvm ir。<br />
+下方是<code>ifnode</code>的<code>emit</code>函数：</p>
+<pre><code class="language-rust no_run noplayground">    fn emit&lt;'a, 'ctx&gt;(&amp;'a mut self, ctx: &amp;mut Ctx&lt;'a, 'ctx&gt;) -&gt; NodeResult&lt;'ctx&gt; {
+        let cond_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), &quot;if.cond&quot;);
+        let then_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), &quot;if.then&quot;);
+        let else_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), &quot;if.else&quot;);
+        let after_block = ctx
+            .context
+            .append_basic_block(ctx.function.unwrap(), &quot;if.after&quot;);
+        ctx.builder.build_unconditional_branch(cond_block);
+        position_at_end(ctx, cond_block);
+        let condrange = self.cond.range();
+        let (cond, _, _, _) = self.cond.emit(ctx)?;
+        let cond = ctx.try_load2var(cond);
+        let con;
+        if let Value::BoolValue(value) = cond {
+            con = value;
+        } else {
+            let err = ctx.add_err(condrange, ErrorCode::IF_CONDITION_MUST_BE_BOOL);
+            return Err(err);
+        }
+        let con = ctx
+            .builder
+            .build_int_truncate(con, ctx.context.bool_type(), &quot;trunctemp&quot;);
+        ctx.builder
+            .build_conditional_branch(con, then_block, else_block);
+        // then block
+        position_at_end(ctx, then_block);
+        let (_, _, then_terminator, _) = self.then.emit(ctx)?;
+        if then_terminator.is_none() {
+            ctx.builder.build_unconditional_branch(after_block);
+        }
+        position_at_end(ctx, else_block);
+        let terminator = if let Some(el) = &amp;mut self.els {
+            let (_, _, else_terminator, _) = el.emit(ctx)?;
+            if else_terminator.is_none() {
+                ctx.builder.build_unconditional_branch(after_block);
+            }
+            if then_terminator.is_return() &amp;&amp; else_terminator.is_return() {
+                TerminatorEnum::RETURN
+            } else {
+                TerminatorEnum::NONE
+            }
+        } else {
+            ctx.builder.build_unconditional_branch(after_block);
+            TerminatorEnum::NONE
+        };
+        position_at_end(ctx, after_block);
+        if terminator.is_return() {
+            ctx.builder.build_unconditional_branch(after_block);
+        }
+        Ok((Value::None, None, terminator, false))
+    }
+</code></pre>
+<p>emit函数的参数是节点自身，第二个参数是编译上下文。编译上下文中会包含一些需要透传的信息，比如符号表，llvmbuilder，lsp参数等。</p>
+<h2 id="打印ast结构"><a class="header" href="#打印ast结构">打印AST结构</a></h2>
+<p>TODO</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                                                    <a rel="prev" href="../tutorial/installation.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                                    <a rel="prev" href="../compiler/parser.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
                         
-                                                    <a rel="next" href="../tutorial/vscsupport.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                                <i class="fa fa-angle-right"></i>
-                            </a>
                         
                         <div style="clear: both"></div>
                     </nav>
@@ -204,13 +266,10 @@ fn printi64ln(i: i64) void;
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                                    <a rel="prev" href="../tutorial/installation.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                    <a rel="prev" href="../compiler/parser.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
                 
-                                    <a rel="next" href="../tutorial/vscsupport.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
-                        <i class="fa fa-angle-right"></i>
-                    </a>
                             </nav>
 
         </div>

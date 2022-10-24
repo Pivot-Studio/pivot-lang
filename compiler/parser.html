@@ -3,9 +3,8 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title></title>
-                        <base href="/">
-        
+        <title>Parser - Pivot Lang</title>
+                
 
         <!-- Custom HTML head -->
         
@@ -15,21 +14,21 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
 
-                <link rel="icon" href="favicon.svg">
-                        <link rel="shortcut icon" href="favicon.png">
-                <link rel="stylesheet" href="css/variables.css">
-        <link rel="stylesheet" href="css/general.css">
-        <link rel="stylesheet" href="css/chrome.css">
-                <link rel="stylesheet" href="css/print.css" media="print">
+                <link rel="icon" href="../favicon.svg">
+                        <link rel="shortcut icon" href="../favicon.png">
+                <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+                <link rel="stylesheet" href="../css/print.css" media="print">
         
         <!-- Fonts -->
-        <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
-                <link rel="stylesheet" href="fonts/fonts.css">
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+                <link rel="stylesheet" href="../fonts/fonts.css">
         
         <!-- Highlight.js Stylesheets -->
-        <link rel="stylesheet" href="highlight.css">
-        <link rel="stylesheet" href="tomorrow-night.css">
-        <link rel="stylesheet" href="ayu-highlight.css">
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
         
@@ -37,7 +36,7 @@
     <body>
         <!-- Provide site root to javascript -->
         <script type="text/javascript">
-            var path_to_root = "";
+            var path_to_root = "../";
             var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
         </script>
 
@@ -83,7 +82,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Getting Started</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> basic project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> vsc support</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the compiler works internally</li><li class="chapter-item expanded "><a href="compiler/index.html"><strong aria-hidden="true">3.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compiler/parser.html"><strong aria-hidden="true">3.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="compiler/ast.html"><strong aria-hidden="true">3.2.</strong> AST</a></li></ol></li></ol>            </div>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Getting Started</li><li class="chapter-item expanded "><a href="../tutorial/index.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="../tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> basic project</a></li><li class="chapter-item expanded "><a href="../tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> vsc support</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the compiler works internally</li><li class="chapter-item expanded "><a href="../compiler/index.html"><strong aria-hidden="true">3.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../compiler/parser.html" class="active"><strong aria-hidden="true">3.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="../compiler/ast.html"><strong aria-hidden="true">3.2.</strong> AST</a></li></ol></li></ol>            </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
@@ -115,13 +114,16 @@
                     <h1 class="menu-title">Pivot Lang</h1>
 
                     <div class="right-buttons">
-                                                <a href="print.html" title="Print this book" aria-label="Print this book">
+                                                <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
                                                                         <a href="https://github.com/Pivot-Studio/pivot-lang" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                                                
+                                                                        <a href="https://github.com/Pivot-Studio/pivot-lang/master/book/src/compiler/parser.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+                        
                     </div>
                 </div>
 
@@ -147,14 +149,47 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="document-not-found-404"><a class="header" href="#document-not-found-404">Document not found (404)</a></h1>
-<p>This URL is invalid, sorry. Please use the navigation bar or search to continue.</p>
+                        <h1 id="parser"><a class="header" href="#parser">Parser</a></h1>
+<p>parser源代码位置位于<code>src/nomparser</code>目录下，包含了词法分析和语法分析部分。</p>
+<h2 id="nom"><a class="header" href="#nom">nom</a></h2>
+<p><a href="https://github.com/Geal/nom">nom</a>是一个用rust编写的parser combinator库，它不像lr分析器一样提供生成代码的功能，而是
+提供一组函数，这些函数可以用来组合出各种parser。</p>
+<p>相比于lr分析器，nom的优点是它的parser combinator非常灵活，熟练后可以快速组合出各种parser，
+而且可自定义性非常的强，看起来也很直观，相比很多ir生成器的语法并没有复杂多少，但是带来了更好的
+语法支持（一般的ir分析生成器的语法定义文件不会有编程语言那么好的语法支持）。</p>
+<p>会使用nom是读懂编译器parser代码的重要前提，这里强烈推荐两个nom文档：</p>
+<ul>
+<li><a href="https://github.com/Geal/nom/blob/main/doc/nom_recipes.md">Nom Recipes</a></li>
+<li><a href="https://github.com/Geal/nom/blob/main/doc/choosing_a_combinator.md">choosing a combinator</a></li>
+</ul>
+<h2 id="parser结构"><a class="header" href="#parser结构">parser结构</a></h2>
+<p>parser的主要功能是使用递归下降法将pivot-lang源代码转换为ast。如果你不了解递归下降法，可以先看看<a href="https://ruslanspivak.com/lsbasi-part1/">这篇文章</a>。</p>
+<p>对于pivot lang的每一条语法规则，都会在parser里对应一个分析函数，这些分析函数可能会调用其他分析函数，最终最上层的分析函数可以将完整的源代码转换为ast。</p>
+<p>pivot lang的完整语法规则见<a href="../../../#grammar">这里</a></p>
+<p>parser最顶层的函数是<code>parse</code>，它接受一个源文件输出一个AST根节点。</p>
+<pre><code class="language-rust no_run noplayground">#[salsa::tracked(lru = 32)]
+pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNodeWrapper, String&gt; {
+    let text = source.text(db);
+    let re = program(Span::new(text));
+    if let Err(e) = re {
+        return Err(format!(&quot;{:?}&quot;, e));
+    }
+    // eprintln!(&quot;parse&quot;);
+    Ok(ProgramNodeWrapper::new(db, re.unwrap().1))
+}
+</code></pre>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
+                                                    <a rel="prev" href="../compiler/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
                         
+                                                    <a rel="next" href="../compiler/ast.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
                         
                         <div style="clear: both"></div>
                     </nav>
@@ -162,7 +197,13 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                                    <a rel="prev" href="../compiler/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
                 
+                                    <a rel="next" href="../compiler/ast.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
                             </nav>
 
         </div>
@@ -175,13 +216,13 @@
         </script>
         
         
-                <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
+                <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
         
-        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
-        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
+        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
 
         <!-- Custom JS scripts -->
         
