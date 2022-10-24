@@ -118,12 +118,17 @@ fn main() {
             printast: cli.printast,
             optimization: opt,
         };
+        let action = if cli.printast {
+            ActionType::PrintAst
+        } else {
+            ActionType::Compile
+        };
         let mem = MemDocsInput::new(
             &db,
             Arc::new(Mutex::new(RefCell::new(mem_docs::MemDocs::new()))),
             abs.to_str().unwrap().to_string(),
             op,
-            ActionType::Compile,
+            action,
             None,
         );
         compiler::compile(&db, mem, cli.out.clone(), op);

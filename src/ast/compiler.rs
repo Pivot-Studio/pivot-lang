@@ -92,6 +92,7 @@ pub enum ActionType {
     Diagnostic,
     Hover,
     Compile,
+    PrintAst,
 }
 
 #[cfg(feature = "jit")]
@@ -205,6 +206,11 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
             println!("{}", format!("{}", dot::TOOMANYERROR));
             return;
         }
+    }
+    if op.printast {
+        let time = now.elapsed();
+        println!("print ast done, time: {:?}", time);
+        return;
     }
     let mut mods = compile_dry::accumulated::<ModBuffer>(db, docs);
     let ctx = Context::create();

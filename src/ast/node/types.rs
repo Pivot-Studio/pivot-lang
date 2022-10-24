@@ -22,12 +22,12 @@ impl TypeNameNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("TypeNameNode");
-        tab(tabs + 1, line.clone(), true);
-        // if self.is_ref {
-        //     println!("id: &{}", self.id);
-        // } else {
-        //     println!("id: {}", self.id);
-        // }
+        if let Some(id) = &self.id {
+            id.print(tabs + 1, true, line.clone());
+        } else {
+            tab(tabs + 1, line.clone(), true);
+            println!("id: <empty>");
+        }
     }
     pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Result<PLType, PLDiag> {
         ctx.if_completion(|ctx, a| {
@@ -195,7 +195,7 @@ impl Node for StructInitFieldNode {
         tab(tabs, line.clone(), end);
         println!("StructInitFieldNode");
         tab(tabs + 1, line.clone(), false);
-        // println!("id: {}", self.id);
+        println!("id: {}", self.id.name);
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {

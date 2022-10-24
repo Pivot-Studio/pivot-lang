@@ -26,7 +26,7 @@ impl Node for FuncDefNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("FuncDefNode");
-        tab(tabs + 1, line.clone(), end);
+        tab(tabs + 1, line.clone(), false);
         println!("id: {}", self.typenode.id);
         for c in self.typenode.doc.iter() {
             c.print(tabs + 1, false, line.clone());
@@ -34,16 +34,12 @@ impl Node for FuncDefNode {
         for p in self.typenode.paralist.iter() {
             p.print(tabs + 1, false, line.clone());
         }
+        // tab(tabs + 1, line.clone(), false);
+        self.typenode.ret.print(tabs + 1, false, line.clone());
         if let Some(body) = &self.body {
-            tab(tabs + 1, line.clone(), false);
-            // if self.typenode.ret.is_ref {
-            //     println!("type: &{}", self.typenode.ret.id);
-            // } else {
-            //     println!("type: {}", self.typenode.ret.id);
-            // }
             body.print(tabs + 1, true, line.clone());
         } else {
-            tab(tabs + 1, line, true);
+            // tab(tabs + 1, line, true);
             // if self.typenode.ret.is_ref {
             //     println!("type: &{}", self.typenode.ret.id);
             // } else {
