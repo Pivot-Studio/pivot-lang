@@ -877,13 +877,18 @@ fn type_name(input: Span) -> IResult<Span, Box<TypeNameNode>> {
     delspace(map_res(
         tuple((
             del_newline_or_space!(opt(tag_token(TokenType::REF))),
-            identifier,
+            extern_identifier,
         )),
-        |(is_ref, o)| {
+        |(is_ref, exid)| {
+            let exid = match *exid {
+                NodeEnum::ExternIDNode(exid) => exid,
+                _ => unreachable!(),
+            };
+            let range = exid.range;
             res_box(Box::new(TypeNameNode {
-                id: o.name,
+                id: Some(exid),
                 is_ref: is_ref.is_some(),
-                range: o.range,
+                range,
             }))
         },
     ))(input)
@@ -904,7 +909,7 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
             tprange.end.column += 1;
             tprange.start = tprange.end;
             let mut tp = Box::new(TypeNameNode {
-                id: "".to_string(),
+                id: None,
                 range: tprange,
                 is_ref: false,
             });
@@ -1136,7 +1141,7 @@ fn struct_init_field(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 let range = id.range.start.to(exp.range().end);
                 res_enum(
                     StructInitFieldNode {
-                        id: id.name,
+                        id: *id,
                         exp,
                         range,
                     }

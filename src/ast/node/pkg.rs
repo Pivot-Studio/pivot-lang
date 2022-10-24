@@ -124,7 +124,7 @@ impl ExternIDNode {
                     a.completion_items.set(completions);
                 }
             });
-            return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
+            return Err(ctx.add_err(self.range, ErrorCode::COMPLETION));
         }
         for id in &self.ns {
             ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);

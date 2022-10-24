@@ -639,6 +639,7 @@ impl FNType {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct STType {
     pub name: String,
+    pub path: String,
     pub fields: FxHashMap<String, Field>,
     pub ordered_fields: Vec<Field>,
     pub range: Range,
@@ -648,15 +649,11 @@ pub struct STType {
 
 impl STType {
     pub fn struct_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> StructType<'ctx> {
-        let st = ctx
-            .module
-            .get_struct_type(&ctx.plmod.get_full_name(&self.name));
+        let st = ctx.module.get_struct_type(&self.get_st_full_name());
         if let Some(st) = st {
             return st;
         }
-        let st = ctx
-            .context
-            .opaque_struct_type(&ctx.plmod.get_full_name(&self.name));
+        let st = ctx.context.opaque_struct_type(&self.get_st_full_name());
         st.set_body(
             &self
                 .ordered_fields
@@ -691,6 +688,9 @@ impl STType {
             });
         }
         completions
+    }
+    pub fn get_st_full_name(&self) -> String {
+        format!("{}..{}", self.path, self.name)
     }
 }
 

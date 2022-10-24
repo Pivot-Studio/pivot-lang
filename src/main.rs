@@ -141,6 +141,6 @@ fn main() {
         }
     } else {
         println!("No file provided");
-        Cli::into_app().print_help().unwrap();
+        Cli::command().print_help().unwrap();
     }
 }
