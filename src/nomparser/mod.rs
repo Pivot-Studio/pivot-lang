@@ -894,20 +894,17 @@ fn type_name(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
 
 #[test_parser("kfsh")]
 fn basic_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
-    delspace(map_res(
-        extern_identifier,
-        |exid| {
-            let exid = match *exid {
-                NodeEnum::ExternIDNode(exid) => exid,
-                _ => unreachable!(),
-            };
-            let range = exid.range;
-            Ok::<_, Error>(Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
-                id: Some(exid),
-                range,
-            })))
-        },
-    ))(input)
+    delspace(map_res(extern_identifier, |exid| {
+        let exid = match *exid {
+            NodeEnum::ExternIDNode(exid) => exid,
+            _ => unreachable!(),
+        };
+        let range = exid.range;
+        Ok::<_, Error>(Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
+            id: Some(exid),
+            range,
+        })))
+    }))(input)
 }
 
 #[test_parser("myname: int")]
@@ -1249,7 +1246,7 @@ fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
 /// ```
 fn array_element(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let re = delspace(tuple((
-        alt((function_call, extern_identifier)),//TODO: support take_exp
+        alt((function_call, extern_identifier)), //TODO: support take_exp
         many1(delimited(
             tag_token(TokenType::LBRACKET),
             logic_exp,

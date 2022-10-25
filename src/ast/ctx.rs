@@ -506,7 +506,17 @@ impl PLType {
         let td = ctx.targetmachine.get_target_data();
         match self {
             PLType::FN(_) => None,
-            PLType::ARR(_) => None,
+            PLType::ARR(arr) => {
+                let elemdi = arr.element_type.get_ditype(ctx)?;
+                let etp = &arr.element_type.get_basic_type(ctx);
+                let size = td.get_bit_size(etp) * arr.size as u64;
+                let align = td.get_preferred_alignment(etp);
+                Some(
+                    ctx.dibuilder
+                        .create_array_type(elemdi, size, align, &[(0..arr.size as i64)])
+                        .as_type(),
+                )
+            }
             PLType::STRUCT(x) => {
                 let mut offset = 0;
                 let m = x

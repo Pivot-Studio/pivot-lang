@@ -121,6 +121,8 @@ fn test_mod_struct() void {
     return;
 }
 fn main() i64 {
+    let a1 = [[[1,2,],[1,2,],],];
+    printi64ln(a1[0][0][0]);
     test_struct();
     printline();
     test_vm();

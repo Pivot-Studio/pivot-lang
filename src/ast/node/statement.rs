@@ -78,23 +78,7 @@ impl Node for DefNode {
         }
         let pltype = pltype_opt.unwrap();
         let ditype = pltype.get_ditype(ctx);
-        let (base_value, debug_type) = if let Value::ArrValue(array_value) = value {
-            let base_type = array_value.get_type();
-            let ptr2value = alloc(ctx, base_type.as_basic_type_enum(), &self.var.name);
-            // println!("ptr2value:{:?}", ptr2value);
-            ctx.builder.build_store(ptr2value, array_value);
-            let re = ctx.add_symbol(
-                self.var.name.clone(),
-                ptr2value,
-                pltype.clone(),
-                self.var.range,
-                false,
-            );
-            if re.is_err() {
-                return Err(re.unwrap_err());
-            }
-            return Ok((Value::None, None, TerminatorEnum::NONE, false));
-        } else {
+        let (base_value, debug_type) = {
             let ditype = ditype.clone();
             let loadv = ctx.try_load2var(value);
             if let Value::None = loadv {
