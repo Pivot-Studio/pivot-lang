@@ -9,12 +9,13 @@
 
 // LLVM Support
 // LLVM-C header Support.h
-use llvm_sys::support;
-use std;
-use std::os::raw::c_void;
+
 // function is marked as unsafe as user can trigger execution of an
 // arbitrary memory address using it
+#[cfg(feature = "jit")]
 pub unsafe fn add_symbol(name: &str, ptr: *const ()) {
+    use llvm_sys::support;
+    use std::os::raw::c_void;
     let name = std::ffi::CString::new(name).unwrap();
     let addr = ptr as *mut c_void;
     support::LLVMAddSymbol(name.as_ptr(), addr)

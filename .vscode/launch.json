@@ -1,0 +1,58 @@
+// A launch configuration that launches the extension inside a new window
+// Use IntelliSense to learn about possible attributes.
+// Hover to view descriptions of existing attributes.
+// For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+{
+	"version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "debug compile",
+            "cargo": {
+                "args": [
+                    "build"
+                ]
+            },
+            "args": ["test/main.pi"]
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "debug jit",
+            "cargo": {
+                "args": [
+                    "build"
+                ]
+            },
+            "args": ["run","out.plb"]
+        },
+        {
+            "type": "lldb",
+            "request": "attach",
+            "name": "debug lsp",
+            "program": "plc",
+            "preLaunchTask": "install debug plc"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "(Unix based system)launch test.pi debug",
+            "program": "${workspaceFolder}/out.plb.out",
+            "args": [],
+            "cwd": "${workspaceFolder}",
+        },
+        {
+            "name": "(Windows) Launch",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/out.plb.out",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "preLaunchTask": "windows link"
+        }
+
+    ]
+}

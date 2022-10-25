@@ -1,13 +1,16 @@
-use super::primary::*;
 use super::*;
-use crate::ast::ctx::Ctx;
+use crate::ast::ctx::{init_arr, Ctx};
+use crate::ast::diag::{ErrorCode, WarnCode};
 use inkwell::debug_info::*;
+use inkwell::types::{AnyType, BasicType};
 use internal_macro::range;
-
+use lsp_types::SemanticTokenType;
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct DefNode {
     pub var: VarNode,
-    pub exp: Box<dyn Node>,
+    pub tp: Option<Box<TypeNodeEnum>>,
+    pub exp: Option<Box<NodeEnum>>,
 }
 impl Node for DefNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -15,44 +18,129 @@ impl Node for DefNode {
         tab(tabs, line.clone(), end);
         println!("DefNode");
         self.var.print(tabs + 1, false, line.clone());
-        self.exp.print(tabs + 1, true, line.clone());
-    }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
-        let (v, pltype) = self.exp.emit(ctx);
-        let e = ctx.try_load(v).as_basic_value_enum();
-        let tp = e.get_type();
-        let p = alloc(ctx, tp, &self.var.name);
-        let pltype = pltype.unwrap();
-        if let (_, Some(ditype)) = ctx.get_type(pltype.as_str()).unwrap() {
-            let var_info = ctx.dibuilder.create_auto_variable(
-                ctx.discope,
-                &self.var.name,
-                ctx.diunit.get_file(),
-                self.var.range.start.line as u32,
-                *ditype,
-                true,
-                DIFlags::PUBLIC,
-                ditype.get_align_in_bits(),
-            );
-            ctx.build_dbg_location(self.var.range.start);
-            ctx.dibuilder.insert_declare_at_end(
-                p,
-                Some(var_info),
-                None,
-                ctx.builder.get_current_debug_location().unwrap(),
-                ctx.function.unwrap().get_first_basic_block().unwrap(),
-            );
-            ctx.add_symbol(self.var.name.clone(), p, pltype.clone());
-            ctx.builder.build_store(p, e);
-            return (Value::None, Some(pltype));
+        if let Some(tp) = &self.tp {
+            tp.print(tabs + 1, true, line.clone());
+        } else {
+            self.exp
+                .as_ref()
+                .unwrap()
+                .print(tabs + 1, true, line.clone());
         }
-        todo!()
+    }
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
+        if let Some(tp) = &self.tp {
+            let pltype = tp.get_type(ctx)?;
+            match pltype.clone() {
+                PLType::FN(_) => todo!(),
+                PLType::STRUCT(_) => todo!(),
+                PLType::ARR(a) => {
+                    let arrtp = a.arr_type(ctx);
+                    let arr = alloc(ctx, arrtp.as_basic_type_enum(), &self.var.name);
+                    init_arr(arr, ctx);
+                    let re = ctx.add_symbol(
+                        self.var.name.clone(),
+                        arr,
+                        pltype.clone(),
+                        self.var.range,
+                        false,
+                    );
+                    if re.is_err() {
+                        return Err(re.unwrap_err());
+                    }
+                    return Ok((Value::None, None, TerminatorEnum::NONE, false));
+                }
+                PLType::PRIMITIVE(p) => {
+                    let tp = p.get_basic_type(ctx);
+                    let v = alloc(ctx, tp, &self.var.name);
+                    let re = ctx.add_symbol(
+                        self.var.name.clone(),
+                        v,
+                        pltype.clone(),
+                        self.var.range,
+                        false,
+                    );
+                    if re.is_err() {
+                        return Err(re.unwrap_err());
+                    }
+                    return Ok((Value::None, None, TerminatorEnum::NONE, false));
+                }
+                PLType::VOID => todo!(),
+                PLType::NAMESPACE(_) => todo!(),
+            };
+        }
+
+        let exp_range = self.exp.as_ref().unwrap().range();
+        let (value, pltype_opt, _, _) = self.exp.as_mut().unwrap().emit(ctx)?;
+        // for err tolerate
+        if pltype_opt.is_none() {
+            return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
+        }
+        let pltype = pltype_opt.unwrap();
+        let ditype = pltype.get_ditype(ctx);
+        let (base_value, debug_type) = if let Value::ArrValue(array_value) = value {
+            let base_type = array_value.get_type();
+            let ptr2value = alloc(ctx, base_type.as_basic_type_enum(), &self.var.name);
+            // println!("ptr2value:{:?}", ptr2value);
+            ctx.builder.build_store(ptr2value, array_value);
+            let re = ctx.add_symbol(
+                self.var.name.clone(),
+                ptr2value,
+                pltype.clone(),
+                self.var.range,
+                false,
+            );
+            if re.is_err() {
+                return Err(re.unwrap_err());
+            }
+            return Ok((Value::None, None, TerminatorEnum::NONE, false));
+        } else {
+            let ditype = ditype.clone();
+            let loadv = ctx.try_load2var(value);
+            if let Value::None = loadv {
+                return Err(ctx.add_err(exp_range, ErrorCode::UNDEFINED_TYPE));
+            }
+            (loadv.as_basic_value_enum(), ditype)
+        };
+        let base_type = base_value.get_type();
+        let ptr2value = alloc(ctx, base_type, &self.var.name);
+        let debug_var_info = ctx.dibuilder.create_auto_variable(
+            ctx.discope,
+            &self.var.name,
+            ctx.diunit.get_file(),
+            self.var.range.start.line as u32,
+            debug_type.unwrap(),
+            true,
+            DIFlags::PUBLIC,
+            debug_type.unwrap().get_align_in_bits(),
+        );
+        ctx.build_dbg_location(self.var.range.start);
+        ctx.dibuilder.insert_declare_at_end(
+            ptr2value,
+            Some(debug_var_info),
+            None,
+            ctx.builder.get_current_debug_location().unwrap(),
+            ctx.function.unwrap().get_first_basic_block().unwrap(),
+        );
+        let re = ctx.add_symbol(
+            self.var.name.clone(),
+            ptr2value,
+            pltype,
+            self.var.range,
+            false,
+        );
+        if re.is_err() {
+            return Err(re.unwrap_err());
+        }
+        ctx.builder.build_store(ptr2value, base_value);
+        return Ok((Value::None, None, TerminatorEnum::NONE, false));
     }
 }
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AssignNode {
-    pub var: Box<dyn Node>,
-    pub exp: Box<dyn Node>,
+    pub var: Box<NodeEnum>,
+    pub exp: Box<NodeEnum>,
 }
 impl Node for AssignNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -62,35 +150,46 @@ impl Node for AssignNode {
         self.var.print(tabs + 1, false, line.clone());
         self.exp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
-        let (pt, _) = self.var.emit(ctx);
-        let (value, _) = self.exp.emit(ctx);
-        if let Value::VarValue(ptr) = pt {
-            let load = ctx.try_load(value);
-            ctx.builder.build_store(ptr, load.as_basic_value_enum());
-            return (Value::None, None);
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let vrange = self.var.range();
+        let (ptr, _, _, is_const) = self.var.emit(ctx)?;
+        if is_const {
+            return Err(ctx.add_err(vrange, ErrorCode::ASSIGN_CONST));
         }
-        todo!()
+        let (value, _, _, _) = self.exp.emit(ctx)?;
+        if let Value::VarValue(ptr) = ptr {
+            let load = ctx.try_load2var(value);
+            if ptr.get_type().get_element_type()
+                != load.as_basic_value_enum().get_type().as_any_type_enum()
+            {
+                return Err(ctx.add_err(self.range, ErrorCode::ASSIGN_TYPE_MISMATCH));
+            }
+            ctx.builder.build_store(ptr, load.as_basic_value_enum());
+            return Ok((Value::None, None, TerminatorEnum::NONE, false));
+        }
+        Err(ctx.add_err(vrange, ErrorCode::NOT_ASSIGNABLE))
     }
 }
 
 #[range]
-pub struct NLNode {}
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct EmptyNode {}
 
-impl Node for NLNode {
+impl Node for EmptyNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
-        println!("NLNode");
+        println!("EmptyNode");
     }
-    fn emit<'a, 'ctx>(&'a mut self, _: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
-        (Value::None, None)
+    fn emit<'a, 'ctx>(&'a mut self, _: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        Ok((Value::None, None, TerminatorEnum::NONE, false))
     }
 }
 
 #[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StatementsNode {
-    pub statements: Vec<Box<dyn Node>>,
+    pub statements: Vec<Box<NodeEnum>>,
 }
 impl Node for StatementsNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -103,28 +202,36 @@ impl Node for StatementsNode {
             statement.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>) {
-        let child = &mut ctx.new_child(self.range.start);
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let mut terminator = TerminatorEnum::NONE;
         for m in self.statements.iter_mut() {
+            if let NodeEnum::Empty(_) = **m {
+                continue;
+            }
+            if !terminator.is_none() {
+                if let NodeEnum::Comment(c) = &**m {
+                    ctx.push_semantic_token(c.range, SemanticTokenType::COMMENT, 0);
+                    continue;
+                }
+                ctx.add_warn(m.range(), WarnCode::UNREACHABLE_STATEMENT);
+                continue;
+            }
             let pos = m.range().start;
-            child.build_dbg_location(pos);
-            m.emit(child);
+            ctx.build_dbg_location(pos);
+            let re = m.emit(ctx);
+            if re.is_err() {
+                continue;
+            }
+            let (_, _, terminator_res, _) = re.unwrap();
+            terminator = terminator_res;
         }
-        (Value::None, None)
+        Ok((Value::None, None, terminator, false))
     }
 }
 
 impl StatementsNode {
-    pub fn emit_child<'a, 'ctx>(
-        &'a mut self,
-        ctx: &mut Ctx<'a, 'ctx>,
-    ) -> (Value<'ctx>, Option<String>) {
-        let child = ctx;
-        for m in self.statements.iter_mut() {
-            let pos = m.range().start;
-            child.build_dbg_location(pos);
-            m.emit(child);
-        }
-        (Value::None, None)
+    pub fn emit_child<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let child = &mut ctx.new_child(self.range.start);
+        self.emit(child)
     }
 }

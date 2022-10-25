@@ -1,0 +1,6 @@
+fn main() i64 {
+    printi64ln(666);
+    return 0;
+}
+
+fn printi64ln(i: i64) void;

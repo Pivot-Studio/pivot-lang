@@ -9,5 +9,6 @@ test.cpp
 *.bc
 .idea
 *.o
-.vscode
 *.plist
+out.*
+*.html

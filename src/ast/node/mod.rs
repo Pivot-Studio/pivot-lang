@@ -1,23 +1,76 @@
 use crate::ast::ctx::Ctx;
-use crate::ast::range::RangeTrait;
 
 use as_any::AsAny;
+use enum_dispatch::enum_dispatch;
 use inkwell::basic_block::BasicBlock;
-use inkwell::types::BasicTypeEnum;
-use inkwell::values::{BasicValue, BasicValueEnum, FloatValue, IntValue, PointerValue};
+use inkwell::types::{BasicTypeEnum, StructType};
+use inkwell::values::{
+    BasicValue, BasicValueEnum, FloatValue, FunctionValue, IntValue, PointerValue,
+};
 
-use super::ctx::PLErr;
-use super::range::Pos;
+use self::comment::CommentNode;
+use self::control::*;
+use self::error::*;
+use self::function::*;
+use self::global::*;
+use self::operator::*;
+use self::pkg::{ExternIDNode, UseNode};
+use self::primary::*;
+use self::ret::*;
+use self::statement::*;
+use self::types::*;
 
+use super::ctx::{PLDiag, PLType};
+use super::range::{Pos, Range};
+
+pub mod comment;
 pub mod control;
 pub mod error;
 pub mod function;
+pub mod global;
 pub mod operator;
+pub mod pkg;
 pub mod primary;
 pub mod program;
 pub mod ret;
 pub mod statement;
 pub mod types;
+#[derive(Debug, Clone, Copy)]
+pub enum TerminatorEnum {
+    NONE,
+    RETURN,
+    BREAK,
+    CONTINUE,
+}
+impl TerminatorEnum {
+    pub fn is_none(self) -> bool {
+        if let TerminatorEnum::NONE = self {
+            true
+        } else {
+            false
+        }
+    }
+    pub fn is_return(self) -> bool {
+        if let TerminatorEnum::RETURN = self {
+            true
+        } else {
+            false
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[enum_dispatch(TypeNode, RangeTrait)]
+pub enum TypeNodeEnum {
+    BasicTypeNode(TypeNameNode),
+    ArrayTypeNode(ArrayTypeNameNode),
+}
+#[enum_dispatch]
+pub trait TypeNode: RangeTrait + AsAny {
+    fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
+    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
+}
+type TypeNodeResult<'ctx> = Result<PLType, PLDiag>;
 /// # Value
 /// 表达每个ast在计算之后产生的值  
 ///
@@ -30,35 +83,98 @@ pub enum Value<'a> {
     FloatValue(FloatValue<'a>),
     VarValue(PointerValue<'a>),
     LoadValue(BasicValueEnum<'a>),
+    ArrValue(PointerValue<'a>),
     StructFieldValue((String, BasicValueEnum<'a>)),
+    FnValue(FunctionValue<'a>),
+    STValue(StructType<'a>),
+    ExFnValue((FunctionValue<'a>, PLType)),
     None,
-    Err(PLErr),
 }
 
 impl<'a> Value<'a> {
     pub fn as_basic_value_enum(&self) -> BasicValueEnum<'a> {
+        self.as_basic_value_enum_op().unwrap()
+    }
+    pub fn as_basic_value_enum_op(&self) -> Option<BasicValueEnum<'a>> {
         match self {
-            Value::IntValue(v) => v.as_basic_value_enum(),
-            Value::FloatValue(v) => v.as_basic_value_enum(),
-            Value::VarValue(v) => v.as_basic_value_enum(),
-            Value::BoolValue(v) => v.as_basic_value_enum(),
-            Value::LoadValue(v) => *v,
-            Value::StructFieldValue((_, v)) => *v,
-            Value::Err(_) => panic!("not implemented"),
-            Value::None => panic!("not implemented"),
+            Value::IntValue(v) => Some(v.as_basic_value_enum()),
+            Value::FloatValue(v) => Some(v.as_basic_value_enum()),
+            Value::VarValue(v) => Some(v.as_basic_value_enum()),
+            Value::BoolValue(v) => Some(v.as_basic_value_enum()),
+            Value::ArrValue(v) => Some(v.as_basic_value_enum()),
+            Value::LoadValue(v) => Some(*v),
+            Value::StructFieldValue((_, v)) => Some(*v),
+            Value::STValue(_) => None,
+            Value::FnValue(_) => None,
+            Value::ExFnValue(_) => None,
+            Value::None => None,
         }
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[enum_dispatch(Node, RangeTrait)]
+pub enum NodeEnum {
+    Def(DefNode),
+    Ret(RetNode),
+    Assign(AssignNode),
+    If(IfNode),
+    While(WhileNode),
+    For(ForNode),
+    Break(BreakNode),
+    Continue(ContinueNode),
+    Expr(BinOpNode),
+    FuncDef(FuncDefNode),
+    FuncCall(FuncCallNode),
+    StructDef(StructDefNode),
+    StructInit(StructInitNode),
+    Take(TakeOpNode),
+    Un(UnaryOpNode),
+    Num(NumNode),
+    Bool(BoolConstNode),
+    Err(ErrorNode),
+    STS(StatementsNode),
+    Empty(EmptyNode),
+    Comment(CommentNode),
+    Program(program::ProgramNode),
+    STInitField(StructInitFieldNode),
+    STErrorNode(STErrorNode),
+    Global(GlobalNode),
+    UseNode(UseNode),
+    ExternIDNode(ExternIDNode),
+    ArrayInitNode(ArrayInitNode),
+    ArrayElementNode(ArrayElementNode),
+}
+
+#[enum_dispatch]
+pub trait RangeTrait {
+    fn range(&self) -> Range;
+}
+
+#[enum_dispatch]
 pub trait Node: RangeTrait + AsAny {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> (Value<'ctx>, Option<String>);
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
 }
+
+type NodeResult<'ctx> = Result<
+    (
+        Value<'ctx>,
+        Option<PLType>, //type
+        TerminatorEnum,
+        bool, // isconst
+    ),
+    PLDiag,
+>;
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Num {
     INT(u64),
     FLOAT(f64),
+}
+
+impl Eq for Num {
+    // FIXME: NaN https://stackoverflow.com/questions/39638363/how-can-i-use-a-hashmap-with-f64-as-key-in-rust
 }
 
 impl<'a, 'ctx> Ctx<'ctx, 'a> {
@@ -123,18 +239,21 @@ pub fn alloc<'a, 'ctx>(
 
 #[macro_export]
 macro_rules! handle_calc {
-    ($ctx:ident, $op:ident, $opf:ident  ,$left:ident, $right:ident) => {
+    ($ctx:ident, $op:ident, $opf:ident  ,$left:ident, $right:ident, $range: expr) => {
         item! {
             match ($left, $right) {
                 (Value::IntValue(left), Value::IntValue(right)) => {
-                    return (Value::IntValue($ctx.builder.[<build_int_$op>](
-                        left, right, "addtmp")),None);
+                    return Ok((Value::IntValue($ctx.builder.[<build_int_$op>](
+                        left, right, "addtmp")),Some(PLType::PRIMITIVE(PriType::try_from_str("i64").unwrap())),TerminatorEnum::NONE,false));
                 },
                 (Value::FloatValue(left), Value::FloatValue(right)) => {
-                    return (Value::FloatValue($ctx.builder.[<build_$opf>](
-                        left, right, "addtmp")),None);
+                    return Ok((Value::FloatValue($ctx.builder.[<build_$opf>](
+                        left, right, "addtmp")),Some(PLType::PRIMITIVE(PriType::try_from_str("f64").unwrap())),TerminatorEnum::NONE,false));
                 },
-                _ => panic!("not implemented")
+                _ =>  return Err($ctx.add_err(
+                    $range,
+                    crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR,
+                ))
             }
         }
     };

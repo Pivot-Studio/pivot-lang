@@ -7,6 +7,7 @@ macro_rules! define_tokens {
         $ident:ident = $string_keyword:expr
     ),*) => {
         #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash)]
+        #[allow(non_camel_case_types)]
         pub enum TokenType {
             $($ident),*
         }
@@ -15,6 +16,11 @@ macro_rules! define_tokens {
             pub static ref TOKEN_TYPE_MAP: HashMap<TokenType, &'static str> = {
                 let mut mp = HashMap::new();
                 $(mp.insert(TokenType::$ident, $ident);)*
+                mp
+            };
+            pub static ref TOKEN_STR_MAP: HashMap<&'static str, TokenType> = {
+                let mut mp = HashMap::new();
+                $(mp.insert($ident,TokenType::$ident);)*
                 mp
             };
         }
@@ -52,7 +58,12 @@ define_tokens!(
     COMMA = ",",
     RETURN = "return",
     DOT = ".",
-    SEMI = ";"
+    SEMI = ";",
+    CONST = "const",
+    USE = "use",
+    DOUBLE_COLON = "::",
+    LBRACKET = "[",
+    RBRACKET = "]"
 );
 impl TokenType {
     pub fn get_str(&self) -> &'static str {
