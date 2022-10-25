@@ -38,21 +38,7 @@ impl GlobalNode {
         }
         let pltype = pltype_opt.unwrap();
         let ditype = pltype.get_ditype(ctx);
-        let (base_value, debug_type) = if let Value::RefValue(ref_value) = value {
-            (
-                ref_value.as_basic_value_enum(),
-                Some(
-                    pltype
-                        .clone()
-                        .get_di_ref_type(ctx, ditype.clone())
-                        .unwrap()
-                        .as_type(),
-                ),
-            )
-        } else {
-            let ditype = ditype.clone();
-            (ctx.try_load2var(value).as_basic_value_enum(), ditype)
-        };
+        let base_value = ctx.try_load2var(value).as_basic_value_enum();
         let base_type = base_value.get_type();
         let globalptr = ctx.module.add_global(base_type, None, &self.var.name);
         globalptr.set_initializer(&base_type.const_zero());
@@ -65,11 +51,11 @@ impl GlobalNode {
             "",
             ctx.diunit.get_file(),
             self.var.range.start.line as u32,
-            debug_type.unwrap(),
+            ditype.unwrap(),
             false,
             None,
             None,
-            debug_type.unwrap().get_align_in_bits(),
+            ditype.unwrap().get_align_in_bits(),
         );
         globalptr.set_metadata(exp.as_metadata_value(ctx.context), 0);
         ctx.add_symbol(

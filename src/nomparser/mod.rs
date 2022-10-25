@@ -749,18 +749,13 @@ fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
 
 #[test_parser("-1")]
 #[test_parser("!a")]
-#[test_parser("&a")]
 #[test_parser_error("+a")]
 pub fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
         take_exp,
         map_res(
             tuple((
-                alt((
-                    tag_token(TokenType::MINUS),
-                    tag_token(TokenType::NOT),
-                    tag_token(TokenType::REF),
-                )),
+                alt((tag_token(TokenType::MINUS), tag_token(TokenType::NOT))),
                 take_exp,
             )),
             |((op, _), exp)| {
@@ -872,26 +867,18 @@ fn float(input: Span) -> IResult<Span, Span> {
 }
 
 #[test_parser("kfsh")]
-#[test_parser("&kfsh")]
 fn type_name(input: Span) -> IResult<Span, Box<TypeNameNode>> {
-    delspace(map_res(
-        tuple((
-            del_newline_or_space!(opt(tag_token(TokenType::REF))),
-            extern_identifier,
-        )),
-        |(is_ref, exid)| {
-            let exid = match *exid {
-                NodeEnum::ExternIDNode(exid) => exid,
-                _ => unreachable!(),
-            };
-            let range = exid.range;
-            res_box(Box::new(TypeNameNode {
-                id: Some(exid),
-                is_ref: is_ref.is_some(),
-                range,
-            }))
-        },
-    ))(input)
+    delspace(map_res(tuple((extern_identifier,)), |(exid,)| {
+        let exid = match *exid {
+            NodeEnum::ExternIDNode(exid) => exid,
+            _ => unreachable!(),
+        };
+        let range = exid.range;
+        res_box(Box::new(TypeNameNode {
+            id: Some(exid),
+            range,
+        }))
+    }))(input)
 }
 
 #[test_parser("myname: int")]
@@ -911,7 +898,6 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
             let mut tp = Box::new(TypeNameNode {
                 id: None,
                 range: tprange,
-                is_ref: false,
             });
 
             let mut doc = None;

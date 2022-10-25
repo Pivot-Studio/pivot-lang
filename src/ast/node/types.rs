@@ -14,7 +14,6 @@ use rustc_hash::FxHashMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeNameNode {
     pub id: Option<ExternIDNode>,
-    pub is_ref: bool,
 }
 
 impl TypeNameNode {
@@ -133,7 +132,6 @@ impl StructDefNode {
                 pltype: tp.clone(),
                 name: field.id.name.clone(),
                 range: field.range,
-                is_ref: field.tp.is_ref,
                 refs: Rc::new(RefCell::new(vec![])),
             };
             ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
@@ -151,17 +149,7 @@ impl StructDefNode {
         st.set_body(
             &order_fields
                 .into_iter()
-                .map(|order_field| {
-                    if order_field.is_ref {
-                        order_field
-                            .pltype
-                            .get_basic_type(&ctx)
-                            .ptr_type(inkwell::AddressSpace::Generic)
-                            .as_basic_type_enum()
-                    } else {
-                        order_field.pltype.get_basic_type(&ctx)
-                    }
-                })
+                .map(|order_field| order_field.pltype.get_basic_type(&ctx))
                 .collect::<Vec<_>>(),
             false,
         );
@@ -204,9 +192,7 @@ impl Node for StructInitFieldNode {
         if !self.has_comma {
             return Err(ctx.add_err(self.range, ErrorCode::COMPLETION));
         }
-        let value = if let Value::RefValue(_) = v {
-            v.as_basic_value_enum()
-        } else {
+        let value = {
             let v = ctx.try_load2var(v);
             let vop = v.as_basic_value_enum_op();
             if vop.is_none() {
