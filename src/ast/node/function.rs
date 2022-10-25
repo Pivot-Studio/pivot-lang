@@ -72,12 +72,7 @@ impl Node for FuncDefNode {
                     para_pltypes.push(pltype.clone());
                     let di_type = pltype.get_ditype(ctx);
                     let di_type = di_type.unwrap();
-                    let di_ref_type = pltype.clone().get_di_ref_type(ctx, Some(di_type)).unwrap();
-                    param_ditypes.push(if para.tp.is_ref {
-                        di_ref_type.as_type()
-                    } else {
-                        di_type
-                    });
+                    param_ditypes.push(di_type);
                 }
             }
         }
@@ -85,16 +80,7 @@ impl Node for FuncDefNode {
         if let Some(body) = self.body.as_mut() {
             let subroutine_type = ctx.dibuilder.create_subroutine_type(
                 ctx.diunit.get_file(),
-                {
-                    let pltype = self.typenode.ret.get_type(ctx)?;
-                    let di_type = pltype.get_ditype(ctx);
-                    let di_ref_type = pltype.clone().get_di_ref_type(ctx, di_type);
-                    if self.typenode.ret.is_ref {
-                        di_ref_type.and_then(|v| Some(v.as_type()))
-                    } else {
-                        di_type
-                    }
-                },
+                self.typenode.ret.get_type(ctx)?.get_ditype(ctx),
                 &param_ditypes,
                 DIFlags::PUBLIC,
             );
@@ -152,13 +138,6 @@ impl Node for FuncDefNode {
                         return Ok((Value::None, None, TerminatorEnum::NONE, false));
                     }
                     op.unwrap()
-                };
-                let ret_type = if self.typenode.ret.is_ref {
-                    ret_type
-                        .ptr_type(inkwell::AddressSpace::Generic)
-                        .as_basic_type_enum()
-                } else {
-                    ret_type
                 };
                 Some(alloc(&mut ctx, ret_type, "retvalue"))
             } else {
@@ -259,11 +238,7 @@ impl Node for FuncCallNode {
         for (i, para) in self.paralist.iter_mut().enumerate() {
             let pararange = para.range();
             let (value, _, _, _) = para.emit(ctx)?;
-            let load_op = if let Value::RefValue(ptr) = value {
-                Some(ptr.as_basic_value_enum())
-            } else {
-                ctx.try_load2var(value).as_basic_value_enum_op()
-            };
+            let load_op = ctx.try_load2var(value).as_basic_value_enum_op();
             if load_op.is_none() {
                 return Ok((Value::None, None, TerminatorEnum::NONE, false));
             }
@@ -282,23 +257,12 @@ impl Node for FuncCallNode {
         if let PLType::FN(fv) = &fntp {
             ctx.save_if_comment_doc_hover(self.range, Some(fv.doc.clone()));
             let o = match ret.try_as_basic_value().left() {
-                Some(v) => {
-                    if v.is_pointer_value() {
-                        Ok((
-                            Value::RefValue(v.into_pointer_value()),
-                            Some(*fv.ret_pltype.clone()),
-                            TerminatorEnum::NONE,
-                            false,
-                        ))
-                    } else {
-                        Ok((
-                            Value::LoadValue(v),
-                            Some(*fv.ret_pltype.clone()),
-                            TerminatorEnum::NONE,
-                            false,
-                        ))
-                    }
-                }
+                Some(v) => Ok((
+                    Value::LoadValue(v),
+                    Some(*fv.ret_pltype.clone()),
+                    TerminatorEnum::NONE,
+                    false,
+                )),
                 None => Ok((
                     Value::None,
                     Some(*fv.ret_pltype.clone()),
@@ -335,30 +299,14 @@ impl FuncTypeNode {
         for para in self.paralist.iter() {
             let paramtype = para.tp.get_type(ctx)?;
             param_pltypes.push(paramtype.clone());
-            para_types.push(if para.tp.is_ref {
-                paramtype
-                    .get_basic_type(&ctx)
-                    .ptr_type(inkwell::AddressSpace::Generic)
-                    .into()
-            } else {
-                paramtype.get_basic_type(&ctx).into()
-            });
+            para_types.push(paramtype.get_basic_type(&ctx).into());
         }
         let pltype = self.ret.get_type(ctx)?;
         let func_type = if pltype.is_void() {
             // void type
             ctx.context.void_type().fn_type(&para_types, false)
         } else {
-            // is ref
-            if self.ret.is_ref {
-                pltype
-                    .get_basic_type(&ctx)
-                    .ptr_type(inkwell::AddressSpace::Generic)
-                    .as_basic_type_enum()
-                    .fn_type(&para_types, false)
-            } else {
-                pltype.get_basic_type(&ctx).fn_type(&para_types, false)
-            }
+            pltype.get_basic_type(&ctx).fn_type(&para_types, false)
         };
         let mut name = self.id.clone();
         if !self.declare {
@@ -373,7 +321,6 @@ impl FuncTypeNode {
             param_pltypes,
             range: self.range,
             refs: Rc::new(RefCell::new(refs)),
-            is_ref: self.ret.is_ref,
             doc: self.doc.clone(),
         });
         ctx.set_if_refs_tp(&ftp, self.range);
