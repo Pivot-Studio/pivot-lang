@@ -15,6 +15,7 @@ use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::utils::read_config::{get_config, Config};
 use crate::Db;
 
+use colored::Colorize;
 use inkwell::context::Context;
 use inkwell::targets::TargetMachine;
 use internal_macro::range;
@@ -238,6 +239,10 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     m.module.set_triple(&TargetMachine::get_default_triple());
     let node = params.node(db);
     let mut nn = node.node(db);
+    if m.action.is_some() && m.action.unwrap() == ActionType::PrintAst {
+        println!("file: {}", params.fullpath(db).green());
+        nn.print(0, true, vec![]);
+    }
     let _ = nn.emit(m);
     Diagnostics::push(
         db,

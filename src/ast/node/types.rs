@@ -14,7 +14,6 @@ use rustc_hash::FxHashMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeNameNode {
     pub id: Option<ExternIDNode>,
-    pub is_ref: bool,
 }
 
 impl TypeNode for TypeNameNode {
@@ -22,12 +21,12 @@ impl TypeNode for TypeNameNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("TypeNameNode");
-        tab(tabs + 1, line.clone(), true);
-        // if self.is_ref {
-        //     println!("id: &{}", self.id);
-        // } else {
-        //     println!("id: {}", self.id);
-        // }
+        if let Some(id) = &self.id {
+            id.print(tabs + 1, true, line.clone());
+        } else {
+            tab(tabs + 1, line.clone(), true);
+            println!("id: <empty>");
+        }
     }
     fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
         ctx.if_completion(|ctx, a| {
@@ -165,7 +164,6 @@ impl StructDefNode {
                 pltype: tp.clone(),
                 name: field.id.name.clone(),
                 range: field.range,
-                is_ref: false, /*field.tp.is_ref*/
                 refs: Rc::new(RefCell::new(vec![])),
             };
             ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
@@ -183,17 +181,7 @@ impl StructDefNode {
         st.set_body(
             &order_fields
                 .into_iter()
-                .map(|order_field| {
-                    if order_field.is_ref {
-                        order_field
-                            .pltype
-                            .get_basic_type(&ctx)
-                            .ptr_type(inkwell::AddressSpace::Generic)
-                            .as_basic_type_enum()
-                    } else {
-                        order_field.pltype.get_basic_type(&ctx)
-                    }
-                })
+                .map(|order_field| order_field.pltype.get_basic_type(&ctx))
                 .collect::<Vec<_>>(),
             false,
         );
@@ -227,7 +215,7 @@ impl Node for StructInitFieldNode {
         tab(tabs, line.clone(), end);
         println!("StructInitFieldNode");
         tab(tabs + 1, line.clone(), false);
-        // println!("id: {}", self.id);
+        println!("id: {}", self.id.name);
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
@@ -236,9 +224,7 @@ impl Node for StructInitFieldNode {
         if !self.has_comma {
             return Err(ctx.add_err(self.range, ErrorCode::COMPLETION));
         }
-        let value = if let Value::RefValue(_) = v {
-            v.as_basic_value_enum()
-        } else {
+        let value = {
             let v = ctx.try_load2var(v);
             let vop = v.as_basic_value_enum_op();
             if vop.is_none() {

@@ -78,8 +78,10 @@ impl FileCompileInput {
     pub fn get_emit_params(self, db: &dyn Db) -> EmitParams {
         let file = self.file(db);
         if self.docs(db).file(db) != file {
-            let action = if self.docs(db).action(db) == ActionType::Compile {
-                ActionType::Compile
+            let action = if self.docs(db).action(db) == ActionType::Compile
+                || self.docs(db).action(db) == ActionType::PrintAst
+            {
+                self.docs(db).action(db)
             } else {
                 ActionType::Diagnostic
             };

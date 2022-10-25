@@ -769,18 +769,13 @@ fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
 
 #[test_parser("-1")]
 #[test_parser("!a")]
-#[test_parser("&a")]
 #[test_parser_error("+a")]
 pub fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
         take_exp,
         map_res(
             tuple((
-                alt((
-                    tag_token(TokenType::MINUS),
-                    tag_token(TokenType::NOT),
-                    tag_token(TokenType::REF),
-                )),
+                alt((tag_token(TokenType::MINUS), tag_token(TokenType::NOT))),
                 take_exp,
             )),
             |((op, _), exp)| {
@@ -824,7 +819,6 @@ pub fn identifier(input: Span) -> IResult<Span, Box<VarNode>> {
 }
 pub fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
-        array_element,
         number,
         bool_const,
         delimited(
@@ -832,6 +826,7 @@ pub fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             logic_exp,
             tag_token(TokenType::RPAREN),
         ),
+        array_element,
         function_call,
         struct_init,
         array_init,
@@ -898,14 +893,10 @@ fn type_name(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
 }
 
 #[test_parser("kfsh")]
-#[test_parser("&kfsh")]
 fn basic_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
     delspace(map_res(
-        tuple((
-            del_newline_or_space!(opt(tag_token(TokenType::REF))),
-            extern_identifier,
-        )),
-        |(is_ref, exid)| {
+        extern_identifier,
+        |exid| {
             let exid = match *exid {
                 NodeEnum::ExternIDNode(exid) => exid,
                 _ => unreachable!(),
@@ -913,7 +904,6 @@ fn basic_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
             let range = exid.range;
             Ok::<_, Error>(Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
                 id: Some(exid),
-                is_ref: is_ref.is_some(),
                 range,
             })))
         },
@@ -937,7 +927,6 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
             let mut tp = Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
                 id: None,
                 range: tprange,
-                is_ref: false,
             }));
 
             let mut doc = None;
@@ -1260,8 +1249,8 @@ fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
 /// ```
 fn array_element(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let re = delspace(tuple((
-        alt((function_call, extern_identifier)),
-        many0(delimited(
+        alt((function_call, extern_identifier)),//TODO: support take_exp
+        many1(delimited(
             tag_token(TokenType::LBRACKET),
             logic_exp,
             tag_token(TokenType::RBRACKET),
@@ -1272,9 +1261,6 @@ fn array_element(input: Span) -> IResult<Span, Box<NodeEnum>> {
     }
     let (input, (a, b)) = re.unwrap();
     let r = a.range();
-    if b.is_empty() {
-        return Ok((input, a.into()));
-    }
     let mut arr_elem_node = ArrayElementNode {
         arr: a.into(),
         index: b[0].clone(),

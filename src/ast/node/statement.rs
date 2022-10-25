@@ -78,18 +78,7 @@ impl Node for DefNode {
         }
         let pltype = pltype_opt.unwrap();
         let ditype = pltype.get_ditype(ctx);
-        let (base_value, debug_type) = if let Value::RefValue(ref_value) = value {
-            (
-                ref_value.as_basic_value_enum(),
-                Some(
-                    pltype
-                        .clone()
-                        .get_di_ref_type(ctx, ditype.clone())
-                        .unwrap()
-                        .as_type(),
-                ),
-            )
-        } else if let Value::ArrValue(array_value) = value {
+        let (base_value, debug_type) = if let Value::ArrValue(array_value) = value {
             let base_type = array_value.get_type();
             let ptr2value = alloc(ctx, base_type.as_basic_type_enum(), &self.var.name);
             // println!("ptr2value:{:?}", ptr2value);
@@ -168,7 +157,6 @@ impl Node for AssignNode {
             return Err(ctx.add_err(vrange, ErrorCode::ASSIGN_CONST));
         }
         let (value, _, _, _) = self.exp.emit(ctx)?;
-        let ptr = ctx.try_load2ptr(ptr);
         if let Value::VarValue(ptr) = ptr {
             let load = ctx.try_load2var(value);
             if ptr.get_type().get_element_type()

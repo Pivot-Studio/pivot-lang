@@ -593,22 +593,13 @@ pub struct Field {
     pub pltype: PLType,
     pub name: String,
     pub range: Range,
-    pub is_ref: bool,
     pub refs: Rc<RefCell<Vec<Location>>>,
 }
 
 impl Field {
     pub fn get_di_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, offset: u64) -> (DIType<'ctx>, u64) {
         let di_type = self.pltype.get_ditype(ctx);
-        let debug_type = if self.is_ref {
-            self.pltype
-                .clone()
-                .get_di_ref_type(ctx, di_type.clone())
-                .unwrap()
-                .as_type()
-        } else {
-            di_type.unwrap()
-        };
+        let debug_type = di_type.unwrap();
         (
             ctx.dibuilder
                 .create_member_type(
@@ -635,7 +626,6 @@ pub struct FNType {
     pub ret_pltype: Box<PLType>,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
-    pub is_ref: bool,
     pub doc: Vec<Box<NodeEnum>>,
 }
 
@@ -705,17 +695,7 @@ impl STType {
                 .ordered_fields
                 .clone()
                 .into_iter()
-                .map(|order_field| {
-                    if order_field.is_ref {
-                        order_field
-                            .pltype
-                            .get_basic_type(&ctx)
-                            .ptr_type(inkwell::AddressSpace::Generic)
-                            .as_basic_type_enum()
-                    } else {
-                        order_field.pltype.get_basic_type(&ctx)
-                    }
-                })
+                .map(|order_field| order_field.pltype.get_basic_type(&ctx))
                 .collect::<Vec<_>>(),
             false,
         );
@@ -1049,6 +1029,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             _ => v,
         }
     }
+
     // load type** and type* to type*
     pub fn try_load2ptr(&mut self, v: Value<'ctx>) -> Value<'ctx> {
         match v.as_basic_value_enum() {

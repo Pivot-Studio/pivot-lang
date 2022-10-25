@@ -150,12 +150,6 @@ impl Node for ArrayElementNode {
             } else {
                 return Err(ctx.add_err(self.range, ErrorCode::CANNOT_INDEX_NON_ARRAY));
             }
-        } else if let Value::RefValue(v) = v {
-            if let PLType::ARR(arrtp) = tp.unwrap() {
-                (arrtp, v)
-            } else {
-                return Err(ctx.add_err(self.range, ErrorCode::CANNOT_INDEX_NON_ARRAY));
-            }
         } else if let Value::LoadValue(v) = v {
             if v.is_array_value() {
                 let (index, _, _, _) = self.index.emit(ctx)?;

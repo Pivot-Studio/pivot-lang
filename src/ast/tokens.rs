@@ -59,7 +59,6 @@ define_tokens!(
     RETURN = "return",
     DOT = ".",
     SEMI = ";",
-    REF = "&",
     CONST = "const",
     USE = "use",
     DOUBLE_COLON = "::",

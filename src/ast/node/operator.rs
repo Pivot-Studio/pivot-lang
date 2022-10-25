@@ -28,15 +28,6 @@ impl Node for UnaryOpNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let (exp, pltype, _, is_const) = self.exp.emit(ctx)?;
-        if let (&Value::VarValue(_), TokenType::REF) = (&exp, self.op) {
-            if is_const {
-                return Err(ctx.add_err(self.range, ErrorCode::REF_CONST));
-            }
-            if let Value::VarValue(exp) = ctx.try_load2ptr(exp) {
-                return Ok((Value::RefValue(exp), pltype, TerminatorEnum::NONE, false));
-            }
-            todo!()
-        }
         let exp = ctx.try_load2var(exp);
         return Ok(match (exp, self.op) {
             (Value::IntValue(exp), TokenType::MINUS) => (
@@ -227,9 +218,6 @@ impl Node for TakeOpNode {
             return Err(ctx.add_err(self.range, ErrorCode::INVALID_GET_FIELD));
         }
         let mut pltype = pltype.unwrap();
-        if self.ids.len() != 0 {
-            res = ctx.try_load2ptr(res);
-        }
         for id in &self.ids {
             res = match res.as_basic_value_enum() {
                 BasicValueEnum::PointerValue(s) => {

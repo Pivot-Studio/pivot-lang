@@ -92,6 +92,7 @@ pub enum ActionType {
     Diagnostic,
     Hover,
     Compile,
+    PrintAst,
 }
 
 #[cfg(feature = "jit")]
@@ -206,6 +207,11 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
             return;
         }
     }
+    if op.printast {
+        let time = now.elapsed();
+        println!("print ast done, time: {:?}", time);
+        return;
+    }
     let mut mods = compile_dry::accumulated::<ModBuffer>(db, docs);
     let ctx = Context::create();
     let m = mods.pop().unwrap();
@@ -237,18 +243,21 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let mut fo = out.to_string();
     fo.push_str(".out");
     llvmmod.write_bitcode_to_path(Path::new(&out));
-    let link = Command::new("clang++")
-        .arg(format!("-O{}", op.optimization as u32))
+    let mut cmd = Command::new("clang++");
+    if cfg!(target_os = "linux") {
+        println!("target os is linux");
+        cmd.arg("-ltinfo");
+    }
+    cmd.arg(format!("-O{}", op.optimization as u32))
         .arg("-pthread")
-        .arg("-ltinfo")
         .arg("-ldl")
         .arg(&f)
         .arg("vm/target/release/libvm.a")
         .arg("-o")
         .arg(&fo)
-        .arg("-g")
-        .status();
-    if link.is_err() || !link.unwrap().success() {
+        .arg("-g");
+    let res = cmd.status();
+    if res.is_err() || !res.unwrap().success() {
         println!("warning: link with pivot lang vm failed, could be caused by vm pkg not found.");
         println!("warning: you can build vm pkg by `cargo build --release` in vm dir.");
     } else {
@@ -258,7 +267,6 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let time = now.elapsed();
     println!("compile succ, time: {:?}", time);
 }
-
 // #[cfg(test)]
 // mod test {
 //     use std::{
