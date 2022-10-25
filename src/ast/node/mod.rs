@@ -58,6 +58,19 @@ impl TerminatorEnum {
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[enum_dispatch(TypeNode, RangeTrait)]
+pub enum TypeNodeEnum {
+    BasicTypeNode(TypeNameNode),
+    ArrayTypeNode(ArrayTypeNameNode),
+}
+#[enum_dispatch]
+pub trait TypeNode: RangeTrait + AsAny {
+    fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
+    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
+}
+type TypeNodeResult<'ctx> = Result<PLType, PLDiag>;
 /// # Value
 /// 表达每个ast在计算之后产生的值  
 ///
@@ -70,6 +83,7 @@ pub enum Value<'a> {
     FloatValue(FloatValue<'a>),
     VarValue(PointerValue<'a>),
     LoadValue(BasicValueEnum<'a>),
+    ArrValue(PointerValue<'a>),
     StructFieldValue((String, BasicValueEnum<'a>)),
     FnValue(FunctionValue<'a>),
     STValue(StructType<'a>),
@@ -87,6 +101,7 @@ impl<'a> Value<'a> {
             Value::FloatValue(v) => Some(v.as_basic_value_enum()),
             Value::VarValue(v) => Some(v.as_basic_value_enum()),
             Value::BoolValue(v) => Some(v.as_basic_value_enum()),
+            Value::ArrValue(v) => Some(v.as_basic_value_enum()),
             Value::LoadValue(v) => Some(*v),
             Value::StructFieldValue((_, v)) => Some(*v),
             Value::STValue(_) => None,
@@ -127,6 +142,8 @@ pub enum NodeEnum {
     Global(GlobalNode),
     UseNode(UseNode),
     ExternIDNode(ExternIDNode),
+    ArrayInitNode(ArrayInitNode),
+    ArrayElementNode(ArrayElementNode),
 }
 
 #[enum_dispatch]

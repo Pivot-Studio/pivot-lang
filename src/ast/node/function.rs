@@ -1,6 +1,6 @@
 use super::statement::StatementsNode;
 use super::*;
-use super::{alloc, types::TypedIdentifierNode, Node};
+use super::{alloc, types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::ctx::{FNType, PLType};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
@@ -58,7 +58,7 @@ impl Node for FuncDefNode {
         ctx.push_semantic_token(self.typenode.range, SemanticTokenType::FUNCTION, 0);
         for para in self.typenode.paralist.iter() {
             ctx.push_semantic_token(para.id.range, SemanticTokenType::PARAMETER, 0);
-            ctx.push_semantic_token(para.tp.range, SemanticTokenType::TYPE, 0);
+            ctx.push_semantic_token(para.tp.range(), SemanticTokenType::TYPE, 0);
             para_names.push(para.id.clone());
             let pltype = para.tp.get_type(ctx)?;
             match pltype {
@@ -76,7 +76,7 @@ impl Node for FuncDefNode {
                 }
             }
         }
-        ctx.push_semantic_token(self.typenode.ret.range, SemanticTokenType::TYPE, 0);
+        ctx.push_semantic_token(self.typenode.ret.range(), SemanticTokenType::TYPE, 0);
         if let Some(body) = self.body.as_mut() {
             let subroutine_type = ctx.dibuilder.create_subroutine_type(
                 ctx.diunit.get_file(),
@@ -282,7 +282,7 @@ impl Node for FuncCallNode {
 pub struct FuncTypeNode {
     pub id: String,
     pub paralist: Vec<Box<TypedIdentifierNode>>,
-    pub ret: Box<TypeNameNode>,
+    pub ret: Box<TypeNodeEnum>,
     pub doc: Vec<Box<NodeEnum>>,
     pub declare: bool,
 }

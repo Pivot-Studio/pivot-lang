@@ -1,15 +1,16 @@
 use super::*;
-use crate::ast::ctx::Ctx;
+use crate::ast::ctx::{init_arr, Ctx};
 use crate::ast::diag::{ErrorCode, WarnCode};
 use inkwell::debug_info::*;
-use inkwell::types::AnyType;
+use inkwell::types::{AnyType, BasicType};
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct DefNode {
     pub var: VarNode,
-    pub exp: Box<NodeEnum>,
+    pub tp: Option<Box<TypeNodeEnum>>,
+    pub exp: Option<Box<NodeEnum>>,
 }
 impl Node for DefNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -17,19 +18,83 @@ impl Node for DefNode {
         tab(tabs, line.clone(), end);
         println!("DefNode");
         self.var.print(tabs + 1, false, line.clone());
-        self.exp.print(tabs + 1, true, line.clone());
+        if let Some(tp) = &self.tp {
+            tp.print(tabs + 1, true, line.clone());
+        } else {
+            self.exp
+                .as_ref()
+                .unwrap()
+                .print(tabs + 1, true, line.clone());
+        }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
-        let exp_range = self.exp.range();
-        let (value, pltype_opt, _, _) = self.exp.emit(ctx)?;
+        if let Some(tp) = &self.tp {
+            let pltype = tp.get_type(ctx)?;
+            match pltype.clone() {
+                PLType::FN(_) => todo!(),
+                PLType::STRUCT(_) => todo!(),
+                PLType::ARR(a) => {
+                    let arrtp = a.arr_type(ctx);
+                    let arr = alloc(ctx, arrtp.as_basic_type_enum(), &self.var.name);
+                    init_arr(arr, ctx);
+                    let re = ctx.add_symbol(
+                        self.var.name.clone(),
+                        arr,
+                        pltype.clone(),
+                        self.var.range,
+                        false,
+                    );
+                    if re.is_err() {
+                        return Err(re.unwrap_err());
+                    }
+                    return Ok((Value::None, None, TerminatorEnum::NONE, false));
+                }
+                PLType::PRIMITIVE(p) => {
+                    let tp = p.get_basic_type(ctx);
+                    let v = alloc(ctx, tp, &self.var.name);
+                    let re = ctx.add_symbol(
+                        self.var.name.clone(),
+                        v,
+                        pltype.clone(),
+                        self.var.range,
+                        false,
+                    );
+                    if re.is_err() {
+                        return Err(re.unwrap_err());
+                    }
+                    return Ok((Value::None, None, TerminatorEnum::NONE, false));
+                }
+                PLType::VOID => todo!(),
+                PLType::NAMESPACE(_) => todo!(),
+            };
+        }
+
+        let exp_range = self.exp.as_ref().unwrap().range();
+        let (value, pltype_opt, _, _) = self.exp.as_mut().unwrap().emit(ctx)?;
         // for err tolerate
         if pltype_opt.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
         }
         let pltype = pltype_opt.unwrap();
         let ditype = pltype.get_ditype(ctx);
-        let (base_value, debug_type) = {
+        let (base_value, debug_type) = if let Value::ArrValue(array_value) = value {
+            let base_type = array_value.get_type();
+            let ptr2value = alloc(ctx, base_type.as_basic_type_enum(), &self.var.name);
+            // println!("ptr2value:{:?}", ptr2value);
+            ctx.builder.build_store(ptr2value, array_value);
+            let re = ctx.add_symbol(
+                self.var.name.clone(),
+                ptr2value,
+                pltype.clone(),
+                self.var.range,
+                false,
+            );
+            if re.is_err() {
+                return Err(re.unwrap_err());
+            }
+            return Ok((Value::None, None, TerminatorEnum::NONE, false));
+        } else {
             let ditype = ditype.clone();
             let loadv = ctx.try_load2var(value);
             if let Value::None = loadv {

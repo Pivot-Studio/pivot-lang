@@ -23,7 +23,9 @@ use crate::{
             function::{FuncCallNode, FuncDefNode, FuncTypeNode},
             global::GlobalNode,
             pkg::{ExternIDNode, UseNode},
-            types::{StructDefNode, TypeNameNode, TypedIdentifierNode},
+            types::{
+                ArrayInitNode, ArrayTypeNameNode, StructDefNode, TypeNameNode, TypedIdentifierNode,
+            },
         },
         tokens::TOKEN_STR_MAP,
     },
@@ -584,22 +586,40 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
 
 #[test_parser("let a = 1")]
 pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    delspace(map_res(
-        preceded(
-            tag_token(TokenType::LET),
-            tuple((identifier, tag_token(TokenType::ASSIGN), logic_exp)),
-        ),
-        |(a, _, v)| {
-            let range = a.range().start.to(v.range().end);
-            res_enum(
-                DefNode {
-                    var: *a,
-                    exp: v,
-                    range,
-                }
-                .into(),
-            )
-        },
+    delspace(preceded(
+        tag_token(TokenType::LET),
+        alt((
+            map_res(
+                tuple((identifier, tag_token(TokenType::ASSIGN), logic_exp)),
+                |(a, _, v)| {
+                    let range = a.range().start.to(v.range().end);
+                    res_enum(
+                        DefNode {
+                            var: *a,
+                            tp: None,
+                            exp: Some(v),
+                            range,
+                        }
+                        .into(),
+                    )
+                },
+            ),
+            map_res(
+                tuple((identifier, tag_token(TokenType::COLON), type_name)),
+                |(a, _, tp)| {
+                    let range = a.range().start.to(tp.range().end);
+                    res_enum(
+                        DefNode {
+                            var: *a,
+                            tp: Some(tp),
+                            exp: None,
+                            range,
+                        }
+                        .into(),
+                    )
+                },
+            ),
+        )),
     ))(input)
 }
 
@@ -806,8 +826,10 @@ pub fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             logic_exp,
             tag_token(TokenType::RPAREN),
         ),
+        array_element,
         function_call,
         struct_init,
+        array_init,
         extern_identifier,
     )))(input)
 }
@@ -866,19 +888,26 @@ fn float(input: Span) -> IResult<Span, Span> {
     ))(input)
 }
 
+fn type_name(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
+    delspace(alt((basic_type, array_type)))(input)
+}
+
 #[test_parser("kfsh")]
-fn type_name(input: Span) -> IResult<Span, Box<TypeNameNode>> {
-    delspace(map_res(tuple((extern_identifier,)), |(exid,)| {
-        let exid = match *exid {
-            NodeEnum::ExternIDNode(exid) => exid,
-            _ => unreachable!(),
-        };
-        let range = exid.range;
-        res_box(Box::new(TypeNameNode {
-            id: Some(exid),
-            range,
-        }))
-    }))(input)
+fn basic_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
+    delspace(map_res(
+        extern_identifier,
+        |exid| {
+            let exid = match *exid {
+                NodeEnum::ExternIDNode(exid) => exid,
+                _ => unreachable!(),
+            };
+            let range = exid.range;
+            Ok::<_, Error>(Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
+                id: Some(exid),
+                range,
+            })))
+        },
+    ))(input)
 }
 
 #[test_parser("myname: int")]
@@ -895,10 +924,10 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
             let mut tprange = range;
             tprange.end.column += 1;
             tprange.start = tprange.end;
-            let mut tp = Box::new(TypeNameNode {
+            let mut tp = Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
                 id: None,
                 range: tprange,
-            });
+            }));
 
             let mut doc = None;
             if let Some(d1) = d {
@@ -908,7 +937,7 @@ fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {
             }
 
             if let Some(type_name) = type_name {
-                range = id.range.start.to(type_name.range.end);
+                range = id.range.start.to(type_name.range().end);
                 tp = type_name;
             }
 
@@ -1156,9 +1185,9 @@ fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
         |(name, _, fields, _)| {
             let range;
             if let Some(last) = fields.last() {
-                range = name.range.start.to(last.range().end);
+                range = name.range().start.to(last.range().end);
             } else {
-                range = name.range;
+                range = name.range();
             }
             res_enum(
                 StructInitNode {
@@ -1170,6 +1199,81 @@ fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
             )
         },
     )(input)
+}
+
+fn array_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
+    map_res(
+        tuple((
+            tag_token(TokenType::LBRACKET),
+            type_name,
+            tag_token(TokenType::MUL),
+            number,
+            tag_token(TokenType::RBRACKET),
+        )),
+        |(_, tp, _, size, _)| {
+            let range = size.range().start.to(tp.range().end);
+
+            Ok::<_, Error>(Box::new(TypeNodeEnum::ArrayTypeNode(
+                ArrayTypeNameNode {
+                    id: tp,
+                    size,
+                    range,
+                }
+                .into(),
+            )))
+        },
+    )(input)
+}
+
+fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    map_res(
+        tuple((
+            tag_token(TokenType::LBRACKET),
+            many0(terminated(logic_exp, tag_token(TokenType::COMMA))),
+            tag_token(TokenType::RBRACKET),
+        )),
+        |(_, exps, _)| {
+            let range;
+            if let Some(last) = exps.last() {
+                range = last.range().start.to(last.range().end);
+            } else {
+                range = Range::default();
+            }
+            res_enum(ArrayInitNode { exps, range }.into())
+        },
+    )(input)
+}
+
+/// ```ebnf
+/// array_element = (function_call | extern_identifier) '[' logic_exp  ']' ;
+/// ```
+fn array_element(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    let re = delspace(tuple((
+        alt((function_call, extern_identifier)),//TODO: support take_exp
+        many1(delimited(
+            tag_token(TokenType::LBRACKET),
+            logic_exp,
+            tag_token(TokenType::RBRACKET),
+        )),
+    )))(input);
+    if let Err(e) = re {
+        return Err(e);
+    }
+    let (input, (a, b)) = re.unwrap();
+    let r = a.range();
+    let mut arr_elem_node = ArrayElementNode {
+        arr: a.into(),
+        index: b[0].clone(),
+        range: r.start.to(b[0].range().end),
+    };
+    for v in &b[1..] {
+        arr_elem_node = ArrayElementNode {
+            arr: box_node(arr_elem_node.into()),
+            index: v.clone(),
+            range: r.start.to(v.range().end),
+        };
+    }
+    Ok((input, box_node(arr_elem_node.into())))
 }
 
 fn decimal(input: Span) -> IResult<Span, Span> {

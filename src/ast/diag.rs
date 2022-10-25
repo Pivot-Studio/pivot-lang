@@ -60,7 +60,13 @@ define_error!(
     EXPECT_TYPE = "expect type",
     REDEFINE_SYMBOL = "redefine symbol",
     SYMBOL_NOT_FOUND = "symbol not found",
-    UNRESOLVED_MODULE = "unresolved module"
+    UNRESOLVED_MODULE = "unresolved module",
+    ARRAY_TYPE_NOT_MATCH = "array type not match",
+    ARRAY_INIT_EMPTY = "array init cannot be empty",
+    CANNOT_INDEX_NON_ARRAY = "cannot index non array type",
+    ARRAY_INDEX_MUST_BE_INT = "array index must be int",
+    ARRAY_INDEX_OUT_OF_BOUNDS = "array index out of bounds",
+    SIZE_MUST_BE_INT = "size must be int"
 );
 macro_rules! define_warn {
     ($(
