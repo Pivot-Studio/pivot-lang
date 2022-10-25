@@ -154,17 +154,17 @@
 <h2 id="ast的设计"><a class="header" href="#ast的设计">AST的设计</a></h2>
 <p>基本上，所有源代码中的基础单位都会对应抽象语法树中的一个节点。抽象语法树有很多类型的节点，他们可能会相互引用。</p>
 <p>所有的节点都必须实现<code>Node</code> trait，这个trait定义了节点的基本行为。</p>
-<pre><code class="language-rust no_run noplayground">#[enum_dispatch]
-pub trait Node: RangeTrait + AsAny {
-    fn print(&amp;self, tabs: usize, end: bool, line: Vec&lt;bool&gt;);
-    fn emit&lt;'a, 'ctx&gt;(&amp;'a mut self, ctx: &amp;mut Ctx&lt;'a, 'ctx&gt;) -&gt; NodeResult&lt;'ctx&gt;;
-}
+<pre><code class="language-rust no_run noplayground">    Program(program::ProgramNode),
+    STInitField(StructInitFieldNode),
+    STErrorNode(STErrorNode),
+    Global(GlobalNode),
+    UseNode(UseNode),
 </code></pre>
 <p>你可能注意到了，<code>Node</code>trait继承了<code>RangeTrait</code>，这个trait定义了节点的位置信息。</p>
-<pre><code class="language-rust no_run noplayground">#[enum_dispatch]
-pub trait RangeTrait {
-    fn range(&amp;self) -&gt; Range;
-}
+<pre><code class="language-rust no_run noplayground">    Bool(BoolConstNode),
+    Err(ErrorNode),
+    STS(StatementsNode),
+    Empty(EmptyNode),
 </code></pre>
 <p>一般来说，<code>RangeTrait</code>的实现通过<code>#[range]</code>宏来自动生成，你不需要手动实现它。</p>
 <p><code>Node</code>接口中的<code>print</code>函数用于打印节点的信息，它会被用于调试。<code>print</code>打印的结果和<code>tree</code>的输出非常像，你需要用一些工具函数来
