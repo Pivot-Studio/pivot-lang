@@ -1,4 +1,4 @@
-use crate::ast::node::Value;
+use crate::ast::node::{alloc, Value};
 use crate::lsp::semantic_tokens::type_index;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::utils::read_config::Config;
@@ -11,6 +11,7 @@ use inkwell::module::FlagBehavior;
 use inkwell::module::Linkage;
 use inkwell::module::Module;
 use inkwell::targets::TargetMachine;
+use inkwell::types::ArrayType;
 use inkwell::types::BasicMetadataTypeEnum;
 use inkwell::types::BasicType;
 use inkwell::types::BasicTypeEnum;
@@ -352,6 +353,7 @@ impl PLDiag {
 pub enum PLType {
     FN(FNType),
     STRUCT(STType),
+    ARR(ARRType),
     PRIMITIVE(PriType),
     VOID,
     NAMESPACE(Mod),
@@ -367,6 +369,25 @@ fn pri_ty<'ctx>(s: &str, ctx: &'ctx Context) -> BasicTypeEnum<'ctx> {
         "f32" => ctx.f32_type().as_basic_type_enum(),
         "f64" => ctx.f64_type().as_basic_type_enum(),
         _ => panic!("unknown type {}", s),
+    }
+}
+
+pub fn init_arr<'a, 'ctx>(ptr: PointerValue<'ctx>, ctx: &mut Ctx<'a, 'ctx>) {
+    if !ptr.get_type().get_element_type().is_array_type() {
+        return;
+    }
+    let tp = ptr.get_type().get_element_type().into_array_type();
+
+    for i in 0..tp.len() {
+        let index = &[
+            ctx.context.i64_type().const_int(0, false),
+            ctx.context.i64_type().const_int(i as u64, false),
+        ];
+        let elemptr = unsafe { ctx.builder.build_in_bounds_gep(ptr, index, "elemptr") };
+        let elem = alloc(ctx, tp.get_element_type(), "eleminit");
+        let elemvalue = ctx.builder.build_load(elem, "elemvalue");
+        ctx.builder.build_store(elemptr, elemvalue);
+        init_arr(elemptr, ctx);
     }
 }
 
@@ -400,6 +421,7 @@ impl PLType {
         match self {
             PLType::FN(f) => Some(f.refs.clone()),
             PLType::STRUCT(s) => Some(s.refs.clone()),
+            PLType::ARR(_) => None,
             PLType::PRIMITIVE(_) => None,
             PLType::VOID => None,
             PLType::NAMESPACE(_) => None,
@@ -419,6 +441,7 @@ impl PLType {
             PLType::FN(fu) => Some(fu.name.clone()),
             PLType::STRUCT(st) => Some(st.name.clone()),
             PLType::PRIMITIVE(pri) => Some(pri.id.clone()),
+            PLType::ARR(_) => None,
             PLType::VOID => Some("void".to_string()),
             PLType::NAMESPACE(_) => None,
         }
@@ -430,6 +453,7 @@ impl PLType {
         match self {
             PLType::FN(f) => Some(f.range.clone()),
             PLType::STRUCT(s) => Some(s.range.clone()),
+            PLType::ARR(_) => None,
             PLType::PRIMITIVE(_) => None,
             PLType::VOID => None,
             PLType::NAMESPACE(_) => None,
@@ -448,6 +472,12 @@ impl PLType {
                     .as_basic_type_enum(),
             ),
             PLType::STRUCT(s) => Some(s.struct_type(&ctx).as_basic_type_enum()),
+            PLType::ARR(a) => Some(
+                a.element_type
+                    .get_basic_type(ctx)
+                    .array_type(a.size)
+                    .as_basic_type_enum(),
+            ),
             PLType::PRIMITIVE(t) => Some(t.get_basic_type(ctx)),
             PLType::VOID => None,
             PLType::NAMESPACE(_) => None,
@@ -476,6 +506,7 @@ impl PLType {
         let td = ctx.targetmachine.get_target_data();
         match self {
             PLType::FN(_) => None,
+            PLType::ARR(_) => None,
             PLType::STRUCT(x) => {
                 let mut offset = 0;
                 let m = x
@@ -633,6 +664,21 @@ impl FNType {
             Some(Linkage::External),
         );
         fn_value
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ARRType {
+    pub element_type: Box<PLType>,
+    pub size: u32,
+}
+
+impl ARRType {
+    pub fn arr_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> ArrayType<'ctx> {
+        self.element_type.get_basic_type(ctx).array_type(self.size)
+    }
+    pub fn get_elem_type<'a, 'ctx>(&'a self) -> Box<PLType> {
+        self.element_type.clone()
     }
 }
 
@@ -1148,6 +1194,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         for (k, f) in self.plmod.types.iter() {
             let tp = match f {
                 PLType::FN(_) => continue,
+                PLType::ARR(_) => continue,
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::VOID => CompletionItemKind::KEYWORD,
@@ -1188,6 +1235,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             let tp = match f {
                 PLType::FN(_) => CompletionItemKind::FUNCTION,
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
+                PLType::ARR(_) => CompletionItemKind::KEYWORD,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::VOID => CompletionItemKind::KEYWORD,
                 PLType::NAMESPACE(_) => todo!(),

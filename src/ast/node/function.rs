@@ -1,6 +1,6 @@
 use super::statement::StatementsNode;
 use super::*;
-use super::{alloc, types::TypedIdentifierNode, Node};
+use super::{alloc, types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::ctx::{FNType, PLType};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
@@ -62,7 +62,7 @@ impl Node for FuncDefNode {
         ctx.push_semantic_token(self.typenode.range, SemanticTokenType::FUNCTION, 0);
         for para in self.typenode.paralist.iter() {
             ctx.push_semantic_token(para.id.range, SemanticTokenType::PARAMETER, 0);
-            ctx.push_semantic_token(para.tp.range, SemanticTokenType::TYPE, 0);
+            ctx.push_semantic_token(para.tp.range(), SemanticTokenType::TYPE, 0);
             para_names.push(para.id.clone());
             let pltype = para.tp.get_type(ctx)?;
             match pltype {
@@ -77,15 +77,19 @@ impl Node for FuncDefNode {
                     let di_type = pltype.get_ditype(ctx);
                     let di_type = di_type.unwrap();
                     let di_ref_type = pltype.clone().get_di_ref_type(ctx, Some(di_type)).unwrap();
-                    param_ditypes.push(if para.tp.is_ref {
-                        di_ref_type.as_type()
-                    } else {
-                        di_type
-                    });
+                    param_ditypes.push(
+                        if false
+                        /*para.tp.is_ref*/
+                        {
+                            di_ref_type.as_type()
+                        } else {
+                            di_type
+                        },
+                    );
                 }
             }
         }
-        ctx.push_semantic_token(self.typenode.ret.range, SemanticTokenType::TYPE, 0);
+        ctx.push_semantic_token(self.typenode.ret.range(), SemanticTokenType::TYPE, 0);
         if let Some(body) = self.body.as_mut() {
             let subroutine_type = ctx.dibuilder.create_subroutine_type(
                 ctx.diunit.get_file(),
@@ -93,7 +97,9 @@ impl Node for FuncDefNode {
                     let pltype = self.typenode.ret.get_type(ctx)?;
                     let di_type = pltype.get_ditype(ctx);
                     let di_ref_type = pltype.clone().get_di_ref_type(ctx, di_type);
-                    if self.typenode.ret.is_ref {
+                    if false
+                    /*self.typenode.ret.is_ref*/
+                    {
                         di_ref_type.and_then(|v| Some(v.as_type()))
                     } else {
                         di_type
@@ -157,7 +163,9 @@ impl Node for FuncDefNode {
                     }
                     op.unwrap()
                 };
-                let ret_type = if self.typenode.ret.is_ref {
+                let ret_type = if false
+                /*self.typenode.ret.is_ref*/
+                {
                     ret_type
                         .ptr_type(inkwell::AddressSpace::Generic)
                         .as_basic_type_enum()
@@ -322,7 +330,7 @@ impl Node for FuncCallNode {
 pub struct FuncTypeNode {
     pub id: String,
     pub paralist: Vec<Box<TypedIdentifierNode>>,
-    pub ret: Box<TypeNameNode>,
+    pub ret: Box<TypeNodeEnum>,
     pub doc: Vec<Box<NodeEnum>>,
     pub declare: bool,
 }
@@ -339,14 +347,18 @@ impl FuncTypeNode {
         for para in self.paralist.iter() {
             let paramtype = para.tp.get_type(ctx)?;
             param_pltypes.push(paramtype.clone());
-            para_types.push(if para.tp.is_ref {
-                paramtype
-                    .get_basic_type(&ctx)
-                    .ptr_type(inkwell::AddressSpace::Generic)
-                    .into()
-            } else {
-                paramtype.get_basic_type(&ctx).into()
-            });
+            para_types.push(
+                if false
+                /*para.tp.is_ref*/
+                {
+                    paramtype
+                        .get_basic_type(&ctx)
+                        .ptr_type(inkwell::AddressSpace::Generic)
+                        .into()
+                } else {
+                    paramtype.get_basic_type(&ctx).into()
+                },
+            );
         }
         let pltype = self.ret.get_type(ctx)?;
         let func_type = if pltype.is_void() {
@@ -354,7 +366,9 @@ impl FuncTypeNode {
             ctx.context.void_type().fn_type(&para_types, false)
         } else {
             // is ref
-            if self.ret.is_ref {
+            if
+            /*self.ret.is_ref*/
+            false {
                 pltype
                     .get_basic_type(&ctx)
                     .ptr_type(inkwell::AddressSpace::Generic)
@@ -377,7 +391,7 @@ impl FuncTypeNode {
             param_pltypes,
             range: self.range,
             refs: Rc::new(RefCell::new(refs)),
-            is_ref: self.ret.is_ref,
+            is_ref: false, //self.ret.is_ref,
             doc: self.doc.clone(),
         });
         ctx.set_if_refs_tp(&ftp, self.range);

@@ -34,6 +34,7 @@ impl Node for RetNode {
                 let err = ctx.add_err(self.range, ErrorCode::RETURN_TYPE_MISMATCH);
                 return Err(err);
             }
+
             ctx.builder.build_store(
                 ctx.return_block.unwrap().1.unwrap(),
                 ret.as_basic_value_enum(),

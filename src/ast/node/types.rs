@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use super::primary::VarNode;
 use super::*;
-use crate::ast::ctx::{Ctx, Field, PLType, STType};
+use crate::ast::ctx::{ARRType, Ctx, Field, PLType, STType};
 use crate::ast::diag::ErrorCode;
 use crate::ast::range::Range;
 use inkwell::types::{AnyType, BasicType};
@@ -17,8 +17,8 @@ pub struct TypeNameNode {
     pub is_ref: bool,
 }
 
-impl TypeNameNode {
-    pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+impl TypeNode for TypeNameNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("TypeNameNode");
@@ -29,7 +29,7 @@ impl TypeNameNode {
         //     println!("id: {}", self.id);
         // }
     }
-    pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Result<PLType, PLDiag> {
+    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
         ctx.if_completion(|ctx, a| {
             if a.0.is_in(self.range) {
                 let completions = ctx.get_type_completions();
@@ -48,11 +48,43 @@ impl TypeNameNode {
         Ok(pltype)
     }
 }
+
+#[range]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArrayTypeNameNode {
+    pub id: Box<TypeNodeEnum>,
+    pub size: Box<NodeEnum>,
+}
+
+impl TypeNode for ArrayTypeNameNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("ArrayTypeNameNode");
+        self.id.print(tabs + 1, false, line.clone());
+        self.size.print(tabs + 1, true, line.clone());
+    }
+    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
+        if let NodeEnum::Num(num) = *self.size {
+            if let Num::INT(sz) = num.value {
+                let pltype = self.id.get_type(ctx)?;
+                let arrtype = ARRType {
+                    element_type: Box::new(pltype),
+                    size: sz as u32,
+                };
+                let arrtype = PLType::ARR(arrtype);
+                return Ok(arrtype);
+            }
+        }
+        return Err(ctx.add_err(self.range, ErrorCode::SIZE_MUST_BE_INT));
+    }
+}
+
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TypedIdentifierNode {
     pub id: VarNode,
-    pub tp: Box<TypeNameNode>,
+    pub tp: Box<TypeNodeEnum>,
     pub doc: Option<CommentNode>,
 }
 
@@ -133,7 +165,7 @@ impl StructDefNode {
                 pltype: tp.clone(),
                 name: field.id.name.clone(),
                 range: field.range,
-                is_ref: field.tp.is_ref,
+                is_ref: false, /*field.tp.is_ref*/
                 refs: Rc::new(RefCell::new(vec![])),
             };
             ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
@@ -226,7 +258,7 @@ impl Node for StructInitFieldNode {
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitNode {
-    pub tp: Box<TypeNameNode>,
+    pub tp: Box<TypeNodeEnum>,
     pub fields: Vec<Box<NodeEnum>>, // TODO: comment db and salsa comment struct
 }
 
@@ -255,7 +287,7 @@ impl Node for StructInitNode {
             }
         }
         if let PLType::STRUCT(st) = &tp {
-            ctx.save_if_comment_doc_hover(self.tp.range, Some(st.doc.clone()));
+            ctx.save_if_comment_doc_hover(self.tp.range(), Some(st.doc.clone()));
             let et = st.struct_type(ctx).as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");
             for (id, (val, range)) in fields {
@@ -285,5 +317,66 @@ impl Node for StructInitNode {
         } else {
             panic!("StructInitNode::emit: invalid type");
         }
+    }
+}
+
+#[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ArrayInitNode {
+    // pub tp: Box<TypeNameNode>,
+    pub exps: Vec<Box<NodeEnum>>,
+}
+
+impl Node for ArrayInitNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("ArrayInitNode");
+        // self.tp.print(tabs + 1, self.exps.len() == 0, line.clone());
+        let mut i = self.exps.len();
+        for exp in &self.exps {
+            i -= 1;
+            exp.print(tabs + 1, i == 0, line.clone());
+        }
+    }
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let mut exps = Vec::<BasicValueEnum<'ctx>>::new();
+        let mut tp0 = None;
+
+        for exp in self.exps.iter_mut() {
+            let range = exp.range();
+            let (v, tp, _, _) = exp.emit(ctx)?;
+            // 检查类型是否一致
+            if tp0.is_none() {
+                tp0 = tp;
+            } else if tp0 != tp {
+                return Err(ctx.add_err(range, ErrorCode::ARRAY_TYPE_NOT_MATCH));
+            }
+            exps.push(ctx.try_load2var(v).as_basic_value_enum());
+        }
+        if tp0.is_none() {
+            return Err(ctx.add_err(self.range, ErrorCode::ARRAY_INIT_EMPTY));
+        }
+        let tp = exps[0].get_type();
+        let sz = exps.len() as u32;
+        let arr = alloc(ctx, tp.array_type(sz).as_basic_type_enum(), "array_alloca");
+
+        for (i, v) in exps.into_iter().enumerate() {
+            let index = &[
+                ctx.context.i64_type().const_int(0 as u64, false),
+                ctx.context.i64_type().const_int(i as u64, false),
+            ];
+            let ptr = unsafe { ctx.builder.build_in_bounds_gep(arr, index, "elem_ptr") };
+            ctx.builder.build_store(ptr, v);
+        }
+        return Ok((
+            Value::ArrValue(arr),
+            Some(PLType::ARR(ARRType {
+                element_type: Box::new(tp0.unwrap()),
+                size: sz,
+            })),
+            TerminatorEnum::NONE,
+            false,
+        ));
     }
 }
