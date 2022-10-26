@@ -67,12 +67,23 @@ mul_exp =
     ;
 
 unary_exp =
-    | take_exp
-    | ("-" | "!" | "&") take_exp
+    | complex_exp
+    | ("-" | "!" | "&") complex_exp
     ;
 
 take_exp =
-    | primary_exp ("." identifier)*
+    | complex_exp ("." complex_exp)+
+    ;
+
+array_element = complex_exp ('[' complex_exp  ']')+ ;
+
+call_function_exp = complex_exp ("(" (complex_exp (","complex_exp)*)? ")")+ ;
+
+complex_exp = 
+    | call_function_exp
+    | array_element
+    | take_exp
+    | primary_exp
     ;
 
 primary_exp =
@@ -80,10 +91,14 @@ primary_exp =
     | bool_const
     | "(" logic_exp ")"
     | extern_identifier
-    | struct_init
-    | call_function
+    | struct_init_exp
     ;
 
+number = [0-9]+ ("." number)? ;
+
+identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
+
+extern_identifier = (identifier "::")* identifier ;
 
 bool_const =
     | "true"
@@ -97,6 +112,10 @@ compare_exp =
 logic_exp = 
     | compare_exp (("&&"｜"||") compare_exp)*
     ;
+
+struct_init_exp = type_name "{" struct_init_exp_field "}" ;
+
+struct_init_exp_field = identifier ":" logic_exp "," ;
 
 assignee = identifier ("." identifier)*;
 
@@ -141,14 +160,7 @@ toplevel_statement =
 
 program = toplevel_statement* ;
 
-
-number = [0-9]+ | number "." number ;
-
-identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
-
 function_def = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name (statement_block | ";") ;
-
-call_function = extern_identifier "(" (logic_exp (","logic_exp)*)? ")" ;
 
 struct_def = "struct" identifier "{" struct_field* "}" ;
 
@@ -158,14 +170,8 @@ typed_identifier = identifier ":" type_name ;
 
 struct_field = typed_identifier ";" ;
 
-struct_init = type_name "{" struct_init_field "}" ;
-
-struct_init_field = identifier ":" logic_exp "," ;
-
 return_statement = "return" logic_exp ";" ;
 
 use_statement = "use" identifier ("::" identifier)* ";" ;
-
-extern_identifier = (identifier "::")* ;
 
 ```
