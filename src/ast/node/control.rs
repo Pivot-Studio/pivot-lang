@@ -13,6 +13,7 @@ pub struct IfNode {
 }
 
 impl Node for IfNode {
+    // ANCHOR: print
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -25,6 +26,8 @@ impl Node for IfNode {
             self.then.print(tabs + 1, true, line.clone());
         }
     }
+    // ANCHOR_END: print
+    // ANCHOR: emit
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let cond_block = ctx
             .context
@@ -82,6 +85,7 @@ impl Node for IfNode {
         }
         Ok((Value::None, None, terminator, false))
     }
+    // ANCHOR_END: emit
 }
 
 #[range]

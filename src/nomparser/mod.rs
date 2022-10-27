@@ -126,6 +126,7 @@ pub struct SourceProgram {
     pub text: String,
 }
 
+// ANCHOR: parse
 #[salsa::tracked(lru = 32)]
 pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, String> {
     let text = source.text(db);
@@ -136,6 +137,7 @@ pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, S
     // eprintln!("parse");
     Ok(ProgramNodeWrapper::new(db, re.unwrap().1))
 }
+// ANCHOR_END: parse
 
 /// ```enbf
 /// use_statement = "use" identifier ("::" identifier)* ;

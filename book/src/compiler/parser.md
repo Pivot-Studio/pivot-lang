@@ -28,5 +28,5 @@ pivot lang的完整语法规则见[这里](../../../#grammar)
 parser最顶层的函数是`parse`，它接受一个源文件输出一个AST根节点。
 
 ```rust,no_run,noplayground
-{{#include ../../../src/nomparser/mod.rs:127:136}}
+{{#include ../../../src/nomparser/mod.rs:parse}}
 ```

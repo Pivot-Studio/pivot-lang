@@ -145,17 +145,20 @@ pub enum NodeEnum {
     ArrayInitNode(ArrayInitNode),
     ArrayElementNode(ArrayElementNode),
 }
-
+// ANCHOR: range
 #[enum_dispatch]
 pub trait RangeTrait {
     fn range(&self) -> Range;
 }
+// ANCHOR_END: range
 
+// ANCHOR: node
 #[enum_dispatch]
 pub trait Node: RangeTrait + AsAny {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
 }
+// ANCHOR_END: node
 
 type NodeResult<'ctx> = Result<
     (
