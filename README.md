@@ -67,23 +67,21 @@ mul_exp =
     ;
 
 unary_exp =
-    | complex_exp
-    | ("-" | "!" | "&") complex_exp
+    | take_exp
+    | ("-" | "!" | "&") take_exp
     ;
 
 take_exp =
-    | complex_exp ("." complex_exp)+
+    | array_element ("." array_element)*
     ;
 
-array_element = complex_exp ('[' complex_exp  ']')+ ;
+array_element = call_function_exp ('[' call_function_exp  ']')* ;
 
-call_function_exp = complex_exp ("(" (complex_exp (","complex_exp)*)? ")")+ ;
+call_function_exp = complex_exp ("(" (complex_exp (","complex_exp)*)? ")")* ;
 
 complex_exp = 
-    | call_function_exp
-    | array_element
+    | primary_exp (* 需要向后看，不能以("."|"["|"(")结尾 *) 
     | take_exp
-    | primary_exp
     ;
 
 primary_exp =
