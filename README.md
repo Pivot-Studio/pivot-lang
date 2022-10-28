@@ -59,20 +59,21 @@
 
 ```ebnf
 add_exp = 
-    | mul_exp ("+" | "-" mul_exp)*
+    | mul_exp ("+" | "-" add_exp)?
     ;
 
 mul_exp = 
-    | unary_exp ("*"｜"/" unary_exp)*
+    | unary_exp ("*"｜"/" mul_exp)?
     ;
 
 unary_exp =
     | take_exp
-    | ("-" | "!" | "&") take_exp
+    | ("-" | "!") take_exp
     ;
 
+
 take_exp =
-    | array_element ("." array_element)*
+    | array_element ("." take_exp)?
     ;
 
 array_element = call_function_exp ('[' call_function_exp  ']')* ;
@@ -162,7 +163,7 @@ function_def = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")
 
 struct_def = "struct" identifier "{" struct_field* "}" ;
 
-type_name = ("&")? identifier ;
+type_name = extern_identifier ;
 
 typed_identifier = identifier ":" type_name ;
 
