@@ -157,7 +157,7 @@ impl ExternIDNode {
                 PLType::FN(f) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
                     Ok((
-                        Value::ExFnValue((f.get_value(ctx, plmod), PLType::FN(f.clone()))),
+                        Value::FnValue(f.get_value(ctx, plmod)),
                         Some(tp),
                         TerminatorEnum::NONE,
                         true,
@@ -167,7 +167,7 @@ impl ExternIDNode {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
                     Ok((
                         Value::STValue(s.struct_type(ctx)),
-                        Some(tp.clone()),
+                        Some(tp),
                         TerminatorEnum::NONE,
                         true,
                     ))

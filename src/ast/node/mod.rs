@@ -87,7 +87,6 @@ pub enum Value<'a> {
     StructFieldValue((String, BasicValueEnum<'a>)),
     FnValue(FunctionValue<'a>),
     STValue(StructType<'a>),
-    ExFnValue((FunctionValue<'a>, PLType)),
     None,
 }
 
@@ -106,7 +105,6 @@ impl<'a> Value<'a> {
             Value::StructFieldValue((_, v)) => Some(*v),
             Value::STValue(_) => None,
             Value::FnValue(_) => None,
-            Value::ExFnValue(_) => None,
             Value::None => None,
         }
     }

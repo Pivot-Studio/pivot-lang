@@ -204,7 +204,7 @@ impl Node for FuncDefNode {
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncCallNode {
-    pub id: ExternIDNode,
+    pub id: Box<NodeEnum>,
     pub paralist: Vec<Box<NodeEnum>>,
 }
 
@@ -222,16 +222,16 @@ impl Node for FuncCallNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut para_values = Vec::new();
-        let (v, id, _, _) = self.id.get_type(ctx)?;
+        let (v, id, _, _) = self.id.emit(ctx)?;
         let id = id.unwrap();
         let func = match v {
-            Value::ExFnValue(f) => Some(f),
+            Value::FnValue(f) => Some(f),
             _ => None,
         };
         if func.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND));
         }
-        let (func, fntp) = func.unwrap();
+        let func = func.unwrap();
         if func.count_params() != self.paralist.len() as u32 {
             return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
         }
@@ -254,7 +254,7 @@ impl Node for FuncCallNode {
             &para_values,
             format(format_args!("call_{}", id.get_name().unwrap())).as_str(),
         );
-        if let PLType::FN(fv) = &fntp {
+        if let PLType::FN(fv) = &id {
             ctx.save_if_comment_doc_hover(self.range, Some(fv.doc.clone()));
             let o = match ret.try_as_basic_value().left() {
                 Some(v) => Ok((
@@ -270,7 +270,7 @@ impl Node for FuncCallNode {
                     false,
                 )),
             };
-            ctx.set_if_refs_tp(&fntp, self.range);
+            ctx.set_if_refs_tp(&id, self.range);
             ctx.send_if_go_to_def(self.range, fv.range, ctx.plmod.path.clone());
             return o;
         }

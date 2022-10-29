@@ -1023,45 +1023,6 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     )(input)
 }
 
-#[test_parser("     x    (   1\n,0             ,\n       1      )")]
-#[test_parser("     x    (   x)")]
-pub fn function_call(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    delspace(map_res(
-        tuple((
-            extern_identifier,
-            tag_token(TokenType::LPAREN),
-            opt(tuple((
-                del_newline_or_space!(logic_exp),
-                many0(preceded(
-                    tag_token(TokenType::COMMA),
-                    del_newline_or_space!(logic_exp),
-                )),
-            ))),
-            tag_token(TokenType::RPAREN),
-        )),
-        |(id, _, paras, _)| {
-            let range = id.range();
-            let id = match *id {
-                NodeEnum::ExternIDNode(id) => id,
-                _ => unreachable!(),
-            };
-            let mut paralist = vec![];
-            if let Some(paras) = paras {
-                paralist.push(paras.0);
-                paralist.extend(paras.1);
-            }
-            res_enum(
-                FuncCallNode {
-                    id,
-                    paralist,
-                    range,
-                }
-                .into(),
-            )
-        },
-    ))(input)
-}
-
 #[test_parser("a.b.c")]
 fn take_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let re = delspace(tuple((
@@ -1292,6 +1253,44 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             ))),
         ),
         take_exp,
+    ))(input)
+}
+
+/// ```ebnf
+/// call_function_exp = complex_exp ("(" (logic_exp (","logic_exp)*)? ")")? ;
+/// ```
+#[test_parser("     x    (   1\n,0             ,\n       1      )")]
+#[test_parser("     x    (   x)")]
+pub fn function_call(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    delspace(map_res(
+        tuple((
+            complex_exp,
+            tag_token(TokenType::LPAREN),
+            opt(tuple((
+                del_newline_or_space!(logic_exp),
+                many0(preceded(
+                    tag_token(TokenType::COMMA),
+                    del_newline_or_space!(logic_exp),
+                )),
+            ))),
+            tag_token(TokenType::RPAREN),
+        )),
+        |(id, _, paras, _)| {
+            let range = id.range();
+            let mut paralist = vec![];
+            if let Some(paras) = paras {
+                paralist.push(paras.0);
+                paralist.extend(paras.1);
+            }
+            res_enum(
+                FuncCallNode {
+                    id,
+                    paralist,
+                    range,
+                }
+                .into(),
+            )
+        },
     ))(input)
 }
 

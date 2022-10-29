@@ -76,9 +76,9 @@ take_exp =
     | array_element ("." take_exp)?
     ;
 
-array_element = call_function_exp ('[' call_function_exp  ']')* ;
+array_element = call_function_exp ('[' call_function_exp ']')? ;
 
-call_function_exp = complex_exp ("(" (complex_exp (","complex_exp)*)? ")")* ;
+call_function_exp = complex_exp ("(" (logic_exp (","logic_exp)*)? ")")? ;
 
 complex_exp = 
     | primary_exp (* 需要向后看，不能以("."|"["|"(")结尾 *) 
@@ -147,7 +147,7 @@ statement =
     | while_statement
     | break_statement
     | continue_statement
-    | function_call
+    | call_function_exp
     ;
 
 toplevel_statement = 
