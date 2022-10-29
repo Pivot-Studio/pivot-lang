@@ -4,7 +4,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_until},
     character::complete::{alpha1, alphanumeric1, one_of, space0},
-    combinator::{eof, map_res, opt, recognize},
+    combinator::{eof, map_res, opt, peek, recognize},
     error::ParseError,
     multi::{many0, many0_count, many1},
     sequence::{delimited, pair, preceded, terminated, tuple},
@@ -1273,6 +1273,26 @@ fn array_element(input: Span) -> IResult<Span, Box<NodeEnum>> {
         };
     }
     Ok((input, box_node(arr_elem_node.into())))
+}
+
+/// ```ebnf
+/// complex_exp =
+///     | primary_exp (* 需要向后看，不能以("."|"["|"(")结尾 *)
+///     | take_exp
+///     ;
+/// ```
+fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    alt((
+        terminated(
+            primary_exp,
+            peek(alt((
+                tag_token(TokenType::DOT),
+                tag_token(TokenType::LBRACKET),
+                tag_token(TokenType::LPAREN),
+            ))),
+        ),
+        take_exp,
+    ))(input)
 }
 
 fn decimal(input: Span) -> IResult<Span, Span> {
