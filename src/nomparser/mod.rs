@@ -1205,35 +1205,27 @@ fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
 }
 
 /// ```ebnf
-/// array_element = (function_call | extern_identifier) '[' logic_exp  ']' ;
+/// array_element = call_function_exp ('[' logic_exp  ']')* ;
 /// ```
-fn array_element(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    let re = delspace(tuple((
-        alt((function_call, extern_identifier)), //TODO: support take_exp
-        many1(delimited(
-            tag_token(TokenType::LBRACKET),
-            logic_exp,
-            tag_token(TokenType::RBRACKET),
-        )),
-    )))(input);
-    if let Err(e) = re {
-        return Err(e);
+#[test_parser("a[1]")]
+fn array_element(input: Span) -> IResult<Span, Box<NodeEnum>>{
+    delspace(map_res(tuple((
+        function_call,
+        opt(delimited(tag_token(TokenType::LBRACKET), logic_exp, tag_token(TokenType::RBRACKET)))
+    )),|(head, index)|{
+        if index.is_none(){
+            res_enum(*head)
+        }else{
+            let index = index.unwrap();
+            let range = head.range().start.to(index.range().end);
+            res_enum(ArrayElementNode{
+                range,
+                arr: head,
+                index,
+            }.into())
+        }
     }
-    let (input, (a, b)) = re.unwrap();
-    let r = a.range();
-    let mut arr_elem_node = ArrayElementNode {
-        arr: a.into(),
-        index: b[0].clone(),
-        range: r.start.to(b[0].range().end),
-    };
-    for v in &b[1..] {
-        arr_elem_node = ArrayElementNode {
-            arr: box_node(arr_elem_node.into()),
-            index: v.clone(),
-            range: r.start.to(v.range().end),
-        };
-    }
-    Ok((input, box_node(arr_elem_node.into())))
+    ))(input)
 }
 
 /// ```ebnf
