@@ -1265,17 +1265,23 @@ pub fn function_call(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
             complex_exp,
-            tag_token(TokenType::LPAREN),
             opt(tuple((
-                del_newline_or_space!(logic_exp),
-                many0(preceded(
-                    tag_token(TokenType::COMMA),
+                tag_token(TokenType::LPAREN),
+                opt(tuple((
                     del_newline_or_space!(logic_exp),
-                )),
+                    many0(preceded(
+                        tag_token(TokenType::COMMA),
+                        del_newline_or_space!(logic_exp),
+                    )),
+                ))),
+                tag_token(TokenType::RPAREN),
             ))),
-            tag_token(TokenType::RPAREN),
         )),
-        |(id, _, paras, _)| {
+        |(id, p)| {
+            if p.is_none() {
+                return res_box(id);
+            }
+            let (_, paras, _) = p.unwrap();
             let range = id.range();
             let mut paralist = vec![];
             if let Some(paras) = paras {
