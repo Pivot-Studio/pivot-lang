@@ -34,6 +34,8 @@ steps:
         replace-with = "tuna"
         [source.tuna]
         registry = "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git"
+        [registries.tuna]
+        index = "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git"
         [net]
         retry = 2
         git-fetch-with-cli = true' > ./.cargo/config.toml
