@@ -95,7 +95,8 @@ fn test_not_ret(judge:bool) void {
     return;
 }
 fn test_complex() void {
-    let res = get(get(get(get(2))));
+    let res: i64;
+    res = get(get(get(get(2))));
     printi64ln(res);
     let b = true && !(res > 3 || res < 10);
     if b {
@@ -122,6 +123,24 @@ fn test_mod_struct() void {
     }
     return;
 }
+
+fn test_loop() void {
+    let i = 0;
+    while i < 7 {
+        if i == 3 {
+            i = 5;
+            continue;
+        }
+        if i==5 {
+            break;
+        }
+        i = i + 1;
+    }
+    for let i = 0; i < 10; i = i + 1 {
+        printi64ln(i);
+    }
+    return;
+}
 fn main() i64 {
     let a1 = [[[1,2,],[1,2,],],];
     printi64ln(a1[0][0][0]);
@@ -136,6 +155,7 @@ fn main() i64 {
     test_const();
     printline();
     test_mod_struct();
+    test_loop();
     return 0;
 }
 

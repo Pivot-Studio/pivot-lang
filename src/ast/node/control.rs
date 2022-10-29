@@ -255,12 +255,7 @@ impl Node for BreakNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if let Some(b) = ctx.break_block {
             ctx.builder.build_unconditional_branch(b);
-            // add dead block to avoid double br
-            position_at_end(
-                ctx,
-                ctx.context
-                    .append_basic_block(ctx.function.unwrap(), "dead"),
-            );
+            ctx.builder.clear_insertion_position();
         } else {
             let err = ctx.add_err(self.range, ErrorCode::BREAK_MUST_BE_IN_LOOP);
             return Err(err);
@@ -283,12 +278,7 @@ impl Node for ContinueNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if let Some(b) = ctx.continue_block {
             ctx.builder.build_unconditional_branch(b);
-            position_at_end(
-                ctx,
-                // add dead block to avoid double br
-                ctx.context
-                    .append_basic_block(ctx.function.unwrap(), "dead"),
-            );
+            ctx.builder.clear_insertion_position();
         } else {
             let err = ctx.add_err(self.range, ErrorCode::CONTINUE_MUST_BE_IN_LOOP);
             return Err(err);

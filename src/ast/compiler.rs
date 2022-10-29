@@ -219,16 +219,16 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let mut set = FxHashSet::default();
     set.insert(m.clone());
     _ = remove_file(m.clone()).unwrap();
-    println!("rm {}", m.to_str().unwrap());
+    // println!("rm {}", m.to_str().unwrap());
     for m in mods {
         if set.contains(&m) {
             continue;
         }
         set.insert(m.clone());
-
+        // println!("{}", m.clone().to_str().unwrap());
         _ = llvmmod.link_in_module(Module::parse_bitcode_from_path(m.clone(), &ctx).unwrap());
         _ = remove_file(m.clone()).unwrap();
-        println!("rm {}", m.to_str().unwrap());
+        // println!("rm {}", m.to_str().unwrap());
     }
     if op.genir {
         let mut s = out.to_string();
@@ -405,13 +405,24 @@ mod test {
             Options {
                 verbose: true,
                 optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
-                genir: false,
+                genir: true,
                 printast: false,
             },
         );
         run(
             &PathBuf::from(out).as_path(),
             inkwell::OptimizationLevel::Default,
-        )
+        );
+        compile(
+            &db,
+            input,
+            out.to_string(),
+            Options {
+                verbose: true,
+                optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
+                genir: false,
+                printast: true,
+            },
+        );
     }
 }

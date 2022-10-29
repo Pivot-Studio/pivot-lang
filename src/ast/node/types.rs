@@ -28,6 +28,13 @@ impl TypeNode for TypeNameNode {
             println!("id: <empty>");
         }
     }
+
+    fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) {
+        if let Some(id) = &self.id {
+            ctx.push_semantic_token(id.range, SemanticTokenType::TYPE, 0);
+        }
+    }
+
     fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
         ctx.if_completion(|ctx, a| {
             if a.0.is_in(self.range) {
@@ -76,6 +83,10 @@ impl TypeNode for ArrayTypeNameNode {
             }
         }
         return Err(ctx.add_err(self.range, ErrorCode::SIZE_MUST_BE_INT));
+    }
+
+    fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) {
+        self.id.emit_highlight(ctx);
     }
 }
 
@@ -133,7 +144,7 @@ impl Node for StructDefNode {
         ctx.push_semantic_token(self.range, SemanticTokenType::STRUCT, 0);
         for (field, has_semi) in self.fields.iter() {
             ctx.push_semantic_token(field.id.range, SemanticTokenType::PROPERTY, 0);
-            ctx.push_semantic_token(field.tp.range(), SemanticTokenType::TYPE, 0);
+            field.tp.emit_highlight(ctx);
             if !has_semi {
                 return Err(ctx.add_err(field.range, ErrorCode::COMPLETION));
             }
