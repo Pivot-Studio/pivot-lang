@@ -76,7 +76,7 @@ take_exp =
     | array_element ("." take_exp)?
     ;
 
-array_element = call_function_exp ('[' call_function_exp ']')? ;
+array_element = call_function_exp ('[' logic_exp ']')? ;
 
 call_function_exp = complex_exp ("(" (logic_exp (","logic_exp)*)? ")")? ;
 
