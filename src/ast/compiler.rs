@@ -388,8 +388,8 @@ mod test {
         use crate::ast::compiler::{compile, run, Options};
 
         let docs = MemDocs::new();
-        let db = Database::default();
-        let input = MemDocsInput::new(
+        let mut db = Database::default();
+        let mut input = MemDocsInput::new(
             &db,
             Arc::new(Mutex::new(RefCell::new(docs))),
             "test/main.pi".to_string(),
@@ -413,6 +413,7 @@ mod test {
             &PathBuf::from(out).as_path(),
             inkwell::OptimizationLevel::Default,
         );
+        input.set_action(&mut db).to(ActionType::PrintAst);
         compile(
             &db,
             input,
