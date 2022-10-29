@@ -57,15 +57,9 @@ impl Node for ProgramNode {
                 }
             }
             if i == 0 {
-                ctx.errs.borrow_mut().clear();
                 break;
             }
             if i == prev {
-                self.structs.iter().for_each(|x| {
-                    if let Err(e) = x.emit_struct_def(ctx) {
-                        ctx.add_diag(e);
-                    }
-                });
                 break;
             }
             prev = i;

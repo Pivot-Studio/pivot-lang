@@ -133,7 +133,7 @@ impl Node for StructDefNode {
         ctx.push_semantic_token(self.range, SemanticTokenType::STRUCT, 0);
         for (field, has_semi) in self.fields.iter() {
             ctx.push_semantic_token(field.id.range, SemanticTokenType::PROPERTY, 0);
-            field.tp.get_type(ctx)?;
+            ctx.push_semantic_token(field.tp.range(), SemanticTokenType::TYPE, 0);
             if !has_semi {
                 return Err(ctx.add_err(field.range, ErrorCode::COMPLETION));
             }
