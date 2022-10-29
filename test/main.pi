@@ -14,6 +14,7 @@ struct struct_father {
 // 2. b
 struct struct_child {
     a : i64;
+    b : [i64*1];
 }
 
 
@@ -32,10 +33,11 @@ struct struct_child {
 // }
 // ```
 fn test_struct() void {
-    let s = struct_father{a:2,b:2,c:struct_child{a:2,},};
+    let s = struct_father{a:2,b:2,c:struct_child{a:2,b:[1101,],},};
     printi64ln(s.a);
     printi64ln(s.a);
     printi64ln(s.c.a);
+    printi64ln(s.c.b[0]);
     mod1::test_mod(a);
     mod2::test_mod(a);
     mod::name();

@@ -67,23 +67,18 @@ mul_exp =
     ;
 
 unary_exp =
-    | take_exp
-    | ("-" | "!") take_exp
+    | complex_exp
+    | ("-" | "!") complex_exp
     ;
 
 
-take_exp =
-    | array_element ("." take_exp)?
-    ;
+complex_exp = primary_exp (take_exp_op|array_element_op|call_function_op)*;
 
-array_element = call_function_exp ('[' logic_exp ']')? ;
+take_exp_op = ("." identifier) ;
 
-call_function_exp = complex_exp ("(" (logic_exp (","logic_exp)*)? ")")? ;
+array_element_op = ('[' logic_exp ']') ;
 
-complex_exp = 
-    | primary_exp (* 需要向后看，不能以("."|"["|"(")结尾 *) 
-    | take_exp
-    ;
+call_function_op = ("(" (logic_exp (","logic_exp)*)? ")") ;
 
 primary_exp =
     | number
@@ -147,7 +142,7 @@ statement =
     | while_statement
     | break_statement
     | continue_statement
-    | call_function_exp
+    | complex_exp ";"
     ;
 
 toplevel_statement = 

@@ -4,7 +4,7 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_until},
     character::complete::{alpha1, alphanumeric1, one_of, space0},
-    combinator::{eof, map_res, opt, peek, recognize},
+    combinator::{eof, map_res, opt, recognize},
     error::ParseError,
     multi::{many0, many0_count, many1},
     sequence::{delimited, pair, preceded, terminated, tuple},
@@ -72,12 +72,12 @@ fn res_enum(t: NodeEnum) -> Result<Box<NodeEnum>, Error> {
     res_box(Box::new(t))
 }
 
-fn box_node<T>(t: T) -> Box<T>
-where
-    T: Node + 'static,
-{
-    Box::new(t)
-}
+// fn box_node<T>(t: T) -> Box<T>
+// where
+//     T: Node + 'static,
+// {
+//     Box::new(t)
+// }
 
 fn res_box<T: ?Sized>(i: Box<T>) -> Result<Box<T>, Error> {
     Ok::<_, Error>(i)
@@ -463,8 +463,7 @@ pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
         break_statement,
         continue_statement,
         return_statement,
-        semi_statement!(function_call),
-        semi_statement!(take_exp), // for completion
+        semi_statement!(complex_exp),
         empty_statement,
         comment,
         except(
@@ -651,7 +650,7 @@ fn global_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("a = 1")]
 pub fn assignment(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
-        tuple((take_exp, tag_token(TokenType::ASSIGN), logic_exp)),
+        tuple((complex_exp, tag_token(TokenType::ASSIGN), logic_exp)),
         |(left, _op, right)| {
             let range = left.range().start.to(right.range().end);
             res_enum(
@@ -774,11 +773,11 @@ fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser_error("+a")]
 pub fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
-        take_exp,
+        complex_exp,
         map_res(
             tuple((
                 alt((tag_token(TokenType::MINUS), tag_token(TokenType::NOT))),
-                take_exp,
+                complex_exp,
             )),
             |((op, _), exp)| {
                 let range = exp.range();
@@ -828,8 +827,6 @@ pub fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             logic_exp,
             tag_token(TokenType::RPAREN),
         ),
-        array_element,
-        function_call,
         struct_init,
         array_init,
         extern_identifier,
@@ -1023,41 +1020,6 @@ fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     )(input)
 }
 
-#[test_parser("a.b.c")]
-fn take_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    let re = delspace(tuple((
-        primary_exp,
-        many0(preceded(tag_token(TokenType::DOT), identifier)),
-    )))(input);
-    if let Err(e) = re {
-        return Err(e);
-    }
-    let (mut input, (a, b)) = re.unwrap();
-    let r = a.range();
-    let mut node = TakeOpNode {
-        head: a,
-        ids: Vec::new(),
-        range: r,
-        complete: true,
-    };
-    let re = take_utf8_split(&input);
-    if re.1.to_string().as_str() == "." {
-        input = re.0;
-        node.complete = false;
-        node.range.end.column += 1;
-    }
-    if b.is_empty() {
-        return Ok((input, box_node(node.into())));
-    }
-    node.range = r.start.to(b.last().unwrap().range().end);
-    if !node.complete {
-        node.range.end.column += 1;
-    }
-    node.ids = b;
-
-    Ok((input, box_node(node.into())))
-}
-
 #[test_parser(
     "struct mystruct {
     myname: int;//123
@@ -1204,90 +1166,126 @@ fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
     )(input)
 }
 
-/// ```ebnf
-/// array_element = call_function_exp ('[' logic_exp  ']')* ;
-/// ```
-#[test_parser("a[1]")]
-fn array_element(input: Span) -> IResult<Span, Box<NodeEnum>>{
-    delspace(map_res(tuple((
-        function_call,
-        opt(delimited(tag_token(TokenType::LBRACKET), logic_exp, tag_token(TokenType::RBRACKET)))
-    )),|(head, index)|{
-        if index.is_none(){
-            res_enum(*head)
-        }else{
-            let index = index.unwrap();
-            let range = head.range().start.to(index.range().end);
-            res_enum(ArrayElementNode{
-                range,
-                arr: head,
-                index,
-            }.into())
-        }
-    }
-    ))(input)
+#[derive(Clone)]
+enum ComplexOp {
+    CallOp(Vec<Box<NodeEnum>>),
+    IndexOp(Box<NodeEnum>),
+    FieldOp(Option<Box<VarNode>>),
 }
 
 /// ```ebnf
-/// complex_exp =
-///     | primary_exp (* 需要向后看，不能以("."|"["|"(")结尾 *)
-///     | take_exp
-///     ;
+/// complex_exp = primary_exp (take_exp_op|array_element_op|call_function_exp_op)*;
 /// ```
+#[test_parser("a[1][2]()[3].b()()[4].c")]
+#[test_parser("a{}.d")]
+#[test_parser("ad")]
 fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    alt((
-        terminated(
+    map_res(
+        pair(
             primary_exp,
-            peek(alt((
-                tag_token(TokenType::DOT),
-                tag_token(TokenType::LBRACKET),
-                tag_token(TokenType::LPAREN),
-            ))),
+            many0(alt((take_exp_op, array_element_op, call_function_op))),
         ),
-        take_exp,
+        |(head, ops)| {
+            let mut res = head;
+            for op in ops {
+                res = match op {
+                    ComplexOp::CallOp(args) => {
+                        let mut range = res.range();
+                        if args.len() > 0 {
+                            range = res.range().start.to(args.last().unwrap().range().end);
+                        }
+                        Box::new(
+                            FuncCallNode {
+                                range,
+                                id: res,
+                                paralist: args,
+                            }
+                            .into(),
+                        )
+                    }
+                    ComplexOp::IndexOp(index) => {
+                        let range = res.range().start.to(index.range().end);
+                        Box::new(
+                            ArrayElementNode {
+                                range,
+                                arr: res,
+                                index,
+                            }
+                            .into(),
+                        )
+                    }
+                    ComplexOp::FieldOp(field) => {
+                        let range;
+                        if field.is_some() {
+                            range = res.range().start.to(field.clone().unwrap().range().end);
+                        } else {
+                            let mut end = res.range().end;
+                            end.column = end.column + 1;
+                            range = res.range().start.to(end);
+                        }
+                        Box::new(
+                            TakeOpNode {
+                                range,
+                                head: res,
+                                field,
+                            }
+                            .into(),
+                        )
+                    }
+                }
+            }
+            res_enum(*res)
+        },
+    )(input)
+}
+
+/// ```ebnf
+/// take_exp_op = ("." identifier?) ;
+/// ```
+fn take_exp_op(input: Span) -> IResult<Span, ComplexOp> {
+    delspace(map_res(
+        preceded(tag_token(TokenType::DOT), opt(identifier)),
+        |idx| Ok::<_, Error>(ComplexOp::FieldOp(idx)),
     ))(input)
 }
 
 /// ```ebnf
-/// call_function_exp = complex_exp ("(" (logic_exp (","logic_exp)*)? ")")? ;
+/// array_element_op = ('[' logic_exp ']') ;
 /// ```
-#[test_parser("     x    (   1\n,0             ,\n       1      )")]
-#[test_parser("     x    (   x)")]
-pub fn function_call(input: Span) -> IResult<Span, Box<NodeEnum>> {
+fn array_element_op(input: Span) -> IResult<Span, ComplexOp> {
+    delspace(map_res(
+        delimited(
+            tag_token(TokenType::LBRACKET),
+            logic_exp,
+            tag_token(TokenType::RBRACKET),
+        ),
+        |idx| Ok::<_, Error>(ComplexOp::IndexOp(idx)),
+    ))(input)
+}
+
+/// ```ebnf
+/// call_function_op = "(" (logic_exp (","logic_exp)*)? ")" ;
+/// ```
+fn call_function_op(input: Span) -> IResult<Span, ComplexOp> {
     delspace(map_res(
         tuple((
-            complex_exp,
+            tag_token(TokenType::LPAREN),
             opt(tuple((
-                tag_token(TokenType::LPAREN),
-                opt(tuple((
+                del_newline_or_space!(logic_exp),
+                many0(preceded(
+                    tag_token(TokenType::COMMA),
                     del_newline_or_space!(logic_exp),
-                    many0(preceded(
-                        tag_token(TokenType::COMMA),
-                        del_newline_or_space!(logic_exp),
-                    )),
-                ))),
-                tag_token(TokenType::RPAREN),
+                )),
             ))),
+            tag_token(TokenType::RPAREN),
         )),
-        |(id, p)| {
-            if p.is_none() {
-                return res_box(id);
-            }
-            let (_, paras, _) = p.unwrap();
-            let range = id.range();
+        |(_, paras, _)| {
             let mut paralist = vec![];
             if let Some(paras) = paras {
                 paralist.push(paras.0);
                 paralist.extend(paras.1);
             }
-            res_enum(
-                FuncCallNode {
-                    id,
-                    paralist,
-                    range,
-                }
-                .into(),
-            )
+            Ok::<_, Error>(ComplexOp::CallOp(paralist))
         },
     ))(input)
 }

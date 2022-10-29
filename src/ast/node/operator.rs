@@ -194,8 +194,7 @@ impl Node for BinOpNode {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TakeOpNode {
     pub head: Box<NodeEnum>,
-    pub ids: Vec<Box<VarNode>>,
-    pub complete: bool,
+    pub field: Option<Box<VarNode>>,
 }
 
 impl Node for TakeOpNode {
@@ -203,22 +202,20 @@ impl Node for TakeOpNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("TakeOpNode");
-        let mut i = self.ids.len();
-        self.head.print(tabs + 1, i == 0, line.clone());
-        for id in &self.ids {
-            i -= 1;
-            id.print(tabs + 1, i == 0, line.clone());
+        self.head
+            .print(tabs + 1, self.field.is_none(), line.clone());
+        if let Some(id) = &self.field {
+            id.print(tabs + 1, true, line.clone());
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let mut range;
         let head = self.head.emit(ctx)?;
         let (mut res, pltype, _, is_const) = head;
         if pltype.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::INVALID_GET_FIELD));
         }
         let mut pltype = pltype.unwrap();
-        for id in &self.ids {
+        if let Some(id) = &self.field {
             res = match res.as_basic_value_enum() {
                 BasicValueEnum::PointerValue(s) => {
                     let etype = s.get_type().get_element_type();
@@ -237,7 +234,7 @@ impl Node for TakeOpNode {
                                 }
                             }
                         });
-                        range = id.range();
+                        let range = id.range();
                         ctx.push_semantic_token(range, SemanticTokenType::PROPERTY, 0);
                         if let PLType::STRUCT(s) = pltype {
                             let field = s.fields.get(&id.name);
@@ -262,7 +259,7 @@ impl Node for TakeOpNode {
                 _ => panic!("not implemented {:?}", res),
             }
         }
-        if !self.complete {
+        if self.field.is_none() {
             // end with ".", gen completions
             ctx.if_completion(|ctx, (pos, trigger)| {
                 if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
@@ -273,7 +270,6 @@ impl Node for TakeOpNode {
                     }
                 }
             });
-
             return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
         }
         Ok((res, Some(pltype.clone()), TerminatorEnum::NONE, is_const))
