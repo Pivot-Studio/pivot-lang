@@ -6,7 +6,7 @@ use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 use inkwell::debug_info::*;
 use inkwell::types::BasicType;
-use inkwell::values::FunctionValue;
+use inkwell::values::{AnyValue, FunctionValue};
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 use std::cell::RefCell;
@@ -135,7 +135,7 @@ impl Node for FuncDefNode {
                 let ret_type = {
                     let op = pltype.get_basic_type_op(&ctx);
                     if op.is_none() {
-                        return Ok((Value::None, None, TerminatorEnum::NONE));
+                        return Ok((None, None, TerminatorEnum::NONE));
                     }
                     op.unwrap()
                 };
@@ -195,9 +195,9 @@ impl Node for FuncDefNode {
             }
             ctx.nodebug_builder.position_at_end(allocab);
             ctx.nodebug_builder.build_unconditional_branch(entry);
-            return Ok((Value::None, None, TerminatorEnum::NONE));
+            return Ok((None, None, TerminatorEnum::NONE));
         }
-        Ok((Value::None, None, TerminatorEnum::NONE))
+        Ok((None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -222,28 +222,23 @@ impl Node for FuncCallNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut para_values = Vec::new();
-        let (v, id, _) = self.id.emit(ctx)?;
-        let id = id.unwrap();
-        let func = match v {
-            Value::FnValue(f) => Some(f),
-            _ => None,
-        };
-        if func.is_none() {
+        let (func, pltype, _) = self.id.emit(ctx)?;
+        if pltype.is_none() || !matches!(pltype.clone().unwrap(), PLType::FN(_)) {
             return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND));
         }
-        let func = func.unwrap();
+        let pltype = pltype.unwrap();
+        let func = func.unwrap().into_function_value();
         if func.count_params() != self.paralist.len() as u32 {
             return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
         }
         for (i, para) in self.paralist.iter_mut().enumerate() {
             let pararange = para.range();
             let (value, _, _) = para.emit(ctx)?;
-            let load_op = ctx.try_load2var(value).as_basic_value_enum_op();
-            if load_op.is_none() {
-                return Ok((Value::None, None, TerminatorEnum::NONE));
+            if value.is_none() {
+                return Ok((None, None, TerminatorEnum::NONE));
             }
+            let load = ctx.try_load2var(value.unwrap());
             let param = func.get_nth_param(i as u32).unwrap();
-            let load = load_op.unwrap();
             if load.get_type() != param.get_type() {
                 return Err(ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH));
             }
@@ -252,23 +247,19 @@ impl Node for FuncCallNode {
         let ret = ctx.builder.build_call(
             func,
             &para_values,
-            format(format_args!("call_{}", id.get_name().unwrap())).as_str(),
+            format(format_args!("call_{}", pltype.get_name().unwrap())).as_str(),
         );
-        if let PLType::FN(fv) = &id {
+        if let PLType::FN(fv) = &pltype {
             ctx.save_if_comment_doc_hover(self.range, Some(fv.doc.clone()));
             let o = match ret.try_as_basic_value().left() {
                 Some(v) => Ok((
-                    Value::LoadValue(v),
+                    Some(v.as_any_value_enum()),
                     Some(*fv.ret_pltype.clone()),
                     TerminatorEnum::NONE,
                 )),
-                None => Ok((
-                    Value::None,
-                    Some(*fv.ret_pltype.clone()),
-                    TerminatorEnum::NONE,
-                )),
+                None => Ok((None, Some(*fv.ret_pltype.clone()), TerminatorEnum::NONE)),
             };
-            ctx.set_if_refs_tp(&id, self.range);
+            ctx.set_if_refs_tp(&pltype, self.range);
             ctx.send_if_go_to_def(self.range, fv.range, ctx.plmod.path.clone());
             return o;
         }

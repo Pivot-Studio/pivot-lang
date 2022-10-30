@@ -389,7 +389,7 @@ mod test {
 
         let docs = MemDocs::new();
         let mut db = Database::default();
-        let mut input = MemDocsInput::new(
+        let input = MemDocsInput::new(
             &db,
             Arc::new(Mutex::new(RefCell::new(docs))),
             "test/main.pi".to_string(),

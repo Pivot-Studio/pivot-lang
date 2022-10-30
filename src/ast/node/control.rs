@@ -1,6 +1,6 @@
 use super::statement::StatementsNode;
 use super::*;
-use crate::ast::ctx::Ctx;
+use crate::ast::ctx::{Ctx, PriType};
 use crate::ast::diag::ErrorCode;
 use internal_macro::range;
 
@@ -44,20 +44,17 @@ impl Node for IfNode {
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, cond_block);
         let condrange = self.cond.range();
-        let (cond, _, _) = self.cond.emit(ctx)?;
-        let cond = ctx.try_load2var(cond);
-        let con;
-        if let Value::BoolValue(value) = cond {
-            con = value;
-        } else {
-            let err = ctx.add_err(condrange, ErrorCode::IF_CONDITION_MUST_BE_BOOL);
-            return Err(err);
+        let (cond, pltype, _) = self.cond.emit(ctx)?;
+        if pltype.is_none() || !pltype.unwrap().is(PriType::BOOL) {
+            return Err(ctx.add_err(condrange, ErrorCode::IF_CONDITION_MUST_BE_BOOL));
         }
-        let con = ctx
-            .builder
-            .build_int_truncate(con, ctx.context.bool_type(), "trunctemp");
+        let cond = ctx.builder.build_int_truncate(
+            cond.unwrap().into_int_value(),
+            ctx.context.bool_type(),
+            "trunctemp",
+        );
         ctx.builder
-            .build_conditional_branch(con, then_block, else_block);
+            .build_conditional_branch(cond, then_block, else_block);
         // then block
         position_at_end(ctx, then_block);
         let (_, _, then_terminator) = self.then.emit(ctx)?;
@@ -83,7 +80,7 @@ impl Node for IfNode {
         if terminator.is_return() {
             ctx.builder.build_unconditional_branch(after_block);
         }
-        Ok((Value::None, None, terminator))
+        Ok((None, None, terminator))
     }
     // ANCHOR_END: emit
 }
@@ -120,26 +117,24 @@ impl Node for WhileNode {
         position_at_end(ctx, cond_block);
         let condrange = self.cond.range();
         let start = self.cond.range().start;
-        let cond = self.cond.emit(ctx)?;
-        let con;
-        if let Value::BoolValue(value) = cond.0 {
-            con = value;
-        } else {
-            let err = ctx.add_err(condrange, ErrorCode::WHILE_CONDITION_MUST_BE_BOOL);
-            return Err(err);
+        let (cond, pltype, _) = self.cond.emit(ctx)?;
+        if pltype.is_none() || !pltype.unwrap().is(PriType::BOOL) {
+            return Err(ctx.add_err(condrange, ErrorCode::WHILE_CONDITION_MUST_BE_BOOL));
         }
-        let con = ctx
-            .builder
-            .build_int_truncate(con, ctx.context.bool_type(), "trunctemp");
+        let cond = ctx.builder.build_int_truncate(
+            cond.unwrap().into_int_value(),
+            ctx.context.bool_type(),
+            "trunctemp",
+        );
         ctx.builder
-            .build_conditional_branch(con, body_block, after_block);
+            .build_conditional_branch(cond, body_block, after_block);
         position_at_end(ctx, body_block);
         let (_, _, terminator) = self.body.emit_child(ctx)?;
         ctx.build_dbg_location(start);
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, after_block);
         Ok((
-            Value::None,
+            None,
             None,
             if terminator.is_return() {
                 TerminatorEnum::RETURN
@@ -202,20 +197,18 @@ impl Node for ForNode {
         ctx.build_dbg_location(self.cond.range().start);
         let condrange = self.cond.range();
         let cond_start = self.cond.range().start;
-        let cond = self.cond.emit(ctx)?;
-        let con;
-        if let Value::BoolValue(value) = cond.0 {
-            con = value;
-        } else {
-            let err = ctx.add_err(condrange, ErrorCode::FOR_CONDITION_MUST_BE_BOOL);
-            return Err(err);
+        let (cond, pltype, _) = self.cond.emit(ctx)?;
+        if pltype.is_none() || !pltype.unwrap().is(PriType::BOOL) {
+            return Err(ctx.add_err(condrange, ErrorCode::FOR_CONDITION_MUST_BE_BOOL));
         }
-        let con = ctx
-            .builder
-            .build_int_truncate(con, ctx.context.bool_type(), "trunctemp");
+        let cond = ctx.builder.build_int_truncate(
+            cond.unwrap().into_int_value(),
+            ctx.context.bool_type(),
+            "trunctemp",
+        );
         ctx.build_dbg_location(self.body.range().start);
         ctx.builder
-            .build_conditional_branch(con, body_block, after_block);
+            .build_conditional_branch(cond, body_block, after_block);
         position_at_end(ctx, opt_block);
         if let Some(op) = &mut self.opt {
             ctx.build_dbg_location(op.range().start);
@@ -228,7 +221,7 @@ impl Node for ForNode {
         ctx.builder.build_unconditional_branch(opt_block);
         position_at_end(ctx, after_block);
         Ok((
-            Value::None,
+            None,
             None,
             if terminator.is_return() {
                 TerminatorEnum::RETURN
@@ -258,7 +251,7 @@ impl Node for BreakNode {
             let err = ctx.add_err(self.range, ErrorCode::BREAK_MUST_BE_IN_LOOP);
             return Err(err);
         }
-        Ok((Value::None, None, TerminatorEnum::BREAK))
+        Ok((None, None, TerminatorEnum::BREAK))
     }
 }
 
@@ -281,6 +274,6 @@ impl Node for ContinueNode {
             let err = ctx.add_err(self.range, ErrorCode::CONTINUE_MUST_BE_IN_LOOP);
             return Err(err);
         }
-        Ok((Value::None, None, TerminatorEnum::CONTINUE))
+        Ok((None, None, TerminatorEnum::CONTINUE))
     }
 }

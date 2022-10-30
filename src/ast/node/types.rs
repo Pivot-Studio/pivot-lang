@@ -152,7 +152,7 @@ impl Node for StructDefNode {
                 ctx.push_semantic_token(doc.range, SemanticTokenType::COMMENT, 0);
             }
         }
-        Ok((Value::None, None, TerminatorEnum::NONE))
+        Ok((None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -230,24 +230,11 @@ impl Node for StructInitFieldNode {
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let range = self.exp.range();
         let (v, tp, _) = self.exp.emit(ctx)?;
         if !self.has_comma {
             return Err(ctx.add_err(self.range, ErrorCode::COMPLETION));
         }
-        let value = {
-            let v = ctx.try_load2var(v);
-            let vop = v.as_basic_value_enum_op();
-            if vop.is_none() {
-                return Err(ctx.add_err(range, ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH));
-            }
-            vop.unwrap()
-        };
-        return Ok((
-            Value::StructFieldValue((self.id.name.clone(), value)),
-            tp,
-            TerminatorEnum::NONE,
-        ));
+        return Ok((v, tp, TerminatorEnum::NONE));
     }
 }
 
@@ -255,7 +242,7 @@ impl Node for StructInitFieldNode {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitNode {
     pub tp: Box<TypeNodeEnum>,
-    pub fields: Vec<Box<NodeEnum>>, // TODO: comment db and salsa comment struct
+    pub fields: Vec<Box<StructInitFieldNode>>, // TODO: comment db and salsa comment struct
 }
 
 impl Node for StructInitNode {
@@ -276,11 +263,9 @@ impl Node for StructInitNode {
         let tp = self.tp.get_type(ctx)?;
         for field in self.fields.iter_mut() {
             let range = field.range();
-            if let (Value::StructFieldValue((id, val)), _, _) = field.emit(ctx)? {
-                fields.insert(id, (val, range));
-            } else {
-                panic!("StructInitNode::emit: invalid field");
-            }
+            let name = field.id.name.clone();
+            let (value, _, _) = field.emit(ctx)?;
+            fields.insert(name, (ctx.try_load2var(value.unwrap()), range));
         }
         if let PLType::STRUCT(st) = &tp {
             ctx.save_if_comment_doc_hover(self.tp.range(), Some(st.doc.clone()));
@@ -309,7 +294,7 @@ impl Node for StructInitNode {
                 ctx.set_if_refs(field.refs.clone(), range);
                 ctx.send_if_go_to_def(range, field.range, st.path.clone())
             }
-            return Ok((Value::VarValue(stv), Some(tp), TerminatorEnum::NONE));
+            return Ok((Some(stv.into()), Some(tp), TerminatorEnum::NONE));
         } else {
             panic!("StructInitNode::emit: invalid type");
         }
@@ -348,7 +333,7 @@ impl Node for ArrayInitNode {
             } else if tp0 != tp {
                 return Err(ctx.add_err(range, ErrorCode::ARRAY_TYPE_NOT_MATCH));
             }
-            exps.push(ctx.try_load2var(v).as_basic_value_enum());
+            exps.push(ctx.try_load2var(v.unwrap()).as_basic_value_enum());
         }
         if tp0.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::ARRAY_INIT_EMPTY));
@@ -366,7 +351,7 @@ impl Node for ArrayInitNode {
             ctx.builder.build_store(ptr, v);
         }
         return Ok((
-            Value::ArrValue(arr),
+            Some(arr.into()),
             Some(PLType::ARR(ARRType {
                 element_type: Box::new(tp0.unwrap()),
                 size: sz,

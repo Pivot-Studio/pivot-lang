@@ -3,10 +3,8 @@ use crate::ast::ctx::Ctx;
 use as_any::AsAny;
 use enum_dispatch::enum_dispatch;
 use inkwell::basic_block::BasicBlock;
-use inkwell::types::{BasicTypeEnum, StructType};
-use inkwell::values::{
-    BasicValue, BasicValueEnum, FloatValue, FunctionValue, IntValue, PointerValue,
-};
+use inkwell::types::BasicTypeEnum;
+use inkwell::values::{AnyValueEnum, BasicValue, BasicValueEnum, PointerValue};
 
 use self::comment::CommentNode;
 use self::control::*;
@@ -72,44 +70,6 @@ pub trait TypeNode: RangeTrait + AsAny {
     fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>);
 }
 type TypeNodeResult<'ctx> = Result<PLType, PLDiag>;
-/// # Value
-/// 表达每个ast在计算之后产生的值  
-///
-/// 只有expression才会产生值，而statement不会产生值。对于statement，
-/// 我们可以用None来表示
-#[derive(Debug)]
-pub enum Value<'a> {
-    BoolValue(IntValue<'a>),
-    IntValue(IntValue<'a>),
-    FloatValue(FloatValue<'a>),
-    VarValue(PointerValue<'a>),
-    LoadValue(BasicValueEnum<'a>),
-    ArrValue(PointerValue<'a>),
-    StructFieldValue((String, BasicValueEnum<'a>)),
-    FnValue(FunctionValue<'a>),
-    STValue(StructType<'a>),
-    None,
-}
-
-impl<'a> Value<'a> {
-    pub fn as_basic_value_enum(&self) -> BasicValueEnum<'a> {
-        self.as_basic_value_enum_op().unwrap()
-    }
-    pub fn as_basic_value_enum_op(&self) -> Option<BasicValueEnum<'a>> {
-        match self {
-            Value::IntValue(v) => Some(v.as_basic_value_enum()),
-            Value::FloatValue(v) => Some(v.as_basic_value_enum()),
-            Value::VarValue(v) => Some(v.as_basic_value_enum()),
-            Value::BoolValue(v) => Some(v.as_basic_value_enum()),
-            Value::ArrValue(v) => Some(v.as_basic_value_enum()),
-            Value::LoadValue(v) => Some(*v),
-            Value::StructFieldValue((_, v)) => Some(*v),
-            Value::STValue(_) => None,
-            Value::FnValue(_) => None,
-            Value::None => None,
-        }
-    }
-}
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 #[enum_dispatch(Node, RangeTrait)]
@@ -160,13 +120,12 @@ pub trait Node: RangeTrait + AsAny {
 // ANCHOR_END: node
 type NodeResult<'ctx> = Result<
     (
-        Value<'ctx>,
+        Option<AnyValueEnum<'ctx>>,
         Option<PLType>, //type
         TerminatorEnum,
     ),
     PLDiag,
 >;
-
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Num {
     INT(u64),
@@ -239,16 +198,16 @@ pub fn alloc<'a, 'ctx>(
 
 #[macro_export]
 macro_rules! handle_calc {
-    ($ctx:ident, $op:ident, $opf:ident  ,$left:ident, $right:ident, $range: expr) => {
+    ($ctx:ident, $op:ident, $opf:ident, $lpltype:ident, $left:ident, $right:ident, $range: expr) => {
         item! {
-            match ($left, $right) {
-                (Value::IntValue(left), Value::IntValue(right)) => {
-                    return Ok((Value::IntValue($ctx.builder.[<build_int_$op>](
-                        left, right, "addtmp")),Some(PLType::PRIMITIVE(PriType::try_from_str("i64").unwrap())),TerminatorEnum::NONE));
+            match $lpltype.unwrap() {
+                PLType::PRIMITIVE(PriType::I64) => {
+                    return Ok((Some($ctx.builder.[<build_int_$op>](
+                        $left.into_int_value(), $right.into_int_value(), "addtmp").into()),Some(PLType::PRIMITIVE(PriType::I64)),TerminatorEnum::NONE));
                 },
-                (Value::FloatValue(left), Value::FloatValue(right)) => {
-                    return Ok((Value::FloatValue($ctx.builder.[<build_$opf>](
-                        left, right, "addtmp")),Some(PLType::PRIMITIVE(PriType::try_from_str("f64").unwrap())),TerminatorEnum::NONE));
+                PLType::PRIMITIVE(PriType::F64) => {
+                    return Ok((Some($ctx.builder.[<build_$opf>](
+                        $left.into_float_value(), $right.into_float_value(), "addtmp").into()),Some(PLType::PRIMITIVE(PriType::F64)),TerminatorEnum::NONE));
                 },
                 _ =>  return Err($ctx.add_err(
                     $range,

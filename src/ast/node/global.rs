@@ -20,7 +20,7 @@ impl Node for GlobalNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
         self.exp.emit(ctx)?;
-        Ok((Value::None, None, TerminatorEnum::NONE))
+        Ok((None, None, TerminatorEnum::NONE))
     }
 }
 impl GlobalNode {
@@ -38,7 +38,7 @@ impl GlobalNode {
         }
         let pltype = pltype_opt.unwrap();
         let ditype = pltype.get_ditype(ctx);
-        let base_value = ctx.try_load2var(value).as_basic_value_enum();
+        let base_value = ctx.try_load2var(value.unwrap());
         let base_type = base_value.get_type();
         let globalptr = ctx.module.add_global(base_type, None, &self.var.name);
         globalptr.set_initializer(&base_type.const_zero());
