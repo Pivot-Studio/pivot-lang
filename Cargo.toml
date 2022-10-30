@@ -39,3 +39,10 @@ jit = ["vm"]
 [[bin]]
 name = "plc"
 path = "src/main.rs"
+
+[workspace]
+members = [
+    "internal_macro",
+    "vm",
+]
+
