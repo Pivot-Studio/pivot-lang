@@ -135,7 +135,7 @@ impl Node for FuncDefNode {
                 let ret_type = {
                     let op = pltype.get_basic_type_op(&ctx);
                     if op.is_none() {
-                        return Ok((Value::None, None, TerminatorEnum::NONE, false));
+                        return Ok((Value::None, None, TerminatorEnum::NONE));
                     }
                     op.unwrap()
                 };
@@ -189,15 +189,15 @@ impl Node for FuncDefNode {
                 ctx.nodebug_builder
                     .build_call(ctx.init_func.unwrap(), &vec![], "init_call");
             }
-            let (_, _, terminator, _) = body.emit(&mut ctx)?;
+            let (_, _, terminator) = body.emit(&mut ctx)?;
             if !terminator.is_return() {
                 return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_MUST_HAVE_RETURN));
             }
             ctx.nodebug_builder.position_at_end(allocab);
             ctx.nodebug_builder.build_unconditional_branch(entry);
-            return Ok((Value::None, None, TerminatorEnum::NONE, false));
+            return Ok((Value::None, None, TerminatorEnum::NONE));
         }
-        Ok((Value::None, None, TerminatorEnum::NONE, false))
+        Ok((Value::None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -222,7 +222,7 @@ impl Node for FuncCallNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut para_values = Vec::new();
-        let (v, id, _, _) = self.id.emit(ctx)?;
+        let (v, id, _) = self.id.emit(ctx)?;
         let id = id.unwrap();
         let func = match v {
             Value::FnValue(f) => Some(f),
@@ -237,10 +237,10 @@ impl Node for FuncCallNode {
         }
         for (i, para) in self.paralist.iter_mut().enumerate() {
             let pararange = para.range();
-            let (value, _, _, _) = para.emit(ctx)?;
+            let (value, _, _) = para.emit(ctx)?;
             let load_op = ctx.try_load2var(value).as_basic_value_enum_op();
             if load_op.is_none() {
-                return Ok((Value::None, None, TerminatorEnum::NONE, false));
+                return Ok((Value::None, None, TerminatorEnum::NONE));
             }
             let param = func.get_nth_param(i as u32).unwrap();
             let load = load_op.unwrap();
@@ -261,13 +261,11 @@ impl Node for FuncCallNode {
                     Value::LoadValue(v),
                     Some(*fv.ret_pltype.clone()),
                     TerminatorEnum::NONE,
-                    false,
                 )),
                 None => Ok((
                     Value::None,
                     Some(*fv.ret_pltype.clone()),
                     TerminatorEnum::NONE,
-                    false,
                 )),
             };
             ctx.set_if_refs_tp(&id, self.range);

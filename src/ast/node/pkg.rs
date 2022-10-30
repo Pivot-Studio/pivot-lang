@@ -71,7 +71,7 @@ impl Node for UseNode {
         if !self.complete {
             return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
         }
-        Ok((Value::None, None, TerminatorEnum::NONE, false))
+        Ok((Value::None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -147,7 +147,6 @@ impl ExternIDNode {
                 Value::VarValue(g),
                 Some(symbol.tp.clone()),
                 TerminatorEnum::NONE,
-                true,
             ));
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
@@ -160,7 +159,6 @@ impl ExternIDNode {
                         Value::FnValue(f.get_value(ctx, plmod)),
                         Some(tp),
                         TerminatorEnum::NONE,
-                        true,
                     ))
                 }
                 PLType::STRUCT(s) => {
@@ -169,7 +167,6 @@ impl ExternIDNode {
                         Value::STValue(s.struct_type(ctx)),
                         Some(tp),
                         TerminatorEnum::NONE,
-                        true,
                     ))
                 }
                 _ => unreachable!(),

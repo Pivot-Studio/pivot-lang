@@ -23,7 +23,6 @@ impl Node for BoolConstNode {
             Value::BoolValue(ctx.context.i8_type().const_int(self.value as u64, true)),
             Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
             TerminatorEnum::NONE,
-            true,
         ))
     }
 }
@@ -47,7 +46,6 @@ impl Node for NumNode {
                 Value::IntValue(b),
                 Some(PLType::PRIMITIVE(PriType::try_from_str("i64").unwrap())),
                 TerminatorEnum::NONE,
-                true,
             ));
         } else if let Num::FLOAT(x) = self.value {
             let b = ctx.context.f64_type().const_float(x);
@@ -55,7 +53,6 @@ impl Node for NumNode {
                 Value::FloatValue(b),
                 Some(PLType::PRIMITIVE(PriType::try_from_str("f64").unwrap())),
                 TerminatorEnum::NONE,
-                true,
             ));
         }
         panic!("not implemented")
@@ -81,13 +78,12 @@ impl VarNode {
             }
         });
         let v = ctx.get_symbol(&self.name);
-        if let Some((v, pltype, dst, refs, is_const)) = v {
+        if let Some((v, pltype, dst, refs, _)) = v {
             ctx.push_semantic_token(self.range, SemanticTokenType::VARIABLE, 0);
             let o = Ok((
                 Value::VarValue(v.clone()),
                 Some(pltype),
                 TerminatorEnum::NONE,
-                is_const,
             ));
             ctx.send_if_go_to_def(self.range, dst, ctx.plmod.path.clone());
             ctx.set_if_refs(refs, self.range);
@@ -101,7 +97,6 @@ impl VarNode {
                         Value::FnValue(f.get_value(ctx, &ctx.plmod)),
                         Some(tp.clone()),
                         TerminatorEnum::NONE,
-                        true,
                     ));
                 }
                 PLType::STRUCT(s) => {
@@ -110,16 +105,15 @@ impl VarNode {
                         Value::STValue(s.struct_type(ctx)),
                         Some(tp.clone()),
                         TerminatorEnum::NONE,
-                        true,
                     ));
                 }
                 PLType::PRIMITIVE(_) => {
                     ctx.push_semantic_token(self.range, SemanticTokenType::TYPE, 0);
-                    return Ok((Value::None, Some(tp.clone()), TerminatorEnum::NONE, true));
+                    return Ok((Value::None, Some(tp.clone()), TerminatorEnum::NONE));
                 }
                 PLType::VOID => {
                     ctx.push_semantic_token(self.range, SemanticTokenType::TYPE, 0);
-                    return Ok((Value::None, Some(tp.clone()), TerminatorEnum::NONE, true));
+                    return Ok((Value::None, Some(tp.clone()), TerminatorEnum::NONE));
                 }
                 _ => return Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND)),
             }
@@ -142,7 +136,7 @@ impl Node for ArrayElementNode {
         self.index.print(tabs + 1, true, line);
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let (v, tp, _, is_const) = self.arr.emit(ctx)?;
+        let (v, tp, _) = self.arr.emit(ctx)?;
         let v = ctx.try_load2ptr(v);
         let (arrtp, arr) = if let Value::VarValue(v) = v {
             if let PLType::ARR(arrtp) = tp.unwrap() {
@@ -152,7 +146,7 @@ impl Node for ArrayElementNode {
             }
         } else if let Value::LoadValue(v) = v {
             if v.is_array_value() {
-                let (index, _, _, _) = self.index.emit(ctx)?;
+                let (index, _, _) = self.index.emit(ctx)?;
                 let index = ctx.try_load2var(index);
                 if !index.as_basic_value_enum().is_int_value() {
                     return Err(ctx.add_err(self.range, ErrorCode::ARRAY_INDEX_MUST_BE_INT));
@@ -173,7 +167,6 @@ impl Node for ArrayElementNode {
                         Value::LoadValue(elemptr.as_basic_value_enum()),
                         Some(*arrtp.get_elem_type()),
                         TerminatorEnum::NONE,
-                        is_const,
                     ));
                 } else {
                     return Err(ctx.add_err(self.range, ErrorCode::CANNOT_INDEX_NON_ARRAY));
@@ -185,7 +178,7 @@ impl Node for ArrayElementNode {
             return Err(ctx.add_err(self.range, ErrorCode::CANNOT_INDEX_NON_ARRAY));
         };
         // TODO: check if index is out of bounds
-        let (index, _, _, _) = self.index.emit(ctx)?;
+        let (index, _, _) = self.index.emit(ctx)?;
         let index = ctx.try_load2var(index);
         if !index.as_basic_value_enum().is_int_value() {
             return Err(ctx.add_err(self.range, ErrorCode::ARRAY_INDEX_MUST_BE_INT));
@@ -203,7 +196,6 @@ impl Node for ArrayElementNode {
             Value::VarValue(elemptr),
             Some(*arrtp.element_type),
             TerminatorEnum::NONE,
-            is_const,
         ));
     }
 }

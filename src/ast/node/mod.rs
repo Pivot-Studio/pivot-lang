@@ -158,13 +158,11 @@ pub trait Node: RangeTrait + AsAny {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
 }
 // ANCHOR_END: node
-
 type NodeResult<'ctx> = Result<
     (
         Value<'ctx>,
         Option<PLType>, //type
         TerminatorEnum,
-        bool, // isconst
     ),
     PLDiag,
 >;
@@ -246,11 +244,11 @@ macro_rules! handle_calc {
             match ($left, $right) {
                 (Value::IntValue(left), Value::IntValue(right)) => {
                     return Ok((Value::IntValue($ctx.builder.[<build_int_$op>](
-                        left, right, "addtmp")),Some(PLType::PRIMITIVE(PriType::try_from_str("i64").unwrap())),TerminatorEnum::NONE,false));
+                        left, right, "addtmp")),Some(PLType::PRIMITIVE(PriType::try_from_str("i64").unwrap())),TerminatorEnum::NONE));
                 },
                 (Value::FloatValue(left), Value::FloatValue(right)) => {
                     return Ok((Value::FloatValue($ctx.builder.[<build_$opf>](
-                        left, right, "addtmp")),Some(PLType::PRIMITIVE(PriType::try_from_str("f64").unwrap())),TerminatorEnum::NONE,false));
+                        left, right, "addtmp")),Some(PLType::PRIMITIVE(PriType::try_from_str("f64").unwrap())),TerminatorEnum::NONE));
                 },
                 _ =>  return Err($ctx.add_err(
                     $range,

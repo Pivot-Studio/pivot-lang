@@ -16,6 +16,6 @@ impl Node for CommentNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.push_semantic_token(self.range, SemanticTokenType::COMMENT, 0);
-        Ok((Value::None, None, TerminatorEnum::NONE, false))
+        Ok((Value::None, None, TerminatorEnum::NONE))
     }
 }

@@ -27,20 +27,18 @@ impl Node for UnaryOpNode {
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let (exp, pltype, _, is_const) = self.exp.emit(ctx)?;
+        let (exp, pltype, _) = self.exp.emit(ctx)?;
         let exp = ctx.try_load2var(exp);
         return Ok(match (exp, self.op) {
             (Value::IntValue(exp), TokenType::MINUS) => (
                 Value::IntValue(ctx.builder.build_int_neg(exp, "negtmp")),
                 pltype,
                 TerminatorEnum::NONE,
-                is_const,
             ),
             (Value::FloatValue(exp), TokenType::MINUS) => (
                 Value::FloatValue(ctx.builder.build_float_neg(exp, "negtmp")),
                 pltype,
                 TerminatorEnum::NONE,
-                is_const,
             ),
             (Value::BoolValue(exp), TokenType::NOT) => (
                 Value::BoolValue({
@@ -55,7 +53,6 @@ impl Node for UnaryOpNode {
                 }),
                 pltype,
                 TerminatorEnum::NONE,
-                is_const,
             ),
             (_exp, _op) => {
                 return Err(ctx.add_err(self.range, ErrorCode::INVALID_UNARY_EXPRESSION));
@@ -82,9 +79,9 @@ impl Node for BinOpNode {
         self.right.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let (lv, lpltype, _, _) = self.left.emit(ctx)?;
+        let (lv, lpltype, _) = self.left.emit(ctx)?;
         let left = ctx.try_load2var(lv);
-        let (rv, rpltype, _, _) = self.right.emit(ctx)?;
+        let (rv, rpltype, _) = self.right.emit(ctx)?;
         let right = ctx.try_load2var(rv);
         if lpltype != rpltype {
             return Err(ctx.add_err(
@@ -116,7 +113,6 @@ impl Node for BinOpNode {
                     }),
                     Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
                     TerminatorEnum::NONE,
-                    true,
                 ),
                 (Value::FloatValue(lhs), Value::FloatValue(rhs)) => (
                     Value::BoolValue({
@@ -131,7 +127,6 @@ impl Node for BinOpNode {
                     }),
                     Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
                     TerminatorEnum::NONE,
-                    true,
                 ),
                 _ => {
                     return Err(ctx.add_err(
@@ -152,7 +147,6 @@ impl Node for BinOpNode {
                     }),
                     Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
                     TerminatorEnum::NONE,
-                    true,
                 ),
                 _ => {
                     return Err(
@@ -172,7 +166,6 @@ impl Node for BinOpNode {
                     }),
                     Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
                     TerminatorEnum::NONE,
-                    true,
                 ),
                 _ => {
                     return Err(
@@ -210,7 +203,7 @@ impl Node for TakeOpNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let head = self.head.emit(ctx)?;
-        let (mut res, pltype, _, is_const) = head;
+        let (mut res, pltype, _) = head;
         if pltype.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::INVALID_GET_FIELD));
         }
@@ -272,6 +265,6 @@ impl Node for TakeOpNode {
             });
             return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
         }
-        Ok((res, Some(pltype.clone()), TerminatorEnum::NONE, is_const))
+        Ok((res, Some(pltype.clone()), TerminatorEnum::NONE))
     }
 }

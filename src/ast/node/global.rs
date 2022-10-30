@@ -20,7 +20,7 @@ impl Node for GlobalNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
         self.exp.emit(ctx)?;
-        Ok((Value::None, None, TerminatorEnum::NONE, false))
+        Ok((Value::None, None, TerminatorEnum::NONE))
     }
 }
 impl GlobalNode {
@@ -31,7 +31,7 @@ impl GlobalNode {
         // use nodebug builder to emit
         let builder = ctx.builder;
         ctx.builder = ctx.nodebug_builder;
-        let (value, pltype_opt, _, _) = self.exp.emit(ctx)?;
+        let (value, pltype_opt, _) = self.exp.emit(ctx)?;
         ctx.builder = builder;
         if pltype_opt.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));

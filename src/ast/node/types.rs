@@ -45,7 +45,7 @@ impl TypeNode for TypeNameNode {
         if self.id.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::EXPECT_TYPE));
         }
-        let (_, pltype, _, _) = self.id.as_ref().unwrap().get_type(ctx)?;
+        let (_, pltype, _) = self.id.as_ref().unwrap().get_type(ctx)?;
         let pltype = pltype.unwrap();
         if let Some(dst) = pltype.get_range() {
             ctx.send_if_go_to_def(self.range, dst, ctx.plmod.path.clone());
@@ -152,7 +152,7 @@ impl Node for StructDefNode {
                 ctx.push_semantic_token(doc.range, SemanticTokenType::COMMENT, 0);
             }
         }
-        Ok((Value::None, None, TerminatorEnum::NONE, false))
+        Ok((Value::None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -231,7 +231,7 @@ impl Node for StructInitFieldNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let range = self.exp.range();
-        let (v, tp, _, _) = self.exp.emit(ctx)?;
+        let (v, tp, _) = self.exp.emit(ctx)?;
         if !self.has_comma {
             return Err(ctx.add_err(self.range, ErrorCode::COMPLETION));
         }
@@ -247,7 +247,6 @@ impl Node for StructInitFieldNode {
             Value::StructFieldValue((self.id.name.clone(), value)),
             tp,
             TerminatorEnum::NONE,
-            false,
         ));
     }
 }
@@ -277,7 +276,7 @@ impl Node for StructInitNode {
         let tp = self.tp.get_type(ctx)?;
         for field in self.fields.iter_mut() {
             let range = field.range();
-            if let (Value::StructFieldValue((id, val)), _, _, _) = field.emit(ctx)? {
+            if let (Value::StructFieldValue((id, val)), _, _) = field.emit(ctx)? {
                 fields.insert(id, (val, range));
             } else {
                 panic!("StructInitNode::emit: invalid field");
@@ -310,7 +309,7 @@ impl Node for StructInitNode {
                 ctx.set_if_refs(field.refs.clone(), range);
                 ctx.send_if_go_to_def(range, field.range, st.path.clone())
             }
-            return Ok((Value::VarValue(stv), Some(tp), TerminatorEnum::NONE, false));
+            return Ok((Value::VarValue(stv), Some(tp), TerminatorEnum::NONE));
         } else {
             panic!("StructInitNode::emit: invalid type");
         }
@@ -342,7 +341,7 @@ impl Node for ArrayInitNode {
 
         for exp in self.exps.iter_mut() {
             let range = exp.range();
-            let (v, tp, _, _) = exp.emit(ctx)?;
+            let (v, tp, _) = exp.emit(ctx)?;
             // 检查类型是否一致
             if tp0.is_none() {
                 tp0 = tp;
@@ -373,7 +372,6 @@ impl Node for ArrayInitNode {
                 size: sz,
             })),
             TerminatorEnum::NONE,
-            false,
         ));
     }
 }

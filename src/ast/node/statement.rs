@@ -48,7 +48,7 @@ impl Node for DefNode {
                     if re.is_err() {
                         return Err(re.unwrap_err());
                     }
-                    return Ok((Value::None, None, TerminatorEnum::NONE, false));
+                    return Ok((Value::None, None, TerminatorEnum::NONE));
                 }
                 PLType::PRIMITIVE(p) => {
                     let tp = p.get_basic_type(ctx);
@@ -63,7 +63,7 @@ impl Node for DefNode {
                     if re.is_err() {
                         return Err(re.unwrap_err());
                     }
-                    return Ok((Value::None, None, TerminatorEnum::NONE, false));
+                    return Ok((Value::None, None, TerminatorEnum::NONE));
                 }
                 PLType::VOID => todo!(),
                 PLType::NAMESPACE(_) => todo!(),
@@ -71,7 +71,7 @@ impl Node for DefNode {
         }
 
         let exp_range = self.exp.as_ref().unwrap().range();
-        let (value, pltype_opt, _, _) = self.exp.as_mut().unwrap().emit(ctx)?;
+        let (value, pltype_opt, _) = self.exp.as_mut().unwrap().emit(ctx)?;
         // for err tolerate
         if pltype_opt.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
@@ -117,7 +117,7 @@ impl Node for DefNode {
             return Err(re.unwrap_err());
         }
         ctx.builder.build_store(ptr2value, base_value);
-        return Ok((Value::None, None, TerminatorEnum::NONE, false));
+        return Ok((Value::None, None, TerminatorEnum::NONE));
     }
 }
 #[range]
@@ -136,11 +136,8 @@ impl Node for AssignNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let vrange = self.var.range();
-        let (ptr, _, _, is_const) = self.var.emit(ctx)?;
-        if is_const {
-            return Err(ctx.add_err(vrange, ErrorCode::ASSIGN_CONST));
-        }
-        let (value, _, _, _) = self.exp.emit(ctx)?;
+        let (ptr, _, _) = self.var.emit(ctx)?;
+        let (value, _, _) = self.exp.emit(ctx)?;
         if let Value::VarValue(ptr) = ptr {
             let load = ctx.try_load2var(value);
             if ptr.get_type().get_element_type()
@@ -149,7 +146,7 @@ impl Node for AssignNode {
                 return Err(ctx.add_err(self.range, ErrorCode::ASSIGN_TYPE_MISMATCH));
             }
             ctx.builder.build_store(ptr, load.as_basic_value_enum());
-            return Ok((Value::None, None, TerminatorEnum::NONE, false));
+            return Ok((Value::None, None, TerminatorEnum::NONE));
         }
         Err(ctx.add_err(vrange, ErrorCode::NOT_ASSIGNABLE))
     }
@@ -166,7 +163,7 @@ impl Node for EmptyNode {
         println!("EmptyNode");
     }
     fn emit<'a, 'ctx>(&'a mut self, _: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        Ok((Value::None, None, TerminatorEnum::NONE, false))
+        Ok((Value::None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -206,10 +203,10 @@ impl Node for StatementsNode {
             if re.is_err() {
                 continue;
             }
-            let (_, _, terminator_res, _) = re.unwrap();
+            let (_, _, terminator_res) = re.unwrap();
             terminator = terminator_res;
         }
-        Ok((Value::None, None, terminator, false))
+        Ok((Value::None, None, terminator))
     }
 }
 
