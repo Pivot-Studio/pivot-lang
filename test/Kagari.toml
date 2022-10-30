@@ -2,5 +2,5 @@ entry = "main.pi"
 
 
 [deps]
-test = { path = "sub2" }
+sub2 = { path = "sub2" }
 

@@ -2,6 +2,7 @@ use mod1;
 use sub::mod;
 use mod2;
 use sub2::main;
+use sub2::main::test;
 const a = 100;
 struct struct_father {
     a : i64;
@@ -43,6 +44,7 @@ fn test_struct() void {
     mod::name();
     mod1::printi64ln(1);
     main::test();
+    test::test();
     return ;
 }
 fn test_vm() void {
@@ -54,6 +56,7 @@ fn test_if_else() void {
     test_if_else_ret(true);
     test_if_ret_only(true);
     test_else_ret_only(true);
+
     test_not_ret(true);
     return    ;
 }

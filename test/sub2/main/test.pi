@@ -1,5 +1,4 @@
-use main::test;
-
 fn test() void {
+
     return;
 }

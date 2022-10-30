@@ -67,10 +67,12 @@ mul_exp =
     ;
 
 unary_exp =
-    | complex_exp
-    | ("-" | "!") complex_exp
+    | pointer_exp
+    | ("-" | "!") pointer_exp
     ;
 
+
+pointer_exp = ("&"|"*")* complex_exp;
 
 complex_exp = primary_exp (take_exp_op|array_element_op|call_function_op)*;
 
