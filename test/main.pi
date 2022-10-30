@@ -1,8 +1,8 @@
 use mod1;
 use sub::mod;
 use mod2;
-use sub2::main;
-use sub2::main::test;
+use sub3::main;
+use sub3::main::test;
 const a = 100;
 struct struct_father {
     a : i64;

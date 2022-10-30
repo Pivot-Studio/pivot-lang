@@ -5,20 +5,19 @@ use nom::{
     bytes::complete::tag,
     combinator::{eof, map_res, recognize},
     multi::many0,
-    sequence::{delimited, terminated, tuple}, IResult,
+    sequence::{delimited, terminated, tuple},
+    IResult,
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
+    ast::range::Range,
+    ast::tokens::TokenType,
     ast::{
         diag::ErrorCode,
         node::error::{ErrorNode, STErrorNode},
     },
-    ast::tokens::TokenType,
-    ast::range::Range,
 };
-
-
 
 use super::*;
 
@@ -79,7 +78,6 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     );
     Ok((input, node))
 }
-
 
 fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
     delspace(alt((

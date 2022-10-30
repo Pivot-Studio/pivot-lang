@@ -5,23 +5,19 @@ use nom::{
     bytes::complete::tag,
     combinator::{map_res, opt},
     multi::many0,
-    sequence::{delimited, tuple}, IResult,
+    sequence::{delimited, tuple},
+    IResult,
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
     ast::node::types::StructDefNode,
     ast::node::{types::StructInitNode, NodeEnum, RangeTrait},
-    ast::{
-        node::types::StructInitFieldNode,
-        tokens::TokenType,
-    },
+    ast::{node::types::StructInitFieldNode, tokens::TokenType},
 };
 use internal_macro::test_parser;
 
 use super::*;
-
-
 
 #[test_parser(
     "struct mystruct {

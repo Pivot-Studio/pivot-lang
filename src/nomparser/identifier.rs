@@ -7,28 +7,27 @@ use nom::{
     combinator::{map_res, opt, recognize},
     multi::{many0, many0_count},
     sequence::{pair, preceded, tuple},
-    IResult, InputTake
+    IResult, InputTake,
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
+    ast::tokens::TokenType,
     ast::{
         node::{
             pkg::ExternIDNode,
-            types::{
-                TypeNameNode, TypedIdentifierNode,
-            },
+            types::{TypeNameNode, TypedIdentifierNode},
         },
         tokens::TOKEN_STR_MAP,
     },
-    ast::{range::Range, node::{NodeEnum, primary::VarNode, RangeTrait, TypeNodeEnum}},
-    ast::tokens::TokenType,
+    ast::{
+        node::{primary::VarNode, NodeEnum, RangeTrait, TypeNodeEnum},
+        range::Range,
+    },
 };
 use internal_macro::test_parser;
 
 use super::*;
-
-
 
 #[test_parser("a::a")]
 #[test_parser("b::c::b")]
@@ -72,7 +71,6 @@ pub fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
     ))(input)
 }
 
-
 pub fn identifier(input: Span) -> IResult<Span, Box<VarNode>> {
     delspace(map_res(
         recognize(pair(
@@ -91,10 +89,6 @@ pub fn identifier(input: Span) -> IResult<Span, Box<VarNode>> {
         },
     ))(input)
 }
-
-
-
-
 
 #[test_parser("myname: int")]
 pub fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> {

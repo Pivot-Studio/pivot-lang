@@ -1,21 +1,12 @@
 use std::fmt::Error;
 
 use nom::{
-    bytes::complete::tag,
-    character::complete::space0,
-    combinator::map_res,
-    error::ParseError,
-    sequence::delimited,
-    AsChar, IResult, InputTake, InputTakeAtPosition, Parser,
+    bytes::complete::tag, character::complete::space0, combinator::map_res, error::ParseError,
+    sequence::delimited, AsChar, IResult, InputTake, InputTakeAtPosition, Parser,
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
-use crate::{
-    ast::range::Range,
-    ast::tokens::TokenType,
-};
-
-
+use crate::{ast::range::Range, ast::tokens::TokenType};
 
 use super::*;
 

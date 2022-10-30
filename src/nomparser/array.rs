@@ -3,17 +3,12 @@ use std::fmt::Error;
 use nom::{
     combinator::map_res,
     multi::many0,
-    sequence::{delimited, terminated, tuple}, IResult,
+    sequence::{delimited, terminated, tuple},
+    IResult,
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
-use crate::{
-    ast::node::types::ArrayInitNode,
-    ast::range::Range,
-    ast::tokens::TokenType,
-};
-
-
+use crate::{ast::node::types::ArrayInitNode, ast::range::Range, ast::tokens::TokenType};
 
 use super::*;
 
@@ -35,7 +30,6 @@ pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
         },
     )(input)
 }
-
 
 /// ```ebnf
 /// array_element_op = ('[' logic_exp ']') ;

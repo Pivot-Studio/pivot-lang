@@ -6,12 +6,7 @@ use nom::{
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
-use crate::{
-    ast::node::comment::CommentNode,
-    ast::range::Range,
-};
-
-
+use crate::{ast::node::comment::CommentNode, ast::range::Range};
 
 use super::*;
 

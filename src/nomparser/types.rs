@@ -1,20 +1,13 @@
 use std::fmt::Error;
 
-use nom::{
-    branch::alt,
-    combinator::map_res,
-    sequence::tuple, IResult
-};
+use nom::{branch::alt, combinator::map_res, sequence::tuple, IResult};
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
-    ast::node::types::{
-                ArrayTypeNameNode, TypeNameNode,
-            },
+    ast::node::types::{ArrayTypeNameNode, TypeNameNode},
     ast::tokens::TokenType,
 };
 use internal_macro::test_parser;
-
 
 use super::*;
 

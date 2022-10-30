@@ -1,14 +1,12 @@
 use nom::{
     combinator::{map_res, opt},
     multi::many0,
-    sequence::{preceded, tuple}, IResult,
+    sequence::{preceded, tuple},
+    IResult,
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
-use crate::{
-    ast::node::pkg::UseNode,
-    ast::tokens::TokenType,
-};
+use crate::{ast::node::pkg::UseNode, ast::tokens::TokenType};
 use internal_macro::test_parser;
 
 use super::*;

@@ -5,16 +5,12 @@ use nom::{
     combinator::{map_res, opt},
     multi::many0,
     sequence::{delimited, pair, preceded, tuple},
-    IResult
+    IResult,
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
-use crate::{
-    ast::node::function::FuncCallNode,
-    ast::tokens::TokenType,
-};
+use crate::{ast::node::function::FuncCallNode, ast::tokens::TokenType};
 use internal_macro::{test_parser, test_parser_error};
-
 
 use super::*;
 
@@ -64,9 +60,6 @@ fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
         ),
     )))(input)
 }
-
-
-
 
 /// ```ebnf
 /// complex_exp = primary_exp (take_exp_op|array_element_op|call_function_exp_op)*;

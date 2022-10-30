@@ -2,15 +2,18 @@ use std::fmt::Error;
 
 use nom::{
     branch::alt,
+    bytes::complete::tag,
     combinator::{map_res, opt, recognize},
     multi::many0,
-    bytes::complete::tag,
-    sequence::{delimited, preceded, terminated, tuple}, IResult,
+    sequence::{delimited, preceded, terminated, tuple},
+    IResult,
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
     ast::node::ret::RetNode,
+    ast::range::Range,
+    ast::tokens::TokenType,
     ast::{
         diag::ErrorCode,
         node::{
@@ -18,11 +21,8 @@ use crate::{
             global::GlobalNode,
         },
     },
-    ast::range::Range,
-    ast::tokens::TokenType,
 };
 use internal_macro::{test_parser, test_parser_error};
-
 
 use super::*;
 
@@ -157,7 +157,6 @@ pub fn assignment(input: Span) -> IResult<Span, Box<NodeEnum>> {
     ))(input)
 }
 
-
 #[test_parser("return 1;")]
 #[test_parser("return 1.1;")]
 #[test_parser("return true;")]
@@ -192,8 +191,6 @@ fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     ))(input)
 }
 
-
-
 #[test_parser("const a = 1")]
 pub fn global_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
@@ -216,5 +213,3 @@ pub fn global_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
         },
     ))(input)
 }
-
-

@@ -5,7 +5,8 @@ use nom::{
     bytes::complete::tag,
     combinator::{map_res, opt},
     multi::many0,
-    sequence::{delimited, preceded, tuple}, IResult,
+    sequence::{delimited, preceded, tuple},
+    IResult,
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
@@ -17,7 +18,6 @@ use crate::{
 use internal_macro::test_parser;
 
 use super::*;
-
 
 /// ```ebnf
 /// function_def = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name (statement_block | newline) ;

@@ -6,14 +6,12 @@ use nom::{
     character::complete::{one_of, space0},
     combinator::{map_res, opt, recognize},
     multi::{many0, many1},
-    sequence::{preceded, terminated, tuple}, IResult,
+    sequence::{preceded, terminated, tuple},
+    IResult,
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
-use crate::{
-    ast::range::Range,
-    ast::tokens::TokenType,
-};
+use crate::{ast::range::Range, ast::tokens::TokenType};
 use internal_macro::{test_parser, test_parser_error};
 use nom::character::complete::char;
 
