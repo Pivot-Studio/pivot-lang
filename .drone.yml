@@ -29,6 +29,7 @@ steps:
     commands:
       - mkdir ./.cargo/
       - export CARGO_NET_GIT_FETCH_WITH_CLI=true
+      - export KAGARI_LIB_ROOT=$(pwd)/planglib
       - |
         echo '[source.crates-io]
         replace-with = "tuna"
