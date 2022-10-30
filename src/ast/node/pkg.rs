@@ -199,7 +199,7 @@ impl ExternIDNode {
                 PLType::FN(f) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
                     Ok((
-                        Value::FnValue(f.get_value(ctx, plmod)),
+                        Value::FnValue(f.get_value(ctx)),
                         Some(tp),
                         TerminatorEnum::NONE,
                         true,

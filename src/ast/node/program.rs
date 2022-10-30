@@ -160,7 +160,6 @@ impl Program {
             for p in u.ids[start..].iter() {
                 path = path.join(p.name.clone());
             }
-            eprintln!("{} {}", "path".green(), path.to_str().unwrap().green());
             path = path.with_extension("pi");
             let f = path.to_str().unwrap().to_string();
             // eprintln!("use {}", f.clone());

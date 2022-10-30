@@ -107,7 +107,7 @@ impl Node for FuncDefNode {
             }
             let fu = res.unwrap();
             func = match fu {
-                PLType::FN(fu) => fu.get_value(ctx, &ctx.plmod),
+                PLType::FN(fu) => fu.get_value(ctx),
                 _ => panic!("type error"), // 理论上这两个Panic不可能触发
             };
             func.set_subprogram(subprogram);
