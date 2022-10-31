@@ -83,7 +83,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Getting Started</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> basic project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> vsc support</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the compiler works internally</li><li class="chapter-item expanded "><a href="compiler/index.html"><strong aria-hidden="true">3.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compiler/parser.html"><strong aria-hidden="true">3.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="compiler/ast.html"><strong aria-hidden="true">3.2.</strong> AST</a></li></ol></li></ol>            </div>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li></ol></li><li class="chapter-item expanded "><a href="lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lsp/diagnostic.html"><strong aria-hidden="true">5.1.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li class="chapter-item expanded "><a href="systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li></ol>            </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
@@ -158,6 +158,9 @@
 <li><a href="https://github.com/llvm/llvm-project/releases/tag/llvmorg-14.0.6">llvm-14</a></li>
 <li><a href="https://www.rust-lang.org/">rust</a></li>
 </ul>
+<p><strong>重要</strong>：如果你想参与开发，请先使用release模式编译项目的vm目录，然后在你的<code>~/.bashrc</code>或者<code>～/.bash_profile</code>中添加如下代码：</p>
+<pre><code class="language-bash">export KAGARI_LIB_ROOT=&lt;pivot-lang project path&gt;/planglib
+</code></pre>
 <h2 id="特点"><a class="header" href="#特点">特点</a></h2>
 <ul>
 <li>同时支持aot和jit两种模式</li>
@@ -255,31 +258,42 @@ ast错误容忍</li>
 </ul>
 <h2 id="grammar"><a class="header" href="#grammar">grammar</a></h2>
 <pre><code class="language-ebnf">add_exp = 
-    | mul_exp (&quot;+&quot; | &quot;-&quot; mul_exp)*
+    | mul_exp (&quot;+&quot; | &quot;-&quot; add_exp)?
     ;
 
 mul_exp = 
-    | unary_exp (&quot;*&quot;｜&quot;/&quot; unary_exp)*
+    | unary_exp (&quot;*&quot;｜&quot;/&quot; mul_exp)?
     ;
 
 unary_exp =
-    | take_exp
-    | (&quot;-&quot; | &quot;!&quot; | &quot;&amp;&quot;) take_exp
+    | pointer_exp
+    | (&quot;-&quot; | &quot;!&quot;) pointer_exp
     ;
 
-take_exp =
-    | primary_exp (&quot;.&quot; identifier)*
-    ;
+
+pointer_exp = (&quot;&amp;&quot;|&quot;*&quot;)* complex_exp;
+
+complex_exp = primary_exp (take_exp_op|array_element_op|call_function_op)*;
+
+take_exp_op = (&quot;.&quot; identifier) ;
+
+array_element_op = ('[' logic_exp ']') ;
+
+call_function_op = (&quot;(&quot; (logic_exp (&quot;,&quot;logic_exp)*)? &quot;)&quot;) ;
 
 primary_exp =
     | number
     | bool_const
     | &quot;(&quot; logic_exp &quot;)&quot;
     | extern_identifier
-    | struct_init
-    | call_function
+    | struct_init_exp
     ;
 
+number = [0-9]+ (&quot;.&quot; number)? ;
+
+identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
+
+extern_identifier = (identifier &quot;::&quot;)* identifier ;
 
 bool_const =
     | &quot;true&quot;
@@ -293,6 +307,10 @@ compare_exp =
 logic_exp = 
     | compare_exp ((&quot;&amp;&amp;&quot;｜&quot;||&quot;) compare_exp)*
     ;
+
+struct_init_exp = type_name &quot;{&quot; struct_init_exp_field &quot;}&quot; ;
+
+struct_init_exp_field = identifier &quot;:&quot; logic_exp &quot;,&quot; ;
 
 assignee = identifier (&quot;.&quot; identifier)*;
 
@@ -325,7 +343,7 @@ statement =
     | while_statement
     | break_statement
     | continue_statement
-    | function_call
+    | complex_exp &quot;;&quot;
     ;
 
 toplevel_statement = 
@@ -337,35 +355,22 @@ toplevel_statement =
 
 program = toplevel_statement* ;
 
-
-number = [0-9]+ | number &quot;.&quot; number ;
-
-identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
-
 function_def = &quot;fn&quot; identifier &quot;(&quot; (typed_identifier (&quot;,&quot;typed_identifier)*)? &quot;)&quot; type_name (statement_block | &quot;;&quot;) ;
-
-call_function = extern_identifier &quot;(&quot; (logic_exp (&quot;,&quot;logic_exp)*)? &quot;)&quot; ;
 
 struct_def = &quot;struct&quot; identifier &quot;{&quot; struct_field* &quot;}&quot; ;
 
-type_name = (&quot;&amp;&quot;)? identifier ;
+type_name = extern_identifier ;
 
 typed_identifier = identifier &quot;:&quot; type_name ;
 
 struct_field = typed_identifier &quot;;&quot; ;
 
-struct_init = type_name &quot;{&quot; struct_init_field &quot;}&quot; ;
-
-struct_init_field = identifier &quot;:&quot; logic_exp &quot;,&quot; ;
-
 return_statement = &quot;return&quot; logic_exp &quot;;&quot; ;
 
 use_statement = &quot;use&quot; identifier (&quot;::&quot; identifier)* &quot;;&quot; ;
 
-extern_identifier = (identifier &quot;::&quot;)* ;
-
 </code></pre>
-<div style="break-before: page; page-break-before: always;"></div><h1 id="tutorial-a-short-introduction-to-the-language"><a class="header" href="#tutorial-a-short-introduction-to-the-language">Tutorial: A short introduction to the language</a></h1>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="quick-start-a-short-introduction-to-the-language"><a class="header" href="#quick-start-a-short-introduction-to-the-language">Quick Start: A short introduction to the language</a></h1>
 <blockquote>
 <p>重要：Pivot lang尚属于早期开发阶段，可能会经常发生breaking change，因此不建议在生产环境中使用。</p>
 </blockquote>
@@ -528,6 +533,62 @@ ast错误容忍</li>
 </ul>
 </li>
 </ul>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="references"><a class="header" href="#references">References</a></h1>
+<p>语言功能的参考文档。</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="module"><a class="header" href="#module">Module</a></h1>
+<p>模块化</p>
+<h2 id="模块的划分和使用"><a class="header" href="#模块的划分和使用">模块的划分和使用</a></h2>
+<p>总体来说，pl的模块化与rust类似，但是规则比rust简单。<br />
+任何一个pl文件都是一个模块，模块的名字就是文件名。一个pl项目的根目录一定有<code>Kagari.toml</code>配置文件，之后所有该项目
+模块的路径都是从该文件所在的目录开始计算的。</p>
+<p>举个例子，如果我的pl项目有以下的目录结构：</p>
+<pre><code class="language-text">test
+├── Kagari.toml
+├── mod1.pi
+├── main.pi
+└── sub
+    └── mod.pi
+
+</code></pre>
+<p>如果<code>main.pi</code>想使用<code>mod1.pi</code>或者<code>mod.pi</code>中的函数，那么可以这样写：</p>
+<pre><code class="language-pivot-lang">use mod1;
+use sub::mod;
+
+fn main() void {
+    mod1::func();
+    mod::func();
+    return;
+}
+</code></pre>
+<p>如果<code>mod.pi</code>想使用<code>mod1.pi</code>中的函数，那么可以这样写：</p>
+<pre><code class="language-pivot-lang">use mod1;
+
+fn main() void {
+    mod1::func();
+    return;
+}
+
+</code></pre>
+<blockquote>
+<p>！！！目前，pl的模块<strong>不支持</strong>循环引用，循环引用可能导致lsp崩溃。</p>
+</blockquote>
+<blockquote>
+<p>！！！目前pl引入的所有模块必须对应到相对的pi文件（不能对应目录，也不能单独引入函数），而且不能引入同名的模块。</p>
+</blockquote>
+<h2 id="引用另一个pl项目"><a class="header" href="#引用另一个pl项目">引用另一个pl项目</a></h2>
+<p>目前只支持引用本地的pl项目，引用的方式是在<code>Kagari.toml</code>中添加<code>[deps]</code> </p>
+<pre><code class="language-toml">[deps]
+sub3 = { path = &quot;sub2&quot; }
+</code></pre>
+<p>使用时，引用的项目模块会在<code>deps</code>中定义的命名空间之下：</p>
+<pre><code class="language-pivot-lang">use sub3::lib;
+
+fn main() void {
+    lib::func();
+    return;
+}
+
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="compiler"><a class="header" href="#compiler">Compiler</a></h1>
 <p>pivot-lang编译器（以下简称编译器）主要由三个部分组成：nom分析器、ast和llvm后端。</p>
 <h2 id="nom-parser"><a class="header" href="#nom-parser">Nom parser</a></h2>
@@ -554,9 +615,7 @@ ast错误容忍</li>
 <p>对于pivot lang的每一条语法规则，都会在parser里对应一个分析函数，这些分析函数可能会调用其他分析函数，最终最上层的分析函数可以将完整的源代码转换为ast。</p>
 <p>pivot lang的完整语法规则见<a href="compiler/../../../#grammar">这里</a></p>
 <p>parser最顶层的函数是<code>parse</code>，它接受一个源文件输出一个AST根节点。</p>
-<pre><code class="language-rust no_run noplayground">}
-
-#[salsa::tracked(lru = 32)]
+<pre><code class="language-rust no_run noplayground">#[salsa::tracked(lru = 32)]
 pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNodeWrapper, String&gt; {
     let text = source.text(db);
     let re = program(Span::new(text));
@@ -564,23 +623,25 @@ pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNode
         return Err(format!(&quot;{:?}&quot;, e));
     }
     // eprintln!(&quot;parse&quot;);
+    Ok(ProgramNodeWrapper::new(db, re.unwrap().1))
+}
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ast-1"><a class="header" href="#ast-1">AST</a></h1>
 <p>抽象语法树是目前编译器中最复杂的部分，它是编译器的中间表示，也是编译器的核心。本节将介绍AST的设计和实现。</p>
 <h2 id="ast的设计"><a class="header" href="#ast的设计">AST的设计</a></h2>
 <p>基本上，所有源代码中的基础单位都会对应抽象语法树中的一个节点。抽象语法树有很多类型的节点，他们可能会相互引用。</p>
 <p>所有的节点都必须实现<code>Node</code> trait，这个trait定义了节点的基本行为。</p>
-<pre><code class="language-rust no_run noplayground">    Program(program::ProgramNode),
-    STInitField(StructInitFieldNode),
-    STErrorNode(STErrorNode),
-    Global(GlobalNode),
-    UseNode(UseNode),
+<pre><code class="language-rust no_run noplayground">#[enum_dispatch]
+pub trait Node: RangeTrait + AsAny {
+    fn print(&amp;self, tabs: usize, end: bool, line: Vec&lt;bool&gt;);
+    fn emit&lt;'a, 'ctx&gt;(&amp;'a mut self, ctx: &amp;mut Ctx&lt;'a, 'ctx&gt;) -&gt; NodeResult&lt;'ctx&gt;;
+}
 </code></pre>
 <p>你可能注意到了，<code>Node</code>trait继承了<code>RangeTrait</code>，这个trait定义了节点的位置信息。</p>
-<pre><code class="language-rust no_run noplayground">    Bool(BoolConstNode),
-    Err(ErrorNode),
-    STS(StatementsNode),
-    Empty(EmptyNode),
+<pre><code class="language-rust no_run noplayground">#[enum_dispatch]
+pub trait RangeTrait {
+    fn range(&amp;self) -&gt; Range;
+}
 </code></pre>
 <p>一般来说，<code>RangeTrait</code>的实现通过<code>#[range]</code>宏来自动生成，你不需要手动实现它。</p>
 <p><code>Node</code>接口中的<code>print</code>函数用于打印节点的信息，它会被用于调试。<code>print</code>打印的结果和<code>tree</code>的输出非常像，你需要用一些工具函数来
@@ -621,29 +682,27 @@ pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNode
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, cond_block);
         let condrange = self.cond.range();
-        let (cond, _, _, _) = self.cond.emit(ctx)?;
-        let cond = ctx.try_load2var(cond);
-        let con;
-        if let Value::BoolValue(value) = cond {
-            con = value;
-        } else {
-            let err = ctx.add_err(condrange, ErrorCode::IF_CONDITION_MUST_BE_BOOL);
-            return Err(err);
+        let (cond, pltype, _) = self.cond.emit(ctx)?;
+        if pltype.is_none() || !pltype.unwrap().is(PriType::BOOL) {
+            return Err(ctx.add_err(condrange, ErrorCode::IF_CONDITION_MUST_BE_BOOL));
         }
-        let con = ctx
-            .builder
-            .build_int_truncate(con, ctx.context.bool_type(), &quot;trunctemp&quot;);
+        let cond = ctx.try_load2var(condrange, cond.unwrap())?;
+        let cond = ctx.builder.build_int_truncate(
+            cond.into_int_value(),
+            ctx.context.bool_type(),
+            &quot;trunctemp&quot;,
+        );
         ctx.builder
-            .build_conditional_branch(con, then_block, else_block);
+            .build_conditional_branch(cond, then_block, else_block);
         // then block
         position_at_end(ctx, then_block);
-        let (_, _, then_terminator, _) = self.then.emit(ctx)?;
+        let (_, _, then_terminator) = self.then.emit(ctx)?;
         if then_terminator.is_none() {
             ctx.builder.build_unconditional_branch(after_block);
         }
         position_at_end(ctx, else_block);
         let terminator = if let Some(el) = &amp;mut self.els {
-            let (_, _, else_terminator, _) = el.emit(ctx)?;
+            let (_, _, else_terminator) = el.emit(ctx)?;
             if else_terminator.is_none() {
                 ctx.builder.build_unconditional_branch(after_block);
             }
@@ -660,12 +719,135 @@ pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNode
         if terminator.is_return() {
             ctx.builder.build_unconditional_branch(after_block);
         }
-        Ok((Value::None, None, terminator, false))
+        Ok((None, None, terminator))
     }
 </code></pre>
 <p>emit函数的参数是节点自身，第二个参数是编译上下文。编译上下文中会包含一些需要透传的信息，比如符号表，llvmbuilder，lsp参数等。</p>
 <h2 id="打印ast结构"><a class="header" href="#打印ast结构">打印AST结构</a></h2>
-<p>TODO</p>
+<p>plc命令行工具有打印ast的功能，你可以使用<code>plc xxx.pi --printast</code>命令来打印ast结构。<br />
+下方是一个ast打印结果的样例：</p>
+<pre><code class="language-ast">...
+file: /Users/bobli/src/pivot-lang/test/sub/mod.pi
+ProgramNode
+ └─ FuncDefNode
+     ├─ id: name
+     ├─ TypeNameNode
+     │   └─ ExternIDNode
+     │       └─ VarNode: void
+     └─ StatementsNode
+         └─ RetNode
+file: /Users/bobli/src/pivot-lang/test/mod2.pi
+ProgramNode
+ ├─ UseNode
+ │   ├─ VarNode: sub
+ │   └─ VarNode: mod
+ ├─ FuncDefNode
+ │   ├─ id: test_mod
+ │   ├─ TypedIdentifierNode
+ │   │   ├─ id: args
+ │   │   └─ TypeNameNode
+ │   │       └─ ExternIDNode
+ │   │           └─ VarNode: i64
+ │   ├─ TypeNameNode
+ │   │   └─ ExternIDNode
+ │   │       └─ VarNode: void
+ │   └─ StatementsNode
+ │       └─ RetNode
+ └─ StructDefNode
+     ├─ id: Mod2
+     └─ TypedIdentifierNode
+         ├─ id: y
+         └─ TypeNameNode
+             └─ ExternIDNode
+                 └─ VarNode: bool
+...
+</code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="language-server"><a class="header" href="#language-server">Language Server</a></h1>
+<p>Pivot Lang的Language Server（以下简称LSP）是一个用于为编译器提供语法支持的组件，它同时被用于在编译期间生成诊断信息。</p>
+<blockquote>
+<p>基本上，lsp能够为所有的现代代码编辑器提供服务，但是目前我们只为vsc提供官方支持。如果想在别的编辑器中使用lsp，可能需要自己写一个
+简单的客户端插件。</p>
+</blockquote>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="diagnostic"><a class="header" href="#diagnostic">Diagnostic</a></h1>
+<p>诊断信息是个非常重要的功能，它可以帮助我们在编写代码的时候发现错误和可能有问题的地方，从而提高我们的编码效率。</p>
+<p>为了让用户体验尽可能的好，我们的lsp分析需要尽量容忍用户的错误输入，尽可能多的分析出用户代码中的问题</p>
+<h2 id="fault-tolerance"><a class="header" href="#fault-tolerance">Fault Tolerance</a></h2>
+<p>错误容忍是生成好的诊断信息的前提。在pivot-lang的中，我们分别在两个层面上实现了错误容忍：</p>
+<ul>
+<li>parser</li>
+<li>ast</li>
+</ul>
+<h3 id="parser的错误容忍"><a class="header" href="#parser的错误容忍">Parser的错误容忍</a></h3>
+<p>nom parser架构中，如果出现了一个无法被识别的语句，整个分析器就会终止分析输出错误。这对于错误容忍的要求来说是无法被接受的。所以
+我们的编译器不使用nom parser的默认错误处理机制，任何parser阶段产生的nom error都应该被视作<strong>bug</strong>，我们应该尽可能的避免这种情况。</p>
+<p>在parse过程中，如果一些错误语句能非常明显的被识别为一个语法的未完成项（且没有歧义），我们应该将它识别为该语法类型的Node，并且在Node上加一个
+flag标识它不完整（常常是<code>is_complete</code>），这样在ast阶段我们就能输出对应的诊断信息。</p>
+<p>对于最常见的基础语法单位<code>statement</code>和<code>top_statement</code>，parser提供了一个helper函数<code>except</code>，能够在遇到不可被识别的错误语句的时候
+将该“块”语句识别为<code>ErrNode</code>，以方便后续的分析正常进行。</p>
+<blockquote>
+<p>！！！<strong>注意</strong>：ErrNode虽然很好用，但是它只能输出很宽泛的诊断信息（比如无法识别该语句），它是最后的错误容忍手段，应该尽量避免使用它</p>
+</blockquote>
+<h3 id="ast的错误容忍"><a class="header" href="#ast的错误容忍">AST的错误容忍</a></h3>
+<p>由于parse阶段的时候能够容忍错误的语句，对于一些语法错误，ast节点只需要检查自身的完整性就能够输出诊断信息了。而对于语义错误（例如类型不匹配），我们需要在ast阶段
+进行分析并获取结果。这些操作目前是在各个节点的<code>emit</code>函数里进行的。所有的<code>emit</code>函数都返回<code>NodeResult</code>类型，如果该节点的<code>emit</code>中出现了错误，
+分析将会中断，其对应的错误信息会被添加到<code>ctx</code>（编译上下文）中并且作为<code>error</code>返回。上层函数如果遇到自己依赖的函数报错<strong>一定不能重复添加该错误至<code>ctx</code>中</strong>，
+否则会导致错误信息重复输出。上层函数处理自己的依赖报错有两种情况：</p>
+<ul>
+<li>直接停止分析并将该错误传递给自己的上级</li>
+<li>忽略该错误继续进行分析</li>
+</ul>
+<p>一般来说，大部分的expression和statement都会采用第一种方案，而statement block则会采用第二种方案</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="systemlib"><a class="header" href="#systemlib">SystemLib</a></h1>
+<p>pl的系统库一部分是pl代码一部分是rust代码，rust部分在项目的<code>vm</code>目录中，pl部分在<code>planglib</code>目录中。</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="vm"><a class="header" href="#vm">VM</a></h1>
+<p>放rust写的给pivot-lang使用的函数</p>
+<p>所有导出的函数需要加<code>#[is_runtime]</code>，所有导出结构体需要加<code>#[repr(C)]</code></p>
+<h2 id="jit-invalid-memory-access-issue"><a class="header" href="#jit-invalid-memory-access-issue">JIT invalid memory access issue</a></h2>
+<p>在jit模式下使用runtime函数可能会出现<code>invalid memory access</code>错误，
+这个问题本质是rust编译的时候会优化掉不使用的module，导致jit时找不到对应runtime函数。所以建议每个
+mod加一个叫做<code>reg</code>的函数，里边什么都不做，这样在需要jit测试的时候调用使用模块的<code>reg</code>函数，就不会被优化掉了。</p>
+<h2 id="使用is_runtime导出rust函数"><a class="header" href="#使用is_runtime导出rust函数">使用<code>is_runtime</code>导出rust函数</a></h2>
+<p>一个被<code>is_runtime</code>标记的rust函数在编译到静态库之后，在pivot-lang中声明对应的函数，即可像正常函数一样调用。例如：</p>
+<p>Rust:</p>
+<pre><pre class="playground"><code class="language-rust">
+<span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[is_runtime]
+fn printi64ln(i: i64) {
+    println!(&quot;{}&quot;, i);
+}
+<span class="boring">}
+</span></code></pre></pre>
+<p>Pivot Lang:</p>
+<pre><code class="language-pivot-lang">fn printi64ln(i: i64) void
+
+fn main() void {
+    printi64ln(1)
+    return
+}
+</code></pre>
+<blockquote>
+<p>！！！<strong>注意事项</strong>：<code>is_runtime</code>标记的函数不能有modifier（比如<code>pub</code>，<code>unsafe</code>），但是被<code>is_runtime</code>标记的<code>impl</code>块中的函数不受此限制。</p>
+<pre><code class="language-rust ignore">struct MyStruct;
+#[is_runtime(&quot;struct&quot;)]
+impl MyStruct {
+  pub fn myfunc1() {
+      // ...
+   }
+}
+</code></pre>
+<p>标记impl块时，导出的函数名称会变为<code>{structname}__{fnname}</code>的形式，函数允许使用receiver。更多高级用法参见<code>is_runtime</code>的rust doc</p>
+</blockquote>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="planglib"><a class="header" href="#planglib">planglib</a></h1>
+<p>planglib目录下的每一个文件夹都是一个系统模块，在编译的时候会自动被加入依赖中，不需要在配置文件中特殊配置。</p>
+<h2 id="planglib如何在编译期间被找到"><a class="header" href="#planglib如何在编译期间被找到">planglib如何在编译期间被找到</a></h2>
+<p>plc编译器在编译时会试图寻找<code>KAGARI_LIB_ROOT</code>环境变量，并且将该变量视为<code>planglib</code>的根目录</p>
+<blockquote>
+<p>不设置或错误设置<code>KAGARI_LIB_ROOT</code>环境变量可能导致无法进行编译或者代码分析</p>
+</blockquote>
+<p>如果你是plang开发者，你可以手动在<code>~/.bashrc</code>或者<code>~/.bash_profile</code>中加入以下代码：</p>
+<pre><code class="language-bash">export KAGARI_LIB_ROOT=&lt;pivot-lang project path&gt;/planglib
+</code></pre>
 
                     </main>
 

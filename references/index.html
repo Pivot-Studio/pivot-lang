@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Compiler - Pivot Lang</title>
+        <title>References - Pivot Lang</title>
                 
 
         <!-- Custom HTML head -->
@@ -82,7 +82,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="../tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="../tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="../tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="../references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="../compiler/index.html" class="active"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="../compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li></ol></li><li class="chapter-item expanded "><a href="../lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../lsp/diagnostic.html"><strong aria-hidden="true">5.1.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li class="chapter-item expanded "><a href="../systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li></ol>            </div>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="../tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="../tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="../tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="../references/index.html" class="active"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="../compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="../compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li></ol></li><li class="chapter-item expanded "><a href="../lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../lsp/diagnostic.html"><strong aria-hidden="true">5.1.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li class="chapter-item expanded "><a href="../systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li></ol>            </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
@@ -120,7 +120,7 @@
                                                                         <a href="https://github.com/Pivot-Studio/pivot-lang" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                                                                        <a href="https://github.com/Pivot-Studio/pivot-lang/master/book/src/compiler/README.md" title="Suggest an edit" aria-label="Suggest an edit">
+                                                                        <a href="https://github.com/Pivot-Studio/pivot-lang/master/book/src/references/README.md" title="Suggest an edit" aria-label="Suggest an edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
                         
@@ -149,24 +149,18 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="compiler"><a class="header" href="#compiler">Compiler</a></h1>
-<p>pivot-lang编译器（以下简称编译器）主要由三个部分组成：nom分析器、ast和llvm后端。</p>
-<h2 id="nom-parser"><a class="header" href="#nom-parser">Nom parser</a></h2>
-<p>nom parser包含了编译器的词法分析和语法分析部分。nom parser的主要功能是使用递归下降法将pivot-lang源代码转换为ast。</p>
-<h2 id="ast"><a class="header" href="#ast">AST</a></h2>
-<p>AST是抽象语法树的简称，是编译器的中间表示。AST是由nom parser生成的，它是一个树形结构，每个节点都是一个结构体，包含了节点的类型、子节点、行号、列号等信息。</p>
-<h2 id="llvm-backend"><a class="header" href="#llvm-backend">LLVM backend</a></h2>
-<p>本编译器使用llvm来生成目标代码，llvm的jit部分会被包含在我们的编译器可执行文件中，然而静态编译不行。因此静态编译相比jit会多一个llvm的依赖。</p>
+                        <h1 id="references"><a class="header" href="#references">References</a></h1>
+<p>语言功能的参考文档。</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                                                    <a rel="prev" href="../references/module.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                                    <a rel="prev" href="../tutorial/vscsupport.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
                         
-                                                    <a rel="next" href="../compiler/parser.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                                    <a rel="next" href="../references/module.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
                         
@@ -176,11 +170,11 @@
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                                    <a rel="prev" href="../references/module.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                    <a rel="prev" href="../tutorial/vscsupport.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
                 
-                                    <a rel="next" href="../compiler/parser.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                    <a rel="next" href="../references/module.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
                             </nav>

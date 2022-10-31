@@ -82,7 +82,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Getting Started</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Tutorial</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> basic project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> vsc support</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the compiler works internally</li><li class="chapter-item expanded "><a href="compiler/index.html"><strong aria-hidden="true">3.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compiler/parser.html"><strong aria-hidden="true">3.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="compiler/ast.html"><strong aria-hidden="true">3.2.</strong> AST</a></li></ol></li></ol>            </div>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li></ol></li><li class="chapter-item expanded "><a href="lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lsp/diagnostic.html"><strong aria-hidden="true">5.1.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li class="chapter-item expanded "><a href="systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li></ol>            </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
@@ -160,6 +160,9 @@
 <li><a href="https://github.com/llvm/llvm-project/releases/tag/llvmorg-14.0.6">llvm-14</a></li>
 <li><a href="https://www.rust-lang.org/">rust</a></li>
 </ul>
+<p><strong>重要</strong>：如果你想参与开发，请先使用release模式编译项目的vm目录，然后在你的<code>~/.bashrc</code>或者<code>～/.bash_profile</code>中添加如下代码：</p>
+<pre><code class="language-bash">export KAGARI_LIB_ROOT=&lt;pivot-lang project path&gt;/planglib
+</code></pre>
 <h2 id="特点"><a class="header" href="#特点">特点</a></h2>
 <ul>
 <li>同时支持aot和jit两种模式</li>
@@ -257,31 +260,42 @@ ast错误容忍</li>
 </ul>
 <h2 id="grammar"><a class="header" href="#grammar">grammar</a></h2>
 <pre><code class="language-ebnf">add_exp = 
-    | mul_exp (&quot;+&quot; | &quot;-&quot; mul_exp)*
+    | mul_exp (&quot;+&quot; | &quot;-&quot; add_exp)?
     ;
 
 mul_exp = 
-    | unary_exp (&quot;*&quot;｜&quot;/&quot; unary_exp)*
+    | unary_exp (&quot;*&quot;｜&quot;/&quot; mul_exp)?
     ;
 
 unary_exp =
-    | take_exp
-    | (&quot;-&quot; | &quot;!&quot; | &quot;&amp;&quot;) take_exp
+    | pointer_exp
+    | (&quot;-&quot; | &quot;!&quot;) pointer_exp
     ;
 
-take_exp =
-    | primary_exp (&quot;.&quot; identifier)*
-    ;
+
+pointer_exp = (&quot;&amp;&quot;|&quot;*&quot;)* complex_exp;
+
+complex_exp = primary_exp (take_exp_op|array_element_op|call_function_op)*;
+
+take_exp_op = (&quot;.&quot; identifier) ;
+
+array_element_op = ('[' logic_exp ']') ;
+
+call_function_op = (&quot;(&quot; (logic_exp (&quot;,&quot;logic_exp)*)? &quot;)&quot;) ;
 
 primary_exp =
     | number
     | bool_const
     | &quot;(&quot; logic_exp &quot;)&quot;
     | extern_identifier
-    | struct_init
-    | call_function
+    | struct_init_exp
     ;
 
+number = [0-9]+ (&quot;.&quot; number)? ;
+
+identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
+
+extern_identifier = (identifier &quot;::&quot;)* identifier ;
 
 bool_const =
     | &quot;true&quot;
@@ -295,6 +309,10 @@ compare_exp =
 logic_exp = 
     | compare_exp ((&quot;&amp;&amp;&quot;｜&quot;||&quot;) compare_exp)*
     ;
+
+struct_init_exp = type_name &quot;{&quot; struct_init_exp_field &quot;}&quot; ;
+
+struct_init_exp_field = identifier &quot;:&quot; logic_exp &quot;,&quot; ;
 
 assignee = identifier (&quot;.&quot; identifier)*;
 
@@ -327,7 +345,7 @@ statement =
     | while_statement
     | break_statement
     | continue_statement
-    | function_call
+    | complex_exp &quot;;&quot;
     ;
 
 toplevel_statement = 
@@ -339,32 +357,19 @@ toplevel_statement =
 
 program = toplevel_statement* ;
 
-
-number = [0-9]+ | number &quot;.&quot; number ;
-
-identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
-
 function_def = &quot;fn&quot; identifier &quot;(&quot; (typed_identifier (&quot;,&quot;typed_identifier)*)? &quot;)&quot; type_name (statement_block | &quot;;&quot;) ;
-
-call_function = extern_identifier &quot;(&quot; (logic_exp (&quot;,&quot;logic_exp)*)? &quot;)&quot; ;
 
 struct_def = &quot;struct&quot; identifier &quot;{&quot; struct_field* &quot;}&quot; ;
 
-type_name = (&quot;&amp;&quot;)? identifier ;
+type_name = extern_identifier ;
 
 typed_identifier = identifier &quot;:&quot; type_name ;
 
 struct_field = typed_identifier &quot;;&quot; ;
 
-struct_init = type_name &quot;{&quot; struct_init_field &quot;}&quot; ;
-
-struct_init_field = identifier &quot;:&quot; logic_exp &quot;,&quot; ;
-
 return_statement = &quot;return&quot; logic_exp &quot;;&quot; ;
 
 use_statement = &quot;use&quot; identifier (&quot;::&quot; identifier)* &quot;;&quot; ;
-
-extern_identifier = (identifier &quot;::&quot;)* ;
 
 </code></pre>
 
