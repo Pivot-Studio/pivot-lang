@@ -152,6 +152,22 @@ fn test_loop() void {
     }
     return;
 }
+struct A {
+    x:i64;
+}
+fn ret_atruct() A {
+    return A{x:10000,};
+}
+fn ret_arr() [i64*3] {
+    return [1,10000,3,];
+}
+fn test_ret_struct_arr() void {
+    let s = ret_atruct().x;
+    io::printi64ln(s);
+    let a = ret_arr()[1];
+    io::printi64ln(a);
+    return;
+}
 fn main() i64 {
     let a1 = [[[1,2,],[1,2,],],];
     io::printi64ln(a1[0][0][0]);
@@ -167,6 +183,7 @@ fn main() i64 {
     printline();
     test_mod_struct();
     test_loop();
+    test_ret_struct_arr();
     test_gc();
     let st = test_ret_struct();
     io::printi64ln(st.a);

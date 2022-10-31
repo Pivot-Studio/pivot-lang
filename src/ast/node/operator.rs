@@ -27,35 +27,48 @@ impl Node for UnaryOpNode {
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let (exp, pltype, _, is_const) = self.exp.emit(ctx)?;
-        let exp = ctx.try_load2var(exp);
-        return Ok(match (exp, self.op) {
-            (Value::IntValue(exp), TokenType::MINUS) => (
-                Value::IntValue(ctx.builder.build_int_neg(exp, "negtmp")),
-                pltype,
+        let exp_range = self.exp.range();
+        let (exp, pltype, _) = self.exp.emit(ctx)?;
+        if pltype.is_none() {
+            return Err(ctx.add_err(self.range, ErrorCode::INVALID_UNARY_EXPRESSION));
+        }
+        let pltype = pltype.unwrap();
+        let exp = ctx.try_load2var(exp_range, exp.unwrap())?;
+        return Ok(match (&pltype, self.op) {
+            (PLType::PRIMITIVE(PriType::I64), TokenType::MINUS) => (
+                Some(
+                    ctx.builder
+                        .build_int_neg(exp.into_int_value(), "negtmp")
+                        .into(),
+                ),
+                Some(pltype),
                 TerminatorEnum::NONE,
-                is_const,
             ),
-            (Value::FloatValue(exp), TokenType::MINUS) => (
-                Value::FloatValue(ctx.builder.build_float_neg(exp, "negtmp")),
-                pltype,
+            (PLType::PRIMITIVE(PriType::F64), TokenType::MINUS) => (
+                Some(
+                    ctx.builder
+                        .build_float_neg(exp.into_float_value(), "negtmp")
+                        .into(),
+                ),
+                Some(pltype),
                 TerminatorEnum::NONE,
-                is_const,
             ),
-            (Value::BoolValue(exp), TokenType::NOT) => (
-                Value::BoolValue({
+            (PLType::PRIMITIVE(PriType::BOOL), TokenType::NOT) => (
+                {
                     let bool_origin = ctx.builder.build_int_compare(
                         IntPredicate::EQ,
-                        exp,
+                        exp.into_int_value(),
                         ctx.context.i8_type().const_int(false as u64, true),
                         "nottmp",
                     );
-                    ctx.builder
-                        .build_int_z_extend(bool_origin, ctx.context.i8_type(), "zexttemp")
-                }),
-                pltype,
+                    Some(
+                        ctx.builder
+                            .build_int_z_extend(bool_origin, ctx.context.i8_type(), "zexttemp")
+                            .into(),
+                    )
+                },
+                Some(pltype),
                 TerminatorEnum::NONE,
-                is_const,
             ),
             (_exp, _op) => {
                 return Err(ctx.add_err(self.range, ErrorCode::INVALID_UNARY_EXPRESSION));
@@ -82,10 +95,11 @@ impl Node for BinOpNode {
         self.right.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let (lv, lpltype, _, _) = self.left.emit(ctx)?;
-        let left = ctx.try_load2var(lv);
-        let (rv, rpltype, _, _) = self.right.emit(ctx)?;
-        let right = ctx.try_load2var(rv);
+        let (lrange, rrange) = (self.left.range(), self.right.range());
+        let (lv, lpltype, _) = self.left.emit(ctx)?;
+        let left = ctx.try_load2var(lrange, lv.unwrap())?;
+        let (rv, rpltype, _) = self.right.emit(ctx)?;
+        let right = ctx.try_load2var(rrange, rv.unwrap())?;
         if lpltype != rpltype {
             return Err(ctx.add_err(
                 self.range,
@@ -93,45 +107,57 @@ impl Node for BinOpNode {
             ));
         }
         Ok(match self.op {
-            TokenType::PLUS => handle_calc!(ctx, add, float_add, left, right, self.range),
-            TokenType::MINUS => handle_calc!(ctx, sub, float_sub, left, right, self.range),
-            TokenType::MUL => handle_calc!(ctx, mul, float_mul, left, right, self.range),
-            TokenType::DIV => handle_calc!(ctx, signed_div, float_div, left, right, self.range),
+            TokenType::PLUS => {
+                handle_calc!(ctx, add, float_add, lpltype, left, right, self.range)
+            }
+            TokenType::MINUS => {
+                handle_calc!(ctx, sub, float_sub, lpltype, left, right, self.range)
+            }
+            TokenType::MUL => {
+                handle_calc!(ctx, mul, float_mul, lpltype, left, right, self.range)
+            }
+            TokenType::DIV => {
+                handle_calc!(ctx, signed_div, float_div, lpltype, left, right, self.range)
+            }
             TokenType::EQ
             | TokenType::NE
             | TokenType::LEQ
             | TokenType::GEQ
             | TokenType::GREATER
-            | TokenType::LESS => match (left, right) {
-                (Value::IntValue(lhs), Value::IntValue(rhs)) => (
-                    Value::BoolValue({
-                        let bool_origin =
+            | TokenType::LESS => match lpltype.unwrap() {
+                PLType::PRIMITIVE(PriType::I64) => (
+                    {
+                        let bool_origin = ctx.builder.build_int_compare(
+                            self.op.get_op(),
+                            left.into_int_value(),
+                            right.into_int_value(),
+                            "cmptmp",
+                        );
+                        Some(
                             ctx.builder
-                                .build_int_compare(self.op.get_op(), lhs, rhs, "cmptmp");
-                        ctx.builder.build_int_z_extend(
-                            bool_origin,
-                            ctx.context.i8_type(),
-                            "zexttemp",
+                                .build_int_z_extend(bool_origin, ctx.context.i8_type(), "zexttemp")
+                                .into(),
                         )
-                    }),
-                    Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
+                    },
+                    Some(PLType::PRIMITIVE(PriType::BOOL)),
                     TerminatorEnum::NONE,
-                    true,
                 ),
-                (Value::FloatValue(lhs), Value::FloatValue(rhs)) => (
-                    Value::BoolValue({
-                        let bool_origin =
+                PLType::PRIMITIVE(PriType::F64) => (
+                    {
+                        let bool_origin = ctx.builder.build_float_compare(
+                            self.op.get_fop(),
+                            left.into_float_value(),
+                            right.into_float_value(),
+                            "cmptmp",
+                        );
+                        Some(
                             ctx.builder
-                                .build_float_compare(self.op.get_fop(), lhs, rhs, "cmptmp");
-                        ctx.builder.build_int_z_extend(
-                            bool_origin,
-                            ctx.context.i8_type(),
-                            "zexttemp",
+                                .build_int_z_extend(bool_origin, ctx.context.i8_type(), "zexttemp")
+                                .into(),
                         )
-                    }),
-                    Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
+                    },
+                    Some(PLType::PRIMITIVE(PriType::BOOL)),
                     TerminatorEnum::NONE,
-                    true,
                 ),
                 _ => {
                     return Err(ctx.add_err(
@@ -140,19 +166,22 @@ impl Node for BinOpNode {
                     ))
                 }
             },
-            TokenType::AND => match (left, right) {
-                (Value::BoolValue(lhs), Value::BoolValue(rhs)) => (
-                    Value::BoolValue({
-                        let bool_origin = ctx.builder.build_and(lhs, rhs, "andtmp");
-                        ctx.builder.build_int_z_extend(
-                            bool_origin,
-                            ctx.context.i8_type(),
-                            "zext_temp",
+            TokenType::AND => match lpltype.unwrap() {
+                PLType::PRIMITIVE(PriType::BOOL) => (
+                    {
+                        let bool_origin = ctx.builder.build_and(
+                            left.into_int_value(),
+                            right.into_int_value(),
+                            "andtmp",
+                        );
+                        Some(
+                            ctx.builder
+                                .build_int_z_extend(bool_origin, ctx.context.i8_type(), "zext_temp")
+                                .into(),
                         )
-                    }),
-                    Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
+                    },
+                    Some(PLType::PRIMITIVE(PriType::BOOL)),
                     TerminatorEnum::NONE,
-                    true,
                 ),
                 _ => {
                     return Err(
@@ -160,19 +189,22 @@ impl Node for BinOpNode {
                     )
                 }
             },
-            TokenType::OR => match (left, right) {
-                (Value::BoolValue(lhs), Value::BoolValue(rhs)) => (
-                    Value::BoolValue({
-                        let bool_origin = ctx.builder.build_or(lhs, rhs, "ortmp");
-                        ctx.builder.build_int_z_extend(
-                            bool_origin,
-                            ctx.context.i8_type(),
-                            "zext_temp",
+            TokenType::OR => match lpltype.unwrap() {
+                PLType::PRIMITIVE(PriType::BOOL) => (
+                    {
+                        let bool_origin = ctx.builder.build_or(
+                            left.into_int_value(),
+                            right.into_int_value(),
+                            "ortmp",
+                        );
+                        Some(
+                            ctx.builder
+                                .build_int_z_extend(bool_origin, ctx.context.i8_type(), "zext_temp")
+                                .into(),
                         )
-                    }),
-                    Some(PLType::PRIMITIVE(PriType::try_from_str("bool").unwrap())),
+                    },
+                    Some(PLType::PRIMITIVE(PriType::BOOL)),
                     TerminatorEnum::NONE,
-                    true,
                 ),
                 _ => {
                     return Err(
@@ -210,14 +242,14 @@ impl Node for TakeOpNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let head = self.head.emit(ctx)?;
-        let (mut res, pltype, _, is_const) = head;
+        let (mut res, pltype, _) = head;
         if pltype.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::INVALID_GET_FIELD));
         }
         let mut pltype = pltype.unwrap();
         if let Some(id) = &self.field {
-            res = match res.as_basic_value_enum() {
-                BasicValueEnum::PointerValue(s) => {
+            res = match res.unwrap() {
+                AnyValueEnum::PointerValue(s) => {
                     let etype = s.get_type().get_element_type();
                     let index;
                     if etype.is_struct_type() {
@@ -254,7 +286,12 @@ impl Node for TakeOpNode {
                     } else {
                         return Err(ctx.add_err(id.range, ErrorCode::INVALID_GET_FIELD));
                     }
-                    Value::VarValue(ctx.builder.build_struct_gep(s, index, "structgep").unwrap())
+                    Some(
+                        ctx.builder
+                            .build_struct_gep(s, index, "structgep")
+                            .unwrap()
+                            .into(),
+                    )
                 }
                 _ => return Err(ctx.add_err(id.range, ErrorCode::ILLEGAL_GET_FIELD_OPERATION)),
             }
@@ -272,6 +309,6 @@ impl Node for TakeOpNode {
             });
             return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
         }
-        Ok((res, Some(pltype.clone()), TerminatorEnum::NONE, is_const))
+        Ok((res, Some(pltype.clone()), TerminatorEnum::NONE))
     }
 }

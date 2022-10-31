@@ -1,4 +1,4 @@
-use crate::ast::node::{alloc, Value};
+use crate::ast::node::alloc;
 use crate::lsp::semantic_tokens::type_index;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::utils::read_config::Config;
@@ -18,10 +18,10 @@ use inkwell::types::BasicTypeEnum;
 use inkwell::types::FunctionType;
 use inkwell::types::StructType;
 use inkwell::types::VoidType;
-use inkwell::values::BasicMetadataValueEnum;
 use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
+use inkwell::values::{AnyValueEnum, BasicMetadataValueEnum};
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::Diagnostic;
@@ -359,19 +359,6 @@ pub enum PLType {
     NAMESPACE(Mod),
 }
 
-fn pri_ty<'ctx>(s: &str, ctx: &'ctx Context) -> BasicTypeEnum<'ctx> {
-    match s {
-        "i32" => ctx.i32_type().as_basic_type_enum(),
-        "i64" => ctx.i64_type().as_basic_type_enum(),
-        "i8" | "bool" => ctx.i8_type().as_basic_type_enum(),
-        "i16" => ctx.i16_type().as_basic_type_enum(),
-        "i1" => ctx.bool_type().as_basic_type_enum(),
-        "f32" => ctx.f32_type().as_basic_type_enum(),
-        "f64" => ctx.f64_type().as_basic_type_enum(),
-        _ => panic!("unknown type {}", s),
-    }
-}
-
 pub fn init_arr<'a, 'ctx>(ptr: PointerValue<'ctx>, ctx: &mut Ctx<'a, 'ctx>) {
     if !ptr.get_type().get_element_type().is_array_type() {
         return;
@@ -394,25 +381,45 @@ pub fn init_arr<'a, 'ctx>(ptr: PointerValue<'ctx>, ctx: &mut Ctx<'a, 'ctx>) {
 /// # PriType
 /// Primitive type for pivot-lang
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PriType {
+pub enum PriType {
     // basetype: BasicTypeEnum<'ctx>,
-    id: String,
+    I64,
+    F64,
+    BOOL,
 }
 impl PriType {
     pub fn get_basic_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> BasicTypeEnum<'ctx> {
-        pri_ty(&self.id, ctx.context)
+        match self {
+            PriType::I64 => ctx.context.i64_type().as_basic_type_enum(),
+            PriType::F64 => ctx.context.f64_type().as_basic_type_enum(),
+            PriType::BOOL => ctx.context.i8_type().as_basic_type_enum(),
+        }
     }
-    pub fn try_from_str(s: &str) -> Option<Self> {
-        match s {
-            "i32" | "i64" | "i8" | "bool" | "i16" | "i1" | "f32" | "f64" => {
-                Some(PriType { id: s.to_string() })
-            }
+    pub fn get_name(&self) -> String {
+        match self {
+            PriType::I64 => String::from("i64"),
+            PriType::F64 => String::from("f64"),
+            PriType::BOOL => String::from("i32"),
+        }
+    }
+    pub fn try_from_str(str: &str) -> Option<Self> {
+        match str {
+            "i64" => Some(PriType::I64),
+            "f64" => Some(PriType::F64),
+            "bool" => Some(PriType::BOOL),
             _ => None,
         }
     }
 }
 
 impl PLType {
+    pub fn is(self, pri_type: PriType) -> bool {
+        if let PLType::PRIMITIVE(pri) = self {
+            pri == pri_type
+        } else {
+            false
+        }
+    }
     /// # get_refs
     /// get the references of the type
     /// used in find references
@@ -440,7 +447,7 @@ impl PLType {
         match self {
             PLType::FN(fu) => Some(fu.name.clone()),
             PLType::STRUCT(st) => Some(st.name.clone()),
-            PLType::PRIMITIVE(pri) => Some(pri.id.clone()),
+            PLType::PRIMITIVE(pri) => Some(pri.get_name()),
             PLType::ARR(_) => None,
             PLType::VOID => Some("void".to_string()),
             PLType::NAMESPACE(_) => None,
@@ -551,7 +558,7 @@ impl PLType {
                 return Some(
                     ctx.dibuilder
                         .create_basic_type(
-                            &pt.id,
+                            &pt.get_name(),
                             td.get_bit_size(&self.get_basic_type(ctx)),
                             get_dw_ate_encoding(&self.get_basic_type(ctx)),
                             DIFlags::PUBLIC,
@@ -729,23 +736,17 @@ impl STType {
 }
 
 fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
-    let pltype_i64 = PLType::PRIMITIVE(PriType {
-        id: "i64".to_string(),
-    });
+    let pltype_i64 = PLType::PRIMITIVE(PriType::I64);
     ctx.plmod
         .types
         .insert("i64".to_string(), pltype_i64.clone());
 
-    let pltype_f64 = PLType::PRIMITIVE(PriType {
-        id: "f64".to_string(),
-    });
+    let pltype_f64 = PLType::PRIMITIVE(PriType::F64);
     ctx.plmod
         .types
         .insert("f64".to_string(), pltype_f64.clone());
 
-    let pltype_bool = PLType::PRIMITIVE(PriType {
-        id: "bool".to_string(),
-    });
+    let pltype_bool = PLType::PRIMITIVE(PriType::BOOL);
     ctx.plmod
         .types
         .insert("bool".to_string(), pltype_bool.clone());
@@ -1017,42 +1018,26 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn add_diag(&mut self, dia: PLDiag) {
         self.errs.borrow_mut().push(dia);
     }
-    // load type** and type* to type
-    pub fn try_load2var(&mut self, v: Value<'ctx>) -> Value<'ctx> {
-        let basic_value_op = v.as_basic_value_enum_op();
-        if basic_value_op.is_none() {
-            return Value::None;
-        }
-        match basic_value_op.unwrap() {
-            BasicValueEnum::IntValue(v) => match v.get_type().get_bit_width() {
-                8 => Value::BoolValue(v),
-                64 => Value::IntValue(v),
-                _ => todo!(),
-            },
-            BasicValueEnum::FloatValue(v) => Value::FloatValue(v),
-            BasicValueEnum::PointerValue(ptr2v) => {
-                let loadv = self.builder.build_load(ptr2v, "loadtmp");
-                self.try_load2var(Value::LoadValue(loadv))
-            }
-            _ => v,
-        }
-    }
-
-    // load type** and type* to type*
-    pub fn try_load2ptr(&mut self, v: Value<'ctx>) -> Value<'ctx> {
-        match v.as_basic_value_enum() {
-            BasicValueEnum::PointerValue(ptr2value) => {
-                if ptr2value.get_type().get_element_type().is_pointer_type() {
-                    let value = self.builder.build_load(ptr2value, "loadtmp");
-                    Value::VarValue(value.into_pointer_value())
-                } else {
-                    Value::VarValue(ptr2value)
-                }
-            }
-            _ => v,
+    // load type* to type
+    pub fn try_load2var(
+        &mut self,
+        range: Range,
+        v: AnyValueEnum<'ctx>,
+    ) -> Result<BasicValueEnum<'ctx>, PLDiag> {
+        if !v.is_pointer_value() {
+            return Ok(match v {
+                AnyValueEnum::ArrayValue(v) => v.into(),
+                AnyValueEnum::IntValue(v) => v.into(),
+                AnyValueEnum::FloatValue(v) => v.into(),
+                AnyValueEnum::PointerValue(v) => v.into(),
+                AnyValueEnum::StructValue(v) => v.into(),
+                AnyValueEnum::VectorValue(v) => v.into(),
+                _ => return Err(self.add_err(range, ErrorCode::EXPECT_VALUE)),
+            });
+        } else {
+            Ok(self.builder.build_load(v.into_pointer_value(), "loadtmp"))
         }
     }
-
     pub fn if_completion(&mut self, c: impl FnOnce(&mut Ctx, &(Pos, Option<String>))) {
         if let Some(tp) = self.action {
             if let Some(comp) = &self.lspparams {

@@ -66,7 +66,7 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
 /// struct_init_field = identifier ":" logic_exp "," ;
 /// ```
 /// special: del newline or space
-fn struct_init_field(input: Span) -> IResult<Span, Box<NodeEnum>> {
+fn struct_init_field(input: Span) -> IResult<Span, Box<StructInitFieldNode>> {
     del_newline_or_space!(map_res(
         tuple((
             identifier,
@@ -76,15 +76,12 @@ fn struct_init_field(input: Span) -> IResult<Span, Box<NodeEnum>> {
         )),
         |(id, _, exp, has_comma)| {
             let range = id.range.start.to(exp.range().end);
-            res_enum(
-                StructInitFieldNode {
-                    id: *id,
-                    exp,
-                    range,
-                    has_comma: has_comma.is_some(),
-                }
-                .into(),
-            )
+            Ok::<_, Error>(Box::new(StructInitFieldNode {
+                id: *id,
+                exp,
+                range,
+                has_comma: has_comma.is_some(),
+            }))
         },
     ))(input)
 }

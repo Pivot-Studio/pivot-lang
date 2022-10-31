@@ -9,7 +9,7 @@ use crate::ast::{
     node::{deal_line, tab},
 };
 
-use super::{primary::VarNode, Node, NodeResult, TerminatorEnum, Value};
+use super::{primary::VarNode, Node, NodeResult, TerminatorEnum};
 
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -113,7 +113,7 @@ impl Node for UseNode {
         if !self.complete {
             return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
         }
-        Ok((Value::None, None, TerminatorEnum::NONE, false))
+        Ok((None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -186,10 +186,9 @@ impl ExternIDNode {
 
             let g = ctx.get_or_add_global(&self.id.name, &plmod, symbol.tp.clone());
             return Ok((
-                Value::VarValue(g),
+                Some(g.into()),
                 Some(symbol.tp.clone()),
                 TerminatorEnum::NONE,
-                true,
             ));
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
@@ -199,20 +198,14 @@ impl ExternIDNode {
                 PLType::FN(f) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
                     Ok((
-                        Value::FnValue(f.get_value(ctx)),
+                        Some(f.get_value(ctx).into()),
                         Some(tp),
                         TerminatorEnum::NONE,
-                        true,
                     ))
                 }
-                PLType::STRUCT(s) => {
+                PLType::STRUCT(_) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
-                    Ok((
-                        Value::STValue(s.struct_type(ctx)),
-                        Some(tp),
-                        TerminatorEnum::NONE,
-                        true,
-                    ))
+                    Ok((None, Some(tp), TerminatorEnum::NONE))
                 }
                 _ => unreachable!(),
             };
