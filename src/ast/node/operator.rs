@@ -256,7 +256,7 @@ impl Node for TakeOpNode {
                     }
                     Value::VarValue(ctx.builder.build_struct_gep(s, index, "structgep").unwrap())
                 }
-                _ => panic!("not implemented {:?}", res),
+                _ => return Err(ctx.add_err(id.range, ErrorCode::ILLEGAL_GET_FIELD_OPERATION)),
             }
         }
         if self.field.is_none() {

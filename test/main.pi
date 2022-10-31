@@ -168,6 +168,8 @@ fn main() i64 {
     test_mod_struct();
     test_loop();
     test_gc();
+    let st = test_ret_struct();
+    io::printi64ln(st.a);
     return 0;
 }
 
@@ -175,4 +177,8 @@ fn test_vm_link() i64;
 fn printline() void {
     io::printi64ln(100000000);
     return;
+}
+
+fn test_ret_struct() struct_child {
+    return struct_child{a:10,};
 }
