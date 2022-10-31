@@ -17,3 +17,5 @@
 - [Language Server](./lsp/README.md)
   - [Diagnostic](./lsp/diagnostic.md)
 - [System library](./systemlib/README.md)
+  - [vm](./systemlib/vm.md)
+  - [planglib](./systemlib/planglib.md)
