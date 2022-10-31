@@ -9,13 +9,13 @@
 所有的节点都必须实现`Node` trait，这个trait定义了节点的基本行为。  
 
 ```rust,no_run,noplayground
-{{#include ../../../src/ast/node/mod.rs:139:143}}
+{{#include ../../../src/ast/node/mod.rs:node}}
 ```
 
 你可能注意到了，`Node`trait继承了`RangeTrait`，这个trait定义了节点的位置信息。  
 
 ```rust,no_run,noplayground
-{{#include ../../../src/ast/node/mod.rs:134:137}}
+{{#include ../../../src/ast/node/mod.rs:range}}
 ```
 一般来说，`RangeTrait`的实现通过`#[range]`宏来自动生成，你不需要手动实现它。  
 
@@ -23,7 +23,7 @@
 格式化输出。以`ifnode`的`print`函数为例：  
 
 ```rust
-{{#include ../../../src/ast/node/control.rs:16:27}}
+{{#include ../../../src/ast/node/control.rs:print}}
 ```  
 
 `emit`函数是生成llvm代码的核心，它会调用llvm api构造自己对应的llvm ir。在编译的时候，最上层节点的`emit`会被调用，
@@ -31,11 +31,51 @@
 下方是`ifnode`的`emit`函数：  
 
 ```rust,no_run,noplayground
-{{#include ../../../src/ast/node/control.rs:28:84}}
+{{#include ../../../src/ast/node/control.rs:emit}}
 ```
 
 emit函数的参数是节点自身，第二个参数是编译上下文。编译上下文中会包含一些需要透传的信息，比如符号表，llvmbuilder，lsp参数等。  
 
 
 ## 打印AST结构
-TODO
+
+plc命令行工具有打印ast的功能，你可以使用`plc xxx.pi --printast`命令来打印ast结构。  
+下方是一个ast打印结果的样例：
+
+```ast
+...
+file: /Users/bobli/src/pivot-lang/test/sub/mod.pi
+ProgramNode
+ └─ FuncDefNode
+     ├─ id: name
+     ├─ TypeNameNode
+     │   └─ ExternIDNode
+     │       └─ VarNode: void
+     └─ StatementsNode
+         └─ RetNode
+file: /Users/bobli/src/pivot-lang/test/mod2.pi
+ProgramNode
+ ├─ UseNode
+ │   ├─ VarNode: sub
+ │   └─ VarNode: mod
+ ├─ FuncDefNode
+ │   ├─ id: test_mod
+ │   ├─ TypedIdentifierNode
+ │   │   ├─ id: args
+ │   │   └─ TypeNameNode
+ │   │       └─ ExternIDNode
+ │   │           └─ VarNode: i64
+ │   ├─ TypeNameNode
+ │   │   └─ ExternIDNode
+ │   │       └─ VarNode: void
+ │   └─ StatementsNode
+ │       └─ RetNode
+ └─ StructDefNode
+     ├─ id: Mod2
+     └─ TypedIdentifierNode
+         ├─ id: y
+         └─ TypeNameNode
+             └─ ExternIDNode
+                 └─ VarNode: bool
+...
+```

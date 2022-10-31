@@ -58,6 +58,7 @@ define_error!(
     STRUCT_FIELD_TYPE_NOT_MATCH = "struct field type not match",
     MISSING_SEMI = "missing semicolon",
     EXPECT_TYPE = "expect type",
+    EXPECT_VALUE = "expect value",
     REDEFINE_SYMBOL = "redefine symbol",
     SYMBOL_NOT_FOUND = "symbol not found",
     UNRESOLVED_MODULE = "unresolved module",
@@ -66,7 +67,9 @@ define_error!(
     CANNOT_INDEX_NON_ARRAY = "cannot index non array type",
     ARRAY_INDEX_MUST_BE_INT = "array index must be int",
     ARRAY_INDEX_OUT_OF_BOUNDS = "array index out of bounds",
-    SIZE_MUST_BE_INT = "size must be int"
+    SIZE_MUST_BE_INT = "size must be int",
+    TYPE_MISMATCH = "mismatch",
+    ILLEGAL_GET_FIELD_OPERATION = "illegal get field operation"
 );
 macro_rules! define_warn {
     ($(

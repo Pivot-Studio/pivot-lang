@@ -12,3 +12,4 @@ test.cpp
 *.plist
 out.*
 *.html
+*.asm

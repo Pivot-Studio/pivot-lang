@@ -188,6 +188,10 @@ impl SemanticTokensBuilder {
             }
         }
 
+        if range.end.character < range.start.character {
+            return;
+        }
+
         // A token cannot be multiline
         let token_len = range.end.character - range.start.character;
 

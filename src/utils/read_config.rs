@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 use rustc_hash::FxHashMap;
 use serde::Deserialize;
@@ -62,6 +62,35 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     if let Err(re) = re {
         return Err(format!("配置文件解析错误:{:?}", re));
     }
-    let config: Config = re.unwrap();
+    let mut config: Config = re.unwrap();
+    let libroot = env::var("KAGARI_LIB_ROOT");
+    if libroot.is_err() {
+        return Err("未设置环境变量KAGARI_LIB_ROOT，无法找到系统库".to_string());
+    }
+    let mut deps = FxHashMap::<String, Dependency>::default();
+    let libroot = PathBuf::from(libroot.unwrap());
+    let libroot = libroot.read_dir();
+    if libroot.is_err() {
+        return Err("KAGARI_LIB_ROOT没有指向合法的目录，无法找到系统库".to_string());
+    }
+    let libroot = libroot.unwrap();
+    for x in libroot {
+        if let Ok(path) = x {
+            if path.path().is_dir() {
+                let mut dep = Dependency::default();
+                dep.path = path.path().to_str().unwrap().to_string();
+                deps.insert(path.file_name().to_str().unwrap().to_string(), dep);
+            }
+        }
+    }
+    if config.deps.is_none() {
+        config.deps = Some(deps);
+    } else {
+        let mut rawdeps = config.deps.unwrap();
+        for (k, v) in rawdeps.iter_mut() {
+            deps.insert(k.clone(), v.clone());
+        }
+        config.deps = Some(deps);
+    }
     Ok(config)
 }

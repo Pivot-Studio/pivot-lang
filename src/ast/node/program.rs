@@ -57,15 +57,9 @@ impl Node for ProgramNode {
                 }
             }
             if i == 0 {
-                ctx.errs.borrow_mut().clear();
                 break;
             }
             if i == prev {
-                self.structs.iter().for_each(|x| {
-                    if let Err(e) = x.emit_struct_def(ctx) {
-                        ctx.add_diag(e);
-                    }
-                });
                 break;
             }
             prev = i;
@@ -97,7 +91,7 @@ impl Node for ProgramNode {
             _ = x.emit(ctx);
         });
 
-        Ok((Value::None, None, TerminatorEnum::NONE, false))
+        Ok((None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -132,12 +126,14 @@ impl Program {
             let mut path = PathBuf::from(self.config(db).root);
             let mut config = self.config(db);
             let mut start = 0;
+            // 加载依赖包的路径
             if let Some(cm) = self.config(db).deps {
+                // 如果use的是依赖包
                 if let Some(dep) = cm.get(&u.ids[0].name) {
-                    path = PathBuf::from(dep.path.clone());
+                    path = path.join(&dep.path);
                     let input = FileCompileInput::new(
                         db,
-                        path.join("/Kagari.toml")
+                        path.join("Kagari.toml")
                             .clone()
                             .to_str()
                             .unwrap()
@@ -156,6 +152,7 @@ impl Program {
                         continue;
                     }
                     config = re.unwrap();
+                    config.root = path.to_str().unwrap().to_string();
 
                     start = 1;
                 }
@@ -283,6 +280,10 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let pp = Path::new(&hashed).with_extension("bc");
         let p = pp.as_path();
         ctx.module.write_bitcode_to_path(p);
+        // _= fs::write(
+        //     Path::new(&hashed).with_extension("ll"),
+        //     ctx.module.print_to_string().to_string(),
+        // );
         ModBuffer::push(db, p.clone().to_path_buf());
     }
     ModWrapper::new(db, ctx.plmod)

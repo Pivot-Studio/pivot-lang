@@ -2,7 +2,7 @@ use super::*;
 use crate::ast::ctx::{init_arr, Ctx};
 use crate::ast::diag::{ErrorCode, WarnCode};
 use inkwell::debug_info::*;
-use inkwell::types::{AnyType, BasicType};
+use inkwell::types::BasicType;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 #[range]
@@ -28,6 +28,7 @@ impl Node for DefNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let range = self.range();
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
         if let Some(tp) = &self.tp {
             let pltype = tp.get_type(ctx)?;
@@ -48,7 +49,7 @@ impl Node for DefNode {
                     if re.is_err() {
                         return Err(re.unwrap_err());
                     }
-                    return Ok((Value::None, None, TerminatorEnum::NONE, false));
+                    return Ok((None, None, TerminatorEnum::NONE));
                 }
                 PLType::PRIMITIVE(p) => {
                     let tp = p.get_basic_type(ctx);
@@ -63,28 +64,27 @@ impl Node for DefNode {
                     if re.is_err() {
                         return Err(re.unwrap_err());
                     }
-                    return Ok((Value::None, None, TerminatorEnum::NONE, false));
+                    return Ok((None, None, TerminatorEnum::NONE));
                 }
                 PLType::VOID => todo!(),
                 PLType::NAMESPACE(_) => todo!(),
             };
         }
 
-        let exp_range = self.exp.as_ref().unwrap().range();
-        let (value, pltype_opt, _, _) = self.exp.as_mut().unwrap().emit(ctx)?;
+        let (value, pltype_opt, _) = self.exp.as_mut().unwrap().emit(ctx)?;
         // for err tolerate
         if pltype_opt.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
+        }
+        if value.is_none() {
+            return Err(ctx.add_err(self.range, ErrorCode::EXPECT_VALUE));
         }
         let pltype = pltype_opt.unwrap();
         let ditype = pltype.get_ditype(ctx);
         let (base_value, debug_type) = {
             let ditype = ditype.clone();
-            let loadv = ctx.try_load2var(value);
-            if let Value::None = loadv {
-                return Err(ctx.add_err(exp_range, ErrorCode::UNDEFINED_TYPE));
-            }
-            (loadv.as_basic_value_enum(), ditype)
+            let loadv = ctx.try_load2var(range, value.unwrap())?;
+            (loadv, ditype)
         };
         let base_type = base_value.get_type();
         let ptr2value = alloc(ctx, base_type, &self.var.name);
@@ -106,18 +106,15 @@ impl Node for DefNode {
             ctx.builder.get_current_debug_location().unwrap(),
             ctx.function.unwrap().get_first_basic_block().unwrap(),
         );
-        let re = ctx.add_symbol(
+        ctx.add_symbol(
             self.var.name.clone(),
             ptr2value,
             pltype,
             self.var.range,
             false,
-        );
-        if re.is_err() {
-            return Err(re.unwrap_err());
-        }
+        )?;
         ctx.builder.build_store(ptr2value, base_value);
-        return Ok((Value::None, None, TerminatorEnum::NONE, false));
+        return Ok((None, None, TerminatorEnum::NONE));
     }
 }
 #[range]
@@ -135,23 +132,18 @@ impl Node for AssignNode {
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let vrange = self.var.range();
-        let (ptr, _, _, is_const) = self.var.emit(ctx)?;
-        if is_const {
-            return Err(ctx.add_err(vrange, ErrorCode::ASSIGN_CONST));
+        let exp_range = self.exp.range();
+        let (ptr, lpltype, _) = self.var.emit(ctx)?;
+        let (value, rpltype, _) = self.exp.emit(ctx)?;
+        if lpltype != rpltype {
+            return Err(ctx.add_err(self.range, ErrorCode::ASSIGN_TYPE_MISMATCH));
         }
-        let (value, _, _, _) = self.exp.emit(ctx)?;
-        if let Value::VarValue(ptr) = ptr {
-            let load = ctx.try_load2var(value);
-            if ptr.get_type().get_element_type()
-                != load.as_basic_value_enum().get_type().as_any_type_enum()
-            {
-                return Err(ctx.add_err(self.range, ErrorCode::ASSIGN_TYPE_MISMATCH));
-            }
-            ctx.builder.build_store(ptr, load.as_basic_value_enum());
-            return Ok((Value::None, None, TerminatorEnum::NONE, false));
-        }
-        Err(ctx.add_err(vrange, ErrorCode::NOT_ASSIGNABLE))
+        let load = ctx.try_load2var(exp_range, value.unwrap())?;
+        ctx.builder.build_store(
+            ptr.unwrap().into_pointer_value(),
+            load.as_basic_value_enum(),
+        );
+        return Ok((None, None, TerminatorEnum::NONE));
     }
 }
 
@@ -166,7 +158,7 @@ impl Node for EmptyNode {
         println!("EmptyNode");
     }
     fn emit<'a, 'ctx>(&'a mut self, _: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        Ok((Value::None, None, TerminatorEnum::NONE, false))
+        Ok((None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -206,10 +198,10 @@ impl Node for StatementsNode {
             if re.is_err() {
                 continue;
             }
-            let (_, _, terminator_res, _) = re.unwrap();
+            let (_, _, terminator_res) = re.unwrap();
             terminator = terminator_res;
         }
-        Ok((Value::None, None, terminator, false))
+        Ok((None, None, terminator))
     }
 }
 

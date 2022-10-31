@@ -18,8 +18,8 @@ use syn::{
 ///
 /// while tagging a function, you can specify the name of the function in the llvm symbol table like this:  
 ///
-/// ```no_run
-/// #[internal_macro::is_runtime("myfunc")]
+/// ```ignore
+/// #[is_runtime("myfunc")]
 /// pub fn myfunc1() {
 ///    // ...
 /// }
@@ -30,9 +30,9 @@ use syn::{
 ///
 /// you can override the name of the block_type_name just like the function sample above.
 ///
-/// ```no_run
+/// ```ignore
 /// struct MyStruct;
-/// #[internal_macro::is_runtime("struct")]
+/// #[is_runtime("struct")]
 /// impl MyStruct {
 ///    pub fn myfunc1() {
 ///       // ...

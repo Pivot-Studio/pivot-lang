@@ -7,11 +7,17 @@
 ![codecov](https://codecov.io/gh/Pivot-Studio/pivot-lang/branch/master/graphs/sunburst.svg?token=CA17PWK0EG)
 
 此项目目前处于早期开发阶段，不建议用于生产环境。  
-[项目地址](https://github.com/Pivot-Studio/pivot-lang)
+[项目地址](https://github.com/Pivot-Studio/pivot-lang)  
 
 ## dependencies
 - [llvm-14](https://github.com/llvm/llvm-project/releases/tag/llvmorg-14.0.6)
 - [rust](https://www.rust-lang.org/)
+
+**重要**：如果你想参与开发，请先使用release模式编译项目的vm目录，然后在你的`~/.bashrc`或者`～/.bash_profile`中添加如下代码：  
+
+```bash
+export KAGARI_LIB_ROOT=<pivot-lang project path>/planglib
+```
 
 ## 特点
 - 同时支持aot和jit两种模式
@@ -59,31 +65,42 @@
 
 ```ebnf
 add_exp = 
-    | mul_exp ("+" | "-" mul_exp)*
+    | mul_exp ("+" | "-" add_exp)?
     ;
 
 mul_exp = 
-    | unary_exp ("*"｜"/" unary_exp)*
+    | unary_exp ("*"｜"/" mul_exp)?
     ;
 
 unary_exp =
-    | take_exp
-    | ("-" | "!" | "&") take_exp
+    | pointer_exp
+    | ("-" | "!") pointer_exp
     ;
 
-take_exp =
-    | primary_exp ("." identifier)*
-    ;
+
+pointer_exp = ("&"|"*")* complex_exp;
+
+complex_exp = primary_exp (take_exp_op|array_element_op|call_function_op)*;
+
+take_exp_op = ("." identifier) ;
+
+array_element_op = ('[' logic_exp ']') ;
+
+call_function_op = ("(" (logic_exp (","logic_exp)*)? ")") ;
 
 primary_exp =
     | number
     | bool_const
     | "(" logic_exp ")"
     | extern_identifier
-    | struct_init
-    | call_function
+    | struct_init_exp
     ;
 
+number = [0-9]+ ("." number)? ;
+
+identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
+
+extern_identifier = (identifier "::")* identifier ;
 
 bool_const =
     | "true"
@@ -97,6 +114,10 @@ compare_exp =
 logic_exp = 
     | compare_exp (("&&"｜"||") compare_exp)*
     ;
+
+struct_init_exp = type_name "{" struct_init_exp_field "}" ;
+
+struct_init_exp_field = identifier ":" logic_exp "," ;
 
 assignee = identifier ("." identifier)*;
 
@@ -129,7 +150,7 @@ statement =
     | while_statement
     | break_statement
     | continue_statement
-    | function_call
+    | complex_exp ";"
     ;
 
 toplevel_statement = 
@@ -141,31 +162,18 @@ toplevel_statement =
 
 program = toplevel_statement* ;
 
-
-number = [0-9]+ | number "." number ;
-
-identifier = [a-zA-Z_][a-zA-Z0-9_]* ;
-
 function_def = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name (statement_block | ";") ;
-
-call_function = extern_identifier "(" (logic_exp (","logic_exp)*)? ")" ;
 
 struct_def = "struct" identifier "{" struct_field* "}" ;
 
-type_name = ("&")? identifier ;
+type_name = extern_identifier ;
 
 typed_identifier = identifier ":" type_name ;
 
 struct_field = typed_identifier ";" ;
 
-struct_init = type_name "{" struct_init_field "}" ;
-
-struct_init_field = identifier ":" logic_exp "," ;
-
 return_statement = "return" logic_exp ";" ;
 
 use_statement = "use" identifier ("::" identifier)* ";" ;
-
-extern_identifier = (identifier "::")* ;
 
 ```
