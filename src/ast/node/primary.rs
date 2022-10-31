@@ -135,10 +135,11 @@ impl Node for ArrayElementNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let (arr, pltype, _) = self.arr.emit(ctx)?;
         if let PLType::ARR(arrtp) = pltype.unwrap() {
-            let arr = ctx.try_load2var(arr.unwrap());
+            let arr = arr.unwrap();
             // TODO: check if index is out of bounds
+            let index_range = self.index.range();
             let (index, index_pltype, _) = self.index.emit(ctx)?;
-            let index = ctx.try_load2var(index.unwrap());
+            let index = ctx.try_load2var(index_range, index.unwrap())?;
             if index_pltype.is_none() || !index_pltype.unwrap().is(PriType::I64) {
                 return Err(ctx.add_err(self.range, ErrorCode::ARRAY_INDEX_MUST_BE_INT));
             }

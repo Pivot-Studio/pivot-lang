@@ -48,8 +48,9 @@ impl Node for IfNode {
         if pltype.is_none() || !pltype.unwrap().is(PriType::BOOL) {
             return Err(ctx.add_err(condrange, ErrorCode::IF_CONDITION_MUST_BE_BOOL));
         }
+        let cond = ctx.try_load2var(condrange, cond.unwrap())?;
         let cond = ctx.builder.build_int_truncate(
-            cond.unwrap().into_int_value(),
+            cond.into_int_value(),
             ctx.context.bool_type(),
             "trunctemp",
         );
@@ -121,8 +122,9 @@ impl Node for WhileNode {
         if pltype.is_none() || !pltype.unwrap().is(PriType::BOOL) {
             return Err(ctx.add_err(condrange, ErrorCode::WHILE_CONDITION_MUST_BE_BOOL));
         }
+        let cond = ctx.try_load2var(condrange, cond.unwrap())?;
         let cond = ctx.builder.build_int_truncate(
-            cond.unwrap().into_int_value(),
+            cond.into_int_value(),
             ctx.context.bool_type(),
             "trunctemp",
         );
@@ -201,8 +203,9 @@ impl Node for ForNode {
         if pltype.is_none() || !pltype.unwrap().is(PriType::BOOL) {
             return Err(ctx.add_err(condrange, ErrorCode::FOR_CONDITION_MUST_BE_BOOL));
         }
+        let cond = ctx.try_load2var(condrange, cond.unwrap())?;
         let cond = ctx.builder.build_int_truncate(
-            cond.unwrap().into_int_value(),
+            cond.into_int_value(),
             ctx.context.bool_type(),
             "trunctemp",
         );

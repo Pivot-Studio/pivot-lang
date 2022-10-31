@@ -6,7 +6,7 @@ use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 use inkwell::debug_info::*;
 use inkwell::types::BasicType;
-use inkwell::values::{AnyValue, FunctionValue};
+use inkwell::values::FunctionValue;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 use std::cell::RefCell;
@@ -237,7 +237,7 @@ impl Node for FuncCallNode {
             if value.is_none() {
                 return Ok((None, None, TerminatorEnum::NONE));
             }
-            let load = ctx.try_load2var(value.unwrap());
+            let load = ctx.try_load2var(pararange, value.unwrap())?;
             let param = func.get_nth_param(i as u32).unwrap();
             if load.get_type() != param.get_type() {
                 return Err(ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH));
@@ -251,9 +251,15 @@ impl Node for FuncCallNode {
         );
         if let PLType::FN(fv) = &pltype {
             ctx.save_if_comment_doc_hover(self.range, Some(fv.doc.clone()));
-            let o = match ret.try_as_basic_value().left() {
+            let res = match ret.try_as_basic_value().left() {
                 Some(v) => Ok((
-                    Some(v.as_any_value_enum()),
+                    {
+                        let ptr = ctx
+                            .nodebug_builder
+                            .build_alloca(v.get_type(), "ret_alloc_tmp");
+                        ctx.nodebug_builder.build_load(ptr, "ret_load_tmp");
+                        Some(ptr.into())
+                    },
                     Some(*fv.ret_pltype.clone()),
                     TerminatorEnum::NONE,
                 )),
@@ -261,7 +267,7 @@ impl Node for FuncCallNode {
             };
             ctx.set_if_refs_tp(&pltype, self.range);
             ctx.send_if_go_to_def(self.range, fv.range, ctx.plmod.path.clone());
-            return o;
+            return res;
         }
         return Err(ctx.add_err(self.range, ErrorCode::NOT_A_FUNCTION));
     }

@@ -25,7 +25,7 @@ impl Node for RetNode {
                 return Err(err);
             }
             let (ret, _, _) = ret.emit(ctx)?;
-            let ret = ctx.try_load2var(ret.unwrap());
+            let ret = ctx.try_load2var(self.range, ret.unwrap())?;
             if ret.as_basic_value_enum().get_type() != rettp.unwrap() {
                 let err = ctx.add_err(self.range, ErrorCode::RETURN_TYPE_MISMATCH);
                 return Err(err);

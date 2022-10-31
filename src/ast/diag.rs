@@ -58,6 +58,7 @@ define_error!(
     STRUCT_FIELD_TYPE_NOT_MATCH = "struct field type not match",
     MISSING_SEMI = "missing semicolon",
     EXPECT_TYPE = "expect type",
+    EXPECT_VALUE = "expect value",
     REDEFINE_SYMBOL = "redefine symbol",
     SYMBOL_NOT_FOUND = "symbol not found",
     UNRESOLVED_MODULE = "unresolved module",

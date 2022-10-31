@@ -25,6 +25,7 @@ impl Node for GlobalNode {
 }
 impl GlobalNode {
     pub fn emit_global<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
+        let exp_range = self.exp.range();
         if ctx.get_symbol(&self.var.name).is_some() {
             return Err(ctx.add_err(self.var.range, ErrorCode::REDEFINE_SYMBOL));
         }
@@ -38,7 +39,7 @@ impl GlobalNode {
         }
         let pltype = pltype_opt.unwrap();
         let ditype = pltype.get_ditype(ctx);
-        let base_value = ctx.try_load2var(value.unwrap());
+        let base_value = ctx.try_load2var(exp_range, value.unwrap())?;
         let base_type = base_value.get_type();
         let globalptr = ctx.module.add_global(base_type, None, &self.var.name);
         globalptr.set_initializer(&base_type.const_zero());

@@ -27,12 +27,13 @@ impl Node for UnaryOpNode {
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let exp_range = self.exp.range();
         let (exp, pltype, _) = self.exp.emit(ctx)?;
         if pltype.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::INVALID_UNARY_EXPRESSION));
         }
         let pltype = pltype.unwrap();
-        let exp = ctx.try_load2var(exp.unwrap());
+        let exp = ctx.try_load2var(exp_range, exp.unwrap())?;
         return Ok(match (&pltype, self.op) {
             (PLType::PRIMITIVE(PriType::I64), TokenType::MINUS) => (
                 Some(
@@ -94,10 +95,11 @@ impl Node for BinOpNode {
         self.right.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let (lrange, rrange) = (self.left.range(), self.right.range());
         let (lv, lpltype, _) = self.left.emit(ctx)?;
-        let left = ctx.try_load2var(lv.unwrap());
+        let left = ctx.try_load2var(lrange, lv.unwrap())?;
         let (rv, rpltype, _) = self.right.emit(ctx)?;
-        let right = ctx.try_load2var(rv.unwrap());
+        let right = ctx.try_load2var(rrange, rv.unwrap())?;
         if lpltype != rpltype {
             return Err(ctx.add_err(
                 self.range,
@@ -291,7 +293,7 @@ impl Node for TakeOpNode {
                             .into(),
                     )
                 }
-                _ => panic!("not implemented {:?}", res),
+                _ => return Err(ctx.add_err(self.range, ErrorCode::INVALID_GET_FIELD)),
             }
         }
         if self.field.is_none() {

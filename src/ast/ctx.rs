@@ -392,7 +392,7 @@ impl PriType {
         match self {
             PriType::I64 => ctx.context.i64_type().as_basic_type_enum(),
             PriType::F64 => ctx.context.f64_type().as_basic_type_enum(),
-            PriType::BOOL => ctx.context.bool_type().as_basic_type_enum(),
+            PriType::BOOL => ctx.context.i8_type().as_basic_type_enum(),
         }
     }
     pub fn get_name(&self) -> String {
@@ -1021,19 +1021,23 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.errs.borrow_mut().push(dia);
     }
     // load type* to type
-    pub fn try_load2var(&mut self, v: AnyValueEnum<'ctx>) -> BasicValueEnum<'ctx> {
+    pub fn try_load2var(
+        &mut self,
+        range: Range,
+        v: AnyValueEnum<'ctx>,
+    ) -> Result<BasicValueEnum<'ctx>, PLDiag> {
         if !v.is_pointer_value() {
-            match v {
+            return Ok(match v {
                 AnyValueEnum::ArrayValue(v) => v.into(),
                 AnyValueEnum::IntValue(v) => v.into(),
                 AnyValueEnum::FloatValue(v) => v.into(),
                 AnyValueEnum::PointerValue(v) => v.into(),
                 AnyValueEnum::StructValue(v) => v.into(),
                 AnyValueEnum::VectorValue(v) => v.into(),
-                _ => todo!(),
-            }
+                _ => return Err(self.add_err(range, ErrorCode::EXPECT_VALUE)),
+            });
         } else {
-            self.builder.build_load(v.into_pointer_value(), "loadtmp")
+            Ok(self.builder.build_load(v.into_pointer_value(), "loadtmp"))
         }
     }
     pub fn if_completion(&mut self, c: impl FnOnce(&mut Ctx, &(Pos, Option<String>))) {

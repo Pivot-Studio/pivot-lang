@@ -28,6 +28,7 @@ impl Node for DefNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let range = self.range();
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
         if let Some(tp) = &self.tp {
             let pltype = tp.get_type(ctx)?;
@@ -75,11 +76,14 @@ impl Node for DefNode {
         if pltype_opt.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
         }
+        if value.is_none() {
+            return Err(ctx.add_err(self.range, ErrorCode::EXPECT_VALUE));
+        }
         let pltype = pltype_opt.unwrap();
         let ditype = pltype.get_ditype(ctx);
         let (base_value, debug_type) = {
             let ditype = ditype.clone();
-            let loadv = ctx.try_load2var(value.unwrap());
+            let loadv = ctx.try_load2var(range, value.unwrap())?;
             (loadv, ditype)
         };
         let base_type = base_value.get_type();
@@ -128,12 +132,13 @@ impl Node for AssignNode {
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let exp_range = self.exp.range();
         let (ptr, lpltype, _) = self.var.emit(ctx)?;
         let (value, rpltype, _) = self.exp.emit(ctx)?;
         if lpltype != rpltype {
             return Err(ctx.add_err(self.range, ErrorCode::ASSIGN_TYPE_MISMATCH));
         }
-        let load = ctx.try_load2var(value.unwrap());
+        let load = ctx.try_load2var(exp_range, value.unwrap())?;
         ctx.builder.build_store(
             ptr.unwrap().into_pointer_value(),
             load.as_basic_value_enum(),

@@ -265,7 +265,7 @@ impl Node for StructInitNode {
             let range = field.range();
             let name = field.id.name.clone();
             let (value, _, _) = field.emit(ctx)?;
-            fields.insert(name, (ctx.try_load2var(value.unwrap()), range));
+            fields.insert(name, (ctx.try_load2var(range, value.unwrap())?, range));
         }
         if let PLType::STRUCT(st) = &tp {
             ctx.save_if_comment_doc_hover(self.tp.range(), Some(st.doc.clone()));
@@ -333,7 +333,7 @@ impl Node for ArrayInitNode {
             } else if tp0 != tp {
                 return Err(ctx.add_err(range, ErrorCode::ARRAY_TYPE_NOT_MATCH));
             }
-            exps.push(ctx.try_load2var(v.unwrap()).as_basic_value_enum());
+            exps.push(ctx.try_load2var(range, v.unwrap())?.as_basic_value_enum());
         }
         if tp0.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::ARRAY_INIT_EMPTY));
