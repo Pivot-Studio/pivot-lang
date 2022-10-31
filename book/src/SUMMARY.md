@@ -2,12 +2,14 @@
 
 - [About](../../README.md)
 
-# Getting Started
+# Tutorial
 
-- [Tutorial](./tutorial/README.md)
+- [Quick Start](./tutorial/README.md)
   - [Installation](./tutorial/installation.md)
   - [Basic Project](./tutorial/basicproject.md)
   - [VSC Support](./tutorial/vscsupport.md)
+- [References](./references/README.md)
+  - [Module](./references/module.md)
 
 # How the project works internally
 
