@@ -293,7 +293,7 @@ impl Node for TakeOpNode {
                             .into(),
                     )
                 }
-                _ => return Err(ctx.add_err(self.range, ErrorCode::INVALID_GET_FIELD)),
+                _ => return Err(ctx.add_err(id.range, ErrorCode::ILLEGAL_GET_FIELD_OPERATION)),
             }
         }
         if self.field.is_none() {

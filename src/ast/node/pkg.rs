@@ -41,11 +41,42 @@ impl Node for UseNode {
         for id in &self.ids {
             ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
             if !self.complete {
-                path = path.join(&self.ids[i].name);
+                if i == 0 && ctx.config.deps.is_some() {
+                    if let Some(p) = ctx.config.deps.as_ref().unwrap().get(&self.ids[i].name) {
+                        path = path.join(&p.path);
+                    }
+                } else {
+                    path = path.join(&self.ids[i].name);
+                }
             } else if i > 0 && self.complete {
-                path = path.join(&self.ids[i - 1].name);
+                if i == 1 && ctx.config.deps.is_some() {
+                    if let Some(p) = ctx.config.deps.as_ref().unwrap().get(&self.ids[i - 1].name) {
+                        path = path.join(&p.path);
+                    }
+                } else {
+                    path = path.join(&self.ids[i - 1].name);
+                }
             }
-            fullpath = fullpath.join(&self.ids[i].name);
+            if i == 0
+                && ctx.config.deps.is_some()
+                && ctx
+                    .config
+                    .deps
+                    .as_ref()
+                    .unwrap()
+                    .contains_key(&self.ids[i].name)
+            {
+                let p = ctx
+                    .config
+                    .deps
+                    .as_ref()
+                    .unwrap()
+                    .get(&self.ids[i].name)
+                    .unwrap();
+                fullpath = fullpath.join(&p.path);
+            } else {
+                fullpath = fullpath.join(&self.ids[i].name);
+            }
             i = i + 1;
         }
         if !fullpath.with_extension("pi").exists() {
@@ -64,6 +95,17 @@ impl Node for UseNode {
                         .into_iter()
                         .filter(|a| a.label != mname)
                         .collect();
+                    if self.complete {
+                        if let Some(deps) = &a.config.deps {
+                            for (dep, _) in deps {
+                                completions.push(lsp_types::CompletionItem {
+                                    label: dep.clone(),
+                                    kind: Some(lsp_types::CompletionItemKind::MODULE),
+                                    ..Default::default()
+                                });
+                            }
+                        }
+                    }
                 }
                 a.completion_items.set(completions);
             }
@@ -156,7 +198,7 @@ impl ExternIDNode {
                 PLType::FN(f) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
                     Ok((
-                        Some(f.get_value(ctx, plmod).into()),
+                        Some(f.get_value(ctx).into()),
                         Some(tp),
                         TerminatorEnum::NONE,
                     ))

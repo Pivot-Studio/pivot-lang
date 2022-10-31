@@ -7,11 +7,17 @@
 ![codecov](https://codecov.io/gh/Pivot-Studio/pivot-lang/branch/master/graphs/sunburst.svg?token=CA17PWK0EG)
 
 此项目目前处于早期开发阶段，不建议用于生产环境。  
-[项目地址](https://github.com/Pivot-Studio/pivot-lang)
+[项目地址](https://github.com/Pivot-Studio/pivot-lang)  
 
 ## dependencies
 - [llvm-14](https://github.com/llvm/llvm-project/releases/tag/llvmorg-14.0.6)
 - [rust](https://www.rust-lang.org/)
+
+**重要**：如果你想参与开发，请先使用release模式编译项目的vm目录，然后在你的`~/.bashrc`或者`～/.bash_profile`中添加如下代码：  
+
+```bash
+export KAGARI_LIB_ROOT=<pivot-lang project path>/planglib
+```
 
 ## 特点
 - 同时支持aot和jit两种模式
@@ -67,10 +73,12 @@ mul_exp =
     ;
 
 unary_exp =
-    | complex_exp
-    | ("-" | "!") complex_exp
+    | pointer_exp
+    | ("-" | "!") pointer_exp
     ;
 
+
+pointer_exp = ("&"|"*")* complex_exp;
 
 complex_exp = primary_exp (take_exp_op|array_element_op|call_function_op)*;
 

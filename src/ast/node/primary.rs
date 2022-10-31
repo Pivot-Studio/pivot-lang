@@ -95,7 +95,7 @@ impl VarNode {
                 PLType::FN(f) => {
                     ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
                     return Ok((
-                        Some(f.get_value(ctx, &ctx.plmod).into()),
+                        Some(f.get_value(ctx).into()),
                         Some(tp.clone()),
                         TerminatorEnum::NONE,
                     ));

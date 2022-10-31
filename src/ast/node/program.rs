@@ -126,12 +126,14 @@ impl Program {
             let mut path = PathBuf::from(self.config(db).root);
             let mut config = self.config(db);
             let mut start = 0;
+            // 加载依赖包的路径
             if let Some(cm) = self.config(db).deps {
+                // 如果use的是依赖包
                 if let Some(dep) = cm.get(&u.ids[0].name) {
-                    path = PathBuf::from(dep.path.clone());
+                    path = path.join(&dep.path);
                     let input = FileCompileInput::new(
                         db,
-                        path.join("/Kagari.toml")
+                        path.join("Kagari.toml")
                             .clone()
                             .to_str()
                             .unwrap()
@@ -150,6 +152,7 @@ impl Program {
                         continue;
                     }
                     config = re.unwrap();
+                    config.root = path.to_str().unwrap().to_string();
 
                     start = 1;
                 }

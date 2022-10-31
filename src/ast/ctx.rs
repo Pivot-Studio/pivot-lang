@@ -473,7 +473,7 @@ impl PLType {
     pub fn get_basic_type_op<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Option<BasicTypeEnum<'ctx>> {
         match self {
             PLType::FN(f) => Some(
-                f.get_value(ctx, &ctx.plmod)
+                f.get_value(ctx)
                     .get_type()
                     .ptr_type(inkwell::AddressSpace::Global)
                     .as_basic_type_enum(),
@@ -650,8 +650,8 @@ impl FNType {
     /// try get function value from module
     ///
     /// if not found, create a declaration
-    pub fn get_value<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, m: &Mod) -> FunctionValue<'ctx> {
-        if let Some(v) = ctx.module.get_function(&m.get_full_name(&self.name)) {
+    pub fn get_value<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> FunctionValue<'ctx> {
+        if let Some(v) = ctx.module.get_function(&self.name) {
             return v;
         }
         if let Some(v) = ctx.module.get_function(&self.name) {
@@ -665,11 +665,9 @@ impl FNType {
             .ret_pltype
             .get_ret_type(ctx)
             .fn_type(&param_types, false);
-        let fn_value = ctx.module.add_function(
-            &m.get_full_name(&self.name),
-            fn_type,
-            Some(Linkage::External),
-        );
+        let fn_value = ctx
+            .module
+            .add_function(&self.name, fn_type, Some(Linkage::External));
         fn_value
     }
 }
@@ -1102,10 +1100,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     pub fn get_completions(&self) -> Vec<CompletionItem> {
         let mut m = FxHashMap::default();
-        self.get_var_completions(&mut m);
         self.get_pltp_completions(&mut m);
-        self.get_keyword_completions(&mut m);
         self.plmod.get_ns_completions_pri(&mut m);
+        self.get_var_completions(&mut m);
+        self.get_keyword_completions(&mut m);
 
         let cm = m.iter().map(|(_, v)| v.clone()).collect();
         cm

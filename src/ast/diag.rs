@@ -68,7 +68,8 @@ define_error!(
     ARRAY_INDEX_MUST_BE_INT = "array index must be int",
     ARRAY_INDEX_OUT_OF_BOUNDS = "array index out of bounds",
     SIZE_MUST_BE_INT = "size must be int",
-    TYPE_MISMATCH = "mismatch"
+    TYPE_MISMATCH = "mismatch",
+    ILLEGAL_GET_FIELD_OPERATION = "illegal get field operation"
 );
 macro_rules! define_warn {
     ($(
