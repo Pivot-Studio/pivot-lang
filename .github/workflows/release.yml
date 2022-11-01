@@ -91,6 +91,13 @@ jobs:
           LLVM_SYS_140_PREFIX: ${{ runner.temp }}/llvm
         run: cargo build --release
 
+      - name: Cargo build vm
+        if: ${{ matrix.config.os != 'windows-latest' }}
+        env:
+          RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
+          LLVM_SYS_140_PREFIX: ${{ runner.temp }}/llvm
+        run: cd vm && cargo build --release
+
       - run: mkdir -p ${{ matrix.config.dir }}
 
       - name: Move artifacts
