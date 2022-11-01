@@ -44,7 +44,7 @@ impl Node for PointerOpNode {
                 let v = ctx
                     .builder
                     .build_alloca::<BasicTypeEnum>(val.get_type(), "addr");
-                ctx.builder.build_store(v, val);
+                ctx.builder.build_store(v, ctx.mv2heap(val));
                 v.into()
             }
         };

@@ -185,9 +185,11 @@ impl Node for FuncDefNode {
                 .unwrap();
             }
             // emit body
+            ctx.builder.unset_current_debug_location();
             if self.typenode.id == "main" {
-                ctx.nodebug_builder
+                ctx.builder
                     .build_call(ctx.init_func.unwrap(), &vec![], "init_call");
+                ctx.init_global_gc();
             }
             let (_, _, terminator) = body.emit(&mut ctx)?;
             if !terminator.is_return() {
