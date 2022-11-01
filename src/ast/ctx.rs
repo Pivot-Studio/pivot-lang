@@ -357,7 +357,6 @@ pub enum PLType {
     ARR(ARRType),
     PRIMITIVE(PriType),
     VOID,
-    NAMESPACE(Mod),
     POINTER(Box<PLType>),
 }
 
@@ -433,7 +432,6 @@ impl PLType {
             PLType::ARR(_) => None,
             PLType::PRIMITIVE(_) => None,
             PLType::VOID => None,
-            PLType::NAMESPACE(_) => None,
             PLType::POINTER(_) => None,
         }
     }
@@ -453,7 +451,6 @@ impl PLType {
             PLType::PRIMITIVE(pri) => Some(pri.get_name()),
             PLType::ARR(_) => None,
             PLType::VOID => Some("void".to_string()),
-            PLType::NAMESPACE(_) => None,
             PLType::POINTER(p) => p.get_name(),
         }
     }
@@ -467,7 +464,6 @@ impl PLType {
             PLType::ARR(_) => None,
             PLType::PRIMITIVE(_) => None,
             PLType::VOID => None,
-            PLType::NAMESPACE(_) => None,
             PLType::POINTER(_) => None,
         }
     }
@@ -492,7 +488,6 @@ impl PLType {
             ),
             PLType::PRIMITIVE(t) => Some(t.get_basic_type(ctx)),
             PLType::VOID => None,
-            PLType::NAMESPACE(_) => None,
             PLType::POINTER(p) => Some(
                 p.get_basic_type(ctx)
                     .ptr_type(AddressSpace::Generic)
@@ -578,7 +573,6 @@ impl PLType {
                 );
             }
             PLType::VOID => None,
-            PLType::NAMESPACE(_) => None,
             PLType::POINTER(p) => {
                 let elemdi = p.get_ditype(ctx)?;
                 let etp = &p.get_basic_type(ctx);
@@ -1193,7 +1187,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::VOID => CompletionItemKind::KEYWORD,
-                PLType::NAMESPACE(_) => todo!(),
                 PLType::POINTER(_) => todo!(),
             };
             m.insert(
@@ -1234,7 +1227,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 PLType::ARR(_) => CompletionItemKind::KEYWORD,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::VOID => CompletionItemKind::KEYWORD,
-                PLType::NAMESPACE(_) => todo!(),
                 PLType::POINTER(_) => todo!(),
             };
             vmap.insert(
