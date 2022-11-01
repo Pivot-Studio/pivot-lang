@@ -68,6 +68,21 @@ impl Node for DefNode {
                 }
                 PLType::VOID => todo!(),
                 PLType::NAMESPACE(_) => todo!(),
+                PLType::POINTER(p) => {
+                    let tp = p.get_basic_type(ctx);
+                    let v = alloc(ctx, tp, &self.var.name);
+                    let re = ctx.add_symbol(
+                        self.var.name.clone(),
+                        v,
+                        pltype.clone(),
+                        self.var.range,
+                        false,
+                    );
+                    if re.is_err() {
+                        return Err(re.unwrap_err());
+                    }
+                    return Ok((None, None, TerminatorEnum::NONE));
+                }
             };
         }
 

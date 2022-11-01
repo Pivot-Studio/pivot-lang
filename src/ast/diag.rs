@@ -69,7 +69,8 @@ define_error!(
     ARRAY_INDEX_OUT_OF_BOUNDS = "array index out of bounds",
     SIZE_MUST_BE_INT = "size must be int",
     TYPE_MISMATCH = "mismatch",
-    ILLEGAL_GET_FIELD_OPERATION = "illegal get field operation"
+    ILLEGAL_GET_FIELD_OPERATION = "illegal get field operation",
+    NOT_A_POINTER = "not a pointer"
 );
 macro_rules! define_warn {
     ($(

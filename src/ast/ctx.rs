@@ -22,6 +22,7 @@ use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
 use inkwell::values::{AnyValueEnum, BasicMetadataValueEnum};
+use inkwell::AddressSpace;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::Diagnostic;
@@ -357,6 +358,7 @@ pub enum PLType {
     PRIMITIVE(PriType),
     VOID,
     NAMESPACE(Mod),
+    POINTER(Box<PLType>),
 }
 
 pub fn init_arr<'a, 'ctx>(ptr: PointerValue<'ctx>, ctx: &mut Ctx<'a, 'ctx>) {
@@ -432,6 +434,7 @@ impl PLType {
             PLType::PRIMITIVE(_) => None,
             PLType::VOID => None,
             PLType::NAMESPACE(_) => None,
+            PLType::POINTER(_) => None,
         }
     }
 
@@ -451,6 +454,7 @@ impl PLType {
             PLType::ARR(_) => None,
             PLType::VOID => Some("void".to_string()),
             PLType::NAMESPACE(_) => None,
+            PLType::POINTER(p) => p.get_name(),
         }
     }
 
@@ -464,6 +468,7 @@ impl PLType {
             PLType::PRIMITIVE(_) => None,
             PLType::VOID => None,
             PLType::NAMESPACE(_) => None,
+            PLType::POINTER(_) => None,
         }
     }
 
@@ -488,6 +493,11 @@ impl PLType {
             PLType::PRIMITIVE(t) => Some(t.get_basic_type(ctx)),
             PLType::VOID => None,
             PLType::NAMESPACE(_) => None,
+            PLType::POINTER(p) => Some(
+                p.get_basic_type(ctx)
+                    .ptr_type(AddressSpace::Generic)
+                    .as_basic_type_enum(),
+            ),
         }
     }
 
@@ -569,6 +579,17 @@ impl PLType {
             }
             PLType::VOID => None,
             PLType::NAMESPACE(_) => None,
+            PLType::POINTER(p) => {
+                let elemdi = p.get_ditype(ctx)?;
+                let etp = &p.get_basic_type(ctx);
+                let size = td.get_bit_size(etp);
+                let align = td.get_preferred_alignment(etp);
+                Some(
+                    ctx.dibuilder
+                        .create_pointer_type("", elemdi, size, align, AddressSpace::Generic)
+                        .as_type(),
+                )
+            }
         }
     }
     pub fn get_di_ref_type<'a, 'ctx>(
@@ -1173,6 +1194,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::VOID => CompletionItemKind::KEYWORD,
                 PLType::NAMESPACE(_) => todo!(),
+                PLType::POINTER(_) => todo!(),
             };
             m.insert(
                 k.to_string(),
@@ -1213,6 +1235,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::VOID => CompletionItemKind::KEYWORD,
                 PLType::NAMESPACE(_) => todo!(),
+                PLType::POINTER(_) => todo!(),
             };
             vmap.insert(
                 k.to_string(),
