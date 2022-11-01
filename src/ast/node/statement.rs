@@ -67,7 +67,6 @@ impl Node for DefNode {
                     return Ok((None, None, TerminatorEnum::NONE));
                 }
                 PLType::VOID => todo!(),
-                PLType::NAMESPACE(_) => todo!(),
                 PLType::POINTER(p) => {
                     let tp = p.get_basic_type(ctx);
                     let v = alloc(ctx, tp, &self.var.name);

@@ -28,13 +28,11 @@ impl Node for PointerOpNode {
         let value = value.unwrap();
         let value = match self.op {
             PointerOpEnum::DEREF => {
-                if value.get_type().is_pointer_type() {
-                    if tp.is_some() {
-                        tp = match tp.unwrap() {
-                            PLType::POINTER(tp) => Some(*tp),
-                            _ => None,
-                        };
-                    }
+                if let Some(PLType::POINTER(tp1)) = tp {
+                    tp = match *tp1 {
+                        PLType::POINTER(tp) => Some(*tp),
+                        _ => None,
+                    };
                     ctx.builder.build_load(value.into_pointer_value(), "deref")
                 } else {
                     let err = ctx.add_err(self.range, ErrorCode::NOT_A_POINTER);
