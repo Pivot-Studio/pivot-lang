@@ -9,7 +9,13 @@ use nom::{
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
-use crate::{ast::node::function::FuncCallNode, ast::tokens::TokenType};
+use crate::{
+    ast::node::function::FuncCallNode,
+    ast::{
+        node::pointer::{PointerOpEnum, PointerOpNode},
+        tokens::TokenType,
+    },
+};
 use internal_macro::{test_parser, test_parser_error};
 
 use super::*;
@@ -47,11 +53,11 @@ fn mul_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser_error("+a")]
 fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
-        complex_exp,
+        pointer_exp,
         map_res(
             tuple((
                 alt((tag_token(TokenType::MINUS), tag_token(TokenType::NOT))),
-                complex_exp,
+                pointer_exp,
             )),
             |((op, _), exp)| {
                 let range = exp.range();
@@ -62,12 +68,49 @@ fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 }
 
 /// ```ebnf
+/// ("&"|"*")* complex_exp;
+/// ```
+#[test_parser("&&a{}.d")]
+#[test_parser("***ad")]
+pub fn pointer_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    map_res(
+        delspace(pair(
+            many0(alt((
+                tag_token(TokenType::TAKE_PTR),
+                tag_token(TokenType::TAKE_VAL),
+            ))),
+            complex_exp,
+        )),
+        |(ops, exp)| {
+            let range = exp.range();
+            let mut exp = exp;
+            for op in ops.into_iter().rev() {
+                let op = match op.0 {
+                    TokenType::TAKE_PTR => PointerOpEnum::ADDR,
+                    TokenType::TAKE_VAL => PointerOpEnum::DEREF,
+                    _ => unreachable!(),
+                };
+                exp = Box::new(
+                    PointerOpNode {
+                        op,
+                        value: exp,
+                        range,
+                    }
+                    .into(),
+                );
+            }
+            res_box(exp)
+        },
+    )(input)
+}
+
+/// ```ebnf
 /// complex_exp = primary_exp (take_exp_op|array_element_op|call_function_exp_op)*;
 /// ```
 #[test_parser("a[1][2]()[3].b()()[4].c")]
 #[test_parser("a{}.d")]
 #[test_parser("ad")]
-pub fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
+fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         pair(
             primary_exp,

@@ -187,7 +187,21 @@ fn main() i64 {
     test_gc();
     let st = test_ret_struct();
     io::printi64ln(st.a);
+    test_pointer();
     return 0;
+}
+
+fn test_pointer() void {
+    let a = 0;
+    let b = &a;
+    test_modify_pointer(&b);
+    io::printi64ln(*b);
+    return;
+}
+
+fn test_modify_pointer(a:**i64) void {
+    **a = 6;
+    return;
 }
 
 fn test_vm_link() i64;

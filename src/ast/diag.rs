@@ -70,7 +70,8 @@ define_error!(
     NEEDED_INDEX_FOR_ARRAY_ELEMENT_ACCESS = "needed index for array element access",
     SIZE_MUST_BE_INT = "size must be int",
     TYPE_MISMATCH = "mismatch",
-    ILLEGAL_GET_FIELD_OPERATION = "illegal get field operation"
+    ILLEGAL_GET_FIELD_OPERATION = "illegal get field operation",
+    NOT_A_POINTER = "not a pointer"
 );
 macro_rules! define_warn {
     ($(
