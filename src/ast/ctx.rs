@@ -661,6 +661,17 @@ pub struct FNType {
     pub doc: Vec<Box<NodeEnum>>,
 }
 
+impl TryFrom<PLType> for FNType {
+    type Error = ();
+
+    fn try_from(value: PLType) -> Result<Self, Self::Error> {
+        match value {
+            PLType::FN(x) => Ok(x),
+            _ => Err(()),
+        }
+    }
+}
+
 impl FNType {
     /// try get function value from module
     ///

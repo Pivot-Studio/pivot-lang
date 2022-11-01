@@ -4,10 +4,7 @@ use mod2;
 use sub3::main;
 use sub3::main::test;
 use std::io;
-use core::gc;
 fn test_gc() void {
-    let gc = gc::DioGC__new_ptr();
-    io::printi64ln(gc);
     return;
 }
 

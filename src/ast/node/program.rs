@@ -74,6 +74,7 @@ impl Node for ProgramNode {
             ctx.context.void_type().fn_type(&vec![], false),
             None,
         ));
+        ctx.add_global_gc();
         let entry = ctx
             .context
             .append_basic_block(ctx.function.unwrap(), "entry");
@@ -108,12 +109,35 @@ impl Program {
     #[salsa::tracked(lru = 32)]
     pub fn emit(self, db: &dyn Db) -> ModWrapper {
         let n = *self.node(db).node(db);
-        let prog = match n {
+        let mut prog = match n {
             NodeEnum::Program(p) => p,
             _ => panic!("not a program"),
         };
 
         let mut modmap = FxHashMap::<String, Mod>::default();
+        if PathBuf::from(self.params(db).file(db))
+            .with_extension("")
+            .file_name()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            != "gc"
+        {
+            let core = Box::new(VarNode {
+                name: "core".to_string(),
+                range: Default::default(),
+            });
+            let gc = Box::new(VarNode {
+                name: "gc".to_string(),
+                range: Default::default(),
+            });
+            prog.uses.push(Box::new(NodeEnum::UseNode(UseNode {
+                ids: vec![core, gc],
+                range: Default::default(),
+                complete: true,
+                singlecolon: false,
+            })));
+        }
         for u in prog.uses {
             let u = if let NodeEnum::UseNode(p) = *u {
                 p
@@ -280,7 +304,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let pp = Path::new(&hashed).with_extension("bc");
         let p = pp.as_path();
         ctx.module.write_bitcode_to_path(p);
-        // _= fs::write(
+        // _= std::fs::write(
         //     Path::new(&hashed).with_extension("ll"),
         //     ctx.module.print_to_string().to_string(),
         // );
