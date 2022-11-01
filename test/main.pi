@@ -4,9 +4,6 @@ use mod2;
 use sub3::main;
 use sub3::main::test;
 use std::io;
-fn test_gc() void {
-    return;
-}
 
 const a = 100;
 struct struct_father {
@@ -181,7 +178,6 @@ fn main() i64 {
     test_mod_struct();
     test_loop();
     test_ret_struct_arr();
-    test_gc();
     let st = test_ret_struct();
     io::printi64ln(st.a);
     test_pointer();
@@ -193,12 +189,19 @@ fn test_pointer() void {
     let b = &a;
     test_modify_pointer(&b);
     io::printi64ln(*b);
+    let dang = test_dangling();
+    io::printi64ln(*dang);
     return;
 }
 
 fn test_modify_pointer(a:**i64) void {
     **a = 6;
     return;
+}
+
+fn test_dangling() *i64 {
+    let a = 100;
+    return &a;
 }
 
 fn test_vm_link() i64;

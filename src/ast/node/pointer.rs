@@ -41,9 +41,7 @@ impl Node for PointerOpNode {
                     tp = Some(PLType::POINTER(Box::new(tp.unwrap())));
                 }
                 let val: BasicValueEnum = value.try_into().unwrap();
-                let v = ctx
-                    .builder
-                    .build_alloca::<BasicTypeEnum>(val.get_type(), "addr");
+                let v = alloc(ctx, val.get_type(), "addr");
                 ctx.builder.build_store(v, ctx.mv2heap(val));
                 v.into()
             }

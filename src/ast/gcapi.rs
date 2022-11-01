@@ -1,4 +1,4 @@
-use inkwell::{values::BasicValueEnum, AddressSpace};
+use inkwell::{builder::Builder, values::BasicValueEnum, AddressSpace};
 
 use super::ctx::{Ctx, FNType};
 
@@ -54,35 +54,68 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             .try_into()
             .unwrap()
     }
-    pub fn gc_add_root(&self) -> FNType {
-        self.plmod
+    pub fn gc_add_root(&self, stackptr: BasicValueEnum<'ctx>, builder: &'a Builder<'ctx>) {
+        let f: FNType = self
+            .plmod
             .submods
             .get("gc")
             .unwrap()
             .get_type("DioGC__add_root")
             .unwrap()
             .try_into()
-            .unwrap()
+            .unwrap();
+        let f = f.get_value(self);
+        let gc = self.module.get_global("diogc").unwrap();
+        let gc = builder.build_load(gc.as_pointer_value(), "gc");
+        let stackptr = builder.build_pointer_cast(
+            stackptr.into_pointer_value(),
+            self.context.i64_type().ptr_type(AddressSpace::Generic),
+            "stackptr",
+        );
+        builder.build_call(f, &[gc.into(), stackptr.into()], "add_root");
     }
-    pub fn gc_rm_root(&self) -> FNType {
-        self.plmod
+    pub fn gc_rm_root(&self, stackptr: BasicValueEnum<'ctx>) {
+        let block = self.builder.get_insert_block().unwrap();
+        if let Some(inst) = block.get_first_instruction() {
+            self.builder.position_before(&inst);
+        }
+        self.gc_rm_root_current(stackptr);
+    }
+    pub fn gc_rm_root_current(&self, stackptr: BasicValueEnum<'ctx>) {
+        let f: FNType = self
+            .plmod
             .submods
             .get("gc")
             .unwrap()
             .get_type("DioGC__rm_root")
             .unwrap()
             .try_into()
-            .unwrap()
+            .unwrap();
+        let f = f.get_value(self);
+        let gc = self.module.get_global("diogc").unwrap();
+        let gc = self.builder.build_load(gc.as_pointer_value(), "gc");
+        let stackptr = self.builder.build_pointer_cast(
+            stackptr.into_pointer_value(),
+            self.context.i64_type().ptr_type(AddressSpace::Generic),
+            "stackptr",
+        );
+        self.builder
+            .build_call(f, &[gc.into(), stackptr.into()], "rm_root");
     }
-    pub fn gc_collect(&self) -> FNType {
-        self.plmod
+    pub fn gc_collect(&self) {
+        let f: FNType = self
+            .plmod
             .submods
             .get("gc")
             .unwrap()
             .get_type("DioGC__collect")
             .unwrap()
             .try_into()
-            .unwrap()
+            .unwrap();
+        let f = f.get_value(self);
+        let gc = self.module.get_global("diogc").unwrap();
+        let gc = self.builder.build_load(gc.as_pointer_value(), "gc");
+        self.builder.build_call(f, &[gc.into()], "collect");
     }
     pub fn gc_get_size(&self) -> FNType {
         self.plmod

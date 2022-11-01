@@ -8,7 +8,7 @@
 
 在jit模式下使用runtime函数可能会出现`invalid memory access`错误，
 这个问题本质是rust编译的时候会优化掉不使用的module，导致jit时找不到对应runtime函数。所以建议每个
-mod加一个叫做`reg`的函数，里边什么都不做，这样在需要jit测试的时候调用使用模块的`reg`函数，就不会被优化掉了。
+mod加一个叫做`reg`的函数，里边**必须用到你会使用的所有结构体**，这样在需要jit测试的时候调用使用模块的`reg`函数，对应代码就不会被优化掉了。
 
 
 ## 使用`is_runtime`导出rust函数

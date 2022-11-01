@@ -193,6 +193,8 @@ pub fn alloc<'a, 'ctx>(
         Some(entry) => {
             builder.position_at_end(entry);
             let p = builder.build_alloca(tp, name);
+            ctx.gc_add_root(p.as_basic_value_enum(), builder);
+            ctx.roots.borrow_mut().push(p.as_basic_value_enum());
             builder.position_at_end(ctx.block.unwrap());
             p
         }

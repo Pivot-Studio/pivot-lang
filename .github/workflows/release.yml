@@ -19,7 +19,7 @@ jobs:
         config:
           - os: "ubuntu-latest"
             dir: linux64
-            artifacts: "plc"
+            artifacts: ["plc","libvm.a"]
             RUSTFLAGS: "-Dwarnings"
           # - os: "windows-latest"
           #   dir: win64
@@ -27,7 +27,7 @@ jobs:
           #   RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"
           - os: "macOS-latest"
             dir: osx64
-            artifacts: "plc"
+            artifacts: ["plc","libvm.a"]
             RUSTFLAGS: "-Dwarnings"
     steps:
       - uses: actions/checkout@v3
@@ -91,13 +91,6 @@ jobs:
           LLVM_SYS_140_PREFIX: ${{ runner.temp }}/llvm
         run: cargo build --release
 
-      - name: Cargo build vm
-        if: ${{ matrix.config.os != 'windows-latest' }}
-        env:
-          RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
-          LLVM_SYS_140_PREFIX: ${{ runner.temp }}/llvm
-        run: cd vm && cargo build --release
-
       - run: mkdir -p ${{ matrix.config.dir }}
 
       - name: Move artifacts
@@ -112,18 +105,6 @@ jobs:
             src = "target/release/%s" % artifact
             dst = os.environ['OUT_DIR'] + "/" + artifact
             os.rename(src, dst)
-        shell: python
-
-      - name: Move vm artifacts
-        env:
-          ARTIFACTS: ${{ matrix.config.artifacts }}
-          OUT_DIR: ${{ matrix.config.dir }}
-          OS: ${{ matrix.config.os }}
-        run: |
-          import os
-          src = "vm/target/release/libvm.a"
-          dst = os.environ['OUT_DIR'] + "/" + "libvm.a"
-          os.rename(src, dst)
         shell: python
 
 

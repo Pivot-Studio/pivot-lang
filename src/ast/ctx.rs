@@ -105,6 +105,7 @@ pub struct Ctx<'a, 'ctx> {
         ),
     >, // variable table
     pub config: Config,                                     // config
+    pub roots: RefCell<Vec<BasicValueEnum<'ctx>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -885,6 +886,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             init_func: None,
             table: FxHashMap::default(),
             config,
+            roots: RefCell::new(Vec::new()),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -925,6 +927,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             init_func: self.init_func,
             table: FxHashMap::default(),
             config: self.config.clone(),
+            roots: RefCell::new(Vec::new()),
         };
         add_primitive_types(&mut ctx);
         ctx
