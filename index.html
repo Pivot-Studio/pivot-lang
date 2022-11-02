@@ -314,7 +314,7 @@ struct_init_exp = type_name &quot;{&quot; struct_init_exp_field &quot;}&quot; ;
 
 struct_init_exp_field = identifier &quot;:&quot; logic_exp &quot;,&quot; ;
 
-assignee = identifier (&quot;.&quot; identifier)*;
+assignee = pointer_exp;
 
 assignment = assignee &quot;=&quot; logic_exp ;
 
@@ -361,7 +361,7 @@ function_def = &quot;fn&quot; identifier &quot;(&quot; (typed_identifier (&quot;
 
 struct_def = &quot;struct&quot; identifier &quot;{&quot; struct_field* &quot;}&quot; ;
 
-type_name = extern_identifier ;
+type_name = &quot;*&quot;* extern_identifier ;
 
 typed_identifier = identifier &quot;:&quot; type_name ;
 

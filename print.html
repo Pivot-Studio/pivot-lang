@@ -312,7 +312,7 @@ struct_init_exp = type_name &quot;{&quot; struct_init_exp_field &quot;}&quot; ;
 
 struct_init_exp_field = identifier &quot;:&quot; logic_exp &quot;,&quot; ;
 
-assignee = identifier (&quot;.&quot; identifier)*;
+assignee = pointer_exp;
 
 assignment = assignee &quot;=&quot; logic_exp ;
 
@@ -359,7 +359,7 @@ function_def = &quot;fn&quot; identifier &quot;(&quot; (typed_identifier (&quot;
 
 struct_def = &quot;struct&quot; identifier &quot;{&quot; struct_field* &quot;}&quot; ;
 
-type_name = extern_identifier ;
+type_name = &quot;*&quot;* extern_identifier ;
 
 typed_identifier = identifier &quot;:&quot; type_name ;
 
@@ -805,7 +805,7 @@ flag标识它不完整（常常是<code>is_complete</code>），这样在ast阶�
 <h2 id="jit-invalid-memory-access-issue"><a class="header" href="#jit-invalid-memory-access-issue">JIT invalid memory access issue</a></h2>
 <p>在jit模式下使用runtime函数可能会出现<code>invalid memory access</code>错误，
 这个问题本质是rust编译的时候会优化掉不使用的module，导致jit时找不到对应runtime函数。所以建议每个
-mod加一个叫做<code>reg</code>的函数，里边什么都不做，这样在需要jit测试的时候调用使用模块的<code>reg</code>函数，就不会被优化掉了。</p>
+mod加一个叫做<code>reg</code>的函数，里边<strong>必须用到你会使用的所有结构体</strong>，这样在需要jit测试的时候调用使用模块的<code>reg</code>函数，对应代码就不会被优化掉了。</p>
 <h2 id="使用is_runtime导出rust函数"><a class="header" href="#使用is_runtime导出rust函数">使用<code>is_runtime</code>导出rust函数</a></h2>
 <p>一个被<code>is_runtime</code>标记的rust函数在编译到静态库之后，在pivot-lang中声明对应的函数，即可像正常函数一样调用。例如：</p>
 <p>Rust:</p>
