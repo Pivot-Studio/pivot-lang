@@ -4,12 +4,6 @@ use mod2;
 use sub3::main;
 use sub3::main::test;
 use std::io;
-use core::gc;
-fn test_gc() void {
-    let gc = gc::DioGC__new_ptr();
-    io::printi64ln(gc);
-    return;
-}
 
 const a = 100;
 struct struct_father {
@@ -184,9 +178,9 @@ fn main() i64 {
     test_mod_struct();
     test_loop();
     test_ret_struct_arr();
-    test_gc();
     let st = test_ret_struct();
     io::printi64ln(st.a);
+    test_pointer();
     return 0;
 }
 fn for_loop() void {
@@ -204,6 +198,30 @@ fn while_loop(i: i64) void {
     let a = 1;
    }
    return;
+}
+
+fn test_pointer() void {
+    let a = 0;
+    let b = &a;
+    test_modify_pointer(&b);
+    io::printi64ln(*b);
+    let dang = test_dangling();
+    io::printi64ln(dang.ptr.a);
+    return;
+}
+
+fn test_modify_pointer(a:**i64) void {
+    **a = 6;
+    return;
+}
+
+struct pointer_struct {
+    ptr: *struct_child;
+}
+
+fn test_dangling() *pointer_struct {
+    let a = pointer_struct{ptr:&struct_child{a:10,},};
+    return &a;
 }
 
 fn test_vm_link() i64;

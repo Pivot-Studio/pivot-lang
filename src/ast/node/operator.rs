@@ -275,6 +275,8 @@ impl Node for TakeOpNode {
         if let Some(id) = &self.field {
             res = match res.unwrap() {
                 AnyValueEnum::PointerValue(s) => {
+                    let (tp, s) = ctx.auto_deref(pltype, s);
+                    pltype = tp;
                     let etype = s.get_type().get_element_type();
                     let index;
                     if etype.is_struct_type() {
@@ -323,9 +325,10 @@ impl Node for TakeOpNode {
         }
         if self.field.is_none() {
             // end with ".", gen completions
+            let tp = ctx.auto_deref_tp(pltype);
             ctx.if_completion(|ctx, (pos, trigger)| {
                 if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
-                    if let PLType::STRUCT(s) = pltype {
+                    if let PLType::STRUCT(s) = tp {
                         let completions = s.get_completions();
                         ctx.completion_items.set(completions);
                         ctx.action = None;

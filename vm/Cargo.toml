@@ -16,6 +16,6 @@ path = "src/lib.rs"
 crate-type = ["staticlib", "lib"]
 
 [features]
-default = ["jit"]
+default = ["static"]
 jit = ["internal_macro/jit"]
 static = ["internal_macro/static"]

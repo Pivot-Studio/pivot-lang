@@ -106,6 +106,31 @@ impl TypeNode for ArrayTypeNameNode {
 }
 
 #[range]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PointerTypeNode {
+    pub elm: Box<TypeNodeEnum>,
+}
+
+impl TypeNode for PointerTypeNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("PointerTypeNode");
+        self.elm.print(tabs + 1, true, line.clone());
+    }
+
+    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
+        let pltype = self.elm.get_type(ctx)?;
+        let pltype = PLType::POINTER(Box::new(pltype));
+        Ok(pltype)
+    }
+
+    fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) {
+        self.elm.emit_highlight(ctx);
+    }
+}
+
+#[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TypedIdentifierNode {
     pub id: VarNode,
@@ -351,7 +376,11 @@ impl Node for StructInitNode {
         for field in self.fields.iter_mut() {
             let range = field.range();
             let name = field.id.name.clone();
+            let frange = field.range();
             let (value, _, _) = field.emit(ctx)?;
+            if value.is_none() {
+                return Err(ctx.add_err(frange, ErrorCode::EXPECT_VALUE));
+            }
             fields.insert(name, (ctx.try_load2var(range, value.unwrap())?, range));
         }
         if let PLType::STRUCT(st) = &tp {

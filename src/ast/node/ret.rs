@@ -56,6 +56,9 @@ impl Node for RetNode {
             ctx.builder
                 .build_unconditional_branch(ctx.return_block.unwrap().0);
         }
+        let ret = ctx.return_block.unwrap().0;
+        let inst = ret.get_first_instruction().unwrap();
+        ctx.builder.position_at(ret, &inst);
         Ok((None, None, TerminatorEnum::RETURN))
     }
 }

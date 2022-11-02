@@ -99,7 +99,10 @@ pub enum ActionType {
 
 #[cfg(feature = "jit")]
 pub fn run(p: &Path, opt: OptimizationLevel) {
+    use inkwell::support;
+
     vm::reg();
+    support::enable_llvm_pretty_stack_trace();
     let ctx = &Context::create();
     let re = Module::parse_bitcode_from_path(p, ctx).unwrap();
     let engine = re.create_jit_execution_engine(opt).unwrap();
@@ -262,7 +265,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         .arg("-pthread")
         .arg("-ldl")
         .arg(&f)
-        .arg("vm/target/release/libvm.a")
+        .arg("target/release/libvm.a")
         .arg("-o")
         .arg(&fo)
         .arg("-g");

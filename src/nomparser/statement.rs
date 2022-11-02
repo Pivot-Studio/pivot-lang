@@ -89,7 +89,7 @@ fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
         break_statement,
         continue_statement,
         return_statement,
-        semi_statement!(complex_exp),
+        semi_statement!(pointer_exp),
         empty_statement,
         comment,
         except(
@@ -142,7 +142,7 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("a = 1")]
 pub fn assignment(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
-        tuple((complex_exp, tag_token(TokenType::ASSIGN), logic_exp)),
+        tuple((pointer_exp, tag_token(TokenType::ASSIGN), logic_exp)),
         |(left, _op, right)| {
             let range = left.range().start.to(right.range().end);
             res_enum(

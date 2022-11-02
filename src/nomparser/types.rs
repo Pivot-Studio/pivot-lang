@@ -1,18 +1,40 @@
 use std::fmt::Error;
 
-use nom::{branch::alt, combinator::map_res, sequence::tuple, IResult};
+use nom::{
+    branch::alt,
+    combinator::map_res,
+    multi::many0,
+    sequence::{pair, tuple},
+    IResult,
+};
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
     ast::node::types::{ArrayTypeNameNode, TypeNameNode},
-    ast::tokens::TokenType,
+    ast::{node::types::PointerTypeNode, tokens::TokenType},
 };
 use internal_macro::test_parser;
 
 use super::*;
 
 pub fn type_name(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
-    delspace(alt((basic_type, array_type)))(input)
+    delspace(map_res(
+        pair(
+            many0(tag_token(TokenType::TAKE_VAL)),
+            alt((basic_type, array_type)),
+        ),
+        |(pts, n)| {
+            let mut node = n;
+            for _ in pts {
+                let range = node.range();
+                node = Box::new(TypeNodeEnum::PointerTypeNode(PointerTypeNode {
+                    elm: node,
+                    range,
+                }));
+            }
+            res_box(node)
+        },
+    ))(input)
 }
 
 #[test_parser("kfsh")]
