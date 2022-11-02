@@ -6,7 +6,7 @@ use crate::{
     },
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
-    utils::read_config::{get_config, ConfigEntry},
+    utils::read_config::{get_config, get_config_path},
     Db,
 };
 use colored::Colorize;
@@ -16,7 +16,12 @@ use inkwell::{
     targets::{FileType, InitializationConfig, Target, TargetMachine},
     OptimizationLevel,
 };
-use std::{fs, path::Path, time::Instant};
+use rustc_hash::FxHashSet;
+use std::{
+    fs::{self, remove_file},
+    path::Path,
+    time::Instant,
+};
 use std::{path::PathBuf, process::Command};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Copy)]
@@ -88,6 +93,7 @@ pub enum ActionType {
     Diagnostic,
     Hover,
     Compile,
+    PrintAst,
 }
 
 #[cfg(feature = "jit")]
@@ -104,13 +110,31 @@ pub fn run(p: &Path, opt: OptimizationLevel) {
 
 #[salsa::tracked(lru = 32)]
 pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
-    let re = get_config(db, ConfigEntry::new(db, docs.file(db).to_string()));
+    let path = get_config_path(docs.file(db).to_string());
+    if path.is_err() {
+        eprintln!("lsp error: {}", path.err().unwrap());
+        return;
+    }
+    let confinput = FileCompileInput::new(
+        db,
+        path.clone().unwrap(),
+        "".to_string(),
+        docs,
+        Default::default(),
+        Default::default(),
+    );
+
+    let re = get_config(db, confinput.get_file_content(db).unwrap());
     if re.is_err() {
         eprintln!("lsp error: {}", re.err().unwrap());
         return;
     }
-    let config = re.unwrap();
-    let file = config.entry;
+    let mut config = re.unwrap();
+    let buf = PathBuf::from(path.unwrap());
+    let parant = buf.parent().unwrap();
+    config.entry = parant.join(config.entry).to_str().unwrap().to_string();
+    let file = config.entry.clone();
+    config.root = parant.to_str().unwrap().to_string();
     let input = FileCompileInput::new(
         db,
         file.clone(),
@@ -122,6 +146,7 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
             .to_string(),
         docs,
         Default::default(),
+        config,
     );
     compile_dry_file(db, input);
 }
@@ -140,7 +165,13 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
         return None;
     }
     let node = parse_result.unwrap();
-    let program = Program::new(db, node, docs.get_emit_params(db), docs.docs(db));
+    let program = Program::new(
+        db,
+        node,
+        docs.get_emit_params(db),
+        docs.docs(db),
+        docs.config(db),
+    );
     Some(program.emit(db))
 }
 
@@ -177,12 +208,28 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
             return;
         }
     }
+    if op.printast {
+        let time = now.elapsed();
+        println!("print ast done, time: {:?}", time);
+        return;
+    }
     let mut mods = compile_dry::accumulated::<ModBuffer>(db, docs);
     let ctx = Context::create();
     let m = mods.pop().unwrap();
-    let llvmmod = Module::parse_bitcode_from_path(m, &ctx).unwrap();
+    let llvmmod = Module::parse_bitcode_from_path(m.clone(), &ctx).unwrap();
+    let mut set = FxHashSet::default();
+    set.insert(m.clone());
+    _ = remove_file(m.clone()).unwrap();
+    // println!("rm {}", m.to_str().unwrap());
     for m in mods {
-        _ = llvmmod.link_in_module(Module::parse_bitcode_from_path(m, &ctx).unwrap());
+        if set.contains(&m) {
+            continue;
+        }
+        set.insert(m.clone());
+        // println!("{}", m.clone().to_str().unwrap());
+        _ = llvmmod.link_in_module(Module::parse_bitcode_from_path(m.clone(), &ctx).unwrap());
+        _ = remove_file(m.clone()).unwrap();
+        // println!("rm {}", m.to_str().unwrap());
     }
     if op.genir {
         let mut s = out.to_string();
@@ -199,18 +246,22 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let mut fo = out.to_string();
     fo.push_str(".out");
     llvmmod.write_bitcode_to_path(Path::new(&out));
-    let link = Command::new("clang")
-        .arg(format!("-O{}", op.optimization as u32))
+    println!("jit executable file writted to: {}", &out);
+    let mut cmd = Command::new("clang++");
+    if cfg!(target_os = "linux") {
+        println!("target os is linux");
+        cmd.arg("-ltinfo");
+    }
+    cmd.arg(format!("-O{}", op.optimization as u32))
         .arg("-pthread")
-        // .arg("-ltinfo")
         .arg("-ldl")
         .arg(&f)
         .arg("vm/target/release/libvm.a")
         .arg("-o")
         .arg(&fo)
-        .arg("-g")
-        .status();
-    if link.is_err() || !link.unwrap().success() {
+        .arg("-g");
+    let res = cmd.status();
+    if res.is_err() || !res.unwrap().success() {
         println!("warning: link with pivot lang vm failed, could be caused by vm pkg not found.");
         println!("warning: you can build vm pkg by `cargo build --release` in vm dir.");
     } else {
@@ -220,109 +271,160 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let time = now.elapsed();
     println!("compile succ, time: {:?}", time);
 }
+#[cfg(test)]
+mod test {
+    use std::{
+        cell::RefCell,
+        sync::{Arc, Mutex},
+    };
 
-// #[cfg(test)]
-// mod test {
-//     use std::{
-//         cell::RefCell,
-//         sync::{Arc, Mutex},
-//     };
+    use salsa::{accumulator::Accumulator, storage::HasJar};
 
-//     use crate::{
-//         ast::{accumulators::Completions, range::Pos},
-//         db::Database,
-//         lsp::mem_docs::{MemDocs, MemDocsInput},
-//     };
+    use crate::{
+        ast::{accumulators::Completions, range::Pos},
+        db::Database,
+        lsp::mem_docs::{MemDocs, MemDocsInput},
+        Db,
+    };
 
-//     use super::{compile_dry, ActionType};
+    use super::{compile_dry, ActionType};
 
-//     #[test]
-//     fn test_struct_field_completion() {
-//         let file = "test/test_completion.pi";
-//         let docs = MemDocs::new();
-//         let db = Database::default();
-//         let input = MemDocsInput::new(
-//             &db,
-//             Arc::new(Mutex::new(RefCell::new(docs))),
-//             file.to_string(),
-//             Default::default(),
-//             ActionType::Completion,
-//             Some((
-//                 Pos {
-//                     line: 9,
-//                     column: 9,
-//                     offset: 0,
-//                 },
-//                 Some(".".to_string()),
-//                 ActionType::Completion,
-//             )),
-//         );
-//         compile_dry(&db, input);
-//         let comps = compile_dry::accumulated::<Completions>(&db, input);
-//         assert_eq!(comps.len(), 1);
-//         assert_eq!(
-//             comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>(),
-//             vec!["a".to_string(), "b".to_string(), "c".to_string()]
-//         );
-//     }
+    fn test_lsp<'db, A>(
+        db: &'db dyn Db,
+        params: Option<(Pos, Option<String>, ActionType)>,
+        action: ActionType,
+        src: &str,
+    ) -> Vec<<A as Accumulator>::Data>
+    where
+        A: Accumulator,
+        dyn Db + 'db: HasJar<<A as Accumulator>::Jar>,
+    {
+        let docs = MemDocs::new();
+        // let db = Database::default();
+        let input = MemDocsInput::new(
+            db,
+            Arc::new(Mutex::new(RefCell::new(docs))),
+            src.to_string(),
+            Default::default(),
+            action,
+            params,
+        );
+        compile_dry(db, input);
+        compile_dry::accumulated::<A>(db, input)
+    }
 
-//     #[test]
-//     fn test_completion() {
-//         let file = "test/test_completion.pi";
-//         let docs = MemDocs::new();
-//         let db = Database::default();
-//         let input = MemDocsInput::new(
-//             &db,
-//             Arc::new(Mutex::new(RefCell::new(docs))),
-//             file.to_string(),
-//             Default::default(),
-//             ActionType::Completion,
-//             Some((
-//                 Pos {
-//                     line: 10,
-//                     column: 6,
-//                     offset: 0,
-//                 },
-//                 None,
-//                 ActionType::Completion,
-//             )),
-//         );
-//         compile_dry(&db, input);
-//         let comps = compile_dry::accumulated::<Completions>(&db, input);
-//         assert_eq!(comps.len(), 1);
-//         let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
-//         assert!(lables.contains(&"test1".to_string()));
-//         assert!(lables.contains(&"name".to_string()));
-//         assert!(lables.contains(&"if".to_string()));
-//     }
-//     #[test]
-//     fn test_type_completion() {
-//         let file = "test/test_completion.pi";
-//         let docs = MemDocs::new();
-//         let db = Database::default();
-//         let input = MemDocsInput::new(
-//             &db,
-//             Arc::new(Mutex::new(RefCell::new(docs))),
-//             file.to_string(),
-//             Default::default(),
-//             ActionType::Completion,
-//             Some((
-//                 Pos {
-//                     line: 5,
-//                     column: 7,
-//                     offset: 0,
-//                 },
-//                 Some(":".to_string()),
-//                 ActionType::Completion,
-//             )),
-//         );
-//         compile_dry(&db, input);
-//         let comps = compile_dry::accumulated::<Completions>(&db, input);
-//         assert_eq!(comps.len(), 1);
-//         let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
-//         // assert!(lables.contains(&"test".to_string())); TODO: self refernece
-//         assert!(lables.contains(&"i64".to_string()));
-//         assert!(!lables.contains(&"name".to_string()));
-//         assert!(lables.contains(&"test1".to_string()));
-//     }
-// }
+    #[test]
+    fn test_struct_field_completion() {
+        let comps = test_lsp::<Completions>(
+            &Database::default(),
+            Some((
+                Pos {
+                    line: 9,
+                    column: 9,
+                    offset: 0,
+                },
+                Some(".".to_string()),
+                ActionType::Completion,
+            )),
+            ActionType::Completion,
+            "test/lsp/test_completion.pi",
+        );
+        assert_eq!(comps.len(), 1);
+        let compstr = vec!["a", "b", "c"];
+        for comp in comps[0].iter() {
+            assert!(compstr.contains(&comp.label.as_str()));
+        }
+    }
+
+    #[test]
+    fn test_completion() {
+        let comps = test_lsp::<Completions>(
+            &Database::default(),
+            Some((
+                Pos {
+                    line: 10,
+                    column: 6,
+                    offset: 0,
+                },
+                None,
+                ActionType::Completion,
+            )),
+            ActionType::Completion,
+            "test/lsp/test_completion.pi",
+        );
+        assert_eq!(comps.len(), 1);
+        let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
+        assert!(lables.contains(&"test1".to_string()));
+        assert!(lables.contains(&"name".to_string()));
+        assert!(lables.contains(&"if".to_string()));
+    }
+    #[test]
+    fn test_type_completion() {
+        let comps = test_lsp::<Completions>(
+            &Database::default(),
+            Some((
+                Pos {
+                    line: 5,
+                    column: 7,
+                    offset: 0,
+                },
+                Some(":".to_string()),
+                ActionType::Completion,
+            )),
+            ActionType::Completion,
+            "test/lsp/test_completion.pi",
+        );
+        assert_eq!(comps.len(), 1);
+        let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
+        // assert!(lables.contains(&"test".to_string())); TODO: self refernece
+        assert!(lables.contains(&"i64".to_string()));
+        assert!(!lables.contains(&"name".to_string()));
+        assert!(lables.contains(&"test1".to_string()));
+    }
+    #[test]
+    #[cfg(feature = "jit")]
+    fn test_jit() {
+        use std::path::PathBuf;
+
+        use crate::ast::compiler::{compile, run, Options};
+
+        let docs = MemDocs::new();
+        let mut db = Database::default();
+        let input = MemDocsInput::new(
+            &db,
+            Arc::new(Mutex::new(RefCell::new(docs))),
+            "test/main.pi".to_string(),
+            Default::default(),
+            ActionType::Compile,
+            None,
+        );
+        let out = "testout.plb";
+        compile(
+            &db,
+            input,
+            out.to_string(),
+            Options {
+                verbose: true,
+                optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
+                genir: true,
+                printast: false,
+            },
+        );
+        run(
+            &PathBuf::from(out).as_path(),
+            inkwell::OptimizationLevel::Default,
+        );
+        input.set_action(&mut db).to(ActionType::PrintAst);
+        compile(
+            &db,
+            input,
+            out.to_string(),
+            Options {
+                verbose: true,
+                optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
+                genir: false,
+                printast: true,
+            },
+        );
+    }
+}

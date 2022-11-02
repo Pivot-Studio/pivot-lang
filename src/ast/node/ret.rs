@@ -35,16 +35,13 @@ impl Node for RetNode {
                 let err = ctx.add_err(self.range, ErrorCode::RETURN_VALUE_IN_VOID_FUNCTION);
                 return Err(err);
             }
-            let (ret, _, _, _) = ret.emit(ctx)?;
-            let ret = if rettp.unwrap().is_pointer_type() {
-                ctx.try_load2ptr(ret)
-            } else {
-                ctx.try_load2var(ret)
-            };
+            let (ret, _, _) = ret.emit(ctx)?;
+            let ret = ctx.try_load2var(self.range, ret.unwrap())?;
             if ret.as_basic_value_enum().get_type() != rettp.unwrap() {
                 let err = ctx.add_err(self.range, ErrorCode::RETURN_TYPE_MISMATCH);
                 return Err(err);
             }
+
             ctx.builder.build_store(
                 ctx.return_block.unwrap().1.unwrap(),
                 ret.as_basic_value_enum(),
@@ -59,6 +56,6 @@ impl Node for RetNode {
             ctx.builder
                 .build_unconditional_branch(ctx.return_block.unwrap().0);
         }
-        Ok((Value::None, None, TerminatorEnum::RETURN, false))
+        Ok((None, None, TerminatorEnum::RETURN))
     }
 }

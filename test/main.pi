@@ -1,17 +1,17 @@
 use mod1;
 use sub::mod;
 use mod2;
-const a = 100;
-fn change(x:&i64) void {
-    x = x + 1;
+use sub3::main;
+use sub3::main::test;
+use std::io;
+use core::gc;
+fn test_gc() void {
+    let gc = gc::DioGC__new_ptr();
+    io::printi64ln(gc);
     return;
 }
-fn ret_ref(x:&i64) &i64 {
-    return &x;
-}
-struct ref_struct {
-    ref : &i64;
-}
+
+const a = 100;
 struct struct_father {
     a : i64;
     b : i64;
@@ -23,6 +23,7 @@ struct struct_father {
 // 2. b
 struct struct_child {
     a : i64;
+    b : [i64*1];
 }
 
 
@@ -34,60 +35,28 @@ struct struct_child {
 // ```pivot-lang
 // fn test_struct() void {
 //     let s = struct_father{a:2,b:2,c:struct_child{a:2,},};
-//     printi64ln(s.a);
-//     printi64ln(s.a);
-//     printi64ln(s.c.a);
+//     io::printi64ln(s.a);
+//     io::printi64ln(s.a);
+//     io::printi64ln(s.c.a);
 //     return ;
 // }
 // ```
 fn test_struct() void {
-    let s = struct_father{a:2,b:2,c:struct_child{a:2,},};
-    printi64ln(s.a);
-    printi64ln(s.a);
-    printi64ln(s.c.a);
+    let s = struct_father{a:2,b:2,c:struct_child{a:2,b:[1101,],},};
+    io::printi64ln(s.a);
+    io::printi64ln(s.a);
+    io::printi64ln(s.c.a);
+    io::printi64ln(s.c.b[0]);
     mod1::test_mod(a);
     mod2::test_mod(a);
     mod::name();
     mod1::printi64ln(1);
+    main::test();
+    test::test();
     return ;
 }
 fn test_vm() void {
-    printi64ln(test_vm_link());//165445451
-    return ;
-}
-fn test_var_ref() void {
-    let a = 1;
-    let b = &a ;
-    b = b + 1;
-    printi64ln(a);
-    printi64ln(b);
-    //4156545
-    return ;//16541
-    //1515
-}
-fn test_fn_ref() void {
-    let a = 1;
-    let b = &a;
-    change(&b);
-    printi64ln(a);
-    printi64ln(b);
-    return ;
-}
-fn test_ret_ref() void {
-    let a = 1;
-    let b = ret_ref(&a);
-    b = b + 1;
-    printi64ln(a);
-    printi64ln(b);
-    return;
-}
-
-fn test_struct_ref() void {
-    let a = 1;
-    let ref_struct = ref_struct{ref:&a,};
-    ref_struct.ref = ref_struct.ref + 1;
-    printi64ln(a);
-    printi64ln(ref_struct.ref);
+    io::printi64ln(test_vm_link());//165445451
     return ;
 }
 fn test_if_else() void {
@@ -95,6 +64,7 @@ fn test_if_else() void {
     test_if_else_ret(true);
     test_if_ret_only(true);
     test_else_ret_only(true);
+
     test_not_ret(true);
     return    ;
 }
@@ -136,11 +106,12 @@ fn test_not_ret(judge:bool) void {
     return;
 }
 fn test_complex() void {
-    let res = get(get(get(get(2))));
-    printi64ln(res);
+    let res: i64;
+    res = get(get(get(get(2))));
+    io::printi64ln(res);
     let b = true && !(res > 3 || res < 10);
     if b {
-        printi64ln(res);
+        io::printi64ln(res);
     }
     return;
 }
@@ -152,27 +123,70 @@ fn test_warn() void {
     let x = 1;//15154212
 }
 fn test_const() void {
-    printi64ln(a);
+    io::printi64ln(a);
+    return;
+}
+fn test_mod_struct() void {
+    let x = mod1::Mod1{x:2,y:mod2::Mod2{y:true,},};
+    io::printi64ln(x.x);
+    if x.y.y {
+        io::printi64ln(x.x);
+    }
+    return;
+}
+
+fn test_loop() void {
+    let i = 0;
+    while i < 7 {
+        if i == 3 {
+            i = 5;
+            continue;
+        }
+        if i==5 {
+            break;
+        }
+        i = i + 1;
+    }
+    for let i = 0; i < 10; i = i + 1 {
+        io::printi64ln(i);
+    }
+    return;
+}
+struct A {
+    x:i64;
+}
+fn ret_atruct() A {
+    return A{x:10000,};
+}
+fn ret_arr() [i64*3] {
+    return [1,10000,3,];
+}
+fn test_ret_struct_arr() void {
+    let s = ret_atruct().x;
+    io::printi64ln(s);
+    let a = ret_arr()[1];
+    io::printi64ln(a);
     return;
 }
 fn main() i64 {
+    let a1 = [[[1,2,],[1,2,],],];
+    io::printi64ln(a1[0][0][0]);
     test_struct();
     printline();
     test_vm();
-    printline();
-    test_var_ref();
-    printline();
-    test_fn_ref();
-    printline();
-    test_ret_ref();
-    printline();
-    test_struct_ref();
     printline();
     test_if_else();
     printline();
     test_complex();
     printline();
     test_const();
+    printline();
+    test_mod_struct();
+    test_loop();
+    test_ret_struct_arr();
+    test_gc();
+    let st = test_ret_struct();
+    io::printi64ln(st.a);
     return 0;
 }
 fn for_loop() void {
@@ -193,8 +207,11 @@ fn while_loop(i: i64) void {
 }
 
 fn test_vm_link() i64;
-fn printi64ln(i: i64) void;//415642154
 fn printline() void {
-    printi64ln(100000000);
+    io::printi64ln(100000000);
     return;
+}
+
+fn test_ret_struct() struct_child {
+    return struct_child{a:10,};
 }

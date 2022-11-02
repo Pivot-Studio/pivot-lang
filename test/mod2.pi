@@ -1,5 +1,8 @@
-
+use sub::mod;
 fn test_mod(args:i64) void {
 
     return;
+}
+struct Mod2 {
+    y:bool;
 }

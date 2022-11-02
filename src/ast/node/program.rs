@@ -1,4 +1,6 @@
 use std::cell::RefCell;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -10,8 +12,10 @@ use crate::ast::compiler::{compile_dry_file, ActionType};
 use crate::ast::ctx::{self, create_ctx_info, Ctx, Mod};
 use crate::lsp::mem_docs::{EmitParams, FileCompileInput, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
+use crate::utils::read_config::{get_config, Config};
 use crate::Db;
 
+use colored::Colorize;
 use inkwell::context::Context;
 use inkwell::targets::TargetMachine;
 use internal_macro::range;
@@ -63,14 +67,10 @@ impl Node for ProgramNode {
                 break;
             }
             if i == prev {
-                self.structs.iter().for_each(|x| {
-                    if let Err(e) = x.emit_struct_def(ctx) {
-                        ctx.add_diag(e);
-                    }
-                });
                 break;
             }
             prev = i;
+            ctx.errs.borrow_mut().clear();
         }
         self.fntypes.iter_mut().for_each(|x| {
             _ = x.emit_func_type(ctx);
@@ -98,7 +98,7 @@ impl Node for ProgramNode {
             _ = x.emit(ctx);
         });
 
-        Ok((Value::None, None, TerminatorEnum::NONE, false))
+        Ok((None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -107,6 +107,7 @@ pub struct Program {
     pub node: ProgramNodeWrapper,
     pub params: EmitParams,
     pub docs: MemDocsInput,
+    pub config: Config,
 }
 
 #[salsa::tracked]
@@ -129,11 +130,43 @@ impl Program {
             if u.ids.is_empty() || !u.complete {
                 continue;
             }
-            let mut path = PathBuf::from(self.params(db).modpath(db));
-            for p in u.ids[0..u.ids.len() - 1].iter() {
+            let mut path = PathBuf::from(self.config(db).root);
+            let mut config = self.config(db);
+            let mut start = 0;
+            // 加载依赖包的路径
+            if let Some(cm) = self.config(db).deps {
+                // 如果use的是依赖包
+                if let Some(dep) = cm.get(&u.ids[0].name) {
+                    path = path.join(&dep.path);
+                    let input = FileCompileInput::new(
+                        db,
+                        path.join("Kagari.toml")
+                            .clone()
+                            .to_str()
+                            .unwrap()
+                            .to_string(),
+                        "".to_string(),
+                        self.docs(db),
+                        Default::default(),
+                        Default::default(),
+                    );
+                    let f = input.get_file_content(db);
+                    if f.is_none() {
+                        continue;
+                    }
+                    let re = get_config(db, f.unwrap());
+                    if re.is_err() {
+                        continue;
+                    }
+                    config = re.unwrap();
+                    config.root = path.to_str().unwrap().to_string();
+
+                    start = 1;
+                }
+            }
+            for p in u.ids[start..].iter() {
                 path = path.join(p.name.clone());
             }
-            path = path.join(u.ids.last().unwrap().name.clone());
             path = path.with_extension("pi");
             let f = path.to_str().unwrap().to_string();
             // eprintln!("use {}", f.clone());
@@ -141,8 +174,9 @@ impl Program {
                 db,
                 f,
                 self.params(db).modpath(db).clone(),
-                self.docs(db).clone(),
+                self.docs(db),
                 Default::default(),
+                config,
             );
             let m = compile_dry_file(db, f);
             if m.is_none() {
@@ -187,6 +221,7 @@ pub struct ProgramEmitParam {
 #[salsa::tracked]
 pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     let context = &Context::create();
+    let action = params.params(db).action(db);
     let (a, b, c, d, e, f) = create_ctx_info(context, params.dir(db), params.file(db));
     let v = RefCell::new(Vec::new());
     let mut ctx = ctx::Ctx::new(
@@ -201,12 +236,17 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         &v,
         Some(params.params(db).action(db)),
         params.params(db).params(db),
+        params.params(db).config(db),
     );
     ctx.plmod.submods = params.submods(db);
     let m = &mut ctx;
     m.module.set_triple(&TargetMachine::get_default_triple());
     let node = params.node(db);
     let mut nn = node.node(db);
+    if m.action.is_some() && m.action.unwrap() == ActionType::PrintAst {
+        println!("file: {}", params.fullpath(db).green());
+        nn.print(0, true, vec![]);
+    }
     let _ = nn.emit(m);
     Diagnostics::push(
         db,
@@ -222,9 +262,10 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let b = ctx.semantic_tokens_builder.borrow().build();
         PLSemanticTokens::push(db, b);
     }
-
-    let ci = ctx.completion_items.take();
-    Completions::push(db, ci);
+    if action == ActionType::Completion {
+        let ci = ctx.completion_items.take();
+        Completions::push(db, ci);
+    }
     if let Some(c) = ctx.goto_def.take() {
         GotoDef::push(db, c);
     }
@@ -233,9 +274,23 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     }
     if ctx.action.is_some() && ctx.action.unwrap() == ActionType::Compile {
         ctx.dibuilder.finalize();
-        let pp = Path::new(params.file(db)).with_extension("bc");
+        let mut hasher = DefaultHasher::new();
+        params.fullpath(db).hash(&mut hasher);
+        let hashed = format!(
+            "{}_{:x}",
+            Path::new(&params.file(db))
+                .with_extension("")
+                .to_str()
+                .unwrap(),
+            hasher.finish()
+        );
+        let pp = Path::new(&hashed).with_extension("bc");
         let p = pp.as_path();
         ctx.module.write_bitcode_to_path(p);
+        // _= fs::write(
+        //     Path::new(&hashed).with_extension("ll"),
+        //     ctx.module.print_to_string().to_string(),
+        // );
         ModBuffer::push(db, p.clone().to_path_buf());
     }
     ModWrapper::new(db, ctx.plmod)

@@ -13,6 +13,7 @@ use crate::{
         range::Pos,
     },
     nomparser::SourceProgram,
+    utils::read_config::Config,
     Db,
 };
 
@@ -31,6 +32,7 @@ pub struct EmitParams {
     pub modpath: String,
     pub action: ActionType,
     pub params: Option<(Pos, Option<String>, ActionType)>,
+    pub config: Config,
 }
 
 #[salsa::input]
@@ -51,6 +53,7 @@ pub struct FileCompileInput {
     pub modpath: String,
     pub docs: MemDocsInput,
     pub submods: FxHashMap<String, Mod>,
+    pub config: Config,
 }
 #[salsa::tracked]
 impl FileCompileInput {
@@ -75,8 +78,10 @@ impl FileCompileInput {
     pub fn get_emit_params(self, db: &dyn Db) -> EmitParams {
         let file = self.file(db);
         if self.docs(db).file(db) != file {
-            let action = if self.docs(db).action(db) == ActionType::Compile {
-                ActionType::Compile
+            let action = if self.docs(db).action(db) == ActionType::Compile
+                || self.docs(db).action(db) == ActionType::PrintAst
+            {
+                self.docs(db).action(db)
             } else {
                 ActionType::Diagnostic
             };
@@ -86,11 +91,19 @@ impl FileCompileInput {
                 self.modpath(db).clone(),
                 action,
                 Some((Default::default(), None, action)),
+                self.config(db),
             );
         }
         let action = self.docs(db).action(db);
         let params = self.docs(db).params(db);
-        EmitParams::new(db, file.clone(), self.modpath(db).clone(), action, params)
+        EmitParams::new(
+            db,
+            file.clone(),
+            self.modpath(db).clone(),
+            action,
+            params,
+            self.config(db),
+        )
     }
 }
 

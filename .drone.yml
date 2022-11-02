@@ -9,6 +9,9 @@ trigger:
   - promote
   - rollback
   - custom
+  branch: 
+    exclude:
+      - "gh-pages"
 steps:
   - name: code cov
     image: registry.cn-hangzhou.aliyuncs.com/pivotstudio/rust-pl:latest
@@ -26,20 +29,56 @@ steps:
     commands:
       - mkdir ./.cargo/
       - export CARGO_NET_GIT_FETCH_WITH_CLI=true
+      - export KAGARI_LIB_ROOT=$(pwd)/planglib
       - |
         echo '[source.crates-io]
         replace-with = "tuna"
         [source.tuna]
         registry = "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git"
+        [registries.tuna]
+        index = "https://mirrors.tuna.tsinghua.edu.cn/git/crates.io-index.git"
         [net]
         retry = 2
         git-fetch-with-cli = true' > ./.cargo/config.toml
       - cargo test --all
       - ls target/debug/deps
       - bash -c 'for file in target/debug/deps/plc-*; do [ -x "$${file}" ] || continue; mkdir -p "target/cov/$(basename $file)"; /kcov-build/usr/local/bin/kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done'
+      - bash -c 'for file in target/debug/deps/vm-*; do [ -x "$${file}" ] || continue; mkdir -p "target/cov/$(basename $file)"; /kcov-build/usr/local/bin/kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done'
       - ls 
       - ls target/cov/
       - wget https://codecov.io/bash
       - chmod +x bash
       - /bin/bash "bash"
       - echo "Uploaded code coverage"
+
+---
+kind: pipeline
+type: docker
+name: book
+trigger:
+  branch: 
+    - gh-pages
+steps:
+  - name: docker  
+    image: plugins/docker
+    settings:
+      username: 
+        from_secret: "docker_user_name"
+      password: 
+        from_secret: "docker_pass"
+      repo: registry.cn-hangzhou.aliyuncs.com/pivotstudio/lang-docs
+      registry: registry.cn-hangzhou.aliyuncs.com
+      mirror: https://jtkrmusq.mirror.aliyuncs.com
+      tags:
+        - latest
+        - build-${DRONE_BUILD_NUMBER} 
+  - name: k8s cd
+    image: ghcr.io/bh90210/dron8s:latest
+    pull: if-not-exists
+    depends_on:
+      - "docker"
+    settings:
+      yaml: book.yaml
+      build_tag: build-${DRONE_BUILD_NUMBER}
+      kubeconfig: 
+        from_secret: KUBE_CONFIG_RAW

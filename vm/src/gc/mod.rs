@@ -151,7 +151,9 @@ impl DioGC {
 
 #[cfg(test)]
 unsafe fn set_point_to(ptr1: *mut c_void, ptr2: *mut c_void, offset: i64) {
-    (ptr1 as *mut *mut c_void).offset(offset as isize).write(ptr2);
+    (ptr1 as *mut *mut c_void)
+        .offset(offset as isize)
+        .write(ptr2);
 }
 #[cfg(test)]
 #[test]

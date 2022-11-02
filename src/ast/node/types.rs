@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use super::primary::VarNode;
 use super::*;
-use crate::ast::ctx::{Ctx, Field, PLType, STType};
+use crate::ast::ctx::{ARRType, Ctx, Field, PLType, STType};
 use crate::ast::diag::ErrorCode;
 use crate::ast::range::Range;
 use inkwell::types::{AnyType, BasicType};
@@ -13,69 +13,122 @@ use rustc_hash::FxHashMap;
 #[range]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeNameNode {
-    pub id: String,
-    pub is_ref: bool,
+    pub id: Option<ExternIDNode>,
 }
 
-impl TypeNameNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        let id = &self.id;
-        return id.to_string();
+impl TypeNode for TypeNameNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let id = self.id;
+        if let Some(id_node) = id {
+            return id_node.format(tabs, prefix);
+        } else {
+            return "<id empty>".to_string();
+        }
     }
-    pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("TypeNameNode");
-        tab(tabs + 1, line.clone(), true);
-        if self.is_ref {
-            println!("id: &{}", self.id);
+        if let Some(id) = &self.id {
+            id.print(tabs + 1, true, line.clone());
         } else {
-            println!("id: {}", self.id);
+            tab(tabs + 1, line.clone(), true);
+            println!("id: <empty>");
         }
     }
-    pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Result<PLType, PLDiag> {
+
+    fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) {
+        if let Some(id) = &self.id {
+            ctx.push_semantic_token(id.range, SemanticTokenType::TYPE, 0);
+        }
+    }
+
+    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
         ctx.if_completion(|ctx, a| {
             if a.0.is_in(self.range) {
                 let completions = ctx.get_type_completions();
                 ctx.completion_items.set(completions);
             }
         });
-        ctx.push_semantic_token(self.range, SemanticTokenType::TYPE, 0);
-        let re = ctx.get_type(&self.id, self.range)?.clone();
-        if let Some(dst) = re.get_range() {
+        if self.id.is_none() {
+            return Err(ctx.add_err(self.range, ErrorCode::EXPECT_TYPE));
+        }
+        let (_, pltype, _) = self.id.as_ref().unwrap().get_type(ctx)?;
+        let pltype = pltype.unwrap();
+        if let Some(dst) = pltype.get_range() {
             ctx.send_if_go_to_def(self.range, dst, ctx.plmod.path.clone());
         }
-        ctx.set_if_refs_tp(&re, self.range);
-        Ok(re)
+        ctx.set_if_refs_tp(&pltype, self.range);
+        Ok(pltype)
     }
 }
+
+#[range]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ArrayTypeNameNode {
+    pub id: Box<TypeNodeEnum>,
+    pub size: Box<NodeEnum>,
+}
+
+impl TypeNode for ArrayTypeNameNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
+    }
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("ArrayTypeNameNode");
+        self.id.print(tabs + 1, false, line.clone());
+        self.size.print(tabs + 1, true, line.clone());
+    }
+    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
+        if let NodeEnum::Num(num) = *self.size {
+            if let Num::INT(sz) = num.value {
+                let pltype = self.id.get_type(ctx)?;
+                let arrtype = ARRType {
+                    element_type: Box::new(pltype),
+                    size: sz as u32,
+                };
+                let arrtype = PLType::ARR(arrtype);
+                return Ok(arrtype);
+            }
+        }
+        return Err(ctx.add_err(self.range, ErrorCode::SIZE_MUST_BE_INT));
+    }
+
+    fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) {
+        self.id.emit_highlight(ctx);
+    }
+}
+
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TypedIdentifierNode {
     pub id: VarNode,
-    pub tp: Box<TypeNameNode>,
+    pub tp: Box<TypeNodeEnum>,
     pub doc: Option<CommentNode>,
 }
 
 impl TypedIdentifierNode {
     pub fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::from("\n\r");
-        let mut id = String::new();
-        if self.tp.is_ref {
-            let ref_id = format!("&{}", &self.tp.id);
-            id.push_str(&ref_id);
-        } else {
-            id.push_str(&self.tp.id);
-        }
-        format_res.push_str(&prefix.repeat(tabs));
-        format_res.push_str(&self.id.name);
-        format_res.push_str(": ");
-        format_res.push_str(&id);
-        format_res.push_str(";");
-        if let Some(doc) = &self.doc {
-            format_res.push_str(&doc.format(tabs, prefix));
-        }
-        return format_res;
+        // let mut format_res = String::from("\n\r");
+        // let mut id = String::new();
+        // if self.tp.is_ref {
+        //     let ref_id = format!("&{}", &self.tp.id);
+        //     id.push_str(&ref_id);
+        // } else {
+        //     id.push_str(&self.tp.id);
+        // }
+        // format_res.push_str(&prefix.repeat(tabs));
+        // format_res.push_str(&self.id.name);
+        // format_res.push_str(": ");
+        // format_res.push_str(&id);
+        // format_res.push_str(";");
+        // if let Some(doc) = &self.doc {
+        //     format_res.push_str(&doc.format(tabs, prefix));
+        // }
+        // return format_res;
+        return "hello".to_string();
     }
     pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -95,7 +148,7 @@ impl TypedIdentifierNode {
 pub struct StructDefNode {
     pub doc: Vec<Box<NodeEnum>>,
     pub id: String,
-    pub fields: Vec<Box<TypedIdentifierNode>>,
+    pub fields: Vec<(Box<TypedIdentifierNode>, bool)>,
 }
 
 impl Node for StructDefNode {
@@ -111,7 +164,7 @@ impl Node for StructDefNode {
         format_res.push_str("struct ");
         format_res.push_str(&self.id);
         format_res.push_str(" {");
-        for field in &self.fields {
+        for (field, i) in &self.fields {
             format_res.push_str(&field.format(tabs + 1, prefix));
         }
         format_res.push_str("\n\r");
@@ -129,7 +182,7 @@ impl Node for StructDefNode {
             c.print(tabs + 1, false, line.clone());
         }
         let mut i = self.fields.len();
-        for field in &self.fields {
+        for (field, _) in &self.fields {
             i -= 1;
             field.print(tabs + 1, i == 0, line.clone());
         }
@@ -140,14 +193,17 @@ impl Node for StructDefNode {
             ctx.push_semantic_token(c.range(), SemanticTokenType::COMMENT, 0);
         }
         ctx.push_semantic_token(self.range, SemanticTokenType::STRUCT, 0);
-        for f in self.fields.clone() {
-            ctx.push_semantic_token(f.id.range, SemanticTokenType::PROPERTY, 0);
-            ctx.push_semantic_token(f.tp.range, SemanticTokenType::TYPE, 0);
-            if let Some(doc) = f.doc {
+        for (field, has_semi) in self.fields.iter() {
+            ctx.push_semantic_token(field.id.range, SemanticTokenType::PROPERTY, 0);
+            field.tp.emit_highlight(ctx);
+            if !has_semi {
+                return Err(ctx.add_err(field.range, ErrorCode::COMPLETION));
+            }
+            if let Some(doc) = &field.doc {
                 ctx.push_semantic_token(doc.range, SemanticTokenType::COMMENT, 0);
             }
         }
-        Ok((Value::None, None, TerminatorEnum::NONE, false))
+        Ok((None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -160,15 +216,16 @@ impl StructDefNode {
         let mut fields = FxHashMap::<String, Field>::default();
         let mut order_fields = Vec::<Field>::new();
         let mut i = 0;
-        for field in self.fields.iter() {
+        for (field, has_semi) in self.fields.iter() {
+            if !has_semi {
+                return Err(ctx.add_err(field.range, ErrorCode::COMPLETION));
+            }
             let (id, tp) = (field.id.clone(), field.tp.get_type(ctx)?);
             let f = Field {
                 index: i,
-                tp: tp.clone(),
-                typename: field.tp.clone(),
+                pltype: tp.clone(),
                 name: field.id.name.clone(),
-                range: field.id.range,
-                is_ref: field.tp.is_ref,
+                range: field.range,
                 refs: Rc::new(RefCell::new(vec![])),
             };
             ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
@@ -186,22 +243,13 @@ impl StructDefNode {
         st.set_body(
             &order_fields
                 .into_iter()
-                .map(|order_field| {
-                    if order_field.is_ref {
-                        order_field
-                            .tp
-                            .get_basic_type(&ctx)
-                            .ptr_type(inkwell::AddressSpace::Generic)
-                            .as_basic_type_enum()
-                    } else {
-                        order_field.tp.get_basic_type(&ctx)
-                    }
-                })
+                .map(|order_field| order_field.pltype.get_basic_type(&ctx))
                 .collect::<Vec<_>>(),
             false,
         );
         let stu = PLType::STRUCT(STType {
             name: name.to_string(),
+            path: ctx.plmod.path.clone(),
             fields,
             ordered_fields: newf,
             range: self.range(),
@@ -218,14 +266,15 @@ impl StructDefNode {
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitFieldNode {
-    pub id: String,
+    pub id: VarNode,
     pub exp: Box<NodeEnum>,
+    pub has_comma: bool,
 }
 
 impl Node for StructInitFieldNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
         let mut format_res = String::from(prefix.repeat(tabs));
-        format_res.push_str(&self.id);
+        format_res.push_str(&self.id.name);
         format_res.push_str(": ");
         format_res.push_str(&self.exp.format(tabs, prefix));
         format_res
@@ -235,30 +284,23 @@ impl Node for StructInitFieldNode {
         tab(tabs, line.clone(), end);
         println!("StructInitFieldNode");
         tab(tabs + 1, line.clone(), false);
-        println!("id: {}", self.id);
+        println!("id: {}", self.id.name);
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let (v, tp, _, _) = self.exp.emit(ctx)?;
-        let value = if let Value::RefValue(_) = v {
-            v.as_basic_value_enum()
-        } else {
-            ctx.try_load2var(v).as_basic_value_enum()
-        };
-        return Ok((
-            Value::StructFieldValue((self.id.clone(), value)),
-            tp,
-            TerminatorEnum::NONE,
-            false,
-        ));
+        let (v, tp, _) = self.exp.emit(ctx)?;
+        if !self.has_comma {
+            return Err(ctx.add_err(self.range, ErrorCode::COMPLETION));
+        }
+        return Ok((v, tp, TerminatorEnum::NONE));
     }
 }
 
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitNode {
-    pub tp: Box<TypeNameNode>,
-    pub fields: Vec<Box<NodeEnum>>, // TODO: comment db and salsa comment struct
+    pub tp: Box<TypeNodeEnum>,
+    pub fields: Vec<Box<StructInitFieldNode>>, // TODO: comment db and salsa comment struct
 }
 
 impl Node for StructInitNode {
@@ -300,19 +342,16 @@ impl Node for StructInitNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        ctx.push_semantic_token(self.tp.range, SemanticTokenType::STRUCT, 0);
         let mut fields = FxHashMap::<String, (BasicValueEnum<'ctx>, Range)>::default();
+        let tp = self.tp.get_type(ctx)?;
         for field in self.fields.iter_mut() {
             let range = field.range();
-            if let (Value::StructFieldValue((id, val)), _, _, _) = field.emit(ctx)? {
-                fields.insert(id, (val, range));
-            } else {
-                panic!("StructInitNode::emit: invalid field");
-            }
+            let name = field.id.name.clone();
+            let (value, _, _) = field.emit(ctx)?;
+            fields.insert(name, (ctx.try_load2var(range, value.unwrap())?, range));
         }
-        let st = self.tp.get_type(ctx)?;
-        if let PLType::STRUCT(st) = st {
-            ctx.save_if_comment_doc_hover(self.tp.range, Some(st.doc.clone()));
+        if let PLType::STRUCT(st) = &tp {
+            ctx.save_if_comment_doc_hover(self.tp.range(), Some(st.doc.clone()));
             let et = st.struct_type(ctx).as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");
             for (id, (val, range)) in fields {
@@ -335,16 +374,75 @@ impl Node for StructInitNode {
                     return Err(ctx.add_err(range, ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH));
                 }
                 ctx.builder.build_store(ptr, val);
-                ctx.send_if_go_to_def(range, field.range, ctx.plmod.path.clone())
+                ctx.set_if_refs(field.refs.clone(), range);
+                ctx.send_if_go_to_def(range, field.range, st.path.clone())
             }
-            return Ok((
-                Value::VarValue(stv),
-                Some(st.name),
-                TerminatorEnum::NONE,
-                false,
-            ));
+            return Ok((Some(stv.into()), Some(tp), TerminatorEnum::NONE));
         } else {
             panic!("StructInitNode::emit: invalid type");
         }
+    }
+}
+
+#[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct ArrayInitNode {
+    // pub tp: Box<TypeNameNode>,
+    pub exps: Vec<Box<NodeEnum>>,
+}
+
+impl Node for ArrayInitNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        return "hello".to_string();
+    }
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("ArrayInitNode");
+        // self.tp.print(tabs + 1, self.exps.len() == 0, line.clone());
+        let mut i = self.exps.len();
+        for exp in &self.exps {
+            i -= 1;
+            exp.print(tabs + 1, i == 0, line.clone());
+        }
+    }
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let mut exps = Vec::<BasicValueEnum<'ctx>>::new();
+        let mut tp0 = None;
+
+        for exp in self.exps.iter_mut() {
+            let range = exp.range();
+            let (v, tp, _) = exp.emit(ctx)?;
+            // 检查类型是否一致
+            if tp0.is_none() {
+                tp0 = tp;
+            } else if tp0 != tp {
+                return Err(ctx.add_err(range, ErrorCode::ARRAY_TYPE_NOT_MATCH));
+            }
+            exps.push(ctx.try_load2var(range, v.unwrap())?.as_basic_value_enum());
+        }
+        if tp0.is_none() {
+            return Err(ctx.add_err(self.range, ErrorCode::ARRAY_INIT_EMPTY));
+        }
+        let tp = exps[0].get_type();
+        let sz = exps.len() as u32;
+        let arr = alloc(ctx, tp.array_type(sz).as_basic_type_enum(), "array_alloca");
+
+        for (i, v) in exps.into_iter().enumerate() {
+            let index = &[
+                ctx.context.i64_type().const_int(0 as u64, false),
+                ctx.context.i64_type().const_int(i as u64, false),
+            ];
+            let ptr = unsafe { ctx.builder.build_in_bounds_gep(arr, index, "elem_ptr") };
+            ctx.builder.build_store(ptr, v);
+        }
+        return Ok((
+            Some(arr.into()),
+            Some(PLType::ARR(ARRType {
+                element_type: Box::new(tp0.unwrap()),
+                size: sz,
+            })),
+            TerminatorEnum::NONE,
+        ));
     }
 }

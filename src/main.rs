@@ -24,7 +24,6 @@ pub struct Jar(
     program::ModWrapper,
     program::ProgramEmitParam,
     program::emit_file,
-    utils::read_config::ConfigEntry,
 );
 
 pub trait Db: salsa::DbWithJar<Jar> {}
@@ -124,12 +123,17 @@ fn main() {
             gensource: cli.gensource,
             optimization: opt,
         };
+        let action = if cli.printast {
+            ActionType::PrintAst
+        } else {
+            ActionType::Compile
+        };
         let mem = MemDocsInput::new(
             &db,
             Arc::new(Mutex::new(RefCell::new(mem_docs::MemDocs::new()))),
             abs.to_str().unwrap().to_string(),
             op,
-            ActionType::Compile,
+            action,
             None,
         );
         compiler::compile(&db, mem, cli.out.clone(), op);
@@ -147,6 +151,6 @@ fn main() {
         }
     } else {
         println!("No file provided");
-        Cli::into_app().print_help().unwrap();
+        Cli::command().print_help().unwrap();
     }
 }

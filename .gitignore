@@ -11,3 +11,5 @@ test.cpp
 *.o
 *.plist
 out.*
+*.html
+*.asm

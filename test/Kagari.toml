@@ -1,1 +1,6 @@
 entry = "main.pi"
+
+
+[deps]
+sub3 = { path = "sub2" }
+

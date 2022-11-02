@@ -1,0 +1,1 @@
+fn DioGC__new_ptr() i64;

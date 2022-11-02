@@ -1,6 +1,7 @@
-use crate::ast::node::Value;
+use crate::ast::node::alloc;
 use crate::lsp::semantic_tokens::type_index;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
+use crate::utils::read_config::Config;
 use colored::Colorize;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
@@ -10,16 +11,17 @@ use inkwell::module::FlagBehavior;
 use inkwell::module::Linkage;
 use inkwell::module::Module;
 use inkwell::targets::TargetMachine;
+use inkwell::types::ArrayType;
 use inkwell::types::BasicMetadataTypeEnum;
 use inkwell::types::BasicType;
 use inkwell::types::BasicTypeEnum;
 use inkwell::types::FunctionType;
 use inkwell::types::StructType;
 use inkwell::types::VoidType;
-use inkwell::values::BasicMetadataValueEnum;
 use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
+use inkwell::values::{AnyValueEnum, BasicMetadataValueEnum};
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::Diagnostic;
@@ -43,8 +45,6 @@ use super::compiler::get_target_machine;
 use super::compiler::ActionType;
 use super::diag::{ErrorCode, WarnCode};
 use super::diag::{ERR_MSG, WARN_MSG};
-use super::node::function::FuncTypeNode;
-use super::node::types::TypeNameNode;
 use super::node::NodeEnum;
 use super::range::Pos;
 use super::range::Range;
@@ -98,16 +98,17 @@ pub struct Ctx<'a, 'ctx> {
         String,
         (
             PointerValue<'ctx>,
-            String,
+            PLType,
             Range,
             Rc<RefCell<Vec<Location>>>,
         ),
     >, // variable table
+    pub config: Config,                                     // config
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobalVar {
-    pub tp: String,
+    pub tp: PLType,
     pub range: Range,
     pub loc: Rc<RefCell<Vec<Location>>>,
 }
@@ -153,7 +154,7 @@ impl Mod {
     pub fn add_global_symbol(
         &mut self,
         name: String,
-        tp: String,
+        tp: PLType,
         range: Range,
         refs: Rc<RefCell<Vec<Location>>>,
     ) -> Result<(), PLDiag> {
@@ -352,46 +353,73 @@ impl PLDiag {
 pub enum PLType {
     FN(FNType),
     STRUCT(STType),
+    ARR(ARRType),
     PRIMITIVE(PriType),
     VOID,
     NAMESPACE(Mod),
 }
 
-fn pri_ty<'ctx>(s: &str, ctx: &'ctx Context) -> BasicTypeEnum<'ctx> {
-    match s {
-        "i32" => ctx.i32_type().as_basic_type_enum(),
-        "i64" => ctx.i64_type().as_basic_type_enum(),
-        "i8" | "bool" => ctx.i8_type().as_basic_type_enum(),
-        "i16" => ctx.i16_type().as_basic_type_enum(),
-        "i1" => ctx.bool_type().as_basic_type_enum(),
-        "f32" => ctx.f32_type().as_basic_type_enum(),
-        "f64" => ctx.f64_type().as_basic_type_enum(),
-        _ => panic!("unknown type {}", s),
+pub fn init_arr<'a, 'ctx>(ptr: PointerValue<'ctx>, ctx: &mut Ctx<'a, 'ctx>) {
+    if !ptr.get_type().get_element_type().is_array_type() {
+        return;
+    }
+    let tp = ptr.get_type().get_element_type().into_array_type();
+
+    for i in 0..tp.len() {
+        let index = &[
+            ctx.context.i64_type().const_int(0, false),
+            ctx.context.i64_type().const_int(i as u64, false),
+        ];
+        let elemptr = unsafe { ctx.builder.build_in_bounds_gep(ptr, index, "elemptr") };
+        let elem = alloc(ctx, tp.get_element_type(), "eleminit");
+        let elemvalue = ctx.builder.build_load(elem, "elemvalue");
+        ctx.builder.build_store(elemptr, elemvalue);
+        init_arr(elemptr, ctx);
     }
 }
 
 /// # PriType
 /// Primitive type for pivot-lang
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PriType {
+pub enum PriType {
     // basetype: BasicTypeEnum<'ctx>,
-    id: String,
+    I64,
+    F64,
+    BOOL,
 }
 impl PriType {
     pub fn get_basic_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> BasicTypeEnum<'ctx> {
-        pri_ty(&self.id, ctx.context)
+        match self {
+            PriType::I64 => ctx.context.i64_type().as_basic_type_enum(),
+            PriType::F64 => ctx.context.f64_type().as_basic_type_enum(),
+            PriType::BOOL => ctx.context.i8_type().as_basic_type_enum(),
+        }
     }
-    pub fn try_from_str(s: &str) -> Option<Self> {
-        match s {
-            "i32" | "i64" | "i8" | "bool" | "i16" | "i1" | "f32" | "f64" => {
-                Some(PriType { id: s.to_string() })
-            }
+    pub fn get_name(&self) -> String {
+        match self {
+            PriType::I64 => String::from("i64"),
+            PriType::F64 => String::from("f64"),
+            PriType::BOOL => String::from("i32"),
+        }
+    }
+    pub fn try_from_str(str: &str) -> Option<Self> {
+        match str {
+            "i64" => Some(PriType::I64),
+            "f64" => Some(PriType::F64),
+            "bool" => Some(PriType::BOOL),
             _ => None,
         }
     }
 }
 
 impl PLType {
+    pub fn is(self, pri_type: PriType) -> bool {
+        if let PLType::PRIMITIVE(pri) = self {
+            pri == pri_type
+        } else {
+            false
+        }
+    }
     /// # get_refs
     /// get the references of the type
     /// used in find references
@@ -400,6 +428,7 @@ impl PLType {
         match self {
             PLType::FN(f) => Some(f.refs.clone()),
             PLType::STRUCT(s) => Some(s.refs.clone()),
+            PLType::ARR(_) => None,
             PLType::PRIMITIVE(_) => None,
             PLType::VOID => None,
             PLType::NAMESPACE(_) => None,
@@ -414,12 +443,24 @@ impl PLType {
         self.get_basic_type_op(ctx).unwrap()
     }
 
+    pub fn get_name<'a, 'ctx>(&self) -> Option<String> {
+        match self {
+            PLType::FN(fu) => Some(fu.name.clone()),
+            PLType::STRUCT(st) => Some(st.name.clone()),
+            PLType::PRIMITIVE(pri) => Some(pri.get_name()),
+            PLType::ARR(_) => None,
+            PLType::VOID => Some("void".to_string()),
+            PLType::NAMESPACE(_) => None,
+        }
+    }
+
     /// # get_range
     /// get the defination range of the type
     pub fn get_range(&self) -> Option<Range> {
         match self {
             PLType::FN(f) => Some(f.range.clone()),
             PLType::STRUCT(s) => Some(s.range.clone()),
+            PLType::ARR(_) => None,
             PLType::PRIMITIVE(_) => None,
             PLType::VOID => None,
             PLType::NAMESPACE(_) => None,
@@ -432,12 +473,18 @@ impl PLType {
     pub fn get_basic_type_op<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Option<BasicTypeEnum<'ctx>> {
         match self {
             PLType::FN(f) => Some(
-                f.get_value(ctx, &ctx.plmod)
+                f.get_value(ctx)
                     .get_type()
                     .ptr_type(inkwell::AddressSpace::Global)
                     .as_basic_type_enum(),
             ),
             PLType::STRUCT(s) => Some(s.struct_type(&ctx).as_basic_type_enum()),
+            PLType::ARR(a) => Some(
+                a.element_type
+                    .get_basic_type(ctx)
+                    .array_type(a.size)
+                    .as_basic_type_enum(),
+            ),
             PLType::PRIMITIVE(t) => Some(t.get_basic_type(ctx)),
             PLType::VOID => None,
             PLType::NAMESPACE(_) => None,
@@ -466,6 +513,17 @@ impl PLType {
         let td = ctx.targetmachine.get_target_data();
         match self {
             PLType::FN(_) => None,
+            PLType::ARR(arr) => {
+                let elemdi = arr.element_type.get_ditype(ctx)?;
+                let etp = &arr.element_type.get_basic_type(ctx);
+                let size = td.get_bit_size(etp) * arr.size as u64;
+                let align = td.get_preferred_alignment(etp);
+                Some(
+                    ctx.dibuilder
+                        .create_array_type(elemdi, size, align, &[(0..arr.size as i64)])
+                        .as_type(),
+                )
+            }
             PLType::STRUCT(x) => {
                 let mut offset = 0;
                 let m = x
@@ -500,7 +558,7 @@ impl PLType {
                 return Some(
                     ctx.dibuilder
                         .create_basic_type(
-                            &pt.id,
+                            &pt.get_name(),
                             td.get_bit_size(&self.get_basic_type(ctx)),
                             get_dw_ate_encoding(&self.get_basic_type(ctx)),
                             DIFlags::PUBLIC,
@@ -549,36 +607,23 @@ impl<'ctx> RetTypeEnum<'ctx> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field {
     pub index: u32,
-    pub tp: PLType,
-    pub typename: Box<TypeNameNode>,
+    pub pltype: PLType,
     pub name: String,
     pub range: Range,
-    pub is_ref: bool,
     pub refs: Rc<RefCell<Vec<Location>>>,
 }
 
 impl Field {
     pub fn get_di_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, offset: u64) -> (DIType<'ctx>, u64) {
-        let pltype = ctx
-            .get_type(&self.typename.id, self.typename.range)
-            .unwrap();
-        let di_type = pltype.get_ditype(ctx);
-        let debug_type = if self.is_ref {
-            pltype
-                .clone()
-                .get_di_ref_type(ctx, di_type.clone())
-                .unwrap()
-                .as_type()
-        } else {
-            di_type.unwrap()
-        };
+        let di_type = self.pltype.get_ditype(ctx);
+        let debug_type = di_type.unwrap();
         (
             ctx.dibuilder
                 .create_member_type(
                     ctx.discope,
                     &self.name,
                     ctx.diunit.get_file(),
-                    self.typename.range.start.line as u32,
+                    self.range.start.line as u32,
                     debug_type.get_size_in_bits(),
                     debug_type.get_align_in_bits(),
                     offset + debug_type.get_offset_in_bits(),
@@ -594,11 +639,10 @@ impl Field {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FNType {
     pub name: String,
-    pub fntype: FuncTypeNode,
-    pub ret_pltype: Option<String>,
+    pub param_pltypes: Vec<PLType>,
+    pub ret_pltype: Box<PLType>,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
-    pub is_ref: bool,
     pub doc: Vec<Box<NodeEnum>>,
 }
 
@@ -606,34 +650,47 @@ impl FNType {
     /// try get function value from module
     ///
     /// if not found, create a declaration
-    pub fn get_value<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, m: &Mod) -> FunctionValue<'ctx> {
-        if let Some(v) = ctx.module.get_function(&m.get_full_name(&self.name)) {
+    pub fn get_value<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> FunctionValue<'ctx> {
+        if let Some(v) = ctx.module.get_function(&self.name) {
             return v;
         }
         if let Some(v) = ctx.module.get_function(&self.name) {
             return v;
         }
-        let ret_pltype = ctx
-            .get_type(&self.ret_pltype.as_ref().unwrap(), self.range)
-            .unwrap();
         let mut param_types = vec![];
-        for param in self.fntype.paralist.iter() {
-            let pltype = m.get_type(&param.tp.id).unwrap();
-            param_types.push(pltype.get_basic_type(ctx).into());
+        for param_pltype in self.param_pltypes.iter() {
+            param_types.push(param_pltype.get_basic_type(ctx).into());
         }
-        let fn_type = ret_pltype.get_ret_type(ctx).fn_type(&param_types, false);
-        let fn_value = ctx.module.add_function(
-            &m.get_full_name(&self.name),
-            fn_type,
-            Some(Linkage::External),
-        );
+        let fn_type = self
+            .ret_pltype
+            .get_ret_type(ctx)
+            .fn_type(&param_types, false);
+        let fn_value = ctx
+            .module
+            .add_function(&self.name, fn_type, Some(Linkage::External));
         fn_value
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ARRType {
+    pub element_type: Box<PLType>,
+    pub size: u32,
+}
+
+impl ARRType {
+    pub fn arr_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> ArrayType<'ctx> {
+        self.element_type.get_basic_type(ctx).array_type(self.size)
+    }
+    pub fn get_elem_type<'a, 'ctx>(&'a self) -> Box<PLType> {
+        self.element_type.clone()
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct STType {
     pub name: String,
+    pub path: String,
     pub fields: FxHashMap<String, Field>,
     pub ordered_fields: Vec<Field>,
     pub range: Range,
@@ -643,31 +700,17 @@ pub struct STType {
 
 impl STType {
     pub fn struct_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> StructType<'ctx> {
-        let st = ctx
-            .module
-            .get_struct_type(&ctx.plmod.get_full_name(&self.name));
+        let st = ctx.module.get_struct_type(&self.get_st_full_name());
         if let Some(st) = st {
             return st;
         }
-        let st = ctx
-            .context
-            .opaque_struct_type(&ctx.plmod.get_full_name(&self.name));
+        let st = ctx.context.opaque_struct_type(&self.get_st_full_name());
         st.set_body(
             &self
                 .ordered_fields
                 .clone()
                 .into_iter()
-                .map(|order_field| {
-                    if order_field.is_ref {
-                        order_field
-                            .tp
-                            .get_basic_type(&ctx)
-                            .ptr_type(inkwell::AddressSpace::Generic)
-                            .as_basic_type_enum()
-                    } else {
-                        order_field.tp.get_basic_type(&ctx)
-                    }
-                })
+                .map(|order_field| order_field.pltype.get_basic_type(&ctx))
                 .collect::<Vec<_>>(),
             false,
         );
@@ -687,26 +730,23 @@ impl STType {
         }
         completions
     }
+    pub fn get_st_full_name(&self) -> String {
+        format!("{}..{}", self.path, self.name)
+    }
 }
 
 fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
-    let pltype_i64 = PLType::PRIMITIVE(PriType {
-        id: "i64".to_string(),
-    });
+    let pltype_i64 = PLType::PRIMITIVE(PriType::I64);
     ctx.plmod
         .types
         .insert("i64".to_string(), pltype_i64.clone());
 
-    let pltype_f64 = PLType::PRIMITIVE(PriType {
-        id: "f64".to_string(),
-    });
+    let pltype_f64 = PLType::PRIMITIVE(PriType::F64);
     ctx.plmod
         .types
         .insert("f64".to_string(), pltype_f64.clone());
 
-    let pltype_bool = PLType::PRIMITIVE(PriType {
-        id: "bool".to_string(),
-    });
+    let pltype_bool = PLType::PRIMITIVE(PriType::BOOL);
     ctx.plmod
         .types
         .insert("bool".to_string(), pltype_bool.clone());
@@ -781,6 +821,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         errs: &'a RefCell<Vec<PLDiag>>,
         sender: Option<ActionType>,
         completion: Option<(Pos, Option<String>, ActionType)>,
+        config: Config,
     ) -> Ctx<'a, 'ctx> {
         let f = Path::new(Path::new(src_file_path).file_stem().unwrap())
             .file_name()
@@ -817,6 +858,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             hover: Rc::new(Cell::new(None)),
             init_func: None,
             table: FxHashMap::default(),
+            config,
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -856,6 +898,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             hover: self.hover.clone(),
             init_func: self.init_func,
             table: FxHashMap::default(),
+            config: self.config.clone(),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -868,7 +911,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         name: &str,
     ) -> Option<(
         PointerValue<'ctx>,
-        String,
+        PLType,
         Range,
         Rc<RefCell<Vec<Location>>>,
         bool,
@@ -877,7 +920,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if let Some((pv, pltype, range, refs)) = v {
             return Some((
                 pv.clone(),
-                pltype.to_string(),
+                pltype.clone(),
                 range.clone(),
                 refs.clone(),
                 false,
@@ -894,7 +937,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         {
             return Some((
                 self.module.get_global(name).unwrap().as_pointer_value(),
-                pltype.to_string(),
+                pltype.clone(),
                 range.clone(),
                 refs.clone(),
                 true,
@@ -907,7 +950,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         &mut self,
         name: String,
         pv: PointerValue<'ctx>,
-        tp: String,
+        tp: PLType,
         range: Range,
         is_const: bool,
     ) -> Result<(), PLDiag> {
@@ -940,10 +983,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     /// 用来获取外部模块的全局变量
     /// 如果没在当前module的全局变量表中找到，将会生成一个
     /// 该全局变量的声明
-    pub fn get_or_add_global(&self, name: &str, m: &Mod, tp: &str) -> PointerValue<'ctx> {
+    pub fn get_or_add_global(&self, name: &str, _m: &Mod, pltype: PLType) -> PointerValue<'ctx> {
         let global = self.module.get_global(name);
         if global.is_none() {
-            let pltype = m.get_type(tp).unwrap();
             let global = self
                 .module
                 .add_global(pltype.get_basic_type(self), None, name);
@@ -976,41 +1018,26 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn add_diag(&mut self, dia: PLDiag) {
         self.errs.borrow_mut().push(dia);
     }
-    // load type** and type* to type
-    pub fn try_load2var(&mut self, v: Value<'ctx>) -> Value<'ctx> {
-        let basic_value_op = v.as_basic_value_enum_op();
-        if basic_value_op.is_none() {
-            return Value::None;
-        }
-        match basic_value_op.unwrap() {
-            BasicValueEnum::IntValue(v) => match v.get_type().get_bit_width() {
-                8 => Value::BoolValue(v),
-                64 => Value::IntValue(v),
-                _ => todo!(),
-            },
-            BasicValueEnum::FloatValue(v) => Value::FloatValue(v),
-            BasicValueEnum::PointerValue(ptr2v) => {
-                let loadv = self.builder.build_load(ptr2v, "loadtmp");
-                self.try_load2var(Value::LoadValue(loadv))
-            }
-            _ => v,
-        }
-    }
-    // load type** and type* to type*
-    pub fn try_load2ptr(&mut self, v: Value<'ctx>) -> Value<'ctx> {
-        match v.as_basic_value_enum() {
-            BasicValueEnum::PointerValue(ptr2value) => {
-                if ptr2value.get_type().get_element_type().is_pointer_type() {
-                    let value = self.builder.build_load(ptr2value, "loadtmp");
-                    Value::VarValue(value.into_pointer_value())
-                } else {
-                    Value::VarValue(ptr2value)
-                }
-            }
-            _ => v,
+    // load type* to type
+    pub fn try_load2var(
+        &mut self,
+        range: Range,
+        v: AnyValueEnum<'ctx>,
+    ) -> Result<BasicValueEnum<'ctx>, PLDiag> {
+        if !v.is_pointer_value() {
+            return Ok(match v {
+                AnyValueEnum::ArrayValue(v) => v.into(),
+                AnyValueEnum::IntValue(v) => v.into(),
+                AnyValueEnum::FloatValue(v) => v.into(),
+                AnyValueEnum::PointerValue(v) => v.into(),
+                AnyValueEnum::StructValue(v) => v.into(),
+                AnyValueEnum::VectorValue(v) => v.into(),
+                _ => return Err(self.add_err(range, ErrorCode::EXPECT_VALUE)),
+            });
+        } else {
+            Ok(self.builder.build_load(v.into_pointer_value(), "loadtmp"))
         }
     }
-
     pub fn if_completion(&mut self, c: impl FnOnce(&mut Ctx, &(Pos, Option<String>))) {
         if let Some(tp) = self.action {
             if let Some(comp) = &self.lspparams {
@@ -1073,10 +1100,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     pub fn get_completions(&self) -> Vec<CompletionItem> {
         let mut m = FxHashMap::default();
-        self.get_var_completions(&mut m);
         self.get_pltp_completions(&mut m);
-        self.get_keyword_completions(&mut m);
         self.plmod.get_ns_completions_pri(&mut m);
+        self.get_var_completions(&mut m);
+        self.get_keyword_completions(&mut m);
 
         let cm = m.iter().map(|(_, v)| v.clone()).collect();
         cm
@@ -1104,7 +1131,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                     kind: Some(CompletionItemKind::CONSTANT),
                     ..Default::default()
                 };
-                item.detail = Some(v.tp.to_string());
+                item.detail = v.tp.get_name();
                 m.insert(k.clone(), item);
             }
         }
@@ -1141,6 +1168,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         for (k, f) in self.plmod.types.iter() {
             let tp = match f {
                 PLType::FN(_) => continue,
+                PLType::ARR(_) => continue,
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::VOID => CompletionItemKind::KEYWORD,
@@ -1181,6 +1209,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             let tp = match f {
                 PLType::FN(_) => CompletionItemKind::FUNCTION,
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
+                PLType::ARR(_) => CompletionItemKind::KEYWORD,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::VOID => CompletionItemKind::KEYWORD,
                 PLType::NAMESPACE(_) => todo!(),
