@@ -65,6 +65,7 @@ pub enum TypeNodeEnum {
 }
 #[enum_dispatch]
 pub trait TypeNode: RangeTrait + AsAny {
+    fn format(&self, tabs: usize, prefix: &str) -> String;
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
     fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>);
