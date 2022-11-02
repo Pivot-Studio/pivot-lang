@@ -83,7 +83,7 @@ pub struct VarNode {
     pub name: String,
 }
 impl VarNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
+    pub fn format(&self, _tabs: usize, _prefix: &str) -> String {
         let name = &self.name;
         return name.to_string();
     }

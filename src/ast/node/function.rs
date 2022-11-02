@@ -32,12 +32,12 @@ impl Node for FuncDefNode {
         }
         let mut format_res = String::from("\n\r");
         let mut ret_type = String::new();
-        if self.typenode.ret.is_ref {
-            let ref_id = format!("&{}", &self.typenode.ret.id);
-            ret_type.push_str(&ref_id);
-        } else {
-            ret_type.push_str(&self.typenode.ret.id);
-        }
+        // if self.typenode.ret.is_ref {
+        //     let ref_id = format!("&{}", &self.typenode.ret.id);
+        //     ret_type.push_str(&ref_id);
+        // } else {
+        //     ret_type.push_str(&self.typenode.ret.id);
+        // }
         format_res.push_str(&doc_str);
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str("fn ");

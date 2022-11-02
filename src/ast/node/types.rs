@@ -18,7 +18,7 @@ pub struct TypeNameNode {
 
 impl TypeNode for TypeNameNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        let id = self.id;
+        let id = &self.id;
         if let Some(id_node) = id {
             return id_node.format(tabs, prefix);
         } else {

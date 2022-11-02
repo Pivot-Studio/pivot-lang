@@ -189,12 +189,12 @@ pub fn print_params(paralist: &Vec<Box<TypedIdentifierNode>>) -> String {
     for param in paralist.iter() {
         let name = &param.id.name;
         let mut id = String::new();
-        if param.tp.is_ref {
-            let ref_id = format!("&{}", &param.tp.id);
-            id.push_str(&ref_id);
-        } else {
-            id.push_str(&param.tp.id)
-        }
+        // if param.tp.is_ref {
+        //     let ref_id = format!("&{}", &param.tp.id);
+        //     id.push_str(&ref_id);
+        // } else {
+        //     id.push_str(&param.tp.id)
+        // }
         str.push_str(name);
         str.push_str(": ");
         str.push_str(&id);

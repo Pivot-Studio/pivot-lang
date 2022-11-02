@@ -94,6 +94,7 @@ pub enum ActionType {
     Hover,
     Compile,
     PrintAst,
+    GenSource,
 }
 
 #[cfg(feature = "jit")]
@@ -211,6 +212,11 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     if op.printast {
         let time = now.elapsed();
         println!("print ast done, time: {:?}", time);
+        return;
+    }
+    if op.gensource {
+        let time = now.elapsed();
+        println!("gen source done, time: {:?}", time);
         return;
     }
     let mut mods = compile_dry::accumulated::<ModBuffer>(db, docs);
@@ -408,6 +414,7 @@ mod test {
                 optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
                 genir: true,
                 printast: false,
+                gensource: false,
             },
         );
         run(
@@ -424,6 +431,7 @@ mod test {
                 optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
                 genir: false,
                 printast: true,
+                gensource: false,
             },
         );
     }

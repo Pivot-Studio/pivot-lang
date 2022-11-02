@@ -125,6 +125,8 @@ fn main() {
         };
         let action = if cli.printast {
             ActionType::PrintAst
+        } else if cli.gensource {
+            ActionType::GenSource
         } else {
             ActionType::Compile
         };
