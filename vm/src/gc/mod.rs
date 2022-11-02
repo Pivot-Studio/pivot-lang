@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    env,
+};
 
 use internal_macro::is_runtime;
 use libc::{c_void, malloc, memset, size_t};
@@ -10,7 +13,12 @@ pub struct Mem {
 }
 
 // bypass rust warning
-pub fn reg() {}
+pub fn reg() {
+    // 防止被优化
+    DioGC {
+        ..Default::default()
+    };
+}
 
 impl Mem {
     fn mark(&mut self) {
@@ -25,10 +33,12 @@ impl Mem {
 }
 
 #[repr(C)]
+#[derive(Default)]
 pub struct DioGC {
     memtable: HashMap<*mut c_void, Mem>,
     size: i64,
     roots: HashSet<*mut c_void>,
+    debug: bool,
 }
 
 #[is_runtime] // jit注册
@@ -38,6 +48,7 @@ impl DioGC {
             size: 0,
             memtable: HashMap::new(),
             roots: HashSet::new(),
+            debug: env::var("DIO_DEBUG").is_ok(),
         }
     }
 
@@ -77,8 +88,14 @@ impl DioGC {
     }
 
     pub unsafe fn collect(&mut self) {
+        debug_log(&self, || {
+            println!("collect start, heap size: {}", self.size);
+        });
         self.mark();
         self.sweep();
+        debug_log(&self, || {
+            println!("collect end, heap size: {}", self.size);
+        });
     }
     pub unsafe fn sweep(&mut self) {
         let mut rm = Vec::new();
@@ -146,6 +163,15 @@ impl DioGC {
         ⠀⠀⢀⣠⠞⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣼⡟⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀";
         println!("{}", dio);
         println!("        Dio gc");
+    }
+}
+
+fn debug_log<F>(gc: &DioGC, logf: F)
+where
+    F: FnOnce() -> (),
+{
+    if gc.debug {
+        logf();
     }
 }
 

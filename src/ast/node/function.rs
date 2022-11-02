@@ -139,7 +139,10 @@ impl Node for FuncDefNode {
                     }
                     op.unwrap()
                 };
-                Some(alloc(&mut ctx, ret_type, "retvalue"))
+                let retv = alloc(&mut ctx, ret_type, "retvalue");
+                // 返回值不能在函数结束时从root表移除
+                ctx.roots.borrow_mut().pop();
+                Some(retv)
             } else {
                 None
             };
@@ -147,8 +150,12 @@ impl Node for FuncDefNode {
             ctx.return_block = Some((return_block, ret_value_ptr));
             if let Some(ptr) = ret_value_ptr {
                 let value = ctx.nodebug_builder.build_load(ptr, "load_ret_tmp");
+                ctx.builder.position_at_end(return_block);
+                ctx.gc_collect();
+                ctx.gc_rm_root_current(ptr.as_basic_value_enum());
                 ctx.nodebug_builder.build_return(Some(&value));
             } else {
+                ctx.gc_collect();
                 ctx.nodebug_builder.build_return(None);
             };
             ctx.position_at_end(entry);
@@ -185,9 +192,14 @@ impl Node for FuncDefNode {
                 .unwrap();
             }
             // emit body
+            ctx.builder.unset_current_debug_location();
             if self.typenode.id == "main" {
-                ctx.nodebug_builder
+                ctx.builder
                     .build_call(ctx.init_func.unwrap(), &vec![], "init_call");
+                let inst = allocab.get_first_instruction().unwrap();
+                ctx.builder.position_at(allocab, &inst);
+                ctx.init_global_gc();
+                ctx.builder.position_at_end(entry);
             }
             let (_, _, terminator) = body.emit(&mut ctx)?;
             if !terminator.is_return() {
@@ -254,10 +266,8 @@ impl Node for FuncCallNode {
             let res = match ret.try_as_basic_value().left() {
                 Some(v) => Ok((
                     {
-                        let ptr = ctx
-                            .nodebug_builder
-                            .build_alloca(v.get_type(), "ret_alloc_tmp");
-                        ctx.nodebug_builder.build_load(ptr, "ret_load_tmp");
+                        let ptr = alloc(ctx, v.get_type(), "ret_alloc_tmp");
+                        ctx.nodebug_builder.build_store(ptr, v);
                         Some(ptr.into())
                     },
                     Some(*fv.ret_pltype.clone()),

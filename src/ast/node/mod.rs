@@ -13,6 +13,7 @@ use self::function::*;
 use self::global::*;
 use self::operator::*;
 use self::pkg::{ExternIDNode, UseNode};
+use self::pointer::PointerOpNode;
 use self::primary::*;
 use self::ret::*;
 use self::statement::*;
@@ -28,6 +29,7 @@ pub mod function;
 pub mod global;
 pub mod operator;
 pub mod pkg;
+pub mod pointer;
 pub mod primary;
 pub mod program;
 pub mod ret;
@@ -62,6 +64,7 @@ impl TerminatorEnum {
 pub enum TypeNodeEnum {
     BasicTypeNode(TypeNameNode),
     ArrayTypeNode(ArrayTypeNameNode),
+    PointerTypeNode(PointerTypeNode),
 }
 #[enum_dispatch]
 pub trait TypeNode: RangeTrait + AsAny {
@@ -103,6 +106,7 @@ pub enum NodeEnum {
     ExternIDNode(ExternIDNode),
     ArrayInitNode(ArrayInitNode),
     ArrayElementNode(ArrayElementNode),
+    PointerOpNode(PointerOpNode),
 }
 // ANCHOR: range
 #[enum_dispatch]
@@ -189,6 +193,8 @@ pub fn alloc<'a, 'ctx>(
         Some(entry) => {
             builder.position_at_end(entry);
             let p = builder.build_alloca(tp, name);
+            ctx.gc_add_root(p.as_basic_value_enum(), builder);
+            ctx.roots.borrow_mut().push(p.as_basic_value_enum());
             builder.position_at_end(ctx.block.unwrap());
             p
         }

@@ -91,6 +91,31 @@ impl TypeNode for ArrayTypeNameNode {
 }
 
 #[range]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PointerTypeNode {
+    pub elm: Box<TypeNodeEnum>,
+}
+
+impl TypeNode for PointerTypeNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("PointerTypeNode");
+        self.elm.print(tabs + 1, true, line.clone());
+    }
+
+    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
+        let pltype = self.elm.get_type(ctx)?;
+        let pltype = PLType::POINTER(Box::new(pltype));
+        Ok(pltype)
+    }
+
+    fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) {
+        self.elm.emit_highlight(ctx);
+    }
+}
+
+#[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TypedIdentifierNode {
     pub id: VarNode,
