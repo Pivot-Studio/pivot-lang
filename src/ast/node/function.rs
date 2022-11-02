@@ -28,9 +28,8 @@ impl Node for FuncDefNode {
         let mut doc_str = String::new();
         for c in self.typenode.doc.iter() {
             doc_str.push_str(&c.format(tabs, prefix));
-            doc_str.push_str("\n\r");
         }
-        let mut format_res = String::from("\n\r");
+        let mut format_res = String::new();
         let mut ret_type = String::new();
         // if self.typenode.ret.is_ref {
         //     let ref_id = format!("&{}", &self.typenode.ret.id);
@@ -57,7 +56,8 @@ impl Node for FuncDefNode {
                 format_res.push_str(";");
             }
         }
-        return format_res;
+        format_res.push_str("\n\r");
+        format_res
     }
 
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {

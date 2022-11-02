@@ -144,8 +144,11 @@ pub struct ExternIDNode {
 impl Node for ExternIDNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
         let mut format_res = String::new();
-        for id in &self.ns {
+        for (i, id) in self.ns.iter().enumerate() {
             format_res.push_str(&id.format(tabs, prefix));
+            if i != self.ns.len() {
+                format_res.push_str("::");
+            }
         }
         format_res.push_str(&self.id.format(tabs, prefix));
         format_res

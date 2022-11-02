@@ -145,10 +145,16 @@ pub struct ArrayElementNode {
 
 impl Node for ArrayElementNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        return String::from("array hellow");
+        format!(
+            "{}[{}]",
+            &self.arr.format(tabs, prefix),
+            &self.index.format(tabs, prefix)
+        )
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("ArrayElementNode");
         self.arr.print(tabs + 1, false, line.clone());
         self.index.print(tabs + 1, true, line);
     }

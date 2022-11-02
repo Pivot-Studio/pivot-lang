@@ -14,7 +14,7 @@ pub struct ErrorNode {
 
 impl Node for ErrorNode {
     fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        return self.src.clone() + "\n\r";
+        format!("\n\r{}\n\r", self.src.clone())
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

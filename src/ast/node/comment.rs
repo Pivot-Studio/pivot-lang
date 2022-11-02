@@ -12,6 +12,7 @@ impl Node for CommentNode {
     fn format(&self, _tabs: usize, _prefix: &str) -> String {
         let mut format_res = String::from("//");
         format_res.push_str(&self.comment);
+        format_res.push_str("\n\r");
         format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {

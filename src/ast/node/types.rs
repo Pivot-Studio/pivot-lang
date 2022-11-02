@@ -72,7 +72,11 @@ pub struct ArrayTypeNameNode {
 
 impl TypeNode for ArrayTypeNameNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        return "hello".to_string();
+        format!(
+            "[{}*{}]",
+            &self.id.format(tabs, prefix),
+            &self.size.format(tabs, prefix)
+        )
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -169,6 +173,7 @@ impl Node for StructDefNode {
         format_res.push_str("\n\r");
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str("}");
+        format_res.push_str("\n\r");
         format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -392,7 +397,15 @@ pub struct ArrayInitNode {
 
 impl Node for ArrayInitNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        return "hello".to_string();
+        let mut format_res = String::from("[");
+        for (i, exp) in self.exps.iter().enumerate() {
+            format_res.push_str(&exp.format(tabs, prefix));
+            if i != self.exps.len() - 1 {
+                format_res.push_str(", ");
+            }
+        }
+        format_res.push(']');
+        format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

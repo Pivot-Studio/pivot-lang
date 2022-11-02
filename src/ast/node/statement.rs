@@ -18,7 +18,11 @@ impl Node for DefNode {
         format_res.push_str("let ");
         format_res.push_str(&self.var.format(tabs, prefix));
         format_res.push_str(" = ");
-        format_res.push_str(&self.exp.as_ref().unwrap().format(tabs, prefix));
+        if let Some(tp) = &self.tp {
+            format_res.push_str(&tp.format(tabs, prefix));
+        } else {
+            format_res.push_str(&self.exp.as_ref().unwrap().format(tabs, prefix));
+        }
         format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {

@@ -32,7 +32,7 @@ pub struct ProgramNode {
 }
 impl Node for ProgramNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::from("\n\r");
+        let mut format_res = String::new();
         for statement in &self.nodes {
             format_res.push_str(&statement.format(tabs, prefix));
         }
