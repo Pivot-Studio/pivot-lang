@@ -36,7 +36,7 @@ impl Node for FuncDefNode {
         //     let ref_id = format!("&{}", &self.typenode.ret.id);
         //     ret_type.push_str(&ref_id);
         // } else {
-        //     ret_type.push_str(&self.typenode.ret.id);
+        ret_type.push_str(&self.typenode.ret.format(tabs, prefix));
         // }
         format_res.push_str(&doc_str);
         format_res.push_str(&prefix.repeat(tabs));

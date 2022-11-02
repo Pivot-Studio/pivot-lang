@@ -193,7 +193,7 @@ pub fn print_params(paralist: &Vec<Box<TypedIdentifierNode>>) -> String {
         //     let ref_id = format!("&{}", &param.tp.id);
         //     id.push_str(&ref_id);
         // } else {
-        //     id.push_str(&param.tp.id)
+        id.push_str(&param.tp.format(0, ""));
         // }
         str.push_str(name);
         str.push_str(": ");
