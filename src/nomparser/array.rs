@@ -8,7 +8,11 @@ use nom::{
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
-use crate::{ast::node::types::ArrayInitNode, ast::{range::Range, node::error::ErrorNode, diag::ErrorCode}, ast::tokens::TokenType};
+use crate::{
+    ast::node::types::ArrayInitNode,
+    ast::tokens::TokenType,
+    ast::{diag::ErrorCode, node::error::ErrorNode, range::Range},
+};
 
 use super::*;
 
@@ -41,18 +45,16 @@ pub fn array_element_op(input: Span) -> IResult<Span, ComplexOp> {
             opt(logic_exp),
             tag_token(TokenType::RBRACKET),
         )),
-        |(_,idx,(_,rr))| {
-            if let Some(idx) = idx{
+        |(_, idx, (_, rr))| {
+            if let Some(idx) = idx {
                 Ok::<_, Error>(ComplexOp::IndexOp(idx))
             } else {
-                Ok::<_, Error>(ComplexOp::IndexOp(Box::new(NodeEnum::Err(
-                    ErrorNode{ 
-                        msg: String::from("Nedded index for array element access"), 
-                        src: String::from("[]"), 
-                        code: ErrorCode::NEEDED_INDEX_FOR_ARRAY_ELEMENT_ACCESS, 
-                        range: rr
-                    }
-                ))))
+                Ok::<_, Error>(ComplexOp::IndexOp(Box::new(NodeEnum::Err(ErrorNode {
+                    msg: String::from("Nedded index for array element access"),
+                    src: String::from("[]"),
+                    code: ErrorCode::NEEDED_INDEX_FOR_ARRAY_ELEMENT_ACCESS,
+                    range: rr,
+                }))))
             }
         },
     ))(input)

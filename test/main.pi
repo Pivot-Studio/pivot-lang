@@ -190,7 +190,7 @@ fn test_pointer() void {
     test_modify_pointer(&b);
     io::printi64ln(*b);
     let dang = test_dangling();
-    io::printi64ln(*dang);
+    io::printi64ln(dang.ptr.a);
     return;
 }
 
@@ -199,8 +199,12 @@ fn test_modify_pointer(a:**i64) void {
     return;
 }
 
-fn test_dangling() *i64 {
-    let a = 100;
+struct pointer_struct {
+    ptr: *struct_child;
+}
+
+fn test_dangling() *pointer_struct {
+    let a = pointer_struct{ptr:&struct_child{a:10,},};
     return &a;
 }
 

@@ -289,7 +289,11 @@ impl Node for StructInitNode {
         for field in self.fields.iter_mut() {
             let range = field.range();
             let name = field.id.name.clone();
+            let frange = field.range();
             let (value, _, _) = field.emit(ctx)?;
+            if value.is_none() {
+                return Err(ctx.add_err(frange, ErrorCode::EXPECT_VALUE));
+            }
             fields.insert(name, (ctx.try_load2var(range, value.unwrap())?, range));
         }
         if let PLType::STRUCT(st) = &tp {

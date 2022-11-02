@@ -1338,4 +1338,39 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             }
         }
     }
+    /// # auto_deref
+    /// 自动解引用，有几层解几层
+    pub fn auto_deref(
+        &self,
+        tp: PLType,
+        value: PointerValue<'ctx>,
+    ) -> (PLType, PointerValue<'ctx>) {
+        let mut tp = tp;
+        let mut value = value;
+        loop {
+            match tp {
+                PLType::POINTER(p) => {
+                    tp = *p;
+                    value = self.builder.build_load(value, "load").into_pointer_value();
+                }
+                _ => break,
+            }
+        }
+        (tp, value)
+    }
+
+    /// # auto_deref_tp
+    /// 自动解pltype引用，有几层解几层
+    pub fn auto_deref_tp(&self, tp: PLType) -> PLType {
+        let mut tp = tp;
+        loop {
+            match tp {
+                PLType::POINTER(p) => {
+                    tp = *p;
+                }
+                _ => break,
+            }
+        }
+        tp
+    }
 }
