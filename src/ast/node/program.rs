@@ -270,7 +270,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     if m.action.is_some() && m.action.unwrap() == ActionType::PrintAst {
         println!("file: {}", params.fullpath(db).green());
         nn.print(0, true, vec![]);
-    } else if m.action.is_some() && m.action.unwrap() == ActionType::GenSource {
+    } else if m.action.is_some() && m.action.unwrap() == ActionType::FMT {
         let code = nn.format(0, "    ");
         println!("{}", code);
     }

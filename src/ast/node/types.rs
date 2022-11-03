@@ -73,7 +73,7 @@ pub struct ArrayTypeNameNode {
 impl TypeNode for ArrayTypeNameNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
         format!(
-            "[{}*{}]",
+            "[{} * {}]",
             &self.id.format(tabs, prefix),
             &self.size.format(tabs, prefix)
         )
@@ -112,6 +112,9 @@ pub struct PointerTypeNode {
 }
 
 impl TypeNode for PointerTypeNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        format!("*{}", self.elm.format(tabs, prefix))
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

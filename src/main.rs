@@ -75,7 +75,7 @@ struct Cli {
 
     /// print source fmt
     #[clap(long)]
-    gensource: bool,
+    fmt: bool,
 
     /// generate ir
     #[clap(long)]
@@ -120,13 +120,13 @@ fn main() {
             verbose: cli.verbose,
             genir: cli.genir,
             printast: cli.printast,
-            gensource: cli.gensource,
+            fmt: cli.fmt,
             optimization: opt,
         };
         let action = if cli.printast {
             ActionType::PrintAst
-        } else if cli.gensource {
-            ActionType::GenSource
+        } else if cli.fmt {
+            ActionType::FMT
         } else {
             ActionType::Compile
         };

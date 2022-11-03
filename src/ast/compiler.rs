@@ -30,7 +30,7 @@ pub struct Options {
     pub genir: bool,
     pub printast: bool,
     pub optimization: HashOptimizationLevel,
-    pub gensource: bool,
+    pub fmt: bool,
 }
 
 #[repr(u32)]
@@ -94,7 +94,7 @@ pub enum ActionType {
     Hover,
     Compile,
     PrintAst,
-    GenSource,
+    FMT,
 }
 
 #[cfg(feature = "jit")]
@@ -217,7 +217,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         println!("print ast done, time: {:?}", time);
         return;
     }
-    if op.gensource {
+    if op.fmt {
         let time = now.elapsed();
         println!("gen source done, time: {:?}", time);
         return;
@@ -417,7 +417,7 @@ mod test {
                 optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
                 genir: true,
                 printast: false,
-                gensource: false,
+                fmt: false,
             },
         );
         run(
@@ -434,7 +434,7 @@ mod test {
                 optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
                 genir: false,
                 printast: true,
-                gensource: false,
+                fmt: false,
             },
         );
     }
