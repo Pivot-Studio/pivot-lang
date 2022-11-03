@@ -9,6 +9,7 @@ edition = "2021"
 internal_macro = { path = "../internal_macro",default-features = false }
 libc = "0.2"
 rand = "0.8"
+backtrace = "0.3"
 
 [lib]
 name = "vm"
