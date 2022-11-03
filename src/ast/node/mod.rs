@@ -108,6 +108,7 @@ pub enum NodeEnum {
     ArrayInitNode(ArrayInitNode),
     ArrayElementNode(ArrayElementNode),
     PointerOpNode(PointerOpNode),
+    ParanthesesNode(ParanthesesNode),
 }
 // ANCHOR: range
 #[enum_dispatch]

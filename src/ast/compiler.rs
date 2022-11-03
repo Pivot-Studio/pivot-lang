@@ -437,5 +437,18 @@ mod test {
                 fmt: false,
             },
         );
+        input.set_action(&mut db).to(ActionType::FMT);
+        compile(
+            &db,
+            input,
+            out.to_string(),
+            Options {
+                verbose: true,
+                optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
+                genir: false,
+                printast: true,
+                fmt: true,
+            },
+        );
     }
 }

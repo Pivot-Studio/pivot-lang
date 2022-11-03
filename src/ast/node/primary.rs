@@ -181,3 +181,24 @@ impl Node for ArrayElementNode {
         return Err(ctx.add_err(self.range, ErrorCode::CANNOT_INDEX_NON_ARRAY));
     }
 }
+
+#[range]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ParanthesesNode {
+    pub node: Box<NodeEnum>,
+}
+
+impl Node for ParanthesesNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        format!("({})", &self.node.format(tabs, prefix))
+    }
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("ParanthesesNode");
+        self.node.print(tabs + 1, true, line);
+    }
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        self.node.emit(ctx)
+    }
+}
