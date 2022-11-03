@@ -286,10 +286,12 @@ call_function_op = (&quot;(&quot; (logic_exp (&quot;,&quot;logic_exp)*)? &quot;)
 primary_exp =
     | number
     | bool_const
-    | &quot;(&quot; logic_exp &quot;)&quot;
+    | parantheses_exp
     | extern_identifier
     | struct_init_exp
     ;
+
+parantheses_exp = &quot;(&quot; logic_exp &quot;)&quot;;
 
 number = [0-9]+ (&quot;.&quot; number)? ;
 
