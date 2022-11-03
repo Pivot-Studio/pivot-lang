@@ -1,1 +1,2 @@
+project = "core"
 entry = "__private.pi"

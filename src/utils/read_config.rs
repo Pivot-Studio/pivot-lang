@@ -44,6 +44,7 @@ pub fn get_config_path(current: String) -> Result<String, &'static str> {
 
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct Config {
+    pub project: String,
     pub entry: String,
     pub deps: Option<FxHashMap<String, Dependency>>,
     #[serde(skip)]

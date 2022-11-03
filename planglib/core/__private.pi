@@ -1,1 +1,1 @@
-use gc;
+use core::gc;

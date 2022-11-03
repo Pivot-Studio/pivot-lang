@@ -149,7 +149,6 @@ impl Program {
             }
             let mut path = PathBuf::from(self.config(db).root);
             let mut config = self.config(db);
-            let mut start = 0;
             // 加载依赖包的路径
             if let Some(cm) = self.config(db).deps {
                 // 如果use的是依赖包
@@ -177,11 +176,9 @@ impl Program {
                     }
                     config = re.unwrap();
                     config.root = path.to_str().unwrap().to_string();
-
-                    start = 1;
                 }
             }
-            for p in u.ids[start..].iter() {
+            for p in u.ids[1..].iter() {
                 path = path.join(p.name.clone());
             }
             path = path.with_extension("pi");
