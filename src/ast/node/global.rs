@@ -10,6 +10,14 @@ pub struct GlobalNode {
     pub exp: Box<NodeEnum>,
 }
 impl Node for GlobalNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let mut format_res = String::from("const ");
+        format_res.push_str(&self.var.format(tabs, prefix));
+        format_res.push_str(" = ");
+        format_res.push_str(&self.exp.format(tabs, prefix));
+        format_res.push_str(";");
+        format_res
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

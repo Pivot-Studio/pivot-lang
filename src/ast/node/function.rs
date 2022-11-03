@@ -22,6 +22,44 @@ pub struct FuncDefNode {
 }
 
 impl Node for FuncDefNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let paralist = &self.typenode.paralist;
+        let params_print = print_params(&paralist);
+        let mut doc_str = String::new();
+        for c in self.typenode.doc.iter() {
+            doc_str.push_str(&c.format(tabs, prefix));
+        }
+        let mut format_res = String::new();
+        let mut ret_type = String::new();
+        // if self.typenode.ret.is_ref {
+        //     let ref_id = format!("&{}", &self.typenode.ret.id);
+        //     ret_type.push_str(&ref_id);
+        // } else {
+        ret_type.push_str(&self.typenode.ret.format(tabs, prefix));
+        // }
+        format_res.push_str(&doc_str);
+        format_res.push_str(&prefix.repeat(tabs));
+        format_res.push_str("fn ");
+        format_res.push_str(&self.typenode.id);
+        format_res.push_str("(");
+        format_res.push_str(&params_print);
+        format_res.push_str(") ");
+        format_res.push_str(&ret_type);
+        match &self.body {
+            Some(body) => {
+                format_res.push_str(" {");
+                format_res.push_str(&body.format(tabs + 1, prefix));
+                format_res.push_str(&prefix.repeat(tabs));
+                format_res.push_str("}");
+            }
+            None => {
+                format_res.push_str(";");
+            }
+        }
+        format_res.push_str("\n\r");
+        format_res
+    }
+
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -221,6 +259,28 @@ pub struct FuncCallNode {
 }
 
 impl Node for FuncCallNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let mut format_res = String::new();
+        let mut param_str = String::new();
+        match Some(&self.paralist) {
+            Some(paralist) => {
+                let mut len = 0;
+                for param in paralist {
+                    len += 1;
+                    param_str.push_str(&param.format(tabs, prefix));
+                    if len < paralist.len() {
+                        param_str.push_str(", ");
+                    }
+                }
+            }
+            None => (),
+        }
+        format_res.push_str(&self.id.format(tabs, prefix));
+        format_res.push_str("(");
+        format_res.push_str(&param_str);
+        format_res.push_str(")");
+        format_res
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

@@ -23,6 +23,17 @@ pub struct UseNode {
 }
 
 impl Node for UseNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let mut format_res = String::from("use ");
+        for (i, id) in self.ids.iter().enumerate() {
+            format_res.push_str(&id.format(tabs, prefix));
+            if i != self.ids.len() - 1 {
+                format_res.push_str("::");
+            }
+        }
+        format_res.push_str(";\r\n");
+        format_res
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -131,6 +142,17 @@ pub struct ExternIDNode {
 }
 
 impl Node for ExternIDNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let mut format_res = String::new();
+        for (i, id) in self.ns.iter().enumerate() {
+            format_res.push_str(&id.format(tabs, prefix));
+            if i != self.ns.len() {
+                format_res.push_str("::");
+            }
+        }
+        format_res.push_str(&self.id.format(tabs, prefix));
+        format_res
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

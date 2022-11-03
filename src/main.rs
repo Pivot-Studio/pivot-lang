@@ -73,6 +73,10 @@ struct Cli {
     #[clap(long)]
     printast: bool,
 
+    /// print source fmt
+    #[clap(long)]
+    fmt: bool,
+
     /// generate ir
     #[clap(long)]
     genir: bool,
@@ -116,10 +120,13 @@ fn main() {
             verbose: cli.verbose,
             genir: cli.genir,
             printast: cli.printast,
+            fmt: cli.fmt,
             optimization: opt,
         };
         let action = if cli.printast {
             ActionType::PrintAst
+        } else if cli.fmt {
+            ActionType::FMT
         } else {
             ActionType::Compile
         };

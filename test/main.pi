@@ -49,7 +49,7 @@ fn test_struct() void {
     test::test();
     return ;
 }
-fn test_vm() void {
+fn test_vm(a: &i64) void {
     io::printi64ln(test_vm_link());//165445451
     return ;
 }
@@ -183,6 +183,7 @@ fn main() i64 {
     test_pointer();
     return 0;
 }
+
 
 fn test_pointer() void {
     let a = 0;
