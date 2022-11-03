@@ -195,7 +195,7 @@ impl Node for StructDefNode {
         format_res.push_str("struct ");
         format_res.push_str(&self.id);
         format_res.push_str(" {");
-        for (field, i) in &self.fields {
+        for (field, _i) in &self.fields {
             format_res.push_str(&field.format(tabs + 1, prefix));
         }
         format_res.push_str("\n\r");

@@ -1,11 +1,8 @@
 use super::*;
 use crate::ast::ctx::{Ctx, PLType, PriType};
 use crate::ast::diag::ErrorCode;
-use crate::ast::node;
-
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
-use vm::printi64ln;
 
 #[range]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
