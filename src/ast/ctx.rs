@@ -36,6 +36,7 @@ use lsp_types::MarkedString;
 use lsp_types::SemanticTokenType;
 use lsp_types::Url;
 use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use std::cell::Cell;
 use std::cell::RefCell;
 use std::path::Path;
@@ -475,7 +476,7 @@ impl PLType {
     pub fn get_basic_type_op<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Option<BasicTypeEnum<'ctx>> {
         match self {
             PLType::FN(f) => Some(
-                f.get_value(ctx)
+                f.get_or_insert_fn(ctx)
                     .get_type()
                     .ptr_type(inkwell::AddressSpace::Global)
                     .as_basic_type_enum(),
@@ -654,7 +655,8 @@ impl Field {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FNType {
-    pub name: String,
+    pub name: String,     // name for lsp
+    pub llvmname: String, // name in llvm ir
     pub param_pltypes: Vec<PLType>,
     pub ret_pltype: Box<PLType>,
     pub range: Range,
@@ -677,11 +679,8 @@ impl FNType {
     /// try get function value from module
     ///
     /// if not found, create a declaration
-    pub fn get_value<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> FunctionValue<'ctx> {
-        if let Some(v) = ctx.module.get_function(&self.name) {
-            return v;
-        }
-        if let Some(v) = ctx.module.get_function(&self.name) {
+    pub fn get_or_insert_fn<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> FunctionValue<'ctx> {
+        if let Some(v) = ctx.module.get_function(&self.llvmname) {
             return v;
         }
         let mut param_types = vec![];
@@ -694,7 +693,7 @@ impl FNType {
             .fn_type(&param_types, false);
         let fn_value = ctx
             .module
-            .add_function(&self.name, fn_type, Some(Linkage::External));
+            .add_function(&self.llvmname, fn_type, Some(Linkage::External));
         fn_value
     }
 }
@@ -965,7 +964,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }) = self.plmod.get_global_symbol(name)
         {
             return Some((
-                self.module.get_global(name).unwrap().as_pointer_value(),
+                self.module
+                    .get_global(&self.plmod.get_full_name(name))
+                    .unwrap()
+                    .as_pointer_value(),
                 pltype.clone(),
                 range.clone(),
                 refs.clone(),
@@ -1012,16 +1014,43 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     /// 用来获取外部模块的全局变量
     /// 如果没在当前module的全局变量表中找到，将会生成一个
     /// 该全局变量的声明
-    pub fn get_or_add_global(&self, name: &str, _m: &Mod, pltype: PLType) -> PointerValue<'ctx> {
+    pub fn get_or_add_global(&self, name: &str, m: &Mod, pltype: PLType) -> PointerValue<'ctx> {
         let global = self.module.get_global(name);
         if global.is_none() {
-            let global = self
-                .module
-                .add_global(pltype.get_basic_type(self), None, name);
+            let global =
+                self.module
+                    .add_global(pltype.get_basic_type(self), None, &m.get_full_name(name));
             global.set_linkage(Linkage::External);
             return global.as_pointer_value();
         }
         global.unwrap().as_pointer_value()
+    }
+    pub fn init_global(&mut self) {
+        let mut set: FxHashSet<String> = FxHashSet::default();
+        for (_, sub) in &self.plmod.clone().submods {
+            self.init_global_walk(&sub, &mut set);
+        }
+        self.nodebug_builder.build_call(
+            self.module
+                .get_function(&self.plmod.get_full_name("__init_global"))
+                .unwrap(),
+            &[],
+            "",
+        );
+    }
+    fn init_global_walk(&mut self, m: &Mod, set: &mut FxHashSet<String>) {
+        let name = m.get_full_name("__init_global");
+        if set.contains(&name) {
+            return;
+        }
+        for (_, sub) in &m.submods {
+            self.init_global_walk(sub, set);
+        }
+        let f = self
+            .module
+            .add_function(&name, self.context.void_type().fn_type(&[], false), None);
+        self.nodebug_builder.build_call(f, &[], "");
+        set.insert(name);
     }
 
     pub fn add_type(&mut self, name: String, tp: PLType, range: Range) -> Result<(), PLDiag> {

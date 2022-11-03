@@ -33,8 +33,6 @@ impl Node for DefNode {
         if let Some(tp) = &self.tp {
             let pltype = tp.get_type(ctx)?;
             match pltype.clone() {
-                PLType::FN(_) => todo!(),
-                PLType::STRUCT(_) => todo!(),
                 PLType::ARR(a) => {
                     let arrtp = a.arr_type(ctx);
                     let arr = alloc(ctx, arrtp.as_basic_type_enum(), &self.var.name);
@@ -66,7 +64,6 @@ impl Node for DefNode {
                     }
                     return Ok((None, None, TerminatorEnum::NONE));
                 }
-                PLType::VOID => todo!(),
                 PLType::POINTER(p) => {
                     let tp = p.get_basic_type(ctx);
                     let v = alloc(ctx, tp, &self.var.name);
@@ -82,6 +79,7 @@ impl Node for DefNode {
                     }
                     return Ok((None, None, TerminatorEnum::NONE));
                 }
+                _ => todo!(),
             };
         }
 

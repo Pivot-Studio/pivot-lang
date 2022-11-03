@@ -180,16 +180,13 @@ impl ExternIDNode {
                 return Err(ctx.add_err(ns.range, ErrorCode::UNRESOLVED_MODULE));
             }
         }
-        let symbol = plmod.get_global_symbol(&self.id.name);
-        if let Some(symbol) = symbol {
+        if let Some(symbol) = plmod.get_global_symbol(&self.id.name) {
             ctx.push_semantic_token(self.id.range, SemanticTokenType::VARIABLE, 0);
-
             let g = ctx.get_or_add_global(&self.id.name, &plmod, symbol.tp.clone());
-            return Ok((
-                Some(g.into()),
-                Some(symbol.tp.clone()),
-                TerminatorEnum::NONE,
-            ));
+            let pltype = symbol.tp.clone();
+            ctx.set_if_refs(symbol.loc.clone(), self.range);
+            ctx.send_if_go_to_def(self.range, symbol.range, plmod.path.clone());
+            return Ok((Some(g.into()), Some(pltype), TerminatorEnum::NONE));
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
             ctx.set_if_refs_tp(&tp, self.range);
@@ -198,7 +195,7 @@ impl ExternIDNode {
                 PLType::FN(f) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
                     Ok((
-                        Some(f.get_value(ctx).into()),
+                        Some(f.get_or_insert_fn(ctx).into()),
                         Some(tp),
                         TerminatorEnum::NONE,
                     ))
