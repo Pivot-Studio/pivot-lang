@@ -156,6 +156,7 @@
 <p>所有的节点都必须实现<code>Node</code> trait，这个trait定义了节点的基本行为。</p>
 <pre><code class="language-rust no_run noplayground">#[enum_dispatch]
 pub trait Node: RangeTrait + AsAny {
+    fn format(&amp;self, tabs: usize, prefix: &amp;str) -&gt; String;
     fn print(&amp;self, tabs: usize, end: bool, line: Vec&lt;bool&gt;);
     fn emit&lt;'a, 'ctx&gt;(&amp;'a mut self, ctx: &amp;mut Ctx&lt;'a, 'ctx&gt;) -&gt; NodeResult&lt;'ctx&gt;;
 }
