@@ -13,6 +13,7 @@ use colored::Colorize;
 use inkwell::{
     context::Context,
     module::Module,
+    passes::{PassManager, PassManagerBuilder},
     targets::{FileType, InitializationConfig, Target, TargetMachine},
     OptimizationLevel,
 };
@@ -240,20 +241,47 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         _ = remove_file(m.clone()).unwrap();
         // println!("rm {}", m.to_str().unwrap());
     }
+    llvmmod.verify().unwrap();
+    let tm = get_target_machine(op.optimization.to_llvm());
+    let mut f = out.to_string();
+    f.push_str(".asm");
+
+    if op.optimization != HashOptimizationLevel::None {
+        let pass_manager_builder = PassManagerBuilder::create();
+
+        pass_manager_builder.set_optimization_level(op.optimization.to_llvm());
+        pass_manager_builder.set_size_level(2);
+
+        // Create FPM MPM
+        let fpm = PassManager::create(&llvmmod);
+        let mpm = PassManager::create(());
+
+        pass_manager_builder.populate_function_pass_manager(&fpm);
+        pass_manager_builder.populate_module_pass_manager(&mpm);
+        let b = fpm.initialize();
+        println!("fpm init: {}", b);
+        for f in llvmmod.get_functions() {
+            let optimized = fpm.run_on(&f);
+            if op.verbose {
+                println!("try to optimize func {}", f.get_name().to_str().unwrap());
+                let oped = if optimized { "yes" } else { "no" };
+                println!("optimized: {}", oped,);
+            }
+        }
+        fpm.finalize();
+        mpm.run_on(&llvmmod);
+    }
     if op.genir {
         let mut s = out.to_string();
         s.push_str(".ll");
         let llp = Path::new(&s[..]);
         fs::write(llp, llvmmod.to_string()).unwrap();
     }
-    llvmmod.verify().unwrap();
-    let tm = get_target_machine(op.optimization.to_llvm());
-    let mut f = out.to_string();
-    f.push_str(".asm");
     tm.write_to_file(&llvmmod, FileType::Assembly, Path::new(&f))
         .unwrap();
-    let mut fo = out.to_string();
-    fo.push_str(".out");
+    let fo = out.to_string();
+    let mut out = out.to_string();
+    out.push_str(".plb");
     llvmmod.write_bitcode_to_path(Path::new(&out));
     println!("jit executable file writted to: {}", &out);
     let mut cmd = Command::new("clang++");

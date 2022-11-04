@@ -13,3 +13,4 @@ test.cpp
 out.*
 *.html
 *.asm
+out

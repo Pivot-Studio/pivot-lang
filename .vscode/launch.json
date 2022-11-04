@@ -14,7 +14,10 @@
                     "build"
                 ]
             },
-            "args": ["test/main.pi"]
+            "args": [
+                "test/main.pi",
+                // "-O1"
+        ]
         },
         {
             "type": "lldb",
@@ -38,15 +41,16 @@
             "type": "lldb",
             "request": "launch",
             "name": "(Unix based system)launch test.pi debug",
-            "program": "${workspaceFolder}/out.plb.out",
+            "program": "${workspaceFolder}/out",
             "args": [],
             "cwd": "${workspaceFolder}",
+            // "stopOnEntry": true
         },
         {
             "name": "(Windows) Launch",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/out.plb.out",
+            "program": "${workspaceFolder}/out",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

@@ -314,10 +314,10 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let pp = Path::new(&hashed).with_extension("bc");
         let p = pp.as_path();
         ctx.module.write_bitcode_to_path(p);
-        _ = std::fs::write(
-            Path::new(&hashed).with_extension("ll"),
-            ctx.module.print_to_string().to_string(),
-        );
+        // _ = std::fs::write(
+        //     Path::new(&hashed).with_extension("ll"),
+        //     ctx.module.print_to_string().to_string(),
+        // );
         ModBuffer::push(db, p.clone().to_path_buf());
     }
     ModWrapper::new(db, ctx.plmod)
