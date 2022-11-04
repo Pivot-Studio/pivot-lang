@@ -254,11 +254,12 @@ pub fn print_params(paralist: &Vec<Box<TypedIdentifierNode>>) -> String {
 }
 
 pub fn alloc<'a, 'ctx>(
-    ctx: &Ctx<'a, 'ctx>,
+    ctx: &mut Ctx<'a, 'ctx>,
     tp: BasicTypeEnum<'ctx>,
     name: &str,
 ) -> PointerValue<'ctx> {
     let builder = ctx.nodebug_builder;
+    ctx.block = Some(builder.get_insert_block().unwrap());
     match ctx.function.unwrap().get_first_basic_block() {
         Some(alloca) => {
             builder.position_at_end(alloca);

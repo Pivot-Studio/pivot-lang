@@ -39,7 +39,10 @@ impl TypeNode for TypeNameNode {
 
     fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) {
         if let Some(id) = &self.id {
-            ctx.push_semantic_token(id.range, SemanticTokenType::TYPE, 0);
+            for ns in id.ns.iter() {
+                ctx.push_semantic_token(ns.range, SemanticTokenType::NAMESPACE, 0);
+            }
+            ctx.push_semantic_token(id.id.range, SemanticTokenType::TYPE, 0);
         }
     }
 
@@ -377,7 +380,7 @@ impl Node for StructInitNode {
         let mut fields = FxHashMap::<String, (BasicValueEnum<'ctx>, Range)>::default();
         let tp = self.tp.get_type(ctx)?;
         for field in self.fields.iter_mut() {
-            let range = field.range();
+            let range = field.id.range();
             let name = field.id.name.clone();
             let frange = field.range();
             let (value, _, _) = field.emit(ctx)?;

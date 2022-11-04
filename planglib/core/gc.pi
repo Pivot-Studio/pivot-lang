@@ -13,3 +13,9 @@ fn DioGC__collect(gc:*i64) void;
 fn DioGC__get_size(gc:*i64) i64;
 
 const diogc = DioGC__new_ptr();
+
+// # get_heap_size
+// get current heap size
+fn get_heap_size() i64 {
+    return DioGC__get_size(diogc);
+}

@@ -435,7 +435,8 @@ mod test {
             ActionType::Compile,
             None,
         );
-        let out = "testout.plb";
+        let outplb = "testout.plb";
+        let out = "testout";
         compile(
             &db,
             input,
@@ -449,7 +450,7 @@ mod test {
             },
         );
         run(
-            &PathBuf::from(out).as_path(),
+            &PathBuf::from(outplb).as_path(),
             inkwell::OptimizationLevel::Default,
         );
         input.set_action(&mut db).to(ActionType::PrintAst);

@@ -13,4 +13,5 @@ test.cpp
 out.*
 *.html
 *.asm
-out
+*out
+*.dSYM

@@ -1,0 +1,5 @@
+// # pl_panic
+// this function will print a backtrace 
+// and exit the current process immediatly with code 1 . 
+// the backtrace may not work in jit mod
+fn pl_panic() void;
