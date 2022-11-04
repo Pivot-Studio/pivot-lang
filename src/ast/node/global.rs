@@ -26,8 +26,25 @@ impl Node for GlobalNode {
         self.exp.print(tabs + 1, true, line.clone());
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        ctx.function = ctx.init_func;
+        let entry = ctx.function.unwrap().get_last_basic_block().unwrap();
+        ctx.builder.position_at_end(entry);
+        ctx.nodebug_builder.position_at_end(entry);
+        let exp_range = self.exp.range();
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
-        self.exp.emit(ctx)?;
+
+        let builder = ctx.builder;
+        ctx.builder = ctx.nodebug_builder;
+        let (value, _, _) = self.exp.emit(ctx)?;
+        let base_value = ctx.try_load2var(exp_range, value.unwrap())?;
+        let res = ctx.get_symbol(&self.var.name);
+        if res.is_none() {
+            return Ok((None, None, TerminatorEnum::NONE));
+        }
+        let (globalptr, _, _, _, _) = res.unwrap();
+        ctx.builder = builder;
+        ctx.position_at_end(entry);
+        ctx.nodebug_builder.build_store(globalptr, base_value);
         Ok((None, None, TerminatorEnum::NONE))
     }
 }
@@ -49,11 +66,11 @@ impl GlobalNode {
         let ditype = pltype.get_ditype(ctx);
         let base_value = ctx.try_load2var(exp_range, value.unwrap())?;
         let base_type = base_value.get_type();
-        let globalptr = ctx.module.add_global(base_type, None, &self.var.name);
+        let globalptr =
+            ctx.module
+                .add_global(base_type, None, &ctx.plmod.get_full_name(&self.var.name));
         globalptr.set_initializer(&base_type.const_zero());
         globalptr.set_constant(false);
-        ctx.nodebug_builder
-            .build_store(globalptr.as_pointer_value(), base_value);
         let exp = ctx.dibuilder.create_global_variable_expression(
             ctx.diunit.as_debug_info_scope(),
             &self.var.name,
@@ -71,7 +88,7 @@ impl GlobalNode {
             self.var.name.clone(),
             globalptr.as_pointer_value(),
             pltype,
-            self.range,
+            self.var.range,
             true,
         )?;
         Ok(())

@@ -45,8 +45,6 @@ impl Node for DefNode {
         if let Some(tp) = &self.tp {
             let pltype = tp.get_type(ctx)?;
             match pltype.clone() {
-                PLType::FN(_) => todo!(),
-                PLType::STRUCT(_) => todo!(),
                 PLType::ARR(a) => {
                     let arrtp = a.arr_type(ctx);
                     let arr = alloc(ctx, arrtp.as_basic_type_enum(), &self.var.name);
@@ -78,7 +76,6 @@ impl Node for DefNode {
                     }
                     return Ok((None, None, TerminatorEnum::NONE));
                 }
-                PLType::VOID => todo!(),
                 PLType::POINTER(p) => {
                     let tp = p.get_basic_type(ctx);
                     let v = alloc(ctx, tp, &self.var.name);
@@ -94,6 +91,7 @@ impl Node for DefNode {
                     }
                     return Ok((None, None, TerminatorEnum::NONE));
                 }
+                _ => todo!(),
             };
         }
 
@@ -170,6 +168,9 @@ impl Node for AssignNode {
         let (value, rpltype, _) = self.exp.emit(ctx)?;
         if lpltype != rpltype {
             return Err(ctx.add_err(self.range, ErrorCode::ASSIGN_TYPE_MISMATCH));
+        }
+        if ptr.as_ref().unwrap().is_const {
+            return Err(ctx.add_err(self.range, ErrorCode::ASSIGN_CONST));
         }
         let load = ctx.try_load2var(exp_range, value.unwrap())?;
         ctx.builder.build_store(

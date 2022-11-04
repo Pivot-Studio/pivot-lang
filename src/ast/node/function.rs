@@ -5,7 +5,6 @@ use crate::ast::ctx::{FNType, PLType};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 use inkwell::debug_info::*;
-use inkwell::types::BasicType;
 use inkwell::values::FunctionValue;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
@@ -145,7 +144,7 @@ impl Node for FuncDefNode {
             }
             let fu = res.unwrap();
             func = match fu {
-                PLType::FN(fu) => fu.get_value(ctx),
+                PLType::FN(fu) => fu.get_or_insert_fn(ctx),
                 _ => panic!("type error"), // 理论上这两个Panic不可能触发
             };
             func.set_subprogram(subprogram);
@@ -232,12 +231,12 @@ impl Node for FuncDefNode {
             // emit body
             ctx.builder.unset_current_debug_location();
             if self.typenode.id == "main" {
-                ctx.builder
-                    .build_call(ctx.init_func.unwrap(), &vec![], "init_call");
                 let inst = allocab.get_first_instruction().unwrap();
                 ctx.builder.position_at(allocab, &inst);
-                ctx.init_global_gc();
+                ctx.nodebug_builder.position_at(allocab, &inst);
+                ctx.init_global();
                 ctx.builder.position_at_end(entry);
+                ctx.nodebug_builder.position_at_end(entry);
             }
             let (_, _, terminator) = body.emit(&mut ctx)?;
             if !terminator.is_return() {
@@ -359,37 +358,29 @@ impl FuncTypeNode {
         if let Ok(_) = ctx.get_type(self.id.as_str(), self.range) {
             return Err(ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL));
         }
-        let mut para_types = Vec::new();
         let mut param_pltypes = Vec::new();
         for para in self.paralist.iter() {
             let paramtype = para.tp.get_type(ctx)?;
             param_pltypes.push(paramtype.clone());
-            para_types.push(paramtype.get_basic_type(&ctx).into());
         }
-        let pltype = self.ret.get_type(ctx)?;
-        let func_type = if pltype.is_void() {
-            // void type
-            ctx.context.void_type().fn_type(&para_types, false)
-        } else {
-            pltype.get_basic_type(&ctx).fn_type(&para_types, false)
-        };
-        let mut name = self.id.clone();
-        if !self.declare {
-            let full = ctx.plmod.get_full_name(self.id.as_str());
-            name = full;
-        }
-        let func = ctx.module.add_function(&name, func_type, None);
         let refs = vec![];
-        let ftp = PLType::FN(FNType {
+        let ftp = FNType {
             name: self.id.clone(),
             ret_pltype: Box::new(self.ret.get_type(ctx)?),
             param_pltypes,
             range: self.range,
             refs: Rc::new(RefCell::new(refs)),
             doc: self.doc.clone(),
-        });
-        ctx.set_if_refs_tp(&ftp, self.range);
-        ctx.add_type(self.id.clone(), ftp, self.range)?;
-        Ok(func)
+            llvmname: if self.declare {
+                self.id.clone()
+            } else {
+                ctx.plmod.get_full_name(&self.id)
+            },
+        };
+        let res = ftp.get_or_insert_fn(ctx);
+        let pltype = PLType::FN(ftp);
+        ctx.set_if_refs_tp(&pltype, self.range);
+        ctx.add_type(self.id.clone(), pltype, self.range)?;
+        Ok(res)
     }
 }

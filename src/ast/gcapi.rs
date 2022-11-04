@@ -1,21 +1,20 @@
-use inkwell::{builder::Builder, values::BasicValueEnum, AddressSpace};
+use inkwell::{
+    builder::Builder,
+    values::{BasicValueEnum, PointerValue},
+    AddressSpace,
+};
 
-use super::ctx::{Ctx, FNType};
+use super::ctx::{Ctx, FNType, Mod};
 
 impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn mv2heap(&self, val: BasicValueEnum<'ctx>) -> BasicValueEnum<'ctx> {
-        let f: FNType = self
-            .plmod
-            .submods
-            .get("gc")
-            .unwrap()
-            .get_type("DioGC__malloc")
-            .unwrap()
-            .try_into()
-            .unwrap();
-        let f = f.get_value(self);
-        let gc = self.module.get_global("diogc").unwrap();
-        let gc = self.builder.build_load(gc.as_pointer_value(), "gc");
+        if !self.usegc {
+            return val;
+        }
+        let gcmod = self.get_gc_plmod();
+        let f: FNType = gcmod.get_type("DioGC__malloc").unwrap().try_into().unwrap();
+        let f = f.get_or_insert_fn(self);
+        let gc = self.builder.build_load(self.get_gc(), "gc");
         let td = self.targetmachine.get_target_data();
         let loaded = self.builder.build_load(val.into_pointer_value(), "loaded");
         let size = td.get_store_size(&loaded.get_type());
@@ -34,39 +33,30 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.builder.build_store(heapptr, loaded);
         heapptr.into()
     }
-    pub fn gc_free(&self) -> FNType {
-        self.plmod
-            .submods
-            .get("gc")
-            .unwrap()
-            .get_type("DioGC__free")
-            .unwrap()
-            .try_into()
-            .unwrap()
-    }
-    pub fn gc_new_ptr(&self) -> FNType {
-        self.plmod
-            .submods
-            .get("gc")
-            .unwrap()
-            .get_type("DioGC__new_ptr")
-            .unwrap()
-            .try_into()
-            .unwrap()
-    }
+    // pub fn gc_free(&self) -> FNType {
+    //     let gcmod = self.get_gc_plmod();
+    //     gcmod.get_type("DioGC__free").unwrap().try_into().unwrap()
+    // }
+    // pub fn gc_new_ptr(&self) -> FNType {
+    //     let gcmod = self.get_gc_plmod();
+    //     gcmod
+    //         .get_type("DioGC__new_ptr")
+    //         .unwrap()
+    //         .try_into()
+    //         .unwrap()
+    // }
     pub fn gc_add_root(&self, stackptr: BasicValueEnum<'ctx>, builder: &'a Builder<'ctx>) {
-        let f: FNType = self
-            .plmod
-            .submods
-            .get("gc")
-            .unwrap()
+        if !self.usegc {
+            return;
+        }
+        let gcmod = self.get_gc_plmod();
+        let f: FNType = gcmod
             .get_type("DioGC__add_root")
             .unwrap()
             .try_into()
             .unwrap();
-        let f = f.get_value(self);
-        let gc = self.module.get_global("diogc").unwrap();
-        let gc = builder.build_load(gc.as_pointer_value(), "gc");
+        let f = f.get_or_insert_fn(self);
+        let gc = builder.build_load(self.get_gc(), "gc");
         let stackptr = builder.build_pointer_cast(
             stackptr.into_pointer_value(),
             self.context.i64_type().ptr_type(AddressSpace::Generic),
@@ -75,6 +65,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         builder.build_call(f, &[gc.into(), stackptr.into()], "add_root");
     }
     pub fn gc_rm_root(&self, stackptr: BasicValueEnum<'ctx>) {
+        if !self.usegc {
+            return;
+        }
         let block = self.builder.get_insert_block().unwrap();
         if let Some(inst) = block.get_first_instruction() {
             self.builder.position_before(&inst);
@@ -82,18 +75,17 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.gc_rm_root_current(stackptr);
     }
     pub fn gc_rm_root_current(&self, stackptr: BasicValueEnum<'ctx>) {
-        let f: FNType = self
-            .plmod
-            .submods
-            .get("gc")
-            .unwrap()
+        if !self.usegc {
+            return;
+        }
+        let gcmod = self.get_gc_plmod();
+        let f: FNType = gcmod
             .get_type("DioGC__rm_root")
             .unwrap()
             .try_into()
             .unwrap();
-        let f = f.get_value(self);
-        let gc = self.module.get_global("diogc").unwrap();
-        let gc = self.builder.build_load(gc.as_pointer_value(), "gc");
+        let f = f.get_or_insert_fn(self);
+        let gc = self.builder.build_load(self.get_gc(), "gc");
         let stackptr = self.builder.build_pointer_cast(
             stackptr.into_pointer_value(),
             self.context.i64_type().ptr_type(AddressSpace::Generic),
@@ -103,48 +95,33 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             .build_call(f, &[gc.into(), stackptr.into()], "rm_root");
     }
     pub fn gc_collect(&self) {
-        let f: FNType = self
-            .plmod
-            .submods
-            .get("gc")
-            .unwrap()
+        if !self.usegc {
+            return;
+        }
+        let gcmod = self.get_gc_plmod();
+        let f: FNType = gcmod
             .get_type("DioGC__collect")
             .unwrap()
             .try_into()
             .unwrap();
-        let f = f.get_value(self);
-        let gc = self.module.get_global("diogc").unwrap();
-        let gc = self.builder.build_load(gc.as_pointer_value(), "gc");
+        let f = f.get_or_insert_fn(self);
+        let gc = self.builder.build_load(self.get_gc(), "gc");
         self.builder.build_call(f, &[gc.into()], "collect");
     }
-    pub fn gc_get_size(&self) -> FNType {
-        self.plmod
-            .submods
-            .get("gc")
-            .unwrap()
-            .get_type("DioGC__get_size")
-            .unwrap()
-            .try_into()
-            .unwrap()
+    // pub fn gc_get_size(&self) -> FNType {
+    //     let gcmod = self.get_gc_plmod();
+    //     gcmod
+    //         .get_type("DioGC__get_size")
+    //         .unwrap()
+    //         .try_into()
+    //         .unwrap()
+    // }
+    fn get_gc_plmod(&self) -> &Mod {
+        self.plmod.submods.get("gc").unwrap()
     }
-    pub fn add_global_gc(&self) {
-        let tp = self.context.i64_type().ptr_type(AddressSpace::Generic);
-        self.module.add_global(tp, None, "diogc");
-    }
-    pub fn init_global_gc(&self) {
-        let f = self.gc_new_ptr().get_value(&self);
-        let gc = self.module.get_global("diogc").unwrap();
-        gc.set_initializer(
-            &self
-                .context
-                .i64_type()
-                .ptr_type(AddressSpace::Generic)
-                .const_zero(),
-        );
-        let v = self.builder.build_call(f, &[], "gc_init_call");
-        self.builder.build_store(
-            gc.as_pointer_value(),
-            v.try_as_basic_value().left().unwrap(),
-        );
+    fn get_gc(&self) -> PointerValue<'ctx> {
+        let gcmod = self.get_gc_plmod();
+        let gc = gcmod.get_global_symbol("diogc").unwrap();
+        self.get_or_add_global("diogc", gcmod, gc.tp.clone())
     }
 }

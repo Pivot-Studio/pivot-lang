@@ -97,9 +97,17 @@ impl VarNode {
             }
         });
         let v = ctx.get_symbol(&self.name);
-        if let Some((v, pltype, dst, refs, _)) = v {
+        if let Some((v, pltype, dst, refs, is_const)) = v {
             ctx.push_semantic_token(self.range, SemanticTokenType::VARIABLE, 0);
-            let o = Ok((Some(v.into()), Some(pltype), TerminatorEnum::NONE));
+            let o = Ok((
+                Some({
+                    let mut res: PLValue = v.into();
+                    res.set_const(is_const);
+                    res
+                }),
+                Some(pltype),
+                TerminatorEnum::NONE,
+            ));
             ctx.send_if_go_to_def(self.range, dst, ctx.plmod.path.clone());
             ctx.set_if_refs(refs, self.range);
             return o;
@@ -109,7 +117,7 @@ impl VarNode {
                 PLType::FN(f) => {
                     ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
                     return Ok((
-                        Some(f.get_value(ctx).into()),
+                        Some(f.get_or_insert_fn(ctx).into()),
                         Some(tp.clone()),
                         TerminatorEnum::NONE,
                     ));

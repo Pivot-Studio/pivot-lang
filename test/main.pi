@@ -1,8 +1,8 @@
-use mod1;
-use sub::mod;
-use mod2;
-use sub3::main;
-use sub3::main::test;
+use project1::mod1;
+use project1::sub::mod;
+use project1::mod2;
+use project2::main;
+use project2::main::test;
 use std::io;
 
 const a = 100;

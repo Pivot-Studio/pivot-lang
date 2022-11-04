@@ -9,7 +9,7 @@ use crate::ast::{
     node::{deal_line, tab},
 };
 
-use super::{primary::VarNode, Node, NodeResult, TerminatorEnum};
+use super::{primary::VarNode, Node, NodeResult, PLValue, TerminatorEnum};
 
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -47,53 +47,26 @@ impl Node for UseNode {
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut path = PathBuf::from(&ctx.config.root);
-        let mut fullpath = path.clone();
-        let mut i = 0;
-        for id in &self.ids {
-            ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
-            if !self.complete {
-                if i == 0 && ctx.config.deps.is_some() {
-                    if let Some(p) = ctx.config.deps.as_ref().unwrap().get(&self.ids[i].name) {
-                        path = path.join(&p.path);
-                    }
-                } else {
+        let head = self.ids[0].name.clone();
+        if self.ids.len() != 0 {
+            // head is project name or deps name
+            let dep = ctx.config.deps.as_ref().unwrap().get(&head);
+            if head == ctx.config.project || dep.is_some() {
+                // change path
+                if dep.is_some() {
+                    path = path.join(&dep.unwrap().path);
+                }
+                for i in 1..self.ids.len() {
                     path = path.join(&self.ids[i].name);
                 }
-            } else if i > 0 && self.complete {
-                if i == 1 && ctx.config.deps.is_some() {
-                    if let Some(p) = ctx.config.deps.as_ref().unwrap().get(&self.ids[i - 1].name) {
-                        path = path.join(&p.path);
-                    }
-                } else {
-                    path = path.join(&self.ids[i - 1].name);
-                }
             }
-            if i == 0
-                && ctx.config.deps.is_some()
-                && ctx
-                    .config
-                    .deps
-                    .as_ref()
-                    .unwrap()
-                    .contains_key(&self.ids[i].name)
-            {
-                let p = ctx
-                    .config
-                    .deps
-                    .as_ref()
-                    .unwrap()
-                    .get(&self.ids[i].name)
-                    .unwrap();
-                fullpath = fullpath.join(&p.path);
-            } else {
-                fullpath = fullpath.join(&self.ids[i].name);
-            }
-            i = i + 1;
         }
-        if !fullpath.with_extension("pi").exists() {
+        for v in self.ids.iter() {
+            ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
+        }
+        if !path.with_extension("pi").exists() {
             ctx.add_err(self.range, crate::ast::diag::ErrorCode::UNRESOLVED_MODULE);
         }
-        let mname = ctx.plmod.name.clone();
         ctx.if_completion(|a, (pos, _)| {
             if pos.is_in(self.range) {
                 a.action = None;
@@ -102,11 +75,8 @@ impl Node for UseNode {
                 }
                 let mut completions = get_ns_path_completions(path.to_str().unwrap());
                 if self.ids.len() < 2 {
-                    completions = completions
-                        .into_iter()
-                        .filter(|a| a.label != mname)
-                        .collect();
                     if self.complete {
+                        completions.clear();
                         if let Some(deps) = &a.config.deps {
                             for (dep, _) in deps {
                                 completions.push(lsp_types::CompletionItem {
@@ -116,6 +86,11 @@ impl Node for UseNode {
                                 });
                             }
                         }
+                        completions.push(lsp_types::CompletionItem {
+                            label: a.config.project.clone(),
+                            kind: Some(lsp_types::CompletionItemKind::MODULE),
+                            ..Default::default()
+                        });
                     }
                 }
                 a.completion_items.set(completions);
@@ -202,14 +177,19 @@ impl ExternIDNode {
                 return Err(ctx.add_err(ns.range, ErrorCode::UNRESOLVED_MODULE));
             }
         }
-        let symbol = plmod.get_global_symbol(&self.id.name);
-        if let Some(symbol) = symbol {
+        if let Some(symbol) = plmod.get_global_symbol(&self.id.name) {
             ctx.push_semantic_token(self.id.range, SemanticTokenType::VARIABLE, 0);
-
             let g = ctx.get_or_add_global(&self.id.name, &plmod, symbol.tp.clone());
+            let pltype = symbol.tp.clone();
+            ctx.set_if_refs(symbol.loc.clone(), self.range);
+            ctx.send_if_go_to_def(self.range, symbol.range, plmod.path.clone());
             return Ok((
-                Some(g.into()),
-                Some(symbol.tp.clone()),
+                Some({
+                    let mut res: PLValue = g.into();
+                    res.set_const(true);
+                    res
+                }),
+                Some(pltype),
                 TerminatorEnum::NONE,
             ));
         }
@@ -220,7 +200,7 @@ impl ExternIDNode {
                 PLType::FN(f) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
                     Ok((
-                        Some(f.get_value(ctx).into()),
+                        Some(f.get_or_insert_fn(ctx).into()),
                         Some(tp),
                         TerminatorEnum::NONE,
                     ))

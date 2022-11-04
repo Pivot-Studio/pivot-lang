@@ -76,21 +76,11 @@ impl Node for ProgramNode {
             _ = x.emit_func_type(ctx);
         });
         // init global
-        ctx.function = Some(ctx.module.add_function(
-            &ctx.plmod.get_full_name("__init_global"),
-            ctx.context.void_type().fn_type(&vec![], false),
-            None,
-        ));
-        ctx.add_global_gc();
-        let entry = ctx
-            .context
-            .append_basic_block(ctx.function.unwrap(), "entry");
-        ctx.position_at_end(entry);
+        ctx.set_init_fn();
         self.globaldefs.iter_mut().for_each(|x| {
             _ = x.emit_global(ctx);
         });
-        ctx.nodebug_builder.build_return(None);
-        ctx.init_func = Some(ctx.function.unwrap());
+        ctx.clear_init_fn();
         ctx.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
             ctx.plmod.path.to_string(),
         ))));
@@ -98,7 +88,7 @@ impl Node for ProgramNode {
         self.nodes.iter_mut().for_each(|x| {
             _ = x.emit(ctx);
         });
-
+        ctx.init_fn_ret();
         Ok((None, None, TerminatorEnum::NONE))
     }
 }
@@ -156,7 +146,6 @@ impl Program {
             }
             let mut path = PathBuf::from(self.config(db).root);
             let mut config = self.config(db);
-            let mut start = 0;
             // 加载依赖包的路径
             if let Some(cm) = self.config(db).deps {
                 // 如果use的是依赖包
@@ -184,11 +173,9 @@ impl Program {
                     }
                     config = re.unwrap();
                     config.root = path.to_str().unwrap().to_string();
-
-                    start = 1;
                 }
             }
-            for p in u.ids[start..].iter() {
+            for p in u.ids[1..].iter() {
                 path = path.join(p.name.clone());
             }
             path = path.with_extension("pi");
@@ -262,6 +249,16 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         params.params(db).params(db),
         params.params(db).config(db),
     );
+    if PathBuf::from(params.file(db))
+        .with_extension("")
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        == "gc"
+    {
+        ctx.usegc = false;
+    }
     ctx.plmod.submods = params.submods(db);
     let m = &mut ctx;
     m.module.set_triple(&TargetMachine::get_default_triple());
@@ -314,10 +311,6 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let pp = Path::new(&hashed).with_extension("bc");
         let p = pp.as_path();
         ctx.module.write_bitcode_to_path(p);
-        // _ = std::fs::write(
-        //     Path::new(&hashed).with_extension("ll"),
-        //     ctx.module.print_to_string().to_string(),
-        // );
         ModBuffer::push(db, p.clone().to_path_buf());
     }
     ModWrapper::new(db, ctx.plmod)

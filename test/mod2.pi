@@ -1,4 +1,4 @@
-use sub::mod;
+use project1::sub::mod;
 fn test_mod(args:i64) void {
 
     return;

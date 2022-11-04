@@ -71,7 +71,8 @@ define_error!(
     SIZE_MUST_BE_INT = "size must be int",
     TYPE_MISMATCH = "mismatch",
     ILLEGAL_GET_FIELD_OPERATION = "illegal get field operation",
-    NOT_A_POINTER = "not a pointer"
+    NOT_A_POINTER = "not a pointer",
+    CAN_NOT_REF_CONSTANT = "can not ref constant"
 );
 macro_rules! define_warn {
     ($(
