@@ -11,3 +11,5 @@ fn DioGC__rm_root(gc:*i64,ptr:*i64) void;
 fn DioGC__collect(gc:*i64) void;
 
 fn DioGC__get_size(gc:*i64) i64;
+
+const diogc = DioGC__new_ptr();

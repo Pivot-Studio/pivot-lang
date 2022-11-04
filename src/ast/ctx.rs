@@ -107,6 +107,7 @@ pub struct Ctx<'a, 'ctx> {
     >, // variable table
     pub config: Config,                                     // config
     pub roots: RefCell<Vec<BasicValueEnum<'ctx>>>,
+    pub usegc: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -886,6 +887,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             table: FxHashMap::default(),
             config,
             roots: RefCell::new(Vec::new()),
+            usegc: true,
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -927,11 +929,45 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             table: FxHashMap::default(),
             config: self.config.clone(),
             roots: RefCell::new(Vec::new()),
+            usegc: self.usegc,
         };
         add_primitive_types(&mut ctx);
         ctx
     }
-
+    pub fn set_init_fn(&mut self) {
+        self.function = Some(self.module.add_function(
+            &self.plmod.get_full_name("__init_global"),
+            self.context.void_type().fn_type(&vec![], false),
+            None,
+        ));
+        self.init_func = self.function;
+        self.context
+            .append_basic_block(self.init_func.unwrap(), "alloc");
+        let entry = self
+            .context
+            .append_basic_block(self.init_func.unwrap(), "entry");
+        self.position_at_end(entry);
+    }
+    pub fn clear_init_fn(&mut self) {
+        let alloc = self.init_func.unwrap().get_first_basic_block().unwrap();
+        let entry = self.init_func.unwrap().get_last_basic_block().unwrap();
+        unsafe {
+            entry.delete().unwrap();
+            alloc.delete().unwrap();
+        }
+        self.context
+            .append_basic_block(self.init_func.unwrap(), "alloc");
+        self.context
+            .append_basic_block(self.init_func.unwrap(), "entry");
+    }
+    pub fn init_fn_ret(&mut self) {
+        let alloc = self.init_func.unwrap().get_first_basic_block().unwrap();
+        let entry = self.init_func.unwrap().get_last_basic_block().unwrap();
+        self.position_at_end(alloc);
+        self.nodebug_builder.build_unconditional_branch(entry);
+        self.position_at_end(entry);
+        self.nodebug_builder.build_return(None);
+    }
     /// # get_symbol
     /// search in current and all father symbol tables
     pub fn get_symbol(
@@ -1015,7 +1051,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     /// 如果没在当前module的全局变量表中找到，将会生成一个
     /// 该全局变量的声明
     pub fn get_or_add_global(&self, name: &str, m: &Mod, pltype: PLType) -> PointerValue<'ctx> {
-        let global = self.module.get_global(name);
+        let global = self.module.get_global(&m.get_full_name(name));
         if global.is_none() {
             let global =
                 self.module

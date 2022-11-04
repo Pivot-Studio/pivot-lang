@@ -197,7 +197,6 @@ impl Node for FuncDefNode {
                 ctx.builder.position_at(allocab, &inst);
                 ctx.nodebug_builder.position_at(allocab, &inst);
                 ctx.init_global();
-                ctx.init_global_gc();
                 ctx.builder.position_at_end(entry);
                 ctx.nodebug_builder.position_at_end(entry);
             }
