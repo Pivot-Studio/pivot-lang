@@ -248,7 +248,7 @@ impl Node for TakeOpNode {
         }
         let mut pltype = pltype.unwrap();
         if let Some(id) = &self.field {
-            res = match res.unwrap() {
+            res = match res.unwrap().value {
                 AnyValueEnum::PointerValue(s) => {
                     let (tp, s) = ctx.auto_deref(pltype, s);
                     pltype = tp;

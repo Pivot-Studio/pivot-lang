@@ -150,6 +150,9 @@ impl Node for AssignNode {
         if lpltype != rpltype {
             return Err(ctx.add_err(self.range, ErrorCode::ASSIGN_TYPE_MISMATCH));
         }
+        if ptr.as_ref().unwrap().is_const {
+            return Err(ctx.add_err(self.range, ErrorCode::ASSIGN_CONST));
+        }
         let load = ctx.try_load2var(exp_range, value.unwrap())?;
         ctx.builder.build_store(
             ptr.unwrap().into_pointer_value(),

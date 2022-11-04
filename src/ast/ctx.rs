@@ -48,6 +48,7 @@ use super::compiler::ActionType;
 use super::diag::{ErrorCode, WarnCode};
 use super::diag::{ERR_MSG, WARN_MSG};
 use super::node::NodeEnum;
+use super::node::PLValue;
 use super::range::Pos;
 use super::range::Range;
 // TODO: match all case
@@ -1116,8 +1117,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn try_load2var(
         &mut self,
         range: Range,
-        v: AnyValueEnum<'ctx>,
+        v: PLValue<'ctx>,
     ) -> Result<BasicValueEnum<'ctx>, PLDiag> {
+        let v = v.value;
         if !v.is_pointer_value() {
             return Ok(match v {
                 AnyValueEnum::ArrayValue(v) => v.into(),

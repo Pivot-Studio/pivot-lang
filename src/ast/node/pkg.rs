@@ -9,7 +9,7 @@ use crate::ast::{
     node::{deal_line, tab},
 };
 
-use super::{primary::VarNode, Node, NodeResult, TerminatorEnum};
+use super::{primary::VarNode, Node, NodeResult, PLValue, TerminatorEnum};
 
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -161,7 +161,15 @@ impl ExternIDNode {
             let pltype = symbol.tp.clone();
             ctx.set_if_refs(symbol.loc.clone(), self.range);
             ctx.send_if_go_to_def(self.range, symbol.range, plmod.path.clone());
-            return Ok((Some(g.into()), Some(pltype), TerminatorEnum::NONE));
+            return Ok((
+                Some({
+                    let mut res: PLValue = g.into();
+                    res.set_const(true);
+                    res
+                }),
+                Some(pltype),
+                TerminatorEnum::NONE,
+            ));
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
             ctx.set_if_refs_tp(&tp, self.range);

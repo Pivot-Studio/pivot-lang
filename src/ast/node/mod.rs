@@ -4,7 +4,9 @@ use as_any::AsAny;
 use enum_dispatch::enum_dispatch;
 use inkwell::basic_block::BasicBlock;
 use inkwell::types::BasicTypeEnum;
-use inkwell::values::{AnyValueEnum, BasicValue, BasicValueEnum, PointerValue};
+use inkwell::values::{
+    AnyValueEnum, BasicValue, BasicValueEnum, FloatValue, FunctionValue, IntValue, PointerValue,
+};
 
 use self::comment::CommentNode;
 use self::control::*;
@@ -124,12 +126,52 @@ pub trait Node: RangeTrait + AsAny {
 // ANCHOR_END: node
 type NodeResult<'ctx> = Result<
     (
-        Option<AnyValueEnum<'ctx>>,
+        Option<PLValue<'ctx>>,
         Option<PLType>, //type
         TerminatorEnum,
     ),
     PLDiag,
 >;
+pub struct PLValue<'ctx> {
+    pub value: AnyValueEnum<'ctx>,
+    pub is_const: bool,
+}
+impl<'ctx> PLValue<'ctx> {
+    pub fn into_pointer_value(&self) -> PointerValue<'ctx> {
+        self.value.into_pointer_value()
+    }
+    pub fn into_int_value(&self) -> IntValue<'ctx> {
+        self.value.into_int_value()
+    }
+    pub fn into_function_value(&self) -> FunctionValue<'ctx> {
+        self.value.into_function_value()
+    }
+    pub fn set_const(&mut self, is_const: bool) {
+        self.is_const = is_const;
+    }
+}
+macro_rules! impl_plvalue_into {
+    ($($args:ident),*) => (
+        $(
+            impl<'ctx> From<$args<'ctx>> for PLValue<'ctx> {
+                fn from(value: $args<'ctx>) -> Self {
+                    Self {
+                        value: value.into(),
+                        is_const: false,
+                    }
+                }
+            }
+        )*
+    );
+}
+impl_plvalue_into!(
+    FunctionValue,
+    FloatValue,
+    IntValue,
+    PointerValue,
+    AnyValueEnum,
+    BasicValueEnum
+);
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Num {
     INT(u64),

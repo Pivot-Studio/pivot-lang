@@ -1,6 +1,5 @@
 use super::*;
 use crate::ast::{ctx::Ctx, diag::ErrorCode};
-use inkwell::values::AnyValue;
 use internal_macro::range;
 
 #[range]
@@ -32,20 +31,25 @@ impl Node for PointerOpNode {
                     tp = Some(*tp1);
                     ctx.builder.build_load(value.into_pointer_value(), "deref")
                 } else {
-                    let err = ctx.add_err(self.range, ErrorCode::NOT_A_POINTER);
-                    return Err(err);
+                    return Err(ctx.add_err(self.range, ErrorCode::NOT_A_POINTER));
                 }
             }
             PointerOpEnum::ADDR => {
                 if tp.is_some() {
                     tp = Some(PLType::POINTER(Box::new(tp.unwrap())));
                 }
-                let val: BasicValueEnum = value.try_into().unwrap();
+                if value.is_const {
+                    return Err(ctx.add_err(self.range, ErrorCode::CAN_NOT_REF_CONSTANT));
+                }
+                let val: BasicValueEnum = value.value.try_into().unwrap();
+                if !val.is_pointer_value() {
+                    return Err(ctx.add_err(self.range, ErrorCode::CAN_NOT_REF_CONSTANT));
+                }
                 let v = alloc(ctx, val.get_type(), "addr");
                 ctx.builder.build_store(v, ctx.mv2heap(val));
                 v.into()
             }
         };
-        Ok((Some(value.as_any_value_enum()), tp, TerminatorEnum::NONE))
+        Ok((Some(value.into()), tp, TerminatorEnum::NONE))
     }
 }
