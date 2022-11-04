@@ -31,6 +31,13 @@ pub struct ProgramNode {
     pub uses: Vec<Box<NodeEnum>>,
 }
 impl Node for ProgramNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let mut format_res = String::new();
+        for statement in &self.nodes {
+            format_res.push_str(&statement.format(tabs, prefix));
+        }
+        return format_res;
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         println!("ProgramNode");
@@ -260,6 +267,9 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     if m.action.is_some() && m.action.unwrap() == ActionType::PrintAst {
         println!("file: {}", params.fullpath(db).green());
         nn.print(0, true, vec![]);
+    } else if m.action.is_some() && m.action.unwrap() == ActionType::FMT {
+        let code = nn.format(0, "    ");
+        println!("{}", code);
     }
     let _ = nn.emit(m);
     Diagnostics::push(

@@ -62,7 +62,7 @@ struct Cli {
     name: Option<String>,
 
     /// output file
-    #[clap(long, value_parser, default_value = "out.plb")]
+    #[clap(short, long, value_parser, default_value = "out")]
     out: String,
 
     /// verbose
@@ -78,9 +78,10 @@ struct Cli {
     genir: bool,
 
     /// optimization level, 0-3
-    #[clap(short, value_parser, default_value = "0")]
+    #[clap(short = 'O', value_parser, default_value = "0")]
     optimization: u64,
 
+    /// print source fmt
     #[clap(subcommand)]
     command: Option<RunCommand>,
 }
@@ -94,7 +95,8 @@ enum RunCommand {
         name: String,
     },
     /// Start the language server
-    Lsp {},
+    Lsp,
+    Fmt,
 }
 
 fn main() {
@@ -107,6 +109,10 @@ fn main() {
         _ => panic!("optimization level must be 0-3"),
     };
 
+    let fmt = match cli.command {
+        Some(RunCommand::Fmt) => true,
+        _ => false,
+    };
     // You can check the value provided by positional arguments, or option arguments
     if let Some(name) = cli.name.as_deref() {
         let db = Database::default();
@@ -116,10 +122,13 @@ fn main() {
             verbose: cli.verbose,
             genir: cli.genir,
             printast: cli.printast,
+            fmt,
             optimization: opt,
         };
         let action = if cli.printast {
             ActionType::PrintAst
+        } else if fmt {
+            ActionType::FMT
         } else {
             ActionType::Compile
         };
@@ -142,6 +151,9 @@ fn main() {
             }
             RunCommand::Lsp {} => {
                 start_lsp().unwrap();
+            }
+            RunCommand::Fmt {} => {
+                println!("fmt command is not implemented yet");
             }
         }
     } else {

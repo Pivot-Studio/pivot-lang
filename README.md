@@ -91,10 +91,12 @@ call_function_op = ("(" (logic_exp (","logic_exp)*)? ")") ;
 primary_exp =
     | number
     | bool_const
-    | "(" logic_exp ")"
+    | parantheses_exp
     | extern_identifier
     | struct_init_exp
     ;
+
+parantheses_exp = "(" logic_exp ")";
 
 number = [0-9]+ ("." number)? ;
 

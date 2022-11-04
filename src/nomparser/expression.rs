@@ -174,11 +174,7 @@ fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
         number,
         bool_const,
-        delimited(
-            tag_token(TokenType::LPAREN),
-            logic_exp,
-            tag_token(TokenType::RPAREN),
-        ),
+        parantheses_exp,
         struct_init,
         array_init,
         extern_identifier,
@@ -193,4 +189,17 @@ fn take_exp_op(input: Span) -> IResult<Span, ComplexOp> {
         preceded(tag_token(TokenType::DOT), opt(identifier)),
         |idx| Ok::<_, Error>(ComplexOp::FieldOp(idx)),
     ))(input)
+}
+
+/// ```ebnf
+/// parantheses_exp = "(" logic_exp ")";
+/// ```
+#[test_parser("(a)")]
+#[test_parser("(a+a*b/c)")]
+fn parantheses_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    delimited(
+        tag_token(TokenType::LPAREN),
+        logic_exp,
+        tag_token(TokenType::RPAREN),
+    )(input)
 }

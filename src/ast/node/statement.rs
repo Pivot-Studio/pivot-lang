@@ -13,6 +13,18 @@ pub struct DefNode {
     pub exp: Option<Box<NodeEnum>>,
 }
 impl Node for DefNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let mut format_res = String::new();
+        format_res.push_str("let ");
+        format_res.push_str(&self.var.format(tabs, prefix));
+        format_res.push_str(" = ");
+        if let Some(tp) = &self.tp {
+            format_res.push_str(&tp.format(tabs, prefix));
+        } else {
+            format_res.push_str(&self.exp.as_ref().unwrap().format(tabs, prefix));
+        }
+        format_res
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -136,6 +148,13 @@ pub struct AssignNode {
     pub exp: Box<NodeEnum>,
 }
 impl Node for AssignNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let mut format_res = String::new();
+        format_res.push_str(&self.var.format(tabs, prefix));
+        format_res.push_str(" = ");
+        format_res.push_str(&self.exp.format(tabs, prefix));
+        format_res
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -167,6 +186,9 @@ impl Node for AssignNode {
 pub struct EmptyNode {}
 
 impl Node for EmptyNode {
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
+        return String::new();
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -183,6 +205,27 @@ pub struct StatementsNode {
     pub statements: Vec<Box<NodeEnum>>,
 }
 impl Node for StatementsNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let mut format_res = String::new();
+        if self.statements.len() == 0 {
+            return "".to_string();
+        }
+        for statement in &self.statements {
+            format_res.push_str("\n\r");
+            format_res.push_str(&prefix.repeat(tabs));
+            format_res.push_str(&statement.format(tabs, prefix));
+            match &**statement {
+                NodeEnum::For(_) => (),
+                NodeEnum::While(_) => (),
+                _ => {
+                    format_res.push_str(";");
+                }
+            }
+        }
+        format_res.push_str("\n\r");
+        return format_res;
+    }
+
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

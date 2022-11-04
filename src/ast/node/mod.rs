@@ -70,6 +70,7 @@ pub enum TypeNodeEnum {
 }
 #[enum_dispatch]
 pub trait TypeNode: RangeTrait + AsAny {
+    fn format(&self, tabs: usize, prefix: &str) -> String;
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
     fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>);
@@ -109,6 +110,7 @@ pub enum NodeEnum {
     ArrayInitNode(ArrayInitNode),
     ArrayElementNode(ArrayElementNode),
     PointerOpNode(PointerOpNode),
+    ParanthesesNode(ParanthesesNode),
 }
 // ANCHOR: range
 #[enum_dispatch]
@@ -120,6 +122,7 @@ pub trait RangeTrait {
 // ANCHOR: node
 #[enum_dispatch]
 pub trait Node: RangeTrait + AsAny {
+    fn format(&self, tabs: usize, prefix: &str) -> String;
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
 }
@@ -223,6 +226,31 @@ pub fn position_at_end<'a, 'b>(ctx: &mut Ctx<'b, 'a>, block: BasicBlock<'a>) {
     ctx.builder.position_at_end(block);
     ctx.block = Some(block);
     ctx.nodebug_builder.position_at_end(block);
+}
+/**
+ * 函数参数format
+ */
+pub fn print_params(paralist: &Vec<Box<TypedIdentifierNode>>) -> String {
+    let mut str = String::new();
+    let mut len = 0;
+    for param in paralist.iter() {
+        let name = &param.id.name;
+        let mut id = String::new();
+        // if param.tp.is_ref {
+        //     let ref_id = format!("&{}", &param.tp.id);
+        //     id.push_str(&ref_id);
+        // } else {
+        id.push_str(&param.tp.format(0, ""));
+        // }
+        str.push_str(name);
+        str.push_str(": ");
+        str.push_str(&id);
+        len += 1;
+        if len < paralist.len() {
+            str.push_str(", ")
+        }
+    }
+    return str;
 }
 
 pub fn alloc<'a, 'ctx>(

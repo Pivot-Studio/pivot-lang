@@ -17,6 +17,14 @@ pub struct TypeNameNode {
 }
 
 impl TypeNode for TypeNameNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let id = &self.id;
+        if let Some(id_node) = id {
+            return id_node.format(tabs, prefix);
+        } else {
+            return "<id empty>".to_string();
+        }
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -63,6 +71,13 @@ pub struct ArrayTypeNameNode {
 }
 
 impl TypeNode for ArrayTypeNameNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        format!(
+            "[{} * {}]",
+            &self.id.format(tabs, prefix),
+            &self.size.format(tabs, prefix)
+        )
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -97,6 +112,9 @@ pub struct PointerTypeNode {
 }
 
 impl TypeNode for PointerTypeNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        format!("*{}", self.elm.format(tabs, prefix))
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -124,6 +142,25 @@ pub struct TypedIdentifierNode {
 }
 
 impl TypedIdentifierNode {
+    pub fn format(&self, tabs: usize, prefix: &str) -> String {
+        let mut format_res = String::from("\n\r");
+        // let mut id = String::new();
+        // if self.tp.is_ref {
+        //     let ref_id = format!("&{}", &self.tp.id);
+        //     id.push_str(&ref_id);
+        // } else {
+        // id.push_str(&self.tp.id);
+        // }
+        format_res.push_str(&prefix.repeat(tabs));
+        format_res.push_str(&self.id.name);
+        format_res.push_str(": ");
+        format_res.push_str(&self.tp.format(tabs, prefix));
+        format_res.push_str(";");
+        if let Some(doc) = &self.doc {
+            format_res.push_str(&doc.format(tabs, prefix));
+        }
+        return format_res;
+    }
     pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -146,6 +183,27 @@ pub struct StructDefNode {
 }
 
 impl Node for StructDefNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let mut format_res = String::from("\n\r");
+        let mut doc_str = String::new();
+        for c in self.doc.iter() {
+            doc_str.push_str(&c.format(tabs, prefix));
+            doc_str.push_str("\n\r");
+        }
+        format_res.push_str(&doc_str);
+        format_res.push_str(&prefix.repeat(tabs));
+        format_res.push_str("struct ");
+        format_res.push_str(&self.id);
+        format_res.push_str(" {");
+        for (field, _i) in &self.fields {
+            format_res.push_str(&field.format(tabs + 1, prefix));
+        }
+        format_res.push_str("\n\r");
+        format_res.push_str(&prefix.repeat(tabs));
+        format_res.push_str("}");
+        format_res.push_str("\n\r");
+        format_res
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -246,6 +304,13 @@ pub struct StructInitFieldNode {
 }
 
 impl Node for StructInitFieldNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let mut format_res = String::from(prefix.repeat(tabs));
+        format_res.push_str(&self.id.name);
+        format_res.push_str(": ");
+        format_res.push_str(&self.exp.format(tabs, prefix));
+        format_res
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -271,6 +336,31 @@ pub struct StructInitNode {
 }
 
 impl Node for StructInitNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let mut format_res = String::new();
+        let mut field_str = String::new();
+        match Some(&self.fields) {
+            Some(fields) => {
+                let mut len = 0;
+                field_str.push_str("{\n\r");
+                for field in fields {
+                    len += 1;
+                    field_str.push_str(&field.format(tabs + 1, prefix));
+                    if len < fields.len() {
+                        field_str.push_str(",\n\r")
+                    } else {
+                        field_str.push_str("\n\r")
+                    }
+                }
+                field_str.push_str(&prefix.repeat(tabs));
+                field_str.push_str("}");
+            }
+            _ => (),
+        }
+        format_res.push_str(&self.tp.format(tabs, prefix));
+        format_res.push_str(&field_str);
+        format_res
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -338,6 +428,17 @@ pub struct ArrayInitNode {
 }
 
 impl Node for ArrayInitNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        let mut format_res = String::from("[");
+        for (i, exp) in self.exps.iter().enumerate() {
+            format_res.push_str(&exp.format(tabs, prefix));
+            if i != self.exps.len() - 1 {
+                format_res.push_str(", ");
+            }
+        }
+        format_res.push(']');
+        format_res
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

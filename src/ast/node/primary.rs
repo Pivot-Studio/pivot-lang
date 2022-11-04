@@ -1,7 +1,6 @@
 use super::*;
 use crate::ast::ctx::{Ctx, PLType, PriType};
 use crate::ast::diag::ErrorCode;
-
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 
@@ -12,6 +11,9 @@ pub struct BoolConstNode {
 }
 
 impl Node for BoolConstNode {
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
+        return self.value.to_string();
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line, end);
@@ -38,6 +40,14 @@ pub struct NumNode {
     pub value: Num,
 }
 impl Node for NumNode {
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
+        if let Num::INT(x) = self.value {
+            return x.to_string();
+        } else if let Num::FLOAT(x) = self.value {
+            return x.to_string();
+        }
+        panic!("not implemented")
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line, end);
@@ -70,6 +80,10 @@ pub struct VarNode {
     pub name: String,
 }
 impl VarNode {
+    pub fn format(&self, _tabs: usize, _prefix: &str) -> String {
+        let name = &self.name;
+        return name.to_string();
+    }
     pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -135,8 +149,17 @@ pub struct ArrayElementNode {
 }
 
 impl Node for ArrayElementNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        format!(
+            "{}[{}]",
+            &self.arr.format(tabs, prefix),
+            &self.index.format(tabs, prefix)
+        )
+    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("ArrayElementNode");
         self.arr.print(tabs + 1, false, line.clone());
         self.index.print(tabs + 1, true, line);
     }
@@ -164,5 +187,26 @@ impl Node for ArrayElementNode {
             ));
         }
         return Err(ctx.add_err(self.range, ErrorCode::CANNOT_INDEX_NON_ARRAY));
+    }
+}
+
+#[range]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct ParanthesesNode {
+    pub node: Box<NodeEnum>,
+}
+
+impl Node for ParanthesesNode {
+    fn format(&self, tabs: usize, prefix: &str) -> String {
+        format!("({})", &self.node.format(tabs, prefix))
+    }
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("ParanthesesNode");
+        self.node.print(tabs + 1, true, line);
+    }
+    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        self.node.emit(ctx)
     }
 }
