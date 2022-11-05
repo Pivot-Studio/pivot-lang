@@ -8,86 +8,12 @@ on:
       - "master"
       - "release/*"
 
-
 jobs:
-
-  test:
-    name: auto test
-    runs-on: ${{ matrix.config.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        config:
-          - os: "ubuntu-latest"
-            dir: linux64
-            RUSTFLAGS: "-Dwarnings"
-          # - os: "windows-latest"
-          #   dir: win64
-          #   artifacts: "plc.exe"
-          #   RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"
-          - os: "macOS-latest"
-            dir: osx64
-            RUSTFLAGS: "-Dwarnings"
+  container-test-job:
+    runs-on: ubuntu-latest
+    container: registry.cn-hangzhou.aliyuncs.com/pivotstudio/rust-pl:latest
     steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-
-      - name: Setup | Rust
-        uses: ATiltedTree/setup-rust@v1
-        with:
-          rust-version: "1.62.1"
-
-
-      - name: Cache LLVM and Clang
-        id: cache-llvm
-        uses: actions/cache@v2
-        with:
-          path: ${{ runner.temp }}/llvm
-          key: llvm-14
-      - name: Install LLVM and Clang
-        if: ${{ matrix.config.os != 'windows-latest' }}
-        uses: KyleMayes/install-llvm-action@v1
-        with:
-          version: "14"
-          directory: ${{ runner.temp }}/llvm
-          cached: ${{ steps.cache-llvm.outputs.cache-hit }}
-      
-      - name: set up win scoop
-        if: ${{ matrix.config.os == 'windows-latest' }}
-        uses: MinoruSekine/setup-scoop@main
-
-      - name: Install LLVM and Clang win
-        if: ${{ matrix.config.os == 'windows-latest' }}
-        run: |
-          scoop install 7zip
-          scoop install wget
-          wget https://github.com/Pivot-Studio/pivot-lang/releases/download/llvm-windows-latest/llvm-14.0.6-windows-x64-msvc17.7z
-          7z x .\llvm-14.0.6-windows-x64-msvc17.7z -y -o${{ runner.temp }}\llvm
-          [Environment]::SetEnvironmentVariable(
-            "Path",
-            [Environment]::GetEnvironmentVariable("Path", "User") + ";${{ runner.temp }}\llvm\bin",
-            "User"
-          )
-          [Environment]::SetEnvironmentVariable('LLVM_SYS_140_PREFIX', '${{ runner.temp }}\llvm', 'User')
-  
-      - uses: ilammy/msvc-dev-cmd@v1
-        if: ${{ matrix.config.os == 'windows-latest' }}
-        with:
-          arch: x64
-          vs_version: 2022
-      - name: Cargo test win
-        if: ${{ matrix.config.os == 'windows-latest' }}
-        env:
-          # RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
-          LLVM_SYS_140_PREFIX: ${{ runner.temp }}\llvm
-        run: cargo test --all
-
-      - name: Cargo test and upload
-        if: ${{ matrix.config.os != 'windows-latest' }}
-        env:
-          # RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
-          LLVM_SYS_140_PREFIX: ${{ runner.temp }}/llvm
+      - name: auto test
         run: |
           export KAGARI_LIB_ROOT=$(pwd)/planglib
           cargo test --all
@@ -98,6 +24,3 @@ jobs:
           chmod +x bash
           ./bash
           echo "Uploaded code coverage"
-        shell: bash
-
-
