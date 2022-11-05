@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     container: registry.cn-hangzhou.aliyuncs.com/pivotstudio/rust-pl:latest
     steps:
+      - uses: actions/checkout@v2
       - name: auto test
         run: |
           cd /github/workspace
