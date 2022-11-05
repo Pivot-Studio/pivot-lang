@@ -15,6 +15,7 @@ jobs:
     steps:
       - name: auto test
         run: |
+          cd /github/workspace
           export KAGARI_LIB_ROOT=$(pwd)/planglib
           cargo test --all
           bash -c 'for file in target/debug/deps/plc-*; do [ -x "$file" ] || continue; mkdir -p "target/cov/$(basename $file)"; /kcov-build/usr/local/bin/kcov --exclude-pattern=/.cargo,/usr/lib --verify "target/cov/$(basename $file)" "$file"; done'
