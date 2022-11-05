@@ -8,13 +8,11 @@ on:
       - "master"
       - "release/*"
 
-env:
-  RUSTFLAGS: -Dwarnings
 
 jobs:
 
-  artifacts:
-    name: Artifacts
+  test:
+    name: auto test
     runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
@@ -81,14 +79,14 @@ jobs:
       - name: Cargo test win
         if: ${{ matrix.config.os == 'windows-latest' }}
         env:
-          RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
+          # RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
           LLVM_SYS_140_PREFIX: ${{ runner.temp }}\llvm
         run: cargo test --all
 
       - name: Cargo test
         if: ${{ matrix.config.os != 'windows-latest' }}
         env:
-          RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
+          # RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
           LLVM_SYS_140_PREFIX: ${{ runner.temp }}/llvm
         run: |
           export KAGARI_LIB_ROOT=$(pwd)/planglib
