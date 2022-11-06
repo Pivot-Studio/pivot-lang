@@ -127,11 +127,12 @@ jobs:
             dst = os.environ['OUT_DIR'] + "/" + artifact
             os.rename(src, dst)
         shell: python
-
-
+      - name: Set outputs
+        id: vars
+        run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
       - uses: ncipollo/release-action@v1
         name: upload
         with:
           artifacts: ${{ matrix.config.dir }}/*
           commit: master
-          tag: ${{ matrix.config.os }}@${{ github.sha }}
+          tag: ${{ matrix.config.os }}-${{ github.run_id }}@{{ steps.vars.outputs.sha_short }}
