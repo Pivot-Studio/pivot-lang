@@ -139,6 +139,7 @@ for_statement = "for" (assignment | new_variable) ";" logic_exp ";" assignment s
 
 statement_block = "{" statements "}" ;
 
+impl_block = "impl" extern_identifier "{" function_def* "}" ;
 
 statements = statement* ;
 

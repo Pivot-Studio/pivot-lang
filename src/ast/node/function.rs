@@ -293,11 +293,20 @@ impl Node for FuncCallNode {
             return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND));
         }
         let pltype = pltype.unwrap();
-        let func = func.unwrap().into_function_value();
-        if func.count_params() != self.paralist.len() as u32 {
+        let plv = func.unwrap();
+        let mut skip = 0;
+        if let Some(receiver) = plv.receiver {
+            para_values.push(receiver.into());
+            skip = 1;
+        }
+        let func = plv.into_function_value();
+        if func.count_params() - skip != self.paralist.len() as u32 {
             return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
         }
         for (i, para) in self.paralist.iter_mut().enumerate() {
+            if i < skip as usize {
+                continue;
+            }
             let pararange = para.range();
             let (value, _, _) = para.emit(ctx)?;
             if value.is_none() {
@@ -354,8 +363,24 @@ impl FuncTypeNode {
             return Err(ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL));
         }
         let mut param_pltypes = Vec::new();
+        let mut receiver = None;
+        let mut first = true;
+        let mut receivertp = None;
         for para in self.paralist.iter() {
             let paramtype = para.tp.get_type(ctx)?;
+            if first && para.id.name == "self" {
+                receivertp = Some(para.tp.clone());
+                let st = match paramtype.clone() {
+                    PLType::POINTER(st) => st,
+                    _ => unreachable!(),
+                };
+                let st = match *st.clone() {
+                    PLType::STRUCT(st) => st,
+                    _ => unreachable!(),
+                };
+                receiver = Some(st);
+            }
+            first = false;
             param_pltypes.push(paramtype.clone());
         }
         let refs = vec![];
@@ -372,6 +397,14 @@ impl FuncTypeNode {
                 ctx.plmod.get_full_name(&self.id)
             },
         };
+        if let Some(mut receiver) = receiver {
+            receiver
+                .methods
+                .insert(self.id.split("::").last().unwrap().to_string(), ftp.clone());
+            receivertp
+                .unwrap()
+                .replace_type(ctx, PLType::STRUCT(receiver));
+        }
         let res = ftp.get_or_insert_fn(ctx);
         let pltype = PLType::FN(ftp);
         ctx.set_if_refs_tp(&pltype, self.range);

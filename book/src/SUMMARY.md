@@ -20,4 +20,5 @@
   - [Diagnostic](./lsp/diagnostic.md)
 - [System library](./systemlib/README.md)
   - [vm](./systemlib/vm.md)
+    - [gc](./systemlib/gc.md)
   - [planglib](./systemlib/planglib.md)

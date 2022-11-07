@@ -13,6 +13,7 @@ use self::control::*;
 use self::error::*;
 use self::function::*;
 use self::global::*;
+use self::implement::ImplNode;
 use self::operator::*;
 use self::pkg::{ExternIDNode, UseNode};
 use self::pointer::PointerOpNode;
@@ -29,6 +30,7 @@ pub mod control;
 pub mod error;
 pub mod function;
 pub mod global;
+pub mod implement;
 pub mod operator;
 pub mod pkg;
 pub mod pointer;
@@ -74,6 +76,7 @@ pub trait TypeNode: RangeTrait + AsAny {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
     fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>);
+    fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: PLType);
 }
 type TypeNodeResult<'ctx> = Result<PLType, PLDiag>;
 
@@ -111,6 +114,7 @@ pub enum NodeEnum {
     ArrayElementNode(ArrayElementNode),
     PointerOpNode(PointerOpNode),
     ParanthesesNode(ParanthesesNode),
+    ImplNode(ImplNode),
 }
 // ANCHOR: range
 #[enum_dispatch]
@@ -138,6 +142,7 @@ type NodeResult<'ctx> = Result<
 pub struct PLValue<'ctx> {
     pub value: AnyValueEnum<'ctx>,
     pub is_const: bool,
+    pub receiver: Option<PointerValue<'ctx>>,
 }
 impl<'ctx> PLValue<'ctx> {
     pub fn into_pointer_value(&self) -> PointerValue<'ctx> {
@@ -161,6 +166,7 @@ macro_rules! impl_plvalue_into {
                     Self {
                         value: value.into(),
                         is_const: false,
+                        receiver: None,
                     }
                 }
             }

@@ -190,6 +190,10 @@ impl Mod {
         None
     }
 
+    pub fn replace_type(&mut self, name: &str, tp: PLType) {
+        self.types.insert(name.to_string(), tp);
+    }
+
     /// 获取llvm名称
     ///
     /// module路径+类型名
@@ -724,6 +728,7 @@ pub struct STType {
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
+    pub methods: FxHashMap<String, FNType>,
 }
 
 impl STType {
@@ -751,6 +756,16 @@ impl STType {
                 kind: Some(CompletionItemKind::FIELD),
                 label: name.clone(),
                 detail: Some("field".to_string()),
+                insert_text: Some(name.clone()),
+                insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+                ..Default::default()
+            });
+        }
+        for (name, _) in &self.methods {
+            completions.push(CompletionItem {
+                kind: Some(CompletionItemKind::METHOD),
+                label: name.clone(),
+                detail: Some("method".to_string()),
                 insert_text: Some(name.clone()),
                 insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
                 ..Default::default()
