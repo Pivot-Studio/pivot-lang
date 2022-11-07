@@ -1,6 +1,7 @@
 use super::*;
 use crate::ast::ctx::{init_arr, Ctx};
 use crate::ast::diag::{ErrorCode, WarnCode};
+use crate::utils::read_config::enter;
 use inkwell::debug_info::*;
 use inkwell::types::BasicType;
 use internal_macro::range;
@@ -17,11 +18,13 @@ impl Node for DefNode {
         let mut format_res = String::new();
         format_res.push_str("let ");
         format_res.push_str(&self.var.format(tabs, prefix));
-        format_res.push_str(" = ");
         if let Some(tp) = &self.tp {
+            format_res.push_str(": ");
             format_res.push_str(&tp.format(tabs, prefix));
-        } else {
-            format_res.push_str(&self.exp.as_ref().unwrap().format(tabs, prefix));
+        }
+        if let Some(exp) = &self.exp {
+            format_res.push_str(" = ");
+            format_res.push_str(&exp.format(tabs, prefix));
         }
         format_res
     }
@@ -207,22 +210,27 @@ pub struct StatementsNode {
 impl Node for StatementsNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
         let mut format_res = String::new();
-        if self.statements.len() == 0 {
-            return "".to_string();
-        }
+        format_res.push_str(enter());
         for statement in &self.statements {
-            format_res.push_str("\n\r");
+            match &**statement {
+                NodeEnum::Empty(_) => continue,
+                _ => {}
+            }
             format_res.push_str(&prefix.repeat(tabs));
             format_res.push_str(&statement.format(tabs, prefix));
             match &**statement {
-                NodeEnum::For(_) => (),
-                NodeEnum::While(_) => (),
+                NodeEnum::For(_) | NodeEnum::While(_) | NodeEnum::If(_) | NodeEnum::Comment(_) => {}
                 _ => {
                     format_res.push_str(";");
                 }
             }
+            match &**statement {
+                NodeEnum::Comment(_) => {}
+                _ => {
+                    format_res.push_str(enter());
+                }
+            }
         }
-        format_res.push_str("\n\r");
         return format_res;
     }
 

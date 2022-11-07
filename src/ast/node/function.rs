@@ -4,6 +4,7 @@ use super::{alloc, types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::ctx::{FNType, PLType};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
+use crate::utils::read_config::enter;
 use inkwell::debug_info::*;
 use inkwell::values::FunctionValue;
 use internal_macro::range;
@@ -29,6 +30,7 @@ impl Node for FuncDefNode {
             doc_str.push_str(&c.format(tabs, prefix));
         }
         let mut format_res = String::new();
+        format_res.push_str(enter());
         let mut ret_type = String::new();
         // if self.typenode.ret.is_ref {
         //     let ref_id = format!("&{}", &self.typenode.ret.id);
@@ -55,7 +57,7 @@ impl Node for FuncDefNode {
                 format_res.push_str(";");
             }
         }
-        format_res.push_str("\n\r");
+        format_res.push_str(enter());
         format_res
     }
 
@@ -75,13 +77,6 @@ impl Node for FuncDefNode {
         self.typenode.ret.print(tabs + 1, false, line.clone());
         if let Some(body) = &self.body {
             body.print(tabs + 1, true, line.clone());
-        } else {
-            // tab(tabs + 1, line, true);
-            // if self.typenode.ret.is_ref {
-            //     println!("type: &{}", self.typenode.ret.id);
-            // } else {
-            //     println!("type: {}", self.typenode.ret.id);
-            // }
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {

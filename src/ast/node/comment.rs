@@ -1,5 +1,5 @@
 use super::*;
-use crate::ast::ctx::Ctx;
+use crate::{ast::ctx::Ctx, utils::read_config::enter};
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 #[range]
@@ -12,7 +12,7 @@ impl Node for CommentNode {
     fn format(&self, _tabs: usize, _prefix: &str) -> String {
         let mut format_res = String::from("//");
         format_res.push_str(&self.comment);
-        format_res.push_str("\n\r");
+        format_res.push_str(enter());
         format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {

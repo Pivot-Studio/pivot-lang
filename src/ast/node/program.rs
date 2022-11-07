@@ -1,9 +1,3 @@
-use std::cell::RefCell;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use std::path::{Path, PathBuf};
-use std::rc::Rc;
-
 use super::function::FuncTypeNode;
 use super::types::StructDefNode;
 use super::*;
@@ -14,12 +8,18 @@ use crate::lsp::mem_docs::{EmitParams, FileCompileInput, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::utils::read_config::{get_config, Config};
 use crate::Db;
-
 use colored::Colorize;
 use inkwell::context::Context;
 use inkwell::targets::TargetMachine;
 use internal_macro::range;
 use rustc_hash::{FxHashMap, FxHashSet};
+use std::cell::RefCell;
+use std::collections::hash_map::DefaultHasher;
+use std::fs::OpenOptions;
+use std::hash::{Hash, Hasher};
+use std::io::prelude::*;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -264,12 +264,23 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     m.module.set_triple(&TargetMachine::get_default_triple());
     let node = params.node(db);
     let mut nn = node.node(db);
-    if m.action.is_some() && m.action.unwrap() == ActionType::PrintAst {
-        println!("file: {}", params.fullpath(db).green());
-        nn.print(0, true, vec![]);
-    } else if m.action.is_some() && m.action.unwrap() == ActionType::FMT {
-        let code = nn.format(0, "    ");
-        println!("{}", code);
+    if let Some(action) = m.action {
+        match action {
+            ActionType::PrintAst => {
+                println!("file: {}", params.fullpath(db).green());
+                nn.print(0, true, vec![]);
+            }
+            ActionType::FMT => {
+                let code = nn.format(0, "    ");
+                let mut f = OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open(params.fullpath(db))
+                    .unwrap();
+                f.write(code.as_bytes()).unwrap();
+            }
+            _ => {}
+        }
     }
     let _ = nn.emit(m);
     Diagnostics::push(

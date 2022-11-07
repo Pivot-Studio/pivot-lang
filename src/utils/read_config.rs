@@ -95,3 +95,15 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     }
     Ok(config)
 }
+#[cfg(target_os = "linux")]
+pub fn enter() -> &'static str {
+    "\n"
+}
+#[cfg(target_os = "macos")]
+pub fn enter() -> &'static str {
+    "\r"
+}
+#[cfg(target_os = "windows")]
+pub fn enter() -> &'static str {
+    "\r\n"
+}

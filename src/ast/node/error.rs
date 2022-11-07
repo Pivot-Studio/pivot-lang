@@ -1,5 +1,8 @@
 use super::*;
-use crate::ast::{ctx::Ctx, diag::ErrorCode};
+use crate::{
+    ast::{ctx::Ctx, diag::ErrorCode},
+    utils::read_config::enter,
+};
 
 use colored::Colorize;
 use internal_macro::range;
@@ -14,7 +17,11 @@ pub struct ErrorNode {
 
 impl Node for ErrorNode {
     fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        format!("\n\r{}\n\r", self.src.clone())
+        let mut format_res = String::new();
+        format_res.push_str(enter());
+        format_res.push_str(&self.src);
+        format_res.push_str(enter());
+        format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

@@ -6,6 +6,7 @@ use super::*;
 use crate::ast::ctx::{ARRType, Ctx, Field, PLType, STType};
 use crate::ast::diag::ErrorCode;
 use crate::ast::range::Range;
+use crate::utils::read_config::enter;
 use inkwell::types::{AnyType, BasicType};
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
@@ -146,14 +147,8 @@ pub struct TypedIdentifierNode {
 
 impl TypedIdentifierNode {
     pub fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::from("\n\r");
-        // let mut id = String::new();
-        // if self.tp.is_ref {
-        //     let ref_id = format!("&{}", &self.tp.id);
-        //     id.push_str(&ref_id);
-        // } else {
-        // id.push_str(&self.tp.id);
-        // }
+        let mut format_res = String::new();
+        format_res.push_str(enter());
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str(&self.id.name);
         format_res.push_str(": ");
@@ -187,11 +182,11 @@ pub struct StructDefNode {
 
 impl Node for StructDefNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::from("\n\r");
+        let mut format_res = String::new();
+        format_res.push_str(enter());
         let mut doc_str = String::new();
         for c in self.doc.iter() {
             doc_str.push_str(&c.format(tabs, prefix));
-            doc_str.push_str("\n\r");
         }
         format_res.push_str(&doc_str);
         format_res.push_str(&prefix.repeat(tabs));
@@ -201,10 +196,10 @@ impl Node for StructDefNode {
         for (field, _i) in &self.fields {
             format_res.push_str(&field.format(tabs + 1, prefix));
         }
-        format_res.push_str("\n\r");
+        format_res.push_str(enter());
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str("}");
-        format_res.push_str("\n\r");
+        format_res.push_str(enter());
         format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -303,7 +298,6 @@ impl StructDefNode {
 pub struct StructInitFieldNode {
     pub id: VarNode,
     pub exp: Box<NodeEnum>,
-    pub has_comma: bool,
 }
 
 impl Node for StructInitFieldNode {
@@ -324,9 +318,6 @@ impl Node for StructInitFieldNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let (v, tp, _) = self.exp.emit(ctx)?;
-        if !self.has_comma {
-            return Err(ctx.add_err(self.range, ErrorCode::COMPLETION));
-        }
         return Ok((v, tp, TerminatorEnum::NONE));
     }
 }
@@ -345,14 +336,16 @@ impl Node for StructInitNode {
         match Some(&self.fields) {
             Some(fields) => {
                 let mut len = 0;
-                field_str.push_str("{\n\r");
+                field_str.push_str("{");
+                field_str.push_str(enter());
                 for field in fields {
                     len += 1;
                     field_str.push_str(&field.format(tabs + 1, prefix));
                     if len < fields.len() {
-                        field_str.push_str(",\n\r")
+                        field_str.push_str(",");
+                        field_str.push_str(enter());
                     } else {
-                        field_str.push_str("\n\r")
+                        field_str.push_str(enter());
                     }
                 }
                 field_str.push_str(&prefix.repeat(tabs));

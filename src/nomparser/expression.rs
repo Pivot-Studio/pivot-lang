@@ -197,9 +197,20 @@ fn take_exp_op(input: Span) -> IResult<Span, ComplexOp> {
 #[test_parser("(a)")]
 #[test_parser("(a+a*b/c)")]
 fn parantheses_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    delimited(
-        tag_token(TokenType::LPAREN),
-        logic_exp,
-        tag_token(TokenType::RPAREN),
+    map_res(
+        delimited(
+            tag_token(TokenType::LPAREN),
+            logic_exp,
+            tag_token(TokenType::RPAREN),
+        ),
+        |exp| {
+            res_enum(
+                ParanthesesNode {
+                    range: exp.range(),
+                    node: exp,
+                }
+                .into(),
+            )
+        },
     )(input)
 }
