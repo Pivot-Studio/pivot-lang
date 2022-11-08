@@ -11,7 +11,9 @@ on:
 jobs:
   container-test-job:
     runs-on: ubuntu-latest
-    container: registry.cn-hangzhou.aliyuncs.com/pivotstudio/rust-pl:latest
+    container:
+      image: registry.cn-hangzhou.aliyuncs.com/pivotstudio/rust-pl:latest
+      options: --security-opt seccomp=unconfined
     steps:
       - uses: actions/checkout@v2
         with:
