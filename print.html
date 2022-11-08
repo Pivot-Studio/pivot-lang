@@ -83,7 +83,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li></ol></li><li class="chapter-item expanded "><a href="lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lsp/diagnostic.html"><strong aria-hidden="true">5.1.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li class="chapter-item expanded "><a href="systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li></ol>            </div>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li><li class="chapter-item expanded "><a href="references/method.html"><strong aria-hidden="true">3.2.</strong> Method</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li></ol></li><li class="chapter-item expanded "><a href="lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lsp/diagnostic.html"><strong aria-hidden="true">5.1.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/gc.html"><strong aria-hidden="true">6.1.1.</strong> gc</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li></ol>            </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
@@ -332,6 +332,7 @@ for_statement = &quot;for&quot; (assignment | new_variable) &quot;;&quot; logic_
 
 statement_block = &quot;{&quot; statements &quot;}&quot; ;
 
+impl_block = &quot;impl&quot; extern_identifier &quot;{&quot; function_def* &quot;}&quot; ;
 
 statements = statement* ;
 
@@ -593,6 +594,41 @@ fn main() void {
 }
 
 </code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="method"><a class="header" href="#method">Method</a></h1>
+<p>method就是隶属于某个结构体的函数，它们与普通函数<strong>没有</strong>本质区别。<br />
+所有的method都必须在impl块里声明，且method都会隐式的有个<code>self</code>参数，该参数是<code>impl</code>类型的指针 </p>
+<blockquote>
+<p>为什么pivot-lang的receiver是隐式的？因为我们有gc，所以没必要像rust那样显示的声明receiver类型，统一指针就可以解决几乎所有情况。</p>
+</blockquote>
+<blockquote>
+<p>可能存在的问题：不方便约束receiver不可变的情况</p>
+</blockquote>
+<h2 id="method-example"><a class="header" href="#method-example">Method Example</a></h2>
+<p>最简单的添加method的例子：</p>
+<pre><code class="language-pivot-lang">
+impl pointer_struct {
+    fn name() void {
+        io::printi64ln(100100);
+        return;
+    }
+}
+</code></pre>
+<p>在一个包中，可以定义外部引入的包中结构体的<code>method</code> . </p>
+<pre><code class="language-pivot-lang">
+impl mod1::Mod1 {
+    // xxx
+    fn name() void {
+        self.x = 114514;
+        io::printi64ln(100101);
+        return;
+    }
+}
+
+</code></pre>
+<p>调用method的时候，使用<code>&lt;receiver类型&gt;.&lt;method&gt;</code>即可 </p>
+<pre><code class="language-pivot-lang">let a = A{};
+a.method();
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="compiler"><a class="header" href="#compiler">Compiler</a></h1>
 <p>pivot-lang编译器（以下简称编译器）主要由三个部分组成：nom分析器、ast和llvm后端。</p>
 <h2 id="nom-parser"><a class="header" href="#nom-parser">Nom parser</a></h2>
@@ -843,6 +879,17 @@ impl MyStruct {
 </code></pre>
 <p>标记impl块时，导出的函数名称会变为<code>{structname}__{fnname}</code>的形式，函数允许使用receiver。更多高级用法参见<code>is_runtime</code>的rust doc</p>
 </blockquote>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="gc"><a class="header" href="#gc">GC</a></h1>
+<p>pivot-lang 是一门使用gc进行内存管理的语言。<br />
+pivot-lang 的gc目前是使用rust写的，采用非常简单的 <code>mark and sweep</code> 算法。
+栈变量采用<code>shadow stack</code>模式进行追踪。<br />
+目前gc的源代码在vm项目中</p>
+<blockquote>
+<p>目前的gc非常简单，也没做任何优化，属于能用就行。总代码量也很少，欢迎为我们改进它。</p>
+</blockquote>
+<h2 id="shadow-stack"><a class="header" href="#shadow-stack">Shadow Stack</a></h2>
+<p>pl的gc目前是精确gc，编译器会插入指令以让gc运行时能知道gcroot有哪些。gc记录的gcroot列表就是<code>shadow stack</code>。
+在mark阶段，gc会从<code>shadow stack</code>开始扫描。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="planglib"><a class="header" href="#planglib">planglib</a></h1>
 <p>planglib目录下的每一个文件夹都是一个系统模块，在编译的时候会自动被加入依赖中，不需要在配置文件中特殊配置。</p>
 <h2 id="planglib如何在编译期间被找到"><a class="header" href="#planglib如何在编译期间被找到">planglib如何在编译期间被找到</a></h2>

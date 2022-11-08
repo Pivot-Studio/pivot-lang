@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Diagnostic - Pivot Lang</title>
+        <title>Method - Pivot Lang</title>
                 
 
         <!-- Custom HTML head -->
@@ -82,7 +82,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="../tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="../tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="../tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="../references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li><li class="chapter-item expanded "><a href="../references/method.html"><strong aria-hidden="true">3.2.</strong> Method</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="../compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="../compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li></ol></li><li class="chapter-item expanded "><a href="../lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../lsp/diagnostic.html" class="active"><strong aria-hidden="true">5.1.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/gc.html"><strong aria-hidden="true">6.1.1.</strong> gc</a></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li></ol>            </div>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="../tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="../tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="../tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="../references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li><li class="chapter-item expanded "><a href="../references/method.html" class="active"><strong aria-hidden="true">3.2.</strong> Method</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="../compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="../compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li></ol></li><li class="chapter-item expanded "><a href="../lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../lsp/diagnostic.html"><strong aria-hidden="true">5.1.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/gc.html"><strong aria-hidden="true">6.1.1.</strong> gc</a></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li></ol>            </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
@@ -120,7 +120,7 @@
                                                                         <a href="https://github.com/Pivot-Studio/pivot-lang" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                                                                        <a href="https://github.com/Pivot-Studio/pivot-lang/master/book/src/lsp/diagnostic.md" title="Suggest an edit" aria-label="Suggest an edit">
+                                                                        <a href="https://github.com/Pivot-Studio/pivot-lang/master/book/src/references/method.md" title="Suggest an edit" aria-label="Suggest an edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
                         
@@ -149,45 +149,51 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="diagnostic"><a class="header" href="#diagnostic">Diagnostic</a></h1>
-<p>诊断信息是个非常重要的功能，它可以帮助我们在编写代码的时候发现错误和可能有问题的地方，从而提高我们的编码效率。</p>
-<p>为了让用户体验尽可能的好，我们的lsp分析需要尽量容忍用户的错误输入，尽可能多的分析出用户代码中的问题</p>
-<h2 id="fault-tolerance"><a class="header" href="#fault-tolerance">Fault Tolerance</a></h2>
-<p>错误容忍是生成好的诊断信息的前提。在pivot-lang的中，我们分别在两个层面上实现了错误容忍：</p>
-<ul>
-<li>parser</li>
-<li>ast</li>
-</ul>
-<h3 id="parser的错误容忍"><a class="header" href="#parser的错误容忍">Parser的错误容忍</a></h3>
-<p>nom parser架构中，如果出现了一个无法被识别的语句，整个分析器就会终止分析输出错误。这对于错误容忍的要求来说是无法被接受的。所以
-我们的编译器不使用nom parser的默认错误处理机制，任何parser阶段产生的nom error都应该被视作<strong>bug</strong>，我们应该尽可能的避免这种情况。</p>
-<p>在parse过程中，如果一些错误语句能非常明显的被识别为一个语法的未完成项（且没有歧义），我们应该将它识别为该语法类型的Node，并且在Node上加一个
-flag标识它不完整（常常是<code>is_complete</code>），这样在ast阶段我们就能输出对应的诊断信息。</p>
-<p>对于最常见的基础语法单位<code>statement</code>和<code>top_statement</code>，parser提供了一个helper函数<code>except</code>，能够在遇到不可被识别的错误语句的时候
-将该“块”语句识别为<code>ErrNode</code>，以方便后续的分析正常进行。</p>
+                        <h1 id="method"><a class="header" href="#method">Method</a></h1>
+<p>method就是隶属于某个结构体的函数，它们与普通函数<strong>没有</strong>本质区别。<br />
+所有的method都必须在impl块里声明，且method都会隐式的有个<code>self</code>参数，该参数是<code>impl</code>类型的指针 </p>
 <blockquote>
-<p>！！！<strong>注意</strong>：ErrNode虽然很好用，但是它只能输出很宽泛的诊断信息（比如无法识别该语句），它是最后的错误容忍手段，应该尽量避免使用它</p>
+<p>为什么pivot-lang的receiver是隐式的？因为我们有gc，所以没必要像rust那样显示的声明receiver类型，统一指针就可以解决几乎所有情况。</p>
 </blockquote>
-<h3 id="ast的错误容忍"><a class="header" href="#ast的错误容忍">AST的错误容忍</a></h3>
-<p>由于parse阶段的时候能够容忍错误的语句，对于一些语法错误，ast节点只需要检查自身的完整性就能够输出诊断信息了。而对于语义错误（例如类型不匹配），我们需要在ast阶段
-进行分析并获取结果。这些操作目前是在各个节点的<code>emit</code>函数里进行的。所有的<code>emit</code>函数都返回<code>NodeResult</code>类型，如果该节点的<code>emit</code>中出现了错误，
-分析将会中断，其对应的错误信息会被添加到<code>ctx</code>（编译上下文）中并且作为<code>error</code>返回。上层函数如果遇到自己依赖的函数报错<strong>一定不能重复添加该错误至<code>ctx</code>中</strong>，
-否则会导致错误信息重复输出。上层函数处理自己的依赖报错有两种情况：</p>
-<ul>
-<li>直接停止分析并将该错误传递给自己的上级</li>
-<li>忽略该错误继续进行分析</li>
-</ul>
-<p>一般来说，大部分的expression和statement都会采用第一种方案，而statement block则会采用第二种方案</p>
+<blockquote>
+<p>可能存在的问题：不方便约束receiver不可变的情况</p>
+</blockquote>
+<h2 id="method-example"><a class="header" href="#method-example">Method Example</a></h2>
+<p>最简单的添加method的例子：</p>
+<pre><code class="language-pivot-lang">
+impl pointer_struct {
+    fn name() void {
+        io::printi64ln(100100);
+        return;
+    }
+}
+</code></pre>
+<p>在一个包中，可以定义外部引入的包中结构体的<code>method</code> . </p>
+<pre><code class="language-pivot-lang">
+impl mod1::Mod1 {
+    // xxx
+    fn name() void {
+        self.x = 114514;
+        io::printi64ln(100101);
+        return;
+    }
+}
+
+</code></pre>
+<p>调用method的时候，使用<code>&lt;receiver类型&gt;.&lt;method&gt;</code>即可 </p>
+<pre><code class="language-pivot-lang">let a = A{};
+a.method();
+</code></pre>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                                                    <a rel="prev" href="../lsp/index.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                                    <a rel="prev" href="../references/module.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
                         
-                                                    <a rel="next" href="../systemlib/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                                    <a rel="next" href="../compiler/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
                         
@@ -197,11 +203,11 @@ flag标识它不完整（常常是<code>is_complete</code>），这样在ast阶�
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                                    <a rel="prev" href="../lsp/index.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                    <a rel="prev" href="../references/module.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
                 
-                                    <a rel="next" href="../systemlib/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                    <a rel="next" href="../compiler/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
                             </nav>
