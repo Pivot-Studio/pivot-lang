@@ -6,6 +6,7 @@ use crate::ast::compiler::{compile_dry_file, ActionType};
 use crate::ast::ctx::{self, create_ctx_info, Ctx, Mod};
 use crate::lsp::mem_docs::{EmitParams, FileCompileInput, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
+use crate::lsp::text;
 use crate::utils::read_config::{get_config, Config};
 use crate::Db;
 use colored::Colorize;
@@ -209,6 +210,7 @@ impl Program {
             abs.to_str().unwrap().to_string(),
             self.params(db),
             modmap,
+            self.docs(db).get_file_content(db).unwrap().text(db).clone(),
         );
 
         emit_file(db, p)
@@ -227,6 +229,8 @@ pub struct ProgramEmitParam {
     #[return_ref]
     pub params: EmitParams,
     pub submods: FxHashMap<String, Mod>,
+    #[return_ref]
+    pub file_content: String,
 }
 
 #[salsa::tracked]
@@ -270,7 +274,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
                 println!("file: {}", params.fullpath(db).green());
                 nn.print(0, true, vec![]);
             }
-            ActionType::FMT => {
+            ActionType::Fmt => {
                 let code = nn.format(0, "    ");
                 let mut f = OpenOptions::new()
                     .write(true)
@@ -278,6 +282,13 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
                     .open(params.fullpath(db))
                     .unwrap();
                 f.write(code.as_bytes()).unwrap();
+            }
+            ActionType::LspFmt => {
+                let oldcode = params.file_content(db);
+                let newcode = nn.format(0, "    ");
+                let diff = text::diff(&oldcode, &newcode);
+                let line_index = text::LineIndex::new(&oldcode);
+                PLFormat::push(db, diff.into_text_edit(&line_index));
             }
             _ => {}
         }

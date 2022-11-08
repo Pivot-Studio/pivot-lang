@@ -18,6 +18,7 @@ pub struct Jar(
     accumulators::PLSemanticTokens,
     accumulators::PLHover,
     accumulators::ModBuffer,
+    accumulators::PLFormat,
     program::Program,
     program::Program_emit,
     program::ProgramNodeWrapper,
@@ -128,7 +129,7 @@ fn main() {
         let action = if cli.printast {
             ActionType::PrintAst
         } else if fmt {
-            ActionType::FMT
+            ActionType::Fmt
         } else {
             ActionType::Compile
         };
