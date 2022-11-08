@@ -14,6 +14,8 @@ llvm-sys = "140"
 internal_macro = { path = "./internal_macro" }
 vm = { path = "./vm", optional = true, features = ["jit"] }
 nom_locate = "4.0.0"
+rowan = "0.15.10"
+dissimilar = "1.0.4"
 as-any = "0.3.0"
 clap = { version = "4.0.18", features = ["derive"] }
 colored = "2.0.0"

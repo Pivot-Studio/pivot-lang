@@ -95,7 +95,8 @@ pub enum ActionType {
     Hover,
     Compile,
     PrintAst,
-    FMT,
+    Fmt,
+    LspFmt,
 }
 
 #[cfg(feature = "jit")]
@@ -466,7 +467,7 @@ mod test {
                 fmt: false,
             },
         );
-        input.set_action(&mut db).to(ActionType::FMT);
+        input.set_action(&mut db).to(ActionType::Fmt);
         compile(
             &db,
             input,

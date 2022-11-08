@@ -117,9 +117,11 @@ logic_exp =
     | compare_exp (("&&"｜"||") compare_exp)*
     ;
 
-struct_init_exp = type_name "{" struct_init_exp_field "}" ;
+struct_init_exp = 
+    | type_name "{" (struct_init_exp_field ("," struct_init_exp_field)* )? "}" 
+    ;
 
-struct_init_exp_field = identifier ":" logic_exp "," ;
+struct_init_exp_field = identifier ":" logic_exp ;
 
 assignee = pointer_exp;
 

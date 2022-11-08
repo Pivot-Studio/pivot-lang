@@ -5,25 +5,23 @@ use project2::main;
 use project2::main::test;
 use core::panic;
 use std::io;
-
 const a = 100;
 struct struct_father {
-    a : i64;
-    b : i64;
-    c : struct_child; // 124548
+    a: i64;
+    b: i64;
+    c: struct_child;// 124548
+
 }
 
 // # 1545145211
 // 1. a
 // 2. b
 struct struct_child {
-    a : i64;
-    b : [i64*1];
+    a: i64;
+    b: [i64 * 1];
 }
 
-
 // 123
-
 // # 123
 // *hello*
 // 123
@@ -37,7 +35,14 @@ struct struct_child {
 // }
 // ```
 fn test_struct() void {
-    let s = struct_father{a:2,b:2,c:struct_child{a:2,b:[1101,],},};
+    let s = struct_father{
+        a: 2,
+        b: 2,
+        c: struct_child{
+            a: 2,
+            b: [1101]
+        }
+    };
     io::printi64ln(s.a);
     io::printi64ln(s.a);
     io::printi64ln(s.c.a);
@@ -48,54 +53,61 @@ fn test_struct() void {
     mod1::printi64ln(1);
     main::test();
     test::test();
-    return ;
+    return;
 }
+
 fn test_if_else() void {
     test_if_only(true);
     test_if_else_ret(true);
     test_if_ret_only(true);
     test_else_ret_only(true);
-
     test_not_ret(true);
-    return    ;
+    return;
 }
-fn test_if_only(judge:bool) void {
+
+fn test_if_only(judge: bool) void {
     if judge {
-        return ;
+        return;
     }
     return;
 }
-fn test_if_else_ret(judge:bool) void {
-    if judge {//12354121
-        return ;
-    } else {//123145212
-        return ;
+
+fn test_if_else_ret(judge: bool) void {
+    if judge {
+        //12354121
+        return;
+    } else {
+        //123145212
+        return;
     }
 }
-fn test_if_ret_only(judge:bool) void {
+
+fn test_if_ret_only(judge: bool) void {
     if judge {
-        return ;
+        return;
     } else {
         //156411
     }
-    return ;
+    return;
 }
-fn test_else_ret_only(judge:bool) void {
+
+fn test_else_ret_only(judge: bool) void {
     if judge {
-        ;
     } else {
         return;
     }
-    return ;
-}//135132123
-fn test_not_ret(judge:bool) void {
-    if judge {
-;
-    } else {
-
-    }//156541
     return;
 }
+
+//135132123
+fn test_not_ret(judge: bool) void {
+    if judge {
+    } else {
+    }
+    //156541
+    return;
+}
+
 fn test_complex() void {
     let res: i64;
     res = get(get(get(get(2))));
@@ -106,19 +118,29 @@ fn test_complex() void {
     }
     return;
 }
-fn get(x:i64) i64 {
-    return ((x+1)*3 + (x/2))/5;
+
+fn get(x: i64) i64 {
+    return ((x + 1) * 3 + (x / 2)) / 5;
 }
+
 fn test_warn() void {
     return;
-    let x = 1;//15154212
+    let x = 1;
+    //15154212
 }
+
 fn test_const() void {
     io::printi64ln(a);
     return;
 }
+
 fn test_mod_struct() void {
-    let x = mod1::Mod1{x:2,y:mod2::Mod2{y:true,},};
+    let x = mod1::Mod1{
+        x: 2,
+        y: mod2::Mod2{
+            y: true
+        }
+    };
     io::printi64ln(x.x);
     if x.y.y {
         io::printi64ln(x.x);
@@ -133,7 +155,7 @@ fn test_loop() void {
             i = 5;
             continue;
         }
-        if i==5 {
+        if i == 5 {
             break;
         }
         i = i + 1;
@@ -143,15 +165,21 @@ fn test_loop() void {
     }
     return;
 }
+
 struct A {
-    x:i64;
+    x: i64;
 }
+
 fn ret_atruct() A {
-    return A{x:10000,};
+    return A{
+        x: 10000
+    };
 }
-fn ret_arr() [i64*3] {
-    return [1,10000,3,];
+
+fn ret_arr() [i64 * 3] {
+    return [1, 10000, 3];
 }
+
 fn test_ret_struct_arr() void {
     let s = ret_atruct().x;
     io::printi64ln(s);
@@ -159,8 +187,9 @@ fn test_ret_struct_arr() void {
     io::printi64ln(a);
     return;
 }
+
 fn main() i64 {
-    let a1 = [[[1,2,],[1,2,],],];
+    let a1 = [[[1, 2], [1, 2]]];
     io::printi64ln(a1[0][0][0]);
     test_struct();
     printline();
@@ -180,7 +209,6 @@ fn main() i64 {
     return 0;
 }
 
-
 fn test_pointer() void {
     let a = 0;
     let b = &a;
@@ -191,7 +219,7 @@ fn test_pointer() void {
     return;
 }
 
-fn test_modify_pointer(a:**i64) void {
+fn test_modify_pointer(a: **i64) void {
     **a = 6;
     return;
 }
@@ -201,16 +229,23 @@ struct pointer_struct {
 }
 
 fn test_dangling() *pointer_struct {
-    let a = pointer_struct{ptr:&struct_child{a:10,},};
+    let a = pointer_struct{
+        ptr: &struct_child{
+            a: 10
+        }
+    };
     return &a;
 }
 
 fn test_vm_link() i64;
+
 fn printline() void {
     io::printi64ln(100000000);
     return;
 }
 
 fn test_ret_struct() struct_child {
-    return struct_child{a:10,};
+    return struct_child{
+        a: 10
+    };
 }

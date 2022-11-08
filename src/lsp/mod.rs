@@ -17,12 +17,12 @@ pub mod dispatcher;
 pub mod helpers;
 pub mod mem_docs;
 pub mod semantic_tokens;
-
+pub mod text;
 use lsp_types::{
     notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
     request::{
-        Completion, GotoDefinition, HoverRequest, References, SemanticTokensFullDeltaRequest,
-        SemanticTokensFullRequest,
+        Completion, Formatting, GotoDefinition, HoverRequest, References,
+        SemanticTokensFullDeltaRequest, SemanticTokensFullRequest,
     },
     Hover, HoverContents, InitializeParams, MarkedString, OneOf, SemanticTokenModifier,
     SemanticTokenType, SemanticTokens, SemanticTokensDelta, SemanticTokensOptions,
@@ -38,7 +38,7 @@ use threadpool::ThreadPool;
 use crate::{
     ast::{
         accumulators::{
-            Completions, Diagnostics, GotoDef, PLHover, PLReferences, PLSemanticTokens,
+            Completions, Diagnostics, GotoDef, PLFormat, PLHover, PLReferences, PLSemanticTokens,
         },
         compiler::{compile_dry, ActionType},
         range::Pos,
@@ -47,8 +47,8 @@ use crate::{
     lsp::{
         dispatcher::Dispatcher,
         helpers::{
-            send_completions, send_diagnostics, send_goto_def, send_hover, send_references,
-            send_semantic_tokens, send_semantic_tokens_edit, url_to_path,
+            send_completions, send_diagnostics, send_format, send_goto_def, send_hover,
+            send_references, send_semantic_tokens, send_semantic_tokens_edit, url_to_path,
         },
         mem_docs::MemDocsInput,
         semantic_tokens::diff_tokens,
@@ -66,6 +66,7 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
     // Run the server and wait for the two threads to end (typically by trigger LSP Exit event).
     let server_capabilities = serde_json::to_value(&ServerCapabilities {
         definition_provider: Some(OneOf::Left(true)),
+        document_formatting_provider: Some(OneOf::Left(true)),
         text_document_sync: Some(lsp_types::TextDocumentSyncCapability::Options(
             TextDocumentSyncOptions {
                 change: Some(TextDocumentSyncKind::INCREMENTAL), // TODO incremental
@@ -301,6 +302,22 @@ fn main_loop(
                     },
                 );
             });
+        })
+        .on::<Formatting, _>(|id, params| {
+            let uri = url_to_path(params.text_document.uri);
+            docin.set_file(&mut db).to(uri.clone());
+            docin.set_action(&mut db).to(ActionType::LspFmt);
+            docin
+                .set_params(&mut db)
+                .to(Some((Default::default(), None, ActionType::LspFmt)));
+            compile_dry(&db, docin);
+            let fmt = compile_dry::accumulated::<PLFormat>(&db, docin);
+            if !fmt.is_empty() {
+                let sender = connection.sender.clone();
+                pool.execute(move || {
+                    send_format(&sender, id, fmt[0].clone());
+                });
+            }
         })
         .on_noti::<DidChangeTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);

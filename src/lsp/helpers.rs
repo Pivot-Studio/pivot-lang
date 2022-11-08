@@ -55,6 +55,15 @@ pub fn send_references(
         .unwrap();
 }
 
+pub fn send_format(sender: &Sender<Message>, id: RequestId, texts: Vec<lsp_types::TextEdit>) {
+    sender
+        .send(Message::Response(lsp_server::Response::new_ok(
+            id,
+            Some(serde_json::to_value(texts).unwrap()),
+        )))
+        .unwrap();
+}
+
 pub fn send_semantic_tokens_edit(
     sender: &Sender<Message>,
     id: RequestId,

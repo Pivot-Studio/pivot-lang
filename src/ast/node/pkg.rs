@@ -3,10 +3,13 @@ use std::path::PathBuf;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 
-use crate::ast::{
-    ctx::{get_ns_path_completions, Ctx, PLType},
-    diag::ErrorCode,
-    node::{deal_line, tab},
+use crate::{
+    ast::{
+        ctx::{get_ns_path_completions, Ctx, PLType},
+        diag::ErrorCode,
+        node::{deal_line, tab},
+    },
+    utils::read_config::enter,
 };
 
 use super::{primary::VarNode, Node, NodeResult, PLValue, TerminatorEnum};
@@ -31,7 +34,8 @@ impl Node for UseNode {
                 format_res.push_str("::");
             }
         }
-        format_res.push_str(";\r\n");
+        format_res.push_str(";");
+        format_res.push_str(enter());
         format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
