@@ -97,6 +97,7 @@ pub enum ActionType {
     PrintAst,
     Fmt,
     LspFmt,
+    Hint,
 }
 
 #[cfg(feature = "jit")]

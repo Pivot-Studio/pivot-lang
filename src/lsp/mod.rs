@@ -21,7 +21,7 @@ pub mod text;
 use lsp_types::{
     notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
     request::{
-        Completion, Formatting, GotoDefinition, HoverRequest, References,
+        Completion, Formatting, GotoDefinition, HoverRequest, InlayHintRequest, References,
         SemanticTokensFullDeltaRequest, SemanticTokensFullRequest,
     },
     Hover, HoverContents, InitializeParams, MarkedString, OneOf, SemanticTokenModifier,
@@ -38,7 +38,8 @@ use threadpool::ThreadPool;
 use crate::{
     ast::{
         accumulators::{
-            Completions, Diagnostics, GotoDef, PLFormat, PLHover, PLReferences, PLSemanticTokens,
+            Completions, Diagnostics, GotoDef, Hints, PLFormat, PLHover, PLReferences,
+            PLSemanticTokens,
         },
         compiler::{compile_dry, ActionType},
         range::Pos,
@@ -47,7 +48,7 @@ use crate::{
     lsp::{
         dispatcher::Dispatcher,
         helpers::{
-            send_completions, send_diagnostics, send_format, send_goto_def, send_hover,
+            send_completions, send_diagnostics, send_format, send_goto_def, send_hints, send_hover,
             send_references, send_semantic_tokens, send_semantic_tokens_edit, url_to_path,
         },
         mem_docs::MemDocsInput,
@@ -74,11 +75,13 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
                 ..Default::default()
             },
         )),
+        inlay_hint_provider: Some(OneOf::Left(true)),
         completion_provider: Some(lsp_types::CompletionOptions {
             trigger_characters: Some(vec![".".to_string(), ":".to_string()]),
             resolve_provider: None,
             work_done_progress_options: Default::default(),
             all_commit_characters: None,
+            completion_item: None,
         }),
         references_provider: Some(OneOf::Left(true)),
         hover_provider: Some(lsp_types::HoverProviderCapability::Simple(true)),
@@ -316,6 +319,22 @@ fn main_loop(
                 let sender = connection.sender.clone();
                 pool.execute(move || {
                     send_format(&sender, id, fmt[0].clone());
+                });
+            }
+        })
+        .on::<InlayHintRequest, _>(|id, params| {
+            let uri = url_to_path(params.text_document.uri);
+            docin.set_file(&mut db).to(uri.clone());
+            docin.set_action(&mut db).to(ActionType::Hint);
+            docin
+                .set_params(&mut db)
+                .to(Some((Default::default(), None, ActionType::LspFmt)));
+            compile_dry(&db, docin);
+            let hints = compile_dry::accumulated::<Hints>(&db, docin);
+            let sender = connection.sender.clone();
+            if !hints.is_empty() {
+                pool.execute(move || {
+                    send_hints(&sender, id, hints[0].clone());
                 });
             }
         })

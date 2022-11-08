@@ -312,6 +312,10 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let ci = ctx.completion_items.take();
         Completions::push(db, ci);
     }
+    if action == ActionType::Hint {
+        let hints = ctx.hints.take();
+        Hints::push(db, *hints);
+    }
     if let Some(c) = ctx.goto_def.take() {
         GotoDef::push(db, c);
     }

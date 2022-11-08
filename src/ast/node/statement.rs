@@ -107,6 +107,7 @@ impl Node for DefNode {
             return Err(ctx.add_err(self.range, ErrorCode::EXPECT_VALUE));
         }
         let pltype = pltype_opt.unwrap();
+        ctx.push_type_hints(self.var.range, &pltype);
         let ditype = pltype.get_ditype(ctx);
         let (base_value, debug_type) = {
             let ditype = ditype.clone();

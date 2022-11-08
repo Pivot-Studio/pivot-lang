@@ -289,38 +289,39 @@ impl Node for FuncCallNode {
             return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND));
         }
         let pltype = pltype.unwrap();
-        let plv = func.unwrap();
-        let mut skip = 0;
-        if let Some(receiver) = plv.receiver {
-            para_values.push(receiver.into());
-            skip = 1;
-        }
-        let func = plv.into_function_value();
-        if func.count_params() - skip != self.paralist.len() as u32 {
-            return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
-        }
-        for (i, para) in self.paralist.iter_mut().enumerate() {
-            if i < skip as usize {
-                continue;
-            }
-            let pararange = para.range();
-            let (value, _, _) = para.emit(ctx)?;
-            if value.is_none() {
-                return Ok((None, None, TerminatorEnum::NONE));
-            }
-            let load = ctx.try_load2var(pararange, value.unwrap())?;
-            let param = func.get_nth_param(i as u32).unwrap();
-            if load.get_type() != param.get_type() {
-                return Err(ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH));
-            }
-            para_values.push(load.as_basic_value_enum().into());
-        }
-        let ret = ctx.builder.build_call(
-            func,
-            &para_values,
-            format(format_args!("call_{}", pltype.get_name().unwrap())).as_str(),
-        );
         if let PLType::FN(fv) = &pltype {
+            let plv = func.unwrap();
+            let mut skip = 0;
+            if let Some(receiver) = plv.receiver {
+                para_values.push(receiver.into());
+                skip = 1;
+            }
+            let func = plv.into_function_value();
+            if func.count_params() - skip != self.paralist.len() as u32 {
+                return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
+            }
+            for (i, para) in self.paralist.iter_mut().enumerate() {
+                if i < skip as usize {
+                    continue;
+                }
+                let pararange = para.range();
+                let (value, _, _) = para.emit(ctx)?;
+                if value.is_none() {
+                    return Ok((None, None, TerminatorEnum::NONE));
+                }
+                let load = ctx.try_load2var(pararange, value.unwrap())?;
+                let param = func.get_nth_param(i as u32).unwrap();
+                if load.get_type() != param.get_type() {
+                    return Err(ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH));
+                }
+                para_values.push(load.as_basic_value_enum().into());
+                ctx.push_param_hint(pararange.clone(), fv.param_name[i].clone());
+            }
+            let ret = ctx.builder.build_call(
+                func,
+                &para_values,
+                format(format_args!("call_{}", pltype.get_name())).as_str(),
+            );
             ctx.save_if_comment_doc_hover(self.range, Some(fv.doc.clone()));
             let res = match ret.try_as_basic_value().left() {
                 Some(v) => Ok((
@@ -359,6 +360,7 @@ impl FuncTypeNode {
             return Err(ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL));
         }
         let mut param_pltypes = Vec::new();
+        let mut param_name = Vec::new();
         let mut receiver = None;
         let mut first = true;
         let mut receivertp = None;
@@ -378,12 +380,14 @@ impl FuncTypeNode {
             }
             first = false;
             param_pltypes.push(paramtype.clone());
+            param_name.push(para.id.name.clone());
         }
         let refs = vec![];
         let ftp = FNType {
             name: self.id.clone(),
             ret_pltype: Box::new(self.ret.get_type(ctx)?),
             param_pltypes,
+            param_name,
             range: self.range,
             refs: Rc::new(RefCell::new(refs)),
             doc: self.doc.clone(),

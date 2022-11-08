@@ -30,6 +30,8 @@ use lsp_types::DiagnosticSeverity;
 use lsp_types::GotoDefinitionResponse;
 use lsp_types::Hover;
 use lsp_types::HoverContents;
+use lsp_types::InlayHint;
+use lsp_types::InlayHintKind;
 use lsp_types::InsertTextFormat;
 use lsp_types::Location;
 use lsp_types::MarkedString;
@@ -92,6 +94,7 @@ pub struct Ctx<'a, 'ctx> {
     pub action: Option<ActionType>,       // lsp sender
     pub lspparams: Option<(Pos, Option<String>, ActionType)>, // lsp params
     pub refs: Rc<Cell<Option<Rc<RefCell<Vec<Location>>>>>>, // hold the find references result (thank you, Rust!)
+    pub hints: Rc<RefCell<Box<Vec<InlayHint>>>>,
     pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
     pub goto_def: Rc<Cell<Option<GotoDefinitionResponse>>>, // hold the goto definition result
     pub completion_items: Rc<Cell<Vec<CompletionItem>>>,    // hold the completion items
@@ -408,7 +411,7 @@ impl PriType {
         match self {
             PriType::I64 => String::from("i64"),
             PriType::F64 => String::from("f64"),
-            PriType::BOOL => String::from("i32"),
+            PriType::BOOL => String::from("bool"),
         }
     }
     pub fn try_from_str(str: &str) -> Option<Self> {
@@ -452,14 +455,14 @@ impl PLType {
         self.get_basic_type_op(ctx).unwrap()
     }
 
-    pub fn get_name<'a, 'ctx>(&self) -> Option<String> {
+    pub fn get_name<'a, 'ctx>(&self) -> String {
         match self {
-            PLType::FN(fu) => Some(fu.name.clone()),
-            PLType::STRUCT(st) => Some(st.name.clone()),
-            PLType::PRIMITIVE(pri) => Some(pri.get_name()),
-            PLType::ARR(_) => None,
-            PLType::VOID => Some("void".to_string()),
-            PLType::POINTER(p) => p.get_name(),
+            PLType::FN(fu) => fu.name.clone(),
+            PLType::STRUCT(st) => st.name.clone(),
+            PLType::PRIMITIVE(pri) => pri.get_name(),
+            PLType::ARR(arr) => format!("[{} * {}]", arr.element_type.get_name(), arr.size),
+            PLType::VOID => "void".to_string(),
+            PLType::POINTER(p) => "&".to_string() + &p.get_name(),
         }
     }
 
@@ -664,6 +667,7 @@ pub struct FNType {
     pub name: String,     // name for lsp
     pub llvmname: String, // name in llvm ir
     pub param_pltypes: Vec<PLType>,
+    pub param_name: Vec<String>,
     pub ret_pltype: Box<PLType>,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
@@ -893,6 +897,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             action: sender,
             lspparams: completion,
             refs: Rc::new(Cell::new(None)),
+            hints: Rc::new(RefCell::new(Box::new(vec![]))),
             semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
                 src_file_path.to_string(),
             )))),
@@ -937,6 +942,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             action: self.action,
             lspparams: self.lspparams.clone(),
             refs: self.refs.clone(),
+            hints: self.hints.clone(),
             semantic_tokens_builder: self.semantic_tokens_builder.clone(),
             goto_def: self.goto_def.clone(),
             completion_items: self.completion_items.clone(),
@@ -1242,7 +1248,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                     kind: Some(CompletionItemKind::CONSTANT),
                     ..Default::default()
                 };
-                item.detail = v.tp.get_name();
+                item.detail = Some(v.tp.get_name());
                 m.insert(k.clone(), item);
             }
         }
@@ -1350,7 +1356,32 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             modifiers,
         )
     }
-
+    pub fn push_type_hints(&self, range: Range, pltype: &PLType) {
+        let hint = InlayHint {
+            position: range.to_diag_range().end,
+            label: lsp_types::InlayHintLabel::String(": ".to_string() + &pltype.get_name()),
+            kind: Some(InlayHintKind::TYPE),
+            text_edits: None,
+            tooltip: None,
+            padding_left: None,
+            padding_right: None,
+            data: None,
+        };
+        self.hints.borrow_mut().push(hint);
+    }
+    pub fn push_param_hint(&self, range: Range, name: String) {
+        let hint = InlayHint {
+            position: range.to_diag_range().start,
+            label: lsp_types::InlayHintLabel::String(name + ": "),
+            kind: Some(InlayHintKind::TYPE),
+            text_edits: None,
+            tooltip: None,
+            padding_left: None,
+            padding_right: None,
+            data: None,
+        };
+        self.hints.borrow_mut().push(hint);
+    }
     fn get_keyword_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         let keywords = vec![
             "if", "else", "while", "for", "return", "struct", "let", "true", "false",
