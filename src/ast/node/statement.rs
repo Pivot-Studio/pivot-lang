@@ -66,7 +66,7 @@ impl Node for DefNode {
         ctx.push_type_hints(self.var.range, &pltype);
         let ditype = pltype.get_ditype(ctx);
         let tp = pltype.get_basic_type_op(ctx);
-        if tp.is_none() {
+        if tp.is_none() || ditype.is_none() {
             return Err(ctx.add_err(self.tp.clone().unwrap().range(), ErrorCode::UNDEFINED_TYPE));
         }
         let base_type = tp.unwrap();
