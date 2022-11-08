@@ -44,12 +44,15 @@ impl Node for DefNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let range = self.range();
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
-
-        let pltype;
+        if self.exp.is_none() && self.tp.is_none() {
+            return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
+        }
+        let mut pltype = None;
         let mut expv = None;
         if let Some(tp) = &self.tp {
-            pltype = tp.get_type(ctx)?;
-        } else if let Some(exp) = &mut self.exp {
+            pltype = Some(tp.get_type(ctx)?);
+        }
+        if let Some(exp) = &mut self.exp {
             let (value, pltype_opt, _) = exp.emit(ctx)?;
             // for err tolerate
             if pltype_opt.is_none() {
@@ -58,16 +61,20 @@ impl Node for DefNode {
             if value.is_none() {
                 return Err(ctx.add_err(self.range, ErrorCode::EXPECT_VALUE));
             }
-            pltype = pltype_opt.unwrap();
+            let tp = pltype_opt.unwrap();
+            if pltype.is_none() {
+                ctx.push_type_hints(self.var.range, &tp);
+                pltype = Some(tp);
+            } else if pltype.clone().unwrap() != tp {
+                return Err(ctx.add_err(self.range, ErrorCode::TYPE_MISMATCH));
+            }
             expv = value;
-        } else {
-            return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
         }
-        ctx.push_type_hints(self.var.range, &pltype);
+        let pltype = pltype.unwrap();
         let ditype = pltype.get_ditype(ctx);
         let tp = pltype.get_basic_type_op(ctx);
         if tp.is_none() || ditype.is_none() {
-            return Err(ctx.add_err(self.tp.clone().unwrap().range(), ErrorCode::UNDEFINED_TYPE));
+            return Err(ctx.add_err(range, ErrorCode::UNDEFINED_TYPE));
         }
         let base_type = tp.unwrap();
         let ptr2value = alloc(ctx, base_type, &self.var.name);
