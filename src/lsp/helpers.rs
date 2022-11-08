@@ -64,6 +64,15 @@ pub fn send_format(sender: &Sender<Message>, id: RequestId, texts: Vec<lsp_types
         .unwrap();
 }
 
+pub fn send_hints(sender: &Sender<Message>, id: RequestId, hints: Vec<lsp_types::InlayHint>) {
+    sender
+        .send(Message::Response(lsp_server::Response::new_ok(
+            id,
+            Some(serde_json::to_value(hints).unwrap()),
+        )))
+        .unwrap();
+}
+
 pub fn send_semantic_tokens_edit(
     sender: &Sender<Message>,
     id: RequestId,

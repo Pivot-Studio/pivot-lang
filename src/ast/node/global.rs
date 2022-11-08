@@ -35,7 +35,8 @@ impl Node for GlobalNode {
 
         let builder = ctx.builder;
         ctx.builder = ctx.nodebug_builder;
-        let (value, _, _) = self.exp.emit(ctx)?;
+        let (value, pltype, _) = self.exp.emit(ctx)?;
+        ctx.push_type_hints(self.var.range, &pltype.unwrap());
         let base_value = ctx.try_load2var(exp_range, value.unwrap())?;
         let res = ctx.get_symbol(&self.var.name);
         if res.is_none() {
