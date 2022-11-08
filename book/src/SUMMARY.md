@@ -10,6 +10,7 @@
   - [VSC Support](./tutorial/vscsupport.md)
 - [References](./references/README.md)
   - [Module](./references/module.md)
+  - [Method](./references/method.md)
 
 # How the project works internally
 
