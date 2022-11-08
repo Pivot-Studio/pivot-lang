@@ -27,21 +27,17 @@ impl Node for FuncDefNode {
         let params_print = print_params(&paralist);
         let mut doc_str = String::new();
         for c in self.typenode.doc.iter() {
+            doc_str.push_str(&prefix.repeat(tabs));
             doc_str.push_str(&c.format(tabs, prefix));
         }
         let mut format_res = String::new();
         format_res.push_str(enter());
         let mut ret_type = String::new();
-        // if self.typenode.ret.is_ref {
-        //     let ref_id = format!("&{}", &self.typenode.ret.id);
-        //     ret_type.push_str(&ref_id);
-        // } else {
         ret_type.push_str(&self.typenode.ret.format(tabs, prefix));
-        // }
         format_res.push_str(&doc_str);
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str("fn ");
-        format_res.push_str(&self.typenode.id);
+        format_res.push_str(&self.typenode.id.split("::").last().unwrap());
         format_res.push_str("(");
         format_res.push_str(&params_print);
         format_res.push_str(") ");
@@ -140,7 +136,7 @@ impl Node for FuncDefNode {
             let fu = res.unwrap();
             func = match fu {
                 PLType::FN(fu) => fu.get_or_insert_fn(ctx),
-                _ => {return Ok((None,None,TerminatorEnum::NONE))}
+                _ => return Ok((None, None, TerminatorEnum::NONE)),
             };
             func.set_subprogram(subprogram);
             ctx.function = Some(func);

@@ -241,13 +241,11 @@ pub fn print_params(paralist: &Vec<Box<TypedIdentifierNode>>) -> String {
     let mut len = 0;
     for param in paralist.iter() {
         let name = &param.id.name;
+        if name == "self" {
+            continue;
+        }
         let mut id = String::new();
-        // if param.tp.is_ref {
-        //     let ref_id = format!("&{}", &param.tp.id);
-        //     id.push_str(&ref_id);
-        // } else {
         id.push_str(&param.tp.format(0, ""));
-        // }
         str.push_str(name);
         str.push_str(": ");
         str.push_str(&id);

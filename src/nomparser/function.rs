@@ -50,7 +50,7 @@ use super::*;
 pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((
-            many0(comment),
+            many0(del_newline_or_space!(comment)),
             tag_token(TokenType::FN),
             identifier,
             tag_token(TokenType::LPAREN),

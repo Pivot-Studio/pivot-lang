@@ -1325,6 +1325,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 PLType::VOID => CompletionItemKind::KEYWORD,
                 PLType::POINTER(_) => todo!(),
             };
+            if k.starts_with('|') {
+                // skip method
+                continue;
+            }
             vmap.insert(
                 k.to_string(),
                 CompletionItem {
@@ -1352,7 +1356,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             "if", "else", "while", "for", "return", "struct", "let", "true", "false",
         ];
         let loopkeys = vec!["break", "continue"];
-        let toplevel = vec!["fn", "struct", "const", "use"];
+        let toplevel = vec!["fn", "struct", "const", "use", "impl"];
         if self.father.is_none() {
             for k in toplevel {
                 vmap.insert(

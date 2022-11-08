@@ -133,19 +133,25 @@ fn test_const() void {
     io::printi64ln(a);
     return;
 }
-
 /// ANCHOR: extern_impl
+
 impl mod1::Mod1 {
+    // xxx
     fn name() void {
         self.x = 114514;
         io::printi64ln(100101);
         return;
     }
 }
-/// ANCHOR_END: extern_impl
 
+/// ANCHOR_END: extern_impl
 fn test_mod_struct() void {
-    let x = mod1::Mod1{x:2,y:mod2::Mod2{y:true}};
+    let x = mod1::Mod1{
+        x: 2,
+        y: mod2::Mod2{
+            y: true
+        }
+    };
     x.name();
     io::printi64ln(x.x);
     if x.y.y {
@@ -256,8 +262,8 @@ fn test_ret_struct() struct_child {
         a: 10
     };
 }
-
 /// ANCHOR: impl
+
 impl pointer_struct {
     fn name() void {
         io::printi64ln(100100);
@@ -265,4 +271,3 @@ impl pointer_struct {
     }
 }
 /// ANCHOR_END: impl
-

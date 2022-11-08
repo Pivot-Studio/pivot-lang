@@ -1,5 +1,5 @@
 use super::*;
-use crate::ast::ctx::Ctx;
+use crate::{ast::ctx::Ctx, utils::read_config::enter};
 use internal_macro::range;
 
 #[range]
@@ -11,13 +11,15 @@ pub struct ImplNode {
 
 impl Node for ImplNode {
     fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        let mut format_res = String::from("impl ");
+        let mut format_res = String::from(enter());
+        format_res.push_str("impl ");
         format_res.push_str(&self.target.format(0, ""));
-        format_res.push_str(" {\n\r");
+        format_res.push_str(" {");
         for method in &self.methods {
-            format_res.push_str(&method.format(1, ""));
+            format_res.push_str(&method.format(1, "    "));
         }
-        format_res.push_str("}\n\r");
+        format_res.push_str("}");
+        format_res.push_str(enter());
         format_res
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {

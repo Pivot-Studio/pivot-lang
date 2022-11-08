@@ -101,7 +101,7 @@ pub fn enter() -> &'static str {
 }
 #[cfg(target_os = "macos")]
 pub fn enter() -> &'static str {
-    "\r"
+    "\n"
 }
 #[cfg(target_os = "windows")]
 pub fn enter() -> &'static str {
