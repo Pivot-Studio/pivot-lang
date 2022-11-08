@@ -140,7 +140,7 @@ impl Node for FuncDefNode {
             let fu = res.unwrap();
             func = match fu {
                 PLType::FN(fu) => fu.get_or_insert_fn(ctx),
-                _ => panic!("type error"), // 理论上这两个Panic不可能触发
+                _ => {return Ok((None,None,TerminatorEnum::NONE))}
             };
             func.set_subprogram(subprogram);
             ctx.function = Some(func);
