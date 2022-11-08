@@ -53,7 +53,7 @@ impl Node for DefNode {
             pltype = Some(tp.get_type(ctx)?);
         }
         if let Some(exp) = &mut self.exp {
-            let (value, pltype_opt, _) = exp.emit(ctx)?;
+            let (value, pltype_opt, _) = ctx.emit_with_expectation(exp, pltype.clone())?;
             // for err tolerate
             if pltype_opt.is_none() {
                 return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));

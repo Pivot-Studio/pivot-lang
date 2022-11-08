@@ -270,4 +270,16 @@ impl pointer_struct {
         return;
     }
 }
+
 /// ANCHOR_END: impl
+fn test_primitives() void {
+    let test: i8 = 1;
+    test = -test;
+    let test2: i8 = test + 1;
+    let testf32: f32 = 1.1;
+    testf32 = -testf32;
+    testf32 = testf32 + 1.2;
+    let utest: u8 = 1;
+    utest = utest + 2;
+    return;
+}
