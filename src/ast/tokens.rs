@@ -65,7 +65,8 @@ define_tokens!(
     LBRACKET = "[",
     RBRACKET = "]",
     TAKE_PTR = "&",
-    TAKE_VAL = "*"
+    TAKE_VAL = "*",
+    IMPL = "impl"
 );
 impl TokenType {
     pub fn get_str(&self) -> &'static str {

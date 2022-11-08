@@ -12,14 +12,17 @@ use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
     ast::range::Range,
-    ast::tokens::TokenType,
     ast::{
         diag::ErrorCode,
-        node::error::{ErrorNode, STErrorNode},
+        node::{
+            error::{ErrorNode, STErrorNode},
+            types::PointerTypeNode,
+        },
     },
+    ast::{node::types::TypedIdentifierNode, tokens::TokenType},
 };
 
-use super::*;
+use super::{implement::impl_def, *};
 
 pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let old = input;
@@ -52,6 +55,30 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     uses.push(b.clone());
                     nodes.push(b);
                 }
+                TopLevel::ImplDef(mut im) => {
+                    let imname = im.target.format(0, "");
+                    let target = *im.target.clone();
+                    for mth in im.methods.iter_mut() {
+                        mth.typenode.id = format!("|{}::{}", imname, mth.typenode.id);
+                        mth.typenode.paralist.insert(
+                            0,
+                            Box::new(TypedIdentifierNode {
+                                id: VarNode {
+                                    name: "self".to_string(),
+                                    range: Default::default(),
+                                },
+                                tp: Box::new(TypeNodeEnum::PointerTypeNode(PointerTypeNode {
+                                    elm: Box::new(target.clone()),
+                                    range: Default::default(),
+                                })),
+                                doc: None,
+                                range: Default::default(),
+                            }),
+                        );
+                        fntypes.push(mth.typenode.clone());
+                    }
+                    nodes.push(Box::new(im.into()));
+                }
             }
             input = i;
         } else if let Err(err) = top {
@@ -83,6 +110,7 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
     delspace(alt((
         del_newline_or_space!(function_def),
         del_newline_or_space!(struct_def),
+        del_newline_or_space!(impl_def),
         map_res(
             del_newline_or_space!(semi_statement!(global_variable)),
             |node| {

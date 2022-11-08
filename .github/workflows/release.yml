@@ -135,4 +135,4 @@ jobs:
         with:
           artifacts: ${{ matrix.config.dir }}/*
           commit: master
-          tag: ${{ matrix.config.os }}-${{ github.run_number }}@${{ steps.vars.outputs.sha_short }}
+          tag: cibuild-v${{ github.run_number }}@${{ steps.vars.outputs.sha_short }}-${{ matrix.config.os }}

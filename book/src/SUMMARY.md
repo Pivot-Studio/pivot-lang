@@ -10,6 +10,7 @@
   - [VSC Support](./tutorial/vscsupport.md)
 - [References](./references/README.md)
   - [Module](./references/module.md)
+  - [Method](./references/method.md)
 
 # How the project works internally
 
@@ -20,4 +21,5 @@
   - [Diagnostic](./lsp/diagnostic.md)
 - [System library](./systemlib/README.md)
   - [vm](./systemlib/vm.md)
+    - [gc](./systemlib/gc.md)
   - [planglib](./systemlib/planglib.md)

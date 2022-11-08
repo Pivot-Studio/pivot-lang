@@ -14,6 +14,8 @@ jobs:
     container: registry.cn-hangzhou.aliyuncs.com/pivotstudio/rust-pl:latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
       - name: auto test
         run: |
           export KAGARI_LIB_ROOT=$(pwd)/planglib

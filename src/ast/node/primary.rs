@@ -89,6 +89,9 @@ impl VarNode {
         tab(tabs, line.clone(), end);
         println!("VarNode: {}", self.name);
     }
+    pub fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: PLType) {
+        ctx.plmod.replace_type(&self.name, tp)
+    }
     pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.if_completion(|ctx, a| {
             if a.0.is_in(self.range) {

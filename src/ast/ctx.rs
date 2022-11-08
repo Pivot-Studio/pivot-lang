@@ -190,6 +190,10 @@ impl Mod {
         None
     }
 
+    pub fn replace_type(&mut self, name: &str, tp: PLType) {
+        self.types.insert(name.to_string(), tp);
+    }
+
     /// 获取llvm名称
     ///
     /// module路径+类型名
@@ -724,6 +728,7 @@ pub struct STType {
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
+    pub methods: FxHashMap<String, FNType>,
 }
 
 impl STType {
@@ -751,6 +756,16 @@ impl STType {
                 kind: Some(CompletionItemKind::FIELD),
                 label: name.clone(),
                 detail: Some("field".to_string()),
+                insert_text: Some(name.clone()),
+                insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+                ..Default::default()
+            });
+        }
+        for (name, _) in &self.methods {
+            completions.push(CompletionItem {
+                kind: Some(CompletionItemKind::METHOD),
+                label: name.clone(),
+                detail: Some("method".to_string()),
                 insert_text: Some(name.clone()),
                 insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
                 ..Default::default()
@@ -1310,6 +1325,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 PLType::VOID => CompletionItemKind::KEYWORD,
                 PLType::POINTER(_) => todo!(),
             };
+            if k.starts_with('|') {
+                // skip method
+                continue;
+            }
             vmap.insert(
                 k.to_string(),
                 CompletionItem {
@@ -1337,7 +1356,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             "if", "else", "while", "for", "return", "struct", "let", "true", "false",
         ];
         let loopkeys = vec!["break", "continue"];
-        let toplevel = vec!["fn", "struct", "const", "use"];
+        let toplevel = vec!["fn", "struct", "const", "use", "impl"];
         if self.father.is_none() {
             for k in toplevel {
                 vmap.insert(

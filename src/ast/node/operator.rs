@@ -276,6 +276,7 @@ impl Node for TakeOpNode {
             res = match res.unwrap().value {
                 AnyValueEnum::PointerValue(s) => {
                     let (tp, s) = ctx.auto_deref(pltype, s);
+                    let headptr = s;
                     pltype = tp;
                     let etype = s.get_type().get_element_type();
                     let index;
@@ -294,14 +295,32 @@ impl Node for TakeOpNode {
                             }
                         });
                         let range = id.range();
-                        ctx.push_semantic_token(range, SemanticTokenType::PROPERTY, 0);
                         if let PLType::STRUCT(s) = pltype {
                             let field = s.fields.get(&id.name);
+                            let method = s.methods.get(&id.name);
                             if let Some(field) = field {
+                                ctx.push_semantic_token(range, SemanticTokenType::PROPERTY, 0);
                                 index = field.index;
                                 ctx.set_if_refs(field.refs.clone(), range);
                                 ctx.send_if_go_to_def(range, field.range, s.path);
                                 pltype = field.pltype.clone();
+                            } else if let Some(mthd) = method {
+                                ctx.push_semantic_token(range, SemanticTokenType::METHOD, 0);
+                                // ctx.set_if_refs(mthd.refs.clone(), range);
+                                ctx.send_if_go_to_def(
+                                    range,
+                                    mthd.range,
+                                    mthd.llvmname.split("..").nth(0).unwrap().to_string(),
+                                );
+                                return Ok((
+                                    Some(PLValue {
+                                        value: mthd.get_or_insert_fn(ctx).into(),
+                                        is_const: false,
+                                        receiver: Some(headptr),
+                                    }),
+                                    Some(PLType::FN(mthd.clone())),
+                                    TerminatorEnum::NONE,
+                                ));
                             } else {
                                 return Err(
                                     ctx.add_err(id.range, ErrorCode::STRUCT_FIELD_NOT_FOUND)

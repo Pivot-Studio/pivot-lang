@@ -46,6 +46,9 @@ impl TypeNode for TypeNameNode {
             ctx.push_semantic_token(id.id.range, SemanticTokenType::TYPE, 0);
         }
     }
+    fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: PLType) {
+        self.id.as_mut().unwrap().replace_type(ctx, tp)
+    }
 
     fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
         ctx.if_completion(|ctx, a| {
@@ -81,6 +84,9 @@ impl TypeNode for ArrayTypeNameNode {
             &self.id.format(tabs, prefix),
             &self.size.format(tabs, prefix)
         )
+    }
+    fn replace_type<'a, 'ctx>(&mut self, _: &mut Ctx<'a, 'ctx>, _: PLType) {
+        unreachable!()
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -125,7 +131,9 @@ impl TypeNode for PointerTypeNode {
         println!("PointerTypeNode");
         self.elm.print(tabs + 1, true, line.clone());
     }
-
+    fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: PLType) {
+        self.elm.as_mut().replace_type(ctx, tp)
+    }
     fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
         let pltype = self.elm.get_type(ctx)?;
         let pltype = PLType::POINTER(Box::new(pltype));
@@ -285,6 +293,7 @@ impl StructDefNode {
             range: self.range(),
             refs: Rc::new(RefCell::new(vec![])),
             doc: self.doc.clone(),
+            methods: FxHashMap::default(),
         });
         ctx.set_if_refs_tp(&stu, self.range);
         _ = ctx.add_type(name.to_string(), stu.clone(), self.range);

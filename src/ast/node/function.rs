@@ -27,21 +27,17 @@ impl Node for FuncDefNode {
         let params_print = print_params(&paralist);
         let mut doc_str = String::new();
         for c in self.typenode.doc.iter() {
+            doc_str.push_str(&prefix.repeat(tabs));
             doc_str.push_str(&c.format(tabs, prefix));
         }
         let mut format_res = String::new();
         format_res.push_str(enter());
         let mut ret_type = String::new();
-        // if self.typenode.ret.is_ref {
-        //     let ref_id = format!("&{}", &self.typenode.ret.id);
-        //     ret_type.push_str(&ref_id);
-        // } else {
         ret_type.push_str(&self.typenode.ret.format(tabs, prefix));
-        // }
         format_res.push_str(&doc_str);
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str("fn ");
-        format_res.push_str(&self.typenode.id);
+        format_res.push_str(&self.typenode.id.split("::").last().unwrap());
         format_res.push_str("(");
         format_res.push_str(&params_print);
         format_res.push_str(") ");
@@ -140,7 +136,7 @@ impl Node for FuncDefNode {
             let fu = res.unwrap();
             func = match fu {
                 PLType::FN(fu) => fu.get_or_insert_fn(ctx),
-                _ => panic!("type error"), // 理论上这两个Panic不可能触发
+                _ => return Ok((None, None, TerminatorEnum::NONE)),
             };
             func.set_subprogram(subprogram);
             ctx.function = Some(func);
@@ -293,11 +289,20 @@ impl Node for FuncCallNode {
             return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND));
         }
         let pltype = pltype.unwrap();
-        let func = func.unwrap().into_function_value();
-        if func.count_params() != self.paralist.len() as u32 {
+        let plv = func.unwrap();
+        let mut skip = 0;
+        if let Some(receiver) = plv.receiver {
+            para_values.push(receiver.into());
+            skip = 1;
+        }
+        let func = plv.into_function_value();
+        if func.count_params() - skip != self.paralist.len() as u32 {
             return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
         }
         for (i, para) in self.paralist.iter_mut().enumerate() {
+            if i < skip as usize {
+                continue;
+            }
             let pararange = para.range();
             let (value, _, _) = para.emit(ctx)?;
             if value.is_none() {
@@ -354,8 +359,24 @@ impl FuncTypeNode {
             return Err(ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL));
         }
         let mut param_pltypes = Vec::new();
+        let mut receiver = None;
+        let mut first = true;
+        let mut receivertp = None;
         for para in self.paralist.iter() {
             let paramtype = para.tp.get_type(ctx)?;
+            if first && para.id.name == "self" {
+                receivertp = Some(para.tp.clone());
+                let st = match paramtype.clone() {
+                    PLType::POINTER(st) => st,
+                    _ => unreachable!(),
+                };
+                let st = match *st.clone() {
+                    PLType::STRUCT(st) => st,
+                    _ => unreachable!(),
+                };
+                receiver = Some(st);
+            }
+            first = false;
             param_pltypes.push(paramtype.clone());
         }
         let refs = vec![];
@@ -372,6 +393,14 @@ impl FuncTypeNode {
                 ctx.plmod.get_full_name(&self.id)
             },
         };
+        if let Some(mut receiver) = receiver {
+            receiver
+                .methods
+                .insert(self.id.split("::").last().unwrap().to_string(), ftp.clone());
+            receivertp
+                .unwrap()
+                .replace_type(ctx, PLType::STRUCT(receiver));
+        }
         let res = ftp.get_or_insert_fn(ctx);
         let pltype = PLType::FN(ftp);
         ctx.set_if_refs_tp(&pltype, self.range);

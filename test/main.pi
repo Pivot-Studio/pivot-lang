@@ -133,7 +133,18 @@ fn test_const() void {
     io::printi64ln(a);
     return;
 }
+/// ANCHOR: extern_impl
 
+impl mod1::Mod1 {
+    // xxx
+    fn name() void {
+        self.x = 114514;
+        io::printi64ln(100101);
+        return;
+    }
+}
+
+/// ANCHOR_END: extern_impl
 fn test_mod_struct() void {
     let x = mod1::Mod1{
         x: 2,
@@ -141,6 +152,7 @@ fn test_mod_struct() void {
             y: true
         }
     };
+    x.name();
     io::printi64ln(x.x);
     if x.y.y {
         io::printi64ln(x.x);
@@ -234,6 +246,7 @@ fn test_dangling() *pointer_struct {
             a: 10
         }
     };
+    a.name();
     return &a;
 }
 
@@ -249,3 +262,12 @@ fn test_ret_struct() struct_child {
         a: 10
     };
 }
+/// ANCHOR: impl
+
+impl pointer_struct {
+    fn name() void {
+        io::printi64ln(100100);
+        return;
+    }
+}
+/// ANCHOR_END: impl

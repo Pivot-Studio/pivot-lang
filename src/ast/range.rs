@@ -89,6 +89,9 @@ impl Range {
     }
 
     pub fn to_diag_range(&self) -> lsp_types::Range {
+        if self.start.line < 1 {
+            return Default::default();
+        }
         lsp_types::Range {
             start: lsp_types::Position {
                 line: self.start.line as u32 - 1,
