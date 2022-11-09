@@ -1,13 +1,23 @@
 # Pivot-lang
 
 [![codecov](https://codecov.io/gh/Pivot-Studio/pivot-lang/branch/master/graph/badge.svg?token=CA17PWK0EG)](https://codecov.io/gh/Pivot-Studio/pivot-lang) 
-[![Build Status](https://drone.pivotstudio.cn/api/badges/Pivot-Studio/pivot-lang/status.svg)](https://drone.pivotstudio.cn/Pivot-Studio/pivot-lang)
+[![release](https://github.com/Pivot-Studio/pivot-lang/actions/workflows/release.yml/badge.svg)](https://github.com/Pivot-Studio/pivot-lang/actions/workflows/release.yml)
+[![test](https://github.com/Pivot-Studio/pivot-lang/actions/workflows/test.yml/badge.svg)](https://github.com/Pivot-Studio/pivot-lang/actions/workflows/test.yml)
+[![docs](https://drone.pivotstudio.cn/api/badges/Pivot-Studio/pivot-lang/status.svg?ref=refs/heads/gh-pages)](https://drone.pivotstudio.cn/Pivot-Studio/pivot-lang)
 
 
 ![codecov](https://codecov.io/gh/Pivot-Studio/pivot-lang/branch/master/graphs/sunburst.svg?token=CA17PWK0EG)
 
 此项目目前处于早期开发阶段，不建议用于生产环境。  
 [项目地址](https://github.com/Pivot-Studio/pivot-lang)  
+
+## 文档地址
+https://lang.pivotstudio.cn  
+
+## CONTRIBUTING
+[CONTRIBUTING](CONTRIBUTING.md)  
+中文见[此处](https://lang.pivotstudio.cn/CONTRIBUTING-CN.html)  
+欢迎加入[社区群](https://jq.qq.com/?_wv=1027&k=I5vdShVl)
 
 ## dependencies
 - [llvm-14](https://github.com/llvm/llvm-project/releases/tag/llvmorg-14.0.6)
@@ -23,37 +33,6 @@ export KAGARI_LIB_ROOT=<pivot-lang project path>/planglib
 - 同时支持aot和jit两种模式
 - 极其方便的rust互操作
 
-## 近期开发计划
-- [x] vsc debug
-  - [x] 断点
-  - [x] 变量表
-    - [x] 函数参数
-    - [x] 普通变量
-- [x] 代码高亮
-- [x] lsp支持
-  - [x] 错误容忍
-    - [x] parser错误容忍
-    - [x] ast错误容忍
-  - [ ] 代码提示
-    - [x] 普通变量
-    - [x] 函数参数
-    - [x] 函数
-    - [x] 类型
-    - [ ] 模块
-    - [ ] 语法
-  - [ ] 代码跳转
-    - [x] 普通变量
-    - [x] 函数参数
-    - [x] 函数
-    - [x] 类型
-    - [ ] 模块
-  - [ ] 引用查找
-    - [x] 普通变量
-    - [x] 函数参数
-    - [x] 函数
-    - [x] 类型
-    - [ ] 模块
-  - [x] 语法高亮
 
 ## 项目结构
 

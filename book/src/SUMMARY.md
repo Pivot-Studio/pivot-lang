@@ -23,3 +23,7 @@
   - [vm](./systemlib/vm.md)
     - [gc](./systemlib/gc.md)
   - [planglib](./systemlib/planglib.md)
+
+# CONTRIBUTING
+
+- [Contributing](./CONTRIBUTING-CN.md)
