@@ -126,6 +126,19 @@ jobs:
             src = "target/release/%s" % artifact
             dst = os.environ['OUT_DIR'] + "/" + artifact
             os.rename(src, dst)
+
+      - name: Move lib
+        env:
+          ARTIFACTS: planglib
+          OUT_DIR: ${{ matrix.config.dir }}
+          OS: ${{ matrix.config.os }}
+        run: |
+          import os
+          artifacts = os.environ['ARTIFACTS'].split()
+          for artifact in artifacts:
+            src = "%s" % artifact
+            dst = os.environ['OUT_DIR'] + "/" + artifact
+            os.rename(src, dst)
         shell: python
       - name: Set outputs
         id: vars
