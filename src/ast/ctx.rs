@@ -57,17 +57,14 @@ use super::range::Range;
 const DW_ATE_BOOLEAN: u32 = 0x02;
 const DW_ATE_FLOAT: u32 = 0x04;
 const DW_ATE_SIGNED: u32 = 0x05;
+const DW_ATE_UNSIGNED: u32 = 0x07;
 const DW_TAG_REFERENCE_TYPE: u32 = 16;
-// const DW_ATE_UNSIGNED: u32 = 0x07;
-fn get_dw_ate_encoding(basetype: &BasicTypeEnum) -> u32 {
-    match basetype {
-        BasicTypeEnum::FloatType(_) => DW_ATE_FLOAT,
-        BasicTypeEnum::IntType(i) => match i.get_bit_width() {
-            8 => DW_ATE_BOOLEAN,
-            64 => DW_ATE_SIGNED,
-            _ => todo!(),
-        },
-        _ => todo!(),
+fn get_dw_ate_encoding<'a, 'ctx>(pritp: &PriType) -> u32 {
+    match pritp {
+        PriType::I8 | PriType::I16 | PriType::I32 | PriType::I64 | PriType::I128 => DW_ATE_SIGNED,
+        PriType::U8 | PriType::U16 | PriType::U32 | PriType::U64 | PriType::U128 => DW_ATE_UNSIGNED,
+        PriType::F32 | PriType::F64 => DW_ATE_FLOAT,
+        PriType::BOOL => DW_ATE_BOOLEAN,
     }
 }
 
@@ -591,8 +588,8 @@ impl PLType {
                         .create_basic_type(
                             &pt.get_name(),
                             td.get_bit_size(&self.get_basic_type(ctx)),
-                            get_dw_ate_encoding(&self.get_basic_type(ctx)),
-                            DIFlags::PUBLIC,
+                            get_dw_ate_encoding(pt),
+                            0,
                         )
                         .unwrap()
                         .as_type(),
@@ -881,7 +878,7 @@ pub fn create_ctx_info<'ctx>(
     let module = context.create_module("main");
     let (dibuilder, compile_unit) = module.create_debug_info_builder(
         true,
-        DWARFSourceLanguage::C,
+        DWARFSourceLanguage::Rust,
         file,
         dir,
         "plc frontend",

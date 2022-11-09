@@ -218,6 +218,7 @@ fn main() i64 {
     let st = test_ret_struct();
     io::printi64ln(st.a);
     test_pointer();
+    test_primitives();
     return 0;
 }
 
