@@ -126,7 +126,7 @@ jobs:
             src = "target/release/%s" % artifact
             dst = os.environ['OUT_DIR'] + "/" + artifact
             os.rename(src, dst)
-
+        shell: python
       - name: Move lib
         env:
           ARTIFACTS: planglib
