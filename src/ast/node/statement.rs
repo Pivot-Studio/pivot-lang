@@ -1,9 +1,8 @@
 use super::*;
-use crate::ast::ctx::{init_arr, Ctx};
+use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
 use crate::utils::read_config::enter;
 use inkwell::debug_info::*;
-use inkwell::types::BasicType;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 #[range]
@@ -45,86 +44,49 @@ impl Node for DefNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let range = self.range();
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
-        if let Some(tp) = &self.tp {
-            let pltype = tp.get_type(ctx)?;
-            match pltype.clone() {
-                PLType::ARR(a) => {
-                    let arrtp = a.arr_type(ctx);
-                    let arr = alloc(ctx, arrtp.as_basic_type_enum(), &self.var.name);
-                    init_arr(arr, ctx);
-                    let re = ctx.add_symbol(
-                        self.var.name.clone(),
-                        arr,
-                        pltype.clone(),
-                        self.var.range,
-                        false,
-                    );
-                    if re.is_err() {
-                        return Err(re.unwrap_err());
-                    }
-                    return Ok((None, None, TerminatorEnum::NONE));
-                }
-                PLType::PRIMITIVE(p) => {
-                    let tp = p.get_basic_type(ctx);
-                    let v = alloc(ctx, tp, &self.var.name);
-                    let re = ctx.add_symbol(
-                        self.var.name.clone(),
-                        v,
-                        pltype.clone(),
-                        self.var.range,
-                        false,
-                    );
-                    if re.is_err() {
-                        return Err(re.unwrap_err());
-                    }
-                    return Ok((None, None, TerminatorEnum::NONE));
-                }
-                PLType::POINTER(p) => {
-                    let tp = p.get_basic_type(ctx);
-                    let v = alloc(ctx, tp, &self.var.name);
-                    let re = ctx.add_symbol(
-                        self.var.name.clone(),
-                        v,
-                        pltype.clone(),
-                        self.var.range,
-                        false,
-                    );
-                    if re.is_err() {
-                        return Err(re.unwrap_err());
-                    }
-                    return Ok((None, None, TerminatorEnum::NONE));
-                }
-                _ => todo!(),
-            };
-        }
-
-        let (value, pltype_opt, _) = self.exp.as_mut().unwrap().emit(ctx)?;
-        // for err tolerate
-        if pltype_opt.is_none() {
+        if self.exp.is_none() && self.tp.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
         }
-        if value.is_none() {
-            return Err(ctx.add_err(self.range, ErrorCode::EXPECT_VALUE));
+        let mut pltype = None;
+        let mut expv = None;
+        if let Some(tp) = &self.tp {
+            pltype = Some(tp.get_type(ctx)?);
         }
-        let pltype = pltype_opt.unwrap();
-        ctx.push_type_hints(self.var.range, &pltype);
+        if let Some(exp) = &mut self.exp {
+            let (value, pltype_opt, _) = ctx.emit_with_expectation(exp, pltype.clone())?;
+            // for err tolerate
+            if pltype_opt.is_none() {
+                return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
+            }
+            if value.is_none() {
+                return Err(ctx.add_err(self.range, ErrorCode::EXPECT_VALUE));
+            }
+            let tp = pltype_opt.unwrap();
+            if pltype.is_none() {
+                ctx.push_type_hints(self.var.range, &tp);
+                pltype = Some(tp);
+            } else if pltype.clone().unwrap() != tp {
+                return Err(ctx.add_err(self.range, ErrorCode::TYPE_MISMATCH));
+            }
+            expv = value;
+        }
+        let pltype = pltype.unwrap();
         let ditype = pltype.get_ditype(ctx);
-        let (base_value, debug_type) = {
-            let ditype = ditype.clone();
-            let loadv = ctx.try_load2var(range, value.unwrap())?;
-            (loadv, ditype)
-        };
-        let base_type = base_value.get_type();
+        let tp = pltype.get_basic_type_op(ctx);
+        if tp.is_none() || ditype.is_none() {
+            return Err(ctx.add_err(range, ErrorCode::UNDEFINED_TYPE));
+        }
+        let base_type = tp.unwrap();
         let ptr2value = alloc(ctx, base_type, &self.var.name);
         let debug_var_info = ctx.dibuilder.create_auto_variable(
             ctx.discope,
             &self.var.name,
             ctx.diunit.get_file(),
             self.var.range.start.line as u32,
-            debug_type.unwrap(),
+            ditype.unwrap(),
             true,
             DIFlags::PUBLIC,
-            debug_type.unwrap().get_align_in_bits(),
+            ditype.unwrap().get_align_in_bits(),
         );
         ctx.build_dbg_location(self.var.range.start);
         ctx.dibuilder.insert_declare_at_end(
@@ -141,7 +103,11 @@ impl Node for DefNode {
             self.var.range,
             false,
         )?;
-        ctx.builder.build_store(ptr2value, base_value);
+        if let Some(exp) = expv {
+            ctx.build_dbg_location(self.var.range.start);
+            ctx.builder
+                .build_store(ptr2value, ctx.try_load2var(range, exp)?);
+        }
         return Ok((None, None, TerminatorEnum::NONE));
     }
 }

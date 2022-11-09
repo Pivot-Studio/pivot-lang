@@ -5,7 +5,7 @@ use nom::{
     bytes::complete::tag,
     combinator::{map_res, opt, recognize},
     multi::many0,
-    sequence::{delimited, preceded, terminated, tuple},
+    sequence::{delimited, pair, preceded, terminated, tuple},
     IResult,
 };
 use nom_locate::LocatedSpan;
@@ -104,38 +104,27 @@ fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(preceded(
         tag_token(TokenType::LET),
-        alt((
-            map_res(
-                tuple((identifier, tag_token(TokenType::ASSIGN), logic_exp)),
-                |(a, _, v)| {
-                    let range = a.range().start.to(v.range().end);
-                    res_enum(
-                        DefNode {
-                            var: *a,
-                            tp: None,
-                            exp: Some(v),
-                            range,
-                        }
-                        .into(),
-                    )
-                },
-            ),
-            map_res(
-                tuple((identifier, tag_token(TokenType::COLON), type_name)),
-                |(a, _, tp)| {
-                    let range = a.range().start.to(tp.range().end);
-                    res_enum(
-                        DefNode {
-                            var: *a,
-                            tp: Some(tp),
-                            exp: None,
-                            range,
-                        }
-                        .into(),
-                    )
-                },
-            ),
-        )),
+        map_res(
+            tuple((
+                identifier,
+                opt(pair(tag_token(TokenType::COLON), type_name)),
+                opt(pair(tag_token(TokenType::ASSIGN), logic_exp)),
+            )),
+            |(a, tp, v)| {
+                let range = a.range();
+                let tp = tp.map(|(_, tp)| tp);
+                let exp = v.map(|(_, exp)| exp);
+                res_enum(
+                    DefNode {
+                        var: *a,
+                        tp,
+                        exp,
+                        range,
+                    }
+                    .into(),
+                )
+            },
+        ),
     ))(input)
 }
 

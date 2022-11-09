@@ -42,7 +42,12 @@ impl Node for UnaryOpNode {
         let pltype = pltype.unwrap();
         let exp = ctx.try_load2var(exp_range, exp.unwrap())?;
         return Ok(match (&pltype, self.op) {
-            (PLType::PRIMITIVE(PriType::I64), TokenType::MINUS) => (
+            (
+                PLType::PRIMITIVE(
+                    PriType::I128 | PriType::I64 | PriType::I32 | PriType::I16 | PriType::I8,
+                ),
+                TokenType::MINUS,
+            ) => (
                 Some(
                     ctx.builder
                         .build_int_neg(exp.into_int_value(), "negtmp")
@@ -51,7 +56,7 @@ impl Node for UnaryOpNode {
                 Some(pltype),
                 TerminatorEnum::NONE,
             ),
-            (PLType::PRIMITIVE(PriType::F64), TokenType::MINUS) => (
+            (PLType::PRIMITIVE(PriType::F64 | PriType::F32), TokenType::MINUS) => (
                 Some(
                     ctx.builder
                         .build_float_neg(exp.into_float_value(), "negtmp")
@@ -114,14 +119,8 @@ impl Node for BinOpNode {
         let (lrange, rrange) = (self.left.range(), self.right.range());
         let (lv, lpltype, _) = self.left.emit(ctx)?;
         let left = ctx.try_load2var(lrange, lv.unwrap())?;
-        let (rv, rpltype, _) = self.right.emit(ctx)?;
+        let (rv, _, _) = ctx.emit_with_expectation(&mut self.right, lpltype.clone())?;
         let right = ctx.try_load2var(rrange, rv.unwrap())?;
-        if lpltype != rpltype {
-            return Err(ctx.add_err(
-                self.range,
-                crate::ast::diag::ErrorCode::BIN_OP_TYPE_MISMATCH,
-            ));
-        }
         Ok(match self.op {
             TokenType::PLUS => {
                 handle_calc!(ctx, add, float_add, lpltype, left, right, self.range)
@@ -141,7 +140,18 @@ impl Node for BinOpNode {
             | TokenType::GEQ
             | TokenType::GREATER
             | TokenType::LESS => match lpltype.unwrap() {
-                PLType::PRIMITIVE(PriType::I64) => (
+                PLType::PRIMITIVE(
+                    PriType::I128
+                    | PriType::I64
+                    | PriType::I32
+                    | PriType::I16
+                    | PriType::I8
+                    | PriType::U128
+                    | PriType::U64
+                    | PriType::U32
+                    | PriType::U16
+                    | PriType::U8,
+                ) => (
                     {
                         let bool_origin = ctx.builder.build_int_compare(
                             self.op.get_op(),
@@ -158,7 +168,7 @@ impl Node for BinOpNode {
                     Some(PLType::PRIMITIVE(PriType::BOOL)),
                     TerminatorEnum::NONE,
                 ),
-                PLType::PRIMITIVE(PriType::F64) => (
+                PLType::PRIMITIVE(PriType::F64 | PriType::F32) => (
                     {
                         let bool_origin = ctx.builder.build_float_compare(
                             self.op.get_fop(),

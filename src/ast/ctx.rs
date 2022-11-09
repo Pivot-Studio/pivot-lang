@@ -1,4 +1,3 @@
-use crate::ast::node::alloc;
 use crate::lsp::semantic_tokens::type_index;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::utils::read_config::Config;
@@ -371,52 +370,73 @@ pub enum PLType {
     POINTER(Box<PLType>),
 }
 
-pub fn init_arr<'a, 'ctx>(ptr: PointerValue<'ctx>, ctx: &mut Ctx<'a, 'ctx>) {
-    if !ptr.get_type().get_element_type().is_array_type() {
-        return;
-    }
-    let tp = ptr.get_type().get_element_type().into_array_type();
-
-    for i in 0..tp.len() {
-        let index = &[
-            ctx.context.i64_type().const_int(0, false),
-            ctx.context.i64_type().const_int(i as u64, false),
-        ];
-        let elemptr = unsafe { ctx.builder.build_in_bounds_gep(ptr, index, "elemptr") };
-        let elem = alloc(ctx, tp.get_element_type(), "eleminit");
-        let elemvalue = ctx.builder.build_load(elem, "elemvalue");
-        ctx.builder.build_store(elemptr, elemvalue);
-        init_arr(elemptr, ctx);
-    }
-}
-
 /// # PriType
 /// Primitive type for pivot-lang
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PriType {
     // basetype: BasicTypeEnum<'ctx>,
+    I8,
+    I16,
+    I32,
     I64,
+    I128,
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    F32,
     F64,
     BOOL,
 }
 impl PriType {
     pub fn get_basic_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> BasicTypeEnum<'ctx> {
         match self {
+            PriType::I8 => ctx.context.i8_type().into(),
+            PriType::I16 => ctx.context.i16_type().into(),
+            PriType::I32 => ctx.context.i32_type().into(),
             PriType::I64 => ctx.context.i64_type().as_basic_type_enum(),
+            PriType::I128 => ctx.context.i128_type().as_basic_type_enum(),
+            PriType::U8 => ctx.context.i8_type().as_basic_type_enum(),
+            PriType::U16 => ctx.context.i16_type().as_basic_type_enum(),
+            PriType::U32 => ctx.context.i32_type().as_basic_type_enum(),
+            PriType::U64 => ctx.context.i64_type().as_basic_type_enum(),
+            PriType::U128 => ctx.context.i128_type().as_basic_type_enum(),
+            PriType::F32 => ctx.context.f32_type().as_basic_type_enum(),
             PriType::F64 => ctx.context.f64_type().as_basic_type_enum(),
             PriType::BOOL => ctx.context.i8_type().as_basic_type_enum(),
         }
     }
     pub fn get_name(&self) -> String {
         match self {
+            PriType::I8 => "i8".to_string(),
+            PriType::I16 => "i16".to_string(),
+            PriType::I32 => "i32".to_string(),
             PriType::I64 => String::from("i64"),
+            PriType::I128 => String::from("i128"),
+            PriType::U8 => String::from("u8"),
+            PriType::U16 => String::from("u16"),
+            PriType::U32 => String::from("u32"),
+            PriType::U64 => String::from("u64"),
+            PriType::U128 => String::from("u128"),
+            PriType::F32 => String::from("f32"),
             PriType::F64 => String::from("f64"),
             PriType::BOOL => String::from("bool"),
         }
     }
     pub fn try_from_str(str: &str) -> Option<Self> {
         match str {
+            "i8" => Some(PriType::I8),
+            "i16" => Some(PriType::I16),
+            "i32" => Some(PriType::I32),
             "i64" => Some(PriType::I64),
+            "i128" => Some(PriType::I128),
+            "u8" => Some(PriType::U8),
+            "u16" => Some(PriType::U16),
+            "u32" => Some(PriType::U32),
+            "u64" => Some(PriType::U64),
+            "u128" => Some(PriType::U128),
+            "f32" => Some(PriType::F32),
             "f64" => Some(PriType::F64),
             "bool" => Some(PriType::BOOL),
             _ => None,
@@ -491,12 +511,7 @@ impl PLType {
                     .as_basic_type_enum(),
             ),
             PLType::STRUCT(s) => Some(s.struct_type(&ctx).as_basic_type_enum()),
-            PLType::ARR(a) => Some(
-                a.element_type
-                    .get_basic_type(ctx)
-                    .array_type(a.size)
-                    .as_basic_type_enum(),
-            ),
+            PLType::ARR(a) => Some(a.arr_type(ctx).as_basic_type_enum()),
             PLType::PRIMITIVE(t) => Some(t.get_basic_type(ctx)),
             PLType::VOID => None,
             PLType::POINTER(p) => Some(
@@ -783,15 +798,61 @@ impl STType {
 }
 
 fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
+    let pltype_i128 = PLType::PRIMITIVE(PriType::I128);
+    ctx.plmod
+        .types
+        .insert("i128".to_string(), pltype_i128.clone());
+
     let pltype_i64 = PLType::PRIMITIVE(PriType::I64);
     ctx.plmod
         .types
         .insert("i64".to_string(), pltype_i64.clone());
 
+    let pltype_i32 = PLType::PRIMITIVE(PriType::I32);
+    ctx.plmod
+        .types
+        .insert("i32".to_string(), pltype_i32.clone());
+
+    let pltype_i16 = PLType::PRIMITIVE(PriType::I16);
+    ctx.plmod
+        .types
+        .insert("i16".to_string(), pltype_i16.clone());
+
+    let pltype_i8 = PLType::PRIMITIVE(PriType::I8);
+    ctx.plmod.types.insert("i8".to_string(), pltype_i8.clone());
+
+    let pltype_u128 = PLType::PRIMITIVE(PriType::U128);
+    ctx.plmod
+        .types
+        .insert("u128".to_string(), pltype_u128.clone());
+
+    let pltype_u64 = PLType::PRIMITIVE(PriType::U64);
+    ctx.plmod
+        .types
+        .insert("u64".to_string(), pltype_u64.clone());
+
+    let pltype_u32 = PLType::PRIMITIVE(PriType::U32);
+    ctx.plmod
+        .types
+        .insert("u32".to_string(), pltype_u32.clone());
+
+    let pltype_u16 = PLType::PRIMITIVE(PriType::U16);
+    ctx.plmod
+        .types
+        .insert("u16".to_string(), pltype_u16.clone());
+
+    let pltype_u8 = PLType::PRIMITIVE(PriType::U8);
+    ctx.plmod.types.insert("u8".to_string(), pltype_u8.clone());
+
     let pltype_f64 = PLType::PRIMITIVE(PriType::F64);
     ctx.plmod
         .types
         .insert("f64".to_string(), pltype_f64.clone());
+
+    let pltype_f32 = PLType::PRIMITIVE(PriType::F32);
+    ctx.plmod
+        .types
+        .insert("f32".to_string(), pltype_f32.clone());
 
     let pltype_bool = PLType::PRIMITIVE(PriType::BOOL);
     ctx.plmod

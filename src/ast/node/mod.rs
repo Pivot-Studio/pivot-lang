@@ -5,7 +5,8 @@ use enum_dispatch::enum_dispatch;
 use inkwell::basic_block::BasicBlock;
 use inkwell::types::BasicTypeEnum;
 use inkwell::values::{
-    AnyValueEnum, BasicValue, BasicValueEnum, FloatValue, FunctionValue, IntValue, PointerValue,
+    AnyValue, AnyValueEnum, BasicValue, BasicValueEnum, FloatValue, FunctionValue, IntValue,
+    PointerValue,
 };
 
 use self::comment::CommentNode;
@@ -23,6 +24,7 @@ use self::statement::*;
 use self::types::*;
 
 use super::ctx::{PLDiag, PLType};
+use super::diag::ErrorCode;
 use super::range::{Pos, Range};
 
 pub mod comment;
@@ -191,8 +193,8 @@ impl Eq for Num {
     // FIXME: NaN https://stackoverflow.com/questions/39638363/how-can-i-use-a-hashmap-with-f64-as-key-in-rust
 }
 
-impl<'a, 'ctx> Ctx<'ctx, 'a> {
-    pub fn position_at_end(&mut self, block: BasicBlock<'a>) {
+impl<'a, 'ctx> Ctx<'a, 'ctx> {
+    pub fn position_at_end(&mut self, block: BasicBlock<'ctx>) {
         position_at_end(self, block)
     }
     pub fn build_dbg_location(&mut self, pos: Pos) {
@@ -204,6 +206,63 @@ impl<'a, 'ctx> Ctx<'ctx, 'a> {
             None,
         );
         self.builder.set_current_debug_location(self.context, loc);
+    }
+    fn emit_with_expectation(
+        &mut self,
+        node: &'a mut Box<NodeEnum>,
+        expect: Option<PLType>,
+    ) -> NodeResult<'ctx> {
+        if expect.is_none() {
+            return node.emit(self);
+        }
+        let expect = expect.unwrap();
+        let num: Result<NumNode, _> = (*node.clone()).try_into();
+        let range = node.range();
+        if let Ok(num) = num {
+            let num = num.value;
+            // TODO: check overflow
+            let v = match num {
+                Num::INT(i) => {
+                    if !expect.get_basic_type(&self).is_int_type() {
+                        return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH));
+                    }
+                    let int = expect
+                        .get_basic_type(&self)
+                        .into_int_type()
+                        .const_int(i, false);
+                    int.as_any_value_enum()
+                }
+                Num::FLOAT(f) => {
+                    if !expect.get_basic_type(&self).is_float_type() {
+                        return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH));
+                    }
+                    let float = expect
+                        .get_basic_type(&self)
+                        .into_float_type()
+                        .const_float(f);
+                    float.as_any_value_enum()
+                }
+            };
+            return Ok((
+                Some(PLValue {
+                    value: v,
+                    is_const: true,
+                    receiver: None,
+                }),
+                Some(expect),
+                TerminatorEnum::NONE,
+            ));
+        }
+        let re = node.emit(self)?;
+        let (value, ty, term) = re;
+        if value.is_some() {
+            if let Some(ty) = ty.clone() {
+                if ty != expect {
+                    return Err(self.add_err(range, ErrorCode::TYPE_MISMATCH));
+                }
+            }
+        }
+        Ok((value, ty, term))
     }
 }
 pub fn deal_line(tabs: usize, line: &mut Vec<bool>, end: bool) {
@@ -281,14 +340,15 @@ pub fn alloc<'a, 'ctx>(
 macro_rules! handle_calc {
     ($ctx:ident, $op:ident, $opf:ident, $lpltype:ident, $left:ident, $right:ident, $range: expr) => {
         item! {
-            match $lpltype.unwrap() {
-                PLType::PRIMITIVE(PriType::I64) => {
+            match $lpltype.clone().unwrap() {
+                PLType::PRIMITIVE(PriType::I128|PriType::I64|PriType::I32|PriType::I16|PriType::I8|
+                    PriType::U128|PriType::U64|PriType::U32|PriType::U16|PriType::U8) => {
                     return Ok((Some($ctx.builder.[<build_int_$op>](
-                        $left.into_int_value(), $right.into_int_value(), "addtmp").into()),Some(PLType::PRIMITIVE(PriType::I64)),TerminatorEnum::NONE));
+                        $left.into_int_value(), $right.into_int_value(), "addtmp").into()),Some($lpltype.unwrap()),TerminatorEnum::NONE));
                 },
-                PLType::PRIMITIVE(PriType::F64) => {
+                PLType::PRIMITIVE(PriType::F64|PriType::F32) => {
                     return Ok((Some($ctx.builder.[<build_$opf>](
-                        $left.into_float_value(), $right.into_float_value(), "addtmp").into()),Some(PLType::PRIMITIVE(PriType::F64)),TerminatorEnum::NONE));
+                        $left.into_float_value(), $right.into_float_value(), "addtmp").into()),Some($lpltype.unwrap()),TerminatorEnum::NONE));
                 },
                 _ =>  return Err($ctx.add_err(
                     $range,
