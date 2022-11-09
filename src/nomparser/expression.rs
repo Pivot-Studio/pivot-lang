@@ -59,8 +59,8 @@ fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 alt((tag_token(TokenType::MINUS), tag_token(TokenType::NOT))),
                 pointer_exp,
             )),
-            |((op, _), exp)| {
-                let range = exp.range();
+            |((op, op_range), exp)| {
+                let range = op_range.start.to(exp.range().end);
                 res_enum(UnaryOpNode { op, exp, range }.into())
             },
         ),
@@ -82,14 +82,16 @@ pub fn pointer_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             complex_exp,
         )),
         |(ops, exp)| {
-            let range = exp.range();
+            let exp_range = exp.range();
             let mut exp = exp;
             for op in ops.into_iter().rev() {
-                let op = match op.0 {
+                let (op, op_range) = op;
+                let op = match op {
                     TokenType::TAKE_PTR => PointerOpEnum::ADDR,
                     TokenType::TAKE_VAL => PointerOpEnum::DEREF,
                     _ => unreachable!(),
                 };
+                let range = op_range.start.to(exp_range.end);
                 exp = Box::new(
                     PointerOpNode {
                         op,
