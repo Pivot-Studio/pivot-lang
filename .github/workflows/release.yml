@@ -148,7 +148,7 @@ jobs:
         run: |
           import os
           src = os.environ['OUT_DIR']
-          dst = "artifact.tar.gz"
+          dst = os.environ['OS'] + "-artifact.tar.gz"
           os.system("tar -czvf %s %s" % (dst, src))
         shell: python
       - name: Set outputs
@@ -158,5 +158,6 @@ jobs:
         name: upload
         with:
           artifacts: artifact.tar.gz
+          allowUpdates: true
           commit: master
-          tag: cibuild-v${{ github.run_number }}@${{ steps.vars.outputs.sha_short }}-${{ matrix.config.os }}
+          tag: cibuild-v${{ github.run_number }}@${{ steps.vars.outputs.sha_short }}
