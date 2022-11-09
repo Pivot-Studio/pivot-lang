@@ -19,6 +19,7 @@ use inkwell::{
 };
 use rustc_hash::FxHashSet;
 use std::{
+    env,
     fs::{self, remove_file},
     path::Path,
     time::Instant,
@@ -286,23 +287,34 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     out.push_str(".plb");
     llvmmod.write_bitcode_to_path(Path::new(&out));
     println!("jit executable file writted to: {}", &out);
-    let mut cmd = Command::new("clang++");
+    let mut cmd = Command::new("clang-14");
     if cfg!(target_os = "linux") {
         println!("target os is linux");
         cmd.arg("-ltinfo");
     }
+    if op.optimization != HashOptimizationLevel::None {
+        cmd.arg("-lto");
+    }
+    let root = env::var("PL_ROOT");
+    if root.is_err() {
+        println!("warn: PL_ROOT not set, skip linking libvm");
+        return;
+    }
+    let root = root.unwrap();
+    let vmpath = format!("{}/libvm.a", root);
+
     cmd.arg(format!("-O{}", op.optimization as u32))
         .arg("-pthread")
         .arg("-ldl")
         .arg(&f)
-        .arg("target/release/libvm.a")
+        .arg(&vmpath)
         .arg("-o")
         .arg(&fo)
         .arg("-g");
     let res = cmd.status();
-    if res.is_err() || !res.unwrap().success() {
-        println!("warning: link with pivot lang vm failed, could be caused by vm pkg not found.");
-        println!("warning: you can build vm pkg by `cargo build --release` in vm dir.");
+    if res.is_err() || !res.as_ref().unwrap().success() {
+        println!("{:?}", res);
+        println!("warning: link with pivot lang vm failed, could be caused by libvm not found.");
     } else {
         println!("link succ, output file: {}", fo);
     }
