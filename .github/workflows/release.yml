@@ -181,9 +181,9 @@ jobs:
         uses: jrandiny/apt-repo-action@v2.0.1
         with:
           github_token: ${{ secrets.PAT }}
-          arch: |
+          repo_supported_arch: |
             amd64
-          version: |
+          repo_supported_version: |
             jammy
             focal
           file: ${{ steps.build-deb.outputs.file_name }}
