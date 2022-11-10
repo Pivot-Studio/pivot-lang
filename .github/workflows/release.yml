@@ -155,6 +155,9 @@ jobs:
         run: |
           mkdir -p ${{ matrix.config.debdir }}
           cp -r deb/* ${{ matrix.config.debdir }}/
+          rm ${{ matrix.config.debdir }}/apt.yaml
+          cp book/nginx.conf nginx.conf
+          cp book/Dockerfile Dockerfile
           ls ${{ matrix.config.debdir }}/
           chmod +x ${{ matrix.config.debdir }}/DEBIAN/postinst
           mkdir -p ${{ matrix.config.debdir }}/usr/bin
