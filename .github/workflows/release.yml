@@ -165,6 +165,7 @@ jobs:
           rm ${{ matrix.config.debdir }}/pl/plc
 
       - uses: jiro4989/build-deb-action@v2
+        if: ${{ matrix.config.os == 'ubuntu-latest' }}
         id: build-deb
         with:
           package: pivot-lang
@@ -178,6 +179,7 @@ jobs:
         run: |
           cp ${{ steps.build-deb.outputs.file_name }} ${{ matrix.config.dir }}/
       - name: Update apt repo
+        if: ${{ matrix.config.os == 'ubuntu-latest' }}
         uses: jrandiny/apt-repo-action@v2.0.1
         with:
           github_token: ${{ secrets.PAT }}
@@ -193,6 +195,7 @@ jobs:
           key_passphrase: ${{ secrets.SECRET }}
           page_branch: apt
       - name: Update apt repo
+        if: ${{ matrix.config.os == 'ubuntu-latest' }}
         uses: jrandiny/apt-repo-action@v2.0.1
         with:
           github_token: ${{ secrets.PAT }}
