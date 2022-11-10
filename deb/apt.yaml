@@ -37,7 +37,7 @@ spec:
     spec:
       priorityClassName: high-priority
       containers:
-        - image: registry.cn-hangzhou.aliyuncs.com/pivotstudio/apt-repo:{{.build_tag}}
+        - image: registry.cn-hangzhou.aliyuncs.com/pivotstudio/lang-apt:{{.build_tag}}
           name: apt-repo
           ports:
             - containerPort: 8110
