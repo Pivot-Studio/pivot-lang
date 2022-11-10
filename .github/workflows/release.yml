@@ -158,9 +158,6 @@ jobs:
         run: |
           mkdir -p ${{ matrix.config.debdir }}
           cp -r deb/* ${{ matrix.config.debdir }}/
-          rm ${{ matrix.config.debdir }}/apt.yaml
-          cp book/nginx.conf nginx.conf
-          cp book/Dockerfile Dockerfile
           ls ${{ matrix.config.debdir }}/
           chmod +x ${{ matrix.config.debdir }}/DEBIAN/postinst
           mkdir -p ${{ matrix.config.debdir }}/usr/bin
@@ -169,14 +166,13 @@ jobs:
           cp -r ${{ matrix.config.dir }}/* ${{ matrix.config.debdir }}/pl
           rm ${{ matrix.config.debdir }}/pl/plc
 
-      - uses: Pivot-Studio/build-deb-action@master
-        if: ${{ matrix.config.os == 'ubuntu-latest' }}
+      - uses: jiro4989/build-deb-action@v2
         id: build-deb
         with:
           package: pivot-lang
           package_root: ${{ matrix.config.debdir }}
           maintainer: Chronos <1769712655@qq.com>
-          version: 0.1.${{ github.run_number }} # refs/tags/v*.*.*
+          version: 0.1.0 # refs/tags/v*.*.*
           arch: 'amd64'
           desc: 'pivot-lang compiler'
       - name: move deb
@@ -184,7 +180,6 @@ jobs:
         run: |
           cp ${{ steps.build-deb.outputs.file_name }} ${{ matrix.config.dir }}/
       - name: Update apt repo
-        if: ${{ matrix.config.os == 'ubuntu-latest' }}
         uses: jrandiny/apt-repo-action@v2.0.1
         with:
           github_token: ${{ secrets.PAT }}
@@ -200,7 +195,6 @@ jobs:
           key_passphrase: ${{ secrets.SECRET }}
           page_branch: apt
       - name: Update apt repo
-        if: ${{ matrix.config.os == 'ubuntu-latest' }}
         uses: jrandiny/apt-repo-action@v2.0.1
         with:
           github_token: ${{ secrets.PAT }}
