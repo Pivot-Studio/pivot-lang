@@ -29,9 +29,23 @@ Pivot Lang存在两种不同的编译方案：
 TODO
 
 ## Linux
-目前我们对Ubuntu 20.04 LTS 和 Ubuntu 22.04 LTS提供了预编译的pivot lang编译器，你可以在我们的[release页面](https://github.com/Pivot-Studio/pivot-lang/releases)进行下载。编译器也许也能在别的发行版上运行，但是我们并没有测试过。
+目前我们对Ubuntu 20.04 LTS 和 Ubuntu 22.04 LTS提供了apt包。  
+首先你需要添加我们的apt源的gpg key：
+```bash
+wget -O -  https://apt.lang.pivotstudio.cn/public.key | sudo apt-key add -
+```
+然后添加我们的apt源：
+```bash
+sudo add-apt-repository "deb [arch=amd64] https://apt.lang.pivotstudio.cn/repo focal main"
+sudo add-apt-repository "deb [arch=amd64] https://apt.lang.pivotstudio.cn/repo jammy main"
+```
+最后安装pivot lang编译器：
+```bash
+sudo apt install pivot-lang
+```
+你可以运行`plc`来检查是否安装成功。  
 
-在release中，`plc`程序是编译器可执行文件，下载后请将它添加到`PATH`环境变量中，之后即可运行`plc -h`进行验证。
+请重启当前bash或者运行`source ~/.bashrc`来使环境变量生效。如果想安装`AOT`功能，请手动下载clang-14，下载方式见https://apt.llvm.org/
 
 
 
@@ -40,6 +54,6 @@ TODO
 
 在release中，`plc`程序是编译器可执行文件，下载后请将它添加到`PATH`环境变量中，之后即可运行`plc -h`进行验证。
 
-
+TODO mac文档已过期
 ## Docker
 TODO

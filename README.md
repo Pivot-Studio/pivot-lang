@@ -11,6 +11,9 @@
 此项目目前处于早期开发阶段，不建议用于生产环境。  
 [项目地址](https://github.com/Pivot-Studio/pivot-lang)  
 
+## 安装
+见https://lang.pivotstudio.cn/tutorial/installation.html
+
 ## 文档地址
 https://lang.pivotstudio.cn  
 
