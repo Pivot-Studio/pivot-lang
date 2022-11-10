@@ -19,6 +19,7 @@ jobs:
         config:
           - os: "ubuntu-latest"
             dir: linux64
+            debdir: pivot-lang_0.1.0-1_amd64
             artifacts: "plc"
             RUSTFLAGS: "-Dwarnings"
           # - os: "windows-latest"
@@ -39,6 +40,16 @@ jobs:
         with:
           rust-version: "1.62.1"
 
+      - uses: actions/cache@v3
+        name: Cache Cargo
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cache LLVM and Clang
         id: cache-llvm
@@ -140,6 +151,62 @@ jobs:
             dst = os.environ['OUT_DIR'] + "/" + artifact
             os.rename(src, dst)
         shell: python
+      - name: prepare deb
+        if: ${{ matrix.config.os == 'ubuntu-latest' }}
+        run: |
+          mkdir -p ${{ matrix.config.debdir }}
+          cp -r deb/* ${{ matrix.config.debdir }}/
+          ls ${{ matrix.config.debdir }}/
+          chmod +x ${{ matrix.config.debdir }}/DEBIAN/postinst
+          mkdir -p ${{ matrix.config.debdir }}/usr/bin
+          cp ${{ matrix.config.dir }}/plc ${{ matrix.config.debdir }}/usr/bin
+          mkdir -p ${{ matrix.config.debdir }}/pl
+          cp -r ${{ matrix.config.dir }}/* ${{ matrix.config.debdir }}/pl
+          rm ${{ matrix.config.debdir }}/pl/plc
+
+      - uses: jiro4989/build-deb-action@v2
+        id: build-deb
+        with:
+          package: pivot-lang
+          package_root: ${{ matrix.config.debdir }}
+          maintainer: Chronos <1769712655@qq.com>
+          version: 0.1.0 # refs/tags/v*.*.*
+          arch: 'amd64'
+          desc: 'pivot-lang compiler'
+      - name: move deb
+        if: ${{ matrix.config.os == 'ubuntu-latest' }}
+        run: |
+          cp ${{ steps.build-deb.outputs.file_name }} ${{ matrix.config.dir }}/
+      - name: Update apt repo
+        uses: jrandiny/apt-repo-action@v2.0.1
+        with:
+          github_token: ${{ secrets.PAT }}
+          repo_supported_arch: |
+            amd64
+          repo_supported_version: |
+            jammy
+            focal
+          file: ${{ steps.build-deb.outputs.file_name }}
+          file_target_version: jammy
+          public_key: ${{ secrets.PUBLIC }}
+          private_key: ${{ secrets.PRIVATE }}
+          key_passphrase: ${{ secrets.SECRET }}
+          page_branch: apt
+      - name: Update apt repo
+        uses: jrandiny/apt-repo-action@v2.0.1
+        with:
+          github_token: ${{ secrets.PAT }}
+          repo_supported_arch: |
+            amd64
+          repo_supported_version: |
+            jammy
+            focal
+          file: ${{ steps.build-deb.outputs.file_name }}
+          file_target_version: focal
+          public_key: ${{ secrets.PUBLIC }}
+          private_key: ${{ secrets.PRIVATE }}
+          key_passphrase: ${{ secrets.SECRET }}
+          page_branch: apt
       - name: tar artifacts
         if: ${{ matrix.config.os != 'windows-latest' }}
         env:
