@@ -23,7 +23,6 @@ Pivot Lang存在两种不同的编译方案：
 
 可以看出，just in time模式的编译器依赖比静态编译少很多，因此如果你不需要debug功能，建议使用jit模式。如果你想要体验完整功能，建议使用静态编译。
 
-> 注意：目前静态编译模式主要是内部使用，如果你很想体验，请在github上联系我们
 
 ## Windows
 TODO
@@ -45,7 +44,7 @@ sudo apt install pivot-lang
 ```
 你可以运行`plc`来检查是否安装成功。  
 
-请重启当前bash或者运行`source ~/.bashrc`来使环境变量生效。如果想安装`AOT`功能，请手动下载clang-14，下载方式见https://apt.llvm.org/
+请重启当前bash或者运行`source ~/.bashrc`来使环境变量生效。如果想安装`AOT`功能，请手动下载clang-14，下载方式见[此处](https://apt.llvm.org/)
 
 
 

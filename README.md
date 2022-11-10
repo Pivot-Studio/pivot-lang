@@ -12,7 +12,7 @@
 [项目地址](https://github.com/Pivot-Studio/pivot-lang)  
 
 ## 安装
-见https://lang.pivotstudio.cn/tutorial/installation.html
+见[此处](https://lang.pivotstudio.cn/tutorial/installation.html)
 
 ## 文档地址
 https://lang.pivotstudio.cn  
