@@ -1,9 +1,0 @@
-Source: pivot-lang
-Section: devel
-Priority: optional
-Package: pivot-lang
-Version: 0.1.0
-Maintainer: Chronos <1769712655@qq.com>
-Architecture: amd64
-Homepage: https://lang.pivotstudio.cn
-Description: pivot-lang compiler
