@@ -187,13 +187,26 @@ jobs:
             jammy
             focal
           file: ${{ steps.build-deb.outputs.file_name }}
-          file_target_version: |
-            jammy
-            focal
+          file_target_version: jammy
           public_key: ${{ secrets.PUBLIC }}
           private_key: ${{ secrets.PRIVATE }}
           key_passphrase: ${{ secrets.SECRET }}
-          page_branch: apt
+          page_branch: apt-jammy
+      - name: Update apt repo
+        uses: jrandiny/apt-repo-action@v2.0.1
+        with:
+          github_token: ${{ secrets.PAT }}
+          repo_supported_arch: |
+            amd64
+          repo_supported_version: |
+            jammy
+            focal
+          file: ${{ steps.build-deb.outputs.file_name }}
+          file_target_version: focal
+          public_key: ${{ secrets.PUBLIC }}
+          private_key: ${{ secrets.PRIVATE }}
+          key_passphrase: ${{ secrets.SECRET }}
+          page_branch: apt-focal
       - name: tar artifacts
         if: ${{ matrix.config.os != 'windows-latest' }}
         env:
