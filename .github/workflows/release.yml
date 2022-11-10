@@ -9,7 +9,6 @@ env:
   RUSTFLAGS: -Dwarnings
 
 jobs:
-
   artifacts:
     name: Artifacts
     runs-on: ${{ matrix.config.os }}
