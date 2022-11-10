@@ -164,7 +164,7 @@ jobs:
           cp -r ${{ matrix.config.dir }}/* ${{ matrix.config.debdir }}/pl
           rm ${{ matrix.config.debdir }}/pl/plc
 
-      - uses: jiro4989/build-deb-action@v2
+      - uses: Pivot-Studio/build-deb-action@master
         if: ${{ matrix.config.os == 'ubuntu-latest' }}
         id: build-deb
         with:
