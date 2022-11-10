@@ -159,26 +159,27 @@
 <h3 id="配置文件"><a class="header" href="#配置文件">配置文件</a></h3>
 <p>一个pl项目的根目录必须有一个名为<code>Kagari.toml</code>的配置文件。示例配置文件的内容如下：</p>
 <pre><code class="language-toml">entry = &quot;main.pi&quot;
+project = &quot;main&quot;
 </code></pre>
 <p>entry指定了该项目的入口文件，即编译器将从该文件开始编译。如果缺少该配置<code>plc</code>将无法编译该项目</p>
 <h3 id="源文件"><a class="header" href="#源文件">源文件</a></h3>
 <p>示例项目中的<code>main.pi</code>为源文件。其内容如下：</p>
-<pre><code class="language-pl">fn main() i64 {
-    printi64ln(666);
+<pre><code class="language-pl">use std::io;
+fn main() i64 {
+    io::printi64ln(666);
     return 0;
 }
 
-fn printi64ln(i: i64) void;
 </code></pre>
 <p>源文件的后缀名必须为<code>.pi</code>。<br />
-在示例中，我们声明了一个外部函数<code>printi64ln</code>，该函数用于打印一个i64类型的值并换行。此源代码编译后执行会输出<code>666</code>。</p>
+在示例中，我们调用了一个系统库重的函数<code>printi64ln</code>，该函数用于打印一个i64类型的值并换行。此源代码编译后执行会输出<code>666</code>。</p>
 <blockquote>
-<p>重要：<code>printi64ln</code>函数是目前pl runtime中的一个测试用内置函数，内置函数在未来将有别的引入方法，并且此方法可能会在未来移除</p>
+<p>重要：<code>printi64ln</code>函数是目前pl runtime中的一个测试用内置函数，此函数可能会在未来移除</p>
 </blockquote>
 <h2 id="编译"><a class="header" href="#编译">编译</a></h2>
 <p>如果你已经安装了<code>plc</code>，那么你可以在项目根目录下执行<code>plc main.pi</code>命令来编译该项目。此指令会生成一个名叫<code>out.plb</code>的文件，还有一些中间文件</p>
 <blockquote>
-<p>如果你配置了镜头编译环境，还会生成一个叫做<code>out.plb.out</code>的文件，该文件是一个可执行文件，可以直接运行
+<p>如果你配置了静态编译环境，还会生成一个叫做<code>out</code>的文件，该文件是一个可执行文件，可以直接运行
 而如果你只有jit环境，该文件不会生成，并且编译命令会输出一个clang报错和两行warning，这是正常现象</p>
 </blockquote>
 <h2 id="jit运行"><a class="header" href="#jit运行">jit运行</a></h2>
