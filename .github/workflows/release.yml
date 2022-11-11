@@ -223,7 +223,7 @@ jobs:
         run: |
           import os
           src = os.environ['OUT_DIR']
-          dst = "pivot-lang-cibuild${{ github.run_number }}-${{ matrix.config.arch }}.tar.gz"
+          dst = "pivot-lang-0.1.${{ github.run_number }}-${{ matrix.config.arch }}.tar.gz"
           os.system("tar -czvf %s %s" % (dst, src))
         shell: python
       - name: Set outputs
@@ -232,11 +232,11 @@ jobs:
       - uses: ncipollo/release-action@v1
         name: upload
         with:
-          artifacts: "pivot-lang-cibuild${{ github.run_number }}-${{ matrix.config.arch }}.tar.gz"
+          artifacts: "pivot-lang-0.1.${{ github.run_number }}-${{ matrix.config.arch }}.tar.gz"
           allowUpdates: true
           replacesArtifacts: false
           commit: master
-          tag: cibuild${{ github.run_number }}
+          tag: v0.1.${{ github.run_number }}
 
       - name: Release my project to my Homebrew tap
         if: ${{ matrix.config.os == 'ubuntu-latest' }}
