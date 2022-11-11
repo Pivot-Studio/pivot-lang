@@ -240,8 +240,8 @@ jobs:
         with:
           # The name of the homebrew tap to publish your formula to as it appears on GitHub.
           # Required - strings.
-          homebrew_owner: pivot-lang authors
-          homebrew_tap: Pivot-Studio/homebrew_tap
+          homebrew_owner: Pivot-Studio
+          homebrew_tap: homebrew_tap
 
           # The name of the folder in your homebrew tap where formula will be committed to.
           # Default is shown - string.
