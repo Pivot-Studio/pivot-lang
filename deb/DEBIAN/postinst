@@ -3,8 +3,10 @@ NC='\033[0m'
 RED='\033[0;31m'
 
 if [ "$1" = configure ]; then
-    echo "export KAGARI_LIB_ROOT=/pl/planglib" >> ~/.bashrc
-    echo "export PL_ROOT=/pl" >> ~/.bashrc
+    if [[ -z "${KAGARI_LIB_ROOT}" ]]; then
+        echo "export KAGARI_LIB_ROOT=/pl/planglib" >> ~/.bashrc
+        echo "export PL_ROOT=/pl" >> ~/.bashrc
+    fi
     echo "${GREEN}"
     echo "-------------------------------------------------------------------"
     echo "Successfully installed pivot-lang compiler with JIT feature!"
