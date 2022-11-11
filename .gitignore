@@ -4,7 +4,7 @@ target
 .VSCodeCounter
 *.ll
 *.out
-*.sh
+
 test.cpp
 *.bc
 .idea
