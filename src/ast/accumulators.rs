@@ -1,7 +1,8 @@
 use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 use lsp_types::{
-    CompletionItem, GotoDefinitionResponse, Hover, InlayHint, Location, SemanticTokens, TextEdit,
+    CompletionItem, DocumentSymbol, GotoDefinitionResponse, Hover, InlayHint, Location,
+    SemanticTokens, TextEdit,
 };
 
 use super::ctx::PLDiag;
@@ -31,3 +32,5 @@ pub struct ModBuffer(PathBuf);
 pub struct PLFormat(Vec<TextEdit>);
 #[salsa::accumulator]
 pub struct Hints(Vec<InlayHint>);
+#[salsa::accumulator]
+pub struct DocSymbols(Vec<DocumentSymbol>);
