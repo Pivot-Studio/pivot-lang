@@ -245,7 +245,7 @@ jobs:
 
           # The name of the folder in your homebrew tap where formula will be committed to.
           # Default is shown - string.
-          formula_folder: pivot-lang
+          # formula_folder: pivot-lang
 
           # The GitHub Token (saved as a repo secret) that has `repo` permissions for the homebrew tap you want to release to.
           # Required - string.
