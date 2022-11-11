@@ -269,8 +269,8 @@ jobs:
           # Required - string.
           install: |
             lib.install Dir["./planglib"]
-            lib.install "./libvm.a"
-            bin.install "./plc"
+                lib.install "./libvm.a"
+                bin.install "./plc"
 
 
           # Custom test command for your formula so you can run `brew test`.
@@ -284,7 +284,7 @@ jobs:
           # Linux ARM pre-existing path example: https://github.com/justintime50/myrepo/releases/download/v1.2.0/myrepo-1.2.0-linux-arm64.tar.gz
           # Optional - booleans.
           # target_darwin_amd64: true
-          target_darwin_arm64: false
+          target_darwin_arm64: true
           # target_linux_amd64: true
           # target_linux_arm64: false
 
@@ -312,4 +312,4 @@ jobs:
 
           # Logs debugging info to console.
           # Default is shown - boolean.
-          debug: false
+          debug: true
