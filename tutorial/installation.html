@@ -185,9 +185,14 @@ sudo add-apt-repository &quot;deb [arch=amd64] https://apt.lang.pivotstudio.cn/r
 <p>你可以运行<code>plc</code>来检查是否安装成功。</p>
 <p>请重启当前bash或者运行<code>source ~/.bashrc</code>来使环境变量生效。如果想安装<code>AOT</code>功能，请手动下载clang-14，下载方式见<a href="https://apt.llvm.org/">此处</a></p>
 <h2 id="macos"><a class="header" href="#macos">MacOS</a></h2>
-<p>目前最新版macOS上的编译器可以在我们的<a href="https://github.com/Pivot-Studio/pivot-lang/releases">release页面</a>进行下载，它也许能在老版本MacOS上运行，但是我们并没有测试过。</p>
-<p>在release中，<code>plc</code>程序是编译器可执行文件，下载后请将它添加到<code>PATH</code>环境变量中，之后即可运行<code>plc -h</code>进行验证。</p>
-<p>TODO mac文档已过期</p>
+<p>目前最新版MacOS（非英特尔芯片）上的编译器可以使用<code>homebrew</code>进行安装。</p>
+<p>首先你需要添加我们的homebrew tap：</p>
+<pre><code class="language-bash">brew tap pivot-studio/tap
+</code></pre>
+<p>然后安装pivot lang编译器：</p>
+<pre><code class="language-bash">brew install pivot-lang
+</code></pre>
+<p>安装完成后请按照提示设置环境变量</p>
 <h2 id="docker"><a class="header" href="#docker">Docker</a></h2>
 <p>TODO</p>
 
