@@ -20,6 +20,7 @@ jobs:
             dir: linux64
             debdir: pivot-lang_0.1.0-1_amd64
             artifacts: "plc"
+            arch: linux-amd64
             RUSTFLAGS: "-Dwarnings"
           # - os: "windows-latest"
           #   dir: win64
@@ -27,6 +28,7 @@ jobs:
           #   RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"
           - os: "macOS-latest"
             dir: osx64
+            arch: darwin-amd64
             artifacts: "plc"
             RUSTFLAGS: "-Dwarnings"
     steps:
@@ -220,7 +222,7 @@ jobs:
         run: |
           import os
           src = os.environ['OUT_DIR']
-          dst = os.environ['OS'] + "-artifact.tar.gz"
+          dst = "pivot-lang-cibuild-v${{ github.run_number }}-${{ matrix.config.arch }}.tar.gz"
           os.system("tar -czvf %s %s" % (dst, src))
         shell: python
       - name: Set outputs
@@ -229,13 +231,14 @@ jobs:
       - uses: ncipollo/release-action@v1
         name: upload
         with:
-          artifacts: ${{ matrix.config.os }}-artifact.tar.gz
+          artifacts: "pivot-lang-cibuild-v${{ github.run_number }}-${{ matrix.config.arch }}.tar.gz"
           allowUpdates: true
           replacesArtifacts: false
           commit: master
-          tag: cibuild-v${{ github.run_number }}@${{ steps.vars.outputs.sha_short }}
+          tag: cibuild-v${{ github.run_number }}
 
       - name: Release my project to my Homebrew tap
+        if: ${{ matrix.config.os == 'ubuntu-latest' }}
         uses: Justintime50/homebrew-releaser@v1
         with:
           # The name of the homebrew tap to publish your formula to as it appears on GitHub.
@@ -277,7 +280,7 @@ jobs:
           # Darwin AMD pre-existing path example: https://github.com/justintime50/myrepo/releases/download/v1.2.0/myrepo-1.2.0-darwin-amd64.tar.gz
           # Linux ARM pre-existing path example: https://github.com/justintime50/myrepo/releases/download/v1.2.0/myrepo-1.2.0-linux-arm64.tar.gz
           # Optional - booleans.
-          # target_darwin_amd64: true
+          target_darwin_amd64: true
           # target_darwin_arm64: false
           # target_linux_amd64: true
           # target_linux_arm64: false
