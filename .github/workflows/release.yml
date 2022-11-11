@@ -14,8 +14,14 @@ jobs:
     runs-on: ${{ matrix.config.os }}
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         config:
+          - os: "macOS-latest"
+            dir: osx64
+            arch: darwin-amd64
+            artifacts: "plc"
+            RUSTFLAGS: "-Dwarnings"
           - os: "ubuntu-latest"
             dir: linux64
             debdir: pivot-lang_0.1.0-1_amd64
@@ -26,11 +32,6 @@ jobs:
           #   dir: win64
           #   artifacts: "plc.exe"
           #   RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"
-          - os: "macOS-latest"
-            dir: osx64
-            arch: darwin-amd64
-            artifacts: "plc"
-            RUSTFLAGS: "-Dwarnings"
     steps:
       - uses: actions/checkout@v3
         with:
