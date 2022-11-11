@@ -49,10 +49,19 @@ sudo apt install pivot-lang
 
 
 ## MacOS
-目前最新版macOS上的编译器可以在我们的[release页面](https://github.com/Pivot-Studio/pivot-lang/releases)进行下载，它也许能在老版本MacOS上运行，但是我们并没有测试过。  
+目前最新版MacOS（非英特尔芯片）上的编译器可以使用`homebrew`进行安装。  
 
-在release中，`plc`程序是编译器可执行文件，下载后请将它添加到`PATH`环境变量中，之后即可运行`plc -h`进行验证。
+首先你需要添加我们的homebrew tap：
+```bash
+brew tap pivot-studio/tap
+```
 
-TODO mac文档已过期
+然后安装pivot lang编译器：
+```bash
+brew install pivot-lang
+```
+
+安装完成后请按照提示设置环境变量
+
 ## Docker
 TODO
