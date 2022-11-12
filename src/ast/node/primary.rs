@@ -92,8 +92,8 @@ impl VarNode {
     pub fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: PLType) {
         ctx.plmod.replace_type(&self.name, tp)
     }
-    pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        ctx.if_completion(|ctx, a| {
+    pub fn emit<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        ctx.if_completion_no_mut(|ctx, a| {
             if a.0.is_in(self.range) {
                 let completions = ctx.get_completions();
                 ctx.completion_items.set(completions);
@@ -125,22 +125,32 @@ impl VarNode {
                         TerminatorEnum::NONE,
                     ));
                 }
-                PLType::STRUCT(_) => {
-                    ctx.push_semantic_token(self.range, SemanticTokenType::STRUCT, 0);
-                    return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
-                }
-                PLType::PRIMITIVE(_) => {
-                    ctx.push_semantic_token(self.range, SemanticTokenType::TYPE, 0);
-                    return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
-                }
-                PLType::VOID => {
-                    ctx.push_semantic_token(self.range, SemanticTokenType::TYPE, 0);
-                    return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
-                }
                 _ => return Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND)),
             }
         }
         Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND))
+    }
+    pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        ctx.if_completion_no_mut(|ctx, a| {
+            if a.0.is_in(self.range) {
+                let completions = ctx.get_completions();
+                ctx.completion_items.set(completions);
+            }
+        });
+
+        if let Ok(tp) = ctx.get_type(&self.name, self.range) {
+            match tp {
+                PLType::STRUCT(_) | PLType::PRIMITIVE(_) | PLType::VOID => {
+                    if let PLType::STRUCT(st) = tp.clone() {
+                        ctx.send_if_go_to_def(self.range, st.range, ctx.plmod.path.clone());
+                        ctx.set_if_refs(st.refs, self.range);
+                    }
+                    return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
+                }
+                _ => return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE)),
+            }
+        }
+        Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE))
     }
 }
 

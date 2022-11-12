@@ -50,8 +50,8 @@ impl TypeNode for TypeNameNode {
         self.id.as_mut().unwrap().replace_type(ctx, tp)
     }
 
-    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
-        ctx.if_completion(|ctx, a| {
+    fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
+        ctx.if_completion_no_mut(|ctx, a| {
             if a.0.is_in(self.range) {
                 let completions = ctx.get_type_completions();
                 ctx.completion_items.set(completions);
@@ -95,7 +95,7 @@ impl TypeNode for ArrayTypeNameNode {
         self.id.print(tabs + 1, false, line.clone());
         self.size.print(tabs + 1, true, line.clone());
     }
-    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
+    fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
         if let NodeEnum::Num(num) = *self.size {
             if let Num::INT(sz) = num.value {
                 let pltype = self.id.get_type(ctx)?;
@@ -134,7 +134,7 @@ impl TypeNode for PointerTypeNode {
     fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: PLType) {
         self.elm.as_mut().replace_type(ctx, tp)
     }
-    fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
+    fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
         let pltype = self.elm.get_type(ctx)?;
         let pltype = PLType::POINTER(Box::new(pltype));
         Ok(pltype)
@@ -246,11 +246,27 @@ impl Node for StructDefNode {
 }
 
 impl StructDefNode {
+    pub fn add_to_symbols<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) {
+        let stu = PLType::STRUCT(STType {
+            name: self.id.clone(),
+            path: ctx.plmod.path.clone(),
+            fields: FxHashMap::default(),
+            ordered_fields: vec![],
+            range: self.range(),
+            refs: Rc::new(RefCell::new(vec![])),
+            doc: vec![],
+            methods: FxHashMap::default(),
+        });
+        ctx.context
+            .opaque_struct_type(&ctx.plmod.get_full_name(&self.id));
+        _ = ctx.add_type(self.id.clone(), stu, self.range);
+    }
+
     pub fn emit_struct_def<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
-        if ctx.get_type(self.id.as_str(), self.range).is_ok() {
-            ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL);
-            return Ok(());
-        }
+        // if ctx.get_type(self.id.as_str(), self.range).is_ok() {
+        //     ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL);
+        //     return Ok(());
+        // }
         let mut fields = FxHashMap::<String, Field>::default();
         let mut order_fields = Vec::<Field>::new();
         let mut i = 0;
@@ -258,15 +274,22 @@ impl StructDefNode {
             if !has_semi {
                 return Err(ctx.add_err(field.range, ErrorCode::COMPLETION));
             }
-            let (id, tp) = (field.id.clone(), field.tp.get_type(ctx)?);
+            let id = field.id.clone();
             let f = Field {
                 index: i,
-                pltype: tp.clone(),
+                pltype: field.tp.clone(),
                 name: field.id.name.clone(),
                 range: field.range,
                 refs: Rc::new(RefCell::new(vec![])),
             };
-            ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
+            let tp = field.tp.get_type(ctx);
+            if let Ok(tp) = tp {
+                if tp.get_range().is_some() {
+                    ctx.send_if_go_to_def(f.range, tp.get_range().unwrap(), ctx.plmod.path.clone());
+                }
+            } else {
+                continue;
+            }
             ctx.set_if_refs(f.refs.clone(), field.id.range);
             fields.insert(id.name.to_string(), f.clone());
             order_fields.push(f);
@@ -275,13 +298,20 @@ impl StructDefNode {
         }
         let name = self.id.as_str();
         let st = ctx
-            .context
-            .opaque_struct_type(&ctx.plmod.get_full_name(name));
+            .module
+            .get_struct_type(&ctx.plmod.get_full_name(name))
+            .unwrap();
         let newf = order_fields.clone();
         st.set_body(
             &order_fields
                 .into_iter()
-                .map(|order_field| order_field.pltype.get_basic_type(&ctx))
+                .map(|order_field| {
+                    order_field
+                        .pltype
+                        .get_type(ctx)
+                        .unwrap()
+                        .get_basic_type(&ctx)
+                })
                 .collect::<Vec<_>>(),
             false,
         );
@@ -296,7 +326,7 @@ impl StructDefNode {
             methods: FxHashMap::default(),
         });
         ctx.set_if_refs_tp(&stu, self.range);
-        _ = ctx.add_type(name.to_string(), stu.clone(), self.range);
+        _ = ctx.plmod.replace_type(name, stu.clone());
         ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
         Ok(())
     }
@@ -379,6 +409,7 @@ impl Node for StructInitNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        self.tp.emit_highlight(ctx);
         let mut fields = FxHashMap::<String, (BasicValueEnum<'ctx>, Range)>::default();
         let tp = self.tp.get_type(ctx)?;
         for field in self.fields.iter_mut() {

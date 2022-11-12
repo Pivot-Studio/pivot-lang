@@ -32,7 +32,7 @@ impl Node for ImplNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        _ = self.target.get_type(ctx);
+        _ = self.target.emit_highlight(ctx);
         for method in &mut self.methods {
             _ = method.emit(ctx);
         }

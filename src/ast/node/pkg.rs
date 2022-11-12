@@ -143,36 +143,17 @@ impl Node for ExternIDNode {
     }
 
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        self.get_type(ctx)
-    }
-}
-impl ExternIDNode {
-    pub fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: PLType) {
-        if self.ns.is_empty() {
-            return self.id.replace_type(ctx, tp);
-        }
-        let mut plmod = &mut ctx.plmod;
-        for ns in self.ns.iter() {
-            let re = plmod.submods.get_mut(&ns.name);
-            if let Some(re) = re {
-                plmod = re;
-            } else {
-                unreachable!()
-            }
-        }
-        plmod.replace_type(&self.id.name, tp)
-    }
-    pub fn get_type<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if self.ns.is_empty() {
             if self.complete {
                 // 如果该节点只有一个id，且完整，那么就是一个普通的包内符号，直接调用idnode
-                return self.id.get_type(ctx);
+                return self.id.emit(ctx);
             }
-            ctx.if_completion(|a, (pos, _)| {
+            ctx.if_completion_no_mut(|a, (pos, _)| {
                 if pos.is_in(self.range) {
                     // 如果completion请求对应的区域在本节点内
                     // 那么将action设成None防止外层节点生成错误的completion
-                    a.action = None;
+                    // a.action = None;
+
                     // 如果是单冒号，不要生成auto complete
                     if self.singlecolon {
                         return;
@@ -224,8 +205,85 @@ impl ExternIDNode {
                         TerminatorEnum::NONE,
                     ))
                 }
+                // PLType::STRUCT(_) => {
+                //     ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
+                //     Ok((None, Some(tp), TerminatorEnum::NONE))
+                // }
+                _ => unreachable!(),
+            };
+            if let Some(range) = range {
+                ctx.send_if_go_to_def(self.range, *range, plmod.path.clone());
+            }
+            return re;
+        }
+        Err(ctx.add_err(self.range, ErrorCode::SYMBOL_NOT_FOUND))
+    }
+}
+impl ExternIDNode {
+    pub fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: PLType) {
+        if self.ns.is_empty() {
+            return self.id.replace_type(ctx, tp);
+        }
+        let mut plmod = &mut ctx.plmod;
+        for ns in self.ns.iter() {
+            let re = plmod.submods.get_mut(&ns.name);
+            if let Some(re) = re {
+                plmod = re;
+            } else {
+                unreachable!()
+            }
+        }
+        plmod.replace_type(&self.id.name, tp)
+    }
+    pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        if self.ns.is_empty() {
+            if self.complete {
+                // 如果该节点只有一个id，且完整，那么就是一个普通的包内符号，直接调用idnode
+                return self.id.get_type(ctx);
+            }
+            ctx.if_completion_no_mut(|a, (pos, _)| {
+                if pos.is_in(self.range) {
+                    // 如果completion请求对应的区域在本节点内
+                    // 那么将action设成None防止外层节点生成错误的completion
+                    // a.action = None;
+
+                    // 如果是单冒号，不要生成auto complete
+                    if self.singlecolon {
+                        return;
+                    }
+                    let completions = a.get_completions_in_ns(&self.id.name);
+                    // eprintln!("comp {:?}", completions);
+                    a.completion_items.set(completions);
+                }
+            });
+            return Err(ctx.add_err(self.range, ErrorCode::COMPLETION));
+        }
+        // for id in &self.ns {
+        //     ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
+        // }
+        let mut plmod = &ctx.plmod;
+        for ns in self.ns.iter() {
+            let re = plmod.submods.get(&ns.name);
+            if let Some(re) = re {
+                plmod = re;
+            } else {
+                return Err(ctx.add_err(ns.range, ErrorCode::UNRESOLVED_MODULE));
+            }
+        }
+        if let Some(tp) = plmod.get_type(&self.id.name) {
+            ctx.set_if_refs_tp(&tp, self.range);
+            let range = &tp.get_range();
+            let re = match &tp {
+                // PLType::FN(f) => {
+                //     // ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
+                //     Ok((
+                //         Some(f.get_or_insert_fn(ctx).into()),
+                //         Some(tp),
+                //         TerminatorEnum::NONE,
+                //     ))
+                // }
                 PLType::STRUCT(_) => {
-                    ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
+                    // ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
                     Ok((None, Some(tp), TerminatorEnum::NONE))
                 }
                 _ => unreachable!(),
