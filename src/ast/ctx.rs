@@ -586,6 +586,7 @@ impl PLType {
                 )
             }
             PLType::STRUCT(x) => {
+                // 若已经生成过，直接查表返回
                 if ctx.ditypes.borrow().contains_key(&x.get_st_full_name()) {
                     return Some(
                         ctx.ditypes
@@ -596,6 +597,7 @@ impl PLType {
                     );
                 }
                 let mut offset = 0;
+                // 生成占位符，为循环引用做准备
                 ctx.ditypes_placeholder
                     .borrow_mut()
                     .insert(x.get_st_full_name(), RefCell::new(vec![]));
@@ -631,6 +633,7 @@ impl PLType {
                     .borrow_mut()
                     .remove(&x.get_st_full_name())
                     .unwrap();
+                // 替换循环引用生成的占位符
                 for m in members.borrow().iter() {
                     let mut elemdi = st;
                     for _ in 0..m.ptr_depth {
@@ -751,6 +754,8 @@ impl Field {
             .get(&pltp.get_full_elm_name())
         {
             if !matches!(pltp, PLType::POINTER(_)) {
+                // 出现循环引用，但是不是指针
+                // TODO 应该只需要一层是指针就行，目前的检查要求每一层都是指针
                 ctx.add_err(self.range, ErrorCode::ILLEGAL_SELF_RECURSION);
             }
             let placeholder = unsafe { ctx.dibuilder.create_placeholder_derived_type(ctx.context) };

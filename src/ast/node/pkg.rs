@@ -205,10 +205,6 @@ impl Node for ExternIDNode {
                         TerminatorEnum::NONE,
                     ))
                 }
-                // PLType::STRUCT(_) => {
-                //     ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
-                //     Ok((None, Some(tp), TerminatorEnum::NONE))
-                // }
                 _ => unreachable!(),
             };
             if let Some(range) = range {
@@ -252,15 +248,11 @@ impl ExternIDNode {
                         return;
                     }
                     let completions = a.get_completions_in_ns(&self.id.name);
-                    // eprintln!("comp {:?}", completions);
                     a.completion_items.set(completions);
                 }
             });
             return Err(ctx.add_err(self.range, ErrorCode::COMPLETION));
         }
-        // for id in &self.ns {
-        //     ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
-        // }
         let mut plmod = &ctx.plmod;
         for ns in self.ns.iter() {
             let re = plmod.submods.get(&ns.name);
@@ -274,18 +266,7 @@ impl ExternIDNode {
             ctx.set_if_refs_tp(&tp, self.range);
             let range = &tp.get_range();
             let re = match &tp {
-                // PLType::FN(f) => {
-                //     // ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
-                //     Ok((
-                //         Some(f.get_or_insert_fn(ctx).into()),
-                //         Some(tp),
-                //         TerminatorEnum::NONE,
-                //     ))
-                // }
-                PLType::STRUCT(_) => {
-                    // ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
-                    Ok((None, Some(tp), TerminatorEnum::NONE))
-                }
+                PLType::STRUCT(_) => Ok((None, Some(tp), TerminatorEnum::NONE)),
                 _ => unreachable!(),
             };
             if let Some(range) = range {

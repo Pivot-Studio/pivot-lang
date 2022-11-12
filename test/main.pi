@@ -239,14 +239,14 @@ fn test_modify_pointer(a: **i64) void {
 }
 
 struct pointer_struct {
-    ptr2: *pointer_struct;
+    ptr2: **pointer_struct;
     ptr: *struct_child;
 }
 
 fn test_self_ref() void {
     let a = pointer_struct{
-        ptr2: &pointer_struct{
-            ptr2: &pointer_struct{
+        ptr2: &&pointer_struct{
+            ptr2: &&pointer_struct{
                 ptr: &struct_child{
                     a: 100
                 }
