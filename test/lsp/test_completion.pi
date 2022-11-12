@@ -5,7 +5,7 @@ struct test {
     d:;
 }
 
-fn name(args:test1) void {
+fn name(args:test) void {
     args.
     t
     return;

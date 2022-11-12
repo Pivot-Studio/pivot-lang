@@ -292,9 +292,6 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         println!("target os is linux");
         cmd.arg("-ltinfo");
     }
-    if op.optimization != HashOptimizationLevel::None {
-        cmd.arg("-lto");
-    }
     let root = env::var("PL_ROOT");
     if root.is_err() {
         println!("warn: PL_ROOT not set, skip linking libvm");
@@ -313,7 +310,6 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         .arg("-g");
     let res = cmd.status();
     if res.is_err() || !res.as_ref().unwrap().success() {
-        println!("{:?}", res);
         println!("warning: link with pivot lang vm failed, could be caused by libvm not found.");
     } else {
         println!("link succ, output file: {}", fo);
@@ -371,7 +367,7 @@ mod test {
             Some((
                 Pos {
                     line: 9,
-                    column: 9,
+                    column: 10,
                     offset: 0,
                 },
                 Some(".".to_string()),
