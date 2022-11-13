@@ -1,10 +1,20 @@
+GREEN='\033[0;32m'
+NC='\033[0m'
+RED='\033[0;31m'
+
 if [ "$1" = configure ]; then
-    echo "export KAGARI_LIB_ROOT=/pl/planglib" >> ~/.bashrc
-    echo "export PL_ROOT=/pl" >> ~/.bashrc
+    if [[ -z "${KAGARI_LIB_ROOT}" ]]; then
+        echo "export KAGARI_LIB_ROOT=/pl/planglib" >> ~/.bashrc
+        echo "export PL_ROOT=/pl" >> ~/.bashrc
+    fi
+    echo "${GREEN}"
+    echo "-------------------------------------------------------------------"
     echo "Successfully installed pivot-lang compiler with JIT feature!"
     echo "the pivot-lang compiler is now available as 'plc' command"
-    echo "**jit feature does not support debug**"
+    echo "${RED}**jit feature does not support debug**"
     echo "you may need to restart your shell to load environment variables"
     echo "to install aot feature, please install clang-14 manually"
     echo "see https://apt.llvm.org/ for more details"
+    echo "-------------------------------------------------------------------"
+    echo "${NC}"
 fi
