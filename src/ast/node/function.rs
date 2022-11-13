@@ -105,6 +105,13 @@ impl Node for FuncDefNode {
             }
         }
         ctx.push_semantic_token(self.typenode.ret.range(), SemanticTokenType::TYPE, 0);
+        let res = ctx.get_type(self.typenode.id.as_str(), self.range);
+        if res.is_err() {
+            let diag = res.unwrap_err();
+            ctx.add_diag(diag.clone());
+            return Err(diag);
+        }
+        let pltype = res.unwrap().clone();
         if let Some(body) = self.body.as_mut() {
             let subroutine_type = ctx.dibuilder.create_subroutine_type(
                 ctx.diunit.get_file(),
@@ -126,15 +133,7 @@ impl Node for FuncDefNode {
                 false,
             );
             // add function
-            let func;
-            let res = ctx.get_type(self.typenode.id.as_str(), self.range);
-            if res.is_err() {
-                let diag = res.unwrap_err();
-                ctx.add_diag(diag.clone());
-                return Err(diag);
-            }
-            let fu = res.unwrap();
-            func = match fu {
+            let func = match &pltype {
                 PLType::FN(fu) => fu.get_or_insert_fn(ctx),
                 _ => return Ok((None, None, TerminatorEnum::NONE)),
             };
@@ -238,9 +237,9 @@ impl Node for FuncDefNode {
             }
             ctx.nodebug_builder.position_at_end(allocab);
             ctx.nodebug_builder.build_unconditional_branch(entry);
-            return Ok((None, None, TerminatorEnum::NONE));
+            return Ok((None, Some(pltype.clone()), TerminatorEnum::NONE));
         }
-        Ok((None, None, TerminatorEnum::NONE))
+        Ok((None, Some(pltype.clone()), TerminatorEnum::NONE))
     }
 }
 
@@ -399,6 +398,7 @@ impl FuncTypeNode {
             } else {
                 ctx.plmod.get_full_name(&self.id)
             },
+            method: receiver.is_some(),
         };
         if let Some(mut receiver) = receiver {
             receiver
@@ -411,7 +411,8 @@ impl FuncTypeNode {
         let res = ftp.get_or_insert_fn(ctx);
         let pltype = PLType::FN(ftp);
         ctx.set_if_refs_tp(&pltype, self.range);
-        ctx.add_type(self.id.clone(), pltype, self.range)?;
+        ctx.add_type(self.id.clone(), pltype.clone(), self.range)?;
+        ctx.add_doc_symbols(pltype);
         Ok(res)
     }
 }

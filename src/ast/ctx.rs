@@ -820,6 +820,7 @@ pub struct FNType {
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
+    pub method: bool,
 }
 
 impl TryFrom<PLType> for FNType {
@@ -857,9 +858,17 @@ impl FNType {
     pub fn get_doc_symbol(&self) -> DocumentSymbol {
         #[allow(deprecated)]
         DocumentSymbol {
-            name: self.name.clone(),
+            name: if self.method {
+                self.name.split("::").last().unwrap().to_string()
+            } else {
+                self.name.clone()
+            },
             detail: Some(self.get_signature()),
-            kind: SymbolKind::FUNCTION,
+            kind: if self.method {
+                SymbolKind::METHOD
+            } else {
+                SymbolKind::FUNCTION
+            },
             tags: None,
             deprecated: None,
             range: self.range.to_diag_range(),
@@ -870,11 +879,20 @@ impl FNType {
     pub fn get_signature(&self) -> String {
         let mut params = String::new();
         if !self.param_name.is_empty() {
-            params += &format!(
-                "{}: {}",
-                self.param_name[0],
-                self.param_pltypes[0].get_name()
-            );
+            if !self.method {
+                params += &format!(
+                    "{}: {}",
+                    self.param_name[0],
+                    self.param_pltypes[0].get_name()
+                );
+            }
+            for i in 1..self.param_name.len() {
+                params += &format!(
+                    ", {}: {}",
+                    self.param_name[i],
+                    self.param_pltypes[i].get_name()
+                );
+            }
         }
         format!("fn ({}) {}", params, self.ret_pltype.get_name())
     }
@@ -1366,12 +1384,18 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
         self.plmod.types.insert(name, pltype.clone());
+        Ok(())
+    }
+    pub fn add_doc_symbols(&mut self, pltype: PLType) {
         match &pltype {
-            PLType::FN(f) => self.doc_symbols.borrow_mut().push(f.get_doc_symbol()),
+            PLType::FN(f) => {
+                if !f.method {
+                    self.doc_symbols.borrow_mut().push(f.get_doc_symbol())
+                }
+            }
             PLType::STRUCT(st) => self.doc_symbols.borrow_mut().push(st.get_doc_symbol(self)),
             _ => {}
         }
-        Ok(())
     }
 
     pub fn add_err(&self, range: Range, code: ErrorCode) -> PLDiag {

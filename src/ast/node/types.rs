@@ -315,7 +315,7 @@ impl StructDefNode {
                 .collect::<Vec<_>>(),
             false,
         );
-        let stu = PLType::STRUCT(STType {
+        let pltype = PLType::STRUCT(STType {
             name: name.to_string(),
             path: ctx.plmod.path.clone(),
             fields,
@@ -325,8 +325,9 @@ impl StructDefNode {
             doc: self.doc.clone(),
             methods: FxHashMap::default(),
         });
-        ctx.set_if_refs_tp(&stu, self.range);
-        _ = ctx.plmod.replace_type(name, stu.clone());
+        ctx.set_if_refs_tp(&pltype, self.range);
+        _ = ctx.plmod.replace_type(name, pltype.clone());
+        ctx.add_doc_symbols(pltype);
         ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
         Ok(())
     }
