@@ -28,7 +28,7 @@
                     "build"
                 ]
             },
-            "args": ["run","out.plb"]
+            "args": ["run","out.bc"]
         },
         {
             "type": "lldb",
@@ -50,12 +50,11 @@
             "name": "(Windows) Launch",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/out",
+            "program": "${workspaceFolder}/out.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
-            "preLaunchTask": "windows link"
         }
 
     ]

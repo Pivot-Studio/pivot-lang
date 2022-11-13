@@ -4,6 +4,9 @@ target
 .VSCodeCounter
 *.ll
 *.out
+*.ilk
+*.exe
+*.pdb
 
 test.cpp
 *.bc

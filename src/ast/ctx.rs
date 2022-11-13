@@ -1023,11 +1023,11 @@ pub fn create_ctx_info<'ctx>(
     let metav = context.metadata_node(&[BasicMetadataValueEnum::IntValue(
         context.i32_type().const_int(3, false),
     )]);
-    // let metacv = context.metadata_node(&[BasicMetadataValueEnum::IntValue(
-    //     context.i32_type().const_int(1, false),
-    // )]);
+    let metacv = context.metadata_node(&[BasicMetadataValueEnum::IntValue(
+        context.i32_type().const_int(1, false),
+    )]);
     module.add_metadata_flag("Debug Info Version", FlagBehavior::Warning, metav);
-    // module.add_metadata_flag("CodeView", FlagBehavior::Warning, metacv); // TODO: is this needed for windows debug?
+    module.add_metadata_flag("CodeView", FlagBehavior::Warning, metacv); // TODO: is this needed for windows debug?
     let tm = get_target_machine(inkwell::OptimizationLevel::None);
     (
         module,

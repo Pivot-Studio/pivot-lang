@@ -282,9 +282,9 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     }
     tm.write_to_file(&llvmmod, FileType::Assembly, Path::new(&f))
         .unwrap();
-    let fo = out.to_string();
+    let mut fo = out.to_string();
     let mut out = out.to_string();
-    out.push_str(".plb");
+    out.push_str(".bc");
     llvmmod.write_bitcode_to_path(Path::new(&out));
     println!("jit executable file writted to: {}", &out);
     let mut cmd = Command::new("clang-14");
@@ -298,11 +298,22 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         return;
     }
     let root = root.unwrap();
-    let vmpath = format!("{}/libvm.a", root);
+    let vmpath;
+    if cfg!(target_os = "windows") {
+        cmd = Command::new("clang");
+        f = out;
+        fo.push_str(".exe");
+        vmpath = format!("{}/vm.lib", root);
+        cmd.arg("-lws2_32")
+            .arg("-lbcrypt")
+            .arg("-luserenv")
+            .arg("-ladvapi32");
+    } else {
+        vmpath = format!("{}/libvm.a", root);
+        cmd.arg("-pthread").arg("-ldl");
+    }
 
     cmd.arg(format!("-O{}", op.optimization as u32))
-        .arg("-pthread")
-        .arg("-ldl")
         .arg(&f)
         .arg(&vmpath)
         .arg("-o")
@@ -310,6 +321,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         .arg("-g");
     let res = cmd.status();
     if res.is_err() || !res.as_ref().unwrap().success() {
+        println!("{}", format!("link failed: {}", res.unwrap()).bright_red());
         println!("warning: link with pivot lang vm failed, could be caused by libvm not found.");
     } else {
         println!("link succ, output file: {}", fo);
@@ -445,7 +457,7 @@ mod test {
             ActionType::Compile,
             None,
         );
-        let outplb = "testout.plb";
+        let outplb = "testout.bc";
         let out = "testout";
         compile(
             &db,
