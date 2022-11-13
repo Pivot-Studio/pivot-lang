@@ -222,9 +222,12 @@ impl Node for FuncDefNode {
             // emit body
             ctx.builder.unset_current_debug_location();
             if self.typenode.id == "main" {
-                let inst = allocab.get_first_instruction().unwrap();
-                ctx.builder.position_at(allocab, &inst);
-                ctx.nodebug_builder.position_at(allocab, &inst);
+                if let Some(inst) = allocab.get_first_instruction() {
+                    ctx.builder.position_at(allocab, &inst);
+                    ctx.nodebug_builder.position_at(allocab, &inst);
+                } else {
+                    ctx.position_at_end(allocab);
+                }
                 ctx.init_global();
                 ctx.builder.position_at_end(entry);
                 ctx.nodebug_builder.position_at_end(entry);

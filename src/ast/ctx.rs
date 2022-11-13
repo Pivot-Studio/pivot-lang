@@ -50,6 +50,8 @@ use super::diag::{ErrorCode, WarnCode};
 use super::diag::{ERR_MSG, WARN_MSG};
 use super::node::NodeEnum;
 use super::node::PLValue;
+use super::node::TypeNode;
+use super::node::TypeNodeEnum;
 use super::range::Pos;
 use super::range::Range;
 // TODO: match all case
@@ -90,6 +92,8 @@ pub struct Ctx<'a, 'ctx> {
     pub action: Option<ActionType>,       // lsp sender
     pub lspparams: Option<(Pos, Option<String>, ActionType)>, // lsp params
     pub refs: Rc<Cell<Option<Rc<RefCell<Vec<Location>>>>>>, // hold the find references result (thank you, Rust!)
+    pub ditypes_placeholder: Rc<RefCell<FxHashMap<String, RefCell<Vec<MemberType<'ctx>>>>>>, // hold the generated debug info type place holder
+    pub ditypes: Rc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
     pub hints: Rc<RefCell<Box<Vec<InlayHint>>>>,
     pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
     pub goto_def: Rc<Cell<Option<GotoDefinitionResponse>>>, // hold the goto definition result
@@ -108,6 +112,16 @@ pub struct Ctx<'a, 'ctx> {
     pub config: Config,                                     // config
     pub roots: RefCell<Vec<BasicValueEnum<'ctx>>>,
     pub usegc: bool,
+}
+
+pub struct MemberType<'ctx> {
+    pub ditype: DIDerivedType<'ctx>,
+    pub offset: u64,
+    pub scope: DIScope<'ctx>,
+    pub line: u32,
+    pub name: String,
+    pub di_file: DIFile<'ctx>,
+    pub ptr_depth: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -483,6 +497,25 @@ impl PLType {
         }
     }
 
+    pub fn get_full_elm_name<'a, 'ctx>(&self) -> String {
+        match self {
+            PLType::FN(fu) => fu.name.clone(),
+            PLType::STRUCT(st) => st.get_st_full_name(),
+            PLType::PRIMITIVE(pri) => pri.get_name(),
+            PLType::ARR(arr) => {
+                format!("[{} * {}]", arr.element_type.get_full_elm_name(), arr.size)
+            }
+            PLType::VOID => "void".to_string(),
+            PLType::POINTER(p) => p.get_full_elm_name(),
+        }
+    }
+    pub fn get_ptr_depth(&self) -> usize {
+        match self {
+            PLType::POINTER(p) => p.get_ptr_depth() + 1,
+            _ => 0,
+        }
+    }
+
     /// # get_range
     /// get the defination range of the type
     pub fn get_range(&self) -> Option<Range> {
@@ -553,7 +586,21 @@ impl PLType {
                 )
             }
             PLType::STRUCT(x) => {
+                // 若已经生成过，直接查表返回
+                if ctx.ditypes.borrow().contains_key(&x.get_st_full_name()) {
+                    return Some(
+                        ctx.ditypes
+                            .borrow()
+                            .get(&x.get_st_full_name())
+                            .unwrap()
+                            .clone(),
+                    );
+                }
                 let mut offset = 0;
+                // 生成占位符，为循环引用做准备
+                ctx.ditypes_placeholder
+                    .borrow_mut()
+                    .insert(x.get_st_full_name(), RefCell::new(vec![]));
                 let m = x
                     .ordered_fields
                     .iter()
@@ -563,24 +610,67 @@ impl PLType {
                         tp
                     })
                     .collect::<Vec<_>>();
-                return Some(
-                    ctx.dibuilder
-                        .create_struct_type(
-                            ctx.discope,
-                            &x.name,
-                            ctx.diunit.get_file(),
-                            x.range.start.line as u32 + 1,
-                            td.get_bit_size(&x.struct_type(ctx)),
-                            td.get_abi_alignment(&x.struct_type(ctx)),
-                            DIFlags::PUBLIC,
-                            None,
-                            &m,
-                            0,
-                            None,
-                            &x.name,
-                        )
-                        .as_type(),
-                );
+                let sttp = x.struct_type(ctx);
+                let st = ctx
+                    .dibuilder
+                    .create_struct_type(
+                        ctx.discope,
+                        &x.name,
+                        ctx.diunit.get_file(),
+                        x.range.start.line as u32 + 1,
+                        td.get_bit_size(&sttp),
+                        td.get_abi_alignment(&sttp),
+                        DIFlags::PUBLIC,
+                        None,
+                        &m,
+                        0,
+                        None,
+                        &x.name,
+                    )
+                    .as_type();
+                let members = ctx
+                    .ditypes_placeholder
+                    .borrow_mut()
+                    .remove(&x.get_st_full_name())
+                    .unwrap();
+                // 替换循环引用生成的占位符
+                for m in members.borrow().iter() {
+                    let mut elemdi = st;
+                    for _ in 0..m.ptr_depth {
+                        elemdi = ctx
+                            .dibuilder
+                            .create_pointer_type(
+                                "",
+                                elemdi,
+                                td.get_bit_size(
+                                    &sttp.ptr_type(AddressSpace::Generic).as_basic_type_enum(),
+                                ),
+                                td.get_preferred_alignment(
+                                    &sttp.ptr_type(AddressSpace::Generic).as_basic_type_enum(),
+                                ),
+                                AddressSpace::Generic,
+                            )
+                            .as_type();
+                    }
+
+                    let realtp = ctx.dibuilder.create_member_type(
+                        m.scope,
+                        &m.name,
+                        m.di_file,
+                        m.line,
+                        elemdi.get_size_in_bits(),
+                        elemdi.get_align_in_bits(),
+                        m.offset,
+                        DIFlags::PUBLIC,
+                        elemdi,
+                    );
+                    unsafe {
+                        ctx.dibuilder
+                            .replace_placeholder_derived_type(m.ditype, realtp);
+                    }
+                }
+                ctx.ditypes.borrow_mut().insert(x.get_st_full_name(), st);
+                return Some(st);
             }
             PLType::PRIMITIVE(pt) => {
                 return Some(
@@ -598,7 +688,10 @@ impl PLType {
             PLType::VOID => None,
             PLType::POINTER(p) => {
                 let elemdi = p.get_ditype(ctx)?;
-                let etp = &p.get_basic_type(ctx);
+                let etp = &p
+                    .get_basic_type(ctx)
+                    .ptr_type(AddressSpace::Generic)
+                    .as_basic_type_enum();
                 let size = td.get_bit_size(etp);
                 let align = td.get_preferred_alignment(etp);
                 Some(
@@ -645,7 +738,7 @@ impl<'ctx> RetTypeEnum<'ctx> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field {
     pub index: u32,
-    pub pltype: PLType,
+    pub pltype: Box<TypeNodeEnum>,
     pub name: String,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
@@ -653,7 +746,34 @@ pub struct Field {
 
 impl Field {
     pub fn get_di_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, offset: u64) -> (DIType<'ctx>, u64) {
-        let di_type = self.pltype.get_ditype(ctx);
+        let pltp = self.pltype.get_type(ctx).unwrap();
+        let depth = pltp.get_ptr_depth();
+        if let Some(x) = ctx
+            .ditypes_placeholder
+            .borrow_mut()
+            .get(&pltp.get_full_elm_name())
+        {
+            if !matches!(pltp, PLType::POINTER(_)) {
+                // 出现循环引用，但是不是指针
+                // TODO 应该只需要一层是指针就行，目前的检查要求每一层都是指针
+                ctx.add_err(self.range, ErrorCode::ILLEGAL_SELF_RECURSION);
+            }
+            let placeholder = unsafe { ctx.dibuilder.create_placeholder_derived_type(ctx.context) };
+            let td = ctx.targetmachine.get_target_data();
+            let etp = ctx.context.i8_type().ptr_type(AddressSpace::Generic);
+            let size = td.get_bit_size(&etp);
+            x.borrow_mut().push(MemberType {
+                ditype: placeholder,
+                offset,
+                scope: ctx.discope,
+                line: self.range.start.line as u32,
+                name: self.name.clone(),
+                di_file: ctx.diunit.get_file(),
+                ptr_depth: depth,
+            });
+            return (placeholder.as_type(), offset + size);
+        }
+        let di_type = pltp.get_ditype(ctx);
         let debug_type = di_type.unwrap();
         (
             ctx.dibuilder
@@ -759,7 +879,13 @@ impl STType {
                 .ordered_fields
                 .clone()
                 .into_iter()
-                .map(|order_field| order_field.pltype.get_basic_type(&ctx))
+                .map(|order_field| {
+                    order_field
+                        .pltype
+                        .get_type(ctx)
+                        .unwrap()
+                        .get_basic_type(&ctx)
+                })
                 .collect::<Vec<_>>(),
             false,
         );
@@ -878,7 +1004,7 @@ pub fn create_ctx_info<'ctx>(
     let module = context.create_module("main");
     let (dibuilder, compile_unit) = module.create_debug_info_builder(
         true,
-        DWARFSourceLanguage::Rust,
+        DWARFSourceLanguage::C,
         file,
         dir,
         "plc frontend",
@@ -967,6 +1093,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             config,
             roots: RefCell::new(Vec::new()),
             usegc: true,
+            ditypes_placeholder: Rc::new(RefCell::new(FxHashMap::default())),
+            ditypes: Rc::new(RefCell::new(FxHashMap::default())),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -1010,6 +1138,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             config: self.config.clone(),
             roots: RefCell::new(Vec::new()),
             usegc: self.usegc,
+            ditypes_placeholder: self.ditypes_placeholder.clone(),
+            ditypes: self.ditypes.clone(),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -1178,12 +1308,12 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         Ok(())
     }
 
-    pub fn add_err(&mut self, range: Range, code: ErrorCode) -> PLDiag {
+    pub fn add_err(&self, range: Range, code: ErrorCode) -> PLDiag {
         let dia = PLDiag::new_error(range, code);
         self.errs.borrow_mut().push(dia.clone());
         dia
     }
-    pub fn add_warn(&mut self, range: Range, code: WarnCode) -> PLDiag {
+    pub fn add_warn(&self, range: Range, code: WarnCode) -> PLDiag {
         let dia = PLDiag::new_warn(range, code);
         self.errs.borrow_mut().push(dia.clone());
         dia
@@ -1217,7 +1347,26 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if let Some(tp) = self.action {
             if let Some(comp) = &self.lspparams {
                 if tp == ActionType::Completion {
-                    c(self, &(comp.0, comp.1.clone()));
+                    let v = self.completion_items.take();
+                    if v.is_empty() {
+                        c(self, &(comp.0, comp.1.clone()));
+                    } else {
+                        self.completion_items.set(v);
+                    }
+                }
+            }
+        }
+    }
+    pub fn if_completion_no_mut(&self, c: impl FnOnce(&Ctx, &(Pos, Option<String>))) {
+        if let Some(tp) = self.action {
+            if let Some(comp) = &self.lspparams {
+                if tp == ActionType::Completion {
+                    let v = self.completion_items.take();
+                    if v.is_empty() {
+                        c(self, &(comp.0, comp.1.clone()));
+                    } else {
+                        self.completion_items.set(v);
+                    }
                 }
             }
         }
@@ -1246,27 +1395,32 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn set_if_refs(&self, refs: Rc<RefCell<Vec<Location>>>, range: Range) {
-        if let Some(_) = self.action {
-            if let Some(comp) = &self.lspparams {
-                refs.borrow_mut().push(self.get_location(range));
-                if comp.0.is_in(range) {
-                    self.refs.set(Some(refs));
+        if let Some(act) = self.action {
+            if act == ActionType::FindReferences {
+                if let Some(comp) = &self.lspparams {
+                    refs.borrow_mut().push(self.get_location(range));
+                    if comp.0.is_in(range) {
+                        self.refs.set(Some(refs));
+                    }
                 }
             }
         }
     }
 
-    pub fn send_if_go_to_def(&mut self, range: Range, destrange: Range, file: String) {
+    pub fn send_if_go_to_def(&self, range: Range, destrange: Range, file: String) {
         if let Some(_) = self.action {
             if let Some(comp) = &self.lspparams {
                 if comp.2 == ActionType::GotoDef {
-                    if comp.0.is_in(range) {
+                    let v = self.goto_def.take();
+                    if v.is_none() && comp.0.is_in(range) {
                         let resp = GotoDefinitionResponse::Scalar(Location {
                             uri: Url::from_file_path(file).unwrap(),
                             range: destrange.to_diag_range(),
                         });
                         self.goto_def.set(Some(resp));
-                        self.action = None // set sender to None so it won't be sent again
+                        // self.action = None // set sender to None so it won't be sent again
+                    } else {
+                        self.goto_def.set(v);
                     }
                 }
             }

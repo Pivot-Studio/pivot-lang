@@ -13,7 +13,7 @@ use colored::Colorize;
 use inkwell::context::Context;
 use inkwell::targets::TargetMachine;
 use internal_macro::range;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::fs::OpenOptions;
@@ -49,29 +49,13 @@ impl Node for ProgramNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        // top level parser
-        let mut prev = 1000000;
-        let mut idxs = FxHashSet::default();
-        loop {
-            let mut i = 0;
-            for (idx, def) in self.structs.iter().enumerate() {
-                if idxs.contains(&idx) {
-                    continue;
-                }
-                if def.emit_struct_def(ctx).is_err() {
-                    i = i + 1;
-                } else {
-                    idxs.insert(idx);
-                }
-            }
-            if i == 0 {
-                break;
-            }
-            if i == prev {
-                break;
-            }
-            prev = i;
-            ctx.errs.borrow_mut().clear();
+        // emit structs
+        for def in self.structs.iter() {
+            // 提前加入占位符号，解决自引用问题
+            def.add_to_symbols(ctx);
+        }
+        for def in self.structs.iter() {
+            _ = def.emit_struct_def(ctx);
         }
         self.fntypes.iter_mut().for_each(|x| {
             _ = x.emit_func_type(ctx);

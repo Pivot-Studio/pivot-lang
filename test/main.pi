@@ -219,6 +219,7 @@ fn main() i64 {
     io::printi64ln(st.a);
     test_pointer();
     test_primitives();
+    test_self_ref();
     return 0;
 }
 
@@ -238,7 +239,22 @@ fn test_modify_pointer(a: **i64) void {
 }
 
 struct pointer_struct {
+    ptr2: **pointer_struct;
     ptr: *struct_child;
+}
+
+fn test_self_ref() void {
+    let a = pointer_struct{
+        ptr2: &&pointer_struct{
+            ptr2: &&pointer_struct{
+                ptr: &struct_child{
+                    a: 100
+                }
+            }
+        }
+    };
+    io::printi64ln(a.ptr2.ptr2.ptr.a);
+    return;
 }
 
 fn test_dangling() *pointer_struct {

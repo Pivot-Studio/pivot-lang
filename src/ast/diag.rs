@@ -72,7 +72,8 @@ define_error!(
     TYPE_MISMATCH = "mismatch",
     ILLEGAL_GET_FIELD_OPERATION = "illegal get field operation",
     NOT_A_POINTER = "not a pointer",
-    CAN_NOT_REF_CONSTANT = "can not ref constant"
+    CAN_NOT_REF_CONSTANT = "can not ref constant",
+    ILLEGAL_SELF_RECURSION = "illegal self recursion, please use pointer"
 );
 macro_rules! define_warn {
     ($(
