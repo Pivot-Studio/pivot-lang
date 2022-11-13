@@ -378,13 +378,13 @@ fn main() i64 {
 <p>重要：<code>printi64ln</code>函数是目前pl runtime中的一个测试用内置函数，此函数可能会在未来移除</p>
 </blockquote>
 <h2 id="编译"><a class="header" href="#编译">编译</a></h2>
-<p>如果你已经安装了<code>plc</code>，那么你可以在项目根目录下执行<code>plc main.pi</code>命令来编译该项目。此指令会生成一个名叫<code>out.plb</code>的文件，还有一些中间文件</p>
+<p>如果你已经安装了<code>plc</code>，那么你可以在项目根目录下执行<code>plc main.pi</code>命令来编译该项目。此指令会生成一个名叫<code>out.bc</code>的文件，还有一些中间文件</p>
 <blockquote>
 <p>如果你配置了静态编译环境，还会生成一个叫做<code>out</code>的文件，该文件是一个可执行文件，可以直接运行
 而如果你只有jit环境，该文件不会生成，并且编译命令会输出一个clang报错和两行warning，这是正常现象</p>
 </blockquote>
 <h2 id="jit运行"><a class="header" href="#jit运行">jit运行</a></h2>
-<p>编译后输入<code>plc run out.plb</code>可以jit运行该项目，其输出结果如下：</p>
+<p>编译后输入<code>plc run out.bc</code>可以jit运行该项目，其输出结果如下：</p>
 <pre><code>666
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="visual-studio-code-support"><a class="header" href="#visual-studio-code-support">Visual Studio Code support</a></h1>
