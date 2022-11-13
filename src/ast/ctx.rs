@@ -795,11 +795,11 @@ impl Field {
             offset + debug_type.get_size_in_bits(),
         )
     }
-    pub fn get_doc_symbol(&self) -> DocumentSymbol {
+    pub fn get_doc_symbol<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> DocumentSymbol {
         #[allow(deprecated)]
         DocumentSymbol {
             name: self.name.clone(),
-            detail: Some(self.pltype.get_name()),
+            detail: Some(self.pltype.get_type(ctx).unwrap().get_name()),
             kind: SymbolKind::FIELD,
             tags: None,
             deprecated: None,
@@ -958,11 +958,11 @@ impl STType {
     pub fn get_st_full_name(&self) -> String {
         format!("{}..{}", self.path, self.name)
     }
-    pub fn get_doc_symbol(&self) -> DocumentSymbol {
+    pub fn get_doc_symbol<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> DocumentSymbol {
         let children: Vec<DocumentSymbol> = self
             .ordered_fields
             .iter()
-            .map(|order_field| order_field.get_doc_symbol())
+            .map(|order_field| order_field.get_doc_symbol(ctx))
             .collect();
         #[allow(deprecated)]
         DocumentSymbol {
@@ -1368,7 +1368,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.plmod.types.insert(name, pltype.clone());
         match &pltype {
             PLType::FN(f) => self.doc_symbols.borrow_mut().push(f.get_doc_symbol()),
-            PLType::STRUCT(st) => self.doc_symbols.borrow_mut().push(st.get_doc_symbol()),
+            PLType::STRUCT(st) => self.doc_symbols.borrow_mut().push(st.get_doc_symbol(self)),
             _ => {}
         }
         Ok(())
