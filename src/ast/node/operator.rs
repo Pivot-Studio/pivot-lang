@@ -317,6 +317,8 @@ impl Node for TakeOpNode {
                             } else if let Some(mthd) = method {
                                 ctx.push_semantic_token(range, SemanticTokenType::METHOD, 0);
                                 // ctx.set_if_refs(mthd.refs.clone(), range);
+                                let mut mthd = mthd.clone();
+                                mthd.param_pltypes.insert(0, pltype.clone());
                                 ctx.send_if_go_to_def(
                                     range,
                                     mthd.range,
@@ -328,7 +330,7 @@ impl Node for TakeOpNode {
                                         is_const: false,
                                         receiver: Some(headptr),
                                     }),
-                                    Some(Rc::new(RefCell::new(PLType::FN(mthd.clone())))),
+                                    Some(Rc::new(RefCell::new(PLType::FN(mthd)))),
                                     TerminatorEnum::NONE,
                                 ));
                             } else {

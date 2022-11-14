@@ -206,10 +206,6 @@ impl Mod {
         None
     }
 
-    pub fn replace_type(&mut self, name: &str, tp: Rc<RefCell<PLType>>) {
-        self.types.insert(name.to_string(), tp);
-    }
-
     /// 获取llvm名称
     ///
     /// module路径+类型名

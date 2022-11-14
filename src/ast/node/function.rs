@@ -364,23 +364,12 @@ impl FuncTypeNode {
         }
         let mut param_pltypes = Vec::new();
         let mut param_name = Vec::new();
-        let mut receiver = None;
+        let mut receiver = false;
         let mut first = true;
-        let mut receivertp = None;
         for para in self.paralist.iter() {
             let paramtype = para.tp.get_type(ctx)?;
             if first && para.id.name == "self" {
-                receivertp = Some(para.tp.clone());
-                let p = paramtype.clone();
-                let st = match p.borrow().clone() {
-                    PLType::POINTER(st) => st,
-                    _ => unreachable!(),
-                };
-                let st = match st.clone().borrow().clone() {
-                    PLType::STRUCT(st) => st,
-                    _ => unreachable!(),
-                };
-                receiver = Some(st);
+                receiver = true;
             }
             first = false;
             param_pltypes.push(paramtype.clone());
@@ -400,16 +389,19 @@ impl FuncTypeNode {
             } else {
                 ctx.plmod.get_full_name(&self.id.name)
             },
-            method: receiver.is_some(),
+            method: receiver,
         };
-        if let Some(mut receiver) = receiver {
-            receiver.methods.insert(
-                self.id.name.split("::").last().unwrap().to_string(),
-                ftp.clone(),
-            );
-            receivertp
-                .unwrap()
-                .replace_type(ctx, Rc::new(RefCell::new(PLType::STRUCT(receiver))));
+        if receiver {
+            let a = self.paralist.first().unwrap().tp.get_type(ctx).unwrap();
+            let mut b = a.borrow_mut();
+            if let PLType::POINTER(s) = &mut *b {
+                if let PLType::STRUCT(s) = &mut *s.borrow_mut() {
+                    let mut ftp = ftp.clone();
+                    ftp.param_pltypes = ftp.param_pltypes[1..].to_vec();
+                    s.methods
+                        .insert(self.id.name.split("::").last().unwrap().to_string(), ftp);
+                }
+            }
         }
         let res = ftp.get_or_insert_fn(ctx);
         let pltype = PLType::FN(ftp);

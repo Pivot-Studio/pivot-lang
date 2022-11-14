@@ -46,9 +46,6 @@ impl TypeNode for TypeNameNode {
             ctx.push_semantic_token(id.id.range, SemanticTokenType::TYPE, 0);
         }
     }
-    fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: Rc<RefCell<PLType>>) {
-        self.id.as_mut().unwrap().replace_type(ctx, tp)
-    }
 
     fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
         ctx.if_completion_no_mut(|ctx, a| {
@@ -84,9 +81,6 @@ impl TypeNode for ArrayTypeNameNode {
             &self.id.format(tabs, prefix),
             &self.size.format(tabs, prefix)
         )
-    }
-    fn replace_type<'a, 'ctx>(&mut self, _: &mut Ctx<'a, 'ctx>, _: Rc<RefCell<PLType>>) {
-        unreachable!()
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -130,9 +124,6 @@ impl TypeNode for PointerTypeNode {
         tab(tabs, line.clone(), end);
         println!("PointerTypeNode");
         self.elm.print(tabs + 1, true, line.clone());
-    }
-    fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: Rc<RefCell<PLType>>) {
-        self.elm.as_mut().replace_type(ctx, tp)
     }
     fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
         let pltype = self.elm.get_type(ctx)?;
@@ -317,19 +308,14 @@ impl StructDefNode {
                 .collect::<Vec<_>>(),
             false,
         );
-        let pltype = Rc::new(RefCell::new(PLType::STRUCT(STType {
-            name: name.to_string(),
-            path: ctx.plmod.path.clone(),
-            fields,
-            ordered_fields: newf,
-            range: self.range(),
-            refs: Rc::new(RefCell::new(vec![])),
-            doc: self.doc.clone(),
-            methods: FxHashMap::default(),
-        })));
-        ctx.set_if_refs_tp(pltype.clone(), self.range);
-        _ = ctx.plmod.replace_type(name, pltype.clone());
-        ctx.add_doc_symbols(pltype);
+        let tp = ctx.get_type(&self.id.name.as_str(), self.range).unwrap();
+        ctx.set_if_refs_tp(tp.clone(), self.range);
+        ctx.add_doc_symbols(tp.clone());
+        if let PLType::STRUCT(st) = &mut *tp.borrow_mut() {
+            st.fields = fields;
+            st.ordered_fields = newf;
+            st.doc = self.doc.clone();
+        }
         ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
         Ok(())
     }
