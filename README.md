@@ -147,7 +147,11 @@ program = toplevel_statement* ;
 
 function_def = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name (statement_block | ";") ;
 
-struct_def = "struct" identifier "{" struct_field* "}" ;
+generic_type = "<" type_name ("|" type_name)* ">" ;
+
+generic_type_def = "<" identifier ("|" identifier)* ">" ;
+
+struct_def = "struct" identifier generic_type_def? "{" struct_field* "}" ;
 
 type_name = "*"* extern_identifier ;
 

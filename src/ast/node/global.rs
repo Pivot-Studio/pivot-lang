@@ -36,7 +36,7 @@ impl Node for GlobalNode {
         let builder = ctx.builder;
         ctx.builder = ctx.nodebug_builder;
         let (value, pltype, _) = self.exp.emit(ctx)?;
-        ctx.push_type_hints(self.var.range, &pltype.unwrap());
+        ctx.push_type_hints(self.var.range, pltype.unwrap());
         let base_value = ctx.try_load2var(exp_range, value.unwrap())?;
         let res = ctx.get_symbol(&self.var.name);
         if res.is_none() {
@@ -64,7 +64,7 @@ impl GlobalNode {
             return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
         }
         let pltype = pltype_opt.unwrap();
-        let ditype = pltype.get_ditype(ctx);
+        let ditype = pltype.borrow().get_ditype(ctx);
         let base_value = ctx.try_load2var(exp_range, value.unwrap())?;
         let base_type = base_value.get_type();
         let globalptr =

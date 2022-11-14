@@ -46,7 +46,7 @@ impl TypeNode for TypeNameNode {
             ctx.push_semantic_token(id.id.range, SemanticTokenType::TYPE, 0);
         }
     }
-    fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: PLType) {
+    fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: Rc<RefCell<PLType>>) {
         self.id.as_mut().unwrap().replace_type(ctx, tp)
     }
 
@@ -62,10 +62,10 @@ impl TypeNode for TypeNameNode {
         }
         let (_, pltype, _) = self.id.as_ref().unwrap().get_type(ctx)?;
         let pltype = pltype.unwrap();
-        if let Some(dst) = pltype.get_range() {
+        if let Some(dst) = pltype.borrow().get_range() {
             ctx.send_if_go_to_def(self.range, dst, ctx.plmod.path.clone());
         }
-        ctx.set_if_refs_tp(&pltype, self.range);
+        ctx.set_if_refs_tp(pltype.clone(), self.range);
         Ok(pltype)
     }
 }
@@ -85,7 +85,7 @@ impl TypeNode for ArrayTypeNameNode {
             &self.size.format(tabs, prefix)
         )
     }
-    fn replace_type<'a, 'ctx>(&mut self, _: &mut Ctx<'a, 'ctx>, _: PLType) {
+    fn replace_type<'a, 'ctx>(&mut self, _: &mut Ctx<'a, 'ctx>, _: Rc<RefCell<PLType>>) {
         unreachable!()
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
@@ -103,7 +103,7 @@ impl TypeNode for ArrayTypeNameNode {
                     element_type: Box::new(pltype),
                     size: sz as u32,
                 };
-                let arrtype = PLType::ARR(arrtype);
+                let arrtype = Rc::new(RefCell::new(PLType::ARR(arrtype)));
                 return Ok(arrtype);
             }
         }
@@ -131,12 +131,12 @@ impl TypeNode for PointerTypeNode {
         println!("PointerTypeNode");
         self.elm.print(tabs + 1, true, line.clone());
     }
-    fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: PLType) {
+    fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: Rc<RefCell<PLType>>) {
         self.elm.as_mut().replace_type(ctx, tp)
     }
     fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
         let pltype = self.elm.get_type(ctx)?;
-        let pltype = PLType::POINTER(Box::new(pltype));
+        let pltype = Rc::new(RefCell::new(PLType::POINTER(Box::new(pltype))));
         Ok(pltype)
     }
 
@@ -186,6 +186,7 @@ pub struct StructDefNode {
     pub doc: Vec<Box<NodeEnum>>,
     pub id: Box<VarNode>,
     pub fields: Vec<(Box<TypedIdentifierNode>, bool)>,
+    pub generics: Option<Box<GenericDefNode>>,
 }
 
 impl Node for StructDefNode {
@@ -247,7 +248,7 @@ impl Node for StructDefNode {
 
 impl StructDefNode {
     pub fn add_to_symbols<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) {
-        let stu = PLType::STRUCT(STType {
+        let stu = Rc::new(RefCell::new(PLType::STRUCT(STType {
             name: self.id.name.clone(),
             path: ctx.plmod.path.clone(),
             fields: FxHashMap::default(),
@@ -256,7 +257,7 @@ impl StructDefNode {
             refs: Rc::new(RefCell::new(vec![])),
             doc: vec![],
             methods: FxHashMap::default(),
-        });
+        })));
         ctx.context
             .opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.range);
@@ -280,8 +281,12 @@ impl StructDefNode {
             };
             let tp = field.tp.get_type(ctx);
             if let Ok(tp) = tp {
-                if tp.get_range().is_some() {
-                    ctx.send_if_go_to_def(f.range, tp.get_range().unwrap(), ctx.plmod.path.clone());
+                if tp.borrow().get_range().is_some() {
+                    ctx.send_if_go_to_def(
+                        f.range,
+                        tp.borrow().get_range().unwrap(),
+                        ctx.plmod.path.clone(),
+                    );
                 }
             } else {
                 continue;
@@ -306,12 +311,13 @@ impl StructDefNode {
                         .pltype
                         .get_type(ctx)
                         .unwrap()
+                        .borrow()
                         .get_basic_type(&ctx)
                 })
                 .collect::<Vec<_>>(),
             false,
         );
-        let pltype = PLType::STRUCT(STType {
+        let pltype = Rc::new(RefCell::new(PLType::STRUCT(STType {
             name: name.to_string(),
             path: ctx.plmod.path.clone(),
             fields,
@@ -320,8 +326,8 @@ impl StructDefNode {
             refs: Rc::new(RefCell::new(vec![])),
             doc: self.doc.clone(),
             methods: FxHashMap::default(),
-        });
-        ctx.set_if_refs_tp(&pltype, self.range);
+        })));
+        ctx.set_if_refs_tp(pltype.clone(), self.range);
         _ = ctx.plmod.replace_type(name, pltype.clone());
         ctx.add_doc_symbols(pltype);
         ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
@@ -419,7 +425,7 @@ impl Node for StructInitNode {
             }
             fields.insert(name, (ctx.try_load2var(range, value.unwrap())?, range));
         }
-        if let PLType::STRUCT(st) = &tp {
+        if let PLType::STRUCT(st) = &*tp.clone().borrow() {
             ctx.save_if_comment_doc_hover(self.tp.range(), Some(st.doc.clone()));
             let et = st.struct_type(ctx).as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");
@@ -446,7 +452,7 @@ impl Node for StructInitNode {
                 ctx.set_if_refs(field.refs.clone(), range);
                 ctx.send_if_go_to_def(range, field.range, st.path.clone())
             }
-            return Ok((Some(stv.into()), Some(tp), TerminatorEnum::NONE));
+            return Ok((Some(stv.into()), Some(tp.clone()), TerminatorEnum::NONE));
         } else {
             panic!("StructInitNode::emit: invalid type");
         }
@@ -515,11 +521,17 @@ impl Node for ArrayInitNode {
         }
         return Ok((
             Some(arr.into()),
-            Some(PLType::ARR(ARRType {
+            Some(Rc::new(RefCell::new(PLType::ARR(ARRType {
                 element_type: Box::new(tp0.unwrap()),
                 size: sz,
-            })),
+            })))),
             TerminatorEnum::NONE,
         ));
     }
+}
+
+#[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct GenericDefNode {
+    pub generics: Vec<Box<VarNode>>,
 }

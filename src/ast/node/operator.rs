@@ -41,7 +41,7 @@ impl Node for UnaryOpNode {
         }
         let pltype = pltype.unwrap();
         let exp = ctx.try_load2var(exp_range, exp.unwrap())?;
-        return Ok(match (&pltype, self.op) {
+        return Ok(match (&*pltype.borrow(), self.op) {
             (
                 PLType::PRIMITIVE(
                     PriType::I128 | PriType::I64 | PriType::I32 | PriType::I16 | PriType::I8,
@@ -53,7 +53,7 @@ impl Node for UnaryOpNode {
                         .build_int_neg(exp.into_int_value(), "negtmp")
                         .into(),
                 ),
-                Some(pltype),
+                Some(pltype.clone()),
                 TerminatorEnum::NONE,
             ),
             (PLType::PRIMITIVE(PriType::F64 | PriType::F32), TokenType::MINUS) => (
@@ -62,7 +62,7 @@ impl Node for UnaryOpNode {
                         .build_float_neg(exp.into_float_value(), "negtmp")
                         .into(),
                 ),
-                Some(pltype),
+                Some(pltype.clone()),
                 TerminatorEnum::NONE,
             ),
             (PLType::PRIMITIVE(PriType::BOOL), TokenType::NOT) => (
@@ -79,7 +79,7 @@ impl Node for UnaryOpNode {
                             .into(),
                     )
                 },
-                Some(pltype),
+                Some(pltype.clone()),
                 TerminatorEnum::NONE,
             ),
             (_exp, _op) => {
@@ -139,7 +139,7 @@ impl Node for BinOpNode {
             | TokenType::LEQ
             | TokenType::GEQ
             | TokenType::GREATER
-            | TokenType::LESS => match lpltype.unwrap() {
+            | TokenType::LESS => match *lpltype.unwrap().borrow() {
                 PLType::PRIMITIVE(
                     PriType::I128
                     | PriType::I64
@@ -165,7 +165,7 @@ impl Node for BinOpNode {
                                 .into(),
                         )
                     },
-                    Some(PLType::PRIMITIVE(PriType::BOOL)),
+                    Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
                 ),
                 PLType::PRIMITIVE(PriType::F64 | PriType::F32) => (
@@ -182,7 +182,7 @@ impl Node for BinOpNode {
                                 .into(),
                         )
                     },
-                    Some(PLType::PRIMITIVE(PriType::BOOL)),
+                    Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
                 ),
                 _ => {
@@ -192,7 +192,7 @@ impl Node for BinOpNode {
                     ))
                 }
             },
-            TokenType::AND => match lpltype.unwrap() {
+            TokenType::AND => match *lpltype.unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::BOOL) => (
                     {
                         let bool_origin = ctx.builder.build_and(
@@ -206,7 +206,7 @@ impl Node for BinOpNode {
                                 .into(),
                         )
                     },
-                    Some(PLType::PRIMITIVE(PriType::BOOL)),
+                    Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
                 ),
                 _ => {
@@ -215,7 +215,7 @@ impl Node for BinOpNode {
                     )
                 }
             },
-            TokenType::OR => match lpltype.unwrap() {
+            TokenType::OR => match *lpltype.unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::BOOL) => (
                     {
                         let bool_origin = ctx.builder.build_or(
@@ -229,7 +229,7 @@ impl Node for BinOpNode {
                                 .into(),
                         )
                     },
-                    Some(PLType::PRIMITIVE(PriType::BOOL)),
+                    Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
                 ),
                 _ => {
@@ -297,7 +297,7 @@ impl Node for TakeOpNode {
                                 && trigger.is_some()
                                 && trigger.as_ref().unwrap() == "."
                             {
-                                if let PLType::STRUCT(s) = pltype.clone() {
+                                if let PLType::STRUCT(s) = &*pltype.clone().borrow() {
                                     let completions = s.get_completions();
                                     ctx.completion_items.set(completions);
                                     ctx.action = None;
@@ -305,14 +305,14 @@ impl Node for TakeOpNode {
                             }
                         });
                         let range = id.range();
-                        if let PLType::STRUCT(s) = pltype {
+                        if let PLType::STRUCT(s) = &*pltype.clone().borrow() {
                             let field = s.fields.get(&id.name);
                             let method = s.methods.get(&id.name);
                             if let Some(field) = field {
                                 ctx.push_semantic_token(range, SemanticTokenType::PROPERTY, 0);
                                 index = field.index;
                                 ctx.set_if_refs(field.refs.clone(), range);
-                                ctx.send_if_go_to_def(range, field.range, s.path);
+                                ctx.send_if_go_to_def(range, field.range, s.path.clone());
                                 pltype = field.pltype.get_type(ctx).unwrap().clone();
                             } else if let Some(mthd) = method {
                                 ctx.push_semantic_token(range, SemanticTokenType::METHOD, 0);
@@ -328,7 +328,7 @@ impl Node for TakeOpNode {
                                         is_const: false,
                                         receiver: Some(headptr),
                                     }),
-                                    Some(PLType::FN(mthd.clone())),
+                                    Some(Rc::new(RefCell::new(PLType::FN(mthd.clone())))),
                                     TerminatorEnum::NONE,
                                 ));
                             } else {
@@ -357,7 +357,7 @@ impl Node for TakeOpNode {
             let tp = ctx.auto_deref_tp(pltype);
             ctx.if_completion(|ctx, (pos, trigger)| {
                 if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
-                    if let PLType::STRUCT(s) = tp {
+                    if let PLType::STRUCT(s) = &*tp.borrow() {
                         let completions = s.get_completions();
                         ctx.completion_items.set(completions);
                         ctx.action = None;

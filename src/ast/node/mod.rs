@@ -1,3 +1,6 @@
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use crate::ast::ctx::Ctx;
 
 use as_any::AsAny;
@@ -78,9 +81,9 @@ pub trait TypeNode: RangeTrait + AsAny {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
     fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>);
-    fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: PLType);
+    fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: Rc<RefCell<PLType>>);
 }
-type TypeNodeResult<'ctx> = Result<PLType, PLDiag>;
+type TypeNodeResult<'ctx> = Result<Rc<RefCell<PLType>>, PLDiag>;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 #[enum_dispatch(Node, RangeTrait)]
@@ -136,7 +139,7 @@ pub trait Node: RangeTrait + AsAny {
 type NodeResult<'ctx> = Result<
     (
         Option<PLValue<'ctx>>,
-        Option<PLType>, //type
+        Option<Rc<RefCell<PLType>>>, //type
         TerminatorEnum,
     ),
     PLDiag,
@@ -210,7 +213,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     fn emit_with_expectation(
         &mut self,
         node: &'a mut Box<NodeEnum>,
-        expect: Option<PLType>,
+        expect: Option<Rc<RefCell<PLType>>>,
     ) -> NodeResult<'ctx> {
         if expect.is_none() {
             return node.emit(self);
@@ -223,20 +226,22 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             // TODO: check overflow
             let v = match num {
                 Num::INT(i) => {
-                    if !expect.get_basic_type(&self).is_int_type() {
+                    if !expect.borrow().get_basic_type(&self).is_int_type() {
                         return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH));
                     }
                     let int = expect
+                        .borrow()
                         .get_basic_type(&self)
                         .into_int_type()
                         .const_int(i, false);
                     int.as_any_value_enum()
                 }
                 Num::FLOAT(f) => {
-                    if !expect.get_basic_type(&self).is_float_type() {
+                    if !expect.borrow().get_basic_type(&self).is_float_type() {
                         return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH));
                     }
                     let float = expect
+                        .borrow()
                         .get_basic_type(&self)
                         .into_float_type()
                         .const_float(f);
@@ -340,7 +345,7 @@ pub fn alloc<'a, 'ctx>(
 macro_rules! handle_calc {
     ($ctx:ident, $op:ident, $opf:ident, $lpltype:ident, $left:ident, $right:ident, $range: expr) => {
         item! {
-            match $lpltype.clone().unwrap() {
+            match *$lpltype.clone().unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::I128|PriType::I64|PriType::I32|PriType::I16|PriType::I8|
                     PriType::U128|PriType::U64|PriType::U32|PriType::U16|PriType::U8) => {
                     return Ok((Some($ctx.builder.[<build_int_$op>](
