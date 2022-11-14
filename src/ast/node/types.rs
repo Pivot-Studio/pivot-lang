@@ -184,7 +184,7 @@ impl TypedIdentifierNode {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructDefNode {
     pub doc: Vec<Box<NodeEnum>>,
-    pub id: String,
+    pub id: Box<VarNode>,
     pub fields: Vec<(Box<TypedIdentifierNode>, bool)>,
 }
 
@@ -199,7 +199,7 @@ impl Node for StructDefNode {
         format_res.push_str(&doc_str);
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str("struct ");
-        format_res.push_str(&self.id);
+        format_res.push_str(&self.id.name);
         format_res.push_str(" {");
         for (field, _i) in &self.fields {
             format_res.push_str(&field.format(tabs + 1, prefix));
@@ -215,7 +215,7 @@ impl Node for StructDefNode {
         tab(tabs, line.clone(), end);
         println!("StructDefNode");
         tab(tabs + 1, line.clone(), false);
-        println!("id: {}", self.id);
+        println!("id: {}", self.id.name);
         for c in self.doc.iter() {
             c.print(tabs + 1, false, line.clone());
         }
@@ -230,7 +230,7 @@ impl Node for StructDefNode {
         for c in self.doc.iter() {
             ctx.push_semantic_token(c.range(), SemanticTokenType::COMMENT, 0);
         }
-        ctx.push_semantic_token(self.range, SemanticTokenType::STRUCT, 0);
+        ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
         for (field, has_semi) in self.fields.iter() {
             ctx.push_semantic_token(field.id.range, SemanticTokenType::PROPERTY, 0);
             field.tp.emit_highlight(ctx);
@@ -248,7 +248,7 @@ impl Node for StructDefNode {
 impl StructDefNode {
     pub fn add_to_symbols<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) {
         let stu = PLType::STRUCT(STType {
-            name: self.id.clone(),
+            name: self.id.name.clone(),
             path: ctx.plmod.path.clone(),
             fields: FxHashMap::default(),
             ordered_fields: vec![],
@@ -258,15 +258,11 @@ impl StructDefNode {
             methods: FxHashMap::default(),
         });
         ctx.context
-            .opaque_struct_type(&ctx.plmod.get_full_name(&self.id));
-        _ = ctx.add_type(self.id.clone(), stu, self.range);
+            .opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
+        _ = ctx.add_type(self.id.name.clone(), stu, self.range);
     }
 
     pub fn emit_struct_def<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
-        // if ctx.get_type(self.id.as_str(), self.range).is_ok() {
-        //     ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL);
-        //     return Ok(());
-        // }
         let mut fields = FxHashMap::<String, Field>::default();
         let mut order_fields = Vec::<Field>::new();
         let mut i = 0;
@@ -296,7 +292,7 @@ impl StructDefNode {
 
             i = i + 1;
         }
-        let name = self.id.as_str();
+        let name = self.id.name.as_str();
         let st = ctx
             .module
             .get_struct_type(&ctx.plmod.get_full_name(name))

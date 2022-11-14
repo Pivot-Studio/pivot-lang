@@ -39,8 +39,8 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             ))),
             del_newline_or_space!(tag_token(TokenType::RBRACE)),
         )),
-        |(doc, _, id, _, fields, _)| {
-            let range = id.range;
+        |(doc, (_, start), id, _, fields, (_, end))| {
+            let range = start.start.to(end.end);
             let mut fieldlist = vec![];
             for mut f in fields {
                 f.0.doc = None;
@@ -53,7 +53,7 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             }
             Ok::<_, Error>(Box::new(TopLevel::StructDef(StructDefNode {
                 doc,
-                id: id.name,
+                id,
                 fields: fieldlist,
                 range,
             })))

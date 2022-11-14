@@ -5,7 +5,7 @@ use nom::{
     bytes::complete::tag,
     combinator::{map_res, opt, recognize},
     multi::many0,
-    sequence::{delimited, pair, preceded, terminated, tuple},
+    sequence::{delimited, pair, terminated, tuple},
     IResult,
 };
 use nom_locate::LocatedSpan;
@@ -45,25 +45,20 @@ fn empty_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 }"
 )]
 pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
-    delspace(delimited(
-        del_newline_or_space!(tag_token(TokenType::LBRACE)),
-        statements,
-        del_newline_or_space!(tag_token(TokenType::RBRACE)),
+    delspace(map_res(
+        tuple((
+            del_newline_or_space!(tag_token(TokenType::LBRACE)),
+            many0(del_newline_or_space!(statement)),
+            del_newline_or_space!(tag_token(TokenType::RBRACE)),
+        )),
+        |((_, start), v, (_, end))| {
+            let range = start.start.to(end.end);
+            Ok::<_, Error>(StatementsNode {
+                statements: v,
+                range,
+            })
+        },
     ))(input)
-}
-
-fn statements(input: Span) -> IResult<Span, StatementsNode> {
-    map_res(many0(del_newline_or_space!(statement)), |v| {
-        let mut range = Range::new(input, input);
-        let la = v.last();
-        if let Some(la) = la {
-            range = range.start.to(la.range().end);
-        }
-        Ok::<_, Error>(StatementsNode {
-            statements: v,
-            range,
-        })
-    })(input)
 }
 
 /// ```ebnf
@@ -102,29 +97,34 @@ fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 
 #[test_parser("let a = 1")]
 pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    delspace(preceded(
-        tag_token(TokenType::LET),
-        map_res(
-            tuple((
-                identifier,
-                opt(pair(tag_token(TokenType::COLON), type_name)),
-                opt(pair(tag_token(TokenType::ASSIGN), logic_exp)),
-            )),
-            |(a, tp, v)| {
-                let range = a.range();
-                let tp = tp.map(|(_, tp)| tp);
-                let exp = v.map(|(_, exp)| exp);
-                res_enum(
-                    DefNode {
-                        var: *a,
-                        tp,
-                        exp,
-                        range,
-                    }
-                    .into(),
-                )
-            },
-        ),
+    delspace(map_res(
+        tuple((
+            tag_token(TokenType::LET),
+            identifier,
+            opt(pair(tag_token(TokenType::COLON), type_name)),
+            opt(pair(tag_token(TokenType::ASSIGN), logic_exp)),
+        )),
+        |((_, start), a, tp, v)| {
+            let mut end = a.range.end;
+            if tp.is_some() {
+                end = tp.as_ref().unwrap().1.range().end;
+            }
+            if v.is_some() {
+                end = v.as_ref().unwrap().1.range().end;
+            }
+            let range = start.start.to(end);
+            let tp = tp.map(|(_, tp)| tp);
+            let exp = v.map(|(_, exp)| exp);
+            res_enum(
+                DefNode {
+                    var: *a,
+                    tp,
+                    exp,
+                    range,
+                }
+                .into(),
+            )
+        },
     ))(input)
 }
 

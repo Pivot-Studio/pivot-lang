@@ -64,20 +64,24 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             tag_token(TokenType::RPAREN),
             type_name,
             alt((
-                map_res(statement_block, |b| Ok::<_, Error>(Some(b))),
-                map_res(tag_token(TokenType::SEMI), |_| Ok::<_, Error>(None)),
+                map_res(statement_block, |b| {
+                    Ok::<_, Error>((Some(b.clone()), b.range))
+                }),
+                map_res(tag_token(TokenType::SEMI), |(_, range)| {
+                    Ok::<_, Error>((None, range))
+                }),
             )),
         )),
-        |(doc, _, id, _, paras, _, ret, body)| {
+        |(doc, (_, start), id, _, paras, _, ret, (body, end))| {
             let mut paralist = vec![];
-            let range = id.range;
+            let range = start.start.to(end.end);
             if let Some(para) = paras {
                 paralist.push(para.0);
                 paralist.extend(para.1);
             }
             let node = FuncDefNode {
                 typenode: FuncTypeNode {
-                    id: id.name,
+                    id,
                     paralist,
                     ret,
                     range,

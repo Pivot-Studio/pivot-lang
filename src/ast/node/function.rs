@@ -37,7 +37,7 @@ impl Node for FuncDefNode {
         format_res.push_str(&doc_str);
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str("fn ");
-        format_res.push_str(&self.typenode.id.split("::").last().unwrap());
+        format_res.push_str(&self.typenode.id.name.split("::").last().unwrap());
         format_res.push_str("(");
         format_res.push_str(&params_print);
         format_res.push_str(") ");
@@ -62,7 +62,7 @@ impl Node for FuncDefNode {
         tab(tabs, line.clone(), end);
         println!("FuncDefNode");
         tab(tabs + 1, line.clone(), false);
-        println!("id: {}", self.typenode.id);
+        println!("id: {}", self.typenode.id.name);
         for c in self.typenode.doc.iter() {
             c.print(tabs + 1, false, line.clone());
         }
@@ -83,7 +83,7 @@ impl Node for FuncDefNode {
         let mut para_pltypes = Vec::new();
         let mut para_names = Vec::new();
         let mut param_ditypes = Vec::new();
-        ctx.push_semantic_token(self.typenode.range, SemanticTokenType::FUNCTION, 0);
+        ctx.push_semantic_token(self.typenode.id.range, SemanticTokenType::FUNCTION, 0);
         for para in self.typenode.paralist.iter() {
             ctx.push_semantic_token(para.id.range, SemanticTokenType::PARAMETER, 0);
             ctx.push_semantic_token(para.tp.range(), SemanticTokenType::TYPE, 0);
@@ -105,7 +105,7 @@ impl Node for FuncDefNode {
             }
         }
         ctx.push_semantic_token(self.typenode.ret.range(), SemanticTokenType::TYPE, 0);
-        let res = ctx.get_type(self.typenode.id.as_str(), self.range);
+        let res = ctx.get_type(self.typenode.id.name.as_str(), self.range);
         if res.is_err() {
             let diag = res.unwrap_err();
             ctx.add_diag(diag.clone());
@@ -121,7 +121,7 @@ impl Node for FuncDefNode {
             );
             let subprogram = ctx.dibuilder.create_function(
                 ctx.diunit.get_file().as_debug_info_scope(),
-                self.typenode.id.as_str(),
+                self.typenode.id.name.as_str(),
                 None,
                 ctx.diunit.get_file(),
                 self.range.start.line as u32,
@@ -220,7 +220,7 @@ impl Node for FuncDefNode {
             }
             // emit body
             ctx.builder.unset_current_debug_location();
-            if self.typenode.id == "main" {
+            if self.typenode.id.name == "main" {
                 if let Some(inst) = allocab.get_first_instruction() {
                     ctx.builder.position_at(allocab, &inst);
                     ctx.nodebug_builder.position_at(allocab, &inst);
@@ -347,7 +347,7 @@ impl Node for FuncCallNode {
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncTypeNode {
-    pub id: String,
+    pub id: Box<VarNode>,
     pub paralist: Vec<Box<TypedIdentifierNode>>,
     pub ret: Box<TypeNodeEnum>,
     pub doc: Vec<Box<NodeEnum>>,
@@ -358,7 +358,7 @@ impl FuncTypeNode {
         &'a mut self,
         ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
     ) -> Result<FunctionValue<'ctx>, PLDiag> {
-        if let Ok(_) = ctx.get_type(self.id.as_str(), self.range) {
+        if let Ok(_) = ctx.get_type(&self.id.name.as_str(), self.range) {
             return Err(ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL));
         }
         let mut param_pltypes = Vec::new();
@@ -386,7 +386,7 @@ impl FuncTypeNode {
         }
         let refs = vec![];
         let ftp = FNType {
-            name: self.id.clone(),
+            name: self.id.name.clone(),
             ret_pltype: Box::new(self.ret.get_type(ctx)?),
             param_pltypes,
             param_name,
@@ -394,16 +394,17 @@ impl FuncTypeNode {
             refs: Rc::new(RefCell::new(refs)),
             doc: self.doc.clone(),
             llvmname: if self.declare {
-                self.id.clone()
+                self.id.name.clone()
             } else {
-                ctx.plmod.get_full_name(&self.id)
+                ctx.plmod.get_full_name(&self.id.name)
             },
             method: receiver.is_some(),
         };
         if let Some(mut receiver) = receiver {
-            receiver
-                .methods
-                .insert(self.id.split("::").last().unwrap().to_string(), ftp.clone());
+            receiver.methods.insert(
+                self.id.name.split("::").last().unwrap().to_string(),
+                ftp.clone(),
+            );
             receivertp
                 .unwrap()
                 .replace_type(ctx, PLType::STRUCT(receiver));
@@ -411,7 +412,7 @@ impl FuncTypeNode {
         let res = ftp.get_or_insert_fn(ctx);
         let pltype = PLType::FN(ftp);
         ctx.set_if_refs_tp(&pltype, self.range);
-        ctx.add_type(self.id.clone(), pltype.clone(), self.range)?;
+        ctx.add_type(self.id.name.clone(), pltype.clone(), self.range)?;
         ctx.add_doc_symbols(pltype);
         Ok(res)
     }

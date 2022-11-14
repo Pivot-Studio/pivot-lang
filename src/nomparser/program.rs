@@ -59,7 +59,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     let imname = im.target.format(0, "");
                     let target = *im.target.clone();
                     for mth in im.methods.iter_mut() {
-                        mth.typenode.id = format!("|{}::{}", imname, mth.typenode.id);
+                        mth.typenode.id.name = format!("|{}::{}", imname, mth.typenode.id.name);
                         mth.typenode.paralist.insert(
                             0,
                             Box::new(TypedIdentifierNode {
