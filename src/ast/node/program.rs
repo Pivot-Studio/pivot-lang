@@ -300,6 +300,10 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let hints = ctx.hints.take();
         Hints::push(db, *hints);
     }
+    if action == ActionType::DocSymbol {
+        let docs = ctx.doc_symbols.take();
+        DocSymbols::push(db, *docs);
+    }
     if let Some(c) = ctx.goto_def.take() {
         GotoDef::push(db, c);
     }

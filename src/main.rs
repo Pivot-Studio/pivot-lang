@@ -20,6 +20,7 @@ pub struct Jar(
     accumulators::ModBuffer,
     accumulators::PLFormat,
     accumulators::Hints,
+    accumulators::DocSymbols,
     program::Program,
     program::Program_emit,
     program::ProgramNodeWrapper,

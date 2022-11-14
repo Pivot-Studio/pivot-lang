@@ -21,8 +21,8 @@ pub mod text;
 use lsp_types::{
     notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
     request::{
-        Completion, Formatting, GotoDefinition, HoverRequest, InlayHintRequest, References,
-        SemanticTokensFullDeltaRequest, SemanticTokensFullRequest,
+        Completion, DocumentSymbolRequest, Formatting, GotoDefinition, HoverRequest,
+        InlayHintRequest, References, SemanticTokensFullDeltaRequest, SemanticTokensFullRequest,
     },
     Hover, HoverContents, InitializeParams, MarkedString, OneOf, SemanticTokenModifier,
     SemanticTokenType, SemanticTokens, SemanticTokensDelta, SemanticTokensOptions,
@@ -38,7 +38,7 @@ use threadpool::ThreadPool;
 use crate::{
     ast::{
         accumulators::{
-            Completions, Diagnostics, GotoDef, Hints, PLFormat, PLHover, PLReferences,
+            Completions, Diagnostics, DocSymbols, GotoDef, Hints, PLFormat, PLHover, PLReferences,
             PLSemanticTokens,
         },
         compiler::{compile_dry, ActionType},
@@ -48,8 +48,9 @@ use crate::{
     lsp::{
         dispatcher::Dispatcher,
         helpers::{
-            send_completions, send_diagnostics, send_format, send_goto_def, send_hints, send_hover,
-            send_references, send_semantic_tokens, send_semantic_tokens_edit, url_to_path,
+            send_completions, send_diagnostics, send_doc_symbols, send_format, send_goto_def,
+            send_hints, send_hover, send_references, send_semantic_tokens,
+            send_semantic_tokens_edit, url_to_path,
         },
         mem_docs::MemDocsInput,
         semantic_tokens::diff_tokens,
@@ -83,6 +84,7 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
             all_commit_characters: None,
             completion_item: None,
         }),
+        document_symbol_provider: Some(OneOf::Left(true)),
         references_provider: Some(OneOf::Left(true)),
         hover_provider: Some(lsp_types::HoverProviderCapability::Simple(true)),
         semantic_tokens_provider: Some(
@@ -335,6 +337,22 @@ fn main_loop(
             if !hints.is_empty() {
                 pool.execute(move || {
                     send_hints(&sender, id, hints[0].clone());
+                });
+            }
+        })
+        .on::<DocumentSymbolRequest, _>(|id, params| {
+            let uri = url_to_path(params.text_document.uri);
+            docin.set_file(&mut db).to(uri.clone());
+            docin.set_action(&mut db).to(ActionType::DocSymbol);
+            docin
+                .set_params(&mut db)
+                .to(Some((Default::default(), None, ActionType::LspFmt)));
+            compile_dry(&db, docin);
+            let doc_symbols = compile_dry::accumulated::<DocSymbols>(&db, docin);
+            let sender = connection.sender.clone();
+            if !doc_symbols.is_empty() {
+                pool.execute(move || {
+                    send_doc_symbols(&sender, id, doc_symbols[0].clone());
                 });
             }
         })

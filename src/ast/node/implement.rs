@@ -1,6 +1,7 @@
 use super::*;
 use crate::{ast::ctx::Ctx, utils::read_config::enter};
 use internal_macro::range;
+use lsp_types::{DocumentSymbol, SymbolKind};
 
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -33,9 +34,34 @@ impl Node for ImplNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         _ = self.target.emit_highlight(ctx);
+        let mut method_docsymbols = vec![];
         for method in &mut self.methods {
-            _ = method.emit(ctx);
+            let res = method.emit(ctx);
+            if res.is_err() {
+                continue;
+            }
+            let (_, pltype, _) = res.unwrap();
+            if pltype.is_none() {
+                continue;
+            }
+            let f = match pltype.unwrap() {
+                PLType::FN(f) => f,
+                _ => continue,
+            };
+            method_docsymbols.push(f.get_doc_symbol());
         }
+        #[allow(deprecated)]
+        let docsymbol = DocumentSymbol {
+            name: format!("impl {}", self.target.format(0, "")),
+            detail: None,
+            kind: SymbolKind::OBJECT,
+            tags: None,
+            deprecated: None,
+            range: self.range.to_diag_range(),
+            selection_range: self.range.to_diag_range(),
+            children: Some(method_docsymbols),
+        };
+        ctx.doc_symbols.borrow_mut().push(docsymbol);
         Ok((None, None, TerminatorEnum::NONE))
     }
 }

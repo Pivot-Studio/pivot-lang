@@ -26,6 +26,7 @@ use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::Diagnostic;
 use lsp_types::DiagnosticSeverity;
+use lsp_types::DocumentSymbol;
 use lsp_types::GotoDefinitionResponse;
 use lsp_types::Hover;
 use lsp_types::HoverContents;
@@ -35,6 +36,7 @@ use lsp_types::InsertTextFormat;
 use lsp_types::Location;
 use lsp_types::MarkedString;
 use lsp_types::SemanticTokenType;
+use lsp_types::SymbolKind;
 use lsp_types::Url;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
@@ -95,6 +97,7 @@ pub struct Ctx<'a, 'ctx> {
     pub ditypes_placeholder: Rc<RefCell<FxHashMap<String, RefCell<Vec<MemberType<'ctx>>>>>>, // hold the generated debug info type place holder
     pub ditypes: Rc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
     pub hints: Rc<RefCell<Box<Vec<InlayHint>>>>,
+    pub doc_symbols: Rc<RefCell<Box<Vec<DocumentSymbol>>>>,
     pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
     pub goto_def: Rc<Cell<Option<GotoDefinitionResponse>>>, // hold the goto definition result
     pub completion_items: Rc<Cell<Vec<CompletionItem>>>,    // hold the completion items
@@ -493,7 +496,7 @@ impl PLType {
             PLType::PRIMITIVE(pri) => pri.get_name(),
             PLType::ARR(arr) => format!("[{} * {}]", arr.element_type.get_name(), arr.size),
             PLType::VOID => "void".to_string(),
-            PLType::POINTER(p) => "&".to_string() + &p.get_name(),
+            PLType::POINTER(p) => "*".to_string() + &p.get_name(),
         }
     }
 
@@ -792,6 +795,19 @@ impl Field {
             offset + debug_type.get_size_in_bits(),
         )
     }
+    pub fn get_doc_symbol<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> DocumentSymbol {
+        #[allow(deprecated)]
+        DocumentSymbol {
+            name: self.name.clone(),
+            detail: Some(self.pltype.get_type(ctx).unwrap().get_name()),
+            kind: SymbolKind::FIELD,
+            tags: None,
+            deprecated: None,
+            range: self.range.to_diag_range(),
+            selection_range: self.range.to_diag_range(),
+            children: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -804,6 +820,7 @@ pub struct FNType {
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
+    pub method: bool,
 }
 
 impl TryFrom<PLType> for FNType {
@@ -837,6 +854,47 @@ impl FNType {
             .module
             .add_function(&self.llvmname, fn_type, Some(Linkage::External));
         fn_value
+    }
+    pub fn get_doc_symbol(&self) -> DocumentSymbol {
+        #[allow(deprecated)]
+        DocumentSymbol {
+            name: if self.method {
+                self.name.split("::").last().unwrap().to_string()
+            } else {
+                self.name.clone()
+            },
+            detail: Some(self.get_signature()),
+            kind: if self.method {
+                SymbolKind::METHOD
+            } else {
+                SymbolKind::FUNCTION
+            },
+            tags: None,
+            deprecated: None,
+            range: self.range.to_diag_range(),
+            selection_range: self.range.to_diag_range(),
+            children: None,
+        }
+    }
+    pub fn get_signature(&self) -> String {
+        let mut params = String::new();
+        if !self.param_name.is_empty() {
+            if !self.method {
+                params += &format!(
+                    "{}: {}",
+                    self.param_name[0],
+                    self.param_pltypes[0].get_name()
+                );
+            }
+            for i in 1..self.param_name.len() {
+                params += &format!(
+                    ", {}: {}",
+                    self.param_name[i],
+                    self.param_pltypes[i].get_name()
+                );
+            }
+        }
+        format!("fn ({}) {}", params, self.ret_pltype.get_name())
     }
 }
 
@@ -917,6 +975,24 @@ impl STType {
     }
     pub fn get_st_full_name(&self) -> String {
         format!("{}..{}", self.path, self.name)
+    }
+    pub fn get_doc_symbol<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> DocumentSymbol {
+        let children: Vec<DocumentSymbol> = self
+            .ordered_fields
+            .iter()
+            .map(|order_field| order_field.get_doc_symbol(ctx))
+            .collect();
+        #[allow(deprecated)]
+        DocumentSymbol {
+            name: self.name.clone(),
+            detail: None,
+            kind: SymbolKind::STRUCT,
+            tags: None,
+            deprecated: None,
+            range: self.range.to_diag_range(),
+            selection_range: self.range.to_diag_range(),
+            children: Some(children),
+        }
     }
 }
 
@@ -1082,6 +1158,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             lspparams: completion,
             refs: Rc::new(Cell::new(None)),
             hints: Rc::new(RefCell::new(Box::new(vec![]))),
+            doc_symbols: Rc::new(RefCell::new(Box::new(vec![]))),
             semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
                 src_file_path.to_string(),
             )))),
@@ -1129,6 +1206,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             lspparams: self.lspparams.clone(),
             refs: self.refs.clone(),
             hints: self.hints.clone(),
+            doc_symbols: self.doc_symbols.clone(),
             semantic_tokens_builder: self.semantic_tokens_builder.clone(),
             goto_def: self.goto_def.clone(),
             completion_items: self.completion_items.clone(),
@@ -1227,7 +1305,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         &mut self,
         name: String,
         pv: PointerValue<'ctx>,
-        tp: PLType,
+        pltype: PLType,
         range: Range,
         is_const: bool,
     ) -> Result<(), PLDiag> {
@@ -1237,9 +1315,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         let refs = Rc::new(RefCell::new(vec![]));
         if is_const {
             self.plmod
-                .add_global_symbol(name, tp, range, refs.clone())?;
+                .add_global_symbol(name, pltype.clone(), range, refs.clone())?;
         } else {
-            self.table.insert(name, (pv, tp, range, refs.clone()));
+            self.table
+                .insert(name, (pv, pltype.clone(), range, refs.clone()));
         }
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
         self.set_if_refs(refs, range);
@@ -1299,13 +1378,24 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         set.insert(name);
     }
 
-    pub fn add_type(&mut self, name: String, tp: PLType, range: Range) -> Result<(), PLDiag> {
+    pub fn add_type(&mut self, name: String, pltype: PLType, range: Range) -> Result<(), PLDiag> {
         if self.plmod.types.contains_key(&name) {
             return Err(self.add_err(range, ErrorCode::REDEFINE_TYPE));
         }
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
-        self.plmod.types.insert(name, tp.clone());
+        self.plmod.types.insert(name, pltype.clone());
         Ok(())
+    }
+    pub fn add_doc_symbols(&mut self, pltype: PLType) {
+        match &pltype {
+            PLType::FN(f) => {
+                if !f.method {
+                    self.doc_symbols.borrow_mut().push(f.get_doc_symbol())
+                }
+            }
+            PLType::STRUCT(st) => self.doc_symbols.borrow_mut().push(st.get_doc_symbol(self)),
+            _ => {}
+        }
     }
 
     pub fn add_err(&self, range: Range, code: ErrorCode) -> PLDiag {

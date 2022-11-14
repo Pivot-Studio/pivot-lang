@@ -1,6 +1,6 @@
 use crossbeam_channel::Sender;
 use lsp_server::{Message, RequestId};
-use lsp_types::{Diagnostic, SemanticTokens, SemanticTokensDelta, Url};
+use lsp_types::{Diagnostic, DocumentSymbol, InlayHint, SemanticTokens, SemanticTokensDelta, Url};
 
 pub fn send_diagnostics(sender: &Sender<Message>, uri: String, diagnostics: Vec<Diagnostic>) {
     sender
@@ -64,11 +64,20 @@ pub fn send_format(sender: &Sender<Message>, id: RequestId, texts: Vec<lsp_types
         .unwrap();
 }
 
-pub fn send_hints(sender: &Sender<Message>, id: RequestId, hints: Vec<lsp_types::InlayHint>) {
+pub fn send_hints(sender: &Sender<Message>, id: RequestId, hints: Vec<InlayHint>) {
     sender
         .send(Message::Response(lsp_server::Response::new_ok(
             id,
             Some(serde_json::to_value(hints).unwrap()),
+        )))
+        .unwrap();
+}
+
+pub fn send_doc_symbols(sender: &Sender<Message>, id: RequestId, doc_symbols: Vec<DocumentSymbol>) {
+    sender
+        .send(Message::Response(lsp_server::Response::new_ok(
+            id,
+            Some(serde_json::to_value(doc_symbols).unwrap()),
         )))
         .unwrap();
 }

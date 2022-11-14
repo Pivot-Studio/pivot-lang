@@ -168,7 +168,6 @@ jobs:
           mkdir -p ${{ matrix.config.debdir }}/pl
           cp -r ${{ matrix.config.dir }}/* ${{ matrix.config.debdir }}/pl
           rm ${{ matrix.config.debdir }}/pl/plc
-
       - uses: Pivot-Studio/build-deb-action@master
         if: ${{ matrix.config.os == 'ubuntu-latest' }}
         id: build-deb
@@ -264,15 +263,12 @@ jobs:
           # Optional - multiline string.
           depends_on: |
             "llvm@14"
-
           # Custom install command for your formula.
           # Required - string.
           install: |
             lib.install Dir["./planglib"]
                 lib.install "./libvm.a"
                 bin.install "./plc"
-
-
           # Custom test command for your formula so you can run `brew test`.
           # Optional - string.
           # test: 'assert_match("my script output", shell_output("my-script-command"))'
