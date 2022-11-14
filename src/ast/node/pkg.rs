@@ -1,4 +1,4 @@
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
+use std::path::PathBuf;
 
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
