@@ -3,9 +3,9 @@ use std::fmt::Error;
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    combinator::{map_res, opt},
-    multi::many0,
-    sequence::{delimited, preceded, tuple},
+    combinator::map_res,
+    multi::{many0, separated_list0},
+    sequence::{delimited, tuple},
     IResult,
 };
 use nom_locate::LocatedSpan;
@@ -54,13 +54,10 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             tag_token(TokenType::FN),
             identifier,
             tag_token(TokenType::LPAREN),
-            del_newline_or_space!(opt(tuple((
+            del_newline_or_space!(separated_list0(
+                tag_token(TokenType::COMMA),
                 del_newline_or_space!(typed_identifier),
-                many0(preceded(
-                    tag_token(TokenType::COMMA),
-                    del_newline_or_space!(typed_identifier)
-                )),
-            )))),
+            )),
             tag_token(TokenType::RPAREN),
             type_name,
             alt((
@@ -73,16 +70,11 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             )),
         )),
         |(doc, (_, start), id, _, paras, _, ret, (body, end))| {
-            let mut paralist = vec![];
             let range = start.start.to(end.end);
-            if let Some(para) = paras {
-                paralist.push(para.0);
-                paralist.extend(para.1);
-            }
             let node = FuncDefNode {
                 typenode: FuncTypeNode {
                     id,
-                    paralist,
+                    paralist: paras,
                     ret,
                     range,
                     doc,
@@ -103,22 +95,12 @@ pub fn call_function_op(input: Span) -> IResult<Span, ComplexOp> {
     delspace(map_res(
         tuple((
             tag_token(TokenType::LPAREN),
-            opt(tuple((
-                del_newline_or_space!(logic_exp),
-                many0(preceded(
-                    tag_token(TokenType::COMMA),
-                    del_newline_or_space!(logic_exp),
-                )),
-            ))),
+            del_newline_or_space!(separated_list0(
+                tag_token(TokenType::COMMA),
+                del_newline_or_space!(logic_exp)
+            )),
             tag_token(TokenType::RPAREN),
         )),
-        |(_, paras, _)| {
-            let mut paralist = vec![];
-            if let Some(paras) = paras {
-                paralist.push(paras.0);
-                paralist.extend(paras.1);
-            }
-            Ok::<_, Error>(ComplexOp::CallOp(paralist))
-        },
+        |(_, paras, _)| Ok::<_, Error>(ComplexOp::CallOp(paras)),
     ))(input)
 }

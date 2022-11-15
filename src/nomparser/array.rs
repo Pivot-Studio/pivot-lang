@@ -4,8 +4,8 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     combinator::{map_res, opt},
-    multi::many0,
-    sequence::{delimited, preceded, tuple},
+    multi::{many0, separated_list0},
+    sequence::{delimited, tuple},
     IResult,
 };
 use nom_locate::LocatedSpan;
@@ -22,26 +22,18 @@ pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
             tag_token(TokenType::LBRACKET),
-            opt(tuple((
+            separated_list0(
+                tag_token(TokenType::COMMA),
                 del_newline_or_space!(logic_exp),
-                many0(preceded(
-                    tag_token(TokenType::COMMA),
-                    del_newline_or_space!(logic_exp),
-                )),
-            ))),
+            ),
             tag_token(TokenType::RBRACKET),
         )),
         |(_, exps, _)| {
             // TODO:get range from token
             let range = Default::default();
-            let mut exp_res = vec![];
-            if let Some((first, second)) = exps {
-                exp_res.push(first);
-                exp_res.extend(second);
-            }
             res_enum(
                 ArrayInitNode {
-                    exps: exp_res,
+                    exps,
                     range,
                 }
                 .into(),
