@@ -286,7 +286,11 @@ program = toplevel_statement* ;
 
 function_def = &quot;fn&quot; identifier &quot;(&quot; (typed_identifier (&quot;,&quot;typed_identifier)*)? &quot;)&quot; type_name (statement_block | &quot;;&quot;) ;
 
-struct_def = &quot;struct&quot; identifier &quot;{&quot; struct_field* &quot;}&quot; ;
+generic_type = &quot;&lt;&quot; type_name (&quot;|&quot; type_name)* &quot;&gt;&quot; ;
+
+generic_type_def = &quot;&lt;&quot; identifier (&quot;|&quot; identifier)* &quot;&gt;&quot; ;
+
+struct_def = &quot;struct&quot; identifier generic_type_def? &quot;{&quot; struct_field* &quot;}&quot; ;
 
 type_name = &quot;*&quot;* extern_identifier ;
 
@@ -664,7 +668,7 @@ pub trait RangeTrait {
         position_at_end(ctx, cond_block);
         let condrange = self.cond.range();
         let (cond, pltype, _) = self.cond.emit(ctx)?;
-        if pltype.is_none() || !pltype.unwrap().is(PriType::BOOL) {
+        if pltype.is_none() || !pltype.unwrap().borrow().clone().is(PriType::BOOL) {
             return Err(ctx.add_err(condrange, ErrorCode::IF_CONDITION_MUST_BE_BOOL));
         }
         let cond = ctx.try_load2var(condrange, cond.unwrap())?;

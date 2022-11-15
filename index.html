@@ -288,7 +288,11 @@ program = toplevel_statement* ;
 
 function_def = &quot;fn&quot; identifier &quot;(&quot; (typed_identifier (&quot;,&quot;typed_identifier)*)? &quot;)&quot; type_name (statement_block | &quot;;&quot;) ;
 
-struct_def = &quot;struct&quot; identifier &quot;{&quot; struct_field* &quot;}&quot; ;
+generic_type = &quot;&lt;&quot; type_name (&quot;|&quot; type_name)* &quot;&gt;&quot; ;
+
+generic_type_def = &quot;&lt;&quot; identifier (&quot;|&quot; identifier)* &quot;&gt;&quot; ;
+
+struct_def = &quot;struct&quot; identifier generic_type_def? &quot;{&quot; struct_field* &quot;}&quot; ;
 
 type_name = &quot;*&quot;* extern_identifier ;
 
