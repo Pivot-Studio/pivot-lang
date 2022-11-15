@@ -89,7 +89,7 @@ impl Node for FuncDefNode {
             ctx.push_semantic_token(para.tp.range(), SemanticTokenType::TYPE, 0);
             para_names.push(para.id.clone());
             let pltype = para.tp.get_type(ctx)?;
-            match pltype {
+            match &*pltype.borrow() {
                 PLType::VOID => {
                     return Err(ctx.add_err(
                         para.range,
@@ -102,7 +102,7 @@ impl Node for FuncDefNode {
                     let di_type = di_type.unwrap();
                     param_ditypes.push(di_type);
                 }
-            }
+            };
         }
         ctx.push_semantic_token(self.typenode.ret.range(), SemanticTokenType::TYPE, 0);
         let res = ctx.get_type(self.typenode.id.name.as_str(), self.range);
@@ -115,7 +115,7 @@ impl Node for FuncDefNode {
         if let Some(body) = self.body.as_mut() {
             let subroutine_type = ctx.dibuilder.create_subroutine_type(
                 ctx.diunit.get_file(),
-                self.typenode.ret.get_type(ctx)?.get_ditype(ctx),
+                self.typenode.ret.get_type(ctx)?.borrow().get_ditype(ctx),
                 &param_ditypes,
                 DIFlags::PUBLIC,
             );
@@ -133,7 +133,7 @@ impl Node for FuncDefNode {
                 false,
             );
             // add function
-            let func = match &pltype {
+            let func = match &*pltype.borrow() {
                 PLType::FN(fu) => fu.get_or_insert_fn(ctx),
                 _ => return Ok((None, None, TerminatorEnum::NONE)),
             };
@@ -160,7 +160,7 @@ impl Node for FuncDefNode {
             let ret_value_ptr = if func.get_type().get_return_type().is_some() {
                 let pltype = self.typenode.ret.get_type(&mut ctx)?;
                 let ret_type = {
-                    let op = pltype.get_basic_type_op(&ctx);
+                    let op = pltype.borrow().get_basic_type_op(&ctx);
                     if op.is_none() {
                         return Ok((None, None, TerminatorEnum::NONE));
                     }
@@ -212,7 +212,7 @@ impl Node for FuncDefNode {
                 ctx.add_symbol(
                     para_names[i].name.clone(),
                     alloca,
-                    para_pltypes[i].clone(),
+                    Rc::new(RefCell::new(para_pltypes[i].clone())),
                     self.typenode.paralist[i].id.range,
                     false,
                 )
@@ -287,11 +287,12 @@ impl Node for FuncCallNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut para_values = Vec::new();
         let (func, pltype, _) = self.id.emit(ctx)?;
-        if pltype.is_none() || !matches!(pltype.clone().unwrap(), PLType::FN(_)) {
+        if pltype.is_none() || !matches!(*RefCell::borrow(&pltype.clone().unwrap()), PLType::FN(_))
+        {
             return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND));
         }
-        let pltype = pltype.unwrap();
-        if let PLType::FN(fv) = &pltype {
+        let pltype = pltype.unwrap().clone();
+        if let PLType::FN(fv) = &*pltype.borrow() {
             let plv = func.unwrap();
             let mut skip = 0;
             if let Some(receiver) = plv.receiver {
@@ -322,7 +323,7 @@ impl Node for FuncCallNode {
             let ret = ctx.builder.build_call(
                 func,
                 &para_values,
-                format(format_args!("call_{}", pltype.get_name())).as_str(),
+                format(format_args!("call_{}", RefCell::borrow(&pltype).get_name())).as_str(),
             );
             ctx.save_if_comment_doc_hover(self.range, Some(fv.doc.clone()));
             let res = match ret.try_as_basic_value().left() {
@@ -337,7 +338,7 @@ impl Node for FuncCallNode {
                 )),
                 None => Ok((None, Some(*fv.ret_pltype.clone()), TerminatorEnum::NONE)),
             };
-            ctx.set_if_refs_tp(&pltype, self.range);
+            ctx.set_if_refs_tp(pltype.clone(), self.range);
             ctx.send_if_go_to_def(self.range, fv.range, ctx.plmod.path.clone());
             return res;
         }
@@ -363,22 +364,12 @@ impl FuncTypeNode {
         }
         let mut param_pltypes = Vec::new();
         let mut param_name = Vec::new();
-        let mut receiver = None;
+        let mut receiver = false;
         let mut first = true;
-        let mut receivertp = None;
         for para in self.paralist.iter() {
             let paramtype = para.tp.get_type(ctx)?;
             if first && para.id.name == "self" {
-                receivertp = Some(para.tp.clone());
-                let st = match paramtype.clone() {
-                    PLType::POINTER(st) => st,
-                    _ => unreachable!(),
-                };
-                let st = match *st.clone() {
-                    PLType::STRUCT(st) => st,
-                    _ => unreachable!(),
-                };
-                receiver = Some(st);
+                receiver = true;
             }
             first = false;
             param_pltypes.push(paramtype.clone());
@@ -398,20 +389,24 @@ impl FuncTypeNode {
             } else {
                 ctx.plmod.get_full_name(&self.id.name)
             },
-            method: receiver.is_some(),
+            method: receiver,
         };
-        if let Some(mut receiver) = receiver {
-            receiver.methods.insert(
-                self.id.name.split("::").last().unwrap().to_string(),
-                ftp.clone(),
-            );
-            receivertp
-                .unwrap()
-                .replace_type(ctx, PLType::STRUCT(receiver));
+        if receiver {
+            let a = self.paralist.first().unwrap().tp.get_type(ctx).unwrap();
+            let mut b = a.borrow_mut();
+            if let PLType::POINTER(s) = &mut *b {
+                if let PLType::STRUCT(s) = &mut *s.borrow_mut() {
+                    let mut ftp = ftp.clone();
+                    ftp.param_pltypes = ftp.param_pltypes[1..].to_vec();
+                    s.methods
+                        .insert(self.id.name.split("::").last().unwrap().to_string(), ftp);
+                }
+            }
         }
         let res = ftp.get_or_insert_fn(ctx);
         let pltype = PLType::FN(ftp);
-        ctx.set_if_refs_tp(&pltype, self.range);
+        let pltype = Rc::new(RefCell::new(pltype));
+        ctx.set_if_refs_tp(pltype.clone(), self.range);
         ctx.add_type(self.id.name.clone(), pltype.clone(), self.range)?;
         ctx.add_doc_symbols(pltype);
         Ok(res)

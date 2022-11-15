@@ -107,7 +107,7 @@ pub struct Ctx<'a, 'ctx> {
         String,
         (
             PointerValue<'ctx>,
-            PLType,
+            Rc<RefCell<PLType>>,
             Range,
             Rc<RefCell<Vec<Location>>>,
         ),
@@ -129,7 +129,7 @@ pub struct MemberType<'ctx> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobalVar {
-    pub tp: PLType,
+    pub tp: Rc<RefCell<PLType>>,
     pub range: Range,
     pub loc: Rc<RefCell<Vec<Location>>>,
 }
@@ -143,7 +143,7 @@ pub struct Mod {
     /// file path of the module
     pub path: String,
     /// func and types
-    pub types: FxHashMap<String, PLType>,
+    pub types: FxHashMap<String, Rc<RefCell<PLType>>>,
     /// sub mods
     pub submods: FxHashMap<String, Mod>,
     // global variable table
@@ -175,7 +175,7 @@ impl Mod {
     pub fn add_global_symbol(
         &mut self,
         name: String,
-        tp: PLType,
+        tp: Rc<RefCell<PLType>>,
         range: Range,
         refs: Rc<RefCell<Vec<Location>>>,
     ) -> Result<(), PLDiag> {
@@ -192,22 +192,18 @@ impl Mod {
         );
         Ok(())
     }
-    pub fn get_type(&self, name: &str) -> Option<PLType> {
+    pub fn get_type(&self, name: &str) -> Option<Rc<RefCell<PLType>>> {
         let v = self.types.get(name);
         if let Some(pv) = v {
             return Some(pv.clone());
         }
         if let Some(x) = PriType::try_from_str(name) {
-            return Some(PLType::PRIMITIVE(x));
+            return Some(Rc::new(RefCell::new(PLType::PRIMITIVE(x))));
         }
         if name == "void" {
-            return Some(PLType::VOID);
+            return Some(Rc::new(RefCell::new(PLType::VOID)));
         }
         None
-    }
-
-    pub fn replace_type(&mut self, name: &str, tp: PLType) {
-        self.types.insert(name.to_string(), tp);
     }
 
     /// 获取llvm名称
@@ -381,7 +377,7 @@ pub enum PLType {
     ARR(ARRType),
     PRIMITIVE(PriType),
     VOID,
-    POINTER(Box<PLType>),
+    POINTER(Box<Rc<RefCell<PLType>>>),
 }
 
 /// # PriType
@@ -494,9 +490,11 @@ impl PLType {
             PLType::FN(fu) => fu.name.clone(),
             PLType::STRUCT(st) => st.name.clone(),
             PLType::PRIMITIVE(pri) => pri.get_name(),
-            PLType::ARR(arr) => format!("[{} * {}]", arr.element_type.get_name(), arr.size),
+            PLType::ARR(arr) => {
+                format!("[{} * {}]", arr.element_type.borrow().get_name(), arr.size)
+            }
             PLType::VOID => "void".to_string(),
-            PLType::POINTER(p) => "*".to_string() + &p.get_name(),
+            PLType::POINTER(p) => "*".to_string() + &p.borrow().get_name(),
         }
     }
 
@@ -506,15 +504,19 @@ impl PLType {
             PLType::STRUCT(st) => st.get_st_full_name(),
             PLType::PRIMITIVE(pri) => pri.get_name(),
             PLType::ARR(arr) => {
-                format!("[{} * {}]", arr.element_type.get_full_elm_name(), arr.size)
+                format!(
+                    "[{} * {}]",
+                    arr.element_type.borrow().get_full_elm_name(),
+                    arr.size
+                )
             }
             PLType::VOID => "void".to_string(),
-            PLType::POINTER(p) => p.get_full_elm_name(),
+            PLType::POINTER(p) => p.borrow().get_full_elm_name(),
         }
     }
     pub fn get_ptr_depth(&self) -> usize {
         match self {
-            PLType::POINTER(p) => p.get_ptr_depth() + 1,
+            PLType::POINTER(p) => p.borrow().get_ptr_depth() + 1,
             _ => 0,
         }
     }
@@ -548,7 +550,8 @@ impl PLType {
             PLType::PRIMITIVE(t) => Some(t.get_basic_type(ctx)),
             PLType::VOID => None,
             PLType::POINTER(p) => Some(
-                p.get_basic_type(ctx)
+                p.borrow()
+                    .get_basic_type(ctx)
                     .ptr_type(AddressSpace::Generic)
                     .as_basic_type_enum(),
             ),
@@ -578,8 +581,8 @@ impl PLType {
         match self {
             PLType::FN(_) => None,
             PLType::ARR(arr) => {
-                let elemdi = arr.element_type.get_ditype(ctx)?;
-                let etp = &arr.element_type.get_basic_type(ctx);
+                let elemdi = arr.element_type.borrow().get_ditype(ctx)?;
+                let etp = &arr.element_type.borrow().get_basic_type(ctx);
                 let size = td.get_bit_size(etp) * arr.size as u64;
                 let align = td.get_preferred_alignment(etp);
                 Some(
@@ -590,10 +593,9 @@ impl PLType {
             }
             PLType::STRUCT(x) => {
                 // 若已经生成过，直接查表返回
-                if ctx.ditypes.borrow().contains_key(&x.get_st_full_name()) {
+                if RefCell::borrow(&ctx.ditypes).contains_key(&x.get_st_full_name()) {
                     return Some(
-                        ctx.ditypes
-                            .borrow()
+                        RefCell::borrow(&ctx.ditypes)
                             .get(&x.get_st_full_name())
                             .unwrap()
                             .clone(),
@@ -690,8 +692,9 @@ impl PLType {
             }
             PLType::VOID => None,
             PLType::POINTER(p) => {
-                let elemdi = p.get_ditype(ctx)?;
+                let elemdi = p.borrow().get_ditype(ctx)?;
                 let etp = &p
+                    .borrow()
                     .get_basic_type(ctx)
                     .ptr_type(AddressSpace::Generic)
                     .as_basic_type_enum();
@@ -750,13 +753,13 @@ pub struct Field {
 impl Field {
     pub fn get_di_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, offset: u64) -> (DIType<'ctx>, u64) {
         let pltp = self.pltype.get_type(ctx).unwrap();
-        let depth = pltp.get_ptr_depth();
+        let depth = RefCell::borrow(&pltp).get_ptr_depth();
         if let Some(x) = ctx
             .ditypes_placeholder
             .borrow_mut()
-            .get(&pltp.get_full_elm_name())
+            .get(&*RefCell::borrow(&pltp).get_full_elm_name())
         {
-            if !matches!(pltp, PLType::POINTER(_)) {
+            if !matches!(*RefCell::borrow(&pltp), PLType::POINTER(_)) {
                 // 出现循环引用，但是不是指针
                 // TODO 应该只需要一层是指针就行，目前的检查要求每一层都是指针
                 ctx.add_err(self.range, ErrorCode::ILLEGAL_SELF_RECURSION);
@@ -776,7 +779,7 @@ impl Field {
             });
             return (placeholder.as_type(), offset + size);
         }
-        let di_type = pltp.get_ditype(ctx);
+        let di_type = RefCell::borrow(&pltp).get_ditype(ctx);
         let debug_type = di_type.unwrap();
         (
             ctx.dibuilder
@@ -799,7 +802,7 @@ impl Field {
         #[allow(deprecated)]
         DocumentSymbol {
             name: self.name.clone(),
-            detail: Some(self.pltype.get_type(ctx).unwrap().get_name()),
+            detail: Some(RefCell::borrow(&self.pltype.get_type(ctx).unwrap()).get_name()),
             kind: SymbolKind::FIELD,
             tags: None,
             deprecated: None,
@@ -814,9 +817,9 @@ impl Field {
 pub struct FNType {
     pub name: String,     // name for lsp
     pub llvmname: String, // name in llvm ir
-    pub param_pltypes: Vec<PLType>,
+    pub param_pltypes: Vec<Rc<RefCell<PLType>>>,
     pub param_name: Vec<String>,
-    pub ret_pltype: Box<PLType>,
+    pub ret_pltype: Box<Rc<RefCell<PLType>>>,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
@@ -844,10 +847,9 @@ impl FNType {
         }
         let mut param_types = vec![];
         for param_pltype in self.param_pltypes.iter() {
-            param_types.push(param_pltype.get_basic_type(ctx).into());
+            param_types.push(RefCell::borrow(&param_pltype).get_basic_type(ctx).into());
         }
-        let fn_type = self
-            .ret_pltype
+        let fn_type = RefCell::borrow(&self.ret_pltype)
             .get_ret_type(ctx)
             .fn_type(&param_types, false);
         let fn_value = ctx
@@ -883,32 +885,39 @@ impl FNType {
                 params += &format!(
                     "{}: {}",
                     self.param_name[0],
-                    self.param_pltypes[0].get_name()
+                    RefCell::borrow(&self.param_pltypes[0]).get_name()
                 );
             }
             for i in 1..self.param_name.len() {
                 params += &format!(
                     ", {}: {}",
                     self.param_name[i],
-                    self.param_pltypes[i].get_name()
+                    RefCell::borrow(&self.param_pltypes[i]).get_name()
                 );
             }
         }
-        format!("fn ({}) {}", params, self.ret_pltype.get_name())
+        format!(
+            "fn ({}) {}",
+            params,
+            RefCell::borrow(&self.ret_pltype).get_name()
+        )
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ARRType {
-    pub element_type: Box<PLType>,
+    pub element_type: Box<Rc<RefCell<PLType>>>,
     pub size: u32,
 }
 
 impl ARRType {
     pub fn arr_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> ArrayType<'ctx> {
-        self.element_type.get_basic_type(ctx).array_type(self.size)
+        self.element_type
+            .borrow()
+            .get_basic_type(ctx)
+            .array_type(self.size)
     }
-    pub fn get_elem_type<'a, 'ctx>(&'a self) -> Box<PLType> {
+    pub fn get_elem_type<'a, 'ctx>(&'a self) -> Box<Rc<RefCell<PLType>>> {
         self.element_type.clone()
     }
 }
@@ -938,11 +947,7 @@ impl STType {
                 .clone()
                 .into_iter()
                 .map(|order_field| {
-                    order_field
-                        .pltype
-                        .get_type(ctx)
-                        .unwrap()
-                        .get_basic_type(&ctx)
+                    RefCell::borrow(&order_field.pltype.get_type(ctx).unwrap()).get_basic_type(&ctx)
                 })
                 .collect::<Vec<_>>(),
             false,
@@ -998,70 +1003,78 @@ impl STType {
 
 fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
     let pltype_i128 = PLType::PRIMITIVE(PriType::I128);
-    ctx.plmod
-        .types
-        .insert("i128".to_string(), pltype_i128.clone());
+    ctx.plmod.types.insert(
+        "i128".to_string(),
+        Rc::new(RefCell::new(pltype_i128.clone())),
+    );
 
     let pltype_i64 = PLType::PRIMITIVE(PriType::I64);
     ctx.plmod
         .types
-        .insert("i64".to_string(), pltype_i64.clone());
+        .insert("i64".to_string(), Rc::new(RefCell::new(pltype_i64.clone())));
 
     let pltype_i32 = PLType::PRIMITIVE(PriType::I32);
     ctx.plmod
         .types
-        .insert("i32".to_string(), pltype_i32.clone());
+        .insert("i32".to_string(), Rc::new(RefCell::new(pltype_i32.clone())));
 
     let pltype_i16 = PLType::PRIMITIVE(PriType::I16);
     ctx.plmod
         .types
-        .insert("i16".to_string(), pltype_i16.clone());
+        .insert("i16".to_string(), Rc::new(RefCell::new(pltype_i16.clone())));
 
     let pltype_i8 = PLType::PRIMITIVE(PriType::I8);
-    ctx.plmod.types.insert("i8".to_string(), pltype_i8.clone());
-
-    let pltype_u128 = PLType::PRIMITIVE(PriType::U128);
     ctx.plmod
         .types
-        .insert("u128".to_string(), pltype_u128.clone());
+        .insert("i8".to_string(), Rc::new(RefCell::new(pltype_i8.clone())));
+
+    let pltype_u128 = PLType::PRIMITIVE(PriType::U128);
+    ctx.plmod.types.insert(
+        "u128".to_string(),
+        Rc::new(RefCell::new(pltype_u128.clone())),
+    );
 
     let pltype_u64 = PLType::PRIMITIVE(PriType::U64);
     ctx.plmod
         .types
-        .insert("u64".to_string(), pltype_u64.clone());
+        .insert("u64".to_string(), Rc::new(RefCell::new(pltype_u64.clone())));
 
     let pltype_u32 = PLType::PRIMITIVE(PriType::U32);
     ctx.plmod
         .types
-        .insert("u32".to_string(), pltype_u32.clone());
+        .insert("u32".to_string(), Rc::new(RefCell::new(pltype_u32.clone())));
 
     let pltype_u16 = PLType::PRIMITIVE(PriType::U16);
     ctx.plmod
         .types
-        .insert("u16".to_string(), pltype_u16.clone());
+        .insert("u16".to_string(), Rc::new(RefCell::new(pltype_u16.clone())));
 
     let pltype_u8 = PLType::PRIMITIVE(PriType::U8);
-    ctx.plmod.types.insert("u8".to_string(), pltype_u8.clone());
+    ctx.plmod
+        .types
+        .insert("u8".to_string(), Rc::new(RefCell::new(pltype_u8.clone())));
 
     let pltype_f64 = PLType::PRIMITIVE(PriType::F64);
     ctx.plmod
         .types
-        .insert("f64".to_string(), pltype_f64.clone());
+        .insert("f64".to_string(), Rc::new(RefCell::new(pltype_f64.clone())));
 
     let pltype_f32 = PLType::PRIMITIVE(PriType::F32);
     ctx.plmod
         .types
-        .insert("f32".to_string(), pltype_f32.clone());
+        .insert("f32".to_string(), Rc::new(RefCell::new(pltype_f32.clone())));
 
     let pltype_bool = PLType::PRIMITIVE(PriType::BOOL);
-    ctx.plmod
-        .types
-        .insert("bool".to_string(), pltype_bool.clone());
+    ctx.plmod.types.insert(
+        "bool".to_string(),
+        Rc::new(RefCell::new(pltype_bool.clone())),
+    );
 
     let pltype_void = PLType::VOID;
-    ctx.plmod
-        .types
-        .insert("void".to_string(), pltype_void.clone());
+    ctx.plmod.types.insert(
+        "void".to_string(),
+        Rc::new(RefCell::new(pltype_void.clone())),
+    );
 }
 
 pub fn create_ctx_info<'ctx>(
@@ -1263,7 +1276,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         name: &str,
     ) -> Option<(
         PointerValue<'ctx>,
-        PLType,
+        Rc<RefCell<PLType>>,
         Range,
         Rc<RefCell<Vec<Location>>>,
         bool,
@@ -1305,7 +1318,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         &mut self,
         name: String,
         pv: PointerValue<'ctx>,
-        pltype: PLType,
+        pltype: Rc<RefCell<PLType>>,
         range: Range,
         is_const: bool,
     ) -> Result<(), PLDiag> {
@@ -1325,10 +1338,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         Ok(())
     }
 
-    pub fn get_type(&self, name: &str, range: Range) -> Result<&PLType, PLDiag> {
+    pub fn get_type(&self, name: &str, range: Range) -> Result<Rc<RefCell<PLType>>, PLDiag> {
         let v = self.plmod.types.get(name);
         if let Some(pv) = v {
-            return Ok(pv);
+            return Ok(pv.clone());
         }
         if let Some(father) = self.father {
             let re = father.get_type(name, range);
@@ -1339,12 +1352,19 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     /// 用来获取外部模块的全局变量
     /// 如果没在当前module的全局变量表中找到，将会生成一个
     /// 该全局变量的声明
-    pub fn get_or_add_global(&self, name: &str, m: &Mod, pltype: PLType) -> PointerValue<'ctx> {
+    pub fn get_or_add_global(
+        &self,
+        name: &str,
+        m: &Mod,
+        pltype: Rc<RefCell<PLType>>,
+    ) -> PointerValue<'ctx> {
         let global = self.module.get_global(&m.get_full_name(name));
         if global.is_none() {
-            let global =
-                self.module
-                    .add_global(pltype.get_basic_type(self), None, &m.get_full_name(name));
+            let global = self.module.add_global(
+                pltype.borrow().get_basic_type(self),
+                None,
+                &m.get_full_name(name),
+            );
             global.set_linkage(Linkage::External);
             return global.as_pointer_value();
         }
@@ -1378,7 +1398,12 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         set.insert(name);
     }
 
-    pub fn add_type(&mut self, name: String, pltype: PLType, range: Range) -> Result<(), PLDiag> {
+    pub fn add_type(
+        &mut self,
+        name: String,
+        pltype: Rc<RefCell<PLType>>,
+        range: Range,
+    ) -> Result<(), PLDiag> {
         if self.plmod.types.contains_key(&name) {
             return Err(self.add_err(range, ErrorCode::REDEFINE_TYPE));
         }
@@ -1386,8 +1411,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.plmod.types.insert(name, pltype.clone());
         Ok(())
     }
-    pub fn add_doc_symbols(&mut self, pltype: PLType) {
-        match &pltype {
+    pub fn add_doc_symbols(&mut self, pltype: Rc<RefCell<PLType>>) {
+        match &*RefCell::borrow(&pltype) {
             PLType::FN(f) => {
                 if !f.method {
                     self.doc_symbols.borrow_mut().push(f.get_doc_symbol())
@@ -1470,10 +1495,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         Location::new(self.get_file_url(), range.to_diag_range())
     }
 
-    pub fn set_if_refs_tp(&self, tp: &PLType, range: Range) {
+    pub fn set_if_refs_tp(&self, tp: Rc<RefCell<PLType>>, range: Range) {
         if let Some(_) = self.action {
             if let Some(comp) = &self.lspparams {
-                let tprefs = tp.get_refs();
+                let tprefs = RefCell::borrow(&tp).get_refs();
                 if let Some(tprefs) = tprefs {
                     tprefs.borrow_mut().push(self.get_location(range));
                     if comp.0.is_in(range) {
@@ -1550,7 +1575,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                     kind: Some(CompletionItemKind::CONSTANT),
                     ..Default::default()
                 };
-                item.detail = Some(v.tp.get_name());
+                item.detail = Some(v.tp.borrow().get_name());
                 m.insert(k.clone(), item);
             }
         }
@@ -1560,7 +1585,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         let ns = self.plmod.submods.get(ns);
         if let Some(ns) = ns {
             for (k, v) in ns.types.iter() {
-                let tp = match v {
+                let tp = match *RefCell::borrow(&v) {
                     PLType::STRUCT(_) => CompletionItemKind::STRUCT,
                     PLType::FN(_) => CompletionItemKind::FUNCTION,
                     _ => continue, // skip completion for primary types
@@ -1585,7 +1610,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     fn get_tp_completions(&self, m: &mut FxHashMap<String, CompletionItem>) {
         for (k, f) in self.plmod.types.iter() {
-            let tp = match f {
+            let tp = match *RefCell::borrow(&f) {
                 PLType::FN(_) => continue,
                 PLType::ARR(_) => continue,
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
@@ -1625,7 +1650,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     fn get_pltp_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         for (k, f) in self.plmod.types.iter() {
-            let tp = match f {
+            let tp = match *RefCell::borrow(&f) {
                 PLType::FN(_) => CompletionItemKind::FUNCTION,
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
                 PLType::ARR(_) => CompletionItemKind::KEYWORD,
@@ -1658,10 +1683,12 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             modifiers,
         )
     }
-    pub fn push_type_hints(&self, range: Range, pltype: &PLType) {
+    pub fn push_type_hints(&self, range: Range, pltype: Rc<RefCell<PLType>>) {
         let hint = InlayHint {
             position: range.to_diag_range().end,
-            label: lsp_types::InlayHintLabel::String(": ".to_string() + &pltype.get_name()),
+            label: lsp_types::InlayHintLabel::String(
+                ": ".to_string() + &pltype.borrow().get_name(),
+            ),
             kind: Some(InlayHintKind::TYPE),
             text_edits: None,
             tooltip: None,
@@ -1761,15 +1788,15 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     /// 自动解引用，有几层解几层
     pub fn auto_deref(
         &self,
-        tp: PLType,
+        tp: Rc<RefCell<PLType>>,
         value: PointerValue<'ctx>,
-    ) -> (PLType, PointerValue<'ctx>) {
+    ) -> (Rc<RefCell<PLType>>, PointerValue<'ctx>) {
         let mut tp = tp;
         let mut value = value;
         loop {
-            match tp {
+            match &*RefCell::borrow(&tp.clone()) {
                 PLType::POINTER(p) => {
-                    tp = *p;
+                    tp = *p.clone();
                     value = self.builder.build_load(value, "load").into_pointer_value();
                 }
                 _ => break,
@@ -1780,12 +1807,12 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     /// # auto_deref_tp
     /// 自动解pltype引用，有几层解几层
-    pub fn auto_deref_tp(&self, tp: PLType) -> PLType {
+    pub fn auto_deref_tp(&self, tp: Rc<RefCell<PLType>>) -> Rc<RefCell<PLType>> {
         let mut tp = tp;
         loop {
-            match tp {
+            match &*RefCell::borrow(&tp.clone()) {
                 PLType::POINTER(p) => {
-                    tp = *p;
+                    tp = *p.clone();
                 }
                 _ => break,
             }

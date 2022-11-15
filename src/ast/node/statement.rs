@@ -64,7 +64,7 @@ impl Node for DefNode {
             }
             let tp = pltype_opt.unwrap();
             if pltype.is_none() {
-                ctx.push_type_hints(self.var.range, &tp);
+                ctx.push_type_hints(self.var.range, tp.clone());
                 pltype = Some(tp);
             } else if pltype.clone().unwrap() != tp {
                 return Err(ctx.add_err(self.range, ErrorCode::TYPE_MISMATCH));
@@ -72,8 +72,8 @@ impl Node for DefNode {
             expv = value;
         }
         let pltype = pltype.unwrap();
-        let ditype = pltype.get_ditype(ctx);
-        let tp = pltype.get_basic_type_op(ctx);
+        let ditype = pltype.borrow().get_ditype(ctx);
+        let tp = pltype.borrow().get_basic_type_op(ctx);
         if tp.is_none() || ditype.is_none() {
             return Err(ctx.add_err(range, ErrorCode::UNDEFINED_TYPE));
         }

@@ -194,9 +194,9 @@ impl Node for ExternIDNode {
             ));
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
-            ctx.set_if_refs_tp(&tp, self.range);
-            let range = &tp.get_range();
-            let re = match &tp {
+            ctx.set_if_refs_tp(tp.clone(), self.range);
+            let range = &tp.clone().borrow().get_range();
+            let re = match &*tp.clone().borrow() {
                 PLType::FN(f) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
                     Ok((
@@ -216,21 +216,6 @@ impl Node for ExternIDNode {
     }
 }
 impl ExternIDNode {
-    pub fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: PLType) {
-        if self.ns.is_empty() {
-            return self.id.replace_type(ctx, tp);
-        }
-        let mut plmod = &mut ctx.plmod;
-        for ns in self.ns.iter() {
-            let re = plmod.submods.get_mut(&ns.name);
-            if let Some(re) = re {
-                plmod = re;
-            } else {
-                unreachable!()
-            }
-        }
-        plmod.replace_type(&self.id.name, tp)
-    }
     pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if self.ns.is_empty() {
             if self.complete {
@@ -263,9 +248,9 @@ impl ExternIDNode {
             }
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
-            ctx.set_if_refs_tp(&tp, self.range);
-            let range = &tp.get_range();
-            let re = match &tp {
+            ctx.set_if_refs_tp(tp.clone(), self.range);
+            let range = &tp.clone().borrow().get_range();
+            let re = match *tp.clone().borrow() {
                 PLType::STRUCT(_) => Ok((None, Some(tp), TerminatorEnum::NONE)),
                 _ => unreachable!(),
             };

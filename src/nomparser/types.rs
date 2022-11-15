@@ -3,7 +3,7 @@ use std::fmt::Error;
 use nom::{
     branch::alt,
     combinator::map_res,
-    multi::many0,
+    multi::{many0, separated_list0},
     sequence::{pair, tuple},
     IResult,
 };
@@ -11,7 +11,10 @@ use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
     ast::node::types::{ArrayTypeNameNode, TypeNameNode},
-    ast::{node::types::PointerTypeNode, tokens::TokenType},
+    ast::{
+        node::types::{GenericDefNode, PointerTypeNode},
+        tokens::TokenType,
+    },
 };
 use internal_macro::test_parser;
 
@@ -72,6 +75,26 @@ fn array_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
                 }
                 .into(),
             )))
+        },
+    )(input)
+}
+
+/// ```enbf
+/// generic_type_def = "<" identifier ("|" identifier)* ">" ;
+/// ```
+pub fn generic_type_def(input: Span) -> IResult<Span, Box<GenericDefNode>> {
+    map_res(
+        tuple((
+            tag_token(TokenType::LESS),
+            separated_list0(tag_token(TokenType::GENERIC_SEP), identifier),
+            tag_token(TokenType::GREATER),
+        )),
+        |(lf, ids, ri)| {
+            let range = lf.1.start.to(ri.1.end);
+            Ok::<_, Error>(Box::new(GenericDefNode {
+                range,
+                generics: ids,
+            }))
         },
     )(input)
 }

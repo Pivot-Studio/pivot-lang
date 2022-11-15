@@ -44,11 +44,13 @@ impl Node for ImplNode {
             if pltype.is_none() {
                 continue;
             }
-            let f = match pltype.unwrap() {
-                PLType::FN(f) => f,
-                _ => continue,
+            let tmp = pltype.unwrap();
+            let f = if let PLType::FN(f) = &*tmp.borrow() {
+                f.get_doc_symbol()
+            } else {
+                continue;
             };
-            method_docsymbols.push(f.get_doc_symbol());
+            method_docsymbols.push(f);
         }
         #[allow(deprecated)]
         let docsymbol = DocumentSymbol {

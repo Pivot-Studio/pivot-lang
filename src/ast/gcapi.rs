@@ -12,7 +12,13 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             return val;
         }
         let gcmod = self.get_gc_plmod();
-        let f: FNType = gcmod.get_type("DioGC__malloc").unwrap().try_into().unwrap();
+        let f: FNType = gcmod
+            .get_type("DioGC__malloc")
+            .unwrap()
+            .borrow()
+            .clone()
+            .try_into()
+            .unwrap();
         let f = f.get_or_insert_fn(self);
         let gc = self.builder.build_load(self.get_gc(), "gc");
         let td = self.targetmachine.get_target_data();
@@ -53,6 +59,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         let f: FNType = gcmod
             .get_type("DioGC__add_root")
             .unwrap()
+            .borrow()
+            .clone()
             .try_into()
             .unwrap();
         let f = f.get_or_insert_fn(self);
@@ -82,6 +90,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         let f: FNType = gcmod
             .get_type("DioGC__rm_root")
             .unwrap()
+            .borrow()
+            .clone()
             .try_into()
             .unwrap();
         let f = f.get_or_insert_fn(self);
@@ -102,6 +112,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         let f: FNType = gcmod
             .get_type("DioGC__collect")
             .unwrap()
+            .borrow()
+            .clone()
             .try_into()
             .unwrap();
         let f = f.get_or_insert_fn(self);

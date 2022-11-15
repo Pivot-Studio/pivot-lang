@@ -20,7 +20,7 @@ use internal_macro::test_parser;
 use super::*;
 
 #[test_parser(
-    "struct mystruct {
+    "struct mystruct<A|B|C> {
     myname: int;//123
     myname2: int;
 }"
@@ -31,6 +31,7 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             many0(comment),
             tag_token(TokenType::STRUCT),
             identifier,
+            opt(generic_type_def),
             del_newline_or_space!(tag_token(TokenType::LBRACE)),
             many0(tuple((
                 del_newline_or_space!(typed_identifier),
@@ -39,7 +40,7 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             ))),
             del_newline_or_space!(tag_token(TokenType::RBRACE)),
         )),
-        |(doc, (_, start), id, _, fields, (_, end))| {
+        |(doc, (_, start), id, generics, _, fields, (_, end))| {
             let range = start.start.to(end.end);
             let mut fieldlist = vec![];
             for mut f in fields {
@@ -56,6 +57,7 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 id,
                 fields: fieldlist,
                 range,
+                generics,
             })))
         },
     )(input)

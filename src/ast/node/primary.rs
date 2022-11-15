@@ -28,7 +28,7 @@ impl Node for BoolConstNode {
                     .const_int(self.value as u64, true)
                     .into(),
             ),
-            Some(PLType::PRIMITIVE(PriType::BOOL)),
+            Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
             TerminatorEnum::NONE,
         ))
     }
@@ -59,14 +59,14 @@ impl Node for NumNode {
             let b = ctx.context.i64_type().const_int(x, true);
             return Ok((
                 Some(b.into()),
-                Some(PLType::PRIMITIVE(PriType::I64)),
+                Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::I64)))),
                 TerminatorEnum::NONE,
             ));
         } else if let Num::FLOAT(x) = self.value {
             let b = ctx.context.f64_type().const_float(x);
             return Ok((
                 Some(b.into()),
-                Some(PLType::PRIMITIVE(PriType::F64)),
+                Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::F64)))),
                 TerminatorEnum::NONE,
             ));
         }
@@ -88,9 +88,6 @@ impl VarNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("VarNode: {}", self.name);
-    }
-    pub fn replace_type<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, tp: PLType) {
-        ctx.plmod.replace_type(&self.name, tp)
     }
     pub fn emit<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.if_completion_no_mut(|ctx, a| {
@@ -116,7 +113,7 @@ impl VarNode {
             return o;
         }
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
-            match tp {
+            match &*tp.borrow() {
                 PLType::FN(f) => {
                     ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
                     return Ok((
@@ -139,11 +136,11 @@ impl VarNode {
         });
 
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
-            match tp {
+            match *tp.borrow() {
                 PLType::STRUCT(_) | PLType::PRIMITIVE(_) | PLType::VOID => {
-                    if let PLType::STRUCT(st) = tp.clone() {
+                    if let PLType::STRUCT(st) = &*tp.clone().borrow() {
                         ctx.send_if_go_to_def(self.range, st.range, ctx.plmod.path.clone());
-                        ctx.set_if_refs(st.refs, self.range);
+                        ctx.set_if_refs(st.refs.clone(), self.range);
                     }
                     return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
                 }
@@ -178,13 +175,13 @@ impl Node for ArrayElementNode {
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let (arr, pltype, _) = self.arr.emit(ctx)?;
-        if let PLType::ARR(arrtp) = pltype.unwrap() {
+        if let PLType::ARR(arrtp) = &*pltype.unwrap().borrow() {
             let arr = arr.unwrap();
             // TODO: check if index is out of bounds
             let index_range = self.index.range();
             let (index, index_pltype, _) = self.index.emit(ctx)?;
             let index = ctx.try_load2var(index_range, index.unwrap())?;
-            if index_pltype.is_none() || !index_pltype.unwrap().is(PriType::I64) {
+            if index_pltype.is_none() || !index_pltype.unwrap().borrow().clone().is(PriType::I64) {
                 return Err(ctx.add_err(self.range, ErrorCode::ARRAY_INDEX_MUST_BE_INT));
             }
             let index_value = index.as_basic_value_enum().into_int_value();
@@ -195,7 +192,7 @@ impl Node for ArrayElementNode {
             };
             return Ok((
                 Some(elemptr.into()),
-                Some(*arrtp.element_type),
+                Some(*arrtp.element_type.clone()),
                 TerminatorEnum::NONE,
             ));
         }
