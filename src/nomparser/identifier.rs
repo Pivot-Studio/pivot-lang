@@ -5,8 +5,8 @@ use nom::{
     bytes::complete::tag,
     character::complete::{alpha1, alphanumeric1},
     combinator::{map_res, opt, recognize},
-    multi::{many0, many0_count},
-    sequence::{pair, preceded, tuple},
+    multi::{many0_count, separated_list1},
+    sequence::{pair, tuple},
     IResult, InputTake,
 };
 use nom_locate::LocatedSpan;
@@ -37,18 +37,11 @@ use super::*;
 pub fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
-            pair(
-                identifier,
-                many0(preceded(
-                    tag_token(TokenType::DOUBLE_COLON),
-                    delspace(identifier),
-                )),
-            ),
+            separated_list1(tag_token(TokenType::DOUBLE_COLON), delspace(identifier)),
             opt(tag_token(TokenType::DOUBLE_COLON)), // 容忍未写完的语句
             opt(tag_token(TokenType::COLON)),        // 容忍未写完的语句
         )),
-        |((a, mut ns), opt, opt2)| {
-            ns.insert(0, a);
+        |(mut ns, opt, opt2)| {
             let id = ns.pop().unwrap();
             let mut range = id.range();
             if opt.is_some() {

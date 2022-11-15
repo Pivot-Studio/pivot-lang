@@ -4,8 +4,8 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     combinator::{map_res, opt},
-    multi::many0,
-    sequence::{delimited, preceded, tuple},
+    multi::{many0, separated_list0},
+    sequence::{delimited, tuple},
     IResult,
 };
 use nom_locate::LocatedSpan;
@@ -91,34 +91,22 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
         tuple((
             type_name,
             tag_token(TokenType::LBRACE),
-            opt(tuple((
+            separated_list0(
+                tag_token(TokenType::COMMA),
                 del_newline_or_space!(struct_init_field),
-                many0(preceded(
-                    tag_token(TokenType::COMMA),
-                    del_newline_or_space!(struct_init_field),
-                )),
-            ))),
+            ),
             tag_token(TokenType::RBRACE),
         )),
         |(name, _, fields, _)| {
-            let range;
-            let mut fields_res = vec![];
-            if let Some((first, second)) = fields {
-                let last_range = if second.is_empty() {
-                    first.range().end
-                } else {
-                    second.last().unwrap().range().end
-                };
-                range = name.range().start.to(last_range);
-                fields_res.push(first);
-                fields_res.extend(second);
+            let range = if fields.len() > 0 {
+                name.range().start.to(fields.last().unwrap().range().end)
             } else {
-                range = name.range();
-            }
+                name.range()
+            };
             res_enum(
                 StructInitNode {
                     tp: name,
-                    fields: fields_res,
+                    fields,
                     range,
                 }
                 .into(),

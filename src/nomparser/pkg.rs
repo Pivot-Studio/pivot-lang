@@ -1,6 +1,6 @@
 use nom::{
     combinator::{map_res, opt},
-    multi::many0,
+    multi::separated_list0,
     sequence::{preceded, tuple},
     IResult,
 };
@@ -23,20 +23,18 @@ pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
         preceded(
             tag_token(TokenType::USE),
             delspace(tuple((
-                identifier,
-                many0(preceded(tag_token(TokenType::DOUBLE_COLON), identifier)),
+                separated_list0(tag_token(TokenType::DOUBLE_COLON), identifier),
                 opt(tag_token(TokenType::DOUBLE_COLON)),
                 opt(tag_token(TokenType::COLON)),
             ))),
         ),
-        |(first, rest, opt, opt2)| {
-            let mut path = vec![first];
-            path.extend(rest);
-            let mut range = path.first().unwrap().range().start.to(path
-                .last()
+        |(ns, opt, opt2)| {
+            let mut range = ns
+                .first()
                 .unwrap()
                 .range()
-                .end);
+                .start
+                .to(ns.last().unwrap().range().end);
             if opt.is_some() {
                 range = range.start.to(opt.unwrap().1.end);
             }
@@ -44,7 +42,7 @@ pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 range = range.start.to(opt2.unwrap().1.end);
             }
             res_enum(NodeEnum::UseNode(UseNode {
-                ids: path,
+                ids: ns,
                 range,
                 complete: opt.is_none() && opt2.is_none(),
                 singlecolon: opt2.is_some(),
