@@ -76,7 +76,7 @@ impl Node for FuncDefNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        ctx.save_if_comment_doc_hover(self.range, Some(self.typenode.doc.clone()));
+        ctx.save_if_comment_doc_hover(self.typenode.id.range, Some(self.typenode.doc.clone()));
         for c in self.typenode.doc.iter_mut() {
             c.emit(ctx)?;
         }
@@ -105,7 +105,7 @@ impl Node for FuncDefNode {
             };
         }
         ctx.push_semantic_token(self.typenode.ret.range(), SemanticTokenType::TYPE, 0);
-        let res = ctx.get_type(self.typenode.id.name.as_str(), self.range);
+        let res = ctx.get_type(self.typenode.id.name.as_str(), self.typenode.id.range);
         if res.is_err() {
             let diag = res.unwrap_err();
             ctx.add_diag(diag.clone());
@@ -285,6 +285,7 @@ impl Node for FuncCallNode {
         }
     }
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        let id_range = self.id.range();
         let mut para_values = Vec::new();
         let (func, pltype, _) = self.id.emit(ctx)?;
         if pltype.is_none() || !matches!(*RefCell::borrow(&pltype.clone().unwrap()), PLType::FN(_))
@@ -325,7 +326,7 @@ impl Node for FuncCallNode {
                 &para_values,
                 format(format_args!("call_{}", RefCell::borrow(&pltype).get_name())).as_str(),
             );
-            ctx.save_if_comment_doc_hover(self.range, Some(fv.doc.clone()));
+            ctx.save_if_comment_doc_hover(id_range, Some(fv.doc.clone()));
             let res = match ret.try_as_basic_value().left() {
                 Some(v) => Ok((
                     {
@@ -338,8 +339,8 @@ impl Node for FuncCallNode {
                 )),
                 None => Ok((None, Some(*fv.ret_pltype.clone()), TerminatorEnum::NONE)),
             };
-            ctx.set_if_refs_tp(pltype.clone(), self.range);
-            ctx.send_if_go_to_def(self.range, fv.range, ctx.plmod.path.clone());
+            ctx.set_if_refs_tp(pltype.clone(), id_range);
+            ctx.send_if_go_to_def(id_range, fv.range, ctx.plmod.path.clone());
             return res;
         }
         return Err(ctx.add_err(self.range, ErrorCode::NOT_A_FUNCTION));
@@ -359,7 +360,7 @@ impl FuncTypeNode {
         &'a mut self,
         ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
     ) -> Result<FunctionValue<'ctx>, PLDiag> {
-        if let Ok(_) = ctx.get_type(&self.id.name.as_str(), self.range) {
+        if let Ok(_) = ctx.get_type(&self.id.name.as_str(), self.id.range) {
             return Err(ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL));
         }
         let mut param_pltypes = Vec::new();
@@ -381,7 +382,7 @@ impl FuncTypeNode {
             ret_pltype: Box::new(self.ret.get_type(ctx)?),
             param_pltypes,
             param_name,
-            range: self.range,
+            range: self.id.range,
             refs: Rc::new(RefCell::new(refs)),
             doc: self.doc.clone(),
             llvmname: if self.declare {
@@ -406,8 +407,8 @@ impl FuncTypeNode {
         let res = ftp.get_or_insert_fn(ctx);
         let pltype = PLType::FN(ftp);
         let pltype = Rc::new(RefCell::new(pltype));
-        ctx.set_if_refs_tp(pltype.clone(), self.range);
-        ctx.add_type(self.id.name.clone(), pltype.clone(), self.range)?;
+        ctx.set_if_refs_tp(pltype.clone(), self.id.range);
+        ctx.add_type(self.id.name.clone(), pltype.clone(), self.id.range)?;
         ctx.add_doc_symbols(pltype);
         Ok(res)
     }
