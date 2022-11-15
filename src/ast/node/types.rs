@@ -309,13 +309,13 @@ impl StructDefNode {
             false,
         );
         let tp = ctx.get_type(&self.id.name.as_str(), self.range).unwrap();
-        ctx.set_if_refs_tp(tp.clone(), self.range);
-        ctx.add_doc_symbols(tp.clone());
         if let PLType::STRUCT(st) = &mut *tp.borrow_mut() {
             st.fields = fields;
             st.ordered_fields = newf;
             st.doc = self.doc.clone();
         }
+        ctx.set_if_refs_tp(tp.clone(), self.range);
+        ctx.add_doc_symbols(tp.clone());
         ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
         Ok(())
     }
