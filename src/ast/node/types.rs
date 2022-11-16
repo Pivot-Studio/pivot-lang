@@ -3,8 +3,9 @@ use std::rc::Rc;
 
 use super::primary::VarNode;
 use super::*;
-use crate::ast::ctx::{ARRType, Ctx, Field, PLType, STType};
+use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
+use crate::ast::pltype::{ARRType, Field, PLType, STType};
 use crate::ast::range::Range;
 use crate::utils::read_config::enter;
 use inkwell::types::{AnyType, BasicType};
@@ -248,7 +249,13 @@ impl StructDefNode {
             refs: Rc::new(RefCell::new(vec![])),
             doc: vec![],
             methods: FxHashMap::default(),
+            generics: None,
+            is_generic_place_holder: false,
         })));
+        // skip generics
+        if self.generics.is_some() {
+            return;
+        }
         ctx.context
             .opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.range);
@@ -289,30 +296,34 @@ impl StructDefNode {
             i = i + 1;
         }
         let name = self.id.name.as_str();
-        let st = ctx
-            .module
-            .get_struct_type(&ctx.plmod.get_full_name(name))
-            .unwrap();
         let newf = order_fields.clone();
-        st.set_body(
-            &order_fields
-                .into_iter()
-                .map(|order_field| {
-                    order_field
-                        .pltype
-                        .get_type(ctx)
-                        .unwrap()
-                        .borrow()
-                        .get_basic_type(&ctx)
-                })
-                .collect::<Vec<_>>(),
-            false,
-        );
+        // skip generics
+        if self.generics.is_none() {
+            let st = ctx
+                .module
+                .get_struct_type(&ctx.plmod.get_full_name(name))
+                .unwrap();
+            st.set_body(
+                &order_fields
+                    .into_iter()
+                    .map(|order_field| {
+                        order_field
+                            .pltype
+                            .get_type(ctx)
+                            .unwrap()
+                            .borrow()
+                            .get_basic_type(&ctx)
+                    })
+                    .collect::<Vec<_>>(),
+                false,
+            );
+        }
         let tp = ctx.get_type(&self.id.name.as_str(), self.range).unwrap();
         if let PLType::STRUCT(st) = &mut *tp.borrow_mut() {
             st.fields = fields;
             st.ordered_fields = newf;
             st.doc = self.doc.clone();
+            st.generics = self.generics.clone();
         }
         ctx.set_if_refs_tp(tp.clone(), self.range);
         ctx.add_doc_symbols(tp.clone());
@@ -520,4 +531,34 @@ impl Node for ArrayInitNode {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct GenericDefNode {
     pub generics: Vec<Box<VarNode>>,
+}
+
+impl GenericDefNode {
+    pub fn child_ctx<'a, 'ctx>(&'a mut self, ctx: &'a mut Ctx<'a, 'ctx>) -> Ctx<'a, 'ctx> {
+        let mut child = ctx.new_child(self.range.start);
+        for gen in self.generics.iter() {
+            let range = gen.range();
+            let name = "__generic__".to_string() + gen.name.clone().as_str();
+            let pltype = PLType::STRUCT(STType {
+                name,
+                path: ctx.plmod.path.clone(),
+                fields: FxHashMap::default(),
+                ordered_fields: vec![],
+                range,
+                refs: Rc::new(RefCell::new(vec![])),
+                doc: vec![],
+                methods: FxHashMap::default(),
+                generics: None,
+                is_generic_place_holder: true,
+            });
+            _ = child.add_type(gen.name.clone(), Rc::new(RefCell::new(pltype)), range);
+        }
+        child
+    }
+}
+
+#[range]
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct GenericParamNode {
+    pub generics: Vec<Box<NodeEnum>>,
 }

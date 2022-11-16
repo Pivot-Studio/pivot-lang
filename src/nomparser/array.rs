@@ -31,13 +31,7 @@ pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
         |(_, exps, _)| {
             // TODO:get range from token
             let range = Default::default();
-            res_enum(
-                ArrayInitNode {
-                    exps,
-                    range,
-                }
-                .into(),
-            )
+            res_enum(ArrayInitNode { exps, range }.into())
         },
     )(input)
 }

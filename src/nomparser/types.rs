@@ -3,7 +3,7 @@ use std::fmt::Error;
 use nom::{
     branch::alt,
     combinator::map_res,
-    multi::{many0, separated_list0},
+    multi::{many0, separated_list1},
     sequence::{pair, tuple},
     IResult,
 };
@@ -12,7 +12,7 @@ type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
     ast::node::types::{ArrayTypeNameNode, TypeNameNode},
     ast::{
-        node::types::{GenericDefNode, PointerTypeNode},
+        node::types::{GenericDefNode, GenericParamNode, PointerTypeNode},
         tokens::TokenType,
     },
 };
@@ -86,12 +86,32 @@ pub fn generic_type_def(input: Span) -> IResult<Span, Box<GenericDefNode>> {
     map_res(
         tuple((
             tag_token(TokenType::LESS),
-            separated_list0(tag_token(TokenType::GENERIC_SEP), identifier),
+            separated_list1(tag_token(TokenType::GENERIC_SEP), identifier),
             tag_token(TokenType::GREATER),
         )),
         |(lf, ids, ri)| {
             let range = lf.1.start.to(ri.1.end);
             Ok::<_, Error>(Box::new(GenericDefNode {
+                range,
+                generics: ids,
+            }))
+        },
+    )(input)
+}
+
+/// ```enbf
+/// generic_param_def = "<" extern_id ("|" extern_id)* ">" ;
+/// ```
+pub fn generic_param_def(input: Span) -> IResult<Span, Box<GenericParamNode>> {
+    map_res(
+        tuple((
+            tag_token(TokenType::LESS),
+            separated_list1(tag_token(TokenType::GENERIC_SEP), extern_identifier),
+            tag_token(TokenType::GREATER),
+        )),
+        |(lf, ids, ri)| {
+            let range = lf.1.start.to(ri.1.end);
+            Ok::<_, Error>(Box::new(GenericParamNode {
                 range,
                 generics: ids,
             }))

@@ -5,9 +5,10 @@ use lsp_types::SemanticTokenType;
 
 use crate::{
     ast::{
-        ctx::{get_ns_path_completions, Ctx, PLType},
+        ctx::{get_ns_path_completions, Ctx},
         diag::ErrorCode,
         node::{deal_line, tab},
+        pltype::PLType,
     },
     utils::read_config::enter,
 };

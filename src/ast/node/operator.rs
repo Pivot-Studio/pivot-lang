@@ -1,8 +1,8 @@
 use super::primary::VarNode;
 use super::*;
 use crate::ast::ctx::Ctx;
-use crate::ast::ctx::PLType;
-use crate::ast::ctx::PriType;
+use crate::ast::pltype::PLType;
+use crate::ast::pltype::PriType;
 use crate::ast::tokens::TokenType;
 
 use crate::ast::diag::ErrorCode;
