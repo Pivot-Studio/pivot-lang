@@ -6,7 +6,6 @@ use crate::ast::node::{deal_line, tab};
 use crate::ast::pltype::{FNType, PLType};
 use crate::utils::read_config::enter;
 use inkwell::debug_info::*;
-use inkwell::values::FunctionValue;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 use std::cell::RefCell;
@@ -133,18 +132,18 @@ impl Node for FuncDefNode {
                 false,
             );
             // add function
-            let func = match &*pltype.borrow() {
-                PLType::FN(fu) => fu.get_or_insert_fn(ctx),
+            let funcvalue = match &*pltype.borrow() {
+                PLType::FN(fntype) => fntype.get_or_insert_fn(ctx),
                 _ => return Ok((None, None, TerminatorEnum::NONE)),
             };
-            func.set_subprogram(subprogram);
-            ctx.function = Some(func);
+            funcvalue.set_subprogram(subprogram);
+            ctx.function = Some(funcvalue);
             let mut ctx = ctx.new_child(self.range.start);
             ctx.discope = subprogram.as_debug_info_scope();
             // copy para type
             let mut para_tps = Vec::new();
             for i in 0..para_names.len() {
-                let para_type = func.get_nth_param(i as u32);
+                let para_type = funcvalue.get_nth_param(i as u32);
                 if para_type.is_none() {
                     return Err(
                         ctx.add_err(self.typenode.paralist[i].range, ErrorCode::EXPECT_TYPE)
@@ -153,11 +152,11 @@ impl Node for FuncDefNode {
                 para_tps.push(para_type.unwrap());
             }
             // add block
-            let allocab = ctx.context.append_basic_block(func, "alloc");
-            let entry = ctx.context.append_basic_block(func, "entry");
-            let return_block = ctx.context.append_basic_block(func, "return");
+            let allocab = ctx.context.append_basic_block(funcvalue, "alloc");
+            let entry = ctx.context.append_basic_block(funcvalue, "entry");
+            let return_block = ctx.context.append_basic_block(funcvalue, "return");
             ctx.position_at_end(return_block);
-            let ret_value_ptr = if func.get_type().get_return_type().is_some() {
+            let ret_value_ptr = if funcvalue.get_type().get_return_type().is_some() {
                 let pltype = self.typenode.ret.get_type(&mut ctx)?;
                 let ret_type = {
                     let op = pltype.borrow().get_basic_type_op(&ctx);
@@ -287,21 +286,23 @@ impl Node for FuncCallNode {
     fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let id_range = self.id.range();
         let mut para_values = Vec::new();
-        let (func, pltype, _) = self.id.emit(ctx)?;
+        let (plvalue, pltype, _) = self.id.emit(ctx)?;
         if pltype.is_none() || !matches!(*RefCell::borrow(&pltype.clone().unwrap()), PLType::FN(_))
         {
             return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND));
         }
         let pltype = pltype.unwrap().clone();
-        if let PLType::FN(fv) = &*pltype.borrow() {
-            let plv = func.unwrap();
+        if let PLType::FN(fntype) = &*pltype.borrow() {
             let mut skip = 0;
-            if let Some(receiver) = plv.receiver {
-                para_values.push(receiver.into());
-                skip = 1;
+            if plvalue.is_some() {
+                if let Some(receiver) = plvalue.unwrap().receiver {
+                    para_values.push(receiver.into());
+                    skip = 1;
+                }
             }
-            let func = plv.into_function_value();
-            if func.count_params() - skip != self.paralist.len() as u32 {
+            // funcvalue must use fntype to get a new one,can not use the return  plvalue of id node emit
+            let funcvalue = fntype.get_or_insert_fn(ctx);
+            if funcvalue.count_params() - skip != self.paralist.len() as u32 {
                 return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
             }
             for (i, para) in self.paralist.iter_mut().enumerate() {
@@ -314,19 +315,19 @@ impl Node for FuncCallNode {
                     return Ok((None, None, TerminatorEnum::NONE));
                 }
                 let load = ctx.try_load2var(pararange, value.unwrap())?;
-                let param = func.get_nth_param(i as u32).unwrap();
+                let param = funcvalue.get_nth_param(i as u32).unwrap();
                 if load.get_type() != param.get_type() {
                     return Err(ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH));
                 }
                 para_values.push(load.as_basic_value_enum().into());
-                ctx.push_param_hint(pararange.clone(), fv.param_name[i].clone());
+                ctx.push_param_hint(pararange.clone(), fntype.param_name[i].clone());
             }
             let ret = ctx.builder.build_call(
-                func,
+                funcvalue,
                 &para_values,
                 format(format_args!("call_{}", RefCell::borrow(&pltype).get_name())).as_str(),
             );
-            ctx.save_if_comment_doc_hover(id_range, Some(fv.doc.clone()));
+            ctx.save_if_comment_doc_hover(id_range, Some(fntype.doc.clone()));
             let res = match ret.try_as_basic_value().left() {
                 Some(v) => Ok((
                     {
@@ -334,13 +335,13 @@ impl Node for FuncCallNode {
                         ctx.nodebug_builder.build_store(ptr, v);
                         Some(ptr.into())
                     },
-                    Some(*fv.ret_pltype.clone()),
+                    Some(*fntype.ret_pltype.clone()),
                     TerminatorEnum::NONE,
                 )),
-                None => Ok((None, Some(*fv.ret_pltype.clone()), TerminatorEnum::NONE)),
+                None => Ok((None, Some(*fntype.ret_pltype.clone()), TerminatorEnum::NONE)),
             };
             ctx.set_if_refs_tp(pltype.clone(), id_range);
-            ctx.send_if_go_to_def(id_range, fv.range, ctx.plmod.path.clone());
+            ctx.send_if_go_to_def(id_range, fntype.range, ctx.plmod.path.clone());
             return res;
         }
         return Err(ctx.add_err(self.range, ErrorCode::NOT_A_FUNCTION));
@@ -360,7 +361,7 @@ impl FuncTypeNode {
     pub fn emit_func_type<'a, 'ctx>(
         &'a mut self,
         ctx: &mut crate::ast::ctx::Ctx<'a, 'ctx>,
-    ) -> Result<FunctionValue<'ctx>, PLDiag> {
+    ) -> Result<(), PLDiag> {
         if let Ok(_) = ctx.get_type(&self.id.name.as_str(), self.id.range) {
             return Err(ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL));
         }
@@ -405,12 +406,12 @@ impl FuncTypeNode {
                 }
             }
         }
-        let res = ftp.get_or_insert_fn(ctx);
+        ftp.get_or_insert_fn(ctx);
         let pltype = PLType::FN(ftp);
         let pltype = Rc::new(RefCell::new(pltype));
         ctx.set_if_refs_tp(pltype.clone(), self.id.range);
         ctx.add_type(self.id.name.clone(), pltype.clone(), self.id.range)?;
         ctx.add_doc_symbols(pltype);
-        Ok(res)
+        Ok(())
     }
 }

@@ -115,13 +115,9 @@ impl VarNode {
         }
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match &*tp.borrow() {
-                PLType::FN(f) => {
+                PLType::FN(_) => {
                     ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
-                    return Ok((
-                        Some(f.get_or_insert_fn(ctx).into()),
-                        Some(tp.clone()),
-                        TerminatorEnum::NONE,
-                    ));
+                    return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
                 }
                 _ => return Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND)),
             }
