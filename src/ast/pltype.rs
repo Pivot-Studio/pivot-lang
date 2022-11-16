@@ -9,6 +9,7 @@ use inkwell::types::StructType;
 use inkwell::types::VoidType;
 use inkwell::values::FunctionValue;
 use inkwell::AddressSpace;
+use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::DocumentSymbol;
@@ -533,6 +534,22 @@ impl FNType {
             .add_function(&self.llvmname, fn_type, Some(Linkage::External));
         fn_value
     }
+    pub fn gen_snippet(&self) -> String {
+        let mut name = self.name.clone();
+        let mut iter = self.param_name.iter();
+        if self.method {
+            iter.next();
+            name = name.split("::").last().unwrap().to_string();
+        }
+        name + "("
+            + &iter
+                .enumerate()
+                .map(|(i, v)| format!("${{{}:{}}}", i + 1, v))
+                .collect::<Vec<_>>()
+                .join(", ")
+            + ")$0"
+    }
+
     pub fn get_doc_symbol(&self) -> DocumentSymbol {
         #[allow(deprecated)]
         DocumentSymbol {
@@ -644,13 +661,18 @@ impl STType {
                 ..Default::default()
             });
         }
-        for (name, _) in &self.methods {
+        for (name, v) in &self.methods {
             completions.push(CompletionItem {
                 kind: Some(CompletionItemKind::METHOD),
                 label: name.clone(),
                 detail: Some("method".to_string()),
-                insert_text: Some(name.clone()),
-                insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
+                insert_text: Some(v.gen_snippet()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                command: Some(Command::new(
+                    "trigger help".to_string(),
+                    "editor.action.triggerParameterHints".to_string(),
+                    None,
+                )),
                 ..Default::default()
             });
         }

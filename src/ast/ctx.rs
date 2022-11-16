@@ -1,6 +1,7 @@
 use crate::lsp::semantic_tokens::type_index;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::utils::read_config::Config;
+use crate::Db;
 use colored::Colorize;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
@@ -14,6 +15,7 @@ use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
 use inkwell::values::{AnyValueEnum, BasicMetadataValueEnum};
+use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::Diagnostic;
@@ -24,9 +26,14 @@ use lsp_types::Hover;
 use lsp_types::HoverContents;
 use lsp_types::InlayHint;
 use lsp_types::InlayHintKind;
+use lsp_types::InsertTextFormat;
 use lsp_types::Location;
 use lsp_types::MarkedString;
+use lsp_types::ParameterInformation;
+use lsp_types::ParameterLabel;
 use lsp_types::SemanticTokenType;
+use lsp_types::SignatureHelp;
+use lsp_types::SignatureInformation;
 use lsp_types::Url;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
@@ -36,6 +43,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use super::accumulators::PLSignatureHelp;
 use super::compiler::get_target_machine;
 use super::compiler::ActionType;
 use super::diag::{ErrorCode, WarnCode};
@@ -90,6 +98,7 @@ pub struct Ctx<'a, 'ctx> {
     pub config: Config,                                     // config
     pub roots: RefCell<Vec<BasicValueEnum<'ctx>>>,
     pub usegc: bool,
+    pub db: &'a dyn Db,
 }
 
 pub struct MemberType<'ctx> {
@@ -409,6 +418,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         sender: Option<ActionType>,
         completion: Option<(Pos, Option<String>, ActionType)>,
         config: Config,
+        db: &'a dyn Db,
     ) -> Ctx<'a, 'ctx> {
         let f = Path::new(Path::new(src_file_path).file_stem().unwrap())
             .file_name()
@@ -452,6 +462,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             usegc: true,
             ditypes_placeholder: Rc::new(RefCell::new(FxHashMap::default())),
             ditypes: Rc::new(RefCell::new(FxHashMap::default())),
+            db,
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -498,6 +509,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             usegc: self.usegc,
             ditypes_placeholder: self.ditypes_placeholder.clone(),
             ditypes: self.ditypes.clone(),
+            db: self.db.clone(),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -776,6 +788,39 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }
     }
 
+    pub fn set_if_sig(&self, range: Range, name: String, params: &[String], n: u32) {
+        if let Some(act) = self.action {
+            if act != ActionType::SignatureHelp {
+                return;
+            }
+            if let Some(comp) = &self.lspparams {
+                if comp.0.is_in(range) {
+                    PLSignatureHelp::push(
+                        self.db,
+                        SignatureHelp {
+                            signatures: vec![SignatureInformation {
+                                label: name,
+                                documentation: None,
+                                parameters: Some(
+                                    params
+                                        .iter()
+                                        .map(|s| ParameterInformation {
+                                            label: ParameterLabel::Simple(s.clone()),
+                                            documentation: None,
+                                        })
+                                        .collect(),
+                                ),
+                                active_parameter: Some(n),
+                            }],
+                            active_signature: None,
+                            active_parameter: None,
+                        },
+                    );
+                }
+            }
+        }
+    }
+
     pub fn set_if_refs(&self, refs: Rc<RefCell<Vec<Location>>>, range: Range) {
         if let Some(act) = self.action {
             if act == ActionType::FindReferences {
@@ -852,14 +897,27 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         let ns = self.plmod.submods.get(ns);
         if let Some(ns) = ns {
             for (k, v) in ns.types.iter() {
-                let tp = match *RefCell::borrow(&v) {
+                let mut insert_text = None;
+                let mut command = None;
+                let tp = match &*v.clone().borrow() {
                     PLType::STRUCT(_) => CompletionItemKind::STRUCT,
-                    PLType::FN(_) => CompletionItemKind::FUNCTION,
+                    PLType::FN(f) => {
+                        insert_text = Some(f.gen_snippet());
+                        command = Some(Command::new(
+                            "trigger help".to_string(),
+                            "editor.action.triggerParameterHints".to_string(),
+                            None,
+                        ));
+                        CompletionItemKind::FUNCTION
+                    }
                     _ => continue, // skip completion for primary types
                 };
                 let mut item = CompletionItem {
                     label: k.to_string(),
                     kind: Some(tp),
+                    insert_text,
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                    command,
                     ..Default::default()
                 };
                 item.detail = Some(k.to_string());
@@ -917,8 +975,18 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     fn get_pltp_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         for (k, f) in self.plmod.types.iter() {
-            let tp = match *RefCell::borrow(&f) {
-                PLType::FN(_) => CompletionItemKind::FUNCTION,
+            let mut insert_text = None;
+            let mut command = None;
+            let tp = match &*f.clone().borrow() {
+                PLType::FN(f) => {
+                    insert_text = Some(f.gen_snippet());
+                    command = Some(Command::new(
+                        "trigger help".to_string(),
+                        "editor.action.triggerParameterHints".to_string(),
+                        None,
+                    ));
+                    CompletionItemKind::FUNCTION
+                }
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
                 PLType::ARR(_) => CompletionItemKind::KEYWORD,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
@@ -934,6 +1002,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 CompletionItem {
                     label: k.to_string(),
                     kind: Some(tp),
+                    insert_text,
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                    command,
                     ..Default::default()
                 },
             );

@@ -122,10 +122,10 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             let mut res = head;
             for op in ops {
                 res = match op {
-                    ComplexOp::CallOp(args) => {
+                    ComplexOp::CallOp((args, params_range)) => {
                         let mut range = res.range();
                         if args.len() > 0 {
-                            range = res.range().start.to(args.last().unwrap().range().end);
+                            range = res.range().start.to(params_range.end);
                         }
                         Box::new(
                             FuncCallNode {

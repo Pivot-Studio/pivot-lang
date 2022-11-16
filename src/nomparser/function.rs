@@ -103,6 +103,8 @@ pub fn call_function_op(input: Span) -> IResult<Span, ComplexOp> {
             )),
             tag_token(TokenType::RPAREN),
         )),
-        |(_, paras, _)| Ok::<_, Error>(ComplexOp::CallOp(paras)),
+        |((_, st), paras, (_, end))| {
+            Ok::<_, Error>(ComplexOp::CallOp((paras, st.start.to(end.end))))
+        },
     ))(input)
 }
