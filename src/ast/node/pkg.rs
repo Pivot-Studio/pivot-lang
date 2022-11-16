@@ -198,13 +198,9 @@ impl Node for ExternIDNode {
             ctx.set_if_refs_tp(tp.clone(), self.range);
             let range = &tp.clone().borrow().get_range();
             let re = match &*tp.clone().borrow() {
-                PLType::FN(f) => {
+                PLType::FN(_) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
-                    Ok((
-                        Some(f.get_or_insert_fn(ctx).into()),
-                        Some(tp),
-                        TerminatorEnum::NONE,
-                    ))
+                    Ok((None, Some(tp), TerminatorEnum::NONE))
                 }
                 _ => unreachable!(),
             };
