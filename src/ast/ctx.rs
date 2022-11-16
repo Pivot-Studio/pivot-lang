@@ -50,6 +50,7 @@ use super::compiler::get_target_machine;
 use super::compiler::ActionType;
 use super::diag::{ErrorCode, WarnCode};
 use super::diag::{ERR_MSG, WARN_MSG};
+use super::node::types::GenericDefNode;
 use super::node::NodeEnum;
 use super::node::PLValue;
 use super::node::TypeNode;
@@ -932,6 +933,8 @@ pub struct STType {
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub methods: FxHashMap<String, FNType>,
+    pub generics: Option<Box<GenericDefNode>>,
+    pub is_generic_place_holder: bool,
 }
 
 impl STType {

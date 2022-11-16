@@ -3,7 +3,7 @@ use std::fmt::Error;
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    combinator::map_res,
+    combinator::{map_res, opt},
     multi::{many0, separated_list0},
     sequence::{delimited, tuple},
     IResult,
@@ -53,6 +53,7 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             many0(del_newline_or_space!(comment)),
             tag_token(TokenType::FN),
             identifier,
+            opt(generic_type_def),
             tag_token(TokenType::LPAREN),
             del_newline_or_space!(separated_list0(
                 tag_token(TokenType::COMMA),
@@ -69,7 +70,7 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 }),
             )),
         )),
-        |(doc, (_, start), id, _, paras, _, ret, (body, end))| {
+        |(doc, (_, start), id, generics, _, paras, _, ret, (body, end))| {
             let range = start.start.to(end.end);
             let node = FuncDefNode {
                 typenode: FuncTypeNode {
@@ -79,6 +80,7 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                     range,
                     doc,
                     declare: body.is_none(),
+                    generics,
                 },
                 body,
                 range,

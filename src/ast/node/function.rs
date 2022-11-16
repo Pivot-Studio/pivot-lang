@@ -354,6 +354,7 @@ pub struct FuncTypeNode {
     pub ret: Box<TypeNodeEnum>,
     pub doc: Vec<Box<NodeEnum>>,
     pub declare: bool,
+    pub generics: Option<Box<GenericDefNode>>,
 }
 impl FuncTypeNode {
     pub fn emit_func_type<'a, 'ctx>(
