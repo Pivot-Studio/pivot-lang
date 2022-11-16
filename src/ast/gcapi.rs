@@ -4,7 +4,8 @@ use inkwell::{
     AddressSpace,
 };
 
-use super::ctx::{Ctx, FNType, Mod};
+use super::ctx::{Ctx, Mod};
+use super::pltype::FNType;
 
 impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn mv2heap(&self, val: BasicValueEnum<'ctx>) -> BasicValueEnum<'ctx> {

@@ -3,8 +3,9 @@ use std::rc::Rc;
 
 use super::primary::VarNode;
 use super::*;
-use crate::ast::ctx::{ARRType, Ctx, Field, PLType, STType};
+use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
+use crate::ast::pltype::{ARRType, Field, PLType, STType};
 use crate::ast::range::Range;
 use crate::utils::read_config::enter;
 use inkwell::types::{AnyType, BasicType};

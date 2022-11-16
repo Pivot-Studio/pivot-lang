@@ -1,7 +1,8 @@
 use super::statement::StatementsNode;
 use super::*;
-use crate::ast::ctx::{Ctx, PriType};
+use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
+use crate::ast::pltype::PriType;
 use internal_macro::range;
 
 #[range]

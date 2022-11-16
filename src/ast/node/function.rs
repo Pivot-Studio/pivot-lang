@@ -1,9 +1,9 @@
 use super::statement::StatementsNode;
 use super::*;
 use super::{alloc, types::TypedIdentifierNode, Node, TypeNode};
-use crate::ast::ctx::{FNType, PLType};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
+use crate::ast::pltype::{FNType, PLType};
 use crate::utils::read_config::enter;
 use inkwell::debug_info::*;
 use inkwell::values::FunctionValue;

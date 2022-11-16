@@ -26,8 +26,9 @@ use self::ret::*;
 use self::statement::*;
 use self::types::*;
 
-use super::ctx::{PLDiag, PLType};
+use super::ctx::PLDiag;
 use super::diag::ErrorCode;
+use super::pltype::PLType;
 use super::range::{Pos, Range};
 
 pub mod comment;
