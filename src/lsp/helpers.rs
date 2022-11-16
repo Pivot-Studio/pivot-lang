@@ -113,6 +113,19 @@ pub fn send_hover(sender: &Sender<Message>, id: RequestId, hover: lsp_types::Hov
         .unwrap();
 }
 
+pub fn send_signature_help(
+    sender: &Sender<Message>,
+    id: RequestId,
+    help: lsp_types::SignatureHelp,
+) {
+    sender
+        .send(Message::Response(lsp_server::Response::new_ok(
+            id,
+            Some(serde_json::to_value(help).unwrap()),
+        )))
+        .unwrap();
+}
+
 pub fn url_to_path(url: Url) -> String {
     url.to_file_path().unwrap().to_str().unwrap().to_string()
 }

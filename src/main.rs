@@ -21,6 +21,7 @@ pub struct Jar(
     accumulators::PLFormat,
     accumulators::Hints,
     accumulators::DocSymbols,
+    accumulators::PLSignatureHelp,
     program::Program,
     program::Program_emit,
     program::ProgramNodeWrapper,

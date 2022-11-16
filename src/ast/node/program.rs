@@ -236,6 +236,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         Some(params.params(db).action(db)),
         params.params(db).params(db),
         params.params(db).config(db),
+        db,
     );
     if PathBuf::from(params.file(db))
         .with_extension("")

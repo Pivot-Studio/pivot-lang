@@ -2,7 +2,7 @@ use std::{cell::RefCell, path::PathBuf, rc::Rc};
 
 use lsp_types::{
     CompletionItem, DocumentSymbol, GotoDefinitionResponse, Hover, InlayHint, Location,
-    SemanticTokens, TextEdit,
+    SemanticTokens, SignatureHelp, TextEdit,
 };
 
 use super::ctx::PLDiag;
@@ -34,3 +34,6 @@ pub struct PLFormat(Vec<TextEdit>);
 pub struct Hints(Vec<InlayHint>);
 #[salsa::accumulator]
 pub struct DocSymbols(Vec<DocumentSymbol>);
+
+#[salsa::accumulator]
+pub struct PLSignatureHelp(SignatureHelp);

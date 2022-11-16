@@ -305,22 +305,44 @@ impl Node for FuncCallNode {
             if funcvalue.count_params() - skip != self.paralist.len() as u32 {
                 return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
             }
+            let mut prevpos = id_range.end;
             for (i, para) in self.paralist.iter_mut().enumerate() {
-                if i < skip as usize {
+                let sigrange = prevpos.to(para.range().end);
+                prevpos = para.range().end;
+                let pararange = para.range();
+                ctx.push_param_hint(pararange.clone(), fntype.param_name[i].clone());
+                ctx.set_if_sig(
+                    sigrange,
+                    fntype.name.clone().split("::").last().unwrap().to_string()
+                        + "("
+                        + fntype
+                            .param_name
+                            .iter()
+                            .enumerate()
+                            .map(|(i, s)| {
+                                s.clone() + ": " + &fntype.param_pltypes[i].borrow().get_name()
+                            })
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                            .as_str()
+                        + ")",
+                    &fntype.param_name,
+                    i as u32 + skip,
+                );
+                let re = para.emit(ctx);
+                if re.is_err() {
                     continue;
                 }
-                let pararange = para.range();
-                let (value, _, _) = para.emit(ctx)?;
+                let (value, _, _) = re.unwrap();
                 if value.is_none() {
-                    return Ok((None, None, TerminatorEnum::NONE));
+                    continue;
                 }
                 let load = ctx.try_load2var(pararange, value.unwrap())?;
-                let param = funcvalue.get_nth_param(i as u32).unwrap();
+                let param = funcvalue.get_nth_param(i as u32 + skip).unwrap();
                 if load.get_type() != param.get_type() {
-                    return Err(ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH));
+                    _ = ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH);
                 }
                 para_values.push(load.as_basic_value_enum().into());
-                ctx.push_param_hint(pararange.clone(), fntype.param_name[i].clone());
             }
             let ret = ctx.builder.build_call(
                 funcvalue,

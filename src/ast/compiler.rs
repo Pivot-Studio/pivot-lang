@@ -100,6 +100,7 @@ pub enum ActionType {
     LspFmt,
     Hint,
     DocSymbol,
+    SignatureHelp,
 }
 
 #[cfg(feature = "jit")]

@@ -23,10 +23,11 @@ use lsp_types::{
     request::{
         Completion, DocumentSymbolRequest, Formatting, GotoDefinition, HoverRequest,
         InlayHintRequest, References, SemanticTokensFullDeltaRequest, SemanticTokensFullRequest,
+        SignatureHelpRequest,
     },
     Hover, HoverContents, InitializeParams, MarkedString, OneOf, SemanticTokenModifier,
     SemanticTokenType, SemanticTokens, SemanticTokensDelta, SemanticTokensOptions,
-    ServerCapabilities, TextDocumentSyncKind, TextDocumentSyncOptions,
+    ServerCapabilities, SignatureHelp, TextDocumentSyncKind, TextDocumentSyncOptions,
 };
 
 use lsp_server::{Connection, Message};
@@ -39,7 +40,7 @@ use crate::{
     ast::{
         accumulators::{
             Completions, Diagnostics, DocSymbols, GotoDef, Hints, PLFormat, PLHover, PLReferences,
-            PLSemanticTokens,
+            PLSemanticTokens, PLSignatureHelp,
         },
         compiler::{compile_dry, ActionType},
         range::Pos,
@@ -50,7 +51,7 @@ use crate::{
         helpers::{
             send_completions, send_diagnostics, send_doc_symbols, send_format, send_goto_def,
             send_hints, send_hover, send_references, send_semantic_tokens,
-            send_semantic_tokens_edit, url_to_path,
+            send_semantic_tokens_edit, send_signature_help, url_to_path,
         },
         mem_docs::MemDocsInput,
         semantic_tokens::diff_tokens,
@@ -87,6 +88,11 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
         document_symbol_provider: Some(OneOf::Left(true)),
         references_provider: Some(OneOf::Left(true)),
         hover_provider: Some(lsp_types::HoverProviderCapability::Simple(true)),
+        signature_help_provider: Some(lsp_types::SignatureHelpOptions {
+            trigger_characters: Some(vec!["(".to_string(), ",".to_string()]),
+            retrigger_characters: None,
+            work_done_progress_options: Default::default(),
+        }),
         semantic_tokens_provider: Some(
             lsp_types::SemanticTokensServerCapabilities::SemanticTokensOptions(
                 SemanticTokensOptions {
@@ -321,6 +327,37 @@ fn main_loop(
                 let sender = connection.sender.clone();
                 pool.execute(move || {
                     send_format(&sender, id, fmt[0].clone());
+                });
+            }
+        })
+        .on::<SignatureHelpRequest, _>(|id, params| {
+            let doc = params.text_document_position_params;
+            let uri = url_to_path(doc.text_document.uri);
+            let pos = Pos::from_diag_pos(&doc.position);
+            docin.set_file(&mut db).to(uri);
+            docin.set_action(&mut db).to(ActionType::SignatureHelp);
+            docin
+                .set_params(&mut db)
+                .to(Some((pos, None, ActionType::SignatureHelp)));
+            compile_dry(&db, docin);
+            let sigs = compile_dry::accumulated::<PLSignatureHelp>(&db, docin);
+            if !sigs.is_empty() {
+                let sender = connection.sender.clone();
+                pool.execute(move || {
+                    send_signature_help(&sender, id, sigs[0].clone());
+                });
+            } else {
+                let sender = connection.sender.clone();
+                pool.execute(move || {
+                    send_signature_help(
+                        &sender,
+                        id,
+                        SignatureHelp {
+                            signatures: vec![],
+                            active_signature: None,
+                            active_parameter: None,
+                        },
+                    );
                 });
             }
         })
