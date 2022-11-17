@@ -5,8 +5,6 @@ on:
       - master
       - release/*
 
-env:
-  RUSTFLAGS: -Dwarnings
 
 jobs:
   artifacts:
@@ -21,13 +19,13 @@ jobs:
             dir: osx64
             arch: darwin-arm64
             artifacts: "plc"
-            RUSTFLAGS: "-Dwarnings"
+            RUSTFLAGS: ""
           - os: "ubuntu-latest"
             dir: linux64
             debdir: pivot-lang_0.1.0-1_amd64
             artifacts: "plc"
             arch: linux-amd64
-            RUSTFLAGS: "-Dwarnings"
+            RUSTFLAGS: ""
           # - os: "windows-latest"
           #   dir: win64
           #   artifacts: "plc.exe"
