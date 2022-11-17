@@ -184,7 +184,7 @@ jobs:
           cp ${{ steps.build-deb.outputs.file_name }} ${{ matrix.config.dir }}/
       - name: Update apt repo
         if: ${{ matrix.config.os == 'ubuntu-latest' }}
-        uses: jrandiny/apt-repo-action@v2.0.1
+        uses: Pivot-Studio/apt-repo-action@master
         with:
           github_token: ${{ secrets.PAT }}
           repo_supported_arch: |
@@ -197,10 +197,12 @@ jobs:
           public_key: ${{ secrets.PUBLIC }}
           private_key: ${{ secrets.PRIVATE }}
           key_passphrase: ${{ secrets.SECRET }}
-          page_branch: apt
+          page_branch: master
+          github_repository: Pivot-Studio/apt-repo
+
       - name: Update apt repo
         if: ${{ matrix.config.os == 'ubuntu-latest' }}
-        uses: jrandiny/apt-repo-action@v2.0.1
+        uses: Pivot-Studio/apt-repo-action@master
         with:
           github_token: ${{ secrets.PAT }}
           repo_supported_arch: |
@@ -213,7 +215,8 @@ jobs:
           public_key: ${{ secrets.PUBLIC }}
           private_key: ${{ secrets.PRIVATE }}
           key_passphrase: ${{ secrets.SECRET }}
-          page_branch: apt
+          page_branch: master
+          github_repository: Pivot-Studio/apt-repo
       - name: tar artifacts
         if: ${{ matrix.config.os != 'windows-latest' }}
         env:
