@@ -11,7 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Release my project to my Homebrew tap
-        if: ${{ matrix.config.os == 'ubuntu-latest' }}
         uses: Pivot-Studio/homebrew-releaser@main
         with:
           # The name of the homebrew tap to publish your formula to as it appears on GitHub.
