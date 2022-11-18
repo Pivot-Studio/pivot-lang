@@ -1,6 +1,6 @@
 use nom::{
     combinator::{map_res, opt},
-    multi::separated_list0,
+    multi::separated_list1,
     sequence::{preceded, tuple},
     IResult,
 };
@@ -23,7 +23,7 @@ pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
         preceded(
             tag_token(TokenType::USE),
             delspace(tuple((
-                separated_list0(tag_token(TokenType::DOUBLE_COLON), identifier),
+                separated_list1(tag_token(TokenType::DOUBLE_COLON), identifier),
                 opt(tag_token(TokenType::DOUBLE_COLON)),
                 opt(tag_token(TokenType::COLON)),
             ))),

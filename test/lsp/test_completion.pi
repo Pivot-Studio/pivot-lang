@@ -16,3 +16,5 @@ struct test1 {
     b:f64;
     c:i64;
 }
+
+use

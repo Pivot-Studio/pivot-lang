@@ -5,6 +5,7 @@ use project2::main;
 use project2::main::test;
 use core::panic;
 use std::io;
+use core::panic;
 const a = 100;
 struct struct_father {
     a: i64;
@@ -86,6 +87,7 @@ fn test_if_ret_only(judge: bool) void {
     if judge {
         return;
     } else {
+        panic::pl_panic();
         //156411
     }
     return;
