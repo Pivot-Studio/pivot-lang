@@ -4,6 +4,7 @@ use super::{alloc, types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 use crate::ast::pltype::{FNType, PLType};
+use crate::lsp::semantic_tokens;
 use crate::utils::read_config::enter;
 use inkwell::debug_info::*;
 use internal_macro::range;
@@ -55,6 +56,7 @@ impl Node for FuncCallNode {
         }
     }
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        // let currscope = ctx.discope;
         let id_range = self.id.range();
         let mut para_values = Vec::new();
         let (plvalue, pltype, _) = self.id.emit(ctx)?;
@@ -167,7 +169,14 @@ impl Node for FuncCallNode {
         }
         if fntype.need_gen_code() {
             let block = ctx.block;
+            let f = ctx.function;
+            let sembuilder = ctx.semantic_tokens_builder.clone();
+            ctx.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(
+                semantic_tokens::SemanticTokensBuilder::new("".to_string()),
+            )));
             let (_, pltype, _) = fntype.node.emit(ctx)?;
+            ctx.semantic_tokens_builder = sembuilder;
+            ctx.function = f;
             ctx.position_at_end(block.unwrap());
             let pltype = pltype.unwrap();
             match &*pltype.borrow() {
@@ -177,8 +186,17 @@ impl Node for FuncCallNode {
                 _ => unreachable!(),
             };
         }
+        let function = fntype.get_or_insert_fn(ctx);
+        if let Some(f) = ctx.function {
+            if f.get_subprogram().is_some() {
+                ctx.discope = f.get_subprogram().unwrap().as_debug_info_scope();
+                let pos = self.range().start;
+                // ctx.discope = currscope;
+                ctx.build_dbg_location(pos)
+            }
+        };
         let ret = ctx.builder.build_call(
-            fntype.get_or_insert_fn(ctx),
+            function,
             &para_values,
             format(format_args!("call_{}", RefCell::borrow(&pltype).get_name())).as_str(),
         );
@@ -186,6 +204,7 @@ impl Node for FuncCallNode {
         let res = match ret.try_as_basic_value().left() {
             Some(v) => Ok((
                 {
+                    ctx.nodebug_builder.unset_current_debug_location();
                     let ptr = alloc(ctx, v.get_type(), "ret_alloc_tmp");
                     ctx.nodebug_builder.build_store(ptr, v);
                     Some(ptr.into())
@@ -416,6 +435,7 @@ impl Node for FuncDefNode {
                     }
                     op.unwrap()
                 };
+                ctx.nodebug_builder.unset_current_debug_location();
                 let retv = alloc(&mut child, ret_type, "retvalue");
                 // 返回值不能在函数结束时从root表移除
                 child.roots.borrow_mut().pop();

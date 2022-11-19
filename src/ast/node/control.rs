@@ -79,7 +79,7 @@ impl Node for IfNode {
             "trunctemp",
         );
         ctx.builder
-            .build_conditional_branch(cond, else_block, then_block);
+            .build_conditional_branch(cond, then_block, else_block);
         // then block
         position_at_end(ctx, then_block);
         let (_, _, then_terminator) = self.then.emit(ctx)?;

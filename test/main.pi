@@ -295,7 +295,7 @@ impl pointer_struct {
         return;
     }
 
-    fn name_params(x: i64, ) void {
+    fn name_params(x: i64) void {
         return;
     }
 }
