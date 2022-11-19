@@ -1,4 +1,4 @@
-use super::function::FuncTypeNode;
+use super::function::FuncDefNode;
 use super::types::StructDefNode;
 use super::*;
 use crate::ast::accumulators::*;
@@ -27,7 +27,7 @@ use std::rc::Rc;
 pub struct ProgramNode {
     pub nodes: Vec<Box<NodeEnum>>,
     pub structs: Vec<StructDefNode>,
-    pub fntypes: Vec<FuncTypeNode>,
+    pub fntypes: Vec<FuncDefNode>,
     pub globaldefs: Vec<GlobalNode>,
     pub uses: Vec<Box<NodeEnum>>,
 }
@@ -48,7 +48,7 @@ impl Node for ProgramNode {
             statement.print(tabs, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         // emit structs
         for def in self.structs.iter() {
             // 提前加入占位符号，解决自引用问题
@@ -58,7 +58,7 @@ impl Node for ProgramNode {
             _ = def.emit_struct_def(ctx);
         }
         self.fntypes.iter_mut().for_each(|x| {
-            _ = x.emit_func_type(ctx);
+            _ = x.emit_func_def(ctx);
         });
         // init global
         ctx.set_init_fn();
@@ -236,6 +236,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         Some(params.params(db).action(db)),
         params.params(db).params(db),
         params.params(db).config(db),
+        db,
     );
     if PathBuf::from(params.file(db))
         .with_extension("")

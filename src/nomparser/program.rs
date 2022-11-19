@@ -36,8 +36,8 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
         let top = top_level_statement(input);
         if let Ok((i, t)) = top {
             match *t {
-                TopLevel::FuncDef(f) => {
-                    fntypes.push(f.typenode.clone());
+                TopLevel::FuncType(f) => {
+                    fntypes.push(f.clone());
                     nodes.push(Box::new(f.into()));
                 }
                 TopLevel::StructDef(s) => {
@@ -59,8 +59,8 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     let imname = im.target.format(0, "");
                     let target = *im.target.clone();
                     for mth in im.methods.iter_mut() {
-                        mth.typenode.id.name = format!("|{}::{}", imname, mth.typenode.id.name);
-                        mth.typenode.paralist.insert(
+                        mth.id.name = format!("|{}::{}", imname, mth.id.name);
+                        mth.paralist.insert(
                             0,
                             Box::new(TypedIdentifierNode {
                                 id: VarNode {
@@ -75,7 +75,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                                 range: Default::default(),
                             }),
                         );
-                        fntypes.push(mth.typenode.clone());
+                        fntypes.push(*mth.clone());
                     }
                     nodes.push(Box::new(im.into()));
                 }

@@ -80,8 +80,8 @@ pub enum TypeNodeEnum {
 pub trait TypeNode: RangeTrait + AsAny {
     fn format(&self, tabs: usize, prefix: &str) -> String;
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
-    fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
-    fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>);
+    fn get_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
+    fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>);
 }
 type TypeNodeResult<'ctx> = Result<Rc<RefCell<PLType>>, PLDiag>;
 
@@ -133,10 +133,10 @@ pub trait RangeTrait {
 pub trait Node: RangeTrait + AsAny {
     fn format(&self, tabs: usize, prefix: &str) -> String;
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
 }
 // ANCHOR_END: node
-type NodeResult<'ctx> = Result<
+pub type NodeResult<'ctx> = Result<
     (
         Option<PLValue<'ctx>>,
         Option<Rc<RefCell<PLType>>>, //type
@@ -212,7 +212,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
     fn emit_with_expectation(
         &mut self,
-        node: &'a mut Box<NodeEnum>,
+        node: &mut Box<NodeEnum>,
         expect: Option<Rc<RefCell<PLType>>>,
     ) -> NodeResult<'ctx> {
         if expect.is_none() {
@@ -300,23 +300,22 @@ pub fn position_at_end<'a, 'b>(ctx: &mut Ctx<'b, 'a>, block: BasicBlock<'a>) {
 /**
  * 函数参数format
  */
-pub fn print_params(paralist: &Vec<Box<TypedIdentifierNode>>) -> String {
+pub fn print_params(paralist: &[Box<TypedIdentifierNode>]) -> String {
     let mut str = String::new();
-    let mut len = 0;
-    for param in paralist.iter() {
-        let name = &param.id.name;
-        if name == "self" {
-            continue;
-        }
-        let mut id = String::new();
-        id.push_str(&param.tp.format(0, ""));
-        str.push_str(name);
-        str.push_str(": ");
-        str.push_str(&id);
-        len += 1;
-        if len < paralist.len() {
-            str.push_str(", ")
-        }
+    if paralist.is_empty() {
+        return str;
+    }
+    if paralist[0].id.name == "self" {
+        return print_params(&paralist[1..]);
+    } else {
+        str += &format!("{}: {}", paralist[0].id.name, paralist[0].tp.format(0, ""));
+    }
+    for i in 1..paralist.len() {
+        str += &format!(
+            ", {}: {}",
+            paralist[i].id.name,
+            paralist[i].tp.format(0, "")
+        );
     }
     return str;
 }

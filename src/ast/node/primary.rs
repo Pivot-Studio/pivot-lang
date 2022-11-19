@@ -20,7 +20,7 @@ impl Node for BoolConstNode {
         tab(tabs, line, end);
         println!("BoolConstNode: {}", self.value);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.push_semantic_token(self.range, SemanticTokenType::KEYWORD, 0);
         Ok((
             Some(
@@ -54,7 +54,7 @@ impl Node for NumNode {
         tab(tabs, line, end);
         println!("NumNode: {:?}", self.value);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.push_semantic_token(self.range, SemanticTokenType::NUMBER, 0);
         if let Num::INT(x) = self.value {
             let b = ctx.context.i64_type().const_int(x, true);
@@ -115,13 +115,9 @@ impl VarNode {
         }
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match &*tp.borrow() {
-                PLType::FN(f) => {
+                PLType::FN(_) => {
                     ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
-                    return Ok((
-                        Some(f.get_or_insert_fn(ctx).into()),
-                        Some(tp.clone()),
-                        TerminatorEnum::NONE,
-                    ));
+                    return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
                 }
                 _ => return Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND)),
             }
@@ -138,7 +134,7 @@ impl VarNode {
 
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match *tp.borrow() {
-                PLType::STRUCT(_) | PLType::PRIMITIVE(_) | PLType::VOID => {
+                PLType::STRUCT(_) | PLType::PRIMITIVE(_) | PLType::VOID | PLType::GENERIC(_) => {
                     if let PLType::STRUCT(st) = &*tp.clone().borrow() {
                         ctx.send_if_go_to_def(self.range, st.range, ctx.plmod.path.clone());
                         ctx.set_if_refs(st.refs.clone(), self.range);
@@ -174,7 +170,7 @@ impl Node for ArrayElementNode {
         self.arr.print(tabs + 1, false, line.clone());
         self.index.print(tabs + 1, true, line);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let (arr, pltype, _) = self.arr.emit(ctx)?;
         if let PLType::ARR(arrtp) = &*pltype.unwrap().borrow() {
             let arr = arr.unwrap();
@@ -217,7 +213,7 @@ impl Node for ParanthesesNode {
         println!("ParanthesesNode");
         self.node.print(tabs + 1, true, line);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         self.node.emit(ctx)
     }
 }

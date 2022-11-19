@@ -5,7 +5,7 @@ use super::primary::VarNode;
 use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
-use crate::ast::pltype::{ARRType, Field, PLType, STType};
+use crate::ast::pltype::{ARRType, Field, GenericType, PLType, STType};
 use crate::ast::range::Range;
 use crate::utils::read_config::enter;
 use inkwell::types::{AnyType, BasicType};
@@ -39,7 +39,7 @@ impl TypeNode for TypeNameNode {
         }
     }
 
-    fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) {
+    fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) {
         if let Some(id) = &self.id {
             for ns in id.ns.iter() {
                 ctx.push_semantic_token(ns.range, SemanticTokenType::NAMESPACE, 0);
@@ -48,7 +48,7 @@ impl TypeNode for TypeNameNode {
         }
     }
 
-    fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
+    fn get_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
         ctx.if_completion_no_mut(|ctx, a| {
             if a.0.is_in(self.range) {
                 let completions = ctx.get_type_completions();
@@ -90,7 +90,7 @@ impl TypeNode for ArrayTypeNameNode {
         self.id.print(tabs + 1, false, line.clone());
         self.size.print(tabs + 1, true, line.clone());
     }
-    fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
+    fn get_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
         if let NodeEnum::Num(num) = *self.size {
             if let Num::INT(sz) = num.value {
                 let pltype = self.id.get_type(ctx)?;
@@ -105,7 +105,7 @@ impl TypeNode for ArrayTypeNameNode {
         return Err(ctx.add_err(self.range, ErrorCode::SIZE_MUST_BE_INT));
     }
 
-    fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) {
+    fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) {
         self.id.emit_highlight(ctx);
     }
 }
@@ -132,7 +132,7 @@ impl TypeNode for PointerTypeNode {
         Ok(pltype)
     }
 
-    fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) {
+    fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) {
         self.elm.emit_highlight(ctx);
     }
 }
@@ -219,7 +219,7 @@ impl Node for StructDefNode {
         }
     }
 
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         for c in self.doc.iter() {
             ctx.push_semantic_token(c.range(), SemanticTokenType::COMMENT, 0);
         }
@@ -239,7 +239,7 @@ impl Node for StructDefNode {
 }
 
 impl StructDefNode {
-    pub fn add_to_symbols<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) {
+    pub fn add_to_symbols<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) {
         let stu = Rc::new(RefCell::new(PLType::STRUCT(STType {
             name: self.id.name.clone(),
             path: ctx.plmod.path.clone(),
@@ -261,7 +261,7 @@ impl StructDefNode {
         _ = ctx.add_type(self.id.name.clone(), stu, self.range);
     }
 
-    pub fn emit_struct_def<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
+    pub fn emit_struct_def<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
         let mut fields = FxHashMap::<String, Field>::default();
         let mut order_fields = Vec::<Field>::new();
         let mut i = 0;
@@ -355,7 +355,7 @@ impl Node for StructInitFieldNode {
         println!("id: {}", self.id.name);
         self.exp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let (v, tp, _) = self.exp.emit(ctx)?;
         return Ok((v, tp, TerminatorEnum::NONE));
     }
@@ -408,7 +408,7 @@ impl Node for StructInitNode {
             field.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         self.tp.emit_highlight(ctx);
         let mut fields = FxHashMap::<String, (BasicValueEnum<'ctx>, Range)>::default();
         let tp = self.tp.get_type(ctx)?;
@@ -486,7 +486,7 @@ impl Node for ArrayInitNode {
             exp.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut exps = Vec::<BasicValueEnum<'ctx>>::new();
         let mut tp0 = None;
 
@@ -532,28 +532,45 @@ impl Node for ArrayInitNode {
 pub struct GenericDefNode {
     pub generics: Vec<Box<VarNode>>,
 }
-
-impl GenericDefNode {
-    pub fn child_ctx<'a, 'ctx>(&'a mut self, ctx: &'a mut Ctx<'a, 'ctx>) -> Ctx<'a, 'ctx> {
-        let mut child = ctx.new_child(self.range.start);
-        for gen in self.generics.iter() {
-            let range = gen.range();
-            let name = "__generic__".to_string() + gen.name.clone().as_str();
-            let pltype = PLType::STRUCT(STType {
-                name,
-                path: ctx.plmod.path.clone(),
-                fields: FxHashMap::default(),
-                ordered_fields: vec![],
-                range,
-                refs: Rc::new(RefCell::new(vec![])),
-                doc: vec![],
-                methods: FxHashMap::default(),
-                generics: None,
-                is_generic_place_holder: true,
-            });
-            _ = child.add_type(gen.name.clone(), Rc::new(RefCell::new(pltype)), range);
+impl Node for GenericDefNode {
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
+        let mut s = String::new();
+        s += &format!("<{}", self.generics[0].name);
+        for i in 1..self.generics.len() {
+            s += &format!("|{}", self.generics[i].name);
         }
-        child
+        s += ">";
+        s.clone()
+    }
+
+    fn print(&self, _tabs: usize, _end: bool, _line: Vec<bool>) {
+        todo!()
+    }
+
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        for g in self.generics.iter() {
+            ctx.push_semantic_token(g.range, SemanticTokenType::TYPE, 0);
+        }
+        return Ok((None, None, TerminatorEnum::NONE));
+    }
+}
+impl GenericDefNode {
+    pub fn gen_generic_type<'a, 'ctx>(
+        &mut self,
+        _: &mut Ctx<'a, 'ctx>,
+    ) -> Result<FxHashMap<String, Rc<RefCell<PLType>>>, PLDiag> {
+        let mut res = FxHashMap::default();
+        for g in self.generics.iter() {
+            let range = g.range;
+            let name = g.name.clone();
+            let gentype = GenericType {
+                name: name.clone(),
+                range: range.clone(),
+                curpltype: None,
+            };
+            res.insert(name, Rc::new(RefCell::new(PLType::GENERIC(gentype))));
+        }
+        Ok(res)
     }
 }
 

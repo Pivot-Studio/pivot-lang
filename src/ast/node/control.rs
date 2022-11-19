@@ -9,7 +9,7 @@ use internal_macro::range;
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct IfNode {
     pub cond: Box<NodeEnum>,
-    pub then: Box<NodeEnum>,
+    pub then: Box<StatementsNode>,
     pub els: Option<Box<NodeEnum>>,
 }
 
@@ -52,7 +52,7 @@ impl Node for IfNode {
     }
     // ANCHOR_END: print
     // ANCHOR: emit
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let cond_block = ctx
             .context
             .append_basic_block(ctx.function.unwrap(), "if.cond");
@@ -82,13 +82,14 @@ impl Node for IfNode {
             .build_conditional_branch(cond, then_block, else_block);
         // then block
         position_at_end(ctx, then_block);
-        let (_, _, then_terminator) = self.then.emit(ctx)?;
+        let (_, _, then_terminator) = self.then.emit_child(ctx)?;
         if then_terminator.is_none() {
             ctx.builder.build_unconditional_branch(after_block);
         }
         position_at_end(ctx, else_block);
         let terminator = if let Some(el) = &mut self.els {
-            let (_, _, else_terminator) = el.emit(ctx)?;
+            let mut child = ctx.new_child(el.range().start);
+            let (_, _, else_terminator) = el.emit(&mut child)?;
             if else_terminator.is_none() {
                 ctx.builder.build_unconditional_branch(after_block);
             }
@@ -135,7 +136,7 @@ impl Node for WhileNode {
         self.cond.print(tabs + 1, false, line.clone());
         self.body.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let ctx = &mut ctx.new_child(self.range.start);
         let cond_block = ctx
             .context
@@ -223,7 +224,7 @@ impl Node for ForNode {
         }
         self.body.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let ctx = &mut ctx.new_child(self.range.start);
         let pre_block = ctx
             .context
@@ -302,7 +303,7 @@ impl Node for BreakNode {
         println!("BreakNode");
     }
 
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if let Some(b) = ctx.break_block {
             ctx.builder.build_unconditional_branch(b);
             ctx.builder.clear_insertion_position();
@@ -328,7 +329,7 @@ impl Node for ContinueNode {
         println!("ContinueNode");
     }
 
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if let Some(b) = ctx.continue_block {
             ctx.builder.build_unconditional_branch(b);
             ctx.builder.clear_insertion_position();

@@ -41,7 +41,7 @@ impl Node for DefNode {
                 .print(tabs + 1, true, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let range = self.range();
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
         if self.exp.is_none() && self.tp.is_none() {
@@ -133,7 +133,7 @@ impl Node for AssignNode {
         self.var.print(tabs + 1, false, line.clone());
         self.exp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let exp_range = self.exp.range();
         let (ptr, lpltype, _) = self.var.emit(ctx)?;
         let (value, rpltype, _) = self.exp.emit(ctx)?;
@@ -165,7 +165,7 @@ impl Node for EmptyNode {
         tab(tabs, line.clone(), end);
         println!("EmptyNode");
     }
-    fn emit<'a, 'ctx>(&'a mut self, _: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, _: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         Ok((None, None, TerminatorEnum::NONE))
     }
 }
@@ -212,7 +212,7 @@ impl Node for StatementsNode {
             statement.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut terminator = TerminatorEnum::NONE;
         for m in self.statements.iter_mut() {
             if let NodeEnum::Empty(_) = **m {
@@ -243,7 +243,7 @@ impl Node for StatementsNode {
 }
 
 impl StatementsNode {
-    pub fn emit_child<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    pub fn emit_child<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let child = &mut ctx.new_child(self.range.start);
         self.emit(child)
     }

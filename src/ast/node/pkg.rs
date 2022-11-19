@@ -50,7 +50,7 @@ impl Node for UseNode {
         }
     }
 
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let mut path = PathBuf::from(&ctx.config.root);
         let head = self.ids[0].name.clone();
         if self.ids.len() != 0 {
@@ -143,7 +143,7 @@ impl Node for ExternIDNode {
         self.id.print(tabs + 1, true, line.clone());
     }
 
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if self.ns.is_empty() {
             if self.complete {
                 // 如果该节点只有一个id，且完整，那么就是一个普通的包内符号，直接调用idnode
@@ -198,13 +198,9 @@ impl Node for ExternIDNode {
             ctx.set_if_refs_tp(tp.clone(), self.range);
             let range = &tp.clone().borrow().get_range();
             let re = match &*tp.clone().borrow() {
-                PLType::FN(f) => {
+                PLType::FN(_) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
-                    Ok((
-                        Some(f.get_or_insert_fn(ctx).into()),
-                        Some(tp),
-                        TerminatorEnum::NONE,
-                    ))
+                    Ok((None, Some(tp), TerminatorEnum::NONE))
                 }
                 _ => unreachable!(),
             };

@@ -1,6 +1,7 @@
 use crate::lsp::semantic_tokens::type_index;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::utils::read_config::Config;
+use crate::Db;
 use colored::Colorize;
 use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
@@ -14,6 +15,7 @@ use inkwell::values::BasicValueEnum;
 use inkwell::values::FunctionValue;
 use inkwell::values::PointerValue;
 use inkwell::values::{AnyValueEnum, BasicMetadataValueEnum};
+use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::Diagnostic;
@@ -24,9 +26,14 @@ use lsp_types::Hover;
 use lsp_types::HoverContents;
 use lsp_types::InlayHint;
 use lsp_types::InlayHintKind;
+use lsp_types::InsertTextFormat;
 use lsp_types::Location;
 use lsp_types::MarkedString;
+use lsp_types::ParameterInformation;
+use lsp_types::ParameterLabel;
 use lsp_types::SemanticTokenType;
+use lsp_types::SignatureHelp;
+use lsp_types::SignatureInformation;
 use lsp_types::Url;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
@@ -36,6 +43,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use super::accumulators::PLSignatureHelp;
 use super::compiler::get_target_machine;
 use super::compiler::ActionType;
 use super::diag::{ErrorCode, WarnCode};
@@ -50,6 +58,7 @@ use super::range::Range;
 /// # Ctx
 /// Context for code generation
 pub struct Ctx<'a, 'ctx> {
+    pub need_highlight: bool,
     pub plmod: Mod,
     pub father: Option<&'a Ctx<'a, 'ctx>>, // father context, for symbol lookup
     pub context: &'ctx Context,            // llvm context
@@ -90,6 +99,7 @@ pub struct Ctx<'a, 'ctx> {
     pub config: Config,                                     // config
     pub roots: RefCell<Vec<BasicValueEnum<'ctx>>>,
     pub usegc: bool,
+    pub db: &'a dyn Db,
 }
 
 pub struct MemberType<'ctx> {
@@ -409,6 +419,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         sender: Option<ActionType>,
         completion: Option<(Pos, Option<String>, ActionType)>,
         config: Config,
+        db: &'a dyn Db,
     ) -> Ctx<'a, 'ctx> {
         let f = Path::new(Path::new(src_file_path).file_stem().unwrap())
             .file_name()
@@ -418,6 +429,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             .unwrap()
             .to_string();
         let mut ctx = Ctx {
+            need_highlight: true,
             plmod: Mod::new(f, src_file_path.to_string()),
             father: None,
             context,
@@ -452,12 +464,14 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             usegc: true,
             ditypes_placeholder: Rc::new(RefCell::new(FxHashMap::default())),
             ditypes: Rc::new(RefCell::new(FxHashMap::default())),
+            db,
         };
         add_primitive_types(&mut ctx);
         ctx
     }
     pub fn new_child(&'a self, start: Pos) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
+            need_highlight: self.need_highlight,
             plmod: self.plmod.new_child(),
             father: Some(self),
             context: self.context,
@@ -498,6 +512,47 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             usegc: self.usegc,
             ditypes_placeholder: self.ditypes_placeholder.clone(),
             ditypes: self.ditypes.clone(),
+            db: self.db.clone(),
+        };
+        add_primitive_types(&mut ctx);
+        ctx
+    }
+    pub fn tmp_child_ctx(&'a self) -> Ctx<'a, 'ctx> {
+        let mut ctx = Ctx {
+            need_highlight: self.need_highlight,
+            plmod: self.plmod.new_child(),
+            father: Some(self),
+            context: self.context,
+            builder: self.builder,
+            module: self.module,
+            function: self.function,
+            block: self.block,
+            continue_block: self.continue_block,
+            break_block: self.break_block,
+            return_block: self.return_block,
+            dibuilder: self.dibuilder,
+            diunit: self.diunit,
+            targetmachine: self.targetmachine,
+            discope: self.discope.clone(),
+            nodebug_builder: self.nodebug_builder,
+            errs: self.errs,
+            action: self.action,
+            lspparams: self.lspparams.clone(),
+            refs: self.refs.clone(),
+            hints: self.hints.clone(),
+            doc_symbols: self.doc_symbols.clone(),
+            semantic_tokens_builder: self.semantic_tokens_builder.clone(),
+            goto_def: self.goto_def.clone(),
+            completion_items: self.completion_items.clone(),
+            hover: self.hover.clone(),
+            init_func: self.init_func,
+            table: FxHashMap::default(),
+            config: self.config.clone(),
+            roots: RefCell::new(Vec::new()),
+            usegc: self.usegc,
+            ditypes_placeholder: self.ditypes_placeholder.clone(),
+            ditypes: self.ditypes.clone(),
+            db: self.db,
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -776,6 +831,39 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }
     }
 
+    pub fn set_if_sig(&self, range: Range, name: String, params: &[String], n: u32) {
+        if let Some(act) = self.action {
+            if act != ActionType::SignatureHelp {
+                return;
+            }
+            if let Some(comp) = &self.lspparams {
+                if comp.0.is_in(range) {
+                    PLSignatureHelp::push(
+                        self.db,
+                        SignatureHelp {
+                            signatures: vec![SignatureInformation {
+                                label: name,
+                                documentation: None,
+                                parameters: Some(
+                                    params
+                                        .iter()
+                                        .map(|s| ParameterInformation {
+                                            label: ParameterLabel::Simple(s.clone()),
+                                            documentation: None,
+                                        })
+                                        .collect(),
+                                ),
+                                active_parameter: Some(n),
+                            }],
+                            active_signature: None,
+                            active_parameter: None,
+                        },
+                    );
+                }
+            }
+        }
+    }
+
     pub fn set_if_refs(&self, refs: Rc<RefCell<Vec<Location>>>, range: Range) {
         if let Some(act) = self.action {
             if act == ActionType::FindReferences {
@@ -852,14 +940,27 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         let ns = self.plmod.submods.get(ns);
         if let Some(ns) = ns {
             for (k, v) in ns.types.iter() {
-                let tp = match *RefCell::borrow(&v) {
+                let mut insert_text = None;
+                let mut command = None;
+                let tp = match &*v.clone().borrow() {
                     PLType::STRUCT(_) => CompletionItemKind::STRUCT,
-                    PLType::FN(_) => CompletionItemKind::FUNCTION,
+                    PLType::FN(f) => {
+                        insert_text = Some(f.gen_snippet());
+                        command = Some(Command::new(
+                            "trigger help".to_string(),
+                            "editor.action.triggerParameterHints".to_string(),
+                            None,
+                        ));
+                        CompletionItemKind::FUNCTION
+                    }
                     _ => continue, // skip completion for primary types
                 };
                 let mut item = CompletionItem {
                     label: k.to_string(),
                     kind: Some(tp),
+                    insert_text,
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                    command,
                     ..Default::default()
                 };
                 item.detail = Some(k.to_string());
@@ -880,6 +981,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             let tp = match *RefCell::borrow(&f) {
                 PLType::FN(_) => continue,
                 PLType::ARR(_) => continue,
+                PLType::GENERIC(_) => CompletionItemKind::STRUCT,
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::VOID => CompletionItemKind::KEYWORD,
@@ -917,11 +1019,22 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
 
     fn get_pltp_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         for (k, f) in self.plmod.types.iter() {
-            let tp = match *RefCell::borrow(&f) {
-                PLType::FN(_) => CompletionItemKind::FUNCTION,
+            let mut insert_text = None;
+            let mut command = None;
+            let tp = match &*f.clone().borrow() {
+                PLType::FN(f) => {
+                    insert_text = Some(f.gen_snippet());
+                    command = Some(Command::new(
+                        "trigger help".to_string(),
+                        "editor.action.triggerParameterHints".to_string(),
+                        None,
+                    ));
+                    CompletionItemKind::FUNCTION
+                }
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
                 PLType::ARR(_) => CompletionItemKind::KEYWORD,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
+                PLType::GENERIC(_) => CompletionItemKind::STRUCT,
                 PLType::VOID => CompletionItemKind::KEYWORD,
                 PLType::POINTER(_) => todo!(),
             };
@@ -934,6 +1047,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 CompletionItem {
                     label: k.to_string(),
                     kind: Some(tp),
+                    insert_text,
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                    command,
                     ..Default::default()
                 },
             );
@@ -944,6 +1060,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn push_semantic_token(&self, range: Range, tp: SemanticTokenType, modifiers: u32) {
+        if !self.need_highlight {
+            return;
+        }
         self.semantic_tokens_builder.borrow_mut().push(
             range.to_diag_range(),
             type_index(tp),
@@ -951,6 +1070,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         )
     }
     pub fn push_type_hints(&self, range: Range, pltype: Rc<RefCell<PLType>>) {
+        if !self.need_highlight {
+            return;
+        }
         let hint = InlayHint {
             position: range.to_diag_range().end,
             label: lsp_types::InlayHintLabel::String(
@@ -966,6 +1088,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.hints.borrow_mut().push(hint);
     }
     pub fn push_param_hint(&self, range: Range, name: String) {
+        if !self.need_highlight {
+            return;
+        }
         let hint = InlayHint {
             position: range.to_diag_range().start,
             label: lsp_types::InlayHintLabel::String(name + ": "),
@@ -1022,6 +1147,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn save_if_comment_doc_hover(&self, range: Range, docs: Option<Vec<Box<NodeEnum>>>) {
+        if !self.need_highlight {
+            return;
+        }
         let mut content = vec![];
         let mut string = String::new();
         if let Some(docs) = docs {
@@ -1037,6 +1165,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn save_if_hover(&self, range: Range, value: HoverContents) {
+        if !self.need_highlight {
+            return;
+        }
         if let Some(act) = self.action {
             if let Some(comp) = &self.lspparams {
                 if act == ActionType::Hover {

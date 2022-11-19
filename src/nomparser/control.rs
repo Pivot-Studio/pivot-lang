@@ -63,7 +63,7 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
             res_enum(
                 IfNode {
                     cond,
-                    then: Box::new(then.into()),
+                    then: Box::new(then),
                     els,
                     range,
                 }
