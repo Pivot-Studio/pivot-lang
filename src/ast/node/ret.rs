@@ -28,7 +28,7 @@ impl Node for RetNode {
             value.print(tabs + 1, true, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let rettp = ctx.function.unwrap().get_type().get_return_type();
         if let Some(ret) = &mut self.value {
             if rettp.is_none() {

@@ -1,3 +1,13 @@
+use super::ctx::Ctx;
+use super::ctx::MemberType;
+use super::ctx::PLDiag;
+use super::diag::ErrorCode;
+use super::node::function::FuncDefNode;
+use super::node::types::GenericDefNode;
+use super::node::NodeEnum;
+use super::node::TypeNode;
+use super::node::TypeNodeEnum;
+use super::range::Range;
 use inkwell::debug_info::*;
 use inkwell::module::Linkage;
 use inkwell::types::ArrayType;
@@ -19,15 +29,6 @@ use lsp_types::SymbolKind;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
-
-use super::ctx::Ctx;
-use super::ctx::MemberType;
-use super::diag::ErrorCode;
-use super::node::types::GenericDefNode;
-use super::node::NodeEnum;
-use super::node::TypeNode;
-use super::node::TypeNodeEnum;
-use super::range::Range;
 // TODO: match all case
 // const DW_ATE_UTF: u32 = 0x10;
 const DW_ATE_BOOLEAN: u32 = 0x02;
@@ -55,8 +56,8 @@ pub enum PLType {
     PRIMITIVE(PriType),
     VOID,
     POINTER(Box<Rc<RefCell<PLType>>>),
+    GENERIC(GenericType),
 }
-
 /// # PriType
 /// Primitive type for pivot-lang
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -151,6 +152,7 @@ impl PLType {
             PLType::PRIMITIVE(_) => None,
             PLType::VOID => None,
             PLType::POINTER(_) => None,
+            PLType::GENERIC(_) => None,
         }
     }
 
@@ -172,11 +174,13 @@ impl PLType {
             }
             PLType::VOID => "void".to_string(),
             PLType::POINTER(p) => "*".to_string() + &p.borrow().get_name(),
+            PLType::GENERIC(g) => g.name.clone(),
         }
     }
 
     pub fn get_full_elm_name<'a, 'ctx>(&self) -> String {
         match self {
+            PLType::GENERIC(g) => g.name.clone(),
             PLType::FN(fu) => fu.name.clone(),
             PLType::STRUCT(st) => st.get_st_full_name(),
             PLType::PRIMITIVE(pri) => pri.get_name(),
@@ -202,6 +206,7 @@ impl PLType {
     /// get the defination range of the type
     pub fn get_range(&self) -> Option<Range> {
         match self {
+            PLType::GENERIC(g) => Some(g.range.clone()),
             PLType::FN(f) => Some(f.range.clone()),
             PLType::STRUCT(s) => Some(s.range.clone()),
             PLType::ARR(_) => None,
@@ -216,6 +221,23 @@ impl PLType {
     /// used in code generation
     pub fn get_basic_type_op<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Option<BasicTypeEnum<'ctx>> {
         match self {
+            PLType::GENERIC(g) => match &g.curpltype {
+                Some(pltype) => pltype.borrow().get_basic_type_op(ctx),
+                None => Some({
+                    let name = &format!("__generic__{}", g.name);
+                    ctx.module
+                        .get_struct_type(name)
+                        .or(Some({
+                            let st = ctx
+                                .context
+                                .opaque_struct_type(&format!("__generic__{}", g.name));
+                            st.set_body(&[], false);
+                            st
+                        }))
+                        .unwrap()
+                        .into()
+                }),
+            },
             PLType::FN(f) => Some(
                 f.get_or_insert_fn(ctx)
                     .get_type()
@@ -257,6 +279,14 @@ impl PLType {
         let td = ctx.targetmachine.get_target_data();
         match self {
             PLType::FN(_) => None,
+            PLType::GENERIC(g) => {
+                if g.curpltype.is_some() {
+                    let pltype = g.curpltype.as_ref().unwrap();
+                    pltype.clone().borrow().get_ditype(ctx)
+                } else {
+                    PLType::PRIMITIVE(PriType::I64).get_ditype(ctx)
+                }
+            }
             PLType::ARR(arr) => {
                 let elemdi = arr.element_type.borrow().get_ditype(ctx)?;
                 let etp = &arr.element_type.borrow().get_basic_type(ctx);
@@ -296,7 +326,7 @@ impl PLType {
                 let st = ctx
                     .dibuilder
                     .create_struct_type(
-                        ctx.discope,
+                        ctx.diunit.get_file().as_debug_info_scope(),
                         &x.name,
                         ctx.diunit.get_file(),
                         x.range.start.line as u32 + 1,
@@ -448,7 +478,7 @@ impl Field {
             x.borrow_mut().push(MemberType {
                 ditype: placeholder,
                 offset,
-                scope: ctx.discope,
+                scope: ctx.diunit.get_file().as_debug_info_scope(),
                 line: self.range.start.line as u32,
                 name: self.name.clone(),
                 di_file: ctx.diunit.get_file(),
@@ -461,7 +491,7 @@ impl Field {
         (
             ctx.dibuilder
                 .create_member_type(
-                    ctx.discope,
+                    ctx.diunit.get_file().as_debug_info_scope(),
                     &self.name,
                     ctx.diunit.get_file(),
                     self.range.start.line as u32,
@@ -495,12 +525,15 @@ pub struct FNType {
     pub name: String,     // name for lsp
     pub llvmname: String, // name in llvm ir
     pub param_pltypes: Vec<Rc<RefCell<PLType>>>,
-    pub param_name: Vec<String>,
-    pub ret_pltype: Box<Rc<RefCell<PLType>>>,
+    pub param_names: Vec<String>,
+    pub ret_pltype: Rc<RefCell<PLType>>,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub method: bool,
+    pub generic_map: FxHashMap<String, Rc<RefCell<PLType>>>,
+    pub generic: bool,
+    pub node: Box<FuncDefNode>,
 }
 
 impl TryFrom<PLType> for FNType {
@@ -513,13 +546,32 @@ impl TryFrom<PLType> for FNType {
         }
     }
 }
-
 impl FNType {
+    pub fn append_name_with_generic(&self, name: String) -> String {
+        if self.need_gen_code() {
+            let mut newname = format!("{}", name);
+            for (_, v) in self.generic_map.iter() {
+                match &*v.clone().borrow() {
+                    PLType::GENERIC(g) => {
+                        newname.push_str(
+                            format!("__{}", g.curpltype.as_ref().unwrap().borrow().get_name())
+                                .as_str(),
+                        );
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            newname.clone()
+        } else {
+            name.clone()
+        }
+    }
     /// try get function value from module
     ///
     /// if not found, create a declaration
     pub fn get_or_insert_fn<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> FunctionValue<'ctx> {
-        if let Some(v) = ctx.module.get_function(&self.llvmname) {
+        let llvmname = self.append_name_with_generic(self.llvmname.clone());
+        if let Some(v) = ctx.module.get_function(&llvmname) {
             return v;
         }
         let mut param_types = vec![];
@@ -531,12 +583,12 @@ impl FNType {
             .fn_type(&param_types, false);
         let fn_value = ctx
             .module
-            .add_function(&self.llvmname, fn_type, Some(Linkage::External));
+            .add_function(&llvmname, fn_type, Some(Linkage::External));
         fn_value
     }
     pub fn gen_snippet(&self) -> String {
         let mut name = self.name.clone();
-        let mut iter = self.param_name.iter();
+        let mut iter = self.param_names.iter();
         if self.method {
             iter.next();
             name = name.split("::").last().unwrap().to_string();
@@ -550,6 +602,42 @@ impl FNType {
             + ")$0"
     }
 
+    pub fn need_gen_code(&self) -> bool {
+        if self.generic_map.is_empty() {
+            return false;
+        }
+        for (_, v) in self.generic_map.iter() {
+            match &*v.clone().borrow() {
+                PLType::GENERIC(g) => {
+                    if g.curpltype.is_none() {
+                        return false;
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+        true
+    }
+    pub fn clear_generic(&mut self) {
+        self.generic_map
+            .iter_mut()
+            .for_each(|(_, v)| match &mut *v.clone().borrow_mut() {
+                PLType::GENERIC(g) => {
+                    g.clear_type();
+                }
+                _ => unreachable!(),
+            })
+    }
+    pub fn add_generic_type(&self, ctx: &mut Ctx) -> Result<(), PLDiag> {
+        for (name, g) in self.generic_map.iter() {
+            ctx.add_type(
+                name.clone(),
+                g.clone(),
+                (&*g.clone().borrow()).get_range().unwrap(),
+            )?;
+        }
+        Ok(())
+    }
     pub fn get_doc_symbol(&self) -> DocumentSymbol {
         #[allow(deprecated)]
         DocumentSymbol {
@@ -573,18 +661,18 @@ impl FNType {
     }
     pub fn get_signature(&self) -> String {
         let mut params = String::new();
-        if !self.param_name.is_empty() {
+        if !self.param_names.is_empty() {
             if !self.method {
                 params += &format!(
                     "{}: {}",
-                    self.param_name[0],
+                    self.param_names[0],
                     RefCell::borrow(&self.param_pltypes[0]).get_name()
                 );
             }
-            for i in 1..self.param_name.len() {
+            for i in 1..self.param_names.len() {
                 params += &format!(
                     ", {}: {}",
-                    self.param_name[i],
+                    self.param_names[i],
                     RefCell::borrow(&self.param_pltypes[i]).get_name()
                 );
             }
@@ -775,4 +863,18 @@ pub fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
         "void".to_string(),
         Rc::new(RefCell::new(pltype_void.clone())),
     );
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenericType {
+    pub name: String,
+    pub range: Range,
+    pub curpltype: Option<Rc<RefCell<PLType>>>,
+}
+impl GenericType {
+    pub fn set_type(&mut self, pltype: Rc<RefCell<PLType>>) {
+        self.curpltype = Some(pltype);
+    }
+    pub fn clear_type(&mut self) {
+        self.curpltype = None;
+    }
 }

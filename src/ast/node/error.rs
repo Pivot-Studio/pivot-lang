@@ -30,7 +30,7 @@ impl Node for ErrorNode {
         tab(tabs + 1, line, true);
         println!("Src: {}", format!("{:?}", self.src).red());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let err = ctx.add_err(self.range, self.code);
         ctx.if_completion(|ctx, a| {
             if a.0.is_in(self.range) {
@@ -63,7 +63,7 @@ impl Node for STErrorNode {
         self.st.print(tabs + 1, false, line.clone());
         self.err.print(tabs + 1, true, line);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         _ = self.st.emit(ctx);
         self.err.emit(ctx)
     }

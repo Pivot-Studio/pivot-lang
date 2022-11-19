@@ -31,7 +31,7 @@ impl Node for PointerOpNode {
         println!("PointerOpNode");
         self.value.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let (value, mut tp, _) = self.value.emit(ctx)?;
         let value = value.unwrap();
         let value = match self.op {

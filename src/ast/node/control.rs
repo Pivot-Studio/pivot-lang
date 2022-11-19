@@ -52,7 +52,7 @@ impl Node for IfNode {
     }
     // ANCHOR_END: print
     // ANCHOR: emit
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let cond_block = ctx
             .context
             .append_basic_block(ctx.function.unwrap(), "if.cond");
@@ -79,7 +79,7 @@ impl Node for IfNode {
             "trunctemp",
         );
         ctx.builder
-            .build_conditional_branch(cond, then_block, else_block);
+            .build_conditional_branch(cond, else_block, then_block);
         // then block
         position_at_end(ctx, then_block);
         let (_, _, then_terminator) = self.then.emit(ctx)?;
@@ -135,7 +135,7 @@ impl Node for WhileNode {
         self.cond.print(tabs + 1, false, line.clone());
         self.body.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let ctx = &mut ctx.new_child(self.range.start);
         let cond_block = ctx
             .context
@@ -223,7 +223,7 @@ impl Node for ForNode {
         }
         self.body.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let ctx = &mut ctx.new_child(self.range.start);
         let pre_block = ctx
             .context
@@ -302,7 +302,7 @@ impl Node for BreakNode {
         println!("BreakNode");
     }
 
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if let Some(b) = ctx.break_block {
             ctx.builder.build_unconditional_branch(b);
             ctx.builder.clear_insertion_position();
@@ -328,7 +328,7 @@ impl Node for ContinueNode {
         println!("ContinueNode");
     }
 
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if let Some(b) = ctx.continue_block {
             ctx.builder.build_unconditional_branch(b);
             ctx.builder.clear_insertion_position();

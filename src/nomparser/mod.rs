@@ -50,7 +50,7 @@ pub mod types;
 #[derive(Debug, Clone)]
 pub enum TopLevel {
     StructDef(StructDefNode),
-    FuncDef(FuncDefNode),
+    FuncType(FuncDefNode),
     GlobalDef(GlobalNode),
     Common(Box<NodeEnum>),
     Use(Box<NodeEnum>),

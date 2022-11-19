@@ -10,10 +10,7 @@ use nom::{
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
-use crate::{
-    ast::node::function::{FuncDefNode, FuncTypeNode},
-    ast::tokens::TokenType,
-};
+use crate::{ast::node::function::FuncDefNode, ast::tokens::TokenType};
 
 use internal_macro::test_parser;
 
@@ -73,19 +70,16 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
         |(doc, (_, start), id, generics, _, paras, _, ret, (body, end))| {
             let range = start.start.to(end.end);
             let node = FuncDefNode {
-                typenode: FuncTypeNode {
-                    id,
-                    paralist: paras,
-                    ret,
-                    range,
-                    doc,
-                    declare: body.is_none(),
-                    generics,
-                },
-                body,
+                id,
+                paralist: paras,
+                ret,
                 range,
+                doc,
+                declare: body.is_none(),
+                generics,
+                body,
             };
-            Ok::<_, Error>(Box::new(TopLevel::FuncDef(node)))
+            Ok::<_, Error>(Box::new(TopLevel::FuncType(node)))
         },
     )(input)
 }

@@ -73,7 +73,8 @@ define_error!(
     ILLEGAL_GET_FIELD_OPERATION = "illegal get field operation",
     NOT_A_POINTER = "not a pointer",
     CAN_NOT_REF_CONSTANT = "can not ref constant",
-    ILLEGAL_SELF_RECURSION = "illegal self recursion, please use pointer"
+    ILLEGAL_SELF_RECURSION = "illegal self recursion, please use pointer",
+    GENERIC_CANNOT_BE_INFER = "generic can not be infer"
 );
 macro_rules! define_warn {
     ($(

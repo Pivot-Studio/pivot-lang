@@ -53,7 +53,7 @@ pub fn impl_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                     .map(|x| {
                         let d = (*x).clone();
                         match *d {
-                            TopLevel::FuncDef(x) => x.clone().into(),
+                            TopLevel::FuncType(x) => x.clone().into(),
                             _ => unreachable!(),
                         }
                     })
