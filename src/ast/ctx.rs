@@ -514,6 +514,45 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         add_primitive_types(&mut ctx);
         ctx
     }
+    pub fn tmp_child_ctx(&'a self) -> Ctx<'a, 'ctx> {
+        let mut ctx = Ctx {
+            plmod: self.plmod.new_child(),
+            father: Some(self),
+            context: self.context,
+            builder: self.builder,
+            module: self.module,
+            function: self.function,
+            block: self.block,
+            continue_block: self.continue_block,
+            break_block: self.break_block,
+            return_block: self.return_block,
+            dibuilder: self.dibuilder,
+            diunit: self.diunit,
+            targetmachine: self.targetmachine,
+            discope: self.discope.clone(),
+            nodebug_builder: self.nodebug_builder,
+            errs: self.errs,
+            action: self.action,
+            lspparams: self.lspparams.clone(),
+            refs: self.refs.clone(),
+            hints: self.hints.clone(),
+            doc_symbols: self.doc_symbols.clone(),
+            semantic_tokens_builder: self.semantic_tokens_builder.clone(),
+            goto_def: self.goto_def.clone(),
+            completion_items: self.completion_items.clone(),
+            hover: self.hover.clone(),
+            init_func: self.init_func,
+            table: FxHashMap::default(),
+            config: self.config.clone(),
+            roots: RefCell::new(Vec::new()),
+            usegc: self.usegc,
+            ditypes_placeholder: self.ditypes_placeholder.clone(),
+            ditypes: self.ditypes.clone(),
+            db: self.db,
+        };
+        add_primitive_types(&mut ctx);
+        ctx
+    }
     pub fn set_init_fn(&mut self) {
         self.function = Some(self.module.add_function(
             &self.plmod.get_full_name("__init_global"),
@@ -938,6 +977,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             let tp = match *RefCell::borrow(&f) {
                 PLType::FN(_) => continue,
                 PLType::ARR(_) => continue,
+                PLType::GENERIC(_) => CompletionItemKind::STRUCT,
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::VOID => CompletionItemKind::KEYWORD,
@@ -990,6 +1030,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
                 PLType::ARR(_) => CompletionItemKind::KEYWORD,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
+                PLType::GENERIC(_) => CompletionItemKind::STRUCT,
                 PLType::VOID => CompletionItemKind::KEYWORD,
                 PLType::POINTER(_) => todo!(),
             };

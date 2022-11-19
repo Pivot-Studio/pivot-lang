@@ -20,7 +20,7 @@ impl Node for CommentNode {
         tab(tabs, line.clone(), end);
         println!("CommentNode: {}", self.comment);
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.push_semantic_token(self.range, SemanticTokenType::COMMENT, 0);
         Ok((None, None, TerminatorEnum::NONE))
     }

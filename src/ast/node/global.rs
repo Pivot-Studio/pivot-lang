@@ -25,7 +25,7 @@ impl Node for GlobalNode {
         self.var.print(tabs + 1, false, line.clone());
         self.exp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.function = ctx.init_func;
         let entry = ctx.function.unwrap().get_last_basic_block().unwrap();
         ctx.builder.position_at_end(entry);
@@ -50,7 +50,7 @@ impl Node for GlobalNode {
     }
 }
 impl GlobalNode {
-    pub fn emit_global<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
+    pub fn emit_global<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
         let exp_range = self.exp.range();
         if ctx.get_symbol(&self.var.name).is_some() {
             return Err(ctx.add_err(self.var.range, ErrorCode::REDEFINE_SYMBOL));

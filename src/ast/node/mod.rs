@@ -80,8 +80,8 @@ pub enum TypeNodeEnum {
 pub trait TypeNode: RangeTrait + AsAny {
     fn format(&self, tabs: usize, prefix: &str) -> String;
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
-    fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
-    fn emit_highlight<'a, 'ctx>(&'a self, ctx: &mut Ctx<'a, 'ctx>);
+    fn get_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
+    fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>);
 }
 type TypeNodeResult<'ctx> = Result<Rc<RefCell<PLType>>, PLDiag>;
 
@@ -133,10 +133,10 @@ pub trait RangeTrait {
 pub trait Node: RangeTrait + AsAny {
     fn format(&self, tabs: usize, prefix: &str) -> String;
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
-    fn emit<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
 }
 // ANCHOR_END: node
-type NodeResult<'ctx> = Result<
+pub type NodeResult<'ctx> = Result<
     (
         Option<PLValue<'ctx>>,
         Option<Rc<RefCell<PLType>>>, //type
@@ -212,7 +212,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
     fn emit_with_expectation(
         &mut self,
-        node: &'a mut Box<NodeEnum>,
+        node: &mut Box<NodeEnum>,
         expect: Option<Rc<RefCell<PLType>>>,
     ) -> NodeResult<'ctx> {
         if expect.is_none() {
