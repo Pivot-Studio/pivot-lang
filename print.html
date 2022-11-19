@@ -554,6 +554,10 @@ impl pointer_struct {
         io::printi64ln(100100);
         return;
     }
+
+    fn name_params(x: i64) void {
+        return;
+    }
 }
 
 </code></pre>
@@ -619,7 +623,7 @@ pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNode
 pub trait Node: RangeTrait + AsAny {
     fn format(&amp;self, tabs: usize, prefix: &amp;str) -&gt; String;
     fn print(&amp;self, tabs: usize, end: bool, line: Vec&lt;bool&gt;);
-    fn emit&lt;'a, 'ctx&gt;(&amp;'a mut self, ctx: &amp;mut Ctx&lt;'a, 'ctx&gt;) -&gt; NodeResult&lt;'ctx&gt;;
+    fn emit&lt;'a, 'ctx&gt;(&amp;mut self, ctx: &amp;mut Ctx&lt;'a, 'ctx&gt;) -&gt; NodeResult&lt;'ctx&gt;;
 }
 </code></pre>
 <p>你可能注意到了，<code>Node</code>trait继承了<code>RangeTrait</code>，这个trait定义了节点的位置信息。</p>
@@ -651,7 +655,7 @@ pub trait RangeTrait {
 <p><code>emit</code>函数是生成llvm代码的核心，它会调用llvm api构造自己对应的llvm ir。在编译的时候，最上层节点的<code>emit</code>会被调用，
 该函数会递归的调用自己的子节点的<code>emit</code>函数，最终生成整个程序的llvm ir。<br />
 下方是<code>ifnode</code>的<code>emit</code>函数：</p>
-<pre><code class="language-rust no_run noplayground">    fn emit&lt;'a, 'ctx&gt;(&amp;'a mut self, ctx: &amp;mut Ctx&lt;'a, 'ctx&gt;) -&gt; NodeResult&lt;'ctx&gt; {
+<pre><code class="language-rust no_run noplayground">    fn emit&lt;'a, 'ctx&gt;(&amp;mut self, ctx: &amp;mut Ctx&lt;'a, 'ctx&gt;) -&gt; NodeResult&lt;'ctx&gt; {
         let cond_block = ctx
             .context
             .append_basic_block(ctx.function.unwrap(), &quot;if.cond&quot;);
@@ -681,13 +685,14 @@ pub trait RangeTrait {
             .build_conditional_branch(cond, then_block, else_block);
         // then block
         position_at_end(ctx, then_block);
-        let (_, _, then_terminator) = self.then.emit(ctx)?;
+        let (_, _, then_terminator) = self.then.emit_child(ctx)?;
         if then_terminator.is_none() {
             ctx.builder.build_unconditional_branch(after_block);
         }
         position_at_end(ctx, else_block);
         let terminator = if let Some(el) = &amp;mut self.els {
-            let (_, _, else_terminator) = el.emit(ctx)?;
+            let mut child = ctx.new_child(el.range().start);
+            let (_, _, else_terminator) = el.emit(&amp;mut child)?;
             if else_terminator.is_none() {
                 ctx.builder.build_unconditional_branch(after_block);
             }
