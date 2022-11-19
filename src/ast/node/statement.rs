@@ -243,7 +243,7 @@ impl Node for StatementsNode {
 }
 
 impl StatementsNode {
-    pub fn emit_child<'a, 'ctx>(&'a mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    pub fn emit_child<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let child = &mut ctx.new_child(self.range.start);
         self.emit(child)
     }

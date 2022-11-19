@@ -4,7 +4,6 @@ use super::{alloc, types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 use crate::ast::pltype::{FNType, PLType};
-use crate::lsp::semantic_tokens;
 use crate::utils::read_config::enter;
 use inkwell::debug_info::*;
 use internal_macro::range;
@@ -170,12 +169,9 @@ impl Node for FuncCallNode {
         if fntype.need_gen_code() {
             let block = ctx.block;
             let f = ctx.function;
-            let sembuilder = ctx.semantic_tokens_builder.clone();
-            ctx.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(
-                semantic_tokens::SemanticTokensBuilder::new("".to_string()),
-            )));
+            ctx.need_highlight = false;
             let (_, pltype, _) = fntype.node.emit(ctx)?;
-            ctx.semantic_tokens_builder = sembuilder;
+            ctx.need_highlight = true;
             ctx.function = f;
             ctx.position_at_end(block.unwrap());
             let pltype = pltype.unwrap();
@@ -322,6 +318,9 @@ impl Node for FuncDefNode {
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str("fn ");
         format_res.push_str(&self.id.name.split("::").last().unwrap());
+        if self.generics.is_some() {
+            format_res.push_str(&self.generics.as_ref().unwrap().format(0, ""));
+        }
         format_res.push_str("(");
         format_res.push_str(&params_print);
         format_res.push_str(") ");
@@ -365,6 +364,9 @@ impl Node for FuncDefNode {
             c.emit(ctx)?;
         }
         ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
+        if self.generics.is_some() {
+            self.generics.as_mut().unwrap().emit(ctx)?;
+        }
         for para in self.paralist.iter() {
             ctx.push_semantic_token(para.id.range, SemanticTokenType::PARAMETER, 0);
             ctx.push_semantic_token(para.tp.range(), SemanticTokenType::TYPE, 0);

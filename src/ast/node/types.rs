@@ -532,7 +532,28 @@ impl Node for ArrayInitNode {
 pub struct GenericDefNode {
     pub generics: Vec<Box<VarNode>>,
 }
+impl Node for GenericDefNode {
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
+        let mut s = String::new();
+        s += &format!("<{}", self.generics[0].name);
+        for i in 1..self.generics.len() {
+            s += &format!("|{}", self.generics[i].name);
+        }
+        s += ">";
+        s.clone()
+    }
 
+    fn print(&self, _tabs: usize, _end: bool, _line: Vec<bool>) {
+        todo!()
+    }
+
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        for g in self.generics.iter() {
+            ctx.push_semantic_token(g.range, SemanticTokenType::TYPE, 0);
+        }
+        return Ok((None, None, TerminatorEnum::NONE));
+    }
+}
 impl GenericDefNode {
     pub fn gen_generic_type<'a, 'ctx>(
         &mut self,

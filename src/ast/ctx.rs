@@ -58,6 +58,7 @@ use super::range::Range;
 /// # Ctx
 /// Context for code generation
 pub struct Ctx<'a, 'ctx> {
+    pub need_highlight: bool,
     pub plmod: Mod,
     pub father: Option<&'a Ctx<'a, 'ctx>>, // father context, for symbol lookup
     pub context: &'ctx Context,            // llvm context
@@ -428,6 +429,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             .unwrap()
             .to_string();
         let mut ctx = Ctx {
+            need_highlight: true,
             plmod: Mod::new(f, src_file_path.to_string()),
             father: None,
             context,
@@ -469,6 +471,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
     pub fn new_child(&'a self, start: Pos) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
+            need_highlight: self.need_highlight,
             plmod: self.plmod.new_child(),
             father: Some(self),
             context: self.context,
@@ -516,6 +519,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
     pub fn tmp_child_ctx(&'a self) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
+            need_highlight: self.need_highlight,
             plmod: self.plmod.new_child(),
             father: Some(self),
             context: self.context,
@@ -1056,6 +1060,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn push_semantic_token(&self, range: Range, tp: SemanticTokenType, modifiers: u32) {
+        if !self.need_highlight {
+            return;
+        }
         self.semantic_tokens_builder.borrow_mut().push(
             range.to_diag_range(),
             type_index(tp),
@@ -1063,6 +1070,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         )
     }
     pub fn push_type_hints(&self, range: Range, pltype: Rc<RefCell<PLType>>) {
+        if !self.need_highlight {
+            return;
+        }
         let hint = InlayHint {
             position: range.to_diag_range().end,
             label: lsp_types::InlayHintLabel::String(
@@ -1078,6 +1088,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.hints.borrow_mut().push(hint);
     }
     pub fn push_param_hint(&self, range: Range, name: String) {
+        if !self.need_highlight {
+            return;
+        }
         let hint = InlayHint {
             position: range.to_diag_range().start,
             label: lsp_types::InlayHintLabel::String(name + ": "),
@@ -1134,6 +1147,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn save_if_comment_doc_hover(&self, range: Range, docs: Option<Vec<Box<NodeEnum>>>) {
+        if !self.need_highlight {
+            return;
+        }
         let mut content = vec![];
         let mut string = String::new();
         if let Some(docs) = docs {
@@ -1149,6 +1165,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn save_if_hover(&self, range: Range, value: HoverContents) {
+        if !self.need_highlight {
+            return;
+        }
         if let Some(act) = self.action {
             if let Some(comp) = &self.lspparams {
                 if act == ActionType::Hover {

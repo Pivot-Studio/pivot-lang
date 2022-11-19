@@ -9,7 +9,7 @@ use internal_macro::range;
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct IfNode {
     pub cond: Box<NodeEnum>,
-    pub then: Box<NodeEnum>,
+    pub then: Box<StatementsNode>,
     pub els: Option<Box<NodeEnum>>,
 }
 
@@ -82,13 +82,14 @@ impl Node for IfNode {
             .build_conditional_branch(cond, then_block, else_block);
         // then block
         position_at_end(ctx, then_block);
-        let (_, _, then_terminator) = self.then.emit(ctx)?;
+        let (_, _, then_terminator) = self.then.emit_child(ctx)?;
         if then_terminator.is_none() {
             ctx.builder.build_unconditional_branch(after_block);
         }
         position_at_end(ctx, else_block);
         let terminator = if let Some(el) = &mut self.els {
-            let (_, _, else_terminator) = el.emit(ctx)?;
+            let mut child = ctx.new_child(el.range().start);
+            let (_, _, else_terminator) = el.emit(&mut child)?;
             if else_terminator.is_none() {
                 ctx.builder.build_unconditional_branch(after_block);
             }
