@@ -77,6 +77,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if !self.usegc {
             return;
         }
+        self.builder.unset_current_debug_location();
         let block = self.builder.get_insert_block().unwrap();
         if let Some(inst) = block.get_first_instruction() {
             self.builder.position_before(&inst);
@@ -109,6 +110,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if !self.usegc {
             return;
         }
+        self.builder.unset_current_debug_location();
         let gcmod = self.get_gc_plmod();
         let f: FNType = gcmod
             .get_type("DioGC__collect")
