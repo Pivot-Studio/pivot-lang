@@ -3,7 +3,6 @@ use super::ctx::MemberType;
 use super::ctx::PLDiag;
 use super::diag::ErrorCode;
 use super::node::function::FuncDefNode;
-use super::node::types::GenericDefNode;
 use super::node::NodeEnum;
 use super::node::TypeNode;
 use super::node::TypeNodeEnum;
@@ -451,7 +450,7 @@ impl<'ctx> RetTypeEnum<'ctx> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field {
     pub index: u32,
-    pub pltype: Box<TypeNodeEnum>,
+    pub typenode: Box<TypeNodeEnum>,
     pub name: String,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
@@ -459,7 +458,7 @@ pub struct Field {
 
 impl Field {
     pub fn get_di_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, offset: u64) -> (DIType<'ctx>, u64) {
-        let pltp = self.pltype.get_type(ctx).unwrap();
+        let pltp = self.typenode.get_type(ctx).unwrap();
         let depth = RefCell::borrow(&pltp).get_ptr_depth();
         if let Some(x) = ctx
             .ditypes_placeholder
@@ -509,7 +508,7 @@ impl Field {
         #[allow(deprecated)]
         DocumentSymbol {
             name: self.name.clone(),
-            detail: Some(RefCell::borrow(&self.pltype.get_type(ctx).unwrap()).get_name()),
+            detail: Some(RefCell::borrow(&self.typenode.get_type(ctx).unwrap()).get_name()),
             kind: SymbolKind::FIELD,
             tags: None,
             deprecated: None,
@@ -601,43 +600,6 @@ impl FNType {
                 .join(", ")
             + ")$0"
     }
-
-    pub fn need_gen_code(&self) -> bool {
-        if self.generic_map.is_empty() {
-            return false;
-        }
-        for (_, v) in self.generic_map.iter() {
-            match &*v.clone().borrow() {
-                PLType::GENERIC(g) => {
-                    if g.curpltype.is_none() {
-                        return false;
-                    }
-                }
-                _ => unreachable!(),
-            }
-        }
-        true
-    }
-    pub fn clear_generic(&mut self) {
-        self.generic_map
-            .iter_mut()
-            .for_each(|(_, v)| match &mut *v.clone().borrow_mut() {
-                PLType::GENERIC(g) => {
-                    g.clear_type();
-                }
-                _ => unreachable!(),
-            })
-    }
-    pub fn add_generic_type(&self, ctx: &mut Ctx) -> Result<(), PLDiag> {
-        for (name, g) in self.generic_map.iter() {
-            ctx.add_type(
-                name.clone(),
-                g.clone(),
-                (&*g.clone().borrow()).get_range().unwrap(),
-            )?;
-        }
-        Ok(())
-    }
     pub fn get_doc_symbol(&self) -> DocumentSymbol {
         #[allow(deprecated)]
         DocumentSymbol {
@@ -713,8 +675,7 @@ pub struct STType {
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub methods: FxHashMap<String, FNType>,
-    pub generics: Option<Box<GenericDefNode>>,
-    pub is_generic_place_holder: bool,
+    pub generic_map: FxHashMap<String, Rc<RefCell<PLType>>>,
 }
 
 impl STType {
@@ -730,7 +691,8 @@ impl STType {
                 .clone()
                 .into_iter()
                 .map(|order_field| {
-                    RefCell::borrow(&order_field.pltype.get_type(ctx).unwrap()).get_basic_type(&ctx)
+                    RefCell::borrow(&order_field.typenode.get_type(ctx).unwrap())
+                        .get_basic_type(&ctx)
                 })
                 .collect::<Vec<_>>(),
             false,
@@ -878,3 +840,48 @@ impl GenericType {
         self.curpltype = None;
     }
 }
+macro_rules! generic_impl {
+    ($($args:ident),*) => (
+        $(
+            impl $args {
+                pub fn need_gen_code(&self) -> bool {
+                    if self.generic_map.is_empty() {
+                        return false;
+                    }
+                    for (_, v) in self.generic_map.iter() {
+                        match &*v.clone().borrow() {
+                            PLType::GENERIC(g) => {
+                                if g.curpltype.is_none() {
+                                    return false;
+                                }
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                    true
+                }
+                pub fn clear_generic(&mut self) {
+                    self.generic_map
+                        .iter_mut()
+                        .for_each(|(_, v)| match &mut *v.clone().borrow_mut() {
+                            PLType::GENERIC(g) => {
+                                g.clear_type();
+                            }
+                            _ => unreachable!(),
+                        })
+                }
+                pub fn add_generic_type(&self, ctx: &mut Ctx) -> Result<(), PLDiag> {
+                    for (name, g) in self.generic_map.iter() {
+                        ctx.add_type(
+                            name.clone(),
+                            g.clone(),
+                            (&*g.clone().borrow()).get_range().unwrap(),
+                        )?;
+                    }
+                    Ok(())
+                }
+            }
+        )*
+    );
+}
+generic_impl!(FNType, STType);

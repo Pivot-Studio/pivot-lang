@@ -97,7 +97,7 @@ pub fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> 
             let mut tprange = range;
             tprange.end.column += 1;
             tprange.start = tprange.end;
-            let mut tp = Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
+            let mut typenode = Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
                 id: None,
                 range: tprange,
             }));
@@ -111,12 +111,12 @@ pub fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> 
 
             if let Some(type_name) = type_name {
                 range = id.range.start.to(type_name.range().end);
-                tp = type_name;
+                typenode = type_name;
             }
 
             res_box(Box::new(TypedIdentifierNode {
                 id: *id,
-                tp,
+                typenode,
                 doc,
                 range,
             }))

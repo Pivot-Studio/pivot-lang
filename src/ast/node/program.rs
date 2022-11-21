@@ -54,7 +54,7 @@ impl Node for ProgramNode {
             // 提前加入占位符号，解决自引用问题
             def.add_to_symbols(ctx);
         }
-        for def in self.structs.iter() {
+        for def in self.structs.iter_mut() {
             _ = def.emit_struct_def(ctx);
         }
         self.fntypes.iter_mut().for_each(|x| {
@@ -324,7 +324,9 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
             hasher.finish()
         );
         let pp = Path::new(&hashed).with_extension("bc");
+        let ll = Path::new(&hashed).with_extension("ll");
         let p = pp.as_path();
+        ctx.module.print_to_file(ll);
         ctx.module.write_bitcode_to_path(p);
         ModBuffer::push(db, p.clone().to_path_buf());
     }

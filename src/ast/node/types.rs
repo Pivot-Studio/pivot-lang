@@ -141,7 +141,7 @@ impl TypeNode for PointerTypeNode {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TypedIdentifierNode {
     pub id: VarNode,
-    pub tp: Box<TypeNodeEnum>,
+    pub typenode: Box<TypeNodeEnum>,
     pub doc: Option<CommentNode>,
 }
 
@@ -152,7 +152,7 @@ impl TypedIdentifierNode {
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str(&self.id.name);
         format_res.push_str(": ");
-        format_res.push_str(&self.tp.format(tabs, prefix));
+        format_res.push_str(&self.typenode.format(tabs, prefix));
         format_res.push_str(";");
         if let Some(doc) = &self.doc {
             format_res.push_str(&doc.format(tabs, prefix));
@@ -168,7 +168,7 @@ impl TypedIdentifierNode {
         if let Some(doc) = &self.doc {
             doc.print(tabs + 1, false, line.clone());
         }
-        self.tp.print(tabs + 1, true, line.clone());
+        self.typenode.print(tabs + 1, true, line.clone());
     }
 }
 
@@ -193,6 +193,9 @@ impl Node for StructDefNode {
         format_res.push_str(&prefix.repeat(tabs));
         format_res.push_str("struct ");
         format_res.push_str(&self.id.name);
+        if self.generics.is_some() {
+            format_res.push_str(&self.generics.as_ref().unwrap().format(0, ""));
+        }
         format_res.push_str(" {");
         for (field, _i) in &self.fields {
             format_res.push_str(&field.format(tabs + 1, prefix));
@@ -224,9 +227,12 @@ impl Node for StructDefNode {
             ctx.push_semantic_token(c.range(), SemanticTokenType::COMMENT, 0);
         }
         ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
+        if self.generics.is_some() {
+            self.generics.as_mut().unwrap().emit(ctx)?;
+        }
         for (field, has_semi) in self.fields.iter() {
             ctx.push_semantic_token(field.id.range, SemanticTokenType::PROPERTY, 0);
-            field.tp.emit_highlight(ctx);
+            field.typenode.emit_highlight(ctx);
             if !has_semi {
                 return Err(ctx.add_err(field.range, ErrorCode::COMPLETION));
             }
@@ -249,47 +255,55 @@ impl StructDefNode {
             refs: Rc::new(RefCell::new(vec![])),
             doc: vec![],
             methods: FxHashMap::default(),
-            generics: None,
-            is_generic_place_holder: false,
+            generic_map: FxHashMap::default(),
         })));
-        // skip generics
-        if self.generics.is_some() {
-            return;
-        }
         ctx.context
             .opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.range);
     }
 
-    pub fn emit_struct_def<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
+    pub fn emit_struct_def<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
         let mut fields = FxHashMap::<String, Field>::default();
         let mut order_fields = Vec::<Field>::new();
         let mut i = 0;
+        // add generic type before field add type
+        let mut generic_map = FxHashMap::default();
+        if self.generics.is_some() {
+            generic_map = self.generics.as_mut().unwrap().gen_generic_type(ctx)?;
+        }
+        let child = &mut ctx.tmp_child_ctx();
+        for (name, pltype) in generic_map.iter() {
+            child.add_type(
+                name.clone(),
+                pltype.clone(),
+                pltype.clone().borrow().get_range().unwrap(),
+            )?;
+        }
         for (field, has_semi) in self.fields.iter() {
             if !has_semi {
-                return Err(ctx.add_err(field.range, ErrorCode::COMPLETION));
+                return Err(child.add_err(field.range, ErrorCode::COMPLETION));
             }
             let id = field.id.clone();
             let f = Field {
                 index: i,
-                pltype: field.tp.clone(),
+                typenode: field.typenode.clone(),
                 name: field.id.name.clone(),
                 range: field.range,
                 refs: Rc::new(RefCell::new(vec![])),
             };
-            let tp = field.tp.get_type(ctx);
-            if let Ok(tp) = tp {
-                if tp.borrow().get_range().is_some() {
-                    ctx.send_if_go_to_def(
+            let pltype = field.typenode.get_type(child);
+            if let Ok(pltype) = pltype {
+                if pltype.borrow().get_range().is_some() {
+                    child.send_if_go_to_def(
                         f.range,
-                        tp.borrow().get_range().unwrap(),
-                        ctx.plmod.path.clone(),
+                        pltype.borrow().get_range().unwrap(),
+                        child.plmod.path.clone(),
                     );
                 }
             } else {
                 continue;
             }
-            ctx.set_if_refs(f.refs.clone(), field.id.range);
+            child.set_if_refs(f.refs.clone(), field.id.range);
             fields.insert(id.name.to_string(), f.clone());
             order_fields.push(f);
 
@@ -297,37 +311,34 @@ impl StructDefNode {
         }
         let name = self.id.name.as_str();
         let newf = order_fields.clone();
-        // skip generics
-        if self.generics.is_none() {
-            let st = ctx
-                .module
-                .get_struct_type(&ctx.plmod.get_full_name(name))
-                .unwrap();
-            st.set_body(
-                &order_fields
-                    .into_iter()
-                    .map(|order_field| {
-                        order_field
-                            .pltype
-                            .get_type(ctx)
-                            .unwrap()
-                            .borrow()
-                            .get_basic_type(&ctx)
-                    })
-                    .collect::<Vec<_>>(),
-                false,
-            );
-        }
-        let tp = ctx.get_type(&self.id.name.as_str(), self.range).unwrap();
-        if let PLType::STRUCT(st) = &mut *tp.borrow_mut() {
+        let st = child
+            .module
+            .get_struct_type(&child.plmod.get_full_name(name))
+            .unwrap();
+        st.set_body(
+            &order_fields
+                .into_iter()
+                .map(|order_field| {
+                    order_field
+                        .typenode
+                        .get_type(child)
+                        .unwrap()
+                        .borrow()
+                        .get_basic_type(&child)
+                })
+                .collect::<Vec<_>>(),
+            false,
+        );
+        let pltype = child.get_type(&self.id.name.as_str(), self.range)?;
+        if let PLType::STRUCT(st) = &mut *pltype.borrow_mut() {
             st.fields = fields;
             st.ordered_fields = newf;
             st.doc = self.doc.clone();
-            st.generics = self.generics.clone();
+            st.generic_map = generic_map;
         }
-        ctx.set_if_refs_tp(tp.clone(), self.range);
-        ctx.add_doc_symbols(tp.clone());
-        ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
+        child.set_if_refs_tp(pltype.clone(), self.range);
+        child.add_doc_symbols(pltype.clone());
+        child.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
         Ok(())
     }
 }
@@ -364,7 +375,7 @@ impl Node for StructInitFieldNode {
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitNode {
-    pub tp: Box<TypeNodeEnum>,
+    pub typename: Box<TypeNodeEnum>,
     pub fields: Vec<Box<StructInitFieldNode>>, // TODO: comment db and salsa comment struct
 }
 
@@ -392,7 +403,7 @@ impl Node for StructInitNode {
             }
             _ => (),
         }
-        format_res.push_str(&self.tp.format(tabs, prefix));
+        format_res.push_str(&self.typename.format(tabs, prefix));
         format_res.push_str(&field_str);
         format_res
     }
@@ -400,7 +411,7 @@ impl Node for StructInitNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("StructInitNode");
-        self.tp
+        self.typename
             .print(tabs + 1, self.fields.len() == 0, line.clone());
         let mut i = self.fields.len();
         for field in &self.fields {
@@ -409,9 +420,9 @@ impl Node for StructInitNode {
         }
     }
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        self.tp.emit_highlight(ctx);
+        self.typename.emit_highlight(ctx);
         let mut fields = FxHashMap::<String, (BasicValueEnum<'ctx>, Range)>::default();
-        let tp = self.tp.get_type(ctx)?;
+        let tp = self.typename.get_type(ctx)?;
         for field in self.fields.iter_mut() {
             let range = field.id.range();
             let name = field.id.name.clone();
@@ -423,7 +434,7 @@ impl Node for StructInitNode {
             fields.insert(name, (ctx.try_load2var(range, value.unwrap())?, range));
         }
         if let PLType::STRUCT(st) = &*tp.clone().borrow() {
-            ctx.save_if_comment_doc_hover(self.tp.range(), Some(st.doc.clone()));
+            ctx.save_if_comment_doc_hover(self.typename.range(), Some(st.doc.clone()));
             let et = st.struct_type(ctx).as_basic_type_enum();
             let stv = alloc(ctx, et, "initstruct");
             for (id, (val, range)) in fields {

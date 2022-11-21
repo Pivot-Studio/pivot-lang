@@ -107,7 +107,7 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
             };
             res_enum(
                 StructInitNode {
-                    tp: name,
+                    typename: name,
                     fields,
                     range,
                 }
