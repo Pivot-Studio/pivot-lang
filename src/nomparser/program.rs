@@ -67,10 +67,12 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                                     name: "self".to_string(),
                                     range: Default::default(),
                                 },
-                                tp: Box::new(TypeNodeEnum::PointerTypeNode(PointerTypeNode {
-                                    elm: Box::new(target.clone()),
-                                    range: Default::default(),
-                                })),
+                                typenode: Box::new(TypeNodeEnum::PointerTypeNode(
+                                    PointerTypeNode {
+                                        elm: Box::new(target.clone()),
+                                        range: Default::default(),
+                                    },
+                                )),
                                 doc: None,
                                 range: Default::default(),
                             }),

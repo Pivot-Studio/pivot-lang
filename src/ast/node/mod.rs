@@ -308,13 +308,17 @@ pub fn print_params(paralist: &[Box<TypedIdentifierNode>]) -> String {
     if paralist[0].id.name == "self" {
         return print_params(&paralist[1..]);
     } else {
-        str += &format!("{}: {}", paralist[0].id.name, paralist[0].tp.format(0, ""));
+        str += &format!(
+            "{}: {}",
+            paralist[0].id.name,
+            paralist[0].typenode.format(0, "")
+        );
     }
     for i in 1..paralist.len() {
         str += &format!(
             ", {}: {}",
             paralist[i].id.name,
-            paralist[i].tp.format(0, "")
+            paralist[i].typenode.format(0, "")
         );
     }
     return str;

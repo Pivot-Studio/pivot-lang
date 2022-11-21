@@ -74,80 +74,42 @@ impl Node for FuncCallNode {
                 para_values.push(receiver.into());
                 skip = 1;
             }
-            // funcvalue must use fntype to get a new one,can not use the return  plvalue of id node emit
-            let funcvalue = fntype.get_or_insert_fn(ctx);
-            if funcvalue.count_params() - skip != self.paralist.len() as u32 {
-                return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
-            }
-            let mut prevpos = id_range.end;
-            for (i, para) in self.paralist.iter_mut().enumerate() {
-                let sigrange = prevpos.to(para.range().end);
-                prevpos = para.range().end;
-                let pararange = para.range();
-                ctx.push_param_hint(pararange.clone(), fntype.param_names[i].clone());
-                ctx.set_if_sig(
-                    sigrange,
-                    fntype.name.clone().split("::").last().unwrap().to_string()
-                        + "("
-                        + fntype
-                            .param_names
-                            .iter()
-                            .enumerate()
-                            .map(|(i, s)| {
-                                s.clone() + ": " + &fntype.param_pltypes[i].borrow().get_name()
-                            })
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                            .as_str()
-                        + ")",
-                    &fntype.param_names,
-                    i as u32 + skip,
-                );
-                let re = para.emit(ctx);
-                if re.is_err() {
-                    continue;
-                }
-                let (value, _, _) = re.unwrap();
-                if value.is_none() {
-                    continue;
-                }
-                let load = ctx.try_load2var(pararange, value.unwrap())?;
-                let param = funcvalue.get_nth_param(i as u32 + skip).unwrap();
-                if load.get_type() != param.get_type() {
-                    _ = ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH);
-                }
-                para_values.push(load.as_basic_value_enum().into());
-            }
-            let ret = ctx.builder.build_call(
-                funcvalue,
-                &para_values,
-                format(format_args!("call_{}", RefCell::borrow(&pltype).get_name())).as_str(),
-            );
-            ctx.save_if_comment_doc_hover(id_range, Some(fntype.doc.clone()));
-            let res = match ret.try_as_basic_value().left() {
-                Some(v) => Ok((
-                    {
-                        let ptr = alloc(ctx, v.get_type(), "ret_alloc_tmp");
-                        ctx.nodebug_builder.build_store(ptr, v);
-                        Some(ptr.into())
-                    },
-                    Some(fntype.ret_pltype),
-                    TerminatorEnum::NONE,
-                )),
-                None => Ok((None, Some(fntype.ret_pltype), TerminatorEnum::NONE)),
-            };
-            ctx.set_if_refs_tp(pltype.clone(), id_range);
-            ctx.send_if_go_to_def(id_range, fntype.range, ctx.plmod.path.clone());
-            return res;
         }
         // funcvalue must use fntype to get a new one,can not use the return  plvalue of id node emit
         if fntype.param_pltypes.len() - skip as usize != self.paralist.len() {
             return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
         }
+        // set sig and param hint
+        let mut prevpos = id_range.end;
         for (i, para) in self.paralist.iter_mut().enumerate() {
-            if i < skip as usize {
-                continue;
-            }
+            let sigrange = prevpos.to(para.range().end);
+            prevpos = para.range().end;
+            let pararange = para.range();
+            ctx.push_param_hint(
+                pararange.clone(),
+                fntype.param_names[i + skip as usize].clone(),
+            );
+            ctx.set_if_sig(
+                sigrange,
+                fntype.name.clone().split("::").last().unwrap().to_string()
+                    + "("
+                    + fntype
+                        .param_names
+                        .iter()
+                        .enumerate()
+                        .map(|(i, s)| {
+                            s.clone() + ": " + &fntype.param_pltypes[i].borrow().get_name()
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                        .as_str()
+                    + ")",
+                &fntype.param_names,
+                i as u32 + skip,
+            );
+        }
+        // value check and generic infer
+        for (i, para) in self.paralist.iter_mut().enumerate() {
             let pararange = para.range();
             let (value, value_pltype, _) = para.emit(ctx)?;
             if value.is_none() || value_pltype.is_none() {
@@ -155,8 +117,8 @@ impl Node for FuncCallNode {
             }
             let load = ctx.try_load2var(pararange, value.unwrap())?;
             let value_pltype = value_pltype.unwrap();
-            if value_pltype != fntype.param_pltypes[i] {
-                match &mut *fntype.param_pltypes[i].clone().borrow_mut() {
+            if value_pltype != fntype.param_pltypes[i + skip as usize] {
+                match &mut *fntype.param_pltypes[i + skip as usize].clone().borrow_mut() {
                     PLType::GENERIC(g) => {
                         g.set_type(value_pltype.clone());
                     }
@@ -164,7 +126,6 @@ impl Node for FuncCallNode {
                 }
             }
             para_values.push(load.as_basic_value_enum().into());
-            ctx.push_param_hint(pararange.clone(), fntype.param_names[i].clone());
         }
         if fntype.need_gen_code() {
             let block = ctx.block;
@@ -254,7 +215,7 @@ impl FuncDefNode {
             )?;
         }
         for para in self.paralist.iter() {
-            let paramtype = para.tp.get_type(&child)?;
+            let paramtype = para.typenode.get_type(&child)?;
             if first && para.id.name == "self" {
                 method = true;
             }
@@ -282,7 +243,13 @@ impl FuncDefNode {
             node: Box::new(self.clone()),
         };
         if method {
-            let a = self.paralist.first().unwrap().tp.get_type(&child).unwrap();
+            let a = self
+                .paralist
+                .first()
+                .unwrap()
+                .typenode
+                .get_type(&child)
+                .unwrap();
             let mut b = a.borrow_mut();
             if let PLType::POINTER(s) = &mut *b {
                 if let PLType::STRUCT(s) = &mut *s.borrow_mut() {
@@ -369,7 +336,7 @@ impl Node for FuncDefNode {
         }
         for para in self.paralist.iter() {
             ctx.push_semantic_token(para.id.range, SemanticTokenType::PARAMETER, 0);
-            ctx.push_semantic_token(para.tp.range(), SemanticTokenType::TYPE, 0);
+            ctx.push_semantic_token(para.typenode.range(), SemanticTokenType::TYPE, 0);
         }
         ctx.push_semantic_token(self.ret.range(), SemanticTokenType::TYPE, 0);
         let pltype = ctx.get_type(&self.id.name, self.range)?;
@@ -386,7 +353,7 @@ impl Node for FuncDefNode {
             };
             let mut param_ditypes = vec![];
             for para in self.paralist.iter() {
-                let pltype = para.tp.get_type(&child)?;
+                let pltype = para.typenode.get_type(&child)?;
                 match &*pltype.borrow() {
                     PLType::VOID => {
                         return Err(child.add_err(
