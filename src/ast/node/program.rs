@@ -326,7 +326,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let pp = Path::new(&hashed).with_extension("bc");
         let ll = Path::new(&hashed).with_extension("ll");
         let p = pp.as_path();
-        ctx.module.print_to_file(ll);
+        ctx.module.print_to_file(ll).unwrap();
         ctx.module.write_bitcode_to_path(p);
         ModBuffer::push(db, p.clone().to_path_buf());
     }

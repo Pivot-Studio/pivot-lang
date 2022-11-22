@@ -3,12 +3,12 @@ use super::*;
 use super::{alloc, types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
-use crate::ast::pltype::{FNType, PLType};
+use crate::ast::pltype::{eq_or_infer, FNType, PLType};
 use crate::utils::read_config::enter;
+use indexmap::IndexMap;
 use inkwell::debug_info::*;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
-use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::fmt::format;
 use std::rc::Rc;
@@ -117,13 +117,11 @@ impl Node for FuncCallNode {
             }
             let load = ctx.try_load2var(pararange, value.unwrap())?;
             let value_pltype = value_pltype.unwrap();
-            if value_pltype != fntype.param_pltypes[i + skip as usize] {
-                match &mut *fntype.param_pltypes[i + skip as usize].clone().borrow_mut() {
-                    PLType::GENERIC(g) => {
-                        g.set_type(value_pltype.clone());
-                    }
-                    _ => return Err(ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH)),
-                }
+            if !eq_or_infer(
+                fntype.param_pltypes[i + skip as usize].clone(),
+                value_pltype,
+            ) {
+                return Err(ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH));
             }
             para_values.push(load.as_basic_value_enum().into());
         }
@@ -202,7 +200,7 @@ impl FuncDefNode {
         let mut param_name = Vec::new();
         let mut method = false;
         let mut first = true;
-        let mut generic_map = FxHashMap::default();
+        let mut generic_map = IndexMap::default();
         if self.generics.is_some() {
             generic_map = self.generics.as_mut().unwrap().gen_generic_type(ctx)?;
         }

@@ -3,10 +3,18 @@ use super::ctx::MemberType;
 use super::ctx::PLDiag;
 use super::diag::ErrorCode;
 use super::node::function::FuncDefNode;
+use super::node::pkg::ExternIDNode;
+use super::node::primary::NumNode;
+use super::node::primary::VarNode;
+use super::node::types::ArrayTypeNameNode;
+use super::node::types::PointerTypeNode;
+use super::node::types::TypeNameNode;
 use super::node::NodeEnum;
+use super::node::Num;
 use super::node::TypeNode;
 use super::node::TypeNodeEnum;
 use super::range::Range;
+use indexmap::IndexMap;
 use inkwell::debug_info::*;
 use inkwell::module::Linkage;
 use inkwell::types::ArrayType;
@@ -54,7 +62,7 @@ pub enum PLType {
     ARR(ARRType),
     PRIMITIVE(PriType),
     VOID,
-    POINTER(Box<Rc<RefCell<PLType>>>),
+    POINTER(Rc<RefCell<PLType>>),
     GENERIC(GenericType),
 }
 /// # PriType
@@ -131,8 +139,85 @@ impl PriType {
     }
 }
 
+fn new_typename_node(name: &str) -> Box<TypeNodeEnum> {
+    Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
+        id: Some(ExternIDNode {
+            ns: vec![],
+            id: Box::new(VarNode {
+                name: name.to_string(),
+                range: Default::default(),
+            }),
+            complete: true,
+            singlecolon: false,
+            range: Default::default(),
+        }),
+        range: Default::default(),
+    }))
+}
+fn new_arrtype_node(typenode: Box<TypeNodeEnum>, size: u64) -> Box<TypeNodeEnum> {
+    Box::new(TypeNodeEnum::ArrayTypeNode(ArrayTypeNameNode {
+        id: typenode,
+        size: Box::new(NodeEnum::Num(NumNode {
+            value: Num::INT(size),
+            range: Default::default(),
+        })),
+        range: Default::default(),
+    }))
+}
+fn new_ptrtype_node(typenode: Box<TypeNodeEnum>) -> Box<TypeNodeEnum> {
+    Box::new(TypeNodeEnum::PointerTypeNode(PointerTypeNode {
+        elm: typenode,
+        range: Default::default(),
+    }))
+}
+pub fn eq_or_infer(l: Rc<RefCell<PLType>>, r: Rc<RefCell<PLType>>) -> bool {
+    match &mut *l.borrow_mut() {
+        PLType::GENERIC(l) => {
+            l.set_type(r.clone());
+            return true;
+        }
+        _ => {}
+    }
+    match (&*l.borrow(), &*r.borrow()) {
+        (PLType::PRIMITIVE(l), PLType::PRIMITIVE(r)) => l == r,
+        (PLType::VOID, PLType::VOID) => true,
+        (PLType::POINTER(l), PLType::POINTER(r)) => eq_or_infer(l.clone(), r.clone()),
+        (PLType::ARR(l), PLType::ARR(r)) => {
+            eq_or_infer(l.get_elem_type(), r.get_elem_type()) && l.size == r.size
+        }
+        (PLType::STRUCT(l), PLType::STRUCT(r)) => l.name == r.name && l.path == r.path,
+        (PLType::FN(l), PLType::FN(r)) => l == r,
+        _ => false,
+    }
+}
 impl PLType {
-    pub fn is(self, pri_type: PriType) -> bool {
+    pub fn get_typenode(&self, ctx: &Ctx) -> Box<TypeNodeEnum> {
+        match self {
+            PLType::STRUCT(st) => {
+                if st.path == ctx.plmod.path {
+                    new_typename_node(&st.name)
+                } else {
+                    todo!()
+                }
+            }
+            PLType::ARR(arr) => new_arrtype_node(
+                arr.get_elem_type().borrow().get_typenode(ctx),
+                arr.size as u64,
+            ),
+            PLType::PRIMITIVE(p) => new_typename_node(&p.get_name()),
+            PLType::VOID => new_typename_node("void"),
+            PLType::POINTER(p) => new_ptrtype_node(p.borrow().get_typenode(ctx)),
+            PLType::GENERIC(g) => {
+                if !g.curpltype.is_none() {
+                    g.curpltype.as_ref().unwrap().borrow().get_typenode(ctx)
+                } else {
+                    unreachable!()
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+    pub fn is(&self, pri_type: &PriType) -> bool {
         if let PLType::PRIMITIVE(pri) = self {
             pri == pri_type
         } else {
@@ -530,7 +615,7 @@ pub struct FNType {
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub method: bool,
-    pub generic_map: FxHashMap<String, Rc<RefCell<PLType>>>,
+    pub generic_map: IndexMap<String, Rc<RefCell<PLType>>>,
     pub generic: bool,
     pub node: Box<FuncDefNode>,
 }
@@ -649,7 +734,7 @@ impl FNType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ARRType {
-    pub element_type: Box<Rc<RefCell<PLType>>>,
+    pub element_type: Rc<RefCell<PLType>>,
     pub size: u32,
 }
 
@@ -660,7 +745,7 @@ impl ARRType {
             .get_basic_type(ctx)
             .array_type(self.size)
     }
-    pub fn get_elem_type<'a, 'ctx>(&'a self) -> Box<Rc<RefCell<PLType>>> {
+    pub fn get_elem_type<'a, 'ctx>(&'a self) -> Rc<RefCell<PLType>> {
         self.element_type.clone()
     }
 }
@@ -675,10 +760,43 @@ pub struct STType {
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub methods: FxHashMap<String, FNType>,
-    pub generic_map: FxHashMap<String, Rc<RefCell<PLType>>>,
+    pub generic_map: IndexMap<String, Rc<RefCell<PLType>>>,
 }
 
 impl STType {
+    pub fn generic_name(&self) -> String {
+        if self.need_gen_code() {
+            let typeinfer = self
+                .generic_map
+                .iter()
+                .map(|(_, v)| match &*v.clone().borrow() {
+                    PLType::GENERIC(g) => g.curpltype.as_ref().unwrap().borrow().get_name(),
+                    _ => unreachable!(),
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            return format!("{}<{}>", self.name, typeinfer);
+        }
+        unreachable!()
+    }
+    pub fn generic_infer_pltype(&self, ctx: &Ctx) -> STType {
+        let mut res = self.clone();
+        res.name = self.generic_name();
+        res.ordered_fields = self
+            .ordered_fields
+            .iter()
+            .map(|f| {
+                let mut nf = f.clone();
+                nf.typenode = f.typenode.get_type(ctx).unwrap().borrow().get_typenode(ctx);
+                nf
+            })
+            .collect::<Vec<Field>>();
+        res.ordered_fields.iter().for_each(|f| {
+            res.fields.insert(f.name.clone(), f.clone());
+        });
+        res.generic_map.clear();
+        res
+    }
     pub fn struct_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> StructType<'ctx> {
         let st = ctx.module.get_struct_type(&self.get_st_full_name());
         if let Some(st) = st {

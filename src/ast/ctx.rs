@@ -1194,7 +1194,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         loop {
             match &*RefCell::borrow(&tp.clone()) {
                 PLType::POINTER(p) => {
-                    tp = *p.clone();
+                    tp = p.clone();
                     value = self.builder.build_load(value, "load").into_pointer_value();
                 }
                 _ => break,
@@ -1210,7 +1210,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         loop {
             match &*RefCell::borrow(&tp.clone()) {
                 PLType::POINTER(p) => {
-                    tp = *p.clone();
+                    tp = p.clone();
                 }
                 _ => break,
             }

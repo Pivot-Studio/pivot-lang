@@ -5,10 +5,10 @@ use super::primary::VarNode;
 use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
-use crate::ast::pltype::{ARRType, Field, GenericType, PLType, STType};
-use crate::ast::range::Range;
+use crate::ast::pltype::{eq_or_infer, ARRType, Field, GenericType, PLType, STType};
 use crate::utils::read_config::enter;
-use inkwell::types::{AnyType, BasicType};
+use indexmap::IndexMap;
+use inkwell::types::BasicType;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 use rustc_hash::FxHashMap;
@@ -95,7 +95,7 @@ impl TypeNode for ArrayTypeNameNode {
             if let Num::INT(sz) = num.value {
                 let pltype = self.id.get_type(ctx)?;
                 let arrtype = ARRType {
-                    element_type: Box::new(pltype),
+                    element_type: pltype,
                     size: sz as u32,
                 };
                 let arrtype = Rc::new(RefCell::new(PLType::ARR(arrtype)));
@@ -128,7 +128,7 @@ impl TypeNode for PointerTypeNode {
     }
     fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
         let pltype = self.elm.get_type(ctx)?;
-        let pltype = Rc::new(RefCell::new(PLType::POINTER(Box::new(pltype))));
+        let pltype = Rc::new(RefCell::new(PLType::POINTER(pltype)));
         Ok(pltype)
     }
 
@@ -255,7 +255,7 @@ impl StructDefNode {
             refs: Rc::new(RefCell::new(vec![])),
             doc: vec![],
             methods: FxHashMap::default(),
-            generic_map: FxHashMap::default(),
+            generic_map: IndexMap::default(),
         })));
         ctx.context
             .opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
@@ -267,7 +267,7 @@ impl StructDefNode {
         let mut order_fields = Vec::<Field>::new();
         let mut i = 0;
         // add generic type before field add type
-        let mut generic_map = FxHashMap::default();
+        let mut generic_map = IndexMap::default();
         if self.generics.is_some() {
             generic_map = self.generics.as_mut().unwrap().gen_generic_type(ctx)?;
         }
@@ -420,50 +420,81 @@ impl Node for StructInitNode {
         }
     }
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        self.typename.emit_highlight(ctx);
-        let mut fields = FxHashMap::<String, (BasicValueEnum<'ctx>, Range)>::default();
-        let tp = self.typename.get_type(ctx)?;
-        for field in self.fields.iter_mut() {
-            let range = field.id.range();
-            let name = field.id.name.clone();
-            let frange = field.range();
-            let (value, _, _) = field.emit(ctx)?;
-            if value.is_none() {
-                return Err(ctx.add_err(frange, ErrorCode::EXPECT_VALUE));
+        let child = &mut ctx.tmp_child_ctx();
+        self.typename.emit_highlight(child);
+        let pltype = self.typename.get_type(child)?;
+        let mut sttype = match &mut *pltype.clone().borrow_mut() {
+            PLType::STRUCT(s) => s.clone(),
+            _ => unreachable!(),
+        };
+        sttype.clear_generic();
+        sttype.add_generic_type(child)?;
+        child.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
+        let mut field_init_values = vec![];
+        for fieldinit in self.fields.iter_mut() {
+            let field_id_range = fieldinit.id.range;
+            let field_exp_range = fieldinit.exp.range();
+
+            let field = sttype.fields.get(&fieldinit.id.name);
+            if field.is_none() {
+                child.if_completion(|ctx, a| {
+                    if a.0.is_in(self.range) {
+                        let completions = sttype.get_completions();
+                        ctx.completion_items.set(completions);
+                    }
+                });
+                return Err(child.add_err(field_id_range, ErrorCode::STRUCT_FIELD_NOT_FOUND));
             }
-            fields.insert(name, (ctx.try_load2var(range, value.unwrap())?, range));
-        }
-        if let PLType::STRUCT(st) = &*tp.clone().borrow() {
-            ctx.save_if_comment_doc_hover(self.typename.range(), Some(st.doc.clone()));
-            let et = st.struct_type(ctx).as_basic_type_enum();
-            let stv = alloc(ctx, et, "initstruct");
-            for (id, (val, range)) in fields {
-                let field = st.fields.get(&id);
-                if field.is_none() {
-                    ctx.if_completion(|ctx, a| {
-                        if a.0.is_in(self.range) {
-                            let completions = st.get_completions();
-                            ctx.completion_items.set(completions);
-                        }
-                    });
-                    return Err(ctx.add_err(range, ErrorCode::STRUCT_FIELD_NOT_FOUND));
-                }
-                let field = field.unwrap();
-                let ptr = ctx
-                    .builder
-                    .build_struct_gep(stv, field.index, "fieldptr")
-                    .unwrap();
-                if ptr.get_type().get_element_type() != val.get_type().as_any_type_enum() {
-                    return Err(ctx.add_err(range, ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH));
-                }
-                ctx.builder.build_store(ptr, val);
-                ctx.set_if_refs(field.refs.clone(), range);
-                ctx.send_if_go_to_def(range, field.range, st.path.clone())
+            let field = field.unwrap();
+            let (value, value_pltype, _) = fieldinit.emit(child)?;
+            if value.is_none() || value_pltype.is_none() {
+                return Err(child.add_err(field_exp_range, ErrorCode::EXPECT_VALUE));
             }
-            return Ok((Some(stv.into()), Some(tp.clone()), TerminatorEnum::NONE));
-        } else {
-            panic!("StructInitNode::emit: invalid type");
+            let value = child.try_load2var(field_exp_range, value.unwrap())?;
+            if !eq_or_infer(field.typenode.get_type(child)?, value_pltype.unwrap()) {
+                return Err(child.add_err(fieldinit.range, ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH));
+            }
+            field_init_values.push((field.index, value));
+            child.set_if_refs(field.refs.clone(), field_id_range);
+            child.send_if_go_to_def(field_id_range, field.range, sttype.path.clone())
         }
+        if !sttype.generic_map.is_empty() {
+            if sttype.need_gen_code() {
+                sttype = sttype.generic_infer_pltype(child);
+            } else {
+                return Err(
+                    child.add_err(self.typename.range(), ErrorCode::GENERIC_CANNOT_BE_INFER)
+                );
+            }
+        }
+        let pltype = Rc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
+        let struct_pointer = alloc(
+            child,
+            sttype.struct_type(child).as_basic_type_enum(),
+            "initstruct",
+        );
+        field_init_values.iter().for_each(|(index, value)| {
+            let fieldptr = child
+                .builder
+                .build_struct_gep(struct_pointer, *index, "fieldptr")
+                .unwrap();
+            child.builder.build_store(fieldptr, *value);
+        });
+        if ctx
+            .get_type(&pltype.borrow().get_name(), Default::default())
+            .is_err()
+        {
+            ctx.add_type(
+                pltype.borrow().get_name(),
+                pltype.clone(),
+                pltype.borrow().get_range().unwrap(),
+            )?;
+        }
+        return Ok((
+            Some(struct_pointer.into()),
+            Some(pltype.clone()),
+            TerminatorEnum::NONE,
+        ));
     }
 }
 
@@ -530,7 +561,7 @@ impl Node for ArrayInitNode {
         return Ok((
             Some(arr.into()),
             Some(Rc::new(RefCell::new(PLType::ARR(ARRType {
-                element_type: Box::new(tp0.unwrap()),
+                element_type: tp0.unwrap(),
                 size: sz,
             })))),
             TerminatorEnum::NONE,
@@ -569,8 +600,8 @@ impl GenericDefNode {
     pub fn gen_generic_type<'a, 'ctx>(
         &mut self,
         _: &mut Ctx<'a, 'ctx>,
-    ) -> Result<FxHashMap<String, Rc<RefCell<PLType>>>, PLDiag> {
-        let mut res = FxHashMap::default();
+    ) -> Result<IndexMap<String, Rc<RefCell<PLType>>>, PLDiag> {
+        let mut res = IndexMap::default();
         for g in self.generics.iter() {
             let range = g.range;
             let name = g.name.clone();

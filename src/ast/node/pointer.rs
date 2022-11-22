@@ -40,7 +40,7 @@ impl Node for PointerOpNode {
                     return Err(ctx.add_err(self.range, ErrorCode::NOT_A_POINTER));
                 }
                 if let PLType::POINTER(tp1) = &*tp.unwrap().borrow() {
-                    tp = Some(*tp1.clone());
+                    tp = Some(tp1.clone());
                     ctx.builder.build_load(value.into_pointer_value(), "deref")
                 } else {
                     return Err(ctx.add_err(self.range, ErrorCode::NOT_A_POINTER));
@@ -48,9 +48,7 @@ impl Node for PointerOpNode {
             }
             PointerOpEnum::ADDR => {
                 if tp.is_some() {
-                    tp = Some(Rc::new(RefCell::new(PLType::POINTER(Box::new(
-                        tp.unwrap(),
-                    )))));
+                    tp = Some(Rc::new(RefCell::new(PLType::POINTER(tp.unwrap()))));
                 }
                 if value.is_const {
                     return Err(ctx.add_err(self.range, ErrorCode::CAN_NOT_REF_CONSTANT));
