@@ -360,7 +360,7 @@ impl Node for TakeOpNode {
             ctx.if_completion(|ctx, (pos, trigger)| {
                 if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
                     if let PLType::STRUCT(s) = &*tp.borrow() {
-                        let completions = s.get_field_completions();
+                        let completions = s.get_completions(&ctx);
                         ctx.completion_items.set(completions);
                         ctx.action = None;
                     }

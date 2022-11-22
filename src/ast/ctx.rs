@@ -234,9 +234,15 @@ impl Mod {
             });
         };
         for (_,m) in &self.submods {
+            if m.methods.get(full_name).is_none() {
+                continue;
+            }
             for (name, v) in m.methods.get(full_name).unwrap() {
                 f(name,v);
             }
+        }
+        if self.methods.get(full_name).is_none() {
+            return completions;
         }
         for (name, v) in self.methods.get(full_name).unwrap() {
             f(name,v);
