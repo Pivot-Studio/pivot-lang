@@ -178,7 +178,7 @@ impl Node for ArrayElementNode {
             let index_range = self.index.range();
             let (index, index_pltype, _) = self.index.emit(ctx)?;
             let index = ctx.try_load2var(index_range, index.unwrap())?;
-            if index_pltype.is_none() || !index_pltype.unwrap().borrow().clone().is(PriType::I64) {
+            if index_pltype.is_none() || !index_pltype.unwrap().borrow().is(&PriType::I64) {
                 return Err(ctx.add_err(self.range, ErrorCode::ARRAY_INDEX_MUST_BE_INT));
             }
             let index_value = index.as_basic_value_enum().into_int_value();
@@ -189,7 +189,7 @@ impl Node for ArrayElementNode {
             };
             return Ok((
                 Some(elemptr.into()),
-                Some(*arrtp.element_type.clone()),
+                Some(arrtp.element_type.clone()),
                 TerminatorEnum::NONE,
             ));
         }
