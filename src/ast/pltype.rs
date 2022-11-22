@@ -26,7 +26,6 @@ use inkwell::types::StructType;
 use inkwell::types::VoidType;
 use inkwell::values::FunctionValue;
 use inkwell::AddressSpace;
-use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::DocumentSymbol;
@@ -759,7 +758,6 @@ pub struct STType {
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
-    pub methods: FxHashMap<String, FNType>,
     pub generic_map: IndexMap<String, Rc<RefCell<PLType>>>,
 }
 
@@ -817,7 +815,7 @@ impl STType {
         );
         st
     }
-    pub fn get_completions(&self) -> Vec<CompletionItem> {
+    pub fn get_field_completions(&self) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
         for (name, _) in &self.fields {
             completions.push(CompletionItem {
@@ -829,22 +827,19 @@ impl STType {
                 ..Default::default()
             });
         }
-        for (name, v) in &self.methods {
-            completions.push(CompletionItem {
-                kind: Some(CompletionItemKind::METHOD),
-                label: name.clone(),
-                detail: Some("method".to_string()),
-                insert_text: Some(v.gen_snippet()),
-                insert_text_format: Some(InsertTextFormat::SNIPPET),
-                command: Some(Command::new(
-                    "trigger help".to_string(),
-                    "editor.action.triggerParameterHints".to_string(),
-                    None,
-                )),
-                ..Default::default()
-            });
-        }
         completions
+    }
+    pub fn get_mthd_completions<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Vec<CompletionItem> {
+        ctx.plmod.get_methods_completions(&self.get_st_full_name())
+    }
+
+    pub fn get_completions<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>)-> Vec<CompletionItem> {
+        let mut coms = self.get_field_completions();
+        coms.extend(self.get_mthd_completions(ctx));
+        coms
+    }
+    pub fn find_method<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, method: &str) -> Option<FNType> {
+        ctx.plmod.find_method(&self.get_st_full_name(),method)
     }
     pub fn get_st_full_name(&self) -> String {
         format!("{}..{}", self.path, self.name)

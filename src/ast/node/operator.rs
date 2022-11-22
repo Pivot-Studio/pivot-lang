@@ -298,7 +298,7 @@ impl Node for TakeOpNode {
                                 && trigger.as_ref().unwrap() == "."
                             {
                                 if let PLType::STRUCT(s) = &*pltype.clone().borrow() {
-                                    let completions = s.get_completions();
+                                    let completions = s.get_completions(ctx);
                                     ctx.completion_items.set(completions);
                                     ctx.action = None;
                                 }
@@ -307,7 +307,7 @@ impl Node for TakeOpNode {
                         let range = id.range();
                         if let PLType::STRUCT(s) = &*pltype.clone().borrow() {
                             let field = s.fields.get(&id.name);
-                            let method = s.methods.get(&id.name);
+                            let method = s.find_method(&ctx,&id.name);
                             if let Some(field) = field {
                                 ctx.push_semantic_token(range, SemanticTokenType::PROPERTY, 0);
                                 index = field.index;
@@ -360,7 +360,7 @@ impl Node for TakeOpNode {
             ctx.if_completion(|ctx, (pos, trigger)| {
                 if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
                     if let PLType::STRUCT(s) = &*tp.borrow() {
-                        let completions = s.get_completions();
+                        let completions = s.get_field_completions();
                         ctx.completion_items.set(completions);
                         ctx.action = None;
                     }

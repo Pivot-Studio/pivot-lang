@@ -74,7 +74,8 @@ define_error!(
     NOT_A_POINTER = "not a pointer",
     CAN_NOT_REF_CONSTANT = "can not ref constant",
     ILLEGAL_SELF_RECURSION = "illegal self recursion, please use pointer",
-    GENERIC_CANNOT_BE_INFER = "generic can not be infer"
+    GENERIC_CANNOT_BE_INFER = "generic can not be infer",
+    DUPLICATE_METHOD = "duplicate method"
 );
 macro_rules! define_warn {
     ($(
