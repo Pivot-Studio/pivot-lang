@@ -359,7 +359,7 @@ impl PLDiag {
         match self {
             PLDiag::Error(s) => {
                 let err = format!(
-                    "error at {}\n\t{}",
+                    "{}\n\t{}",
                     format!(
                         "{}:{}:{}",
                         path,
@@ -369,11 +369,11 @@ impl PLDiag {
                     .red(),
                     format!("{}", s.diag.message.blue().bold()),
                 );
-                println!("{}", err);
+                log::error!("{}", err);
             }
             PLDiag::Warn(s) => {
                 let err = format!(
-                    "warn at {}\n\t{}",
+                    "{}\n\t{}",
                     format!(
                         "{}:{}:{}",
                         path,
@@ -383,7 +383,7 @@ impl PLDiag {
                     .yellow(),
                     format!("{}", s.diag.message.blue().bold()),
                 );
-                println!("{}", err);
+                log::warn!("{}", err);
             }
         }
     }
@@ -897,9 +897,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             if let Some(comp) = &self.lspparams {
                 let tprefs = RefCell::borrow(&tp).get_refs();
                 if let Some(tprefs) = tprefs {
-                    if range.start.line == 13 && self.plmod.path.contains("main") {
-                        eprintln!("refs: {:?}", tprefs);
-                    }
                     tprefs.borrow_mut().push(self.get_location(range));
                     if comp.0.is_in(range) {
                         self.refs.set(Some(tprefs));
