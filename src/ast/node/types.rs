@@ -60,7 +60,6 @@ impl TypeNode for TypeNameNode {
         }
         let (_, pltype, _) = self.id.as_ref().unwrap().get_type(ctx)?;
         let pltype = pltype.unwrap();
-        ctx.set_if_refs_tp(pltype.clone(), self.range);
         Ok(pltype)
     }
 }
@@ -255,7 +254,7 @@ impl StructDefNode {
         })));
         ctx.context
             .opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
-        _ = ctx.add_type(self.id.name.clone(), stu, self.range);
+        _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
     }
 
     pub fn emit_struct_def<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
@@ -287,11 +286,11 @@ impl StructDefNode {
                 range: field.range,
                 refs: Rc::new(RefCell::new(vec![])),
             };
-            field.typenode.get_type(child)?;
+            let tp = field.typenode.get_type(child)?;
             child.set_if_refs(f.refs.clone(), field.id.range);
             fields.insert(id.name.to_string(), f.clone());
             order_fields.push(f);
-
+            ctx.set_if_refs_tp(tp.clone(), field.typenode.range());
             i = i + 1;
         }
         let name = self.id.name.as_str();
@@ -408,6 +407,7 @@ impl Node for StructInitNode {
         let child = &mut ctx.tmp_child_ctx();
         self.typename.emit_highlight(child);
         let pltype = self.typename.get_type(child)?;
+        ctx.set_if_refs_tp(pltype.clone(), self.typename.range());
         let mut sttype = match &mut *pltype.clone().borrow_mut() {
             PLType::STRUCT(s) => s.clone(),
             _ => unreachable!(),

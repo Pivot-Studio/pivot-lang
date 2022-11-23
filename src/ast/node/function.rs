@@ -119,7 +119,7 @@ impl Node for FuncCallNode {
             let value_pltype = value_pltype.unwrap();
             if !eq_or_infer(
                 fntype.param_pltypes[i + skip as usize].clone(),
-                value_pltype,
+                value_pltype.clone(),
             ) {
                 return Err(ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH));
             }
@@ -175,6 +175,7 @@ impl Node for FuncCallNode {
             None => Ok((None, Some(fntype.ret_pltype.clone()), TerminatorEnum::NONE)),
         };
         fntype.clear_generic();
+        ctx.send_if_go_to_def(id_range, fntype.range, ctx.plmod.path.clone());
         ctx.set_if_refs_tp(pltype.clone(), id_range);
         return res;
     }
@@ -213,6 +214,7 @@ impl FuncDefNode {
         }
         for para in self.paralist.iter() {
             let paramtype = para.typenode.get_type(&child)?;
+            ctx.set_if_refs_tp(paramtype.clone(), para.typenode.range());
             if first && para.id.name == "self" {
                 method = true;
             }

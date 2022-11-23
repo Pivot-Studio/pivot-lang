@@ -897,6 +897,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             if let Some(comp) = &self.lspparams {
                 let tprefs = RefCell::borrow(&tp).get_refs();
                 if let Some(tprefs) = tprefs {
+                    if range.start.line == 13 && self.plmod.path.contains("main") {
+                        eprintln!("refs: {:?}", tprefs);
+                    }
                     tprefs.borrow_mut().push(self.get_location(range));
                     if comp.0.is_in(range) {
                         self.refs.set(Some(tprefs));

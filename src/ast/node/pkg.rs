@@ -195,7 +195,7 @@ impl Node for ExternIDNode {
             ));
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
-            ctx.set_if_refs_tp(tp.clone(), self.range);
+            // ctx.set_if_refs_tp(tp.clone(), self.range);
             let range = &tp.clone().borrow().get_range();
             let re = match &*tp.clone().borrow() {
                 PLType::FN(_) => {
@@ -245,7 +245,7 @@ impl ExternIDNode {
             }
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
-            ctx.set_if_refs_tp(tp.clone(), self.range);
+            // ctx.set_if_refs_tp(tp.clone(), self.range);
             let range = &tp.clone().borrow().get_range();
             let re = match *tp.clone().borrow() {
                 PLType::STRUCT(_) => Ok((None, Some(tp), TerminatorEnum::NONE)),
