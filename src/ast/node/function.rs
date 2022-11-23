@@ -240,6 +240,10 @@ impl FuncDefNode {
             generic: self.generics.is_some(),
             node: Box::new(self.clone()),
         };
+        ftp.get_or_insert_fn(&child);
+        let pltype = Rc::new(RefCell::new(PLType::FN(ftp.clone())));
+        child.set_if_refs_tp(pltype.clone(), self.id.range);
+        child.add_doc_symbols(pltype.clone());
         if method {
             let a = self
                 .paralist
@@ -251,17 +255,12 @@ impl FuncDefNode {
             let mut b = a.borrow_mut();
             if let PLType::POINTER(s) = &mut *b {
                 if let PLType::STRUCT(s) = &mut *s.borrow_mut() {
-                    let mut ftp = ftp.clone();
+                    let mut ftp = ftp;
                     ftp.param_pltypes = ftp.param_pltypes[1..].to_vec();
-                    s.methods
-                        .insert(self.id.name.split("::").last().unwrap().to_string(), ftp);
+                    ctx.add_method(s, self.id.name.split("::").last().unwrap(), ftp.clone(), self.id.range);
                 }
             }
         }
-        ftp.get_or_insert_fn(&child);
-        let pltype = Rc::new(RefCell::new(PLType::FN(ftp)));
-        child.set_if_refs_tp(pltype.clone(), self.id.range);
-        child.add_doc_symbols(pltype.clone());
         ctx.add_type(self.id.name.clone(), pltype, self.id.range)?;
         Ok(())
     }

@@ -50,6 +50,8 @@ use super::diag::{ErrorCode, WarnCode};
 use super::diag::{ERR_MSG, WARN_MSG};
 use super::node::NodeEnum;
 use super::node::PLValue;
+use super::pltype::FNType;
+use super::pltype::STType;
 use super::pltype::add_primitive_types;
 use super::pltype::PLType;
 use super::pltype::PriType;
@@ -131,8 +133,10 @@ pub struct Mod {
     pub types: FxHashMap<String, Rc<RefCell<PLType>>>,
     /// sub mods
     pub submods: FxHashMap<String, Mod>,
-    // global variable table
+    /// global variable table
     pub global_table: FxHashMap<String, GlobalVar>,
+    /// structs methods
+    pub methods: FxHashMap<String,  FxHashMap<String, FNType>>,
 }
 
 impl Mod {
@@ -143,6 +147,7 @@ impl Mod {
             types: FxHashMap::default(),
             submods: FxHashMap::default(),
             global_table: FxHashMap::default(),
+            methods: FxHashMap::default(),
         }
     }
     pub fn new_child(&self) -> Self {
@@ -152,6 +157,7 @@ impl Mod {
             types: FxHashMap::default(),
             submods: self.submods.clone(),
             global_table: FxHashMap::default(),
+            methods: self.methods.clone(),
         }
     }
     pub fn get_global_symbol(&self, name: &str) -> Option<&GlobalVar> {
@@ -210,6 +216,70 @@ impl Mod {
         }
         name.to_string()
     }
+    pub fn get_methods_completions(&self, full_name: &str)-> Vec<CompletionItem> {
+        let mut completions = Vec::new();
+        let mut f = |name:&String,v:&FNType| {
+            completions.push(CompletionItem {
+                kind: Some(CompletionItemKind::METHOD),
+                label: name.clone(),
+                detail: Some("method".to_string()),
+                insert_text: Some(v.gen_snippet()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                command: Some(Command::new(
+                    "trigger help".to_string(),
+                    "editor.action.triggerParameterHints".to_string(),
+                    None,
+                )),
+                ..Default::default()
+            });
+        };
+        for (_,m) in &self.submods {
+            if m.methods.get(full_name).is_none() {
+                continue;
+            }
+            for (name, v) in m.methods.get(full_name).unwrap() {
+                f(name,v);
+            }
+        }
+        if self.methods.get(full_name).is_none() {
+            return completions;
+        }
+        for (name, v) in self.methods.get(full_name).unwrap() {
+            f(name,v);
+        }
+        completions
+    }
+
+    pub fn find_method(&self, full_name: &str, mthd:&str)-> Option< FNType> {
+        if let Some(m) = self.methods.get(full_name) {
+            if let Some(v) = m.get(mthd) {
+                return Some(v.clone());
+            }
+        }
+        for (_,m) in &self.submods {
+            if let Some(v) = m.find_method(full_name,mthd) {
+                return Some(v);
+            }
+        }
+        None
+    }
+
+    fn add_method(&mut self, tp: &STType, mthd:&str, fntp: FNType) -> Result<(),()> {
+        let full_name = tp.get_st_full_name();
+        if let Some(m) = self.methods.get_mut(&full_name) {
+            if let Some(_) = m.get(mthd) {
+                // duplicate method
+                return Err(());
+            }
+            m.insert(mthd.to_string(), fntp);
+        }else {
+            let mut m = FxHashMap::default();
+            m.insert(mthd.to_string(), fntp);
+            self.methods.insert(full_name, m);
+        }
+        Ok(())
+    }
+
     fn get_ns_completions_pri(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         for (k, _) in self.submods.iter() {
             vmap.insert(
@@ -582,6 +652,11 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             .append_basic_block(self.init_func.unwrap(), "alloc");
         self.context
             .append_basic_block(self.init_func.unwrap(), "entry");
+    }
+    pub fn add_method(&mut self, tp: &STType, mthd:&str, fntp: FNType, range: Range) {
+        if self.plmod.add_method(tp, mthd, fntp).is_err() {
+            self.add_err(range, ErrorCode::DUPLICATE_METHOD);
+        }
     }
     pub fn init_fn_ret(&mut self) {
         let alloc = self.init_func.unwrap().get_first_basic_block().unwrap();

@@ -254,7 +254,6 @@ impl StructDefNode {
             range: self.range(),
             refs: Rc::new(RefCell::new(vec![])),
             doc: vec![],
-            methods: FxHashMap::default(),
             generic_map: IndexMap::default(),
         })));
         ctx.context
@@ -439,7 +438,7 @@ impl Node for StructInitNode {
             if field.is_none() {
                 child.if_completion(|ctx, a| {
                     if a.0.is_in(self.range) {
-                        let completions = sttype.get_completions();
+                        let completions = sttype.get_completions(&ctx);
                         ctx.completion_items.set(completions);
                     }
                 });
