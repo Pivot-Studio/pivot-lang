@@ -1,4 +1,4 @@
-.PHONY: devlinux devmac vm install fmt test
+.PHONY: devlinux devmac vm install fmt test clean
 devlinux:
 	@echo "KAGARI_LIB_ROOT=$(pwd)/planglib">>~/.bashrc
 	@echo "PL_ROOT=$(pwd)/target/release/">>~/.bashrc
@@ -20,3 +20,6 @@ fmt:
 
 test:
 	@cargo test --all
+
+clean:
+	@rm -f *.ll && rm -f out* && rm -f testout*

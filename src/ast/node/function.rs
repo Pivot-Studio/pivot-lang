@@ -176,7 +176,6 @@ impl Node for FuncCallNode {
         };
         fntype.clear_generic();
         ctx.set_if_refs_tp(pltype.clone(), id_range);
-        ctx.send_if_go_to_def(id_range, fntype.range, ctx.plmod.path.clone());
         return res;
     }
 }
@@ -222,7 +221,7 @@ impl FuncDefNode {
             param_name.push(para.id.name.clone());
         }
         let refs = vec![];
-        let ftp = FNType {
+        let mut ftp = FNType {
             name: self.id.name.clone(),
             ret_pltype: self.ret.get_type(&child)?,
             param_pltypes,
@@ -255,9 +254,13 @@ impl FuncDefNode {
             let mut b = a.borrow_mut();
             if let PLType::POINTER(s) = &mut *b {
                 if let PLType::STRUCT(s) = &mut *s.borrow_mut() {
-                    let mut ftp = ftp;
                     ftp.param_pltypes = ftp.param_pltypes[1..].to_vec();
-                    ctx.add_method(s, self.id.name.split("::").last().unwrap(), ftp.clone(), self.id.range);
+                    ctx.add_method(
+                        s,
+                        self.id.name.split("::").last().unwrap(),
+                        ftp.clone(),
+                        self.id.range,
+                    );
                 }
             }
         }

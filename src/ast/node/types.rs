@@ -60,9 +60,6 @@ impl TypeNode for TypeNameNode {
         }
         let (_, pltype, _) = self.id.as_ref().unwrap().get_type(ctx)?;
         let pltype = pltype.unwrap();
-        if let Some(dst) = pltype.borrow().get_range() {
-            ctx.send_if_go_to_def(self.range, dst, ctx.plmod.path.clone());
-        }
         ctx.set_if_refs_tp(pltype.clone(), self.range);
         Ok(pltype)
     }
@@ -290,18 +287,7 @@ impl StructDefNode {
                 range: field.range,
                 refs: Rc::new(RefCell::new(vec![])),
             };
-            let pltype = field.typenode.get_type(child);
-            if let Ok(pltype) = pltype {
-                if pltype.borrow().get_range().is_some() {
-                    child.send_if_go_to_def(
-                        f.range,
-                        pltype.borrow().get_range().unwrap(),
-                        child.plmod.path.clone(),
-                    );
-                }
-            } else {
-                continue;
-            }
+            field.typenode.get_type(child)?;
             child.set_if_refs(f.refs.clone(), field.id.range);
             fields.insert(id.name.to_string(), f.clone());
             order_fields.push(f);
@@ -335,7 +321,7 @@ impl StructDefNode {
             st.doc = self.doc.clone();
             st.generic_map = generic_map;
         }
-        child.set_if_refs_tp(pltype.clone(), self.range);
+        child.set_if_refs_tp(pltype.clone(), self.id.range);
         child.add_doc_symbols(pltype.clone());
         child.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
         Ok(())
@@ -455,7 +441,6 @@ impl Node for StructInitNode {
             }
             field_init_values.push((field.index, value));
             child.set_if_refs(field.refs.clone(), field_id_range);
-            child.send_if_go_to_def(field_id_range, field.range, sttype.path.clone())
         }
         if !sttype.generic_map.is_empty() {
             if sttype.need_gen_code() {

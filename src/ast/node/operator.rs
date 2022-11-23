@@ -307,7 +307,7 @@ impl Node for TakeOpNode {
                         let range = id.range();
                         if let PLType::STRUCT(s) = &*pltype.clone().borrow() {
                             let field = s.fields.get(&id.name);
-                            let method = s.find_method(&ctx,&id.name);
+                            let method = s.find_method(&ctx, &id.name);
                             if let Some(field) = field {
                                 ctx.push_semantic_token(range, SemanticTokenType::PROPERTY, 0);
                                 index = field.index;

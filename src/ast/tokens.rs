@@ -67,7 +67,8 @@ define_tokens!(
     TAKE_PTR = "&",
     TAKE_VAL = "*",
     IMPL = "impl",
-    GENERIC_SEP = "|"
+    GENERIC_SEP = "|",
+    INGNORE = "_"
 );
 impl TokenType {
     pub fn get_str(&self) -> &'static str {

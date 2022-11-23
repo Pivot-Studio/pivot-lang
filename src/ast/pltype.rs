@@ -137,20 +137,43 @@ impl PriType {
         }
     }
 }
+pub fn eq_or_infer(l: Rc<RefCell<PLType>>, r: Rc<RefCell<PLType>>) -> bool {
+    match &mut *l.borrow_mut() {
+        PLType::GENERIC(l) => {
+            if l.curpltype.is_some() {
+                return eq_or_infer(l.curpltype.as_ref().unwrap().clone(), r);
+            }
+            l.set_type(r.clone());
+            return true;
+        }
+        _ => {}
+    }
+    match (&*l.borrow(), &*r.borrow()) {
+        (PLType::PRIMITIVE(l), PLType::PRIMITIVE(r)) => l == r,
+        (PLType::VOID, PLType::VOID) => true,
+        (PLType::POINTER(l), PLType::POINTER(r)) => eq_or_infer(l.clone(), r.clone()),
+        (PLType::ARR(l), PLType::ARR(r)) => {
+            eq_or_infer(l.get_elem_type(), r.get_elem_type()) && l.size == r.size
+        }
+        (PLType::STRUCT(l), PLType::STRUCT(r)) => l.name == r.name && l.path == r.path,
+        (PLType::FN(l), PLType::FN(r)) => l == r,
+        _ => false,
+    }
+}
 
-fn new_typename_node(name: &str) -> Box<TypeNodeEnum> {
+fn new_typename_node(name: &str, range: Range) -> Box<TypeNodeEnum> {
     Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
         id: Some(ExternIDNode {
             ns: vec![],
             id: Box::new(VarNode {
                 name: name.to_string(),
-                range: Default::default(),
+                range,
             }),
             complete: true,
             singlecolon: false,
-            range: Default::default(),
+            range,
         }),
-        range: Default::default(),
+        range,
     }))
 }
 fn new_arrtype_node(typenode: Box<TypeNodeEnum>, size: u64) -> Box<TypeNodeEnum> {
@@ -169,32 +192,12 @@ fn new_ptrtype_node(typenode: Box<TypeNodeEnum>) -> Box<TypeNodeEnum> {
         range: Default::default(),
     }))
 }
-pub fn eq_or_infer(l: Rc<RefCell<PLType>>, r: Rc<RefCell<PLType>>) -> bool {
-    match &mut *l.borrow_mut() {
-        PLType::GENERIC(l) => {
-            l.set_type(r.clone());
-            return true;
-        }
-        _ => {}
-    }
-    match (&*l.borrow(), &*r.borrow()) {
-        (PLType::PRIMITIVE(l), PLType::PRIMITIVE(r)) => l == r,
-        (PLType::VOID, PLType::VOID) => true,
-        (PLType::POINTER(l), PLType::POINTER(r)) => eq_or_infer(l.clone(), r.clone()),
-        (PLType::ARR(l), PLType::ARR(r)) => {
-            eq_or_infer(l.get_elem_type(), r.get_elem_type()) && l.size == r.size
-        }
-        (PLType::STRUCT(l), PLType::STRUCT(r)) => l.name == r.name && l.path == r.path,
-        (PLType::FN(l), PLType::FN(r)) => l == r,
-        _ => false,
-    }
-}
 impl PLType {
     pub fn get_typenode(&self, ctx: &Ctx) -> Box<TypeNodeEnum> {
         match self {
             PLType::STRUCT(st) => {
                 if st.path == ctx.plmod.path {
-                    new_typename_node(&st.name)
+                    new_typename_node(&st.name, st.range)
                 } else {
                     todo!()
                 }
@@ -203,8 +206,8 @@ impl PLType {
                 arr.get_elem_type().borrow().get_typenode(ctx),
                 arr.size as u64,
             ),
-            PLType::PRIMITIVE(p) => new_typename_node(&p.get_name()),
-            PLType::VOID => new_typename_node("void"),
+            PLType::PRIMITIVE(p) => new_typename_node(&p.get_name(), Default::default()),
+            PLType::VOID => new_typename_node("void", Default::default()),
             PLType::POINTER(p) => new_ptrtype_node(p.borrow().get_typenode(ctx)),
             PLType::GENERIC(g) => {
                 if !g.curpltype.is_none() {
@@ -833,13 +836,13 @@ impl STType {
         ctx.plmod.get_methods_completions(&self.get_st_full_name())
     }
 
-    pub fn get_completions<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>)-> Vec<CompletionItem> {
+    pub fn get_completions<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Vec<CompletionItem> {
         let mut coms = self.get_field_completions();
         coms.extend(self.get_mthd_completions(ctx));
         coms
     }
     pub fn find_method<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, method: &str) -> Option<FNType> {
-        ctx.plmod.find_method(&self.get_st_full_name(),method)
+        ctx.plmod.find_method(&self.get_st_full_name(), method)
     }
     pub fn get_st_full_name(&self) -> String {
         format!("{}..{}", self.path, self.name)
