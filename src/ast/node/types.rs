@@ -60,10 +60,6 @@ impl TypeNode for TypeNameNode {
         }
         let (_, pltype, _) = self.id.as_ref().unwrap().get_type(ctx)?;
         let pltype = pltype.unwrap();
-        if let Some(dst) = pltype.borrow().get_range() {
-            ctx.send_if_go_to_def(self.range, dst, ctx.plmod.path.clone());
-        }
-        ctx.set_if_refs_tp(pltype.clone(), self.range);
         Ok(pltype)
     }
 }
@@ -258,7 +254,7 @@ impl StructDefNode {
         })));
         ctx.context
             .opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
-        _ = ctx.add_type(self.id.name.clone(), stu, self.range);
+        _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
     }
 
     pub fn emit_struct_def<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
@@ -290,22 +286,11 @@ impl StructDefNode {
                 range: field.range,
                 refs: Rc::new(RefCell::new(vec![])),
             };
-            let pltype = field.typenode.get_type(child);
-            if let Ok(pltype) = pltype {
-                if pltype.borrow().get_range().is_some() {
-                    child.send_if_go_to_def(
-                        f.range,
-                        pltype.borrow().get_range().unwrap(),
-                        child.plmod.path.clone(),
-                    );
-                }
-            } else {
-                continue;
-            }
+            let tp = field.typenode.get_type(child)?;
             child.set_if_refs(f.refs.clone(), field.id.range);
             fields.insert(id.name.to_string(), f.clone());
             order_fields.push(f);
-
+            ctx.set_if_refs_tp(tp.clone(), field.typenode.range());
             i = i + 1;
         }
         let name = self.id.name.as_str();
@@ -335,7 +320,7 @@ impl StructDefNode {
             st.doc = self.doc.clone();
             st.generic_map = generic_map;
         }
-        child.set_if_refs_tp(pltype.clone(), self.range);
+        child.set_if_refs_tp(pltype.clone(), self.id.range);
         child.add_doc_symbols(pltype.clone());
         child.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
         Ok(())
@@ -374,6 +359,7 @@ impl Node for StructInitFieldNode {
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitNode {
+    pub generic_params: Option<Box<GenericParamNode>>,
     pub typename: Box<TypeNodeEnum>,
     pub fields: Vec<Box<StructInitFieldNode>>, // TODO: comment db and salsa comment struct
 }
@@ -403,6 +389,9 @@ impl Node for StructInitNode {
             _ => (),
         }
         format_res.push_str(&self.typename.format(tabs, prefix));
+        if self.generic_params.is_some() {
+            format_res.push_str(&self.generic_params.as_ref().unwrap().format(0, ""));
+        }
         format_res.push_str(&field_str);
         format_res
     }
@@ -422,12 +411,31 @@ impl Node for StructInitNode {
         let child = &mut ctx.tmp_child_ctx();
         self.typename.emit_highlight(child);
         let pltype = self.typename.get_type(child)?;
+        ctx.set_if_refs_tp(pltype.clone(), self.typename.range());
         let mut sttype = match &mut *pltype.clone().borrow_mut() {
             PLType::STRUCT(s) => s.clone(),
             _ => unreachable!(),
         };
         sttype.clear_generic();
         sttype.add_generic_type(child)?;
+        if self.generic_params.is_some() {
+            let generic_params = self.generic_params.as_mut().unwrap();
+            let generic_params_range = generic_params.range.clone();
+            generic_params.emit(child)?;
+            if generic_params.generics.len() != sttype.generic_map.len() {
+                return Err(
+                    child.add_err(generic_params_range, ErrorCode::GENERIC_PARAM_LEN_MISMATCH)
+                );
+            }
+            let generic_types = generic_params.get_generic_types(child)?;
+            let mut i = 0;
+            for (_, pltype) in sttype.generic_map.iter() {
+                if generic_types[i].is_some() {
+                    eq_or_infer(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
+                }
+                i = i + 1;
+            }
+        }
         child.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
         let mut field_init_values = vec![];
         for fieldinit in self.fields.iter_mut() {
@@ -455,7 +463,6 @@ impl Node for StructInitNode {
             }
             field_init_values.push((field.index, value));
             child.set_if_refs(field.refs.clone(), field_id_range);
-            child.send_if_go_to_def(field_id_range, field.range, sttype.path.clone())
         }
         if !sttype.generic_map.is_empty() {
             if sttype.need_gen_code() {
@@ -575,13 +582,14 @@ pub struct GenericDefNode {
 }
 impl Node for GenericDefNode {
     fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        let mut s = String::new();
-        s += &format!("<{}", self.generics[0].name);
-        for i in 1..self.generics.len() {
-            s += &format!("|{}", self.generics[i].name);
-        }
-        s += ">";
-        s.clone()
+        format!(
+            "<{}>",
+            self.generics
+                .iter()
+                .map(|g| { g.name.clone() })
+                .collect::<Vec<_>>()
+                .join("|")
+        )
     }
 
     fn print(&self, _tabs: usize, _end: bool, _line: Vec<bool>) {
@@ -618,5 +626,51 @@ impl GenericDefNode {
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct GenericParamNode {
-    pub generics: Vec<Box<NodeEnum>>,
+    pub generics: Vec<Option<Box<TypeNodeEnum>>>,
+}
+impl Node for GenericParamNode {
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
+        format!(
+            "<{}>",
+            self.generics
+                .iter()
+                .map(|g| {
+                    match g {
+                        Some(n) => n.format(0, ""),
+                        None => "_".to_string(),
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("|")
+        )
+    }
+
+    fn print(&self, _tabs: usize, _end: bool, _line: Vec<bool>) {
+        todo!()
+    }
+
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        for g in self.generics.iter() {
+            if g.is_some() {
+                g.as_ref().unwrap().emit_highlight(ctx);
+            }
+        }
+        return Ok((None, None, TerminatorEnum::NONE));
+    }
+}
+impl GenericParamNode {
+    pub fn get_generic_types<'a, 'ctx>(
+        &self,
+        ctx: &mut Ctx<'a, 'ctx>,
+    ) -> Result<Vec<Option<Rc<RefCell<PLType>>>>, PLDiag> {
+        let mut res = vec![];
+        for g in self.generics.iter() {
+            if g.is_none() {
+                res.push(None);
+                continue;
+            }
+            res.push(Some(g.as_ref().unwrap().get_type(ctx)?));
+        }
+        Ok(res)
+    }
 }

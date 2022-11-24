@@ -69,9 +69,18 @@ struct Cli {
     #[clap(short, long, value_parser, default_value = "out")]
     out: String,
 
-    /// verbose
-    #[clap(short, long)]
-    verbose: bool,
+    /// verbose level
+    /// - 0: only error
+    /// - 1: error and warning
+    /// - 2: error, warning and info
+    /// - 3: error, warning, info and debug
+    /// - 4: error, warning, info, debug and trace
+    #[clap(short, long, default_value = "1")]
+    verbose: u32,
+
+    /// quiet mode
+    #[clap(long, default_value = "false")]
+    quiet: bool,
 
     /// print ast
     #[clap(long)]
@@ -113,17 +122,23 @@ fn main() {
         _ => panic!("optimization level must be 0-3"),
     };
 
+    let mut logger = stderrlog::new();
+    logger
+        .module(module_path!())
+        .quiet(cli.quiet)
+        .verbosity(cli.verbose as usize);
+
     let fmt = match cli.command {
         Some(RunCommand::Fmt) => true,
         _ => false,
     };
     // You can check the value provided by positional arguments, or option arguments
     if let Some(name) = cli.name.as_deref() {
+        logger.timestamp(stderrlog::Timestamp::Off).init().unwrap();
         let db = Database::default();
         let filepath = Path::new(name);
         let abs = dunce::canonicalize(filepath).unwrap();
         let op = compiler::Options {
-            verbose: cli.verbose,
             genir: cli.genir,
             printast: cli.printast,
             fmt,
@@ -154,6 +169,10 @@ fn main() {
                 println!("feature jit is not enabled, cannot use run command");
             }
             RunCommand::Lsp {} => {
+                logger
+                    .timestamp(stderrlog::Timestamp::Microsecond)
+                    .init()
+                    .unwrap();
                 start_lsp().unwrap();
             }
             RunCommand::Fmt {} => {

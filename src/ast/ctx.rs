@@ -50,11 +50,11 @@ use super::diag::{ErrorCode, WarnCode};
 use super::diag::{ERR_MSG, WARN_MSG};
 use super::node::NodeEnum;
 use super::node::PLValue;
-use super::pltype::FNType;
-use super::pltype::STType;
 use super::pltype::add_primitive_types;
+use super::pltype::FNType;
 use super::pltype::PLType;
 use super::pltype::PriType;
+use super::pltype::STType;
 use super::range::Pos;
 use super::range::Range;
 /// # Ctx
@@ -136,7 +136,7 @@ pub struct Mod {
     /// global variable table
     pub global_table: FxHashMap<String, GlobalVar>,
     /// structs methods
-    pub methods: FxHashMap<String,  FxHashMap<String, FNType>>,
+    pub methods: FxHashMap<String, FxHashMap<String, FNType>>,
 }
 
 impl Mod {
@@ -216,9 +216,9 @@ impl Mod {
         }
         name.to_string()
     }
-    pub fn get_methods_completions(&self, full_name: &str)-> Vec<CompletionItem> {
+    pub fn get_methods_completions(&self, full_name: &str) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
-        let mut f = |name:&String,v:&FNType| {
+        let mut f = |name: &String, v: &FNType| {
             completions.push(CompletionItem {
                 kind: Some(CompletionItemKind::METHOD),
                 label: name.clone(),
@@ -233,38 +233,38 @@ impl Mod {
                 ..Default::default()
             });
         };
-        for (_,m) in &self.submods {
+        for (_, m) in &self.submods {
             if m.methods.get(full_name).is_none() {
                 continue;
             }
             for (name, v) in m.methods.get(full_name).unwrap() {
-                f(name,v);
+                f(name, v);
             }
         }
         if self.methods.get(full_name).is_none() {
             return completions;
         }
         for (name, v) in self.methods.get(full_name).unwrap() {
-            f(name,v);
+            f(name, v);
         }
         completions
     }
 
-    pub fn find_method(&self, full_name: &str, mthd:&str)-> Option< FNType> {
+    pub fn find_method(&self, full_name: &str, mthd: &str) -> Option<FNType> {
         if let Some(m) = self.methods.get(full_name) {
             if let Some(v) = m.get(mthd) {
                 return Some(v.clone());
             }
         }
-        for (_,m) in &self.submods {
-            if let Some(v) = m.find_method(full_name,mthd) {
+        for (_, m) in &self.submods {
+            if let Some(v) = m.find_method(full_name, mthd) {
                 return Some(v);
             }
         }
         None
     }
 
-    fn add_method(&mut self, tp: &STType, mthd:&str, fntp: FNType) -> Result<(),()> {
+    fn add_method(&mut self, tp: &STType, mthd: &str, fntp: FNType) -> Result<(), ()> {
         let full_name = tp.get_st_full_name();
         if let Some(m) = self.methods.get_mut(&full_name) {
             if let Some(_) = m.get(mthd) {
@@ -272,7 +272,7 @@ impl Mod {
                 return Err(());
             }
             m.insert(mthd.to_string(), fntp);
-        }else {
+        } else {
             let mut m = FxHashMap::default();
             m.insert(mthd.to_string(), fntp);
             self.methods.insert(full_name, m);
@@ -359,7 +359,7 @@ impl PLDiag {
         match self {
             PLDiag::Error(s) => {
                 let err = format!(
-                    "error at {}\n\t{}",
+                    "{}\n\t{}",
                     format!(
                         "{}:{}:{}",
                         path,
@@ -369,11 +369,11 @@ impl PLDiag {
                     .red(),
                     format!("{}", s.diag.message.blue().bold()),
                 );
-                println!("{}", err);
+                log::error!("{}", err);
             }
             PLDiag::Warn(s) => {
                 let err = format!(
-                    "warn at {}\n\t{}",
+                    "{}\n\t{}",
                     format!(
                         "{}:{}:{}",
                         path,
@@ -383,7 +383,7 @@ impl PLDiag {
                     .yellow(),
                     format!("{}", s.diag.message.blue().bold()),
                 );
-                println!("{}", err);
+                log::warn!("{}", err);
             }
         }
     }
@@ -653,7 +653,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.context
             .append_basic_block(self.init_func.unwrap(), "entry");
     }
-    pub fn add_method(&mut self, tp: &STType, mthd:&str, fntp: FNType, range: Range) {
+    pub fn add_method(&mut self, tp: &STType, mthd: &str, fntp: FNType, range: Range) {
         if self.plmod.add_method(tp, mthd, fntp).is_err() {
             self.add_err(range, ErrorCode::DUPLICATE_METHOD);
         }

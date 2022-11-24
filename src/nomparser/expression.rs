@@ -112,6 +112,7 @@ pub fn pointer_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("a[1][2]()[3].b()()[4].c")]
 #[test_parser("a{}.d")]
 #[test_parser("ad")]
+#[test_parser("a<i64>{}")]
 fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         pair(
@@ -122,13 +123,14 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             let mut res = head;
             for op in ops {
                 res = match op {
-                    ComplexOp::CallOp((args, params_range)) => {
+                    ComplexOp::CallOp((args, params_range, generic_params)) => {
                         let mut range = res.range();
                         if args.len() > 0 {
                             range = res.range().start.to(params_range.end);
                         }
                         Box::new(
                             FuncCallNode {
+                                generic_params,
                                 range,
                                 id: res,
                                 paralist: args,

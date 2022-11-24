@@ -16,6 +16,7 @@ use std::vec;
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncCallNode {
+    pub generic_params: Option<Box<GenericParamNode>>,
     pub id: Box<NodeEnum>,
     pub paralist: Vec<Box<NodeEnum>>,
 }
@@ -38,6 +39,9 @@ impl Node for FuncCallNode {
             None => (),
         }
         format_res.push_str(&self.id.format(tabs, prefix));
+        if self.generic_params.is_some() {
+            format_res.push_str(&self.generic_params.as_ref().unwrap().format(0, ""));
+        }
         format_res.push_str("(");
         format_res.push_str(&param_str);
         format_res.push_str(")");
@@ -68,6 +72,24 @@ impl Node for FuncCallNode {
             _ => return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND)),
         };
         fntype.clear_generic();
+        if self.generic_params.is_some() {
+            let generic_params = self.generic_params.as_mut().unwrap();
+            let generic_params_range = generic_params.range.clone();
+            generic_params.emit(ctx)?;
+            if generic_params.generics.len() != fntype.generic_map.len() {
+                return Err(
+                    ctx.add_err(generic_params_range, ErrorCode::GENERIC_PARAM_LEN_MISMATCH)
+                );
+            }
+            let generic_types = generic_params.get_generic_types(ctx)?;
+            let mut i = 0;
+            for (_, pltype) in fntype.generic_map.iter() {
+                if generic_types[i].is_some() {
+                    eq_or_infer(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
+                }
+                i = i + 1;
+            }
+        }
         let mut skip = 0;
         if plvalue.is_some() {
             if let Some(receiver) = plvalue.unwrap().receiver {
@@ -119,7 +141,7 @@ impl Node for FuncCallNode {
             let value_pltype = value_pltype.unwrap();
             if !eq_or_infer(
                 fntype.param_pltypes[i + skip as usize].clone(),
-                value_pltype,
+                value_pltype.clone(),
             ) {
                 return Err(ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH));
             }
@@ -175,8 +197,8 @@ impl Node for FuncCallNode {
             None => Ok((None, Some(fntype.ret_pltype.clone()), TerminatorEnum::NONE)),
         };
         fntype.clear_generic();
-        ctx.set_if_refs_tp(pltype.clone(), id_range);
         ctx.send_if_go_to_def(id_range, fntype.range, ctx.plmod.path.clone());
+        ctx.set_if_refs_tp(pltype.clone(), id_range);
         return res;
     }
 }
@@ -214,6 +236,7 @@ impl FuncDefNode {
         }
         for para in self.paralist.iter() {
             let paramtype = para.typenode.get_type(&child)?;
+            ctx.set_if_refs_tp(paramtype.clone(), para.typenode.range());
             if first && para.id.name == "self" {
                 method = true;
             }
@@ -222,7 +245,7 @@ impl FuncDefNode {
             param_name.push(para.id.name.clone());
         }
         let refs = vec![];
-        let ftp = FNType {
+        let mut ftp = FNType {
             name: self.id.name.clone(),
             ret_pltype: self.ret.get_type(&child)?,
             param_pltypes,
@@ -255,9 +278,13 @@ impl FuncDefNode {
             let mut b = a.borrow_mut();
             if let PLType::POINTER(s) = &mut *b {
                 if let PLType::STRUCT(s) = &mut *s.borrow_mut() {
-                    let mut ftp = ftp;
                     ftp.param_pltypes = ftp.param_pltypes[1..].to_vec();
-                    ctx.add_method(s, self.id.name.split("::").last().unwrap(), ftp.clone(), self.id.range);
+                    ctx.add_method(
+                        s,
+                        self.id.name.split("::").last().unwrap(),
+                        ftp.clone(),
+                        self.id.range,
+                    );
                 }
             }
         }
