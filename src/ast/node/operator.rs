@@ -118,8 +118,11 @@ impl Node for BinOpNode {
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let (lrange, rrange) = (self.left.range(), self.right.range());
         let (lv, lpltype, _) = self.left.emit(ctx)?;
-        let left = ctx.try_load2var(lrange, lv.unwrap())?;
         let (rv, _, _) = ctx.emit_with_expectation(&mut self.right, lpltype.clone())?;
+        if lv.is_none() || rv.is_none() {
+            return Err(ctx.add_err(self.range, ErrorCode::EXPECT_VALUE));
+        }
+        let left = ctx.try_load2var(lrange, lv.unwrap())?;
         let right = ctx.try_load2var(rrange, rv.unwrap())?;
         Ok(match self.op {
             TokenType::PLUS => {
@@ -185,12 +188,7 @@ impl Node for BinOpNode {
                     Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
                 ),
-                _ => {
-                    return Err(ctx.add_err(
-                        self.range,
-                        crate::ast::diag::ErrorCode::VALUE_NOT_COMPARABLE,
-                    ))
-                }
+                _ => return Err(ctx.add_err(self.range, ErrorCode::VALUE_NOT_COMPARABLE)),
             },
             TokenType::AND => match *lpltype.unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::BOOL) => (
@@ -209,11 +207,7 @@ impl Node for BinOpNode {
                     Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
                 ),
-                _ => {
-                    return Err(
-                        ctx.add_err(self.range, crate::ast::diag::ErrorCode::LOGIC_OP_NOT_BOOL)
-                    )
-                }
+                _ => return Err(ctx.add_err(self.range, ErrorCode::LOGIC_OP_NOT_BOOL)),
             },
             TokenType::OR => match *lpltype.unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::BOOL) => (
@@ -238,12 +232,7 @@ impl Node for BinOpNode {
                     )
                 }
             },
-            _ => {
-                return Err(ctx.add_err(
-                    self.range,
-                    crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR,
-                ))
-            }
+            _ => return Err(ctx.add_err(self.range, ErrorCode::UNRECOGNIZED_BIN_OPERATOR)),
         })
     }
 }

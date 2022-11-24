@@ -16,6 +16,7 @@ use std::vec;
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncCallNode {
+    pub generic_params: Option<Box<GenericParamNode>>,
     pub id: Box<NodeEnum>,
     pub paralist: Vec<Box<NodeEnum>>,
 }
@@ -38,6 +39,9 @@ impl Node for FuncCallNode {
             None => (),
         }
         format_res.push_str(&self.id.format(tabs, prefix));
+        if self.generic_params.is_some() {
+            format_res.push_str(&self.generic_params.as_ref().unwrap().format(0, ""));
+        }
         format_res.push_str("(");
         format_res.push_str(&param_str);
         format_res.push_str(")");
@@ -68,6 +72,24 @@ impl Node for FuncCallNode {
             _ => return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND)),
         };
         fntype.clear_generic();
+        if self.generic_params.is_some() {
+            let generic_params = self.generic_params.as_mut().unwrap();
+            let generic_params_range = generic_params.range.clone();
+            generic_params.emit(ctx)?;
+            if generic_params.generics.len() != fntype.generic_map.len() {
+                return Err(
+                    ctx.add_err(generic_params_range, ErrorCode::GENERIC_PARAM_LEN_MISMATCH)
+                );
+            }
+            let generic_types = generic_params.get_generic_types(ctx)?;
+            let mut i = 0;
+            for (_, pltype) in fntype.generic_map.iter() {
+                if generic_types[i].is_some() {
+                    eq_or_infer(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
+                }
+                i = i + 1;
+            }
+        }
         let mut skip = 0;
         if plvalue.is_some() {
             if let Some(receiver) = plvalue.unwrap().receiver {

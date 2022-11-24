@@ -359,6 +359,7 @@ impl Node for StructInitFieldNode {
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitNode {
+    pub generic_params: Option<Box<GenericParamNode>>,
     pub typename: Box<TypeNodeEnum>,
     pub fields: Vec<Box<StructInitFieldNode>>, // TODO: comment db and salsa comment struct
 }
@@ -388,6 +389,9 @@ impl Node for StructInitNode {
             _ => (),
         }
         format_res.push_str(&self.typename.format(tabs, prefix));
+        if self.generic_params.is_some() {
+            format_res.push_str(&self.generic_params.as_ref().unwrap().format(0, ""));
+        }
         format_res.push_str(&field_str);
         format_res
     }
@@ -414,6 +418,24 @@ impl Node for StructInitNode {
         };
         sttype.clear_generic();
         sttype.add_generic_type(child)?;
+        if self.generic_params.is_some() {
+            let generic_params = self.generic_params.as_mut().unwrap();
+            let generic_params_range = generic_params.range.clone();
+            generic_params.emit(child)?;
+            if generic_params.generics.len() != sttype.generic_map.len() {
+                return Err(
+                    child.add_err(generic_params_range, ErrorCode::GENERIC_PARAM_LEN_MISMATCH)
+                );
+            }
+            let generic_types = generic_params.get_generic_types(child)?;
+            let mut i = 0;
+            for (_, pltype) in sttype.generic_map.iter() {
+                if generic_types[i].is_some() {
+                    eq_or_infer(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
+                }
+                i = i + 1;
+            }
+        }
         child.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
         let mut field_init_values = vec![];
         for fieldinit in self.fields.iter_mut() {
@@ -560,13 +582,14 @@ pub struct GenericDefNode {
 }
 impl Node for GenericDefNode {
     fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        let mut s = String::new();
-        s += &format!("<{}", self.generics[0].name);
-        for i in 1..self.generics.len() {
-            s += &format!("|{}", self.generics[i].name);
-        }
-        s += ">";
-        s.clone()
+        format!(
+            "<{}>",
+            self.generics
+                .iter()
+                .map(|g| { g.name.clone() })
+                .collect::<Vec<_>>()
+                .join("|")
+        )
     }
 
     fn print(&self, _tabs: usize, _end: bool, _line: Vec<bool>) {
@@ -603,5 +626,51 @@ impl GenericDefNode {
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct GenericParamNode {
-    pub generics: Vec<Box<NodeEnum>>,
+    pub generics: Vec<Option<Box<TypeNodeEnum>>>,
+}
+impl Node for GenericParamNode {
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
+        format!(
+            "<{}>",
+            self.generics
+                .iter()
+                .map(|g| {
+                    match g {
+                        Some(n) => n.format(0, ""),
+                        None => "_".to_string(),
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("|")
+        )
+    }
+
+    fn print(&self, _tabs: usize, _end: bool, _line: Vec<bool>) {
+        todo!()
+    }
+
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        for g in self.generics.iter() {
+            if g.is_some() {
+                g.as_ref().unwrap().emit_highlight(ctx);
+            }
+        }
+        return Ok((None, None, TerminatorEnum::NONE));
+    }
+}
+impl GenericParamNode {
+    pub fn get_generic_types<'a, 'ctx>(
+        &self,
+        ctx: &mut Ctx<'a, 'ctx>,
+    ) -> Result<Vec<Option<Rc<RefCell<PLType>>>>, PLDiag> {
+        let mut res = vec![];
+        for g in self.generics.iter() {
+            if g.is_none() {
+                res.push(None);
+                continue;
+            }
+            res.push(Some(g.as_ref().unwrap().get_type(ctx)?));
+        }
+        Ok(res)
+    }
 }

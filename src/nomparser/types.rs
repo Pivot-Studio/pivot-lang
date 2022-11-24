@@ -100,13 +100,21 @@ pub fn generic_type_def(input: Span) -> IResult<Span, Box<GenericDefNode>> {
 }
 
 /// ```enbf
-/// generic_param_def = "<" extern_id ("|" extern_id)* ">" ;
+/// generic_param_def = "<" (extern_id|"_") ("|"(extern_id|"_"))* ">" ;
 /// ```
+#[test_parser("<a|b|B::c>")]
+#[test_parser("<a>")]
 pub fn generic_param_def(input: Span) -> IResult<Span, Box<GenericParamNode>> {
     map_res(
         tuple((
             tag_token(TokenType::LESS),
-            separated_list1(tag_token(TokenType::GENERIC_SEP), extern_identifier),
+            separated_list1(
+                tag_token(TokenType::GENERIC_SEP),
+                alt((
+                    map_res(type_name, |x| Ok::<_, Error>(Some(x))),
+                    map_res(tag_token(TokenType::INGNORE), |_| Ok::<_, Error>(None)),
+                )),
+            ),
             tag_token(TokenType::GREATER),
         )),
         |(lf, ids, ri)| {
