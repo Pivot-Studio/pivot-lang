@@ -5,6 +5,7 @@ use crate::{
     ast::node::{
         function::FuncDefNode,
         global::GlobalNode,
+        interface::TraitDefNode,
         types::{GenericParamNode, StructDefNode},
     },
     ast::{
@@ -60,6 +61,7 @@ pub enum TopLevel {
     Common(Box<NodeEnum>),
     Use(Box<NodeEnum>),
     ImplDef(ImplNode),
+    TraitDef(TraitDefNode),
 }
 
 #[derive(Clone)]

@@ -2,9 +2,10 @@ use std::fmt::Error;
 
 use nom::{
     branch::alt,
+    bytes::complete::tag,
     combinator::{map_res, opt},
     multi::{many0, separated_list1},
-    sequence::{pair, tuple},
+    sequence::{delimited, pair, tuple},
     IResult,
 };
 use nom_locate::LocatedSpan;
@@ -12,7 +13,10 @@ type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
     ast::node::types::{ArrayTypeNameNode, TypeNameNode},
     ast::{
-        node::types::{GenericDefNode, GenericParamNode, PointerTypeNode},
+        node::{
+            interface::TraitDefNode,
+            types::{GenericDefNode, GenericParamNode, PointerTypeNode},
+        },
         tokens::TokenType,
     },
 };
@@ -87,6 +91,7 @@ fn array_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
 /// ```enbf
 /// generic_type_def = "<" identifier ("|" identifier)* ">" ;
 /// ```
+/// 形参
 pub fn generic_type_def(input: Span) -> IResult<Span, Box<GenericDefNode>> {
     map_res(
         tuple((
@@ -107,6 +112,7 @@ pub fn generic_type_def(input: Span) -> IResult<Span, Box<GenericDefNode>> {
 /// ```enbf
 /// generic_param_def = "<" (extern_id|"_") ("|"(extern_id|"_"))* ">" ;
 /// ```
+/// 实参
 #[test_parser("<a|b|B::c>")]
 #[test_parser("<a>")]
 pub fn generic_param_def(input: Span) -> IResult<Span, Box<GenericParamNode>> {
@@ -127,6 +133,42 @@ pub fn generic_param_def(input: Span) -> IResult<Span, Box<GenericParamNode>> {
             Ok::<_, Error>(Box::new(GenericParamNode {
                 range,
                 generics: ids,
+            }))
+        },
+    )(input)
+}
+
+/// ```enbf
+/// trait_def = "trait" identifier generic_type_def? "{" function_def* "}" ;
+/// ```
+#[test_parser(
+    "trait mytrait<A|B|C> {
+    fn a() A;
+}"
+)]
+pub fn trait_def(input: Span) -> IResult<Span, Box<TraitDefNode>> {
+    map_res(
+        tuple((
+            tag_token(TokenType::TRAIT),
+            identifier,
+            opt(generic_type_def),
+            del_newline_or_space!(tag_token(TokenType::LBRACE)),
+            many0(del_newline_or_space!(function_def)),
+            del_newline_or_space!(tag_token(TokenType::RBRACE)),
+        )),
+        |(_, id, generics, _, defs, (_, rr))| {
+            let range = id.range().start.to(rr.end);
+            Ok::<_, Error>(Box::new(TraitDefNode {
+                id,
+                generics,
+                methods: defs
+                    .into_iter()
+                    .map(|x| match *x {
+                        TopLevel::FuncType(f) => f,
+                        _ => unreachable!(),
+                    })
+                    .collect(),
+                range,
             }))
         },
     )(input)

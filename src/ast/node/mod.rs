@@ -15,6 +15,7 @@ use self::error::*;
 use self::function::*;
 use self::global::*;
 use self::implement::ImplNode;
+use self::interface::TraitDefNode;
 use self::operator::*;
 use self::pkg::{ExternIdNode, UseNode};
 use self::pointer::PointerOpNode;
@@ -37,6 +38,7 @@ pub mod error;
 pub mod function;
 pub mod global;
 pub mod implement;
+pub mod interface;
 pub mod operator;
 pub mod pkg;
 pub mod pointer;
@@ -143,6 +145,7 @@ pub enum NodeEnum {
     ParanthesesNode(ParanthesesNode),
     ImplNode(ImplNode),
     StringNode(StringNode),
+    TraitDefNode(TraitDefNode),
 }
 // ANCHOR: range
 #[enum_dispatch]

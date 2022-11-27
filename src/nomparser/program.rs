@@ -33,6 +33,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let mut fntypes = vec![];
     let mut globaldefs = vec![];
     let mut uses = vec![];
+    let mut traits = vec![];
     loop {
         let top = top_level_statement(input);
         if let Ok((i, t)) = top {
@@ -82,6 +83,10 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     }
                     nodes.push(Box::new(im.into()));
                 }
+                TopLevel::TraitDef(tr) => {
+                    traits.push(tr.clone());
+                    nodes.push(Box::new(tr.into()));
+                }
             }
             input = i;
         } else if let Err(err) = top {
@@ -103,6 +108,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
             globaldefs,
             range: Range::new(old, input),
             uses,
+            traits,
         }
         .into(),
     );
@@ -129,6 +135,8 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
         }),
         map_res(del_newline_or_space!(comment), |c| {
             Ok::<_, Error>(Box::new(TopLevel::Common(c)))
+        map_res(del_newline_or_space!(trait_def), |c| {
+            Ok::<_, Error>(Box::new(TopLevel::TraitDef(*c)))
         }),
         map_res(
             del_newline_or_space!(except(

@@ -40,6 +40,7 @@ pub struct ProgramNode {
     pub fntypes: Vec<FuncDefNode>,
     pub globaldefs: Vec<GlobalNode>,
     pub uses: Vec<Box<NodeEnum>>,
+    pub traits: Vec<TraitDefNode>,
 }
 impl Node for ProgramNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
