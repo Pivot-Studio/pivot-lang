@@ -1,4 +1,6 @@
 use super::*;
+use crate::ast::builder::{IRBuilder, VarBuilder, NumBuilder};
+use crate::ast::builder::llvmbuilder::PLLLVMBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{PLType, PriType};
@@ -97,6 +99,29 @@ impl Node for NumNode {
     }
 }
 
+impl <'a, 'ctx>NumBuilder<'a, 'ctx> for PLLLVMBuilder<'a, 'ctx> {
+    fn build_num(&mut self, ctx: &mut Ctx<'a, 'ctx>, node: & NumNode)  -> NodeResult<'ctx>  {
+        match node.value {
+            Num::INT(x) => {
+                let b = ctx.context.i64_type().const_int(x, true);
+                return Ok((
+                    Some(b.into()),
+                    Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::I64)))),
+                    TerminatorEnum::NONE,
+                ));
+            }
+            Num::FLOAT(x) => {
+                let b = ctx.context.f64_type().const_float(x);
+                return Ok((
+                    Some(b.into()),
+                    Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::F64)))),
+                    TerminatorEnum::NONE,
+                ));
+            }
+        }
+    }
+}
+
 #[range]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct VarNode {
@@ -173,6 +198,34 @@ impl VarNode {
         Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE))
     }
 }
+
+impl <'a, 'ctx>VarBuilder<'a, 'ctx> for PLLLVMBuilder<'a, 'ctx> {
+    fn build_var(&mut self, ctx: &mut Ctx<'a, 'ctx>, node: & VarNode)  -> NodeResult<'ctx>  {
+        let v = ctx.get_symbol(&node.name);
+        if let Some((v, pltype, _, _, is_const)) = v {
+            let o = Ok((
+                Some({
+                    let mut res: PLValue = v.into();
+                    res.set_const(is_const);
+                    res
+                }),
+                Some(pltype),
+                TerminatorEnum::NONE,
+            ));
+            return o;
+        }
+        if let Ok(tp) = ctx.get_type(&node.name, node.range) {
+            match &*tp.borrow() {
+                PLType::FN(_) => {
+                    return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
+                }
+                _ => return Err(ctx.add_err(node.range, ErrorCode::VAR_NOT_FOUND)),
+            }
+        }
+        Err(ctx.add_err(node.range, ErrorCode::VAR_NOT_FOUND))
+    }
+}
+
 
 #[range]
 #[comments]
