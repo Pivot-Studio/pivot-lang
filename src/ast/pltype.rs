@@ -278,7 +278,7 @@ impl PLType {
     /// get the basic type of the type
     /// used in code generation
     /// may panic if the type is void type
-    pub fn get_basic_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> BasicTypeEnum<'ctx> {
+    pub fn get_basic_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> BasicTypeEnum<'ctx> {
         self.get_basic_type_op(ctx).unwrap()
     }
 
@@ -343,7 +343,10 @@ impl PLType {
     /// # get_basic_type_op
     /// get the basic type of the type
     /// used in code generation
-    pub fn get_basic_type_op<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Option<BasicTypeEnum<'ctx>> {
+    pub fn get_basic_type_op<'a, 'ctx>(
+        &self,
+        ctx: &mut Ctx<'a, 'ctx>,
+    ) -> Option<BasicTypeEnum<'ctx>> {
         match self {
             PLType::GENERIC(g) => match &g.curpltype {
                 Some(pltype) => pltype.borrow().get_basic_type_op(ctx),
@@ -368,7 +371,7 @@ impl PLType {
                     .ptr_type(inkwell::AddressSpace::Global)
                     .as_basic_type_enum(),
             ),
-            PLType::STRUCT(s) => Some(s.struct_type(&ctx).as_basic_type_enum()),
+            PLType::STRUCT(s) => Some(s.struct_type(ctx).as_basic_type_enum()),
             PLType::ARR(a) => Some(a.arr_type(ctx).as_basic_type_enum()),
             PLType::PRIMITIVE(t) => Some(t.get_basic_type(ctx)),
             PLType::VOID => None,
@@ -383,7 +386,7 @@ impl PLType {
 
     /// # get_ret_type
     /// get the return type, which is void type or primitive type
-    pub fn get_ret_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> RetTypeEnum<'ctx> {
+    pub fn get_ret_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> RetTypeEnum<'ctx> {
         match self {
             PLType::VOID => RetTypeEnum::VOID(ctx.context.void_type()),
             _ => RetTypeEnum::BASIC(self.get_basic_type(ctx)),
@@ -399,7 +402,7 @@ impl PLType {
 
     /// # get_ditype
     /// get the debug info type of the pltype
-    pub fn get_ditype<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
+    pub fn get_ditype<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
         let td = ctx.targetmachine.get_target_data();
         match self {
             PLType::FN(_) => None,
@@ -582,7 +585,11 @@ pub struct Field {
 }
 
 impl Field {
-    pub fn get_di_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, offset: u64) -> (DIType<'ctx>, u64) {
+    pub fn get_di_type<'a, 'ctx>(
+        &self,
+        ctx: &mut Ctx<'a, 'ctx>,
+        offset: u64,
+    ) -> (DIType<'ctx>, u64) {
         let field_pltype = match self.typenode.get_type(ctx) {
             Ok(field_pltype) => field_pltype,
             Err(_) => ctx.get_type("i64", Default::default()).unwrap(),
@@ -696,7 +703,7 @@ impl FNType {
     /// try get function value from module
     ///
     /// if not found, create a declaration
-    pub fn get_or_insert_fn<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> FunctionValue<'ctx> {
+    pub fn get_or_insert_fn<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> FunctionValue<'ctx> {
         let llvmname = self.append_name_with_generic(self.llvmname.clone());
         if let Some(v) = ctx.module.get_function(&llvmname) {
             return v;
@@ -789,7 +796,7 @@ pub struct ARRType {
 }
 
 impl ARRType {
-    pub fn arr_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> ArrayType<'ctx> {
+    pub fn arr_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> ArrayType<'ctx> {
         self.element_type
             .borrow()
             .get_basic_type(ctx)
@@ -846,7 +853,7 @@ impl STType {
         res.generic_map.clear();
         res
     }
-    pub fn struct_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> StructType<'ctx> {
+    pub fn struct_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> StructType<'ctx> {
         let st = ctx.module.get_struct_type(&self.get_st_full_name());
         if let Some(st) = st {
             return st;
@@ -859,7 +866,7 @@ impl STType {
                 .into_iter()
                 .map(|order_field| {
                     RefCell::borrow(&order_field.typenode.get_type(ctx).unwrap())
-                        .get_basic_type(&ctx)
+                        .get_basic_type(ctx)
                 })
                 .collect::<Vec<_>>(),
             false,

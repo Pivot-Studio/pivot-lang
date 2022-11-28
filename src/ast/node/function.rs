@@ -267,7 +267,7 @@ impl FuncDefNode {
             node: Box::new(self.clone()),
         };
         if self.generics.is_none() {
-            ftp.get_or_insert_fn(&child);
+            ftp.get_or_insert_fn(child);
         }
         let pltype = Rc::new(RefCell::new(PLType::FN(ftp.clone())));
         child.set_if_refs_tp(pltype.clone(), self.id.range);
@@ -371,14 +371,14 @@ impl Node for FuncDefNode {
         let pltype = ctx.get_type(&self.id.name, self.range)?;
         if let Some(body) = self.body.as_mut() {
             // add function
-            let mut child = ctx.new_child(self.range.start);
+            let child = &mut ctx.new_child(self.range.start);
             let fntype = match &*pltype.borrow() {
                 PLType::FN(fntype) => fntype.clone(),
                 _ => return Ok((None, None, TerminatorEnum::NONE)),
             };
             let funcvalue = {
-                fntype.add_generic_type(&mut child)?;
-                fntype.get_or_insert_fn(&child)
+                fntype.add_generic_type(child)?;
+                fntype.get_or_insert_fn(child)
             };
             let mut param_ditypes = vec![];
             for para in self.paralist.iter() {
@@ -391,14 +391,14 @@ impl Node for FuncDefNode {
                         ))
                     }
                     pltype => {
-                        param_ditypes.push(pltype.get_ditype(&child).unwrap());
+                        param_ditypes.push(pltype.get_ditype(child).unwrap());
                     }
                 };
             }
             // debug info
             let subroutine_type = child.dibuilder.create_subroutine_type(
                 child.diunit.get_file(),
-                self.ret.get_type(&child)?.borrow().get_ditype(&child),
+                self.ret.get_type(child)?.borrow().get_ditype(child),
                 &param_ditypes,
                 DIFlags::PUBLIC,
             );
@@ -425,16 +425,16 @@ impl Node for FuncDefNode {
             let return_block = child.context.append_basic_block(funcvalue, "return");
             child.position_at_end(return_block);
             let ret_value_ptr = if funcvalue.get_type().get_return_type().is_some() {
-                let pltype = self.ret.get_type(&mut child)?;
+                let pltype = self.ret.get_type(child)?;
                 let ret_type = {
-                    let op = pltype.borrow().get_basic_type_op(&child);
+                    let op = pltype.borrow().get_basic_type_op(child);
                     if op.is_none() {
                         return Ok((None, None, TerminatorEnum::NONE));
                     }
                     op.unwrap()
                 };
                 ctx.nodebug_builder.unset_current_debug_location();
-                let retv = alloc(&mut child, ret_type, "retvalue");
+                let retv = alloc(child, ret_type, "retvalue");
                 // 返回值不能在函数结束时从root表移除
                 child.roots.borrow_mut().pop();
                 Some(retv)
@@ -456,8 +456,8 @@ impl Node for FuncDefNode {
             child.position_at_end(entry);
             // alloc para
             for (i, para) in fntype.param_pltypes.iter().enumerate() {
-                let basetype = para.get_type(&child)?.borrow().get_basic_type(&child);
-                let alloca = alloc(&mut child, basetype, &fntype.param_names[i]);
+                let basetype = para.get_type(child)?.borrow().get_basic_type(child);
+                let alloca = alloc(child, basetype, &fntype.param_names[i]);
                 // add alloc var debug info
                 let divar = child.dibuilder.create_parameter_variable(
                     child.discope,
@@ -503,7 +503,7 @@ impl Node for FuncDefNode {
                 child.builder.position_at_end(entry);
                 child.nodebug_builder.position_at_end(entry);
             }
-            let (_, _, terminator) = body.emit(&mut child)?;
+            let (_, _, terminator) = body.emit(child)?;
             if !terminator.is_return() {
                 return Err(child.add_err(self.range, ErrorCode::FUNCTION_MUST_HAVE_RETURN));
             }

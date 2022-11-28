@@ -231,23 +231,23 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             // TODO: check overflow
             let v = match num {
                 Num::INT(i) => {
-                    if !expect.borrow().get_basic_type(&self).is_int_type() {
+                    if !expect.borrow().get_basic_type(self).is_int_type() {
                         return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH));
                     }
                     let int = expect
                         .borrow()
-                        .get_basic_type(&self)
+                        .get_basic_type(self)
                         .into_int_type()
                         .const_int(i, false);
                     int.as_any_value_enum()
                 }
                 Num::FLOAT(f) => {
-                    if !expect.borrow().get_basic_type(&self).is_float_type() {
+                    if !expect.borrow().get_basic_type(self).is_float_type() {
                         return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH));
                     }
                     let float = expect
                         .borrow()
-                        .get_basic_type(&self)
+                        .get_basic_type(self)
                         .into_float_type()
                         .const_float(f);
                     float.as_any_value_enum()
