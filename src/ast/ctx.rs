@@ -750,18 +750,15 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     /// 如果没在当前module的全局变量表中找到，将会生成一个
     /// 该全局变量的声明
     pub fn get_or_add_global(
-        &self,
+        &mut self,
         name: &str,
-        m: &Mod,
         pltype: Rc<RefCell<PLType>>,
     ) -> PointerValue<'ctx> {
-        let global = self.module.get_global(&m.get_full_name(name));
+        let global = self.module.get_global(name);
         if global.is_none() {
-            let global = self.module.add_global(
-                pltype.borrow().get_basic_type(self),
-                None,
-                &m.get_full_name(name),
-            );
+            let global = self
+                .module
+                .add_global(pltype.borrow().get_basic_type(self), None, name);
             global.set_linkage(Linkage::External);
             return global.as_pointer_value();
         }

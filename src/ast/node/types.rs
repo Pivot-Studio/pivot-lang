@@ -435,7 +435,7 @@ impl StructDefNode {
                             .get_type(child)
                             .unwrap()
                             .borrow()
-                            .get_basic_type(&child)
+                            .get_basic_type(child)
                     })
                     .collect::<Vec<_>>(),
                 false,
@@ -600,11 +600,8 @@ impl Node for StructInitNode {
             }
         }
         let pltype = Rc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
-        let struct_pointer = alloc(
-            child,
-            sttype.struct_type(child).as_basic_type_enum(),
-            "initstruct",
-        );
+        let tp = sttype.struct_type(child).as_basic_type_enum().clone();
+        let struct_pointer = alloc(child, tp, "initstruct");
         field_init_values.iter().for_each(|(index, value)| {
             let fieldptr = child
                 .builder
