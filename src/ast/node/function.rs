@@ -186,16 +186,16 @@ impl Node for FuncCallNode {
                     Some(ptr.into())
                 },
                 Some({
-                    match &*fntype.ret_pltype.get_type(&child)?.borrow() {
+                    match &*fntype.ret_pltype.get_type(child)?.borrow() {
                         PLType::GENERIC(g) => g.curpltype.as_ref().unwrap().clone(),
-                        _ => fntype.ret_pltype.get_type(&child)?,
+                        _ => fntype.ret_pltype.get_type(child)?,
                     }
                 }),
                 TerminatorEnum::NONE,
             )),
             None => Ok((
                 None,
-                Some(fntype.ret_pltype.get_type(ctx)?),
+                Some(fntype.ret_pltype.get_type(child)?),
                 TerminatorEnum::NONE,
             )),
         };
@@ -238,7 +238,7 @@ impl FuncDefNode {
             )?;
         }
         for para in self.paralist.iter() {
-            let paramtype = para.typenode.get_type(&child)?;
+            let paramtype = para.typenode.get_type(child)?;
             ctx.set_if_refs_tp(paramtype.clone(), para.typenode.range());
             if first && para.id.name == "self" {
                 method = true;
@@ -278,7 +278,7 @@ impl FuncDefNode {
                 .first()
                 .unwrap()
                 .typenode
-                .get_type(&child)
+                .get_type(child)
                 .unwrap();
             let mut b = a.borrow_mut();
             if let PLType::POINTER(s) = &mut *b {
@@ -382,7 +382,7 @@ impl Node for FuncDefNode {
             };
             let mut param_ditypes = vec![];
             for para in self.paralist.iter() {
-                let pltype = para.typenode.get_type(&child)?;
+                let pltype = para.typenode.get_type(child)?;
                 match &*pltype.borrow() {
                     PLType::VOID => {
                         return Err(child.add_err(
@@ -480,11 +480,12 @@ impl Node for FuncDefNode {
                 child
                     .builder
                     .build_store(alloca, funcvalue.get_nth_param(i as u32).unwrap());
+                let parapltype = para.get_type(child)?.clone();
                 child
                     .add_symbol(
                         fntype.param_names[i].clone(),
                         alloca,
-                        para.get_type(&child)?.clone(),
+                        parapltype,
                         self.paralist[i].id.range,
                         false,
                     )

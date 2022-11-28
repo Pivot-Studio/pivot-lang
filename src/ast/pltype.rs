@@ -639,11 +639,11 @@ impl Field {
             offset + debug_type.get_size_in_bits(),
         )
     }
-    pub fn get_doc_symbol<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> DocumentSymbol {
+    pub fn get_doc_symbol<'a, 'ctx>(&self) -> DocumentSymbol {
         #[allow(deprecated)]
         DocumentSymbol {
             name: self.name.clone(),
-            detail: Some(RefCell::borrow(&self.typenode.get_type(ctx).unwrap()).get_name()),
+            detail: Some(self.typenode.format(0, "")),
             kind: SymbolKind::FIELD,
             tags: None,
             deprecated: None,
@@ -835,7 +835,7 @@ impl STType {
         }
         unreachable!()
     }
-    pub fn generic_infer_pltype(&self, ctx: &Ctx) -> STType {
+    pub fn generic_infer_pltype(&self, ctx: &mut Ctx) -> STType {
         let mut res = self.clone();
         res.name = self.append_name_with_generic();
         res.ordered_fields = self
@@ -865,7 +865,11 @@ impl STType {
                 .clone()
                 .into_iter()
                 .map(|order_field| {
-                    RefCell::borrow(&order_field.typenode.get_type(ctx).unwrap())
+                    order_field
+                        .typenode
+                        .get_type(ctx)
+                        .unwrap()
+                        .borrow()
                         .get_basic_type(ctx)
                 })
                 .collect::<Vec<_>>(),
@@ -902,11 +906,11 @@ impl STType {
     pub fn get_st_full_name(&self) -> String {
         format!("{}..{}", self.path, self.name)
     }
-    pub fn get_doc_symbol<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> DocumentSymbol {
+    pub fn get_doc_symbol<'a, 'ctx>(&self) -> DocumentSymbol {
         let children: Vec<DocumentSymbol> = self
             .ordered_fields
             .iter()
-            .map(|order_field| order_field.get_doc_symbol(ctx))
+            .map(|order_field| order_field.get_doc_symbol())
             .collect();
         #[allow(deprecated)]
         DocumentSymbol {
