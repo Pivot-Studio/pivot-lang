@@ -22,4 +22,4 @@ test:
 	@cargo test --all
 
 clean:
-	@rm -f *.ll && rm -rf out* && rm -rf testout* && rm -rf *.dSYM
+	@rm -f *.ll && rm -f *.bc && rm -rf *.dSYM && rm -f testout*

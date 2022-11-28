@@ -82,6 +82,11 @@ pub trait TypeNode: RangeTrait + AsAny {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn get_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
     fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>);
+    fn eq_or_infer<'a, 'ctx>(
+        &self,
+        ctx: &mut Ctx<'a, 'ctx>,
+        pltype: Rc<RefCell<PLType>>,
+    ) -> Result<bool, PLDiag>;
 }
 type TypeNodeResult<'ctx> = Result<Rc<RefCell<PLType>>, PLDiag>;
 
