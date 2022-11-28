@@ -812,7 +812,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                     self.doc_symbols.borrow_mut().push(f.get_doc_symbol())
                 }
             }
-            PLType::STRUCT(st) => self.doc_symbols.borrow_mut().push(st.get_doc_symbol(self)),
+            PLType::STRUCT(st) => self.doc_symbols.borrow_mut().push(st.get_doc_symbol()),
             _ => {}
         }
     }
