@@ -220,12 +220,26 @@ fn test_generic() void {
     if *b.y.y {
         io::printi64ln(b.y.x);
     }
+    let g = GenericOutter{
+        x: GenericInner{
+            x: 998
+        }
+    };
+    io::printi64ln(g.x.x);
     return;
 }
 
 struct GenericType<S|T> {
     x: S;
     y: *T;
+}
+
+struct GenericOutter<S> {
+    x: GenericInner<S>;
+}
+
+struct GenericInner<T> {
+    x: T;
 }
 
 fn generic<T>(x: T) T {

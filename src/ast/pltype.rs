@@ -137,11 +137,11 @@ impl PriType {
         }
     }
 }
-pub fn eq_or_infer(l: Rc<RefCell<PLType>>, r: Rc<RefCell<PLType>>) -> bool {
+pub fn eq(l: Rc<RefCell<PLType>>, r: Rc<RefCell<PLType>>) -> bool {
     match &mut *l.borrow_mut() {
         PLType::GENERIC(l) => {
             if l.curpltype.is_some() {
-                return eq_or_infer(l.curpltype.as_ref().unwrap().clone(), r);
+                return eq(l.curpltype.as_ref().unwrap().clone(), r);
             }
             l.set_type(r.clone());
             return true;
@@ -151,9 +151,9 @@ pub fn eq_or_infer(l: Rc<RefCell<PLType>>, r: Rc<RefCell<PLType>>) -> bool {
     match (&*l.borrow(), &*r.borrow()) {
         (PLType::PRIMITIVE(l), PLType::PRIMITIVE(r)) => l == r,
         (PLType::VOID, PLType::VOID) => true,
-        (PLType::POINTER(l), PLType::POINTER(r)) => eq_or_infer(l.clone(), r.clone()),
+        (PLType::POINTER(l), PLType::POINTER(r)) => eq(l.clone(), r.clone()),
         (PLType::ARR(l), PLType::ARR(r)) => {
-            eq_or_infer(l.get_elem_type(), r.get_elem_type()) && l.size == r.size
+            eq(l.get_elem_type(), r.get_elem_type()) && l.size == r.size
         }
         (PLType::STRUCT(l), PLType::STRUCT(r)) => l.name == r.name && l.path == r.path,
         (PLType::FN(l), PLType::FN(r)) => l == r,
@@ -173,6 +173,7 @@ fn new_typename_node(name: &str, range: Range) -> Box<TypeNodeEnum> {
             singlecolon: false,
             range,
         }),
+        generic_params: None,
         range,
     }))
 }
@@ -192,6 +193,25 @@ fn new_ptrtype_node(typenode: Box<TypeNodeEnum>) -> Box<TypeNodeEnum> {
         range: Default::default(),
     }))
 }
+fn new_exid_node(modname: &str, name: &str, range: Range) -> Box<TypeNodeEnum> {
+    Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
+        id: Some(ExternIDNode {
+            ns: vec![Box::new(VarNode {
+                name: modname.to_string(),
+                range,
+            })],
+            id: Box::new(VarNode {
+                name: name.to_string(),
+                range,
+            }),
+            complete: true,
+            singlecolon: false,
+            range,
+        }),
+        generic_params: None,
+        range,
+    }))
+}
 impl PLType {
     pub fn get_typenode(&self, ctx: &Ctx) -> Box<TypeNodeEnum> {
         match self {
@@ -199,7 +219,19 @@ impl PLType {
                 if st.path == ctx.plmod.path {
                     new_typename_node(&st.name, st.range)
                 } else {
-                    todo!()
+                    new_exid_node(
+                        st.path
+                            .split("/")
+                            .collect::<Vec<_>>()
+                            .last()
+                            .unwrap()
+                            .split(".")
+                            .collect::<Vec<_>>()
+                            .first()
+                            .unwrap(),
+                        &st.name,
+                        st.range,
+                    )
                 }
             }
             PLType::ARR(arr) => new_arrtype_node(
@@ -210,10 +242,10 @@ impl PLType {
             PLType::VOID => new_typename_node("void", Default::default()),
             PLType::POINTER(p) => new_ptrtype_node(p.borrow().get_typenode(ctx)),
             PLType::GENERIC(g) => {
-                if !g.curpltype.is_none() {
+                if g.curpltype.is_some() {
                     g.curpltype.as_ref().unwrap().borrow().get_typenode(ctx)
                 } else {
-                    unreachable!()
+                    new_typename_node(&g.name, Default::default())
                 }
             }
             _ => unreachable!(),
@@ -260,7 +292,13 @@ impl PLType {
             }
             PLType::VOID => "void".to_string(),
             PLType::POINTER(p) => "*".to_string() + &p.borrow().get_name(),
-            PLType::GENERIC(g) => g.name.clone(),
+            PLType::GENERIC(g) => {
+                if g.curpltype.is_some() {
+                    g.curpltype.as_ref().unwrap().borrow().get_name()
+                } else {
+                    g.name.clone()
+                }
+            }
         }
     }
 
@@ -545,14 +583,17 @@ pub struct Field {
 
 impl Field {
     pub fn get_di_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, offset: u64) -> (DIType<'ctx>, u64) {
-        let pltp = self.typenode.get_type(ctx).unwrap();
-        let depth = RefCell::borrow(&pltp).get_ptr_depth();
+        let field_pltype = match self.typenode.get_type(ctx) {
+            Ok(field_pltype) => field_pltype,
+            Err(_) => ctx.get_type("i64", Default::default()).unwrap(),
+        };
+        let depth = RefCell::borrow(&field_pltype).get_ptr_depth();
         if let Some(x) = ctx
             .ditypes_placeholder
             .borrow_mut()
-            .get(&*RefCell::borrow(&pltp).get_full_elm_name())
+            .get(&*RefCell::borrow(&field_pltype).get_full_elm_name())
         {
-            if !matches!(*RefCell::borrow(&pltp), PLType::POINTER(_)) {
+            if !matches!(*RefCell::borrow(&field_pltype), PLType::POINTER(_)) {
                 // 出现循环引用，但是不是指针
                 // TODO 应该只需要一层是指针就行，目前的检查要求每一层都是指针
                 ctx.add_err(self.range, ErrorCode::ILLEGAL_SELF_RECURSION);
@@ -572,7 +613,7 @@ impl Field {
             });
             return (placeholder.as_type(), offset + size);
         }
-        let di_type = RefCell::borrow(&pltp).get_ditype(ctx);
+        let di_type = RefCell::borrow(&field_pltype).get_ditype(ctx);
         let debug_type = di_type.unwrap();
         (
             ctx.dibuilder
@@ -610,9 +651,9 @@ impl Field {
 pub struct FNType {
     pub name: String,     // name for lsp
     pub llvmname: String, // name in llvm ir
-    pub param_pltypes: Vec<Rc<RefCell<PLType>>>,
+    pub param_pltypes: Vec<Box<TypeNodeEnum>>,
     pub param_names: Vec<String>,
-    pub ret_pltype: Rc<RefCell<PLType>>,
+    pub ret_pltype: Box<TypeNodeEnum>,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
@@ -662,14 +703,25 @@ impl FNType {
         }
         let mut param_types = vec![];
         for param_pltype in self.param_pltypes.iter() {
-            param_types.push(RefCell::borrow(&param_pltype).get_basic_type(ctx).into());
+            param_types.push(
+                param_pltype
+                    .get_type(ctx)
+                    .unwrap()
+                    .borrow()
+                    .get_basic_type(ctx)
+                    .into(),
+            );
         }
-        let fn_type = RefCell::borrow(&self.ret_pltype)
+        let fn_type = &self
+            .ret_pltype
+            .get_type(ctx)
+            .unwrap()
+            .borrow()
             .get_ret_type(ctx)
             .fn_type(&param_types, false);
         let fn_value = ctx
             .module
-            .add_function(&llvmname, fn_type, Some(Linkage::External));
+            .add_function(&llvmname, *fn_type, Some(Linkage::External));
         fn_value
     }
     pub fn gen_snippet(&self) -> String {
@@ -715,22 +767,18 @@ impl FNType {
                 params += &format!(
                     "{}: {}",
                     self.param_names[0],
-                    RefCell::borrow(&self.param_pltypes[0]).get_name()
+                    &self.param_pltypes[0].format(0, "")
                 );
             }
             for i in 1..self.param_names.len() {
                 params += &format!(
                     ", {}: {}",
                     self.param_names[i],
-                    RefCell::borrow(&self.param_pltypes[i]).get_name()
+                    &self.param_pltypes[i].format(0, "")
                 );
             }
         }
-        format!(
-            "fn ({}) {}",
-            params,
-            RefCell::borrow(&self.ret_pltype).get_name()
-        )
+        format!("fn ({}) {}", params, &self.ret_pltype.format(0, ""))
     }
 }
 
@@ -765,7 +813,7 @@ pub struct STType {
 }
 
 impl STType {
-    pub fn generic_name(&self) -> String {
+    pub fn append_name_with_generic(&self) -> String {
         if self.need_gen_code() {
             let typeinfer = self
                 .generic_map
@@ -782,7 +830,7 @@ impl STType {
     }
     pub fn generic_infer_pltype(&self, ctx: &Ctx) -> STType {
         let mut res = self.clone();
-        res.name = self.generic_name();
+        res.name = self.append_name_with_generic();
         res.ordered_fields = self
             .ordered_fields
             .iter()
