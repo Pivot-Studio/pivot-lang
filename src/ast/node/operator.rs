@@ -1,11 +1,10 @@
 use super::primary::VarNode;
 use super::*;
 use crate::ast::ctx::Ctx;
+use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::PLType;
 use crate::ast::pltype::PriType;
 use crate::ast::tokens::TokenType;
-
-use crate::ast::diag::ErrorCode;
 use crate::handle_calc;
 use inkwell::IntPredicate;
 use internal_macro::range;
