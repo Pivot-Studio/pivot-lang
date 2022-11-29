@@ -1047,7 +1047,7 @@ macro_rules! generic_impl {
                 }
                 pub fn add_generic_type(&self, ctx: &mut Ctx) -> Result<(), PLDiag> {
                     for (name, g) in self.generic_map.iter() {
-                        ctx.add_type(
+                        ctx.add_generic_type(
                             name.clone(),
                             g.clone(),
                             (&*g.clone().borrow()).get_range().unwrap(),

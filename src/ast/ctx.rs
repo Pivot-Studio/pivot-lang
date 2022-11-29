@@ -60,6 +60,7 @@ use super::range::Range;
 /// # Ctx
 /// Context for code generation
 pub struct Ctx<'a, 'ctx> {
+    pub generic_types: FxHashMap<String, Rc<RefCell<PLType>>>,
     pub need_highlight: bool,
     pub plmod: Mod,
     pub father: Option<&'a Ctx<'a, 'ctx>>, // father context, for symbol lookup
@@ -500,6 +501,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             .to_string();
         let mut ctx = Ctx {
             need_highlight: true,
+            generic_types: FxHashMap::default(),
             plmod: Mod::new(f, src_file_path.to_string()),
             father: None,
             context,
@@ -542,6 +544,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn new_child(&'a self, start: Pos) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
             need_highlight: self.need_highlight,
+            generic_types: FxHashMap::default(),
             plmod: self.plmod.new_child(),
             father: Some(self),
             context: self.context,
@@ -590,6 +593,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn tmp_child_ctx(&'a self) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
             need_highlight: self.need_highlight,
+            generic_types: FxHashMap::default(),
             plmod: self.plmod.new_child(),
             father: Some(self),
             context: self.context,
@@ -736,8 +740,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn get_type(&self, name: &str, range: Range) -> Result<Rc<RefCell<PLType>>, PLDiag> {
-        let v = self.plmod.types.get(name);
-        if let Some(pv) = v {
+        if let Some(pv) = self.generic_types.get(name) {
+            return Ok(pv.clone());
+        }
+        if let Some(pv) = self.plmod.types.get(name) {
             return Ok(pv.clone());
         }
         if let Some(father) = self.father {
@@ -798,12 +804,54 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         pltype: Rc<RefCell<PLType>>,
         range: Range,
     ) -> Result<(), PLDiag> {
+        if let PLType::GENERIC(g) = &*pltype.borrow() {
+            if g.curpltype.is_some() {
+                let cur = g.curpltype.as_ref().unwrap();
+                return self.add_type(
+                    cur.borrow().get_name(),
+                    cur.clone(),
+                    cur.borrow().get_range().unwrap(),
+                );
+            }
+            unreachable!()
+        }
         if self.plmod.types.contains_key(&name) {
             return Err(self.add_err(range, ErrorCode::REDEFINE_TYPE));
         }
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
         self.plmod.types.insert(name, pltype.clone());
         Ok(())
+    }
+    pub fn add_type_without_check(&mut self, pltype: Rc<RefCell<PLType>>) {
+        if let PLType::GENERIC(g) = &*pltype.borrow() {
+            if g.curpltype.is_some() {
+                return self.add_type_without_check(g.curpltype.as_ref().unwrap().clone());
+            }
+            return;
+        }
+        let name = pltype.borrow().get_name();
+        if self.plmod.types.contains_key(&name) {
+            return;
+        }
+        let range = pltype.borrow().get_range().unwrap();
+        self.send_if_go_to_def(range, range, self.plmod.path.clone());
+        self.plmod.types.insert(name, pltype.clone());
+    }
+    pub fn add_generic_type(
+        &mut self,
+        name: String,
+        pltype: Rc<RefCell<PLType>>,
+        range: Range,
+    ) -> Result<(), PLDiag> {
+        self.send_if_go_to_def(range, range, self.plmod.path.clone());
+        self.generic_types.insert(name, pltype.clone());
+        Ok(())
+    }
+    pub fn move_generic_types(&mut self) -> FxHashMap<String, Rc<RefCell<PLType>>> {
+        self.generic_types.clone()
+    }
+    pub fn reset_generic_types(&mut self, mp: FxHashMap<String, Rc<RefCell<PLType>>>) {
+        self.generic_types = mp
     }
     pub fn add_doc_symbols(&mut self, pltype: Rc<RefCell<PLType>>) {
         match &*RefCell::borrow(&pltype) {

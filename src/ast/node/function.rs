@@ -60,6 +60,7 @@ impl Node for FuncCallNode {
     }
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         // let currscope = ctx.discope;
+        let mp = ctx.move_generic_types();
         let id_range = self.id.range();
         let mut para_values = Vec::new();
         let (plvalue, pltype, _) = self.id.emit(ctx)?;
@@ -71,18 +72,17 @@ impl Node for FuncCallNode {
             PLType::FN(f) => f.clone(),
             _ => return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND)),
         };
-        let child = &mut ctx.tmp_child_ctx();
-        fntype.add_generic_type(child)?;
+        fntype.add_generic_type(ctx)?;
         fntype.clear_generic();
         if let Some(generic_params) = &self.generic_params {
             let generic_params_range = generic_params.range.clone();
-            generic_params.emit_highlight(child);
+            generic_params.emit_highlight(ctx);
             if generic_params.generics.len() != fntype.generic_map.len() {
                 return Err(
-                    child.add_err(generic_params_range, ErrorCode::GENERIC_PARAM_LEN_MISMATCH)
+                    ctx.add_err(generic_params_range, ErrorCode::GENERIC_PARAM_LEN_MISMATCH)
                 );
             }
-            let generic_types = generic_params.get_generic_types(child)?;
+            let generic_types = generic_params.get_generic_types(ctx)?;
             let mut i = 0;
             for (_, pltype) in fntype.generic_map.iter() {
                 if generic_types[i].is_some() {
@@ -100,7 +100,7 @@ impl Node for FuncCallNode {
         }
         // funcvalue must use fntype to get a new one,can not use the return  plvalue of id node emit
         if fntype.param_pltypes.len() - skip as usize != self.paralist.len() {
-            return Err(child.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
+            return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
         }
         // set sig and param hint
         let mut prevpos = id_range.end;
@@ -108,11 +108,11 @@ impl Node for FuncCallNode {
             let sigrange = prevpos.to(para.range().end);
             prevpos = para.range().end;
             let pararange = para.range();
-            child.push_param_hint(
+            ctx.push_param_hint(
                 pararange.clone(),
                 fntype.param_names[i + skip as usize].clone(),
             );
-            child.set_if_sig(
+            ctx.set_if_sig(
                 sigrange,
                 fntype.name.clone().split("::").last().unwrap().to_string()
                     + "("
@@ -132,28 +132,28 @@ impl Node for FuncCallNode {
         // value check and generic infer
         for (i, para) in self.paralist.iter_mut().enumerate() {
             let pararange = para.range();
-            let (value, value_pltype, _) = para.emit(child)?;
+            let (value, value_pltype, _) = para.emit(ctx)?;
             if value.is_none() || value_pltype.is_none() {
                 return Ok((None, None, TerminatorEnum::NONE));
             }
-            let load = child.try_load2var(pararange, value.unwrap())?;
+            let load = ctx.try_load2var(pararange, value.unwrap())?;
             let value_pltype = value_pltype.unwrap();
             if !fntype.param_pltypes[i + skip as usize]
                 .clone()
-                .eq_or_infer(child, value_pltype.clone())?
+                .eq_or_infer(ctx, value_pltype.clone())?
             {
-                return Err(child.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH));
+                return Err(ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH));
             }
             para_values.push(load.as_basic_value_enum().into());
         }
         if fntype.need_gen_code() {
-            let block = child.block;
-            let f = child.function;
-            child.need_highlight = false;
-            let (_, pltype, _) = fntype.node.emit(child)?;
-            child.need_highlight = true;
-            child.function = f;
-            child.position_at_end(block.unwrap());
+            let block = ctx.block;
+            let f = ctx.function;
+            ctx.need_highlight = false;
+            let (_, pltype, _) = fntype.node.emit(ctx)?;
+            ctx.need_highlight = true;
+            ctx.function = f;
+            ctx.position_at_end(block.unwrap());
             let pltype = pltype.unwrap();
             match &*pltype.borrow() {
                 PLType::FN(f) => {
@@ -162,46 +162,47 @@ impl Node for FuncCallNode {
                 _ => unreachable!(),
             };
         }
-        let function = fntype.get_or_insert_fn(child);
-        if let Some(f) = child.function {
+        let function = fntype.get_or_insert_fn(ctx);
+        if let Some(f) = ctx.function {
             if f.get_subprogram().is_some() {
-                child.discope = f.get_subprogram().unwrap().as_debug_info_scope();
+                ctx.discope = f.get_subprogram().unwrap().as_debug_info_scope();
                 let pos = self.range().start;
                 // ctx.discope = currscope;
-                child.build_dbg_location(pos)
+                ctx.build_dbg_location(pos)
             }
         };
-        let ret = child.builder.build_call(
+        let ret = ctx.builder.build_call(
             function,
             &para_values,
             format(format_args!("call_{}", RefCell::borrow(&pltype).get_name())).as_str(),
         );
-        child.save_if_comment_doc_hover(id_range, Some(fntype.doc.clone()));
+        ctx.save_if_comment_doc_hover(id_range, Some(fntype.doc.clone()));
         let res = match ret.try_as_basic_value().left() {
             Some(v) => Ok((
                 {
-                    child.nodebug_builder.unset_current_debug_location();
-                    let ptr = alloc(child, v.get_type(), "ret_alloc_tmp");
-                    child.nodebug_builder.build_store(ptr, v);
+                    ctx.nodebug_builder.unset_current_debug_location();
+                    let ptr = alloc(ctx, v.get_type(), "ret_alloc_tmp");
+                    ctx.nodebug_builder.build_store(ptr, v);
                     Some(ptr.into())
                 },
                 Some({
-                    match &*fntype.ret_pltype.get_type(child)?.borrow() {
+                    match &*fntype.ret_pltype.get_type(ctx)?.borrow() {
                         PLType::GENERIC(g) => g.curpltype.as_ref().unwrap().clone(),
-                        _ => fntype.ret_pltype.get_type(child)?,
+                        _ => fntype.ret_pltype.get_type(ctx)?,
                     }
                 }),
                 TerminatorEnum::NONE,
             )),
             None => Ok((
                 None,
-                Some(fntype.ret_pltype.get_type(child)?),
+                Some(fntype.ret_pltype.get_type(ctx)?),
                 TerminatorEnum::NONE,
             )),
         };
         fntype.clear_generic();
-        child.send_if_go_to_def(id_range, fntype.range, child.plmod.path.clone());
-        child.set_if_refs_tp(pltype.clone(), id_range);
+        ctx.send_if_go_to_def(id_range, fntype.range, ctx.plmod.path.clone());
+        ctx.set_if_refs_tp(pltype.clone(), id_range);
+        ctx.reset_generic_types(mp);
         return res;
     }
 }
@@ -229,16 +230,16 @@ impl FuncDefNode {
         if let Some(generics) = &mut self.generics {
             generic_map = generics.gen_generic_type(ctx);
         }
-        let child = &mut ctx.tmp_child_ctx();
+        let mp = ctx.move_generic_types();
         for (name, pltype) in generic_map.iter() {
-            child.add_type(
+            ctx.add_generic_type(
                 name.clone(),
                 pltype.clone(),
                 pltype.clone().borrow().get_range().unwrap(),
             )?;
         }
         for para in self.paralist.iter() {
-            let paramtype = para.typenode.get_type(child)?;
+            let paramtype = para.typenode.get_type(ctx)?;
             ctx.set_if_refs_tp(paramtype.clone(), para.typenode.range());
             if first && para.id.name == "self" {
                 method = true;
@@ -259,7 +260,7 @@ impl FuncDefNode {
             llvmname: if self.declare {
                 self.id.name.clone()
             } else {
-                child.plmod.get_full_name(&self.id.name)
+                ctx.plmod.get_full_name(&self.id.name)
             },
             method,
             generic_map,
@@ -267,18 +268,18 @@ impl FuncDefNode {
             node: Box::new(self.clone()),
         };
         if self.generics.is_none() {
-            ftp.get_or_insert_fn(child);
+            ftp.get_or_insert_fn(ctx);
         }
         let pltype = Rc::new(RefCell::new(PLType::FN(ftp.clone())));
-        child.set_if_refs_tp(pltype.clone(), self.id.range);
-        child.add_doc_symbols(pltype.clone());
+        ctx.set_if_refs_tp(pltype.clone(), self.id.range);
+        ctx.add_doc_symbols(pltype.clone());
         if method {
             let a = self
                 .paralist
                 .first()
                 .unwrap()
                 .typenode
-                .get_type(child)
+                .get_type(ctx)
                 .unwrap();
             let mut b = a.borrow_mut();
             if let PLType::POINTER(s) = &mut *b {
@@ -294,6 +295,7 @@ impl FuncDefNode {
             }
         }
         ctx.add_type(self.id.name.clone(), pltype, self.id.range)?;
+        ctx.reset_generic_types(mp);
         Ok(())
     }
 }
@@ -372,6 +374,7 @@ impl Node for FuncDefNode {
         if let Some(body) = self.body.as_mut() {
             // add function
             let child = &mut ctx.new_child(self.range.start);
+            let mp = child.move_generic_types();
             let fntype = match &*pltype.borrow() {
                 PLType::FN(fntype) => fntype.clone(),
                 _ => return Ok((None, None, TerminatorEnum::NONE)),
@@ -385,10 +388,9 @@ impl Node for FuncDefNode {
                 let pltype = para.typenode.get_type(child)?;
                 match &*pltype.borrow() {
                     PLType::VOID => {
-                        return Err(child.add_err(
-                            para.range,
-                            crate::ast::diag::ErrorCode::VOID_TYPE_CANNOT_BE_PARAMETER,
-                        ))
+                        return Err(
+                            child.add_err(para.range, ErrorCode::VOID_TYPE_CANNOT_BE_PARAMETER)
+                        )
                     }
                     pltype => {
                         param_ditypes.push(pltype.get_ditype(child).unwrap());
@@ -511,6 +513,7 @@ impl Node for FuncDefNode {
             child.nodebug_builder.position_at_end(allocab);
             child.nodebug_builder.build_unconditional_branch(entry);
             child.discope = discope;
+            child.reset_generic_types(mp);
             return Ok((None, Some(pltype.clone()), TerminatorEnum::NONE));
         }
         Ok((None, Some(pltype.clone()), TerminatorEnum::NONE))
