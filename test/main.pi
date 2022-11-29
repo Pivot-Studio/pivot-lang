@@ -263,6 +263,32 @@ fn test_generic_same_name() void {
     return;
 }
 
+fn test_ret_generic() void {
+    let x = ret_generic1<i64>();
+    let y = ret_generic2(true);
+    let z = ret_generic2([1, 2, 3]);
+    let i = ret_generic2(&z);
+    if y.c.b.a {
+        io::printi64ln(x.c.b.a);
+    }
+    return;
+}
+
+fn ret_generic1<T>() Three<T> {
+    return Three<T>{};
+}
+
+fn ret_generic2<T>(x: T) Three<T> {
+    let two = Two{
+        b: One{
+            a: x
+        }
+    };
+    return Three{
+        c: two
+    };
+}
+
 struct One<T> {
     a: T;
 }
@@ -293,6 +319,7 @@ fn main() i64 {
     test_many_params(1, 1, 3, 4);
     test_generic();
     test_generic_same_name();
+    test_ret_generic();
     return 0;
 }
 

@@ -134,7 +134,11 @@ impl VarNode {
 
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match *tp.borrow() {
-                PLType::STRUCT(_) | PLType::PRIMITIVE(_) | PLType::VOID | PLType::GENERIC(_) => {
+                PLType::STRUCT(_)
+                | PLType::PRIMITIVE(_)
+                | PLType::VOID
+                | PLType::GENERIC(_)
+                | PLType::PLACEHOLDER(_) => {
                     if let PLType::STRUCT(st) = &*tp.clone().borrow() {
                         ctx.send_if_go_to_def(self.range, st.range, ctx.plmod.path.clone());
                         ctx.set_if_refs(st.refs.clone(), self.range);

@@ -833,8 +833,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if self.plmod.types.contains_key(&name) {
             return;
         }
-        let range = pltype.borrow().get_range().unwrap();
-        self.send_if_go_to_def(range, range, self.plmod.path.clone());
         self.plmod.types.insert(name, pltype.clone());
     }
     pub fn add_generic_type(

@@ -249,7 +249,9 @@ impl PLType {
                     new_typename_node(&g.name, Default::default())
                 }
             }
-            PLType::PLACEHOLDER(p) => new_typename_node(&p.name.clone(), Default::default()),
+            PLType::PLACEHOLDER(p) => {
+                new_typename_node(&p.get_place_holder_name(), Default::default())
+            }
             _ => unreachable!(),
         }
     }
@@ -1036,15 +1038,15 @@ impl GenericType {
         self.curpltype = None;
     }
     pub fn set_place_holder(&mut self, ctx: &mut Ctx) {
-        let name = format!("placeholder_{}", self.name);
         let range = self.range;
         let p = PlaceHolderType {
-            name: name.clone(),
+            name: self.name.clone(),
             range,
         };
+        let name_in_map = p.get_place_holder_name();
         let pltype = Rc::new(RefCell::new(PLType::PLACEHOLDER(p)));
         self.curpltype = Some(pltype.clone());
-        ctx.add_type(name, pltype, range).unwrap();
+        ctx.add_type(name_in_map, pltype, range).unwrap();
     }
 }
 macro_rules! generic_impl {
@@ -1096,4 +1098,9 @@ generic_impl!(FNType, STType);
 pub struct PlaceHolderType {
     pub name: String,
     pub range: Range,
+}
+impl PlaceHolderType {
+    fn get_place_holder_name(&self) -> String {
+        format!("placeholder_::{}", self.name)
+    }
 }
