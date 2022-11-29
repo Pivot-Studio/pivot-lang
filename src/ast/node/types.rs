@@ -498,26 +498,24 @@ impl Node for StructInitNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
         let mut format_res = String::new();
         let mut field_str = String::new();
-        match Some(&self.fields) {
-            Some(fields) => {
-                let mut len = 0;
-                field_str.push_str("{");
-                field_str.push_str(enter());
-                for field in fields {
-                    len += 1;
-                    field_str.push_str(&field.format(tabs + 1, prefix));
-                    if len < fields.len() {
-                        field_str.push_str(",");
-                        field_str.push_str(enter());
-                    } else {
-                        field_str.push_str(enter());
-                    }
+
+        let mut len = 0;
+        field_str.push_str("{");
+        if self.fields.len() > 0 {
+            field_str.push_str(enter());
+            for field in &self.fields {
+                len += 1;
+                field_str.push_str(&field.format(tabs + 1, prefix));
+                if len < self.fields.len() {
+                    field_str.push_str(",");
+                    field_str.push_str(enter());
+                } else {
+                    field_str.push_str(enter());
                 }
-                field_str.push_str(&prefix.repeat(tabs));
-                field_str.push_str("}");
             }
-            _ => (),
+            field_str.push_str(&prefix.repeat(tabs));
         }
+        field_str.push_str("}");
         format_res.push_str(&self.typename.format(tabs, prefix));
         if let Some(generic_params) = &self.generic_params {
             format_res.push_str(&generic_params.format(0, ""));
