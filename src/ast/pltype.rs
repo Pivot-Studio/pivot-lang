@@ -63,6 +63,7 @@ pub enum PLType {
     VOID,
     POINTER(Rc<RefCell<PLType>>),
     GENERIC(GenericType),
+    PLACEHOLDER(PlaceHolderType),
 }
 /// # PriType
 /// Primitive type for pivot-lang
@@ -248,6 +249,7 @@ impl PLType {
                     new_typename_node(&g.name, Default::default())
                 }
             }
+            PLType::PLACEHOLDER(p) => new_typename_node(&p.name.clone(), Default::default()),
             _ => unreachable!(),
         }
     }
@@ -271,6 +273,7 @@ impl PLType {
             PLType::VOID => None,
             PLType::POINTER(_) => None,
             PLType::GENERIC(_) => None,
+            PLType::PLACEHOLDER(_) => None,
         }
     }
 
@@ -299,6 +302,7 @@ impl PLType {
                     g.name.clone()
                 }
             }
+            PLType::PLACEHOLDER(p) => p.name.clone(),
         }
     }
 
@@ -317,6 +321,7 @@ impl PLType {
             }
             PLType::VOID => "void".to_string(),
             PLType::POINTER(p) => p.borrow().get_full_elm_name(),
+            PLType::PLACEHOLDER(p) => p.name.clone(),
         }
     }
     pub fn get_ptr_depth(&self) -> usize {
@@ -337,6 +342,7 @@ impl PLType {
             PLType::PRIMITIVE(_) => None,
             PLType::VOID => None,
             PLType::POINTER(_) => None,
+            PLType::PLACEHOLDER(p) => Some(p.range.clone()),
         }
     }
 
@@ -381,6 +387,20 @@ impl PLType {
                     .ptr_type(AddressSpace::Generic)
                     .as_basic_type_enum(),
             ),
+            PLType::PLACEHOLDER(p) => Some({
+                let name = &format!("__placeholder__{}", p.name);
+                ctx.module
+                    .get_struct_type(name)
+                    .or(Some({
+                        let st = ctx
+                            .context
+                            .opaque_struct_type(&format!("__placeholder__{}", p.name));
+                        st.set_body(&[], false);
+                        st
+                    }))
+                    .unwrap()
+                    .into()
+            }),
         }
     }
 
@@ -414,6 +434,7 @@ impl PLType {
                     PLType::PRIMITIVE(PriType::I64).get_ditype(ctx)
                 }
             }
+            PLType::PLACEHOLDER(_) => PLType::PRIMITIVE(PriType::I64).get_ditype(ctx),
             PLType::ARR(arr) => {
                 let elemdi = arr.element_type.borrow().get_ditype(ctx)?;
                 let etp = &arr.element_type.borrow().get_basic_type(ctx);
@@ -1014,6 +1035,17 @@ impl GenericType {
     pub fn clear_type(&mut self) {
         self.curpltype = None;
     }
+    pub fn set_place_holder(&mut self, ctx: &mut Ctx) {
+        let name = format!("placeholder_{}", self.name);
+        let range = self.range;
+        let p = PlaceHolderType {
+            name: name.clone(),
+            range,
+        };
+        let pltype = Rc::new(RefCell::new(PLType::PLACEHOLDER(p)));
+        self.curpltype = Some(pltype.clone());
+        ctx.add_type(name, pltype, range).unwrap();
+    }
 }
 macro_rules! generic_impl {
     ($($args:ident),*) => (
@@ -1060,3 +1092,8 @@ macro_rules! generic_impl {
     );
 }
 generic_impl!(FNType, STType);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceHolderType {
+    pub name: String,
+    pub range: Range,
+}

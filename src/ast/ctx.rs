@@ -1101,6 +1101,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             let tp = match *RefCell::borrow(&f) {
                 PLType::FN(_) => continue,
                 PLType::ARR(_) => continue,
+                PLType::PLACEHOLDER(_) => CompletionItemKind::STRUCT,
                 PLType::GENERIC(_) => CompletionItemKind::STRUCT,
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
@@ -1157,6 +1158,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 PLType::GENERIC(_) => CompletionItemKind::STRUCT,
                 PLType::VOID => CompletionItemKind::KEYWORD,
                 PLType::POINTER(_) => todo!(),
+                PLType::PLACEHOLDER(_) => CompletionItemKind::STRUCT,
             };
             if k.starts_with('|') {
                 // skip method

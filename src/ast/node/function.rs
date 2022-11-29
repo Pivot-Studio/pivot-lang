@@ -150,7 +150,7 @@ impl Node for FuncCallNode {
             let block = ctx.block;
             let f = ctx.function;
             ctx.need_highlight = false;
-            let (_, pltype, _) = fntype.node.emit(ctx)?;
+            let (_, pltype, _) = fntype.node.gen_fntype(ctx, false)?;
             ctx.need_highlight = true;
             ctx.function = f;
             ctx.position_at_end(block.unwrap());
@@ -357,6 +357,11 @@ impl Node for FuncDefNode {
         }
     }
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        self.gen_fntype(ctx, true)
+    }
+}
+impl FuncDefNode {
+    fn gen_fntype<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, first: bool) -> NodeResult<'ctx> {
         ctx.save_if_comment_doc_hover(self.id.range, Some(self.doc.clone()));
         for c in self.doc.iter_mut() {
             c.emit(ctx)?;
@@ -375,12 +380,22 @@ impl Node for FuncDefNode {
             // add function
             let child = &mut ctx.new_child(self.range.start);
             let mp = child.move_generic_types();
-            let fntype = match &*pltype.borrow() {
+            let mut fntype = match &*pltype.borrow() {
                 PLType::FN(fntype) => fntype.clone(),
                 _ => return Ok((None, None, TerminatorEnum::NONE)),
             };
             let funcvalue = {
                 fntype.add_generic_type(child)?;
+                if first {
+                    fntype.generic_map.iter_mut().for_each(|(_, pltype)| {
+                        match &mut *pltype.borrow_mut() {
+                            PLType::GENERIC(g) => {
+                                g.set_place_holder(child);
+                            }
+                            _ => unreachable!(),
+                        }
+                    })
+                }
                 fntype.get_or_insert_fn(child)
             };
             let mut param_ditypes = vec![];
