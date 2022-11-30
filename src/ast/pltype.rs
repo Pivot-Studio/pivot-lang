@@ -33,6 +33,7 @@ use lsp_types::InsertTextFormat;
 use lsp_types::Location;
 use lsp_types::SymbolKind;
 use rustc_hash::FxHashMap;
+use std::cell::Ref;
 use std::cell::RefCell;
 use std::rc::Rc;
 // TODO: match all case
@@ -139,6 +140,14 @@ impl PriType {
     }
 }
 pub fn eq(l: Rc<RefCell<PLType>>, r: Rc<RefCell<PLType>>) -> bool {
+    match (&*l.borrow(), &*r.borrow()) {
+        (PLType::GENERIC(l), PLType::GENERIC(r)) => {
+            if l == r {
+                return true;
+            }
+        }
+        _ => {},
+    }
     match &mut *l.borrow_mut() {
         PLType::GENERIC(l) => {
             if l.curpltype.is_some() {
@@ -861,6 +870,8 @@ impl STType {
     pub fn generic_infer_pltype(&self, ctx: &mut Ctx) -> STType {
         let mut res = self.clone();
         res.name = self.append_name_with_generic();
+        // TODO
+        ctx.add_type_without_check(Rc::new(RefCell::new(PLType::STRUCT(res.clone()))));
         res.ordered_fields = self
             .ordered_fields
             .iter()

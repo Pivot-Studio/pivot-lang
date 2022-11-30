@@ -78,11 +78,25 @@ impl TypeNode for TypeNameNode {
                     ErrorCode::GENERIC_PARAM_LEN_MISMATCH,
                 ));
             }
-            sttype.clear_generic();
             let mut i = 0;
             for (_, pltype) in sttype.generic_map.iter() {
-                if generic_types[i].is_none()
-                    || !eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
+                if generic_types[i].is_none(){
+                    return Err(ctx.add_err(self.range, ErrorCode::GENERIC_CANNOT_BE_INFER));
+                }
+                // log::error!("{:?}\n{:?}", pltype, generic_types[i].as_ref().unwrap());
+                if pltype == generic_types[i].as_ref().unwrap() {
+                    if let PLType::GENERIC(g) = &mut *pltype.borrow_mut() {
+                        if g.curpltype.is_none() {
+                            g.curpltype = Some(generic_types[i].as_ref().unwrap().clone());   
+                        }
+                    }
+                    i = i + 1;
+                    continue;
+                }
+                if let PLType::GENERIC(g) = &mut *pltype.borrow_mut() {
+                    g.curpltype = None;
+                }
+                if !eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
                 {
                     return Err(ctx.add_err(self.range, ErrorCode::GENERIC_CANNOT_BE_INFER));
                 }
@@ -90,6 +104,7 @@ impl TypeNode for TypeNameNode {
             }
             if sttype.need_gen_code() {
                 let mp = ctx.move_generic_types();
+                // log::error!("stmap {:?}", sttype.generic_map);
                 sttype.add_generic_type(ctx)?;
                 sttype = sttype.generic_infer_pltype(ctx);
                 ctx.reset_generic_types(mp);
