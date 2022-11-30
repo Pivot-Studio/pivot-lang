@@ -67,20 +67,18 @@ impl TypeNode for TypeNameNode {
         let (_, pltype, _) = self.id.as_ref().unwrap().get_type(&ctx)?;
         let mut pltype = pltype.unwrap();
         if let Some(generic_params) = &self.generic_params {
-            let mp = ctx.move_generic_types();
             let mut sttype = match &mut *pltype.clone().borrow_mut() {
                 PLType::STRUCT(s) => s.clone(),
                 _ => return Err(ctx.add_err(self.range, ErrorCode::NOT_GENERIC_TYPE)),
             };
             let generic_types = generic_params.get_generic_types(ctx)?;
-            sttype.clear_generic();
-            sttype.add_generic_type(ctx)?;
             if generic_params.generics.len() != sttype.generic_map.len() {
                 return Err(ctx.add_err(
                     generic_params.range.clone(),
                     ErrorCode::GENERIC_PARAM_LEN_MISMATCH,
                 ));
             }
+            sttype.clear_generic();
             let mut i = 0;
             for (_, pltype) in sttype.generic_map.iter() {
                 if generic_types[i].is_none()
@@ -91,12 +89,14 @@ impl TypeNode for TypeNameNode {
                 i = i + 1;
             }
             if sttype.need_gen_code() {
+                let mp = ctx.move_generic_types();
+                sttype.add_generic_type(ctx)?;
                 sttype = sttype.generic_infer_pltype(ctx);
+                ctx.reset_generic_types(mp);
             } else {
                 return Err(ctx.add_err(self.range, ErrorCode::GENERIC_CANNOT_BE_INFER));
             }
             pltype = Rc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
-            ctx.reset_generic_types(mp);
         }
         ctx.add_type_without_check(pltype.clone());
         Ok(pltype)
@@ -544,23 +544,6 @@ impl Node for StructInitNode {
             _ => unreachable!(),
         };
         let mp = ctx.move_generic_types();
-        if let Some(generic_params) = &mut self.generic_params {
-            generic_params.emit_highlight(ctx);
-            if generic_params.generics.len() != sttype.generic_map.len() {
-                return Err(ctx.add_err(
-                    generic_params.range.clone(),
-                    ErrorCode::GENERIC_PARAM_LEN_MISMATCH,
-                ));
-            }
-            let generic_types = generic_params.get_generic_types(ctx)?;
-            let mut i = 0;
-            for (_, pltype) in sttype.generic_map.iter() {
-                if generic_types[i].is_some() {
-                    eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
-                }
-                i = i + 1;
-            }
-        }
         sttype.clear_generic();
         sttype.add_generic_type(ctx)?;
         ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
