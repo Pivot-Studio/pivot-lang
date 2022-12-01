@@ -97,6 +97,7 @@ pub fn pointer_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                         op,
                         value: exp,
                         range,
+                        comments: vec![],
                     }
                     .into(),
                 );
@@ -122,7 +123,7 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
         |(head, ops)| {
             let mut res = head;
             for op in ops {
-                res = match op {
+                res = match op.0 {
                     ComplexOp::CallOp((args, params_range, generic_params)) => {
                         let mut range = res.range();
                         if args.len() > 0 {
@@ -134,6 +135,7 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                                 range,
                                 id: res,
                                 paralist: args,
+                                comments: vec![op.1],
                             }
                             .into(),
                         )
@@ -145,6 +147,7 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                                 range,
                                 arr: res,
                                 index,
+                                comments: vec![op.1],
                             }
                             .into(),
                         )
@@ -163,6 +166,7 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                                 range,
                                 head: res,
                                 field,
+                                comments: vec![op.1],
                             }
                             .into(),
                         )
@@ -175,23 +179,42 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 }
 
 fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    delspace(alt((
-        number,
-        bool_const,
-        parantheses_exp,
-        struct_init,
-        array_init,
-        extern_identifier,
-    )))(input)
+    delspace(map_res(
+        tuple((
+            many0(comment),
+            alt((
+                number,
+                bool_const,
+                parantheses_exp,
+                struct_init,
+                array_init,
+                extern_identifier,
+            )),
+            many0(comment),
+        )),
+        |(lcoms, node, rcoms)| {
+            res_enum(
+                PrimaryNode {
+                    value: node,
+                    comments: vec![lcoms, rcoms],
+                    range: Range::new(input, input),
+                }
+                .into(),
+            )
+        },
+    ))(input)
 }
 
 /// ```ebnf
 /// take_exp_op = ("." identifier?) ;
 /// ```
-fn take_exp_op(input: Span) -> IResult<Span, ComplexOp> {
+fn take_exp_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
     delspace(map_res(
-        preceded(tag_token(TokenType::DOT), opt(identifier)),
-        |idx| Ok::<_, Error>(ComplexOp::FieldOp(idx)),
+        preceded(
+            tag_token(TokenType::DOT),
+            pair(opt(identifier), many0(comment)),
+        ),
+        |(idx, coms)| Ok::<_, Error>((ComplexOp::FieldOp(idx), coms)),
     ))(input)
 }
 

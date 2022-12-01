@@ -6,6 +6,7 @@ use lsp_types::SemanticTokenType;
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CommentNode {
     pub comment: String,
+    pub is_doc: bool,
 }
 
 impl Node for CommentNode {

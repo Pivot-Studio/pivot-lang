@@ -39,23 +39,27 @@ pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
 /// ```ebnf
 /// array_element_op = ('[' logic_exp ']') ;
 /// ```
-pub fn array_element_op(input: Span) -> IResult<Span, ComplexOp> {
+pub fn array_element_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
     delspace(map_res(
         tuple((
             tag_token(TokenType::LBRACKET),
             opt(logic_exp),
             tag_token(TokenType::RBRACKET),
+            many0(comment),
         )),
-        |(_, idx, (_, rr))| {
+        |(_, idx, (_, rr), com)| {
             if let Some(idx) = idx {
-                Ok::<_, Error>(ComplexOp::IndexOp(idx))
+                Ok::<_, Error>((ComplexOp::IndexOp(idx), com))
             } else {
-                Ok::<_, Error>(ComplexOp::IndexOp(Box::new(NodeEnum::Err(ErrorNode {
-                    msg: String::from("Nedded index for array element access"),
-                    src: String::from("[]"),
-                    code: ErrorCode::NEEDED_INDEX_FOR_ARRAY_ELEMENT_ACCESS,
-                    range: rr,
-                }))))
+                Ok::<_, Error>((
+                    ComplexOp::IndexOp(Box::new(NodeEnum::Err(ErrorNode {
+                        msg: String::from("Nedded index for array element access"),
+                        src: String::from("[]"),
+                        code: ErrorCode::NEEDED_INDEX_FOR_ARRAY_ELEMENT_ACCESS,
+                        range: rr,
+                    }))),
+                    com,
+                ))
             }
         },
     ))(input)

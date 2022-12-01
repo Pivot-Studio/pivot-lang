@@ -22,21 +22,21 @@ struct struct_child {
     b: [i64 * 1];
 }
 
-// 123
-// # 123
-// *hello*
-// 123
-// ```pivot-lang
-// fn test_struct() void {
-//     let s = struct_father{a:2,b:2,c:struct_child{a:2,},};
-//     io::printi64ln(s.a);
-//     io::printi64ln(s.a);
-//     io::printi64ln(s.c.a);
-//     return ;
-// }
-// ```
+/// 123
+/// # 123
+/// *hello*
+/// 123
+/// ```pivot-lang
+/// fn test_struct() void {
+///     let s = struct_father{a:2,b:2,c:struct_child{a:2,},};
+///     io::printi64ln(s.a);
+///     io::printi64ln(s.a);
+///     io::printi64ln(s.c.a);
+///     return ;
+/// }
+/// ```
 fn test_struct() void {
-    let s = struct_father{
+    let s= struct_father{
         a: 2,
         b: 2,
         c: struct_child{
@@ -131,14 +131,16 @@ fn test_warn() void {
     //15154212
 }
 
+////
 fn test_const() void {
     io::printi64ln(a);
     return;
 }
-/// ANCHOR: extern_impl
-
 impl mod1::Mod1 {
-    // xxx
+    //
+    /// ### xxx
+    //
+    /// *0123*
     fn name() void {
         self.x = 114514;
         io::printi64ln(100101);
@@ -162,10 +164,10 @@ fn test_mod_struct() void {
     return;
 }
 
-fn test_loop() void {
+fn test_loop() void {//12255
     let i = 0;
     while i < 7 {
-        if i == 3 {
+        if i == 3 {//000002
             i = 5;
             continue;
         }
@@ -193,7 +195,9 @@ fn ret_atruct() A {
 fn ret_arr() [i64 * 3] {
     return [1, 10000, 3];
 }
-
+//12321
+///# 123
+/// ~123~
 fn test_ret_struct_arr() void {
     let s = ret_atruct().x;
     io::printi64ln(s);
@@ -320,7 +324,9 @@ fn main() i64 {
     test_mod_struct();
     test_loop();
     test_ret_struct_arr();
-    let st = test_ret_struct();
+    test_ret_struct()/// 123
+    .a;///
+    let st = test_ret_struct();//
     io::printi64ln(st.a);
     test_pointer();
     test_primitives();
