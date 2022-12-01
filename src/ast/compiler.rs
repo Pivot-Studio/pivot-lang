@@ -388,6 +388,7 @@ mod test {
             "test/lsp/test_completion.pi",
         );
         assert_eq!(comps.len(), 1);
+        assert_eq!(comps[0].len(), 3);
         let compstr = vec!["a", "b", "c"];
         for comp in comps[0].iter() {
             assert!(compstr.contains(&comp.label.as_str()));

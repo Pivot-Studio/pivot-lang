@@ -1,6 +1,7 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{btree_map::BTreeMap, HashSet},
     env,
+    ops::Bound::*,
 };
 
 use internal_macro::is_runtime;
@@ -35,10 +36,26 @@ impl Mem {
 #[repr(C)]
 #[derive(Default)]
 pub struct DioGC {
-    memtable: HashMap<*mut c_void, Mem>,
+    memtable: BTreeMap<isize, Mem>,
     size: i64,
     roots: HashSet<*mut c_void>,
     debug: bool,
+}
+
+unsafe fn get_region_ptr(
+    memtable: &mut BTreeMap<isize, Mem>,
+    ptr: *mut c_void,
+) -> Option<(*mut c_void, &mut Mem)> {
+    // 只获取当前区间左侧的指针
+    let left_mem_tuple = memtable
+        .range_mut((Unbounded, Included(ptr as isize)))
+        .last();
+    if let Some((lptr, mem)) = left_mem_tuple {
+        if *lptr + mem.size as isize > ptr as isize {
+            return Some((*lptr as *mut c_void, mem));
+        }
+    }
+    None
 }
 
 #[is_runtime] // jit注册
@@ -46,7 +63,7 @@ impl DioGC {
     pub fn new() -> DioGC {
         DioGC {
             size: 0,
-            memtable: HashMap::new(),
+            memtable: BTreeMap::new(),
             roots: HashSet::new(),
             debug: env::var("DIO_DEBUG").is_ok(),
         }
@@ -60,7 +77,7 @@ impl DioGC {
         let ptr = malloc(size as size_t);
         memset(ptr, 0, size as size_t);
         self.memtable.insert(
-            ptr,
+            ptr as isize,
             Mem {
                 size,
                 marked: false,
@@ -71,7 +88,7 @@ impl DioGC {
     }
 
     pub unsafe fn free(&mut self, ptr: *mut c_void) {
-        if let Some(mem) = self.memtable.remove(&ptr) {
+        if let Some(mem) = self.memtable.remove(&(ptr as isize)) {
             self.size -= mem.size;
         }
     }
@@ -107,7 +124,7 @@ impl DioGC {
             }
         }
         for ptr in rm {
-            self.free(ptr);
+            self.free(ptr as *mut c_void);
         }
     }
 
@@ -118,14 +135,14 @@ impl DioGC {
             Self::mark_ptr(&mut self.memtable, &pointto);
         }
     }
-    pub unsafe fn mark_ptr(memtable: &mut HashMap<*mut c_void, Mem>, ptr: &*mut c_void) {
-        let mem = memtable.get_mut(ptr);
-        if let Some(mem) = mem {
+    pub unsafe fn mark_ptr(memtable: &mut BTreeMap<isize, Mem>, ptr: &*mut c_void) {
+        let mem = get_region_ptr(memtable, *ptr);
+        if let Some((ptr, mem)) = mem {
             if mem.is_marked() {
                 return;
             }
             mem.mark();
-            let p = *ptr;
+            let p = ptr;
             let data = p as *mut *mut c_void;
             let size = mem.size / 8;
             for i in 0..size {
@@ -222,18 +239,19 @@ fn test_complicated_gc() {
         let mut gc = DioGC::new();
         gc.about();
         println!("start test_complicated_gc");
-        // allocate first pointers
-        let mut ptr1 = gc.malloc(64);
-        println!("mark ptr: {:p}", ptr1);
+        // allocate first pointers 
+        // 这里看起来是分配了个堆指针，实际上ptrfirst是个rust变量，底层是一个栈指针，它指向的值是堆指针
+        let mut ptrfirst = gc.malloc(64);
+        println!("mark ptr: {:p}", ptrfirst);
         let mut size = 64;
-        // get rust stack pointer point to ptr1
-        let rustptr = (&mut ptr1) as *mut *mut c_void as *mut c_void;
+        // get rust stack pointer point to ptr1（获取栈指针
+        let rustptr = (&mut ptrfirst) as *mut *mut c_void as *mut c_void;
         println!("stack ptr: {:p}", rustptr);
         println!("mark ptr: {:p}", *(rustptr as *mut *mut c_void));
         // important!
         // 如果直接给ptr1赋值，会写入原本的栈指针指向的空间，导致测试的gcroot指向最后一个赋值对象
         // 而不是第一个ptr1，所以这里在栈上声明一个新的ptr1
-        let mut ptr1 = ptr1;
+        let mut ptr1 = ptrfirst;
         for _ in 0..1000 {
             let ptr = gc.malloc(64);
             let n = rand::thread_rng().gen_range(0..2);
@@ -263,6 +281,13 @@ fn test_complicated_gc() {
             "gc collect finished, time spent: {:#?}, testing gc size after collection",
             spent
         );
+        assert_eq!(gc.get_size(), size);
+        println!("gc size after collection is correct: {}", gc.get_size());
+        println!("change gc root to origin ptr with offset");
+        ptrfirst = ptrfirst.offset(1);
+        let rustptr = (&mut ptrfirst) as *mut *mut c_void as *mut c_void;
+        println!("stack ptr: {:p}", rustptr);
+        gc.collect();
         assert_eq!(gc.get_size(), size);
         println!("gc size after collection is correct: {}", gc.get_size());
     }
