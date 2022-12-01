@@ -36,10 +36,26 @@ impl Mem {
 #[repr(C)]
 #[derive(Default)]
 pub struct DioGC {
-    memtable: BTreeMap<*mut c_void, Mem>,
+    memtable: BTreeMap<isize, Mem>,
     size: i64,
     roots: HashSet<*mut c_void>,
     debug: bool,
+}
+
+unsafe fn get_region_ptr(
+    memtable: &mut BTreeMap<isize, Mem>,
+    ptr: *mut c_void,
+) -> Option<(*mut c_void, &mut Mem)> {
+    // 只获取当前区间左侧的指针
+    let left_mem_tuple = memtable
+        .range_mut((Unbounded, Included(ptr as isize)))
+        .last();
+    if let Some((lptr, mem)) = left_mem_tuple {
+        if *lptr + mem.size as isize > ptr as isize {
+            return Some((*lptr as *mut c_void, mem));
+        }
+    }
+    None
 }
 
 #[is_runtime] // jit注册
@@ -57,30 +73,11 @@ impl DioGC {
         Box::into_raw(Box::new(DioGC::new()))
     }
 
-    pub unsafe fn get_region_ptr(&mut self, ptr: *mut c_void) -> *mut c_void {
-        // 只获取当前区间左侧的指针
-        let left_mem_tuple = self.memtable.range((Unbounded, Included(ptr))).last();
-
-        if let Some(mem_tuple) = left_mem_tuple {
-            let left_ptr = *(mem_tuple.0);
-            let size = (mem_tuple.1).size / 8;
-
-            let data = left_ptr as *mut *mut c_void;
-            for i in 0..size {
-                let cur_ptr = data.offset(i as isize).read();
-                if ptr == cur_ptr {
-                    return left_ptr
-                }
-            }
-        }     
-        ptr.clone()
-    }
-
     pub unsafe fn malloc(&mut self, size: i64) -> *mut c_void {
         let ptr = malloc(size as size_t);
         memset(ptr, 0, size as size_t);
         self.memtable.insert(
-            ptr,
+            ptr as isize,
             Mem {
                 size,
                 marked: false,
@@ -91,7 +88,7 @@ impl DioGC {
     }
 
     pub unsafe fn free(&mut self, ptr: *mut c_void) {
-        if let Some(mem) = self.memtable.remove(&ptr) {
+        if let Some(mem) = self.memtable.remove(&(ptr as isize)) {
             self.size -= mem.size;
         }
     }
@@ -127,7 +124,7 @@ impl DioGC {
             }
         }
         for ptr in rm {
-            self.free(ptr);
+            self.free(ptr as *mut c_void);
         }
     }
 
@@ -138,14 +135,14 @@ impl DioGC {
             Self::mark_ptr(&mut self.memtable, &pointto);
         }
     }
-    pub unsafe fn mark_ptr(memtable: &mut BTreeMap<*mut c_void, Mem>, ptr: &*mut c_void) {
-        let mem = memtable.get_mut(ptr);
-        if let Some(mem) = mem {
+    pub unsafe fn mark_ptr(memtable: &mut BTreeMap<isize, Mem>, ptr: &*mut c_void) {
+        let mem = get_region_ptr(memtable, *ptr);
+        if let Some((ptr, mem)) = mem {
             if mem.is_marked() {
                 return;
             }
             mem.mark();
-            let p = *ptr;
+            let p = ptr;
             let data = p as *mut *mut c_void;
             let size = mem.size / 8;
             for i in 0..size {
@@ -242,18 +239,19 @@ fn test_complicated_gc() {
         let mut gc = DioGC::new();
         gc.about();
         println!("start test_complicated_gc");
-        // allocate first pointers
-        let mut ptr1 = gc.malloc(64);
-        println!("mark ptr: {:p}", ptr1);
+        // allocate first pointers 
+        // 这里看起来是分配了个堆指针，实际上ptrfirst是个rust变量，底层是一个栈指针，它指向的值是堆指针
+        let mut ptrfirst = gc.malloc(64);
+        println!("mark ptr: {:p}", ptrfirst);
         let mut size = 64;
-        // get rust stack pointer point to ptr1
-        let rustptr = (&mut ptr1) as *mut *mut c_void as *mut c_void;
+        // get rust stack pointer point to ptr1（获取栈指针
+        let rustptr = (&mut ptrfirst) as *mut *mut c_void as *mut c_void;
         println!("stack ptr: {:p}", rustptr);
         println!("mark ptr: {:p}", *(rustptr as *mut *mut c_void));
         // important!
         // 如果直接给ptr1赋值，会写入原本的栈指针指向的空间，导致测试的gcroot指向最后一个赋值对象
         // 而不是第一个ptr1，所以这里在栈上声明一个新的ptr1
-        let mut ptr1 = ptr1;
+        let mut ptr1 = ptrfirst;
         for _ in 0..1000 {
             let ptr = gc.malloc(64);
             let n = rand::thread_rng().gen_range(0..2);
@@ -285,18 +283,12 @@ fn test_complicated_gc() {
         );
         assert_eq!(gc.get_size(), size);
         println!("gc size after collection is correct: {}", gc.get_size());
-
-        println!("testing ptr change");
-        println!("ptr1: {:p}", ptr1);
-        let offset_ptr = ptr1.offset(4);
-        println!("offset_ptr: {:p}", offset_ptr);
-        set_point_to(ptr1, offset_ptr, 1);
-        let region_ptr = gc.get_region_ptr(offset_ptr);
-        assert_eq!(ptr1, region_ptr);
-        gc.rm_root(ptr1);
-        gc.add_root(offset_ptr);
+        println!("change gc root to origin ptr with offset");
+        ptrfirst = ptrfirst.offset(1);
+        let rustptr = (&mut ptrfirst) as *mut *mut c_void as *mut c_void;
+        println!("stack ptr: {:p}", rustptr);
         gc.collect();
+        assert_eq!(gc.get_size(), size);
         println!("gc size after collection is correct: {}", gc.get_size());
-
     }
 }
