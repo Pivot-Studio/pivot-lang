@@ -51,13 +51,16 @@ use super::diag::{ERR_MSG, WARN_MSG};
 use super::node::NodeEnum;
 use super::node::PLValue;
 use super::pltype::add_primitive_types;
+use super::pltype::FNType;
 use super::pltype::PLType;
 use super::pltype::PriType;
+use super::pltype::STType;
 use super::range::Pos;
 use super::range::Range;
 /// # Ctx
 /// Context for code generation
 pub struct Ctx<'a, 'ctx> {
+    pub generic_types: FxHashMap<String, Rc<RefCell<PLType>>>,
     pub need_highlight: bool,
     pub plmod: Mod,
     pub father: Option<&'a Ctx<'a, 'ctx>>, // father context, for symbol lookup
@@ -131,8 +134,10 @@ pub struct Mod {
     pub types: FxHashMap<String, Rc<RefCell<PLType>>>,
     /// sub mods
     pub submods: FxHashMap<String, Mod>,
-    // global variable table
+    /// global variable table
     pub global_table: FxHashMap<String, GlobalVar>,
+    /// structs methods
+    pub methods: FxHashMap<String, FxHashMap<String, FNType>>,
 }
 
 impl Mod {
@@ -143,6 +148,7 @@ impl Mod {
             types: FxHashMap::default(),
             submods: FxHashMap::default(),
             global_table: FxHashMap::default(),
+            methods: FxHashMap::default(),
         }
     }
     pub fn new_child(&self) -> Self {
@@ -152,6 +158,7 @@ impl Mod {
             types: FxHashMap::default(),
             submods: self.submods.clone(),
             global_table: FxHashMap::default(),
+            methods: self.methods.clone(),
         }
     }
     pub fn get_global_symbol(&self, name: &str) -> Option<&GlobalVar> {
@@ -210,6 +217,70 @@ impl Mod {
         }
         name.to_string()
     }
+    pub fn get_methods_completions(&self, full_name: &str) -> Vec<CompletionItem> {
+        let mut completions = Vec::new();
+        let mut f = |name: &String, v: &FNType| {
+            completions.push(CompletionItem {
+                kind: Some(CompletionItemKind::METHOD),
+                label: name.clone(),
+                detail: Some("method".to_string()),
+                insert_text: Some(v.gen_snippet()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                command: Some(Command::new(
+                    "trigger help".to_string(),
+                    "editor.action.triggerParameterHints".to_string(),
+                    None,
+                )),
+                ..Default::default()
+            });
+        };
+        for (_, m) in &self.submods {
+            if m.methods.get(full_name).is_none() {
+                continue;
+            }
+            for (name, v) in m.methods.get(full_name).unwrap() {
+                f(name, v);
+            }
+        }
+        if self.methods.get(full_name).is_none() {
+            return completions;
+        }
+        for (name, v) in self.methods.get(full_name).unwrap() {
+            f(name, v);
+        }
+        completions
+    }
+
+    pub fn find_method(&self, full_name: &str, mthd: &str) -> Option<FNType> {
+        if let Some(m) = self.methods.get(full_name) {
+            if let Some(v) = m.get(mthd) {
+                return Some(v.clone());
+            }
+        }
+        for (_, m) in &self.submods {
+            if let Some(v) = m.find_method(full_name, mthd) {
+                return Some(v);
+            }
+        }
+        None
+    }
+
+    fn add_method(&mut self, tp: &STType, mthd: &str, fntp: FNType) -> Result<(), ()> {
+        let full_name = tp.get_st_full_name();
+        if let Some(m) = self.methods.get_mut(&full_name) {
+            if let Some(_) = m.get(mthd) {
+                // duplicate method
+                return Err(());
+            }
+            m.insert(mthd.to_string(), fntp);
+        } else {
+            let mut m = FxHashMap::default();
+            m.insert(mthd.to_string(), fntp);
+            self.methods.insert(full_name, m);
+        }
+        Ok(())
+    }
+
     fn get_ns_completions_pri(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         for (k, _) in self.submods.iter() {
             vmap.insert(
@@ -289,7 +360,7 @@ impl PLDiag {
         match self {
             PLDiag::Error(s) => {
                 let err = format!(
-                    "error at {}\n\t{}",
+                    "{}\n\t{}",
                     format!(
                         "{}:{}:{}",
                         path,
@@ -299,11 +370,11 @@ impl PLDiag {
                     .red(),
                     format!("{}", s.diag.message.blue().bold()),
                 );
-                println!("{}", err);
+                log::error!("{}", err);
             }
             PLDiag::Warn(s) => {
                 let err = format!(
-                    "warn at {}\n\t{}",
+                    "{}\n\t{}",
                     format!(
                         "{}:{}:{}",
                         path,
@@ -313,7 +384,7 @@ impl PLDiag {
                     .yellow(),
                     format!("{}", s.diag.message.blue().bold()),
                 );
-                println!("{}", err);
+                log::warn!("{}", err);
             }
         }
     }
@@ -430,6 +501,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             .to_string();
         let mut ctx = Ctx {
             need_highlight: true,
+            generic_types: FxHashMap::default(),
             plmod: Mod::new(f, src_file_path.to_string()),
             father: None,
             context,
@@ -472,6 +544,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn new_child(&'a self, start: Pos) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
             need_highlight: self.need_highlight,
+            generic_types: FxHashMap::default(),
             plmod: self.plmod.new_child(),
             father: Some(self),
             context: self.context,
@@ -520,6 +593,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn tmp_child_ctx(&'a self) -> Ctx<'a, 'ctx> {
         let mut ctx = Ctx {
             need_highlight: self.need_highlight,
+            generic_types: FxHashMap::default(),
             plmod: self.plmod.new_child(),
             father: Some(self),
             context: self.context,
@@ -582,6 +656,11 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             .append_basic_block(self.init_func.unwrap(), "alloc");
         self.context
             .append_basic_block(self.init_func.unwrap(), "entry");
+    }
+    pub fn add_method(&mut self, tp: &STType, mthd: &str, fntp: FNType, range: Range) {
+        if self.plmod.add_method(tp, mthd, fntp).is_err() {
+            self.add_err(range, ErrorCode::DUPLICATE_METHOD);
+        }
     }
     pub fn init_fn_ret(&mut self) {
         let alloc = self.init_func.unwrap().get_first_basic_block().unwrap();
@@ -661,8 +740,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn get_type(&self, name: &str, range: Range) -> Result<Rc<RefCell<PLType>>, PLDiag> {
-        let v = self.plmod.types.get(name);
-        if let Some(pv) = v {
+        if let Some(pv) = self.generic_types.get(name) {
+            return Ok(pv.clone());
+        }
+        if let Some(pv) = self.plmod.types.get(name) {
             return Ok(pv.clone());
         }
         if let Some(father) = self.father {
@@ -675,18 +756,15 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     /// 如果没在当前module的全局变量表中找到，将会生成一个
     /// 该全局变量的声明
     pub fn get_or_add_global(
-        &self,
+        &mut self,
         name: &str,
-        m: &Mod,
         pltype: Rc<RefCell<PLType>>,
     ) -> PointerValue<'ctx> {
-        let global = self.module.get_global(&m.get_full_name(name));
+        let global = self.module.get_global(name);
         if global.is_none() {
-            let global = self.module.add_global(
-                pltype.borrow().get_basic_type(self),
-                None,
-                &m.get_full_name(name),
-            );
+            let global = self
+                .module
+                .add_global(pltype.borrow().get_basic_type(self), None, name);
             global.set_linkage(Linkage::External);
             return global.as_pointer_value();
         }
@@ -726,12 +804,46 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         pltype: Rc<RefCell<PLType>>,
         range: Range,
     ) -> Result<(), PLDiag> {
+        if let PLType::GENERIC(g) = &*pltype.borrow() {
+            if g.curpltype.is_some() {
+                let cur = g.curpltype.as_ref().unwrap();
+                return self.add_type(
+                    cur.borrow().get_name(),
+                    cur.clone(),
+                    cur.borrow().get_range().unwrap(),
+                );
+            }
+            unreachable!()
+        }
         if self.plmod.types.contains_key(&name) {
             return Err(self.add_err(range, ErrorCode::REDEFINE_TYPE));
         }
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
         self.plmod.types.insert(name, pltype.clone());
         Ok(())
+    }
+    pub fn add_type_without_check(&mut self, pltype: Rc<RefCell<PLType>>) {
+        if let PLType::GENERIC(g) = &*pltype.borrow() {
+            if g.curpltype.is_some() {
+                return self.add_type_without_check(g.curpltype.as_ref().unwrap().clone());
+            }
+            return;
+        }
+        let name = pltype.borrow().get_name();
+        if self.plmod.types.contains_key(&name) {
+            return;
+        }
+        self.plmod.types.insert(name, pltype.clone());
+    }
+    pub fn add_generic_type(&mut self, name: String, pltype: Rc<RefCell<PLType>>, range: Range) {
+        self.send_if_go_to_def(range, range, self.plmod.path.clone());
+        self.generic_types.insert(name, pltype.clone());
+    }
+    pub fn move_generic_types(&mut self) -> FxHashMap<String, Rc<RefCell<PLType>>> {
+        self.generic_types.clone()
+    }
+    pub fn reset_generic_types(&mut self, mp: FxHashMap<String, Rc<RefCell<PLType>>>) {
+        self.generic_types = mp
     }
     pub fn add_doc_symbols(&mut self, pltype: Rc<RefCell<PLType>>) {
         match &*RefCell::borrow(&pltype) {
@@ -740,7 +852,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                     self.doc_symbols.borrow_mut().push(f.get_doc_symbol())
                 }
             }
-            PLType::STRUCT(st) => self.doc_symbols.borrow_mut().push(st.get_doc_symbol(self)),
+            PLType::STRUCT(st) => self.doc_symbols.borrow_mut().push(st.get_doc_symbol()),
             _ => {}
         }
     }
@@ -981,6 +1093,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             let tp = match *RefCell::borrow(&f) {
                 PLType::FN(_) => continue,
                 PLType::ARR(_) => continue,
+                PLType::PLACEHOLDER(_) => CompletionItemKind::STRUCT,
                 PLType::GENERIC(_) => CompletionItemKind::STRUCT,
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
@@ -1037,6 +1150,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 PLType::GENERIC(_) => CompletionItemKind::STRUCT,
                 PLType::VOID => CompletionItemKind::KEYWORD,
                 PLType::POINTER(_) => todo!(),
+                PLType::PLACEHOLDER(_) => CompletionItemKind::STRUCT,
             };
             if k.starts_with('|') {
                 // skip method
@@ -1194,7 +1308,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         loop {
             match &*RefCell::borrow(&tp.clone()) {
                 PLType::POINTER(p) => {
-                    tp = *p.clone();
+                    tp = p.clone();
                     value = self.builder.build_load(value, "load").into_pointer_value();
                 }
                 _ => break,
@@ -1210,7 +1324,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         loop {
             match &*RefCell::borrow(&tp.clone()) {
                 PLType::POINTER(p) => {
-                    tp = *p.clone();
+                    tp = p.clone();
                 }
                 _ => break,
             }

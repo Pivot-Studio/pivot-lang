@@ -235,7 +235,7 @@ impl Node for StatementsNode {
             let (_, _, terminator_res) = re.unwrap();
             terminator = terminator_res;
         }
-        for root in ctx.roots.borrow().iter() {
+        for root in ctx.roots.clone().borrow().iter() {
             ctx.gc_rm_root(root.as_basic_value_enum())
         }
         Ok((None, None, terminator))

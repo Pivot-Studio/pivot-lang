@@ -85,6 +85,7 @@ fn struct_init_field(input: Span) -> IResult<Span, Box<StructInitFieldNode>> {
 #[test_parser("a{a : 1}")]
 #[test_parser("a{a : 1,b:2}")]
 #[test_parser("a{}")]
+#[test_parser("a<i64|B>{}")]
 /// ```enbf
 /// struct_init = type_name "{" (struct_init_field ("," struct_init_field)* )? "}" ;
 /// ```
@@ -92,6 +93,7 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
             type_name,
+            opt(generic_param_def),
             tag_token(TokenType::LBRACE),
             separated_list0(
                 tag_token(TokenType::COMMA),
@@ -99,7 +101,7 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
             ),
             tag_token(TokenType::RBRACE),
         )),
-        |(name, _, fields, _)| {
+        |(name, generic_params, _, fields, _)| {
             let range = if fields.len() > 0 {
                 name.range().start.to(fields.last().unwrap().range().end)
             } else {
@@ -107,6 +109,7 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
             };
             res_enum(
                 StructInitNode {
+                    generic_params,
                     typename: name,
                     fields,
                     range,

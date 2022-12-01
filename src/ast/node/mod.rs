@@ -80,8 +80,13 @@ pub enum TypeNodeEnum {
 pub trait TypeNode: RangeTrait + AsAny {
     fn format(&self, tabs: usize, prefix: &str) -> String;
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
-    fn get_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
+    fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
     fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>);
+    fn eq_or_infer<'a, 'ctx>(
+        &self,
+        ctx: &mut Ctx<'a, 'ctx>,
+        pltype: Rc<RefCell<PLType>>,
+    ) -> Result<bool, PLDiag>;
 }
 type TypeNodeResult<'ctx> = Result<Rc<RefCell<PLType>>, PLDiag>;
 
@@ -226,23 +231,23 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             // TODO: check overflow
             let v = match num {
                 Num::INT(i) => {
-                    if !expect.borrow().get_basic_type(&self).is_int_type() {
+                    if !expect.borrow().get_basic_type(self).is_int_type() {
                         return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH));
                     }
                     let int = expect
                         .borrow()
-                        .get_basic_type(&self)
+                        .get_basic_type(self)
                         .into_int_type()
                         .const_int(i, false);
                     int.as_any_value_enum()
                 }
                 Num::FLOAT(f) => {
-                    if !expect.borrow().get_basic_type(&self).is_float_type() {
+                    if !expect.borrow().get_basic_type(self).is_float_type() {
                         return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH));
                     }
                     let float = expect
                         .borrow()
-                        .get_basic_type(&self)
+                        .get_basic_type(self)
                         .into_float_type()
                         .const_float(f);
                     float.as_any_value_enum()

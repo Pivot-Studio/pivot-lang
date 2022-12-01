@@ -180,10 +180,10 @@ impl Node for ExternIDNode {
         }
         if let Some(symbol) = plmod.get_global_symbol(&self.id.name) {
             ctx.push_semantic_token(self.id.range, SemanticTokenType::VARIABLE, 0);
-            let g = ctx.get_or_add_global(&self.id.name, &plmod, symbol.tp.clone());
             let pltype = symbol.tp.clone();
             ctx.set_if_refs(symbol.loc.clone(), self.range);
             ctx.send_if_go_to_def(self.range, symbol.range, plmod.path.clone());
+            let g = ctx.get_or_add_global(&plmod.get_full_name(&self.id.name), symbol.tp.clone());
             return Ok((
                 Some({
                     let mut res: PLValue = g.into();
@@ -195,7 +195,6 @@ impl Node for ExternIDNode {
             ));
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
-            ctx.set_if_refs_tp(tp.clone(), self.range);
             let range = &tp.clone().borrow().get_range();
             let re = match &*tp.clone().borrow() {
                 PLType::FN(_) => {
@@ -245,7 +244,7 @@ impl ExternIDNode {
             }
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
-            ctx.set_if_refs_tp(tp.clone(), self.range);
+            // ctx.set_if_refs_tp(tp.clone(), self.range);
             let range = &tp.clone().borrow().get_range();
             let re = match *tp.clone().borrow() {
                 PLType::STRUCT(_) => Ok((None, Some(tp), TerminatorEnum::NONE)),

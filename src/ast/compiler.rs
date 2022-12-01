@@ -17,6 +17,7 @@ use inkwell::{
     targets::{FileType, InitializationConfig, Target, TargetMachine},
     OptimizationLevel,
 };
+use log::{info, trace, warn};
 use rustc_hash::FxHashSet;
 use std::{
     env,
@@ -28,7 +29,6 @@ use std::{path::PathBuf, process::Command};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Copy)]
 pub struct Options {
-    pub verbose: bool,
     pub genir: bool,
     pub printast: bool,
     pub optimization: HashOptimizationLevel,
@@ -122,7 +122,7 @@ pub fn run(p: &Path, opt: OptimizationLevel) {
 pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
     let path = get_config_path(docs.file(db).to_string());
     if path.is_err() {
-        eprintln!("lsp error: {}", path.err().unwrap());
+        log::error!("lsp error: {}", path.err().unwrap());
         return;
     }
     let confinput = FileCompileInput::new(
@@ -136,7 +136,7 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
 
     let re = get_config(db, confinput.get_file_content(db).unwrap());
     if re.is_err() {
-        eprintln!("lsp error: {}", re.err().unwrap());
+        log::error!("lsp error: {}", re.err().unwrap());
         return;
     }
     let mut config = re.unwrap();
@@ -171,7 +171,7 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
     let src = re.unwrap();
     let parse_result = parse(db, src);
     if let Err(e) = parse_result {
-        eprintln!("{}", e);
+        log::error!("source code parse failed {}", e);
         return None;
     }
     let node = parse_result.unwrap();
@@ -203,14 +203,14 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         }
         if errs_num > 0 {
             if errs_num == 1 {
-                println!(
+                log::error!(
                     "{}",
                     format!("compile failed: there is {} error", errs_num).bright_red()
                 );
                 println!("{}", format!("{}", dot::ERROR));
                 return;
             }
-            println!(
+            log::error!(
                 "{}",
                 format!("compile failed: there are {} errors", errs_num).bright_red()
             );
@@ -220,12 +220,12 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     }
     if op.printast {
         let time = now.elapsed();
-        println!("print ast done, time: {:?}", time);
+        info!("print ast done, time: {:?}", time);
         return;
     }
     if op.fmt {
         let time = now.elapsed();
-        println!("gen source done, time: {:?}", time);
+        info!("gen source done, time: {:?}", time);
         return;
     }
     let mut mods = compile_dry::accumulated::<ModBuffer>(db, docs);
@@ -235,7 +235,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let mut set = FxHashSet::default();
     set.insert(m.clone());
     _ = remove_file(m.clone()).unwrap();
-    // println!("rm {}", m.to_str().unwrap());
+    log::debug!("rm {}", m.to_str().unwrap());
     for m in mods {
         if set.contains(&m) {
             continue;
@@ -244,7 +244,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         // println!("{}", m.clone().to_str().unwrap());
         _ = llvmmod.link_in_module(Module::parse_bitcode_from_path(m.clone(), &ctx).unwrap());
         _ = remove_file(m.clone()).unwrap();
-        // println!("rm {}", m.to_str().unwrap());
+        log::debug!("rm {}", m.to_str().unwrap());
     }
     llvmmod.verify().unwrap();
     let tm = get_target_machine(op.optimization.to_llvm());
@@ -264,14 +264,12 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         pass_manager_builder.populate_function_pass_manager(&fpm);
         pass_manager_builder.populate_module_pass_manager(&mpm);
         let b = fpm.initialize();
-        println!("fpm init: {}", b);
+        trace!("fpm init: {}", b);
         for f in llvmmod.get_functions() {
             let optimized = fpm.run_on(&f);
-            if op.verbose {
-                println!("try to optimize func {}", f.get_name().to_str().unwrap());
-                let oped = if optimized { "yes" } else { "no" };
-                println!("optimized: {}", oped,);
-            }
+            trace!("try to optimize func {}", f.get_name().to_str().unwrap());
+            let oped = if optimized { "yes" } else { "no" };
+            trace!("optimized: {}", oped,);
         }
         fpm.finalize();
         mpm.run_on(&llvmmod);
@@ -291,12 +289,12 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     println!("jit executable file writted to: {}", &out);
     let mut cmd = Command::new("clang-14");
     if cfg!(target_os = "linux") {
-        println!("target os is linux");
+        trace!("target os is linux");
         cmd.arg("-ltinfo");
     }
     let root = env::var("PL_ROOT");
     if root.is_err() {
-        println!("warn: PL_ROOT not set, skip linking libvm");
+        warn!("warn: PL_ROOT not set, skip linking libvm");
         return;
     }
     let root = root.unwrap();
@@ -323,8 +321,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         .arg("-g");
     let res = cmd.status();
     if res.is_err() || !res.as_ref().unwrap().success() {
-        println!("{}", format!("link failed: {}", res.unwrap()).bright_red());
-        println!("warning: link with pivot lang vm failed, could be caused by libvm not found.");
+        warn!("{}", format!("link failed: {}", res.unwrap()).bright_red());
     } else {
         println!("link succ, output file: {}", fo);
     }
@@ -466,7 +463,6 @@ mod test {
             input,
             out.to_string(),
             Options {
-                verbose: true,
                 optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
                 genir: true,
                 printast: false,
@@ -483,7 +479,6 @@ mod test {
             input,
             out.to_string(),
             Options {
-                verbose: true,
                 optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
                 genir: false,
                 printast: true,
@@ -496,7 +491,6 @@ mod test {
             input,
             out.to_string(),
             Options {
-                verbose: true,
                 optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
                 genir: false,
                 printast: true,

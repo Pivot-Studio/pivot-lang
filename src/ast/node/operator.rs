@@ -1,11 +1,10 @@
 use super::primary::VarNode;
 use super::*;
 use crate::ast::ctx::Ctx;
+use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::PLType;
 use crate::ast::pltype::PriType;
 use crate::ast::tokens::TokenType;
-
-use crate::ast::diag::ErrorCode;
 use crate::handle_calc;
 use inkwell::IntPredicate;
 use internal_macro::range;
@@ -118,8 +117,11 @@ impl Node for BinOpNode {
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let (lrange, rrange) = (self.left.range(), self.right.range());
         let (lv, lpltype, _) = self.left.emit(ctx)?;
-        let left = ctx.try_load2var(lrange, lv.unwrap())?;
         let (rv, _, _) = ctx.emit_with_expectation(&mut self.right, lpltype.clone())?;
+        if lv.is_none() || rv.is_none() {
+            return Err(ctx.add_err(self.range, ErrorCode::EXPECT_VALUE));
+        }
+        let left = ctx.try_load2var(lrange, lv.unwrap())?;
         let right = ctx.try_load2var(rrange, rv.unwrap())?;
         Ok(match self.op {
             TokenType::PLUS => {
@@ -185,12 +187,7 @@ impl Node for BinOpNode {
                     Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
                 ),
-                _ => {
-                    return Err(ctx.add_err(
-                        self.range,
-                        crate::ast::diag::ErrorCode::VALUE_NOT_COMPARABLE,
-                    ))
-                }
+                _ => return Err(ctx.add_err(self.range, ErrorCode::VALUE_NOT_COMPARABLE)),
             },
             TokenType::AND => match *lpltype.unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::BOOL) => (
@@ -209,11 +206,7 @@ impl Node for BinOpNode {
                     Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
                 ),
-                _ => {
-                    return Err(
-                        ctx.add_err(self.range, crate::ast::diag::ErrorCode::LOGIC_OP_NOT_BOOL)
-                    )
-                }
+                _ => return Err(ctx.add_err(self.range, ErrorCode::LOGIC_OP_NOT_BOOL)),
             },
             TokenType::OR => match *lpltype.unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::BOOL) => (
@@ -238,12 +231,7 @@ impl Node for BinOpNode {
                     )
                 }
             },
-            _ => {
-                return Err(ctx.add_err(
-                    self.range,
-                    crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR,
-                ))
-            }
+            _ => return Err(ctx.add_err(self.range, ErrorCode::UNRECOGNIZED_BIN_OPERATOR)),
         })
     }
 }
@@ -298,7 +286,7 @@ impl Node for TakeOpNode {
                                 && trigger.as_ref().unwrap() == "."
                             {
                                 if let PLType::STRUCT(s) = &*pltype.clone().borrow() {
-                                    let completions = s.get_completions();
+                                    let completions = s.get_completions(ctx);
                                     ctx.completion_items.set(completions);
                                     ctx.action = None;
                                 }
@@ -307,18 +295,18 @@ impl Node for TakeOpNode {
                         let range = id.range();
                         if let PLType::STRUCT(s) = &*pltype.clone().borrow() {
                             let field = s.fields.get(&id.name);
-                            let method = s.methods.get(&id.name);
+                            let method = s.find_method(&ctx, &id.name);
                             if let Some(field) = field {
                                 ctx.push_semantic_token(range, SemanticTokenType::PROPERTY, 0);
                                 index = field.index;
                                 ctx.set_if_refs(field.refs.clone(), range);
                                 ctx.send_if_go_to_def(range, field.range, s.path.clone());
-                                pltype = field.typenode.get_type(ctx).unwrap().clone();
+                                pltype = field.typenode.get_type(ctx)?.clone();
                             } else if let Some(mthd) = method {
                                 ctx.push_semantic_token(range, SemanticTokenType::METHOD, 0);
-                                // ctx.set_if_refs(mthd.refs.clone(), range);
                                 let mut mthd = mthd.clone();
-                                mthd.param_pltypes.insert(0, pltype.clone());
+                                mthd.param_pltypes
+                                    .insert(0, pltype.borrow().get_typenode(ctx));
                                 ctx.send_if_go_to_def(
                                     range,
                                     mthd.range,
@@ -360,7 +348,7 @@ impl Node for TakeOpNode {
             ctx.if_completion(|ctx, (pos, trigger)| {
                 if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
                     if let PLType::STRUCT(s) = &*tp.borrow() {
-                        let completions = s.get_completions();
+                        let completions = s.get_completions(&ctx);
                         ctx.completion_items.set(completions);
                         ctx.action = None;
                     }

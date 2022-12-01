@@ -2,7 +2,11 @@ use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
     ast::node::*,
-    ast::node::{function::FuncDefNode, global::GlobalNode, types::StructDefNode},
+    ast::node::{
+        function::FuncDefNode,
+        global::GlobalNode,
+        types::{GenericParamNode, StructDefNode},
+    },
     ast::{
         node::{
             control::*, implement::ImplNode, operator::*, primary::*, program::*, statement::*,
@@ -59,7 +63,7 @@ pub enum TopLevel {
 
 #[derive(Clone)]
 pub enum ComplexOp {
-    CallOp((Vec<Box<NodeEnum>>, Range)),
+    CallOp((Vec<Box<NodeEnum>>, Range, Option<Box<GenericParamNode>>)),
     IndexOp(Box<NodeEnum>),
     FieldOp(Option<Box<VarNode>>),
 }

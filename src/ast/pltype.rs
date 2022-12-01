@@ -3,10 +3,18 @@ use super::ctx::MemberType;
 use super::ctx::PLDiag;
 use super::diag::ErrorCode;
 use super::node::function::FuncDefNode;
+use super::node::pkg::ExternIDNode;
+use super::node::primary::NumNode;
+use super::node::primary::VarNode;
+use super::node::types::ArrayTypeNameNode;
+use super::node::types::PointerTypeNode;
+use super::node::types::TypeNameNode;
 use super::node::NodeEnum;
+use super::node::Num;
 use super::node::TypeNode;
 use super::node::TypeNodeEnum;
 use super::range::Range;
+use indexmap::IndexMap;
 use inkwell::debug_info::*;
 use inkwell::module::Linkage;
 use inkwell::types::ArrayType;
@@ -18,7 +26,6 @@ use inkwell::types::StructType;
 use inkwell::types::VoidType;
 use inkwell::values::FunctionValue;
 use inkwell::AddressSpace;
-use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::DocumentSymbol;
@@ -54,8 +61,9 @@ pub enum PLType {
     ARR(ARRType),
     PRIMITIVE(PriType),
     VOID,
-    POINTER(Box<Rc<RefCell<PLType>>>),
+    POINTER(Rc<RefCell<PLType>>),
     GENERIC(GenericType),
+    PLACEHOLDER(PlaceHolderType),
 }
 /// # PriType
 /// Primitive type for pivot-lang
@@ -130,9 +138,132 @@ impl PriType {
         }
     }
 }
+pub fn eq(l: Rc<RefCell<PLType>>, r: Rc<RefCell<PLType>>) -> bool {
+    match (&*l.borrow(), &*r.borrow()) {
+        (PLType::GENERIC(l), PLType::GENERIC(r)) => {
+            if l == r {
+                return true;
+            }
+        }
+        _ => {}
+    }
+    match &mut *l.borrow_mut() {
+        PLType::GENERIC(l) => {
+            if l.curpltype.is_some() {
+                return eq(l.curpltype.as_ref().unwrap().clone(), r);
+            }
+            l.set_type(r.clone());
+            return true;
+        }
+        _ => {}
+    }
+    match (&*l.borrow(), &*r.borrow()) {
+        (PLType::PRIMITIVE(l), PLType::PRIMITIVE(r)) => l == r,
+        (PLType::VOID, PLType::VOID) => true,
+        (PLType::POINTER(l), PLType::POINTER(r)) => eq(l.clone(), r.clone()),
+        (PLType::ARR(l), PLType::ARR(r)) => {
+            eq(l.get_elem_type(), r.get_elem_type()) && l.size == r.size
+        }
+        (PLType::STRUCT(l), PLType::STRUCT(r)) => l.name == r.name && l.path == r.path,
+        (PLType::FN(l), PLType::FN(r)) => l == r,
+        _ => false,
+    }
+}
 
+fn new_typename_node(name: &str, range: Range) -> Box<TypeNodeEnum> {
+    Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
+        id: Some(ExternIDNode {
+            ns: vec![],
+            id: Box::new(VarNode {
+                name: name.to_string(),
+                range,
+            }),
+            complete: true,
+            singlecolon: false,
+            range,
+        }),
+        generic_params: None,
+        range,
+    }))
+}
+fn new_arrtype_node(typenode: Box<TypeNodeEnum>, size: u64) -> Box<TypeNodeEnum> {
+    Box::new(TypeNodeEnum::ArrayTypeNode(ArrayTypeNameNode {
+        id: typenode,
+        size: Box::new(NodeEnum::Num(NumNode {
+            value: Num::INT(size),
+            range: Default::default(),
+        })),
+        range: Default::default(),
+    }))
+}
+fn new_ptrtype_node(typenode: Box<TypeNodeEnum>) -> Box<TypeNodeEnum> {
+    Box::new(TypeNodeEnum::PointerTypeNode(PointerTypeNode {
+        elm: typenode,
+        range: Default::default(),
+    }))
+}
+fn new_exid_node(modname: &str, name: &str, range: Range) -> Box<TypeNodeEnum> {
+    Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
+        id: Some(ExternIDNode {
+            ns: vec![Box::new(VarNode {
+                name: modname.to_string(),
+                range,
+            })],
+            id: Box::new(VarNode {
+                name: name.to_string(),
+                range,
+            }),
+            complete: true,
+            singlecolon: false,
+            range,
+        }),
+        generic_params: None,
+        range,
+    }))
+}
 impl PLType {
-    pub fn is(self, pri_type: PriType) -> bool {
+    pub fn get_typenode(&self, ctx: &Ctx) -> Box<TypeNodeEnum> {
+        match self {
+            PLType::STRUCT(st) => {
+                if st.path == ctx.plmod.path {
+                    new_typename_node(&st.name, st.range)
+                } else {
+                    new_exid_node(
+                        st.path
+                            .split("/")
+                            .collect::<Vec<_>>()
+                            .last()
+                            .unwrap()
+                            .split(".")
+                            .collect::<Vec<_>>()
+                            .first()
+                            .unwrap(),
+                        &st.name,
+                        st.range,
+                    )
+                }
+            }
+            PLType::ARR(arr) => new_arrtype_node(
+                arr.get_elem_type().borrow().get_typenode(ctx),
+                arr.size as u64,
+            ),
+            PLType::PRIMITIVE(p) => new_typename_node(&p.get_name(), Default::default()),
+            PLType::VOID => new_typename_node("void", Default::default()),
+            PLType::POINTER(p) => new_ptrtype_node(p.borrow().get_typenode(ctx)),
+            PLType::GENERIC(g) => {
+                if g.curpltype.is_some() {
+                    g.curpltype.as_ref().unwrap().borrow().get_typenode(ctx)
+                } else {
+                    new_typename_node(&g.name, Default::default())
+                }
+            }
+            PLType::PLACEHOLDER(p) => {
+                new_typename_node(&p.get_place_holder_name(), Default::default())
+            }
+            _ => unreachable!(),
+        }
+    }
+    pub fn is(&self, pri_type: &PriType) -> bool {
         if let PLType::PRIMITIVE(pri) = self {
             pri == pri_type
         } else {
@@ -152,6 +283,7 @@ impl PLType {
             PLType::VOID => None,
             PLType::POINTER(_) => None,
             PLType::GENERIC(_) => None,
+            PLType::PLACEHOLDER(_) => None,
         }
     }
 
@@ -159,7 +291,7 @@ impl PLType {
     /// get the basic type of the type
     /// used in code generation
     /// may panic if the type is void type
-    pub fn get_basic_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> BasicTypeEnum<'ctx> {
+    pub fn get_basic_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> BasicTypeEnum<'ctx> {
         self.get_basic_type_op(ctx).unwrap()
     }
 
@@ -173,7 +305,14 @@ impl PLType {
             }
             PLType::VOID => "void".to_string(),
             PLType::POINTER(p) => "*".to_string() + &p.borrow().get_name(),
-            PLType::GENERIC(g) => g.name.clone(),
+            PLType::GENERIC(g) => {
+                if g.curpltype.is_some() {
+                    g.curpltype.as_ref().unwrap().borrow().get_name()
+                } else {
+                    g.name.clone()
+                }
+            }
+            PLType::PLACEHOLDER(p) => p.name.clone(),
         }
     }
 
@@ -192,6 +331,7 @@ impl PLType {
             }
             PLType::VOID => "void".to_string(),
             PLType::POINTER(p) => p.borrow().get_full_elm_name(),
+            PLType::PLACEHOLDER(p) => p.name.clone(),
         }
     }
     pub fn get_ptr_depth(&self) -> usize {
@@ -212,13 +352,17 @@ impl PLType {
             PLType::PRIMITIVE(_) => None,
             PLType::VOID => None,
             PLType::POINTER(_) => None,
+            PLType::PLACEHOLDER(p) => Some(p.range.clone()),
         }
     }
 
     /// # get_basic_type_op
     /// get the basic type of the type
     /// used in code generation
-    pub fn get_basic_type_op<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Option<BasicTypeEnum<'ctx>> {
+    pub fn get_basic_type_op<'a, 'ctx>(
+        &self,
+        ctx: &mut Ctx<'a, 'ctx>,
+    ) -> Option<BasicTypeEnum<'ctx>> {
         match self {
             PLType::GENERIC(g) => match &g.curpltype {
                 Some(pltype) => pltype.borrow().get_basic_type_op(ctx),
@@ -243,7 +387,7 @@ impl PLType {
                     .ptr_type(inkwell::AddressSpace::Global)
                     .as_basic_type_enum(),
             ),
-            PLType::STRUCT(s) => Some(s.struct_type(&ctx).as_basic_type_enum()),
+            PLType::STRUCT(s) => Some(s.struct_type(ctx).as_basic_type_enum()),
             PLType::ARR(a) => Some(a.arr_type(ctx).as_basic_type_enum()),
             PLType::PRIMITIVE(t) => Some(t.get_basic_type(ctx)),
             PLType::VOID => None,
@@ -253,12 +397,26 @@ impl PLType {
                     .ptr_type(AddressSpace::Generic)
                     .as_basic_type_enum(),
             ),
+            PLType::PLACEHOLDER(p) => Some({
+                let name = &format!("__placeholder__{}", p.name);
+                ctx.module
+                    .get_struct_type(name)
+                    .or(Some({
+                        let st = ctx
+                            .context
+                            .opaque_struct_type(&format!("__placeholder__{}", p.name));
+                        st.set_body(&[], false);
+                        st
+                    }))
+                    .unwrap()
+                    .into()
+            }),
         }
     }
 
     /// # get_ret_type
     /// get the return type, which is void type or primitive type
-    pub fn get_ret_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> RetTypeEnum<'ctx> {
+    pub fn get_ret_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> RetTypeEnum<'ctx> {
         match self {
             PLType::VOID => RetTypeEnum::VOID(ctx.context.void_type()),
             _ => RetTypeEnum::BASIC(self.get_basic_type(ctx)),
@@ -274,7 +432,7 @@ impl PLType {
 
     /// # get_ditype
     /// get the debug info type of the pltype
-    pub fn get_ditype<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
+    pub fn get_ditype<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
         let td = ctx.targetmachine.get_target_data();
         match self {
             PLType::FN(_) => None,
@@ -286,6 +444,7 @@ impl PLType {
                     PLType::PRIMITIVE(PriType::I64).get_ditype(ctx)
                 }
             }
+            PLType::PLACEHOLDER(_) => PLType::PRIMITIVE(PriType::I64).get_ditype(ctx),
             PLType::ARR(arr) => {
                 let elemdi = arr.element_type.borrow().get_ditype(ctx)?;
                 let etp = &arr.element_type.borrow().get_basic_type(ctx);
@@ -457,15 +616,22 @@ pub struct Field {
 }
 
 impl Field {
-    pub fn get_di_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, offset: u64) -> (DIType<'ctx>, u64) {
-        let pltp = self.typenode.get_type(ctx).unwrap();
-        let depth = RefCell::borrow(&pltp).get_ptr_depth();
+    pub fn get_di_type<'a, 'ctx>(
+        &self,
+        ctx: &mut Ctx<'a, 'ctx>,
+        offset: u64,
+    ) -> (DIType<'ctx>, u64) {
+        let field_pltype = match self.typenode.get_type(ctx) {
+            Ok(field_pltype) => field_pltype,
+            Err(_) => ctx.get_type("i64", Default::default()).unwrap(),
+        };
+        let depth = RefCell::borrow(&field_pltype).get_ptr_depth();
         if let Some(x) = ctx
             .ditypes_placeholder
             .borrow_mut()
-            .get(&*RefCell::borrow(&pltp).get_full_elm_name())
+            .get(&*RefCell::borrow(&field_pltype).get_full_elm_name())
         {
-            if !matches!(*RefCell::borrow(&pltp), PLType::POINTER(_)) {
+            if !matches!(*RefCell::borrow(&field_pltype), PLType::POINTER(_)) {
                 // 出现循环引用，但是不是指针
                 // TODO 应该只需要一层是指针就行，目前的检查要求每一层都是指针
                 ctx.add_err(self.range, ErrorCode::ILLEGAL_SELF_RECURSION);
@@ -485,7 +651,7 @@ impl Field {
             });
             return (placeholder.as_type(), offset + size);
         }
-        let di_type = RefCell::borrow(&pltp).get_ditype(ctx);
+        let di_type = RefCell::borrow(&field_pltype).get_ditype(ctx);
         let debug_type = di_type.unwrap();
         (
             ctx.dibuilder
@@ -504,11 +670,11 @@ impl Field {
             offset + debug_type.get_size_in_bits(),
         )
     }
-    pub fn get_doc_symbol<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> DocumentSymbol {
+    pub fn get_doc_symbol<'a, 'ctx>(&self) -> DocumentSymbol {
         #[allow(deprecated)]
         DocumentSymbol {
             name: self.name.clone(),
-            detail: Some(RefCell::borrow(&self.typenode.get_type(ctx).unwrap()).get_name()),
+            detail: Some(self.typenode.format(0, "")),
             kind: SymbolKind::FIELD,
             tags: None,
             deprecated: None,
@@ -523,14 +689,14 @@ impl Field {
 pub struct FNType {
     pub name: String,     // name for lsp
     pub llvmname: String, // name in llvm ir
-    pub param_pltypes: Vec<Rc<RefCell<PLType>>>,
+    pub param_pltypes: Vec<Box<TypeNodeEnum>>,
     pub param_names: Vec<String>,
-    pub ret_pltype: Rc<RefCell<PLType>>,
+    pub ret_pltype: Box<TypeNodeEnum>,
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub method: bool,
-    pub generic_map: FxHashMap<String, Rc<RefCell<PLType>>>,
+    pub generic_map: IndexMap<String, Rc<RefCell<PLType>>>,
     pub generic: bool,
     pub node: Box<FuncDefNode>,
 }
@@ -568,21 +734,32 @@ impl FNType {
     /// try get function value from module
     ///
     /// if not found, create a declaration
-    pub fn get_or_insert_fn<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> FunctionValue<'ctx> {
+    pub fn get_or_insert_fn<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> FunctionValue<'ctx> {
         let llvmname = self.append_name_with_generic(self.llvmname.clone());
         if let Some(v) = ctx.module.get_function(&llvmname) {
             return v;
         }
         let mut param_types = vec![];
         for param_pltype in self.param_pltypes.iter() {
-            param_types.push(RefCell::borrow(&param_pltype).get_basic_type(ctx).into());
+            param_types.push(
+                param_pltype
+                    .get_type(ctx)
+                    .unwrap()
+                    .borrow()
+                    .get_basic_type(ctx)
+                    .into(),
+            );
         }
-        let fn_type = RefCell::borrow(&self.ret_pltype)
+        let fn_type = &self
+            .ret_pltype
+            .get_type(ctx)
+            .unwrap()
+            .borrow()
             .get_ret_type(ctx)
             .fn_type(&param_types, false);
         let fn_value = ctx
             .module
-            .add_function(&llvmname, fn_type, Some(Linkage::External));
+            .add_function(&llvmname, *fn_type, Some(Linkage::External));
         fn_value
     }
     pub fn gen_snippet(&self) -> String {
@@ -628,39 +805,35 @@ impl FNType {
                 params += &format!(
                     "{}: {}",
                     self.param_names[0],
-                    RefCell::borrow(&self.param_pltypes[0]).get_name()
+                    &self.param_pltypes[0].format(0, "")
                 );
             }
             for i in 1..self.param_names.len() {
                 params += &format!(
                     ", {}: {}",
                     self.param_names[i],
-                    RefCell::borrow(&self.param_pltypes[i]).get_name()
+                    &self.param_pltypes[i].format(0, "")
                 );
             }
         }
-        format!(
-            "fn ({}) {}",
-            params,
-            RefCell::borrow(&self.ret_pltype).get_name()
-        )
+        format!("fn ({}) {}", params, &self.ret_pltype.format(0, ""))
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ARRType {
-    pub element_type: Box<Rc<RefCell<PLType>>>,
+    pub element_type: Rc<RefCell<PLType>>,
     pub size: u32,
 }
 
 impl ARRType {
-    pub fn arr_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> ArrayType<'ctx> {
+    pub fn arr_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> ArrayType<'ctx> {
         self.element_type
             .borrow()
             .get_basic_type(ctx)
             .array_type(self.size)
     }
-    pub fn get_elem_type<'a, 'ctx>(&'a self) -> Box<Rc<RefCell<PLType>>> {
+    pub fn get_elem_type<'a, 'ctx>(&'a self) -> Rc<RefCell<PLType>> {
         self.element_type.clone()
     }
 }
@@ -674,12 +847,56 @@ pub struct STType {
     pub range: Range,
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
-    pub methods: FxHashMap<String, FNType>,
-    pub generic_map: FxHashMap<String, Rc<RefCell<PLType>>>,
+    pub generic_map: IndexMap<String, Rc<RefCell<PLType>>>,
 }
 
 impl STType {
-    pub fn struct_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> StructType<'ctx> {
+    pub fn append_name_with_generic(&self) -> String {
+        if self.need_gen_code() {
+            let typeinfer = self
+                .generic_map
+                .iter()
+                .map(|(_, v)| match &*v.clone().borrow() {
+                    PLType::GENERIC(g) => g.curpltype.as_ref().unwrap().borrow().get_name(),
+                    _ => unreachable!(),
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            return format!("{}<{}>", self.name, typeinfer);
+        }
+        unreachable!()
+    }
+    pub fn generic_infer_pltype(&self, ctx: &mut Ctx) -> STType {
+        let name = self.append_name_with_generic();
+        if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
+            match &*pltype.borrow() {
+                PLType::STRUCT(st) => {
+                    return st.clone();
+                }
+                _ => unreachable!(),
+            }
+        }
+        let mut res = self.clone();
+        res.name = name;
+        ctx.add_type_without_check(Rc::new(RefCell::new(PLType::STRUCT(res.clone()))));
+        res.ordered_fields = self
+            .ordered_fields
+            .iter()
+            .map(|f| {
+                let mut nf = f.clone();
+                nf.typenode = f.typenode.get_type(ctx).unwrap().borrow().get_typenode(ctx);
+                nf
+            })
+            .collect::<Vec<Field>>();
+        res.ordered_fields.iter().for_each(|f| {
+            res.fields.insert(f.name.clone(), f.clone());
+        });
+        res.generic_map.clear();
+        let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
+        pltype.replace(PLType::STRUCT(res.clone()));
+        res
+    }
+    pub fn struct_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> StructType<'ctx> {
         let st = ctx.module.get_struct_type(&self.get_st_full_name());
         if let Some(st) = st {
             return st;
@@ -691,15 +908,19 @@ impl STType {
                 .clone()
                 .into_iter()
                 .map(|order_field| {
-                    RefCell::borrow(&order_field.typenode.get_type(ctx).unwrap())
-                        .get_basic_type(&ctx)
+                    order_field
+                        .typenode
+                        .get_type(ctx)
+                        .unwrap()
+                        .borrow()
+                        .get_basic_type(ctx)
                 })
                 .collect::<Vec<_>>(),
             false,
         );
         st
     }
-    pub fn get_completions(&self) -> Vec<CompletionItem> {
+    pub fn get_field_completions(&self) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
         for (name, _) in &self.fields {
             completions.push(CompletionItem {
@@ -711,31 +932,28 @@ impl STType {
                 ..Default::default()
             });
         }
-        for (name, v) in &self.methods {
-            completions.push(CompletionItem {
-                kind: Some(CompletionItemKind::METHOD),
-                label: name.clone(),
-                detail: Some("method".to_string()),
-                insert_text: Some(v.gen_snippet()),
-                insert_text_format: Some(InsertTextFormat::SNIPPET),
-                command: Some(Command::new(
-                    "trigger help".to_string(),
-                    "editor.action.triggerParameterHints".to_string(),
-                    None,
-                )),
-                ..Default::default()
-            });
-        }
         completions
+    }
+    pub fn get_mthd_completions<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Vec<CompletionItem> {
+        ctx.plmod.get_methods_completions(&self.get_st_full_name())
+    }
+
+    pub fn get_completions<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Vec<CompletionItem> {
+        let mut coms = self.get_field_completions();
+        coms.extend(self.get_mthd_completions(ctx));
+        coms
+    }
+    pub fn find_method<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, method: &str) -> Option<FNType> {
+        ctx.plmod.find_method(&self.get_st_full_name(), method)
     }
     pub fn get_st_full_name(&self) -> String {
         format!("{}..{}", self.path, self.name)
     }
-    pub fn get_doc_symbol<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> DocumentSymbol {
+    pub fn get_doc_symbol<'a, 'ctx>(&self) -> DocumentSymbol {
         let children: Vec<DocumentSymbol> = self
             .ordered_fields
             .iter()
-            .map(|order_field| order_field.get_doc_symbol(ctx))
+            .map(|order_field| order_field.get_doc_symbol())
             .collect();
         #[allow(deprecated)]
         DocumentSymbol {
@@ -839,6 +1057,17 @@ impl GenericType {
     pub fn clear_type(&mut self) {
         self.curpltype = None;
     }
+    pub fn set_place_holder(&mut self, ctx: &mut Ctx) {
+        let range = self.range;
+        let p = PlaceHolderType {
+            name: self.name.clone(),
+            range,
+        };
+        let name_in_map = p.get_place_holder_name();
+        let pltype = Rc::new(RefCell::new(PLType::PLACEHOLDER(p)));
+        self.curpltype = Some(pltype.clone());
+        ctx.add_type(name_in_map, pltype, range).unwrap();
+    }
 }
 macro_rules! generic_impl {
     ($($args:ident),*) => (
@@ -872,11 +1101,11 @@ macro_rules! generic_impl {
                 }
                 pub fn add_generic_type(&self, ctx: &mut Ctx) -> Result<(), PLDiag> {
                     for (name, g) in self.generic_map.iter() {
-                        ctx.add_type(
+                        ctx.add_generic_type(
                             name.clone(),
                             g.clone(),
                             (&*g.clone().borrow()).get_range().unwrap(),
-                        )?;
+                        );
                     }
                     Ok(())
                 }
@@ -885,3 +1114,13 @@ macro_rules! generic_impl {
     );
 }
 generic_impl!(FNType, STType);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlaceHolderType {
+    pub name: String,
+    pub range: Range,
+}
+impl PlaceHolderType {
+    fn get_place_holder_name(&self) -> String {
+        format!("placeholder_::{}", self.name)
+    }
+}

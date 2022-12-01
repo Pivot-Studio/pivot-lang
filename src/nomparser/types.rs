@@ -2,7 +2,7 @@ use std::fmt::Error;
 
 use nom::{
     branch::alt,
-    combinator::map_res,
+    combinator::{map_res, opt},
     multi::{many0, separated_list1},
     sequence::{pair, tuple},
     IResult,
@@ -41,18 +41,23 @@ pub fn type_name(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
 }
 
 #[test_parser("kfsh")]
+#[test_parser("kfsh<a|b|c>")]
 fn basic_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
-    delspace(map_res(extern_identifier, |exid| {
-        let exid = match *exid {
-            NodeEnum::ExternIDNode(exid) => exid,
-            _ => unreachable!(),
-        };
-        let range = exid.range;
-        Ok::<_, Error>(Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
-            id: Some(exid),
-            range,
-        })))
-    }))(input)
+    delspace(map_res(
+        tuple((extern_identifier, opt(generic_param_def))),
+        |(exid, generic_params)| {
+            let exid = match *exid {
+                NodeEnum::ExternIDNode(exid) => exid,
+                _ => unreachable!(),
+            };
+            let range = exid.range;
+            Ok::<_, Error>(Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
+                generic_params,
+                id: Some(exid),
+                range,
+            })))
+        },
+    ))(input)
 }
 
 fn array_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
@@ -100,13 +105,21 @@ pub fn generic_type_def(input: Span) -> IResult<Span, Box<GenericDefNode>> {
 }
 
 /// ```enbf
-/// generic_param_def = "<" extern_id ("|" extern_id)* ">" ;
+/// generic_param_def = "<" (extern_id|"_") ("|"(extern_id|"_"))* ">" ;
 /// ```
+#[test_parser("<a|b|B::c>")]
+#[test_parser("<a>")]
 pub fn generic_param_def(input: Span) -> IResult<Span, Box<GenericParamNode>> {
     map_res(
         tuple((
             tag_token(TokenType::LESS),
-            separated_list1(tag_token(TokenType::GENERIC_SEP), extern_identifier),
+            separated_list1(
+                tag_token(TokenType::GENERIC_SEP),
+                alt((
+                    map_res(type_name, |x| Ok::<_, Error>(Some(x))),
+                    map_res(tag_token(TokenType::INGNORE), |_| Ok::<_, Error>(None)),
+                )),
+            ),
             tag_token(TokenType::GREATER),
         )),
         |(lf, ids, ri)| {

@@ -8,7 +8,7 @@ use super::ctx::{Ctx, Mod};
 use super::pltype::FNType;
 
 impl<'a, 'ctx> Ctx<'a, 'ctx> {
-    pub fn mv2heap(&self, val: BasicValueEnum<'ctx>) -> BasicValueEnum<'ctx> {
+    pub fn mv2heap(&mut self, val: BasicValueEnum<'ctx>) -> BasicValueEnum<'ctx> {
         if !self.usegc {
             return val;
         }
@@ -52,7 +52,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     //         .try_into()
     //         .unwrap()
     // }
-    pub fn gc_add_root(&self, stackptr: BasicValueEnum<'ctx>, builder: &'a Builder<'ctx>) {
+    pub fn gc_add_root(&mut self, stackptr: BasicValueEnum<'ctx>, builder: &'a Builder<'ctx>) {
         if !self.usegc {
             return;
         }
@@ -73,7 +73,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         );
         builder.build_call(f, &[gc.into(), stackptr.into()], "add_root");
     }
-    pub fn gc_rm_root(&self, stackptr: BasicValueEnum<'ctx>) {
+    pub fn gc_rm_root(&mut self, stackptr: BasicValueEnum<'ctx>) {
         if !self.usegc {
             return;
         }
@@ -84,7 +84,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }
         self.gc_rm_root_current(stackptr);
     }
-    pub fn gc_rm_root_current(&self, stackptr: BasicValueEnum<'ctx>) {
+    pub fn gc_rm_root_current(&mut self, stackptr: BasicValueEnum<'ctx>) {
         if !self.usegc {
             return;
         }
@@ -106,7 +106,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.builder
             .build_call(f, &[gc.into(), stackptr.into()], "rm_root");
     }
-    pub fn gc_collect(&self) {
+    pub fn gc_collect(&mut self) {
         if !self.usegc {
             return;
         }
@@ -134,9 +134,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     fn get_gc_plmod(&self) -> &Mod {
         self.plmod.submods.get("gc").unwrap()
     }
-    fn get_gc(&self) -> PointerValue<'ctx> {
+    fn get_gc(&mut self) -> PointerValue<'ctx> {
         let gcmod = self.get_gc_plmod();
         let gc = gcmod.get_global_symbol("diogc").unwrap();
-        self.get_or_add_global("diogc", gcmod, gc.tp.clone())
+        self.get_or_add_global(&gcmod.get_full_name("diogc"), gc.tp.clone())
     }
 }

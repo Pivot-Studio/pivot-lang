@@ -60,7 +60,7 @@ use crate::{
 
 pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
     // Note that  we must have our logging only write out to stderr.
-    eprintln!("starting pivot-lang LSP server");
+    log::info!("starting pivot-lang LSP server");
 
     // Create the transport. Includes the stdio (stdin and stdout) versions but this could
     // also be implemented to use sockets or HTTP.
@@ -146,7 +146,7 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
     io_threads.join()?;
 
     // Shut down gracefully.
-    eprintln!("shutting down server");
+    log::info!("shutting down server");
     Ok(())
 }
 
@@ -169,7 +169,7 @@ fn main_loop(
     );
     let mut tokens = FxHashMap::default();
 
-    eprintln!("starting main loop");
+    log::info!("starting main loop");
     for msg in &connection.receiver {
         let now = Instant::now();
         let di = Dispatcher::new(msg.clone());
@@ -448,7 +448,7 @@ fn main_loop(
             docin.set_docs(&mut db).to(docs.clone());
         });
         let elapsed = now.elapsed();
-        eprintln!("req finished, time: {:?}", elapsed);
+        log::info!("req finished, time: {:?}", elapsed);
     }
     Ok(())
 }

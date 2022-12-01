@@ -100,6 +100,7 @@ pub fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> 
             let mut typenode = Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
                 id: None,
                 range: tprange,
+                generic_params: None,
             }));
 
             let mut doc = None;

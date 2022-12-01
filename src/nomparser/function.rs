@@ -87,9 +87,12 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
 /// ```ebnf
 /// call_function_op = "(" (logic_exp (","logic_exp)*)? ")" ;
 /// ```
+#[test_parser("(a,c,c)")]
+#[test_parser("<T|S::k|i64>(a,c,c)")]
 pub fn call_function_op(input: Span) -> IResult<Span, ComplexOp> {
     delspace(map_res(
         tuple((
+            opt(generic_param_def),
             tag_token(TokenType::LPAREN),
             del_newline_or_space!(separated_list0(
                 tag_token(TokenType::COMMA),
@@ -97,8 +100,8 @@ pub fn call_function_op(input: Span) -> IResult<Span, ComplexOp> {
             )),
             tag_token(TokenType::RPAREN),
         )),
-        |((_, st), paras, (_, end))| {
-            Ok::<_, Error>(ComplexOp::CallOp((paras, st.start.to(end.end))))
+        |(generic, (_, st), paras, (_, end))| {
+            Ok::<_, Error>(ComplexOp::CallOp((paras, st.start.to(end.end), generic)))
         },
     ))(input)
 }
