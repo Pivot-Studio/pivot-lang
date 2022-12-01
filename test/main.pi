@@ -289,6 +289,15 @@ fn ret_generic2<T>(x: T) Three<T> {
     };
 }
 
+fn test_self_ref_generic() void {
+    let x = GenericSelfRef<i64|bool>{};
+    return;
+}
+
+struct GenericSelfRef<T|S> {
+    x: *GenericSelfRef<T|S>;
+}
+
 struct One<T> {
     a: T;
 }
@@ -320,6 +329,7 @@ fn main() i64 {
     test_generic();
     test_generic_same_name();
     test_ret_generic();
+    test_self_ref_generic();
     return 0;
 }
 

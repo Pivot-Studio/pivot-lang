@@ -80,14 +80,14 @@ impl TypeNode for TypeNameNode {
             }
             let mut i = 0;
             for (_, pltype) in sttype.generic_map.iter() {
-                if generic_types[i].is_none(){
+                if generic_types[i].is_none() {
                     return Err(ctx.add_err(self.range, ErrorCode::GENERIC_CANNOT_BE_INFER));
                 }
-                // log::error!("{:?}\n{:?}", pltype, generic_types[i].as_ref().unwrap());
                 if pltype == generic_types[i].as_ref().unwrap() {
                     if let PLType::GENERIC(g) = &mut *pltype.borrow_mut() {
+                        // self ref to avoid emit_struct_def check
                         if g.curpltype.is_none() {
-                            g.curpltype = Some(generic_types[i].as_ref().unwrap().clone());   
+                            g.curpltype = Some(generic_types[i].as_ref().unwrap().clone());
                         }
                     }
                     i = i + 1;
@@ -96,15 +96,13 @@ impl TypeNode for TypeNameNode {
                 if let PLType::GENERIC(g) = &mut *pltype.borrow_mut() {
                     g.curpltype = None;
                 }
-                if !eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
-                {
+                if !eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone()) {
                     return Err(ctx.add_err(self.range, ErrorCode::GENERIC_CANNOT_BE_INFER));
                 }
                 i = i + 1;
             }
             if sttype.need_gen_code() {
                 let mp = ctx.move_generic_types();
-                // log::error!("stmap {:?}", sttype.generic_map);
                 sttype.add_generic_type(ctx)?;
                 sttype = sttype.generic_infer_pltype(ctx);
                 ctx.reset_generic_types(mp);
@@ -415,10 +413,11 @@ impl StructDefNode {
                     name.clone(),
                     pltype.clone(),
                     pltype.clone().borrow().get_range().unwrap(),
-                )?;
+                );
             }
         }
         let pltype = ctx.get_type(&self.id.name.as_str(), self.range)?;
+        let clone_map = ctx.plmod.types.clone();
         for (field, has_semi) in self.fields.iter() {
             if !has_semi {
                 return Err(ctx.add_err(field.range, ErrorCode::COMPLETION));
@@ -459,6 +458,7 @@ impl StructDefNode {
                 false,
             );
         }
+        ctx.plmod.types = clone_map;
         if let PLType::STRUCT(st) = &mut *pltype.borrow_mut() {
             st.fields = fields;
             st.ordered_fields = newf;

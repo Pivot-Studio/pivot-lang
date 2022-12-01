@@ -835,15 +835,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }
         self.plmod.types.insert(name, pltype.clone());
     }
-    pub fn add_generic_type(
-        &mut self,
-        name: String,
-        pltype: Rc<RefCell<PLType>>,
-        range: Range,
-    ) -> Result<(), PLDiag> {
+    pub fn add_generic_type(&mut self, name: String, pltype: Rc<RefCell<PLType>>, range: Range) {
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
         self.generic_types.insert(name, pltype.clone());
-        Ok(())
     }
     pub fn move_generic_types(&mut self) -> FxHashMap<String, Rc<RefCell<PLType>>> {
         self.generic_types.clone()
