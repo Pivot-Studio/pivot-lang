@@ -2,8 +2,30 @@ use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{PLType, PriType};
-use internal_macro::range;
+use internal_macro::{comments, range};
 use lsp_types::SemanticTokenType;
+
+#[range]
+#[comments]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct PrimaryNode {
+    pub value: Box<NodeEnum>,
+}
+
+impl Node for PrimaryNode {
+    fn format(&self, _tabs: usize, _prefix: &str) -> String {
+        return self.value.format(_tabs, _prefix);
+    }
+    fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
+        self.value.print(tabs, end, line);
+    }
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        ctx.emit_comment_highlight(&self.comments[0]);
+        let res = self.value.emit(ctx);
+        ctx.emit_comment_highlight(&self.comments[1]);
+        res
+    }
+}
 
 #[range]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -153,6 +175,7 @@ impl VarNode {
 }
 
 #[range]
+#[comments]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ArrayElementNode {
     pub arr: Box<NodeEnum>,
@@ -191,6 +214,7 @@ impl Node for ArrayElementNode {
                 let index = &[ctx.context.i64_type().const_int(0, false), index_value];
                 ctx.builder.build_in_bounds_gep(arr, index, "element_ptr")
             };
+            ctx.emit_comment_highlight(&self.comments[0]);
             return Ok((
                 Some(elemptr.into()),
                 Some(arrtp.element_type.clone()),

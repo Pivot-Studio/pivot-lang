@@ -3,9 +3,10 @@ use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
 use crate::utils::read_config::enter;
 use inkwell::debug_info::*;
-use internal_macro::range;
+use internal_macro::{comments, range};
 use lsp_types::SemanticTokenType;
 #[range]
+#[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct DefNode {
     pub var: VarNode,
@@ -153,6 +154,7 @@ impl Node for AssignNode {
 }
 
 #[range]
+#[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct EmptyNode {}
 
@@ -165,7 +167,8 @@ impl Node for EmptyNode {
         tab(tabs, line.clone(), end);
         println!("EmptyNode");
     }
-    fn emit<'a, 'ctx>(&mut self, _: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        ctx.emit_comment_highlight(&self.comments[0]);
         Ok((None, None, TerminatorEnum::NONE))
     }
 }

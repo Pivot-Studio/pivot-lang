@@ -7,6 +7,7 @@ use crate::ast::pltype::PriType;
 use crate::ast::tokens::TokenType;
 use crate::handle_calc;
 use inkwell::IntPredicate;
+use internal_macro::comments;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 use paste::item;
@@ -237,6 +238,7 @@ impl Node for BinOpNode {
 }
 
 #[range]
+#[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TakeOpNode {
     pub head: Box<NodeEnum>,
@@ -356,6 +358,7 @@ impl Node for TakeOpNode {
             });
             return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
         }
+        ctx.emit_comment_highlight(&self.comments[0]);
         Ok((res, Some(pltype.clone()), TerminatorEnum::NONE))
     }
 }

@@ -69,12 +69,23 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
         )),
         |(doc, (_, start), id, generics, _, paras, _, ret, (body, end))| {
             let range = start.start.to(end.end);
+            let mut docs = vec![];
+            let mut precoms = vec![];
+            for d in doc {
+                if let NodeEnum::Comment(com) = *d {
+                    if com.is_doc {
+                        docs.push(Box::new(NodeEnum::Comment(com.clone())));
+                    }
+                    precoms.push(Box::new(NodeEnum::Comment(com)));
+                }
+            }
             let node = FuncDefNode {
                 id,
                 paralist: paras,
                 ret,
                 range,
-                doc,
+                doc: docs,
+                precom: precoms,
                 declare: body.is_none(),
                 generics,
                 body,
@@ -89,7 +100,7 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
 /// ```
 #[test_parser("(a,c,c)")]
 #[test_parser("<T|S::k|i64>(a,c,c)")]
-pub fn call_function_op(input: Span) -> IResult<Span, ComplexOp> {
+pub fn call_function_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
     delspace(map_res(
         tuple((
             opt(generic_param_def),
@@ -99,9 +110,13 @@ pub fn call_function_op(input: Span) -> IResult<Span, ComplexOp> {
                 del_newline_or_space!(logic_exp)
             )),
             tag_token(TokenType::RPAREN),
+            many0(comment),
         )),
-        |(generic, (_, st), paras, (_, end))| {
-            Ok::<_, Error>(ComplexOp::CallOp((paras, st.start.to(end.end), generic)))
+        |(generic, (_, st), paras, (_, end), com)| {
+            Ok::<_, Error>((
+                ComplexOp::CallOp((paras, st.start.to(end.end), generic)),
+                com,
+            ))
         },
     ))(input)
 }

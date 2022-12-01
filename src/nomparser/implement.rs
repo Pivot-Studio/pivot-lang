@@ -42,9 +42,10 @@ pub fn impl_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             type_name,
             del_newline_or_space!(tag_token(TokenType::LBRACE)),
             many0(del_newline_or_space!(function_def)),
+            many0(comment),
             del_newline_or_space!(tag_token(TokenType::RBRACE)),
         )),
-        |(_, tp, (_, start), func_def, (_, end))| {
+        |(_, tp, (_, start), func_def, comment0, (_, end))| {
             res_box(Box::new(TopLevel::ImplDef(ImplNode {
                 range: start.start.to(end.end),
                 target: tp,
@@ -58,6 +59,7 @@ pub fn impl_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                         }
                     })
                     .collect(),
+                comments: vec![comment0],
             })))
         },
     )(input)

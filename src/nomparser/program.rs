@@ -123,11 +123,11 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
                 }))
             },
         ),
-        map_res(del_newline_or_space!(comment), |c| {
-            Ok::<_, Error>(Box::new(TopLevel::Common(c)))
-        }),
         map_res(del_newline_or_space!(semi_statement!(use_statement)), |c| {
             Ok::<_, Error>(Box::new(TopLevel::Use(c)))
+        }),
+        map_res(del_newline_or_space!(comment), |c| {
+            Ok::<_, Error>(Box::new(TopLevel::Common(c)))
         }),
         map_res(
             del_newline_or_space!(except(
