@@ -301,7 +301,7 @@ impl Node for TakeOpNode {
                                 index = field.index;
                                 ctx.set_if_refs(field.refs.clone(), range);
                                 ctx.send_if_go_to_def(range, field.range, s.path.clone());
-                                pltype = field.typenode.get_type(ctx).unwrap().clone();
+                                pltype = field.typenode.get_type(ctx)?.clone();
                             } else if let Some(mthd) = method {
                                 ctx.push_semantic_token(range, SemanticTokenType::METHOD, 0);
                                 let mut mthd = mthd.clone();

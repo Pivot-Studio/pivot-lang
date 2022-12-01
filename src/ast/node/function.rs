@@ -236,7 +236,7 @@ impl FuncDefNode {
                 name.clone(),
                 pltype.clone(),
                 pltype.clone().borrow().get_range().unwrap(),
-            )?;
+            );
         }
         for para in self.paralist.iter() {
             let paramtype = para.typenode.get_type(ctx)?;
