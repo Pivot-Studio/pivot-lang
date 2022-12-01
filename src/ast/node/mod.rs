@@ -217,8 +217,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         );
         self.builder.set_current_debug_location(self.context, loc);
     }
-    fn emit_comment_highlight(&mut self, comments: &Vec<Box<NodeEnum>>) {
-        for com in comments {
+    fn emit_comment_highlight(&mut self, comments: &Vec<Box<NodeEnum>>)  {
+        for com in comments  {
             self.push_semantic_token(com.range(), SemanticTokenType::COMMENT, 0);
         }
     }
@@ -233,8 +233,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         let expect = expect.unwrap();
         let range = node.range();
         let pri: Result<PrimaryNode, _> = (*node.clone()).try_into();
-        if let Ok(pri) = pri {
-            let num: Result<NumNode, _> = (*pri.value.clone()).try_into();
+        if let Ok(pri) = pri{
+            let num :Result<NumNode, _> = (*pri.value.clone()).try_into();
             if let Ok(numnode) = num {
                 self.emit_comment_highlight(&pri.comments[0]);
                 let num = numnode.value;
@@ -256,10 +256,10 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                             return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH));
                         }
                         let float = expect
-                            .borrow()
-                            .get_basic_type(self)
-                            .into_float_type()
-                            .const_float(f);
+                        .borrow()
+                        .get_basic_type(self)
+                        .into_float_type()
+                        .const_float(f);
                         float.as_any_value_enum()
                     }
                 };
