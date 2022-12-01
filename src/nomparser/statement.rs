@@ -1,11 +1,10 @@
 use std::fmt::Error;
-
 use nom::{
     branch::alt,
     bytes::complete::tag,
     combinator::{map_res, opt, recognize},
     multi::many0,
-    sequence::{delimited, pair, terminated, tuple},
+    sequence::{delimited, pair, terminated, preceded, tuple},
     IResult,
 };
 use nom_locate::LocatedSpan;
@@ -27,10 +26,16 @@ use internal_macro::{test_parser, test_parser_error};
 use super::*;
 
 fn empty_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    map_res(tag_token(TokenType::SEMI), |_| {
+    map_res(preceded(tag_token(TokenType::SEMI), opt(delspace(comment))), |optcomment| {
+        let comments = if let Some(com) = optcomment{
+            vec![vec![com]]
+        }else{
+            vec![vec![]]
+        };
         res_enum(
             EmptyNode {
                 range: Range::new(input, input),
+                comments
             }
             .into(),
         )
@@ -121,6 +126,7 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     tp,
                     exp,
                     range,
+                    comments:vec![]
                 }
                 .into(),
             )
@@ -162,19 +168,26 @@ fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
             tag_token(TokenType::RETURN),
             opt(logic_exp),
             tag_token(TokenType::SEMI),
+            opt(delspace(comment))
         )),
-        |((_, range), val, _)| {
+        |((_, range), val, _, optcomment)| {
+            let comments = if let Some(com) = optcomment{
+                vec![vec![com]]
+            }else{
+                vec![vec![]]
+            };
             if let Some(val) = val {
                 let range = val.range();
                 res_enum(
                     RetNode {
                         value: Some(val),
                         range,
+                        comments
                     }
                     .into(),
                 )
             } else {
-                res_enum(RetNode { value: None, range }.into())
+                res_enum(RetNode { value: None, range ,comments}.into())
             }
         },
     ))(input)

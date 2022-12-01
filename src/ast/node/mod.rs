@@ -11,6 +11,7 @@ use inkwell::values::{
     AnyValue, AnyValueEnum, BasicValue, BasicValueEnum, FloatValue, FunctionValue, IntValue,
     PointerValue,
 };
+use lsp_types::SemanticTokenType;
 
 use self::comment::CommentNode;
 use self::control::*;
@@ -103,6 +104,7 @@ pub enum NodeEnum {
     StructInit(StructInitNode),
     Take(TakeOpNode),
     Un(UnaryOpNode),
+    Primary(PrimaryNode),
     Num(NumNode),
     Bool(BoolConstNode),
     Err(ErrorNode),
@@ -210,6 +212,11 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         );
         self.builder.set_current_debug_location(self.context, loc);
     }
+    fn emit_comment_highlight(&mut self, comments: &Vec<Box<NodeEnum>>){
+        for com in comments{
+            self.push_semantic_token(com.range(), SemanticTokenType::COMMENT, 0);
+        }
+    }
     fn emit_with_expectation(
         &mut self,
         node: &mut Box<NodeEnum>,
@@ -219,44 +226,50 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             return node.emit(self);
         }
         let expect = expect.unwrap();
-        let num: Result<NumNode, _> = (*node.clone()).try_into();
         let range = node.range();
-        if let Ok(num) = num {
-            let num = num.value;
-            // TODO: check overflow
-            let v = match num {
-                Num::INT(i) => {
-                    if !expect.borrow().get_basic_type(&self).is_int_type() {
-                        return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH));
+        let pri: Result<PrimaryNode, _> = (*node.clone()).try_into();
+        if let Ok(pri) = pri{
+            let num :Result<NumNode, _> = (*pri.value.clone()).try_into();
+            if let Ok(numnode) = num {
+                self.emit_comment_highlight(&pri.comments[0]);
+                let num = numnode.value;
+                // TODO: check overflow
+                let v = match num {
+                    Num::INT(i) => {
+                        if !expect.borrow().get_basic_type(&self).is_int_type() {
+                            return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH));
+                        }
+                        let int = expect
+                            .borrow()
+                            .get_basic_type(&self)
+                            .into_int_type()
+                            .const_int(i, false);
+                        int.as_any_value_enum()
                     }
-                    let int = expect
-                        .borrow()
-                        .get_basic_type(&self)
-                        .into_int_type()
-                        .const_int(i, false);
-                    int.as_any_value_enum()
-                }
-                Num::FLOAT(f) => {
-                    if !expect.borrow().get_basic_type(&self).is_float_type() {
-                        return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH));
-                    }
-                    let float = expect
+                    Num::FLOAT(f) => {
+                        if !expect.borrow().get_basic_type(&self).is_float_type() {
+                            return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH));
+                        }
+                        let float = expect
                         .borrow()
                         .get_basic_type(&self)
                         .into_float_type()
                         .const_float(f);
-                    float.as_any_value_enum()
-                }
-            };
-            return Ok((
-                Some(PLValue {
-                    value: v,
-                    is_const: true,
-                    receiver: None,
-                }),
-                Some(expect),
-                TerminatorEnum::NONE,
-            ));
+                        float.as_any_value_enum()
+                    }
+                };
+                self.push_semantic_token(numnode.range(), SemanticTokenType::NUMBER, 0);
+                self.emit_comment_highlight(&pri.comments[1]);
+                return Ok((
+                    Some(PLValue {
+                        value: v,
+                        is_const: true,
+                        receiver: None,
+                    }),
+                    Some(expect),
+                    TerminatorEnum::NONE,
+                ));
+            }
         }
         let re = node.emit(self)?;
         let (value, ty, term) = re;

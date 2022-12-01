@@ -1,9 +1,10 @@
 use super::*;
 use crate::{ast::ctx::Ctx, utils::read_config::enter};
-use internal_macro::range;
+use internal_macro::{range, comments};
 use lsp_types::{DocumentSymbol, SymbolKind};
 
 #[range]
+#[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ImplNode {
     pub target: Box<TypeNodeEnum>,
@@ -52,6 +53,7 @@ impl Node for ImplNode {
             };
             method_docsymbols.push(f);
         }
+        ctx.emit_comment_highlight(&self.comments[0]);
         #[allow(deprecated)]
         let docsymbol = DocumentSymbol {
             name: format!("impl {}", self.target.format(0, "")),

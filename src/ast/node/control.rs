@@ -3,9 +3,10 @@ use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::PriType;
-use internal_macro::range;
+use internal_macro::{range, comments};
 
 #[range]
+#[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct IfNode {
     pub cond: Box<NodeEnum>,
@@ -106,12 +107,14 @@ impl Node for IfNode {
         if terminator.is_return() {
             ctx.builder.build_unconditional_branch(after_block);
         }
+        ctx.emit_comment_highlight(&self.comments[0]);
         Ok((None, None, terminator))
     }
     // ANCHOR_END: emit
 }
 
 #[range]
+#[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct WhileNode {
     pub cond: Box<NodeEnum>,
@@ -170,6 +173,7 @@ impl Node for WhileNode {
         ctx.build_dbg_location(start);
         ctx.builder.build_unconditional_branch(cond_block);
         position_at_end(ctx, after_block);
+        ctx.emit_comment_highlight(&self.comments[0]);
         Ok((
             None,
             None,
@@ -183,6 +187,7 @@ impl Node for WhileNode {
 }
 
 #[range]
+#[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ForNode {
     pub pre: Option<Box<NodeEnum>>,
@@ -277,6 +282,7 @@ impl Node for ForNode {
         let (_, _, terminator) = self.body.emit_child(ctx)?;
         ctx.builder.build_unconditional_branch(opt_block);
         position_at_end(ctx, after_block);
+        ctx.emit_comment_highlight(&self.comments[0]);
         Ok((
             None,
             None,
@@ -290,6 +296,7 @@ impl Node for ForNode {
 }
 
 #[range]
+#[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BreakNode {}
 
@@ -304,6 +311,7 @@ impl Node for BreakNode {
     }
 
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+        ctx.emit_comment_highlight(&self.comments[0]);
         if let Some(b) = ctx.break_block {
             ctx.builder.build_unconditional_branch(b);
             ctx.builder.clear_insertion_position();
@@ -316,6 +324,7 @@ impl Node for BreakNode {
 }
 
 #[range]
+#[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ContinueNode {}
 

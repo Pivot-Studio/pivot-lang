@@ -9,7 +9,7 @@ use crate::ast::pltype::{eq_or_infer, ARRType, Field, GenericType, PLType, STTyp
 use crate::utils::read_config::enter;
 use indexmap::IndexMap;
 use inkwell::types::BasicType;
-use internal_macro::range;
+use internal_macro::{range, comments};
 use lsp_types::SemanticTokenType;
 use rustc_hash::FxHashMap;
 #[range]
@@ -171,6 +171,7 @@ impl TypedIdentifierNode {
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructDefNode {
+    pub precom: Vec<Box<NodeEnum>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub id: Box<VarNode>,
     pub fields: Vec<(Box<TypedIdentifierNode>, bool)>,
@@ -182,7 +183,7 @@ impl Node for StructDefNode {
         let mut format_res = String::new();
         format_res.push_str(enter());
         let mut doc_str = String::new();
-        for c in self.doc.iter() {
+        for c in self.precom.iter() {
             doc_str.push_str(&c.format(tabs, prefix));
         }
         format_res.push_str(&doc_str);
@@ -208,7 +209,7 @@ impl Node for StructDefNode {
         println!("StructDefNode");
         tab(tabs + 1, line.clone(), false);
         println!("id: {}", self.id.name);
-        for c in self.doc.iter() {
+        for c in self.precom.iter() {
             c.print(tabs + 1, false, line.clone());
         }
         let mut i = self.fields.len();
@@ -219,9 +220,7 @@ impl Node for StructDefNode {
     }
 
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        for c in self.doc.iter() {
-            ctx.push_semantic_token(c.range(), SemanticTokenType::COMMENT, 0);
-        }
+        ctx.emit_comment_highlight(&self.precom);
         ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
         if self.generics.is_some() {
             self.generics.as_mut().unwrap().emit(ctx)?;
@@ -357,6 +356,7 @@ impl Node for StructInitFieldNode {
 }
 
 #[range]
+#[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitNode {
     pub generic_params: Option<Box<GenericParamNode>>,
@@ -438,10 +438,10 @@ impl Node for StructInitNode {
         }
         child.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
         let mut field_init_values = vec![];
+        let mut idx = 0;
         for fieldinit in self.fields.iter_mut() {
             let field_id_range = fieldinit.id.range;
             let field_exp_range = fieldinit.exp.range();
-
             let field = sttype.fields.get(&fieldinit.id.name);
             if field.is_none() {
                 child.if_completion(|ctx, a| {
@@ -454,6 +454,7 @@ impl Node for StructInitNode {
             }
             let field = field.unwrap();
             let (value, value_pltype, _) = fieldinit.emit(child)?;
+            idx+=1;child.emit_comment_highlight(&self.comments[idx-1]);
             if value.is_none() || value_pltype.is_none() {
                 return Err(child.add_err(field_exp_range, ErrorCode::EXPECT_VALUE));
             }
@@ -463,6 +464,9 @@ impl Node for StructInitNode {
             }
             field_init_values.push((field.index, value));
             child.set_if_refs(field.refs.clone(), field_id_range);
+        }
+        if self.fields.len() < self.comments.len(){
+            child.emit_comment_highlight(&self.comments[idx]);
         }
         if !sttype.generic_map.is_empty() {
             if sttype.need_gen_code() {

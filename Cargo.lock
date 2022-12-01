@@ -201,6 +201,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "comment_macro"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "core-foundation-sys"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -523,6 +531,7 @@ name = "internal_macro"
 version = "0.1.0"
 dependencies = [
  "add_symbol_macro",
+ "comment_macro",
  "ctor",
  "llvm-sys",
  "range_macro",

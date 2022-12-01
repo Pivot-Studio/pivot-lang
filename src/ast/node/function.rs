@@ -7,13 +7,14 @@ use crate::ast::pltype::{eq_or_infer, FNType, PLType};
 use crate::utils::read_config::enter;
 use indexmap::IndexMap;
 use inkwell::debug_info::*;
-use internal_macro::range;
+use internal_macro::{range, comments};
 use lsp_types::SemanticTokenType;
 use std::cell::RefCell;
 use std::fmt::format;
 use std::rc::Rc;
 use std::vec;
 #[range]
+#[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncCallNode {
     pub generic_params: Option<Box<GenericParamNode>>,
@@ -199,6 +200,7 @@ impl Node for FuncCallNode {
         fntype.clear_generic();
         ctx.send_if_go_to_def(id_range, fntype.range, ctx.plmod.path.clone());
         ctx.set_if_refs_tp(pltype.clone(), id_range);
+        ctx.emit_comment_highlight(&self.comments[0]);
         return res;
     }
 }
@@ -209,6 +211,7 @@ pub struct FuncDefNode {
     pub paralist: Vec<Box<TypedIdentifierNode>>,
     pub ret: Box<TypeNodeEnum>,
     pub doc: Vec<Box<NodeEnum>>,
+    pub precom: Vec<Box<NodeEnum>>,
     pub declare: bool,
     pub generics: Option<Box<GenericDefNode>>,
     pub body: Option<StatementsNode>,
@@ -297,7 +300,7 @@ impl Node for FuncDefNode {
         let paralist = &self.paralist;
         let params_print = print_params(&paralist);
         let mut doc_str = String::new();
-        for c in self.doc.iter() {
+        for c in self.precom.iter() {
             doc_str.push_str(&prefix.repeat(tabs));
             doc_str.push_str(&c.format(tabs, prefix));
         }
@@ -337,7 +340,7 @@ impl Node for FuncDefNode {
         println!("FuncDefNode");
         tab(tabs + 1, line.clone(), false);
         println!("id: {}", self.id.name);
-        for c in self.doc.iter() {
+        for c in self.precom.iter() {
             c.print(tabs + 1, false, line.clone());
         }
         for p in self.paralist.iter() {
@@ -351,9 +354,7 @@ impl Node for FuncDefNode {
     }
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         ctx.save_if_comment_doc_hover(self.id.range, Some(self.doc.clone()));
-        for c in self.doc.iter_mut() {
-            c.emit(ctx)?;
-        }
+        ctx.emit_comment_highlight(&self.precom);
         ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
         if self.generics.is_some() {
             self.generics.as_mut().unwrap().emit(ctx)?;

@@ -1,8 +1,9 @@
 use super::*;
 use crate::ast::{ctx::Ctx, diag::ErrorCode};
-use internal_macro::range;
+use internal_macro::{range, comments};
 
 #[range]
+#[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RetNode {
     pub value: Option<Box<NodeEnum>>,

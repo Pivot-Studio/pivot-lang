@@ -1,8 +1,8 @@
 use nom::{
     branch::alt,
     combinator::{map_res, opt},
-    sequence::{preceded, terminated, tuple},
-    IResult,
+    sequence::{tuple, preceded},
+    IResult
 };
 use nom_locate::LocatedSpan;
 type Span<'a> = LocatedSpan<&'a str>;
@@ -47,6 +47,7 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
             tag_token(TokenType::IF),
             logic_exp,
             statement_block,
+            opt(delspace(comment)),
             opt(preceded(
                 tag_token(TokenType::ELSE),
                 alt((
@@ -55,17 +56,23 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 )),
             )),
         ))),
-        |(_, cond, then, els)| {
+        |(_, cond, then, comment0, els)| {
             let mut range = cond.range().start.to(then.range.end);
             if let Some(el) = &els {
                 range = range.start.to(el.range().end);
             }
+            let comments = if let Some(com) = comment0 {
+                vec![vec![com]]
+            }else{
+                vec![vec![]]
+            };
             res_enum(
                 IfNode {
                     cond,
                     then: Box::new(then),
                     els,
                     range,
+                    comments
                 }
                 .into(),
             )
@@ -98,14 +105,21 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 ErrorCode::WHILE_CONDITION_MUST_BE_BOOL,
             ),
             statement_block,
+            opt(delspace(comment)),
         ))),
-        |(_, cond, body)| {
+        |(_, cond, body, optcomment)| {
             let range = cond.range().start.to(body.range.end);
+            let comments = if let Some(com) = optcomment{
+                vec![vec![com]]
+            }else{
+                vec![vec![]]
+            };
             res_enum(
                 WhileNode {
                     cond,
                     body: Box::new(body),
                     range,
+                    comments
                 }
                 .into(),
             )
@@ -152,12 +166,18 @@ pub fn for_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
             tag_token(TokenType::SEMI),
             opt(assignment),
             statement_block,
+            opt(delspace(comment))
         ))),
-        |(_, pre, _, cond, _, opt, body)| {
+        |(_, pre, _, cond, _, opt, body, optcomment)| {
             let mut range = cond.range().start.to(body.range.end);
             if let Some(pre) = &pre {
                 range = range.end.from(pre.range().start);
             }
+            let comments = if let Some(com) = optcomment{
+                vec![vec![com]]
+            }else{
+                vec![vec![]]
+            };
             res_enum(
                 ForNode {
                     pre,
@@ -165,6 +185,7 @@ pub fn for_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     opt,
                     body: Box::new(body),
                     range,
+                    comments
                 }
                 .into(),
             )
@@ -174,29 +195,43 @@ pub fn for_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 
 #[test_parser("break;")]
 pub fn break_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    terminated(
-        map_res(tag_token(TokenType::BREAK), |_| {
-            res_enum(
-                BreakNode {
-                    range: Range::new(input, input),
-                }
-                .into(),
-            )
-        }),
+    map_res(tuple((
+        tag_token(TokenType::BREAK),
         tag_token(TokenType::SEMI),
-    )(input)
+        opt(delspace(comment))
+    )), |(_, _, optcomment)| {
+        let comments = if let Some(com) = optcomment{
+            vec![vec![com]]
+        }else{
+            vec![vec![]]
+        };
+        res_enum(
+            BreakNode {
+                range: Range::new(input, input),
+                comments
+            }
+            .into(),
+        )
+    })(input)
 }
 #[test_parser("continue;")]
 pub fn continue_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    terminated(
-        map_res(tag_token(TokenType::CONTINUE), |_| {
-            res_enum(
-                ContinueNode {
-                    range: Range::new(input, input),
-                }
-                .into(),
-            )
-        }),
+    map_res(tuple((
+        tag_token(TokenType::CONTINUE),
         tag_token(TokenType::SEMI),
-    )(input)
+        opt(delspace(comment))
+    )), |(_, _, optcomment)| {
+        let comments = if let Some(com) = optcomment{
+            vec![vec![com]]
+        }else{
+            vec![vec![]]
+        };
+        res_enum(
+            ContinueNode {
+                range: Range::new(input, input),
+                comments
+            }
+            .into(),
+        )
+    })(input)
 }

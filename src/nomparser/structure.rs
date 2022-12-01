@@ -4,8 +4,8 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     combinator::{map_res, opt},
-    multi::{many0, separated_list0},
-    sequence::{delimited, tuple},
+    multi::many0,
+    sequence::{delimited, tuple, pair, terminated},
     IResult,
 };
 use nom_locate::LocatedSpan;
@@ -28,7 +28,7 @@ use super::*;
 pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((
-            many0(comment),
+            many0(del_newline_or_space!(comment)),
             tag_token(TokenType::STRUCT),
             identifier,
             opt(generic_type_def),
@@ -52,8 +52,19 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 }
                 fieldlist.push((f.0.clone(), f.1.is_some()));
             }
+            let mut docs = vec![];
+            let mut precoms = vec![];
+            for d in doc{
+                if let NodeEnum::Comment(com) = *d{
+                    if com.is_doc {
+                        docs.push(Box::new(NodeEnum::Comment(com.clone())));
+                    }
+                    precoms.push(Box::new(NodeEnum::Comment(com)));
+                }
+            }
             Ok::<_, Error>(Box::new(TopLevel::StructDef(StructDefNode {
-                doc,
+                precom: precoms,
+                doc: docs,
                 id,
                 fields: fieldlist,
                 range,
@@ -95,24 +106,50 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
             type_name,
             opt(generic_param_def),
             tag_token(TokenType::LBRACE),
-            separated_list0(
-                tag_token(TokenType::COMMA),
-                del_newline_or_space!(struct_init_field),
-            ),
+            alt((
+                map_res(pair(
+                    many0(tuple((terminated(del_newline_or_space!(struct_init_field),tag_token(TokenType::COMMA)), many0(comment)))),
+                    del_newline_or_space!(struct_init_field)
+                ),|(lfields, rfield)|{
+                    let mut fields = vec![];
+                    let mut coms = vec![];
+                    for f in lfields{
+                        fields.push(f.0);
+                        coms.push(f.1);
+                    }
+                    fields.push(rfield);
+                    Ok::<_, Error>((fields, coms))
+                }
+                ),
+                map_res(
+                    opt(del_newline_or_space!(struct_init_field)),
+                    |field|{
+                        if field.is_some(){
+                            Ok::<_, Error>((vec![field.unwrap()], vec![]))
+                        }else{
+                            Ok::<_, Error>((vec![], vec![]))
+                        }
+                    }
+                )
+            )),
+            many0(comment),
             tag_token(TokenType::RBRACE),
         )),
-        |(name, generic_params, _, fields, _)| {
+        |(name, generic_params, _, (fields, lcomment), rcomment, _)| {
             let range = if fields.len() > 0 {
                 name.range().start.to(fields.last().unwrap().range().end)
             } else {
                 name.range()
             };
+            let mut comments = lcomment;
+            comments.push(rcomment); 
             res_enum(
                 StructInitNode {
                     generic_params,
                     typename: name,
                     fields,
                     range,
+                    comments
                 }
                 .into(),
             )
