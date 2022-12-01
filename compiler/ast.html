@@ -244,6 +244,7 @@ pub trait RangeTrait {
         if terminator.is_return() {
             ctx.builder.build_unconditional_branch(after_block);
         }
+        ctx.emit_comment_highlight(&amp;self.comments[0]);
         Ok((None, None, terminator))
     }
 </code></pre>

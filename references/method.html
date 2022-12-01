@@ -175,15 +175,6 @@ impl pointer_struct {
 </code></pre>
 <p>在一个包中，可以定义外部引入的包中结构体的<code>method</code> . </p>
 <pre><code class="language-pivot-lang">
-impl mod1::Mod1 {
-    // xxx
-    fn name() void {
-        self.x = 114514;
-        io::printi64ln(100101);
-        return;
-    }
-}
-
 </code></pre>
 <p>调用method的时候，使用<code>&lt;receiver类型&gt;.&lt;method&gt;</code>即可 </p>
 <pre><code class="language-pivot-lang">let a = A{};
