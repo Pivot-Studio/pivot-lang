@@ -430,7 +430,11 @@ impl StructDefNode {
                 range: field.range,
                 refs: Rc::new(RefCell::new(vec![])),
             };
-            let tp = field.typenode.get_type(ctx)?;
+            let tpre = field.typenode.get_type(ctx);
+            if tpre.is_err() {
+                continue;
+            }
+            let tp = tpre.unwrap();
             ctx.set_if_refs(f.refs.clone(), field.id.range);
             fields.insert(id.name.to_string(), f.clone());
             order_fields.push(f);
