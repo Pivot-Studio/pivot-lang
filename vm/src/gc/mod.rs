@@ -239,7 +239,7 @@ fn test_complicated_gc() {
         let mut gc = DioGC::new();
         gc.about();
         println!("start test_complicated_gc");
-        // allocate first pointers 
+        // allocate first pointers
         // 这里看起来是分配了个堆指针，实际上ptrfirst是个rust变量，底层是一个栈指针，它指向的值是堆指针
         let mut ptrfirst = gc.malloc(64);
         println!("mark ptr: {:p}", ptrfirst);

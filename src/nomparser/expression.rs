@@ -193,11 +193,12 @@ fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             many0(comment),
         )),
         |(lcoms, node, rcoms)| {
+            let range = node.range();
             res_enum(
                 PrimaryNode {
                     value: node,
                     comments: vec![lcoms, rcoms],
-                    range: Range::new(input, input),
+                    range,
                 }
                 .into(),
             )

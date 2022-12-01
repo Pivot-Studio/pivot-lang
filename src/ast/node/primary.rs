@@ -2,9 +2,8 @@ use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{PLType, PriType};
-use internal_macro::{range, comments};
+use internal_macro::{comments, range};
 use lsp_types::SemanticTokenType;
-
 
 #[range]
 #[comments]
@@ -15,7 +14,7 @@ pub struct PrimaryNode {
 
 impl Node for PrimaryNode {
     fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        return self.value.format(_tabs, _prefix)
+        return self.value.format(_tabs, _prefix);
     }
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
         self.value.print(tabs, end, line);

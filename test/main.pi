@@ -324,8 +324,7 @@ fn main() i64 {
     test_mod_struct();
     test_loop();
     test_ret_struct_arr();
-    test_ret_struct()/// 123
-    .a;///
+    test_ret_struct().a;/// 123
     let st = test_ret_struct();//
     io::printi64ln(st.a);
     test_pointer();
