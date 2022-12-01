@@ -1,6 +1,7 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{btree_map::BTreeMap, HashSet},
     env,
+    ops::Bound::*,
 };
 
 use internal_macro::is_runtime;
@@ -35,7 +36,7 @@ impl Mem {
 #[repr(C)]
 #[derive(Default)]
 pub struct DioGC {
-    memtable: HashMap<*mut c_void, Mem>,
+    memtable: BTreeMap<*mut c_void, Mem>,
     size: i64,
     roots: HashSet<*mut c_void>,
     debug: bool,
@@ -46,7 +47,7 @@ impl DioGC {
     pub fn new() -> DioGC {
         DioGC {
             size: 0,
-            memtable: HashMap::new(),
+            memtable: BTreeMap::new(),
             roots: HashSet::new(),
             debug: env::var("DIO_DEBUG").is_ok(),
         }
@@ -54,6 +55,25 @@ impl DioGC {
 
     pub unsafe fn new_ptr() -> *mut DioGC {
         Box::into_raw(Box::new(DioGC::new()))
+    }
+
+    pub unsafe fn get_region_ptr(&mut self, ptr: *mut c_void) -> *mut c_void {
+        // 只获取当前区间左侧的指针
+        let left_mem_tuple = self.memtable.range((Unbounded, Included(ptr))).last();
+
+        if let Some(mem_tuple) = left_mem_tuple {
+            let left_ptr = *(mem_tuple.0);
+            let size = (mem_tuple.1).size / 8;
+
+            let data = left_ptr as *mut *mut c_void;
+            for i in 0..size {
+                let cur_ptr = data.offset(i as isize).read();
+                if ptr == cur_ptr {
+                    return left_ptr
+                }
+            }
+        }     
+        ptr.clone()
     }
 
     pub unsafe fn malloc(&mut self, size: i64) -> *mut c_void {
@@ -118,7 +138,7 @@ impl DioGC {
             Self::mark_ptr(&mut self.memtable, &pointto);
         }
     }
-    pub unsafe fn mark_ptr(memtable: &mut HashMap<*mut c_void, Mem>, ptr: &*mut c_void) {
+    pub unsafe fn mark_ptr(memtable: &mut BTreeMap<*mut c_void, Mem>, ptr: &*mut c_void) {
         let mem = memtable.get_mut(ptr);
         if let Some(mem) = mem {
             if mem.is_marked() {
@@ -265,5 +285,18 @@ fn test_complicated_gc() {
         );
         assert_eq!(gc.get_size(), size);
         println!("gc size after collection is correct: {}", gc.get_size());
+
+        println!("testing ptr change");
+        println!("ptr1: {:p}", ptr1);
+        let offset_ptr = ptr1.offset(4);
+        println!("offset_ptr: {:p}", offset_ptr);
+        set_point_to(ptr1, offset_ptr, 1);
+        let region_ptr = gc.get_region_ptr(offset_ptr);
+        assert_eq!(ptr1, region_ptr);
+        gc.rm_root(ptr1);
+        gc.add_root(offset_ptr);
+        gc.collect();
+        println!("gc size after collection is correct: {}", gc.get_size());
+
     }
 }
