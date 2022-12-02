@@ -103,7 +103,7 @@ impl <'a, 'ctx>NumBuilder<'a, 'ctx> for PLLLVMBuilder<'a, 'ctx> {
     fn build_num(&mut self, ctx: &mut Ctx<'a, 'ctx>, node: & NumNode)  -> NodeResult<'ctx>  {
         match node.value {
             Num::INT(x) => {
-                let b = ctx.context.i64_type().const_int(x, true);
+                let b = self.context.i64_type().const_int(x, true);
                 return Ok((
                     Some(b.into()),
                     Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::I64)))),
@@ -111,7 +111,7 @@ impl <'a, 'ctx>NumBuilder<'a, 'ctx> for PLLLVMBuilder<'a, 'ctx> {
                 ));
             }
             Num::FLOAT(x) => {
-                let b = ctx.context.f64_type().const_float(x);
+                let b = self.context.f64_type().const_float(x);
                 return Ok((
                     Some(b.into()),
                     Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::F64)))),
