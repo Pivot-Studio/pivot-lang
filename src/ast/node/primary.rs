@@ -137,7 +137,8 @@ impl VarNode {
         }
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match &*tp.borrow() {
-                PLType::FN(_) => {
+                PLType::FN(f) => {
+                    ctx.send_if_go_to_def(self.range, f.range, ctx.plmod.path.clone());
                     ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
                     return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
                 }

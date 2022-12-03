@@ -244,15 +244,10 @@ impl ExternIDNode {
             }
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
-            // ctx.set_if_refs_tp(tp.clone(), self.range);
-            let range = &tp.clone().borrow().get_range();
             let re = match *tp.clone().borrow() {
                 PLType::STRUCT(_) => Ok((None, Some(tp), TerminatorEnum::NONE)),
                 _ => unreachable!(),
             };
-            if let Some(range) = range {
-                ctx.send_if_go_to_def(self.range, *range, plmod.path.clone());
-            }
             return re;
         }
         Err(ctx.add_err(self.range, ErrorCode::SYMBOL_NOT_FOUND))

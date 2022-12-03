@@ -21,7 +21,6 @@ use lsp_types::CompletionItemKind;
 use lsp_types::Diagnostic;
 use lsp_types::DiagnosticSeverity;
 use lsp_types::DocumentSymbol;
-use lsp_types::GotoDefinitionResponse;
 use lsp_types::Hover;
 use lsp_types::HoverContents;
 use lsp_types::InlayHint;
@@ -39,6 +38,7 @@ use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use std::cell::Cell;
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -86,10 +86,9 @@ pub struct Ctx<'a, 'ctx> {
     pub hints: Rc<RefCell<Box<Vec<InlayHint>>>>,
     pub doc_symbols: Rc<RefCell<Box<Vec<DocumentSymbol>>>>,
     pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
-    pub goto_def: Rc<Cell<Option<GotoDefinitionResponse>>>, // hold the goto definition result
-    pub completion_items: Rc<Cell<Vec<CompletionItem>>>,    // hold the completion items
-    pub hover: Rc<Cell<Option<Hover>>>,                     // hold the hover result
-    pub init_func: Option<FunctionValue<'ctx>>,             //init function,call first in main
+    pub completion_items: Rc<Cell<Vec<CompletionItem>>>, // hold the completion items
+    pub hover: Rc<Cell<Option<Hover>>>,                  // hold the hover result
+    pub init_func: Option<FunctionValue<'ctx>>,          //init function,call first in main
     pub table: FxHashMap<
         String,
         (
@@ -99,7 +98,7 @@ pub struct Ctx<'a, 'ctx> {
             Rc<RefCell<Vec<Location>>>,
         ),
     >, // variable table
-    pub config: Config,                                     // config
+    pub config: Config,                                  // config
     pub roots: RefCell<Vec<BasicValueEnum<'ctx>>>,
     pub usegc: bool,
     pub db: &'a dyn Db,
@@ -138,6 +137,13 @@ pub struct Mod {
     pub global_table: FxHashMap<String, GlobalVar>,
     /// structs methods
     pub methods: FxHashMap<String, FxHashMap<String, FNType>>,
+    pub lsp_results: Rc<RefCell<BTreeMap<Range, LSPRes>>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LSPRes {
+    GotoDef(Location),
+    Hover,
 }
 
 impl Mod {
@@ -149,6 +155,7 @@ impl Mod {
             submods: FxHashMap::default(),
             global_table: FxHashMap::default(),
             methods: FxHashMap::default(),
+            lsp_results: Rc::new(RefCell::new(BTreeMap::new())),
         }
     }
     pub fn new_child(&self) -> Self {
@@ -159,6 +166,7 @@ impl Mod {
             submods: self.submods.clone(),
             global_table: FxHashMap::default(),
             methods: self.methods.clone(),
+            lsp_results: self.lsp_results.clone(),
         }
     }
     pub fn get_global_symbol(&self, name: &str) -> Option<&GlobalVar> {
@@ -526,7 +534,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
                 src_file_path.to_string(),
             )))),
-            goto_def: Rc::new(Cell::new(None)),
             completion_items: Rc::new(Cell::new(Vec::new())),
             hover: Rc::new(Cell::new(None)),
             init_func: None,
@@ -575,7 +582,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             hints: self.hints.clone(),
             doc_symbols: self.doc_symbols.clone(),
             semantic_tokens_builder: self.semantic_tokens_builder.clone(),
-            goto_def: self.goto_def.clone(),
             completion_items: self.completion_items.clone(),
             hover: self.hover.clone(),
             init_func: self.init_func,
@@ -616,7 +622,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             hints: self.hints.clone(),
             doc_symbols: self.doc_symbols.clone(),
             semantic_tokens_builder: self.semantic_tokens_builder.clone(),
-            goto_def: self.goto_def.clone(),
             completion_items: self.completion_items.clone(),
             hover: self.hover.clone(),
             init_func: self.init_func,
@@ -990,23 +995,13 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn send_if_go_to_def(&self, range: Range, destrange: Range, file: String) {
-        if let Some(_) = self.action {
-            if let Some(comp) = &self.lspparams {
-                if comp.2 == ActionType::GotoDef {
-                    let v = self.goto_def.take();
-                    if v.is_none() && comp.0.is_in(range) {
-                        let resp = GotoDefinitionResponse::Scalar(Location {
-                            uri: Url::from_file_path(file).unwrap(),
-                            range: destrange.to_diag_range(),
-                        });
-                        self.goto_def.set(Some(resp));
-                        // self.action = None // set sender to None so it won't be sent again
-                    } else {
-                        self.goto_def.set(v);
-                    }
-                }
-            }
-        }
+        self.plmod.lsp_results.borrow_mut().insert(
+            range,
+            LSPRes::GotoDef(Location {
+                uri: Url::from_file_path(file.clone()).unwrap(),
+                range: destrange.to_diag_range(),
+            }),
+        );
     }
 
     pub fn get_completions(&self) -> Vec<CompletionItem> {

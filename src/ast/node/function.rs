@@ -201,7 +201,6 @@ impl Node for FuncCallNode {
             )),
         };
         fntype.clear_generic();
-        ctx.send_if_go_to_def(id_range, fntype.range, ctx.plmod.path.clone());
         ctx.set_if_refs_tp(pltype.clone(), id_range);
         ctx.reset_generic_types(mp);
         ctx.emit_comment_highlight(&self.comments[0]);

@@ -3,7 +3,7 @@ use super::types::StructDefNode;
 use super::*;
 use crate::ast::accumulators::*;
 use crate::ast::compiler::{compile_dry_file, ActionType};
-use crate::ast::ctx::{self, create_ctx_info, Ctx, Mod};
+use crate::ast::ctx::{self, create_ctx_info, Ctx, LSPRes, Mod};
 use crate::lsp::mem_docs::{EmitParams, FileCompileInput, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
@@ -13,12 +13,14 @@ use colored::Colorize;
 use inkwell::context::Context;
 use inkwell::targets::TargetMachine;
 use internal_macro::range;
+use lsp_types::GotoDefinitionResponse;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::fs::OpenOptions;
 use std::hash::{Hash, Hasher};
 use std::io::prelude::*;
+use std::ops::Bound::*;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -197,7 +199,23 @@ impl Program {
             self.docs(db).get_file_content(db).unwrap().text(db).clone(),
         );
 
-        emit_file(db, p)
+        let m = emit_file(db, p);
+        let plmod = m.plmod(db);
+        let params = self.params(db);
+        if params.action(db) == ActionType::GotoDef {
+            let (pos, _, _) = params.params(db).unwrap();
+            let range = pos.to(pos);
+            let res = plmod.lsp_results.borrow();
+            let re = res.range((Unbounded, Included(&range))).last();
+            if let Some((range, res)) = re {
+                if let LSPRes::GotoDef(def) = res {
+                    if pos.is_in(*range) {
+                        GotoDef::push(db, GotoDefinitionResponse::Scalar(def.clone()));
+                    }
+                }
+            }
+        }
+        m
     }
 }
 
@@ -304,9 +322,6 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     if action == ActionType::DocSymbol {
         let docs = ctx.doc_symbols.take();
         DocSymbols::push(db, *docs);
-    }
-    if let Some(c) = ctx.goto_def.take() {
-        GotoDef::push(db, c);
     }
     if let Some(c) = ctx.hover.take() {
         PLHover::push(db, c);
