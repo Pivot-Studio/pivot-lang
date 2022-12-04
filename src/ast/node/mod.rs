@@ -29,6 +29,7 @@ use self::types::*;
 
 use super::ctx::PLDiag;
 use super::diag::ErrorCode;
+use super::fmt::FmtBuilder;
 use super::pltype::PLType;
 use super::range::{Pos, Range};
 
@@ -92,7 +93,7 @@ pub trait TypeNode: RangeTrait + AsAny {
 type TypeNodeResult<'ctx> = Result<Rc<RefCell<PLType>>, PLDiag>;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-#[enum_dispatch(Node, RangeTrait)]
+#[enum_dispatch(Node, RangeTrait, FmtNode)]
 pub enum NodeEnum {
     Def(DefNode),
     Ret(RetNode),
@@ -134,6 +135,13 @@ pub trait RangeTrait {
     fn range(&self) -> Range;
 }
 // ANCHOR_END: range
+
+// ANCHOR: fmtnode
+// #[enum_dispatch]
+pub trait FmtNode {
+    fn formatBuild(&self, builder: &mut FmtBuilder);
+}
+// ANCHOR_END: fmtnode
 
 // ANCHOR: node
 #[enum_dispatch]

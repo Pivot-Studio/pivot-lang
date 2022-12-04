@@ -7,6 +7,7 @@ use crate::{
     ast::{
         ctx::{get_ns_path_completions, Ctx},
         diag::ErrorCode,
+        fmt::FmtBuilder,
         node::{deal_line, tab},
         pltype::PLType,
     },
@@ -14,7 +15,6 @@ use crate::{
 };
 
 use super::{primary::VarNode, Node, NodeResult, PLValue, TerminatorEnum};
-
 #[range]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UseNode {
@@ -28,16 +28,18 @@ pub struct UseNode {
 
 impl Node for UseNode {
     fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::from("use ");
+        let mut builder = FmtBuilder::new();
+        builder.token("use");
+        builder.space();
         for (i, id) in self.ids.iter().enumerate() {
-            format_res.push_str(&id.format(tabs, prefix));
+            builder.token(&id.format(tabs, prefix));
             if i != self.ids.len() - 1 {
-                format_res.push_str("::");
+                builder.dbcolon();
             }
         }
-        format_res.push_str(";");
-        format_res.push_str(enter());
-        format_res
+        builder.semicolon();
+        builder.enter();
+        builder.format()
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
