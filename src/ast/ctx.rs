@@ -80,7 +80,6 @@ pub struct Ctx<'a, 'ctx> {
     pub errs: &'a RefCell<Vec<PLDiag>>,   // diagnostic list
     pub action: Option<ActionType>,       // lsp sender
     pub lspparams: Option<(Pos, Option<String>, ActionType)>, // lsp params
-    pub refs: Rc<Cell<Option<Rc<RefCell<Vec<Location>>>>>>, // hold the find references result (thank you, Rust!)
     pub ditypes_placeholder: Rc<RefCell<FxHashMap<String, RefCell<Vec<MemberType<'ctx>>>>>>, // hold the generated debug info type place holder
     pub ditypes: Rc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
     pub hints: Rc<RefCell<Box<Vec<InlayHint>>>>,
@@ -137,13 +136,16 @@ pub struct Mod {
     pub global_table: FxHashMap<String, GlobalVar>,
     /// structs methods
     pub methods: FxHashMap<String, FxHashMap<String, FNType>>,
-    pub lsp_results: Rc<RefCell<BTreeMap<Range, LSPRes>>>,
+    pub defs: LSPRangeMap<Range, LSPDef>,
+    pub refs: LSPRangeMap<Range, Rc<RefCell<Vec<Location>>>>,
 }
 
+type LSPRangeMap<T, V> = Rc<RefCell<BTreeMap<T, V>>>;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum LSPRes {
-    GotoDef(Location),
-    Hover,
+pub enum LSPDef {
+    Scalar(Location),
+    Array,
 }
 
 impl Mod {
@@ -155,7 +157,8 @@ impl Mod {
             submods: FxHashMap::default(),
             global_table: FxHashMap::default(),
             methods: FxHashMap::default(),
-            lsp_results: Rc::new(RefCell::new(BTreeMap::new())),
+            defs: Rc::new(RefCell::new(BTreeMap::new())),
+            refs: Rc::new(RefCell::new(BTreeMap::new())),
         }
     }
     pub fn new_child(&self) -> Self {
@@ -166,7 +169,8 @@ impl Mod {
             submods: self.submods.clone(),
             global_table: FxHashMap::default(),
             methods: self.methods.clone(),
-            lsp_results: self.lsp_results.clone(),
+            defs: self.defs.clone(),
+            refs: self.refs.clone(),
         }
     }
     pub fn get_global_symbol(&self, name: &str) -> Option<&GlobalVar> {
@@ -528,7 +532,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             errs,
             action: sender,
             lspparams: completion,
-            refs: Rc::new(Cell::new(None)),
             hints: Rc::new(RefCell::new(Box::new(vec![]))),
             doc_symbols: Rc::new(RefCell::new(Box::new(vec![]))),
             semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
@@ -578,7 +581,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             errs: self.errs,
             action: self.action,
             lspparams: self.lspparams.clone(),
-            refs: self.refs.clone(),
             hints: self.hints.clone(),
             doc_symbols: self.doc_symbols.clone(),
             semantic_tokens_builder: self.semantic_tokens_builder.clone(),
@@ -618,7 +620,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             errs: self.errs,
             action: self.action,
             lspparams: self.lspparams.clone(),
-            refs: self.refs.clone(),
             hints: self.hints.clone(),
             doc_symbols: self.doc_symbols.clone(),
             semantic_tokens_builder: self.semantic_tokens_builder.clone(),
@@ -935,17 +936,21 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn set_if_refs_tp(&self, tp: Rc<RefCell<PLType>>, range: Range) {
-        if let Some(_) = self.action {
-            if let Some(comp) = &self.lspparams {
-                let tprefs = RefCell::borrow(&tp).get_refs();
-                if let Some(tprefs) = tprefs {
-                    tprefs.borrow_mut().push(self.get_location(range));
-                    if comp.0.is_in(range) {
-                        self.refs.set(Some(tprefs));
-                    }
-                }
-            }
+        if let Some(tprefs) = tp.borrow().get_refs() {
+            tprefs.borrow_mut().push(self.get_location(range));
+            self.plmod.refs.borrow_mut().insert(range, tprefs.clone());
         }
+        // if let Some(_) = self.action {
+        //     if let Some(comp) = &self.lspparams {
+        //         let tprefs = RefCell::borrow(&tp).get_refs();
+        //         if let Some(tprefs) = tprefs {
+        //             tprefs.borrow_mut().push(self.get_location(range));
+        //             if comp.0.is_in(range) {
+        //                 self.refs.set(Some(tprefs));
+        //             }
+        //         }
+        //     }
+        // }
     }
 
     pub fn set_if_sig(&self, range: Range, name: String, params: &[String], n: u32) {
@@ -982,22 +987,14 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn set_if_refs(&self, refs: Rc<RefCell<Vec<Location>>>, range: Range) {
-        if let Some(act) = self.action {
-            if act == ActionType::FindReferences {
-                if let Some(comp) = &self.lspparams {
-                    refs.borrow_mut().push(self.get_location(range));
-                    if comp.0.is_in(range) {
-                        self.refs.set(Some(refs));
-                    }
-                }
-            }
-        }
+        refs.borrow_mut().push(self.get_location(range));
+        self.plmod.refs.borrow_mut().insert(range, refs.clone());
     }
 
     pub fn send_if_go_to_def(&self, range: Range, destrange: Range, file: String) {
-        self.plmod.lsp_results.borrow_mut().insert(
+        self.plmod.defs.borrow_mut().insert(
             range,
-            LSPRes::GotoDef(Location {
+            LSPDef::Scalar(Location {
                 uri: Url::from_file_path(file.clone()).unwrap(),
                 range: destrange.to_diag_range(),
             }),

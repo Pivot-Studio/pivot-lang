@@ -434,6 +434,13 @@ impl StructDefNode {
                 continue;
             }
             let tp = tpre.unwrap();
+            match &*tp.borrow() {
+                PLType::STRUCT(sttp) => {
+                    ctx.send_if_go_to_def(field.typenode.range(), sttp.range, sttp.path.clone());
+                }
+                _ => {}
+            };
+
             ctx.set_if_refs(f.refs.clone(), field.id.range);
             fields.insert(id.name.to_string(), f.clone());
             order_fields.push(f);
@@ -562,6 +569,7 @@ impl Node for StructInitNode {
             PLType::STRUCT(s) => s.clone(),
             _ => unreachable!(),
         };
+        ctx.send_if_go_to_def(self.typename.range(), sttype.range, sttype.path.clone());
         let mp = ctx.move_generic_types();
         sttype.clear_generic();
         sttype.add_generic_type(ctx)?;

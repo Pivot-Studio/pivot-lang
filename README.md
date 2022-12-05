@@ -31,6 +31,8 @@ https://lang.pivotstudio.cn
 ## 特点
 - 同时支持aot和jit两种模式
 - 极其方便的rust互操作
+- 支持debug
+- 支持lsp，自带vsc插件，能替佛那个优秀的代码支持
 
 
 ## 项目结构

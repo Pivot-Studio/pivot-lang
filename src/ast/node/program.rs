@@ -3,7 +3,7 @@ use super::types::StructDefNode;
 use super::*;
 use crate::ast::accumulators::*;
 use crate::ast::compiler::{compile_dry_file, ActionType};
-use crate::ast::ctx::{self, create_ctx_info, Ctx, LSPRes, Mod};
+use crate::ast::ctx::{self, create_ctx_info, Ctx, LSPDef, Mod};
 use crate::lsp::mem_docs::{EmitParams, FileCompileInput, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
@@ -202,18 +202,32 @@ impl Program {
         let m = emit_file(db, p);
         let plmod = m.plmod(db);
         let params = self.params(db);
-        if params.action(db) == ActionType::GotoDef {
-            let (pos, _, _) = params.params(db).unwrap();
-            let range = pos.to(pos);
-            let res = plmod.lsp_results.borrow();
-            let re = res.range((Unbounded, Included(&range))).last();
-            if let Some((range, res)) = re {
-                if let LSPRes::GotoDef(def) = res {
+        match params.action(db) {
+            ActionType::FindReferences => {
+                let (pos, _, _) = params.params(db).unwrap();
+                let range = pos.to(pos);
+                let res = plmod.refs.borrow();
+                let re = res.range((Unbounded, Included(&range))).last();
+                if let Some((range, res)) = re {
                     if pos.is_in(*range) {
-                        GotoDef::push(db, GotoDefinitionResponse::Scalar(def.clone()));
+                        PLReferences::push(db, res.clone());
                     }
                 }
             }
+            ActionType::GotoDef => {
+                let (pos, _, _) = params.params(db).unwrap();
+                let range = pos.to(pos);
+                let res = plmod.defs.borrow();
+                let re = res.range((Unbounded, Included(&range))).last();
+                if let Some((range, res)) = re {
+                    if let LSPDef::Scalar(def) = res {
+                        if pos.is_in(*range) {
+                            GotoDef::push(db, GotoDefinitionResponse::Scalar(def.clone()));
+                        }
+                    }
+                }
+            }
+            _ => {}
         }
         m
     }
@@ -304,9 +318,9 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
             v.borrow().iter().map(|x| x.clone()).collect(),
         ),
     );
-    if let Some(c) = ctx.refs.take() {
-        PLReferences::push(db, c.clone());
-    }
+    // if let Some(c) = ctx.refs.take() {
+    //     PLReferences::push(db, c.clone());
+    // }
     if ctx.action.is_some() && ctx.action.unwrap() == ActionType::SemanticTokensFull {
         let b = ctx.semantic_tokens_builder.borrow().build();
         PLSemanticTokens::push(db, b);
