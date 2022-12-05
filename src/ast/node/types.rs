@@ -9,10 +9,11 @@ use crate::ast::pltype::{eq, ARRType, Field, GenericType, PLType, STType};
 use crate::utils::read_config::enter;
 use indexmap::IndexMap;
 use inkwell::types::BasicType;
-use internal_macro::{comments, range};
+use internal_macro::{comments, format, range};
 use lsp_types::SemanticTokenType;
 use rustc_hash::FxHashMap;
 #[range]
+#[format]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeNameNode {
     pub id: Option<ExternIDNode>,
@@ -20,15 +21,8 @@ pub struct TypeNameNode {
 }
 
 impl TypeNode for TypeNameNode {
-    fn format(&self, _: usize, _: &str) -> String {
-        let mut res = String::new();
-        if let Some(id_node) = &self.id {
-            res.push_str(&id_node.format(0, ""));
-        }
-        if let Some(generic_params) = &self.generic_params {
-            res.push_str(&generic_params.format(0, ""));
-        }
-        res
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -170,6 +164,7 @@ impl TypeNode for TypeNameNode {
 }
 
 #[range]
+#[format]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArrayTypeNameNode {
     pub id: Box<TypeNodeEnum>,
@@ -177,12 +172,8 @@ pub struct ArrayTypeNameNode {
 }
 
 impl TypeNode for ArrayTypeNameNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        format!(
-            "[{} * {}]",
-            &self.id.format(tabs, prefix),
-            &self.size.format(tabs, prefix)
-        )
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -233,14 +224,15 @@ impl TypeNode for ArrayTypeNameNode {
 }
 
 #[range]
+#[format]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PointerTypeNode {
     pub elm: Box<TypeNodeEnum>,
 }
 
 impl TypeNode for PointerTypeNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        format!("*{}", self.elm.format(tabs, prefix))
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder)
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -273,6 +265,7 @@ impl TypeNode for PointerTypeNode {
 }
 
 #[range]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TypedIdentifierNode {
     pub id: VarNode,
@@ -281,18 +274,8 @@ pub struct TypedIdentifierNode {
 }
 
 impl TypedIdentifierNode {
-    pub fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::new();
-        format_res.push_str(enter());
-        format_res.push_str(&prefix.repeat(tabs));
-        format_res.push_str(&self.id.name);
-        format_res.push_str(": ");
-        format_res.push_str(&self.typenode.format(tabs, prefix));
-        format_res.push_str(";");
-        if let Some(doc) = &self.doc {
-            format_res.push_str(&doc.format(tabs, prefix));
-        }
-        return format_res;
+    pub fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -308,6 +291,7 @@ impl TypedIdentifierNode {
 }
 
 #[range]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructDefNode {
     pub precom: Vec<Box<NodeEnum>>,
@@ -318,29 +302,8 @@ pub struct StructDefNode {
 }
 
 impl Node for StructDefNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::new();
-        format_res.push_str(enter());
-        let mut doc_str = String::new();
-        for c in self.precom.iter() {
-            doc_str.push_str(&c.format(tabs, prefix));
-        }
-        format_res.push_str(&doc_str);
-        format_res.push_str(&prefix.repeat(tabs));
-        format_res.push_str("struct ");
-        format_res.push_str(&self.id.name);
-        if let Some(generics) = &self.generics {
-            format_res.push_str(&generics.format(0, ""));
-        }
-        format_res.push_str(" {");
-        for (field, _i) in &self.fields {
-            format_res.push_str(&field.format(tabs + 1, prefix));
-        }
-        format_res.push_str(enter());
-        format_res.push_str(&prefix.repeat(tabs));
-        format_res.push_str("}");
-        format_res.push_str(enter());
-        format_res
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -476,6 +439,7 @@ impl StructDefNode {
 }
 
 #[range]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitFieldNode {
     pub id: VarNode,
@@ -483,12 +447,8 @@ pub struct StructInitFieldNode {
 }
 
 impl Node for StructInitFieldNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::from(prefix.repeat(tabs));
-        format_res.push_str(&self.id.name);
-        format_res.push_str(": ");
-        format_res.push_str(&self.exp.format(tabs, prefix));
-        format_res
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -505,6 +465,7 @@ impl Node for StructInitFieldNode {
 }
 
 #[range]
+#[format]
 #[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitNode {
@@ -514,33 +475,8 @@ pub struct StructInitNode {
 }
 
 impl Node for StructInitNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::new();
-        let mut field_str = String::new();
-
-        let mut len = 0;
-        field_str.push_str("{");
-        if self.fields.len() > 0 {
-            field_str.push_str(enter());
-            for field in &self.fields {
-                len += 1;
-                field_str.push_str(&field.format(tabs + 1, prefix));
-                if len < self.fields.len() {
-                    field_str.push_str(",");
-                    field_str.push_str(enter());
-                } else {
-                    field_str.push_str(enter());
-                }
-            }
-            field_str.push_str(&prefix.repeat(tabs));
-        }
-        field_str.push_str("}");
-        format_res.push_str(&self.typename.format(tabs, prefix));
-        if let Some(generic_params) = &self.generic_params {
-            format_res.push_str(&generic_params.format(0, ""));
-        }
-        format_res.push_str(&field_str);
-        format_res
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -626,6 +562,7 @@ impl Node for StructInitNode {
 }
 
 #[range]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ArrayInitNode {
     // pub tp: Box<TypeNameNode>,
@@ -633,16 +570,8 @@ pub struct ArrayInitNode {
 }
 
 impl Node for ArrayInitNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::from("[");
-        for (i, exp) in self.exps.iter().enumerate() {
-            format_res.push_str(&exp.format(tabs, prefix));
-            if i != self.exps.len() - 1 {
-                format_res.push_str(", ");
-            }
-        }
-        format_res.push(']');
-        format_res
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -697,20 +626,14 @@ impl Node for ArrayInitNode {
 }
 
 #[range]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct GenericDefNode {
     pub generics: Vec<Box<VarNode>>,
 }
 impl Node for GenericDefNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        format!(
-            "<{}>",
-            self.generics
-                .iter()
-                .map(|g| { g.name.clone() })
-                .collect::<Vec<_>>()
-                .join("|")
-        )
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
 
     fn print(&self, _tabs: usize, _end: bool, _line: Vec<bool>) {
@@ -745,27 +668,15 @@ impl GenericDefNode {
 }
 
 #[range]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct GenericParamNode {
     pub generics: Vec<Option<Box<TypeNodeEnum>>>,
 }
 impl Node for GenericParamNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        format!(
-            "<{}>",
-            self.generics
-                .iter()
-                .map(|g| {
-                    match g {
-                        Some(n) => n.format(0, ""),
-                        None => "_".to_string(),
-                    }
-                })
-                .collect::<Vec<_>>()
-                .join("|")
-        )
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
-
     fn print(&self, _tabs: usize, _end: bool, _line: Vec<bool>) {
         todo!()
     }

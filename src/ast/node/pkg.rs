@@ -1,21 +1,19 @@
 use std::path::PathBuf;
 
-use internal_macro::range;
-use lsp_types::SemanticTokenType;
-
-use crate::{
-    ast::{
-        ctx::{get_ns_path_completions, Ctx},
-        diag::ErrorCode,
-        fmt::FmtBuilder,
-        node::{deal_line, tab},
-        pltype::PLType,
-    },
-    utils::read_config::enter,
+use crate::ast::node::FmtNode;
+use crate::ast::{
+    ctx::{get_ns_path_completions, Ctx},
+    diag::ErrorCode,
+    fmt::FmtBuilder,
+    node::{deal_line, tab},
+    pltype::PLType,
 };
+use internal_macro::{format, range};
+use lsp_types::SemanticTokenType;
 
 use super::{primary::VarNode, Node, NodeResult, PLValue, TerminatorEnum};
 #[range]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UseNode {
     pub ids: Vec<Box<VarNode>>,
@@ -27,19 +25,8 @@ pub struct UseNode {
 }
 
 impl Node for UseNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut builder = FmtBuilder::new();
-        builder.token("use");
-        builder.space();
-        for (i, id) in self.ids.iter().enumerate() {
-            builder.token(&id.format(tabs, prefix));
-            if i != self.ids.len() - 1 {
-                builder.dbcolon();
-            }
-        }
-        builder.semicolon();
-        builder.enter();
-        builder.format()
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -115,6 +102,7 @@ impl Node for UseNode {
 ///
 /// TODO: 区分该节点与ExternTypeName节点，该节点不生成类型，只生成函数与变量/常量
 #[range]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ExternIDNode {
     pub ns: Vec<Box<VarNode>>,
@@ -124,16 +112,8 @@ pub struct ExternIDNode {
 }
 
 impl Node for ExternIDNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::new();
-        for (i, id) in self.ns.iter().enumerate() {
-            format_res.push_str(&id.format(tabs, prefix));
-            if i != self.ns.len() {
-                format_res.push_str("::");
-            }
-        }
-        format_res.push_str(&self.id.format(tabs, prefix));
-        format_res
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

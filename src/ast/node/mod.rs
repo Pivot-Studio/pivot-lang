@@ -72,7 +72,7 @@ impl TerminatorEnum {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[enum_dispatch(TypeNode, RangeTrait)]
+#[enum_dispatch(TypeNode, RangeTrait, FmtNode)]
 pub enum TypeNodeEnum {
     BasicTypeNode(TypeNameNode),
     ArrayTypeNode(ArrayTypeNameNode),
@@ -80,7 +80,7 @@ pub enum TypeNodeEnum {
 }
 #[enum_dispatch]
 pub trait TypeNode: RangeTrait + AsAny {
-    fn format(&self, tabs: usize, prefix: &str) -> String;
+    fn format(&self, b: &mut FmtBuilder);
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
     fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>);
@@ -137,7 +137,7 @@ pub trait RangeTrait {
 // ANCHOR_END: range
 
 // ANCHOR: fmtnode
-// #[enum_dispatch]
+#[enum_dispatch]
 pub trait FmtNode {
     fn formatBuild(&self, builder: &mut FmtBuilder);
 }
@@ -146,7 +146,7 @@ pub trait FmtNode {
 // ANCHOR: node
 #[enum_dispatch]
 pub trait Node: RangeTrait + AsAny {
-    fn format(&self, tabs: usize, prefix: &str) -> String;
+    fn format(&self, builder: &mut FmtBuilder);
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
 }
@@ -337,14 +337,14 @@ pub fn print_params(paralist: &[Box<TypedIdentifierNode>]) -> String {
         str += &format!(
             "{}: {}",
             paralist[0].id.name,
-            paralist[0].typenode.format(0, "")
+            FmtBuilder::generate_node(&paralist[0].typenode)
         );
     }
     for i in 1..paralist.len() {
         str += &format!(
             ", {}: {}",
             paralist[i].id.name,
-            paralist[i].typenode.format(0, "")
+            FmtBuilder::generate_node(&paralist[i].typenode)
         );
     }
     return str;

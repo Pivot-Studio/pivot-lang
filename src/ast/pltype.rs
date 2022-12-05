@@ -2,6 +2,7 @@ use super::ctx::Ctx;
 use super::ctx::MemberType;
 use super::ctx::PLDiag;
 use super::diag::ErrorCode;
+use super::fmt::FmtBuilder;
 use super::node::function::FuncDefNode;
 use super::node::pkg::ExternIDNode;
 use super::node::primary::NumNode;
@@ -674,7 +675,7 @@ impl Field {
         #[allow(deprecated)]
         DocumentSymbol {
             name: self.name.clone(),
-            detail: Some(self.typenode.format(0, "")),
+            detail: Some(FmtBuilder::generate_node(&self.typenode)),
             kind: SymbolKind::FIELD,
             tags: None,
             deprecated: None,
@@ -805,18 +806,22 @@ impl FNType {
                 params += &format!(
                     "{}: {}",
                     self.param_names[0],
-                    &self.param_pltypes[0].format(0, "")
+                    FmtBuilder::generate_node(&self.param_pltypes[0])
                 );
             }
             for i in 1..self.param_names.len() {
                 params += &format!(
                     ", {}: {}",
                     self.param_names[i],
-                    &self.param_pltypes[i].format(0, "")
+                    FmtBuilder::generate_node(&self.param_pltypes[i])
                 );
             }
         }
-        format!("fn ({}) {}", params, &self.ret_pltype.format(0, ""))
+        format!(
+            "fn ({}) {}",
+            params,
+            FmtBuilder::generate_node(&self.ret_pltype)
+        )
     }
 }
 

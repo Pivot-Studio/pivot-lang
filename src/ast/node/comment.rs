@@ -1,8 +1,9 @@
 use super::*;
 use crate::{ast::ctx::Ctx, utils::read_config::enter};
-use internal_macro::range;
+use internal_macro::{format, range};
 use lsp_types::SemanticTokenType;
 #[range]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CommentNode {
     pub comment: String,
@@ -10,11 +11,8 @@ pub struct CommentNode {
 }
 
 impl Node for CommentNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        let mut format_res = String::from("//");
-        format_res.push_str(&self.comment);
-        format_res.push_str(enter());
-        format_res
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

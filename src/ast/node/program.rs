@@ -33,10 +33,8 @@ pub struct ProgramNode {
     pub uses: Vec<Box<NodeEnum>>,
 }
 impl Node for ProgramNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut builder = FmtBuilder::new();
-        self.formatBuild(&mut builder);
-        builder.format()
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -259,7 +257,9 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
                 nn.print(0, true, vec![]);
             }
             ActionType::Fmt => {
-                let code = nn.format(0, "    ");
+                let mut builder = FmtBuilder::new();
+                nn.format(&mut builder);
+                let code = builder.generate();
                 let mut f = OpenOptions::new()
                     .write(true)
                     .truncate(true)
@@ -269,7 +269,9 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
             }
             ActionType::LspFmt => {
                 let oldcode = params.file_content(db);
-                let newcode = nn.format(0, "    ");
+                let mut builder = FmtBuilder::new();
+                nn.format(&mut builder);
+                let newcode = builder.generate();
                 let diff = text::diff(&oldcode, &newcode);
                 let line_index = text::LineIndex::new(&oldcode);
                 PLFormat::push(db, diff.into_text_edit(&line_index));

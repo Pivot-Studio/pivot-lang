@@ -5,9 +5,10 @@ use crate::{
 };
 
 use colored::Colorize;
-use internal_macro::range;
+use internal_macro::{format, range};
 
 #[range]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ErrorNode {
     pub msg: String,
@@ -16,12 +17,8 @@ pub struct ErrorNode {
 }
 
 impl Node for ErrorNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        let mut format_res = String::new();
-        format_res.push_str(enter());
-        format_res.push_str(&self.src);
-        format_res.push_str(enter());
-        format_res
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -46,6 +43,7 @@ impl Node for ErrorNode {
 /// # STErrorNode
 /// 表现一个因为缺少分号而错误的statement
 #[range]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct STErrorNode {
     pub err: ErrorNode,
@@ -53,8 +51,8 @@ pub struct STErrorNode {
 }
 
 impl Node for STErrorNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        return self.st.format(tabs, prefix);
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

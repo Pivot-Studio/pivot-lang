@@ -8,10 +8,12 @@ use crate::ast::tokens::TokenType;
 use crate::handle_calc;
 use inkwell::IntPredicate;
 use internal_macro::comments;
+use internal_macro::format;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 use paste::item;
 #[range]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UnaryOpNode {
     pub op: TokenType,
@@ -19,11 +21,8 @@ pub struct UnaryOpNode {
 }
 // 单目运算符
 impl Node for UnaryOpNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::new();
-        format_res.push_str(TokenType::get_str(&self.op));
-        format_res.push_str(&self.exp.format(tabs, prefix));
-        format_res
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -90,6 +89,7 @@ impl Node for UnaryOpNode {
 }
 
 #[range]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BinOpNode {
     pub left: Box<NodeEnum>,
@@ -97,14 +97,8 @@ pub struct BinOpNode {
     pub right: Box<NodeEnum>,
 }
 impl Node for BinOpNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::new();
-        format_res.push_str(&self.left.format(tabs, prefix));
-        format_res.push_str(" ");
-        format_res.push_str(TokenType::get_str(&self.op));
-        format_res.push_str(" ");
-        format_res.push_str(&self.right.format(tabs, prefix));
-        return format_res;
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -239,6 +233,7 @@ impl Node for BinOpNode {
 
 #[range]
 #[comments]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TakeOpNode {
     pub head: Box<NodeEnum>,
@@ -246,14 +241,8 @@ pub struct TakeOpNode {
 }
 
 impl Node for TakeOpNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::new();
-        format_res.push_str(&self.head.format(tabs, prefix));
-        for id in &self.field {
-            format_res.push_str(".");
-            format_res.push_str(&id.format(tabs, prefix));
-        }
-        format_res
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

@@ -1,9 +1,10 @@
 use super::*;
 use crate::ast::{ctx::Ctx, diag::ErrorCode};
-use internal_macro::{comments, range};
+use internal_macro::{comments, format, range};
 
 #[range]
 #[comments]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct PointerOpNode {
     pub value: Box<NodeEnum>,
@@ -17,14 +18,8 @@ pub enum PointerOpEnum {
 }
 
 impl Node for PointerOpNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut op = String::new();
-        if self.op == PointerOpEnum::ADDR {
-            op.push_str("&");
-        } else {
-            op.push_str("*");
-        }
-        format!("{}{}", op, self.value.format(tabs, prefix))
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

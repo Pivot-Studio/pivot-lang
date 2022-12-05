@@ -7,13 +7,14 @@ use crate::ast::pltype::{eq, FNType, PLType};
 use crate::utils::read_config::enter;
 use indexmap::IndexMap;
 use inkwell::debug_info::*;
-use internal_macro::{comments, range};
+use internal_macro::{comments, format, range};
 use lsp_types::SemanticTokenType;
 use std::cell::RefCell;
 use std::fmt::format;
 use std::rc::Rc;
 use std::vec;
 #[range]
+#[format]
 #[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncCallNode {
@@ -23,30 +24,8 @@ pub struct FuncCallNode {
 }
 
 impl Node for FuncCallNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::new();
-        let mut param_str = String::new();
-        match Some(&self.paralist) {
-            Some(paralist) => {
-                let mut len = 0;
-                for param in paralist {
-                    len += 1;
-                    param_str.push_str(&param.format(tabs, prefix));
-                    if len < paralist.len() {
-                        param_str.push_str(", ");
-                    }
-                }
-            }
-            None => (),
-        }
-        format_res.push_str(&self.id.format(tabs, prefix));
-        if let Some(generic_params) = &self.generic_params {
-            format_res.push_str(&generic_params.format(0, ""));
-        }
-        format_res.push_str("(");
-        format_res.push_str(&param_str);
-        format_res.push_str(")");
-        format_res
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -121,7 +100,11 @@ impl Node for FuncCallNode {
                         .param_names
                         .iter()
                         .enumerate()
-                        .map(|(i, s)| s.clone() + ": " + &fntype.param_pltypes[i].format(0, ""))
+                        .map(|(i, s)| {
+                            s.clone()
+                                + ": "
+                                + FmtBuilder::generate_node(&fntype.param_pltypes[i]).as_str()
+                        })
                         .collect::<Vec<_>>()
                         .join(", ")
                         .as_str()
@@ -209,6 +192,7 @@ impl Node for FuncCallNode {
     }
 }
 #[range]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncDefNode {
     pub id: Box<VarNode>,
@@ -303,44 +287,9 @@ impl FuncDefNode {
     }
 }
 impl Node for FuncDefNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let paralist = &self.paralist;
-        let params_print = print_params(&paralist);
-        let mut doc_str = String::new();
-        for c in self.precom.iter() {
-            doc_str.push_str(&prefix.repeat(tabs));
-            doc_str.push_str(&c.format(tabs, prefix));
-        }
-        let mut format_res = String::new();
-        format_res.push_str(enter());
-        let mut ret_type = String::new();
-        ret_type.push_str(&self.ret.format(tabs, prefix));
-        format_res.push_str(&doc_str);
-        format_res.push_str(&prefix.repeat(tabs));
-        format_res.push_str("fn ");
-        format_res.push_str(&self.id.name.split("::").last().unwrap());
-        if let Some(generics) = &self.generics {
-            format_res.push_str(&generics.format(0, ""));
-        }
-        format_res.push_str("(");
-        format_res.push_str(&params_print);
-        format_res.push_str(") ");
-        format_res.push_str(&ret_type);
-        match &self.body {
-            Some(body) => {
-                format_res.push_str(" {");
-                format_res.push_str(&body.format(tabs + 1, prefix));
-                format_res.push_str(&prefix.repeat(tabs));
-                format_res.push_str("}");
-            }
-            None => {
-                format_res.push_str(";");
-            }
-        }
-        format_res.push_str(enter());
-        format_res
+    fn format(&self, builder: &mut FmtBuilder) {
+        self.formatBuild(builder);
     }
-
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
