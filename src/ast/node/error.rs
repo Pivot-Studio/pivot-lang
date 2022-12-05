@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    ast::{ctx::Ctx, diag::ErrorCode},
-    utils::read_config::enter,
-};
+use crate::ast::{ctx::Ctx, diag::ErrorCode};
 
 use colored::Colorize;
 use internal_macro::{format, range};

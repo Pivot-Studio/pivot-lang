@@ -4,7 +4,6 @@ use super::{alloc, types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 use crate::ast::pltype::{eq, FNType, PLType};
-use crate::utils::read_config::enter;
 use indexmap::IndexMap;
 use inkwell::debug_info::*;
 use internal_macro::{comments, format, range};

@@ -72,14 +72,14 @@ impl TerminatorEnum {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[enum_dispatch(TypeNode, RangeTrait, FmtNode)]
+#[enum_dispatch(TypeNode, RangeTrait, FmtTrait)]
 pub enum TypeNodeEnum {
     BasicTypeNode(TypeNameNode),
     ArrayTypeNode(ArrayTypeNameNode),
     PointerTypeNode(PointerTypeNode),
 }
 #[enum_dispatch]
-pub trait TypeNode: RangeTrait + AsAny {
+pub trait TypeNode: RangeTrait + AsAny + FmtTrait {
     fn format(&self, b: &mut FmtBuilder);
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
@@ -93,7 +93,7 @@ pub trait TypeNode: RangeTrait + AsAny {
 type TypeNodeResult<'ctx> = Result<Rc<RefCell<PLType>>, PLDiag>;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-#[enum_dispatch(Node, RangeTrait, FmtNode)]
+#[enum_dispatch(Node, RangeTrait, FmtTrait)]
 pub enum NodeEnum {
     Def(DefNode),
     Ret(RetNode),
@@ -138,14 +138,14 @@ pub trait RangeTrait {
 
 // ANCHOR: fmtnode
 #[enum_dispatch]
-pub trait FmtNode {
+pub trait FmtTrait {
     fn formatBuild(&self, builder: &mut FmtBuilder);
 }
 // ANCHOR_END: fmtnode
 
 // ANCHOR: node
 #[enum_dispatch]
-pub trait Node: RangeTrait + AsAny {
+pub trait Node: RangeTrait + AsAny + FmtTrait {
     fn format(&self, builder: &mut FmtBuilder);
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;

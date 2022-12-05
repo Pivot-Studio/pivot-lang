@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::ast::node::FmtNode;
+use crate::ast::node::FmtTrait;
 use crate::ast::{
     ctx::{get_ns_path_completions, Ctx},
     diag::ErrorCode,

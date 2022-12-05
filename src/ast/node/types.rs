@@ -6,7 +6,6 @@ use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{eq, ARRType, Field, GenericType, PLType, STType};
-use crate::utils::read_config::enter;
 use indexmap::IndexMap;
 use inkwell::types::BasicType;
 use internal_macro::{comments, format, range};

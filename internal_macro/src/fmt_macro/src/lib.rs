@@ -10,7 +10,7 @@ pub fn format(_args: TokenStream, input: TokenStream) -> TokenStream {
             let fnid = format_ident!("parse{}", ident);
             return quote! {
                 #ast
-                impl crate::ast::node::FmtNode for #ident {
+                impl crate::ast::node::FmtTrait for #ident {
                     fn formatBuild(&self, builder: &mut crate::ast::fmt::FmtBuilder) {
                         builder.#fnid(self);
                     }

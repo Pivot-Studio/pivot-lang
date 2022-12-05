@@ -22,7 +22,7 @@ use super::{
             ArrayInitNode, ArrayTypeNameNode, GenericDefNode, GenericParamNode, PointerTypeNode,
             StructDefNode, StructInitFieldNode, StructInitNode, TypeNameNode, TypedIdentifierNode,
         },
-        FmtNode, Node, NodeEnum, TypeNode, TypeNodeEnum,
+        FmtTrait, Node, NodeEnum, TypeNode, TypeNodeEnum,
     },
     tokens::TokenType,
 };
@@ -56,10 +56,10 @@ impl FmtBuilder {
     pub fn generate(&self) -> String {
         self.buf.clone()
     }
-    pub fn addTab(&mut self) {
+    pub fn add_tab(&mut self) {
         self.tabs += 1;
     }
-    pub fn subTab(&mut self) {
+    pub fn sub_tab(&mut self) {
         self.tabs -= 1;
     }
     pub fn prefix(&mut self) {
@@ -202,12 +202,12 @@ impl FmtBuilder {
         }
         self.space();
         self.l_brace();
-        self.addTab();
+        self.add_tab();
         for (field, _i) in &node.fields {
             field.format(self);
         }
         self.enter();
-        self.subTab();
+        self.sub_tab();
         self.prefix();
         self.r_brace();
         self.enter();
@@ -233,7 +233,7 @@ impl FmtBuilder {
         let mut len = 0;
         if node.fields.len() > 0 {
             self.enter();
-            self.addTab();
+            self.add_tab();
             for field in &node.fields {
                 len += 1;
                 field.format(self);
@@ -242,7 +242,7 @@ impl FmtBuilder {
                 }
                 self.enter();
             }
-            self.subTab();
+            self.sub_tab();
             self.prefix();
         }
         self.r_brace();
@@ -378,11 +378,11 @@ impl FmtBuilder {
         self.space();
         self.l_brace();
         self.enter();
-        self.addTab();
+        self.add_tab();
         for method in &node.methods {
             method.format(self);
         }
-        self.subTab();
+        self.sub_tab();
         self.r_brace();
         self.enter();
     }
@@ -439,9 +439,9 @@ impl FmtBuilder {
             Some(body) => {
                 self.space();
                 self.l_brace();
-                self.addTab();
+                self.add_tab();
                 body.format(self);
-                self.subTab();
+                self.sub_tab();
                 self.prefix();
                 self.r_brace();
             }
@@ -467,27 +467,27 @@ impl FmtBuilder {
         self.space();
         self.l_brace();
         if let Some(el) = &node.els {
-            self.addTab();
+            self.add_tab();
             node.then.format(self);
-            self.subTab();
+            self.sub_tab();
             self.prefix();
             self.r_brace();
             self.space();
             self.token("else");
             self.space();
             self.l_brace();
-            self.addTab();
+            self.add_tab();
             el.format(self);
-            self.subTab();
+            self.sub_tab();
             // if el_str.bytes().len() > 0 {
             //     self.prefix();
             // }
             self.prefix();
             self.r_brace();
         } else {
-            self.addTab();
+            self.add_tab();
             node.then.format(self);
-            self.subTab();
+            self.sub_tab();
             self.prefix();
             self.r_brace();
         }
@@ -498,9 +498,9 @@ impl FmtBuilder {
         node.cond.format(self);
         self.space();
         self.l_brace();
-        self.addTab();
+        self.add_tab();
         node.body.format(self);
-        self.subTab();
+        self.sub_tab();
         self.prefix();
         self.r_brace();
     }
@@ -520,9 +520,9 @@ impl FmtBuilder {
         }
         self.space();
         self.l_brace();
-        self.addTab();
+        self.add_tab();
         node.body.format(self);
-        self.subTab();
+        self.sub_tab();
         self.prefix();
         self.r_brace();
     }
@@ -531,10 +531,10 @@ impl FmtBuilder {
         self.token(&node.comment);
         self.enter();
     }
-    pub fn parseContinueNode(&mut self, node: &ContinueNode) {
+    pub fn parseContinueNode(&mut self, _node: &ContinueNode) {
         self.token("continue");
     }
-    pub fn parseBreakNode(&mut self, node: &BreakNode) {
+    pub fn parseBreakNode(&mut self, _node: &BreakNode) {
         self.token("break");
     }
     pub fn parseBoolConstNode(&mut self, node: &BoolConstNode) {

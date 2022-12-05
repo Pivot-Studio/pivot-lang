@@ -1,5 +1,5 @@
 use super::*;
-use crate::{ast::ctx::Ctx, utils::read_config::enter};
+use crate::ast::ctx::Ctx;
 use internal_macro::{format, range};
 use lsp_types::SemanticTokenType;
 #[range]

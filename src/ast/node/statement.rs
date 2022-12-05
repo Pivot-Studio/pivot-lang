@@ -1,7 +1,6 @@
 use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
-use crate::utils::read_config::enter;
 use inkwell::debug_info::*;
 use internal_macro::{comments, format, range};
 use lsp_types::SemanticTokenType;
