@@ -11,7 +11,7 @@ pub fn format(_args: TokenStream, input: TokenStream) -> TokenStream {
             return quote! {
                 #ast
                 impl crate::ast::node::FmtTrait for #ident {
-                    fn formatBuild(&self, builder: &mut crate::ast::fmt::FmtBuilder) {
+                    fn format(&self, builder: &mut crate::ast::fmt::FmtBuilder) {
                         builder.#fnid(self);
                     }
                 }

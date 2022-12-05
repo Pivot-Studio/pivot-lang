@@ -33,9 +33,6 @@ pub struct ProgramNode {
     pub uses: Vec<Box<NodeEnum>>,
 }
 impl Node for ProgramNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         println!("ProgramNode");

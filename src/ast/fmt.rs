@@ -50,7 +50,7 @@ impl FmtBuilder {
     }
     pub fn generate_node(node: &Box<TypeNodeEnum>) -> String {
         let mut b = FmtBuilder::new();
-        node.formatBuild(&mut b);
+        node.format(&mut b);
         b.generate()
     }
     pub fn generate(&self) -> String {

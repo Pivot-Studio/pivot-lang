@@ -14,9 +14,6 @@ pub struct DefNode {
     pub exp: Option<Box<NodeEnum>>,
 }
 impl Node for DefNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -110,9 +107,6 @@ pub struct AssignNode {
     pub exp: Box<NodeEnum>,
 }
 impl Node for AssignNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -146,9 +140,6 @@ impl Node for AssignNode {
 pub struct EmptyNode {}
 
 impl Node for EmptyNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -167,10 +158,6 @@ pub struct StatementsNode {
     pub statements: Vec<Box<NodeEnum>>,
 }
 impl Node for StatementsNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
-
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

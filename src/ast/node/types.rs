@@ -20,9 +20,6 @@ pub struct TypeNameNode {
 }
 
 impl TypeNode for TypeNameNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -171,9 +168,6 @@ pub struct ArrayTypeNameNode {
 }
 
 impl TypeNode for ArrayTypeNameNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -230,9 +224,6 @@ pub struct PointerTypeNode {
 }
 
 impl TypeNode for PointerTypeNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder)
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -273,9 +264,6 @@ pub struct TypedIdentifierNode {
 }
 
 impl TypedIdentifierNode {
-    pub fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -301,9 +289,6 @@ pub struct StructDefNode {
 }
 
 impl Node for StructDefNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -446,9 +431,6 @@ pub struct StructInitFieldNode {
 }
 
 impl Node for StructInitFieldNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -474,9 +456,6 @@ pub struct StructInitNode {
 }
 
 impl Node for StructInitNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -569,9 +548,6 @@ pub struct ArrayInitNode {
 }
 
 impl Node for ArrayInitNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -631,10 +607,6 @@ pub struct GenericDefNode {
     pub generics: Vec<Box<VarNode>>,
 }
 impl Node for GenericDefNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
-
     fn print(&self, _tabs: usize, _end: bool, _line: Vec<bool>) {
         todo!()
     }
@@ -673,9 +645,6 @@ pub struct GenericParamNode {
     pub generics: Vec<Option<Box<TypeNodeEnum>>>,
 }
 impl Node for GenericParamNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, _tabs: usize, _end: bool, _line: Vec<bool>) {
         todo!()
     }

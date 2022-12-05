@@ -25,9 +25,6 @@ pub struct UseNode {
 }
 
 impl Node for UseNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -112,9 +109,6 @@ pub struct ExternIDNode {
 }
 
 impl Node for ExternIDNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

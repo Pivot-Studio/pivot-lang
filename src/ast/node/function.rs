@@ -23,9 +23,6 @@ pub struct FuncCallNode {
 }
 
 impl Node for FuncCallNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -286,9 +283,6 @@ impl FuncDefNode {
     }
 }
 impl Node for FuncDefNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

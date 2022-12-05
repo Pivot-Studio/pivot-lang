@@ -14,9 +14,6 @@ pub struct PrimaryNode {
 }
 
 impl Node for PrimaryNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
         self.value.print(tabs, end, line);
     }
@@ -36,9 +33,6 @@ pub struct BoolConstNode {
 }
 
 impl Node for BoolConstNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line, end);
@@ -66,9 +60,6 @@ pub struct NumNode {
     pub value: Num,
 }
 impl Node for NumNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line, end);
@@ -102,9 +93,6 @@ pub struct VarNode {
     pub name: String,
 }
 impl VarNode {
-    pub fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -182,9 +170,6 @@ pub struct ArrayElementNode {
 }
 
 impl Node for ArrayElementNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -228,9 +213,6 @@ pub struct ParanthesesNode {
 }
 
 impl Node for ParanthesesNode {
-    fn format(&self, builder: &mut FmtBuilder) {
-        self.formatBuild(builder);
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

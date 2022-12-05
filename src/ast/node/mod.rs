@@ -80,7 +80,6 @@ pub enum TypeNodeEnum {
 }
 #[enum_dispatch]
 pub trait TypeNode: RangeTrait + AsAny + FmtTrait {
-    fn format(&self, b: &mut FmtBuilder);
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
     fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>);
@@ -139,14 +138,13 @@ pub trait RangeTrait {
 // ANCHOR: fmtnode
 #[enum_dispatch]
 pub trait FmtTrait {
-    fn formatBuild(&self, builder: &mut FmtBuilder);
+    fn format(&self, builder: &mut FmtBuilder);
 }
 // ANCHOR_END: fmtnode
 
 // ANCHOR: node
 #[enum_dispatch]
 pub trait Node: RangeTrait + AsAny + FmtTrait {
-    fn format(&self, builder: &mut FmtBuilder);
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
 }
