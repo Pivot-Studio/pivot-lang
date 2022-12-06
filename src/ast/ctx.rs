@@ -85,7 +85,6 @@ pub struct Ctx<'a, 'ctx> {
     pub doc_symbols: Rc<RefCell<Box<Vec<DocumentSymbol>>>>,
     pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
     pub completion_items: Rc<Cell<Vec<CompletionItem>>>, // hold the completion items
-    pub hover: Rc<Cell<Option<Hover>>>,                  // hold the hover result
     pub init_func: Option<FunctionValue<'ctx>>,          //init function,call first in main
     pub table: FxHashMap<
         String,
@@ -138,6 +137,7 @@ pub struct Mod {
     pub defs: LSPRangeMap<Range, LSPDef>,
     pub refs: LSPRangeMap<Range, Rc<RefCell<Vec<Location>>>>,
     pub sig_helps: LSPRangeMap<Range, SignatureHelp>,
+    pub hovers: LSPRangeMap<Range, Hover>,
 }
 
 type LSPRangeMap<T, V> = Rc<RefCell<BTreeMap<T, V>>>;
@@ -160,6 +160,7 @@ impl Mod {
             defs: Rc::new(RefCell::new(BTreeMap::new())),
             refs: Rc::new(RefCell::new(BTreeMap::new())),
             sig_helps: Rc::new(RefCell::new(BTreeMap::new())),
+            hovers: Rc::new(RefCell::new(BTreeMap::new())),
         }
     }
     pub fn new_child(&self) -> Self {
@@ -173,6 +174,7 @@ impl Mod {
             defs: self.defs.clone(),
             refs: self.refs.clone(),
             sig_helps: self.sig_helps.clone(),
+            hovers: self.hovers.clone(),
         }
     }
     pub fn get_global_symbol(&self, name: &str) -> Option<&GlobalVar> {
@@ -540,7 +542,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 src_file_path.to_string(),
             )))),
             completion_items: Rc::new(Cell::new(Vec::new())),
-            hover: Rc::new(Cell::new(None)),
             init_func: None,
             table: FxHashMap::default(),
             config,
@@ -587,7 +588,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             doc_symbols: self.doc_symbols.clone(),
             semantic_tokens_builder: self.semantic_tokens_builder.clone(),
             completion_items: self.completion_items.clone(),
-            hover: self.hover.clone(),
             init_func: self.init_func,
             table: FxHashMap::default(),
             config: self.config.clone(),
@@ -626,7 +626,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             doc_symbols: self.doc_symbols.clone(),
             semantic_tokens_builder: self.semantic_tokens_builder.clone(),
             completion_items: self.completion_items.clone(),
-            hover: self.hover.clone(),
             init_func: self.init_func,
             table: FxHashMap::default(),
             config: self.config.clone(),
@@ -1256,19 +1255,13 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if !self.need_highlight {
             return;
         }
-        if let Some(act) = self.action {
-            if let Some(comp) = &self.lspparams {
-                if act == ActionType::Hover {
-                    if comp.0.is_in(range) {
-                        let hover = Hover {
-                            contents: value,
-                            range: None,
-                        };
-                        self.hover.set(Some(hover));
-                    }
-                }
-            }
-        }
+        self.plmod.hovers.borrow_mut().insert(
+            range,
+            Hover {
+                range: None,
+                contents: value,
+            },
+        );
     }
     /// # auto_deref
     /// 自动解引用，有几层解几层

@@ -238,6 +238,17 @@ impl Program {
                     }
                 }
             }
+            ActionType::Hover => {
+                let (pos, _, _) = params.params(db).unwrap();
+                let range = pos.to(pos);
+                let res = plmod.hovers.borrow();
+                let re = res.range((Unbounded, Included(&range))).last();
+                if let Some((range, res)) = re {
+                    if pos.is_in(*range) {
+                        PLHover::push(db, res.clone());
+                    }
+                }
+            }
             _ => {}
         }
         m
@@ -329,9 +340,6 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
             v.borrow().iter().map(|x| x.clone()).collect(),
         ),
     );
-    // if let Some(c) = ctx.refs.take() {
-    //     PLReferences::push(db, c.clone());
-    // }
     if ctx.action.is_some() && ctx.action.unwrap() == ActionType::SemanticTokensFull {
         let b = ctx.semantic_tokens_builder.borrow().build();
         PLSemanticTokens::push(db, b);
@@ -347,9 +355,6 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     if action == ActionType::DocSymbol {
         let docs = ctx.doc_symbols.take();
         DocSymbols::push(db, *docs);
-    }
-    if let Some(c) = ctx.hover.take() {
-        PLHover::push(db, c);
     }
     if ctx.action.is_some() && ctx.action.unwrap() == ActionType::Compile {
         ctx.dibuilder.finalize();
