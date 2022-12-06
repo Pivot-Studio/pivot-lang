@@ -527,7 +527,11 @@ impl FmtBuilder {
         self.r_brace();
     }
     pub fn parseCommentNode(&mut self, node: &CommentNode) {
-        self.token("//");
+        if node.is_doc {
+            self.token("///");
+        } else {
+            self.token("//");
+        }
         self.token(&node.comment);
         self.enter();
     }
