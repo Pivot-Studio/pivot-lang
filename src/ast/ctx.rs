@@ -44,7 +44,6 @@ use std::path::PathBuf;
 use std::rc::Rc;
 
 use super::compiler::get_target_machine;
-use super::compiler::ActionType;
 use super::diag::{ErrorCode, WarnCode};
 use super::diag::{ERR_MSG, WARN_MSG};
 use super::node::NodeEnum;
@@ -77,13 +76,11 @@ pub struct Ctx<'a, 'ctx> {
     pub discope: DIScope<'ctx>,           // debug info scope
     pub nodebug_builder: &'a Builder<'ctx>, // builder without debug info
     pub errs: &'a RefCell<Vec<PLDiag>>,   // diagnostic list
-    pub action: Option<ActionType>,       // lsp sender
-    pub edit_pos: Option<(Pos, Option<String>, ActionType)>, // lsp params
+    pub edit_pos: Option<Pos>,            // lsp params
     pub ditypes_placeholder: Rc<RefCell<FxHashMap<String, RefCell<Vec<MemberType<'ctx>>>>>>, // hold the generated debug info type place holder
     pub ditypes: Rc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
     pub hints: Rc<RefCell<Box<Vec<InlayHint>>>>,
     pub doc_symbols: Rc<RefCell<Box<Vec<DocumentSymbol>>>>,
-    pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
     pub completion_items: Rc<Cell<Vec<CompletionItem>>>, // hold the completion items
     pub init_func: Option<FunctionValue<'ctx>>,          //init function,call first in main
     pub table: FxHashMap<
@@ -140,6 +137,7 @@ pub struct Mod {
     pub hovers: LSPRangeMap<Range, Hover>,
     pub completions: Rc<RefCell<Vec<CompletionItemWrapper>>>,
     pub completion_gened: Rc<RefCell<Gened>>,
+    pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -187,6 +185,9 @@ impl Mod {
             hovers: Rc::new(RefCell::new(BTreeMap::new())),
             completions: Rc::new(RefCell::new(vec![])),
             completion_gened: Rc::new(RefCell::new(Gened(false))),
+            semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
+                "builder".to_string(),
+            )))),
         }
     }
     pub fn new_child(&self) -> Self {
@@ -203,6 +204,7 @@ impl Mod {
             hovers: self.hovers.clone(),
             completions: self.completions.clone(),
             completion_gened: self.completion_gened.clone(),
+            semantic_tokens_builder: self.semantic_tokens_builder.clone(),
         }
     }
     pub fn get_global_symbol(&self, name: &str) -> Option<&GlobalVar> {
@@ -531,8 +533,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         nodbg_builder: &'a Builder<'ctx>,
         src_file_path: &'a str,
         errs: &'a RefCell<Vec<PLDiag>>,
-        sender: Option<ActionType>,
-        completion: Option<(Pos, Option<String>, ActionType)>,
+        edit_pos: Option<Pos>,
         config: Config,
         db: &'a dyn Db,
     ) -> Ctx<'a, 'ctx> {
@@ -562,13 +563,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             discope: diunit.get_file().as_debug_info_scope(),
             nodebug_builder: nodbg_builder,
             errs,
-            action: sender,
-            edit_pos: completion,
+            edit_pos,
             hints: Rc::new(RefCell::new(Box::new(vec![]))),
             doc_symbols: Rc::new(RefCell::new(Box::new(vec![]))),
-            semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
-                src_file_path.to_string(),
-            )))),
             completion_items: Rc::new(Cell::new(Vec::new())),
             init_func: None,
             table: FxHashMap::default(),
@@ -610,11 +607,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 .as_debug_info_scope(),
             nodebug_builder: self.nodebug_builder,
             errs: self.errs,
-            action: self.action,
             edit_pos: self.edit_pos.clone(),
             hints: self.hints.clone(),
             doc_symbols: self.doc_symbols.clone(),
-            semantic_tokens_builder: self.semantic_tokens_builder.clone(),
             completion_items: self.completion_items.clone(),
             init_func: self.init_func,
             table: FxHashMap::default(),
@@ -648,11 +643,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             discope: self.discope.clone(),
             nodebug_builder: self.nodebug_builder,
             errs: self.errs,
-            action: self.action,
             edit_pos: self.edit_pos.clone(),
             hints: self.hints.clone(),
             doc_symbols: self.doc_symbols.clone(),
-            semantic_tokens_builder: self.semantic_tokens_builder.clone(),
             completion_items: self.completion_items.clone(),
             init_func: self.init_func,
             table: FxHashMap::default(),
@@ -932,11 +925,8 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         range: Range,
         get_completions: impl FnOnce() -> Vec<CompletionItem>,
     ) {
-        if let Some((pos, _, _)) = self.edit_pos {
-            if self.action.unwrap() == ActionType::Diagnostic
-                && pos.is_in(range)
-                && !self.plmod.completion_gened.borrow().is_true()
-            {
+        if let Some(pos) = self.edit_pos {
+            if pos.is_in(range) && !self.plmod.completion_gened.borrow().is_true() {
                 let comps = get_completions();
                 let comps = comps.iter().map(|x| CompletionItemWrapper(x.clone()));
                 self.plmod.completions.borrow_mut().truncate(0);
@@ -1168,7 +1158,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if !self.need_highlight {
             return;
         }
-        self.semantic_tokens_builder.borrow_mut().push(
+        self.plmod.semantic_tokens_builder.borrow_mut().push(
             range.to_diag_range(),
             type_index(tp),
             modifiers,

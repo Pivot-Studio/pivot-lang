@@ -366,6 +366,7 @@ mod test {
             Default::default(),
             action,
             params,
+            None,
         );
         compile_dry(db, input);
         compile_dry::accumulated::<A>(db, input)
@@ -455,6 +456,7 @@ mod test {
             "test/main.pi".to_string(),
             Default::default(),
             ActionType::Compile,
+            None,
             None,
         );
         let outplb = "testout.bc";

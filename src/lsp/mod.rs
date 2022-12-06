@@ -166,6 +166,7 @@ fn main_loop(
         Default::default(),
         ActionType::Diagnostic,
         None,
+        None,
     );
     let mut tokens = FxHashMap::default();
     let mut completions: Vec<Vec<lsp_types::CompletionItem>> = vec![];
@@ -255,6 +256,7 @@ fn main_loop(
             }
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::Completion);
+            docin.set_edit_pos(&mut db).to(Some(pos));
             docin
                 .set_params(&mut db)
                 .to(Some((pos, trigger.clone(), ActionType::Completion)));
@@ -404,9 +406,7 @@ fn main_loop(
                 );
                 let mut pos = Pos::from_diag_pos(&content_change.range.unwrap().clone().end);
                 pos.column += 1;
-                docin
-                    .set_params(&mut db)
-                    .to(Some((pos, None, ActionType::Diagnostic)));
+                docin.set_edit_pos(&mut db).to(Some(pos));
                 docin.set_docs(&mut db).to(docs.clone());
             }
             docin.set_file(&mut db).to(f.clone());
@@ -455,7 +455,7 @@ fn main_loop(
             docin.set_docs(&mut db).to(docs.clone());
         });
         let elapsed = now.elapsed();
-        log::info!("req finished, time: {:?}", elapsed);
+        log::info!("req {:?} finished, time: {:?}", docin.action(&db), elapsed);
     }
     Ok(())
 }

@@ -68,9 +68,9 @@ impl Node for ProgramNode {
             _ = x.emit_global(ctx);
         });
         ctx.clear_init_fn();
-        ctx.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
-            ctx.plmod.path.to_string(),
-        ))));
+        ctx.plmod.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(
+            SemanticTokensBuilder::new(ctx.plmod.path.to_string()),
+        )));
         // node parser
         self.nodes.iter_mut().for_each(|x| {
             _ = x.emit(ctx);
@@ -187,6 +187,12 @@ impl Program {
         let abs = dunce::canonicalize(filepath).unwrap();
         let dir = abs.parent().unwrap().to_str().unwrap();
         let fname = abs.file_name().unwrap().to_str().unwrap();
+        let params = self.params(db);
+        let pos = if self.docs(db).file(db) == params.file(db) {
+            self.docs(db).edit_pos(db)
+        } else {
+            None
+        };
 
         let p = ProgramEmitParam::new(
             db,
@@ -194,11 +200,41 @@ impl Program {
             dir.to_string(),
             fname.to_string(),
             abs.to_str().unwrap().to_string(),
-            self.params(db),
+            LspParams::new(
+                db,
+                params.modpath(db).to_string(),
+                pos,
+                params.config(db),
+                params.action(db) == ActionType::Compile,
+            ),
             modmap,
             self.docs(db).get_file_content(db).unwrap().text(db).clone(),
         );
 
+        let nn = p.node(db).node(db);
+        match params.action(db) {
+            ActionType::PrintAst => {
+                println!("file: {}", p.fullpath(db).green());
+                nn.print(0, true, vec![]);
+            }
+            ActionType::Fmt => {
+                let code = nn.format(0, "    ");
+                let mut f = OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open(p.fullpath(db))
+                    .unwrap();
+                f.write(code.as_bytes()).unwrap();
+            }
+            ActionType::LspFmt => {
+                let oldcode = p.file_content(db);
+                let newcode = nn.format(0, "    ");
+                let diff = text::diff(&oldcode, &newcode);
+                let line_index = text::LineIndex::new(&oldcode);
+                PLFormat::push(db, diff.into_text_edit(&line_index));
+            }
+            _ => {}
+        }
         let m = emit_file(db, p);
         let plmod = m.plmod(db);
         let params = self.params(db);
@@ -258,6 +294,10 @@ impl Program {
                     }
                 }
             }
+            ActionType::SemanticTokensFull => {
+                let b = plmod.semantic_tokens_builder.borrow().build();
+                PLSemanticTokens::push(db, b);
+            }
             _ => {}
         }
         m
@@ -274,16 +314,30 @@ pub struct ProgramEmitParam {
     #[return_ref]
     pub fullpath: String,
     #[return_ref]
-    pub params: EmitParams,
+    pub params: LspParams,
     pub submods: FxHashMap<String, Mod>,
     #[return_ref]
     pub file_content: String,
 }
 
 #[salsa::tracked]
+pub struct LspParams {
+    #[return_ref]
+    pub modpath: String,
+    pub params: Option<Pos>,
+    pub config: Config,
+    pub is_compile: bool,
+}
+
+#[salsa::tracked(lru = 32)]
 pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
+    log::info!(
+        "emit_file: {} params: {:?} config: {:?} ",
+        params.fullpath(db),
+        params.params(db).params(db),
+        params.params(db).config(db)
+    );
     let context = &Context::create();
-    let action = params.params(db).action(db);
     let (a, b, c, d, e, f) = create_ctx_info(context, params.dir(db), params.file(db));
     let v = RefCell::new(Vec::new());
     let mut ctx = ctx::Ctx::new(
@@ -296,7 +350,6 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         &f,
         params.fullpath(db),
         &v,
-        Some(params.params(db).action(db)),
         params.params(db).params(db),
         params.params(db).config(db),
         db,
@@ -316,31 +369,6 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     m.module.set_triple(&TargetMachine::get_default_triple());
     let node = params.node(db);
     let mut nn = node.node(db);
-    if let Some(action) = m.action {
-        match action {
-            ActionType::PrintAst => {
-                println!("file: {}", params.fullpath(db).green());
-                nn.print(0, true, vec![]);
-            }
-            ActionType::Fmt => {
-                let code = nn.format(0, "    ");
-                let mut f = OpenOptions::new()
-                    .write(true)
-                    .truncate(true)
-                    .open(params.fullpath(db))
-                    .unwrap();
-                f.write(code.as_bytes()).unwrap();
-            }
-            ActionType::LspFmt => {
-                let oldcode = params.file_content(db);
-                let newcode = nn.format(0, "    ");
-                let diff = text::diff(&oldcode, &newcode);
-                let line_index = text::LineIndex::new(&oldcode);
-                PLFormat::push(db, diff.into_text_edit(&line_index));
-            }
-            _ => {}
-        }
-    }
     let _ = nn.emit(m);
     Diagnostics::push(
         db,
@@ -349,23 +377,11 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
             v.borrow().iter().map(|x| x.clone()).collect(),
         ),
     );
-    if ctx.action.is_some() && ctx.action.unwrap() == ActionType::SemanticTokensFull {
-        let b = ctx.semantic_tokens_builder.borrow().build();
-        PLSemanticTokens::push(db, b);
-    }
-    // if action == ActionType::Completion {
-    //     let ci = ctx.completion_items.take();
-    //     Completions::push(db, ci);
-    // }
-    if action == ActionType::Hint {
-        let hints = ctx.hints.take();
-        Hints::push(db, *hints);
-    }
-    if action == ActionType::DocSymbol {
-        let docs = ctx.doc_symbols.take();
-        DocSymbols::push(db, *docs);
-    }
-    if ctx.action.is_some() && ctx.action.unwrap() == ActionType::Compile {
+    let hints = ctx.hints.take();
+    Hints::push(db, *hints);
+    let docs = ctx.doc_symbols.take();
+    DocSymbols::push(db, *docs);
+    if params.params(db).is_compile(db) {
         ctx.dibuilder.finalize();
         let mut hasher = DefaultHasher::new();
         params.fullpath(db).hash(&mut hasher);

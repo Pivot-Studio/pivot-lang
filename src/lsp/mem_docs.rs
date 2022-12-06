@@ -43,6 +43,7 @@ pub struct MemDocsInput {
     pub op: Options,
     pub action: ActionType,
     pub params: Option<(Pos, Option<String>, ActionType)>,
+    pub edit_pos: Option<Pos>,
 }
 
 #[salsa::tracked]
