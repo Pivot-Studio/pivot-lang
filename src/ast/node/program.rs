@@ -202,6 +202,15 @@ impl Program {
         let m = emit_file(db, p);
         let plmod = m.plmod(db);
         let params = self.params(db);
+        Completions::push(
+            db,
+            plmod
+                .completions
+                .borrow()
+                .iter()
+                .map(|x| x.into_completions())
+                .collect(),
+        );
         match params.action(db) {
             ActionType::FindReferences => {
                 let (pos, _, _) = params.params(db).unwrap();
@@ -344,10 +353,10 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let b = ctx.semantic_tokens_builder.borrow().build();
         PLSemanticTokens::push(db, b);
     }
-    if action == ActionType::Completion {
-        let ci = ctx.completion_items.take();
-        Completions::push(db, ci);
-    }
+    // if action == ActionType::Completion {
+    //     let ci = ctx.completion_items.take();
+    //     Completions::push(db, ci);
+    // }
     if action == ActionType::Hint {
         let hints = ctx.hints.take();
         Hints::push(db, *hints);

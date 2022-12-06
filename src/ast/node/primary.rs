@@ -113,12 +113,7 @@ impl VarNode {
         println!("VarNode: {}", self.name);
     }
     pub fn emit<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        ctx.if_completion_no_mut(|ctx, a| {
-            if a.0.is_in(self.range) {
-                let completions = ctx.get_completions();
-                ctx.completion_items.set(completions);
-            }
-        });
+        ctx.if_completion(self.range, || ctx.get_completions());
         let v = ctx.get_symbol(&self.name);
         if let Some((v, pltype, dst, refs, is_const)) = v {
             ctx.push_semantic_token(self.range, SemanticTokenType::VARIABLE, 0);
@@ -148,12 +143,7 @@ impl VarNode {
         Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND))
     }
     pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        ctx.if_completion_no_mut(|ctx, a| {
-            if a.0.is_in(self.range) {
-                let completions = ctx.get_completions();
-                ctx.completion_items.set(completions);
-            }
-        });
+        ctx.if_completion(self.range, || ctx.get_completions());
 
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match *tp.borrow() {

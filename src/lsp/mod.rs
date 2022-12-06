@@ -168,6 +168,7 @@ fn main_loop(
         None,
     );
     let mut tokens = FxHashMap::default();
+    let mut completions: Vec<Vec<lsp_types::CompletionItem>> = vec![];
 
     log::info!("starting main loop");
     for msg in &connection.receiver {
@@ -258,11 +259,11 @@ fn main_loop(
                 .set_params(&mut db)
                 .to(Some((pos, trigger.clone(), ActionType::Completion)));
             compile_dry(&db, docin);
-            let completions = compile_dry::accumulated::<Completions>(&db, docin);
             if !completions.is_empty() {
                 let sender = connection.sender.clone();
+                let comps = completions[0].clone();
                 pool.execute(move || {
-                    send_completions(&sender, id, completions[0].clone());
+                    send_completions(&sender, id, comps.clone());
                 });
             }
         })
@@ -401,12 +402,18 @@ fn main_loop(
                     f.clone(),
                     content_change.text.clone(),
                 );
+                let mut pos = Pos::from_diag_pos(&content_change.range.unwrap().clone().end);
+                pos.column += 1;
+                docin
+                    .set_params(&mut db)
+                    .to(Some((pos, None, ActionType::Diagnostic)));
                 docin.set_docs(&mut db).to(docs.clone());
             }
             docin.set_file(&mut db).to(f.clone());
+
             docin.set_action(&mut db).to(ActionType::Diagnostic);
-            docin.set_params(&mut db).to(None);
             compile_dry(&db, docin);
+            completions = compile_dry::accumulated::<Completions>(&db, docin);
             let diags = compile_dry::accumulated::<Diagnostics>(&db, docin);
             let sender = connection.sender.clone();
             pool.execute(move || {

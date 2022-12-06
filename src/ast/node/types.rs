@@ -55,12 +55,7 @@ impl TypeNode for TypeNameNode {
     }
 
     fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
-        ctx.if_completion_no_mut(|ctx, a| {
-            if a.0.is_in(self.range) {
-                let completions = ctx.get_type_completions();
-                ctx.completion_items.set(completions);
-            }
-        });
+        ctx.if_completion(self.range, || ctx.get_type_completions());
         if self.id.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::EXPECT_TYPE));
         }
@@ -581,12 +576,7 @@ impl Node for StructInitNode {
             let field_exp_range = fieldinit.exp.range();
             let field = sttype.fields.get(&fieldinit.id.name);
             if field.is_none() {
-                ctx.if_completion(|ctx, a| {
-                    if a.0.is_in(self.range) {
-                        let completions = sttype.get_completions(&ctx);
-                        ctx.completion_items.set(completions);
-                    }
-                });
+                ctx.if_completion(self.range, || sttype.get_completions(&ctx));
                 return Err(ctx.add_err(field_id_range, ErrorCode::STRUCT_FIELD_NOT_FOUND));
             }
             let field = field.unwrap();

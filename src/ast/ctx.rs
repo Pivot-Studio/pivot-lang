@@ -78,7 +78,7 @@ pub struct Ctx<'a, 'ctx> {
     pub nodebug_builder: &'a Builder<'ctx>, // builder without debug info
     pub errs: &'a RefCell<Vec<PLDiag>>,   // diagnostic list
     pub action: Option<ActionType>,       // lsp sender
-    pub lspparams: Option<(Pos, Option<String>, ActionType)>, // lsp params
+    pub edit_pos: Option<(Pos, Option<String>, ActionType)>, // lsp params
     pub ditypes_placeholder: Rc<RefCell<FxHashMap<String, RefCell<Vec<MemberType<'ctx>>>>>>, // hold the generated debug info type place holder
     pub ditypes: Rc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
     pub hints: Rc<RefCell<Box<Vec<InlayHint>>>>,
@@ -138,6 +138,30 @@ pub struct Mod {
     pub refs: LSPRangeMap<Range, Rc<RefCell<Vec<Location>>>>,
     pub sig_helps: LSPRangeMap<Range, SignatureHelp>,
     pub hovers: LSPRangeMap<Range, Hover>,
+    pub completions: Rc<RefCell<Vec<CompletionItemWrapper>>>,
+    pub completion_gened: Rc<RefCell<Gened>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompletionItemWrapper(CompletionItem);
+
+impl Eq for CompletionItemWrapper {}
+
+impl CompletionItemWrapper {
+    pub fn into_completions(&self) -> CompletionItem {
+        self.0.clone()
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Gened(bool);
+
+impl Gened {
+    pub fn set_true(&mut self) {
+        self.0 = true;
+    }
+    pub fn is_true(&self) -> bool {
+        self.0
+    }
 }
 
 type LSPRangeMap<T, V> = Rc<RefCell<BTreeMap<T, V>>>;
@@ -161,6 +185,8 @@ impl Mod {
             refs: Rc::new(RefCell::new(BTreeMap::new())),
             sig_helps: Rc::new(RefCell::new(BTreeMap::new())),
             hovers: Rc::new(RefCell::new(BTreeMap::new())),
+            completions: Rc::new(RefCell::new(vec![])),
+            completion_gened: Rc::new(RefCell::new(Gened(false))),
         }
     }
     pub fn new_child(&self) -> Self {
@@ -175,6 +201,8 @@ impl Mod {
             refs: self.refs.clone(),
             sig_helps: self.sig_helps.clone(),
             hovers: self.hovers.clone(),
+            completions: self.completions.clone(),
+            completion_gened: self.completion_gened.clone(),
         }
     }
     pub fn get_global_symbol(&self, name: &str) -> Option<&GlobalVar> {
@@ -535,7 +563,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             nodebug_builder: nodbg_builder,
             errs,
             action: sender,
-            lspparams: completion,
+            edit_pos: completion,
             hints: Rc::new(RefCell::new(Box::new(vec![]))),
             doc_symbols: Rc::new(RefCell::new(Box::new(vec![]))),
             semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
@@ -583,7 +611,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             nodebug_builder: self.nodebug_builder,
             errs: self.errs,
             action: self.action,
-            lspparams: self.lspparams.clone(),
+            edit_pos: self.edit_pos.clone(),
             hints: self.hints.clone(),
             doc_symbols: self.doc_symbols.clone(),
             semantic_tokens_builder: self.semantic_tokens_builder.clone(),
@@ -621,7 +649,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             nodebug_builder: self.nodebug_builder,
             errs: self.errs,
             action: self.action,
-            lspparams: self.lspparams.clone(),
+            edit_pos: self.edit_pos.clone(),
             hints: self.hints.clone(),
             doc_symbols: self.doc_symbols.clone(),
             semantic_tokens_builder: self.semantic_tokens_builder.clone(),
@@ -899,31 +927,21 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             Ok(self.builder.build_load(v.into_pointer_value(), "loadtmp"))
         }
     }
-    pub fn if_completion(&mut self, c: impl FnOnce(&mut Ctx, &(Pos, Option<String>))) {
-        if let Some(tp) = self.action {
-            if let Some(comp) = &self.lspparams {
-                if tp == ActionType::Completion {
-                    let v = self.completion_items.take();
-                    if v.is_empty() {
-                        c(self, &(comp.0, comp.1.clone()));
-                    } else {
-                        self.completion_items.set(v);
-                    }
-                }
-            }
-        }
-    }
-    pub fn if_completion_no_mut(&self, c: impl FnOnce(&Ctx, &(Pos, Option<String>))) {
-        if let Some(tp) = self.action {
-            if let Some(comp) = &self.lspparams {
-                if tp == ActionType::Completion {
-                    let v = self.completion_items.take();
-                    if v.is_empty() {
-                        c(self, &(comp.0, comp.1.clone()));
-                    } else {
-                        self.completion_items.set(v);
-                    }
-                }
+    pub fn if_completion(
+        &self,
+        range: Range,
+        get_completions: impl FnOnce() -> Vec<CompletionItem>,
+    ) {
+        if let Some((pos, _, _)) = self.edit_pos {
+            if self.action.unwrap() == ActionType::Diagnostic
+                && pos.is_in(range)
+                && !self.plmod.completion_gened.borrow().is_true()
+            {
+                let comps = get_completions();
+                let comps = comps.iter().map(|x| CompletionItemWrapper(x.clone()));
+                self.plmod.completions.borrow_mut().truncate(0);
+                self.plmod.completions.borrow_mut().extend(comps);
+                self.plmod.completion_gened.borrow_mut().set_true();
             }
         }
     }
