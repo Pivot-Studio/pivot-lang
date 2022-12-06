@@ -227,6 +227,17 @@ impl Program {
                     }
                 }
             }
+            ActionType::SignatureHelp => {
+                let (pos, _, _) = params.params(db).unwrap();
+                let range = pos.to(pos);
+                let res = plmod.sig_helps.borrow();
+                let re = res.range((Unbounded, Included(&range))).last();
+                if let Some((range, res)) = re {
+                    if pos.is_in(*range) {
+                        PLSignatureHelp::push(db, res.clone());
+                    }
+                }
+            }
             _ => {}
         }
         m

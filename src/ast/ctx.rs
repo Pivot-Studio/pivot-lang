@@ -43,7 +43,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use super::accumulators::PLSignatureHelp;
 use super::compiler::get_target_machine;
 use super::compiler::ActionType;
 use super::diag::{ErrorCode, WarnCode};
@@ -138,6 +137,7 @@ pub struct Mod {
     pub methods: FxHashMap<String, FxHashMap<String, FNType>>,
     pub defs: LSPRangeMap<Range, LSPDef>,
     pub refs: LSPRangeMap<Range, Rc<RefCell<Vec<Location>>>>,
+    pub sig_helps: LSPRangeMap<Range, SignatureHelp>,
 }
 
 type LSPRangeMap<T, V> = Rc<RefCell<BTreeMap<T, V>>>;
@@ -159,6 +159,7 @@ impl Mod {
             methods: FxHashMap::default(),
             defs: Rc::new(RefCell::new(BTreeMap::new())),
             refs: Rc::new(RefCell::new(BTreeMap::new())),
+            sig_helps: Rc::new(RefCell::new(BTreeMap::new())),
         }
     }
     pub fn new_child(&self) -> Self {
@@ -171,6 +172,7 @@ impl Mod {
             methods: self.methods.clone(),
             defs: self.defs.clone(),
             refs: self.refs.clone(),
+            sig_helps: self.sig_helps.clone(),
         }
     }
     pub fn get_global_symbol(&self, name: &str) -> Option<&GlobalVar> {
@@ -940,50 +942,30 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             tprefs.borrow_mut().push(self.get_location(range));
             self.plmod.refs.borrow_mut().insert(range, tprefs.clone());
         }
-        // if let Some(_) = self.action {
-        //     if let Some(comp) = &self.lspparams {
-        //         let tprefs = RefCell::borrow(&tp).get_refs();
-        //         if let Some(tprefs) = tprefs {
-        //             tprefs.borrow_mut().push(self.get_location(range));
-        //             if comp.0.is_in(range) {
-        //                 self.refs.set(Some(tprefs));
-        //             }
-        //         }
-        //     }
-        // }
     }
 
     pub fn set_if_sig(&self, range: Range, name: String, params: &[String], n: u32) {
-        if let Some(act) = self.action {
-            if act != ActionType::SignatureHelp {
-                return;
-            }
-            if let Some(comp) = &self.lspparams {
-                if comp.0.is_in(range) {
-                    PLSignatureHelp::push(
-                        self.db,
-                        SignatureHelp {
-                            signatures: vec![SignatureInformation {
-                                label: name,
+        self.plmod.sig_helps.borrow_mut().insert(
+            range,
+            SignatureHelp {
+                signatures: vec![SignatureInformation {
+                    label: name,
+                    documentation: None,
+                    parameters: Some(
+                        params
+                            .iter()
+                            .map(|s| ParameterInformation {
+                                label: ParameterLabel::Simple(s.clone()),
                                 documentation: None,
-                                parameters: Some(
-                                    params
-                                        .iter()
-                                        .map(|s| ParameterInformation {
-                                            label: ParameterLabel::Simple(s.clone()),
-                                            documentation: None,
-                                        })
-                                        .collect(),
-                                ),
-                                active_parameter: Some(n),
-                            }],
-                            active_signature: None,
-                            active_parameter: None,
-                        },
-                    );
-                }
-            }
-        }
+                            })
+                            .collect(),
+                    ),
+                    active_parameter: Some(n),
+                }],
+                active_signature: None,
+                active_parameter: None,
+            },
+        );
     }
 
     pub fn set_if_refs(&self, refs: Rc<RefCell<Vec<Location>>>, range: Range) {

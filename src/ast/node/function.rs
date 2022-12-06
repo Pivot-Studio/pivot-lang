@@ -103,18 +103,14 @@ impl Node for FuncCallNode {
         if fntype.param_pltypes.len() - skip as usize != self.paralist.len() {
             return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
         }
-        // set sig and param hint
-        let mut prevpos = id_range.end;
         for (i, para) in self.paralist.iter_mut().enumerate() {
-            let sigrange = prevpos.to(para.range().end);
-            prevpos = para.range().end;
             let pararange = para.range();
             ctx.push_param_hint(
                 pararange.clone(),
                 fntype.param_names[i + skip as usize].clone(),
             );
             ctx.set_if_sig(
-                sigrange,
+                para.range(),
                 fntype.name.clone().split("::").last().unwrap().to_string()
                     + "("
                     + fntype
