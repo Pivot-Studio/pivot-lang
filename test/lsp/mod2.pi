@@ -1,0 +1,13 @@
+use test::mod;
+
+fn name() void {
+    let a = mod::name{};
+    return;
+}
+
+
+
+fn test_sig_help(i:i64, ii:bool) void {
+    test_sig_help(i, ii)
+    return;
+}

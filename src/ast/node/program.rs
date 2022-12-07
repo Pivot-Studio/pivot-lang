@@ -138,6 +138,7 @@ impl Program {
                 // 如果use的是依赖包
                 if let Some(dep) = cm.get(&u.ids[0].name) {
                     path = path.join(&dep.path);
+
                     let input = FileCompileInput::new(
                         db,
                         path.join("Kagari.toml")
@@ -147,7 +148,6 @@ impl Program {
                             .to_string(),
                         "".to_string(),
                         self.docs(db),
-                        Default::default(),
                         Default::default(),
                     );
                     let f = input.get_file_content(db);
@@ -173,7 +173,6 @@ impl Program {
                 f,
                 self.params(db).modpath(db).clone(),
                 self.docs(db),
-                Default::default(),
                 config,
             );
             let m = compile_dry_file(db, f);
@@ -188,11 +187,7 @@ impl Program {
         let dir = abs.parent().unwrap().to_str().unwrap();
         let fname = abs.file_name().unwrap().to_str().unwrap();
         let params = self.params(db);
-        let pos = if self.docs(db).file(db) == params.file(db) {
-            self.docs(db).edit_pos(db)
-        } else {
-            None
-        };
+        let pos = self.docs(db).edit_pos(db);
 
         let p = ProgramEmitParam::new(
             db,
@@ -339,12 +334,7 @@ pub struct LspParams {
 
 #[salsa::tracked(lru = 32)]
 pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
-    log::info!(
-        "emit_file: {} params: {:?} config: {:?} ",
-        params.fullpath(db),
-        params.params(db).params(db),
-        params.params(db).config(db)
-    );
+    log::info!("emit_file: {}", params.fullpath(db),);
     let context = &Context::create();
     let (a, b, c, d, e, f) = create_ctx_info(context, params.dir(db), params.file(db));
     let v = RefCell::new(Vec::new());

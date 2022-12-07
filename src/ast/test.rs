@@ -5,12 +5,16 @@ mod test {
         sync::{Arc, Mutex},
     };
 
-    use lsp_types::{CompletionItemKind, InlayHintLabel};
+    use lsp_types::{
+        CompletionItemKind, GotoDefinitionResponse, HoverContents, InlayHintLabel, MarkedString,
+    };
     use salsa::{accumulator::Accumulator, storage::HasJar};
 
     use crate::{
         ast::{
-            accumulators::{Completions, DocSymbols, Hints},
+            accumulators::{
+                Completions, DocSymbols, GotoDef, Hints, PLHover, PLReferences, PLSignatureHelp,
+            },
             compiler::{compile_dry, ActionType},
             range::Pos,
         },
@@ -193,6 +197,134 @@ mod test {
                 character: ec,
             },
         }
+    }
+    #[test]
+    fn test_goto_def() {
+        let def = test_lsp::<GotoDef>(
+            &Database::default(),
+            Some((
+                Pos {
+                    line: 39,
+                    column: 14,
+                    offset: 0,
+                },
+                None,
+            )),
+            ActionType::GotoDef,
+            "test/lsp/test_completion.pi",
+        );
+        assert!(def.len() > 0);
+        if let GotoDefinitionResponse::Scalar(sc) = def[0].clone() {
+            assert!(sc.uri.to_string().contains("test/lsp/mod.pi"));
+            assert_eq!(sc.range, new_range(1, 0, 3, 1));
+        } else {
+            panic!("expect goto def to be scalar, found {:?}", def[0])
+        }
+    }
+    #[test]
+    fn test_hover_struct() {
+        let hovers = test_lsp::<PLHover>(
+            &Database::default(),
+            Some((
+                Pos {
+                    line: 4,
+                    column: 19,
+                    offset: 0,
+                },
+                None,
+            )),
+            ActionType::Hover,
+            "test/lsp/mod2.pi",
+        );
+        assert!(hovers.len() > 0);
+        if let HoverContents::Array(v) = hovers[0].clone().contents {
+            if let MarkedString::String(st) = v[0].clone() {
+                assert_eq!(st.trim(), "# content".to_string());
+            } else {
+                panic!("expect hover to be string, found {:?}", hovers[0])
+            }
+        } else {
+            panic!("expect goto def to be scalar, found {:?}", hovers[0])
+        }
+    }
+
+    #[test]
+    fn test_sig_help() {
+        let hovers = test_lsp::<PLSignatureHelp>(
+            &Database::default(),
+            Some((
+                Pos {
+                    line: 11,
+                    column: 19,
+                    offset: 0,
+                },
+                None,
+            )),
+            ActionType::SignatureHelp,
+            "test/lsp/mod2.pi",
+        );
+        assert!(hovers.len() > 0);
+        assert!(
+            hovers[0]
+                .signatures
+                .iter()
+                .find(|s| {
+                    s.label == "test_sig_help(i: i64, ii: bool)" && s.active_parameter == Some(0)
+                })
+                .is_some(),
+            "expect to find test_sig_help(i: i64, ii: bool) with active parameter 0, found {:?}",
+            hovers[0]
+        );
+    }
+
+    #[test]
+    fn test_find_refs() {
+        let refs = test_lsp::<PLReferences>(
+            &Database::default(),
+            Some((
+                Pos {
+                    line: 2,
+                    column: 8,
+                    offset: 0,
+                },
+                None,
+            )),
+            ActionType::FindReferences,
+            "test/lsp/mod.pi",
+        );
+        assert!(refs.len() > 0);
+        let locs = refs[0].borrow();
+        assert_eq!(locs.len(), 3);
+        assert!(locs
+            .iter()
+            .find(|l| {
+                let ok = l.uri.to_string().contains("test/lsp/mod.pi");
+                if ok {
+                    assert!(l.range == new_range(1, 7, 1, 11))
+                }
+                ok
+            })
+            .is_some());
+        assert!(locs
+            .iter()
+            .find(|l| {
+                let ok = l.uri.to_string().contains("test/lsp/test_completion.pi");
+                if ok {
+                    assert!(l.range == new_range(38, 11, 38, 15))
+                }
+                ok
+            })
+            .is_some());
+        assert!(locs
+            .iter()
+            .find(|l| {
+                let ok = l.uri.to_string().contains("test/lsp/mod2.pi");
+                if ok {
+                    assert!(l.range == new_range(3, 17, 3, 21))
+                }
+                ok
+            })
+            .is_some());
     }
 
     #[test]

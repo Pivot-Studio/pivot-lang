@@ -118,7 +118,7 @@ pub fn run(p: &Path, opt: OptimizationLevel) {
     }
 }
 
-#[salsa::tracked(lru = 32)]
+#[salsa::tracked]
 pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
     let path = get_config_path(docs.file(db).to_string());
     if path.is_err() {
@@ -130,7 +130,6 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
         path.clone().unwrap(),
         "".to_string(),
         docs,
-        Default::default(),
         Default::default(),
     );
 
@@ -155,13 +154,12 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
             .unwrap()
             .to_string(),
         docs,
-        Default::default(),
         config,
     );
     compile_dry_file(db, input);
 }
 
-#[salsa::tracked(lru = 32)]
+#[salsa::tracked]
 pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrapper> {
     // eprintln!("compile_dry_file: {:?}", docs.debug_all(db));
     let re = docs.get_file_content(db);

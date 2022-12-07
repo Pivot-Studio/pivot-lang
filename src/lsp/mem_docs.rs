@@ -9,7 +9,6 @@ use rustc_hash::FxHashMap;
 use crate::{
     ast::{
         compiler::{ActionType, Options},
-        ctx::Mod,
         range::Pos,
     },
     nomparser::SourceProgram,
@@ -46,14 +45,15 @@ pub struct MemDocsInput {
     pub edit_pos: Option<Pos>,
 }
 
-#[salsa::tracked]
+/// 必须是interned，否则会导致lru cache失效
+/// 因为tracked类型结构体每次new都会生成一个新的实例（即使值一样），而interned类型结构体如果值一样会生成同一个实例
+#[salsa::interned]
 pub struct FileCompileInput {
     #[return_ref]
     pub file: String,
     #[return_ref]
     pub modpath: String,
     pub docs: MemDocsInput,
-    pub submods: FxHashMap<String, Mod>,
     pub config: Config,
 }
 #[salsa::tracked]
