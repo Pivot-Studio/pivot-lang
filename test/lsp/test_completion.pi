@@ -18,3 +18,15 @@ struct test1 {
 }
 
 use
+
+fn name() void {
+
+    return;
+}
+
+fn name1() void {
+    let a = 10;
+    return;
+}
+
+// 此文件中尽量不要改动已有代码，最好在后方添加。改动已有代码可能导致测试不通过

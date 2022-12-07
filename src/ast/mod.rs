@@ -7,4 +7,5 @@ pub mod gcapi;
 pub mod node;
 pub mod pltype;
 pub mod range;
+pub mod test;
 pub mod tokens;
