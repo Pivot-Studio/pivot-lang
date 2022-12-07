@@ -5,7 +5,7 @@ mod test {
         sync::{Arc, Mutex},
     };
 
-    use lsp_types::InlayHintLabel;
+    use lsp_types::{CompletionItemKind, InlayHintLabel};
     use salsa::{accumulator::Accumulator, storage::HasJar};
 
     use crate::{
@@ -114,6 +114,58 @@ mod test {
         assert!(lables.contains(&"i64".to_string()));
         assert!(!lables.contains(&"name".to_string()));
         assert!(lables.contains(&"test1".to_string()));
+    }
+
+    #[test]
+    fn test_st_field_completion() {
+        let comps = test_lsp::<Completions>(
+            &Database::default(),
+            Some((
+                Pos {
+                    line: 37,
+                    column: 8,
+                    offset: 0,
+                },
+                Some(":".to_string()),
+            )),
+            ActionType::Completion,
+            "test/lsp/test_completion.pi",
+        );
+        assert!(comps.len() > 0);
+        let lables = comps[0].iter().map(|c| c.clone()).collect::<Vec<_>>();
+        assert!(
+            lables
+                .iter()
+                .find(|c| c.label == "mod" && c.kind == Some(CompletionItemKind::MODULE))
+                .is_some(),
+            "mod not found in completion"
+        );
+    }
+
+    #[test]
+    fn test_st_field_exttp_completion() {
+        let comps = test_lsp::<Completions>(
+            &Database::default(),
+            Some((
+                Pos {
+                    line: 38,
+                    column: 8,
+                    offset: 0,
+                },
+                Some(":".to_string()),
+            )),
+            ActionType::Completion,
+            "test/lsp/test_completion.pi",
+        );
+        assert!(comps.len() > 0);
+        let lables = comps[0].iter().map(|c| c.clone()).collect::<Vec<_>>();
+        assert!(
+            lables
+                .iter()
+                .find(|c| c.label == "name" && c.kind == Some(CompletionItemKind::STRUCT))
+                .is_some(),
+            "name not found in completion"
+        );
     }
     #[test]
     fn test_hint() {

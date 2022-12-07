@@ -55,11 +55,12 @@ impl TypeNode for TypeNameNode {
     }
 
     fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
-        ctx.if_completion(self.range, || ctx.get_type_completions());
         if self.id.is_none() {
+            ctx.if_completion(self.range, || ctx.get_type_completions());
             return Err(ctx.add_err(self.range, ErrorCode::EXPECT_TYPE));
         }
         let (_, pltype, _) = self.id.as_ref().unwrap().get_type(&ctx)?;
+        ctx.if_completion(self.range, || ctx.get_type_completions());
         let mut pltype = pltype.unwrap();
         if let Some(generic_params) = &self.generic_params {
             let mut sttype = match &mut *pltype.clone().borrow_mut() {
@@ -363,7 +364,7 @@ impl Node for StructDefNode {
             ctx.push_semantic_token(field.id.range, SemanticTokenType::PROPERTY, 0);
             field.typenode.emit_highlight(ctx);
             if !has_semi {
-                return Err(ctx.add_err(field.range, ErrorCode::COMPLETION));
+                ctx.add_err(field.range, ErrorCode::COMPLETION);
             }
             if let Some(doc) = &field.doc {
                 ctx.push_semantic_token(doc.range, SemanticTokenType::COMMENT, 0);
@@ -414,7 +415,7 @@ impl StructDefNode {
         let clone_map = ctx.plmod.types.clone();
         for (field, has_semi) in self.fields.iter() {
             if !has_semi {
-                return Err(ctx.add_err(field.range, ErrorCode::COMPLETION));
+                ctx.add_err(field.range, ErrorCode::COMPLETION);
             }
             let id = field.id.clone();
             let f = Field {
