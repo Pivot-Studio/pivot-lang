@@ -233,17 +233,18 @@ mod test {
                 fmt: false,
             },
         );
-        input.set_action(&mut db).to(ActionType::Fmt);
-        compile(
-            &db,
-            input,
-            out.to_string(),
-            Options {
-                optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
-                genir: false,
-                printast: true,
-                fmt: true,
-            },
+        test_lsp::<Completions>(
+            &Database::default(),
+            Some((
+                Pos {
+                    line: 10,
+                    column: 6,
+                    offset: 0,
+                },
+                None,
+            )),
+            ActionType::LspFmt,
+            "test/main.pi",
         );
     }
 }
