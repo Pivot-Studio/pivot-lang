@@ -238,18 +238,26 @@ impl Program {
         let m = emit_file(db, p);
         let plmod = m.plmod(db);
         let params = self.params(db);
-        Completions::push(
-            db,
-            plmod
-                .completions
-                .borrow()
-                .iter()
-                .map(|x| x.into_completions())
-                .collect(),
-        );
+        if self.docs(db).file(db) == params.file(db) {
+            if pos.is_some() {
+                Completions::push(
+                    db,
+                    plmod
+                        .completions
+                        .borrow()
+                        .iter()
+                        .map(|x| x.into_completions())
+                        .collect(),
+                );
+            }
+            let hints = plmod.hints.borrow().clone();
+            Hints::push(db, *hints);
+            let docs = plmod.doc_symbols.borrow().clone();
+            DocSymbols::push(db, *docs);
+        }
         match params.action(db) {
             ActionType::FindReferences => {
-                let (pos, _, _) = params.params(db).unwrap();
+                let (pos, _) = params.params(db).unwrap();
                 let range = pos.to(pos);
                 let res = plmod.refs.borrow();
                 let re = res.range((Unbounded, Included(&range))).last();
@@ -260,7 +268,7 @@ impl Program {
                 }
             }
             ActionType::GotoDef => {
-                let (pos, _, _) = params.params(db).unwrap();
+                let (pos, _) = params.params(db).unwrap();
                 let range = pos.to(pos);
                 let res = plmod.defs.borrow();
                 let re = res.range((Unbounded, Included(&range))).last();
@@ -273,7 +281,7 @@ impl Program {
                 }
             }
             ActionType::SignatureHelp => {
-                let (pos, _, _) = params.params(db).unwrap();
+                let (pos, _) = params.params(db).unwrap();
                 let range = pos.to(pos);
                 let res = plmod.sig_helps.borrow();
                 let re = res.range((Unbounded, Included(&range))).last();
@@ -284,7 +292,7 @@ impl Program {
                 }
             }
             ActionType::Hover => {
-                let (pos, _, _) = params.params(db).unwrap();
+                let (pos, _) = params.params(db).unwrap();
                 let range = pos.to(pos);
                 let res = plmod.hovers.borrow();
                 let re = res.range((Unbounded, Included(&range))).last();
@@ -377,10 +385,6 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
             v.borrow().iter().map(|x| x.clone()).collect(),
         ),
     );
-    let hints = ctx.hints.take();
-    Hints::push(db, *hints);
-    let docs = ctx.doc_symbols.take();
-    DocSymbols::push(db, *docs);
     if params.params(db).is_compile(db) {
         ctx.dibuilder.finalize();
         let mut hasher = DefaultHasher::new();

@@ -75,7 +75,7 @@ impl Node for ImplNode {
             selection_range: self.range.to_diag_range(),
             children: Some(method_docsymbols),
         };
-        ctx.doc_symbols.borrow_mut().push(docsymbol);
+        ctx.plmod.doc_symbols.borrow_mut().push(docsymbol);
         Ok((None, None, TerminatorEnum::NONE))
     }
 }

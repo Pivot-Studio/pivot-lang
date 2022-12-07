@@ -349,7 +349,7 @@ mod test {
 
     fn test_lsp<'db, A>(
         db: &'db dyn Db,
-        params: Option<(Pos, Option<String>, ActionType)>,
+        params: Option<(Pos, Option<String>)>,
         action: ActionType,
         src: &str,
     ) -> Vec<<A as Accumulator>::Data>
@@ -358,6 +358,11 @@ mod test {
         dyn Db + 'db: HasJar<<A as Accumulator>::Jar>,
     {
         let docs = MemDocs::new();
+        let pos = if let Some((pos, _)) = params {
+            Some(pos)
+        } else {
+            None
+        };
         // let db = Database::default();
         let input = MemDocsInput::new(
             db,
@@ -366,7 +371,7 @@ mod test {
             Default::default(),
             action,
             params,
-            None,
+            pos,
         );
         compile_dry(db, input);
         compile_dry::accumulated::<A>(db, input)
@@ -383,12 +388,11 @@ mod test {
                     offset: 0,
                 },
                 Some(".".to_string()),
-                ActionType::Completion,
             )),
             ActionType::Completion,
             "test/lsp/test_completion.pi",
         );
-        assert_eq!(comps.len(), 1);
+        assert!(comps.len() > 0);
         assert_eq!(comps[0].len(), 3);
         let compstr = vec!["a", "b", "c"];
         for comp in comps[0].iter() {
@@ -407,12 +411,11 @@ mod test {
                     offset: 0,
                 },
                 None,
-                ActionType::Completion,
             )),
             ActionType::Completion,
             "test/lsp/test_completion.pi",
         );
-        assert_eq!(comps.len(), 1);
+        assert!(comps.len() > 0);
         let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
         assert!(lables.contains(&"test1".to_string()));
         assert!(lables.contains(&"name".to_string()));
@@ -429,12 +432,11 @@ mod test {
                     offset: 0,
                 },
                 Some(":".to_string()),
-                ActionType::Completion,
             )),
             ActionType::Completion,
             "test/lsp/test_completion.pi",
         );
-        assert_eq!(comps.len(), 1);
+        assert!(comps.len() > 0);
         let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
         // assert!(lables.contains(&"test".to_string())); TODO: self refernece
         assert!(lables.contains(&"i64".to_string()));

@@ -36,7 +36,6 @@ use lsp_types::SignatureInformation;
 use lsp_types::Url;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
-use std::cell::Cell;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -79,10 +78,7 @@ pub struct Ctx<'a, 'ctx> {
     pub edit_pos: Option<Pos>,            // lsp params
     pub ditypes_placeholder: Rc<RefCell<FxHashMap<String, RefCell<Vec<MemberType<'ctx>>>>>>, // hold the generated debug info type place holder
     pub ditypes: Rc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
-    pub hints: Rc<RefCell<Box<Vec<InlayHint>>>>,
-    pub doc_symbols: Rc<RefCell<Box<Vec<DocumentSymbol>>>>,
-    pub completion_items: Rc<Cell<Vec<CompletionItem>>>, // hold the completion items
-    pub init_func: Option<FunctionValue<'ctx>>,          //init function,call first in main
+    pub init_func: Option<FunctionValue<'ctx>>,                //init function,call first in main
     pub table: FxHashMap<
         String,
         (
@@ -92,7 +88,7 @@ pub struct Ctx<'a, 'ctx> {
             Rc<RefCell<Vec<Location>>>,
         ),
     >, // variable table
-    pub config: Config,                                  // config
+    pub config: Config,                                        // config
     pub roots: RefCell<Vec<BasicValueEnum<'ctx>>>,
     pub usegc: bool,
     pub db: &'a dyn Db,
@@ -138,6 +134,9 @@ pub struct Mod {
     pub completions: Rc<RefCell<Vec<CompletionItemWrapper>>>,
     pub completion_gened: Rc<RefCell<Gened>>,
     pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
+    pub hints: Rc<RefCell<Box<Vec<InlayHint>>>>,
+    pub doc_symbols: Rc<RefCell<Box<Vec<DocumentSymbol>>>>,
+    // pub hints: Rc<RefCell<Box<Vec<InlayHint>>>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -188,6 +187,8 @@ impl Mod {
             semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
                 "builder".to_string(),
             )))),
+            hints: Rc::new(RefCell::new(Box::new(vec![]))),
+            doc_symbols: Rc::new(RefCell::new(Box::new(vec![]))),
         }
     }
     pub fn new_child(&self) -> Self {
@@ -205,6 +206,8 @@ impl Mod {
             completions: self.completions.clone(),
             completion_gened: self.completion_gened.clone(),
             semantic_tokens_builder: self.semantic_tokens_builder.clone(),
+            hints: self.hints.clone(),
+            doc_symbols: self.doc_symbols.clone(),
         }
     }
     pub fn get_global_symbol(&self, name: &str) -> Option<&GlobalVar> {
@@ -564,9 +567,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             nodebug_builder: nodbg_builder,
             errs,
             edit_pos,
-            hints: Rc::new(RefCell::new(Box::new(vec![]))),
-            doc_symbols: Rc::new(RefCell::new(Box::new(vec![]))),
-            completion_items: Rc::new(Cell::new(Vec::new())),
             init_func: None,
             table: FxHashMap::default(),
             config,
@@ -608,9 +608,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             nodebug_builder: self.nodebug_builder,
             errs: self.errs,
             edit_pos: self.edit_pos.clone(),
-            hints: self.hints.clone(),
-            doc_symbols: self.doc_symbols.clone(),
-            completion_items: self.completion_items.clone(),
             init_func: self.init_func,
             table: FxHashMap::default(),
             config: self.config.clone(),
@@ -644,9 +641,6 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             nodebug_builder: self.nodebug_builder,
             errs: self.errs,
             edit_pos: self.edit_pos.clone(),
-            hints: self.hints.clone(),
-            doc_symbols: self.doc_symbols.clone(),
-            completion_items: self.completion_items.clone(),
             init_func: self.init_func,
             table: FxHashMap::default(),
             config: self.config.clone(),
@@ -877,10 +871,14 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         match &*RefCell::borrow(&pltype) {
             PLType::FN(f) => {
                 if !f.method {
-                    self.doc_symbols.borrow_mut().push(f.get_doc_symbol())
+                    self.plmod.doc_symbols.borrow_mut().push(f.get_doc_symbol())
                 }
             }
-            PLType::STRUCT(st) => self.doc_symbols.borrow_mut().push(st.get_doc_symbol()),
+            PLType::STRUCT(st) => self
+                .plmod
+                .doc_symbols
+                .borrow_mut()
+                .push(st.get_doc_symbol()),
             _ => {}
         }
     }
@@ -1180,7 +1178,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             padding_right: None,
             data: None,
         };
-        self.hints.borrow_mut().push(hint);
+        self.plmod.hints.borrow_mut().push(hint);
     }
     pub fn push_param_hint(&self, range: Range, name: String) {
         if !self.need_highlight {
@@ -1196,7 +1194,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             padding_right: None,
             data: None,
         };
-        self.hints.borrow_mut().push(hint);
+        self.plmod.hints.borrow_mut().push(hint);
     }
     fn get_keyword_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         let keywords = vec![

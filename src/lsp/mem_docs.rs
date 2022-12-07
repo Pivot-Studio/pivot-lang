@@ -31,7 +31,7 @@ pub struct EmitParams {
     #[return_ref]
     pub modpath: String,
     pub action: ActionType,
-    pub params: Option<(Pos, Option<String>, ActionType)>,
+    pub params: Option<(Pos, Option<String>)>,
     pub config: Config,
 }
 
@@ -42,7 +42,7 @@ pub struct MemDocsInput {
     pub file: String,
     pub op: Options,
     pub action: ActionType,
-    pub params: Option<(Pos, Option<String>, ActionType)>,
+    pub params: Option<(Pos, Option<String>)>,
     pub edit_pos: Option<Pos>,
 }
 
@@ -91,7 +91,7 @@ impl FileCompileInput {
                 file.clone(),
                 self.modpath(db).clone(),
                 action,
-                Some((Default::default(), None, action)),
+                Some((Default::default(), None)),
                 self.config(db),
             );
         }

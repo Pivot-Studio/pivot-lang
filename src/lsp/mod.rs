@@ -185,9 +185,7 @@ fn main_loop(
             let pos = Pos::from_diag_pos(&params.text_document_position_params.position);
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::GotoDef);
-            docin
-                .set_params(&mut db)
-                .to(Some((pos, None, ActionType::GotoDef)));
+            docin.set_params(&mut db).to(Some((pos, None)));
             compile_dry(&db, docin);
             let defs = compile_dry::accumulated::<GotoDef>(&db, docin);
             let sender = connection.sender.clone();
@@ -202,9 +200,7 @@ fn main_loop(
             let pos = Pos::from_diag_pos(&params.text_document_position_params.position);
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::Hover);
-            docin
-                .set_params(&mut db)
-                .to(Some((pos, None, ActionType::Hover)));
+            docin.set_params(&mut db).to(Some((pos, None)));
             compile_dry(&db, docin);
             let mut hover = compile_dry::accumulated::<PLHover>(&db, docin);
             let hover = hover.pop();
@@ -231,9 +227,7 @@ fn main_loop(
             let pos = Pos::from_diag_pos(&params.text_document_position.position);
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::FindReferences);
-            docin
-                .set_params(&mut db)
-                .to(Some((pos, None, ActionType::FindReferences)));
+            docin.set_params(&mut db).to(Some((pos, None)));
             compile_dry(&db, docin);
             let refs = compile_dry::accumulated::<PLReferences>(&db, docin);
             let sender = connection.sender.clone();
@@ -257,9 +251,7 @@ fn main_loop(
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::Completion);
             docin.set_edit_pos(&mut db).to(Some(pos));
-            docin
-                .set_params(&mut db)
-                .to(Some((pos, trigger.clone(), ActionType::Completion)));
+            docin.set_params(&mut db).to(Some((pos, trigger.clone())));
             compile_dry(&db, docin);
             if !completions.is_empty() {
                 let sender = connection.sender.clone();
@@ -273,11 +265,9 @@ fn main_loop(
             let uri = url_to_path(params.text_document.uri);
             docin.set_file(&mut db).to(uri.clone());
             docin.set_action(&mut db).to(ActionType::SemanticTokensFull);
-            docin.set_params(&mut db).to(Some((
-                Default::default(),
-                None,
-                ActionType::SemanticTokensFull,
-            )));
+            docin
+                .set_params(&mut db)
+                .to(Some((Default::default(), None)));
             compile_dry(&db, docin);
             let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(&db, docin);
             if newtokens.is_empty() {
@@ -293,11 +283,9 @@ fn main_loop(
             let uri = url_to_path(params.text_document.uri);
             docin.set_file(&mut db).to(uri.clone());
             docin.set_action(&mut db).to(ActionType::SemanticTokensFull);
-            docin.set_params(&mut db).to(Some((
-                Default::default(),
-                None,
-                ActionType::SemanticTokensFull,
-            )));
+            docin
+                .set_params(&mut db)
+                .to(Some((Default::default(), None)));
             compile_dry(&db, docin);
             let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(&db, docin);
             if newtokens.is_empty() {
@@ -323,7 +311,7 @@ fn main_loop(
             docin.set_action(&mut db).to(ActionType::LspFmt);
             docin
                 .set_params(&mut db)
-                .to(Some((Default::default(), None, ActionType::LspFmt)));
+                .to(Some((Default::default(), None)));
             compile_dry(&db, docin);
             let fmt = compile_dry::accumulated::<PLFormat>(&db, docin);
             if !fmt.is_empty() {
@@ -339,9 +327,7 @@ fn main_loop(
             let pos = Pos::from_diag_pos(&doc.position);
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::SignatureHelp);
-            docin
-                .set_params(&mut db)
-                .to(Some((pos, None, ActionType::SignatureHelp)));
+            docin.set_params(&mut db).to(Some((pos, None)));
             compile_dry(&db, docin);
             let sigs = compile_dry::accumulated::<PLSignatureHelp>(&db, docin);
             if !sigs.is_empty() {
@@ -370,7 +356,7 @@ fn main_loop(
             docin.set_action(&mut db).to(ActionType::Hint);
             docin
                 .set_params(&mut db)
-                .to(Some((Default::default(), None, ActionType::LspFmt)));
+                .to(Some((Default::default(), None)));
             compile_dry(&db, docin);
             let hints = compile_dry::accumulated::<Hints>(&db, docin);
             let sender = connection.sender.clone();
@@ -386,7 +372,7 @@ fn main_loop(
             docin.set_action(&mut db).to(ActionType::DocSymbol);
             docin
                 .set_params(&mut db)
-                .to(Some((Default::default(), None, ActionType::LspFmt)));
+                .to(Some((Default::default(), None)));
             compile_dry(&db, docin);
             let doc_symbols = compile_dry::accumulated::<DocSymbols>(&db, docin);
             let sender = connection.sender.clone();
