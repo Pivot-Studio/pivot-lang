@@ -3,10 +3,10 @@ use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::PriType;
-use internal_macro::{comments, format, range};
+use internal_macro::{comments, fmt, range};
 
 #[range]
-#[format]
+#[fmt]
 #[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct IfNode {
@@ -92,7 +92,7 @@ impl Node for IfNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct WhileNode {
@@ -156,7 +156,7 @@ impl Node for WhileNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ForNode {
@@ -248,7 +248,7 @@ impl Node for ForNode {
 
 #[range]
 #[comments]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BreakNode {}
 
@@ -273,7 +273,7 @@ impl Node for BreakNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ContinueNode {}

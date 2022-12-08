@@ -8,14 +8,14 @@ use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{eq, ARRType, Field, GenericType, PLType, STType};
 use indexmap::IndexMap;
 use inkwell::types::BasicType;
-use internal_macro::{comments, format, range};
+use internal_macro::{comments, fmt, range};
 use lsp_types::SemanticTokenType;
 use rustc_hash::FxHashMap;
 #[range]
-#[format]
+#[fmt]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeNameNode {
-    pub id: Option<ExternIDNode>,
+    pub id: Option<ExternIdNode>,
     pub generic_params: Option<Box<GenericParamNode>>,
 }
 
@@ -156,7 +156,7 @@ impl TypeNode for TypeNameNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArrayTypeNameNode {
     pub id: Box<TypeNodeEnum>,
@@ -213,7 +213,7 @@ impl TypeNode for ArrayTypeNameNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PointerTypeNode {
     pub elm: Box<TypeNodeEnum>,
@@ -251,7 +251,7 @@ impl TypeNode for PointerTypeNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TypedIdentifierNode {
     pub id: VarNode,
@@ -274,7 +274,7 @@ impl TypedIdentifierNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructDefNode {
     pub precom: Vec<Box<NodeEnum>>,
@@ -426,7 +426,7 @@ impl StructDefNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitFieldNode {
     pub id: VarNode,
@@ -449,7 +449,7 @@ impl Node for StructInitFieldNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StructInitNode {
@@ -539,7 +539,7 @@ impl Node for StructInitNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ArrayInitNode {
     // pub tp: Box<TypeNameNode>,
@@ -600,7 +600,7 @@ impl Node for ArrayInitNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct GenericDefNode {
     pub generics: Vec<Box<VarNode>>,
@@ -638,7 +638,7 @@ impl GenericDefNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct GenericParamNode {
     pub generics: Vec<Option<Box<TypeNodeEnum>>>,

@@ -16,7 +16,7 @@ use crate::{
         diag::ErrorCode,
         fmt::FmtBuilder,
         node::{
-            error::{ErrorNode, STErrorNode},
+            error::{ErrorNode, StErrorNode},
             types::PointerTypeNode,
         },
     },

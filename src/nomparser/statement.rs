@@ -16,7 +16,7 @@ use crate::{
     ast::{
         diag::ErrorCode,
         node::{
-            error::{ErrorNode, STErrorNode},
+            error::{ErrorNode, StErrorNode},
             global::GlobalNode,
         },
     },

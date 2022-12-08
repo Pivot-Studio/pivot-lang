@@ -4,7 +4,7 @@ use super::ctx::PLDiag;
 use super::diag::ErrorCode;
 use super::fmt::FmtBuilder;
 use super::node::function::FuncDefNode;
-use super::node::pkg::ExternIDNode;
+use super::node::pkg::ExternIdNode;
 use super::node::primary::NumNode;
 use super::node::primary::VarNode;
 use super::node::types::ArrayTypeNameNode;
@@ -173,7 +173,7 @@ pub fn eq(l: Rc<RefCell<PLType>>, r: Rc<RefCell<PLType>>) -> bool {
 
 fn new_typename_node(name: &str, range: Range) -> Box<TypeNodeEnum> {
     Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
-        id: Some(ExternIDNode {
+        id: Some(ExternIdNode {
             ns: vec![],
             id: Box::new(VarNode {
                 name: name.to_string(),
@@ -205,7 +205,7 @@ fn new_ptrtype_node(typenode: Box<TypeNodeEnum>) -> Box<TypeNodeEnum> {
 }
 fn new_exid_node(modname: &str, name: &str, range: Range) -> Box<TypeNodeEnum> {
     Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
-        id: Some(ExternIDNode {
+        id: Some(ExternIdNode {
             ns: vec![Box::new(VarNode {
                 name: modname.to_string(),
                 range,

@@ -20,11 +20,12 @@ use self::function::*;
 use self::global::*;
 use self::implement::ImplNode;
 use self::operator::*;
-use self::pkg::{ExternIDNode, UseNode};
+use self::pkg::{ExternIdNode, UseNode};
 use self::pointer::PointerOpNode;
 use self::primary::*;
 use self::ret::*;
 use self::statement::*;
+use self::string_literal::StringNode;
 use self::types::*;
 
 use super::ctx::PLDiag;
@@ -46,6 +47,7 @@ pub mod primary;
 pub mod program;
 pub mod ret;
 pub mod statement;
+pub mod string_literal;
 pub mod types;
 #[derive(Debug, Clone, Copy)]
 pub enum TerminatorEnum {
@@ -119,15 +121,16 @@ pub enum NodeEnum {
     Comment(CommentNode),
     Program(program::ProgramNode),
     STInitField(StructInitFieldNode),
-    STErrorNode(STErrorNode),
+    StErrorNode(StErrorNode),
     Global(GlobalNode),
     UseNode(UseNode),
-    ExternIDNode(ExternIDNode),
+    ExternIdNode(ExternIdNode),
     ArrayInitNode(ArrayInitNode),
     ArrayElementNode(ArrayElementNode),
     PointerOpNode(PointerOpNode),
     ParanthesesNode(ParanthesesNode),
     ImplNode(ImplNode),
+    StringNode(StringNode),
 }
 // ANCHOR: range
 #[enum_dispatch]

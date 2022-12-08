@@ -1,9 +1,9 @@
 use super::*;
 use crate::ast::{ctx::Ctx, diag::ErrorCode};
-use internal_macro::{comments, format, range};
+use internal_macro::{comments, fmt, range};
 
 #[range]
-#[format]
+#[fmt]
 #[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RetNode {

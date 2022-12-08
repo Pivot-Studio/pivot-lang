@@ -2,11 +2,11 @@ use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
 use inkwell::debug_info::*;
-use internal_macro::{comments, format, range};
+use internal_macro::{comments, fmt, range};
 use lsp_types::SemanticTokenType;
 #[range]
 #[comments]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct DefNode {
     pub var: VarNode,
@@ -100,7 +100,7 @@ impl Node for DefNode {
     }
 }
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct AssignNode {
     pub var: Box<NodeEnum>,
@@ -135,7 +135,7 @@ impl Node for AssignNode {
 
 #[range]
 #[comments]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct EmptyNode {}
 
@@ -152,7 +152,7 @@ impl Node for EmptyNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct StatementsNode {
     pub statements: Vec<Box<NodeEnum>>,

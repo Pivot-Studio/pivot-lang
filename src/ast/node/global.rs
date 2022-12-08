@@ -1,10 +1,10 @@
 use super::*;
 use crate::ast::diag::ErrorCode;
 use inkwell::debug_info::AsDIScope;
-use internal_macro::{format, range};
+use internal_macro::{fmt, range};
 use lsp_types::SemanticTokenType;
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct GlobalNode {
     pub var: VarNode,
