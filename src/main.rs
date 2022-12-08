@@ -28,6 +28,7 @@ pub struct Jar(
     program::ModWrapper,
     program::ProgramEmitParam,
     program::emit_file,
+    program::LspParams,
 );
 
 pub trait Db: salsa::DbWithJar<Jar> {}
@@ -157,6 +158,7 @@ fn main() {
             abs.to_str().unwrap().to_string(),
             op,
             action,
+            None,
             None,
         );
         compiler::compile(&db, mem, cli.out.clone(), op);

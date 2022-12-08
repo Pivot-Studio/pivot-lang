@@ -103,18 +103,14 @@ impl Node for FuncCallNode {
         if fntype.param_pltypes.len() - skip as usize != self.paralist.len() {
             return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
         }
-        // set sig and param hint
-        let mut prevpos = id_range.end;
         for (i, para) in self.paralist.iter_mut().enumerate() {
-            let sigrange = prevpos.to(para.range().end);
-            prevpos = para.range().end;
             let pararange = para.range();
             ctx.push_param_hint(
                 pararange.clone(),
                 fntype.param_names[i + skip as usize].clone(),
             );
             ctx.set_if_sig(
-                sigrange,
+                para.range(),
                 fntype.name.clone().split("::").last().unwrap().to_string()
                     + "("
                     + fntype
@@ -201,7 +197,6 @@ impl Node for FuncCallNode {
             )),
         };
         fntype.clear_generic();
-        ctx.send_if_go_to_def(id_range, fntype.range, ctx.plmod.path.clone());
         ctx.set_if_refs_tp(pltype.clone(), id_range);
         ctx.reset_generic_types(mp);
         ctx.emit_comment_highlight(&self.comments[0]);
@@ -221,10 +216,10 @@ pub struct FuncDefNode {
     pub body: Option<StatementsNode>,
 }
 impl FuncDefNode {
-    pub fn emit_func_def<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
-        if let Ok(_) = ctx.get_type(&self.id.name.as_str(), self.id.range) {
-            return Err(ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL));
-        }
+    pub fn emit_pl_tp<'a, 'ctx>(
+        &mut self,
+        ctx: &mut Ctx<'a, 'ctx>,
+    ) -> Result<Rc<RefCell<PLType>>, PLDiag> {
         let mut param_pltypes = Vec::new();
         let mut param_name = Vec::new();
         let mut method = false;
@@ -257,7 +252,7 @@ impl FuncDefNode {
             ret_pltype: self.ret.clone(),
             param_pltypes,
             param_names: param_name,
-            range: self.id.range,
+            range: self.range,
             refs: Rc::new(RefCell::new(refs)),
             doc: self.doc.clone(),
             llvmname: if self.declare {
@@ -297,8 +292,15 @@ impl FuncDefNode {
                 }
             }
         }
-        ctx.add_type(self.id.name.clone(), pltype, self.id.range)?;
         ctx.reset_generic_types(mp);
+        Ok(pltype)
+    }
+    pub fn emit_func_def<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
+        if let Ok(_) = ctx.get_type(&self.id.name.as_str(), self.id.range) {
+            return Err(ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL));
+        }
+        let pltype = self.emit_pl_tp(ctx)?;
+        ctx.add_type(self.id.name.clone(), pltype, self.id.range)?;
         Ok(())
     }
 }
@@ -377,6 +379,9 @@ impl FuncDefNode {
         }
         ctx.push_semantic_token(self.ret.range(), SemanticTokenType::TYPE, 0);
         let pltype = ctx.get_type(&self.id.name, self.range)?;
+        if pltype.borrow().get_range() != Some(self.range) {
+            return Err(PLDiag::new_error(self.id.range, ErrorCode::REDEFINE_SYMBOL));
+        }
         if let Some(body) = self.body.as_mut() {
             // add function
             let child = &mut ctx.new_child(self.range.start);

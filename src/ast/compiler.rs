@@ -118,7 +118,7 @@ pub fn run(p: &Path, opt: OptimizationLevel) {
     }
 }
 
-#[salsa::tracked(lru = 32)]
+#[salsa::tracked]
 pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
     let path = get_config_path(docs.file(db).to_string());
     if path.is_err() {
@@ -130,7 +130,6 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
         path.clone().unwrap(),
         "".to_string(),
         docs,
-        Default::default(),
         Default::default(),
     );
 
@@ -155,13 +154,12 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
             .unwrap()
             .to_string(),
         docs,
-        Default::default(),
         config,
     );
     compile_dry_file(db, input);
 }
 
-#[salsa::tracked(lru = 32)]
+#[salsa::tracked]
 pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrapper> {
     // eprintln!("compile_dry_file: {:?}", docs.debug_all(db));
     let re = docs.get_file_content(db);
@@ -328,175 +326,4 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     // //  TargetMachine::get_default_triple()
     let time = now.elapsed();
     println!("compile succ, time: {:?}", time);
-}
-#[cfg(test)]
-mod test {
-    use std::{
-        cell::RefCell,
-        sync::{Arc, Mutex},
-    };
-
-    use salsa::{accumulator::Accumulator, storage::HasJar};
-
-    use crate::{
-        ast::{accumulators::Completions, range::Pos},
-        db::Database,
-        lsp::mem_docs::{MemDocs, MemDocsInput},
-        Db,
-    };
-
-    use super::{compile_dry, ActionType};
-
-    fn test_lsp<'db, A>(
-        db: &'db dyn Db,
-        params: Option<(Pos, Option<String>, ActionType)>,
-        action: ActionType,
-        src: &str,
-    ) -> Vec<<A as Accumulator>::Data>
-    where
-        A: Accumulator,
-        dyn Db + 'db: HasJar<<A as Accumulator>::Jar>,
-    {
-        let docs = MemDocs::new();
-        // let db = Database::default();
-        let input = MemDocsInput::new(
-            db,
-            Arc::new(Mutex::new(RefCell::new(docs))),
-            src.to_string(),
-            Default::default(),
-            action,
-            params,
-        );
-        compile_dry(db, input);
-        compile_dry::accumulated::<A>(db, input)
-    }
-
-    #[test]
-    fn test_struct_field_completion() {
-        let comps = test_lsp::<Completions>(
-            &Database::default(),
-            Some((
-                Pos {
-                    line: 9,
-                    column: 10,
-                    offset: 0,
-                },
-                Some(".".to_string()),
-                ActionType::Completion,
-            )),
-            ActionType::Completion,
-            "test/lsp/test_completion.pi",
-        );
-        assert_eq!(comps.len(), 1);
-        assert_eq!(comps[0].len(), 3);
-        let compstr = vec!["a", "b", "c"];
-        for comp in comps[0].iter() {
-            assert!(compstr.contains(&comp.label.as_str()));
-        }
-    }
-
-    #[test]
-    fn test_completion() {
-        let comps = test_lsp::<Completions>(
-            &Database::default(),
-            Some((
-                Pos {
-                    line: 10,
-                    column: 6,
-                    offset: 0,
-                },
-                None,
-                ActionType::Completion,
-            )),
-            ActionType::Completion,
-            "test/lsp/test_completion.pi",
-        );
-        assert_eq!(comps.len(), 1);
-        let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
-        assert!(lables.contains(&"test1".to_string()));
-        assert!(lables.contains(&"name".to_string()));
-        assert!(lables.contains(&"if".to_string()));
-    }
-    #[test]
-    fn test_type_completion() {
-        let comps = test_lsp::<Completions>(
-            &Database::default(),
-            Some((
-                Pos {
-                    line: 5,
-                    column: 7,
-                    offset: 0,
-                },
-                Some(":".to_string()),
-                ActionType::Completion,
-            )),
-            ActionType::Completion,
-            "test/lsp/test_completion.pi",
-        );
-        assert_eq!(comps.len(), 1);
-        let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
-        // assert!(lables.contains(&"test".to_string())); TODO: self refernece
-        assert!(lables.contains(&"i64".to_string()));
-        assert!(!lables.contains(&"name".to_string()));
-        assert!(lables.contains(&"test1".to_string()));
-    }
-    #[test]
-    #[cfg(feature = "jit")]
-    fn test_jit() {
-        use std::path::PathBuf;
-
-        use crate::ast::compiler::{compile, run, Options};
-
-        let docs = MemDocs::new();
-        let mut db = Database::default();
-        let input = MemDocsInput::new(
-            &db,
-            Arc::new(Mutex::new(RefCell::new(docs))),
-            "test/main.pi".to_string(),
-            Default::default(),
-            ActionType::Compile,
-            None,
-        );
-        let outplb = "testout.bc";
-        let out = "testout";
-        compile(
-            &db,
-            input,
-            out.to_string(),
-            Options {
-                optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
-                genir: true,
-                printast: false,
-                fmt: false,
-            },
-        );
-        run(
-            &PathBuf::from(outplb).as_path(),
-            inkwell::OptimizationLevel::Default,
-        );
-        input.set_action(&mut db).to(ActionType::PrintAst);
-        compile(
-            &db,
-            input,
-            out.to_string(),
-            Options {
-                optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
-                genir: false,
-                printast: true,
-                fmt: false,
-            },
-        );
-        input.set_action(&mut db).to(ActionType::Fmt);
-        compile(
-            &db,
-            input,
-            out.to_string(),
-            Options {
-                optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
-                genir: false,
-                printast: true,
-                fmt: true,
-            },
-        );
-    }
 }
