@@ -29,6 +29,7 @@ use self::types::*;
 
 use super::ctx::PLDiag;
 use super::diag::ErrorCode;
+use super::fmt::FmtBuilder;
 use super::pltype::PLType;
 use super::range::{Pos, Range};
 
@@ -71,15 +72,14 @@ impl TerminatorEnum {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[enum_dispatch(TypeNode, RangeTrait)]
+#[enum_dispatch(TypeNode, RangeTrait, FmtTrait)]
 pub enum TypeNodeEnum {
     BasicTypeNode(TypeNameNode),
     ArrayTypeNode(ArrayTypeNameNode),
     PointerTypeNode(PointerTypeNode),
 }
 #[enum_dispatch]
-pub trait TypeNode: RangeTrait + AsAny {
-    fn format(&self, tabs: usize, prefix: &str) -> String;
+pub trait TypeNode: RangeTrait + AsAny + FmtTrait {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     /// 重要：这个函数不要干lsp相关操作，只用来获取type
     fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
@@ -93,7 +93,7 @@ pub trait TypeNode: RangeTrait + AsAny {
 type TypeNodeResult<'ctx> = Result<Rc<RefCell<PLType>>, PLDiag>;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-#[enum_dispatch(Node, RangeTrait)]
+#[enum_dispatch(Node, RangeTrait, FmtTrait)]
 pub enum NodeEnum {
     Def(DefNode),
     Ret(RetNode),
@@ -136,10 +136,16 @@ pub trait RangeTrait {
 }
 // ANCHOR_END: range
 
+// ANCHOR: fmtnode
+#[enum_dispatch]
+pub trait FmtTrait {
+    fn format(&self, builder: &mut FmtBuilder);
+}
+// ANCHOR_END: fmtnode
+
 // ANCHOR: node
 #[enum_dispatch]
-pub trait Node: RangeTrait + AsAny {
-    fn format(&self, tabs: usize, prefix: &str) -> String;
+pub trait Node: RangeTrait + AsAny + FmtTrait {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
 }
@@ -330,14 +336,14 @@ pub fn print_params(paralist: &[Box<TypedIdentifierNode>]) -> String {
         str += &format!(
             "{}: {}",
             paralist[0].id.name,
-            paralist[0].typenode.format(0, "")
+            FmtBuilder::generate_node(&paralist[0].typenode)
         );
     }
     for i in 1..paralist.len() {
         str += &format!(
             ", {}: {}",
             paralist[i].id.name,
-            paralist[i].typenode.format(0, "")
+            FmtBuilder::generate_node(&paralist[i].typenode)
         );
     }
     return str;

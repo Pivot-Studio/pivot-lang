@@ -2,20 +2,18 @@ use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{PLType, PriType};
-use internal_macro::{comments, range};
+use internal_macro::{comments, format, range};
 use lsp_types::SemanticTokenType;
 
 #[range]
 #[comments]
+#[format]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct PrimaryNode {
     pub value: Box<NodeEnum>,
 }
 
 impl Node for PrimaryNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        return self.value.format(_tabs, _prefix);
-    }
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
         self.value.print(tabs, end, line);
     }
@@ -28,15 +26,13 @@ impl Node for PrimaryNode {
 }
 
 #[range]
+#[format]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct BoolConstNode {
     pub value: bool,
 }
 
 impl Node for BoolConstNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        return self.value.to_string();
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line, end);
@@ -58,19 +54,12 @@ impl Node for BoolConstNode {
 }
 
 #[range]
+#[format]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct NumNode {
     pub value: Num,
 }
 impl Node for NumNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        if let Num::INT(x) = self.value {
-            return x.to_string();
-        } else if let Num::FLOAT(x) = self.value {
-            return x.to_string();
-        }
-        panic!("not implemented")
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line, end);
@@ -98,15 +87,12 @@ impl Node for NumNode {
 }
 
 #[range]
+#[format]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct VarNode {
     pub name: String,
 }
 impl VarNode {
-    pub fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        let name = &self.name;
-        return name.to_string();
-    }
     pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -167,6 +153,7 @@ impl VarNode {
 
 #[range]
 #[comments]
+#[format]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ArrayElementNode {
     pub arr: Box<NodeEnum>,
@@ -174,13 +161,6 @@ pub struct ArrayElementNode {
 }
 
 impl Node for ArrayElementNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        format!(
-            "{}[{}]",
-            &self.arr.format(tabs, prefix),
-            &self.index.format(tabs, prefix)
-        )
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -217,15 +197,13 @@ impl Node for ArrayElementNode {
 }
 
 #[range]
+#[format]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ParanthesesNode {
     pub node: Box<NodeEnum>,
 }
 
 impl Node for ParanthesesNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        format!("({})", &self.node.format(tabs, prefix))
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

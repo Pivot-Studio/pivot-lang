@@ -395,6 +395,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "fmt_macro"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "form_urlencoded"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -533,6 +541,7 @@ dependencies = [
  "add_symbol_macro",
  "comment_macro",
  "ctor",
+ "fmt_macro",
  "llvm-sys",
  "range_macro",
  "test_parser_macro",

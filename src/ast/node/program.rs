@@ -12,7 +12,7 @@ use crate::Db;
 use colored::Colorize;
 use inkwell::context::Context;
 use inkwell::targets::TargetMachine;
-use internal_macro::range;
+use internal_macro::{format, range};
 use lsp_types::GotoDefinitionResponse;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 #[range]
+#[format]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ProgramNode {
     pub nodes: Vec<Box<NodeEnum>>,
@@ -34,13 +35,6 @@ pub struct ProgramNode {
     pub uses: Vec<Box<NodeEnum>>,
 }
 impl Node for ProgramNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::new();
-        for statement in &self.nodes {
-            format_res.push_str(&statement.format(tabs, prefix));
-        }
-        return format_res;
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         println!("ProgramNode");
@@ -221,7 +215,9 @@ impl Program {
                 nn.print(0, true, vec![]);
             }
             ActionType::Fmt => {
-                let code = nn.format(0, "    ");
+                let mut builder = FmtBuilder::new();
+                nn.format(&mut builder);
+                let code = builder.generate();
                 let mut f = OpenOptions::new()
                     .write(true)
                     .truncate(true)
@@ -231,7 +227,9 @@ impl Program {
             }
             ActionType::LspFmt => {
                 let oldcode = p.file_content(db);
-                let newcode = nn.format(0, "    ");
+                let mut builder = FmtBuilder::new();
+                nn.format(&mut builder);
+                let newcode = builder.generate();
                 let diff = text::diff(&oldcode, &newcode);
                 let line_index = text::LineIndex::new(&oldcode);
                 PLFormat::push(db, diff.into_text_edit(&line_index));

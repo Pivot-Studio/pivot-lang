@@ -14,6 +14,7 @@ use crate::{
     ast::range::Range,
     ast::{
         diag::ErrorCode,
+        fmt::FmtBuilder,
         node::{
             error::{ErrorNode, STErrorNode},
             types::PointerTypeNode,
@@ -56,7 +57,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     nodes.push(b);
                 }
                 TopLevel::ImplDef(mut im) => {
-                    let imname = im.target.format(0, "");
+                    let imname = FmtBuilder::generate_node(&im.target);
                     let target = *im.target.clone();
                     for mth in im.methods.iter_mut() {
                         mth.id.name = format!("|{}::{}", imname, mth.id.name);
