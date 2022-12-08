@@ -12,8 +12,3 @@ struct Mod1 {
     y: mod2::Mod2;
 }
 
-struct Mod1 {
-    x: i64;
-    y: mod2::Mod2;
-}
-
