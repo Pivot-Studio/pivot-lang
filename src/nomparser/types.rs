@@ -47,7 +47,7 @@ fn basic_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
         tuple((extern_identifier, opt(generic_param_def))),
         |(exid, generic_params)| {
             let exid = match *exid {
-                NodeEnum::ExternIDNode(exid) => exid,
+                NodeEnum::ExternIdNode(exid) => exid,
                 _ => unreachable!(),
             };
             let range = exid.range;

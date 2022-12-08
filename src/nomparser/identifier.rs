@@ -15,7 +15,7 @@ use crate::{
     ast::tokens::TokenType,
     ast::{
         node::{
-            pkg::ExternIDNode,
+            pkg::ExternIdNode,
             types::{TypeNameNode, TypedIdentifierNode},
         },
         tokens::TOKEN_STR_MAP,
@@ -51,7 +51,7 @@ pub fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 range = range.start.to(opt2.unwrap().1.end);
             }
             res_enum(
-                ExternIDNode {
+                ExternIdNode {
                     ns,
                     id,
                     range,

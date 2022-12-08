@@ -2,12 +2,12 @@ use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{PLType, PriType};
-use internal_macro::{comments, format, range};
+use internal_macro::{comments, fmt, range};
 use lsp_types::SemanticTokenType;
 
 #[range]
 #[comments]
-#[format]
+#[fmt]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct PrimaryNode {
     pub value: Box<NodeEnum>,
@@ -26,7 +26,7 @@ impl Node for PrimaryNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct BoolConstNode {
     pub value: bool,
@@ -54,7 +54,7 @@ impl Node for BoolConstNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct NumNode {
     pub value: Num,
@@ -87,7 +87,7 @@ impl Node for NumNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct VarNode {
     pub name: String,
@@ -153,7 +153,7 @@ impl VarNode {
 
 #[range]
 #[comments]
-#[format]
+#[fmt]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ArrayElementNode {
     pub arr: Box<NodeEnum>,
@@ -197,7 +197,7 @@ impl Node for ArrayElementNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ParanthesesNode {
     pub node: Box<NodeEnum>,

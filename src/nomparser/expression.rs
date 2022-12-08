@@ -18,7 +18,7 @@ use crate::{
 };
 use internal_macro::{test_parser, test_parser_error};
 
-use super::*;
+use super::{string_literal::string_literal, *};
 
 #[test_parser("a&&b")]
 #[test_parser("a||b")]
@@ -189,6 +189,7 @@ fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 struct_init,
                 array_init,
                 extern_identifier,
+                string_literal,
             )),
             many0(comment),
         )),

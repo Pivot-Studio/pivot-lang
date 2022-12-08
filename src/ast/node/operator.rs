@@ -8,12 +8,12 @@ use crate::ast::tokens::TokenType;
 use crate::handle_calc;
 use inkwell::IntPredicate;
 use internal_macro::comments;
-use internal_macro::format;
+use internal_macro::fmt;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 use paste::item;
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UnaryOpNode {
     pub op: TokenType,
@@ -86,7 +86,7 @@ impl Node for UnaryOpNode {
 }
 
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BinOpNode {
     pub left: Box<NodeEnum>,
@@ -227,7 +227,7 @@ impl Node for BinOpNode {
 
 #[range]
 #[comments]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TakeOpNode {
     pub head: Box<NodeEnum>,

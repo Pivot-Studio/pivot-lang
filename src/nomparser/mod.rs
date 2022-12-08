@@ -48,6 +48,7 @@ pub mod implement;
 pub mod pkg;
 pub mod program;
 pub mod statement;
+pub mod string_literal;
 pub mod structure;
 pub mod types;
 

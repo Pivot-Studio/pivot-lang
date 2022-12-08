@@ -4,12 +4,12 @@ use super::{
     node::{
         comment::CommentNode,
         control::{BreakNode, ContinueNode, ForNode, IfNode, WhileNode},
-        error::{ErrorNode, STErrorNode},
+        error::{ErrorNode, StErrorNode},
         function::{FuncCallNode, FuncDefNode},
         global::GlobalNode,
         implement::ImplNode,
         operator::{BinOpNode, TakeOpNode, UnaryOpNode},
-        pkg::{ExternIDNode, UseNode},
+        pkg::{ExternIdNode, UseNode},
         pointer::{PointerOpEnum, PointerOpNode},
         primary::{
             ArrayElementNode, BoolConstNode, NumNode, ParanthesesNode, PrimaryNode, VarNode,
@@ -18,6 +18,7 @@ use super::{
         program::ProgramNode,
         ret::RetNode,
         statement::{AssignNode, DefNode, EmptyNode, StatementsNode},
+        string_literal::StringNode,
         types::{
             ArrayInitNode, ArrayTypeNameNode, GenericDefNode, GenericParamNode, PointerTypeNode,
             StructDefNode, StructInitFieldNode, StructInitNode, TypeNameNode, TypedIdentifierNode,
@@ -45,6 +46,9 @@ impl FmtBuilder {
         let mut b = FmtBuilder::new();
         node.format(&mut b);
         b.generate()
+    }
+    pub fn double_quote(&mut self) {
+        self.token("\"")
     }
     pub fn generate(&self) -> String {
         self.buf.clone()
@@ -122,15 +126,15 @@ impl FmtBuilder {
         self.buf.push_str(token);
     }
     // parse nodes
-    pub fn parseProgramNode(&mut self, node: &ProgramNode) {
+    pub fn parse_program_node(&mut self, node: &ProgramNode) {
         for statement in &node.nodes {
             statement.format(self);
         }
     }
-    pub fn parseVarNode(&mut self, node: &VarNode) {
+    pub fn parse_var_node(&mut self, node: &VarNode) {
         self.token(&node.name);
     }
-    pub fn parseUseNode(&mut self, node: &UseNode) {
+    pub fn parse_use_node(&mut self, node: &UseNode) {
         self.token("use");
         self.space();
         for (i, id) in node.ids.iter().enumerate() {
@@ -142,7 +146,7 @@ impl FmtBuilder {
         self.semicolon();
         self.enter();
     }
-    pub fn parseExternIDNode(&mut self, node: &ExternIDNode) {
+    pub fn parse_extern_id_node(&mut self, node: &ExternIdNode) {
         for (i, id) in node.ns.iter().enumerate() {
             id.format(self);
             if i != node.ns.len() {
@@ -151,7 +155,7 @@ impl FmtBuilder {
         }
         node.id.format(self);
     }
-    pub fn parseArrayTypeNameNode(&mut self, node: &ArrayTypeNameNode) {
+    pub fn parse_array_type_name_node(&mut self, node: &ArrayTypeNameNode) {
         self.l_bracket();
         node.id.format(self);
         self.space();
@@ -160,7 +164,7 @@ impl FmtBuilder {
         node.size.format(self);
         self.r_bracket();
     }
-    pub fn parseTypeNameNode(&mut self, node: &TypeNameNode) {
+    pub fn parse_type_name_node(&mut self, node: &TypeNameNode) {
         if let Some(id_node) = &node.id {
             id_node.format(self);
         }
@@ -168,7 +172,7 @@ impl FmtBuilder {
             generic_params.format(self);
         }
     }
-    pub fn parseTypedIdentifierNode(&mut self, node: &TypedIdentifierNode) {
+    pub fn parse_typed_identifier_node(&mut self, node: &TypedIdentifierNode) {
         self.enter();
         self.prefix();
         self.token(node.id.name.as_str());
@@ -180,7 +184,7 @@ impl FmtBuilder {
             doc.format(self);
         }
     }
-    pub fn parseStructDefNode(&mut self, node: &StructDefNode) {
+    pub fn parse_struct_def_node(&mut self, node: &StructDefNode) {
         for c in node.precom.iter() {
             c.format(self);
         }
@@ -205,11 +209,11 @@ impl FmtBuilder {
         // 顶层节点加空格
         self.enter();
     }
-    pub fn parsePointerTypeNode(&mut self, node: &PointerTypeNode) {
+    pub fn parse_pointer_type_node(&mut self, node: &PointerTypeNode) {
         self.asterisk();
         node.elm.format(self);
     }
-    pub fn parseStructInitFieldNode(&mut self, node: &StructInitFieldNode) {
+    pub fn parse_struct_init_field_node(&mut self, node: &StructInitFieldNode) {
         self.prefix();
         self.token(&node.id.name);
         self.colon();
@@ -217,7 +221,7 @@ impl FmtBuilder {
         node.exp.format(self);
     }
 
-    pub fn parseStructInitNode(&mut self, node: &StructInitNode) {
+    pub fn parse_struct_init_node(&mut self, node: &StructInitNode) {
         node.typename.format(self);
         if let Some(generic_params) = &node.generic_params {
             generic_params.format(self);
@@ -240,7 +244,7 @@ impl FmtBuilder {
         }
         self.r_brace();
     }
-    pub fn parseArrayInitNode(&mut self, node: &ArrayInitNode) {
+    pub fn parse_array_init_node(&mut self, node: &ArrayInitNode) {
         self.l_bracket();
         for (i, exp) in node.exps.iter().enumerate() {
             exp.format(self);
@@ -251,7 +255,7 @@ impl FmtBuilder {
         }
         self.r_bracket();
     }
-    pub fn parseGenericParamNode(&mut self, node: &GenericParamNode) {
+    pub fn parse_generic_param_node(&mut self, node: &GenericParamNode) {
         self.l_angle_bracket();
 
         for (i, generic) in node.generics.iter().enumerate() {
@@ -265,7 +269,7 @@ impl FmtBuilder {
         }
         self.r_angle_bracket();
     }
-    pub fn parseDefNode(&mut self, node: &DefNode) {
+    pub fn parse_def_node(&mut self, node: &DefNode) {
         self.token("let");
         self.space();
         node.var.format(self);
@@ -281,7 +285,7 @@ impl FmtBuilder {
             exp.format(self);
         }
     }
-    pub fn parseAssignNode(&mut self, node: &AssignNode) {
+    pub fn parse_assign_node(&mut self, node: &AssignNode) {
         node.var.format(self);
         self.space();
         self.equal();
@@ -289,8 +293,8 @@ impl FmtBuilder {
         node.exp.format(self);
     }
 
-    pub fn parseEmptyNode(&mut self, _node: &EmptyNode) {}
-    pub fn parseStatementsNode(&mut self, node: &StatementsNode) {
+    pub fn parse_empty_node(&mut self, _node: &EmptyNode) {}
+    pub fn parse_statements_node(&mut self, node: &StatementsNode) {
         self.enter();
         for statement in &node.statements {
             match &**statement {
@@ -313,7 +317,7 @@ impl FmtBuilder {
             }
         }
     }
-    pub fn parseRetNode(&mut self, node: &RetNode) {
+    pub fn parse_ret_node(&mut self, node: &RetNode) {
         if let Some(value) = &node.value {
             self.token("return");
             self.space();
@@ -322,48 +326,48 @@ impl FmtBuilder {
             self.token("return");
         }
     }
-    pub fn parsePrimaryNode(&mut self, node: &PrimaryNode) {
+    pub fn parse_primary_node(&mut self, node: &PrimaryNode) {
         node.value.format(self);
     }
 
-    pub fn parseArrayElementNode(&mut self, node: &ArrayElementNode) {
+    pub fn parse_array_element_node(&mut self, node: &ArrayElementNode) {
         node.arr.format(self);
         self.l_bracket();
         node.index.format(self);
         self.r_bracket();
     }
-    pub fn parseParanthesesNode(&mut self, node: &ParanthesesNode) {
+    pub fn parse_parantheses_node(&mut self, node: &ParanthesesNode) {
         self.l_paren();
         node.node.format(self);
         self.r_paren();
     }
-    pub fn parsePointerOpNode(&mut self, node: &PointerOpNode) {
+    pub fn parse_pointer_op_node(&mut self, node: &PointerOpNode) {
         match node.op {
             PointerOpEnum::ADDR => self.and(),
             PointerOpEnum::DEREF => self.asterisk(),
         }
         node.value.format(self);
     }
-    pub fn parseUnaryOpNode(&mut self, node: &UnaryOpNode) {
+    pub fn parse_unary_op_node(&mut self, node: &UnaryOpNode) {
         self.token(TokenType::get_str(&node.op));
         node.exp.format(self);
     }
 
-    pub fn parseBinOpNode(&mut self, node: &BinOpNode) {
+    pub fn parse_bin_op_node(&mut self, node: &BinOpNode) {
         node.left.format(self);
         self.space();
         self.token(TokenType::get_str(&node.op));
         self.space();
         node.right.format(self);
     }
-    pub fn parseTakeOpNode(&mut self, node: &TakeOpNode) {
+    pub fn parse_take_op_node(&mut self, node: &TakeOpNode) {
         node.head.format(self);
         for id in &node.field {
             self.dot();
             id.format(self);
         }
     }
-    pub fn parseImplNode(&mut self, node: &ImplNode) {
+    pub fn parse_impl_node(&mut self, node: &ImplNode) {
         self.token("impl");
         self.space();
         node.target.format(self);
@@ -380,7 +384,7 @@ impl FmtBuilder {
         // 顶层节点加空格
         self.enter();
     }
-    pub fn parseGlobalNode(&mut self, node: &GlobalNode) {
+    pub fn parse_global_node(&mut self, node: &GlobalNode) {
         self.token("const");
         self.space();
         node.var.format(self);
@@ -392,7 +396,7 @@ impl FmtBuilder {
         // 顶层节点加空格
         self.enter();
     }
-    pub fn parseFuncCallNode(&mut self, node: &FuncCallNode) {
+    pub fn parse_func_call_node(&mut self, node: &FuncCallNode) {
         node.id.format(self);
         if let Some(generic_params) = &node.generic_params {
             generic_params.format(self);
@@ -411,7 +415,7 @@ impl FmtBuilder {
         }
         self.r_paren();
     }
-    pub fn parseFuncDefNode(&mut self, node: &FuncDefNode) {
+    pub fn parse_func_def_node(&mut self, node: &FuncDefNode) {
         let paralist = &node.paralist;
         let params_print = print_params(&paralist);
         // self.enter();
@@ -449,15 +453,15 @@ impl FmtBuilder {
         // 顶层节点加空格
         self.enter();
     }
-    pub fn parseSTErrorNode(&mut self, node: &STErrorNode) {
+    pub fn parse_st_error_node(&mut self, node: &StErrorNode) {
         node.st.format(self);
     }
-    pub fn parseErrorNode(&mut self, node: &ErrorNode) {
+    pub fn parse_error_node(&mut self, node: &ErrorNode) {
         self.enter();
         self.token(&node.src);
         self.enter();
     }
-    pub fn parseIfNode(&mut self, node: &IfNode) {
+    pub fn parse_if_node(&mut self, node: &IfNode) {
         // format_res.push_str(&prefix.repeat(tabs));
         self.token("if");
         self.space();
@@ -490,7 +494,7 @@ impl FmtBuilder {
             self.r_brace();
         }
     }
-    pub fn parseWhileNode(&mut self, node: &WhileNode) {
+    pub fn parse_while_node(&mut self, node: &WhileNode) {
         self.token("while");
         self.space();
         node.cond.format(self);
@@ -502,7 +506,7 @@ impl FmtBuilder {
         self.prefix();
         self.r_brace();
     }
-    pub fn parseForNode(&mut self, node: &ForNode) {
+    pub fn parse_for_node(&mut self, node: &ForNode) {
         self.token("for");
         self.space();
         if let Some(pre) = &node.pre {
@@ -524,7 +528,7 @@ impl FmtBuilder {
         self.prefix();
         self.r_brace();
     }
-    pub fn parseCommentNode(&mut self, node: &CommentNode) {
+    pub fn parse_comment_node(&mut self, node: &CommentNode) {
         if node.is_doc {
             self.token("///");
         } else {
@@ -533,16 +537,16 @@ impl FmtBuilder {
         self.token(&node.comment);
         self.enter();
     }
-    pub fn parseContinueNode(&mut self, _node: &ContinueNode) {
+    pub fn parse_continue_node(&mut self, _node: &ContinueNode) {
         self.token("continue");
     }
-    pub fn parseBreakNode(&mut self, _node: &BreakNode) {
+    pub fn parse_break_node(&mut self, _node: &BreakNode) {
         self.token("break");
     }
-    pub fn parseBoolConstNode(&mut self, node: &BoolConstNode) {
+    pub fn parse_bool_const_node(&mut self, node: &BoolConstNode) {
         self.token(node.value.to_string().as_str());
     }
-    pub fn parseNumNode(&mut self, node: &NumNode) {
+    pub fn parse_num_node(&mut self, node: &NumNode) {
         if let Num::INT(x) = node.value {
             self.token(x.to_string().as_str());
         } else if let Num::FLOAT(x) = node.value {
@@ -551,7 +555,7 @@ impl FmtBuilder {
             panic!("not implemented")
         }
     }
-    pub fn parseGenericDefNode(&mut self, node: &GenericDefNode) {
+    pub fn parse_generic_def_node(&mut self, node: &GenericDefNode) {
         self.l_angle_bracket();
         self.token(
             &node
@@ -562,5 +566,10 @@ impl FmtBuilder {
                 .join("|"),
         );
         self.r_angle_bracket();
+    }
+    pub fn parse_string_node(&mut self, node: &StringNode) {
+        self.double_quote();
+        self.token(&node.content);
+        self.double_quote();
     }
 }

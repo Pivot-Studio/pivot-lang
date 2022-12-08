@@ -6,14 +6,14 @@ use crate::ast::node::{deal_line, tab};
 use crate::ast::pltype::{eq, FNType, PLType};
 use indexmap::IndexMap;
 use inkwell::debug_info::*;
-use internal_macro::{comments, format, range};
+use internal_macro::{comments, fmt, range};
 use lsp_types::SemanticTokenType;
 use std::cell::RefCell;
 use std::fmt::format;
 use std::rc::Rc;
 use std::vec;
 #[range]
-#[format]
+#[fmt]
 #[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncCallNode {
@@ -183,7 +183,7 @@ impl Node for FuncCallNode {
     }
 }
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncDefNode {
     pub id: Box<VarNode>,

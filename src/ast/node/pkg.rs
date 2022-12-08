@@ -1,19 +1,17 @@
 use std::path::PathBuf;
 
-use crate::ast::node::FmtTrait;
 use crate::ast::{
     ctx::{get_ns_path_completions, Ctx},
     diag::ErrorCode,
-    fmt::FmtBuilder,
     node::{deal_line, tab},
     pltype::PLType,
 };
-use internal_macro::{format, range};
+use internal_macro::{fmt, range};
 use lsp_types::SemanticTokenType;
 
 use super::{primary::VarNode, Node, NodeResult, PLValue, TerminatorEnum};
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UseNode {
     pub ids: Vec<Box<VarNode>>,
@@ -91,25 +89,25 @@ impl Node for UseNode {
     }
 }
 
-/// # ExternIDNode
+/// # ExternIdNode
 /// 外部符号节点，可能会退化为内部符号节点（VarNode）
 ///
 /// TODO: 区分该节点与ExternTypeName节点，该节点不生成类型，只生成函数与变量/常量
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct ExternIDNode {
+pub struct ExternIdNode {
     pub ns: Vec<Box<VarNode>>,
     pub id: Box<VarNode>,
     pub complete: bool,
     pub singlecolon: bool,
 }
 
-impl Node for ExternIDNode {
+impl Node for ExternIdNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
-        println!("ExternIDNode");
+        println!("ExternIdNode");
         for id in &self.ns {
             id.print(tabs + 1, false, line.clone());
         }
@@ -181,7 +179,7 @@ impl Node for ExternIDNode {
         Err(ctx.add_err(self.range, ErrorCode::SYMBOL_NOT_FOUND))
     }
 }
-impl ExternIDNode {
+impl ExternIdNode {
     pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         if self.ns.is_empty() {
             if self.complete {

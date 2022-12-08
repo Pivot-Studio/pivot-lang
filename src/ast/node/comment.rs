@@ -1,9 +1,9 @@
 use super::*;
 use crate::ast::ctx::Ctx;
-use internal_macro::{format, range};
+use internal_macro::{fmt, range};
 use lsp_types::SemanticTokenType;
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CommentNode {
     pub comment: String,

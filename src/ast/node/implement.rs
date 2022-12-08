@@ -1,10 +1,10 @@
 use super::*;
 use crate::ast::ctx::Ctx;
-use internal_macro::{comments, format, range};
+use internal_macro::{comments, fmt, range};
 use lsp_types::{DocumentSymbol, SymbolKind};
 
 #[range]
-#[format]
+#[fmt]
 #[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ImplNode {

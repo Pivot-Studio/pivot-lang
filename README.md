@@ -74,6 +74,7 @@ primary_exp =
     | parantheses_exp
     | extern_identifier
     | struct_init_exp
+    | string_literal
     ;
 
 parantheses_exp = "(" logic_exp ")";
@@ -164,5 +165,7 @@ struct_field = typed_identifier ";" ;
 return_statement = "return" logic_exp ";" ;
 
 use_statement = "use" identifier ("::" identifier)* ";" ;
+
+string_literal = "\"" [^"]* "\"" ;
 
 ```

@@ -12,7 +12,7 @@ use crate::Db;
 use colored::Colorize;
 use inkwell::context::Context;
 use inkwell::targets::TargetMachine;
-use internal_macro::{format, range};
+use internal_macro::{fmt, range};
 use lsp_types::GotoDefinitionResponse;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
@@ -25,7 +25,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 #[range]
-#[format]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ProgramNode {
     pub nodes: Vec<Box<NodeEnum>>,
