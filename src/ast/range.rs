@@ -4,18 +4,35 @@ type Span<'a> = nom_locate::LocatedSpan<&'a str>;
 
 /// # Pos
 /// source code position in file
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, Hash, PartialOrd)]
 pub struct Pos {
     pub line: usize,   // 1based
     pub column: usize, // 1based
     pub offset: usize, // 0based
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, PartialOrd)]
 pub struct Range {
     pub start: Pos,
     pub end: Pos,
 }
+
+impl Ord for Range {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.start.cmp(&other.start)
+    }
+}
+
+impl Ord for Pos {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        if self.line == other.line {
+            self.column.cmp(&other.column)
+        } else {
+            self.line.cmp(&other.line)
+        }
+    }
+}
+
 impl Pos {
     pub fn to(&self, end: Pos) -> Range {
         Range { start: *self, end }
