@@ -213,6 +213,7 @@ primary_exp =
     | parantheses_exp
     | extern_identifier
     | struct_init_exp
+    | string_literal
     ;
 
 parantheses_exp = &quot;(&quot; logic_exp &quot;)&quot;;
@@ -303,6 +304,8 @@ struct_field = typed_identifier &quot;;&quot; ;
 return_statement = &quot;return&quot; logic_exp &quot;;&quot; ;
 
 use_statement = &quot;use&quot; identifier (&quot;::&quot; identifier)* &quot;;&quot; ;
+
+string_literal = &quot;\&quot;&quot; [^&quot;]* &quot;\&quot;&quot; ;
 
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="quick-start-a-short-introduction-to-the-language"><a class="header" href="#quick-start-a-short-introduction-to-the-language">Quick Start: A short introduction to the language</a></h1>
@@ -715,7 +718,7 @@ ProgramNode
  └─ FuncDefNode
      ├─ id: name
      ├─ TypeNameNode
-     │   └─ ExternIDNode
+     │   └─ ExternIdNode
      │       └─ VarNode: void
      └─ StatementsNode
          └─ RetNode
@@ -729,10 +732,10 @@ ProgramNode
  │   ├─ TypedIdentifierNode
  │   │   ├─ id: args
  │   │   └─ TypeNameNode
- │   │       └─ ExternIDNode
+ │   │       └─ ExternIdNode
  │   │           └─ VarNode: i64
  │   ├─ TypeNameNode
- │   │   └─ ExternIDNode
+ │   │   └─ ExternIdNode
  │   │       └─ VarNode: void
  │   └─ StatementsNode
  │       └─ RetNode
@@ -741,7 +744,7 @@ ProgramNode
      └─ TypedIdentifierNode
          ├─ id: y
          └─ TypeNameNode
-             └─ ExternIDNode
+             └─ ExternIdNode
                  └─ VarNode: bool
 ...
 </code></pre>
