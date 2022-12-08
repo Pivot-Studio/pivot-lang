@@ -83,7 +83,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li><li class="chapter-item expanded "><a href="references/method.html"><strong aria-hidden="true">3.2.</strong> Method</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li></ol></li><li class="chapter-item expanded "><a href="lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lsp/diagnostic.html"><strong aria-hidden="true">5.1.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/gc.html"><strong aria-hidden="true">6.1.1.</strong> gc</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">CONTRIBUTING</li><li class="chapter-item expanded "><a href="CONTRIBUTING-CN.html"><strong aria-hidden="true">7.</strong> Contributing</a></li></ol>            </div>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li><li class="chapter-item expanded "><a href="references/method.html"><strong aria-hidden="true">3.2.</strong> Method</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li></ol></li><li class="chapter-item expanded "><a href="lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lsp/design.html"><strong aria-hidden="true">5.1.</strong> Design</a></li><li class="chapter-item expanded "><a href="lsp/diagnostic.html"><strong aria-hidden="true">5.2.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/gc.html"><strong aria-hidden="true">6.1.1.</strong> gc</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">CONTRIBUTING</li><li class="chapter-item expanded "><a href="CONTRIBUTING-CN.html"><strong aria-hidden="true">7.</strong> Contributing</a></li></ol>            </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
@@ -173,6 +173,8 @@
 <ul>
 <li>同时支持aot和jit两种模式</li>
 <li>极其方便的rust互操作</li>
+<li>支持debug</li>
+<li>支持lsp，自带vsc插件，能替佛那个优秀的代码支持</li>
 </ul>
 <h2 id="项目结构"><a class="header" href="#项目结构">项目结构</a></h2>
 <ul>
@@ -601,7 +603,7 @@ pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNode
     if let Err(e) = re {
         return Err(format!(&quot;{:?}&quot;, e));
     }
-    // eprintln!(&quot;parse&quot;);
+    log::info!(&quot;parse {:?}&quot;, source.path(db));
     Ok(ProgramNodeWrapper::new(db, re.unwrap().1))
 }
 </code></pre>
@@ -750,6 +752,50 @@ ProgramNode
 <p>基本上，lsp能够为所有的现代代码编辑器提供服务，但是目前我们只为vsc提供官方支持。如果想在别的编辑器中使用lsp，可能需要自己写一个
 简单的客户端插件。</p>
 </blockquote>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="设计design"><a class="header" href="#设计design">设计(design)</a></h1>
+<p>pivot-lang的lsp功能被内置于编译器中，它是以差量计算（incremental）为前提设计的。
+目前整个lsp程序几乎是完全单线程的，但得益于我们的差量计算，它仍然具有不错的性能。</p>
+<h2 id="1-差量计算incremental"><a class="header" href="#1-差量计算incremental">1. 差量计算(incremental)</a></h2>
+<p>差量计算是指在编译器中，当源代码发生修改时，我们只对发生变化的部分进行重新分析，而不是对整个项目全部重新进行计算。</p>
+<p>pivot-lang的差量计算是基于rust的<a href="https://github.com/salsa-rs/salsa">salsa</a>库实现的。
+我们使用的版本是仍然处于预览阶段的<code>salsa_2022</code>。</p>
+<p>pl中的差量计算的最小复用单元是<code>Module</code>，即一个源文件。</p>
+<p>在plc作为lsp运行时，所有的lsp功能相关计算会在<code>TextDocumentEdit</code>事件发生时进行，之后如果不进行文本编辑，所有的
+lsp请求都会直接从缓存中读取结果。</p>
+<h2 id="2-差量计算举例"><a class="header" href="#2-差量计算举例">2. 差量计算举例</a></h2>
+<p>假设我们有一个pl项目，其中有三个文件：<code>a.pi</code>、<code>b.pi</code>、<code>c.pi</code>。
+其中<code>a.pi</code>和<code>b.pi</code>都引用了<code>c.pi</code>中的函数<code>f</code>，并且<code>a.pi</code>中还使用了<code>b.pi</code>中的函数<code>g</code>。</p>
+<p>此时，当我们用vsc打开此pl项目，vsc会启动plc进行分析。如果没使用差量计算，那么plc分析流程如下：</p>
+<pre><code>尝试分析a.pi-&gt;
+依赖c.pi-&gt;
+分析c.pi-&gt;
+返回继续分析a.pi-&gt;
+依赖b.pi-&gt;
+分析b.pi-&gt;
+依赖c.pi-&gt;
+分析c.pi-&gt;
+返回继续分析b.pi-&gt;
+返回继续分析a.pi-&gt;
+完成
+</code></pre>
+<p>可以看到<code>c.pi</code>被分析了两次，这是不必要的。差量分析在这一步中可以优化掉第二次对<code>c.pi</code>的分析。</p>
+<p>然后，假设我们在<code>a.pi</code>中添加了一个字符，那么如果没采用差量分析法，所有的模块都会被重新分析一遍。而差量分析法只会对<code>a.pi</code>进行重新分析。</p>
+<p>接着，如果我们改动了<code>b.pi</code>，那么差量分析法会对<code>b.pi</code>和<code>a.pi</code>进行重新分析，而不会对<code>c.pi</code>进行重新分析。<strong>即：每次修改文件时，只会对该文件以及依赖该文件的文件进行重新分析。</strong></p>
+<h2 id="3-验证差量计算是否正常工作"><a class="header" href="#3-验证差量计算是否正常工作">3. 验证差量计算是否正常工作</a></h2>
+<p>我们可以在vsc的选项中找到一个plc的<code>Log Level</code>选项，将它设置成<code>2</code>之后就能看到plc的<code>info</code>日志了。<br />
+<img src="lsp/2022-12-08-13-20-37.png" alt="" /></p>
+<blockquote>
+<p>日志可以在vsc的outut中选择<code>pivot-lang language server</code>查看
+<img src="lsp/2022-12-08-13-22-04.png" alt="" /></p>
+</blockquote>
+<p>这里会在每次重新计算的时候输出对应的log。</p>
+<h2 id="一些坑点"><a class="header" href="#一些坑点">一些坑点</a></h2>
+<h3 id="salsa-lru与internedtracked类型"><a class="header" href="#salsa-lru与internedtracked类型">salsa lru与interned、tracked类型</a></h3>
+<p><code>salsa</code>的lru缓存实际上缓存的key是<code>salsa</code>结构体的值，而不是实际值。也就是说，即使实际值一样，如果<code>salsa</code>结构体的值不同，那么缓存也会失效。</p>
+<p>所以，如果使用lru缓存的函数的输入是<code>tracked</code>类型的结构体，必须输入完全一致的对象才能触发缓存逻辑。
+<strong>如果你的结构体是<code>new</code>的则一定无法触发缓存逻辑</strong>。</p>
+<p>因此，建议在需要缓存的函数中使用<code>interned</code>类型的结构体作为参数。因为<code>interned</code>每次<code>new</code>的时候会去db中检索值，
+如果值已经存在则会返回已有的<code>salsa struct</code>，而不会<code>new</code>一个新的值。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="diagnostic"><a class="header" href="#diagnostic">Diagnostic</a></h1>
 <p>诊断信息是个非常重要的功能，它可以帮助我们在编写代码的时候发现错误和可能有问题的地方，从而提高我们的编码效率。</p>
 <p>为了让用户体验尽可能的好，我们的lsp分析需要尽量容忍用户的错误输入，尽可能多的分析出用户代码中的问题</p>
