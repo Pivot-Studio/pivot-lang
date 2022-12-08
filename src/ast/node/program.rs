@@ -13,6 +13,7 @@ use colored::Colorize;
 use inkwell::context::Context;
 use inkwell::targets::TargetMachine;
 use internal_macro::{format, range};
+use lsp_types::GotoDefinitionResponse;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;

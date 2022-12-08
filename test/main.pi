@@ -21,6 +21,7 @@ struct struct_child {
     a: i64;
     b: [i64 * 1];
 }
+
 /// 123
 /// # 123
 /// *hello*
@@ -55,6 +56,7 @@ fn test_struct() void {
     test::test();
     return;
 }
+
 fn test_if_else() void {
     test_if_only(true);
     test_if_else_ret(true);
@@ -63,12 +65,14 @@ fn test_if_else() void {
     test_not_ret(true);
     return;
 }
+
 fn test_if_only(judge: bool) void {
     if judge {
         return;
     }
     return;
 }
+
 fn test_if_else_ret(judge: bool) void {
     if judge {
         //12354121
@@ -78,6 +82,7 @@ fn test_if_else_ret(judge: bool) void {
         return;
     }
 }
+
 fn test_if_ret_only(judge: bool) void {
     if judge {
         return;
@@ -87,6 +92,7 @@ fn test_if_ret_only(judge: bool) void {
     }
     return;
 }
+
 fn test_else_ret_only(judge: bool) void {
     if judge {
     } else {
@@ -94,6 +100,7 @@ fn test_else_ret_only(judge: bool) void {
     }
     return;
 }
+
 //135132123
 fn test_not_ret(judge: bool) void {
     if judge {
@@ -102,6 +109,7 @@ fn test_not_ret(judge: bool) void {
     //156541
     return;
 }
+
 fn test_complex() void {
     let res: i64;
     res = get(get(get(get(2))));
@@ -112,19 +120,23 @@ fn test_complex() void {
     }
     return;
 }
+
 fn get(x: i64) i64 {
     return ((x + 1) * 3 + (x / 2)) / 5;
 }
+
 fn test_warn() void {
     return;
     let x = 1;
     //15154212
 }
+
 ////
 fn test_const() void {
     io::printi64ln(a);
     return;
 }
+
 
 impl mod1::Mod1 {
     //
@@ -136,7 +148,9 @@ impl mod1::Mod1 {
         io::printi64ln(100101);
         return;
     }
+
 }
+
 /// ANCHOR_END: extern_impl
 fn test_mod_struct() void {
     let x = mod1::Mod1{
@@ -152,6 +166,7 @@ fn test_mod_struct() void {
     }
     return;
 }
+
 fn test_loop() void {
     //12255
     let i = 0;
@@ -174,14 +189,17 @@ fn test_loop() void {
 struct A {
     x: i64;
 }
+
 fn ret_atruct() A {
     return A{
         x: 10000
     };
 }
+
 fn ret_arr() [i64 * 3] {
     return [1, 10000, 3];
 }
+
 //12321
 ///# 123
 /// ~123~
@@ -192,6 +210,7 @@ fn test_ret_struct_arr() void {
     io::printi64ln(a);
     return;
 }
+
 fn test_generic() void {
     let x = generic(114514);
     let y = generic(true);
@@ -231,10 +250,12 @@ struct GenericOutter<S> {
 struct GenericInner<T> {
     x: T;
 }
+
 fn generic<T>(x: T) T {
     let y = x;
     return y;
 }
+
 fn test_generic_same_name() void {
     let t = Three{
         c: Two{
@@ -250,6 +271,7 @@ fn test_generic_same_name() void {
     }
     return;
 }
+
 fn test_ret_generic() void {
     let x = ret_generic1<i64>();
     let y = ret_generic2(true);
@@ -260,9 +282,11 @@ fn test_ret_generic() void {
     }
     return;
 }
+
 fn ret_generic1<T>() Three<T> {
     return Three<T>{};
 }
+
 fn ret_generic2<T>(x: T) Three<T> {
     let two = Two{
         b: One{
@@ -273,6 +297,7 @@ fn ret_generic2<T>(x: T) Three<T> {
         c: two
     };
 }
+
 fn test_self_ref_generic() void {
     let x = GenericSelfRef<i64|bool>{};
     return;
@@ -293,6 +318,7 @@ struct Two<T> {
 struct Three<T> {
     c: Two<T>;
 }
+
 fn main() i64 {
     let a1 = [[[1, 2], [1, 2]]];
     io::printi64ln(a1[0][0][0]);
@@ -317,9 +343,11 @@ fn main() i64 {
     test_self_ref_generic();
     return 0;
 }
+
 fn test_many_params(a: i64, b: i64, c: i64, d: i64) void {
     return;
 }
+
 fn test_pointer() void {
     let a = 0;
     let b = &a;
@@ -329,6 +357,7 @@ fn test_pointer() void {
     io::printi64ln(dang.ptr.a);
     return;
 }
+
 fn test_modify_pointer(a: **i64) void {
     **a = 6;
     return;
@@ -338,6 +367,7 @@ struct pointer_struct {
     ptr2: **pointer_struct;
     ptr: *struct_child;
 }
+
 fn test_self_ref() void {
     let a = pointer_struct{
         ptr2: &&pointer_struct{
@@ -351,6 +381,7 @@ fn test_self_ref() void {
     io::printi64ln(a.ptr2.ptr2.ptr.a);
     return;
 }
+
 fn test_dangling() *pointer_struct {
     let a = pointer_struct{
         ptr: &struct_child{
@@ -361,12 +392,15 @@ fn test_dangling() *pointer_struct {
     a.name_params(1);
     return &a;
 }
+
 fn test_vm_link() i64;
+
 fn test_ret_struct() struct_child {
     return struct_child{
         a: 10
     };
 }
+
 /// ANCHOR: impl
 
 impl pointer_struct {
@@ -374,10 +408,13 @@ impl pointer_struct {
         io::printi64ln(100100);
         return;
     }
+
     fn name_params(x: i64) void {
         return;
     }
+
 }
+
 /// ANCHOR_END: impl
 fn test_primitives() void {
     let test: i8 = 1;
@@ -390,3 +427,4 @@ fn test_primitives() void {
     utest = utest + 2;
     return;
 }
+

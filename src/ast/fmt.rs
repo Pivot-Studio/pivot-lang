@@ -22,7 +22,7 @@ use super::{
             ArrayInitNode, ArrayTypeNameNode, GenericDefNode, GenericParamNode, PointerTypeNode,
             StructDefNode, StructInitFieldNode, StructInitNode, TypeNameNode, TypedIdentifierNode,
         },
-        FmtTrait, Node, NodeEnum, TypeNode, TypeNodeEnum,
+        FmtTrait, NodeEnum, TypeNodeEnum,
     },
     tokens::TokenType,
 };
@@ -38,13 +38,6 @@ impl FmtBuilder {
         FmtBuilder {
             buf: String::new(),
             tabs: 0,
-            prefix: "    ",
-        }
-    }
-    pub fn from(tabs: usize) -> Self {
-        FmtBuilder {
-            buf: String::new(),
-            tabs,
             prefix: "    ",
         }
     }
@@ -128,7 +121,6 @@ impl FmtBuilder {
     pub fn token(&mut self, token: &str) {
         self.buf.push_str(token);
     }
-
     // parse nodes
     pub fn parseProgramNode(&mut self, node: &ProgramNode) {
         for statement in &node.nodes {
@@ -189,7 +181,6 @@ impl FmtBuilder {
         }
     }
     pub fn parseStructDefNode(&mut self, node: &StructDefNode) {
-        self.enter();
         for c in node.precom.iter() {
             c.format(self);
         }
@@ -210,6 +201,8 @@ impl FmtBuilder {
         self.sub_tab();
         self.prefix();
         self.r_brace();
+        self.enter();
+        // 顶层节点加空格
         self.enter();
     }
     pub fn parsePointerTypeNode(&mut self, node: &PointerTypeNode) {
@@ -385,6 +378,8 @@ impl FmtBuilder {
         self.sub_tab();
         self.r_brace();
         self.enter();
+        // 顶层节点加空格
+        self.enter();
     }
     pub fn parseGlobalNode(&mut self, node: &GlobalNode) {
         self.token("const");
@@ -395,6 +390,8 @@ impl FmtBuilder {
         self.space();
         node.exp.format(self);
         self.semicolon();
+        // 顶层节点加空格
+        self.enter();
     }
     pub fn parseFuncCallNode(&mut self, node: &FuncCallNode) {
         node.id.format(self);
@@ -449,6 +446,8 @@ impl FmtBuilder {
                 self.semicolon();
             }
         }
+        self.enter();
+        // 顶层节点加空格
         self.enter();
     }
     pub fn parseSTErrorNode(&mut self, node: &STErrorNode) {
