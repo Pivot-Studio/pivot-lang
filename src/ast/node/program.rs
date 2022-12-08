@@ -80,7 +80,7 @@ impl Node for ProgramNode {
     }
 }
 
-#[salsa::tracked]
+#[salsa::interned]
 pub struct Program {
     pub node: ProgramNodeWrapper,
     pub params: EmitParams,
@@ -187,7 +187,15 @@ impl Program {
         let dir = abs.parent().unwrap().to_str().unwrap();
         let fname = abs.file_name().unwrap().to_str().unwrap();
         let params = self.params(db);
-        let pos = self.docs(db).edit_pos(db);
+        // 不要修改这里，除非你知道自己在干什么
+        // 除了当前用户正打开的文件外，其他文件的编辑位置都输入None，这样可以保证每次用户修改的时候，
+        // 未被修改的文件的`emit_file`参数与之前一致，不会被重新分析
+        // 修改这里可能导致所有文件被重复分析，从而导致lsp性能下降
+        let pos = if self.docs(db).file(db) == params.file(db) {
+            self.docs(db).edit_pos(db)
+        } else {
+            None
+        };
 
         let p = ProgramEmitParam::new(
             db,

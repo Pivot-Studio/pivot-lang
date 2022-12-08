@@ -70,7 +70,7 @@ impl FileCompileInput {
             .borrow()
             .get_file_content(self.file(db));
         if let Some(c) = re {
-            Some(SourceProgram::new(db, c))
+            Some(SourceProgram::new(db, c, self.file(db).clone()))
         } else {
             None
         }
@@ -119,7 +119,7 @@ impl MemDocsInput {
             .borrow()
             .get_file_content(self.file(db));
         if let Some(c) = re {
-            Some(SourceProgram::new(db, c))
+            Some(SourceProgram::new(db, c, self.file(db).clone()))
         } else {
             None
         }

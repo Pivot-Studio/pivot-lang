@@ -18,6 +18,7 @@
   - [Parser](./compiler/parser.md)
   - [AST](./compiler/ast.md)
 - [Language Server](./lsp/README.md)
+  - [Design](./lsp/design.md)
   - [Diagnostic](./lsp/diagnostic.md)
 - [System library](./systemlib/README.md)
   - [vm](./systemlib/vm.md)

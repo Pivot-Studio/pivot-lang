@@ -68,10 +68,12 @@ pub enum ComplexOp {
     FieldOp(Option<Box<VarNode>>),
 }
 
-#[salsa::tracked]
+#[salsa::interned]
 pub struct SourceProgram {
     #[return_ref]
     pub text: String,
+    #[return_ref]
+    pub path: String,
 }
 
 // ANCHOR: parse
@@ -82,7 +84,7 @@ pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, S
     if let Err(e) = re {
         return Err(format!("{:?}", e));
     }
-    // eprintln!("parse");
+    log::info!("parse {:?}", source.path(db));
     Ok(ProgramNodeWrapper::new(db, re.unwrap().1))
 }
 // ANCHOR_END: parse
