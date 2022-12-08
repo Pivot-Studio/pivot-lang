@@ -21,7 +21,6 @@ use lsp_types::CompletionItemKind;
 use lsp_types::Diagnostic;
 use lsp_types::DiagnosticSeverity;
 use lsp_types::DocumentSymbol;
-use lsp_types::GotoDefinitionResponse;
 use lsp_types::Hover;
 use lsp_types::HoverContents;
 use lsp_types::InlayHint;
@@ -37,15 +36,13 @@ use lsp_types::SignatureInformation;
 use lsp_types::Url;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
-use std::cell::Cell;
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use super::accumulators::PLSignatureHelp;
 use super::compiler::get_target_machine;
-use super::compiler::ActionType;
 use super::diag::{ErrorCode, WarnCode};
 use super::diag::{ERR_MSG, WARN_MSG};
 use super::node::NodeEnum;
@@ -78,18 +75,10 @@ pub struct Ctx<'a, 'ctx> {
     pub discope: DIScope<'ctx>,           // debug info scope
     pub nodebug_builder: &'a Builder<'ctx>, // builder without debug info
     pub errs: &'a RefCell<Vec<PLDiag>>,   // diagnostic list
-    pub action: Option<ActionType>,       // lsp sender
-    pub lspparams: Option<(Pos, Option<String>, ActionType)>, // lsp params
-    pub refs: Rc<Cell<Option<Rc<RefCell<Vec<Location>>>>>>, // hold the find references result (thank you, Rust!)
+    pub edit_pos: Option<Pos>,            // lsp params
     pub ditypes_placeholder: Rc<RefCell<FxHashMap<String, RefCell<Vec<MemberType<'ctx>>>>>>, // hold the generated debug info type place holder
     pub ditypes: Rc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
-    pub hints: Rc<RefCell<Box<Vec<InlayHint>>>>,
-    pub doc_symbols: Rc<RefCell<Box<Vec<DocumentSymbol>>>>,
-    pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
-    pub goto_def: Rc<Cell<Option<GotoDefinitionResponse>>>, // hold the goto definition result
-    pub completion_items: Rc<Cell<Vec<CompletionItem>>>,    // hold the completion items
-    pub hover: Rc<Cell<Option<Hover>>>,                     // hold the hover result
-    pub init_func: Option<FunctionValue<'ctx>>,             //init function,call first in main
+    pub init_func: Option<FunctionValue<'ctx>>,                //init function,call first in main
     pub table: FxHashMap<
         String,
         (
@@ -99,7 +88,7 @@ pub struct Ctx<'a, 'ctx> {
             Rc<RefCell<Vec<Location>>>,
         ),
     >, // variable table
-    pub config: Config,                                     // config
+    pub config: Config,                                        // config
     pub roots: RefCell<Vec<BasicValueEnum<'ctx>>>,
     pub usegc: bool,
     pub db: &'a dyn Db,
@@ -138,6 +127,46 @@ pub struct Mod {
     pub global_table: FxHashMap<String, GlobalVar>,
     /// structs methods
     pub methods: FxHashMap<String, FxHashMap<String, FNType>>,
+    pub defs: LSPRangeMap<Range, LSPDef>,
+    pub refs: LSPRangeMap<Range, Rc<RefCell<Vec<Location>>>>,
+    pub sig_helps: LSPRangeMap<Range, SignatureHelp>,
+    pub hovers: LSPRangeMap<Range, Hover>,
+    pub completions: Rc<RefCell<Vec<CompletionItemWrapper>>>,
+    pub completion_gened: Rc<RefCell<Gened>>,
+    pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
+    pub hints: Rc<RefCell<Box<Vec<InlayHint>>>>,
+    pub doc_symbols: Rc<RefCell<Box<Vec<DocumentSymbol>>>>,
+    // pub hints: Rc<RefCell<Box<Vec<InlayHint>>>>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CompletionItemWrapper(CompletionItem);
+
+impl Eq for CompletionItemWrapper {}
+
+impl CompletionItemWrapper {
+    pub fn into_completions(&self) -> CompletionItem {
+        self.0.clone()
+    }
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Gened(bool);
+
+impl Gened {
+    pub fn set_true(&mut self) {
+        self.0 = true;
+    }
+    pub fn is_true(&self) -> bool {
+        self.0
+    }
+}
+
+type LSPRangeMap<T, V> = Rc<RefCell<BTreeMap<T, V>>>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LSPDef {
+    Scalar(Location),
+    Array,
 }
 
 impl Mod {
@@ -149,6 +178,17 @@ impl Mod {
             submods: FxHashMap::default(),
             global_table: FxHashMap::default(),
             methods: FxHashMap::default(),
+            defs: Rc::new(RefCell::new(BTreeMap::new())),
+            refs: Rc::new(RefCell::new(BTreeMap::new())),
+            sig_helps: Rc::new(RefCell::new(BTreeMap::new())),
+            hovers: Rc::new(RefCell::new(BTreeMap::new())),
+            completions: Rc::new(RefCell::new(vec![])),
+            completion_gened: Rc::new(RefCell::new(Gened(false))),
+            semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
+                "builder".to_string(),
+            )))),
+            hints: Rc::new(RefCell::new(Box::new(vec![]))),
+            doc_symbols: Rc::new(RefCell::new(Box::new(vec![]))),
         }
     }
     pub fn new_child(&self) -> Self {
@@ -159,6 +199,15 @@ impl Mod {
             submods: self.submods.clone(),
             global_table: FxHashMap::default(),
             methods: self.methods.clone(),
+            defs: self.defs.clone(),
+            refs: self.refs.clone(),
+            sig_helps: self.sig_helps.clone(),
+            hovers: self.hovers.clone(),
+            completions: self.completions.clone(),
+            completion_gened: self.completion_gened.clone(),
+            semantic_tokens_builder: self.semantic_tokens_builder.clone(),
+            hints: self.hints.clone(),
+            doc_symbols: self.doc_symbols.clone(),
         }
     }
     pub fn get_global_symbol(&self, name: &str) -> Option<&GlobalVar> {
@@ -487,8 +536,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         nodbg_builder: &'a Builder<'ctx>,
         src_file_path: &'a str,
         errs: &'a RefCell<Vec<PLDiag>>,
-        sender: Option<ActionType>,
-        completion: Option<(Pos, Option<String>, ActionType)>,
+        edit_pos: Option<Pos>,
         config: Config,
         db: &'a dyn Db,
     ) -> Ctx<'a, 'ctx> {
@@ -518,17 +566,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             discope: diunit.get_file().as_debug_info_scope(),
             nodebug_builder: nodbg_builder,
             errs,
-            action: sender,
-            lspparams: completion,
-            refs: Rc::new(Cell::new(None)),
-            hints: Rc::new(RefCell::new(Box::new(vec![]))),
-            doc_symbols: Rc::new(RefCell::new(Box::new(vec![]))),
-            semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
-                src_file_path.to_string(),
-            )))),
-            goto_def: Rc::new(Cell::new(None)),
-            completion_items: Rc::new(Cell::new(Vec::new())),
-            hover: Rc::new(Cell::new(None)),
+            edit_pos,
             init_func: None,
             table: FxHashMap::default(),
             config,
@@ -569,15 +607,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 .as_debug_info_scope(),
             nodebug_builder: self.nodebug_builder,
             errs: self.errs,
-            action: self.action,
-            lspparams: self.lspparams.clone(),
-            refs: self.refs.clone(),
-            hints: self.hints.clone(),
-            doc_symbols: self.doc_symbols.clone(),
-            semantic_tokens_builder: self.semantic_tokens_builder.clone(),
-            goto_def: self.goto_def.clone(),
-            completion_items: self.completion_items.clone(),
-            hover: self.hover.clone(),
+            edit_pos: self.edit_pos.clone(),
             init_func: self.init_func,
             table: FxHashMap::default(),
             config: self.config.clone(),
@@ -610,15 +640,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             discope: self.discope.clone(),
             nodebug_builder: self.nodebug_builder,
             errs: self.errs,
-            action: self.action,
-            lspparams: self.lspparams.clone(),
-            refs: self.refs.clone(),
-            hints: self.hints.clone(),
-            doc_symbols: self.doc_symbols.clone(),
-            semantic_tokens_builder: self.semantic_tokens_builder.clone(),
-            goto_def: self.goto_def.clone(),
-            completion_items: self.completion_items.clone(),
-            hover: self.hover.clone(),
+            edit_pos: self.edit_pos.clone(),
             init_func: self.init_func,
             table: FxHashMap::default(),
             config: self.config.clone(),
@@ -849,10 +871,14 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         match &*RefCell::borrow(&pltype) {
             PLType::FN(f) => {
                 if !f.method {
-                    self.doc_symbols.borrow_mut().push(f.get_doc_symbol())
+                    self.plmod.doc_symbols.borrow_mut().push(f.get_doc_symbol())
                 }
             }
-            PLType::STRUCT(st) => self.doc_symbols.borrow_mut().push(st.get_doc_symbol()),
+            PLType::STRUCT(st) => self
+                .plmod
+                .doc_symbols
+                .borrow_mut()
+                .push(st.get_doc_symbol()),
             _ => {}
         }
     }
@@ -892,31 +918,18 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             Ok(self.builder.build_load(v.into_pointer_value(), "loadtmp"))
         }
     }
-    pub fn if_completion(&mut self, c: impl FnOnce(&mut Ctx, &(Pos, Option<String>))) {
-        if let Some(tp) = self.action {
-            if let Some(comp) = &self.lspparams {
-                if tp == ActionType::Completion {
-                    let v = self.completion_items.take();
-                    if v.is_empty() {
-                        c(self, &(comp.0, comp.1.clone()));
-                    } else {
-                        self.completion_items.set(v);
-                    }
-                }
-            }
-        }
-    }
-    pub fn if_completion_no_mut(&self, c: impl FnOnce(&Ctx, &(Pos, Option<String>))) {
-        if let Some(tp) = self.action {
-            if let Some(comp) = &self.lspparams {
-                if tp == ActionType::Completion {
-                    let v = self.completion_items.take();
-                    if v.is_empty() {
-                        c(self, &(comp.0, comp.1.clone()));
-                    } else {
-                        self.completion_items.set(v);
-                    }
-                }
+    pub fn if_completion(
+        &self,
+        range: Range,
+        get_completions: impl FnOnce() -> Vec<CompletionItem>,
+    ) {
+        if let Some(pos) = self.edit_pos {
+            if pos.is_in(range) && !self.plmod.completion_gened.borrow().is_true() {
+                let comps = get_completions();
+                let comps = comps.iter().map(|x| CompletionItemWrapper(x.clone()));
+                self.plmod.completions.borrow_mut().truncate(0);
+                self.plmod.completions.borrow_mut().extend(comps);
+                self.plmod.completion_gened.borrow_mut().set_true();
             }
         }
     }
@@ -930,83 +943,49 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
 
     pub fn set_if_refs_tp(&self, tp: Rc<RefCell<PLType>>, range: Range) {
-        if let Some(_) = self.action {
-            if let Some(comp) = &self.lspparams {
-                let tprefs = RefCell::borrow(&tp).get_refs();
-                if let Some(tprefs) = tprefs {
-                    tprefs.borrow_mut().push(self.get_location(range));
-                    if comp.0.is_in(range) {
-                        self.refs.set(Some(tprefs));
-                    }
-                }
-            }
+        if let Some(tprefs) = tp.borrow().get_refs() {
+            tprefs.borrow_mut().push(self.get_location(range));
+            self.plmod.refs.borrow_mut().insert(range, tprefs.clone());
         }
     }
 
     pub fn set_if_sig(&self, range: Range, name: String, params: &[String], n: u32) {
-        if let Some(act) = self.action {
-            if act != ActionType::SignatureHelp {
-                return;
-            }
-            if let Some(comp) = &self.lspparams {
-                if comp.0.is_in(range) {
-                    PLSignatureHelp::push(
-                        self.db,
-                        SignatureHelp {
-                            signatures: vec![SignatureInformation {
-                                label: name,
+        self.plmod.sig_helps.borrow_mut().insert(
+            range,
+            SignatureHelp {
+                signatures: vec![SignatureInformation {
+                    label: name,
+                    documentation: None,
+                    parameters: Some(
+                        params
+                            .iter()
+                            .map(|s| ParameterInformation {
+                                label: ParameterLabel::Simple(s.clone()),
                                 documentation: None,
-                                parameters: Some(
-                                    params
-                                        .iter()
-                                        .map(|s| ParameterInformation {
-                                            label: ParameterLabel::Simple(s.clone()),
-                                            documentation: None,
-                                        })
-                                        .collect(),
-                                ),
-                                active_parameter: Some(n),
-                            }],
-                            active_signature: None,
-                            active_parameter: None,
-                        },
-                    );
-                }
-            }
-        }
+                            })
+                            .collect(),
+                    ),
+                    active_parameter: Some(n),
+                }],
+                active_signature: None,
+                active_parameter: None,
+            },
+        );
     }
 
     pub fn set_if_refs(&self, refs: Rc<RefCell<Vec<Location>>>, range: Range) {
-        if let Some(act) = self.action {
-            if act == ActionType::FindReferences {
-                if let Some(comp) = &self.lspparams {
-                    refs.borrow_mut().push(self.get_location(range));
-                    if comp.0.is_in(range) {
-                        self.refs.set(Some(refs));
-                    }
-                }
-            }
-        }
+        refs.borrow_mut().push(self.get_location(range));
+        self.plmod.refs.borrow_mut().insert(range, refs.clone());
     }
 
     pub fn send_if_go_to_def(&self, range: Range, destrange: Range, file: String) {
-        if let Some(_) = self.action {
-            if let Some(comp) = &self.lspparams {
-                if comp.2 == ActionType::GotoDef {
-                    let v = self.goto_def.take();
-                    if v.is_none() && comp.0.is_in(range) {
-                        let resp = GotoDefinitionResponse::Scalar(Location {
-                            uri: Url::from_file_path(file).unwrap(),
-                            range: destrange.to_diag_range(),
-                        });
-                        self.goto_def.set(Some(resp));
-                        // self.action = None // set sender to None so it won't be sent again
-                    } else {
-                        self.goto_def.set(v);
-                    }
-                }
-            }
-        }
+        self.plmod.defs.borrow_mut().insert(
+            range,
+            LSPDef::Scalar(Location {
+                uri: Url::from_file_path(file.clone()).unwrap(),
+                range: destrange.to_diag_range(),
+            }),
+        );
     }
 
     pub fn get_completions(&self) -> Vec<CompletionItem> {
@@ -1177,7 +1156,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if !self.need_highlight {
             return;
         }
-        self.semantic_tokens_builder.borrow_mut().push(
+        self.plmod.semantic_tokens_builder.borrow_mut().push(
             range.to_diag_range(),
             type_index(tp),
             modifiers,
@@ -1199,7 +1178,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             padding_right: None,
             data: None,
         };
-        self.hints.borrow_mut().push(hint);
+        self.plmod.hints.borrow_mut().push(hint);
     }
     pub fn push_param_hint(&self, range: Range, name: String) {
         if !self.need_highlight {
@@ -1215,7 +1194,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             padding_right: None,
             data: None,
         };
-        self.hints.borrow_mut().push(hint);
+        self.plmod.hints.borrow_mut().push(hint);
     }
     fn get_keyword_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         let keywords = vec![
@@ -1282,19 +1261,13 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         if !self.need_highlight {
             return;
         }
-        if let Some(act) = self.action {
-            if let Some(comp) = &self.lspparams {
-                if act == ActionType::Hover {
-                    if comp.0.is_in(range) {
-                        let hover = Hover {
-                            contents: value,
-                            range: None,
-                        };
-                        self.hover.set(Some(hover));
-                    }
-                }
-            }
-        }
+        self.plmod.hovers.borrow_mut().insert(
+            range,
+            Hover {
+                range: None,
+                contents: value,
+            },
+        );
     }
     /// # auto_deref
     /// 自动解引用，有几层解几层

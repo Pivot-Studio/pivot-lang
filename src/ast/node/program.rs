@@ -3,7 +3,7 @@ use super::types::StructDefNode;
 use super::*;
 use crate::ast::accumulators::*;
 use crate::ast::compiler::{compile_dry_file, ActionType};
-use crate::ast::ctx::{self, create_ctx_info, Ctx, Mod};
+use crate::ast::ctx::{self, create_ctx_info, Ctx, LSPDef, Mod};
 use crate::lsp::mem_docs::{EmitParams, FileCompileInput, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
@@ -20,6 +20,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::fs::OpenOptions;
 use std::hash::{Hash, Hasher};
 use std::io::prelude::*;
+use std::ops::Bound::*;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
@@ -61,9 +62,9 @@ impl Node for ProgramNode {
             _ = x.emit_global(ctx);
         });
         ctx.clear_init_fn();
-        ctx.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
-            ctx.plmod.path.to_string(),
-        ))));
+        ctx.plmod.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(
+            SemanticTokensBuilder::new(ctx.plmod.path.to_string()),
+        )));
         // node parser
         self.nodes.iter_mut().for_each(|x| {
             _ = x.emit(ctx);
@@ -73,7 +74,7 @@ impl Node for ProgramNode {
     }
 }
 
-#[salsa::tracked]
+#[salsa::interned]
 pub struct Program {
     pub node: ProgramNodeWrapper,
     pub params: EmitParams,
@@ -131,6 +132,7 @@ impl Program {
                 // 如果use的是依赖包
                 if let Some(dep) = cm.get(&u.ids[0].name) {
                     path = path.join(&dep.path);
+
                     let input = FileCompileInput::new(
                         db,
                         path.join("Kagari.toml")
@@ -140,7 +142,6 @@ impl Program {
                             .to_string(),
                         "".to_string(),
                         self.docs(db),
-                        Default::default(),
                         Default::default(),
                     );
                     let f = input.get_file_content(db);
@@ -166,7 +167,6 @@ impl Program {
                 f,
                 self.params(db).modpath(db).clone(),
                 self.docs(db),
-                Default::default(),
                 config,
             );
             let m = compile_dry_file(db, f);
@@ -180,6 +180,16 @@ impl Program {
         let abs = dunce::canonicalize(filepath).unwrap();
         let dir = abs.parent().unwrap().to_str().unwrap();
         let fname = abs.file_name().unwrap().to_str().unwrap();
+        let params = self.params(db);
+        // 不要修改这里，除非你知道自己在干什么
+        // 除了当前用户正打开的文件外，其他文件的编辑位置都输入None，这样可以保证每次用户修改的时候，
+        // 未被修改的文件的`emit_file`参数与之前一致，不会被重新分析
+        // 修改这里可能导致所有文件被重复分析，从而导致lsp性能下降
+        let pos = if self.docs(db).file(db) == params.file(db) {
+            self.docs(db).edit_pos(db)
+        } else {
+            None
+        };
 
         let p = ProgramEmitParam::new(
             db,
@@ -187,12 +197,119 @@ impl Program {
             dir.to_string(),
             fname.to_string(),
             abs.to_str().unwrap().to_string(),
-            self.params(db),
+            LspParams::new(
+                db,
+                params.modpath(db).to_string(),
+                pos,
+                params.config(db),
+                params.action(db) == ActionType::Compile,
+            ),
             modmap,
             self.docs(db).get_file_content(db).unwrap().text(db).clone(),
         );
 
-        emit_file(db, p)
+        let nn = p.node(db).node(db);
+        match params.action(db) {
+            ActionType::PrintAst => {
+                println!("file: {}", p.fullpath(db).green());
+                nn.print(0, true, vec![]);
+            }
+            ActionType::Fmt => {
+                let mut builder = FmtBuilder::new();
+                nn.format(&mut builder);
+                let code = builder.generate();
+                let mut f = OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open(p.fullpath(db))
+                    .unwrap();
+                f.write(code.as_bytes()).unwrap();
+            }
+            ActionType::LspFmt => {
+                let oldcode = p.file_content(db);
+                let mut builder = FmtBuilder::new();
+                nn.format(&mut builder);
+                let newcode = builder.generate();
+                let diff = text::diff(&oldcode, &newcode);
+                let line_index = text::LineIndex::new(&oldcode);
+                PLFormat::push(db, diff.into_text_edit(&line_index));
+            }
+            _ => {}
+        }
+        let m = emit_file(db, p);
+        let plmod = m.plmod(db);
+        let params = self.params(db);
+        if self.docs(db).file(db) == params.file(db) {
+            if pos.is_some() {
+                Completions::push(
+                    db,
+                    plmod
+                        .completions
+                        .borrow()
+                        .iter()
+                        .map(|x| x.into_completions())
+                        .collect(),
+                );
+            }
+            let hints = plmod.hints.borrow().clone();
+            Hints::push(db, *hints);
+            let docs = plmod.doc_symbols.borrow().clone();
+            DocSymbols::push(db, *docs);
+        }
+        match params.action(db) {
+            ActionType::FindReferences => {
+                let (pos, _) = params.params(db).unwrap();
+                let range = pos.to(pos);
+                let res = plmod.refs.borrow();
+                let re = res.range((Unbounded, Included(&range))).last();
+                if let Some((range, res)) = re {
+                    if pos.is_in(*range) {
+                        PLReferences::push(db, res.clone());
+                    }
+                }
+            }
+            ActionType::GotoDef => {
+                let (pos, _) = params.params(db).unwrap();
+                let range = pos.to(pos);
+                let res = plmod.defs.borrow();
+                let re = res.range((Unbounded, Included(&range))).last();
+                if let Some((range, res)) = re {
+                    if let LSPDef::Scalar(def) = res {
+                        if pos.is_in(*range) {
+                            GotoDef::push(db, GotoDefinitionResponse::Scalar(def.clone()));
+                        }
+                    }
+                }
+            }
+            ActionType::SignatureHelp => {
+                let (pos, _) = params.params(db).unwrap();
+                let range = pos.to(pos);
+                let res = plmod.sig_helps.borrow();
+                let re = res.range((Unbounded, Included(&range))).last();
+                if let Some((range, res)) = re {
+                    if pos.is_in(*range) {
+                        PLSignatureHelp::push(db, res.clone());
+                    }
+                }
+            }
+            ActionType::Hover => {
+                let (pos, _) = params.params(db).unwrap();
+                let range = pos.to(pos);
+                let res = plmod.hovers.borrow();
+                let re = res.range((Unbounded, Included(&range))).last();
+                if let Some((range, res)) = re {
+                    if pos.is_in(*range) {
+                        PLHover::push(db, res.clone());
+                    }
+                }
+            }
+            ActionType::SemanticTokensFull => {
+                let b = plmod.semantic_tokens_builder.borrow().build();
+                PLSemanticTokens::push(db, b);
+            }
+            _ => {}
+        }
+        m
     }
 }
 
@@ -206,16 +323,25 @@ pub struct ProgramEmitParam {
     #[return_ref]
     pub fullpath: String,
     #[return_ref]
-    pub params: EmitParams,
+    pub params: LspParams,
     pub submods: FxHashMap<String, Mod>,
     #[return_ref]
     pub file_content: String,
 }
 
 #[salsa::tracked]
+pub struct LspParams {
+    #[return_ref]
+    pub modpath: String,
+    pub params: Option<Pos>,
+    pub config: Config,
+    pub is_compile: bool,
+}
+
+#[salsa::tracked(lru = 32)]
 pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
+    log::info!("emit_file: {}", params.fullpath(db),);
     let context = &Context::create();
-    let action = params.params(db).action(db);
     let (a, b, c, d, e, f) = create_ctx_info(context, params.dir(db), params.file(db));
     let v = RefCell::new(Vec::new());
     let mut ctx = ctx::Ctx::new(
@@ -228,7 +354,6 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         &f,
         params.fullpath(db),
         &v,
-        Some(params.params(db).action(db)),
         params.params(db).params(db),
         params.params(db).config(db),
         db,
@@ -248,35 +373,6 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     m.module.set_triple(&TargetMachine::get_default_triple());
     let node = params.node(db);
     let mut nn = node.node(db);
-    if let Some(action) = m.action {
-        match action {
-            ActionType::PrintAst => {
-                println!("file: {}", params.fullpath(db).green());
-                nn.print(0, true, vec![]);
-            }
-            ActionType::Fmt => {
-                let mut builder = FmtBuilder::new();
-                nn.format(&mut builder);
-                let code = builder.generate();
-                let mut f = OpenOptions::new()
-                    .write(true)
-                    .truncate(true)
-                    .open(params.fullpath(db))
-                    .unwrap();
-                f.write(code.as_bytes()).unwrap();
-            }
-            ActionType::LspFmt => {
-                let oldcode = params.file_content(db);
-                let mut builder = FmtBuilder::new();
-                nn.format(&mut builder);
-                let newcode = builder.generate();
-                let diff = text::diff(&oldcode, &newcode);
-                let line_index = text::LineIndex::new(&oldcode);
-                PLFormat::push(db, diff.into_text_edit(&line_index));
-            }
-            _ => {}
-        }
-    }
     let _ = nn.emit(m);
     Diagnostics::push(
         db,
@@ -285,32 +381,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
             v.borrow().iter().map(|x| x.clone()).collect(),
         ),
     );
-    if let Some(c) = ctx.refs.take() {
-        PLReferences::push(db, c.clone());
-    }
-    if ctx.action.is_some() && ctx.action.unwrap() == ActionType::SemanticTokensFull {
-        let b = ctx.semantic_tokens_builder.borrow().build();
-        PLSemanticTokens::push(db, b);
-    }
-    if action == ActionType::Completion {
-        let ci = ctx.completion_items.take();
-        Completions::push(db, ci);
-    }
-    if action == ActionType::Hint {
-        let hints = ctx.hints.take();
-        Hints::push(db, *hints);
-    }
-    if action == ActionType::DocSymbol {
-        let docs = ctx.doc_symbols.take();
-        DocSymbols::push(db, *docs);
-    }
-    if let Some(c) = ctx.goto_def.take() {
-        GotoDef::push(db, c);
-    }
-    if let Some(c) = ctx.hover.take() {
-        PLHover::push(db, c);
-    }
-    if ctx.action.is_some() && ctx.action.unwrap() == ActionType::Compile {
+    if params.params(db).is_compile(db) {
         ctx.dibuilder.finalize();
         let mut hasher = DefaultHasher::new();
         params.fullpath(db).hash(&mut hasher);

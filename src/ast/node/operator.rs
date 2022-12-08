@@ -262,17 +262,11 @@ impl Node for TakeOpNode {
                     let index;
                     if etype.is_struct_type() {
                         // end with ".", gen completions
-                        ctx.if_completion(|ctx, (pos, trigger)| {
-                            if pos.is_in(id.range)
-                                && trigger.is_some()
-                                && trigger.as_ref().unwrap() == "."
-                            {
-                                if let PLType::STRUCT(s) = &*pltype.clone().borrow() {
-                                    let completions = s.get_completions(ctx);
-                                    ctx.completion_items.set(completions);
-                                    ctx.action = None;
-                                }
+                        ctx.if_completion(id.range, || {
+                            if let PLType::STRUCT(s) = &*pltype.clone().borrow() {
+                                return s.get_completions(ctx);
                             }
+                            vec![]
                         });
                         let range = id.range();
                         if let PLType::STRUCT(s) = &*pltype.clone().borrow() {
@@ -327,14 +321,11 @@ impl Node for TakeOpNode {
         if self.field.is_none() {
             // end with ".", gen completions
             let tp = ctx.auto_deref_tp(pltype);
-            ctx.if_completion(|ctx, (pos, trigger)| {
-                if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
-                    if let PLType::STRUCT(s) = &*tp.borrow() {
-                        let completions = s.get_completions(&ctx);
-                        ctx.completion_items.set(completions);
-                        ctx.action = None;
-                    }
+            ctx.if_completion(self.range, || {
+                if let PLType::STRUCT(s) = &*tp.borrow() {
+                    return s.get_completions(&ctx);
                 }
+                vec![]
             });
             return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
         }

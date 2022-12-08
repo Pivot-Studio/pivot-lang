@@ -23,7 +23,7 @@ as-any = "0.3.0"
 clap = { version = "4.0.18", features = ["derive"] }
 colored = "2.0.0"
 serde = "1.0.145"
-lsp-types = { version = "0.93.1", features = ["proposed"] }
+lsp-types = { branch = "master", features = ["proposed"], git = "https://github.com/Pivot-Studio/lsp-types" }
 lsp-server = "0.6.0"
 serde_json = "1.0.85"
 rustc-hash = "1.1.0"

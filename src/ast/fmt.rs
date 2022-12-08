@@ -364,7 +364,6 @@ impl FmtBuilder {
         }
     }
     pub fn parseImplNode(&mut self, node: &ImplNode) {
-        self.enter();
         self.token("impl");
         self.space();
         node.target.format(self);

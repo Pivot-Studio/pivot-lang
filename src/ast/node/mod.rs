@@ -81,6 +81,7 @@ pub enum TypeNodeEnum {
 #[enum_dispatch]
 pub trait TypeNode: RangeTrait + AsAny + FmtTrait {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
+    /// 重要：这个函数不要干lsp相关操作，只用来获取type
     fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
     fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>);
     fn eq_or_infer<'a, 'ctx>(

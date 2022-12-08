@@ -1,7 +1,7 @@
 use std::{env, path::PathBuf};
 
-use rustc_hash::FxHashMap;
 use serde::Deserialize;
+use std::collections::BTreeMap;
 
 use crate::{nomparser::SourceProgram, Db};
 
@@ -42,16 +42,16 @@ pub fn get_config_path(current: String) -> Result<String, &'static str> {
     return get_config_path(next_path);
 }
 
-#[derive(Deserialize, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq, Default, Hash)]
 pub struct Config {
     pub project: String,
     pub entry: String,
-    pub deps: Option<FxHashMap<String, Dependency>>,
+    pub deps: Option<BTreeMap<String, Dependency>>,
     #[serde(skip)]
     pub root: String,
 }
 
-#[derive(Deserialize, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq, Default, Hash)]
 pub struct Dependency {
     pub version: Option<String>,
     pub path: String,
@@ -59,6 +59,7 @@ pub struct Dependency {
 
 pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     let config = entry.text(db);
+
     let re = toml::from_str(&config);
     if let Err(re) = re {
         return Err(format!("配置文件解析错误:{:?}", re));
@@ -68,7 +69,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     if libroot.is_err() {
         return Err("未设置环境变量KAGARI_LIB_ROOT，无法找到系统库".to_string());
     }
-    let mut deps = FxHashMap::<String, Dependency>::default();
+    let mut deps = BTreeMap::<String, Dependency>::default();
     let libroot = PathBuf::from(libroot.unwrap());
     let libroot = libroot.read_dir();
     if libroot.is_err() {

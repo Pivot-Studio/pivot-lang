@@ -23,12 +23,7 @@ impl Node for ErrorNode {
     }
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let err = ctx.add_err(self.range, self.code);
-        ctx.if_completion(|ctx, a| {
-            if a.0.is_in(self.range) {
-                let completions = ctx.get_completions();
-                ctx.completion_items.set(completions);
-            }
-        });
+        ctx.if_completion(self.range, || ctx.get_completions());
 
         Err(err)
     }

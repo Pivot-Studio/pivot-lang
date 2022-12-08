@@ -11,4 +11,4 @@ create-missing = false
 [output.html]
 git-repository-url = "https://github.com/Pivot-Studio/pivot-lang"
 git-repository-icon = "fa-github"
-edit-url-template = "https://github.com/Pivot-Studio/pivot-lang/master/book/{path}"
+edit-url-template = "https://github.com/Pivot-Studio/pivot-lang/edit/master/book/{path}"

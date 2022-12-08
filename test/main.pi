@@ -137,7 +137,6 @@ fn test_const() void {
     return;
 }
 
-
 impl mod1::Mod1 {
     //
     /// ### xxx
@@ -402,7 +401,6 @@ fn test_ret_struct() struct_child {
 }
 
 /// ANCHOR: impl
-
 impl pointer_struct {
     fn name() void {
         io::printi64ln(100100);

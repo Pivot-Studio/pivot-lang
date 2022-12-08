@@ -25,6 +25,16 @@ impl Node for ImplNode {
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         _ = self.target.emit_highlight(ctx);
         let mut method_docsymbols = vec![];
+        let tp = self.target.get_type(ctx)?;
+        match &*tp.borrow() {
+            PLType::STRUCT(sttp) => {
+                ctx.send_if_go_to_def(self.target.range(), sttp.range, sttp.path.clone());
+            }
+            _ => {
+                ctx.add_err(self.target.range(), ErrorCode::EXPECT_TYPE);
+            }
+        };
+
         for method in &mut self.methods {
             let res = method.emit(ctx);
             if res.is_err() {
@@ -54,7 +64,7 @@ impl Node for ImplNode {
             selection_range: self.range.to_diag_range(),
             children: Some(method_docsymbols),
         };
-        ctx.doc_symbols.borrow_mut().push(docsymbol);
+        ctx.plmod.doc_symbols.borrow_mut().push(docsymbol);
         Ok((None, None, TerminatorEnum::NONE))
     }
 }
