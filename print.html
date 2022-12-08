@@ -550,8 +550,7 @@ fn main() void {
 </blockquote>
 <h2 id="method-example"><a class="header" href="#method-example">Method Example</a></h2>
 <p>最简单的添加method的例子：</p>
-<pre><code class="language-pivot-lang">
-impl pointer_struct {
+<pre><code class="language-pivot-lang">impl pointer_struct {
     fn name() void {
         io::printi64ln(100100);
         return;
@@ -560,6 +559,7 @@ impl pointer_struct {
     fn name_params(x: i64) void {
         return;
     }
+
 }
 
 </code></pre>
@@ -613,8 +613,7 @@ pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNode
 <p>基本上，所有源代码中的基础单位都会对应抽象语法树中的一个节点。抽象语法树有很多类型的节点，他们可能会相互引用。</p>
 <p>所有的节点都必须实现<code>Node</code> trait，这个trait定义了节点的基本行为。</p>
 <pre><code class="language-rust no_run noplayground">#[enum_dispatch]
-pub trait Node: RangeTrait + AsAny {
-    fn format(&amp;self, tabs: usize, prefix: &amp;str) -&gt; String;
+pub trait Node: RangeTrait + AsAny + FmtTrait {
     fn print(&amp;self, tabs: usize, end: bool, line: Vec&lt;bool&gt;);
     fn emit&lt;'a, 'ctx&gt;(&amp;mut self, ctx: &amp;mut Ctx&lt;'a, 'ctx&gt;) -&gt; NodeResult&lt;'ctx&gt;;
 }
