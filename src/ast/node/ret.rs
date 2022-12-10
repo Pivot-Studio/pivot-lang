@@ -27,6 +27,7 @@ impl Node for RetNode {
                 return Err(err);
             }
             let (ret, _, _) = ret.emit(ctx)?;
+            ctx.emit_comment_highlight(&self.comments[0]);
             let ret = ctx.try_load2var(self.range, ret.unwrap())?;
             if ret.as_basic_value_enum().get_type() != rettp.unwrap() {
                 let err = ctx.add_err(self.range, ErrorCode::RETURN_TYPE_MISMATCH);
@@ -40,6 +41,7 @@ impl Node for RetNode {
             ctx.builder
                 .build_unconditional_branch(ctx.return_block.unwrap().0);
         } else {
+            ctx.emit_comment_highlight(&self.comments[0]);
             if rettp.is_some() {
                 let err = ctx.add_err(self.range, ErrorCode::NO_RETURN_VALUE_IN_NON_VOID_FUNCTION);
                 return Err(err);
