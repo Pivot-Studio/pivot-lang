@@ -28,9 +28,8 @@ pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
             ),
             tag_token(TokenType::RBRACKET),
         )),
-        |(_, exps, _)| {
-            // TODO:get range from token
-            let range = Default::default();
+        |((_, lb), exps, (_, rb))| {
+            let range = lb.start.to(rb.end);
             res_enum(ArrayInitNode { exps, range }.into())
         },
     )(input)

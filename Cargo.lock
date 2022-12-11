@@ -395,6 +395,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "fmt_macro"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "form_urlencoded"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -533,6 +541,7 @@ dependencies = [
  "add_symbol_macro",
  "comment_macro",
  "ctor",
+ "fmt_macro",
  "llvm-sys",
  "range_macro",
  "test_parser_macro",
@@ -621,8 +630,7 @@ dependencies = [
 [[package]]
 name = "lsp-types"
 version = "0.93.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9be6e9c7e2d18f651974370d7aff703f9513e0df6e464fd795660edc77e6ca51"
+source = "git+https://github.com/Pivot-Studio/lsp-types?branch=master#7458e694ab201495748fd882214f3ef4849b3aa6"
 dependencies = [
  "bitflags",
  "serde",

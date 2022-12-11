@@ -8,10 +8,12 @@ use crate::ast::tokens::TokenType;
 use crate::handle_calc;
 use inkwell::IntPredicate;
 use internal_macro::comments;
+use internal_macro::fmt;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
 use paste::item;
 #[range]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UnaryOpNode {
     pub op: TokenType,
@@ -19,12 +21,6 @@ pub struct UnaryOpNode {
 }
 // 单目运算符
 impl Node for UnaryOpNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::new();
-        format_res.push_str(TokenType::get_str(&self.op));
-        format_res.push_str(&self.exp.format(tabs, prefix));
-        format_res
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -90,6 +86,7 @@ impl Node for UnaryOpNode {
 }
 
 #[range]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BinOpNode {
     pub left: Box<NodeEnum>,
@@ -97,15 +94,6 @@ pub struct BinOpNode {
     pub right: Box<NodeEnum>,
 }
 impl Node for BinOpNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::new();
-        format_res.push_str(&self.left.format(tabs, prefix));
-        format_res.push_str(" ");
-        format_res.push_str(TokenType::get_str(&self.op));
-        format_res.push_str(" ");
-        format_res.push_str(&self.right.format(tabs, prefix));
-        return format_res;
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -239,6 +227,7 @@ impl Node for BinOpNode {
 
 #[range]
 #[comments]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct TakeOpNode {
     pub head: Box<NodeEnum>,
@@ -246,15 +235,6 @@ pub struct TakeOpNode {
 }
 
 impl Node for TakeOpNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::new();
-        format_res.push_str(&self.head.format(tabs, prefix));
-        for id in &self.field {
-            format_res.push_str(".");
-            format_res.push_str(&id.format(tabs, prefix));
-        }
-        format_res
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -282,17 +262,11 @@ impl Node for TakeOpNode {
                     let index;
                     if etype.is_struct_type() {
                         // end with ".", gen completions
-                        ctx.if_completion(|ctx, (pos, trigger)| {
-                            if pos.is_in(id.range)
-                                && trigger.is_some()
-                                && trigger.as_ref().unwrap() == "."
-                            {
-                                if let PLType::STRUCT(s) = &*pltype.clone().borrow() {
-                                    let completions = s.get_completions(ctx);
-                                    ctx.completion_items.set(completions);
-                                    ctx.action = None;
-                                }
+                        ctx.if_completion(id.range, || {
+                            if let PLType::STRUCT(s) = &*pltype.clone().borrow() {
+                                return s.get_completions(ctx);
                             }
+                            vec![]
                         });
                         let range = id.range();
                         if let PLType::STRUCT(s) = &*pltype.clone().borrow() {
@@ -347,14 +321,11 @@ impl Node for TakeOpNode {
         if self.field.is_none() {
             // end with ".", gen completions
             let tp = ctx.auto_deref_tp(pltype);
-            ctx.if_completion(|ctx, (pos, trigger)| {
-                if pos.is_in(self.range) && trigger.is_some() && trigger.as_ref().unwrap() == "." {
-                    if let PLType::STRUCT(s) = &*tp.borrow() {
-                        let completions = s.get_completions(&ctx);
-                        ctx.completion_items.set(completions);
-                        ctx.action = None;
-                    }
+            ctx.if_completion(self.range, || {
+                if let PLType::STRUCT(s) = &*tp.borrow() {
+                    return s.get_completions(&ctx);
                 }
+                vec![]
             });
             return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
         }

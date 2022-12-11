@@ -4,20 +4,18 @@ use crate::ast::builder::llvmbuilder::PLLLVMBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{PLType, PriType};
-use internal_macro::{comments, range};
+use internal_macro::{comments, fmt, range};
 use lsp_types::SemanticTokenType;
 
 #[range]
 #[comments]
+#[fmt]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct PrimaryNode {
     pub value: Box<NodeEnum>,
 }
 
 impl Node for PrimaryNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        return self.value.format(_tabs, _prefix);
-    }
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
         self.value.print(tabs, end, line);
     }
@@ -30,15 +28,13 @@ impl Node for PrimaryNode {
 }
 
 #[range]
+#[fmt]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct BoolConstNode {
     pub value: bool,
 }
 
 impl Node for BoolConstNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        return self.value.to_string();
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line, end);
@@ -60,19 +56,12 @@ impl Node for BoolConstNode {
 }
 
 #[range]
+#[fmt]
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct NumNode {
     pub value: Num,
 }
 impl Node for NumNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        if let Num::INT(x) = self.value {
-            return x.to_string();
-        } else if let Num::FLOAT(x) = self.value {
-            return x.to_string();
-        }
-        panic!("not implemented")
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line, end);
@@ -123,27 +112,19 @@ impl <'a, 'ctx>NumBuilder<'a, 'ctx> for PLLLVMBuilder<'a, 'ctx> {
 }
 
 #[range]
+#[fmt]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct VarNode {
     pub name: String,
 }
 impl VarNode {
-    pub fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        let name = &self.name;
-        return name.to_string();
-    }
     pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("VarNode: {}", self.name);
     }
     pub fn emit<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        ctx.if_completion_no_mut(|ctx, a| {
-            if a.0.is_in(self.range) {
-                let completions = ctx.get_completions();
-                ctx.completion_items.set(completions);
-            }
-        });
+        ctx.if_completion(self.range, || ctx.get_completions());
         let v = ctx.get_symbol(&self.name);
         if let Some((v, pltype, dst, refs, is_const)) = v {
             ctx.push_semantic_token(self.range, SemanticTokenType::VARIABLE, 0);
@@ -162,7 +143,8 @@ impl VarNode {
         }
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match &*tp.borrow() {
-                PLType::FN(_) => {
+                PLType::FN(f) => {
+                    ctx.send_if_go_to_def(self.range, f.range, ctx.plmod.path.clone());
                     ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
                     return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
                 }
@@ -172,12 +154,7 @@ impl VarNode {
         Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND))
     }
     pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        ctx.if_completion_no_mut(|ctx, a| {
-            if a.0.is_in(self.range) {
-                let completions = ctx.get_completions();
-                ctx.completion_items.set(completions);
-            }
-        });
+        ctx.if_completion(self.range, || ctx.get_completions());
 
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match *tp.borrow() {
@@ -229,6 +206,7 @@ impl <'a, 'ctx>VarBuilder<'a, 'ctx> for PLLLVMBuilder<'a, 'ctx> {
 
 #[range]
 #[comments]
+#[fmt]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ArrayElementNode {
     pub arr: Box<NodeEnum>,
@@ -236,13 +214,6 @@ pub struct ArrayElementNode {
 }
 
 impl Node for ArrayElementNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        format!(
-            "{}[{}]",
-            &self.arr.format(tabs, prefix),
-            &self.index.format(tabs, prefix)
-        )
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -279,15 +250,13 @@ impl Node for ArrayElementNode {
 }
 
 #[range]
+#[fmt]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct ParanthesesNode {
     pub node: Box<NodeEnum>,
 }
 
 impl Node for ParanthesesNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        format!("({})", &self.node.format(tabs, prefix))
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);

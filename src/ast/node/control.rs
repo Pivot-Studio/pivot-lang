@@ -3,9 +3,10 @@ use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::PriType;
-use internal_macro::{comments, range};
+use internal_macro::{comments, fmt, range};
 
 #[range]
+#[fmt]
 #[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct IfNode {
@@ -15,29 +16,6 @@ pub struct IfNode {
 }
 
 impl Node for IfNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::new();
-        // format_res.push_str(&prefix.repeat(tabs));
-        format_res.push_str("if ");
-        format_res.push_str(&self.cond.format(tabs, prefix));
-        format_res.push_str(" {");
-        if let Some(el) = &self.els {
-            format_res.push_str(&self.then.format(tabs + 1, prefix));
-            format_res.push_str(&prefix.repeat(tabs));
-            format_res.push_str("} else {");
-            let el_str = &el.format(tabs + 1, prefix);
-            format_res.push_str(&el_str);
-            if el_str.bytes().len() > 0 {
-                format_res.push_str(&prefix.repeat(tabs));
-            }
-            format_res.push_str("}")
-        } else {
-            format_res.push_str(&self.then.format(tabs + 1, prefix));
-            format_res.push_str(&prefix.repeat(tabs));
-            format_res.push_str("}");
-        }
-        format_res
-    }
     // ANCHOR: print
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -114,6 +92,7 @@ impl Node for IfNode {
 }
 
 #[range]
+#[fmt]
 #[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct WhileNode {
@@ -122,16 +101,6 @@ pub struct WhileNode {
 }
 
 impl Node for WhileNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::new();
-        format_res.push_str("while ");
-        format_res.push_str(&self.cond.format(tabs, prefix));
-        format_res.push_str(" {");
-        format_res.push_str(&self.body.format(tabs + 1, prefix));
-        format_res.push_str(&prefix.repeat(tabs));
-        format_res.push_str("}");
-        format_res
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -187,6 +156,7 @@ impl Node for WhileNode {
 }
 
 #[range]
+#[fmt]
 #[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ForNode {
@@ -197,25 +167,6 @@ pub struct ForNode {
 }
 
 impl Node for ForNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        let mut format_res = String::new();
-        format_res.push_str("for ");
-        if let Some(pre) = &self.pre {
-            format_res.push_str(&pre.format(tabs, prefix));
-        }
-        format_res.push_str("; ");
-        format_res.push_str(&self.cond.format(tabs, prefix));
-        if let Some(opt) = &self.opt {
-            format_res.push_str("; ");
-            format_res.push_str(&opt.format(tabs, prefix));
-        }
-        format_res.push_str(" {");
-        format_res.push_str(&self.body.format(tabs + 1, prefix));
-        format_res.push_str(&prefix.repeat(tabs));
-        format_res.push_str("}");
-
-        format_res
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -297,13 +248,11 @@ impl Node for ForNode {
 
 #[range]
 #[comments]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BreakNode {}
 
 impl Node for BreakNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        return "break".to_string();
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line, end);
@@ -324,14 +273,12 @@ impl Node for BreakNode {
 }
 
 #[range]
+#[fmt]
 #[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ContinueNode {}
 
 impl Node for ContinueNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        return "continue".to_string();
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line, end);

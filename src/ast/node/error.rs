@@ -1,13 +1,11 @@
 use super::*;
-use crate::{
-    ast::{ctx::Ctx, diag::ErrorCode},
-    utils::read_config::enter,
-};
+use crate::ast::{ctx::Ctx, diag::ErrorCode};
 
 use colored::Colorize;
-use internal_macro::range;
+use internal_macro::{fmt, range};
 
 #[range]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ErrorNode {
     pub msg: String,
@@ -16,13 +14,6 @@ pub struct ErrorNode {
 }
 
 impl Node for ErrorNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        let mut format_res = String::new();
-        format_res.push_str(enter());
-        format_res.push_str(&self.src);
-        format_res.push_str(enter());
-        format_res
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -32,34 +23,27 @@ impl Node for ErrorNode {
     }
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         let err = ctx.add_err(self.range, self.code);
-        ctx.if_completion(|ctx, a| {
-            if a.0.is_in(self.range) {
-                let completions = ctx.get_completions();
-                ctx.completion_items.set(completions);
-            }
-        });
+        ctx.if_completion(self.range, || ctx.get_completions());
 
         Err(err)
     }
 }
 
-/// # STErrorNode
+/// # StErrorNode
 /// 表现一个因为缺少分号而错误的statement
 #[range]
+#[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct STErrorNode {
+pub struct StErrorNode {
     pub err: ErrorNode,
     pub st: Box<NodeEnum>,
 }
 
-impl Node for STErrorNode {
-    fn format(&self, tabs: usize, prefix: &str) -> String {
-        return self.st.format(tabs, prefix);
-    }
+impl Node for StErrorNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
-        println!("STErrorNode");
+        println!("StErrorNode");
         self.st.print(tabs + 1, false, line.clone());
         self.err.print(tabs + 1, true, line);
     }

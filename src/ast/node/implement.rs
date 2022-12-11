@@ -1,9 +1,10 @@
 use super::*;
-use crate::{ast::ctx::Ctx, utils::read_config::enter};
-use internal_macro::{comments, range};
+use crate::ast::ctx::Ctx;
+use internal_macro::{comments, fmt, range};
 use lsp_types::{DocumentSymbol, SymbolKind};
 
 #[range]
+#[fmt]
 #[comments]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ImplNode {
@@ -12,18 +13,6 @@ pub struct ImplNode {
 }
 
 impl Node for ImplNode {
-    fn format(&self, _tabs: usize, _prefix: &str) -> String {
-        let mut format_res = String::from(enter());
-        format_res.push_str("impl ");
-        format_res.push_str(&self.target.format(0, ""));
-        format_res.push_str(" {");
-        for method in &self.methods {
-            format_res.push_str(&method.format(1, "    "));
-        }
-        format_res.push_str("}");
-        format_res.push_str(enter());
-        format_res
-    }
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -36,6 +25,16 @@ impl Node for ImplNode {
     fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
         _ = self.target.emit_highlight(ctx);
         let mut method_docsymbols = vec![];
+        let tp = self.target.get_type(ctx)?;
+        match &*tp.borrow() {
+            PLType::STRUCT(sttp) => {
+                ctx.send_if_go_to_def(self.target.range(), sttp.range, sttp.path.clone());
+            }
+            _ => {
+                ctx.add_err(self.target.range(), ErrorCode::EXPECT_TYPE);
+            }
+        };
+
         for method in &mut self.methods {
             let res = method.emit(ctx);
             if res.is_err() {
@@ -56,7 +55,7 @@ impl Node for ImplNode {
         ctx.emit_comment_highlight(&self.comments[0]);
         #[allow(deprecated)]
         let docsymbol = DocumentSymbol {
-            name: format!("impl {}", self.target.format(0, "")),
+            name: format!("impl {}", FmtBuilder::generate_node(&self.target)),
             detail: None,
             kind: SymbolKind::OBJECT,
             tags: None,
@@ -65,7 +64,7 @@ impl Node for ImplNode {
             selection_range: self.range.to_diag_range(),
             children: Some(method_docsymbols),
         };
-        ctx.doc_symbols.borrow_mut().push(docsymbol);
+        ctx.plmod.doc_symbols.borrow_mut().push(docsymbol);
         Ok((None, None, TerminatorEnum::NONE))
     }
 }

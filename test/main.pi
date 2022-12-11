@@ -36,7 +36,7 @@ struct struct_child {
 /// }
 /// ```
 fn test_struct() void {
-    let s= struct_father{
+    let s = struct_father{
         a: 2,
         b: 2,
         c: struct_child{
@@ -136,6 +136,7 @@ fn test_const() void {
     io::printi64ln(a);
     return;
 }
+
 impl mod1::Mod1 {
     //
     /// ### xxx
@@ -146,6 +147,7 @@ impl mod1::Mod1 {
         io::printi64ln(100101);
         return;
     }
+
 }
 
 /// ANCHOR_END: extern_impl
@@ -164,10 +166,11 @@ fn test_mod_struct() void {
     return;
 }
 
-fn test_loop() void {//12255
+fn test_loop() void {
+    //12255
     let i = 0;
     while i < 7 {
-        if i == 3 {//000002
+        if i == 3 {
             i = 5;
             continue;
         }
@@ -195,6 +198,7 @@ fn ret_atruct() A {
 fn ret_arr() [i64 * 3] {
     return [1, 10000, 3];
 }
+
 //12321
 ///# 123
 /// ~123~
@@ -324,8 +328,9 @@ fn main() i64 {
     test_mod_struct();
     test_loop();
     test_ret_struct_arr();
-    test_ret_struct().a;/// 123
-    let st = test_ret_struct();//
+    test_ret_struct().a;
+    /// 123
+    let st = test_ret_struct();
     io::printi64ln(st.a);
     test_pointer();
     test_primitives();
@@ -394,8 +399,8 @@ fn test_ret_struct() struct_child {
         a: 10
     };
 }
-/// ANCHOR: impl
 
+/// ANCHOR: impl
 impl pointer_struct {
     fn name() void {
         io::printi64ln(100100);
@@ -405,6 +410,7 @@ impl pointer_struct {
     fn name_params(x: i64) void {
         return;
     }
+
 }
 
 /// ANCHOR_END: impl
@@ -419,5 +425,3 @@ fn test_primitives() void {
     utest = utest + 2;
     return;
 }
-//123
-//

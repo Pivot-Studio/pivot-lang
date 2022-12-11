@@ -49,7 +49,7 @@ ProgramNode
  └─ FuncDefNode
      ├─ id: name
      ├─ TypeNameNode
-     │   └─ ExternIDNode
+     │   └─ ExternIdNode
      │       └─ VarNode: void
      └─ StatementsNode
          └─ RetNode
@@ -63,10 +63,10 @@ ProgramNode
  │   ├─ TypedIdentifierNode
  │   │   ├─ id: args
  │   │   └─ TypeNameNode
- │   │       └─ ExternIDNode
+ │   │       └─ ExternIdNode
  │   │           └─ VarNode: i64
  │   ├─ TypeNameNode
- │   │   └─ ExternIDNode
+ │   │   └─ ExternIdNode
  │   │       └─ VarNode: void
  │   └─ StatementsNode
  │       └─ RetNode
@@ -75,7 +75,7 @@ ProgramNode
      └─ TypedIdentifierNode
          ├─ id: y
          └─ TypeNameNode
-             └─ ExternIDNode
+             └─ ExternIdNode
                  └─ VarNode: bool
 ...
 ```
