@@ -1,4 +1,5 @@
 pub mod accumulators;
+pub mod builder;
 pub mod compiler;
 pub mod ctx;
 pub mod diag;

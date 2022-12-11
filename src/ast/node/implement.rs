@@ -22,7 +22,7 @@ impl Node for ImplNode {
             method.print(tabs + 1, false, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
         _ = self.target.emit_highlight(ctx);
         let mut method_docsymbols = vec![];
         let tp = self.target.get_type(ctx)?;

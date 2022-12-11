@@ -28,7 +28,7 @@ impl Node for DefNode {
                 .print(tabs + 1, true, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
         let range = self.range();
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
         if self.exp.is_none() && self.tp.is_none() {
@@ -36,6 +36,7 @@ impl Node for DefNode {
         }
         let mut pltype = None;
         let mut expv = None;
+        let mut exptp = None;
         if let Some(tp) = &self.tp {
             tp.emit_highlight(ctx);
             pltype = Some(tp.get_type(ctx)?);
@@ -57,33 +58,23 @@ impl Node for DefNode {
                 return Err(ctx.add_err(self.range, ErrorCode::TYPE_MISMATCH));
             }
             expv = value;
+            exptp = pltype_opt;
         }
         let pltype = pltype.unwrap();
-        let ditype = pltype.borrow().get_ditype(ctx);
-        let tp = pltype.borrow().get_basic_type_op(ctx);
-        if tp.is_none() || ditype.is_none() {
-            return Err(ctx.add_err(range, ErrorCode::UNDEFINED_TYPE));
-        }
-        let base_type = tp.unwrap();
-        let ptr2value = alloc(ctx, base_type, &self.var.name);
-        let debug_var_info = ctx.dibuilder.create_auto_variable(
-            ctx.discope,
+        let ptr2value = ctx
+            .llbuilder
+            .borrow()
+            .alloc(&self.var.name, &pltype.borrow(), ctx);
+        ctx.llbuilder.borrow().insert_var_declare(
             &self.var.name,
-            ctx.diunit.get_file(),
             self.var.range.start.line as u32,
-            ditype.unwrap(),
-            true,
-            DIFlags::PUBLIC,
-            ditype.unwrap().get_align_in_bits(),
-        );
-        ctx.build_dbg_location(self.var.range.start);
-        ctx.dibuilder.insert_declare_at_end(
+            &pltype.borrow(),
             ptr2value,
-            Some(debug_var_info),
-            None,
-            ctx.builder.get_current_debug_location().unwrap(),
-            ctx.function.unwrap().get_first_basic_block().unwrap(),
+            ctx,
         );
+        ctx.llbuilder
+            .borrow()
+            .build_dbg_location(self.var.range.start);
         ctx.add_symbol(
             self.var.name.clone(),
             ptr2value,
@@ -92,9 +83,12 @@ impl Node for DefNode {
             false,
         )?;
         if let Some(exp) = expv {
-            ctx.build_dbg_location(self.var.range.start);
-            ctx.builder
-                .build_store(ptr2value, ctx.try_load2var(range, exp)?);
+            ctx.llbuilder
+                .borrow()
+                .build_dbg_location(self.var.range.start);
+            ctx.llbuilder
+                .borrow()
+                .build_store(ptr2value, ctx.try_load2var(range, exp, exptp.unwrap())?.0);
         }
         return Ok((None, None, TerminatorEnum::NONE));
     }
@@ -114,7 +108,7 @@ impl Node for AssignNode {
         self.var.print(tabs + 1, false, line.clone());
         self.exp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
         let exp_range = self.exp.range();
         let (ptr, lpltype, _) = self.var.emit(ctx)?;
         let (value, rpltype, _) = self.exp.emit(ctx)?;
@@ -124,11 +118,8 @@ impl Node for AssignNode {
         if ptr.as_ref().unwrap().is_const {
             return Err(ctx.add_err(self.range, ErrorCode::ASSIGN_CONST));
         }
-        let load = ctx.try_load2var(exp_range, value.unwrap())?;
-        ctx.builder.build_store(
-            ptr.unwrap().into_pointer_value(),
-            load.as_basic_value_enum(),
-        );
+        let (load, _) = ctx.try_load2var(exp_range, value.unwrap(), rpltype.unwrap())?;
+        ctx.llbuilder.borrow().build_store(ptr.unwrap().value, load);
         return Ok((None, None, TerminatorEnum::NONE));
     }
 }
@@ -145,7 +136,7 @@ impl Node for EmptyNode {
         tab(tabs, line.clone(), end);
         println!("EmptyNode");
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
         ctx.emit_comment_highlight(&self.comments[0]);
         Ok((None, None, TerminatorEnum::NONE))
     }
@@ -168,7 +159,7 @@ impl Node for StatementsNode {
             statement.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
         let mut terminator = TerminatorEnum::NONE;
         for m in self.statements.iter_mut() {
             if let NodeEnum::Empty(_) = **m {
@@ -183,7 +174,7 @@ impl Node for StatementsNode {
                 continue;
             }
             let pos = m.range().start;
-            ctx.build_dbg_location(pos);
+            ctx.llbuilder.borrow().build_dbg_location(pos);
             let re = m.emit(ctx);
             if re.is_err() {
                 continue;
@@ -192,14 +183,14 @@ impl Node for StatementsNode {
             terminator = terminator_res;
         }
         for root in ctx.roots.clone().borrow().iter() {
-            ctx.gc_rm_root(root.as_basic_value_enum())
+            ctx.llbuilder.borrow().gc_rm_root(*root, ctx)
         }
         Ok((None, None, terminator))
     }
 }
 
 impl StatementsNode {
-    pub fn emit_child<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    pub fn emit_child<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
         let child = &mut ctx.new_child(self.range.start);
         self.emit(child)
     }

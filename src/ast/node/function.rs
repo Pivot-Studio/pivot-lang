@@ -1,9 +1,10 @@
 use super::statement::StatementsNode;
 use super::*;
-use super::{alloc, types::TypedIdentifierNode, Node, TypeNode};
+use super::{types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 use crate::ast::pltype::{eq, FNType, PLType};
+use crate::plv;
 use indexmap::IndexMap;
 use inkwell::debug_info::*;
 use internal_macro::{comments, fmt, range};
@@ -34,7 +35,7 @@ impl Node for FuncCallNode {
             para.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
         // let currscope = ctx.discope;
         let mp = ctx.move_generic_types();
         let id_range = self.id.range();
@@ -112,7 +113,7 @@ impl Node for FuncCallNode {
             if value.is_none() || value_pltype.is_none() {
                 return Ok((None, None, TerminatorEnum::NONE));
             }
-            let load = ctx.try_load2var(pararange, value.unwrap())?;
+            let (load, _) = ctx.try_load2var(pararange, value.unwrap(), value_pltype.unwrap())?;
             let value_pltype = value_pltype.unwrap();
             if !fntype.param_pltypes[i + skip as usize]
                 .clone()
@@ -120,15 +121,13 @@ impl Node for FuncCallNode {
             {
                 return Err(ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH));
             }
-            para_values.push(load.as_basic_value_enum().into());
+            para_values.push(load);
         }
         if fntype.need_gen_code() {
             let block = ctx.block;
-            let f = ctx.function;
             ctx.need_highlight = false;
             let (_, pltype, _) = fntype.node.gen_fntype(ctx, false)?;
             ctx.need_highlight = true;
-            ctx.function = f;
             ctx.position_at_end(block.unwrap());
             let pltype = pltype.unwrap();
             match &*pltype.borrow() {
@@ -138,28 +137,20 @@ impl Node for FuncCallNode {
                 _ => unreachable!(),
             };
         }
-        let function = fntype.get_or_insert_fn(ctx);
-        if let Some(f) = ctx.function {
-            if f.get_subprogram().is_some() {
-                ctx.discope = f.get_subprogram().unwrap().as_debug_info_scope();
-                let pos = self.range().start;
-                // ctx.discope = currscope;
-                ctx.build_dbg_location(pos)
-            }
-        };
-        let ret = ctx.builder.build_call(
-            function,
-            &para_values,
-            format(format_args!("call_{}", RefCell::borrow(&pltype).get_name())).as_str(),
-        );
+        let function = ctx.llbuilder.borrow().get_or_insert_fn_handle(&fntype, ctx);
+        ctx.llbuilder.borrow().try_set_fn_dbg(self.range.start);
+        let ret = ctx
+            .llbuilder
+            .borrow()
+            .build_call(function, false, para_values.iter());
         ctx.save_if_comment_doc_hover(id_range, Some(fntype.doc.clone()));
-        let res = match ret.try_as_basic_value().left() {
+        let res = match ret {
             Some(v) => Ok((
                 {
-                    ctx.nodebug_builder.unset_current_debug_location();
-                    let ptr = alloc(ctx, v.get_type(), "ret_alloc_tmp");
-                    ctx.nodebug_builder.build_store(ptr, v);
-                    Some(ptr.into())
+                    ctx.llbuilder.borrow().rm_curr_debug_location();
+                    let ptr = ctx.llbuilder.borrow().alloc_vtp("ret_alloc_tmp", v, ctx);
+                    ctx.llbuilder.borrow().build_store(ptr, v);
+                    Some(plv!(ptr))
                 },
                 Some({
                     match &*fntype.ret_pltype.get_type(ctx)?.borrow() {
@@ -246,7 +237,7 @@ impl FuncDefNode {
             node: Box::new(self.clone()),
         };
         if self.generics.is_none() {
-            ftp.get_or_insert_fn(ctx);
+            ctx.llbuilder.borrow().get_or_insert_fn_handle(&ftp, ctx);
         }
         let pltype = Rc::new(RefCell::new(PLType::FN(ftp.clone())));
         ctx.set_if_refs_tp(pltype.clone(), self.id.range);
@@ -303,12 +294,12 @@ impl Node for FuncDefNode {
             body.print(tabs + 1, true, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
         self.gen_fntype(ctx, true)
     }
 }
 impl FuncDefNode {
-    fn gen_fntype<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, first: bool) -> NodeResult<'ctx> {
+    fn gen_fntype<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, first: bool) -> NodeResult {
         ctx.save_if_comment_doc_hover(self.id.range, Some(self.doc.clone()));
         ctx.emit_comment_highlight(&self.precom);
         ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
@@ -344,107 +335,88 @@ impl FuncDefNode {
                         }
                     })
                 }
-                fntype.get_or_insert_fn(child)
+                child
+                    .llbuilder
+                    .borrow()
+                    .get_or_insert_fn_handle(&fntype, child)
             };
-            let mut param_ditypes = vec![];
-            for para in self.paralist.iter() {
-                let pltype = para.typenode.get_type(child)?;
-                match &*pltype.borrow() {
-                    PLType::VOID => {
-                        return Err(
-                            child.add_err(para.range, ErrorCode::VOID_TYPE_CANNOT_BE_PARAMETER)
-                        )
-                    }
-                    pltype => {
-                        param_ditypes.push(pltype.get_ditype(child).unwrap());
-                    }
-                };
-            }
             // debug info
-            let subroutine_type = child.dibuilder.create_subroutine_type(
-                child.diunit.get_file(),
-                self.ret.get_type(child)?.borrow().get_ditype(child),
-                &param_ditypes,
-                DIFlags::PUBLIC,
-            );
-            let subprogram = child.dibuilder.create_function(
-                child.diunit.get_file().as_debug_info_scope(),
-                &fntype.append_name_with_generic(fntype.name.clone()),
-                None,
-                child.diunit.get_file(),
-                self.range.start.line as u32,
-                subroutine_type,
-                true,
-                true,
-                self.range.start.line as u32,
-                DIFlags::PUBLIC,
-                false,
-            );
-            funcvalue.set_subprogram(subprogram);
-            child.function = Some(funcvalue);
-            let discope = child.discope;
-            child.discope = subprogram.as_debug_info_scope().clone();
+            // let subroutine_type = child.dibuilder.create_subroutine_type(
+            //     child.diunit.get_file(),
+            //     self.ret.get_type(child)?.borrow().get_ditype(child),
+            //     &param_ditypes,
+            //     DIFlags::PUBLIC,
+            // );
+            // let subprogram = child.dibuilder.create_function(
+            //     child.diunit.get_file().as_debug_info_scope(),
+            //     &fntype.append_name_with_generic(fntype.name.clone()),
+            //     None,
+            //     child.diunit.get_file(),
+            //     self.range.start.line as u32,
+            //     subroutine_type,
+            //     true,
+            //     true,
+            //     self.range.start.line as u32,
+            //     DIFlags::PUBLIC,
+            //     false,
+            // );
+            // funcvalue.set_subprogram(subprogram);
+            // child.function = Some(funcvalue);
+            // // let discope = child.discope;
+            // child.discope = subprogram.as_debug_info_scope().clone();
+            ctx.llbuilder
+                .borrow()
+                .build_sub_program(&self, &fntype, funcvalue, child)?;
             // add block
-            let allocab = child.context.append_basic_block(funcvalue, "alloc");
-            let entry = child.context.append_basic_block(funcvalue, "entry");
-            let return_block = child.context.append_basic_block(funcvalue, "return");
+            let allocab = child.llbuilder.borrow().append_basic_block("alloc");
+            let entry = child.llbuilder.borrow().append_basic_block("entry");
+            let return_block = child.llbuilder.borrow().append_basic_block("return");
             child.position_at_end(return_block);
-            let ret_value_ptr = if funcvalue.get_type().get_return_type().is_some() {
-                let pltype = self.ret.get_type(child)?;
-                let ret_type = {
-                    let op = pltype.borrow().get_basic_type_op(child);
-                    if op.is_none() {
-                        return Ok((None, None, TerminatorEnum::NONE));
-                    }
-                    op.unwrap()
-                };
-                ctx.nodebug_builder.unset_current_debug_location();
-                let retv = alloc(child, ret_type, "retvalue");
-                // 返回值不能在函数结束时从root表移除
-                child.roots.borrow_mut().pop();
-                Some(retv)
-            } else {
-                None
+            let ret_value_ptr = match &*fntype.ret_pltype.get_type(ctx)?.borrow() {
+                _ => {
+                    let pltype = self.ret.get_type(child)?;
+                    ctx.llbuilder.borrow().rm_curr_debug_location();
+                    let retv = child
+                        .llbuilder
+                        .borrow()
+                        .alloc("retvalue", &pltype.borrow(), child);
+                    // 返回值不能在函数结束时从root表移除
+                    child.roots.borrow_mut().pop();
+                    Some(retv)
+                }
+                PLType::VOID => None,
             };
 
             child.return_block = Some((return_block, ret_value_ptr));
             if let Some(ptr) = ret_value_ptr {
-                let value = child.nodebug_builder.build_load(ptr, "load_ret_tmp");
-                child.builder.position_at_end(return_block);
-                child.gc_collect();
-                child.gc_rm_root_current(ptr.as_basic_value_enum());
-                child.nodebug_builder.build_return(Some(&value));
+                let value = child.llbuilder.borrow().build_load(ptr, "load_ret_tmp");
+                child.position_at_end(return_block);
+                child.llbuilder.borrow().gc_collect(child);
+                child.llbuilder.borrow().gc_rm_root_current(ptr, child);
+                child.llbuilder.borrow().build_return(Some(value));
             } else {
-                child.gc_collect();
-                child.nodebug_builder.build_return(None);
+                child.llbuilder.borrow().gc_collect(child);
+                child.llbuilder.borrow().build_return(None);
             };
             child.position_at_end(entry);
             // alloc para
             for (i, para) in fntype.param_pltypes.iter().enumerate() {
-                let basetype = para.get_type(child)?.borrow().get_basic_type(child);
-                let alloca = alloc(child, basetype, &fntype.param_names[i]);
+                let basetype = para.get_type(child)?.borrow();
+                let alloca =
+                    child
+                        .llbuilder
+                        .borrow()
+                        .alloc(&fntype.param_names[i], &basetype, child);
                 // add alloc var debug info
-                let divar = child.dibuilder.create_parameter_variable(
-                    child.discope,
-                    &fntype.param_names[i],
-                    i as u32,
-                    child.diunit.get_file(),
-                    self.range.start.line as u32,
-                    param_ditypes[i],
-                    false,
-                    DIFlags::PUBLIC,
-                );
-                child.build_dbg_location(self.paralist[i].range.start);
-                child.dibuilder.insert_declare_at_end(
+                child.llbuilder.borrow().create_parameter_variable(
+                    &fntype,
+                    self.paralist[i].range.start,
+                    i,
+                    child,
+                    funcvalue,
                     alloca,
-                    Some(divar),
-                    None,
-                    child.builder.get_current_debug_location().unwrap(),
                     allocab,
                 );
-                child
-                    .builder
-                    .build_store(alloca, funcvalue.get_nth_param(i as u32).unwrap());
                 let parapltype = para.get_type(child)?.clone();
                 child
                     .add_symbol(
@@ -457,25 +429,23 @@ impl FuncDefNode {
                     .unwrap();
             }
             // emit body
-            child.builder.unset_current_debug_location();
+            child.llbuilder.borrow().rm_curr_debug_location();
             if self.id.name == "main" {
-                if let Some(inst) = allocab.get_first_instruction() {
-                    child.builder.position_at(allocab, &inst);
-                    child.nodebug_builder.position_at(allocab, &inst);
+                if let Some(inst) = child.llbuilder.borrow().get_first_instruction(allocab) {
+                    child.llbuilder.borrow().position_at(inst);
                 } else {
                     child.position_at_end(allocab);
                 }
                 child.init_global();
-                child.builder.position_at_end(entry);
-                child.nodebug_builder.position_at_end(entry);
+                child.position_at_end(entry);
             }
             let (_, _, terminator) = body.emit(child)?;
             if !terminator.is_return() {
                 return Err(child.add_err(self.range, ErrorCode::FUNCTION_MUST_HAVE_RETURN));
             }
-            child.nodebug_builder.position_at_end(allocab);
-            child.nodebug_builder.build_unconditional_branch(entry);
-            child.discope = discope;
+            child.position_at_end(allocab);
+            child.llbuilder.borrow().build_unconditional_branch(entry);
+            // child.discope = discope;
             child.reset_generic_types(mp);
             return Ok((None, Some(pltype.clone()), TerminatorEnum::NONE));
         }

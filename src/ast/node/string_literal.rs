@@ -1,9 +1,12 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::ast::{
-    ctx::Ctx,
-    node::{deal_line, tab},
-    pltype::{ARRType, PLType, PriType},
+use crate::{
+    ast::{
+        ctx::Ctx,
+        node::{deal_line, tab},
+        pltype::{ARRType, PLType, PriType},
+    },
+    plv,
 };
 
 use inkwell::values::AnyValueEnum;
@@ -26,15 +29,12 @@ impl Node for StringNode {
         println!("StringNode: \"{}\"", self.content);
     }
 
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::STRING, 0);
-        let v: AnyValueEnum = ctx
-            .context
-            .const_string(self.content.as_bytes(), false)
-            .into();
+        let v = ctx.llbuilder.borrow().const_string(&self.content);
         Ok((
             Some({
-                let mut res: PLValue = v.into();
+                let mut res: PLValue = plv!(v);
                 res.set_const(true);
                 res
             }),

@@ -6,6 +6,7 @@ use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{eq, ARRType, Field, GenericType, PLType, STType};
+use crate::plv;
 use indexmap::IndexMap;
 use inkwell::types::BasicType;
 use internal_macro::{comments, fmt, range};
@@ -44,7 +45,7 @@ impl TypeNode for TypeNameNode {
         }
     }
 
-    fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
+    fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult {
         if self.id.is_none() {
             ctx.if_completion(self.range, || ctx.get_type_completions());
             return Err(ctx.add_err(self.range, ErrorCode::EXPECT_TYPE));
@@ -171,7 +172,7 @@ impl TypeNode for ArrayTypeNameNode {
         self.id.print(tabs + 1, false, line.clone());
         self.size.print(tabs + 1, true, line.clone());
     }
-    fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
+    fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult {
         if let NodeEnum::Num(num) = *self.size {
             if let Num::INT(sz) = num.value {
                 let pltype = self.id.get_type(ctx)?;
@@ -226,7 +227,7 @@ impl TypeNode for PointerTypeNode {
         println!("PointerTypeNode");
         self.elm.print(tabs + 1, true, line.clone());
     }
-    fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx> {
+    fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult {
         let pltype = self.elm.get_type(ctx)?;
         let pltype = Rc::new(RefCell::new(PLType::POINTER(pltype)));
         Ok(pltype)
@@ -301,7 +302,7 @@ impl Node for StructDefNode {
         }
     }
 
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
         ctx.emit_comment_highlight(&self.precom);
         ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
         if let Some(generics) = &mut self.generics {
@@ -337,7 +338,8 @@ impl StructDefNode {
             doc: vec![],
             generic_map,
         })));
-        ctx.context
+        ctx.llbuilder
+            .borrow()
             .opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
     }
@@ -392,23 +394,10 @@ impl StructDefNode {
         }
         let newf = order_fields.clone();
         if self.generics.is_none() {
-            let st = ctx
-                .module
-                .get_struct_type(&ctx.plmod.get_full_name(&self.id.name))
-                .unwrap();
-            st.set_body(
-                &order_fields
-                    .into_iter()
-                    .map(|order_field| {
-                        order_field
-                            .typenode
-                            .get_type(ctx)
-                            .unwrap()
-                            .borrow()
-                            .get_basic_type(ctx)
-                    })
-                    .collect::<Vec<_>>(),
-                false,
+            ctx.llbuilder.borrow().add_body_to_struct_type(
+                &ctx.plmod.get_full_name(&self.id.name),
+                &order_fields,
+                ctx,
             );
         }
         ctx.plmod.types = clone_map;
@@ -442,7 +431,7 @@ impl Node for StructInitFieldNode {
         println!("id: {}", self.id.name);
         self.exp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
         let (v, tp, _) = self.exp.emit(ctx)?;
         return Ok((v, tp, TerminatorEnum::NONE));
     }
@@ -471,7 +460,7 @@ impl Node for StructInitNode {
             field.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
         self.typename.emit_highlight(ctx);
         let pltype = self.typename.get_type(ctx)?;
         ctx.set_if_refs_tp(pltype.clone(), self.typename.range());
@@ -501,7 +490,8 @@ impl Node for StructInitNode {
             if value.is_none() || value_pltype.is_none() {
                 return Err(ctx.add_err(field_exp_range, ErrorCode::EXPECT_VALUE));
             }
-            let value = ctx.try_load2var(field_exp_range, value.unwrap())?;
+            let (value, _) =
+                ctx.try_load2var(field_exp_range, value.unwrap(), value_pltype.unwrap())?;
             let value_pltype = value_pltype.unwrap();
             if !field.typenode.eq_or_infer(ctx, value_pltype)? {
                 return Err(ctx.add_err(fieldinit.range, ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH));
@@ -520,18 +510,22 @@ impl Node for StructInitNode {
             }
         }
         let pltype = Rc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
-        let tp = sttype.struct_type(ctx).as_basic_type_enum().clone();
-        let struct_pointer = alloc(ctx, tp, "initstruct");
+        // let tp = sttype.struct_type(ctx).as_basic_type_enum().clone();
+        let struct_pointer =
+            ctx.llbuilder
+                .borrow()
+                .alloc("initstruct", &PLType::STRUCT(sttype), ctx); //alloc(ctx, tp, "initstruct");
         field_init_values.iter().for_each(|(index, value)| {
             let fieldptr = ctx
-                .builder
+                .llbuilder
+                .borrow()
                 .build_struct_gep(struct_pointer, *index, "fieldptr")
                 .unwrap();
-            ctx.builder.build_store(fieldptr, *value);
+            ctx.llbuilder.borrow().build_store(fieldptr, *value);
         });
         ctx.reset_generic_types(mp);
         return Ok((
-            Some(struct_pointer.into()),
+            Some(plv!(struct_pointer)),
             Some(pltype.clone()),
             TerminatorEnum::NONE,
         ));
@@ -558,8 +552,8 @@ impl Node for ArrayInitNode {
             exp.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let mut exps = Vec::<BasicValueEnum<'ctx>>::new();
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
+        let mut exps = Vec::new();
         let mut tp0 = None;
 
         for exp in self.exps.iter_mut() {
@@ -571,25 +565,32 @@ impl Node for ArrayInitNode {
             } else if tp0 != tp {
                 return Err(ctx.add_err(range, ErrorCode::ARRAY_TYPE_NOT_MATCH));
             }
-            exps.push(ctx.try_load2var(range, v.unwrap())?.as_basic_value_enum());
+            let tp = tp.unwrap();
+            exps.push(ctx.try_load2var(range, v.unwrap(), tp)?);
         }
         if tp0.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::ARRAY_INIT_EMPTY));
         }
-        let tp = exps[0].get_type();
+        let tp = exps[0].1;
         let sz = exps.len() as u32;
-        let arr = alloc(ctx, tp.array_type(sz).as_basic_type_enum(), "array_alloca");
+        let arr = ctx.llbuilder.borrow().alloc(
+            "array_alloca",
+            &PLType::ARR(ARRType {
+                element_type: tp,
+                size: exps.len() as u32,
+            }),
+            ctx,
+        );
 
-        for (i, v) in exps.into_iter().enumerate() {
-            let index = &[
-                ctx.context.i64_type().const_int(0 as u64, false),
-                ctx.context.i64_type().const_int(i as u64, false),
-            ];
-            let ptr = unsafe { ctx.builder.build_in_bounds_gep(arr, index, "elem_ptr") };
-            ctx.builder.build_store(ptr, v);
+        for (i, (v, _)) in exps.into_iter().enumerate() {
+            let ptr = ctx
+                .llbuilder
+                .borrow()
+                .build_const_in_bounds_gep(arr, &[0, 1], "elem_ptr");
+            ctx.llbuilder.borrow().build_store(ptr, v);
         }
         return Ok((
-            Some(arr.into()),
+            Some(plv!(arr)),
             Some(Rc::new(RefCell::new(PLType::ARR(ARRType {
                 element_type: tp0.unwrap(),
                 size: sz,
@@ -610,7 +611,7 @@ impl Node for GenericDefNode {
         todo!()
     }
 
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
         for g in self.generics.iter() {
             ctx.push_semantic_token(g.range, SemanticTokenType::TYPE, 0);
         }
@@ -648,7 +649,7 @@ impl Node for GenericParamNode {
         todo!()
     }
 
-    fn emit<'a, 'ctx>(&mut self, _: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, _: &mut Ctx<'a, 'ctx>) -> NodeResult {
         return Ok((None, None, TerminatorEnum::NONE));
     }
 }

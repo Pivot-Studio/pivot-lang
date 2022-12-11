@@ -44,7 +44,7 @@ impl Node for ProgramNode {
             statement.print(tabs, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
         // emit structs
         for def in self.structs.iter() {
             // 提前加入占位符号，解决自引用问题
@@ -370,7 +370,6 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     }
     ctx.plmod.submods = params.submods(db);
     let m = &mut ctx;
-    m.module.set_triple(&TargetMachine::get_default_triple());
     let node = params.node(db);
     let mut nn = node.node(db);
     let _ = nn.emit(m);
@@ -382,7 +381,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         ),
     );
     if params.params(db).is_compile(db) {
-        ctx.dibuilder.finalize();
+        ctx.llbuilder.borrow().finalize_debug();
         let mut hasher = DefaultHasher::new();
         params.fullpath(db).hash(&mut hasher);
         let hashed = format!(
@@ -396,8 +395,8 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let pp = Path::new(&hashed).with_extension("bc");
         let ll = Path::new(&hashed).with_extension("ll");
         let p = pp.as_path();
-        ctx.module.print_to_file(ll).unwrap();
-        ctx.module.write_bitcode_to_path(p);
+        ctx.llbuilder.borrow().print_to_file(ll).unwrap();
+        ctx.llbuilder.borrow().write_bitcode_to_path(p);
         ModBuffer::push(db, p.clone().to_path_buf());
     }
     ModWrapper::new(db, ctx.plmod)

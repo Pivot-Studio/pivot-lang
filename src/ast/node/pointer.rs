@@ -1,5 +1,8 @@
 use super::*;
-use crate::ast::{ctx::Ctx, diag::ErrorCode};
+use crate::{
+    ast::{ctx::Ctx, diag::ErrorCode},
+    plv,
+};
 use internal_macro::{comments, fmt, range};
 
 #[range]
@@ -24,7 +27,7 @@ impl Node for PointerOpNode {
         println!("PointerOpNode");
         self.value.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
         let (value, mut tp, _) = self.value.emit(ctx)?;
         let value = value.unwrap();
         let value = match self.op {
@@ -34,27 +37,36 @@ impl Node for PointerOpNode {
                 }
                 if let PLType::POINTER(tp1) = &*tp.unwrap().borrow() {
                     tp = Some(tp1.clone());
-                    ctx.builder.build_load(value.into_pointer_value(), "deref")
+                    ctx.llbuilder.borrow().build_load(value.value, "deref")
                 } else {
                     return Err(ctx.add_err(self.range, ErrorCode::NOT_A_POINTER));
                 }
             }
             PointerOpEnum::ADDR => {
+                let mut isptr = false;
                 if tp.is_some() {
+                    if let PLType::POINTER(_) = &*tp.unwrap().borrow() {
+                        isptr = true;
+                    }
                     tp = Some(Rc::new(RefCell::new(PLType::POINTER(tp.unwrap()))));
                 }
                 if value.is_const {
                     return Err(ctx.add_err(self.range, ErrorCode::CAN_NOT_REF_CONSTANT));
                 }
-                let val: BasicValueEnum = value.value.try_into().unwrap();
-                if !val.is_pointer_value() {
+                let val = value.value;
+                if !isptr {
                     return Err(ctx.add_err(self.range, ErrorCode::CAN_NOT_REF_CONSTANT));
                 }
-                let v = alloc(ctx, val.get_type(), "addr");
-                ctx.builder.build_store(v, ctx.mv2heap(val));
+                let v = ctx
+                    .llbuilder
+                    .borrow()
+                    .alloc("addr", &tp.unwrap().borrow(), ctx);
+                ctx.llbuilder
+                    .borrow()
+                    .build_store(v, ctx.llbuilder.borrow().mv2heap(val, ctx));
                 v.into()
             }
         };
-        Ok((Some(value.into()), tp, TerminatorEnum::NONE))
+        Ok((Some(plv!(value)), tp, TerminatorEnum::NONE))
     }
 }

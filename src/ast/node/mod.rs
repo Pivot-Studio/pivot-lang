@@ -28,10 +28,11 @@ use self::statement::*;
 use self::string_literal::StringNode;
 use self::types::*;
 
+use super::builder::ValueHandle;
 use super::ctx::PLDiag;
 use super::diag::ErrorCode;
 use super::fmt::FmtBuilder;
-use super::pltype::PLType;
+use super::pltype::{PLType, PriType};
 use super::range::{Pos, Range};
 
 pub mod comment;
@@ -72,6 +73,16 @@ impl TerminatorEnum {
         }
     }
 }
+#[macro_export]
+macro_rules! plv {
+    ($e:expr) => {
+        PLValue {
+            value: $e,
+            is_const: true,
+            receiver: None,
+        }
+    };
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[enum_dispatch(TypeNode, RangeTrait, FmtTrait)]
@@ -84,7 +95,7 @@ pub enum TypeNodeEnum {
 pub trait TypeNode: RangeTrait + AsAny + FmtTrait {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     /// 重要：这个函数不要干lsp相关操作，只用来获取type
-    fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult<'ctx>;
+    fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult;
     fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>);
     fn eq_or_infer<'a, 'ctx>(
         &self,
@@ -92,7 +103,7 @@ pub trait TypeNode: RangeTrait + AsAny + FmtTrait {
         pltype: Rc<RefCell<PLType>>,
     ) -> Result<bool, PLDiag>;
 }
-type TypeNodeResult<'ctx> = Result<Rc<RefCell<PLType>>, PLDiag>;
+type TypeNodeResult = Result<Rc<RefCell<PLType>>, PLDiag>;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 #[enum_dispatch(Node, RangeTrait, FmtTrait)]
@@ -150,59 +161,36 @@ pub trait FmtTrait {
 #[enum_dispatch]
 pub trait Node: RangeTrait + AsAny + FmtTrait {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx>;
+    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult;
 }
 // ANCHOR_END: node
-pub type NodeResult<'ctx> = Result<
+pub type NodeResult = Result<
     (
-        Option<PLValue<'ctx>>,
+        Option<PLValue>,
         Option<Rc<RefCell<PLType>>>, //type
         TerminatorEnum,
     ),
     PLDiag,
 >;
-pub struct PLValue<'ctx> {
-    pub value: AnyValueEnum<'ctx>,
+pub struct PLValue {
+    pub value: ValueHandle,
     pub is_const: bool,
-    pub receiver: Option<PointerValue<'ctx>>,
+    pub receiver: Option<ValueHandle>,
 }
-impl<'ctx> PLValue<'ctx> {
-    pub fn into_pointer_value(&self) -> PointerValue<'ctx> {
-        self.value.into_pointer_value()
-    }
-    pub fn into_int_value(&self) -> IntValue<'ctx> {
-        self.value.into_int_value()
-    }
-    pub fn into_function_value(&self) -> FunctionValue<'ctx> {
-        self.value.into_function_value()
-    }
+impl PLValue {
+    // pub fn into_pointer_value(&self) -> PointerValue<'ctx> {
+    //     self.value.into_pointer_value()
+    // }
+    // pub fn into_int_value(&self) -> IntValue<'ctx> {
+    //     self.value.into_int_value()
+    // }
+    // pub fn into_function_value(&self) -> FunctionValue<'ctx> {
+    //     self.value.into_function_value()
+    // }
     pub fn set_const(&mut self, is_const: bool) {
         self.is_const = is_const;
     }
 }
-macro_rules! impl_plvalue_into {
-    ($($args:ident),*) => (
-        $(
-            impl<'ctx> From<$args<'ctx>> for PLValue<'ctx> {
-                fn from(value: $args<'ctx>) -> Self {
-                    Self {
-                        value: value.into(),
-                        is_const: false,
-                        receiver: None,
-                    }
-                }
-            }
-        )*
-    );
-}
-impl_plvalue_into!(
-    FunctionValue,
-    FloatValue,
-    IntValue,
-    PointerValue,
-    AnyValueEnum,
-    BasicValueEnum
-);
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Num {
     INT(u64),
@@ -214,19 +202,6 @@ impl Eq for Num {
 }
 
 impl<'a, 'ctx> Ctx<'a, 'ctx> {
-    pub fn position_at_end(&mut self, block: BasicBlock<'ctx>) {
-        position_at_end(self, block)
-    }
-    pub fn build_dbg_location(&mut self, pos: Pos) {
-        let loc = self.dibuilder.create_debug_location(
-            self.context,
-            pos.line as u32,
-            pos.column as u32,
-            self.discope,
-            None,
-        );
-        self.builder.set_current_debug_location(self.context, loc);
-    }
     fn emit_comment_highlight(&mut self, comments: &Vec<Box<NodeEnum>>) {
         for com in comments {
             self.push_semantic_token(com.range(), SemanticTokenType::COMMENT, 0);
@@ -236,7 +211,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         &mut self,
         node: &mut Box<NodeEnum>,
         expect: Option<Rc<RefCell<PLType>>>,
-    ) -> NodeResult<'ctx> {
+    ) -> NodeResult {
         if expect.is_none() {
             return node.emit(self);
         }
@@ -250,28 +225,35 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 let num = numnode.value;
                 // TODO: check overflow
                 let v = match num {
-                    Num::INT(i) => {
-                        if !expect.borrow().get_basic_type(self).is_int_type() {
-                            return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH));
+                    Num::INT(i) => match &*expect.borrow() {
+                        PLType::PRIMITIVE(tp) => {
+                            let sign_ext = match tp {
+                                PriType::I8
+                                | PriType::I16
+                                | PriType::I32
+                                | PriType::I64
+                                | PriType::I128 => true,
+                                PriType::U128
+                                | PriType::U64
+                                | PriType::U32
+                                | PriType::U16
+                                | PriType::U8 => false,
+                                _ => return Err(self.add_err(range, ErrorCode::TYPE_MISMATCH)),
+                            };
+                            let int = self.llbuilder.borrow().int_value(tp, i, sign_ext);
+                            int
                         }
-                        let int = expect
-                            .borrow()
-                            .get_basic_type(self)
-                            .into_int_type()
-                            .const_int(i, false);
-                        int.as_any_value_enum()
-                    }
-                    Num::FLOAT(f) => {
-                        if !expect.borrow().get_basic_type(self).is_float_type() {
-                            return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH));
-                        }
-                        let float = expect
-                            .borrow()
-                            .get_basic_type(self)
-                            .into_float_type()
-                            .const_float(f);
-                        float.as_any_value_enum()
-                    }
+                        _ => return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH)),
+                    },
+                    Num::FLOAT(f) => match &*expect.borrow() {
+                        PLType::PRIMITIVE(tp) => match tp {
+                            PriType::F32 | PriType::F64 => {
+                                self.llbuilder.borrow().float_value(tp, f)
+                            }
+                            _ => return Err(self.add_err(range, ErrorCode::TYPE_MISMATCH)),
+                        },
+                        _ => return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH)),
+                    },
                 };
                 self.push_semantic_token(numnode.range(), SemanticTokenType::NUMBER, 0);
                 self.emit_comment_highlight(&pri.comments[1]);
@@ -320,11 +302,6 @@ pub fn tab(tabs: usize, line: Vec<bool>, end: bool) {
     }
 }
 
-pub fn position_at_end<'a, 'b>(ctx: &mut Ctx<'b, 'a>, block: BasicBlock<'a>) {
-    ctx.builder.position_at_end(block);
-    ctx.block = Some(block);
-    ctx.nodebug_builder.position_at_end(block);
-}
 /**
  * 函数参数format
  */
@@ -352,25 +329,53 @@ pub fn print_params(paralist: &[Box<TypedIdentifierNode>]) -> String {
     return str;
 }
 
-pub fn alloc<'a, 'ctx>(
-    ctx: &mut Ctx<'a, 'ctx>,
-    tp: BasicTypeEnum<'ctx>,
-    name: &str,
-) -> PointerValue<'ctx> {
-    let builder = ctx.nodebug_builder;
-    ctx.block = Some(builder.get_insert_block().unwrap());
-    match ctx.function.unwrap().get_first_basic_block() {
-        Some(alloca) => {
-            builder.position_at_end(alloca);
-            let p = builder.build_alloca(tp, name);
-            ctx.gc_add_root(p.as_basic_value_enum(), builder);
-            ctx.roots.borrow_mut().push(p.as_basic_value_enum());
-            builder.position_at_end(ctx.block.unwrap());
-            p
-        }
-        None => panic!("alloc get entry failed!"),
-    }
-}
+// pub fn pl_alloc<'a, 'ctx>(
+//     ctx: &mut Ctx<'a, 'ctx>,
+//     tp: &PLType,
+//     name: &str,
+//     range: Range,
+// ) -> Result<(), PLDiag> {
+//     let builder = ctx.nodebug_builder;
+//     ctx.block = Some(builder.get_insert_block().unwrap());
+//     match ctx.function.unwrap().get_first_basic_block() {
+//         Some(alloca) => {
+//             builder.position_at_end(alloca);
+//             let tp = if let Some(tp) = tp.get_basic_type_op(ctx) {
+//                 tp
+//             } else {
+//                 return Err(ctx.add_err(range, ErrorCode::UNDEFINED_TYPE));
+//             };
+
+//             let p = builder.build_alloca(tp, name);
+//             ctx.gc_add_root(p.as_basic_value_enum(), builder);
+//             ctx.roots.borrow_mut().push(p.as_basic_value_enum());
+//             builder.position_at_end(ctx.block.unwrap());
+//             Ok(())
+//         }
+//         None => panic!("alloc get entry failed!"),
+//     }
+// }
+
+// #[deprecated = "use `pl_alloc` instead"]
+// pub fn alloc<'a, 'ctx>(
+//     ctx: &mut Ctx<'a, 'ctx>,
+//     tp: BasicTypeEnum<'ctx>,
+//     name: &str,
+// ) -> PointerValue<'ctx> {
+//     let builder = ctx.nodebug_builder;
+//     ctx.block = Some(builder.get_insert_block().unwrap());
+//     match ctx.function.unwrap().get_first_basic_block() {
+//         Some(alloca) => {
+//             builder.position_at_end(alloca);
+//             let p = builder.build_alloca(tp, name);
+//             ctx.gc_add_root(p.as_basic_value_enum(), builder);
+//             ctx.roots.borrow_mut().push(p.as_basic_value_enum());
+//             builder.position_at_end(ctx.block.unwrap());
+//             p
+//         }
+//         None => panic!("alloc get entry failed!"),
+//     }
+// }
 
 #[macro_export]
 macro_rules! handle_calc {
@@ -379,12 +384,12 @@ macro_rules! handle_calc {
             match *$lpltype.clone().unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::I128|PriType::I64|PriType::I32|PriType::I16|PriType::I8|
                     PriType::U128|PriType::U64|PriType::U32|PriType::U16|PriType::U8) => {
-                    return Ok((Some($ctx.builder.[<build_int_$op>](
-                        $left.into_int_value(), $right.into_int_value(), "addtmp").into()),Some($lpltype.unwrap()),TerminatorEnum::NONE));
+                    return Ok((Some(plv!( $ctx.llbuilder.borrow().[<build_int_$op>](
+                        $left, $right, "addtmp"))),Some($lpltype.unwrap()),TerminatorEnum::NONE));
                 },
                 PLType::PRIMITIVE(PriType::F64|PriType::F32) => {
-                    return Ok((Some($ctx.builder.[<build_$opf>](
-                        $left.into_float_value(), $right.into_float_value(), "addtmp").into()),Some($lpltype.unwrap()),TerminatorEnum::NONE));
+                    return Ok((Some(plv!( $ctx.llbuilder.borrow().[<build_$opf>](
+                        $left, $right, "addtmp"))),Some($lpltype.unwrap()),TerminatorEnum::NONE));
                 },
                 _ =>  return Err($ctx.add_err(
                     $range,
