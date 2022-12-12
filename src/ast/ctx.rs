@@ -1,20 +1,30 @@
+use super::builder::BlockHandle;
+use super::builder::LLVMBuilder;
+use super::builder::ValueHandle;
+use super::compiler::get_target_machine;
+use super::diag::{ErrorCode, WarnCode};
+use super::diag::{ERR_MSG, WARN_MSG};
+use super::node::NodeEnum;
+use super::node::PLValue;
+use super::pltype::add_primitive_types;
+use super::pltype::FNType;
+use super::pltype::PLType;
+use super::pltype::PriType;
+use super::pltype::STType;
+use super::range::Pos;
+use super::range::Range;
 use crate::lsp::semantic_tokens::type_index;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::utils::read_config::Config;
 use crate::Db;
 use colored::Colorize;
-use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::debug_info::*;
 use inkwell::module::FlagBehavior;
-use inkwell::module::Linkage;
 use inkwell::module::Module;
 use inkwell::targets::TargetMachine;
-use inkwell::values::BasicValueEnum;
-use inkwell::values::FunctionValue;
-use inkwell::values::PointerValue;
-use inkwell::values::{AnyValueEnum, BasicMetadataValueEnum};
+use inkwell::values::BasicMetadataValueEnum;
 use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
@@ -41,24 +51,6 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
-
-use super::builder::BlockHandle;
-use super::builder::LLVMBuilder;
-use super::builder::ValueHandle;
-use super::compiler::get_target_machine;
-use super::diag::{ErrorCode, WarnCode};
-use super::diag::{ERR_MSG, WARN_MSG};
-use super::node::pkg::ExternIdNode;
-use super::node::types::TypeNameNode;
-use super::node::NodeEnum;
-use super::node::PLValue;
-use super::pltype::add_primitive_types;
-use super::pltype::FNType;
-use super::pltype::PLType;
-use super::pltype::PriType;
-use super::pltype::STType;
-use super::range::Pos;
-use super::range::Range;
 /// # Ctx
 /// Context for code generation
 pub struct Ctx<'a> {
@@ -68,20 +60,6 @@ pub struct Ctx<'a> {
     pub father: Option<&'a Ctx<'a>>, // father context, for symbol lookup
     pub function: Option<ValueHandle>, // current function
     pub init_func: Option<ValueHandle>, //init function,call first in main
-    // pub llbuilder: RefCell<LLVMBuilder<'a, 'ctx>>,
-    // pub context: &'ctx Context,            // llvm context
-    // pub builder: &'a Builder<'ctx>,        // llvm builder
-    // pub module: &'a Module<'ctx>,          // llvm module
-    // pub dibuilder: &'a DebugInfoBuilder<'ctx>, // debug info builder
-    // pub diunit: &'a DICompileUnit<'ctx>,   // debug info unit
-    // pub function: Option<FunctionValue<'ctx>>, // current function
-    // pub block: Option<BasicBlock<'ctx>>,   // current block
-    // pub continue_block: Option<BasicBlock<'ctx>>, // the block to jump when continue
-    // pub break_block: Option<BasicBlock<'ctx>>, // the block to jump to when break
-    // pub return_block: Option<(BasicBlock<'ctx>, Option<PointerValue<'ctx>>)>, // the block to jump to when return and value
-    // pub targetmachine: &'a TargetMachine, // might be used in debug info
-    // pub discope: DIScope<'ctx>,           // debug info scope
-    // pub nodebug_builder: &'a Builder<'ctx>, // builder without debug info
     pub roots: RefCell<Vec<ValueHandle>>,
     pub block: Option<BlockHandle>,          // current block
     pub continue_block: Option<BlockHandle>, // the block to jump when continue
@@ -482,7 +460,7 @@ impl PLDiag {
     }
 }
 
-pub fn create_ctx_info<'ctx>(
+pub fn create_llvm_deps<'ctx>(
     context: &'ctx Context,
     dir: &str,
     file: &str,
@@ -492,7 +470,6 @@ pub fn create_ctx_info<'ctx>(
     DebugInfoBuilder<'ctx>,
     DICompileUnit<'ctx>,
     TargetMachine,
-    Builder<'ctx>,
 ) {
     let builder = context.create_builder();
     let module = context.create_module("main");
@@ -525,14 +502,7 @@ pub fn create_ctx_info<'ctx>(
         module.add_metadata_flag("CodeView", FlagBehavior::Warning, metacv); // TODO: is this needed for windows debug?
     }
     let tm = get_target_machine(inkwell::OptimizationLevel::None);
-    (
-        module,
-        builder,
-        dibuilder,
-        compile_unit,
-        tm,
-        context.create_builder(),
-    )
+    (module, builder, dibuilder, compile_unit, tm)
 }
 
 impl<'a, 'ctx> Ctx<'a> {
@@ -589,7 +559,7 @@ impl<'a, 'ctx> Ctx<'a> {
         add_primitive_types(&mut ctx);
         ctx
     }
-    pub fn new_child(&'a self, start: Pos) -> Ctx<'a> {
+    pub fn new_child(&'a self, start: Pos, builder: &'a LLVMBuilder<'a, 'ctx>) -> Ctx<'a> {
         let mut ctx = Ctx {
             need_highlight: self.need_highlight,
             generic_types: FxHashMap::default(),
@@ -612,6 +582,7 @@ impl<'a, 'ctx> Ctx<'a> {
             function: self.function.clone(),
         };
         add_primitive_types(&mut ctx);
+        builder.new_subscope(start);
         ctx
     }
     pub fn tmp_child_ctx(&'a self) -> Ctx<'a> {
@@ -766,11 +737,11 @@ impl<'a, 'ctx> Ctx<'a> {
             self.init_global_walk(&sub, &mut set, builder);
         }
         let a: &[ValueHandle] = &[];
+        builder.rm_curr_debug_location();
         builder.build_call(
             builder
                 .get_function(&self.plmod.get_full_name("__init_global"))
                 .unwrap(),
-            false,
             a.iter(),
         );
     }
@@ -789,7 +760,8 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         let f = builder.add_function(&name, &[], PLType::VOID, self);
         let a: &[ValueHandle] = &[];
-        builder.build_call(f, false, a.iter());
+        builder.rm_curr_debug_location();
+        builder.build_call(f, a.iter());
         set.insert(name);
     }
 

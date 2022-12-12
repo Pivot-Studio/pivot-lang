@@ -58,7 +58,7 @@ impl Node for IfNode {
         }
         ctx.position_at_end(else_block, builder);
         let terminator = if let Some(el) = &mut self.els {
-            let mut child = ctx.new_child(el.range().start);
+            let mut child = ctx.new_child(el.range().start, builder);
             let (_, _, else_terminator) = el.emit(&mut child, builder)?;
             if else_terminator.is_none() {
                 builder.build_unconditional_branch(after_block);
@@ -104,7 +104,7 @@ impl Node for WhileNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b LLVMBuilder<'a, 'ctx>,
     ) -> NodeResult {
-        let ctx = &mut ctx.new_child(self.range.start);
+        let ctx = &mut ctx.new_child(self.range.start, builder);
         let cond_block = builder.append_basic_block(ctx.function.unwrap(), "while.cond");
         let body_block = builder.append_basic_block(ctx.function.unwrap(), "while.body");
         let after_block = builder.append_basic_block(ctx.function.unwrap(), "while.after");
@@ -169,7 +169,7 @@ impl Node for ForNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b LLVMBuilder<'a, 'ctx>,
     ) -> NodeResult {
-        let ctx = &mut ctx.new_child(self.range.start);
+        let ctx = &mut ctx.new_child(self.range.start, builder);
         let pre_block = builder.append_basic_block(ctx.function.unwrap(), "for.pre");
         let cond_block = builder.append_basic_block(ctx.function.unwrap(), "for.cond");
         let opt_block = builder.append_basic_block(ctx.function.unwrap(), "for.opt");

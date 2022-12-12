@@ -5,12 +5,7 @@ use crate::ast::ctx::Ctx;
 
 use as_any::AsAny;
 use enum_dispatch::enum_dispatch;
-use inkwell::basic_block::BasicBlock;
-use inkwell::types::BasicTypeEnum;
-use inkwell::values::{
-    AnyValue, AnyValueEnum, BasicValue, BasicValueEnum, FloatValue, FunctionValue, IntValue,
-    PointerValue,
-};
+
 use lsp_types::SemanticTokenType;
 
 use self::comment::CommentNode;
@@ -336,54 +331,6 @@ pub fn print_params(paralist: &[Box<TypedIdentifierNode>]) -> String {
     }
     return str;
 }
-
-// pub fn pl_alloc<'a, 'ctx>(
-//     ctx: &mut Ctx<'a>,
-//     tp: &PLType,
-//     name: &str,
-//     range: Range,
-// ) -> Result<(), PLDiag> {
-//     let builder = ctx.nodebug_builder;
-//     ctx.block = Some(builder.get_insert_block().unwrap());
-//     match ctx.function.unwrap().get_first_basic_block() {
-//         Some(alloca) => {
-//             builder.position_at_end(alloca);
-//             let tp = if let Some(tp) = tp.get_basic_type_op(ctx) {
-//                 tp
-//             } else {
-//                 return Err(ctx.add_err(range, ErrorCode::UNDEFINED_TYPE));
-//             };
-
-//             let p = builder.build_alloca(tp, name);
-//             ctx.gc_add_root(p.as_basic_value_enum(), builder);
-//             ctx.roots.borrow_mut().push(p.as_basic_value_enum());
-//             builder.position_at_end(ctx.block.unwrap());
-//             Ok(())
-//         }
-//         None => panic!("alloc get entry failed!"),
-//     }
-// }
-
-// #[deprecated = "use `pl_alloc` instead"]
-// pub fn alloc<'a, 'ctx>(
-//     ctx: &mut Ctx<'a>,
-//     tp: BasicTypeEnum<'ctx>,
-//     name: &str,
-// ) -> PointerValue<'ctx> {
-//     let builder = ctx.nodebug_builder;
-//     ctx.block = Some(builder.get_insert_block().unwrap());
-//     match ctx.function.unwrap().get_first_basic_block() {
-//         Some(alloca) => {
-//             builder.position_at_end(alloca);
-//             let p = builder.build_alloca(tp, name);
-//             ctx.gc_add_root(p.as_basic_value_enum(), builder);
-//             ctx.roots.borrow_mut().push(p.as_basic_value_enum());
-//             builder.position_at_end(ctx.block.unwrap());
-//             p
-//         }
-//         None => panic!("alloc get entry failed!"),
-//     }
-// }
 
 #[macro_export]
 macro_rules! handle_calc {

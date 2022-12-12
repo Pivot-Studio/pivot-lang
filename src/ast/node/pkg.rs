@@ -41,7 +41,7 @@ impl Node for UseNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        _builder: &'b LLVMBuilder<'a, 'ctx>,
     ) -> NodeResult {
         let mut path = PathBuf::from(&ctx.config.root);
         let head = self.ids[0].name.clone();

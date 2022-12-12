@@ -10,7 +10,6 @@ use crate::{
     plv,
 };
 
-use inkwell::values::AnyValueEnum;
 use internal_macro::{fmt, range};
 use lsp_types::SemanticTokenType;
 

@@ -1,6 +1,6 @@
 use super::*;
 use crate::ast::diag::ErrorCode;
-use inkwell::debug_info::AsDIScope;
+
 use internal_macro::{fmt, range};
 use lsp_types::SemanticTokenType;
 #[range]
@@ -31,7 +31,7 @@ impl Node for GlobalNode {
 
         let (value, pltype, _) = self.exp.emit(ctx, builder)?;
         ctx.push_type_hints(self.var.range, pltype.clone().unwrap());
-        let (base_value, tp) =
+        let (base_value, _tp) =
             ctx.try_load2var(exp_range, value.unwrap(), pltype.unwrap(), builder)?;
         let res = ctx.get_symbol(&self.var.name, builder);
         if res.is_none() {

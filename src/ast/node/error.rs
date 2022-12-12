@@ -24,7 +24,7 @@ impl Node for ErrorNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        _builder: &'b LLVMBuilder<'a, 'ctx>,
     ) -> NodeResult {
         let err = ctx.add_err(self.range, self.code);
         ctx.if_completion(self.range, || ctx.get_completions());

@@ -148,7 +148,7 @@ impl Node for FuncCallNode {
         if let Some(f) = ctx.function {
             builder.try_set_fn_dbg(self.range.start, f);
         };
-        let ret = builder.build_call(function, false, para_values.iter());
+        let ret = builder.build_call(function, para_values.iter());
         ctx.save_if_comment_doc_hover(id_range, Some(fntype.doc.clone()));
         let res = match ret {
             Some(v) => Ok((
@@ -343,7 +343,7 @@ impl FuncDefNode {
                 _ => return Ok((None, None, TerminatorEnum::NONE)),
             };
             // add function
-            let child = &mut ctx.new_child(self.range.start);
+            let child = &mut ctx.new_child(self.range.start, builder);
             let mp = child.move_generic_types();
             let funcvalue = {
                 fntype.add_generic_type(child)?;
@@ -359,31 +359,7 @@ impl FuncDefNode {
                 }
                 builder.get_or_insert_fn_handle(&fntype, child)
             };
-            // debug info
-            // let subroutine_type = child.dibuilder.create_subroutine_type(
-            //     child.diunit.get_file(),
-            //     self.ret.get_type(child)?.borrow().get_ditype(child),
-            //     &param_ditypes,
-            //     DIFlags::PUBLIC,
-            // );
-            // let subprogram = child.dibuilder.create_function(
-            //     child.diunit.get_file().as_debug_info_scope(),
-            //     &fntype.append_name_with_generic(fntype.name.clone()),
-            //     None,
-            //     child.diunit.get_file(),
-            //     self.range.start.line as u32,
-            //     subroutine_type,
-            //     true,
-            //     true,
-            //     self.range.start.line as u32,
-            //     DIFlags::PUBLIC,
-            //     false,
-            // );
-            // funcvalue.set_subprogram(subprogram);
             child.function = Some(funcvalue);
-
-            // // let discope = child.discope;
-            // child.discope = subprogram.as_debug_info_scope().clone();
             builder.build_sub_program(paras, ret, &fntype, funcvalue, child)?;
             // add block
             let allocab = builder.append_basic_block(funcvalue, "alloc");

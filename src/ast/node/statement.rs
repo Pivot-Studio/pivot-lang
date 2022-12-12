@@ -1,7 +1,7 @@
 use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
-use inkwell::debug_info::*;
+
 use internal_macro::{comments, fmt, range};
 use lsp_types::SemanticTokenType;
 #[range]
@@ -66,14 +66,14 @@ impl Node for DefNode {
         }
         let pltype = pltype.unwrap();
         let ptr2value = builder.alloc(&self.var.name, &pltype.borrow(), ctx);
+        builder.build_dbg_location(self.var.range.start);
         builder.insert_var_declare(
             &self.var.name,
-            self.var.range.start.line as u32,
+            self.var.range.start,
             &pltype.borrow(),
             ptr2value,
             ctx,
         );
-        builder.build_dbg_location(self.var.range.start);
         ctx.add_symbol(
             self.var.name.clone(),
             ptr2value,
@@ -141,7 +141,7 @@ impl Node for EmptyNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        _builder: &'b LLVMBuilder<'a, 'ctx>,
     ) -> NodeResult {
         ctx.emit_comment_highlight(&self.comments[0]);
         Ok((None, None, TerminatorEnum::NONE))
@@ -205,7 +205,7 @@ impl StatementsNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b LLVMBuilder<'a, 'ctx>,
     ) -> NodeResult {
-        let child = &mut ctx.new_child(self.range.start);
+        let child = &mut ctx.new_child(self.range.start, builder);
         self.emit(child, builder)
     }
 }

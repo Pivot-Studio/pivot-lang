@@ -113,9 +113,9 @@ impl Node for BinOpNode {
         if lv.is_none() || rv.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::EXPECT_VALUE));
         }
-        let (left, ltp) =
+        let (left, _ltp) =
             ctx.try_load2var(lrange, lv.unwrap(), lpltype.clone().unwrap(), builder)?;
-        let (right, rtp) = ctx.try_load2var(rrange, rv.unwrap(), rpltype.unwrap(), builder)?;
+        let (right, _rtp) = ctx.try_load2var(rrange, rv.unwrap(), rpltype.unwrap(), builder)?;
         Ok(match self.op {
             TokenType::PLUS => {
                 handle_calc!(ctx, add, float_add, lpltype, left, right, self.range, builder)
@@ -251,13 +251,13 @@ impl Node for TakeOpNode {
         let mut pltype = pltype.unwrap();
         if let Some(id) = &self.field {
             res = match &*pltype.clone().borrow() {
-                PLType::STRUCT(_)|PLType::POINTER(_) => {
+                PLType::STRUCT(_) | PLType::POINTER(_) => {
                     let (tp, s) = ctx.auto_deref(pltype, res.unwrap().value, builder);
                     let headptr = s;
                     pltype = tp;
                     let etype = pltype.clone();
                     let index;
-                    if let PLType::STRUCT(s) = &*etype.borrow() {
+                    if let PLType::STRUCT(_s) = &*etype.borrow() {
                         // end with ".", gen completions
                         ctx.if_completion(id.range, || {
                             if let PLType::STRUCT(s) = &*pltype.clone().borrow() {

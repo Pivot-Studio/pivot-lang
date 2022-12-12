@@ -17,7 +17,7 @@ use inkwell::{
     types::{ArrayType, BasicType, BasicTypeEnum, StructType},
     values::{
         AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue,
-         PointerValue,
+        PointerValue,
     },
     AddressSpace, FloatPredicate, IntPredicate,
 };
@@ -26,7 +26,7 @@ use rustc_hash::FxHashMap;
 use super::{
     ctx::{Ctx, MemberType, PLDiag},
     diag::ErrorCode,
-    node::{ types::TypedIdentifierNode, TypeNode, TypeNodeEnum},
+    node::{types::TypedIdentifierNode, TypeNode, TypeNodeEnum},
     pltype::{ARRType, FNType, Field, PLType, PriType, RetTypeEnum, STType},
     range::{Pos, Range},
 };
@@ -58,14 +58,26 @@ pub struct LLVMBuilder<'a, 'ctx> {
     module: &'a Module<'ctx>,              // llvm module
     dibuilder: &'a DebugInfoBuilder<'ctx>, // debug info builder
     diunit: &'a DICompileUnit<'ctx>,       // debug info unit
-    targetmachine: &'a TargetMachine, // might be used in debug info
-    discope: Cell<DIScope<'ctx>>,     // debug info scope
-    nodebug_builder: &'a Builder<'ctx>, // builder without debug info
+    targetmachine: &'a TargetMachine,      // might be used in debug info
+    discope: Cell<DIScope<'ctx>>,          // debug info scope
     ditypes_placeholder: Rc<RefCell<FxHashMap<String, RefCell<Vec<MemberType<'ctx>>>>>>, // hold the generated debug info type place holder
     ditypes: Rc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
 }
 
 impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
+    pub fn new_subscope(&self, start: Pos) {
+        let scope = self.discope.get();
+        self.discope.set(
+            self.dibuilder
+                .create_lexical_block(
+                    scope,
+                    self.diunit.get_file(),
+                    start.line as u32,
+                    start.column as u32,
+                )
+                .as_debug_info_scope(),
+        );
+    }
     pub fn new(
         context: &'ctx Context,
         module: &'a Module<'ctx>,
@@ -73,7 +85,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         dibuilder: &'a DebugInfoBuilder<'ctx>,
         diunit: &'a DICompileUnit<'ctx>,
         tm: &'a TargetMachine,
-        nodbg_builder: &'a Builder<'ctx>,
     ) -> Self {
         module.set_triple(&TargetMachine::get_default_triple());
         Self {
@@ -84,7 +95,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             diunit,
             targetmachine: tm,
             discope: Cell::new(diunit.get_file().as_debug_info_scope()),
-            nodebug_builder: nodbg_builder,
             ditypes: Rc::new(RefCell::new(FxHashMap::default())),
             ditypes_placeholder: Rc::new(RefCell::new(FxHashMap::default())),
             handle_table: Rc::new(RefCell::new(FxHashMap::default())),
@@ -93,14 +103,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             block_reverse_table: Rc::new(RefCell::new(FxHashMap::default())),
         }
     }
-    fn position_at_end(&self, block: BasicBlock<'ctx>) {
-        self.builder.position_at_end(block);
-        self.nodebug_builder.position_at_end(block);
-    }
     pub fn position_at_end_block(&self, block: BlockHandle) {
         self.builder
-            .position_at_end(self.block_table.borrow()[&block]);
-        self.nodebug_builder
             .position_at_end(self.block_table.borrow()[&block]);
     }
 
@@ -709,15 +713,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         Some(self.get_llvm_value_handle(&f.as_any_value_enum()))
     }
 
-    pub fn build_call<'b, I>(&self, f: ValueHandle, debug: bool, args: I) -> Option<ValueHandle>
+    pub fn build_call<'b, I>(&self, f: ValueHandle, args: I) -> Option<ValueHandle>
     where
         I: Iterator<Item = &'b ValueHandle>,
     {
-        let builder = if debug {
-            self.builder
-        } else {
-            self.nodebug_builder
-        };
+        let builder = self.builder;
         let f = self.get_llvm_value(f).unwrap();
         let f = f.into_function_value();
         let args = args
@@ -771,14 +771,24 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         );
     }
     pub fn alloc(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle {
-        let builder = self.nodebug_builder;
-        match self.builder.get_insert_block().unwrap().get_parent().unwrap().get_first_basic_block() {
+        let builder = self.builder;
+        let lb = builder.get_insert_block().unwrap();
+        match self
+            .builder
+            .get_insert_block()
+            .unwrap()
+            .get_parent()
+            .unwrap()
+            .get_first_basic_block()
+        {
             Some(alloca) => {
                 builder.position_at_end(alloca);
                 let p = builder.build_alloca(self.get_basic_type_op(pltype, ctx).unwrap(), name);
                 self.gc_add_root(p.as_basic_value_enum(), ctx);
-                ctx.roots.borrow_mut().push(self.get_llvm_value_handle(&p.as_any_value_enum()));
-                // builder.position_at_end(ctx.block.unwrap());
+                ctx.roots
+                    .borrow_mut()
+                    .push(self.get_llvm_value_handle(&p.as_any_value_enum()));
+                builder.position_at_end(lb);
                 self.get_llvm_value_handle(&p.as_any_value_enum())
             }
             None => panic!("alloc get entry failed!"),
@@ -878,7 +888,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     pub fn insert_var_declare(
         &self,
         name: &str,
-        line: u32,
+        pos: Pos,
         pltype: &PLType,
         v: ValueHandle,
         ctx: &mut Ctx<'a>,
@@ -888,7 +898,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             self.discope.get(),
             name,
             self.diunit.get_file(),
-            line,
+            pos.line as u32,
             ditype.unwrap(),
             true,
             DIFlags::PUBLIC,
@@ -924,20 +934,14 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
     pub fn position_at(&self, v: ValueHandle) {
         // inkwell hack
-        let v = self
-        .get_llvm_value(v)
-        .unwrap();
+        let v = self.get_llvm_value(v).unwrap();
         let v = if v.is_instruction_value() {
             v.into_instruction_value()
-        }else {
-            let bs:BasicValueEnum = v.try_into().unwrap();
-            bs
-                .as_instruction_value()
-                .unwrap()
+        } else {
+            let bs: BasicValueEnum = v.try_into().unwrap();
+            bs.as_instruction_value().unwrap()
         };
         self.builder.position_at(v.get_parent().unwrap(), &v);
-        self.nodebug_builder
-            .position_at(v.get_parent().unwrap(), &v);
     }
     pub fn finalize_debug(&self) {
         self.dibuilder.finalize();
@@ -1096,7 +1100,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
     pub fn clear_insertion_position(&self) {
         self.builder.clear_insertion_position();
-        self.nodebug_builder.clear_insertion_position();
     }
     pub fn try_set_fn_dbg(&self, pos: Pos, f: ValueHandle) {
         let f = self.get_llvm_value(f).unwrap().into_function_value();
@@ -1231,11 +1234,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         pltp: &PLType,
     ) -> ValueHandle {
         let base_type = self.get_basic_type_op(&pltype.borrow(), ctx).unwrap();
-        let global = self.module.add_global(
-            base_type,
-            None,
-            name,
-        );
+        let global = self.module.add_global(base_type, None, name);
         let ditype = self.get_ditype(pltp, ctx);
         let exp = self.dibuilder.create_global_variable_expression(
             self.diunit.as_debug_info_scope(),

@@ -8,7 +8,7 @@ use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{eq, ARRType, Field, GenericType, PLType, STType};
 use crate::plv;
 use indexmap::IndexMap;
-use inkwell::types::BasicType;
+
 use internal_macro::{comments, fmt, range};
 use lsp_types::SemanticTokenType;
 use rustc_hash::FxHashMap;
@@ -624,7 +624,7 @@ impl Node for ArrayInitNode {
             ctx,
         );
 
-        for (i, (v, _)) in exps.into_iter().enumerate() {
+        for (_i, (v, _)) in exps.into_iter().enumerate() {
             let ptr = builder.build_const_in_bounds_gep(arr, &[0, 1], "elem_ptr");
             builder.build_store(ptr, v);
         }
@@ -653,7 +653,7 @@ impl Node for GenericDefNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        _builder: &'b LLVMBuilder<'a, 'ctx>,
     ) -> NodeResult {
         for g in self.generics.iter() {
             ctx.push_semantic_token(g.range, SemanticTokenType::TYPE, 0);
