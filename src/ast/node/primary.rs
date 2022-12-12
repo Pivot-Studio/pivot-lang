@@ -51,7 +51,7 @@ impl Node for BoolConstNode {
         ctx.push_semantic_token(self.range, SemanticTokenType::KEYWORD, 0);
         Ok((
             Some(plv!(builder.int_value(
-                &PriType::I8,
+                &PriType::BOOL,
                 self.value as u64,
                 true
             ))),

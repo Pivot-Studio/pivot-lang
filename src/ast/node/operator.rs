@@ -66,11 +66,12 @@ impl Node for UnaryOpNode {
                         builder.int_value(&PriType::BOOL, false as u64, true),
                         "nottmp",
                     );
-                    Some(plv!(builder.build_int_z_extend(
-                        bool_origin,
-                        &PriType::BOOL,
-                        "zexttemp"
-                    )))
+                    // Some(plv!(builder.build_int_z_extend(
+                    //     bool_origin,
+                    //     &PriType::BOOL,
+                    //     "zexttemp"
+                    // )))
+                    Some(plv!(bool_origin))
                 },
                 Some(pltype.clone()),
                 TerminatorEnum::NONE,
@@ -150,11 +151,12 @@ impl Node for BinOpNode {
                     {
                         let bool_origin =
                             builder.build_int_compare(self.op.get_op(), left, right, "cmptmp");
-                        Some(plv!(builder.build_int_z_extend(
-                            bool_origin,
-                            &PriType::BOOL,
-                            "zexttemp"
-                        )))
+                        // Some(plv!(builder.build_int_z_extend(
+                        //     bool_origin,
+                        //     &PriType::BOOL,
+                        //     "zexttemp"
+                        // )))
+                        Some(plv!(bool_origin))
                     },
                     Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
@@ -163,11 +165,12 @@ impl Node for BinOpNode {
                     {
                         let bool_origin =
                             builder.build_float_compare(self.op.get_fop(), left, right, "cmptmp");
-                        Some(plv!(builder.build_int_z_extend(
-                            bool_origin,
-                            &PriType::BOOL,
-                            "zexttemp"
-                        )))
+                        // Some(plv!(builder.build_int_z_extend(
+                        //     bool_origin,
+                        //     &PriType::BOOL,
+                        //     "zexttemp"
+                        // )))
+                        Some(plv!(bool_origin))
                     },
                     Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
@@ -178,11 +181,12 @@ impl Node for BinOpNode {
                 PLType::PRIMITIVE(PriType::BOOL) => (
                     {
                         let bool_origin = builder.build_and(left, right, "andtmp");
-                        Some(plv!(builder.build_int_z_extend(
-                            bool_origin,
-                            &PriType::BOOL,
-                            "zext_temp"
-                        )))
+                        // Some(plv!(builder.build_int_z_extend(
+                        //     bool_origin,
+                        //     &PriType::BOOL,
+                        //     "zext_temp"
+                        // )))
+                        Some(plv!(bool_origin))
                     },
                     Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
@@ -193,11 +197,12 @@ impl Node for BinOpNode {
                 PLType::PRIMITIVE(PriType::BOOL) => (
                     {
                         let bool_origin = builder.build_or(left, right, "ortmp");
-                        Some(plv!(builder.build_int_z_extend(
-                            bool_origin,
-                            &PriType::BOOL,
-                            "zext_temp"
-                        )))
+                        // Some(plv!(builder.build_int_z_extend(
+                        //     bool_origin,
+                        //     &PriType::BOOL,
+                        //     "zext_temp"
+                        // )))
+                        Some(plv!(bool_origin))
                     },
                     Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
@@ -246,7 +251,7 @@ impl Node for TakeOpNode {
         let mut pltype = pltype.unwrap();
         if let Some(id) = &self.field {
             res = match &*pltype.clone().borrow() {
-                PLType::POINTER(ptr) => {
+                PLType::STRUCT(_)|PLType::POINTER(_) => {
                     let (tp, s) = ctx.auto_deref(pltype, res.unwrap().value, builder);
                     let headptr = s;
                     pltype = tp;

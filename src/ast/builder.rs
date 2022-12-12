@@ -16,8 +16,8 @@ use inkwell::{
     targets::TargetMachine,
     types::{ArrayType, BasicType, BasicTypeEnum, StructType},
     values::{
-        AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValueEnum, FunctionValue, GlobalValue,
-        PointerValue,
+        AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue,
+         PointerValue,
     },
     AddressSpace, FloatPredicate, IntPredicate,
 };
@@ -26,7 +26,7 @@ use rustc_hash::FxHashMap;
 use super::{
     ctx::{Ctx, MemberType, PLDiag},
     diag::ErrorCode,
-    node::{function::FuncDefNode, types::TypedIdentifierNode, TypeNode, TypeNodeEnum},
+    node::{ types::TypedIdentifierNode, TypeNode, TypeNodeEnum},
     pltype::{ARRType, FNType, Field, PLType, PriType, RetTypeEnum, STType},
     range::{Pos, Range},
 };
@@ -39,7 +39,7 @@ const DW_ATE_BOOLEAN: u32 = 0x02;
 const DW_ATE_FLOAT: u32 = 0x04;
 const DW_ATE_SIGNED: u32 = 0x05;
 const DW_ATE_UNSIGNED: u32 = 0x07;
-const DW_TAG_REFERENCE_TYPE: u32 = 16;
+// const DW_TAG_REFERENCE_TYPE: u32 = 16;
 fn get_dw_ate_encoding<'a, 'ctx>(pritp: &PriType) -> u32 {
     match pritp {
         PriType::I8 | PriType::I16 | PriType::I32 | PriType::I64 | PriType::I128 => DW_ATE_SIGNED,
@@ -58,8 +58,6 @@ pub struct LLVMBuilder<'a, 'ctx> {
     module: &'a Module<'ctx>,              // llvm module
     dibuilder: &'a DebugInfoBuilder<'ctx>, // debug info builder
     diunit: &'a DICompileUnit<'ctx>,       // debug info unit
-    // function: Option<FunctionValue<'ctx>>,  // current function
-    // init_func: Option<FunctionValue<'ctx>>, //init function,call first in main
     targetmachine: &'a TargetMachine, // might be used in debug info
     discope: Cell<DIScope<'ctx>>,     // debug info scope
     nodebug_builder: &'a Builder<'ctx>, // builder without debug info
@@ -107,17 +105,18 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn get_llvm_value_handle(&self, value: &AnyValueEnum<'ctx>) -> ValueHandle {
-        match self.handle_reverse_table.borrow().get(value) {
+        let len = self.handle_table.borrow().len();
+        let nh = match self.handle_reverse_table.borrow().get(value) {
             Some(handle) => *handle,
-            None => {
-                let handle = self.handle_table.borrow().len();
-                self.handle_table.borrow_mut().insert(handle, value.clone());
-                self.handle_reverse_table
-                    .borrow_mut()
-                    .insert(value.clone(), handle);
-                handle
-            }
+            None => len,
+        };
+        if nh == len {
+            self.handle_table.borrow_mut().insert(nh, value.clone());
+            self.handle_reverse_table
+                .borrow_mut()
+                .insert(value.clone(), nh);
         }
+        nh
     }
     fn get_llvm_value(&self, handle: ValueHandle) -> Option<AnyValueEnum<'ctx>> {
         match self.handle_table.borrow().get(&handle) {
@@ -126,15 +125,16 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
     }
     fn get_llvm_block_handle(&self, block: BasicBlock<'ctx>) -> BlockHandle {
-        match self.block_reverse_table.borrow().get(&block) {
+        let len = self.block_table.borrow().len();
+        let nh = match self.block_reverse_table.borrow().get(&block) {
             Some(handle) => *handle,
-            None => {
-                let handle = self.block_table.borrow().len();
-                self.block_table.borrow_mut().insert(handle, block);
-                self.block_reverse_table.borrow_mut().insert(block, handle);
-                handle
-            }
+            None => len,
+        };
+        if nh == len {
+            self.block_table.borrow_mut().insert(nh, block);
+            self.block_reverse_table.borrow_mut().insert(block, nh);
         }
+        nh
     }
     fn get_llvm_block(&self, handle: BlockHandle) -> Option<BasicBlock<'ctx>> {
         match self.block_table.borrow().get(&handle) {
@@ -168,7 +168,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             PriType::U128 => self.context.i128_type().as_basic_type_enum(),
             PriType::F32 => self.context.f32_type().as_basic_type_enum(),
             PriType::F64 => self.context.f64_type().as_basic_type_enum(),
-            PriType::BOOL => self.context.i8_type().as_basic_type_enum(),
+            PriType::BOOL => self.context.bool_type().as_basic_type_enum(),
         }
     }
     /// # get_basic_type_op
@@ -771,12 +771,24 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         );
     }
     pub fn alloc(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle {
-        let alloca = self
-            .builder
-            .build_alloca(self.get_basic_type_op(pltype, ctx).unwrap(), name);
-        self.get_llvm_value_handle(&alloca.as_any_value_enum())
+        let builder = self.nodebug_builder;
+        match self.builder.get_insert_block().unwrap().get_parent().unwrap().get_first_basic_block() {
+            Some(alloca) => {
+                builder.position_at_end(alloca);
+                let p = builder.build_alloca(self.get_basic_type_op(pltype, ctx).unwrap(), name);
+                self.gc_add_root(p.as_basic_value_enum(), ctx);
+                ctx.roots.borrow_mut().push(self.get_llvm_value_handle(&p.as_any_value_enum()));
+                // builder.position_at_end(ctx.block.unwrap());
+                self.get_llvm_value_handle(&p.as_any_value_enum())
+            }
+            None => panic!("alloc get entry failed!"),
+        }
+        // let alloca = self
+        //     .builder
+        //     .build_alloca(self.get_basic_type_op(pltype, ctx).unwrap(), name);
+        // self.get_llvm_value_handle(&alloca.as_any_value_enum())
     }
-    pub fn alloc_vtp(&self, name: &str, v: ValueHandle, ctx: &mut Ctx<'a>) -> ValueHandle {
+    pub fn alloc_vtp(&self, name: &str, v: ValueHandle) -> ValueHandle {
         let alloca = self.builder.build_alloca::<BasicTypeEnum>(
             self.get_llvm_value(v)
                 .unwrap()
@@ -802,7 +814,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             return Err(());
         };
     }
-    pub fn build_store(&self, value: ValueHandle, ptr: ValueHandle) {
+    pub fn build_store(&self, ptr: ValueHandle, value: ValueHandle) {
         let value = self.get_llvm_value(value).unwrap();
         let ptr = self.get_llvm_value(ptr).unwrap();
         let ptr = ptr.into_pointer_value();
@@ -911,7 +923,18 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
     }
     pub fn position_at(&self, v: ValueHandle) {
-        let v = self.get_llvm_value(v).unwrap().into_instruction_value();
+        // inkwell hack
+        let v = self
+        .get_llvm_value(v)
+        .unwrap();
+        let v = if v.is_instruction_value() {
+            v.into_instruction_value()
+        }else {
+            let bs:BasicValueEnum = v.try_into().unwrap();
+            bs
+                .as_instruction_value()
+                .unwrap()
+        };
         self.builder.position_at(v.get_parent().unwrap(), &v);
         self.nodebug_builder
             .position_at(v.get_parent().unwrap(), &v);
@@ -1196,7 +1219,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     pub fn delete_block(&self, b: BlockHandle) {
         let b = self.get_llvm_block(b).unwrap();
         unsafe {
-            b.delete();
+            _ = b.delete();
         }
     }
     pub fn add_global(
@@ -1207,8 +1230,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         line: u32,
         pltp: &PLType,
     ) -> ValueHandle {
+        let base_type = self.get_basic_type_op(&pltype.borrow(), ctx).unwrap();
         let global = self.module.add_global(
-            self.get_basic_type_op(&pltype.borrow(), ctx).unwrap(),
+            base_type,
             None,
             name,
         );
@@ -1225,7 +1249,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             None,
             ditype.unwrap().get_align_in_bits(),
         );
-
+        global.set_initializer(&base_type.const_zero());
         global.set_metadata(exp.as_metadata_value(self.context), 0);
         self.get_llvm_value_handle(&global.as_any_value_enum())
     }

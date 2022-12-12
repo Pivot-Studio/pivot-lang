@@ -1,3 +1,5 @@
+use std::borrow::BorrowMut;
+
 use super::*;
 use crate::ast::{ctx::Ctx, diag::ErrorCode};
 use internal_macro::{comments, fmt, range};
@@ -40,7 +42,8 @@ impl Node for RetNode {
             builder.build_store(ctx.return_block.unwrap().1.unwrap(), ret);
             builder.build_unconditional_branch(ctx.return_block.unwrap().0);
         } else {
-            if rettp.is_some() {
+            if rettp.is_some() && &*rettp.clone().unwrap().borrow() != &PLType::VOID {
+                let s = format!("return type is {:?}", &*rettp.unwrap().borrow());
                 let err = ctx.add_err(self.range, ErrorCode::NO_RETURN_VALUE_IN_NON_VOID_FUNCTION);
                 return Err(err);
             }

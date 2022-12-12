@@ -47,20 +47,11 @@ impl Node for PointerOpNode {
                 }
             }
             PointerOpEnum::ADDR => {
-                let mut isptr = false;
-                if tp.is_some() {
-                    if let PLType::POINTER(_) = &*tp.clone().unwrap().borrow() {
-                        isptr = true;
-                    }
-                    tp = Some(Rc::new(RefCell::new(PLType::POINTER(tp.unwrap()))));
-                }
+                tp = Some(Rc::new(RefCell::new(PLType::POINTER(tp.unwrap()))));
                 if value.is_const {
                     return Err(ctx.add_err(self.range, ErrorCode::CAN_NOT_REF_CONSTANT));
                 }
                 let val = value.value;
-                if !isptr {
-                    return Err(ctx.add_err(self.range, ErrorCode::CAN_NOT_REF_CONSTANT));
-                }
                 let v = builder.alloc("addr", &tp.clone().unwrap().borrow(), ctx);
                 builder.build_store(v, builder.mv2heap(val, ctx));
                 v.into()

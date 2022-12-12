@@ -6,11 +6,9 @@ use crate::ast::node::{deal_line, tab};
 use crate::ast::pltype::{eq, FNType, PLType};
 use crate::plv;
 use indexmap::IndexMap;
-use inkwell::debug_info::*;
 use internal_macro::{comments, fmt, range};
 use lsp_types::SemanticTokenType;
 use std::cell::RefCell;
-use std::fmt::format;
 use std::rc::Rc;
 use std::vec;
 #[range]
@@ -156,7 +154,7 @@ impl Node for FuncCallNode {
             Some(v) => Ok((
                 {
                     builder.rm_curr_debug_location();
-                    let ptr = builder.alloc_vtp("ret_alloc_tmp", v, ctx);
+                    let ptr = builder.alloc_vtp("ret_alloc_tmp", v);
                     builder.build_store(ptr, v);
                     Some(plv!(ptr))
                 },
@@ -340,13 +338,13 @@ impl FuncDefNode {
         let paras = self.paralist.clone();
         let ret = self.ret.clone();
         if let Some(body) = self.body.as_mut() {
-            // add function
-            let child = &mut ctx.new_child(self.range.start);
-            let mp = child.move_generic_types();
             let mut fntype = match &*pltype.borrow() {
                 PLType::FN(fntype) => fntype.clone(),
                 _ => return Ok((None, None, TerminatorEnum::NONE)),
             };
+            // add function
+            let child = &mut ctx.new_child(self.range.start);
+            let mp = child.move_generic_types();
             let funcvalue = {
                 fntype.add_generic_type(child)?;
                 if first {
@@ -453,6 +451,7 @@ impl FuncDefNode {
                 child.init_global(builder);
                 child.position_at_end(entry, builder);
             }
+            child.rettp = Some(fntype.ret_pltype.get_type(child, builder)?);
             let (_, _, terminator) = body.emit(child, builder)?;
             if !terminator.is_return() {
                 return Err(child.add_err(self.range, ErrorCode::FUNCTION_MUST_HAVE_RETURN));

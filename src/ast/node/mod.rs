@@ -78,7 +78,7 @@ macro_rules! plv {
     ($e:expr) => {
         PLValue {
             value: $e,
-            is_const: true,
+            is_const: false,
             receiver: None,
         }
     };
