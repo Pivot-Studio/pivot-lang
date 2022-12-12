@@ -627,8 +627,8 @@ impl Node for ArrayInitNode {
             ctx,
         );
 
-        for (_i, (v, _)) in exps.into_iter().enumerate() {
-            let ptr = builder.build_const_in_bounds_gep(arr, &[0, 1], "elem_ptr");
+        for (i, (v, _)) in exps.into_iter().enumerate() {
+            let ptr = builder.build_const_in_bounds_gep(arr, &[0, i as u64], "elem_ptr");
             builder.build_store(ptr, v);
         }
         return Ok((
