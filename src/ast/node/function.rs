@@ -36,7 +36,7 @@ impl Node for FuncCallNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         // let currscope = ctx.discope;
         let mp = ctx.move_generic_types();
@@ -196,7 +196,7 @@ impl FuncDefNode {
     pub fn emit_pl_tp<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<Rc<RefCell<PLType>>, PLDiag> {
         let mut param_pltypes = Vec::new();
         let mut param_name = Vec::new();
@@ -276,7 +276,7 @@ impl FuncDefNode {
     pub fn emit_func_def<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<(), PLDiag> {
         if let Ok(_) = ctx.get_type(&self.id.name.as_str(), self.id.range) {
             return Err(ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL));
@@ -308,7 +308,7 @@ impl Node for FuncDefNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         self.gen_fntype(ctx, true, builder)
     }
@@ -318,7 +318,7 @@ impl FuncDefNode {
         &mut self,
         ctx: &'b mut Ctx<'a>,
         first: bool,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.save_if_comment_doc_hover(self.id.range, Some(self.doc.clone()));
         ctx.emit_comment_highlight(&self.precom);

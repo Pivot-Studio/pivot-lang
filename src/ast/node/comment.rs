@@ -19,7 +19,7 @@ impl Node for CommentNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        _builder: &'b LLVMBuilder<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::COMMENT, 0);
         Ok((None, None, TerminatorEnum::NONE))

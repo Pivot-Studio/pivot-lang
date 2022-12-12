@@ -1,5 +1,7 @@
 use super::*;
-use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
+
+use crate::ast::builder::BuilderEnum;
+use crate::ast::builder::IRBuilder;
 use crate::ast::{ctx::Ctx, diag::ErrorCode};
 use internal_macro::{comments, fmt, range};
 
@@ -23,7 +25,7 @@ impl Node for RetNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let rettp = ctx.rettp.clone();
         if let Some(ret) = &mut self.value {

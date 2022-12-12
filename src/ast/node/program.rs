@@ -2,13 +2,16 @@ use super::function::FuncDefNode;
 use super::types::StructDefNode;
 use super::*;
 use crate::ast::accumulators::*;
+use crate::ast::builder::llvmbuilder::LLVMBuilder;
+use crate::ast::builder::no_op_builder::NoOpBuilder;
+use crate::ast::builder::BuilderEnum;
+use crate::ast::builder::IRBuilder;
 use crate::ast::compiler::{compile_dry_file, ActionType};
 use crate::ast::ctx::{self, create_llvm_deps, Ctx, LSPDef, Mod};
 use crate::lsp::mem_docs::{EmitParams, FileCompileInput, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
 use crate::utils::read_config::{get_config, Config};
-use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
 use crate::Db;
 use colored::Colorize;
 use inkwell::context::Context;
@@ -48,7 +51,7 @@ impl Node for ProgramNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         // emit structs
         for def in self.structs.iter() {
@@ -349,7 +352,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     let context = &Context::create();
     let (a, b, c, d, e) = create_llvm_deps(context, params.dir(db), params.file(db));
     let v = RefCell::new(Vec::new());
-    let builder = LLVMBuilder::new(context,&a, &b, &c, &d, &e);
+    let builder = LLVMBuilder::new(context, &a, &b, &c, &d, &e);
     let mut ctx = ctx::Ctx::new(
         params.fullpath(db),
         &v,
@@ -371,7 +374,14 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     let m = &mut ctx;
     let node = params.node(db);
     let mut nn = node.node(db);
-    let _ = nn.emit(m, &builder);
+    let mut builder = &builder.into();
+    let noop = NoOpBuilder::new();
+    let noop = noop.into();
+    if !params.params(db).is_compile(db) {
+        log::info!("not in compile mode, using no-op builder");
+        builder = &noop;
+    }
+    let _ = nn.emit(m, builder);
     Diagnostics::push(
         db,
         (

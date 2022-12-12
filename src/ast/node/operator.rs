@@ -1,6 +1,8 @@
 use super::primary::VarNode;
 use super::*;
-use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
+
+use crate::ast::builder::BuilderEnum;
+use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::PLType;
@@ -35,7 +37,7 @@ impl Node for UnaryOpNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let exp_range = self.exp.range();
         let (exp, pltype, _) = self.exp.emit(ctx, builder)?;
@@ -106,7 +108,7 @@ impl Node for BinOpNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let (lrange, rrange) = (self.left.range(), self.right.range());
         let (lv, lpltype, _) = self.left.emit(ctx, builder)?;
@@ -243,7 +245,7 @@ impl Node for TakeOpNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let head = self.head.emit(ctx, builder)?;
         let (mut res, pltype, _) = head;

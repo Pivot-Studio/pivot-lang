@@ -3,7 +3,9 @@ use std::rc::Rc;
 
 use super::primary::VarNode;
 use super::*;
-use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
+
+use crate::ast::builder::BuilderEnum;
+use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{eq, ARRType, Field, GenericType, PLType, STType};
@@ -49,7 +51,7 @@ impl TypeNode for TypeNameNode {
     fn get_type<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> TypeNodeResult {
         if self.id.is_none() {
             ctx.if_completion(self.range, || ctx.get_type_completions());
@@ -111,7 +113,7 @@ impl TypeNode for TypeNameNode {
         &self,
         ctx: &'b mut Ctx<'a>,
         right: Rc<RefCell<PLType>>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<bool, PLDiag> {
         if let Some(generic_params) = &self.generic_params {
             if self.id.is_none() {
@@ -187,7 +189,7 @@ impl TypeNode for ArrayTypeNameNode {
     fn get_type<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> TypeNodeResult {
         if let NodeEnum::Num(num) = *self.size {
             if let Num::INT(sz) = num.value {
@@ -211,7 +213,7 @@ impl TypeNode for ArrayTypeNameNode {
         &self,
         ctx: &'b mut Ctx<'a>,
         pltype: Rc<RefCell<PLType>>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<bool, PLDiag> {
         match &*pltype.borrow() {
             PLType::ARR(a) => {
@@ -247,7 +249,7 @@ impl TypeNode for PointerTypeNode {
     fn get_type<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> TypeNodeResult {
         let pltype = self.elm.get_type(ctx, builder)?;
         let pltype = Rc::new(RefCell::new(PLType::POINTER(pltype)));
@@ -262,7 +264,7 @@ impl TypeNode for PointerTypeNode {
         &self,
         ctx: &'b mut Ctx<'a>,
         pltype: Rc<RefCell<PLType>>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<bool, PLDiag> {
         match &*pltype.borrow() {
             PLType::POINTER(p) => {
@@ -327,7 +329,7 @@ impl Node for StructDefNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.emit_comment_highlight(&self.precom);
         ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
@@ -352,7 +354,7 @@ impl StructDefNode {
     pub fn add_to_symbols<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) {
         let mut generic_map = IndexMap::default();
         if let Some(generics) = &self.generics {
@@ -375,7 +377,7 @@ impl StructDefNode {
     pub fn emit_struct_def<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<(), PLDiag> {
         let mp = ctx.move_generic_types();
         let mut fields = FxHashMap::<String, Field>::default();
@@ -466,7 +468,7 @@ impl Node for StructInitFieldNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let (v, tp, _) = self.exp.emit(ctx, builder)?;
         return Ok((v, tp, TerminatorEnum::NONE));
@@ -499,7 +501,7 @@ impl Node for StructInitNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         self.typename.emit_highlight(ctx);
         let pltype = self.typename.get_type(ctx, builder)?;
@@ -594,7 +596,7 @@ impl Node for ArrayInitNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let mut exps = Vec::new();
         let mut tp0 = None;
@@ -654,7 +656,7 @@ impl Node for GenericDefNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        _builder: &'b LLVMBuilder<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         for g in self.generics.iter() {
             ctx.push_semantic_token(g.range, SemanticTokenType::TYPE, 0);
@@ -696,7 +698,7 @@ impl Node for GenericParamNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         _: &'b mut Ctx<'a>,
-        _: &'b LLVMBuilder<'a, 'ctx>,
+        _: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         return Ok((None, None, TerminatorEnum::NONE));
     }
@@ -705,7 +707,7 @@ impl GenericParamNode {
     pub fn get_generic_types<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<Vec<Option<Rc<RefCell<PLType>>>>, PLDiag> {
         let mut res = vec![];
         for g in self.generics.iter() {

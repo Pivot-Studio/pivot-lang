@@ -34,7 +34,7 @@ impl Node for IfNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let cond_block = builder.append_basic_block(ctx.function.unwrap(), "if.cond");
         let then_block = builder.append_basic_block(ctx.function.unwrap(), "if.then");
@@ -102,7 +102,7 @@ impl Node for WhileNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let ctx = &mut ctx.new_child(self.range.start, builder);
         let cond_block = builder.append_basic_block(ctx.function.unwrap(), "while.cond");
@@ -167,7 +167,7 @@ impl Node for ForNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let ctx = &mut ctx.new_child(self.range.start, builder);
         let pre_block = builder.append_basic_block(ctx.function.unwrap(), "for.pre");
@@ -236,7 +236,7 @@ impl Node for BreakNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.emit_comment_highlight(&self.comments[0]);
         if let Some(b) = ctx.break_block {
@@ -266,7 +266,7 @@ impl Node for ContinueNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         if let Some(b) = ctx.continue_block {
             builder.build_unconditional_branch(b);

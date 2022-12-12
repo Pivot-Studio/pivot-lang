@@ -25,7 +25,7 @@ impl Node for ImplNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         _ = self.target.emit_highlight(ctx);
         let mut method_docsymbols = vec![];

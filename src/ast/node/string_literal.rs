@@ -9,7 +9,8 @@ use crate::{
     plv,
 };
 
-use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
+use crate::ast::builder::BuilderEnum;
+use crate::ast::builder::IRBuilder;
 use internal_macro::{fmt, range};
 use lsp_types::SemanticTokenType;
 
@@ -32,7 +33,7 @@ impl Node for StringNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::STRING, 0);
         let v = builder.const_string(&self.content);

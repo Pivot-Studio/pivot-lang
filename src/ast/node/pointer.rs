@@ -1,5 +1,7 @@
 use super::*;
-use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
+
+use crate::ast::builder::BuilderEnum;
+use crate::ast::builder::IRBuilder;
 use crate::{
     ast::{ctx::Ctx, diag::ErrorCode},
     plv,
@@ -31,7 +33,7 @@ impl Node for PointerOpNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let (value, mut tp, _) = self.value.emit(ctx, builder)?;
         let value = value.unwrap();

@@ -3,7 +3,8 @@ use std::rc::Rc;
 
 use crate::ast::ctx::Ctx;
 
-use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
+use crate::ast::builder::BuilderEnum;
+use crate::ast::builder::IRBuilder;
 use as_any::AsAny;
 use enum_dispatch::enum_dispatch;
 
@@ -24,7 +25,7 @@ use self::statement::*;
 use self::string_literal::StringNode;
 use self::types::*;
 
-use super::builder::{ValueHandle};
+use super::builder::ValueHandle;
 use super::ctx::PLDiag;
 use super::diag::ErrorCode;
 use super::fmt::FmtBuilder;
@@ -94,14 +95,14 @@ pub trait TypeNode: RangeTrait + AsAny + FmtTrait {
     fn get_type<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> TypeNodeResult;
     fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a>);
     fn eq_or_infer<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
         pltype: Rc<RefCell<PLType>>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<bool, PLDiag>;
 }
 type TypeNodeResult = Result<Rc<RefCell<PLType>>, PLDiag>;
@@ -165,7 +166,7 @@ pub trait Node: RangeTrait + AsAny + FmtTrait {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult;
 }
 // ANCHOR_END: node
@@ -216,7 +217,7 @@ impl<'a, 'ctx> Ctx<'a> {
         &'b mut self,
         node: &mut Box<NodeEnum>,
         expect: Option<Rc<RefCell<PLType>>>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         if expect.is_none() {
             return node.emit(self, builder);

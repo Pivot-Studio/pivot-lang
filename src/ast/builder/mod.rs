@@ -2,37 +2,23 @@
 /// 1. 所有Builder的字段都应该private，不应该被外部直接访问
 /// 2. 所有涉及llvm类型的函数（包括参数或返回值）都应该是private的
 pub mod llvmbuilder;
-use std::{
-    cell::{Cell, RefCell},
-    path::Path,
-    rc::Rc,
-};
+pub mod no_op_builder;
+use std::{cell::RefCell, path::Path, rc::Rc};
 
-use inkwell::{
-    basic_block::BasicBlock,
-    builder::Builder,
-    context::Context,
-    debug_info::*,
-    module::{Linkage, Module},
-    targets::TargetMachine,
-    types::{ArrayType, BasicType, BasicTypeEnum, StructType},
-    values::{
-        AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue,
-        PointerValue,
-    },
-    AddressSpace, FloatPredicate, IntPredicate,
-};
-use rustc_hash::FxHashMap;
+use enum_dispatch::enum_dispatch;
+use inkwell::{values::BasicValueEnum, FloatPredicate, IntPredicate};
+
+use self::llvmbuilder::LLVMBuilder;
+use self::no_op_builder::NoOpBuilder;
 
 use super::{
-    ctx::{Ctx, MemberType, PLDiag},
-    diag::ErrorCode,
-    node::{types::TypedIdentifierNode, TypeNode, TypeNodeEnum},
-    pltype::{ARRType, FNType, Field, PLType, PriType, RetTypeEnum, STType},
+    ctx::{Ctx, PLDiag},
+    node::{types::TypedIdentifierNode, TypeNodeEnum},
+    pltype::{FNType, Field, PLType, PriType},
     range::{Pos, Range},
 };
 
-
+#[enum_dispatch]
 pub trait IRBuilder<'a, 'ctx> {
     fn get_global_var_handle(&self, name: &str) -> Option<ValueHandle>;
     fn new_subscope(&self, start: Pos);
@@ -173,7 +159,11 @@ pub trait IRBuilder<'a, 'ctx> {
     fn build_int_neg(&self, v: ValueHandle, name: &str) -> ValueHandle;
 }
 
-
 pub type ValueHandle = usize;
 pub type BlockHandle = usize;
 
+#[enum_dispatch(IRBuilder)]
+pub enum BuilderEnum<'a, 'ctx> {
+    LLVM(LLVMBuilder<'a, 'ctx>),
+    NoOp(NoOpBuilder),
+}

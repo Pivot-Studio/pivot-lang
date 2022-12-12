@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use crate::ast::builder::BuilderEnum;
 use crate::{
     ast::{
         ctx::{get_ns_path_completions, Ctx},
@@ -11,7 +12,6 @@ use crate::{
 };
 use internal_macro::{fmt, range};
 use lsp_types::SemanticTokenType;
-use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
 
 use super::{primary::VarNode, Node, NodeResult, PLValue, TerminatorEnum};
 #[range]
@@ -41,7 +41,7 @@ impl Node for UseNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        _builder: &'b LLVMBuilder<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let mut path = PathBuf::from(&ctx.config.root);
         let head = self.ids[0].name.clone();
@@ -125,7 +125,7 @@ impl Node for ExternIdNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         if self.ns.is_empty() {
             if self.complete {

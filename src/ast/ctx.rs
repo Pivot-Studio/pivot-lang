@@ -1,7 +1,6 @@
-use super::builder::BlockHandle;
-use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
-use super::builder::ValueHandle;
 use super::builder::llvmbuilder::get_target_machine;
+use super::builder::BlockHandle;
+use super::builder::ValueHandle;
 use super::diag::{ErrorCode, WarnCode};
 use super::diag::{ERR_MSG, WARN_MSG};
 use super::node::NodeEnum;
@@ -13,6 +12,9 @@ use super::pltype::PriType;
 use super::pltype::STType;
 use super::range::Pos;
 use super::range::Range;
+
+use crate::ast::builder::BuilderEnum;
+use crate::ast::builder::IRBuilder;
 use crate::lsp::semantic_tokens::type_index;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::utils::read_config::Config;
@@ -543,7 +545,7 @@ impl<'a, 'ctx> Ctx<'a> {
         add_primitive_types(&mut ctx);
         ctx
     }
-    pub fn new_child(&'a self, start: Pos, builder: &'a LLVMBuilder<'a, 'ctx>) -> Ctx<'a> {
+    pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
         let mut ctx = Ctx {
             need_highlight: self.need_highlight,
             generic_types: FxHashMap::default(),
@@ -592,7 +594,7 @@ impl<'a, 'ctx> Ctx<'a> {
         add_primitive_types(&mut ctx);
         ctx
     }
-    pub fn set_init_fn<'b>(&'b mut self, builder: &'b LLVMBuilder<'a, 'ctx>) {
+    pub fn set_init_fn<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
         self.function = Some(builder.add_function(
             &self.plmod.get_full_name("__init_global"),
             &vec![],
@@ -604,7 +606,7 @@ impl<'a, 'ctx> Ctx<'a> {
         let entry = builder.append_basic_block(self.init_func.unwrap(), "entry");
         self.position_at_end(entry, builder);
     }
-    pub fn clear_init_fn<'b>(&'b self, builder: &'b LLVMBuilder<'a, 'ctx>) {
+    pub fn clear_init_fn<'b>(&'b self, builder: &'b BuilderEnum<'a, 'ctx>) {
         let alloc = builder.get_first_basic_block(self.init_func.unwrap());
         let entry = builder.get_last_basic_block(self.init_func.unwrap());
         builder.delete_block(alloc);
@@ -612,7 +614,7 @@ impl<'a, 'ctx> Ctx<'a> {
         builder.append_basic_block(self.init_func.unwrap(), "alloc");
         builder.append_basic_block(self.init_func.unwrap(), "entry");
     }
-    pub fn init_fn_ret<'b>(&'b mut self, builder: &'b LLVMBuilder<'a, 'ctx>) {
+    pub fn init_fn_ret<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
         let alloc = builder.get_first_basic_block(self.init_func.unwrap());
         let entry = builder.get_last_basic_block(self.init_func.unwrap());
         self.position_at_end(alloc, builder);
@@ -631,7 +633,7 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn get_symbol<'b>(
         &'b self,
         name: &str,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Option<(
         ValueHandle,
         Rc<RefCell<PLType>>,
@@ -709,11 +711,11 @@ impl<'a, 'ctx> Ctx<'a> {
         &'b mut self,
         name: &str,
         pltype: Rc<RefCell<PLType>>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> ValueHandle {
         builder.get_or_add_global(name, pltype, self)
     }
-    pub fn init_global<'b>(&'b mut self, builder: &'b LLVMBuilder<'a, 'ctx>) {
+    pub fn init_global<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
         let mut set: FxHashSet<String> = FxHashSet::default();
         for (_, sub) in &self.plmod.clone().submods {
             self.init_global_walk(&sub, &mut set, builder);
@@ -724,14 +726,14 @@ impl<'a, 'ctx> Ctx<'a> {
             builder
                 .get_function(&self.plmod.get_full_name("__init_global"))
                 .unwrap(),
-                &[],
+            &[],
         );
     }
     fn init_global_walk<'b>(
         &'b mut self,
         m: &Mod,
         set: &mut FxHashSet<String>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) {
         let name = m.get_full_name("__init_global");
         if set.contains(&name) {
@@ -829,7 +831,7 @@ impl<'a, 'ctx> Ctx<'a> {
         range: Range,
         v: PLValue,
         tp: Rc<RefCell<PLType>>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<(ValueHandle, Rc<RefCell<PLType>>), PLDiag> {
         let v = v.value;
         builder.try_load2var(range, v, tp, self)
@@ -1115,7 +1117,7 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn position_at_end<'b>(
         &'b mut self,
         block: BlockHandle,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) {
         self.block = Some(block);
         builder.position_at_end_block(block);
@@ -1199,7 +1201,7 @@ impl<'a, 'ctx> Ctx<'a> {
         &'b self,
         tp: Rc<RefCell<PLType>>,
         value: ValueHandle,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> (Rc<RefCell<PLType>>, ValueHandle) {
         let mut tp = tp;
         let mut value = value;

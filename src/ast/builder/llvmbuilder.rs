@@ -12,8 +12,8 @@ use inkwell::{
     builder::Builder,
     context::Context,
     debug_info::*,
-    module::{Linkage, Module, FlagBehavior},
-    targets::{TargetMachine, Target, InitializationConfig},
+    module::{Linkage, Module},
+    targets::{InitializationConfig, Target, TargetMachine},
     types::{ArrayType, BasicType, BasicTypeEnum, StructType},
     values::{
         AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue,
@@ -23,16 +23,19 @@ use inkwell::{
 };
 use rustc_hash::FxHashMap;
 
-use super::{super::{
-    ctx::{Ctx, MemberType, PLDiag},
-    diag::ErrorCode,
-    node::{types::TypedIdentifierNode, TypeNode, TypeNodeEnum},
-    pltype::{ARRType, FNType, Field, PLType, PriType, RetTypeEnum, STType},
-    range::{Pos, Range},
-}, IRBuilder};
+use super::{
+    super::{
+        ctx::{Ctx, MemberType, PLDiag},
+        diag::ErrorCode,
+        node::{types::TypedIdentifierNode, TypeNode, TypeNodeEnum},
+        pltype::{ARRType, FNType, Field, PLType, PriType, RetTypeEnum, STType},
+        range::{Pos, Range},
+    },
+    IRBuilder,
+};
 
-use super::ValueHandle;
 use super::BlockHandle;
+use super::ValueHandle;
 
 // TODO: match all case
 // const DW_ATE_UTF: u32 = 0x10;
@@ -50,6 +53,7 @@ fn get_dw_ate_encoding<'a, 'ctx>(pritp: &PriType) -> u32 {
     }
 }
 
+#[derive(Clone)]
 pub struct LLVMBuilder<'a, 'ctx> {
     handle_table: Rc<RefCell<FxHashMap<ValueHandle, AnyValueEnum<'ctx>>>>,
     handle_reverse_table: Rc<RefCell<FxHashMap<AnyValueEnum<'ctx>, ValueHandle>>>,
@@ -241,7 +245,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
         offset: u64,
     ) -> (DIType<'ctx>, u64) {
-        let field_pltype = match field.typenode.get_type(ctx, self) {
+        let field_pltype = match field.typenode.get_type(ctx, &self.clone().into()) {
             Ok(field_pltype) => field_pltype,
             Err(_) => ctx.get_type("i64", Default::default()).unwrap(),
         };
@@ -448,13 +452,26 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let mut param_types = vec![];
         for param_pltype in pltp.param_pltypes.iter() {
             param_types.push(
-                self.get_basic_type_op(&param_pltype.get_type(ctx, self).unwrap().borrow(), ctx)
-                    .unwrap()
-                    .into(),
+                self.get_basic_type_op(
+                    &param_pltype
+                        .get_type(ctx, &self.clone().into())
+                        .unwrap()
+                        .borrow(),
+                    ctx,
+                )
+                .unwrap()
+                .into(),
             );
         }
         let fn_type = self
-            .get_ret_type(&pltp.ret_pltype.get_type(ctx, self).unwrap().borrow(), ctx)
+            .get_ret_type(
+                &pltp
+                    .ret_pltype
+                    .get_type(ctx, &self.clone().into())
+                    .unwrap()
+                    .borrow(),
+                ctx,
+            )
             .fn_type(&param_types, false);
         let fn_value = self
             .module
@@ -474,7 +491,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 .into_iter()
                 .map(|order_field| {
                     self.get_basic_type_op(
-                        &order_field.typenode.get_type(ctx, self).unwrap().borrow(),
+                        &order_field
+                            .typenode
+                            .get_type(ctx, &self.clone().into())
+                            .unwrap()
+                            .borrow(),
                         ctx,
                     )
                     .unwrap()
@@ -707,12 +728,12 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         Some(self.get_llvm_value_handle(&f.as_any_value_enum()))
     }
 
-    fn build_call(&self, f: ValueHandle, args: &[ValueHandle]) -> Option<ValueHandle>
-    {
+    fn build_call(&self, f: ValueHandle, args: &[ValueHandle]) -> Option<ValueHandle> {
         let builder = self.builder;
         let f = self.get_llvm_value(f).unwrap();
         let f = f.into_function_value();
-        let args = args.iter()
+        let args = args
+            .iter()
             .map(|v| {
                 let be: BasicValueEnum = self.get_llvm_value(*v).unwrap().try_into().unwrap();
                 let bme: BasicMetadataValueEnum = be.into();
@@ -753,7 +774,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .into_iter()
                 .map(|order_field| {
                     self.get_basic_type_op(
-                        &order_field.typenode.get_type(ctx, self).unwrap().borrow(),
+                        &order_field
+                            .typenode
+                            .get_type(ctx, &self.clone().into())
+                            .unwrap()
+                            .borrow(),
                         ctx,
                     )
                     .unwrap()
@@ -1103,7 +1128,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     ) -> Result<(), PLDiag> {
         let mut param_ditypes = vec![];
         for para in paralist.iter() {
-            let pltype = para.typenode.get_type(child, self)?;
+            let pltype = para.typenode.get_type(child, &self.clone().into())?;
             match &*pltype.borrow() {
                 PLType::VOID => {
                     return Err(child.add_err(para.range, ErrorCode::VOID_TYPE_CANNOT_BE_PARAMETER))
@@ -1116,7 +1141,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         // debug info
         let subroutine_type = self.dibuilder.create_subroutine_type(
             self.diunit.get_file(),
-            self.get_ditype(&ret.get_type(child, self)?.borrow(), child),
+            self.get_ditype(&ret.get_type(child, &self.clone().into())?.borrow(), child),
             &param_ditypes,
             DIFlags::PUBLIC,
         );
@@ -1166,7 +1191,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             pos.line as u32,
             self.get_ditype(
                 &fntype.param_pltypes[i]
-                    .get_type(child, self)
+                    .get_type(child, &self.clone().into())
                     .unwrap()
                     .borrow(),
                 child,

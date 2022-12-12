@@ -1,5 +1,7 @@
 use super::*;
-use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
+
+use crate::ast::builder::BuilderEnum;
+use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{PLType, PriType};
@@ -22,7 +24,7 @@ impl Node for PrimaryNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.emit_comment_highlight(&self.comments[0]);
         let res = self.value.emit(ctx, builder);
@@ -47,7 +49,7 @@ impl Node for BoolConstNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::KEYWORD, 0);
         Ok((
@@ -77,7 +79,7 @@ impl Node for NumNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::NUMBER, 0);
         if let Num::INT(x) = self.value {
@@ -114,7 +116,7 @@ impl VarNode {
     pub fn emit<'a, 'ctx, 'b>(
         &self,
         ctx: &'b Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.if_completion(self.range, || ctx.get_completions());
         let v = ctx.get_symbol(&self.name, builder);
@@ -188,7 +190,7 @@ impl Node for ArrayElementNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let (arr, pltype, _) = self.arr.emit(ctx, builder)?;
         if let PLType::ARR(arrtp) = &*pltype.unwrap().borrow() {
@@ -237,7 +239,7 @@ impl Node for ParanthesesNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         self.node.emit(ctx, builder)
     }

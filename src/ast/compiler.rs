@@ -2,7 +2,8 @@ use super::{dot, node::program::ModWrapper};
 use crate::{
     ast::{
         accumulators::{Diagnostics, ModBuffer},
-        node::program::Program, builder::llvmbuilder::get_target_machine,
+        builder::llvmbuilder::get_target_machine,
+        node::program::Program,
     },
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
@@ -14,7 +15,7 @@ use inkwell::{
     context::Context,
     module::Module,
     passes::{PassManager, PassManagerBuilder},
-    targets::{FileType, InitializationConfig, Target, TargetMachine},
+    targets::FileType,
     OptimizationLevel,
 };
 use log::{info, trace, warn};
@@ -63,7 +64,6 @@ impl HashOptimizationLevel {
 }
 
 type MainFunc = unsafe extern "C" fn() -> i64;
-
 
 /// # ActionType
 /// lsp action type

@@ -1,5 +1,7 @@
 use super::*;
-use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
+
+use crate::ast::builder::BuilderEnum;
+use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
 
@@ -32,7 +34,7 @@ impl Node for DefNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let range = self.range();
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
@@ -110,7 +112,7 @@ impl Node for AssignNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let exp_range = self.exp.range();
         let (ptr, lpltype, _) = self.var.emit(ctx, builder)?;
@@ -142,7 +144,7 @@ impl Node for EmptyNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        _builder: &'b LLVMBuilder<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.emit_comment_highlight(&self.comments[0]);
         Ok((None, None, TerminatorEnum::NONE))
@@ -169,7 +171,7 @@ impl Node for StatementsNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let mut terminator = TerminatorEnum::NONE;
         for m in self.statements.iter_mut() {
@@ -204,7 +206,7 @@ impl StatementsNode {
     pub fn emit_child<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let child = &mut ctx.new_child(self.range.start, builder);
         self.emit(child, builder)

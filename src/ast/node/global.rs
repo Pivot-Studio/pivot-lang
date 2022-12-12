@@ -1,5 +1,7 @@
 use super::*;
-use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
+
+use crate::ast::builder::BuilderEnum;
+use crate::ast::builder::IRBuilder;
 use crate::ast::diag::ErrorCode;
 
 use internal_macro::{fmt, range};
@@ -22,7 +24,7 @@ impl Node for GlobalNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let entry = builder.get_last_basic_block(ctx.init_func.unwrap());
 
@@ -48,7 +50,7 @@ impl GlobalNode {
     pub fn emit_global<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<(), PLDiag> {
         let exp_range = self.exp.range();
         if ctx.get_symbol(&self.var.name, builder).is_some() {

@@ -1,5 +1,6 @@
-use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
 use super::ctx::Ctx;
+
+use crate::ast::builder::BuilderEnum;
 
 use super::ctx::PLDiag;
 
@@ -524,7 +525,7 @@ impl STType {
     pub fn generic_infer_pltype<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b LLVMBuilder<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> STType {
         let name = self.append_name_with_generic();
         if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
