@@ -2,6 +2,7 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     ast::{
+        builder::LLVMBuilder,
         ctx::Ctx,
         node::{deal_line, tab},
         pltype::{ARRType, PLType, PriType},
@@ -29,9 +30,13 @@ impl Node for StringNode {
         println!("StringNode: \"{}\"", self.content);
     }
 
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::STRING, 0);
-        let v = ctx.llbuilder.borrow().const_string(&self.content);
+        let v = builder.const_string(&self.content);
         Ok((
             Some({
                 let mut res: PLValue = plv!(v);

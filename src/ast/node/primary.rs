@@ -18,9 +18,13 @@ impl Node for PrimaryNode {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
         self.value.print(tabs, end, line);
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> NodeResult {
         ctx.emit_comment_highlight(&self.comments[0]);
-        let res = self.value.emit(ctx);
+        let res = self.value.emit(ctx, builder);
         ctx.emit_comment_highlight(&self.comments[1]);
         res
     }
@@ -39,10 +43,14 @@ impl Node for BoolConstNode {
         tab(tabs, line, end);
         println!("BoolConstNode: {}", self.value);
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::KEYWORD, 0);
         Ok((
-            Some(plv!(ctx.llbuilder.borrow().int_value(
+            Some(plv!(builder.int_value(
                 &PriType::I8,
                 self.value as u64,
                 true
@@ -65,17 +73,21 @@ impl Node for NumNode {
         tab(tabs, line, end);
         println!("NumNode: {:?}", self.value);
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::NUMBER, 0);
         if let Num::INT(x) = self.value {
-            let b = ctx.llbuilder.borrow().int_value(&PriType::I64, x, true);
+            let b = builder.int_value(&PriType::I64, x, true);
             return Ok((
                 Some(plv!(b)),
                 Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::I64)))),
                 TerminatorEnum::NONE,
             ));
         } else if let Num::FLOAT(x) = self.value {
-            let b = ctx.llbuilder.borrow().float_value(&PriType::F64, x);
+            let b = builder.float_value(&PriType::F64, x);
             return Ok((
                 Some(plv!(b)),
                 Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::F64)))),
@@ -98,9 +110,13 @@ impl VarNode {
         tab(tabs, line.clone(), end);
         println!("VarNode: {}", self.name);
     }
-    pub fn emit<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> NodeResult {
+    pub fn emit<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> NodeResult {
         ctx.if_completion(self.range, || ctx.get_completions());
-        let v = ctx.get_symbol(&self.name);
+        let v = ctx.get_symbol(&self.name, builder);
         if let Some((v, pltype, dst, refs, is_const)) = v {
             ctx.push_semantic_token(self.range, SemanticTokenType::VARIABLE, 0);
             let o = Ok((
@@ -128,7 +144,7 @@ impl VarNode {
         }
         Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND))
     }
-    pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> NodeResult {
+    pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a>) -> NodeResult {
         ctx.if_completion(self.range, || ctx.get_completions());
 
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
@@ -168,26 +184,29 @@ impl Node for ArrayElementNode {
         self.arr.print(tabs + 1, false, line.clone());
         self.index.print(tabs + 1, true, line);
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
-        let (arr, pltype, _) = self.arr.emit(ctx)?;
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> NodeResult {
+        let (arr, pltype, _) = self.arr.emit(ctx, builder)?;
         if let PLType::ARR(arrtp) = &*pltype.unwrap().borrow() {
             let arr = arr.unwrap();
             // TODO: check if index is out of bounds
             let index_range = self.index.range();
-            let (index, index_pltype, _) = self.index.emit(ctx)?;
-            let (index, _) =
-                ctx.try_load2var(index_range, index.unwrap(), index_pltype.unwrap())?;
+            let (index, index_pltype, _) = self.index.emit(ctx, builder)?;
+            let (index, _) = ctx.try_load2var(
+                index_range,
+                index.unwrap(),
+                index_pltype.clone().unwrap(),
+                builder,
+            )?;
             if index_pltype.is_none() || !index_pltype.unwrap().borrow().is(&PriType::I64) {
                 return Err(ctx.add_err(self.range, ErrorCode::ARRAY_INDEX_MUST_BE_INT));
             }
             let elemptr = {
-                let index = &[
-                    ctx.llbuilder.borrow().int_value(&PriType::I64, 0, false),
-                    index,
-                ];
-                ctx.llbuilder
-                    .borrow()
-                    .build_in_bounds_gep(arr.value, index, "element_ptr")
+                let index = &[builder.int_value(&PriType::I64, 0, false), index];
+                builder.build_in_bounds_gep(arr.value, index, "element_ptr")
             };
             ctx.emit_comment_highlight(&self.comments[0]);
             return Ok((
@@ -214,7 +233,11 @@ impl Node for ParanthesesNode {
         println!("ParanthesesNode");
         self.node.print(tabs + 1, true, line);
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
-        self.node.emit(ctx)
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> NodeResult {
+        self.node.emit(ctx, builder)
     }
 }

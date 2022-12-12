@@ -1,3 +1,4 @@
+use super::builder::LLVMBuilder;
 use super::ctx::Ctx;
 use super::ctx::MemberType;
 use super::ctx::PLDiag;
@@ -71,7 +72,7 @@ pub enum PriType {
     BOOL,
 }
 impl PriType {
-    // pub fn get_basic_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> BasicTypeEnum<'ctx> {
+    // pub fn get_basic_type<'a, 'ctx>(&self, ctx: &Ctx<'a>) -> BasicTypeEnum<'ctx> {
     //     match self {
     //         PriType::I8 => ctx.context.i8_type().into(),
     //         PriType::I16 => ctx.context.i16_type().into(),
@@ -277,7 +278,7 @@ impl PLType {
     // /// get the basic type of the type
     // /// used in code generation
     // /// may panic if the type is void type
-    // pub fn get_basic_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> BasicTypeEnum<'ctx> {
+    // pub fn get_basic_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) -> BasicTypeEnum<'ctx> {
     //     self.get_basic_type_op(ctx).unwrap()
     // }
 
@@ -347,7 +348,7 @@ impl PLType {
     // /// used in code generation
     // pub fn get_basic_type_op<'a, 'ctx>(
     //     &self,
-    //     ctx: &mut Ctx<'a, 'ctx>,
+    //     ctx: &mut Ctx<'a>,
     // ) -> Option<BasicTypeEnum<'ctx>> {
     //     match self {
     //         PLType::GENERIC(g) => match &g.curpltype {
@@ -402,7 +403,7 @@ impl PLType {
 
     // /// # get_ret_type
     // /// get the return type, which is void type or primitive type
-    // pub fn get_ret_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> RetTypeEnum<'ctx> {
+    // pub fn get_ret_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) -> RetTypeEnum<'ctx> {
     //     match self {
     //         PLType::VOID => RetTypeEnum::VOID(ctx.context.void_type()),
     //         _ => RetTypeEnum::BASIC(self.get_basic_type(ctx)),
@@ -418,7 +419,7 @@ impl PLType {
 
     // /// # get_ditype
     // /// get the debug info type of the pltype
-    // pub fn get_ditype<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
+    // pub fn get_ditype<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) -> Option<DIType<'ctx>> {
     //     let td = ctx.targetmachine.get_target_data();
     //     match self {
     //         PLType::FN(_) => None,
@@ -591,7 +592,7 @@ pub struct Field {
 impl Field {
     // pub fn get_di_type<'a, 'ctx>(
     //     &self,
-    //     ctx: &mut Ctx<'a, 'ctx>,
+    //     ctx: &mut Ctx<'a>,
     //     offset: u64,
     // ) -> (DIType<'ctx>, u64) {
     //     let field_pltype = match self.typenode.get_type(ctx) {
@@ -707,7 +708,7 @@ impl FNType {
     // /// try get function value from module
     // ///
     // /// if not found, create a declaration
-    // pub fn get_or_insert_fn<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> FunctionValue<'ctx> {
+    // pub fn get_or_insert_fn<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) -> FunctionValue<'ctx> {
     //     let llvmname = self.append_name_with_generic(self.llvmname.clone());
     //     if let Some(v) = ctx.module.get_function(&llvmname) {
     //         return v;
@@ -804,7 +805,7 @@ pub struct ARRType {
 }
 
 impl ARRType {
-    // pub fn arr_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> ArrayType<'ctx> {
+    // pub fn arr_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) -> ArrayType<'ctx> {
     //     self.element_type
     //         .borrow()
     //         .get_basic_type(ctx)
@@ -843,7 +844,11 @@ impl STType {
         }
         unreachable!()
     }
-    pub fn generic_infer_pltype(&self, ctx: &mut Ctx) -> STType {
+    pub fn generic_infer_pltype<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> STType {
         let name = self.append_name_with_generic();
         if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
             match &*pltype.borrow() {
@@ -861,7 +866,12 @@ impl STType {
             .iter()
             .map(|f| {
                 let mut nf = f.clone();
-                nf.typenode = f.typenode.get_type(ctx).unwrap().borrow().get_typenode(ctx);
+                nf.typenode = f
+                    .typenode
+                    .get_type(ctx, builder)
+                    .unwrap()
+                    .borrow()
+                    .get_typenode(ctx);
                 nf
             })
             .collect::<Vec<Field>>();
@@ -873,7 +883,7 @@ impl STType {
         pltype.replace(PLType::STRUCT(res.clone()));
         res
     }
-    // pub fn struct_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> StructType<'ctx> {
+    // pub fn struct_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) -> StructType<'ctx> {
     //     let st = ctx.module.get_struct_type(&self.get_st_full_name());
     //     if let Some(st) = st {
     //         return st;
@@ -911,16 +921,16 @@ impl STType {
         }
         completions
     }
-    pub fn get_mthd_completions<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Vec<CompletionItem> {
+    pub fn get_mthd_completions<'a, 'ctx>(&self, ctx: &Ctx<'a>) -> Vec<CompletionItem> {
         ctx.plmod.get_methods_completions(&self.get_st_full_name())
     }
 
-    pub fn get_completions<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Vec<CompletionItem> {
+    pub fn get_completions<'a, 'ctx>(&self, ctx: &Ctx<'a>) -> Vec<CompletionItem> {
         let mut coms = self.get_field_completions();
         coms.extend(self.get_mthd_completions(ctx));
         coms
     }
-    pub fn find_method<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, method: &str) -> Option<FNType> {
+    pub fn find_method<'a, 'ctx>(&self, ctx: &Ctx<'a>, method: &str) -> Option<FNType> {
         ctx.plmod.find_method(&self.get_st_full_name(), method)
     }
     pub fn get_st_full_name(&self) -> String {
@@ -946,7 +956,7 @@ impl STType {
     }
 }
 
-pub fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
+pub fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a>) {
     let pltype_i128 = PLType::PRIMITIVE(PriType::I128);
     ctx.plmod.types.insert(
         "i128".to_string(),

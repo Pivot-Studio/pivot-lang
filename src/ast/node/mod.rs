@@ -28,7 +28,7 @@ use self::statement::*;
 use self::string_literal::StringNode;
 use self::types::*;
 
-use super::builder::ValueHandle;
+use super::builder::{LLVMBuilder, ValueHandle};
 use super::ctx::PLDiag;
 use super::diag::ErrorCode;
 use super::fmt::FmtBuilder;
@@ -95,12 +95,17 @@ pub enum TypeNodeEnum {
 pub trait TypeNode: RangeTrait + AsAny + FmtTrait {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     /// 重要：这个函数不要干lsp相关操作，只用来获取type
-    fn get_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> TypeNodeResult;
-    fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>);
-    fn eq_or_infer<'a, 'ctx>(
+    fn get_type<'a, 'ctx, 'b>(
         &self,
-        ctx: &mut Ctx<'a, 'ctx>,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> TypeNodeResult;
+    fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a>);
+    fn eq_or_infer<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
         pltype: Rc<RefCell<PLType>>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
     ) -> Result<bool, PLDiag>;
 }
 type TypeNodeResult = Result<Rc<RefCell<PLType>>, PLDiag>;
@@ -161,7 +166,11 @@ pub trait FmtTrait {
 #[enum_dispatch]
 pub trait Node: RangeTrait + AsAny + FmtTrait {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult;
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> NodeResult;
 }
 // ANCHOR_END: node
 pub type NodeResult = Result<
@@ -201,19 +210,20 @@ impl Eq for Num {
     // FIXME: NaN https://stackoverflow.com/questions/39638363/how-can-i-use-a-hashmap-with-f64-as-key-in-rust
 }
 
-impl<'a, 'ctx> Ctx<'a, 'ctx> {
+impl<'a, 'ctx> Ctx<'a> {
     fn emit_comment_highlight(&mut self, comments: &Vec<Box<NodeEnum>>) {
         for com in comments {
             self.push_semantic_token(com.range(), SemanticTokenType::COMMENT, 0);
         }
     }
-    fn emit_with_expectation(
-        &mut self,
+    fn emit_with_expectation<'b>(
+        &'b mut self,
         node: &mut Box<NodeEnum>,
         expect: Option<Rc<RefCell<PLType>>>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
     ) -> NodeResult {
         if expect.is_none() {
-            return node.emit(self);
+            return node.emit(self, builder);
         }
         let expect = expect.unwrap();
         let range = node.range();
@@ -240,16 +250,14 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                                 | PriType::U8 => false,
                                 _ => return Err(self.add_err(range, ErrorCode::TYPE_MISMATCH)),
                             };
-                            let int = self.llbuilder.borrow().int_value(tp, i, sign_ext);
+                            let int = builder.int_value(tp, i, sign_ext);
                             int
                         }
                         _ => return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH)),
                     },
                     Num::FLOAT(f) => match &*expect.borrow() {
                         PLType::PRIMITIVE(tp) => match tp {
-                            PriType::F32 | PriType::F64 => {
-                                self.llbuilder.borrow().float_value(tp, f)
-                            }
+                            PriType::F32 | PriType::F64 => builder.float_value(tp, f),
                             _ => return Err(self.add_err(range, ErrorCode::TYPE_MISMATCH)),
                         },
                         _ => return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH)),
@@ -268,7 +276,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
                 ));
             }
         }
-        let re = node.emit(self)?;
+        let re = node.emit(self, builder)?;
         let (value, ty, term) = re;
         if value.is_some() {
             if let Some(ty) = ty.clone() {
@@ -330,7 +338,7 @@ pub fn print_params(paralist: &[Box<TypedIdentifierNode>]) -> String {
 }
 
 // pub fn pl_alloc<'a, 'ctx>(
-//     ctx: &mut Ctx<'a, 'ctx>,
+//     ctx: &mut Ctx<'a>,
 //     tp: &PLType,
 //     name: &str,
 //     range: Range,
@@ -358,7 +366,7 @@ pub fn print_params(paralist: &[Box<TypedIdentifierNode>]) -> String {
 
 // #[deprecated = "use `pl_alloc` instead"]
 // pub fn alloc<'a, 'ctx>(
-//     ctx: &mut Ctx<'a, 'ctx>,
+//     ctx: &mut Ctx<'a>,
 //     tp: BasicTypeEnum<'ctx>,
 //     name: &str,
 // ) -> PointerValue<'ctx> {
@@ -379,16 +387,16 @@ pub fn print_params(paralist: &[Box<TypedIdentifierNode>]) -> String {
 
 #[macro_export]
 macro_rules! handle_calc {
-    ($ctx:ident, $op:ident, $opf:ident, $lpltype:ident, $left:ident, $right:ident, $range: expr) => {
+    ($ctx:ident, $op:ident, $opf:ident, $lpltype:ident, $left:ident, $right:ident, $range: expr,$builder:ident) => {
         item! {
             match *$lpltype.clone().unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::I128|PriType::I64|PriType::I32|PriType::I16|PriType::I8|
                     PriType::U128|PriType::U64|PriType::U32|PriType::U16|PriType::U8) => {
-                    return Ok((Some(plv!( $ctx.llbuilder.borrow().[<build_int_$op>](
+                    return Ok((Some(plv!( $builder.[<build_int_$op>](
                         $left, $right, "addtmp"))),Some($lpltype.unwrap()),TerminatorEnum::NONE));
                 },
                 PLType::PRIMITIVE(PriType::F64|PriType::F32) => {
-                    return Ok((Some(plv!( $ctx.llbuilder.borrow().[<build_$opf>](
+                    return Ok((Some(plv!( $builder.[<build_$opf>](
                         $left, $right, "addtmp"))),Some($lpltype.unwrap()),TerminatorEnum::NONE));
                 },
                 _ =>  return Err($ctx.add_err(

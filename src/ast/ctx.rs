@@ -61,12 +61,14 @@ use super::range::Pos;
 use super::range::Range;
 /// # Ctx
 /// Context for code generation
-pub struct Ctx<'a, 'ctx> {
+pub struct Ctx<'a> {
     pub generic_types: FxHashMap<String, Rc<RefCell<PLType>>>,
     pub need_highlight: bool,
     pub plmod: Mod,
-    pub father: Option<&'a Ctx<'a, 'ctx>>, // father context, for symbol lookup
-    pub llbuilder: RefCell<LLVMBuilder<'a, 'ctx>>,
+    pub father: Option<&'a Ctx<'a>>, // father context, for symbol lookup
+    pub function: Option<ValueHandle>, // current function
+    pub init_func: Option<ValueHandle>, //init function,call first in main
+    // pub llbuilder: RefCell<LLVMBuilder<'a, 'ctx>>,
     // pub context: &'ctx Context,            // llvm context
     // pub builder: &'a Builder<'ctx>,        // llvm builder
     // pub module: &'a Module<'ctx>,          // llvm module
@@ -533,21 +535,21 @@ pub fn create_ctx_info<'ctx>(
     )
 }
 
-impl<'a, 'ctx> Ctx<'a, 'ctx> {
+impl<'a, 'ctx> Ctx<'a> {
     pub fn new(
-        context: &'ctx Context,
-        module: &'a Module<'ctx>,
-        builder: &'a Builder<'ctx>,
-        dibuilder: &'a DebugInfoBuilder<'ctx>,
-        diunit: &'a DICompileUnit<'ctx>,
-        tm: &'a TargetMachine,
-        nodbg_builder: &'a Builder<'ctx>,
+        // context: &'ctx Context,
+        // module: &'a Module<'ctx>,
+        // builder: &'a Builder<'ctx>,
+        // dibuilder: &'a DebugInfoBuilder<'ctx>,
+        // diunit: &'a DICompileUnit<'ctx>,
+        // tm: &'a TargetMachine,
+        // nodbg_builder: &'a Builder<'ctx>,
         src_file_path: &'a str,
         errs: &'a RefCell<Vec<PLDiag>>,
         edit_pos: Option<Pos>,
         config: Config,
         db: &'a dyn Db,
-    ) -> Ctx<'a, 'ctx> {
+    ) -> Ctx<'a> {
         let f = Path::new(Path::new(src_file_path).file_stem().unwrap())
             .file_name()
             .take()
@@ -560,15 +562,17 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             generic_types: FxHashMap::default(),
             plmod: Mod::new(f, src_file_path.to_string()),
             father: None,
-            llbuilder: RefCell::new(LLVMBuilder::new(
-                context,
-                module,
-                builder,
-                dibuilder,
-                diunit,
-                tm,
-                nodbg_builder,
-            )),
+            init_func: None,
+            function: None,
+            // llbuilder: RefCell::new(LLVMBuilder::new(
+            //     context,
+            //     module,
+            //     builder,
+            //     dibuilder,
+            //     diunit,
+            //     tm,
+            //     nodbg_builder,
+            // )),
             errs,
             edit_pos,
             table: FxHashMap::default(),
@@ -585,13 +589,13 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         add_primitive_types(&mut ctx);
         ctx
     }
-    pub fn new_child(&'a self, start: Pos) -> Ctx<'a, 'ctx> {
+    pub fn new_child(&'a self, start: Pos) -> Ctx<'a> {
         let mut ctx = Ctx {
             need_highlight: self.need_highlight,
             generic_types: FxHashMap::default(),
             plmod: self.plmod.new_child(),
             father: Some(self),
-            llbuilder: RefCell::new(self.llbuilder.borrow().new_child()),
+            // llbuilder: RefCell::new(self.llbuilder.borrow().new_child()),
             errs: self.errs,
             edit_pos: self.edit_pos.clone(),
             table: FxHashMap::default(),
@@ -604,17 +608,19 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             return_block: self.return_block,
             roots: RefCell::new(Vec::new()),
             rettp: self.rettp.clone(),
+            init_func: self.init_func.clone(),
+            function: self.function.clone(),
         };
         add_primitive_types(&mut ctx);
         ctx
     }
-    pub fn tmp_child_ctx(&'a self) -> Ctx<'a, 'ctx> {
+    pub fn tmp_child_ctx(&'a self) -> Ctx<'a> {
         let mut ctx = Ctx {
             need_highlight: self.need_highlight,
             generic_types: FxHashMap::default(),
             plmod: self.plmod.new_child(),
             father: Some(self),
-            llbuilder: RefCell::new(self.llbuilder.borrow().new_child()),
+            // llbuilder: RefCell::new(self.llbuilder.borrow().new_child()),
             errs: self.errs,
             edit_pos: self.edit_pos.clone(),
             table: FxHashMap::default(),
@@ -627,29 +633,52 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             return_block: self.return_block,
             roots: RefCell::new(Vec::new()),
             rettp: self.rettp.clone(),
+            init_func: self.init_func.clone(),
+            function: self.function.clone(),
         };
         add_primitive_types(&mut ctx);
         ctx
     }
-    pub fn set_init_fn(&self) {
-        self.llbuilder.borrow_mut().set_init_fn(&self);
+    pub fn set_init_fn<'b>(&'b mut self, builder: &'b LLVMBuilder<'a, 'ctx>) {
+        self.function = Some(builder.add_function(
+            &self.plmod.get_full_name("__init_global"),
+            &vec![],
+            PLType::VOID,
+            self,
+        ));
+        self.init_func = self.function;
+        builder.append_basic_block(self.init_func.unwrap(), "alloc");
+        let entry = builder.append_basic_block(self.init_func.unwrap(), "entry");
+        self.position_at_end(entry, builder);
     }
-    pub fn clear_init_fn(&self) {
-        self.llbuilder.borrow_mut().clear_init_fn();
+    pub fn clear_init_fn<'b>(&'b self, builder: &'b LLVMBuilder<'a, 'ctx>) {
+        let alloc = builder.get_first_basic_block(self.init_func.unwrap());
+        let entry = builder.get_last_basic_block(self.init_func.unwrap());
+        builder.delete_block(alloc);
+        builder.delete_block(entry);
+        builder.append_basic_block(self.init_func.unwrap(), "alloc");
+        builder.append_basic_block(self.init_func.unwrap(), "entry");
+    }
+    pub fn init_fn_ret<'b>(&'b mut self, builder: &'b LLVMBuilder<'a, 'ctx>) {
+        let alloc = builder.get_first_basic_block(self.init_func.unwrap());
+        let entry = builder.get_last_basic_block(self.init_func.unwrap());
+        self.position_at_end(alloc, builder);
+        builder.rm_curr_debug_location();
+        builder.build_unconditional_branch(entry);
+        self.position_at_end(entry, builder);
+        builder.build_return(None);
     }
     pub fn add_method(&mut self, tp: &STType, mthd: &str, fntp: FNType, range: Range) {
         if self.plmod.add_method(tp, mthd, fntp).is_err() {
             self.add_err(range, ErrorCode::DUPLICATE_METHOD);
         }
     }
-    pub fn init_fn_ret(&self) {
-        self.llbuilder.borrow_mut().init_fn_ret();
-    }
     /// # get_symbol
     /// search in current and all father symbol tables
-    pub fn get_symbol(
-        &self,
+    pub fn get_symbol<'b>(
+        &'b self,
         name: &str,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
     ) -> Option<(
         ValueHandle,
         Rc<RefCell<PLType>>,
@@ -662,7 +691,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             return Some((*h, pltype.clone(), range.clone(), refs.clone(), false));
         }
         if let Some(father) = self.father {
-            return father.get_symbol(name);
+            return father.get_symbol(name, builder);
         }
         if let Some(GlobalVar {
             tp: pltype,
@@ -671,8 +700,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }) = self.plmod.get_global_symbol(name)
         {
             return Some((
-                self.llbuilder
-                    .borrow()
+                builder
                     .get_global_var_handle(&self.plmod.get_full_name(name))
                     .unwrap(),
                 pltype.clone(),
@@ -724,40 +752,44 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     /// 用来获取外部模块的全局变量
     /// 如果没在当前module的全局变量表中找到，将会生成一个
     /// 该全局变量的声明
-    pub fn get_or_add_global(&mut self, name: &str, pltype: Rc<RefCell<PLType>>) -> ValueHandle {
-        self.llbuilder
-            .borrow()
-            .get_or_add_global(name, pltype, self)
+    pub fn get_or_add_global<'b>(
+        &'b mut self,
+        name: &str,
+        pltype: Rc<RefCell<PLType>>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> ValueHandle {
+        builder.get_or_add_global(name, pltype, self)
     }
-    pub fn init_global(&mut self) {
+    pub fn init_global<'b>(&'b mut self, builder: &'b LLVMBuilder<'a, 'ctx>) {
         let mut set: FxHashSet<String> = FxHashSet::default();
         for (_, sub) in &self.plmod.clone().submods {
-            self.init_global_walk(&sub, &mut set);
+            self.init_global_walk(&sub, &mut set, builder);
         }
         let a: &[ValueHandle] = &[];
-        self.llbuilder.borrow().build_call(
-            self.llbuilder
-                .borrow()
+        builder.build_call(
+            builder
                 .get_function(&self.plmod.get_full_name("__init_global"))
                 .unwrap(),
             false,
             a.iter(),
         );
     }
-    fn init_global_walk(&mut self, m: &Mod, set: &mut FxHashSet<String>) {
+    fn init_global_walk<'b>(
+        &'b mut self,
+        m: &Mod,
+        set: &mut FxHashSet<String>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) {
         let name = m.get_full_name("__init_global");
         if set.contains(&name) {
             return;
         }
         for (_, sub) in &m.submods {
-            self.init_global_walk(sub, set);
+            self.init_global_walk(sub, set, builder);
         }
-        let f = self
-            .llbuilder
-            .borrow()
-            .add_function(&name, &[], PLType::VOID, self);
+        let f = builder.add_function(&name, &[], PLType::VOID, self);
         let a: &[ValueHandle] = &[];
-        self.llbuilder.borrow().build_call(f, false, a.iter());
+        builder.build_call(f, false, a.iter());
         set.insert(name);
     }
 
@@ -839,14 +871,15 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.errs.borrow_mut().push(dia);
     }
     // load type* to type
-    pub fn try_load2var(
-        &mut self,
+    pub fn try_load2var<'b>(
+        &'b mut self,
         range: Range,
         v: PLValue,
         tp: Rc<RefCell<PLType>>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
     ) -> Result<(ValueHandle, Rc<RefCell<PLType>>), PLDiag> {
         let v = v.value;
-        self.llbuilder.borrow().try_load2var(range, v, tp, self)
+        builder.try_load2var(range, v, tp, self)
     }
     pub fn if_completion(
         &self,
@@ -1126,9 +1159,13 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         };
         self.plmod.hints.borrow_mut().push(hint);
     }
-    pub fn position_at_end(&mut self, block: BlockHandle) {
+    pub fn position_at_end<'b>(
+        &'b mut self,
+        block: BlockHandle,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) {
         self.block = Some(block);
-        self.llbuilder.borrow().position_at_end_block(block);
+        builder.position_at_end_block(block);
     }
     fn get_keyword_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         let keywords = vec![
@@ -1205,10 +1242,11 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
     /// # auto_deref
     /// 自动解引用，有几层解几层
-    pub fn auto_deref(
-        &self,
+    pub fn auto_deref<'b>(
+        &'b self,
         tp: Rc<RefCell<PLType>>,
         value: ValueHandle,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
     ) -> (Rc<RefCell<PLType>>, ValueHandle) {
         let mut tp = tp;
         let mut value = value;
@@ -1216,7 +1254,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             match &*RefCell::borrow(&tp.clone()) {
                 PLType::POINTER(p) => {
                     tp = p.clone();
-                    value = self.llbuilder.borrow().build_load(value, "load");
+                    value = builder.build_load(value, "load");
                 }
                 _ => break,
             }

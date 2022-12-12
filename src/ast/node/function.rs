@@ -35,12 +35,16 @@ impl Node for FuncCallNode {
             para.print(tabs + 1, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> NodeResult {
         // let currscope = ctx.discope;
         let mp = ctx.move_generic_types();
         let id_range = self.id.range();
         let mut para_values = Vec::new();
-        let (plvalue, pltype, _) = self.id.emit(ctx)?;
+        let (plvalue, pltype, _) = self.id.emit(ctx, builder)?;
         if pltype.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND));
         }
@@ -59,7 +63,7 @@ impl Node for FuncCallNode {
                     ctx.add_err(generic_params_range, ErrorCode::GENERIC_PARAM_LEN_MISMATCH)
                 );
             }
-            let generic_types = generic_params.get_generic_types(ctx)?;
+            let generic_types = generic_params.get_generic_types(ctx, builder)?;
             let mut i = 0;
             for (_, pltype) in fntype.generic_map.iter() {
                 if generic_types[i].is_some() {
@@ -109,15 +113,20 @@ impl Node for FuncCallNode {
         // value check and generic infer
         for (i, para) in self.paralist.iter_mut().enumerate() {
             let pararange = para.range();
-            let (value, value_pltype, _) = para.emit(ctx)?;
+            let (value, value_pltype, _) = para.emit(ctx, builder)?;
             if value.is_none() || value_pltype.is_none() {
                 return Ok((None, None, TerminatorEnum::NONE));
             }
-            let (load, _) = ctx.try_load2var(pararange, value.unwrap(), value_pltype.unwrap())?;
+            let (load, _) = ctx.try_load2var(
+                pararange,
+                value.unwrap(),
+                value_pltype.clone().unwrap(),
+                builder,
+            )?;
             let value_pltype = value_pltype.unwrap();
             if !fntype.param_pltypes[i + skip as usize]
                 .clone()
-                .eq_or_infer(ctx, value_pltype.clone())?
+                .eq_or_infer(ctx, value_pltype.clone(), builder)?
             {
                 return Err(ctx.add_err(pararange, ErrorCode::PARAMETER_TYPE_NOT_MATCH));
             }
@@ -126,9 +135,9 @@ impl Node for FuncCallNode {
         if fntype.need_gen_code() {
             let block = ctx.block;
             ctx.need_highlight = false;
-            let (_, pltype, _) = fntype.node.gen_fntype(ctx, false)?;
+            let (_, pltype, _) = fntype.node.gen_fntype(ctx, false, builder)?;
             ctx.need_highlight = true;
-            ctx.position_at_end(block.unwrap());
+            ctx.position_at_end(block.unwrap(), builder);
             let pltype = pltype.unwrap();
             match &*pltype.borrow() {
                 PLType::FN(f) => {
@@ -137,32 +146,31 @@ impl Node for FuncCallNode {
                 _ => unreachable!(),
             };
         }
-        let function = ctx.llbuilder.borrow().get_or_insert_fn_handle(&fntype, ctx);
-        ctx.llbuilder.borrow().try_set_fn_dbg(self.range.start);
-        let ret = ctx
-            .llbuilder
-            .borrow()
-            .build_call(function, false, para_values.iter());
+        let function = builder.get_or_insert_fn_handle(&fntype, ctx);
+        if let Some(f) = ctx.function {
+            builder.try_set_fn_dbg(self.range.start, f);
+        };
+        let ret = builder.build_call(function, false, para_values.iter());
         ctx.save_if_comment_doc_hover(id_range, Some(fntype.doc.clone()));
         let res = match ret {
             Some(v) => Ok((
                 {
-                    ctx.llbuilder.borrow().rm_curr_debug_location();
-                    let ptr = ctx.llbuilder.borrow().alloc_vtp("ret_alloc_tmp", v, ctx);
-                    ctx.llbuilder.borrow().build_store(ptr, v);
+                    builder.rm_curr_debug_location();
+                    let ptr = builder.alloc_vtp("ret_alloc_tmp", v, ctx);
+                    builder.build_store(ptr, v);
                     Some(plv!(ptr))
                 },
                 Some({
-                    match &*fntype.ret_pltype.get_type(ctx)?.borrow() {
+                    match &*fntype.ret_pltype.get_type(ctx, builder)?.borrow() {
                         PLType::GENERIC(g) => g.curpltype.as_ref().unwrap().clone(),
-                        _ => fntype.ret_pltype.get_type(ctx)?,
+                        _ => fntype.ret_pltype.get_type(ctx, builder)?,
                     }
                 }),
                 TerminatorEnum::NONE,
             )),
             None => Ok((
                 None,
-                Some(fntype.ret_pltype.get_type(ctx)?),
+                Some(fntype.ret_pltype.get_type(ctx, builder)?),
                 TerminatorEnum::NONE,
             )),
         };
@@ -187,9 +195,10 @@ pub struct FuncDefNode {
     pub body: Option<StatementsNode>,
 }
 impl FuncDefNode {
-    pub fn emit_pl_tp<'a, 'ctx>(
+    pub fn emit_pl_tp<'a, 'ctx, 'b>(
         &mut self,
-        ctx: &mut Ctx<'a, 'ctx>,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
     ) -> Result<Rc<RefCell<PLType>>, PLDiag> {
         let mut param_pltypes = Vec::new();
         let mut param_name = Vec::new();
@@ -208,7 +217,7 @@ impl FuncDefNode {
             );
         }
         for para in self.paralist.iter() {
-            let paramtype = para.typenode.get_type(ctx)?;
+            let paramtype = para.typenode.get_type(ctx, builder)?;
             ctx.set_if_refs_tp(paramtype.clone(), para.typenode.range());
             if first && para.id.name == "self" {
                 method = true;
@@ -237,7 +246,7 @@ impl FuncDefNode {
             node: Box::new(self.clone()),
         };
         if self.generics.is_none() {
-            ctx.llbuilder.borrow().get_or_insert_fn_handle(&ftp, ctx);
+            builder.get_or_insert_fn_handle(&ftp, ctx);
         }
         let pltype = Rc::new(RefCell::new(PLType::FN(ftp.clone())));
         ctx.set_if_refs_tp(pltype.clone(), self.id.range);
@@ -248,7 +257,7 @@ impl FuncDefNode {
                 .first()
                 .unwrap()
                 .typenode
-                .get_type(ctx)
+                .get_type(ctx, builder)
                 .unwrap();
             let mut b = a.borrow_mut();
             if let PLType::POINTER(s) = &mut *b {
@@ -266,11 +275,15 @@ impl FuncDefNode {
         ctx.reset_generic_types(mp);
         Ok(pltype)
     }
-    pub fn emit_func_def<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
+    pub fn emit_func_def<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> Result<(), PLDiag> {
         if let Ok(_) = ctx.get_type(&self.id.name.as_str(), self.id.range) {
             return Err(ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL));
         }
-        let pltype = self.emit_pl_tp(ctx)?;
+        let pltype = self.emit_pl_tp(ctx, builder)?;
         ctx.add_type(self.id.name.clone(), pltype, self.id.range)?;
         Ok(())
     }
@@ -294,17 +307,26 @@ impl Node for FuncDefNode {
             body.print(tabs + 1, true, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
-        self.gen_fntype(ctx, true)
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> NodeResult {
+        self.gen_fntype(ctx, true, builder)
     }
 }
 impl FuncDefNode {
-    fn gen_fntype<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>, first: bool) -> NodeResult {
+    fn gen_fntype<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        first: bool,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> NodeResult {
         ctx.save_if_comment_doc_hover(self.id.range, Some(self.doc.clone()));
         ctx.emit_comment_highlight(&self.precom);
         ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
         if let Some(generics) = &mut self.generics {
-            generics.emit(ctx)?;
+            generics.emit(ctx, builder)?;
         }
         for para in self.paralist.iter() {
             ctx.push_semantic_token(para.id.range, SemanticTokenType::PARAMETER, 0);
@@ -315,6 +337,8 @@ impl FuncDefNode {
         if pltype.borrow().get_range() != Some(self.range) {
             return Err(PLDiag::new_error(self.id.range, ErrorCode::REDEFINE_SYMBOL));
         }
+        let paras = self.paralist.clone();
+        let ret = self.ret.clone();
         if let Some(body) = self.body.as_mut() {
             // add function
             let child = &mut ctx.new_child(self.range.start);
@@ -335,10 +359,7 @@ impl FuncDefNode {
                         }
                     })
                 }
-                child
-                    .llbuilder
-                    .borrow()
-                    .get_or_insert_fn_handle(&fntype, child)
+                builder.get_or_insert_fn_handle(&fntype, child)
             };
             // debug info
             // let subroutine_type = child.dibuilder.create_subroutine_type(
@@ -361,54 +382,47 @@ impl FuncDefNode {
             //     false,
             // );
             // funcvalue.set_subprogram(subprogram);
-            // child.function = Some(funcvalue);
+            child.function = Some(funcvalue);
+
             // // let discope = child.discope;
             // child.discope = subprogram.as_debug_info_scope().clone();
-            ctx.llbuilder
-                .borrow()
-                .build_sub_program(&self, &fntype, funcvalue, child)?;
+            builder.build_sub_program(paras, ret, &fntype, funcvalue, child)?;
             // add block
-            let allocab = child.llbuilder.borrow().append_basic_block("alloc");
-            let entry = child.llbuilder.borrow().append_basic_block("entry");
-            let return_block = child.llbuilder.borrow().append_basic_block("return");
-            child.position_at_end(return_block);
-            let ret_value_ptr = match &*fntype.ret_pltype.get_type(ctx)?.borrow() {
+            let allocab = builder.append_basic_block(funcvalue, "alloc");
+            let entry = builder.append_basic_block(funcvalue, "entry");
+            let return_block = builder.append_basic_block(funcvalue, "return");
+            child.position_at_end(return_block, builder);
+            let ret_value_ptr = match &*fntype.ret_pltype.get_type(child, builder)?.borrow() {
+                PLType::VOID => None,
                 _ => {
-                    let pltype = self.ret.get_type(child)?;
-                    ctx.llbuilder.borrow().rm_curr_debug_location();
-                    let retv = child
-                        .llbuilder
-                        .borrow()
-                        .alloc("retvalue", &pltype.borrow(), child);
+                    let pltype = self.ret.get_type(child, builder)?;
+                    builder.rm_curr_debug_location();
+                    let retv = builder.alloc("retvalue", &pltype.borrow(), child);
                     // 返回值不能在函数结束时从root表移除
                     child.roots.borrow_mut().pop();
                     Some(retv)
                 }
-                PLType::VOID => None,
             };
 
             child.return_block = Some((return_block, ret_value_ptr));
             if let Some(ptr) = ret_value_ptr {
-                let value = child.llbuilder.borrow().build_load(ptr, "load_ret_tmp");
-                child.position_at_end(return_block);
-                child.llbuilder.borrow().gc_collect(child);
-                child.llbuilder.borrow().gc_rm_root_current(ptr, child);
-                child.llbuilder.borrow().build_return(Some(value));
+                let value = builder.build_load(ptr, "load_ret_tmp");
+                child.position_at_end(return_block, builder);
+                builder.gc_collect(child);
+                builder.gc_rm_root_current(ptr, child);
+                builder.build_return(Some(value));
             } else {
-                child.llbuilder.borrow().gc_collect(child);
-                child.llbuilder.borrow().build_return(None);
+                builder.gc_collect(child);
+                builder.build_return(None);
             };
-            child.position_at_end(entry);
+            child.position_at_end(entry, builder);
             // alloc para
             for (i, para) in fntype.param_pltypes.iter().enumerate() {
-                let basetype = para.get_type(child)?.borrow();
-                let alloca =
-                    child
-                        .llbuilder
-                        .borrow()
-                        .alloc(&fntype.param_names[i], &basetype, child);
+                let tp = para.get_type(child, builder)?;
+                let basetype = tp.borrow();
+                let alloca = builder.alloc(&fntype.param_names[i], &basetype, child);
                 // add alloc var debug info
-                child.llbuilder.borrow().create_parameter_variable(
+                builder.create_parameter_variable(
                     &fntype,
                     self.paralist[i].range.start,
                     i,
@@ -417,7 +431,7 @@ impl FuncDefNode {
                     alloca,
                     allocab,
                 );
-                let parapltype = para.get_type(child)?.clone();
+                let parapltype = para.get_type(child, builder)?.clone();
                 child
                     .add_symbol(
                         fntype.param_names[i].clone(),
@@ -429,22 +443,22 @@ impl FuncDefNode {
                     .unwrap();
             }
             // emit body
-            child.llbuilder.borrow().rm_curr_debug_location();
+            builder.rm_curr_debug_location();
             if self.id.name == "main" {
-                if let Some(inst) = child.llbuilder.borrow().get_first_instruction(allocab) {
-                    child.llbuilder.borrow().position_at(inst);
+                if let Some(inst) = builder.get_first_instruction(allocab) {
+                    builder.position_at(inst);
                 } else {
-                    child.position_at_end(allocab);
+                    child.position_at_end(allocab, builder);
                 }
-                child.init_global();
-                child.position_at_end(entry);
+                child.init_global(builder);
+                child.position_at_end(entry, builder);
             }
-            let (_, _, terminator) = body.emit(child)?;
+            let (_, _, terminator) = body.emit(child, builder)?;
             if !terminator.is_return() {
                 return Err(child.add_err(self.range, ErrorCode::FUNCTION_MUST_HAVE_RETURN));
             }
-            child.position_at_end(allocab);
-            child.llbuilder.borrow().build_unconditional_branch(entry);
+            child.position_at_end(allocab, builder);
+            builder.build_unconditional_branch(entry);
             // child.discope = discope;
             child.reset_generic_types(mp);
             return Ok((None, Some(pltype.clone()), TerminatorEnum::NONE));

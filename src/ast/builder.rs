@@ -1,7 +1,11 @@
 /// 为以后codegen逻辑完全分离作准备，此包代码应该遵循以下原则：
 /// 1. 所有Builder的字段都应该private，不应该被外部直接访问
 /// 2. 所有涉及llvm类型的函数（包括参数或返回值）都应该是private的
-use std::{cell::RefCell, path::Path, rc::Rc};
+use std::{
+    cell::{Cell, RefCell},
+    path::Path,
+    rc::Rc,
+};
 
 use inkwell::{
     basic_block::BasicBlock,
@@ -22,7 +26,7 @@ use rustc_hash::FxHashMap;
 use super::{
     ctx::{Ctx, MemberType, PLDiag},
     diag::ErrorCode,
-    node::{function::FuncDefNode, TypeNode},
+    node::{function::FuncDefNode, types::TypedIdentifierNode, TypeNode, TypeNodeEnum},
     pltype::{ARRType, FNType, Field, PLType, PriType, RetTypeEnum, STType},
     range::{Pos, Range},
 };
@@ -49,16 +53,16 @@ pub struct LLVMBuilder<'a, 'ctx> {
     handle_reverse_table: Rc<RefCell<FxHashMap<AnyValueEnum<'ctx>, ValueHandle>>>,
     block_table: Rc<RefCell<FxHashMap<BlockHandle, BasicBlock<'ctx>>>>,
     block_reverse_table: Rc<RefCell<FxHashMap<BasicBlock<'ctx>, BlockHandle>>>,
-    context: &'ctx Context,                 // llvm context
-    builder: &'a Builder<'ctx>,             // llvm builder
-    module: &'a Module<'ctx>,               // llvm module
-    dibuilder: &'a DebugInfoBuilder<'ctx>,  // debug info builder
-    diunit: &'a DICompileUnit<'ctx>,        // debug info unit
-    function: Option<FunctionValue<'ctx>>,  // current function
-    init_func: Option<FunctionValue<'ctx>>, //init function,call first in main
-    targetmachine: &'a TargetMachine,       // might be used in debug info
-    discope: DIScope<'ctx>,                 // debug info scope
-    nodebug_builder: &'a Builder<'ctx>,     // builder without debug info
+    context: &'ctx Context,                // llvm context
+    builder: &'a Builder<'ctx>,            // llvm builder
+    module: &'a Module<'ctx>,              // llvm module
+    dibuilder: &'a DebugInfoBuilder<'ctx>, // debug info builder
+    diunit: &'a DICompileUnit<'ctx>,       // debug info unit
+    // function: Option<FunctionValue<'ctx>>,  // current function
+    // init_func: Option<FunctionValue<'ctx>>, //init function,call first in main
+    targetmachine: &'a TargetMachine, // might be used in debug info
+    discope: Cell<DIScope<'ctx>>,     // debug info scope
+    nodebug_builder: &'a Builder<'ctx>, // builder without debug info
     ditypes_placeholder: Rc<RefCell<FxHashMap<String, RefCell<Vec<MemberType<'ctx>>>>>>, // hold the generated debug info type place holder
     ditypes: Rc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
 }
@@ -80,63 +84,28 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             module,
             dibuilder,
             diunit,
-            function: None,
             targetmachine: tm,
-            discope: diunit.get_file().as_debug_info_scope(),
+            discope: Cell::new(diunit.get_file().as_debug_info_scope()),
             nodebug_builder: nodbg_builder,
             ditypes: Rc::new(RefCell::new(FxHashMap::default())),
             ditypes_placeholder: Rc::new(RefCell::new(FxHashMap::default())),
-            init_func: None,
             handle_table: Rc::new(RefCell::new(FxHashMap::default())),
             handle_reverse_table: Rc::new(RefCell::new(FxHashMap::default())),
             block_table: Rc::new(RefCell::new(FxHashMap::default())),
             block_reverse_table: Rc::new(RefCell::new(FxHashMap::default())),
         }
     }
-    pub fn set_init_fn(&mut self, ctx: &Ctx<'a, 'ctx>) {
-        self.function = Some(self.module.add_function(
-            &ctx.plmod.get_full_name("__init_global"),
-            self.context.void_type().fn_type(&vec![], false),
-            None,
-        ));
-        self.init_func = self.function;
-        self.context
-            .append_basic_block(self.init_func.unwrap(), "alloc");
-        let entry = self
-            .context
-            .append_basic_block(self.init_func.unwrap(), "entry");
-        self.position_at_end(entry);
-    }
-    fn position_at_end(&mut self, block: BasicBlock<'ctx>) {
+    fn position_at_end(&self, block: BasicBlock<'ctx>) {
         self.builder.position_at_end(block);
         self.nodebug_builder.position_at_end(block);
     }
-    pub fn position_at_end_block(&mut self, block: BlockHandle) {
+    pub fn position_at_end_block(&self, block: BlockHandle) {
         self.builder
             .position_at_end(self.block_table.borrow()[&block]);
         self.nodebug_builder
             .position_at_end(self.block_table.borrow()[&block]);
     }
-    pub fn clear_init_fn(&mut self) {
-        let alloc = self.init_func.unwrap().get_first_basic_block().unwrap();
-        let entry = self.init_func.unwrap().get_last_basic_block().unwrap();
-        unsafe {
-            entry.delete().unwrap();
-            alloc.delete().unwrap();
-        }
-        self.context
-            .append_basic_block(self.init_func.unwrap(), "alloc");
-        self.context
-            .append_basic_block(self.init_func.unwrap(), "entry");
-    }
-    pub fn init_fn_ret(&mut self) {
-        let alloc = self.init_func.unwrap().get_first_basic_block().unwrap();
-        let entry = self.init_func.unwrap().get_last_basic_block().unwrap();
-        self.position_at_end(alloc);
-        self.nodebug_builder.build_unconditional_branch(entry);
-        self.position_at_end(entry);
-        self.nodebug_builder.build_return(None);
-    }
+
     fn get_llvm_value_handle(&self, value: &AnyValueEnum<'ctx>) -> ValueHandle {
         match self.handle_reverse_table.borrow().get(value) {
             Some(handle) => *handle,
@@ -205,11 +174,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     /// # get_basic_type_op
     /// get the basic type of the type
     /// used in code generation
-    fn get_basic_type_op(
-        &self,
-        pltp: &PLType,
-        ctx: &mut Ctx<'a, 'ctx>,
-    ) -> Option<BasicTypeEnum<'ctx>> {
+    fn get_basic_type_op(&self, pltp: &PLType, ctx: &mut Ctx<'a>) -> Option<BasicTypeEnum<'ctx>> {
         match pltp {
             PLType::GENERIC(g) => match &g.curpltype {
                 Some(pltype) => self.get_basic_type_op(&pltype.borrow(), ctx),
@@ -261,13 +226,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
     }
 
-    pub fn get_or_insert_fn_handle(&self, pltp: &FNType, ctx: &mut Ctx<'a, 'ctx>) -> ValueHandle {
+    pub fn get_or_insert_fn_handle(&self, pltp: &FNType, ctx: &mut Ctx<'a>) -> ValueHandle {
         self.get_llvm_value_handle(&self.get_or_insert_fn(pltp, ctx).as_any_value_enum())
     }
     /// try get function value from module
     ///
     /// if not found, create a declaration
-    fn get_or_insert_fn(&self, pltp: &FNType, ctx: &mut Ctx<'a, 'ctx>) -> FunctionValue<'ctx> {
+    fn get_or_insert_fn(&self, pltp: &FNType, ctx: &mut Ctx<'a>) -> FunctionValue<'ctx> {
         let llvmname = pltp.append_name_with_generic(pltp.llvmname.clone());
         if let Some(v) = self.module.get_function(&llvmname) {
             return v;
@@ -275,20 +240,20 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let mut param_types = vec![];
         for param_pltype in pltp.param_pltypes.iter() {
             param_types.push(
-                self.get_basic_type_op(&param_pltype.get_type(ctx).unwrap().borrow(), ctx)
+                self.get_basic_type_op(&param_pltype.get_type(ctx, self).unwrap().borrow(), ctx)
                     .unwrap()
                     .into(),
             );
         }
         let fn_type = self
-            .get_ret_type(&pltp.ret_pltype.get_type(ctx).unwrap().borrow(), ctx)
+            .get_ret_type(&pltp.ret_pltype.get_type(ctx, self).unwrap().borrow(), ctx)
             .fn_type(&param_types, false);
         let fn_value = self
             .module
             .add_function(&llvmname, fn_type, Some(Linkage::External));
         fn_value
     }
-    fn struct_type(&self, pltp: &STType, ctx: &mut Ctx<'a, 'ctx>) -> StructType<'ctx> {
+    fn struct_type(&self, pltp: &STType, ctx: &mut Ctx<'a>) -> StructType<'ctx> {
         let st = self.module.get_struct_type(&pltp.get_st_full_name());
         if let Some(st) = st {
             return st;
@@ -301,7 +266,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 .into_iter()
                 .map(|order_field| {
                     self.get_basic_type_op(
-                        &order_field.typenode.get_type(ctx).unwrap().borrow(),
+                        &order_field.typenode.get_type(ctx, self).unwrap().borrow(),
                         ctx,
                     )
                     .unwrap()
@@ -313,13 +278,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
     /// # get_ret_type
     /// get the return type, which is void type or primitive type
-    fn get_ret_type(&self, pltp: &PLType, ctx: &mut Ctx<'a, 'ctx>) -> RetTypeEnum<'ctx> {
+    fn get_ret_type(&self, pltp: &PLType, ctx: &mut Ctx<'a>) -> RetTypeEnum<'ctx> {
         match pltp {
             PLType::VOID => RetTypeEnum::VOID(self.context.void_type()),
             _ => RetTypeEnum::BASIC(self.get_basic_type_op(pltp, ctx).unwrap()),
         }
     }
-    fn arr_type(&self, arrtp: &ARRType, ctx: &mut Ctx<'a, 'ctx>) -> ArrayType<'ctx> {
+    fn arr_type(&self, arrtp: &ARRType, ctx: &mut Ctx<'a>) -> ArrayType<'ctx> {
         self.get_basic_type_op(&arrtp.element_type.borrow(), ctx)
             .unwrap()
             .array_type(arrtp.size)
@@ -328,10 +293,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     fn get_field_di_type(
         &self,
         field: &Field,
-        ctx: &mut Ctx<'a, 'ctx>,
+        ctx: &mut Ctx<'a>,
         offset: u64,
     ) -> (DIType<'ctx>, u64) {
-        let field_pltype = match field.typenode.get_type(ctx) {
+        let field_pltype = match field.typenode.get_type(ctx, self) {
             Ok(field_pltype) => field_pltype,
             Err(_) => ctx.get_type("i64", Default::default()).unwrap(),
         };
@@ -383,7 +348,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
     /// # get_ditype
     /// get the debug info type of the pltype
-    fn get_ditype(&self, pltp: &PLType, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
+    fn get_ditype(&self, pltp: &PLType, ctx: &mut Ctx<'a>) -> Option<DIType<'ctx>> {
         let td = self.targetmachine.get_target_data();
         match pltp {
             PLType::FN(_) => None,
@@ -527,7 +492,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
     }
 
-    pub fn mv2heap(&mut self, val: ValueHandle, ctx: &mut Ctx<'a, 'ctx>) -> ValueHandle {
+    pub fn mv2heap(&self, val: ValueHandle, ctx: &mut Ctx<'a>) -> ValueHandle {
         if !ctx.usegc {
             return val;
         }
@@ -572,7 +537,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     //         .try_into()
     //         .unwrap()
     // }
-    pub fn gc_add_root(&mut self, stackptr: BasicValueEnum<'ctx>, ctx: &mut Ctx<'a, 'ctx>) {
+    pub fn gc_add_root(&self, stackptr: BasicValueEnum<'ctx>, ctx: &mut Ctx<'a>) {
         if !ctx.usegc {
             return;
         }
@@ -594,7 +559,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         self.builder
             .build_call(f, &[gc.into(), stackptr.into()], "add_root");
     }
-    pub fn gc_rm_root(&mut self, stackptr: ValueHandle, ctx: &mut Ctx<'a, 'ctx>) {
+    pub fn gc_rm_root(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>) {
         if !ctx.usegc {
             return;
         }
@@ -605,7 +570,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
         self.gc_rm_root_current(stackptr, ctx);
     }
-    pub fn gc_rm_root_current(&mut self, stackptr: ValueHandle, ctx: &mut Ctx<'a, 'ctx>) {
+    pub fn gc_rm_root_current(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>) {
         if !ctx.usegc {
             return;
         }
@@ -628,7 +593,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         self.builder
             .build_call(f, &[gc.into(), stackptr.into()], "rm_root");
     }
-    pub fn gc_collect(&mut self, ctx: &mut Ctx<'a, 'ctx>) {
+    pub fn gc_collect(&self, ctx: &mut Ctx<'a>) {
         if !ctx.usegc {
             return;
         }
@@ -653,7 +618,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     //         .try_into()
     //         .unwrap()
     // }
-    fn get_gc(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> PointerValue<'ctx> {
+    fn get_gc(&self, ctx: &mut Ctx<'a>) -> PointerValue<'ctx> {
         let gcmod = ctx.plmod.submods.get("gc").unwrap();
         let gc = gcmod.get_global_symbol("diogc").unwrap();
         self.get_or_add_global_value(&gcmod.get_full_name("diogc"), gc.tp.clone(), ctx)
@@ -665,7 +630,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         &self,
         name: &str,
         pltype: Rc<RefCell<PLType>>,
-        ctx: &mut Ctx<'a, 'ctx>,
+        ctx: &mut Ctx<'a>,
     ) -> PointerValue<'ctx> {
         let global = self.get_global_var_handle(name);
         if global.is_none() {
@@ -685,7 +650,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         &self,
         name: &str,
         pltype: Rc<RefCell<PLType>>,
-        ctx: &mut Ctx<'a, 'ctx>,
+        ctx: &mut Ctx<'a>,
     ) -> ValueHandle {
         self.get_llvm_value_handle(
             &self
@@ -694,18 +659,18 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         )
     }
 
-    pub fn build_load(&mut self, ptr: ValueHandle, name: &str) -> ValueHandle {
+    pub fn build_load(&self, ptr: ValueHandle, name: &str) -> ValueHandle {
         let ptr = self.get_llvm_value(ptr).unwrap();
         let ptr = ptr.into_pointer_value();
         let ptr = self.builder.build_load(ptr, name);
         self.get_llvm_value_handle(&ptr.as_any_value_enum())
     }
     pub fn try_load2var(
-        &mut self,
+        &self,
         range: Range,
         v: ValueHandle,
         tp: Rc<RefCell<PLType>>,
-        ctx: &mut Ctx<'a, 'ctx>,
+        ctx: &mut Ctx<'a>,
     ) -> Result<(ValueHandle, Rc<RefCell<PLType>>), PLDiag> {
         let handle = v;
         let v = self.get_llvm_value(handle).unwrap();
@@ -773,7 +738,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         name: &str,
         paramtps: &[PLType],
         ret: PLType,
-        ctx: &mut Ctx<'a, 'ctx>,
+        ctx: &mut Ctx<'a>,
     ) -> ValueHandle {
         let mut param_types = vec![];
         for param_pltype in paramtps.iter() {
@@ -789,19 +754,14 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         self.context.opaque_struct_type(name);
     }
 
-    pub fn add_body_to_struct_type(
-        &self,
-        name: &str,
-        order_fields: &[Field],
-        ctx: &mut Ctx<'a, 'ctx>,
-    ) {
+    pub fn add_body_to_struct_type(&self, name: &str, order_fields: &[Field], ctx: &mut Ctx<'a>) {
         let st = self.module.get_struct_type(name).unwrap();
         st.set_body(
             &order_fields
                 .into_iter()
                 .map(|order_field| {
                     self.get_basic_type_op(
-                        &order_field.typenode.get_type(ctx).unwrap().borrow(),
+                        &order_field.typenode.get_type(ctx, self).unwrap().borrow(),
                         ctx,
                     )
                     .unwrap()
@@ -810,13 +770,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             false,
         );
     }
-    pub fn alloc(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a, 'ctx>) -> ValueHandle {
+    pub fn alloc(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle {
         let alloca = self
             .builder
             .build_alloca(self.get_basic_type_op(pltype, ctx).unwrap(), name);
         self.get_llvm_value_handle(&alloca.as_any_value_enum())
     }
-    pub fn alloc_vtp(&self, name: &str, v: ValueHandle, ctx: &mut Ctx<'a, 'ctx>) -> ValueHandle {
+    pub fn alloc_vtp(&self, name: &str, v: ValueHandle, ctx: &mut Ctx<'a>) -> ValueHandle {
         let alloca = self.builder.build_alloca::<BasicTypeEnum>(
             self.get_llvm_value(v)
                 .unwrap()
@@ -898,7 +858,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             self.context,
             pos.line as u32,
             pos.column as u32,
-            self.discope,
+            self.discope.get(),
             None,
         );
         self.builder.set_current_debug_location(self.context, loc);
@@ -909,11 +869,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         line: u32,
         pltype: &PLType,
         v: ValueHandle,
-        ctx: &mut Ctx<'a, 'ctx>,
+        ctx: &mut Ctx<'a>,
     ) {
         let ditype = self.get_ditype(pltype, ctx);
         let debug_var_info = self.dibuilder.create_auto_variable(
-            self.discope,
+            self.discope.get(),
             name,
             self.diunit.get_file(),
             line,
@@ -927,14 +887,14 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             Some(debug_var_info),
             None,
             self.builder.get_current_debug_location().unwrap(),
-            self.function.unwrap().get_first_basic_block().unwrap(),
+            self.builder
+                .get_insert_block()
+                .unwrap()
+                .get_parent()
+                .unwrap()
+                .get_first_basic_block()
+                .unwrap(),
         );
-    }
-    pub fn set_current_function(&mut self, f: ValueHandle) {
-        self.function = Some(self.get_llvm_value(f).unwrap().into_function_value());
-    }
-    pub fn get_current_function(&self) -> ValueHandle {
-        self.get_llvm_value_handle(&self.function.unwrap().as_any_value_enum())
     }
     pub fn build_unconditional_branch(&self, bb: BlockHandle) {
         let bb = self.get_llvm_block(bb).unwrap();
@@ -1083,10 +1043,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let v = self.builder.build_float_div(lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn append_basic_block(&self, name: &str) -> BlockHandle {
-        let bb = self
-            .context
-            .append_basic_block(self.function.unwrap(), name);
+    pub fn append_basic_block(&self, func: ValueHandle, name: &str) -> BlockHandle {
+        let bb = self.context.append_basic_block(
+            self.get_llvm_value(func).unwrap().into_function_value(),
+            name,
+        );
         self.get_llvm_block_handle(bb)
     }
     pub fn build_int_truncate(&self, v: ValueHandle, dest_ty: &PriType, name: &str) -> ValueHandle {
@@ -1114,25 +1075,26 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         self.builder.clear_insertion_position();
         self.nodebug_builder.clear_insertion_position();
     }
-    pub fn try_set_fn_dbg(&mut self, pos: Pos) {
-        if let Some(f) = self.function {
-            if f.get_subprogram().is_some() {
-                self.discope = f.get_subprogram().unwrap().as_debug_info_scope();
-                // ctx.discope = currscope;
-                self.build_dbg_location(pos)
-            }
-        };
+    pub fn try_set_fn_dbg(&self, pos: Pos, f: ValueHandle) {
+        let f = self.get_llvm_value(f).unwrap().into_function_value();
+        if f.get_subprogram().is_some() {
+            self.discope
+                .set(f.get_subprogram().unwrap().as_debug_info_scope());
+            // ctx.discope = currscope;
+            self.build_dbg_location(pos)
+        }
     }
     pub fn build_sub_program(
-        &mut self,
-        f: &FuncDefNode,
+        &self,
+        paralist: Vec<Box<TypedIdentifierNode>>,
+        ret: Box<TypeNodeEnum>,
         fntype: &FNType,
         fnvalue: ValueHandle,
-        child: &mut Ctx<'a, 'ctx>,
+        child: &mut Ctx<'a>,
     ) -> Result<(), PLDiag> {
         let mut param_ditypes = vec![];
-        for para in f.paralist.iter() {
-            let pltype = para.typenode.get_type(child)?;
+        for para in paralist.iter() {
+            let pltype = para.typenode.get_type(child, self)?;
             match &*pltype.borrow() {
                 PLType::VOID => {
                     return Err(child.add_err(para.range, ErrorCode::VOID_TYPE_CANNOT_BE_PARAMETER))
@@ -1145,7 +1107,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         // debug info
         let subroutine_type = self.dibuilder.create_subroutine_type(
             self.diunit.get_file(),
-            self.get_ditype(&f.ret.get_type(child)?.borrow(), child),
+            self.get_ditype(&ret.get_type(child, self)?.borrow(), child),
             &param_ditypes,
             DIFlags::PUBLIC,
         );
@@ -1154,19 +1116,18 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             &fntype.append_name_with_generic(fntype.name.clone()),
             None,
             self.diunit.get_file(),
-            f.range.start.line as u32,
+            fntype.range.start.line as u32,
             subroutine_type,
             true,
             true,
-            f.range.start.line as u32,
+            fntype.range.start.line as u32,
             DIFlags::PUBLIC,
             false,
         );
         let funcvalue = self.get_llvm_value(fnvalue).unwrap().into_function_value();
         funcvalue.set_subprogram(subprogram);
-        self.function = Some(funcvalue);
         // let discope = child.discope;
-        self.discope = subprogram.as_debug_info_scope().clone();
+        self.discope.set(subprogram.as_debug_info_scope().clone());
         Ok(())
     }
     pub fn build_return(&self, v: Option<ValueHandle>) {
@@ -1183,19 +1144,22 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         fntype: &FNType,
         pos: Pos,
         i: usize,
-        child: &mut Ctx<'a, 'ctx>,
+        child: &mut Ctx<'a>,
         fnvalue: ValueHandle,
         alloca: ValueHandle,
         allocab: BlockHandle,
     ) {
         let divar = self.dibuilder.create_parameter_variable(
-            self.discope,
+            self.discope.get(),
             &fntype.param_names[i],
             i as u32,
             self.diunit.get_file(),
             pos.line as u32,
             self.get_ditype(
-                &fntype.param_pltypes[i].get_type(child).unwrap().borrow(),
+                &fntype.param_pltypes[i]
+                    .get_type(child, self)
+                    .unwrap()
+                    .borrow(),
                 child,
             )
             .unwrap(),
@@ -1225,17 +1189,21 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let v = self.get_llvm_value(v).unwrap().into_function_value();
         self.get_llvm_block_handle(v.get_last_basic_block().unwrap())
     }
-    pub fn point_to_init_fn(&mut self) {
-        self.function = self.init_func;
+    pub fn get_first_basic_block(&self, v: ValueHandle) -> BlockHandle {
+        let v = self.get_llvm_value(v).unwrap().into_function_value();
+        self.get_llvm_block_handle(v.get_first_basic_block().unwrap())
     }
-    pub fn get_init_fn(&self) -> ValueHandle {
-        self.get_llvm_value_handle(&self.init_func.unwrap().as_any_value_enum())
+    pub fn delete_block(&self, b: BlockHandle) {
+        let b = self.get_llvm_block(b).unwrap();
+        unsafe {
+            b.delete();
+        }
     }
     pub fn add_global(
-        &mut self,
+        &self,
         name: &str,
         pltype: Rc<RefCell<PLType>>,
-        ctx: &mut Ctx<'a, 'ctx>,
+        ctx: &mut Ctx<'a>,
         line: u32,
         pltp: &PLType,
     ) -> ValueHandle {

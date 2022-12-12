@@ -30,14 +30,18 @@ impl Node for UnaryOpNode {
         println!("{:?}", self.op);
         self.exp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> NodeResult {
         let exp_range = self.exp.range();
-        let (exp, pltype, _) = self.exp.emit(ctx)?;
+        let (exp, pltype, _) = self.exp.emit(ctx, builder)?;
         if pltype.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::INVALID_UNARY_EXPRESSION));
         }
         let pltype = pltype.unwrap();
-        let (exp, _) = ctx.try_load2var(exp_range, exp.unwrap(), pltype)?;
+        let (exp, _) = ctx.try_load2var(exp_range, exp.unwrap(), pltype.clone(), builder)?;
         return Ok(match (&*pltype.borrow(), self.op) {
             (
                 PLType::PRIMITIVE(
@@ -45,26 +49,24 @@ impl Node for UnaryOpNode {
                 ),
                 TokenType::MINUS,
             ) => (
-                Some(plv!(ctx.llbuilder.borrow().build_int_neg(exp, "negtmp"))),
+                Some(plv!(builder.build_int_neg(exp, "negtmp"))),
                 Some(pltype.clone()),
                 TerminatorEnum::NONE,
             ),
             (PLType::PRIMITIVE(PriType::F64 | PriType::F32), TokenType::MINUS) => (
-                Some(plv!(ctx.llbuilder.borrow().build_float_neg(exp, "negtmp"))),
+                Some(plv!(builder.build_float_neg(exp, "negtmp"))),
                 Some(pltype.clone()),
                 TerminatorEnum::NONE,
             ),
             (PLType::PRIMITIVE(PriType::BOOL), TokenType::NOT) => (
                 {
-                    let bool_origin = ctx.llbuilder.borrow().build_int_compare(
+                    let bool_origin = builder.build_int_compare(
                         IntPredicate::EQ,
                         exp,
-                        ctx.llbuilder
-                            .borrow()
-                            .int_value(&PriType::BOOL, false as u64, true),
+                        builder.int_value(&PriType::BOOL, false as u64, true),
                         "nottmp",
                     );
-                    Some(plv!(ctx.llbuilder.borrow().build_int_z_extend(
+                    Some(plv!(builder.build_int_z_extend(
                         bool_origin,
                         &PriType::BOOL,
                         "zexttemp"
@@ -98,28 +100,34 @@ impl Node for BinOpNode {
         println!("{:?}", self.op);
         self.right.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> NodeResult {
         let (lrange, rrange) = (self.left.range(), self.right.range());
-        let (lv, lpltype, _) = self.left.emit(ctx)?;
-        let (rv, rpltype, _) = ctx.emit_with_expectation(&mut self.right, lpltype.clone())?;
+        let (lv, lpltype, _) = self.left.emit(ctx, builder)?;
+        let (rv, rpltype, _) =
+            ctx.emit_with_expectation(&mut self.right, lpltype.clone(), builder)?;
         if lv.is_none() || rv.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::EXPECT_VALUE));
         }
-        let (left, ltp) = ctx.try_load2var(lrange, lv.unwrap(), lpltype.unwrap())?;
-        let (right, rtp) = ctx.try_load2var(rrange, rv.unwrap(), rpltype.unwrap())?;
+        let (left, ltp) =
+            ctx.try_load2var(lrange, lv.unwrap(), lpltype.clone().unwrap(), builder)?;
+        let (right, rtp) = ctx.try_load2var(rrange, rv.unwrap(), rpltype.unwrap(), builder)?;
         Ok(match self.op {
             TokenType::PLUS => {
-                handle_calc!(ctx, add, float_add, lpltype, left, right, self.range)
+                handle_calc!(ctx, add, float_add, lpltype, left, right, self.range, builder)
             }
             TokenType::MINUS => {
-                handle_calc!(ctx, sub, float_sub, lpltype, left, right, self.range)
+                handle_calc!(ctx, sub, float_sub, lpltype, left, right, self.range, builder)
             }
             TokenType::MUL => {
-                handle_calc!(ctx, mul, float_mul, lpltype, left, right, self.range)
+                handle_calc!(ctx, mul, float_mul, lpltype, left, right, self.range, builder)
             }
             TokenType::DIV => {
                 // TODO: 无符号触发
-                handle_calc!(ctx, signed_div, float_div, lpltype, left, right, self.range)
+                handle_calc!(ctx, signed_div, float_div, lpltype, left, right, self.range, builder)
             }
             TokenType::EQ
             | TokenType::NE
@@ -140,13 +148,9 @@ impl Node for BinOpNode {
                     | PriType::U8,
                 ) => (
                     {
-                        let bool_origin = ctx.llbuilder.borrow().build_int_compare(
-                            self.op.get_op(),
-                            left,
-                            right,
-                            "cmptmp",
-                        );
-                        Some(plv!(ctx.llbuilder.borrow().build_int_z_extend(
+                        let bool_origin =
+                            builder.build_int_compare(self.op.get_op(), left, right, "cmptmp");
+                        Some(plv!(builder.build_int_z_extend(
                             bool_origin,
                             &PriType::BOOL,
                             "zexttemp"
@@ -157,13 +161,9 @@ impl Node for BinOpNode {
                 ),
                 PLType::PRIMITIVE(PriType::F64 | PriType::F32) => (
                     {
-                        let bool_origin = ctx.llbuilder.borrow().build_float_compare(
-                            self.op.get_fop(),
-                            left,
-                            right,
-                            "cmptmp",
-                        );
-                        Some(plv!(ctx.llbuilder.borrow().build_int_z_extend(
+                        let bool_origin =
+                            builder.build_float_compare(self.op.get_fop(), left, right, "cmptmp");
+                        Some(plv!(builder.build_int_z_extend(
                             bool_origin,
                             &PriType::BOOL,
                             "zexttemp"
@@ -177,8 +177,8 @@ impl Node for BinOpNode {
             TokenType::AND => match *lpltype.unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::BOOL) => (
                     {
-                        let bool_origin = ctx.llbuilder.borrow().build_and(left, right, "andtmp");
-                        Some(plv!(ctx.llbuilder.borrow().build_int_z_extend(
+                        let bool_origin = builder.build_and(left, right, "andtmp");
+                        Some(plv!(builder.build_int_z_extend(
                             bool_origin,
                             &PriType::BOOL,
                             "zext_temp"
@@ -192,8 +192,8 @@ impl Node for BinOpNode {
             TokenType::OR => match *lpltype.unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::BOOL) => (
                     {
-                        let bool_origin = ctx.llbuilder.borrow().build_or(left, right, "ortmp");
-                        Some(plv!(ctx.llbuilder.borrow().build_int_z_extend(
+                        let bool_origin = builder.build_or(left, right, "ortmp");
+                        Some(plv!(builder.build_int_z_extend(
                             bool_origin,
                             &PriType::BOOL,
                             "zext_temp"
@@ -233,17 +233,21 @@ impl Node for TakeOpNode {
             id.print(tabs + 1, true, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
-        let head = self.head.emit(ctx)?;
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> NodeResult {
+        let head = self.head.emit(ctx, builder)?;
         let (mut res, pltype, _) = head;
         if pltype.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::INVALID_GET_FIELD));
         }
         let mut pltype = pltype.unwrap();
         if let Some(id) = &self.field {
-            res = match &*pltype.borrow() {
+            res = match &*pltype.clone().borrow() {
                 PLType::POINTER(ptr) => {
-                    let (tp, s) = ctx.auto_deref(pltype, res.unwrap().value);
+                    let (tp, s) = ctx.auto_deref(pltype, res.unwrap().value, builder);
                     let headptr = s;
                     pltype = tp;
                     let etype = pltype.clone();
@@ -265,7 +269,7 @@ impl Node for TakeOpNode {
                                 index = field.index;
                                 ctx.set_if_refs(field.refs.clone(), range);
                                 ctx.send_if_go_to_def(range, field.range, s.path.clone());
-                                pltype = field.typenode.get_type(ctx)?.clone();
+                                pltype = field.typenode.get_type(ctx, builder)?.clone();
                             } else if let Some(mthd) = method {
                                 ctx.push_semantic_token(range, SemanticTokenType::METHOD, 0);
                                 let mut mthd = mthd.clone();
@@ -278,10 +282,7 @@ impl Node for TakeOpNode {
                                 );
                                 return Ok((
                                     Some(PLValue {
-                                        value: ctx
-                                            .llbuilder
-                                            .borrow()
-                                            .get_or_insert_fn_handle(&mthd, ctx),
+                                        value: builder.get_or_insert_fn_handle(&mthd, ctx),
                                         is_const: false,
                                         receiver: Some(headptr),
                                     }),
@@ -299,9 +300,7 @@ impl Node for TakeOpNode {
                     } else {
                         return Err(ctx.add_err(id.range, ErrorCode::INVALID_GET_FIELD));
                     }
-                    Some(plv!(ctx
-                        .llbuilder
-                        .borrow()
+                    Some(plv!(builder
                         .build_struct_gep(s, index, "structgep")
                         .unwrap()))
                 }

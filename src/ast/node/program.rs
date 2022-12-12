@@ -44,32 +44,36 @@ impl Node for ProgramNode {
             statement.print(tabs, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b LLVMBuilder<'a, 'ctx>,
+    ) -> NodeResult {
         // emit structs
         for def in self.structs.iter() {
             // 提前加入占位符号，解决自引用问题
-            def.add_to_symbols(ctx);
+            def.add_to_symbols(ctx, builder);
         }
         for def in self.structs.iter_mut() {
-            _ = def.emit_struct_def(ctx);
+            _ = def.emit_struct_def(ctx, builder);
         }
         self.fntypes.iter_mut().for_each(|x| {
-            _ = x.emit_func_def(ctx);
+            _ = x.emit_func_def(ctx, builder);
         });
         // init global
-        ctx.set_init_fn();
+        ctx.set_init_fn(builder);
         self.globaldefs.iter_mut().for_each(|x| {
-            _ = x.emit_global(ctx);
+            _ = x.emit_global(ctx, builder);
         });
-        ctx.clear_init_fn();
+        ctx.clear_init_fn(builder);
         ctx.plmod.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(
             SemanticTokensBuilder::new(ctx.plmod.path.to_string()),
         )));
         // node parser
         self.nodes.iter_mut().for_each(|x| {
-            _ = x.emit(ctx);
+            _ = x.emit(ctx, builder);
         });
-        ctx.init_fn_ret();
+        ctx.init_fn_ret(builder);
         Ok((None, None, TerminatorEnum::NONE))
     }
 }
@@ -344,14 +348,8 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     let context = &Context::create();
     let (a, b, c, d, e, f) = create_ctx_info(context, params.dir(db), params.file(db));
     let v = RefCell::new(Vec::new());
+    let builder = LLVMBuilder::new(context, &a, &b, &c, &d, &e, &f);
     let mut ctx = ctx::Ctx::new(
-        context,
-        &a,
-        &b,
-        &c,
-        &d,
-        &e,
-        &f,
         params.fullpath(db),
         &v,
         params.params(db).params(db),
@@ -372,7 +370,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     let m = &mut ctx;
     let node = params.node(db);
     let mut nn = node.node(db);
-    let _ = nn.emit(m);
+    let _ = nn.emit(m, &builder);
     Diagnostics::push(
         db,
         (
@@ -381,7 +379,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         ),
     );
     if params.params(db).is_compile(db) {
-        ctx.llbuilder.borrow().finalize_debug();
+        builder.finalize_debug();
         let mut hasher = DefaultHasher::new();
         params.fullpath(db).hash(&mut hasher);
         let hashed = format!(
@@ -395,8 +393,8 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let pp = Path::new(&hashed).with_extension("bc");
         let ll = Path::new(&hashed).with_extension("ll");
         let p = pp.as_path();
-        ctx.llbuilder.borrow().print_to_file(ll).unwrap();
-        ctx.llbuilder.borrow().write_bitcode_to_path(p);
+        builder.print_to_file(ll).unwrap();
+        builder.write_bitcode_to_path(p);
         ModBuffer::push(db, p.clone().to_path_buf());
     }
     ModWrapper::new(db, ctx.plmod)
