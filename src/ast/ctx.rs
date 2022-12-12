@@ -1,7 +1,7 @@
 use super::builder::BlockHandle;
-use super::builder::LLVMBuilder;
+use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
 use super::builder::ValueHandle;
-use super::compiler::get_target_machine;
+use super::builder::llvmbuilder::get_target_machine;
 use super::diag::{ErrorCode, WarnCode};
 use super::diag::{ERR_MSG, WARN_MSG};
 use super::node::NodeEnum;
@@ -507,13 +507,6 @@ pub fn create_llvm_deps<'ctx>(
 
 impl<'a, 'ctx> Ctx<'a> {
     pub fn new(
-        // context: &'ctx Context,
-        // module: &'a Module<'ctx>,
-        // builder: &'a Builder<'ctx>,
-        // dibuilder: &'a DebugInfoBuilder<'ctx>,
-        // diunit: &'a DICompileUnit<'ctx>,
-        // tm: &'a TargetMachine,
-        // nodbg_builder: &'a Builder<'ctx>,
         src_file_path: &'a str,
         errs: &'a RefCell<Vec<PLDiag>>,
         edit_pos: Option<Pos>,
@@ -534,15 +527,6 @@ impl<'a, 'ctx> Ctx<'a> {
             father: None,
             init_func: None,
             function: None,
-            // llbuilder: RefCell::new(LLVMBuilder::new(
-            //     context,
-            //     module,
-            //     builder,
-            //     dibuilder,
-            //     diunit,
-            //     tm,
-            //     nodbg_builder,
-            // )),
             errs,
             edit_pos,
             table: FxHashMap::default(),
@@ -565,7 +549,6 @@ impl<'a, 'ctx> Ctx<'a> {
             generic_types: FxHashMap::default(),
             plmod: self.plmod.new_child(),
             father: Some(self),
-            // llbuilder: RefCell::new(self.llbuilder.borrow().new_child()),
             errs: self.errs,
             edit_pos: self.edit_pos.clone(),
             table: FxHashMap::default(),
@@ -591,7 +574,6 @@ impl<'a, 'ctx> Ctx<'a> {
             generic_types: FxHashMap::default(),
             plmod: self.plmod.new_child(),
             father: Some(self),
-            // llbuilder: RefCell::new(self.llbuilder.borrow().new_child()),
             errs: self.errs,
             edit_pos: self.edit_pos.clone(),
             table: FxHashMap::default(),
@@ -736,13 +718,13 @@ impl<'a, 'ctx> Ctx<'a> {
         for (_, sub) in &self.plmod.clone().submods {
             self.init_global_walk(&sub, &mut set, builder);
         }
-        let a: &[ValueHandle] = &[];
+
         builder.rm_curr_debug_location();
         builder.build_call(
             builder
                 .get_function(&self.plmod.get_full_name("__init_global"))
                 .unwrap(),
-            a.iter(),
+                &[],
         );
     }
     fn init_global_walk<'b>(
@@ -759,9 +741,8 @@ impl<'a, 'ctx> Ctx<'a> {
             self.init_global_walk(sub, set, builder);
         }
         let f = builder.add_function(&name, &[], PLType::VOID, self);
-        let a: &[ValueHandle] = &[];
         builder.rm_curr_debug_location();
-        builder.build_call(f, a.iter());
+        builder.build_call(f, &[]);
         set.insert(name);
     }
 

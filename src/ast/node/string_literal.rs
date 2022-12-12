@@ -2,7 +2,6 @@ use std::{cell::RefCell, rc::Rc};
 
 use crate::{
     ast::{
-        builder::LLVMBuilder,
         ctx::Ctx,
         node::{deal_line, tab},
         pltype::{ARRType, PLType, PriType},
@@ -10,6 +9,7 @@ use crate::{
     plv,
 };
 
+use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
 use internal_macro::{fmt, range};
 use lsp_types::SemanticTokenType;
 

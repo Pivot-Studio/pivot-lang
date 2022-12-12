@@ -12,27 +12,28 @@ use inkwell::{
     builder::Builder,
     context::Context,
     debug_info::*,
-    module::{Linkage, Module},
-    targets::TargetMachine,
+    module::{Linkage, Module, FlagBehavior},
+    targets::{TargetMachine, Target, InitializationConfig},
     types::{ArrayType, BasicType, BasicTypeEnum, StructType},
     values::{
         AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue,
         PointerValue,
     },
-    AddressSpace, FloatPredicate, IntPredicate,
+    AddressSpace, FloatPredicate, IntPredicate, OptimizationLevel,
 };
 use rustc_hash::FxHashMap;
 
-use super::{
+use super::{super::{
     ctx::{Ctx, MemberType, PLDiag},
     diag::ErrorCode,
     node::{types::TypedIdentifierNode, TypeNode, TypeNodeEnum},
     pltype::{ARRType, FNType, Field, PLType, PriType, RetTypeEnum, STType},
     range::{Pos, Range},
-};
+}, IRBuilder};
 
-pub type ValueHandle = usize;
-pub type BlockHandle = usize;
+use super::ValueHandle;
+use super::BlockHandle;
+
 // TODO: match all case
 // const DW_ATE_UTF: u32 = 0x10;
 const DW_ATE_BOOLEAN: u32 = 0x02;
@@ -48,6 +49,7 @@ fn get_dw_ate_encoding<'a, 'ctx>(pritp: &PriType) -> u32 {
         PriType::BOOL => DW_ATE_BOOLEAN,
     }
 }
+
 pub struct LLVMBuilder<'a, 'ctx> {
     handle_table: Rc<RefCell<FxHashMap<ValueHandle, AnyValueEnum<'ctx>>>>,
     handle_reverse_table: Rc<RefCell<FxHashMap<AnyValueEnum<'ctx>, ValueHandle>>>,
@@ -64,20 +66,27 @@ pub struct LLVMBuilder<'a, 'ctx> {
     ditypes: Rc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
 }
 
+pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
+    let triple = &TargetMachine::get_default_triple();
+    let s1 = TargetMachine::get_host_cpu_name();
+    let cpu = s1.to_str().unwrap();
+    let s2 = TargetMachine::get_host_cpu_features();
+    let features = s2.to_str().unwrap();
+    Target::initialize_native(&InitializationConfig::default()).unwrap();
+    let target = Target::from_triple(triple).unwrap();
+    target
+        .create_target_machine(
+            triple,
+            cpu,
+            features,
+            level,
+            inkwell::targets::RelocMode::Static,
+            inkwell::targets::CodeModel::Default,
+        )
+        .unwrap()
+}
+
 impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
-    pub fn new_subscope(&self, start: Pos) {
-        let scope = self.discope.get();
-        self.discope.set(
-            self.dibuilder
-                .create_lexical_block(
-                    scope,
-                    self.diunit.get_file(),
-                    start.line as u32,
-                    start.column as u32,
-                )
-                .as_debug_info_scope(),
-        );
-    }
     pub fn new(
         context: &'ctx Context,
         module: &'a Module<'ctx>,
@@ -103,11 +112,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             block_reverse_table: Rc::new(RefCell::new(FxHashMap::default())),
         }
     }
-    pub fn position_at_end_block(&self, block: BlockHandle) {
-        self.builder
-            .position_at_end(self.block_table.borrow()[&block]);
-    }
-
     fn get_llvm_value_handle(&self, value: &AnyValueEnum<'ctx>) -> ValueHandle {
         let len = self.handle_table.borrow().len();
         let nh = match self.handle_reverse_table.borrow().get(value) {
@@ -143,18 +147,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     fn get_llvm_block(&self, handle: BlockHandle) -> Option<BasicBlock<'ctx>> {
         match self.block_table.borrow().get(&handle) {
             Some(block) => Some(*block),
-            None => None,
-        }
-    }
-    // pub fn get_var_handle(&self, name: &str) -> Option<ValueHandle> {
-    //     match self.symbol_table.get(name) {
-    //         Some(value) => Some(self.get_llvm_value_handle(&value.as_any_value_enum())),
-    //         None => None,
-    //     }
-    // }
-    pub fn get_global_var_handle(&self, name: &str) -> Option<ValueHandle> {
-        match self.module.get_global(name) {
-            Some(value) => Some(self.get_llvm_value_handle(&value.as_any_value_enum())),
             None => None,
         }
     }
@@ -228,57 +220,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .into()
             }),
         }
-    }
-
-    pub fn get_or_insert_fn_handle(&self, pltp: &FNType, ctx: &mut Ctx<'a>) -> ValueHandle {
-        self.get_llvm_value_handle(&self.get_or_insert_fn(pltp, ctx).as_any_value_enum())
-    }
-    /// try get function value from module
-    ///
-    /// if not found, create a declaration
-    fn get_or_insert_fn(&self, pltp: &FNType, ctx: &mut Ctx<'a>) -> FunctionValue<'ctx> {
-        let llvmname = pltp.append_name_with_generic(pltp.llvmname.clone());
-        if let Some(v) = self.module.get_function(&llvmname) {
-            return v;
-        }
-        let mut param_types = vec![];
-        for param_pltype in pltp.param_pltypes.iter() {
-            param_types.push(
-                self.get_basic_type_op(&param_pltype.get_type(ctx, self).unwrap().borrow(), ctx)
-                    .unwrap()
-                    .into(),
-            );
-        }
-        let fn_type = self
-            .get_ret_type(&pltp.ret_pltype.get_type(ctx, self).unwrap().borrow(), ctx)
-            .fn_type(&param_types, false);
-        let fn_value = self
-            .module
-            .add_function(&llvmname, fn_type, Some(Linkage::External));
-        fn_value
-    }
-    fn struct_type(&self, pltp: &STType, ctx: &mut Ctx<'a>) -> StructType<'ctx> {
-        let st = self.module.get_struct_type(&pltp.get_st_full_name());
-        if let Some(st) = st {
-            return st;
-        }
-        let st = self.context.opaque_struct_type(&pltp.get_st_full_name());
-        st.set_body(
-            &pltp
-                .ordered_fields
-                .clone()
-                .into_iter()
-                .map(|order_field| {
-                    self.get_basic_type_op(
-                        &order_field.typenode.get_type(ctx, self).unwrap().borrow(),
-                        ctx,
-                    )
-                    .unwrap()
-                })
-                .collect::<Vec<_>>(),
-            false,
-        );
-        st
     }
     /// # get_ret_type
     /// get the return type, which is void type or primitive type
@@ -496,7 +437,112 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
     }
 
-    pub fn mv2heap(&self, val: ValueHandle, ctx: &mut Ctx<'a>) -> ValueHandle {
+    /// try get function value from module
+    ///
+    /// if not found, create a declaration
+    fn get_or_insert_fn(&self, pltp: &FNType, ctx: &mut Ctx<'a>) -> FunctionValue<'ctx> {
+        let llvmname = pltp.append_name_with_generic(pltp.llvmname.clone());
+        if let Some(v) = self.module.get_function(&llvmname) {
+            return v;
+        }
+        let mut param_types = vec![];
+        for param_pltype in pltp.param_pltypes.iter() {
+            param_types.push(
+                self.get_basic_type_op(&param_pltype.get_type(ctx, self).unwrap().borrow(), ctx)
+                    .unwrap()
+                    .into(),
+            );
+        }
+        let fn_type = self
+            .get_ret_type(&pltp.ret_pltype.get_type(ctx, self).unwrap().borrow(), ctx)
+            .fn_type(&param_types, false);
+        let fn_value = self
+            .module
+            .add_function(&llvmname, fn_type, Some(Linkage::External));
+        fn_value
+    }
+    fn struct_type(&self, pltp: &STType, ctx: &mut Ctx<'a>) -> StructType<'ctx> {
+        let st = self.module.get_struct_type(&pltp.get_st_full_name());
+        if let Some(st) = st {
+            return st;
+        }
+        let st = self.context.opaque_struct_type(&pltp.get_st_full_name());
+        st.set_body(
+            &pltp
+                .ordered_fields
+                .clone()
+                .into_iter()
+                .map(|order_field| {
+                    self.get_basic_type_op(
+                        &order_field.typenode.get_type(ctx, self).unwrap().borrow(),
+                        ctx,
+                    )
+                    .unwrap()
+                })
+                .collect::<Vec<_>>(),
+            false,
+        );
+        st
+    }
+
+    fn get_gc(&self, ctx: &mut Ctx<'a>) -> PointerValue<'ctx> {
+        let gcmod = ctx.plmod.submods.get("gc").unwrap();
+        let gc = gcmod.get_global_symbol("diogc").unwrap();
+        self.get_or_add_global_value(&gcmod.get_full_name("diogc"), gc.tp.clone(), ctx)
+    }
+    /// 用来获取外部模块的全局变量
+    /// 如果没在当前module的全局变量表中找到，将会生成一个
+    /// 该全局变量的声明
+    fn get_or_add_global_value(
+        &self,
+        name: &str,
+        pltype: Rc<RefCell<PLType>>,
+        ctx: &mut Ctx<'a>,
+    ) -> PointerValue<'ctx> {
+        let global = self.get_global_var_handle(name);
+        if global.is_none() {
+            let global = self.module.add_global(
+                self.get_basic_type_op(&pltype.borrow(), ctx).unwrap(),
+                None,
+                name,
+            );
+            global.set_linkage(Linkage::External);
+            return global.as_pointer_value();
+        }
+        self.get_llvm_value(global.unwrap())
+            .unwrap()
+            .into_pointer_value()
+    }
+}
+impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
+    fn get_global_var_handle(&self, name: &str) -> Option<ValueHandle> {
+        match self.module.get_global(name) {
+            Some(value) => Some(self.get_llvm_value_handle(&value.as_any_value_enum())),
+            None => None,
+        }
+    }
+    fn new_subscope(&self, start: Pos) {
+        let scope = self.discope.get();
+        self.discope.set(
+            self.dibuilder
+                .create_lexical_block(
+                    scope,
+                    self.diunit.get_file(),
+                    start.line as u32,
+                    start.column as u32,
+                )
+                .as_debug_info_scope(),
+        );
+    }
+    fn position_at_end_block(&self, block: BlockHandle) {
+        self.builder
+            .position_at_end(self.block_table.borrow()[&block]);
+    }
+    fn get_or_insert_fn_handle(&self, pltp: &FNType, ctx: &mut Ctx<'a>) -> ValueHandle {
+        self.get_llvm_value_handle(&self.get_or_insert_fn(pltp, ctx).as_any_value_enum())
+    }
+
+    fn mv2heap(&self, val: ValueHandle, ctx: &mut Ctx<'a>) -> ValueHandle {
         if !ctx.usegc {
             return val;
         }
@@ -529,19 +575,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         self.builder.build_store(heapptr, loaded);
         self.get_llvm_value_handle(&heapptr.as_any_value_enum())
     }
-    // pub fn gc_free(&self) -> FNType {
-    //     let gcmod = self.get_gc_plmod();
-    //     gcmod.get_type("DioGC__free").unwrap().try_into().unwrap()
-    // }
-    // pub fn gc_new_ptr(&self) -> FNType {
-    //     let gcmod = self.get_gc_plmod();
-    //     gcmod
-    //         .get_type("DioGC__new_ptr")
-    //         .unwrap()
-    //         .try_into()
-    //         .unwrap()
-    // }
-    pub fn gc_add_root(&self, stackptr: BasicValueEnum<'ctx>, ctx: &mut Ctx<'a>) {
+    fn gc_add_root(&self, stackptr: BasicValueEnum<'ctx>, ctx: &mut Ctx<'a>) {
         if !ctx.usegc {
             return;
         }
@@ -563,7 +597,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         self.builder
             .build_call(f, &[gc.into(), stackptr.into()], "add_root");
     }
-    pub fn gc_rm_root(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>) {
+    fn gc_rm_root(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>) {
         if !ctx.usegc {
             return;
         }
@@ -574,7 +608,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
         self.gc_rm_root_current(stackptr, ctx);
     }
-    pub fn gc_rm_root_current(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>) {
+    fn gc_rm_root_current(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>) {
         if !ctx.usegc {
             return;
         }
@@ -597,7 +631,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         self.builder
             .build_call(f, &[gc.into(), stackptr.into()], "rm_root");
     }
-    pub fn gc_collect(&self, ctx: &mut Ctx<'a>) {
+    fn gc_collect(&self, ctx: &mut Ctx<'a>) {
         if !ctx.usegc {
             return;
         }
@@ -614,43 +648,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let gc = self.builder.build_load(self.get_gc(ctx), "gc");
         self.builder.build_call(f, &[gc.into()], "collect");
     }
-    // pub fn gc_get_size(&self) -> FNType {
-    //     let gcmod = self.get_gc_plmod();
-    //     gcmod
-    //         .get_type("DioGC__get_size")
-    //         .unwrap()
-    //         .try_into()
-    //         .unwrap()
-    // }
-    fn get_gc(&self, ctx: &mut Ctx<'a>) -> PointerValue<'ctx> {
-        let gcmod = ctx.plmod.submods.get("gc").unwrap();
-        let gc = gcmod.get_global_symbol("diogc").unwrap();
-        self.get_or_add_global_value(&gcmod.get_full_name("diogc"), gc.tp.clone(), ctx)
-    }
-    /// 用来获取外部模块的全局变量
-    /// 如果没在当前module的全局变量表中找到，将会生成一个
-    /// 该全局变量的声明
-    fn get_or_add_global_value(
-        &self,
-        name: &str,
-        pltype: Rc<RefCell<PLType>>,
-        ctx: &mut Ctx<'a>,
-    ) -> PointerValue<'ctx> {
-        let global = self.get_global_var_handle(name);
-        if global.is_none() {
-            let global = self.module.add_global(
-                self.get_basic_type_op(&pltype.borrow(), ctx).unwrap(),
-                None,
-                name,
-            );
-            global.set_linkage(Linkage::External);
-            return global.as_pointer_value();
-        }
-        self.get_llvm_value(global.unwrap())
-            .unwrap()
-            .into_pointer_value()
-    }
-    pub fn get_or_add_global(
+    fn get_or_add_global(
         &self,
         name: &str,
         pltype: Rc<RefCell<PLType>>,
@@ -663,13 +661,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         )
     }
 
-    pub fn build_load(&self, ptr: ValueHandle, name: &str) -> ValueHandle {
+    fn build_load(&self, ptr: ValueHandle, name: &str) -> ValueHandle {
         let ptr = self.get_llvm_value(ptr).unwrap();
         let ptr = ptr.into_pointer_value();
         let ptr = self.builder.build_load(ptr, name);
         self.get_llvm_value_handle(&ptr.as_any_value_enum())
     }
-    pub fn try_load2var(
+    fn try_load2var(
         &self,
         range: Range,
         v: ValueHandle,
@@ -689,10 +687,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 _ => return Err(ctx.add_err(range, ErrorCode::EXPECT_VALUE)),
             });
         } else {
-            // let tp = match &*tp.borrow() {
-            //     PLType::POINTER(tp) => tp,
-            //     _ => &tp,
-            // };
             let tp = &tp;
             Ok((
                 self.build_load(
@@ -704,7 +698,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
     }
 
-    pub fn get_function(&self, name: &str) -> Option<ValueHandle> {
+    fn get_function(&self, name: &str) -> Option<ValueHandle> {
         let f = self.module.get_function(name);
         if f.is_none() {
             return None;
@@ -713,14 +707,12 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         Some(self.get_llvm_value_handle(&f.as_any_value_enum()))
     }
 
-    pub fn build_call<'b, I>(&self, f: ValueHandle, args: I) -> Option<ValueHandle>
-    where
-        I: Iterator<Item = &'b ValueHandle>,
+    fn build_call(&self, f: ValueHandle, args: &[ValueHandle]) -> Option<ValueHandle>
     {
         let builder = self.builder;
         let f = self.get_llvm_value(f).unwrap();
         let f = f.into_function_value();
-        let args = args
+        let args = args.iter()
             .map(|v| {
                 let be: BasicValueEnum = self.get_llvm_value(*v).unwrap().try_into().unwrap();
                 let bme: BasicMetadataValueEnum = be.into();
@@ -733,7 +725,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
         Some(self.get_llvm_value_handle(&v.left().unwrap().as_any_value_enum()))
     }
-    pub fn add_function(
+    fn add_function(
         &self,
         name: &str,
         paramtps: &[PLType],
@@ -750,11 +742,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .add_function(name, fn_type, Some(Linkage::External));
         self.get_llvm_value_handle(&fn_value.as_any_value_enum())
     }
-    pub fn opaque_struct_type(&self, name: &str) {
+    fn opaque_struct_type(&self, name: &str) {
         self.context.opaque_struct_type(name);
     }
 
-    pub fn add_body_to_struct_type(&self, name: &str, order_fields: &[Field], ctx: &mut Ctx<'a>) {
+    fn add_body_to_struct_type(&self, name: &str, order_fields: &[Field], ctx: &mut Ctx<'a>) {
         let st = self.module.get_struct_type(name).unwrap();
         st.set_body(
             &order_fields
@@ -770,7 +762,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             false,
         );
     }
-    pub fn alloc(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle {
+    fn alloc(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle {
         let builder = self.builder;
         let lb = builder.get_insert_block().unwrap();
         match self
@@ -793,12 +785,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             }
             None => panic!("alloc get entry failed!"),
         }
-        // let alloca = self
-        //     .builder
-        //     .build_alloca(self.get_basic_type_op(pltype, ctx).unwrap(), name);
-        // self.get_llvm_value_handle(&alloca.as_any_value_enum())
     }
-    pub fn alloc_vtp(&self, name: &str, v: ValueHandle) -> ValueHandle {
+    fn alloc_vtp(&self, name: &str, v: ValueHandle) -> ValueHandle {
         let alloca = self.builder.build_alloca::<BasicTypeEnum>(
             self.get_llvm_value(v)
                 .unwrap()
@@ -809,7 +797,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         );
         self.get_llvm_value_handle(&alloca.as_any_value_enum())
     }
-    pub fn build_struct_gep(
+    fn build_struct_gep(
         &self,
         structv: ValueHandle,
         index: u32,
@@ -824,14 +812,14 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             return Err(());
         };
     }
-    pub fn build_store(&self, ptr: ValueHandle, value: ValueHandle) {
+    fn build_store(&self, ptr: ValueHandle, value: ValueHandle) {
         let value = self.get_llvm_value(value).unwrap();
         let ptr = self.get_llvm_value(ptr).unwrap();
         let ptr = ptr.into_pointer_value();
         self.builder
             .build_store::<BasicValueEnum>(ptr, value.try_into().unwrap());
     }
-    pub fn build_const_in_bounds_gep(
+    fn build_const_in_bounds_gep(
         &self,
         ptr: ValueHandle,
         index: &[u64],
@@ -851,7 +839,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         };
         self.get_llvm_value_handle(&gep.as_any_value_enum())
     }
-    pub fn build_in_bounds_gep(
+    fn build_in_bounds_gep(
         &self,
         ptr: ValueHandle,
         index: &[ValueHandle],
@@ -871,11 +859,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         };
         self.get_llvm_value_handle(&gep.as_any_value_enum())
     }
-    pub fn const_string(&self, s: &str) -> ValueHandle {
+    fn const_string(&self, s: &str) -> ValueHandle {
         let s = self.context.const_string(s.as_bytes(), false);
         self.get_llvm_value_handle(&s.as_any_value_enum())
     }
-    pub fn build_dbg_location(&self, pos: Pos) {
+    fn build_dbg_location(&self, pos: Pos) {
         let loc = self.dibuilder.create_debug_location(
             self.context,
             pos.line as u32,
@@ -885,7 +873,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         );
         self.builder.set_current_debug_location(self.context, loc);
     }
-    pub fn insert_var_declare(
+    fn insert_var_declare(
         &self,
         name: &str,
         pos: Pos,
@@ -918,12 +906,12 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 .unwrap(),
         );
     }
-    pub fn build_unconditional_branch(&self, bb: BlockHandle) {
+    fn build_unconditional_branch(&self, bb: BlockHandle) {
         let bb = self.get_llvm_block(bb).unwrap();
         self.builder.build_unconditional_branch(bb);
     }
 
-    pub fn get_first_instruction(&self, bb: BlockHandle) -> Option<ValueHandle> {
+    fn get_first_instruction(&self, bb: BlockHandle) -> Option<ValueHandle> {
         let bb = self.get_llvm_block(bb).unwrap();
         let first = bb.get_first_instruction();
         if let Some(first) = first {
@@ -932,7 +920,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             return None;
         }
     }
-    pub fn position_at(&self, v: ValueHandle) {
+    fn position_at(&self, v: ValueHandle) {
         // inkwell hack
         let v = self.get_llvm_value(v).unwrap();
         let v = if v.is_instruction_value() {
@@ -943,47 +931,47 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         };
         self.builder.position_at(v.get_parent().unwrap(), &v);
     }
-    pub fn finalize_debug(&self) {
+    fn finalize_debug(&self) {
         self.dibuilder.finalize();
     }
-    pub fn print_to_file<P: AsRef<Path>>(&self, file: P) -> Result<(), String> {
+    fn print_to_file(&self, file: &Path) -> Result<(), String> {
         if let Err(s) = self.module.print_to_file(file) {
             return Err(s.to_string());
         }
         Ok(())
     }
-    pub fn write_bitcode_to_path(&self, path: &Path) -> bool {
+    fn write_bitcode_to_path(&self, path: &Path) -> bool {
         self.module.write_bitcode_to_path(path)
     }
-    pub fn int_value(&self, ty: &PriType, v: u64, sign_ext: bool) -> ValueHandle {
+    fn int_value(&self, ty: &PriType, v: u64, sign_ext: bool) -> ValueHandle {
         let ty = self.get_pri_basic_type(ty).into_int_type();
         let v = ty.const_int(v, sign_ext);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn float_value(&self, ty: &PriType, v: f64) -> ValueHandle {
+    fn float_value(&self, ty: &PriType, v: f64) -> ValueHandle {
         let ty = self.get_pri_basic_type(ty).into_float_type();
         let v = ty.const_float(v);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_int_z_extend(&self, v: ValueHandle, ty: &PriType, name: &str) -> ValueHandle {
+    fn build_int_z_extend(&self, v: ValueHandle, ty: &PriType, name: &str) -> ValueHandle {
         let v = self.get_llvm_value(v).unwrap().into_int_value();
         let ty = self.get_pri_basic_type(ty).into_int_type();
         let v = self.builder.build_int_z_extend(v, ty, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_or(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
+    fn build_or(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
         let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
         let v = self.builder.build_or(lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_and(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
+    fn build_and(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
         let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
         let v = self.builder.build_and(lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_float_compare(
+    fn build_float_compare(
         &self,
         op: FloatPredicate,
         lhs: ValueHandle,
@@ -995,7 +983,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let v = self.builder.build_float_compare(op, lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_int_compare(
+    fn build_int_compare(
         &self,
         op: IntPredicate,
         lhs: ValueHandle,
@@ -1007,83 +995,78 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let v = self.builder.build_int_compare(op, lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_int_neg(&self, v: ValueHandle, name: &str) -> ValueHandle {
+    fn build_int_neg(&self, v: ValueHandle, name: &str) -> ValueHandle {
         let v = self.get_llvm_value(v).unwrap().into_int_value();
         let v = self.builder.build_int_neg(v, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_int_add(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
+    fn build_int_add(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
         let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
         let v = self.builder.build_int_add(lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_int_sub(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
+    fn build_int_sub(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
         let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
         let v = self.builder.build_int_sub(lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_int_mul(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
+    fn build_int_mul(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
         let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
         let v = self.builder.build_int_mul(lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_int_signed_div(
-        &self,
-        lhs: ValueHandle,
-        rhs: ValueHandle,
-        name: &str,
-    ) -> ValueHandle {
+    fn build_int_signed_div(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
         let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
         let v = self.builder.build_int_signed_div(lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_float_neg(&self, v: ValueHandle, name: &str) -> ValueHandle {
+    fn build_float_neg(&self, v: ValueHandle, name: &str) -> ValueHandle {
         let v = self.get_llvm_value(v).unwrap().into_float_value();
         let v = self.builder.build_float_neg(v, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_float_add(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
+    fn build_float_add(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_float_value();
         let rhs = self.get_llvm_value(rhs).unwrap().into_float_value();
         let v = self.builder.build_float_add(lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_float_sub(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
+    fn build_float_sub(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_float_value();
         let rhs = self.get_llvm_value(rhs).unwrap().into_float_value();
         let v = self.builder.build_float_sub(lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_float_mul(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
+    fn build_float_mul(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_float_value();
         let rhs = self.get_llvm_value(rhs).unwrap().into_float_value();
         let v = self.builder.build_float_mul(lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_float_div(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
+    fn build_float_div(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_float_value();
         let rhs = self.get_llvm_value(rhs).unwrap().into_float_value();
         let v = self.builder.build_float_div(lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn append_basic_block(&self, func: ValueHandle, name: &str) -> BlockHandle {
+    fn append_basic_block(&self, func: ValueHandle, name: &str) -> BlockHandle {
         let bb = self.context.append_basic_block(
             self.get_llvm_value(func).unwrap().into_function_value(),
             name,
         );
         self.get_llvm_block_handle(bb)
     }
-    pub fn build_int_truncate(&self, v: ValueHandle, dest_ty: &PriType, name: &str) -> ValueHandle {
+    fn build_int_truncate(&self, v: ValueHandle, dest_ty: &PriType, name: &str) -> ValueHandle {
         let v = self.get_llvm_value(v).unwrap().into_int_value();
         let dest_ty = self.get_pri_basic_type(dest_ty).into_int_type();
         let v = self.builder.build_int_truncate(v, dest_ty, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
-    pub fn build_conditional_branch(
+    fn build_conditional_branch(
         &self,
         cond: ValueHandle,
         then_bb: BlockHandle,
@@ -1095,13 +1078,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         self.builder
             .build_conditional_branch(cond, then_bb, else_bb);
     }
-    pub fn rm_curr_debug_location(&self) {
+    fn rm_curr_debug_location(&self) {
         self.builder.unset_current_debug_location();
     }
-    pub fn clear_insertion_position(&self) {
+    fn clear_insertion_position(&self) {
         self.builder.clear_insertion_position();
     }
-    pub fn try_set_fn_dbg(&self, pos: Pos, f: ValueHandle) {
+    fn try_set_fn_dbg(&self, pos: Pos, f: ValueHandle) {
         let f = self.get_llvm_value(f).unwrap().into_function_value();
         if f.get_subprogram().is_some() {
             self.discope
@@ -1110,7 +1093,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             self.build_dbg_location(pos)
         }
     }
-    pub fn build_sub_program(
+    fn build_sub_program(
         &self,
         paralist: Vec<Box<TypedIdentifierNode>>,
         ret: Box<TypeNodeEnum>,
@@ -1156,7 +1139,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         self.discope.set(subprogram.as_debug_info_scope().clone());
         Ok(())
     }
-    pub fn build_return(&self, v: Option<ValueHandle>) {
+    fn build_return(&self, v: Option<ValueHandle>) {
         if let Some(v) = v {
             let v = self.get_llvm_value(v).unwrap();
             let v: BasicValueEnum = v.try_into().unwrap();
@@ -1165,7 +1148,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             self.builder.build_return(None);
         }
     }
-    pub fn create_parameter_variable(
+    fn create_parameter_variable(
         &self,
         fntype: &FNType,
         pos: Pos,
@@ -1211,21 +1194,21 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             ),
         );
     }
-    pub fn get_last_basic_block(&self, v: ValueHandle) -> BlockHandle {
+    fn get_last_basic_block(&self, v: ValueHandle) -> BlockHandle {
         let v = self.get_llvm_value(v).unwrap().into_function_value();
         self.get_llvm_block_handle(v.get_last_basic_block().unwrap())
     }
-    pub fn get_first_basic_block(&self, v: ValueHandle) -> BlockHandle {
+    fn get_first_basic_block(&self, v: ValueHandle) -> BlockHandle {
         let v = self.get_llvm_value(v).unwrap().into_function_value();
         self.get_llvm_block_handle(v.get_first_basic_block().unwrap())
     }
-    pub fn delete_block(&self, b: BlockHandle) {
+    fn delete_block(&self, b: BlockHandle) {
         let b = self.get_llvm_block(b).unwrap();
         unsafe {
             _ = b.delete();
         }
     }
-    pub fn add_global(
+    fn add_global(
         &self,
         name: &str,
         pltype: Rc<RefCell<PLType>>,

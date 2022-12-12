@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use crate::{
     ast::{
-        builder::LLVMBuilder,
         ctx::{get_ns_path_completions, Ctx},
         diag::ErrorCode,
         node::{deal_line, tab},
@@ -12,6 +11,7 @@ use crate::{
 };
 use internal_macro::{fmt, range};
 use lsp_types::SemanticTokenType;
+use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
 
 use super::{primary::VarNode, Node, NodeResult, PLValue, TerminatorEnum};
 #[range]

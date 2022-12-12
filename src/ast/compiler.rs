@@ -2,7 +2,7 @@ use super::{dot, node::program::ModWrapper};
 use crate::{
     ast::{
         accumulators::{Diagnostics, ModBuffer},
-        node::program::Program,
+        node::program::Program, builder::llvmbuilder::get_target_machine,
     },
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
@@ -64,25 +64,6 @@ impl HashOptimizationLevel {
 
 type MainFunc = unsafe extern "C" fn() -> i64;
 
-pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
-    let triple = &TargetMachine::get_default_triple();
-    let s1 = TargetMachine::get_host_cpu_name();
-    let cpu = s1.to_str().unwrap();
-    let s2 = TargetMachine::get_host_cpu_features();
-    let features = s2.to_str().unwrap();
-    Target::initialize_native(&InitializationConfig::default()).unwrap();
-    let target = Target::from_triple(triple).unwrap();
-    target
-        .create_target_machine(
-            triple,
-            cpu,
-            features,
-            level,
-            inkwell::targets::RelocMode::Static,
-            inkwell::targets::CodeModel::Default,
-        )
-        .unwrap()
-}
 
 /// # ActionType
 /// lsp action type

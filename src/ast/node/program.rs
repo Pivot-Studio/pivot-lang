@@ -8,6 +8,7 @@ use crate::lsp::mem_docs::{EmitParams, FileCompileInput, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
 use crate::utils::read_config::{get_config, Config};
+use crate::ast::builder::llvmbuilder::LLVMBuilder;use crate::ast::builder::IRBuilder;
 use crate::Db;
 use colored::Colorize;
 use inkwell::context::Context;
@@ -348,7 +349,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     let context = &Context::create();
     let (a, b, c, d, e) = create_llvm_deps(context, params.dir(db), params.file(db));
     let v = RefCell::new(Vec::new());
-    let builder = LLVMBuilder::new(context, &a, &b, &c, &d, &e);
+    let builder = LLVMBuilder::new(context,&a, &b, &c, &d, &e);
     let mut ctx = ctx::Ctx::new(
         params.fullpath(db),
         &v,
@@ -393,7 +394,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let pp = Path::new(&hashed).with_extension("bc");
         let ll = Path::new(&hashed).with_extension("ll");
         let p = pp.as_path();
-        builder.print_to_file(ll).unwrap();
+        builder.print_to_file(&ll).unwrap();
         builder.write_bitcode_to_path(p);
         ModBuffer::push(db, p.clone().to_path_buf());
     }

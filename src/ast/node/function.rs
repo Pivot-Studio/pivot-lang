@@ -148,7 +148,7 @@ impl Node for FuncCallNode {
         if let Some(f) = ctx.function {
             builder.try_set_fn_dbg(self.range.start, f);
         };
-        let ret = builder.build_call(function, para_values.iter());
+        let ret = builder.build_call(function, &para_values);
         ctx.save_if_comment_doc_hover(id_range, Some(fntype.doc.clone()));
         let res = match ret {
             Some(v) => Ok((
