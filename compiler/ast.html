@@ -157,7 +157,11 @@
 <pre><code class="language-rust no_run noplayground">#[enum_dispatch]
 pub trait Node: RangeTrait + AsAny + FmtTrait {
     fn print(&amp;self, tabs: usize, end: bool, line: Vec&lt;bool&gt;);
-    fn emit&lt;'a, 'ctx&gt;(&amp;mut self, ctx: &amp;mut Ctx&lt;'a, 'ctx&gt;) -&gt; NodeResult&lt;'ctx&gt;;
+    fn emit&lt;'a, 'ctx, 'b&gt;(
+        &amp;mut self,
+        ctx: &amp;'b mut Ctx&lt;'a&gt;,
+        builder: &amp;'b BuilderEnum&lt;'a, 'ctx&gt;,
+    ) -&gt; NodeResult;
 }
 </code></pre>
 <p>你可能注意到了，<code>Node</code>trait继承了<code>RangeTrait</code>，这个trait定义了节点的位置信息。</p>
@@ -189,46 +193,37 @@ pub trait RangeTrait {
 <p><code>emit</code>函数是生成llvm代码的核心，它会调用llvm api构造自己对应的llvm ir。在编译的时候，最上层节点的<code>emit</code>会被调用，
 该函数会递归的调用自己的子节点的<code>emit</code>函数，最终生成整个程序的llvm ir。<br />
 下方是<code>ifnode</code>的<code>emit</code>函数：</p>
-<pre><code class="language-rust no_run noplayground">    fn emit&lt;'a, 'ctx&gt;(&amp;mut self, ctx: &amp;mut Ctx&lt;'a, 'ctx&gt;) -&gt; NodeResult&lt;'ctx&gt; {
-        let cond_block = ctx
-            .context
-            .append_basic_block(ctx.function.unwrap(), &quot;if.cond&quot;);
-        let then_block = ctx
-            .context
-            .append_basic_block(ctx.function.unwrap(), &quot;if.then&quot;);
-        let else_block = ctx
-            .context
-            .append_basic_block(ctx.function.unwrap(), &quot;if.else&quot;);
-        let after_block = ctx
-            .context
-            .append_basic_block(ctx.function.unwrap(), &quot;if.after&quot;);
-        ctx.builder.build_unconditional_branch(cond_block);
-        position_at_end(ctx, cond_block);
+<pre><code class="language-rust no_run noplayground">    fn emit&lt;'a, 'ctx, 'b&gt;(
+        &amp;mut self,
+        ctx: &amp;'b mut Ctx&lt;'a&gt;,
+        builder: &amp;'b BuilderEnum&lt;'a, 'ctx&gt;,
+    ) -&gt; NodeResult {
+        let cond_block = builder.append_basic_block(ctx.function.unwrap(), &quot;if.cond&quot;);
+        let then_block = builder.append_basic_block(ctx.function.unwrap(), &quot;if.then&quot;);
+        let else_block = builder.append_basic_block(ctx.function.unwrap(), &quot;if.else&quot;);
+        let after_block = builder.append_basic_block(ctx.function.unwrap(), &quot;if.after&quot;);
+        builder.build_unconditional_branch(cond_block);
+        ctx.position_at_end(cond_block, builder);
         let condrange = self.cond.range();
-        let (cond, pltype, _) = self.cond.emit(ctx)?;
-        if pltype.is_none() || !pltype.unwrap().borrow().is(&amp;PriType::BOOL) {
+        let (cond, pltype, _) = self.cond.emit(ctx, builder)?;
+        if pltype.is_none() || !pltype.clone().unwrap().borrow().is(&amp;PriType::BOOL) {
             return Err(ctx.add_err(condrange, ErrorCode::IF_CONDITION_MUST_BE_BOOL));
         }
-        let cond = ctx.try_load2var(condrange, cond.unwrap())?;
-        let cond = ctx.builder.build_int_truncate(
-            cond.into_int_value(),
-            ctx.context.bool_type(),
-            &quot;trunctemp&quot;,
-        );
-        ctx.builder
-            .build_conditional_branch(cond, then_block, else_block);
+        let (cond, _) = ctx.try_load2var(condrange, cond.unwrap(), pltype.unwrap(), builder)?;
+        let cond = builder.build_int_truncate(cond, &amp;PriType::BOOL, &quot;trunctemp&quot;);
+        builder.build_conditional_branch(cond, then_block, else_block);
         // then block
-        position_at_end(ctx, then_block);
-        let (_, _, then_terminator) = self.then.emit_child(ctx)?;
+        ctx.position_at_end(then_block, builder);
+        let (_, _, then_terminator) = self.then.emit_child(ctx, builder)?;
         if then_terminator.is_none() {
-            ctx.builder.build_unconditional_branch(after_block);
+            builder.build_unconditional_branch(after_block);
         }
-        position_at_end(ctx, else_block);
+        ctx.position_at_end(else_block, builder);
         let terminator = if let Some(el) = &amp;mut self.els {
-            let mut child = ctx.new_child(el.range().start);
-            let (_, _, else_terminator) = el.emit(&amp;mut child)?;
+            let mut child = ctx.new_child(el.range().start, builder);
+            let (_, _, else_terminator) = el.emit(&amp;mut child, builder)?;
             if else_terminator.is_none() {
-                ctx.builder.build_unconditional_branch(after_block);
+                builder.build_unconditional_branch(after_block);
             }
             if then_terminator.is_return() &amp;&amp; else_terminator.is_return() {
                 TerminatorEnum::RETURN
@@ -236,12 +231,12 @@ pub trait RangeTrait {
                 TerminatorEnum::NONE
             }
         } else {
-            ctx.builder.build_unconditional_branch(after_block);
+            builder.build_unconditional_branch(after_block);
             TerminatorEnum::NONE
         };
-        position_at_end(ctx, after_block);
+        ctx.position_at_end(after_block, builder);
         if terminator.is_return() {
-            ctx.builder.build_unconditional_branch(after_block);
+            builder.build_unconditional_branch(after_block);
         }
         ctx.emit_comment_highlight(&amp;self.comments[0]);
         Ok((None, None, terminator))
