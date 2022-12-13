@@ -1,10 +1,14 @@
 use std::path::PathBuf;
 
-use crate::ast::{
-    ctx::{get_ns_path_completions, Ctx},
-    diag::ErrorCode,
-    node::{deal_line, tab},
-    pltype::PLType,
+use crate::ast::builder::BuilderEnum;
+use crate::{
+    ast::{
+        ctx::{get_ns_path_completions, Ctx},
+        diag::ErrorCode,
+        node::{deal_line, tab},
+        pltype::PLType,
+    },
+    plv,
 };
 use internal_macro::{fmt, range};
 use lsp_types::SemanticTokenType;
@@ -34,7 +38,11 @@ impl Node for UseNode {
         }
     }
 
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        _builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> NodeResult {
         let mut path = PathBuf::from(&ctx.config.root);
         let head = self.ids[0].name.clone();
         if self.ids.len() != 0 {
@@ -114,11 +122,15 @@ impl Node for ExternIdNode {
         self.id.print(tabs + 1, true, line.clone());
     }
 
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> NodeResult {
         if self.ns.is_empty() {
             if self.complete {
                 // 如果该节点只有一个id，且完整，那么就是一个普通的包内符号，直接调用idnode
-                return self.id.emit(ctx);
+                return self.id.emit(ctx, builder);
             }
             ctx.if_completion(self.range, || {
                 // 如果completion请求对应的区域在本节点内
@@ -151,10 +163,14 @@ impl Node for ExternIdNode {
             let pltype = symbol.tp.clone();
             ctx.set_if_refs(symbol.loc.clone(), self.range);
             ctx.send_if_go_to_def(self.range, symbol.range, plmod.path.clone());
-            let g = ctx.get_or_add_global(&plmod.get_full_name(&self.id.name), symbol.tp.clone());
+            let g = ctx.get_or_add_global(
+                &plmod.get_full_name(&self.id.name),
+                symbol.tp.clone(),
+                builder,
+            );
             return Ok((
                 Some({
-                    let mut res: PLValue = g.into();
+                    let mut res: PLValue = plv!(g);
                     res.set_const(true);
                     res
                 }),
@@ -180,7 +196,7 @@ impl Node for ExternIdNode {
     }
 }
 impl ExternIdNode {
-    pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a>) -> NodeResult {
         if self.ns.is_empty() {
             if self.complete {
                 // 如果该节点只有一个id，且完整，那么就是一个普通的包内符号，直接调用idnode

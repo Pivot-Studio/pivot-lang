@@ -21,7 +21,11 @@ impl Node for ErrorNode {
         tab(tabs + 1, line, true);
         println!("Src: {}", format!("{:?}", self.src).red());
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        _builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> NodeResult {
         let err = ctx.add_err(self.range, self.code);
         ctx.if_completion(self.range, || ctx.get_completions());
 
@@ -47,8 +51,12 @@ impl Node for StErrorNode {
         self.st.print(tabs + 1, false, line.clone());
         self.err.print(tabs + 1, true, line);
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        _ = self.st.emit(ctx);
-        self.err.emit(ctx)
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> NodeResult {
+        _ = self.st.emit(ctx, builder);
+        self.err.emit(ctx, builder)
     }
 }

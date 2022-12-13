@@ -1,4 +1,7 @@
 use super::*;
+
+use crate::ast::builder::BuilderEnum;
+use crate::ast::builder::IRBuilder;
 use crate::ast::{ctx::Ctx, diag::ErrorCode};
 use internal_macro::{comments, fmt, range};
 
@@ -19,39 +22,38 @@ impl Node for RetNode {
             value.print(tabs + 1, true, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        let rettp = ctx.function.unwrap().get_type().get_return_type();
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> NodeResult {
+        let rettp = ctx.rettp.clone();
         if let Some(ret) = &mut self.value {
             if rettp.is_none() {
                 let err = ctx.add_err(self.range, ErrorCode::RETURN_VALUE_IN_VOID_FUNCTION);
                 return Err(err);
             }
-            let (ret, _, _) = ret.emit(ctx)?;
+            let (ret, tp, _) = ret.emit(ctx, builder)?;
             ctx.emit_comment_highlight(&self.comments[0]);
-            let ret = ctx.try_load2var(self.range, ret.unwrap())?;
-            if ret.as_basic_value_enum().get_type() != rettp.unwrap() {
+            let (ret, v) = ctx.try_load2var(self.range, ret.unwrap(), tp.unwrap(), builder)?;
+            if v != rettp.unwrap() {
                 let err = ctx.add_err(self.range, ErrorCode::RETURN_TYPE_MISMATCH);
                 return Err(err);
             }
 
-            ctx.builder.build_store(
-                ctx.return_block.unwrap().1.unwrap(),
-                ret.as_basic_value_enum(),
-            );
-            ctx.builder
-                .build_unconditional_branch(ctx.return_block.unwrap().0);
+            builder.build_store(ctx.return_block.unwrap().1.unwrap(), ret);
+            builder.build_unconditional_branch(ctx.return_block.unwrap().0);
         } else {
-            ctx.emit_comment_highlight(&self.comments[0]);
-            if rettp.is_some() {
+            if rettp.is_some() && &*rettp.clone().unwrap().borrow() != &PLType::VOID {
+                ctx.emit_comment_highlight(&self.comments[0]);
                 let err = ctx.add_err(self.range, ErrorCode::NO_RETURN_VALUE_IN_NON_VOID_FUNCTION);
                 return Err(err);
             }
-            ctx.builder
-                .build_unconditional_branch(ctx.return_block.unwrap().0);
+            builder.build_unconditional_branch(ctx.return_block.unwrap().0);
         }
         let ret = ctx.return_block.unwrap().0;
-        let inst = ret.get_first_instruction().unwrap();
-        ctx.builder.position_at(ret, &inst);
+        let inst = builder.get_first_instruction(ret).unwrap();
+        builder.position_at(inst);
         Ok((None, None, TerminatorEnum::RETURN))
     }
 }

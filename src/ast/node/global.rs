@@ -1,6 +1,9 @@
 use super::*;
+
+use crate::ast::builder::BuilderEnum;
+use crate::ast::builder::IRBuilder;
 use crate::ast::diag::ErrorCode;
-use inkwell::debug_info::AsDIScope;
+
 use internal_macro::{fmt, range};
 use lsp_types::SemanticTokenType;
 #[range]
@@ -18,69 +21,59 @@ impl Node for GlobalNode {
         self.var.print(tabs + 1, false, line.clone());
         self.exp.print(tabs + 1, true, line.clone());
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
-        ctx.function = ctx.init_func;
-        let entry = ctx.function.unwrap().get_last_basic_block().unwrap();
-        ctx.builder.position_at_end(entry);
-        ctx.nodebug_builder.position_at_end(entry);
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> NodeResult {
+        let entry = builder.get_last_basic_block(ctx.init_func.unwrap());
+
+        ctx.position_at_end(entry, builder);
         let exp_range = self.exp.range();
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
 
-        let builder = ctx.builder;
-        ctx.builder = ctx.nodebug_builder;
-        let (value, pltype, _) = self.exp.emit(ctx)?;
-        ctx.push_type_hints(self.var.range, pltype.unwrap());
-        let base_value = ctx.try_load2var(exp_range, value.unwrap())?;
-        let res = ctx.get_symbol(&self.var.name);
+        let (value, pltype, _) = self.exp.emit(ctx, builder)?;
+        ctx.push_type_hints(self.var.range, pltype.clone().unwrap());
+        let (base_value, _tp) =
+            ctx.try_load2var(exp_range, value.unwrap(), pltype.unwrap(), builder)?;
+        let res = ctx.get_symbol(&self.var.name, builder);
         if res.is_none() {
             return Ok((None, None, TerminatorEnum::NONE));
         }
         let (globalptr, _, _, _, _) = res.unwrap();
-        ctx.builder = builder;
-        ctx.position_at_end(entry);
-        ctx.nodebug_builder.build_store(globalptr, base_value);
+        ctx.position_at_end(entry, builder);
+        builder.build_store(globalptr, base_value);
         Ok((None, None, TerminatorEnum::NONE))
     }
 }
 impl GlobalNode {
-    pub fn emit_global<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> Result<(), PLDiag> {
+    pub fn emit_global<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> Result<(), PLDiag> {
         let exp_range = self.exp.range();
-        if ctx.get_symbol(&self.var.name).is_some() {
+        if ctx.get_symbol(&self.var.name, builder).is_some() {
             return Err(ctx.add_err(self.var.range, ErrorCode::REDEFINE_SYMBOL));
         }
         // use nodebug builder to emit
-        let builder = ctx.builder;
-        ctx.builder = ctx.nodebug_builder;
-        let (value, pltype_opt, _) = self.exp.emit(ctx)?;
-        ctx.builder = builder;
+        let (value, pltype_opt, _) = self.exp.emit(ctx, builder)?;
         if pltype_opt.is_none() {
             return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
         }
         let pltype = pltype_opt.unwrap();
-        let ditype = pltype.borrow().get_ditype(ctx);
-        let base_value = ctx.try_load2var(exp_range, value.unwrap())?;
-        let base_type = base_value.get_type();
-        let globalptr =
-            ctx.module
-                .add_global(base_type, None, &ctx.plmod.get_full_name(&self.var.name));
-        globalptr.set_initializer(&base_type.const_zero());
-        globalptr.set_constant(false);
-        let exp = ctx.dibuilder.create_global_variable_expression(
-            ctx.diunit.as_debug_info_scope(),
-            &self.var.name,
-            "",
-            ctx.diunit.get_file(),
+        let (_, tp) = ctx.try_load2var(exp_range, value.unwrap(), pltype.clone(), builder)?;
+        let base_type = tp;
+        let globalptr = builder.add_global(
+            &ctx.plmod.get_full_name(&self.var.name),
+            base_type,
+            ctx,
             self.var.range.start.line as u32,
-            ditype.unwrap(),
-            false,
-            None,
-            None,
-            ditype.unwrap().get_align_in_bits(),
+            &pltype.borrow(),
         );
-        globalptr.set_metadata(exp.as_metadata_value(ctx.context), 0);
         ctx.add_symbol(
             self.var.name.clone(),
-            globalptr.as_pointer_value(),
+            globalptr,
             pltype,
             self.var.range,
             true,

@@ -1,7 +1,9 @@
 use super::ctx::Ctx;
-use super::ctx::MemberType;
+
+use crate::ast::builder::BuilderEnum;
+
 use super::ctx::PLDiag;
-use super::diag::ErrorCode;
+
 use super::fmt::FmtBuilder;
 use super::node::function::FuncDefNode;
 use super::node::pkg::ExternIdNode;
@@ -16,17 +18,14 @@ use super::node::TypeNode;
 use super::node::TypeNodeEnum;
 use super::range::Range;
 use indexmap::IndexMap;
-use inkwell::debug_info::*;
-use inkwell::module::Linkage;
-use inkwell::types::ArrayType;
+
 use inkwell::types::BasicMetadataTypeEnum;
 use inkwell::types::BasicType;
 use inkwell::types::BasicTypeEnum;
 use inkwell::types::FunctionType;
-use inkwell::types::StructType;
+
 use inkwell::types::VoidType;
-use inkwell::values::FunctionValue;
-use inkwell::AddressSpace;
+
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::DocumentSymbol;
@@ -36,21 +35,6 @@ use lsp_types::SymbolKind;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::rc::Rc;
-// TODO: match all case
-// const DW_ATE_UTF: u32 = 0x10;
-const DW_ATE_BOOLEAN: u32 = 0x02;
-const DW_ATE_FLOAT: u32 = 0x04;
-const DW_ATE_SIGNED: u32 = 0x05;
-const DW_ATE_UNSIGNED: u32 = 0x07;
-const DW_TAG_REFERENCE_TYPE: u32 = 16;
-fn get_dw_ate_encoding<'a, 'ctx>(pritp: &PriType) -> u32 {
-    match pritp {
-        PriType::I8 | PriType::I16 | PriType::I32 | PriType::I64 | PriType::I128 => DW_ATE_SIGNED,
-        PriType::U8 | PriType::U16 | PriType::U32 | PriType::U64 | PriType::U128 => DW_ATE_UNSIGNED,
-        PriType::F32 | PriType::F64 => DW_ATE_FLOAT,
-        PriType::BOOL => DW_ATE_BOOLEAN,
-    }
-}
 
 /// # PLType
 /// Type for pivot-lang
@@ -86,23 +70,6 @@ pub enum PriType {
     BOOL,
 }
 impl PriType {
-    pub fn get_basic_type<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> BasicTypeEnum<'ctx> {
-        match self {
-            PriType::I8 => ctx.context.i8_type().into(),
-            PriType::I16 => ctx.context.i16_type().into(),
-            PriType::I32 => ctx.context.i32_type().into(),
-            PriType::I64 => ctx.context.i64_type().as_basic_type_enum(),
-            PriType::I128 => ctx.context.i128_type().as_basic_type_enum(),
-            PriType::U8 => ctx.context.i8_type().as_basic_type_enum(),
-            PriType::U16 => ctx.context.i16_type().as_basic_type_enum(),
-            PriType::U32 => ctx.context.i32_type().as_basic_type_enum(),
-            PriType::U64 => ctx.context.i64_type().as_basic_type_enum(),
-            PriType::U128 => ctx.context.i128_type().as_basic_type_enum(),
-            PriType::F32 => ctx.context.f32_type().as_basic_type_enum(),
-            PriType::F64 => ctx.context.f64_type().as_basic_type_enum(),
-            PriType::BOOL => ctx.context.i8_type().as_basic_type_enum(),
-        }
-    }
     pub fn get_name(&self) -> String {
         match self {
             PriType::I8 => "i8".to_string(),
@@ -288,14 +255,6 @@ impl PLType {
         }
     }
 
-    /// # get_basic_type
-    /// get the basic type of the type
-    /// used in code generation
-    /// may panic if the type is void type
-    pub fn get_basic_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> BasicTypeEnum<'ctx> {
-        self.get_basic_type_op(ctx).unwrap()
-    }
-
     pub fn get_name<'a, 'ctx>(&self) -> String {
         match self {
             PLType::FN(fu) => fu.name.clone(),
@@ -357,235 +316,12 @@ impl PLType {
         }
     }
 
-    /// # get_basic_type_op
-    /// get the basic type of the type
-    /// used in code generation
-    pub fn get_basic_type_op<'a, 'ctx>(
-        &self,
-        ctx: &mut Ctx<'a, 'ctx>,
-    ) -> Option<BasicTypeEnum<'ctx>> {
-        match self {
-            PLType::GENERIC(g) => match &g.curpltype {
-                Some(pltype) => pltype.borrow().get_basic_type_op(ctx),
-                None => Some({
-                    let name = &format!("__generic__{}", g.name);
-                    ctx.module
-                        .get_struct_type(name)
-                        .or(Some({
-                            let st = ctx
-                                .context
-                                .opaque_struct_type(&format!("__generic__{}", g.name));
-                            st.set_body(&[], false);
-                            st
-                        }))
-                        .unwrap()
-                        .into()
-                }),
-            },
-            PLType::FN(f) => Some(
-                f.get_or_insert_fn(ctx)
-                    .get_type()
-                    .ptr_type(inkwell::AddressSpace::Global)
-                    .as_basic_type_enum(),
-            ),
-            PLType::STRUCT(s) => Some(s.struct_type(ctx).as_basic_type_enum()),
-            PLType::ARR(a) => Some(a.arr_type(ctx).as_basic_type_enum()),
-            PLType::PRIMITIVE(t) => Some(t.get_basic_type(ctx)),
-            PLType::VOID => None,
-            PLType::POINTER(p) => Some(
-                p.borrow()
-                    .get_basic_type(ctx)
-                    .ptr_type(AddressSpace::Generic)
-                    .as_basic_type_enum(),
-            ),
-            PLType::PLACEHOLDER(p) => Some({
-                let name = &format!("__placeholder__{}", p.name);
-                ctx.module
-                    .get_struct_type(name)
-                    .or(Some({
-                        let st = ctx
-                            .context
-                            .opaque_struct_type(&format!("__placeholder__{}", p.name));
-                        st.set_body(&[], false);
-                        st
-                    }))
-                    .unwrap()
-                    .into()
-            }),
-        }
-    }
-
-    /// # get_ret_type
-    /// get the return type, which is void type or primitive type
-    pub fn get_ret_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> RetTypeEnum<'ctx> {
-        match self {
-            PLType::VOID => RetTypeEnum::VOID(ctx.context.void_type()),
-            _ => RetTypeEnum::BASIC(self.get_basic_type(ctx)),
-        }
-    }
     pub fn is_void(&self) -> bool {
         if let PLType::VOID = self {
             true
         } else {
             false
         }
-    }
-
-    /// # get_ditype
-    /// get the debug info type of the pltype
-    pub fn get_ditype<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> Option<DIType<'ctx>> {
-        let td = ctx.targetmachine.get_target_data();
-        match self {
-            PLType::FN(_) => None,
-            PLType::GENERIC(g) => {
-                if g.curpltype.is_some() {
-                    let pltype = g.curpltype.as_ref().unwrap();
-                    pltype.clone().borrow().get_ditype(ctx)
-                } else {
-                    PLType::PRIMITIVE(PriType::I64).get_ditype(ctx)
-                }
-            }
-            PLType::PLACEHOLDER(_) => PLType::PRIMITIVE(PriType::I64).get_ditype(ctx),
-            PLType::ARR(arr) => {
-                let elemdi = arr.element_type.borrow().get_ditype(ctx)?;
-                let etp = &arr.element_type.borrow().get_basic_type(ctx);
-                let size = td.get_bit_size(etp) * arr.size as u64;
-                let align = td.get_preferred_alignment(etp);
-                Some(
-                    ctx.dibuilder
-                        .create_array_type(elemdi, size, align, &[(0..arr.size as i64)])
-                        .as_type(),
-                )
-            }
-            PLType::STRUCT(x) => {
-                // 若已经生成过，直接查表返回
-                if RefCell::borrow(&ctx.ditypes).contains_key(&x.get_st_full_name()) {
-                    return Some(
-                        RefCell::borrow(&ctx.ditypes)
-                            .get(&x.get_st_full_name())
-                            .unwrap()
-                            .clone(),
-                    );
-                }
-                let mut offset = 0;
-                // 生成占位符，为循环引用做准备
-                ctx.ditypes_placeholder
-                    .borrow_mut()
-                    .insert(x.get_st_full_name(), RefCell::new(vec![]));
-                let m = x
-                    .ordered_fields
-                    .iter()
-                    .map(|v| {
-                        let (tp, off) = v.get_di_type(ctx, offset);
-                        offset = off;
-                        tp
-                    })
-                    .collect::<Vec<_>>();
-                let sttp = x.struct_type(ctx);
-                let st = ctx
-                    .dibuilder
-                    .create_struct_type(
-                        ctx.diunit.get_file().as_debug_info_scope(),
-                        &x.name,
-                        ctx.diunit.get_file(),
-                        x.range.start.line as u32 + 1,
-                        td.get_bit_size(&sttp),
-                        td.get_abi_alignment(&sttp),
-                        DIFlags::PUBLIC,
-                        None,
-                        &m,
-                        0,
-                        None,
-                        &x.name,
-                    )
-                    .as_type();
-                let members = ctx
-                    .ditypes_placeholder
-                    .borrow_mut()
-                    .remove(&x.get_st_full_name())
-                    .unwrap();
-                // 替换循环引用生成的占位符
-                for m in members.borrow().iter() {
-                    let mut elemdi = st;
-                    for _ in 0..m.ptr_depth {
-                        elemdi = ctx
-                            .dibuilder
-                            .create_pointer_type(
-                                "",
-                                elemdi,
-                                td.get_bit_size(
-                                    &sttp.ptr_type(AddressSpace::Generic).as_basic_type_enum(),
-                                ),
-                                td.get_preferred_alignment(
-                                    &sttp.ptr_type(AddressSpace::Generic).as_basic_type_enum(),
-                                ),
-                                AddressSpace::Generic,
-                            )
-                            .as_type();
-                    }
-
-                    let realtp = ctx.dibuilder.create_member_type(
-                        m.scope,
-                        &m.name,
-                        m.di_file,
-                        m.line,
-                        elemdi.get_size_in_bits(),
-                        elemdi.get_align_in_bits(),
-                        m.offset,
-                        DIFlags::PUBLIC,
-                        elemdi,
-                    );
-                    unsafe {
-                        ctx.dibuilder
-                            .replace_placeholder_derived_type(m.ditype, realtp);
-                    }
-                }
-                ctx.ditypes.borrow_mut().insert(x.get_st_full_name(), st);
-                return Some(st);
-            }
-            PLType::PRIMITIVE(pt) => {
-                return Some(
-                    ctx.dibuilder
-                        .create_basic_type(
-                            &pt.get_name(),
-                            td.get_bit_size(&self.get_basic_type(ctx)),
-                            get_dw_ate_encoding(pt),
-                            0,
-                        )
-                        .unwrap()
-                        .as_type(),
-                );
-            }
-            PLType::VOID => None,
-            PLType::POINTER(p) => {
-                let elemdi = p.borrow().get_ditype(ctx)?;
-                let etp = &p
-                    .borrow()
-                    .get_basic_type(ctx)
-                    .ptr_type(AddressSpace::Generic)
-                    .as_basic_type_enum();
-                let size = td.get_bit_size(etp);
-                let align = td.get_preferred_alignment(etp);
-                Some(
-                    ctx.dibuilder
-                        .create_pointer_type("", elemdi, size, align, AddressSpace::Generic)
-                        .as_type(),
-                )
-            }
-        }
-    }
-    pub fn get_di_ref_type<'a, 'ctx>(
-        &self,
-        ctx: &Ctx<'a, 'ctx>,
-        ditype: Option<DIType<'ctx>>,
-    ) -> Option<DIDerivedType<'ctx>> {
-        if ditype.is_none() {
-            return None;
-        }
-        Some(
-            ctx.dibuilder
-                .create_reference_type(ditype.unwrap(), DW_TAG_REFERENCE_TYPE),
-        )
     }
 }
 
@@ -617,60 +353,6 @@ pub struct Field {
 }
 
 impl Field {
-    pub fn get_di_type<'a, 'ctx>(
-        &self,
-        ctx: &mut Ctx<'a, 'ctx>,
-        offset: u64,
-    ) -> (DIType<'ctx>, u64) {
-        let field_pltype = match self.typenode.get_type(ctx) {
-            Ok(field_pltype) => field_pltype,
-            Err(_) => ctx.get_type("i64", Default::default()).unwrap(),
-        };
-        let depth = RefCell::borrow(&field_pltype).get_ptr_depth();
-        if let Some(x) = ctx
-            .ditypes_placeholder
-            .borrow_mut()
-            .get(&*RefCell::borrow(&field_pltype).get_full_elm_name())
-        {
-            if !matches!(*RefCell::borrow(&field_pltype), PLType::POINTER(_)) {
-                // 出现循环引用，但是不是指针
-                // TODO 应该只需要一层是指针就行，目前的检查要求每一层都是指针
-                ctx.add_err(self.range, ErrorCode::ILLEGAL_SELF_RECURSION);
-            }
-            let placeholder = unsafe { ctx.dibuilder.create_placeholder_derived_type(ctx.context) };
-            let td = ctx.targetmachine.get_target_data();
-            let etp = ctx.context.i8_type().ptr_type(AddressSpace::Generic);
-            let size = td.get_bit_size(&etp);
-            x.borrow_mut().push(MemberType {
-                ditype: placeholder,
-                offset,
-                scope: ctx.diunit.get_file().as_debug_info_scope(),
-                line: self.range.start.line as u32,
-                name: self.name.clone(),
-                di_file: ctx.diunit.get_file(),
-                ptr_depth: depth,
-            });
-            return (placeholder.as_type(), offset + size);
-        }
-        let di_type = RefCell::borrow(&field_pltype).get_ditype(ctx);
-        let debug_type = di_type.unwrap();
-        (
-            ctx.dibuilder
-                .create_member_type(
-                    ctx.diunit.get_file().as_debug_info_scope(),
-                    &self.name,
-                    ctx.diunit.get_file(),
-                    self.range.start.line as u32,
-                    debug_type.get_size_in_bits(),
-                    debug_type.get_align_in_bits(),
-                    offset + debug_type.get_offset_in_bits(),
-                    DIFlags::PUBLIC,
-                    debug_type,
-                )
-                .as_type(),
-            offset + debug_type.get_size_in_bits(),
-        )
-    }
     pub fn get_doc_symbol<'a, 'ctx>(&self) -> DocumentSymbol {
         #[allow(deprecated)]
         DocumentSymbol {
@@ -731,37 +413,6 @@ impl FNType {
         } else {
             name.clone()
         }
-    }
-    /// try get function value from module
-    ///
-    /// if not found, create a declaration
-    pub fn get_or_insert_fn<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> FunctionValue<'ctx> {
-        let llvmname = self.append_name_with_generic(self.llvmname.clone());
-        if let Some(v) = ctx.module.get_function(&llvmname) {
-            return v;
-        }
-        let mut param_types = vec![];
-        for param_pltype in self.param_pltypes.iter() {
-            param_types.push(
-                param_pltype
-                    .get_type(ctx)
-                    .unwrap()
-                    .borrow()
-                    .get_basic_type(ctx)
-                    .into(),
-            );
-        }
-        let fn_type = &self
-            .ret_pltype
-            .get_type(ctx)
-            .unwrap()
-            .borrow()
-            .get_ret_type(ctx)
-            .fn_type(&param_types, false);
-        let fn_value = ctx
-            .module
-            .add_function(&llvmname, *fn_type, Some(Linkage::External));
-        fn_value
     }
     pub fn gen_snippet(&self) -> String {
         let mut name = self.name.clone();
@@ -832,12 +483,12 @@ pub struct ARRType {
 }
 
 impl ARRType {
-    pub fn arr_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> ArrayType<'ctx> {
-        self.element_type
-            .borrow()
-            .get_basic_type(ctx)
-            .array_type(self.size)
-    }
+    // pub fn arr_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) -> ArrayType<'ctx> {
+    //     self.element_type
+    //         .borrow()
+    //         .get_basic_type(ctx)
+    //         .array_type(self.size)
+    // }
     pub fn get_elem_type<'a, 'ctx>(&'a self) -> Rc<RefCell<PLType>> {
         self.element_type.clone()
     }
@@ -871,7 +522,11 @@ impl STType {
         }
         unreachable!()
     }
-    pub fn generic_infer_pltype(&self, ctx: &mut Ctx) -> STType {
+    pub fn generic_infer_pltype<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> STType {
         let name = self.append_name_with_generic();
         if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
             match &*pltype.borrow() {
@@ -889,7 +544,12 @@ impl STType {
             .iter()
             .map(|f| {
                 let mut nf = f.clone();
-                nf.typenode = f.typenode.get_type(ctx).unwrap().borrow().get_typenode(ctx);
+                nf.typenode = f
+                    .typenode
+                    .get_type(ctx, builder)
+                    .unwrap()
+                    .borrow()
+                    .get_typenode(ctx);
                 nf
             })
             .collect::<Vec<Field>>();
@@ -901,30 +561,30 @@ impl STType {
         pltype.replace(PLType::STRUCT(res.clone()));
         res
     }
-    pub fn struct_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a, 'ctx>) -> StructType<'ctx> {
-        let st = ctx.module.get_struct_type(&self.get_st_full_name());
-        if let Some(st) = st {
-            return st;
-        }
-        let st = ctx.context.opaque_struct_type(&self.get_st_full_name());
-        st.set_body(
-            &self
-                .ordered_fields
-                .clone()
-                .into_iter()
-                .map(|order_field| {
-                    order_field
-                        .typenode
-                        .get_type(ctx)
-                        .unwrap()
-                        .borrow()
-                        .get_basic_type(ctx)
-                })
-                .collect::<Vec<_>>(),
-            false,
-        );
-        st
-    }
+    // pub fn struct_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) -> StructType<'ctx> {
+    //     let st = ctx.module.get_struct_type(&self.get_st_full_name());
+    //     if let Some(st) = st {
+    //         return st;
+    //     }
+    //     let st = ctx.context.opaque_struct_type(&self.get_st_full_name());
+    //     st.set_body(
+    //         &self
+    //             .ordered_fields
+    //             .clone()
+    //             .into_iter()
+    //             .map(|order_field| {
+    //                 order_field
+    //                     .typenode
+    //                     .get_type(ctx)
+    //                     .unwrap()
+    //                     .borrow()
+    //                     .get_basic_type(ctx)
+    //             })
+    //             .collect::<Vec<_>>(),
+    //         false,
+    //     );
+    //     st
+    // }
     pub fn get_field_completions(&self) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
         for (name, _) in &self.fields {
@@ -939,16 +599,16 @@ impl STType {
         }
         completions
     }
-    pub fn get_mthd_completions<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Vec<CompletionItem> {
+    pub fn get_mthd_completions<'a, 'ctx>(&self, ctx: &Ctx<'a>) -> Vec<CompletionItem> {
         ctx.plmod.get_methods_completions(&self.get_st_full_name())
     }
 
-    pub fn get_completions<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>) -> Vec<CompletionItem> {
+    pub fn get_completions<'a, 'ctx>(&self, ctx: &Ctx<'a>) -> Vec<CompletionItem> {
         let mut coms = self.get_field_completions();
         coms.extend(self.get_mthd_completions(ctx));
         coms
     }
-    pub fn find_method<'a, 'ctx>(&self, ctx: &Ctx<'a, 'ctx>, method: &str) -> Option<FNType> {
+    pub fn find_method<'a, 'ctx>(&self, ctx: &Ctx<'a>, method: &str) -> Option<FNType> {
         ctx.plmod.find_method(&self.get_st_full_name(), method)
     }
     pub fn get_st_full_name(&self) -> String {
@@ -974,7 +634,7 @@ impl STType {
     }
 }
 
-pub fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a, 'ctx>) {
+pub fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a>) {
     let pltype_i128 = PLType::PRIMITIVE(PriType::I128);
     ctx.plmod.types.insert(
         "i128".to_string(),

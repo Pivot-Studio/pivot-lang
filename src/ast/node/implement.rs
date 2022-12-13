@@ -22,10 +22,14 @@ impl Node for ImplNode {
             method.print(tabs + 1, false, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> NodeResult {
         _ = self.target.emit_highlight(ctx);
         let mut method_docsymbols = vec![];
-        let tp = self.target.get_type(ctx)?;
+        let tp = self.target.get_type(ctx, builder)?;
         match &*tp.borrow() {
             PLType::STRUCT(sttp) => {
                 ctx.send_if_go_to_def(self.target.range(), sttp.range, sttp.path.clone());
@@ -36,7 +40,7 @@ impl Node for ImplNode {
         };
 
         for method in &mut self.methods {
-            let res = method.emit(ctx);
+            let res = method.emit(ctx, builder);
             if res.is_err() {
                 continue;
             }

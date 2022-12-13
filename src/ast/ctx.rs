@@ -1,20 +1,32 @@
+use super::builder::llvmbuilder::get_target_machine;
+use super::builder::BlockHandle;
+use super::builder::ValueHandle;
+use super::diag::{ErrorCode, WarnCode};
+use super::diag::{ERR_MSG, WARN_MSG};
+use super::node::NodeEnum;
+use super::node::PLValue;
+use super::pltype::add_primitive_types;
+use super::pltype::FNType;
+use super::pltype::PLType;
+use super::pltype::PriType;
+use super::pltype::STType;
+use super::range::Pos;
+use super::range::Range;
+
+use crate::ast::builder::BuilderEnum;
+use crate::ast::builder::IRBuilder;
 use crate::lsp::semantic_tokens::type_index;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::utils::read_config::Config;
 use crate::Db;
 use colored::Colorize;
-use inkwell::basic_block::BasicBlock;
 use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::debug_info::*;
 use inkwell::module::FlagBehavior;
-use inkwell::module::Linkage;
 use inkwell::module::Module;
 use inkwell::targets::TargetMachine;
-use inkwell::values::BasicValueEnum;
-use inkwell::values::FunctionValue;
-use inkwell::values::PointerValue;
-use inkwell::values::{AnyValueEnum, BasicMetadataValueEnum};
+use inkwell::values::BasicMetadataValueEnum;
 use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
@@ -41,57 +53,35 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::path::PathBuf;
 use std::rc::Rc;
-
-use super::compiler::get_target_machine;
-use super::diag::{ErrorCode, WarnCode};
-use super::diag::{ERR_MSG, WARN_MSG};
-use super::node::NodeEnum;
-use super::node::PLValue;
-use super::pltype::add_primitive_types;
-use super::pltype::FNType;
-use super::pltype::PLType;
-use super::pltype::PriType;
-use super::pltype::STType;
-use super::range::Pos;
-use super::range::Range;
 /// # Ctx
 /// Context for code generation
-pub struct Ctx<'a, 'ctx> {
+pub struct Ctx<'a> {
     pub generic_types: FxHashMap<String, Rc<RefCell<PLType>>>,
     pub need_highlight: bool,
     pub plmod: Mod,
-    pub father: Option<&'a Ctx<'a, 'ctx>>, // father context, for symbol lookup
-    pub context: &'ctx Context,            // llvm context
-    pub builder: &'a Builder<'ctx>,        // llvm builder
-    pub module: &'a Module<'ctx>,          // llvm module
-    pub dibuilder: &'a DebugInfoBuilder<'ctx>, // debug info builder
-    pub diunit: &'a DICompileUnit<'ctx>,   // debug info unit
-    pub function: Option<FunctionValue<'ctx>>, // current function
-    pub block: Option<BasicBlock<'ctx>>,   // current block
-    pub continue_block: Option<BasicBlock<'ctx>>, // the block to jump when continue
-    pub break_block: Option<BasicBlock<'ctx>>, // the block to jump to when break
-    pub return_block: Option<(BasicBlock<'ctx>, Option<PointerValue<'ctx>>)>, // the block to jump to when return and value
-    pub targetmachine: &'a TargetMachine, // might be used in debug info
-    pub discope: DIScope<'ctx>,           // debug info scope
-    pub nodebug_builder: &'a Builder<'ctx>, // builder without debug info
-    pub errs: &'a RefCell<Vec<PLDiag>>,   // diagnostic list
-    pub edit_pos: Option<Pos>,            // lsp params
-    pub ditypes_placeholder: Rc<RefCell<FxHashMap<String, RefCell<Vec<MemberType<'ctx>>>>>>, // hold the generated debug info type place holder
-    pub ditypes: Rc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
-    pub init_func: Option<FunctionValue<'ctx>>,                //init function,call first in main
+    pub father: Option<&'a Ctx<'a>>, // father context, for symbol lookup
+    pub function: Option<ValueHandle>, // current function
+    pub init_func: Option<ValueHandle>, //init function,call first in main
+    pub roots: RefCell<Vec<ValueHandle>>,
+    pub block: Option<BlockHandle>,          // current block
+    pub continue_block: Option<BlockHandle>, // the block to jump when continue
+    pub break_block: Option<BlockHandle>,    // the block to jump to when break
+    pub return_block: Option<(BlockHandle, Option<ValueHandle>)>, // the block to jump to when return and value
+    pub errs: &'a RefCell<Vec<PLDiag>>,                           // diagnostic list
+    pub edit_pos: Option<Pos>,                                    // lsp params
     pub table: FxHashMap<
         String,
         (
-            PointerValue<'ctx>,
+            ValueHandle,
             Rc<RefCell<PLType>>,
             Range,
             Rc<RefCell<Vec<Location>>>,
         ),
     >, // variable table
-    pub config: Config,                                        // config
-    pub roots: RefCell<Vec<BasicValueEnum<'ctx>>>,
+    pub config: Config,                                           // config
     pub usegc: bool,
     pub db: &'a dyn Db,
+    pub rettp: Option<Rc<RefCell<PLType>>>,
 }
 
 pub struct MemberType<'ctx> {
@@ -472,7 +462,7 @@ impl PLDiag {
     }
 }
 
-pub fn create_ctx_info<'ctx>(
+pub fn create_llvm_deps<'ctx>(
     context: &'ctx Context,
     dir: &str,
     file: &str,
@@ -482,7 +472,6 @@ pub fn create_ctx_info<'ctx>(
     DebugInfoBuilder<'ctx>,
     DICompileUnit<'ctx>,
     TargetMachine,
-    Builder<'ctx>,
 ) {
     let builder = context.create_builder();
     let module = context.create_module("main");
@@ -515,31 +504,17 @@ pub fn create_ctx_info<'ctx>(
         module.add_metadata_flag("CodeView", FlagBehavior::Warning, metacv); // TODO: is this needed for windows debug?
     }
     let tm = get_target_machine(inkwell::OptimizationLevel::None);
-    (
-        module,
-        builder,
-        dibuilder,
-        compile_unit,
-        tm,
-        context.create_builder(),
-    )
+    (module, builder, dibuilder, compile_unit, tm)
 }
 
-impl<'a, 'ctx> Ctx<'a, 'ctx> {
+impl<'a, 'ctx> Ctx<'a> {
     pub fn new(
-        context: &'ctx Context,
-        module: &'a Module<'ctx>,
-        builder: &'a Builder<'ctx>,
-        dibuilder: &'a DebugInfoBuilder<'ctx>,
-        diunit: &'a DICompileUnit<'ctx>,
-        tm: &'a TargetMachine,
-        nodbg_builder: &'a Builder<'ctx>,
         src_file_path: &'a str,
         errs: &'a RefCell<Vec<PLDiag>>,
         edit_pos: Option<Pos>,
         config: Config,
         db: &'a dyn Db,
-    ) -> Ctx<'a, 'ctx> {
+    ) -> Ctx<'a> {
         let f = Path::new(Path::new(src_file_path).file_stem().unwrap())
             .file_name()
             .take()
@@ -552,170 +527,126 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
             generic_types: FxHashMap::default(),
             plmod: Mod::new(f, src_file_path.to_string()),
             father: None,
-            context,
-            module,
-            builder,
+            init_func: None,
             function: None,
+            errs,
+            edit_pos,
+            table: FxHashMap::default(),
+            config,
+            usegc: true,
+            db,
             block: None,
             continue_block: None,
             break_block: None,
             return_block: None,
-            dibuilder,
-            diunit,
-            targetmachine: tm,
-            discope: diunit.get_file().as_debug_info_scope(),
-            nodebug_builder: nodbg_builder,
-            errs,
-            edit_pos,
-            init_func: None,
-            table: FxHashMap::default(),
-            config,
             roots: RefCell::new(Vec::new()),
-            usegc: true,
-            ditypes_placeholder: Rc::new(RefCell::new(FxHashMap::default())),
-            ditypes: Rc::new(RefCell::new(FxHashMap::default())),
-            db,
+            rettp: None,
         };
         add_primitive_types(&mut ctx);
         ctx
     }
-    pub fn new_child(&'a self, start: Pos) -> Ctx<'a, 'ctx> {
+    pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
         let mut ctx = Ctx {
             need_highlight: self.need_highlight,
             generic_types: FxHashMap::default(),
             plmod: self.plmod.new_child(),
             father: Some(self),
-            context: self.context,
-            builder: self.builder,
-            module: self.module,
-            function: self.function,
-            block: self.block,
-            continue_block: self.continue_block,
-            break_block: self.break_block,
-            return_block: self.return_block,
-            dibuilder: self.dibuilder,
-            diunit: self.diunit,
-            targetmachine: self.targetmachine,
-            discope: self
-                .dibuilder
-                .create_lexical_block(
-                    self.discope,
-                    self.diunit.get_file(),
-                    start.line as u32,
-                    start.column as u32,
-                )
-                .as_debug_info_scope(),
-            nodebug_builder: self.nodebug_builder,
             errs: self.errs,
             edit_pos: self.edit_pos.clone(),
-            init_func: self.init_func,
             table: FxHashMap::default(),
             config: self.config.clone(),
-            roots: RefCell::new(Vec::new()),
             usegc: self.usegc,
-            ditypes_placeholder: self.ditypes_placeholder.clone(),
-            ditypes: self.ditypes.clone(),
             db: self.db.clone(),
+            block: self.block,
+            continue_block: self.continue_block,
+            break_block: self.break_block,
+            return_block: self.return_block,
+            roots: RefCell::new(Vec::new()),
+            rettp: self.rettp.clone(),
+            init_func: self.init_func.clone(),
+            function: self.function.clone(),
         };
         add_primitive_types(&mut ctx);
+        builder.new_subscope(start);
         ctx
     }
-    pub fn tmp_child_ctx(&'a self) -> Ctx<'a, 'ctx> {
+    pub fn tmp_child_ctx(&'a self) -> Ctx<'a> {
         let mut ctx = Ctx {
             need_highlight: self.need_highlight,
             generic_types: FxHashMap::default(),
             plmod: self.plmod.new_child(),
             father: Some(self),
-            context: self.context,
-            builder: self.builder,
-            module: self.module,
-            function: self.function,
+            errs: self.errs,
+            edit_pos: self.edit_pos.clone(),
+            table: FxHashMap::default(),
+            config: self.config.clone(),
+            usegc: self.usegc,
+            db: self.db,
             block: self.block,
             continue_block: self.continue_block,
             break_block: self.break_block,
             return_block: self.return_block,
-            dibuilder: self.dibuilder,
-            diunit: self.diunit,
-            targetmachine: self.targetmachine,
-            discope: self.discope.clone(),
-            nodebug_builder: self.nodebug_builder,
-            errs: self.errs,
-            edit_pos: self.edit_pos.clone(),
-            init_func: self.init_func,
-            table: FxHashMap::default(),
-            config: self.config.clone(),
             roots: RefCell::new(Vec::new()),
-            usegc: self.usegc,
-            ditypes_placeholder: self.ditypes_placeholder.clone(),
-            ditypes: self.ditypes.clone(),
-            db: self.db,
+            rettp: self.rettp.clone(),
+            init_func: self.init_func.clone(),
+            function: self.function.clone(),
         };
         add_primitive_types(&mut ctx);
         ctx
     }
-    pub fn set_init_fn(&mut self) {
-        self.function = Some(self.module.add_function(
+    pub fn set_init_fn<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
+        self.function = Some(builder.add_function(
             &self.plmod.get_full_name("__init_global"),
-            self.context.void_type().fn_type(&vec![], false),
-            None,
+            &vec![],
+            PLType::VOID,
+            self,
         ));
         self.init_func = self.function;
-        self.context
-            .append_basic_block(self.init_func.unwrap(), "alloc");
-        let entry = self
-            .context
-            .append_basic_block(self.init_func.unwrap(), "entry");
-        self.position_at_end(entry);
+        builder.append_basic_block(self.init_func.unwrap(), "alloc");
+        let entry = builder.append_basic_block(self.init_func.unwrap(), "entry");
+        self.position_at_end(entry, builder);
     }
-    pub fn clear_init_fn(&mut self) {
-        let alloc = self.init_func.unwrap().get_first_basic_block().unwrap();
-        let entry = self.init_func.unwrap().get_last_basic_block().unwrap();
-        unsafe {
-            entry.delete().unwrap();
-            alloc.delete().unwrap();
-        }
-        self.context
-            .append_basic_block(self.init_func.unwrap(), "alloc");
-        self.context
-            .append_basic_block(self.init_func.unwrap(), "entry");
+    pub fn clear_init_fn<'b>(&'b self, builder: &'b BuilderEnum<'a, 'ctx>) {
+        let alloc = builder.get_first_basic_block(self.init_func.unwrap());
+        let entry = builder.get_last_basic_block(self.init_func.unwrap());
+        builder.delete_block(alloc);
+        builder.delete_block(entry);
+        builder.append_basic_block(self.init_func.unwrap(), "alloc");
+        builder.append_basic_block(self.init_func.unwrap(), "entry");
+    }
+    pub fn init_fn_ret<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
+        let alloc = builder.get_first_basic_block(self.init_func.unwrap());
+        let entry = builder.get_last_basic_block(self.init_func.unwrap());
+        self.position_at_end(alloc, builder);
+        builder.rm_curr_debug_location();
+        builder.build_unconditional_branch(entry);
+        self.position_at_end(entry, builder);
+        builder.build_return(None);
     }
     pub fn add_method(&mut self, tp: &STType, mthd: &str, fntp: FNType, range: Range) {
         if self.plmod.add_method(tp, mthd, fntp).is_err() {
             self.add_err(range, ErrorCode::DUPLICATE_METHOD);
         }
     }
-    pub fn init_fn_ret(&mut self) {
-        let alloc = self.init_func.unwrap().get_first_basic_block().unwrap();
-        let entry = self.init_func.unwrap().get_last_basic_block().unwrap();
-        self.position_at_end(alloc);
-        self.nodebug_builder.build_unconditional_branch(entry);
-        self.position_at_end(entry);
-        self.nodebug_builder.build_return(None);
-    }
     /// # get_symbol
     /// search in current and all father symbol tables
-    pub fn get_symbol(
-        &self,
+    pub fn get_symbol<'b>(
+        &'b self,
         name: &str,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Option<(
-        PointerValue<'ctx>,
+        ValueHandle,
         Rc<RefCell<PLType>>,
         Range,
         Rc<RefCell<Vec<Location>>>,
         bool,
     )> {
         let v = self.table.get(name);
-        if let Some((pv, pltype, range, refs)) = v {
-            return Some((
-                pv.clone(),
-                pltype.clone(),
-                range.clone(),
-                refs.clone(),
-                false,
-            ));
+        if let Some((h, pltype, range, refs)) = v {
+            return Some((*h, pltype.clone(), range.clone(), refs.clone(), false));
         }
         if let Some(father) = self.father {
-            return father.get_symbol(name);
+            return father.get_symbol(name, builder);
         }
         if let Some(GlobalVar {
             tp: pltype,
@@ -724,10 +655,9 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         }) = self.plmod.get_global_symbol(name)
         {
             return Some((
-                self.module
-                    .get_global(&self.plmod.get_full_name(name))
-                    .unwrap()
-                    .as_pointer_value(),
+                builder
+                    .get_global_var_handle(&self.plmod.get_full_name(name))
+                    .unwrap(),
                 pltype.clone(),
                 range.clone(),
                 refs.clone(),
@@ -740,7 +670,7 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     pub fn add_symbol(
         &mut self,
         name: String,
-        pv: PointerValue<'ctx>,
+        pv: ValueHandle,
         pltype: Rc<RefCell<PLType>>,
         range: Range,
         is_const: bool,
@@ -777,46 +707,44 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     /// 用来获取外部模块的全局变量
     /// 如果没在当前module的全局变量表中找到，将会生成一个
     /// 该全局变量的声明
-    pub fn get_or_add_global(
-        &mut self,
+    pub fn get_or_add_global<'b>(
+        &'b mut self,
         name: &str,
         pltype: Rc<RefCell<PLType>>,
-    ) -> PointerValue<'ctx> {
-        let global = self.module.get_global(name);
-        if global.is_none() {
-            let global = self
-                .module
-                .add_global(pltype.borrow().get_basic_type(self), None, name);
-            global.set_linkage(Linkage::External);
-            return global.as_pointer_value();
-        }
-        global.unwrap().as_pointer_value()
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> ValueHandle {
+        builder.get_or_add_global(name, pltype, self)
     }
-    pub fn init_global(&mut self) {
+    pub fn init_global<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
         let mut set: FxHashSet<String> = FxHashSet::default();
         for (_, sub) in &self.plmod.clone().submods {
-            self.init_global_walk(&sub, &mut set);
+            self.init_global_walk(&sub, &mut set, builder);
         }
-        self.nodebug_builder.build_call(
-            self.module
+
+        builder.rm_curr_debug_location();
+        builder.build_call(
+            builder
                 .get_function(&self.plmod.get_full_name("__init_global"))
                 .unwrap(),
             &[],
-            "",
         );
     }
-    fn init_global_walk(&mut self, m: &Mod, set: &mut FxHashSet<String>) {
+    fn init_global_walk<'b>(
+        &'b mut self,
+        m: &Mod,
+        set: &mut FxHashSet<String>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) {
         let name = m.get_full_name("__init_global");
         if set.contains(&name) {
             return;
         }
         for (_, sub) in &m.submods {
-            self.init_global_walk(sub, set);
+            self.init_global_walk(sub, set, builder);
         }
-        let f = self
-            .module
-            .add_function(&name, self.context.void_type().fn_type(&[], false), None);
-        self.nodebug_builder.build_call(f, &[], "");
+        let f = builder.add_function(&name, &[], PLType::VOID, self);
+        builder.rm_curr_debug_location();
+        builder.build_call(f, &[]);
         set.insert(name);
     }
 
@@ -898,25 +826,15 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         self.errs.borrow_mut().push(dia);
     }
     // load type* to type
-    pub fn try_load2var(
-        &mut self,
+    pub fn try_load2var<'b>(
+        &'b mut self,
         range: Range,
-        v: PLValue<'ctx>,
-    ) -> Result<BasicValueEnum<'ctx>, PLDiag> {
+        v: PLValue,
+        tp: Rc<RefCell<PLType>>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> Result<(ValueHandle, Rc<RefCell<PLType>>), PLDiag> {
         let v = v.value;
-        if !v.is_pointer_value() {
-            return Ok(match v {
-                AnyValueEnum::ArrayValue(v) => v.into(),
-                AnyValueEnum::IntValue(v) => v.into(),
-                AnyValueEnum::FloatValue(v) => v.into(),
-                AnyValueEnum::PointerValue(v) => v.into(),
-                AnyValueEnum::StructValue(v) => v.into(),
-                AnyValueEnum::VectorValue(v) => v.into(),
-                _ => return Err(self.add_err(range, ErrorCode::EXPECT_VALUE)),
-            });
-        } else {
-            Ok(self.builder.build_load(v.into_pointer_value(), "loadtmp"))
-        }
+        builder.try_load2var(range, v, tp, self)
     }
     pub fn if_completion(
         &self,
@@ -1196,6 +1114,14 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
         };
         self.plmod.hints.borrow_mut().push(hint);
     }
+    pub fn position_at_end<'b>(
+        &'b mut self,
+        block: BlockHandle,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) {
+        self.block = Some(block);
+        builder.position_at_end_block(block);
+    }
     fn get_keyword_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         let keywords = vec![
             "if", "else", "while", "for", "return", "struct", "let", "true", "false",
@@ -1271,18 +1197,19 @@ impl<'a, 'ctx> Ctx<'a, 'ctx> {
     }
     /// # auto_deref
     /// 自动解引用，有几层解几层
-    pub fn auto_deref(
-        &self,
+    pub fn auto_deref<'b>(
+        &'b self,
         tp: Rc<RefCell<PLType>>,
-        value: PointerValue<'ctx>,
-    ) -> (Rc<RefCell<PLType>>, PointerValue<'ctx>) {
+        value: ValueHandle,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> (Rc<RefCell<PLType>>, ValueHandle) {
         let mut tp = tp;
         let mut value = value;
         loop {
             match &*RefCell::borrow(&tp.clone()) {
                 PLType::POINTER(p) => {
                     tp = p.clone();
-                    value = self.builder.build_load(value, "load").into_pointer_value();
+                    value = builder.build_load(value, "load");
                 }
                 _ => break,
             }

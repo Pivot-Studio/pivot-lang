@@ -2,8 +2,12 @@ use super::function::FuncDefNode;
 use super::types::StructDefNode;
 use super::*;
 use crate::ast::accumulators::*;
+use crate::ast::builder::llvmbuilder::LLVMBuilder;
+use crate::ast::builder::no_op_builder::NoOpBuilder;
+use crate::ast::builder::BuilderEnum;
+use crate::ast::builder::IRBuilder;
 use crate::ast::compiler::{compile_dry_file, ActionType};
-use crate::ast::ctx::{self, create_ctx_info, Ctx, LSPDef, Mod};
+use crate::ast::ctx::{self, create_llvm_deps, Ctx, LSPDef, Mod};
 use crate::lsp::mem_docs::{EmitParams, FileCompileInput, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
@@ -11,7 +15,7 @@ use crate::utils::read_config::{get_config, Config};
 use crate::Db;
 use colored::Colorize;
 use inkwell::context::Context;
-use inkwell::targets::TargetMachine;
+
 use internal_macro::{fmt, range};
 use lsp_types::GotoDefinitionResponse;
 use rustc_hash::FxHashMap;
@@ -44,32 +48,36 @@ impl Node for ProgramNode {
             statement.print(tabs, i == 0, line.clone());
         }
     }
-    fn emit<'a, 'ctx>(&mut self, ctx: &mut Ctx<'a, 'ctx>) -> NodeResult<'ctx> {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> NodeResult {
         // emit structs
         for def in self.structs.iter() {
             // 提前加入占位符号，解决自引用问题
-            def.add_to_symbols(ctx);
+            def.add_to_symbols(ctx, builder);
         }
         for def in self.structs.iter_mut() {
-            _ = def.emit_struct_def(ctx);
+            _ = def.emit_struct_def(ctx, builder);
         }
         self.fntypes.iter_mut().for_each(|x| {
-            _ = x.emit_func_def(ctx);
+            _ = x.emit_func_def(ctx, builder);
         });
         // init global
-        ctx.set_init_fn();
+        ctx.set_init_fn(builder);
         self.globaldefs.iter_mut().for_each(|x| {
-            _ = x.emit_global(ctx);
+            _ = x.emit_global(ctx, builder);
         });
-        ctx.clear_init_fn();
+        ctx.clear_init_fn(builder);
         ctx.plmod.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(
             SemanticTokensBuilder::new(ctx.plmod.path.to_string()),
         )));
         // node parser
         self.nodes.iter_mut().for_each(|x| {
-            _ = x.emit(ctx);
+            _ = x.emit(ctx, builder);
         });
-        ctx.init_fn_ret();
+        ctx.init_fn_ret(builder);
         Ok((None, None, TerminatorEnum::NONE))
     }
 }
@@ -342,16 +350,10 @@ pub struct LspParams {
 pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     log::info!("emit_file: {}", params.fullpath(db),);
     let context = &Context::create();
-    let (a, b, c, d, e, f) = create_ctx_info(context, params.dir(db), params.file(db));
+    let (a, b, c, d, e) = create_llvm_deps(context, params.dir(db), params.file(db));
     let v = RefCell::new(Vec::new());
+    let builder = LLVMBuilder::new(context, &a, &b, &c, &d, &e);
     let mut ctx = ctx::Ctx::new(
-        context,
-        &a,
-        &b,
-        &c,
-        &d,
-        &e,
-        &f,
         params.fullpath(db),
         &v,
         params.params(db).params(db),
@@ -370,10 +372,16 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     }
     ctx.plmod.submods = params.submods(db);
     let m = &mut ctx;
-    m.module.set_triple(&TargetMachine::get_default_triple());
     let node = params.node(db);
     let mut nn = node.node(db);
-    let _ = nn.emit(m);
+    let mut builder = &builder.into();
+    let noop = NoOpBuilder::new();
+    let noop = noop.into();
+    if !params.params(db).is_compile(db) {
+        log::info!("not in compile mode, using no-op builder");
+        builder = &noop;
+    }
+    let _ = nn.emit(m, builder);
     Diagnostics::push(
         db,
         (
@@ -382,7 +390,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         ),
     );
     if params.params(db).is_compile(db) {
-        ctx.dibuilder.finalize();
+        builder.finalize_debug();
         let mut hasher = DefaultHasher::new();
         params.fullpath(db).hash(&mut hasher);
         let hashed = format!(
@@ -396,8 +404,8 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let pp = Path::new(&hashed).with_extension("bc");
         let ll = Path::new(&hashed).with_extension("ll");
         let p = pp.as_path();
-        ctx.module.print_to_file(ll).unwrap();
-        ctx.module.write_bitcode_to_path(p);
+        builder.print_to_file(&ll).unwrap();
+        builder.write_bitcode_to_path(p);
         ModBuffer::push(db, p.clone().to_path_buf());
     }
     ModWrapper::new(db, ctx.plmod)
