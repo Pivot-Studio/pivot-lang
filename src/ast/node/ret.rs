@@ -34,6 +34,7 @@ impl Node for RetNode {
                 return Err(err);
             }
             let (ret, tp, _) = ret.emit(ctx, builder)?;
+            ctx.emit_comment_highlight(&self.comments[0]);
             let (ret, v) = ctx.try_load2var(self.range, ret.unwrap(), tp.unwrap(), builder)?;
             if v != rettp.unwrap() {
                 let err = ctx.add_err(self.range, ErrorCode::RETURN_TYPE_MISMATCH);
@@ -44,7 +45,7 @@ impl Node for RetNode {
             builder.build_unconditional_branch(ctx.return_block.unwrap().0);
         } else {
             if rettp.is_some() && &*rettp.clone().unwrap().borrow() != &PLType::VOID {
-                let _s = format!("return type is {:?}", &*rettp.unwrap().borrow());
+                ctx.emit_comment_highlight(&self.comments[0]);
                 let err = ctx.add_err(self.range, ErrorCode::NO_RETURN_VALUE_IN_NON_VOID_FUNCTION);
                 return Err(err);
             }
