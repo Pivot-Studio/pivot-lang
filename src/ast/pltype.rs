@@ -2,7 +2,7 @@ use super::ctx::Ctx;
 
 use crate::ast::builder::BuilderEnum;
 
-use super::ctx::PLDiag;
+use super::diag::PLDiag;
 
 use super::fmt::FmtBuilder;
 use super::node::function::FuncDefNode;

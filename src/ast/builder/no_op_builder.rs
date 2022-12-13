@@ -88,7 +88,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
         _fntype: &crate::ast::pltype::FNType,
         _fnvalue: super::ValueHandle,
         _child: &mut crate::ast::ctx::Ctx<'a>,
-    ) -> Result<(), crate::ast::ctx::PLDiag> {
+    ) -> Result<(), crate::ast::diag::PLDiag> {
         Ok(())
     }
 
@@ -233,7 +233,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
             super::ValueHandle,
             std::rc::Rc<std::cell::RefCell<crate::ast::pltype::PLType>>,
         ),
-        crate::ast::ctx::PLDiag,
+        crate::ast::diag::PLDiag,
     > {
         Ok((0, tp))
     }

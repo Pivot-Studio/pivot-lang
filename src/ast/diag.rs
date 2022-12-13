@@ -102,3 +102,98 @@ macro_rules! define_warn {
 define_warn! {
     UNREACHABLE_STATEMENT= "unreachable statement"
 }
+
+use colored::Colorize;
+use lsp_types::{Diagnostic, DiagnosticSeverity};
+
+use super::range::Range;
+
+/// # PLDiag
+/// Diagnostic for pivot-lang
+/// TODO: info
+#[derive(Debug, Clone)]
+pub enum PLDiag {
+    Error(Err),
+    Warn(Warn),
+}
+
+/// # Err
+/// Error for pivot-lang
+#[derive(Debug, Clone)]
+pub struct Err {
+    pub diag: Diagnostic,
+}
+#[derive(Debug, Clone)]
+pub struct Warn {
+    pub diag: Diagnostic,
+}
+
+const PL_DIAG_SOURCE: &str = "plsp";
+
+impl PLDiag {
+    pub fn print(&self, path: &str) {
+        match self {
+            PLDiag::Error(s) => {
+                let err = format!(
+                    "{}\n\t{}",
+                    format!(
+                        "{}:{}:{}",
+                        path,
+                        s.diag.range.start.line + 1,
+                        s.diag.range.start.character + 1
+                    )
+                    .red(),
+                    format!("{}", s.diag.message.blue().bold()),
+                );
+                log::error!("{}", err);
+            }
+            PLDiag::Warn(s) => {
+                let err = format!(
+                    "{}\n\t{}",
+                    format!(
+                        "{}:{}:{}",
+                        path,
+                        s.diag.range.start.line + 1,
+                        s.diag.range.start.character + 1
+                    )
+                    .yellow(),
+                    format!("{}", s.diag.message.blue().bold()),
+                );
+                log::warn!("{}", err);
+            }
+        }
+    }
+    pub fn is_err(&self) -> bool {
+        if let PLDiag::Error(_) = self {
+            true
+        } else {
+            false
+        }
+    }
+    pub fn get_diagnostic(&self) -> Diagnostic {
+        match self {
+            PLDiag::Error(e) => e.diag.clone(),
+            PLDiag::Warn(w) => w.diag.clone(),
+        }
+    }
+    pub fn new_error(range: Range, code: ErrorCode) -> Self {
+        let diag = Diagnostic::new_with_code_number(
+            range.to_diag_range(),
+            DiagnosticSeverity::ERROR,
+            code as i32,
+            Some(PL_DIAG_SOURCE.to_string()),
+            ERR_MSG[&code].to_string(),
+        );
+        PLDiag::Error(Err { diag })
+    }
+    pub fn new_warn(range: Range, code: WarnCode) -> Self {
+        let diag = Diagnostic::new_with_code_number(
+            range.to_diag_range(),
+            DiagnosticSeverity::WARNING,
+            code as i32,
+            Some(PL_DIAG_SOURCE.to_string()),
+            WARN_MSG[&code].to_string(),
+        );
+        PLDiag::Warn(Warn { diag })
+    }
+}
