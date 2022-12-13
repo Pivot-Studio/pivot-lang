@@ -1,4 +1,4 @@
-/// 为以后codegen逻辑完全分离作准备，此包代码应该遵循以下原则：
+/// 此包代码应该遵循以下原则：
 /// 1. 所有Builder的字段都应该private，不应该被外部直接访问
 /// 2. 所有涉及llvm类型的函数（包括参数或返回值）都应该是private的
 use std::{
@@ -12,7 +12,7 @@ use inkwell::{
     builder::Builder,
     context::Context,
     debug_info::*,
-    module::{Linkage, Module},
+    module::{FlagBehavior, Linkage, Module},
     targets::{InitializationConfig, Target, TargetMachine},
     types::{ArrayType, BasicType, BasicTypeEnum, StructType},
     values::{
@@ -23,9 +23,11 @@ use inkwell::{
 };
 use rustc_hash::FxHashMap;
 
+use crate::ast::diag::PLDiag;
+
 use super::{
     super::{
-        ctx::{Ctx, MemberType, PLDiag},
+        ctx::Ctx,
         diag::ErrorCode,
         node::{types::TypedIdentifierNode, TypeNode, TypeNodeEnum},
         pltype::{ARRType, FNType, Field, PLType, PriType, RetTypeEnum, STType},
@@ -51,6 +53,61 @@ fn get_dw_ate_encoding<'a, 'ctx>(pritp: &PriType) -> u32 {
         PriType::F32 | PriType::F64 => DW_ATE_FLOAT,
         PriType::BOOL => DW_ATE_BOOLEAN,
     }
+}
+
+pub struct MemberType<'ctx> {
+    pub ditype: DIDerivedType<'ctx>,
+    pub offset: u64,
+    pub scope: DIScope<'ctx>,
+    pub line: u32,
+    pub name: String,
+    pub di_file: DIFile<'ctx>,
+    pub ptr_depth: usize,
+}
+
+pub fn create_llvm_deps<'ctx>(
+    context: &'ctx Context,
+    dir: &str,
+    file: &str,
+) -> (
+    Module<'ctx>,
+    Builder<'ctx>,
+    DebugInfoBuilder<'ctx>,
+    DICompileUnit<'ctx>,
+    TargetMachine,
+) {
+    let builder = context.create_builder();
+    let module = context.create_module("main");
+    let (dibuilder, compile_unit) = module.create_debug_info_builder(
+        true,
+        DWARFSourceLanguage::C,
+        file,
+        dir,
+        "plc frontend",
+        false,
+        "",
+        0,
+        "",
+        DWARFEmissionKind::Full,
+        0,
+        false,
+        true,
+        "",
+        "",
+    );
+
+    let metav = context.metadata_node(&[BasicMetadataValueEnum::IntValue(
+        context.i32_type().const_int(3, false),
+    )]);
+    module.add_metadata_flag("Debug Info Version", FlagBehavior::Warning, metav);
+    if cfg!(target_os = "windows") {
+        let metacv = context.metadata_node(&[BasicMetadataValueEnum::IntValue(
+            context.i32_type().const_int(1, false),
+        )]);
+        module.add_metadata_flag("CodeView", FlagBehavior::Warning, metacv); // TODO: is this needed for windows debug?
+    }
+    let tm = get_target_machine(inkwell::OptimizationLevel::None);
+    (module, builder, dibuilder, compile_unit, tm)
 }
 
 #[derive(Clone)]

@@ -26,8 +26,8 @@ use self::string_literal::StringNode;
 use self::types::*;
 
 use super::builder::ValueHandle;
-use super::ctx::PLDiag;
 use super::diag::ErrorCode;
+use super::diag::PLDiag;
 use super::fmt::FmtBuilder;
 use super::pltype::{PLType, PriType};
 use super::range::{Pos, Range};

@@ -1,9 +1,10 @@
 use std::path::PathBuf;
 
 use crate::ast::builder::BuilderEnum;
+use crate::ast::plmod::get_ns_path_completions;
 use crate::{
     ast::{
-        ctx::{get_ns_path_completions, Ctx},
+        ctx::Ctx,
         diag::ErrorCode,
         node::{deal_line, tab},
         pltype::PLType,

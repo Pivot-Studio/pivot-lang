@@ -12,7 +12,8 @@ use self::llvmbuilder::LLVMBuilder;
 use self::no_op_builder::NoOpBuilder;
 
 use super::{
-    ctx::{Ctx, PLDiag},
+    ctx::Ctx,
+    diag::PLDiag,
     node::{types::TypedIdentifierNode, TypeNodeEnum},
     pltype::{FNType, Field, PLType, PriType},
     range::{Pos, Range},

@@ -5,7 +5,7 @@ use lsp_types::{
     SemanticTokens, SignatureHelp, TextEdit,
 };
 
-use super::ctx::PLDiag;
+use super::diag::PLDiag;
 
 #[salsa::accumulator]
 pub struct Diagnostics((String, Vec<PLDiag>));
