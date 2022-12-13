@@ -23,7 +23,7 @@ use super::{
             ArrayInitNode, ArrayTypeNameNode, GenericDefNode, GenericParamNode, PointerTypeNode,
             StructDefNode, StructInitFieldNode, StructInitNode, TypeNameNode, TypedIdentifierNode,
         },
-        FmtTrait, NodeEnum, TypeNodeEnum,
+        FmtTrait, NodeEnum, TypeNodeEnum, interface::TraitDefNode,
     },
     tokens::TokenType,
 };
@@ -571,5 +571,8 @@ impl FmtBuilder {
         self.double_quote();
         self.token(&node.content);
         self.double_quote();
+    }
+    pub fn parse_trait_def_node(&mut self, node: &TraitDefNode){
+        todo!()
     }
 }
