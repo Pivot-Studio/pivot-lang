@@ -69,9 +69,10 @@ pub enum ComplexOp {
     FieldOp(Option<Box<VarNode>>),
 }
 
-#[salsa::interned]
+#[salsa::tracked]
 pub struct SourceProgram {
     #[return_ref]
+    #[salsa::id::id]
     pub text: String,
     #[return_ref]
     pub path: String,

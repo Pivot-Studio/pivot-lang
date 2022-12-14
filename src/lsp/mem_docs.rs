@@ -45,15 +45,18 @@ pub struct MemDocsInput {
     pub edit_pos: Option<Pos>,
 }
 
-/// 必须是interned，否则会导致lru cache失效
-/// 因为tracked类型结构体每次new都会生成一个新的实例（即使值一样），而interned类型结构体如果值一样会生成同一个实例
-#[salsa::interned]
+/// 必须有#[id]，否则会导致lru cache失效
+#[salsa::tracked]
 pub struct FileCompileInput {
     #[return_ref]
+    #[salsa::id::id]
     pub file: String,
     #[return_ref]
+    #[salsa::id::id]
     pub modpath: String,
+    #[salsa::id::id]
     pub docs: MemDocsInput,
+    #[salsa::id::id]
     pub config: Config,
 }
 #[salsa::tracked]

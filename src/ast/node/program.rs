@@ -85,11 +85,15 @@ impl Node for ProgramNode {
     }
 }
 
-#[salsa::interned]
+#[salsa::tracked]
 pub struct Program {
+    #[salsa::id::id]
     pub node: ProgramNodeWrapper,
+    #[salsa::id::id]
     pub params: EmitParams,
+    #[salsa::id::id]
     pub docs: MemDocsInput,
+    #[salsa::id::id]
     pub config: Config,
 }
 
