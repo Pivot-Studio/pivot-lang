@@ -4,6 +4,7 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
+use crate::mismatch_err;
 
 use internal_macro::{comments, fmt, range};
 use lsp_types::SemanticTokenType;
@@ -39,7 +40,7 @@ impl Node for DefNode {
         let range = self.range();
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
         if self.exp.is_none() && self.tp.is_none() {
-            return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
         }
         let mut pltype = None;
         let mut expv = None;
@@ -52,17 +53,17 @@ impl Node for DefNode {
             let (value, pltype_opt, _) = ctx.emit_with_expectation(exp, pltype.clone(), builder)?;
             // for err tolerate
             if pltype_opt.is_none() {
-                return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
+                return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
             }
             if value.is_none() {
-                return Err(ctx.add_err(self.range, ErrorCode::EXPECT_VALUE));
+                return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
             }
             let tp = pltype_opt.clone().unwrap();
             if pltype.is_none() {
                 ctx.push_type_hints(self.var.range, tp.clone());
                 pltype = Some(tp);
             } else if pltype.clone().unwrap() != tp {
-                return Err(ctx.add_err(self.range, ErrorCode::TYPE_MISMATCH));
+                return Err(mismatch_err!(ctx, self.range(), tp, pltype.unwrap()));
             }
             expv = value;
             exptp = pltype_opt;
@@ -118,10 +119,10 @@ impl Node for AssignNode {
         let (ptr, lpltype, _) = self.var.emit(ctx, builder)?;
         let (value, rpltype, _) = self.exp.emit(ctx, builder)?;
         if lpltype != rpltype {
-            return Err(ctx.add_err(self.range, ErrorCode::ASSIGN_TYPE_MISMATCH));
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::ASSIGN_TYPE_MISMATCH)));
         }
         if ptr.as_ref().unwrap().is_const {
-            return Err(ctx.add_err(self.range, ErrorCode::ASSIGN_CONST));
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::ASSIGN_CONST)));
         }
         let (load, _) = ctx.try_load2var(exp_range, value.unwrap(), rpltype.unwrap(), builder)?;
         builder.build_store(ptr.unwrap().value, load);
@@ -183,7 +184,9 @@ impl Node for StatementsNode {
                     ctx.push_semantic_token(c.range, SemanticTokenType::COMMENT, 0);
                     continue;
                 }
-                ctx.add_warn(m.range(), WarnCode::UNREACHABLE_STATEMENT);
+                ctx.add_diag(m.range().new_warn(WarnCode::UNREACHABLE_STATEMENT).add_help(
+                    "This statement will never be executed, because the previous statements contains a terminator. Try to remove it.",
+                ).clone());
                 continue;
             }
             let pos = m.range().start;

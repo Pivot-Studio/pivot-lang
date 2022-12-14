@@ -1,5 +1,7 @@
 use lsp_types::Position;
 
+use super::diag::{ErrorCode, PLDiag, WarnCode};
+
 type Span<'a> = nom_locate::LocatedSpan<&'a str>;
 
 /// # Pos
@@ -103,6 +105,12 @@ impl Range {
                 offset: end.location_offset(),
             },
         }
+    }
+    pub fn new_err(&self, err: ErrorCode) -> PLDiag {
+        PLDiag::new_error(*self, err)
+    }
+    pub fn new_warn(&self, warn: WarnCode) -> PLDiag {
+        PLDiag::new_warn(*self, warn)
     }
 
     pub fn to_diag_range(&self) -> lsp_types::Range {

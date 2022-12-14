@@ -35,7 +35,7 @@ impl Node for ImplNode {
                 ctx.send_if_go_to_def(self.target.range(), sttp.range, sttp.path.clone());
             }
             _ => {
-                ctx.add_err(self.target.range(), ErrorCode::EXPECT_TYPE);
+                ctx.add_diag(self.target.range().new_err(ErrorCode::EXPECT_TYPE));
             }
         };
 

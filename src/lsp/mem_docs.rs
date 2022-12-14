@@ -129,6 +129,10 @@ impl MemDocsInput {
     }
 }
 
+pub fn get_doc_range(doc: &str, range: lsp_types::Range) -> String {
+    doc[position_to_offset(doc, range.start)..position_to_offset(doc, range.end)].to_string()
+}
+
 impl MemDocs {
     pub fn new() -> Self {
         MemDocs {

@@ -1,7 +1,7 @@
 use super::builder::BlockHandle;
 use super::builder::ValueHandle;
+use super::diag::ErrorCode;
 use super::diag::PLDiag;
-use super::diag::{ErrorCode, WarnCode};
 
 use super::node::NodeEnum;
 use super::node::PLValue;
@@ -173,7 +173,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
     pub fn add_method(&mut self, tp: &STType, mthd: &str, fntp: FNType, range: Range) {
         if self.plmod.add_method(tp, mthd, fntp).is_err() {
-            self.add_err(range, ErrorCode::DUPLICATE_METHOD);
+            self.add_diag(range.new_err(ErrorCode::DUPLICATE_METHOD));
         }
     }
     /// # get_symbol
@@ -224,7 +224,7 @@ impl<'a, 'ctx> Ctx<'a> {
         is_const: bool,
     ) -> Result<(), PLDiag> {
         if self.table.contains_key(&name) {
-            return Err(self.add_err(range, ErrorCode::REDECLARATION));
+            return Err(self.add_diag(range.new_err(ErrorCode::REDECLARATION)));
         }
         let refs = Rc::new(RefCell::new(vec![]));
         if is_const {
@@ -250,7 +250,7 @@ impl<'a, 'ctx> Ctx<'a> {
             let re = father.get_type(name, range);
             return re;
         }
-        Err(PLDiag::new_error(range, ErrorCode::UNDEFINED_TYPE))
+        Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
     }
     /// 用来获取外部模块的全局变量
     /// 如果没在当前module的全局变量表中找到，将会生成一个
@@ -314,7 +314,7 @@ impl<'a, 'ctx> Ctx<'a> {
             unreachable!()
         }
         if self.plmod.types.contains_key(&name) {
-            return Err(self.add_err(range, ErrorCode::REDEFINE_TYPE));
+            return Err(self.add_diag(range.new_err(ErrorCode::REDEFINE_TYPE)));
         }
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
         self.plmod.types.insert(name, pltype.clone());
@@ -359,19 +359,10 @@ impl<'a, 'ctx> Ctx<'a> {
         }
     }
 
-    pub fn add_err(&self, range: Range, code: ErrorCode) -> PLDiag {
-        let dia = PLDiag::new_error(range, code);
-        self.errs.borrow_mut().push(dia.clone());
-        dia
-    }
-    pub fn add_warn(&self, range: Range, code: WarnCode) -> PLDiag {
-        let dia = PLDiag::new_warn(range, code);
-        self.errs.borrow_mut().push(dia.clone());
-        dia
-    }
-
-    pub fn add_diag(&mut self, dia: PLDiag) {
+    pub fn add_diag(&self, dia: PLDiag) -> PLDiag {
+        let dia2 = dia.clone();
         self.errs.borrow_mut().push(dia);
+        dia2
     }
     // load type* to type
     pub fn try_load2var<'b>(
