@@ -8,6 +8,7 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
+use crate::ast::pltype::get_type_deep;
 use crate::ast::pltype::{eq, ARRType, Field, GenericType, PLType, STType};
 use crate::plv;
 use indexmap::IndexMap;
@@ -715,7 +716,9 @@ impl GenericParamNode {
                 res.push(None);
                 continue;
             }
-            res.push(Some(g.as_ref().unwrap().get_type(ctx, builder)?));
+            res.push(Some(get_type_deep(
+                g.as_ref().unwrap().get_type(ctx, builder)?,
+            )));
         }
         Ok(res)
     }

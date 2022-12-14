@@ -134,6 +134,7 @@ pub fn eq(l: Rc<RefCell<PLType>>, r: Rc<RefCell<PLType>>) -> bool {
         }
         (PLType::STRUCT(l), PLType::STRUCT(r)) => l.name == r.name && l.path == r.path,
         (PLType::FN(l), PLType::FN(r)) => l == r,
+        (PLType::PLACEHOLDER(l), PLType::PLACEHOLDER(r)) => l == r,
         _ => false,
     }
 }
@@ -188,6 +189,18 @@ fn new_exid_node(modname: &str, name: &str, range: Range) -> Box<TypeNodeEnum> {
         generic_params: None,
         range,
     }))
+}
+pub fn get_type_deep(pltype: Rc<RefCell<PLType>>) -> Rc<RefCell<PLType>> {
+    match &*pltype.borrow() {
+        PLType::GENERIC(g) => {
+            if g.curpltype.is_some() {
+                g.curpltype.as_ref().unwrap().clone()
+            } else {
+                pltype.clone()
+            }
+        }
+        _ => pltype.clone(),
+    }
 }
 impl PLType {
     pub fn get_typenode(&self, ctx: &Ctx) -> Box<TypeNodeEnum> {
@@ -380,6 +393,7 @@ pub struct FNType {
     pub doc: Vec<Box<NodeEnum>>,
     pub method: bool,
     pub generic_map: IndexMap<String, Rc<RefCell<PLType>>>,
+    pub generic_infer: Rc<RefCell<IndexMap<String, Rc<RefCell<PLType>>>>>,
     pub generic: bool,
     pub node: Box<FuncDefNode>,
 }
@@ -397,22 +411,74 @@ impl TryFrom<PLType> for FNType {
 impl FNType {
     pub fn append_name_with_generic(&self, name: String) -> String {
         if self.need_gen_code() {
-            let mut newname = format!("{}", name);
-            for (_, v) in self.generic_map.iter() {
-                match &*v.clone().borrow() {
-                    PLType::GENERIC(g) => {
-                        newname.push_str(
-                            format!("__{}", g.curpltype.as_ref().unwrap().borrow().get_name())
-                                .as_str(),
-                        );
-                    }
+            let typeinfer = self
+                .generic_map
+                .iter()
+                .map(|(_, v)| match &*v.clone().borrow() {
+                    PLType::GENERIC(g) => g.curpltype.as_ref().unwrap().borrow().get_name(),
                     _ => unreachable!(),
-                }
-            }
-            newname.clone()
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            return format!("{}<{}>", name, typeinfer);
         } else {
             name.clone()
         }
+    }
+    pub fn generic_infer_pltype<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> Result<FNType, PLDiag> {
+        let name = self.append_name_with_generic(self.name.clone());
+        if let Some(pltype) = self.generic_infer.borrow().get(&name) {
+            if let PLType::FN(f) = &*pltype.borrow() {
+                return Ok(f.clone());
+            }
+        }
+        let mut res = self.clone();
+        res.llvmname = format!(
+            "{}..{}",
+            res.llvmname.split("..").collect::<Vec<&str>>()[0],
+            name
+        );
+        res.name = name.clone();
+        res.generic_map.clear();
+        self.generic_infer
+            .borrow_mut()
+            .insert(name, Rc::new(RefCell::new(PLType::FN(res.clone()))));
+
+        let block = ctx.block;
+        ctx.need_highlight = ctx.need_highlight + 1;
+        self.node
+            .gen_fntype(ctx, false, builder, Some(self.clone()))?;
+        ctx.need_highlight = ctx.need_highlight - 1;
+        ctx.position_at_end(block.unwrap(), builder);
+
+        res.ret_pltype = self
+            .ret_pltype
+            .get_type(ctx, builder)
+            .unwrap()
+            .borrow()
+            .get_typenode(ctx);
+        res.param_pltypes = self
+            .param_pltypes
+            .iter()
+            .map(|p| {
+                let np = p.get_type(ctx, builder).unwrap().borrow().get_typenode(ctx);
+                np
+            })
+            .collect::<Vec<Box<TypeNodeEnum>>>();
+        let pltype = res
+            .generic_infer
+            .borrow()
+            .get(&res.name)
+            .as_ref()
+            .unwrap()
+            .clone()
+            .clone();
+        pltype.replace(PLType::FN(res.clone()));
+        Ok(res.clone())
     }
     pub fn gen_snippet(&self) -> String {
         let mut name = self.name.clone();
@@ -773,6 +839,21 @@ macro_rules! generic_impl {
                         );
                     }
                     Ok(())
+                }
+                pub fn new_pltype(&self) -> $args {
+                    let mut res = self.clone();
+                    res.generic_map = res
+                        .generic_map
+                        .iter()
+                        .map(|(k, pltype)| {
+                            if let PLType::GENERIC(g) = &*pltype.borrow() {
+                                return (k.clone(), Rc::new(RefCell::new(PLType::GENERIC(g.clone()))));
+                            }
+                            unreachable!()
+                        })
+                        .collect::<IndexMap<String, Rc<RefCell<PLType>>>>();
+                    res.clear_generic();
+                    res
                 }
             }
         )*
