@@ -72,7 +72,6 @@ pub enum ComplexOp {
 #[salsa::tracked]
 pub struct SourceProgram {
     #[return_ref]
-    #[salsa::id::id]
     pub text: String,
     #[return_ref]
     pub path: String,

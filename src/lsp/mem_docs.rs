@@ -49,14 +49,10 @@ pub struct MemDocsInput {
 #[salsa::tracked]
 pub struct FileCompileInput {
     #[return_ref]
-    #[salsa::id::id]
     pub file: String,
     #[return_ref]
-    #[salsa::id::id]
     pub modpath: String,
-    #[salsa::id::id]
     pub docs: MemDocsInput,
-    #[salsa::id::id]
     pub config: Config,
 }
 #[salsa::tracked]
