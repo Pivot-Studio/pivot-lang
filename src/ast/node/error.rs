@@ -26,7 +26,7 @@ impl Node for ErrorNode {
         ctx: &'b mut Ctx<'a>,
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        let err = ctx.add_err(self.range, self.code);
+        let err = ctx.add_diag(self.range.new_err(self.code));
         ctx.if_completion(self.range, || ctx.get_completions());
 
         Err(err)

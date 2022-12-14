@@ -45,7 +45,7 @@ impl Node for IfNode {
         let condrange = self.cond.range();
         let (cond, pltype, _) = self.cond.emit(ctx, builder)?;
         if pltype.is_none() || !pltype.clone().unwrap().borrow().is(&PriType::BOOL) {
-            return Err(ctx.add_err(condrange, ErrorCode::IF_CONDITION_MUST_BE_BOOL));
+            return Err(ctx.add_diag(condrange.new_err(ErrorCode::IF_CONDITION_MUST_BE_BOOL)));
         }
         let (cond, _) = ctx.try_load2var(condrange, cond.unwrap(), pltype.unwrap(), builder)?;
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
@@ -116,7 +116,7 @@ impl Node for WhileNode {
         let start = self.cond.range().start;
         let (cond, pltype, _) = self.cond.emit(ctx, builder)?;
         if pltype.is_none() || !pltype.clone().unwrap().borrow().is(&PriType::BOOL) {
-            return Err(ctx.add_err(condrange, ErrorCode::WHILE_CONDITION_MUST_BE_BOOL));
+            return Err(ctx.add_diag(condrange.new_err(ErrorCode::WHILE_CONDITION_MUST_BE_BOOL)));
         }
         let (cond, _) = ctx.try_load2var(condrange, cond.unwrap(), pltype.unwrap(), builder)?;
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
@@ -190,7 +190,7 @@ impl Node for ForNode {
         let cond_start = self.cond.range().start;
         let (cond, pltype, _) = self.cond.emit(ctx, builder)?;
         if pltype.is_none() || !pltype.clone().unwrap().borrow().is(&PriType::BOOL) {
-            return Err(ctx.add_err(condrange, ErrorCode::FOR_CONDITION_MUST_BE_BOOL));
+            return Err(ctx.add_diag(condrange.new_err(ErrorCode::FOR_CONDITION_MUST_BE_BOOL)));
         }
         let (cond, _) = ctx.try_load2var(condrange, cond.unwrap(), pltype.unwrap(), builder)?;
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
@@ -243,7 +243,7 @@ impl Node for BreakNode {
             builder.build_unconditional_branch(b);
             builder.clear_insertion_position();
         } else {
-            let err = ctx.add_err(self.range, ErrorCode::BREAK_MUST_BE_IN_LOOP);
+            let err = ctx.add_diag(self.range.new_err(ErrorCode::BREAK_MUST_BE_IN_LOOP));
             return Err(err);
         }
         Ok((None, None, TerminatorEnum::BREAK))
@@ -272,7 +272,7 @@ impl Node for ContinueNode {
             builder.build_unconditional_branch(b);
             builder.clear_insertion_position();
         } else {
-            let err = ctx.add_err(self.range, ErrorCode::CONTINUE_MUST_BE_IN_LOOP);
+            let err = ctx.add_diag(self.range.new_err(ErrorCode::CONTINUE_MUST_BE_IN_LOOP));
             return Err(err);
         }
         Ok((None, None, TerminatorEnum::CONTINUE))

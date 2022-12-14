@@ -40,19 +40,19 @@ impl Node for PointerOpNode {
         let value = match self.op {
             PointerOpEnum::DEREF => {
                 if tp.is_none() {
-                    return Err(ctx.add_err(self.range, ErrorCode::NOT_A_POINTER));
+                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::NOT_A_POINTER)));
                 }
                 if let PLType::POINTER(tp1) = &*tp.unwrap().borrow() {
                     tp = Some(tp1.clone());
                     builder.build_load(value.value, "deref")
                 } else {
-                    return Err(ctx.add_err(self.range, ErrorCode::NOT_A_POINTER));
+                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::NOT_A_POINTER)));
                 }
             }
             PointerOpEnum::ADDR => {
                 tp = Some(Rc::new(RefCell::new(PLType::POINTER(tp.unwrap()))));
                 if value.is_const {
-                    return Err(ctx.add_err(self.range, ErrorCode::CAN_NOT_REF_CONSTANT));
+                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::CAN_NOT_REF_CONSTANT)));
                 }
                 let val = value.value;
                 let v = builder.alloc("addr", &tp.clone().unwrap().borrow(), ctx);

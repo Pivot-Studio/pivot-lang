@@ -206,6 +206,35 @@ pub enum Num {
 impl Eq for Num {
     // FIXME: NaN https://stackoverflow.com/questions/39638363/how-can-i-use-a-hashmap-with-f64-as-key-in-rust
 }
+#[macro_export]
+macro_rules! mismatch_err {
+    ($self:ident, $range:expr, $expect:ident) => {
+        $self.add_diag(
+            $range
+                .new_err(ErrorCode::TYPE_MISMATCH)
+                .add_label(
+                    $range,
+                    Some(format!("expected type `{}`", $expect.borrow().get_name())),
+                )
+                .clone(),
+        )
+    };
+    ($self:ident, $range:expr, $expect:ident,$got:expr) => {
+        $self.add_diag(
+            $range
+                .new_err(ErrorCode::TYPE_MISMATCH)
+                .add_label(
+                    $range,
+                    Some(format!(
+                        "expected type `{}, got type {}`",
+                        $expect.borrow().get_name(),
+                        $got.borrow().get_name()
+                    )),
+                )
+                .clone(),
+        )
+    };
+}
 
 impl<'a, 'ctx> Ctx<'a> {
     fn emit_comment_highlight(&mut self, comments: &Vec<Box<NodeEnum>>) {
@@ -245,19 +274,19 @@ impl<'a, 'ctx> Ctx<'a> {
                                 | PriType::U32
                                 | PriType::U16
                                 | PriType::U8 => false,
-                                _ => return Err(self.add_err(range, ErrorCode::TYPE_MISMATCH)),
+                                _ => return Err(mismatch_err!(self, range, expect)),
                             };
                             let int = builder.int_value(tp, i, sign_ext);
                             int
                         }
-                        _ => return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH)),
+                        _ => return Err(mismatch_err!(self, range, expect)),
                     },
                     Num::FLOAT(f) => match &*expect.borrow() {
                         PLType::PRIMITIVE(tp) => match tp {
                             PriType::F32 | PriType::F64 => builder.float_value(tp, f),
-                            _ => return Err(self.add_err(range, ErrorCode::TYPE_MISMATCH)),
+                            _ => return Err(mismatch_err!(self, range, expect)),
                         },
-                        _ => return Err(self.add_err(node.range(), ErrorCode::TYPE_MISMATCH)),
+                        _ => return Err(mismatch_err!(self, range, expect)),
                     },
                 };
                 self.push_semantic_token(numnode.range(), SemanticTokenType::NUMBER, 0);
@@ -278,7 +307,7 @@ impl<'a, 'ctx> Ctx<'a> {
         if value.is_some() {
             if let Some(ty) = ty.clone() {
                 if ty != expect {
-                    return Err(self.add_err(range, ErrorCode::TYPE_MISMATCH));
+                    return Err(mismatch_err!(self, range, expect));
                 }
             }
         }
@@ -348,9 +377,9 @@ macro_rules! handle_calc {
                     return Ok((Some(plv!( $builder.[<build_$opf>](
                         $left, $right, "addtmp"))),Some($lpltype.unwrap()),TerminatorEnum::NONE));
                 },
-                _ =>  return Err($ctx.add_err(
-                    $range,
-                    crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR,
+                _ =>  return Err($ctx.add_diag(
+                    $range.new_err(
+                    crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR),
                 ))
             }
         }

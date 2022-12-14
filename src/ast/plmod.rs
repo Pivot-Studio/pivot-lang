@@ -148,7 +148,7 @@ impl Mod {
         refs: Rc<RefCell<Vec<Location>>>,
     ) -> Result<(), PLDiag> {
         if self.global_table.contains_key(&name) {
-            return Err(PLDiag::new_error(range, ErrorCode::UNDEFINED_TYPE));
+            return Err(range.new_err(ErrorCode::UNDEFINED_TYPE));
         }
         self.global_table.insert(
             name,

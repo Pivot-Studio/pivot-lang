@@ -51,11 +51,11 @@ pub fn res_box<T: ?Sized>(i: Box<T>) -> Result<Box<T>, Error> {
 pub fn create_bin(
     (mut left, rights): (Box<NodeEnum>, Vec<((TokenType, Range), Box<NodeEnum>)>),
 ) -> Result<Box<NodeEnum>, Error> {
-    for ((op, _), right) in rights {
+    for ((op, orange), right) in rights {
         let range = left.range().start.to(right.range().end);
         left = Box::new(
             BinOpNode {
-                op,
+                op: (op, orange),
                 left,
                 right,
                 range,

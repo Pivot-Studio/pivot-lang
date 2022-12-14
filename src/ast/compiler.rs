@@ -174,7 +174,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         for e in errs.iter() {
             let path = &e.0;
             for e in e.1.iter() {
-                e.print(&path);
+                e.print(&path, docs.get_file_content(db).unwrap().text(db));
                 if e.is_err() {
                     errs_num = errs_num + 1
                 }
