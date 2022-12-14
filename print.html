@@ -786,13 +786,6 @@ lsp请求都会直接从缓存中读取结果。</p>
 <img src="lsp/2022-12-08-13-22-04.png" alt="" /></p>
 </blockquote>
 <p>这里会在每次重新计算的时候输出对应的log。</p>
-<h2 id="一些坑点"><a class="header" href="#一些坑点">一些坑点</a></h2>
-<h3 id="salsa-lru与internedtracked类型"><a class="header" href="#salsa-lru与internedtracked类型">salsa lru与interned、tracked类型</a></h3>
-<p><code>salsa</code>的lru缓存实际上缓存的key是<code>salsa</code>结构体的值，而不是实际值。也就是说，即使实际值一样，如果<code>salsa</code>结构体的值不同，那么缓存也会失效。</p>
-<p>所以，如果使用lru缓存的函数的输入是<code>tracked</code>类型的结构体，必须输入完全一致的对象才能触发缓存逻辑。
-<strong>如果你的结构体是<code>new</code>的则一定无法触发缓存逻辑</strong>。</p>
-<p>因此，建议在需要缓存的函数中使用<code>interned</code>类型的结构体作为参数。因为<code>interned</code>每次<code>new</code>的时候会去db中检索值，
-如果值已经存在则会返回已有的<code>salsa struct</code>，而不会<code>new</code>一个新的值。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="diagnostic"><a class="header" href="#diagnostic">Diagnostic</a></h1>
 <p>诊断信息是个非常重要的功能，它可以帮助我们在编写代码的时候发现错误和可能有问题的地方，从而提高我们的编码效率。</p>
 <p>为了让用户体验尽可能的好，我们的lsp分析需要尽量容忍用户的错误输入，尽可能多的分析出用户代码中的问题</p>
