@@ -118,8 +118,6 @@ impl Default for DiagCode {
 
 use lsp_types::{Diagnostic, DiagnosticSeverity};
 
-use crate::lsp::mem_docs::get_doc_range;
-
 use super::range::Range;
 
 /// # PLDiag
@@ -155,7 +153,7 @@ impl PLDiag {
     pub fn print(&self, path: &str, doc: &str) {
         let mut r = self.get_diagnostic().range.clone();
         r.start.character = 0;
-        let a = miette::Report::new(self.to_file_diag(path, &get_doc_range(doc, r)));
+        let a = miette::Report::new(self.to_file_diag(path, doc));
         println!("{a:?}");
     }
     pub fn is_err(&self) -> bool {
@@ -192,11 +190,10 @@ impl PLDiag {
     }
 
     pub fn add_label(&mut self, range: Range, label: Option<String>) -> &mut Self {
-        let linestart = self.range.start.offset - self.range.start.column + 1;
-        let startoffset = miette::ByteOffset::from(range.start.offset - linestart);
-        let len = miette::ByteOffset::from(range.end.offset - range.start.offset);
+        let startoffset = miette::ByteOffset::from(range.start.offset);
+        let mut len = miette::ByteOffset::from(range.end.offset - range.start.offset);
         if len == 0 {
-            return self;
+            len = 1;
         }
         self.labels.push(LabeledSpan::new(label, startoffset, len));
         self

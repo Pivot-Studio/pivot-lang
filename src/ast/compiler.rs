@@ -7,7 +7,7 @@ use crate::{
     },
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
-    utils::read_config::{get_config, get_config_path},
+    utils::read_config::get_config_path,
     Db,
 };
 use colored::Colorize;
@@ -20,13 +20,13 @@ use inkwell::{
 };
 use log::{info, trace, warn};
 use rustc_hash::FxHashSet;
+use std::process::Command;
 use std::{
     env,
     fs::{self, remove_file},
     path::Path,
     time::Instant,
 };
-use std::{path::PathBuf, process::Command};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Copy)]
 pub struct Options {
@@ -106,42 +106,20 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
         log::error!("lsp error: {}", path.err().unwrap());
         return;
     }
-    let confinput = FileCompileInput::new(
-        db,
-        path.clone().unwrap(),
-        "".to_string(),
-        docs,
-        Default::default(),
-    );
 
-    let re = get_config(db, confinput.get_file_content(db).unwrap());
-    if re.is_err() {
-        log::error!("lsp error: {}", re.err().unwrap());
+    let input = docs.get_file_params(db, docs.file(db).clone(), true);
+    if input.is_none() {
         return;
     }
-    let mut config = re.unwrap();
-    let buf = PathBuf::from(path.unwrap());
-    let parant = buf.parent().unwrap();
-    config.entry = parant.join(config.entry).to_str().unwrap().to_string();
-    let file = config.entry.clone();
-    config.root = parant.to_str().unwrap().to_string();
-    let input = FileCompileInput::new(
-        db,
-        file.clone(),
-        PathBuf::from(file)
-            .parent()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string(),
-        docs,
-        config,
-    );
-    compile_dry_file(db, input);
+    compile_dry_file(db, input.unwrap());
 }
 
 #[salsa::tracked]
 pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrapper> {
+    if docs.file(db).ends_with(".toml") {
+        // skip toml
+        return None;
+    }
     // eprintln!("compile_dry_file: {:?}", docs.debug_all(db));
     let re = docs.get_file_content(db);
     if re.is_none() {

@@ -45,7 +45,12 @@ impl Node for IfNode {
         let condrange = self.cond.range();
         let (cond, pltype, _) = self.cond.emit(ctx, builder)?;
         if pltype.is_none() || !pltype.clone().unwrap().borrow().is(&PriType::BOOL) {
-            return Err(ctx.add_diag(condrange.new_err(ErrorCode::IF_CONDITION_MUST_BE_BOOL)));
+            return Err(ctx.add_diag(
+                condrange
+                    .new_err(ErrorCode::IF_CONDITION_MUST_BE_BOOL)
+                    .add_help("use a bool variable instead")
+                    .clone(),
+            ));
         }
         let (cond, _) = ctx.try_load2var(condrange, cond.unwrap(), pltype.unwrap(), builder)?;
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
