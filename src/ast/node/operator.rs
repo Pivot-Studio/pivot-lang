@@ -113,7 +113,7 @@ impl Node for BinOpNode {
         let (lrange, rrange) = (self.left.range(), self.right.range());
         let (lv, lpltype, _) = self.left.emit(ctx, builder)?;
         let (rv, rpltype, _) =
-            ctx.emit_with_expectation(&mut self.right, lpltype.clone(), builder)?;
+            ctx.emit_with_expectation(&mut self.right, lpltype.clone(), lrange, builder)?;
         if lv.is_none() || rv.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
         }
@@ -198,7 +198,10 @@ impl Node for BinOpNode {
                 _ => {
                     return Err(ctx
                         .add_diag(self.range.new_err(ErrorCode::LOGIC_OP_NOT_BOOL))
-                        .add_label(self.left.range(), Some("expect bool here".to_string()))
+                        .add_label(
+                            self.left.range(),
+                            Some(("expect bool here".to_string(), vec![])),
+                        )
                         .clone())
                 }
             },
@@ -222,9 +225,9 @@ impl Node for BinOpNode {
                             .new_err(crate::ast::diag::ErrorCode::LOGIC_OP_NOT_BOOL)
                             .add_label(
                                 self.left.range(),
-                                Some(format!(
-                                    "expect bool here, found {}",
-                                    lpltype.unwrap().borrow().get_name()
+                                Some((
+                                    "expect bool here, found {}".to_string(),
+                                    vec![lpltype.unwrap().borrow().get_name()],
                                 )),
                             )
                             .clone(),

@@ -5,7 +5,6 @@ use crate::ast::ctx::Ctx;
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
-use as_any::AsAny;
 use enum_dispatch::enum_dispatch;
 
 use lsp_types::SemanticTokenType;
@@ -89,7 +88,7 @@ pub enum TypeNodeEnum {
     PointerTypeNode(PointerTypeNode),
 }
 #[enum_dispatch]
-pub trait TypeNode: RangeTrait + AsAny + FmtTrait {
+pub trait TypeNode: RangeTrait + FmtTrait {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     /// 重要：这个函数不要干lsp相关操作，只用来获取type
     fn get_type<'a, 'ctx, 'b>(
@@ -161,7 +160,7 @@ pub trait FmtTrait {
 
 // ANCHOR: node
 #[enum_dispatch]
-pub trait Node: RangeTrait + AsAny + FmtTrait {
+pub trait Node: RangeTrait + FmtTrait {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
     fn emit<'a, 'ctx, 'b>(
         &mut self,
@@ -208,28 +207,17 @@ impl Eq for Num {
 }
 #[macro_export]
 macro_rules! mismatch_err {
-    ($self:ident, $range:expr, $expect:ident) => {
+    ($self:ident, $range:expr,$exprange:expr, $expect:expr,$got:expr) => {
         $self.add_diag(
             $range
                 .new_err(ErrorCode::TYPE_MISMATCH)
                 .add_label(
                     $range,
-                    Some(format!("expected type `{}`", $expect.borrow().get_name())),
+                    Some(("type `{}`".to_string(), vec![$got.get_name()])),
                 )
-                .clone(),
-        )
-    };
-    ($self:ident, $range:expr, $expect:ident,$got:expr) => {
-        $self.add_diag(
-            $range
-                .new_err(ErrorCode::TYPE_MISMATCH)
                 .add_label(
-                    $range,
-                    Some(format!(
-                        "expected type `{}, got type {}`",
-                        $expect.borrow().get_name(),
-                        $got.borrow().get_name()
-                    )),
+                    $exprange,
+                    Some(("type `{}`".to_string(), vec![$expect.get_name()])),
                 )
                 .clone(),
         )
@@ -246,6 +234,7 @@ impl<'a, 'ctx> Ctx<'a> {
         &'b mut self,
         node: &mut Box<NodeEnum>,
         expect: Option<Rc<RefCell<PLType>>>,
+        expectrange: Range,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         if expect.is_none() {
@@ -274,19 +263,51 @@ impl<'a, 'ctx> Ctx<'a> {
                                 | PriType::U32
                                 | PriType::U16
                                 | PriType::U8 => false,
-                                _ => return Err(mismatch_err!(self, range, expect)),
+                                _ => {
+                                    return Err(mismatch_err!(
+                                        self,
+                                        range,
+                                        expectrange,
+                                        expect.borrow(),
+                                        &PriType::I64
+                                    ))
+                                }
                             };
                             let int = builder.int_value(tp, i, sign_ext);
                             int
                         }
-                        _ => return Err(mismatch_err!(self, range, expect)),
+                        _ => {
+                            return Err(mismatch_err!(
+                                self,
+                                range,
+                                expectrange,
+                                expect.borrow(),
+                                &PriType::I64
+                            ))
+                        }
                     },
                     Num::FLOAT(f) => match &*expect.borrow() {
                         PLType::PRIMITIVE(tp) => match tp {
                             PriType::F32 | PriType::F64 => builder.float_value(tp, f),
-                            _ => return Err(mismatch_err!(self, range, expect)),
+                            _ => {
+                                return Err(mismatch_err!(
+                                    self,
+                                    range,
+                                    expectrange,
+                                    expect.borrow(),
+                                    &PriType::F64
+                                ))
+                            }
                         },
-                        _ => return Err(mismatch_err!(self, range, expect)),
+                        _ => {
+                            return Err(mismatch_err!(
+                                self,
+                                range,
+                                expectrange,
+                                expect.borrow(),
+                                &PriType::F64
+                            ))
+                        }
                     },
                 };
                 self.push_semantic_token(numnode.range(), SemanticTokenType::NUMBER, 0);
@@ -307,7 +328,13 @@ impl<'a, 'ctx> Ctx<'a> {
         if value.is_some() {
             if let Some(ty) = ty.clone() {
                 if ty != expect {
-                    return Err(mismatch_err!(self, range, expect));
+                    return Err(mismatch_err!(
+                        self,
+                        range,
+                        expectrange,
+                        expect.borrow(),
+                        ty.borrow()
+                    ));
                 }
             }
         }

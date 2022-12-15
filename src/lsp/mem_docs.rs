@@ -229,7 +229,7 @@ mod tests {
 
     #[test]
     fn test_mem_docs() {
-        let mut db = &mut Database::default();
+        let db = &mut Database::default();
         let mut mem_docs = MemDocs::new();
         mem_docs.insert(
             db,
