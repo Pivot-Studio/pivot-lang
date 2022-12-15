@@ -315,7 +315,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             if !matches!(*RefCell::borrow(&field_pltype), PLType::POINTER(_)) {
                 // 出现循环引用，但是不是指针
                 // TODO 应该只需要一层是指针就行，目前的检查要求每一层都是指针
-                ctx.add_err(field.range, ErrorCode::ILLEGAL_SELF_RECURSION);
+                ctx.add_diag(field.range.new_err(ErrorCode::ILLEGAL_SELF_RECURSION));
             }
             let placeholder =
                 unsafe { self.dibuilder.create_placeholder_derived_type(self.context) };
@@ -762,7 +762,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 | AnyValueEnum::PointerValue(_)
                 | AnyValueEnum::StructValue(_)
                 | AnyValueEnum::VectorValue(_) => (handle, tp),
-                _ => return Err(ctx.add_err(range, ErrorCode::EXPECT_VALUE)),
+                _ => return Err(ctx.add_diag(range.new_err(ErrorCode::EXPECT_VALUE))),
             });
         } else {
             let tp = &tp;
@@ -1188,7 +1188,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             let pltype = para.typenode.get_type(child, &self.clone().into())?;
             match &*pltype.borrow() {
                 PLType::VOID => {
-                    return Err(child.add_err(para.range, ErrorCode::VOID_TYPE_CANNOT_BE_PARAMETER))
+                    return Err(child
+                        .add_diag(para.range.new_err(ErrorCode::VOID_TYPE_CANNOT_BE_PARAMETER)))
                 }
                 pltype => {
                     param_ditypes.push(self.get_ditype(&pltype, child).unwrap());

@@ -130,7 +130,7 @@ pub fn url_to_path(url: Url) -> String {
     url.to_file_path().unwrap().to_str().unwrap().to_string()
 }
 
-pub fn position_to_offset(doc: &String, pos: lsp_types::Position) -> usize {
+pub fn position_to_offset(doc: &str, pos: lsp_types::Position) -> usize {
     let le = LinesWithEndings::from(doc);
     let (line, col) = (pos.line as usize, pos.character as usize);
     let mut offset = 0;

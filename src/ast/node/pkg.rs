@@ -63,7 +63,7 @@ impl Node for UseNode {
             ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
         }
         if !path.with_extension("pi").exists() {
-            ctx.add_err(self.range, crate::ast::diag::ErrorCode::UNRESOLVED_MODULE);
+            ctx.add_diag(self.range.new_err(ErrorCode::UNRESOLVED_MODULE));
         }
         ctx.if_completion(self.range, || {
             if self.singlecolon {
@@ -92,7 +92,7 @@ impl Node for UseNode {
             completions
         });
         if !self.complete {
-            return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
+            return Err(ctx.add_diag(self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION)));
         }
         Ok((None, None, TerminatorEnum::NONE))
     }
@@ -145,7 +145,7 @@ impl Node for ExternIdNode {
                 ctx.get_completions_in_ns(&self.id.name)
                 // eprintln!("comp {:?}", completions);
             });
-            return Err(ctx.add_err(self.range, ErrorCode::COMPLETION));
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION)));
         }
         for id in &self.ns {
             ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
@@ -156,7 +156,7 @@ impl Node for ExternIdNode {
             if let Some(re) = re {
                 plmod = re;
             } else {
-                return Err(ctx.add_err(ns.range, ErrorCode::UNRESOLVED_MODULE));
+                return Err(ctx.add_diag(ns.range.new_err(ErrorCode::UNRESOLVED_MODULE)));
             }
         }
         if let Some(symbol) = plmod.get_global_symbol(&self.id.name) {
@@ -193,7 +193,7 @@ impl Node for ExternIdNode {
             }
             return re;
         }
-        Err(ctx.add_err(self.range, ErrorCode::SYMBOL_NOT_FOUND))
+        Err(ctx.add_diag(self.range.new_err(ErrorCode::SYMBOL_NOT_FOUND)))
     }
 }
 impl ExternIdNode {
@@ -214,7 +214,7 @@ impl ExternIdNode {
                 }
                 ctx.get_completions_in_ns(&self.id.name)
             });
-            return Err(ctx.add_err(self.range, ErrorCode::COMPLETION));
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION)));
         }
         let mut plmod = &ctx.plmod;
         for ns in self.ns.iter() {
@@ -222,7 +222,7 @@ impl ExternIdNode {
             if let Some(re) = re {
                 plmod = re;
             } else {
-                return Err(ctx.add_err(ns.range, ErrorCode::UNRESOLVED_MODULE));
+                return Err(ctx.add_diag(ns.range.new_err(ErrorCode::UNRESOLVED_MODULE)));
             }
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
@@ -232,6 +232,6 @@ impl ExternIdNode {
             };
             return re;
         }
-        Err(ctx.add_err(self.range, ErrorCode::SYMBOL_NOT_FOUND))
+        Err(ctx.add_diag(self.range.new_err(ErrorCode::SYMBOL_NOT_FOUND)))
     }
 }

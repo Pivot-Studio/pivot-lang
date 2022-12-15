@@ -54,12 +54,12 @@ impl GlobalNode {
     ) -> Result<(), PLDiag> {
         let exp_range = self.exp.range();
         if ctx.get_symbol(&self.var.name, builder).is_some() {
-            return Err(ctx.add_err(self.var.range, ErrorCode::REDEFINE_SYMBOL));
+            return Err(ctx.add_diag(self.var.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
         }
         // use nodebug builder to emit
         let (value, pltype_opt, _) = self.exp.emit(ctx, builder)?;
         if pltype_opt.is_none() {
-            return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE));
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
         }
         let pltype = pltype_opt.unwrap();
         let (_, tp) = ctx.try_load2var(exp_range, value.unwrap(), pltype.clone(), builder)?;

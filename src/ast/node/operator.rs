@@ -21,7 +21,7 @@ use paste::item;
 #[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct UnaryOpNode {
-    pub op: TokenType,
+    pub op: (TokenType, Range),
     pub exp: Box<NodeEnum>,
 }
 // 单目运算符
@@ -42,11 +42,11 @@ impl Node for UnaryOpNode {
         let exp_range = self.exp.range();
         let (exp, pltype, _) = self.exp.emit(ctx, builder)?;
         if pltype.is_none() {
-            return Err(ctx.add_err(self.range, ErrorCode::INVALID_UNARY_EXPRESSION));
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::INVALID_UNARY_EXPRESSION)));
         }
         let pltype = pltype.unwrap();
         let (exp, _) = ctx.try_load2var(exp_range, exp.unwrap(), pltype.clone(), builder)?;
-        return Ok(match (&*pltype.borrow(), self.op) {
+        return Ok(match (&*pltype.borrow(), self.op.0) {
             (
                 PLType::PRIMITIVE(
                     PriType::I128 | PriType::I64 | PriType::I32 | PriType::I16 | PriType::I8,
@@ -81,7 +81,7 @@ impl Node for UnaryOpNode {
                 TerminatorEnum::NONE,
             ),
             (_exp, _op) => {
-                return Err(ctx.add_err(self.range, ErrorCode::INVALID_UNARY_EXPRESSION));
+                return Err(ctx.add_diag(self.range.new_err(ErrorCode::INVALID_UNARY_EXPRESSION)));
             }
         });
     }
@@ -92,7 +92,7 @@ impl Node for UnaryOpNode {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BinOpNode {
     pub left: Box<NodeEnum>,
-    pub op: TokenType,
+    pub op: (TokenType, Range),
     pub right: Box<NodeEnum>,
 }
 impl Node for BinOpNode {
@@ -115,12 +115,12 @@ impl Node for BinOpNode {
         let (rv, rpltype, _) =
             ctx.emit_with_expectation(&mut self.right, lpltype.clone(), builder)?;
         if lv.is_none() || rv.is_none() {
-            return Err(ctx.add_err(self.range, ErrorCode::EXPECT_VALUE));
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
         }
         let (left, _ltp) =
             ctx.try_load2var(lrange, lv.unwrap(), lpltype.clone().unwrap(), builder)?;
         let (right, _rtp) = ctx.try_load2var(rrange, rv.unwrap(), rpltype.unwrap(), builder)?;
-        Ok(match self.op {
+        Ok(match self.op.0 {
             TokenType::PLUS => {
                 handle_calc!(ctx, add, float_add, lpltype, left, right, self.range, builder)
             }
@@ -154,7 +154,7 @@ impl Node for BinOpNode {
                 ) => (
                     {
                         let bool_origin =
-                            builder.build_int_compare(self.op.get_op(), left, right, "cmptmp");
+                            builder.build_int_compare(self.op.0.get_op(), left, right, "cmptmp");
                         // Some(plv!(builder.build_int_z_extend(
                         //     bool_origin,
                         //     &PriType::BOOL,
@@ -168,7 +168,7 @@ impl Node for BinOpNode {
                 PLType::PRIMITIVE(PriType::F64 | PriType::F32) => (
                     {
                         let bool_origin =
-                            builder.build_float_compare(self.op.get_fop(), left, right, "cmptmp");
+                            builder.build_float_compare(self.op.0.get_fop(), left, right, "cmptmp");
                         // Some(plv!(builder.build_int_z_extend(
                         //     bool_origin,
                         //     &PriType::BOOL,
@@ -179,7 +179,7 @@ impl Node for BinOpNode {
                     Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
                 ),
-                _ => return Err(ctx.add_err(self.range, ErrorCode::VALUE_NOT_COMPARABLE)),
+                _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::VALUE_NOT_COMPARABLE))),
             },
             TokenType::AND => match *lpltype.unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::BOOL) => (
@@ -195,9 +195,14 @@ impl Node for BinOpNode {
                     Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
                 ),
-                _ => return Err(ctx.add_err(self.range, ErrorCode::LOGIC_OP_NOT_BOOL)),
+                _ => {
+                    return Err(ctx
+                        .add_diag(self.range.new_err(ErrorCode::LOGIC_OP_NOT_BOOL))
+                        .add_label(self.left.range(), Some("expect bool here".to_string()))
+                        .clone())
+                }
             },
-            TokenType::OR => match *lpltype.unwrap().borrow() {
+            TokenType::OR => match *lpltype.clone().unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::BOOL) => (
                     {
                         let bool_origin = builder.build_or(left, right, "ortmp");
@@ -212,12 +217,28 @@ impl Node for BinOpNode {
                     TerminatorEnum::NONE,
                 ),
                 _ => {
-                    return Err(
-                        ctx.add_err(self.range, crate::ast::diag::ErrorCode::LOGIC_OP_NOT_BOOL)
-                    )
+                    return Err(ctx.add_diag(
+                        self.range
+                            .new_err(crate::ast::diag::ErrorCode::LOGIC_OP_NOT_BOOL)
+                            .add_label(
+                                self.left.range(),
+                                Some(format!(
+                                    "expect bool here, found {}",
+                                    lpltype.unwrap().borrow().get_name()
+                                )),
+                            )
+                            .clone(),
+                    ))
                 }
             },
-            _ => return Err(ctx.add_err(self.range, ErrorCode::UNRECOGNIZED_BIN_OPERATOR)),
+            _ => {
+                return Err(ctx.add_diag(
+                    self.range
+                        .new_err(ErrorCode::UNRECOGNIZED_BIN_OPERATOR)
+                        .add_label(self.op.1, None)
+                        .clone(),
+                ))
+            }
         })
     }
 }
@@ -250,7 +271,7 @@ impl Node for TakeOpNode {
         let head = self.head.emit(ctx, builder)?;
         let (mut res, pltype, _) = head;
         if pltype.is_none() {
-            return Err(ctx.add_err(self.range, ErrorCode::INVALID_GET_FIELD));
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::INVALID_GET_FIELD)));
         }
         let mut pltype = pltype.unwrap();
         if let Some(id) = &self.field {
@@ -299,21 +320,25 @@ impl Node for TakeOpNode {
                                     TerminatorEnum::NONE,
                                 ));
                             } else {
-                                return Err(
-                                    ctx.add_err(id.range, ErrorCode::STRUCT_FIELD_NOT_FOUND)
-                                );
+                                return Err(ctx.add_diag(
+                                    id.range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND),
+                                ));
                             }
                         } else {
                             unreachable!()
                         }
                     } else {
-                        return Err(ctx.add_err(id.range, ErrorCode::INVALID_GET_FIELD));
+                        return Err(ctx.add_diag(id.range.new_err(ErrorCode::INVALID_GET_FIELD)));
                     }
                     Some(plv!(builder
                         .build_struct_gep(s, index, "structgep")
                         .unwrap()))
                 }
-                _ => return Err(ctx.add_err(id.range, ErrorCode::ILLEGAL_GET_FIELD_OPERATION)),
+                _ => {
+                    return Err(
+                        ctx.add_diag(id.range.new_err(ErrorCode::ILLEGAL_GET_FIELD_OPERATION))
+                    )
+                }
             }
         }
         if self.field.is_none() {
@@ -325,7 +350,7 @@ impl Node for TakeOpNode {
                 }
                 vec![]
             });
-            return Err(ctx.add_err(self.range, crate::ast::diag::ErrorCode::COMPLETION));
+            return Err(ctx.add_diag(self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION)));
         }
         ctx.emit_comment_highlight(&self.comments[0]);
         Ok((res, Some(pltype.clone()), TerminatorEnum::NONE))

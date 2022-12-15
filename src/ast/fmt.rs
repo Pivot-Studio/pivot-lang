@@ -349,14 +349,14 @@ impl FmtBuilder {
         node.value.format(self);
     }
     pub fn parse_unary_op_node(&mut self, node: &UnaryOpNode) {
-        self.token(TokenType::get_str(&node.op));
+        self.token(TokenType::get_str(&node.op.0));
         node.exp.format(self);
     }
 
     pub fn parse_bin_op_node(&mut self, node: &BinOpNode) {
         node.left.format(self);
         self.space();
-        self.token(TokenType::get_str(&node.op));
+        self.token(TokenType::get_str(&node.op.0));
         self.space();
         node.right.format(self);
     }

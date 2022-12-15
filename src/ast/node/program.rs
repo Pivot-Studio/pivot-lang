@@ -11,10 +11,10 @@ use crate::ast::compiler::{compile_dry_file, ActionType};
 use crate::ast::ctx::{self, Ctx};
 use crate::ast::plmod::LSPDef;
 use crate::ast::plmod::Mod;
-use crate::lsp::mem_docs::{EmitParams, FileCompileInput, MemDocsInput};
+use crate::lsp::mem_docs::{EmitParams, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
-use crate::utils::read_config::{get_config, Config};
+use crate::utils::read_config::Config;
 use crate::Db;
 use colored::Colorize;
 use inkwell::context::Context;
@@ -85,7 +85,7 @@ impl Node for ProgramNode {
     }
 }
 
-#[salsa::interned]
+#[salsa::tracked]
 pub struct Program {
     pub node: ProgramNodeWrapper,
     pub params: EmitParams,
@@ -137,34 +137,11 @@ impl Program {
                 continue;
             }
             let mut path = PathBuf::from(self.config(db).root);
-            let mut config = self.config(db);
             // 加载依赖包的路径
             if let Some(cm) = self.config(db).deps {
                 // 如果use的是依赖包
                 if let Some(dep) = cm.get(&u.ids[0].name) {
                     path = path.join(&dep.path);
-
-                    let input = FileCompileInput::new(
-                        db,
-                        path.join("Kagari.toml")
-                            .clone()
-                            .to_str()
-                            .unwrap()
-                            .to_string(),
-                        "".to_string(),
-                        self.docs(db),
-                        Default::default(),
-                    );
-                    let f = input.get_file_content(db);
-                    if f.is_none() {
-                        continue;
-                    }
-                    let re = get_config(db, f.unwrap());
-                    if re.is_err() {
-                        continue;
-                    }
-                    config = re.unwrap();
-                    config.root = path.to_str().unwrap().to_string();
                 }
             }
             for p in u.ids[1..].iter() {
@@ -173,13 +150,11 @@ impl Program {
             path = path.with_extension("pi");
             let f = path.to_str().unwrap().to_string();
             // eprintln!("use {}", f.clone());
-            let f = FileCompileInput::new(
-                db,
-                f,
-                self.params(db).modpath(db).clone(),
-                self.docs(db),
-                config,
-            );
+            let f = self.docs(db).get_file_params(db, f, false);
+            if f.is_none() {
+                continue;
+            }
+            let f = f.unwrap();
             let m = compile_dry_file(db, f);
             if m.is_none() {
                 continue;

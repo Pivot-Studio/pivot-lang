@@ -386,6 +386,7 @@ fn main_loop(
             let f = url_to_path(params.text_document.uri);
             for content_change in params.content_changes.iter() {
                 docs.lock().unwrap().borrow_mut().change(
+                    &mut db,
                     content_change.range.unwrap().clone(),
                     f.clone(),
                     content_change.text.clone(),
@@ -414,10 +415,12 @@ fn main_loop(
         })
         .on_noti::<DidOpenTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
-            docs.lock()
-                .unwrap()
-                .borrow_mut()
-                .insert(f.clone(), params.text_document.text);
+            docs.lock().unwrap().borrow_mut().insert(
+                &mut db,
+                f.clone(),
+                params.text_document.text,
+                f.clone(),
+            );
             docin.set_docs(&mut db).to(docs.clone());
             docin.set_file(&mut db).to(f.clone());
             docin.set_action(&mut db).to(ActionType::Diagnostic);
@@ -435,10 +438,10 @@ fn main_loop(
                 }
             });
         })
-        .on_noti::<DidCloseTextDocument, _>(|params| {
-            let f = url_to_path(params.text_document.uri);
-            docs.lock().unwrap().borrow_mut().remove(&f);
-            docin.set_docs(&mut db).to(docs.clone());
+        .on_noti::<DidCloseTextDocument, _>(|_params| {
+            // let f = url_to_path(params.text_document.uri);
+            // docs.lock().unwrap().borrow_mut().remove(&f);
+            // docin.set_docs(&mut db).to(docs.clone());
         });
         let elapsed = now.elapsed();
         log::info!("req {:?} finished, time: {:?}", docin.action(&db), elapsed);

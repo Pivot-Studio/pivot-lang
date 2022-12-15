@@ -56,7 +56,7 @@ impl TypeNode for TypeNameNode {
     ) -> TypeNodeResult {
         if self.id.is_none() {
             ctx.if_completion(self.range, || ctx.get_type_completions());
-            return Err(ctx.add_err(self.range, ErrorCode::EXPECT_TYPE));
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_TYPE)));
         }
         let (_, pltype, _) = self.id.as_ref().unwrap().get_type(&ctx)?;
         ctx.if_completion(self.range, || ctx.get_type_completions());
@@ -64,19 +64,22 @@ impl TypeNode for TypeNameNode {
         if let Some(generic_params) = &self.generic_params {
             let mut sttype = match &mut *pltype.clone().borrow_mut() {
                 PLType::STRUCT(s) => s.clone(),
-                _ => return Err(ctx.add_err(self.range, ErrorCode::NOT_GENERIC_TYPE)),
+                _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::NOT_GENERIC_TYPE))),
             };
             let generic_types = generic_params.get_generic_types(ctx, builder)?;
             if generic_params.generics.len() != sttype.generic_map.len() {
-                return Err(ctx.add_err(
-                    generic_params.range.clone(),
-                    ErrorCode::GENERIC_PARAM_LEN_MISMATCH,
+                return Err(ctx.add_diag(
+                    generic_params
+                        .range
+                        .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
                 ));
             }
             let mut i = 0;
             for (_, pltype) in sttype.generic_map.iter() {
                 if generic_types[i].is_none() {
-                    return Err(ctx.add_err(self.range, ErrorCode::GENERIC_CANNOT_BE_INFER));
+                    return Err(
+                        ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER))
+                    );
                 }
                 if pltype == generic_types[i].as_ref().unwrap() {
                     if let PLType::GENERIC(g) = &mut *pltype.borrow_mut() {
@@ -92,7 +95,9 @@ impl TypeNode for TypeNameNode {
                     g.curpltype = None;
                 }
                 if !eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone()) {
-                    return Err(ctx.add_err(self.range, ErrorCode::GENERIC_CANNOT_BE_INFER));
+                    return Err(
+                        ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER))
+                    );
                 }
                 i = i + 1;
             }
@@ -102,7 +107,7 @@ impl TypeNode for TypeNameNode {
                 sttype = sttype.generic_infer_pltype(ctx, builder);
                 ctx.reset_generic_types(mp);
             } else {
-                return Err(ctx.add_err(self.range, ErrorCode::GENERIC_CANNOT_BE_INFER));
+                return Err(ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER)));
             }
             pltype = Rc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
         }
@@ -118,7 +123,7 @@ impl TypeNode for TypeNameNode {
     ) -> Result<bool, PLDiag> {
         if let Some(generic_params) = &self.generic_params {
             if self.id.is_none() {
-                return Err(ctx.add_err(self.range, ErrorCode::EXPECT_TYPE));
+                return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_TYPE)));
             }
             let (_, left, _) = self.id.as_ref().unwrap().get_type(&ctx)?;
             let left = left.unwrap();
@@ -136,9 +141,10 @@ impl TypeNode for TypeNameNode {
                 sttype.clear_generic();
                 sttype.add_generic_type(ctx)?;
                 if generic_params.generics.len() != sttype.generic_map.len() {
-                    return Err(ctx.add_err(
-                        generic_params.range.clone(),
-                        ErrorCode::GENERIC_PARAM_LEN_MISMATCH,
+                    return Err(ctx.add_diag(
+                        generic_params
+                            .range
+                            .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
                     ));
                 }
                 let mut i = 0;
@@ -146,7 +152,9 @@ impl TypeNode for TypeNameNode {
                     if generic_types[i].is_none()
                         || !eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
                     {
-                        return Err(ctx.add_err(self.range, ErrorCode::GENERIC_CANNOT_BE_INFER));
+                        return Err(
+                            ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER))
+                        );
                     }
                     i = i + 1;
                 }
@@ -165,7 +173,7 @@ impl TypeNode for TypeNameNode {
                 ctx.reset_generic_types(mp);
                 return Ok(true);
             }
-            return Err(ctx.add_err(self.range, ErrorCode::NOT_GENERIC_TYPE));
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::NOT_GENERIC_TYPE)));
         }
         return Ok(eq(self.get_type(ctx, builder)?, right));
     }
@@ -203,7 +211,7 @@ impl TypeNode for ArrayTypeNameNode {
                 return Ok(arrtype);
             }
         }
-        return Err(ctx.add_err(self.range, ErrorCode::SIZE_MUST_BE_INT));
+        return Err(ctx.add_diag(self.range.new_err(ErrorCode::SIZE_MUST_BE_INT)));
     }
 
     fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) {
@@ -226,7 +234,7 @@ impl TypeNode for ArrayTypeNameNode {
                         return self.id.eq_or_infer(ctx, a.element_type.clone(), builder);
                     }
                 }
-                return Err(ctx.add_err(self.range, ErrorCode::SIZE_MUST_BE_INT));
+                return Err(ctx.add_diag(self.range.new_err(ErrorCode::SIZE_MUST_BE_INT)));
             }
             _ => Ok(false),
         }
@@ -341,7 +349,7 @@ impl Node for StructDefNode {
             ctx.push_semantic_token(field.id.range, SemanticTokenType::PROPERTY, 0);
             field.typenode.emit_highlight(ctx);
             if !has_semi {
-                ctx.add_err(field.range, ErrorCode::COMPLETION);
+                ctx.add_diag(field.range.new_err(ErrorCode::COMPLETION));
             }
             if let Some(doc) = &field.doc {
                 ctx.push_semantic_token(doc.range, SemanticTokenType::COMMENT, 0);
@@ -399,7 +407,7 @@ impl StructDefNode {
         let clone_map = ctx.plmod.types.clone();
         for (field, has_semi) in self.fields.iter() {
             if !has_semi {
-                ctx.add_err(field.range, ErrorCode::COMPLETION);
+                ctx.add_diag(field.range.new_err(ErrorCode::COMPLETION));
             }
             let id = field.id.clone();
             let f = Field {
@@ -524,14 +532,14 @@ impl Node for StructInitNode {
             let field = sttype.fields.get(&fieldinit.id.name);
             if field.is_none() {
                 ctx.if_completion(self.range, || sttype.get_completions(&ctx));
-                return Err(ctx.add_err(field_id_range, ErrorCode::STRUCT_FIELD_NOT_FOUND));
+                return Err(ctx.add_diag(field_id_range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND)));
             }
             let field = field.unwrap();
             let (value, value_pltype, _) = fieldinit.emit(ctx, builder)?;
             idx += 1;
             ctx.emit_comment_highlight(&self.comments[idx - 1]);
             if value.is_none() || value_pltype.is_none() {
-                return Err(ctx.add_err(field_exp_range, ErrorCode::EXPECT_VALUE));
+                return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
             }
             let (value, _) = ctx.try_load2var(
                 field_exp_range,
@@ -541,7 +549,11 @@ impl Node for StructInitNode {
             )?;
             let value_pltype = value_pltype.unwrap();
             if !field.typenode.eq_or_infer(ctx, value_pltype, builder)? {
-                return Err(ctx.add_err(fieldinit.range, ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH));
+                return Err(ctx.add_diag(
+                    fieldinit
+                        .range
+                        .new_err(ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH),
+                ));
             }
             field_init_values.push((field.index, value));
             ctx.set_if_refs(field.refs.clone(), field_id_range);
@@ -553,7 +565,11 @@ impl Node for StructInitNode {
             if sttype.need_gen_code() {
                 sttype = sttype.generic_infer_pltype(ctx, builder);
             } else {
-                return Err(ctx.add_err(self.typename.range(), ErrorCode::GENERIC_CANNOT_BE_INFER));
+                return Err(ctx.add_diag(
+                    self.typename
+                        .range()
+                        .new_err(ErrorCode::GENERIC_CANNOT_BE_INFER),
+                ));
             }
         }
         let pltype = Rc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
@@ -609,13 +625,13 @@ impl Node for ArrayInitNode {
             if tp0.is_none() {
                 tp0 = tp.clone();
             } else if tp0 != tp {
-                return Err(ctx.add_err(range, ErrorCode::ARRAY_TYPE_NOT_MATCH));
+                return Err(ctx.add_diag(range.new_err(ErrorCode::ARRAY_TYPE_NOT_MATCH)));
             }
             let tp = tp.unwrap();
             exps.push(ctx.try_load2var(range, v.unwrap(), tp, builder)?);
         }
         if tp0.is_none() {
-            return Err(ctx.add_err(self.range, ErrorCode::ARRAY_INIT_EMPTY));
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_INIT_EMPTY)));
         }
         let tp = exps[0].clone().1;
         let sz = exps.len() as u32;

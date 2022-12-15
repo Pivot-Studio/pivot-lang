@@ -44,20 +44,20 @@ impl Node for FuncCallNode {
         let mut para_values = Vec::new();
         let (plvalue, pltype, _) = self.id.emit(ctx, builder)?;
         if pltype.is_none() {
-            return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND));
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND)));
         }
         let pltype = pltype.unwrap().clone();
         let mut fntype = match &*pltype.borrow() {
             PLType::FN(f) => f.new_pltype(),
-            _ => return Err(ctx.add_err(self.range, ErrorCode::FUNCTION_NOT_FOUND)),
+            _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND))),
         };
         if let Some(generic_params) = &self.generic_params {
             let generic_params_range = generic_params.range.clone();
             generic_params.emit_highlight(ctx);
             if generic_params.generics.len() != fntype.generic_map.len() {
-                return Err(
-                    ctx.add_err(generic_params_range, ErrorCode::GENERIC_PARAM_LEN_MISMATCH)
-                );
+                return Err(ctx.add_diag(
+                    generic_params_range.new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
+                ));
             }
             let generic_types = generic_params.get_generic_types(ctx, builder)?;
             let mut i = 0;
@@ -77,7 +77,7 @@ impl Node for FuncCallNode {
         }
         // funcvalue must use fntype to get a new one,can not use the return  plvalue of id node emit
         if fntype.param_pltypes.len() - skip as usize != self.paralist.len() {
-            return Err(ctx.add_err(self.range, ErrorCode::PARAMETER_LENGTH_NOT_MATCH));
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::PARAMETER_LENGTH_NOT_MATCH)));
         }
         for (i, para) in self.paralist.iter_mut().enumerate() {
             let pararange = para.range();
@@ -127,14 +127,14 @@ impl Node for FuncCallNode {
                 .clone()
                 .eq_or_infer(ctx, value_pltype.clone(), builder)?
             {
-                return Err(ctx.add_err(pararange.clone(), ErrorCode::PARAMETER_TYPE_NOT_MATCH));
+                return Err(ctx.add_diag(pararange.new_err(ErrorCode::PARAMETER_TYPE_NOT_MATCH)));
             }
         }
         if !fntype.generic_map.is_empty() {
             if fntype.need_gen_code() {
                 fntype = fntype.generic_infer_pltype(ctx, builder)?
             } else {
-                return Err(ctx.add_err(self.range, ErrorCode::GENERIC_CANNOT_BE_INFER));
+                return Err(ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER)));
             }
         }
         let function = builder.get_or_insert_fn_handle(&fntype, ctx);
@@ -272,7 +272,7 @@ impl FuncDefNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<(), PLDiag> {
         if let Ok(_) = ctx.get_type(&self.id.name.as_str(), self.id.range) {
-            return Err(ctx.add_err(self.range, ErrorCode::REDEFINE_SYMBOL));
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
         }
         let pltype = self.emit_pl_tp(ctx, builder)?;
         ctx.add_type(self.id.name.clone(), pltype, self.id.range)?;
@@ -327,7 +327,7 @@ impl FuncDefNode {
         ctx.push_semantic_token(self.ret.range(), SemanticTokenType::TYPE, 0);
         let pltype = ctx.get_type(&self.id.name, self.range)?;
         if pltype.borrow().get_range() != Some(self.range) {
-            return Err(PLDiag::new_error(self.id.range, ErrorCode::REDEFINE_SYMBOL));
+            return Err(self.id.range.new_err(ErrorCode::REDEFINE_SYMBOL));
         }
         let paras = self.paralist.clone();
         let ret = self.ret.clone();
@@ -441,7 +441,9 @@ impl FuncDefNode {
             child.rettp = Some(fntype.ret_pltype.get_type(child, builder)?);
             let (_, _, terminator) = body.emit(child, builder)?;
             if !terminator.is_return() {
-                return Err(child.add_err(self.range, ErrorCode::FUNCTION_MUST_HAVE_RETURN));
+                return Err(
+                    child.add_diag(self.range.new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN))
+                );
             }
             child.position_at_end(allocab, builder);
             builder.build_unconditional_branch(entry);

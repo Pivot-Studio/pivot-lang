@@ -142,10 +142,10 @@ impl VarNode {
                     ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
                     return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
                 }
-                _ => return Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND)),
+                _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::VAR_NOT_FOUND))),
             }
         }
-        Err(ctx.add_err(self.range, ErrorCode::VAR_NOT_FOUND))
+        Err(ctx.add_diag(self.range.new_err(ErrorCode::VAR_NOT_FOUND)))
     }
     pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a>) -> NodeResult {
         ctx.if_completion(self.range, || ctx.get_completions());
@@ -163,10 +163,10 @@ impl VarNode {
                     }
                     return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
                 }
-                _ => return Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE)),
+                _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE))),
             }
         }
-        Err(ctx.add_err(self.range, ErrorCode::UNDEFINED_TYPE))
+        Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)))
     }
 }
 
@@ -205,7 +205,7 @@ impl Node for ArrayElementNode {
                 builder,
             )?;
             if index_pltype.is_none() || !index_pltype.unwrap().borrow().is(&PriType::I64) {
-                return Err(ctx.add_err(self.range, ErrorCode::ARRAY_INDEX_MUST_BE_INT));
+                return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_INDEX_MUST_BE_INT)));
             }
             let elemptr = {
                 let index = &[builder.int_value(&PriType::I64, 0, false), index];
@@ -218,7 +218,7 @@ impl Node for ArrayElementNode {
                 TerminatorEnum::NONE,
             ));
         }
-        return Err(ctx.add_err(self.range, ErrorCode::CANNOT_INDEX_NON_ARRAY));
+        return Err(ctx.add_diag(self.range.new_err(ErrorCode::CANNOT_INDEX_NON_ARRAY)));
     }
 }
 

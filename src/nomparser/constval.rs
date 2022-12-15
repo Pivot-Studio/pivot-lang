@@ -2,7 +2,6 @@ use std::fmt::Error;
 
 use nom::{
     branch::alt,
-    bytes::complete::tag,
     character::complete::{one_of, space0},
     combinator::{map_res, opt, recognize},
     multi::{many0, many1},
@@ -43,20 +42,14 @@ pub fn number(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser_error("fales")]
 pub fn bool_const(input: Span) -> IResult<Span, Box<NodeEnum>> {
     alt((
-        map_res(tag("true"), |out| {
-            res_enum(
-                BoolConstNode {
-                    value: true,
-                    range: Range::new(input, out),
-                }
-                .into(),
-            )
+        map_res(tag_token(TokenType::TRUE), |(_, range)| {
+            res_enum(BoolConstNode { value: true, range }.into())
         }),
-        map_res(tag("false"), |out| {
+        map_res(tag_token(TokenType::FALSE), |(_, range)| {
             res_enum(
                 BoolConstNode {
                     value: false,
-                    range: Range::new(input, out),
+                    range,
                 }
                 .into(),
             )

@@ -61,7 +61,14 @@ fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             )),
             |((op, op_range), exp)| {
                 let range = op_range.start.to(exp.range().end);
-                res_enum(UnaryOpNode { op, exp, range }.into())
+                res_enum(
+                    UnaryOpNode {
+                        op: (op, op_range),
+                        exp,
+                        range,
+                    }
+                    .into(),
+                )
             },
         ),
     )))(input)

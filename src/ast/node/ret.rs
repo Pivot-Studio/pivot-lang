@@ -30,14 +30,15 @@ impl Node for RetNode {
         let rettp = ctx.rettp.clone();
         if let Some(ret) = &mut self.value {
             if rettp.is_none() {
-                let err = ctx.add_err(self.range, ErrorCode::RETURN_VALUE_IN_VOID_FUNCTION);
+                let err =
+                    ctx.add_diag(self.range.new_err(ErrorCode::RETURN_VALUE_IN_VOID_FUNCTION));
                 return Err(err);
             }
             let (ret, tp, _) = ret.emit(ctx, builder)?;
             ctx.emit_comment_highlight(&self.comments[0]);
             let (ret, v) = ctx.try_load2var(self.range, ret.unwrap(), tp.unwrap(), builder)?;
             if v != rettp.unwrap() {
-                let err = ctx.add_err(self.range, ErrorCode::RETURN_TYPE_MISMATCH);
+                let err = ctx.add_diag(self.range.new_err(ErrorCode::RETURN_TYPE_MISMATCH));
                 return Err(err);
             }
 
@@ -46,7 +47,10 @@ impl Node for RetNode {
         } else {
             if rettp.is_some() && &*rettp.clone().unwrap().borrow() != &PLType::VOID {
                 ctx.emit_comment_highlight(&self.comments[0]);
-                let err = ctx.add_err(self.range, ErrorCode::NO_RETURN_VALUE_IN_NON_VOID_FUNCTION);
+                let err = ctx.add_diag(
+                    self.range
+                        .new_err(ErrorCode::NO_RETURN_VALUE_IN_NON_VOID_FUNCTION),
+                );
                 return Err(err);
             }
             builder.build_unconditional_branch(ctx.return_block.unwrap().0);
