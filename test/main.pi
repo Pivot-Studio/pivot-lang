@@ -318,6 +318,25 @@ struct Three<T> {
     c: Two<T>;
 }
 
+fn test_generic_fn_simple<T>(x: i64) void {
+    if x > 5 {
+        return;
+    }
+    io::printi64ln(x);
+    test_generic_fn_simple<T>(x + 1);
+    return;
+}
+
+fn test_generic_fn_complex<A|B|C>(a: i64, x: A, y: B, z: C) void {
+    if a > 5 {
+        return;
+    }
+    io::printi64ln(a);
+    test_generic_fn_complex<B|A|C>(a + 1, y, x, z);
+    test_generic_fn_complex<C|A|_>(a + 1, z, x, y);
+    return;
+}
+
 fn main() i64 {
     let a1 = [[[1, 2], [1, 2]]];
     io::printi64ln(a1[0][0][0]);
@@ -340,6 +359,8 @@ fn main() i64 {
     test_generic_same_name();
     test_ret_generic();
     test_self_ref_generic();
+    test_generic_fn_simple<bool>(1);
+    test_generic_fn_complex(1, true, [12, 3], 2);
     return 0;
 }
 
@@ -425,5 +446,6 @@ fn test_primitives() void {
     utest = utest + 2;
     return;
 }
+
 //123
 //

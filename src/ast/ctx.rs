@@ -52,7 +52,7 @@ use std::rc::Rc;
 /// Context for code generation
 pub struct Ctx<'a> {
     pub generic_types: FxHashMap<String, Rc<RefCell<PLType>>>,
-    pub need_highlight: bool,
+    pub need_highlight: usize,
     pub plmod: Mod,
     pub father: Option<&'a Ctx<'a>>, // father context, for symbol lookup
     pub function: Option<ValueHandle>, // current function
@@ -95,7 +95,7 @@ impl<'a, 'ctx> Ctx<'a> {
             .unwrap()
             .to_string();
         let mut ctx = Ctx {
-            need_highlight: true,
+            need_highlight: 0,
             generic_types: FxHashMap::default(),
             plmod: Mod::new(f, src_file_path.to_string()),
             father: None,
@@ -610,7 +610,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn push_semantic_token(&self, range: Range, tp: SemanticTokenType, modifiers: u32) {
-        if !self.need_highlight {
+        if self.need_highlight != 0 {
             return;
         }
         self.plmod.semantic_tokens_builder.borrow_mut().push(
@@ -620,7 +620,7 @@ impl<'a, 'ctx> Ctx<'a> {
         )
     }
     pub fn push_type_hints(&self, range: Range, pltype: Rc<RefCell<PLType>>) {
-        if !self.need_highlight {
+        if self.need_highlight != 0 {
             return;
         }
         let hint = InlayHint {
@@ -638,7 +638,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.plmod.hints.borrow_mut().push(hint);
     }
     pub fn push_param_hint(&self, range: Range, name: String) {
-        if !self.need_highlight {
+        if self.need_highlight != 0 {
             return;
         }
         let hint = InlayHint {
@@ -705,7 +705,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn save_if_comment_doc_hover(&self, range: Range, docs: Option<Vec<Box<NodeEnum>>>) {
-        if !self.need_highlight {
+        if self.need_highlight != 0 {
             return;
         }
         let mut content = vec![];
@@ -723,7 +723,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn save_if_hover(&self, range: Range, value: HoverContents) {
-        if !self.need_highlight {
+        if self.need_highlight != 0 {
             return;
         }
         self.plmod.hovers.borrow_mut().insert(
