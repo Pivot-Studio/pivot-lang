@@ -288,6 +288,26 @@ impl PLType {
             PLType::PLACEHOLDER(p) => p.name.clone(),
         }
     }
+    pub fn get_llvm_name<'a, 'ctx>(&self) -> String {
+        match self {
+            PLType::FN(fu) => fu.name.clone(),
+            PLType::STRUCT(st) => st.name.clone(),
+            PLType::PRIMITIVE(pri) => pri.get_name(),
+            PLType::ARR(arr) => {
+                format!("[{} * {}]", arr.element_type.borrow().get_name(), arr.size)
+            }
+            PLType::VOID => "void".to_string(),
+            PLType::POINTER(p) => "*".to_string() + &p.borrow().get_name(),
+            PLType::GENERIC(g) => {
+                if g.curpltype.is_some() {
+                    g.curpltype.as_ref().unwrap().borrow().get_name()
+                } else {
+                    g.name.clone()
+                }
+            }
+            PLType::PLACEHOLDER(p) => p.get_place_holder_name(),
+        }
+    }
 
     pub fn get_full_elm_name<'a, 'ctx>(&self) -> String {
         match self {
@@ -415,7 +435,7 @@ impl FNType {
                 .generic_map
                 .iter()
                 .map(|(_, v)| match &*v.clone().borrow() {
-                    PLType::GENERIC(g) => g.curpltype.as_ref().unwrap().borrow().get_name(),
+                    PLType::GENERIC(g) => g.curpltype.as_ref().unwrap().borrow().get_llvm_name(),
                     _ => unreachable!(),
                 })
                 .collect::<Vec<_>>()
@@ -435,6 +455,7 @@ impl FNType {
             if let PLType::FN(f) = &*pltype.borrow() {
                 return Ok(f.clone());
             }
+            unreachable!()
         }
         let mut res = self.clone();
         res.llvmname = format!(
@@ -444,6 +465,7 @@ impl FNType {
         );
         res.name = name.clone();
         res.generic_map.clear();
+        res.generic_infer = Rc::new(RefCell::new(IndexMap::default()));
         self.generic_infer
             .borrow_mut()
             .insert(name, Rc::new(RefCell::new(PLType::FN(res.clone()))));
@@ -469,7 +491,7 @@ impl FNType {
                 np
             })
             .collect::<Vec<Box<TypeNodeEnum>>>();
-        let pltype = res
+        let pltype = self
             .generic_infer
             .borrow()
             .get(&res.name)

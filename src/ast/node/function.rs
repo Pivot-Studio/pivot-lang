@@ -345,28 +345,30 @@ impl FuncDefNode {
             let funcvalue = {
                 fntype.add_generic_type(child)?;
                 if first {
-                    fntype.generic_map.iter_mut().for_each(|(_, pltype)| {
-                        match &mut *pltype.borrow_mut() {
-                            PLType::GENERIC(g) => {
-                                g.set_place_holder(child);
+                    if fntype.generic {
+                        fntype.generic_map.iter_mut().for_each(|(_, pltype)| {
+                            match &mut *pltype.borrow_mut() {
+                                PLType::GENERIC(g) => {
+                                    g.set_place_holder(child);
+                                }
+                                _ => unreachable!(),
                             }
-                            _ => unreachable!(),
-                        }
-                    });
-                    let mut place_holder_fn = fntype.clone();
-                    let name =
-                        place_holder_fn.append_name_with_generic(place_holder_fn.name.clone());
-                    place_holder_fn.llvmname = place_holder_fn
-                        .llvmname
-                        .replace(&place_holder_fn.name, &name)
-                        .to_string();
-                    place_holder_fn.name = name.clone();
-                    place_holder_fn.generic_map.clear();
-
-                    place_holder_fn.generic_infer.borrow_mut().insert(
-                        name,
-                        Rc::new(RefCell::new(PLType::FN(place_holder_fn.clone()))),
-                    );
+                        });
+                        let mut place_holder_fn = fntype.clone();
+                        let name =
+                            place_holder_fn.append_name_with_generic(place_holder_fn.name.clone());
+                        place_holder_fn.llvmname = place_holder_fn
+                            .llvmname
+                            .replace(&place_holder_fn.name, &name)
+                            .to_string();
+                        place_holder_fn.name = name.clone();
+                        place_holder_fn.generic_map.clear();
+                        place_holder_fn.generic_infer = Rc::new(RefCell::new(IndexMap::default()));
+                        place_holder_fn.generic_infer.borrow_mut().insert(
+                            name,
+                            Rc::new(RefCell::new(PLType::FN(place_holder_fn.clone()))),
+                        );
+                    }
                 }
                 builder.get_or_insert_fn_handle(&fntype, child)
             };

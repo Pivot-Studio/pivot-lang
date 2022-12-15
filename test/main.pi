@@ -333,7 +333,7 @@ fn test_generic_fn_complex<A|B|C>(a: i64, x: A, y: B, z: C) void {
     }
     io::printi64ln(a);
     test_generic_fn_complex<B|A|C>(a + 1, y, x, z);
-    test_generic_fn_complex<C|A|B>(a + 1, z, x, y);
+    test_generic_fn_complex<C|A|_>(a + 1, z, x, y);
     return;
 }
 
