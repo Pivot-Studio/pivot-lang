@@ -364,7 +364,7 @@ impl FuncDefNode {
                         place_holder_fn.name = name.clone();
                         place_holder_fn.generic_map.clear();
                         place_holder_fn.generic_infer = Rc::new(RefCell::new(IndexMap::default()));
-                        place_holder_fn.generic_infer.borrow_mut().insert(
+                        fntype.generic_infer.borrow_mut().insert(
                             name,
                             Rc::new(RefCell::new(PLType::FN(place_holder_fn.clone()))),
                         );
