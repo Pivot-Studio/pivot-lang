@@ -4,7 +4,6 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
-use crate::mismatch_err;
 
 use internal_macro::{comments, fmt, range};
 use lsp_types::SemanticTokenType;
@@ -50,7 +49,8 @@ impl Node for DefNode {
             pltype = Some(tp.get_type(ctx, builder)?);
         }
         if let Some(exp) = &mut self.exp {
-            let (value, pltype_opt, _) = ctx.emit_with_expectation(exp, pltype.clone(), builder)?;
+            let (value, pltype_opt, _) =
+                ctx.emit_with_expectation(exp, pltype.clone(), self.var.range(), builder)?;
             // for err tolerate
             if pltype_opt.is_none() {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
@@ -62,8 +62,6 @@ impl Node for DefNode {
             if pltype.is_none() {
                 ctx.push_type_hints(self.var.range, tp.clone());
                 pltype = Some(tp);
-            } else if pltype.clone().unwrap() != tp {
-                return Err(mismatch_err!(ctx, self.range(), tp, pltype.unwrap()));
             }
             expv = value;
             exptp = pltype_opt;
