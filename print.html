@@ -616,7 +616,7 @@ pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNode
 <p>基本上，所有源代码中的基础单位都会对应抽象语法树中的一个节点。抽象语法树有很多类型的节点，他们可能会相互引用。</p>
 <p>所有的节点都必须实现<code>Node</code> trait，这个trait定义了节点的基本行为。</p>
 <pre><code class="language-rust no_run noplayground">#[enum_dispatch]
-pub trait Node: RangeTrait + AsAny + FmtTrait {
+pub trait Node: RangeTrait + FmtTrait {
     fn print(&amp;self, tabs: usize, end: bool, line: Vec&lt;bool&gt;);
     fn emit&lt;'a, 'ctx, 'b&gt;(
         &amp;mut self,
