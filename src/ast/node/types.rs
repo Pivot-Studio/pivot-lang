@@ -408,6 +408,7 @@ impl StructDefNode {
             refs: Rc::new(RefCell::new(vec![])),
             doc: vec![],
             generic_map,
+            impls: vec![],
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);

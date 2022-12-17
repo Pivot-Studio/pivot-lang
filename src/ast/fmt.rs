@@ -573,7 +573,29 @@ impl FmtBuilder {
         self.token(&node.content);
         self.double_quote();
     }
-    pub fn parse_trait_def_node(&mut self, _node: &TraitDefNode) {
-        todo!()
+    pub fn parse_trait_def_node(&mut self, node: &TraitDefNode) {
+        // for c in node.precom.iter() {
+        //     c.format(self);
+        // }
+        self.prefix();
+        self.token("trait");
+        self.space();
+        self.token(node.id.name.as_str());
+        if let Some(generics) = &node.generics {
+            generics.format(self);
+        }
+        self.space();
+        self.l_brace();
+        self.add_tab();
+        for m in &node.methods {
+            m.format(self);
+        }
+        self.enter();
+        self.sub_tab();
+        self.prefix();
+        self.r_brace();
+        self.enter();
+        // 顶层节点加空格
+        self.enter();
     }
 }

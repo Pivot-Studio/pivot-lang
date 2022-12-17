@@ -83,7 +83,10 @@ define_error!(
     GENERIC_CANNOT_BE_INFER = "generic can not be infer",
     DUPLICATE_METHOD = "duplicate method",
     GENERIC_PARAM_LEN_MISMATCH = "generic param len mismatch",
-    NOT_GENERIC_TYPE = "not generic type"
+    NOT_GENERIC_TYPE = "not generic type",
+    EXPECT_TRAIT_TYPE = "expect trait type",
+    METHOD_NOT_IN_TRAIT = "method not in trait def",
+    METHOD_NOT_IN_IMPL = "method required in trait not found in impl block"
 );
 macro_rules! define_warn {
     ($(
@@ -109,7 +112,7 @@ define_warn! {
     UNREACHABLE_STATEMENT= "unreachable statement"
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiagCode {
     Err(ErrorCode),
     Warn(WarnCode),
@@ -136,7 +139,7 @@ use super::{ctx::Ctx, range::Range};
 /// # PLDiag
 /// Diagnostic for pivot-lang
 #[range]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PLDiag {
     code: DiagCode,
     help: Option<Box<String>>,

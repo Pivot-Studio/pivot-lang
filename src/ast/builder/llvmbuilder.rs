@@ -384,7 +384,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     fn get_ditype(&self, pltp: &PLType, ctx: &mut Ctx<'a>) -> Option<DIType<'ctx>> {
         let td = self.targetmachine.get_target_data();
         match pltp {
-            PLType::FN(_) => None,
+            PLType::FN(_) => self.get_ditype(&PLType::PRIMITIVE(PriType::I64), ctx),
             PLType::GENERIC(g) => {
                 if g.curpltype.is_some() {
                     let pltype = g.curpltype.as_ref().unwrap();

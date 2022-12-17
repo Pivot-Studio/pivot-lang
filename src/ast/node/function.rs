@@ -212,9 +212,9 @@ impl TypeNode for FuncDefNode {
 
     fn eq_or_infer<'a, 'ctx, 'b>(
         &self,
-        ctx: &'b mut Ctx<'a>,
-        pltype: Rc<RefCell<PLType>>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        _ctx: &'b mut Ctx<'a>,
+        _pltype: Rc<RefCell<PLType>>,
+        _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<bool, PLDiag> {
         todo!()
     }

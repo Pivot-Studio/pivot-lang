@@ -33,7 +33,9 @@ use lsp_types::InsertTextFormat;
 use lsp_types::Location;
 use lsp_types::SymbolKind;
 use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 /// # PLType
@@ -204,6 +206,18 @@ pub fn get_type_deep(pltype: Rc<RefCell<PLType>>) -> Rc<RefCell<PLType>> {
     }
 }
 impl PLType {
+    pub fn get_kind_name(&self) -> String {
+        match self {
+            PLType::PRIMITIVE(_) | PLType::VOID => "primitive".to_string(),
+            PLType::POINTER(_) => "pointer".to_string(),
+            PLType::ARR(_) => "array".to_string(),
+            PLType::STRUCT(_) => "struct".to_string(),
+            PLType::FN(_) => "function".to_string(),
+            PLType::PLACEHOLDER(_) => "placeholder".to_string(),
+            PLType::GENERIC(_) => "generic".to_string(),
+            PLType::TRAIT(_) => "trait".to_string(),
+        }
+    }
     pub fn get_typenode(&self, ctx: &Ctx) -> Box<TypeNodeEnum> {
         match self {
             PLType::STRUCT(st) => {
@@ -435,6 +449,32 @@ impl TryFrom<PLType> for FNType {
     }
 }
 impl FNType {
+    /// 用来比较接口函数与实现函数是否相同
+    ///
+    /// 忽略第一个参数比较（receiver
+    ///
+    /// 因为接口函数的第一个参数是*i64，而实现函数的第一个参数是实现类型
+    pub fn eq_except_receiver<'a, 'ctx, 'b>(
+        &self,
+        other: &FNType,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> bool {
+        if self.name.split("::").last().unwrap() != other.name.split("::").last().unwrap() {
+            return false;
+        }
+        if self.param_pltypes.len() != other.param_pltypes.len() {
+            return false;
+        }
+        for i in 1..self.param_pltypes.len() {
+            if self.param_pltypes[i].get_type(ctx, builder)
+                != other.param_pltypes[i].get_type(ctx, builder)
+            {
+                return false;
+            }
+        }
+        self.ret_pltype.get_type(ctx, builder) == other.ret_pltype.get_type(ctx, builder)
+    }
     pub fn append_name_with_generic(&self, name: String) -> String {
         if self.need_gen_code() {
             let typeinfer = self
@@ -592,6 +632,7 @@ pub struct STType {
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub generic_map: IndexMap<String, Rc<RefCell<PLType>>>,
+    pub impls: Vec<Rc<RefCell<PLType>>>,
 }
 
 impl STType {

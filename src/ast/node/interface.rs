@@ -35,7 +35,7 @@ impl Node for TraitDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        ctx.push_semantic_token(self.range, SemanticTokenType::INTERFACE, 0);
+        ctx.push_semantic_token(self.id.range, SemanticTokenType::INTERFACE, 0);
         for g in &mut self.generics {
             g.emit(ctx, builder)?;
         }
@@ -65,6 +65,7 @@ impl TraitDefNode {
             refs: Rc::new(RefCell::new(vec![])),
             doc: vec![],
             generic_map,
+            impls: vec![],
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
@@ -139,7 +140,7 @@ impl TraitDefNode {
             );
         }
         ctx.plmod.types = clone_map;
-        if let PLType::STRUCT(st) = &mut *pltype.borrow_mut() {
+        if let PLType::TRAIT(st) = &mut *pltype.borrow_mut() {
             st.fields = fields;
             st.ordered_fields = newf;
             // st.doc = self.doc.clone();

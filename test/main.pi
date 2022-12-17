@@ -137,7 +137,7 @@ fn test_const() void {
     return;
 }
 
-impl mod1::Mod1 {
+impl TestTrait for mod1::Mod1 {
     //
     /// ### xxx
     //
