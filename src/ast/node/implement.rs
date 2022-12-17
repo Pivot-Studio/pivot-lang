@@ -12,7 +12,7 @@ pub struct ImplNode {
     pub methods: Vec<Box<FuncDefNode>>,
 }
 
-impl Node for ImplNode {
+impl PrintTrait for ImplNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -22,6 +22,9 @@ impl Node for ImplNode {
             method.print(tabs + 1, false, line.clone());
         }
     }
+}
+
+impl Node for ImplNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,

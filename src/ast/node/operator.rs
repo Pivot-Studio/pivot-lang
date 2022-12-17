@@ -24,8 +24,8 @@ pub struct UnaryOpNode {
     pub op: (TokenType, Range),
     pub exp: Box<NodeEnum>,
 }
-// 单目运算符
-impl Node for UnaryOpNode {
+
+impl PrintTrait for UnaryOpNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -34,6 +34,10 @@ impl Node for UnaryOpNode {
         println!("{:?}", self.op);
         self.exp.print(tabs + 1, true, line.clone());
     }
+}
+
+// 单目运算符
+impl Node for UnaryOpNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -95,7 +99,8 @@ pub struct BinOpNode {
     pub op: (TokenType, Range),
     pub right: Box<NodeEnum>,
 }
-impl Node for BinOpNode {
+
+impl PrintTrait for BinOpNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -105,6 +110,9 @@ impl Node for BinOpNode {
         println!("{:?}", self.op);
         self.right.print(tabs + 1, true, line.clone());
     }
+}
+
+impl Node for BinOpNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -255,7 +263,7 @@ pub struct TakeOpNode {
     pub field: Option<Box<VarNode>>,
 }
 
-impl Node for TakeOpNode {
+impl PrintTrait for TakeOpNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -266,6 +274,9 @@ impl Node for TakeOpNode {
             id.print(tabs + 1, true, line.clone());
         }
     }
+}
+
+impl Node for TakeOpNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,

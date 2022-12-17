@@ -24,7 +24,7 @@ pub struct TypeNameNode {
     pub generic_params: Option<Box<GenericParamNode>>,
 }
 
-impl TypeNode for TypeNameNode {
+impl PrintTrait for TypeNameNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -36,7 +36,9 @@ impl TypeNode for TypeNameNode {
             println!("id: <empty>");
         }
     }
+}
 
+impl TypeNode for TypeNameNode {
     fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) {
         if let Some(id) = &self.id {
             for ns in id.ns.iter() {
@@ -187,7 +189,7 @@ pub struct ArrayTypeNameNode {
     pub size: Box<NodeEnum>,
 }
 
-impl TypeNode for ArrayTypeNameNode {
+impl PrintTrait for ArrayTypeNameNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -195,6 +197,9 @@ impl TypeNode for ArrayTypeNameNode {
         self.id.print(tabs + 1, false, line.clone());
         self.size.print(tabs + 1, true, line.clone());
     }
+}
+
+impl TypeNode for ArrayTypeNameNode {
     fn get_type<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
@@ -248,13 +253,16 @@ pub struct PointerTypeNode {
     pub elm: Box<TypeNodeEnum>,
 }
 
-impl TypeNode for PointerTypeNode {
+impl PrintTrait for PointerTypeNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("PointerTypeNode");
         self.elm.print(tabs + 1, true, line.clone());
     }
+}
+
+impl TypeNode for PointerTypeNode {
     fn get_type<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
@@ -318,7 +326,7 @@ pub struct StructDefNode {
     pub generics: Option<Box<GenericDefNode>>,
 }
 
-impl Node for StructDefNode {
+impl PrintTrait for StructDefNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -334,7 +342,9 @@ impl Node for StructDefNode {
             field.print(tabs + 1, i == 0, line.clone());
         }
     }
+}
 
+impl Node for StructDefNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -465,7 +475,7 @@ pub struct StructInitFieldNode {
     pub exp: Box<NodeEnum>,
 }
 
-impl Node for StructInitFieldNode {
+impl PrintTrait for StructInitFieldNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -474,6 +484,9 @@ impl Node for StructInitFieldNode {
         println!("id: {}", self.id.name);
         self.exp.print(tabs + 1, true, line.clone());
     }
+}
+
+impl Node for StructInitFieldNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -494,7 +507,7 @@ pub struct StructInitNode {
     pub fields: Vec<Box<StructInitFieldNode>>, // TODO: comment db and salsa comment struct
 }
 
-impl Node for StructInitNode {
+impl PrintTrait for StructInitNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -507,6 +520,9 @@ impl Node for StructInitNode {
             field.print(tabs + 1, i == 0, line.clone());
         }
     }
+}
+
+impl Node for StructInitNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -598,7 +614,7 @@ pub struct ArrayInitNode {
     pub exps: Vec<Box<NodeEnum>>,
 }
 
-impl Node for ArrayInitNode {
+impl PrintTrait for ArrayInitNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -610,6 +626,9 @@ impl Node for ArrayInitNode {
             exp.print(tabs + 1, i == 0, line.clone());
         }
     }
+}
+
+impl Node for ArrayInitNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -665,11 +684,21 @@ impl Node for ArrayInitNode {
 pub struct GenericDefNode {
     pub generics: Vec<Box<VarNode>>,
 }
-impl Node for GenericDefNode {
-    fn print(&self, _tabs: usize, _end: bool, _line: Vec<bool>) {
-        todo!()
-    }
 
+impl PrintTrait for GenericDefNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("GenericDefNode");
+        let mut i = self.generics.len();
+        for g in &self.generics {
+            i -= 1;
+            g.print(tabs + 1, i == 0, line.clone());
+        }
+    }
+}
+
+impl Node for GenericDefNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -707,11 +736,26 @@ impl GenericDefNode {
 pub struct GenericParamNode {
     pub generics: Vec<Option<Box<TypeNodeEnum>>>,
 }
-impl Node for GenericParamNode {
-    fn print(&self, _tabs: usize, _end: bool, _line: Vec<bool>) {
-        todo!()
-    }
 
+impl PrintTrait for GenericParamNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("GenericParamNode");
+        let mut i = self.generics.len();
+        for g in &self.generics {
+            i -= 1;
+            if g.is_none() {
+                tab(tabs + 1, line.clone(), i == 0);
+                println!("None");
+            } else {
+                g.as_ref().unwrap().print(tabs + 1, i == 0, line.clone());
+            }
+        }
+    }
+}
+
+impl Node for GenericParamNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         _: &'b mut Ctx<'a>,

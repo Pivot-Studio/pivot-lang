@@ -14,6 +14,7 @@ use crate::{
 use internal_macro::{fmt, range};
 use lsp_types::SemanticTokenType;
 
+use super::PrintTrait;
 use super::{primary::VarNode, Node, NodeResult, PLValue, TerminatorEnum};
 #[range]
 #[fmt]
@@ -27,7 +28,7 @@ pub struct UseNode {
     pub singlecolon: bool,
 }
 
-impl Node for UseNode {
+impl PrintTrait for UseNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -38,7 +39,9 @@ impl Node for UseNode {
             id.print(tabs + 1, i == 0, line.clone());
         }
     }
+}
 
+impl Node for UseNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -112,7 +115,7 @@ pub struct ExternIdNode {
     pub singlecolon: bool,
 }
 
-impl Node for ExternIdNode {
+impl PrintTrait for ExternIdNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -122,7 +125,9 @@ impl Node for ExternIdNode {
         }
         self.id.print(tabs + 1, true, line.clone());
     }
+}
 
+impl Node for ExternIdNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,

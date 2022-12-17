@@ -14,7 +14,7 @@ use crate::ast::builder::IRBuilder;
 use internal_macro::{fmt, range};
 use lsp_types::SemanticTokenType;
 
-use super::{Node, NodeResult, PLValue, TerminatorEnum};
+use super::{Node, NodeResult, PLValue, PrintTrait, TerminatorEnum};
 
 #[range]
 #[fmt]
@@ -23,13 +23,15 @@ pub struct StringNode {
     pub content: String,
 }
 
-impl Node for StringNode {
+impl PrintTrait for StringNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("StringNode: \"{}\"", self.content);
     }
+}
 
+impl Node for StringNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,

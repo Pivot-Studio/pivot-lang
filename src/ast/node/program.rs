@@ -42,7 +42,8 @@ pub struct ProgramNode {
     pub uses: Vec<Box<NodeEnum>>,
     pub traits: Vec<TraitDefNode>,
 }
-impl Node for ProgramNode {
+
+impl PrintTrait for ProgramNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         println!("ProgramNode");
@@ -52,6 +53,9 @@ impl Node for ProgramNode {
             statement.print(tabs, i == 0, line.clone());
         }
     }
+}
+
+impl Node for ProgramNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,

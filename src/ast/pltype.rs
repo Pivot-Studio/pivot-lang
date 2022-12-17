@@ -49,6 +49,7 @@ pub enum PLType {
     POINTER(Rc<RefCell<PLType>>),
     GENERIC(GenericType),
     PLACEHOLDER(PlaceHolderType),
+    TRAIT(STType),
 }
 /// # PriType
 /// Primitive type for pivot-lang
@@ -265,6 +266,7 @@ impl PLType {
             PLType::POINTER(_) => None,
             PLType::GENERIC(_) => None,
             PLType::PLACEHOLDER(_) => None,
+            PLType::TRAIT(t) => Some(t.refs.clone()),
         }
     }
 
@@ -286,12 +288,14 @@ impl PLType {
                 }
             }
             PLType::PLACEHOLDER(p) => p.name.clone(),
+            PLType::TRAIT(t) => t.name.clone(),
         }
     }
     pub fn get_llvm_name<'a, 'ctx>(&self) -> String {
         match self {
             PLType::FN(fu) => fu.name.clone(),
             PLType::STRUCT(st) => st.name.clone(),
+            PLType::TRAIT(t) => t.name.clone(),
             PLType::PRIMITIVE(pri) => pri.get_name(),
             PLType::ARR(arr) => {
                 format!("[{} * {}]", arr.element_type.borrow().get_name(), arr.size)
@@ -314,6 +318,7 @@ impl PLType {
             PLType::GENERIC(g) => g.name.clone(),
             PLType::FN(fu) => fu.name.clone(),
             PLType::STRUCT(st) => st.get_st_full_name(),
+            PLType::TRAIT(st) => st.get_st_full_name(),
             PLType::PRIMITIVE(pri) => pri.get_name(),
             PLType::ARR(arr) => {
                 format!(
@@ -346,6 +351,7 @@ impl PLType {
             PLType::VOID => None,
             PLType::POINTER(_) => None,
             PLType::PLACEHOLDER(p) => Some(p.range.clone()),
+            PLType::TRAIT(t) => Some(t.range.clone()),
         }
     }
 
@@ -571,12 +577,6 @@ pub struct ARRType {
 }
 
 impl ARRType {
-    // pub fn arr_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) -> ArrayType<'ctx> {
-    //     self.element_type
-    //         .borrow()
-    //         .get_basic_type(ctx)
-    //         .array_type(self.size)
-    // }
     pub fn get_elem_type<'a, 'ctx>(&'a self) -> Rc<RefCell<PLType>> {
         self.element_type.clone()
     }
@@ -649,30 +649,6 @@ impl STType {
         pltype.replace(PLType::STRUCT(res.clone()));
         res
     }
-    // pub fn struct_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) -> StructType<'ctx> {
-    //     let st = ctx.module.get_struct_type(&self.get_st_full_name());
-    //     if let Some(st) = st {
-    //         return st;
-    //     }
-    //     let st = ctx.context.opaque_struct_type(&self.get_st_full_name());
-    //     st.set_body(
-    //         &self
-    //             .ordered_fields
-    //             .clone()
-    //             .into_iter()
-    //             .map(|order_field| {
-    //                 order_field
-    //                     .typenode
-    //                     .get_type(ctx)
-    //                     .unwrap()
-    //                     .borrow()
-    //                     .get_basic_type(ctx)
-    //             })
-    //             .collect::<Vec<_>>(),
-    //         false,
-    //     );
-    //     st
-    // }
     pub fn get_field_completions(&self) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
         for (name, _) in &self.fields {

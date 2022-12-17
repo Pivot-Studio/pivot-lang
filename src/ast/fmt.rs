@@ -8,6 +8,7 @@ use super::{
         function::{FuncCallNode, FuncDefNode},
         global::GlobalNode,
         implement::ImplNode,
+        interface::TraitDefNode,
         operator::{BinOpNode, TakeOpNode, UnaryOpNode},
         pkg::{ExternIdNode, UseNode},
         pointer::{PointerOpEnum, PointerOpNode},
@@ -23,7 +24,7 @@ use super::{
             ArrayInitNode, ArrayTypeNameNode, GenericDefNode, GenericParamNode, PointerTypeNode,
             StructDefNode, StructInitFieldNode, StructInitNode, TypeNameNode, TypedIdentifierNode,
         },
-        FmtTrait, NodeEnum, TypeNodeEnum, interface::TraitDefNode,
+        FmtTrait, NodeEnum, TypeNodeEnum,
     },
     tokens::TokenType,
 };
@@ -572,7 +573,7 @@ impl FmtBuilder {
         self.token(&node.content);
         self.double_quote();
     }
-    pub fn parse_trait_def_node(&mut self, node: &TraitDefNode){
+    pub fn parse_trait_def_node(&mut self, _node: &TraitDefNode) {
         todo!()
     }
 }

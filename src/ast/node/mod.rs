@@ -83,15 +83,15 @@ macro_rules! plv {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[enum_dispatch(TypeNode, RangeTrait, FmtTrait)]
+#[enum_dispatch(TypeNode, RangeTrait, FmtTrait, PrintTrait)]
 pub enum TypeNodeEnum {
     BasicTypeNode(TypeNameNode),
     ArrayTypeNode(ArrayTypeNameNode),
     PointerTypeNode(PointerTypeNode),
+    FuncTypeNode(FuncDefNode),
 }
 #[enum_dispatch]
-pub trait TypeNode: RangeTrait + FmtTrait {
-    fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
+pub trait TypeNode: RangeTrait + FmtTrait + PrintTrait {
     /// 重要：这个函数不要干lsp相关操作，只用来获取type
     fn get_type<'a, 'ctx, 'b>(
         &self,
@@ -109,7 +109,7 @@ pub trait TypeNode: RangeTrait + FmtTrait {
 type TypeNodeResult = Result<Rc<RefCell<PLType>>, PLDiag>;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-#[enum_dispatch(Node, RangeTrait, FmtTrait)]
+#[enum_dispatch(Node, RangeTrait, FmtTrait, PrintTrait)]
 pub enum NodeEnum {
     Def(DefNode),
     Ret(RetNode),
@@ -163,14 +163,19 @@ pub trait FmtTrait {
 
 // ANCHOR: node
 #[enum_dispatch]
-pub trait Node: RangeTrait + FmtTrait {
-    fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
+pub trait Node: RangeTrait + FmtTrait + PrintTrait {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult;
 }
+
+#[enum_dispatch]
+pub trait PrintTrait {
+    fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
+}
+
 // ANCHOR_END: node
 pub type NodeResult = Result<
     (
@@ -186,15 +191,6 @@ pub struct PLValue {
     pub receiver: Option<ValueHandle>,
 }
 impl PLValue {
-    // pub fn into_pointer_value(&self) -> PointerValue<'ctx> {
-    //     self.value.into_pointer_value()
-    // }
-    // pub fn into_int_value(&self) -> IntValue<'ctx> {
-    //     self.value.into_int_value()
-    // }
-    // pub fn into_function_value(&self) -> FunctionValue<'ctx> {
-    //     self.value.into_function_value()
-    // }
     pub fn set_const(&mut self, is_const: bool) {
         self.is_const = is_const;
     }

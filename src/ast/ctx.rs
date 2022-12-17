@@ -526,12 +526,13 @@ impl<'a, 'ctx> Ctx<'a> {
 
     fn get_tp_completions(&self, m: &mut FxHashMap<String, CompletionItem>) {
         for (k, f) in self.plmod.types.iter() {
-            let tp = match *RefCell::borrow(&f) {
+            let tp = match &*f.borrow() {
                 PLType::FN(_) => continue,
                 PLType::ARR(_) => continue,
                 PLType::PLACEHOLDER(_) => CompletionItemKind::STRUCT,
-                PLType::GENERIC(_) => CompletionItemKind::STRUCT,
+                PLType::GENERIC(_) => CompletionItemKind::TYPE_PARAMETER,
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
+                PLType::TRAIT(_) => CompletionItemKind::INTERFACE,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::VOID => CompletionItemKind::KEYWORD,
                 PLType::POINTER(_) => todo!(),
@@ -581,6 +582,7 @@ impl<'a, 'ctx> Ctx<'a> {
                     CompletionItemKind::FUNCTION
                 }
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
+                PLType::TRAIT(_) => CompletionItemKind::INTERFACE,
                 PLType::ARR(_) => CompletionItemKind::KEYWORD,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::GENERIC(_) => CompletionItemKind::STRUCT,

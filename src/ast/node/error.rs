@@ -13,7 +13,7 @@ pub struct ErrorNode {
     pub code: ErrorCode,
 }
 
-impl Node for ErrorNode {
+impl PrintTrait for ErrorNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -21,6 +21,9 @@ impl Node for ErrorNode {
         tab(tabs + 1, line, true);
         println!("Src: {}", format!("{:?}", self.src).red());
     }
+}
+
+impl Node for ErrorNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -43,7 +46,7 @@ pub struct StErrorNode {
     pub st: Box<NodeEnum>,
 }
 
-impl Node for StErrorNode {
+impl PrintTrait for StErrorNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -51,6 +54,9 @@ impl Node for StErrorNode {
         self.st.print(tabs + 1, false, line.clone());
         self.err.print(tabs + 1, true, line);
     }
+}
+
+impl Node for StErrorNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,

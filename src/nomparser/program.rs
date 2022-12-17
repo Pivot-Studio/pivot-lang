@@ -134,7 +134,8 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
             Ok::<_, Error>(Box::new(TopLevel::Use(c)))
         }),
         map_res(del_newline_or_space!(comment), |c| {
-            Ok::<_, Error>(Box::new(TopLevel::Common(c)))}),
+            Ok::<_, Error>(Box::new(TopLevel::Common(c)))
+        }),
         map_res(del_newline_or_space!(trait_def), |c| {
             Ok::<_, Error>(Box::new(TopLevel::TraitDef(*c)))
         }),

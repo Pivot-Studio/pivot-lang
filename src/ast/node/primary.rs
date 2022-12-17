@@ -17,10 +17,13 @@ pub struct PrimaryNode {
     pub value: Box<NodeEnum>,
 }
 
-impl Node for PrimaryNode {
+impl PrintTrait for PrimaryNode {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
         self.value.print(tabs, end, line);
     }
+}
+
+impl Node for PrimaryNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -40,12 +43,15 @@ pub struct BoolConstNode {
     pub value: bool,
 }
 
-impl Node for BoolConstNode {
+impl PrintTrait for BoolConstNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line, end);
         println!("BoolConstNode: {}", self.value);
     }
+}
+
+impl Node for BoolConstNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -70,12 +76,14 @@ impl Node for BoolConstNode {
 pub struct NumNode {
     pub value: Num,
 }
-impl Node for NumNode {
+impl PrintTrait for NumNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line, end);
         println!("NumNode: {:?}", self.value);
     }
+}
+impl Node for NumNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -179,7 +187,7 @@ pub struct ArrayElementNode {
     pub index: Box<NodeEnum>,
 }
 
-impl Node for ArrayElementNode {
+impl PrintTrait for ArrayElementNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -187,6 +195,9 @@ impl Node for ArrayElementNode {
         self.arr.print(tabs + 1, false, line.clone());
         self.index.print(tabs + 1, true, line);
     }
+}
+
+impl Node for ArrayElementNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -229,13 +240,16 @@ pub struct ParanthesesNode {
     pub node: Box<NodeEnum>,
 }
 
-impl Node for ParanthesesNode {
+impl PrintTrait for ParanthesesNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("ParanthesesNode");
         self.node.print(tabs + 1, true, line);
     }
+}
+
+impl Node for ParanthesesNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,

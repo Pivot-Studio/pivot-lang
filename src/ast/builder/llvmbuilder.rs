@@ -257,6 +257,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .as_basic_type_enum(),
             ),
             PLType::STRUCT(s) => Some(self.struct_type(s, ctx).as_basic_type_enum()),
+            PLType::TRAIT(s) => Some(self.struct_type(s, ctx).as_basic_type_enum()),
             PLType::ARR(a) => Some(self.arr_type(a, ctx).as_basic_type_enum()),
             PLType::PRIMITIVE(t) => Some(self.get_pri_basic_type(t)),
             PLType::VOID => None,
@@ -380,7 +381,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         .as_type(),
                 )
             }
-            PLType::STRUCT(x) => {
+            PLType::STRUCT(x) | PLType::TRAIT(x) => {
                 // 若已经生成过，直接查表返回
                 if RefCell::borrow(&self.ditypes).contains_key(&x.get_st_full_name()) {
                     return Some(

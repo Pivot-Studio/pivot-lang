@@ -21,7 +21,7 @@ pub struct FuncCallNode {
     pub paralist: Vec<Box<NodeEnum>>,
 }
 
-impl Node for FuncCallNode {
+impl PrintTrait for FuncCallNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -33,6 +33,9 @@ impl Node for FuncCallNode {
             para.print(tabs + 1, i == 0, line.clone());
         }
     }
+}
+
+impl Node for FuncCallNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -184,6 +187,30 @@ pub struct FuncDefNode {
     pub generics: Option<Box<GenericDefNode>>,
     pub body: Option<StatementsNode>,
 }
+
+impl TypeNode for FuncDefNode {
+    fn get_type<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> TypeNodeResult {
+        todo!()
+    }
+
+    fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) {
+        todo!()
+    }
+
+    fn eq_or_infer<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        pltype: Rc<RefCell<PLType>>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> Result<bool, PLDiag> {
+        todo!()
+    }
+}
+
 impl FuncDefNode {
     pub fn emit_pl_tp<'a, 'ctx, 'b>(
         &mut self,
@@ -279,7 +306,8 @@ impl FuncDefNode {
         Ok(())
     }
 }
-impl Node for FuncDefNode {
+
+impl PrintTrait for FuncDefNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -298,6 +326,9 @@ impl Node for FuncDefNode {
             body.print(tabs + 1, true, line.clone());
         }
     }
+}
+
+impl Node for FuncDefNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,

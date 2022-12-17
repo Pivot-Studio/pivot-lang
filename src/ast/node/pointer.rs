@@ -23,13 +23,16 @@ pub enum PointerOpEnum {
     ADDR,
 }
 
-impl Node for PointerOpNode {
+impl PrintTrait for PointerOpNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("PointerOpNode");
         self.value.print(tabs + 1, true, line.clone());
     }
+}
+
+impl Node for PointerOpNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,

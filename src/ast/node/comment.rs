@@ -10,12 +10,15 @@ pub struct CommentNode {
     pub is_doc: bool, // use "///" (is_doc:true)
 }
 
-impl Node for CommentNode {
+impl PrintTrait for CommentNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("CommentNode: {}", self.comment);
     }
+}
+
+impl Node for CommentNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,

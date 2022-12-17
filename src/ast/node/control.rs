@@ -15,7 +15,7 @@ pub struct IfNode {
     pub els: Option<Box<NodeEnum>>,
 }
 
-impl Node for IfNode {
+impl PrintTrait for IfNode {
     // ANCHOR: print
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -30,6 +30,9 @@ impl Node for IfNode {
         }
     }
     // ANCHOR_END: print
+}
+
+impl Node for IfNode {
     // ANCHOR: emit
     fn emit<'a, 'ctx, 'b>(
         &mut self,
@@ -96,7 +99,7 @@ pub struct WhileNode {
     pub body: Box<StatementsNode>,
 }
 
-impl Node for WhileNode {
+impl PrintTrait for WhileNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -104,6 +107,9 @@ impl Node for WhileNode {
         self.cond.print(tabs + 1, false, line.clone());
         self.body.print(tabs + 1, true, line.clone());
     }
+}
+
+impl Node for WhileNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -155,7 +161,7 @@ pub struct ForNode {
     pub body: Box<StatementsNode>,
 }
 
-impl Node for ForNode {
+impl PrintTrait for ForNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -169,6 +175,9 @@ impl Node for ForNode {
         }
         self.body.print(tabs + 1, true, line.clone());
     }
+}
+
+impl Node for ForNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -231,13 +240,15 @@ impl Node for ForNode {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BreakNode {}
 
-impl Node for BreakNode {
+impl PrintTrait for BreakNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line, end);
         println!("BreakNode");
     }
+}
 
+impl Node for BreakNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -261,13 +272,15 @@ impl Node for BreakNode {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct ContinueNode {}
 
-impl Node for ContinueNode {
+impl PrintTrait for ContinueNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line, end);
         println!("ContinueNode");
     }
+}
 
+impl Node for ContinueNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
