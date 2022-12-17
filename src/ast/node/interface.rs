@@ -74,72 +74,95 @@ impl TraitDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<(), PLDiag> {
-        todo!()
-        // let mp = ctx.move_generic_types();
-        // let mut fields = FxHashMap::<String, Field>::default();
-        // let mut order_fields = Vec::<Field>::new();
-        // let mut i = 0;
-        // // add generic type before field add type
-        // if let Some(generics) = &mut self.generics {
-        //     let generic_map = generics.gen_generic_type(ctx);
-        //     for (name, pltype) in generic_map.iter() {
-        //         ctx.add_generic_type(
-        //             name.clone(),
-        //             pltype.clone(),
-        //             pltype.clone().borrow().get_range().unwrap(),
-        //         );
-        //     }
-        // }
-        // let pltype = ctx.get_type(&self.id.name.as_str(), self.range)?;
-        // let clone_map = ctx.plmod.types.clone();
-        // for (field, has_semi) in self.fields.iter() {
-        //     if !has_semi {
-        //         ctx.add_diag(field.range.new_err(ErrorCode::COMPLETION));
-        //     }
-        //     let id = field.id.clone();
-        //     let f = Field {
-        //         index: i,
-        //         typenode: field.typenode.clone(),
-        //         name: field.id.name.clone(),
-        //         range: field.range,
-        //         refs: Rc::new(RefCell::new(vec![])),
-        //     };
-        //     let tpre = field.typenode.get_type(ctx, builder);
-        //     if tpre.is_err() {
-        //         continue;
-        //     }
-        //     let tp = tpre.unwrap();
-        //     match &*tp.borrow() {
-        //         PLType::STRUCT(sttp) => {
-        //             ctx.send_if_go_to_def(field.typenode.range(), sttp.range, sttp.path.clone());
-        //         }
-        //         _ => {}
-        //     };
+        let mp = ctx.move_generic_types();
+        let mut fields = FxHashMap::<String, Field>::default();
+        let mut order_fields = Vec::<Field>::new();
+        let mut i = 0;
+        // add generic type before field add type
+        if let Some(generics) = &mut self.generics {
+            let generic_map = generics.gen_generic_type(ctx);
+            for (name, pltype) in generic_map.iter() {
+                ctx.add_generic_type(
+                    name.clone(),
+                    pltype.clone(),
+                    pltype.clone().borrow().get_range().unwrap(),
+                );
+            }
+        }
+        // type hash
+        order_fields.push(Field {
+            index: i,
+            typenode: Box::new(TypeNameNode::new_from_str("i64").into()),
+            name: "tmp".to_string(),
+            range: Default::default(),
+            refs: Rc::new(RefCell::new(vec![])),
+        });
+        i = i + 1;
+        // pointer to real value
+        order_fields.push(Field {
+            index: i,
+            typenode: Box::new(TypeNodeEnum::PointerTypeNode(PointerTypeNode {
+                elm: Box::new(TypeNameNode::new_from_str("i64").into()),
+                range: Default::default(),
+            })),
+            name: "tmp".to_string(),
+            range: Default::default(),
+            refs: Rc::new(RefCell::new(vec![])),
+        });
+        i = i + 1;
+        let pltype = ctx.get_type(&self.id.name.as_str(), self.range)?;
+        let clone_map = ctx.plmod.types.clone();
+        for field in self.methods.iter() {
+            let mut tp = field.clone();
+            tp.paralist
+                .insert(0, Box::new(new_i64ptr_tf_with_name("self")));
+            let id = field.id.clone();
+            let f = Field {
+                index: i,
+                typenode: Box::new(tp.into()),
+                name: field.id.name.clone(),
+                range: field.range,
+                refs: Rc::new(RefCell::new(vec![])),
+            };
 
-        //     ctx.set_if_refs(f.refs.clone(), field.id.range);
-        //     fields.insert(id.name.to_string(), f.clone());
-        //     order_fields.push(f);
-        //     ctx.set_if_refs_tp(tp.clone(), field.typenode.range());
-        //     i = i + 1;
-        // }
-        // let newf = order_fields.clone();
-        // if self.generics.is_none() {
-        //     builder.add_body_to_struct_type(
-        //         &ctx.plmod.get_full_name(&self.id.name),
-        //         &order_fields,
-        //         ctx,
-        //     );
-        // }
-        // ctx.plmod.types = clone_map;
-        // if let PLType::STRUCT(st) = &mut *pltype.borrow_mut() {
-        //     st.fields = fields;
-        //     st.ordered_fields = newf;
-        //     st.doc = self.doc.clone();
-        // }
-        // ctx.set_if_refs_tp(pltype.clone(), self.id.range);
-        // ctx.add_doc_symbols(pltype.clone());
+            ctx.set_if_refs(f.refs.clone(), field.id.range);
+            fields.insert(id.name.to_string(), f.clone());
+            order_fields.push(f);
+            i = i + 1;
+        }
+        let newf = order_fields.clone();
+        if self.generics.is_none() {
+            builder.add_body_to_struct_type(
+                &ctx.plmod.get_full_name(&self.id.name),
+                &order_fields,
+                ctx,
+            );
+        }
+        ctx.plmod.types = clone_map;
+        if let PLType::STRUCT(st) = &mut *pltype.borrow_mut() {
+            st.fields = fields;
+            st.ordered_fields = newf;
+            // st.doc = self.doc.clone();
+        }
+        ctx.set_if_refs_tp(pltype.clone(), self.id.range);
+        ctx.add_doc_symbols(pltype.clone());
         // ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
-        // ctx.reset_generic_types(mp);
-        // Ok(())
+        ctx.reset_generic_types(mp);
+        Ok(())
+    }
+}
+
+fn new_i64ptr_tf_with_name(n: &str) -> TypedIdentifierNode {
+    TypedIdentifierNode {
+        id: VarNode {
+            name: n.to_string(),
+            range: Default::default(),
+        },
+        typenode: Box::new(TypeNodeEnum::PointerTypeNode(PointerTypeNode {
+            elm: Box::new(TypeNameNode::new_from_str("i64").into()),
+            range: Default::default(),
+        })),
+        doc: None,
+        range: Default::default(),
     }
 }

@@ -232,7 +232,7 @@ impl ExternIdNode {
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
             let re = match *tp.clone().borrow() {
-                PLType::STRUCT(_) => Ok((None, Some(tp), TerminatorEnum::NONE)),
+                PLType::STRUCT(_) | PLType::TRAIT(_) => Ok((None, Some(tp), TerminatorEnum::NONE)),
                 _ => unreachable!(),
             };
             return re;

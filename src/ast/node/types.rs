@@ -24,6 +24,26 @@ pub struct TypeNameNode {
     pub generic_params: Option<Box<GenericParamNode>>,
 }
 
+impl TypeNameNode {
+    pub fn new_from_str(s: &str) -> Self {
+        let id = ExternIdNode {
+            id: Box::new(VarNode {
+                name: s.to_string(),
+                range: Default::default(),
+            }),
+            range: Default::default(),
+            ns: vec![],
+            complete: true,
+            singlecolon: false,
+        };
+        Self {
+            id: Some(id),
+            generic_params: None,
+            range: Default::default(),
+        }
+    }
+}
+
 impl PrintTrait for TypeNameNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -704,13 +724,16 @@ impl Node for GenericDefNode {
         ctx: &'b mut Ctx<'a>,
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        for g in self.generics.iter() {
-            ctx.push_semantic_token(g.range, SemanticTokenType::TYPE, 0);
-        }
+        self.emit_highlight(ctx);
         return Ok((None, None, TerminatorEnum::NONE));
     }
 }
 impl GenericDefNode {
+    pub fn emit_highlight<'a, 'ctx, 'b>(&self, ctx: &'b mut Ctx<'a>) {
+        for g in self.generics.iter() {
+            ctx.push_semantic_token(g.range, SemanticTokenType::TYPE, 0);
+        }
+    }
     pub fn gen_generic_type<'a, 'ctx>(
         &self,
         _: &mut Ctx<'a>,

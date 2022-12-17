@@ -14,7 +14,7 @@ use inkwell::{
     debug_info::*,
     module::{FlagBehavior, Linkage, Module},
     targets::{InitializationConfig, Target, TargetMachine},
-    types::{ArrayType, BasicType, BasicTypeEnum, StructType},
+    types::{ArrayType, BasicType, BasicTypeEnum, FunctionType, StructType},
     values::{
         AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue,
         PointerValue,
@@ -228,6 +228,33 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             PriType::BOOL => self.context.bool_type().as_basic_type_enum(),
         }
     }
+
+    fn get_fn_type(&self, f: &FNType, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
+        let mut param_types = vec![];
+        for param_pltype in f.param_pltypes.iter() {
+            param_types.push(
+                self.get_basic_type_op(
+                    &param_pltype
+                        .get_type(ctx, &self.clone().into())
+                        .unwrap()
+                        .borrow(),
+                    ctx,
+                )
+                .unwrap()
+                .into(),
+            );
+        }
+        let fn_type = self
+            .get_ret_type(
+                &f.ret_pltype
+                    .get_type(ctx, &self.clone().into())
+                    .unwrap()
+                    .borrow(),
+                ctx,
+            )
+            .fn_type(&param_types, false);
+        fn_type
+    }
     /// # get_basic_type_op
     /// get the basic type of the type
     /// used in code generation
@@ -251,9 +278,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 }),
             },
             PLType::FN(f) => Some(
-                self.get_or_insert_fn(f, ctx)
-                    .get_type()
-                    .ptr_type(inkwell::AddressSpace::Global)
+                self.get_fn_type(f, ctx)
+                    .ptr_type(AddressSpace::Generic)
                     .as_basic_type_enum(),
             ),
             PLType::STRUCT(s) => Some(self.struct_type(s, ctx).as_basic_type_enum()),
@@ -507,30 +533,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if let Some(v) = self.module.get_function(&llvmname) {
             return v;
         }
-        let mut param_types = vec![];
-        for param_pltype in pltp.param_pltypes.iter() {
-            param_types.push(
-                self.get_basic_type_op(
-                    &param_pltype
-                        .get_type(ctx, &self.clone().into())
-                        .unwrap()
-                        .borrow(),
-                    ctx,
-                )
-                .unwrap()
-                .into(),
-            );
-        }
-        let fn_type = self
-            .get_ret_type(
-                &pltp
-                    .ret_pltype
-                    .get_type(ctx, &self.clone().into())
-                    .unwrap()
-                    .borrow(),
-                ctx,
-            )
-            .fn_type(&param_types, false);
+        let fn_type = self.get_fn_type(pltp, ctx);
         let fn_value = self
             .module
             .add_function(&llvmname, fn_type, Some(Linkage::External));

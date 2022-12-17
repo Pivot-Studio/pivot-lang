@@ -66,8 +66,15 @@ impl Node for ProgramNode {
             // 提前加入占位符号，解决自引用问题
             def.add_to_symbols(ctx, builder);
         }
+        for def in self.traits.iter() {
+            // 提前加入占位符号，解决自引用问题
+            def.add_to_symbols(ctx, builder);
+        }
         for def in self.structs.iter_mut() {
             _ = def.emit_struct_def(ctx, builder);
+        }
+        for def in self.traits.iter_mut() {
+            _ = def.emit_trait_def(ctx, builder);
         }
         self.fntypes.iter_mut().for_each(|x| {
             _ = x.emit_func_def(ctx, builder);

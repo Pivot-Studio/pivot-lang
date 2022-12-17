@@ -361,7 +361,11 @@ fn main() i64 {
     test_self_ref_generic();
     test_generic_fn_simple<bool>(1);
     test_generic_fn_complex(1, true, [12, 3], 2);
+    let dd:TestTrait;
     return 0;
+}
+trait TestTrait {
+    fn name() void;
 }
 
 fn test_many_params(a: i64, b: i64, c: i64, d: i64) void {

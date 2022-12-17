@@ -194,11 +194,20 @@ impl TypeNode for FuncDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> TypeNodeResult {
-        todo!()
+        self.emit_pl_tp(ctx, builder)
     }
 
     fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) {
-        todo!()
+        ctx.emit_comment_highlight(&self.precom);
+        ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
+        if let Some(generics) = &self.generics {
+            generics.emit_highlight(ctx);
+        }
+        for para in self.paralist.iter() {
+            ctx.push_semantic_token(para.id.range, SemanticTokenType::PARAMETER, 0);
+            ctx.push_semantic_token(para.typenode.range(), SemanticTokenType::TYPE, 0);
+        }
+        ctx.push_semantic_token(self.ret.range(), SemanticTokenType::TYPE, 0);
     }
 
     fn eq_or_infer<'a, 'ctx, 'b>(
@@ -213,7 +222,7 @@ impl TypeNode for FuncDefNode {
 
 impl FuncDefNode {
     pub fn emit_pl_tp<'a, 'ctx, 'b>(
-        &mut self,
+        &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<Rc<RefCell<PLType>>, PLDiag> {
@@ -222,7 +231,7 @@ impl FuncDefNode {
         let mut method = false;
         let mut first = true;
         let mut generic_map = IndexMap::default();
-        if let Some(generics) = &mut self.generics {
+        if let Some(generics) = &self.generics {
             generic_map = generics.gen_generic_type(ctx);
         }
         let mp = ctx.move_generic_types();
