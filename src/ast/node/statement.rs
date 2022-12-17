@@ -123,10 +123,10 @@ impl Node for AssignNode {
     ) -> NodeResult {
         let exp_range = self.exp.range();
         let (ptr, lpltype, _) = self.var.emit(ctx, builder)?;
-        let (value, rpltype, _) = self.exp.emit(ctx, builder)?;
-        if lpltype != rpltype {
-            return Err(ctx.add_diag(self.range.new_err(ErrorCode::ASSIGN_TYPE_MISMATCH)));
+        if lpltype.is_none() {
+            return Err(ctx.add_diag(self.var.range().new_err(ErrorCode::NOT_ASSIGNABLE)));
         }
+        let (value, rpltype, _) = ctx.emit_with_expectation(&mut self.exp, lpltype, self.var.range(), builder)?;
         if ptr.as_ref().unwrap().is_const {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::ASSIGN_CONST)));
         }

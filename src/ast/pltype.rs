@@ -33,9 +33,7 @@ use lsp_types::InsertTextFormat;
 use lsp_types::Location;
 use lsp_types::SymbolKind;
 use rustc_hash::FxHashMap;
-use rustc_hash::FxHashSet;
 use std::cell::RefCell;
-use std::collections::HashSet;
 use std::rc::Rc;
 
 /// # PLType

@@ -1,4 +1,6 @@
-use super::IRBuilder;
+use crate::ast::{ctx::Ctx, pltype::PLType};
+
+use super::{IRBuilder, ValueHandle};
 
 /// 什么都不干的builder，用来测试和lsp模式
 pub struct NoOpBuilder {}
@@ -10,6 +12,24 @@ impl NoOpBuilder {
 }
 
 impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
+    fn bitcast(
+        &self,
+        _ctx: &mut Ctx<'a>,
+        _from: ValueHandle,
+        _to: &PLType,
+        _name: &str,
+    ) -> ValueHandle {
+        0
+    }
+    fn pointer_cast(
+        &self,
+        _ctx: &mut Ctx<'a>,
+        _from: ValueHandle,
+        _to: &PLType,
+        _name: &str,
+    ) -> ValueHandle {
+        0
+    }
     fn get_global_var_handle(&self, _name: &str) -> Option<super::ValueHandle> {
         Some(0)
     }

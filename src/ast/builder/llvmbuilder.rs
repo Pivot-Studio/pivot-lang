@@ -379,6 +379,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             offset + debug_type.get_size_in_bits(),
         )
     }
+
     /// # get_ditype
     /// get the debug info type of the pltype
     fn get_ditype(&self, pltp: &PLType, ctx: &mut Ctx<'a>) -> Option<DIType<'ctx>> {
@@ -597,6 +598,45 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 }
 impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
+    fn bitcast(
+        &self,
+        ctx: &mut Ctx<'a>,
+        from: ValueHandle,
+        to: &PLType,
+        name: &str,
+    ) -> ValueHandle {
+        let lv = self.get_llvm_value(from).unwrap();
+        let re = if lv.is_function_value() {
+            self.builder.build_bitcast(
+                lv.into_function_value().as_global_value().as_pointer_value(),
+                self.get_basic_type_op(to, ctx).unwrap(),
+                name,
+            )
+        }else {
+            self.builder.build_bitcast(
+                lv.into_pointer_value(),
+                self.get_basic_type_op(to, ctx).unwrap(),
+                name,
+            )
+        };
+        self.get_llvm_value_handle(&re.as_any_value_enum())
+    }
+    fn pointer_cast(
+        &self,
+        ctx: &mut Ctx<'a>,
+        from: ValueHandle,
+        to: &PLType,
+        name: &str,
+    ) -> ValueHandle {
+        let lv = self.get_llvm_value(from).unwrap();
+        
+        let re = self.builder.build_pointer_cast(
+            lv.into_pointer_value(),
+            self.get_basic_type_op(to, ctx).unwrap().into_pointer_type(),
+            name,
+        );
+        self.get_llvm_value_handle(&re.as_any_value_enum())
+    }
     fn get_global_var_handle(&self, name: &str) -> Option<ValueHandle> {
         match self.module.get_global(name) {
             Some(value) => Some(self.get_llvm_value_handle(&value.as_any_value_enum())),

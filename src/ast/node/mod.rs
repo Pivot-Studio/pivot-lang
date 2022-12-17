@@ -229,6 +229,7 @@ impl<'a, 'ctx> Ctx<'a> {
             self.push_semantic_token(com.range(), SemanticTokenType::COMMENT, 0);
         }
     }
+
     fn emit_with_expectation<'b>(
         &'b mut self,
         node: &mut Box<NodeEnum>,
@@ -327,6 +328,76 @@ impl<'a, 'ctx> Ctx<'a> {
         if value.is_some() {
             if let Some(ty) = ty.clone() {
                 if ty != expect {
+                    let derefed = self.auto_deref_tp(ty.clone());
+                    match (&*expect.clone().borrow(), &*derefed.borrow()) {
+                        (PLType::TRAIT(t), PLType::STRUCT(st)) => {
+                            let handle = builder.alloc("tmp_traitv", &expect.borrow(), self);
+                            if st
+                                .impls
+                                .iter()
+                                .find(|i| {
+                                    let ty1: &PLType = &i.borrow();
+                                    let ty2: &PLType = &expect.borrow();
+                                    ty1 == ty2
+                                })
+                                .is_none()
+                            {
+                                return Err(mismatch_err!(
+                                    self,
+                                    range,
+                                    expectrange,
+                                    expect.borrow(),
+                                    ty.borrow()
+                                ));
+                            }
+                            for (name, f) in &t.fields {
+                                let mthd = st.find_method(self, name);
+                                if mthd.is_none() {
+                                    return Err(mismatch_err!(
+                                        self,
+                                        range,
+                                        expectrange,
+                                        expect.borrow(),
+                                        ty.borrow()
+                                    ));
+                                }
+                                let mthd = mthd.unwrap();
+                                let fnhandle = builder.get_or_insert_fn_handle(&mthd, self);
+                                let targetftp = f.typenode.get_type(self, builder).unwrap();
+                                let casted = builder.bitcast(
+                                    self,
+                                    fnhandle,
+                                    &targetftp.borrow(),
+                                    "fncast_tmp",
+                                );
+                                let f_ptr = builder
+                                    .build_struct_gep(handle, f.index, "field_tmp")
+                                    .unwrap();
+                                builder.build_store(f_ptr, casted);
+                            }
+                            let (_, v) = self.auto_deref(ty.clone(), value.unwrap().value, builder);
+                            let v = builder.bitcast(
+                                self,
+                                v,
+                                &PLType::POINTER(Rc::new(RefCell::new(PLType::PRIMITIVE(
+                                    PriType::I64,
+                                )))),
+                                "traitcast_tmp",
+                            );
+                            let v_ptr = builder.build_struct_gep(handle, 1, "v_tmp").unwrap();
+                            builder.build_store(v_ptr, v);
+                            return Ok((
+                                Some(PLValue {
+                                    value: handle,
+                                    is_const: true,
+                                    receiver: None,
+                                }),
+                                Some(expect),
+                                term,
+                            ));
+                        }
+                        _ => (),
+                    };
                     return Err(mismatch_err!(
                         self,
                         range,
