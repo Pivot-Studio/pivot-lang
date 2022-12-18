@@ -170,7 +170,7 @@
 <pre><code class="language-rust no_run noplayground">#[salsa::tracked(lru = 32)]
 pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNodeWrapper, String&gt; {
     let text = source.text(db);
-    let re = program(Span::new(text));
+    let re = program(Span::new_extra(text, false));
     if let Err(e) = re {
         return Err(format!(&quot;{:?}&quot;, e));
     }

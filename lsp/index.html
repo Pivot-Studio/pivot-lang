@@ -155,6 +155,9 @@
 <p>基本上，lsp能够为所有的现代代码编辑器提供服务，但是目前我们只为vsc提供官方支持。如果想在别的编辑器中使用lsp，可能需要自己写一个
 简单的客户端插件。</p>
 </blockquote>
+<h3 id="注意事项"><a class="header" href="#注意事项">⚠️注意事项</a></h3>
+<p><strong>有一些函数功能纯粹，可能被用在很多无法预料的地方，如果在这些函数中操作非幂等的lsp相关功能很可能导致lsp最后工作时出现错误，请尽量避免</strong>！</p>
+<p>目前大部分lsp的功能接口都是幂等的。<code>semantic_token</code>和<code>doc_symbol</code>不幂等</p>
 
                     </main>
 

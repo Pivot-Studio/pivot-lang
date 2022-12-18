@@ -155,14 +155,19 @@
 <p>基本上，所有源代码中的基础单位都会对应抽象语法树中的一个节点。抽象语法树有很多类型的节点，他们可能会相互引用。</p>
 <p>所有的节点都必须实现<code>Node</code> trait，这个trait定义了节点的基本行为。</p>
 <pre><code class="language-rust no_run noplayground">#[enum_dispatch]
-pub trait Node: RangeTrait + FmtTrait {
-    fn print(&amp;self, tabs: usize, end: bool, line: Vec&lt;bool&gt;);
+pub trait Node: RangeTrait + FmtTrait + PrintTrait {
     fn emit&lt;'a, 'ctx, 'b&gt;(
         &amp;mut self,
         ctx: &amp;'b mut Ctx&lt;'a&gt;,
         builder: &amp;'b BuilderEnum&lt;'a, 'ctx&gt;,
     ) -&gt; NodeResult;
 }
+
+#[enum_dispatch]
+pub trait PrintTrait {
+    fn print(&amp;self, tabs: usize, end: bool, line: Vec&lt;bool&gt;);
+}
+
 </code></pre>
 <p>你可能注意到了，<code>Node</code>trait继承了<code>RangeTrait</code>，这个trait定义了节点的位置信息。</p>
 <pre><code class="language-rust no_run noplayground">#[enum_dispatch]
