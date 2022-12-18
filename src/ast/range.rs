@@ -1,8 +1,7 @@
 use lsp_types::Position;
 
 use super::diag::{ErrorCode, PLDiag, WarnCode};
-
-type Span<'a> = nom_locate::LocatedSpan<&'a str>;
+use crate::nomparser::Span;
 
 /// # Pos
 /// source code position in file

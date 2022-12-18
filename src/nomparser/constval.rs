@@ -8,8 +8,8 @@ use nom::{
     sequence::{preceded, terminated, tuple},
     IResult,
 };
-use nom_locate::LocatedSpan;
-type Span<'a> = LocatedSpan<&'a str>;
+
+use crate::nomparser::Span;
 use crate::{ast::range::Range, ast::tokens::TokenType};
 use internal_macro::{test_parser, test_parser_error};
 use nom::character::complete::char;

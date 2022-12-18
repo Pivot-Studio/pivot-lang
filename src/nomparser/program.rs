@@ -5,11 +5,11 @@ use nom::{
     bytes::complete::tag,
     combinator::{eof, map_res, recognize},
     multi::many0,
-    sequence::{delimited, terminated, tuple},
+    sequence::{delimited, preceded, terminated, tuple},
     IResult,
 };
-use nom_locate::LocatedSpan;
-type Span<'a> = LocatedSpan<&'a str>;
+
+use crate::nomparser::Span;
 use crate::{
     ast::range::Range,
     ast::{
@@ -90,10 +90,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
             }
             input = i;
         } else if let Err(err) = top {
-            let e: Result<
-                (LocatedSpan<&str>, LocatedSpan<&str>),
-                nom::Err<nom::error::Error<Span>>,
-            > = eof(input);
+            let e: Result<(Span, Span), nom::Err<nom::error::Error<Span>>> = eof(input);
             if e.is_ok() {
                 break;
             }

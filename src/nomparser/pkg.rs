@@ -4,8 +4,8 @@ use nom::{
     sequence::{preceded, tuple},
     IResult,
 };
-use nom_locate::LocatedSpan;
-type Span<'a> = LocatedSpan<&'a str>;
+
+use crate::nomparser::Span;
 use crate::{ast::node::pkg::UseNode, ast::tokens::TokenType};
 use internal_macro::test_parser;
 

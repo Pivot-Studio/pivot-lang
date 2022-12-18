@@ -9,8 +9,8 @@ use nom::{
     sequence::{pair, tuple},
     IResult, InputTake,
 };
-use nom_locate::LocatedSpan;
-type Span<'a> = LocatedSpan<&'a str>;
+
+use crate::nomparser::Span;
 use crate::{
     ast::tokens::TokenType,
     ast::{

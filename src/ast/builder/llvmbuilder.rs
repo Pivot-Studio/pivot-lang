@@ -16,8 +16,8 @@ use inkwell::{
     targets::{InitializationConfig, Target, TargetMachine},
     types::{ArrayType, BasicType, BasicTypeEnum, FunctionType, StructType},
     values::{
-        AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue,
-        PointerValue,
+        AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, CallableValue,
+        FunctionValue, PointerValue,
     },
     AddressSpace, FloatPredicate, IntPredicate, OptimizationLevel,
 };
@@ -608,11 +608,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let lv = self.get_llvm_value(from).unwrap();
         let re = if lv.is_function_value() {
             self.builder.build_bitcast(
-                lv.into_function_value().as_global_value().as_pointer_value(),
+                lv.into_function_value()
+                    .as_global_value()
+                    .as_pointer_value(),
                 self.get_basic_type_op(to, ctx).unwrap(),
                 name,
             )
-        }else {
+        } else {
             self.builder.build_bitcast(
                 lv.into_pointer_value(),
                 self.get_basic_type_op(to, ctx).unwrap(),
@@ -629,7 +631,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         name: &str,
     ) -> ValueHandle {
         let lv = self.get_llvm_value(from).unwrap();
-        
+
         let re = self.builder.build_pointer_cast(
             lv.into_pointer_value(),
             self.get_basic_type_op(to, ctx).unwrap().into_pointer_type(),
@@ -832,7 +834,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     fn build_call(&self, f: ValueHandle, args: &[ValueHandle]) -> Option<ValueHandle> {
         let builder = self.builder;
         let f = self.get_llvm_value(f).unwrap();
-        let f = f.into_function_value();
+        let f: CallableValue = if f.is_function_value() {
+            f.into_function_value().into()
+        } else {
+            f.into_pointer_value().try_into().unwrap()
+        };
         let args = args
             .iter()
             .map(|v| {

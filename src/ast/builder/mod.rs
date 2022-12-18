@@ -21,13 +21,8 @@ use super::{
 
 #[enum_dispatch]
 pub trait IRBuilder<'a, 'ctx> {
-    fn bitcast(
-        &self,
-        ctx: &mut Ctx<'a>,
-        from: ValueHandle,
-        to: &PLType,
-        name: &str,
-    ) -> ValueHandle;
+    fn bitcast(&self, ctx: &mut Ctx<'a>, from: ValueHandle, to: &PLType, name: &str)
+        -> ValueHandle;
     fn pointer_cast(
         &self,
         ctx: &mut Ctx<'a>,

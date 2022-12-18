@@ -398,7 +398,7 @@ impl FmtBuilder {
         self.enter();
     }
     pub fn parse_func_call_node(&mut self, node: &FuncCallNode) {
-        node.id.format(self);
+        node.callee.format(self);
         if let Some(generic_params) = &node.generic_params {
             generic_params.format(self);
         }

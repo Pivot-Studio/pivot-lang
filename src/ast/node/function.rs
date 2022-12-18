@@ -17,7 +17,7 @@ use std::vec;
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncCallNode {
     pub generic_params: Option<Box<GenericParamNode>>,
-    pub id: Box<NodeEnum>,
+    pub callee: Box<NodeEnum>,
     pub paralist: Vec<Box<NodeEnum>>,
 }
 
@@ -27,7 +27,7 @@ impl PrintTrait for FuncCallNode {
         tab(tabs, line.clone(), end);
         println!("FuncCallNode");
         let mut i = self.paralist.len();
-        self.id.print(tabs + 1, false, line.clone());
+        self.callee.print(tabs + 1, false, line.clone());
         for para in &self.paralist {
             i -= 1;
             para.print(tabs + 1, i == 0, line.clone());
@@ -43,9 +43,9 @@ impl Node for FuncCallNode {
     ) -> NodeResult {
         // let currscope = ctx.discope;
         let mp = ctx.move_generic_types();
-        let id_range = self.id.range();
+        let id_range = self.callee.range();
         let mut para_values = Vec::new();
-        let (plvalue, pltype, _) = self.id.emit(ctx, builder)?;
+        let (plvalue, pltype, _) = self.callee.emit(ctx, builder)?;
         if pltype.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND)));
         }
@@ -72,11 +72,15 @@ impl Node for FuncCallNode {
             }
         }
         let mut skip = 0;
+        let mut function = None;
+
         if plvalue.is_some() {
-            if let Some(receiver) = plvalue.unwrap().receiver {
+            let v = plvalue.unwrap();
+            if let Some(receiver) = v.receiver {
                 para_values.push(receiver.into());
                 skip = 1;
             }
+            function = Some(v.value);
         }
         // funcvalue must use fntype to get a new one,can not use the return  plvalue of id node emit
         if fntype.param_pltypes.len() - skip as usize != self.paralist.len() {
@@ -140,7 +144,11 @@ impl Node for FuncCallNode {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER)));
             }
         }
-        let function = builder.get_or_insert_fn_handle(&fntype, ctx);
+        let function = if function.is_some() {
+            function.unwrap()
+        } else {
+            builder.get_or_insert_fn_handle(&fntype, ctx)
+        };
         if let Some(f) = ctx.function {
             builder.try_set_fn_dbg(self.range.start, f);
         };
@@ -221,6 +229,20 @@ impl TypeNode for FuncDefNode {
 }
 
 impl FuncDefNode {
+    pub fn gen_snippet(&self) -> String {
+        self.id.name.clone()
+            + "("
+            + &self
+                .paralist
+                .iter()
+                .skip_while(|v| v.id.name == "self")
+                .enumerate()
+                .map(|(i, v)| format!("${{{}:{}}}", i + 1, v.id.name))
+                .collect::<Vec<_>>()
+                .join(", ")
+            + ")$0"
+    }
+
     pub fn emit_pl_tp<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,

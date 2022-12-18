@@ -26,6 +26,7 @@ use inkwell::types::FunctionType;
 
 use inkwell::types::VoidType;
 
+use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::DocumentSymbol;
@@ -710,6 +711,32 @@ impl STType {
         let mut coms = self.get_field_completions();
         coms.extend(self.get_mthd_completions(ctx));
         coms
+    }
+    pub fn get_trait_completions<'a, 'ctx>(&self, ctx: &Ctx<'a>) -> Vec<CompletionItem> {
+        let mut coms = self.get_trait_field_completions();
+        coms.extend(self.get_mthd_completions(ctx));
+        coms
+    }
+    pub fn get_trait_field_completions<'a, 'ctx>(&self) -> Vec<CompletionItem> {
+        let mut completions = Vec::new();
+        for (name, f) in &self.fields {
+            if let TypeNodeEnum::FuncTypeNode(func) = &*f.typenode {
+                completions.push(CompletionItem {
+                    kind: Some(CompletionItemKind::METHOD),
+                    label: name.clone(),
+                    detail: Some("method".to_string()),
+                    insert_text: Some(func.gen_snippet()),
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                    command: Some(Command::new(
+                        "trigger help".to_string(),
+                        "editor.action.triggerParameterHints".to_string(),
+                        None,
+                    )),
+                    ..Default::default()
+                });
+            }
+        }
+        completions
     }
     pub fn find_method<'a, 'ctx>(&self, ctx: &Ctx<'a>, method: &str) -> Option<FNType> {
         ctx.plmod.find_method(&self.get_st_full_name(), method)
