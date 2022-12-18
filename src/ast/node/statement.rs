@@ -1,6 +1,5 @@
 use super::*;
 
-use crate::add_err_to_ctx_and_ret;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
@@ -51,8 +50,7 @@ impl Node for DefNode {
         let mut exptp = None;
         if let Some(tp) = &self.tp {
             tp.emit_highlight(ctx);
-            add_err_to_ctx_and_ret!(ctx, tp.get_type(ctx, builder), tp);
-            pltype = Some(tp);
+            pltype = Some(tp.get_type(ctx, builder)?);
         }
         if let Some(exp) = &mut self.exp {
             let (value, pltype_opt, _) =

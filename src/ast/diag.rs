@@ -112,7 +112,7 @@ define_warn! {
     UNREACHABLE_STATEMENT= "unreachable statement"
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DiagCode {
     Err(ErrorCode),
     Warn(WarnCode),
@@ -142,7 +142,7 @@ use super::{
 /// # PLDiag
 /// Diagnostic for pivot-lang
 #[range]
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct PLDiag {
     code: DiagCode,
     help: Option<Box<String>>,

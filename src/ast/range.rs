@@ -12,7 +12,7 @@ pub struct Pos {
     pub offset: usize, // 0based
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, PartialOrd)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, PartialOrd, Hash)]
 pub struct Range {
     pub start: Pos,
     pub end: Pos,

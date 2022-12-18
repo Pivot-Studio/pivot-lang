@@ -22,6 +22,7 @@ use inkwell::context::Context;
 use internal_macro::{fmt, range};
 use lsp_types::GotoDefinitionResponse;
 use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::fs::OpenOptions;
@@ -345,7 +346,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     log::info!("emit_file: {}", params.fullpath(db),);
     let context = &Context::create();
     let (a, b, c, d, e) = create_llvm_deps(context, params.dir(db), params.file(db));
-    let v = RefCell::new(Vec::new());
+    let v = RefCell::new(FxHashSet::default());
     let builder = LLVMBuilder::new(context, &a, &b, &c, &d, &e);
     let mut ctx = ctx::Ctx::new(
         params.fullpath(db),

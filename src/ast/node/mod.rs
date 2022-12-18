@@ -176,30 +176,6 @@ pub trait PrintTrait {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
 }
 
-#[macro_export]
-macro_rules! add_err_to_ctx_and_ret {
-    ($ctx:expr, $exp:expr, $re:ident) => {
-        let $re = $exp;
-        if let Err(diag) = $re {
-            diag.clone().add_to_ctx($ctx);
-            return Err(diag);
-        }
-        let $re = $re.unwrap();
-    };
-}
-#[macro_export]
-macro_rules! add_err_to_ctx {
-    ($ctx:expr, $exp:expr, $re:ident) => {
-        let $re = $exp;
-        let $re = if let Err(diag) = $re {
-            diag.clone().add_to_ctx($ctx);
-            Err(diag)
-        } else {
-            $re
-        };
-    };
-}
-
 // ANCHOR_END: node
 pub type NodeResult = Result<
     (

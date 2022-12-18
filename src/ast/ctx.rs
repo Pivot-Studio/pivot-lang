@@ -62,7 +62,7 @@ pub struct Ctx<'a> {
     pub continue_block: Option<BlockHandle>, // the block to jump when continue
     pub break_block: Option<BlockHandle>,    // the block to jump to when break
     pub return_block: Option<(BlockHandle, Option<ValueHandle>)>, // the block to jump to when return and value
-    pub errs: &'a RefCell<Vec<PLDiag>>,                           // diagnostic list
+    pub errs: &'a RefCell<FxHashSet<PLDiag>>,                     // diagnostic list
     pub edit_pos: Option<Pos>,                                    // lsp params
     pub table: FxHashMap<
         String,
@@ -82,7 +82,7 @@ pub struct Ctx<'a> {
 impl<'a, 'ctx> Ctx<'a> {
     pub fn new(
         src_file_path: &'a str,
-        errs: &'a RefCell<Vec<PLDiag>>,
+        errs: &'a RefCell<FxHashSet<PLDiag>>,
         edit_pos: Option<Pos>,
         config: Config,
         db: &'a dyn Db,
@@ -361,7 +361,7 @@ impl<'a, 'ctx> Ctx<'a> {
 
     pub fn add_diag(&self, dia: PLDiag) -> PLDiag {
         let dia2 = dia.clone();
-        self.errs.borrow_mut().push(dia);
+        self.errs.borrow_mut().insert(dia);
         dia2
     }
     // load type* to type

@@ -4,7 +4,7 @@ use super::{types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 use crate::ast::pltype::{eq, get_type_deep, FNType, PLType};
-use crate::{add_err_to_ctx_and_ret, plv};
+use crate::plv;
 use indexmap::IndexMap;
 use internal_macro::{comments, fmt, range};
 use lsp_types::SemanticTokenType;
@@ -438,8 +438,7 @@ impl FuncDefNode {
             let entry = builder.append_basic_block(funcvalue, "entry");
             let return_block = builder.append_basic_block(funcvalue, "return");
             child.position_at_end(return_block, builder);
-            add_err_to_ctx_and_ret!(child, fntype.ret_pltype.get_type(child, builder), rettp);
-            let ret_value_ptr = match &*rettp.borrow() {
+            let ret_value_ptr = match &*fntype.ret_pltype.get_type(child, builder)?.borrow() {
                 PLType::VOID => None,
                 _ => {
                     let pltype = self.ret.get_type(child, builder)?;
@@ -465,7 +464,7 @@ impl FuncDefNode {
             child.position_at_end(entry, builder);
             // alloc para
             for (i, para) in fntype.param_pltypes.iter().enumerate() {
-                add_err_to_ctx_and_ret!(child, para.get_type(child, builder), tp);
+                let tp = para.get_type(child, builder)?;
                 let b = tp.clone();
                 let basetype = b.borrow();
                 let alloca = builder.alloc(&fntype.param_names[i], &basetype, child);
