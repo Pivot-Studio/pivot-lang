@@ -5,6 +5,8 @@ on:
     - '**.rs'
     - '**/Cargo.*'
     - '.github/workflows/**.yml'
+    - '**.pi'
+    - '**/Kagari.*'
   push:
     branches:
       - "master"

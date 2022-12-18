@@ -299,19 +299,6 @@ impl Node for TakeOpNode {
                     let is_trait = matches!(&*pltype.borrow(), PLType::TRAIT(_));
                     match &*pltype.clone().borrow() {
                         PLType::STRUCT(s) | PLType::TRAIT(s) => {
-                            // // end with ".", gen completions
-                            // ctx.if_completion(id.range, || {
-                            //     match  &*pltype.clone().borrow() {
-                            //         PLType::STRUCT(s) => {
-                            //             s.get_completions(ctx)
-                            //         },
-                            //         PLType::TRAIT(s) => {
-                            //             s.get_trait_completions(ctx)
-                            //         },
-                            //         _ => vec![]
-                            //     }
-                            // });
-
                             let field = s.fields.get(&id.name);
                             let method = s.find_method(&ctx, &id.name);
                             if let Some(field) = field {

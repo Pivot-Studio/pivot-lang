@@ -1,5 +1,8 @@
 use super::*;
-use crate::ast::{ctx::Ctx, tokens::TokenType};
+use crate::{
+    add_err_to_ctx_and_ret,
+    ast::{ctx::Ctx, tokens::TokenType},
+};
 use internal_macro::{comments, fmt, range};
 use lsp_types::{DocumentSymbol, SymbolKind};
 use rustc_hash::FxHashSet;
@@ -49,7 +52,8 @@ impl Node for ImplNode {
         }
         self.target.emit_highlight(ctx);
         let mut method_docsymbols = vec![];
-        let tp = self.target.get_type(ctx, builder)?;
+        add_err_to_ctx_and_ret!(ctx, self.target.get_type(ctx, builder), tp);
+
         match &mut *tp.borrow_mut() {
             PLType::STRUCT(sttp) => {
                 if let Some((t, _)) = &self.impl_trait {

@@ -3,7 +3,7 @@
 // Hover to view descriptions of existing attributes.
 // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
 {
-	"version": "0.2.0",
+    "version": "0.2.0",
     "configurations": [
         {
             "type": "lldb",
@@ -17,7 +17,21 @@
             "args": [
                 "test/main.pi",
                 // "-O1"
-        ]
+            ]
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "debug compile lsp test",
+            "cargo": {
+                "args": [
+                    "build"
+                ]
+            },
+            "args": [
+                "test/lsp/test_completion.pi",
+                // "-O1"
+            ]
         },
         {
             "type": "lldb",
@@ -28,7 +42,10 @@
                     "build"
                 ]
             },
-            "args": ["run","out.bc"]
+            "args": [
+                "run",
+                "out.bc"
+            ]
         },
         {
             "type": "lldb",
@@ -56,6 +73,5 @@
             "cwd": "${workspaceFolder}",
             "environment": [],
         }
-
     ]
 }

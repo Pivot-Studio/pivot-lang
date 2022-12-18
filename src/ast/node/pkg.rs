@@ -219,7 +219,7 @@ impl ExternIdNode {
                 }
                 ctx.get_completions_in_ns(&self.id.name)
             });
-            return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION)));
+            return Err(self.range.new_err(ErrorCode::COMPLETION).clone());
         }
         let mut plmod = &ctx.plmod;
         for ns in self.ns.iter() {
@@ -237,6 +237,6 @@ impl ExternIdNode {
             };
             return re;
         }
-        Err(ctx.add_diag(self.range.new_err(ErrorCode::SYMBOL_NOT_FOUND)))
+        Err(self.range.new_err(ErrorCode::SYMBOL_NOT_FOUND).clone())
     }
 }

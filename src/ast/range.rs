@@ -95,12 +95,12 @@ impl Range {
         Range {
             start: Pos {
                 line: start.location_line() as usize,
-                column: start.get_column(),
+                column: start.get_utf8_column(),
                 offset: start.location_offset(),
             },
             end: Pos {
                 line: end.location_line() as usize,
-                column: end.get_column(),
+                column: end.get_utf8_column(),
                 offset: end.location_offset(),
             },
         }

@@ -166,6 +166,7 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                         } else {
                             let mut end = res.range().end;
                             end.column = end.column + 1;
+                            end.offset = end.offset + 1;
                             range = res.range().start.to(end);
                         }
                         Box::new(

@@ -134,7 +134,10 @@ impl Display for DiagCode {
 
 use lsp_types::{Diagnostic, DiagnosticSeverity};
 
-use super::{ctx::Ctx, range::Range};
+use super::{
+    ctx::Ctx,
+    range::{Pos, Range},
+};
 
 /// # PLDiag
 /// Diagnostic for pivot-lang
@@ -148,20 +151,37 @@ pub struct PLDiag {
 
 const PL_DIAG_SOURCE: &str = "plsp";
 
+impl Pos {
+    pub fn utf8_offset(&self, doc: &Source) -> usize {
+        doc.line(self.line - 1).unwrap().offset() + self.column - 1
+    }
+}
+
 impl PLDiag {
-    pub fn print(&self, path: &str, doc: &str) {
+    pub fn print(&self, path: &str, doc: Source) {
+        if self.code == DiagCode::Err(ErrorCode::COMPLETION) {
+            println!()
+        }
         let mut colors = ColorGenerator::new();
 
-        let mut rb = Report::build(self.get_report_kind(), path, self.range.start.offset)
-            .with_code(self.code)
-            .with_message(self.get_msg());
+        let mut rb = Report::build(
+            self.get_report_kind(),
+            path,
+            self.range.start.utf8_offset(&doc),
+        )
+        .with_code(self.code)
+        .with_message(self.get_msg());
         let mut labels = vec![];
         if self.labels.len() == 0 {
             labels.push((self.range, Some(("here".to_string(), vec![]))));
         }
+
         for (range, txt) in labels.iter().chain(self.labels.iter()) {
             let color = colors.next();
-            let mut lab = Label::new((path, range.start.offset..range.end.offset));
+            let mut lab = Label::new((
+                path,
+                range.start.utf8_offset(&doc)..range.end.utf8_offset(&doc),
+            ));
             if let Some((tpl, args)) = txt {
                 let mut msg = tpl.clone();
                 msg = msg.format(
@@ -178,7 +198,7 @@ impl PLDiag {
             rb = rb.with_help(help);
         }
         let r = rb.finish();
-        r.eprint((path, Source::from(doc))).unwrap();
+        r.eprint((path, doc)).unwrap();
     }
     fn get_report_kind(&self) -> ReportKind {
         match self.code {

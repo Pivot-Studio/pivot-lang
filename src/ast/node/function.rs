@@ -4,7 +4,7 @@ use super::{types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 use crate::ast::pltype::{eq, get_type_deep, FNType, PLType};
-use crate::plv;
+use crate::{add_err_to_ctx_and_ret, plv};
 use indexmap::IndexMap;
 use internal_macro::{comments, fmt, range};
 use lsp_types::SemanticTokenType;
@@ -154,6 +154,7 @@ impl Node for FuncCallNode {
         };
         let ret = builder.build_call(function, &para_values);
         ctx.save_if_comment_doc_hover(id_range, Some(fntype.doc.clone()));
+        let rettp = fntype.ret_pltype.get_type(ctx, builder)?;
         let res = match ret {
             Some(v) => Ok((
                 {
@@ -163,18 +164,14 @@ impl Node for FuncCallNode {
                     Some(plv!(ptr))
                 },
                 Some({
-                    match &*fntype.ret_pltype.get_type(ctx, builder)?.borrow() {
+                    match &*rettp.clone().borrow() {
                         PLType::GENERIC(g) => g.curpltype.as_ref().unwrap().clone(),
-                        _ => fntype.ret_pltype.get_type(ctx, builder)?,
+                        _ => rettp,
                     }
                 }),
                 TerminatorEnum::NONE,
             )),
-            None => Ok((
-                None,
-                Some(fntype.ret_pltype.get_type(ctx, builder)?),
-                TerminatorEnum::NONE,
-            )),
+            None => Ok((None, Some(rettp), TerminatorEnum::NONE)),
         };
         ctx.set_if_refs_tp(pltype.clone(), id_range);
         ctx.reset_generic_types(mp);
@@ -441,7 +438,8 @@ impl FuncDefNode {
             let entry = builder.append_basic_block(funcvalue, "entry");
             let return_block = builder.append_basic_block(funcvalue, "return");
             child.position_at_end(return_block, builder);
-            let ret_value_ptr = match &*fntype.ret_pltype.get_type(child, builder)?.borrow() {
+            add_err_to_ctx_and_ret!(child, fntype.ret_pltype.get_type(child, builder), rettp);
+            let ret_value_ptr = match &*rettp.borrow() {
                 PLType::VOID => None,
                 _ => {
                     let pltype = self.ret.get_type(child, builder)?;
@@ -467,8 +465,9 @@ impl FuncDefNode {
             child.position_at_end(entry, builder);
             // alloc para
             for (i, para) in fntype.param_pltypes.iter().enumerate() {
-                let tp = para.get_type(child, builder)?;
-                let basetype = tp.borrow();
+                add_err_to_ctx_and_ret!(child, para.get_type(child, builder), tp);
+                let b = tp.clone();
+                let basetype = b.borrow();
                 let alloca = builder.alloc(&fntype.param_names[i], &basetype, child);
                 // add alloc var debug info
                 builder.create_parameter_variable(
@@ -480,7 +479,7 @@ impl FuncDefNode {
                     alloca,
                     allocab,
                 );
-                let parapltype = para.get_type(child, builder)?.clone();
+                let parapltype = tp;
                 child
                     .add_symbol(
                         fntype.param_names[i].clone(),

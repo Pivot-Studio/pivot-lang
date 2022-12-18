@@ -203,7 +203,11 @@ impl Program {
                 params.action(db) == ActionType::Compile,
             ),
             modmap,
-            self.docs(db).get_file_content(db).unwrap().text(db).clone(),
+            self.docs(db)
+                .get_current_file_content(db)
+                .unwrap()
+                .text(db)
+                .clone(),
         );
 
         let nn = p.node(db).node(db);

@@ -4,6 +4,8 @@ use std::rc::Rc;
 use super::primary::VarNode;
 use super::*;
 
+use crate::add_err_to_ctx;
+use crate::add_err_to_ctx_and_ret;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
@@ -78,7 +80,7 @@ impl TypeNode for TypeNameNode {
     ) -> TypeNodeResult {
         if self.id.is_none() {
             ctx.if_completion(self.range, || ctx.get_type_completions());
-            return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_TYPE)));
+            return Err(self.range.new_err(ErrorCode::EXPECT_TYPE));
         }
         let (_, pltype, _) = self.id.as_ref().unwrap().get_type(&ctx)?;
         ctx.if_completion(self.range, || ctx.get_type_completions());
@@ -375,12 +377,9 @@ impl Node for StructDefNode {
         if let Some(generics) = &mut self.generics {
             generics.emit(ctx, builder)?;
         }
-        for (field, has_semi) in self.fields.iter() {
+        for (field, _) in self.fields.iter() {
             ctx.push_semantic_token(field.id.range, SemanticTokenType::PROPERTY, 0);
             field.typenode.emit_highlight(ctx);
-            if !has_semi {
-                ctx.add_diag(field.range.new_err(ErrorCode::COMPLETION));
-            }
             if let Some(doc) = &field.doc {
                 ctx.push_semantic_token(doc.range, SemanticTokenType::COMMENT, 0);
             }
@@ -448,11 +447,13 @@ impl StructDefNode {
                 range: field.range,
                 refs: Rc::new(RefCell::new(vec![])),
             };
-            let tpre = field.typenode.get_type(ctx, builder);
+            // ANCHOR: helper_macro2
+            add_err_to_ctx!(ctx, field.typenode.get_type(ctx, builder), tpre);
             if tpre.is_err() {
                 continue;
             }
             let tp = tpre.unwrap();
+            // ANCHOR_END: helper_macro2
             match &*tp.borrow() {
                 PLType::STRUCT(sttp) => {
                     ctx.send_if_go_to_def(field.typenode.range(), sttp.range, sttp.path.clone());
@@ -550,12 +551,14 @@ impl Node for StructInitNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         self.typename.emit_highlight(ctx);
-        let pltype = self.typename.get_type(ctx, builder)?;
+        // ANCHOR: helper_macro1
+        add_err_to_ctx_and_ret!(ctx, self.typename.get_type(ctx, builder), pltype);
         ctx.set_if_refs_tp(pltype.clone(), self.typename.range());
         let mut sttype = match &mut *pltype.clone().borrow_mut() {
             PLType::STRUCT(s) => s.clone(),
             _ => unreachable!(),
         };
+        // ANCHOR_END: helper_macro1
         ctx.send_if_go_to_def(self.typename.range(), sttype.range, sttype.path.clone());
         let mp = ctx.move_generic_types();
         sttype.clear_generic();
