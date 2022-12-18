@@ -13,7 +13,7 @@ pub struct RetNode {
     pub value: Option<Box<NodeEnum>>,
 }
 
-impl Node for RetNode {
+impl PrintTrait for RetNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -22,6 +22,9 @@ impl Node for RetNode {
             value.print(tabs + 1, true, line.clone());
         }
     }
+}
+
+impl Node for RetNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,

@@ -15,6 +15,7 @@ use self::error::*;
 use self::function::*;
 use self::global::*;
 use self::implement::ImplNode;
+use self::interface::TraitDefNode;
 use self::operator::*;
 use self::pkg::{ExternIdNode, UseNode};
 use self::pointer::PointerOpNode;
@@ -37,6 +38,7 @@ pub mod error;
 pub mod function;
 pub mod global;
 pub mod implement;
+pub mod interface;
 pub mod operator;
 pub mod pkg;
 pub mod pointer;
@@ -81,15 +83,15 @@ macro_rules! plv {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[enum_dispatch(TypeNode, RangeTrait, FmtTrait)]
+#[enum_dispatch(TypeNode, RangeTrait, FmtTrait, PrintTrait)]
 pub enum TypeNodeEnum {
     BasicTypeNode(TypeNameNode),
     ArrayTypeNode(ArrayTypeNameNode),
     PointerTypeNode(PointerTypeNode),
+    FuncTypeNode(FuncDefNode),
 }
 #[enum_dispatch]
-pub trait TypeNode: RangeTrait + FmtTrait {
-    fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
+pub trait TypeNode: RangeTrait + FmtTrait + PrintTrait {
     /// 重要：这个函数不要干lsp相关操作，只用来获取type
     fn get_type<'a, 'ctx, 'b>(
         &self,
@@ -107,7 +109,7 @@ pub trait TypeNode: RangeTrait + FmtTrait {
 type TypeNodeResult = Result<Rc<RefCell<PLType>>, PLDiag>;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-#[enum_dispatch(Node, RangeTrait, FmtTrait)]
+#[enum_dispatch(Node, RangeTrait, FmtTrait, PrintTrait)]
 pub enum NodeEnum {
     Def(DefNode),
     Ret(RetNode),
@@ -143,6 +145,7 @@ pub enum NodeEnum {
     ParanthesesNode(ParanthesesNode),
     ImplNode(ImplNode),
     StringNode(StringNode),
+    TraitDefNode(TraitDefNode),
 }
 // ANCHOR: range
 #[enum_dispatch]
@@ -160,14 +163,19 @@ pub trait FmtTrait {
 
 // ANCHOR: node
 #[enum_dispatch]
-pub trait Node: RangeTrait + FmtTrait {
-    fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
+pub trait Node: RangeTrait + FmtTrait + PrintTrait {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult;
 }
+
+#[enum_dispatch]
+pub trait PrintTrait {
+    fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
+}
+
 // ANCHOR_END: node
 pub type NodeResult = Result<
     (
@@ -183,15 +191,6 @@ pub struct PLValue {
     pub receiver: Option<ValueHandle>,
 }
 impl PLValue {
-    // pub fn into_pointer_value(&self) -> PointerValue<'ctx> {
-    //     self.value.into_pointer_value()
-    // }
-    // pub fn into_int_value(&self) -> IntValue<'ctx> {
-    //     self.value.into_int_value()
-    // }
-    // pub fn into_function_value(&self) -> FunctionValue<'ctx> {
-    //     self.value.into_function_value()
-    // }
     pub fn set_const(&mut self, is_const: bool) {
         self.is_const = is_const;
     }
@@ -230,6 +229,7 @@ impl<'a, 'ctx> Ctx<'a> {
             self.push_semantic_token(com.range(), SemanticTokenType::COMMENT, 0);
         }
     }
+
     fn emit_with_expectation<'b>(
         &'b mut self,
         node: &mut Box<NodeEnum>,
@@ -328,6 +328,76 @@ impl<'a, 'ctx> Ctx<'a> {
         if value.is_some() {
             if let Some(ty) = ty.clone() {
                 if ty != expect {
+                    let derefed = self.auto_deref_tp(ty.clone());
+                    match (&*expect.clone().borrow(), &*derefed.borrow()) {
+                        (PLType::TRAIT(t), PLType::STRUCT(st)) => {
+                            let handle = builder.alloc("tmp_traitv", &expect.borrow(), self);
+                            if st
+                                .impls
+                                .iter()
+                                .find(|i| {
+                                    let ty1: &PLType = &i.borrow();
+                                    let ty2: &PLType = &expect.borrow();
+                                    ty1 == ty2
+                                })
+                                .is_none()
+                            {
+                                return Err(mismatch_err!(
+                                    self,
+                                    range,
+                                    expectrange,
+                                    expect.borrow(),
+                                    ty.borrow()
+                                ));
+                            }
+                            for (name, f) in &t.fields {
+                                let mthd = st.find_method(self, name);
+                                if mthd.is_none() {
+                                    return Err(mismatch_err!(
+                                        self,
+                                        range,
+                                        expectrange,
+                                        expect.borrow(),
+                                        ty.borrow()
+                                    ));
+                                }
+                                let mthd = mthd.unwrap();
+                                let fnhandle = builder.get_or_insert_fn_handle(&mthd, self);
+                                let targetftp = f.typenode.get_type(self, builder).unwrap();
+                                let casted = builder.bitcast(
+                                    self,
+                                    fnhandle,
+                                    &targetftp.borrow(),
+                                    "fncast_tmp",
+                                );
+                                let f_ptr = builder
+                                    .build_struct_gep(handle, f.index, "field_tmp")
+                                    .unwrap();
+                                builder.build_store(f_ptr, casted);
+                            }
+                            let (_, v) = self.auto_deref(ty.clone(), value.unwrap().value, builder);
+                            let v = builder.bitcast(
+                                self,
+                                v,
+                                &PLType::POINTER(Rc::new(RefCell::new(PLType::PRIMITIVE(
+                                    PriType::I64,
+                                )))),
+                                "traitcast_tmp",
+                            );
+                            let v_ptr = builder.build_struct_gep(handle, 1, "v_tmp").unwrap();
+                            builder.build_store(v_ptr, v);
+                            return Ok((
+                                Some(PLValue {
+                                    value: handle,
+                                    is_const: true,
+                                    receiver: None,
+                                }),
+                                Some(expect),
+                                term,
+                            ));
+                        }
+                        _ => (),
+                    };
                     return Err(mismatch_err!(
                         self,
                         range,

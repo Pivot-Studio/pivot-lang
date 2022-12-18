@@ -4,8 +4,8 @@ use nom::{
     sequence::{preceded, tuple},
     IResult,
 };
-use nom_locate::LocatedSpan;
-type Span<'a> = LocatedSpan<&'a str>;
+
+use crate::nomparser::Span;
 use crate::{ast::diag::ErrorCode, ast::range::Range, ast::tokens::TokenType};
 use internal_macro::{test_parser, test_parser_error};
 
@@ -38,6 +38,13 @@ use super::*;
     a = 4;
 }"
 )]
+#[test_parser(
+    r#"if judge {
+        
+} else {
+    return;
+}"#
+)]
 /// ```ebnf
 /// if_statement = "if" logic_exp statement_block ("else" (if_statement | statement_block))? ;
 /// ```
@@ -45,7 +52,7 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
             tag_token(TokenType::IF),
-            logic_exp,
+            parse_with_ex(logic_exp, true),
             statement_block,
             opt(delspace(comment)),
             opt(preceded(

@@ -1,10 +1,9 @@
-use nom_locate::LocatedSpan;
-type Span<'a> = LocatedSpan<&'a str>;
 use crate::{
     ast::node::*,
     ast::node::{
         function::FuncDefNode,
         global::GlobalNode,
+        interface::TraitDefNode,
         types::{GenericParamNode, StructDefNode},
     },
     ast::{
@@ -15,6 +14,14 @@ use crate::{
     },
     Db,
 };
+use nom_locate::LocatedSpan;
+/// extra为布尔类型，代表是否跳过struct init等可能造成if语句条件二义性的parser
+/// 由于我们的if不需要括号，所以如果允许这些表达式将会出现以下情况：
+/// ```pl
+/// if A{}
+/// ```
+/// 这个时候如果不特殊处理，将无法知道`A{}`整体是个struct init，还是`A`是个变量
+pub type Span<'a> = LocatedSpan<&'a str, bool>;
 
 use self::{
     array::*,
@@ -60,6 +67,7 @@ pub enum TopLevel {
     Common(Box<NodeEnum>),
     Use(Box<NodeEnum>),
     ImplDef(ImplNode),
+    TraitDef(TraitDefNode),
 }
 
 #[derive(Clone)]
@@ -81,7 +89,7 @@ pub struct SourceProgram {
 #[salsa::tracked(lru = 32)]
 pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, String> {
     let text = source.text(db);
-    let re = program(Span::new(text));
+    let re = program(Span::new_extra(text, false));
     if let Err(e) = re {
         return Err(format!("{:?}", e));
     }

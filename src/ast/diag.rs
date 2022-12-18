@@ -75,7 +75,7 @@ define_error!(
     ARRAY_INDEX_OUT_OF_BOUNDS = "array index out of bounds",
     NEEDED_INDEX_FOR_ARRAY_ELEMENT_ACCESS = "needed index for array element access",
     SIZE_MUST_BE_INT = "size must be int",
-    TYPE_MISMATCH = "mismatch",
+    TYPE_MISMATCH = "type mismatch",
     ILLEGAL_GET_FIELD_OPERATION = "illegal get field operation",
     NOT_A_POINTER = "not a pointer",
     CAN_NOT_REF_CONSTANT = "can not ref constant",
@@ -83,7 +83,10 @@ define_error!(
     GENERIC_CANNOT_BE_INFER = "generic can not be infer",
     DUPLICATE_METHOD = "duplicate method",
     GENERIC_PARAM_LEN_MISMATCH = "generic param len mismatch",
-    NOT_GENERIC_TYPE = "not generic type"
+    NOT_GENERIC_TYPE = "not generic type",
+    EXPECT_TRAIT_TYPE = "expect trait type",
+    METHOD_NOT_IN_TRAIT = "method not in trait def",
+    METHOD_NOT_IN_IMPL = "method required in trait not found in impl block"
 );
 macro_rules! define_warn {
     ($(
@@ -109,7 +112,7 @@ define_warn! {
     UNREACHABLE_STATEMENT= "unreachable statement"
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DiagCode {
     Err(ErrorCode),
     Warn(WarnCode),
@@ -131,12 +134,15 @@ impl Display for DiagCode {
 
 use lsp_types::{Diagnostic, DiagnosticSeverity};
 
-use super::{ctx::Ctx, range::Range};
+use super::{
+    ctx::Ctx,
+    range::{Pos, Range},
+};
 
 /// # PLDiag
 /// Diagnostic for pivot-lang
 #[range]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct PLDiag {
     code: DiagCode,
     help: Option<Box<String>>,
@@ -145,20 +151,37 @@ pub struct PLDiag {
 
 const PL_DIAG_SOURCE: &str = "plsp";
 
+impl Pos {
+    pub fn utf8_offset(&self, doc: &Source) -> usize {
+        doc.line(self.line - 1).unwrap().offset() + self.column - 1
+    }
+}
+
 impl PLDiag {
-    pub fn print(&self, path: &str, doc: &str) {
+    pub fn print(&self, path: &str, doc: Source) {
+        if self.code == DiagCode::Err(ErrorCode::COMPLETION) {
+            println!()
+        }
         let mut colors = ColorGenerator::new();
 
-        let mut rb = Report::build(self.get_report_kind(), path, self.range.start.offset)
-            .with_code(self.code)
-            .with_message(self.get_msg());
+        let mut rb = Report::build(
+            self.get_report_kind(),
+            path,
+            self.range.start.utf8_offset(&doc),
+        )
+        .with_code(self.code)
+        .with_message(self.get_msg());
         let mut labels = vec![];
         if self.labels.len() == 0 {
             labels.push((self.range, Some(("here".to_string(), vec![]))));
         }
+
         for (range, txt) in labels.iter().chain(self.labels.iter()) {
             let color = colors.next();
-            let mut lab = Label::new((path, range.start.offset..range.end.offset));
+            let mut lab = Label::new((
+                path,
+                range.start.utf8_offset(&doc)..range.end.utf8_offset(&doc),
+            ));
             if let Some((tpl, args)) = txt {
                 let mut msg = tpl.clone();
                 msg = msg.format(
@@ -175,7 +198,7 @@ impl PLDiag {
             rb = rb.with_help(help);
         }
         let r = rb.finish();
-        r.eprint((path, Source::from(doc))).unwrap();
+        r.eprint((path, doc)).unwrap();
     }
     fn get_report_kind(&self) -> ReportKind {
         match self.code {

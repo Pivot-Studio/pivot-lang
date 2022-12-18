@@ -22,6 +22,7 @@ use inkwell::context::Context;
 use internal_macro::{fmt, range};
 use lsp_types::GotoDefinitionResponse;
 use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::fs::OpenOptions;
@@ -40,8 +41,10 @@ pub struct ProgramNode {
     pub fntypes: Vec<FuncDefNode>,
     pub globaldefs: Vec<GlobalNode>,
     pub uses: Vec<Box<NodeEnum>>,
+    pub traits: Vec<TraitDefNode>,
 }
-impl Node for ProgramNode {
+
+impl PrintTrait for ProgramNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         println!("ProgramNode");
@@ -51,6 +54,9 @@ impl Node for ProgramNode {
             statement.print(tabs, i == 0, line.clone());
         }
     }
+}
+
+impl Node for ProgramNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -61,8 +67,15 @@ impl Node for ProgramNode {
             // 提前加入占位符号，解决自引用问题
             def.add_to_symbols(ctx, builder);
         }
+        for def in self.traits.iter() {
+            // 提前加入占位符号，解决自引用问题
+            def.add_to_symbols(ctx, builder);
+        }
         for def in self.structs.iter_mut() {
             _ = def.emit_struct_def(ctx, builder);
+        }
+        for def in self.traits.iter_mut() {
+            _ = def.emit_trait_def(ctx, builder);
         }
         self.fntypes.iter_mut().for_each(|x| {
             _ = x.emit_func_def(ctx, builder);
@@ -191,7 +204,11 @@ impl Program {
                 params.action(db) == ActionType::Compile,
             ),
             modmap,
-            self.docs(db).get_file_content(db).unwrap().text(db).clone(),
+            self.docs(db)
+                .get_current_file_content(db)
+                .unwrap()
+                .text(db)
+                .clone(),
         );
 
         let nn = p.node(db).node(db);
@@ -329,7 +346,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     log::info!("emit_file: {}", params.fullpath(db),);
     let context = &Context::create();
     let (a, b, c, d, e) = create_llvm_deps(context, params.dir(db), params.file(db));
-    let v = RefCell::new(Vec::new());
+    let v = RefCell::new(FxHashSet::default());
     let builder = LLVMBuilder::new(context, &a, &b, &c, &d, &e);
     let mut ctx = ctx::Ctx::new(
         params.fullpath(db),

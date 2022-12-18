@@ -38,5 +38,5 @@ struct a {
     m:mod::
     o:mod::name
 }
-
 use test::mod2;
+use test::trait1;

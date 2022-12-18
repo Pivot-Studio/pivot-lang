@@ -21,6 +21,15 @@ use super::{
 
 #[enum_dispatch]
 pub trait IRBuilder<'a, 'ctx> {
+    fn bitcast(&self, ctx: &mut Ctx<'a>, from: ValueHandle, to: &PLType, name: &str)
+        -> ValueHandle;
+    fn pointer_cast(
+        &self,
+        ctx: &mut Ctx<'a>,
+        from: ValueHandle,
+        to: &PLType,
+        name: &str,
+    ) -> ValueHandle;
     fn get_global_var_handle(&self, name: &str) -> Option<ValueHandle>;
     fn new_subscope(&self, start: Pos);
     fn add_global(

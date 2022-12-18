@@ -16,7 +16,8 @@ pub struct DefNode {
     pub tp: Option<Box<TypeNodeEnum>>,
     pub exp: Option<Box<NodeEnum>>,
 }
-impl Node for DefNode {
+
+impl PrintTrait for DefNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -31,6 +32,9 @@ impl Node for DefNode {
                 .print(tabs + 1, true, line.clone());
         }
     }
+}
+
+impl Node for DefNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -100,7 +104,8 @@ pub struct AssignNode {
     pub var: Box<NodeEnum>,
     pub exp: Box<NodeEnum>,
 }
-impl Node for AssignNode {
+
+impl PrintTrait for AssignNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -108,6 +113,9 @@ impl Node for AssignNode {
         self.var.print(tabs + 1, false, line.clone());
         self.exp.print(tabs + 1, true, line.clone());
     }
+}
+
+impl Node for AssignNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -115,10 +123,11 @@ impl Node for AssignNode {
     ) -> NodeResult {
         let exp_range = self.exp.range();
         let (ptr, lpltype, _) = self.var.emit(ctx, builder)?;
-        let (value, rpltype, _) = self.exp.emit(ctx, builder)?;
-        if lpltype != rpltype {
-            return Err(ctx.add_diag(self.range.new_err(ErrorCode::ASSIGN_TYPE_MISMATCH)));
+        if lpltype.is_none() {
+            return Err(ctx.add_diag(self.var.range().new_err(ErrorCode::NOT_ASSIGNABLE)));
         }
+        let (value, rpltype, _) =
+            ctx.emit_with_expectation(&mut self.exp, lpltype, self.var.range(), builder)?;
         if ptr.as_ref().unwrap().is_const {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::ASSIGN_CONST)));
         }
@@ -134,12 +143,15 @@ impl Node for AssignNode {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct EmptyNode {}
 
-impl Node for EmptyNode {
+impl PrintTrait for EmptyNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("EmptyNode");
     }
+}
+
+impl Node for EmptyNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -156,7 +168,8 @@ impl Node for EmptyNode {
 pub struct StatementsNode {
     pub statements: Vec<Box<NodeEnum>>,
 }
-impl Node for StatementsNode {
+
+impl PrintTrait for StatementsNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -167,6 +180,9 @@ impl Node for StatementsNode {
             statement.print(tabs + 1, i == 0, line.clone());
         }
     }
+}
+
+impl Node for StatementsNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,

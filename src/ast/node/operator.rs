@@ -24,8 +24,8 @@ pub struct UnaryOpNode {
     pub op: (TokenType, Range),
     pub exp: Box<NodeEnum>,
 }
-// 单目运算符
-impl Node for UnaryOpNode {
+
+impl PrintTrait for UnaryOpNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -34,6 +34,10 @@ impl Node for UnaryOpNode {
         println!("{:?}", self.op);
         self.exp.print(tabs + 1, true, line.clone());
     }
+}
+
+// 单目运算符
+impl Node for UnaryOpNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -95,7 +99,8 @@ pub struct BinOpNode {
     pub op: (TokenType, Range),
     pub right: Box<NodeEnum>,
 }
-impl Node for BinOpNode {
+
+impl PrintTrait for BinOpNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -105,6 +110,9 @@ impl Node for BinOpNode {
         println!("{:?}", self.op);
         self.right.print(tabs + 1, true, line.clone());
     }
+}
+
+impl Node for BinOpNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -255,7 +263,7 @@ pub struct TakeOpNode {
     pub field: Option<Box<VarNode>>,
 }
 
-impl Node for TakeOpNode {
+impl PrintTrait for TakeOpNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -266,6 +274,9 @@ impl Node for TakeOpNode {
             id.print(tabs + 1, true, line.clone());
         }
     }
+}
+
+impl Node for TakeOpNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -279,29 +290,50 @@ impl Node for TakeOpNode {
         let mut pltype = pltype.unwrap();
         if let Some(id) = &self.field {
             res = match &*pltype.clone().borrow() {
-                PLType::STRUCT(_) | PLType::POINTER(_) => {
+                PLType::STRUCT(_) | PLType::POINTER(_) | PLType::TRAIT(_) => {
                     let (tp, s) = ctx.auto_deref(pltype, res.unwrap().value, builder);
                     let headptr = s;
                     pltype = tp;
-                    let etype = pltype.clone();
                     let index;
-                    if let PLType::STRUCT(_s) = &*etype.borrow() {
-                        // end with ".", gen completions
-                        ctx.if_completion(id.range, || {
-                            if let PLType::STRUCT(s) = &*pltype.clone().borrow() {
-                                return s.get_completions(ctx);
-                            }
-                            vec![]
-                        });
-                        let range = id.range();
-                        if let PLType::STRUCT(s) = &*pltype.clone().borrow() {
+                    let range = id.range();
+                    let is_trait = matches!(&*pltype.borrow(), PLType::TRAIT(_));
+                    match &*pltype.clone().borrow() {
+                        PLType::STRUCT(s) | PLType::TRAIT(s) => {
                             let field = s.fields.get(&id.name);
                             let method = s.find_method(&ctx, &id.name);
                             if let Some(field) = field {
-                                ctx.push_semantic_token(range, SemanticTokenType::PROPERTY, 0);
+                                ctx.push_semantic_token(
+                                    range,
+                                    if is_trait {
+                                        SemanticTokenType::METHOD
+                                    } else {
+                                        SemanticTokenType::PROPERTY
+                                    },
+                                    0,
+                                );
                                 index = field.index;
                                 ctx.set_if_refs(field.refs.clone(), range);
                                 ctx.send_if_go_to_def(range, field.range, s.path.clone());
+
+                                if is_trait {
+                                    let re = field.typenode.get_type(ctx, builder)?;
+                                    let fnv = builder
+                                        .build_struct_gep(headptr, field.index, "mthd_ptr")
+                                        .unwrap();
+                                    let fnv = builder.build_load(fnv, "mthd_ptr_load");
+                                    let headptr =
+                                        builder.build_struct_gep(headptr, 1, "traitptr").unwrap();
+                                    let headptr = builder.build_load(headptr, "traitptr_load");
+                                    return Ok((
+                                        Some(PLValue {
+                                            value: fnv,
+                                            is_const: false,
+                                            receiver: Some(headptr),
+                                        }),
+                                        Some(re),
+                                        TerminatorEnum::NONE,
+                                    ));
+                                }
                                 pltype = field.typenode.get_type(ctx, builder)?.clone();
                             } else if let Some(mthd) = method {
                                 ctx.push_semantic_token(range, SemanticTokenType::METHOD, 0);
@@ -327,11 +359,10 @@ impl Node for TakeOpNode {
                                     id.range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND),
                                 ));
                             }
-                        } else {
-                            unreachable!()
                         }
-                    } else {
-                        return Err(ctx.add_diag(id.range.new_err(ErrorCode::INVALID_GET_FIELD)));
+                        _ => {
+                            return Err(ctx.add_diag(id.range.new_err(ErrorCode::INVALID_GET_FIELD)))
+                        }
                     }
                     Some(plv!(builder
                         .build_struct_gep(s, index, "structgep")
@@ -347,11 +378,10 @@ impl Node for TakeOpNode {
         if self.field.is_none() {
             // end with ".", gen completions
             let tp = ctx.auto_deref_tp(pltype);
-            ctx.if_completion(self.range, || {
-                if let PLType::STRUCT(s) = &*tp.borrow() {
-                    return s.get_completions(&ctx);
-                }
-                vec![]
+            ctx.if_completion(self.range, || match &*tp.clone().borrow() {
+                PLType::STRUCT(s) => s.get_completions(ctx),
+                PLType::TRAIT(s) => s.get_trait_completions(ctx),
+                _ => vec![],
             });
             return Err(ctx.add_diag(self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION)));
         }

@@ -168,4 +168,6 @@ use_statement = "use" identifier ("::" identifier)* ";" ;
 
 string_literal = "\"" [^"]* "\"" ;
 
+trait_def = "trait" identifier generic_type_def? "{" function_def* "}" ;
+
 ```

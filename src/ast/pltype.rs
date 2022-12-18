@@ -26,6 +26,7 @@ use inkwell::types::FunctionType;
 
 use inkwell::types::VoidType;
 
+use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::DocumentSymbol;
@@ -49,6 +50,7 @@ pub enum PLType {
     POINTER(Rc<RefCell<PLType>>),
     GENERIC(GenericType),
     PLACEHOLDER(PlaceHolderType),
+    TRAIT(STType),
 }
 /// # PriType
 /// Primitive type for pivot-lang
@@ -203,6 +205,18 @@ pub fn get_type_deep(pltype: Rc<RefCell<PLType>>) -> Rc<RefCell<PLType>> {
     }
 }
 impl PLType {
+    pub fn get_kind_name(&self) -> String {
+        match self {
+            PLType::PRIMITIVE(_) | PLType::VOID => "primitive".to_string(),
+            PLType::POINTER(_) => "pointer".to_string(),
+            PLType::ARR(_) => "array".to_string(),
+            PLType::STRUCT(_) => "struct".to_string(),
+            PLType::FN(_) => "function".to_string(),
+            PLType::PLACEHOLDER(_) => "placeholder".to_string(),
+            PLType::GENERIC(_) => "generic".to_string(),
+            PLType::TRAIT(_) => "trait".to_string(),
+        }
+    }
     pub fn get_typenode(&self, ctx: &Ctx) -> Box<TypeNodeEnum> {
         match self {
             PLType::STRUCT(st) => {
@@ -265,6 +279,7 @@ impl PLType {
             PLType::POINTER(_) => None,
             PLType::GENERIC(_) => None,
             PLType::PLACEHOLDER(_) => None,
+            PLType::TRAIT(t) => Some(t.refs.clone()),
         }
     }
 
@@ -286,12 +301,14 @@ impl PLType {
                 }
             }
             PLType::PLACEHOLDER(p) => p.name.clone(),
+            PLType::TRAIT(t) => t.name.clone(),
         }
     }
     pub fn get_llvm_name<'a, 'ctx>(&self) -> String {
         match self {
             PLType::FN(fu) => fu.name.clone(),
             PLType::STRUCT(st) => st.name.clone(),
+            PLType::TRAIT(t) => t.name.clone(),
             PLType::PRIMITIVE(pri) => pri.get_name(),
             PLType::ARR(arr) => {
                 format!("[{} * {}]", arr.element_type.borrow().get_name(), arr.size)
@@ -314,6 +331,7 @@ impl PLType {
             PLType::GENERIC(g) => g.name.clone(),
             PLType::FN(fu) => fu.name.clone(),
             PLType::STRUCT(st) => st.get_st_full_name(),
+            PLType::TRAIT(st) => st.get_st_full_name(),
             PLType::PRIMITIVE(pri) => pri.get_name(),
             PLType::ARR(arr) => {
                 format!(
@@ -346,6 +364,7 @@ impl PLType {
             PLType::VOID => None,
             PLType::POINTER(_) => None,
             PLType::PLACEHOLDER(p) => Some(p.range.clone()),
+            PLType::TRAIT(t) => Some(t.range.clone()),
         }
     }
 
@@ -429,6 +448,32 @@ impl TryFrom<PLType> for FNType {
     }
 }
 impl FNType {
+    /// 用来比较接口函数与实现函数是否相同
+    ///
+    /// 忽略第一个参数比较（receiver
+    ///
+    /// 因为接口函数的第一个参数是*i64，而实现函数的第一个参数是实现类型
+    pub fn eq_except_receiver<'a, 'ctx, 'b>(
+        &self,
+        other: &FNType,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> bool {
+        if self.name.split("::").last().unwrap() != other.name.split("::").last().unwrap() {
+            return false;
+        }
+        if self.param_pltypes.len() != other.param_pltypes.len() {
+            return false;
+        }
+        for i in 1..self.param_pltypes.len() {
+            if self.param_pltypes[i].get_type(ctx, builder)
+                != other.param_pltypes[i].get_type(ctx, builder)
+            {
+                return false;
+            }
+        }
+        self.ret_pltype.get_type(ctx, builder) == other.ret_pltype.get_type(ctx, builder)
+    }
     pub fn append_name_with_generic(&self, name: String) -> String {
         if self.need_gen_code() {
             let typeinfer = self
@@ -571,12 +616,6 @@ pub struct ARRType {
 }
 
 impl ARRType {
-    // pub fn arr_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) -> ArrayType<'ctx> {
-    //     self.element_type
-    //         .borrow()
-    //         .get_basic_type(ctx)
-    //         .array_type(self.size)
-    // }
     pub fn get_elem_type<'a, 'ctx>(&'a self) -> Rc<RefCell<PLType>> {
         self.element_type.clone()
     }
@@ -592,6 +631,7 @@ pub struct STType {
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub generic_map: IndexMap<String, Rc<RefCell<PLType>>>,
+    pub impls: Vec<Rc<RefCell<PLType>>>,
 }
 
 impl STType {
@@ -649,30 +689,6 @@ impl STType {
         pltype.replace(PLType::STRUCT(res.clone()));
         res
     }
-    // pub fn struct_type<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) -> StructType<'ctx> {
-    //     let st = ctx.module.get_struct_type(&self.get_st_full_name());
-    //     if let Some(st) = st {
-    //         return st;
-    //     }
-    //     let st = ctx.context.opaque_struct_type(&self.get_st_full_name());
-    //     st.set_body(
-    //         &self
-    //             .ordered_fields
-    //             .clone()
-    //             .into_iter()
-    //             .map(|order_field| {
-    //                 order_field
-    //                     .typenode
-    //                     .get_type(ctx)
-    //                     .unwrap()
-    //                     .borrow()
-    //                     .get_basic_type(ctx)
-    //             })
-    //             .collect::<Vec<_>>(),
-    //         false,
-    //     );
-    //     st
-    // }
     pub fn get_field_completions(&self) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
         for (name, _) in &self.fields {
@@ -695,6 +711,32 @@ impl STType {
         let mut coms = self.get_field_completions();
         coms.extend(self.get_mthd_completions(ctx));
         coms
+    }
+    pub fn get_trait_completions<'a, 'ctx>(&self, ctx: &Ctx<'a>) -> Vec<CompletionItem> {
+        let mut coms = self.get_trait_field_completions();
+        coms.extend(self.get_mthd_completions(ctx));
+        coms
+    }
+    pub fn get_trait_field_completions<'a, 'ctx>(&self) -> Vec<CompletionItem> {
+        let mut completions = Vec::new();
+        for (name, f) in &self.fields {
+            if let TypeNodeEnum::FuncTypeNode(func) = &*f.typenode {
+                completions.push(CompletionItem {
+                    kind: Some(CompletionItemKind::METHOD),
+                    label: name.clone(),
+                    detail: Some("method".to_string()),
+                    insert_text: Some(func.gen_snippet()),
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                    command: Some(Command::new(
+                        "trigger help".to_string(),
+                        "editor.action.triggerParameterHints".to_string(),
+                        None,
+                    )),
+                    ..Default::default()
+                });
+            }
+        }
+        completions
     }
     pub fn find_method<'a, 'ctx>(&self, ctx: &Ctx<'a>, method: &str) -> Option<FNType> {
         ctx.plmod.find_method(&self.get_st_full_name(), method)

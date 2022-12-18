@@ -1,0 +1,17 @@
+
+
+trait TestTrait {
+    fn name() void;
+}
+
+
+struct testSt {
+    
+}
+
+impl TestTrait for testSt {
+    fn name2() void {
+        return;
+    }
+}
+

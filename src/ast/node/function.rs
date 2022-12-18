@@ -17,22 +17,25 @@ use std::vec;
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct FuncCallNode {
     pub generic_params: Option<Box<GenericParamNode>>,
-    pub id: Box<NodeEnum>,
+    pub callee: Box<NodeEnum>,
     pub paralist: Vec<Box<NodeEnum>>,
 }
 
-impl Node for FuncCallNode {
+impl PrintTrait for FuncCallNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("FuncCallNode");
         let mut i = self.paralist.len();
-        self.id.print(tabs + 1, false, line.clone());
+        self.callee.print(tabs + 1, false, line.clone());
         for para in &self.paralist {
             i -= 1;
             para.print(tabs + 1, i == 0, line.clone());
         }
     }
+}
+
+impl Node for FuncCallNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -40,9 +43,9 @@ impl Node for FuncCallNode {
     ) -> NodeResult {
         // let currscope = ctx.discope;
         let mp = ctx.move_generic_types();
-        let id_range = self.id.range();
+        let id_range = self.callee.range();
         let mut para_values = Vec::new();
-        let (plvalue, pltype, _) = self.id.emit(ctx, builder)?;
+        let (plvalue, pltype, _) = self.callee.emit(ctx, builder)?;
         if pltype.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND)));
         }
@@ -69,11 +72,15 @@ impl Node for FuncCallNode {
             }
         }
         let mut skip = 0;
+        let mut function = None;
+
         if plvalue.is_some() {
-            if let Some(receiver) = plvalue.unwrap().receiver {
+            let v = plvalue.unwrap();
+            if let Some(receiver) = v.receiver {
                 para_values.push(receiver.into());
                 skip = 1;
             }
+            function = Some(v.value);
         }
         // funcvalue must use fntype to get a new one,can not use the return  plvalue of id node emit
         if fntype.param_pltypes.len() - skip as usize != self.paralist.len() {
@@ -137,12 +144,17 @@ impl Node for FuncCallNode {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER)));
             }
         }
-        let function = builder.get_or_insert_fn_handle(&fntype, ctx);
+        let function = if function.is_some() {
+            function.unwrap()
+        } else {
+            builder.get_or_insert_fn_handle(&fntype, ctx)
+        };
         if let Some(f) = ctx.function {
             builder.try_set_fn_dbg(self.range.start, f);
         };
         let ret = builder.build_call(function, &para_values);
         ctx.save_if_comment_doc_hover(id_range, Some(fntype.doc.clone()));
+        let rettp = fntype.ret_pltype.get_type(ctx, builder)?;
         let res = match ret {
             Some(v) => Ok((
                 {
@@ -152,18 +164,14 @@ impl Node for FuncCallNode {
                     Some(plv!(ptr))
                 },
                 Some({
-                    match &*fntype.ret_pltype.get_type(ctx, builder)?.borrow() {
+                    match &*rettp.clone().borrow() {
                         PLType::GENERIC(g) => g.curpltype.as_ref().unwrap().clone(),
-                        _ => fntype.ret_pltype.get_type(ctx, builder)?,
+                        _ => rettp,
                     }
                 }),
                 TerminatorEnum::NONE,
             )),
-            None => Ok((
-                None,
-                Some(fntype.ret_pltype.get_type(ctx, builder)?),
-                TerminatorEnum::NONE,
-            )),
+            None => Ok((None, Some(rettp), TerminatorEnum::NONE)),
         };
         ctx.set_if_refs_tp(pltype.clone(), id_range);
         ctx.reset_generic_types(mp);
@@ -184,9 +192,56 @@ pub struct FuncDefNode {
     pub generics: Option<Box<GenericDefNode>>,
     pub body: Option<StatementsNode>,
 }
+
+impl TypeNode for FuncDefNode {
+    fn get_type<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> TypeNodeResult {
+        self.emit_pl_tp(ctx, builder)
+    }
+
+    fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) {
+        ctx.emit_comment_highlight(&self.precom);
+        ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
+        if let Some(generics) = &self.generics {
+            generics.emit_highlight(ctx);
+        }
+        for para in self.paralist.iter() {
+            ctx.push_semantic_token(para.id.range, SemanticTokenType::PARAMETER, 0);
+            ctx.push_semantic_token(para.typenode.range(), SemanticTokenType::TYPE, 0);
+        }
+        ctx.push_semantic_token(self.ret.range(), SemanticTokenType::TYPE, 0);
+    }
+
+    fn eq_or_infer<'a, 'ctx, 'b>(
+        &self,
+        _ctx: &'b mut Ctx<'a>,
+        _pltype: Rc<RefCell<PLType>>,
+        _builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> Result<bool, PLDiag> {
+        todo!()
+    }
+}
+
 impl FuncDefNode {
+    pub fn gen_snippet(&self) -> String {
+        self.id.name.clone()
+            + "("
+            + &self
+                .paralist
+                .iter()
+                .skip_while(|v| v.id.name == "self")
+                .enumerate()
+                .map(|(i, v)| format!("${{{}:{}}}", i + 1, v.id.name))
+                .collect::<Vec<_>>()
+                .join(", ")
+            + ")$0"
+    }
+
     pub fn emit_pl_tp<'a, 'ctx, 'b>(
-        &mut self,
+        &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<Rc<RefCell<PLType>>, PLDiag> {
@@ -195,7 +250,7 @@ impl FuncDefNode {
         let mut method = false;
         let mut first = true;
         let mut generic_map = IndexMap::default();
-        if let Some(generics) = &mut self.generics {
+        if let Some(generics) = &self.generics {
             generic_map = generics.gen_generic_type(ctx);
         }
         let mp = ctx.move_generic_types();
@@ -279,7 +334,8 @@ impl FuncDefNode {
         Ok(())
     }
 }
-impl Node for FuncDefNode {
+
+impl PrintTrait for FuncDefNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -298,6 +354,9 @@ impl Node for FuncDefNode {
             body.print(tabs + 1, true, line.clone());
         }
     }
+}
+
+impl Node for FuncDefNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
@@ -406,7 +465,8 @@ impl FuncDefNode {
             // alloc para
             for (i, para) in fntype.param_pltypes.iter().enumerate() {
                 let tp = para.get_type(child, builder)?;
-                let basetype = tp.borrow();
+                let b = tp.clone();
+                let basetype = b.borrow();
                 let alloca = builder.alloc(&fntype.param_names[i], &basetype, child);
                 // add alloc var debug info
                 builder.create_parameter_variable(
@@ -418,7 +478,7 @@ impl FuncDefNode {
                     alloca,
                     allocab,
                 );
-                let parapltype = para.get_type(child, builder)?.clone();
+                let parapltype = tp;
                 child
                     .add_symbol(
                         fntype.param_names[i].clone(),
