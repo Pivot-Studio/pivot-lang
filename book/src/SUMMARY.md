@@ -17,6 +17,7 @@
 - [Compiler](./compiler/README.md)
   - [Parser](./compiler/parser.md)
   - [AST](./compiler/ast.md)
+  - [Flow Chart](compiler/flow.md)
 - [Language Server](./lsp/README.md)
   - [Design](./lsp/design.md)
   - [Diagnostic](./lsp/diagnostic.md)

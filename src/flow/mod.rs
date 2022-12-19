@@ -5,49 +5,39 @@ use petgraph::stable_graph::{NodeIndex, StableDiGraph};
 use petgraph::visit::{EdgeRef, IntoNodeReferences};
 use petgraph::EdgeDirection;
 pub mod display;
+
+// ANCHOR: nodeandedge
 #[derive(Debug, Clone, PartialEq)]
 pub enum GraphNodeType {
-    /// Dummy nodes will be removed eventually
-    Dummy,
-    Begin,
-    End,
-    Node(String),
-    Err(String, String),
-    Choice(String),
+    Dummy,               // 虚节点
+    Begin,               // 起点
+    End,                 // 终点
+    Node(String),        // 普通节点
+    Err(String, String), // 错误节点
+    Choice(String),      // 选择节点
 }
-
-// impl Display for GraphNodeType {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             GraphNodeType::Dummy => todo!(),
-//             GraphNodeType::Begin => write!(f, "Begin"),
-//             GraphNodeType::End => write!(f, "End"),
-//             GraphNodeType::Node(s) => write!(f, "{}", s),
-//             GraphNodeType::Choice(s) => write!(f, "{}", s),
-//             GraphNodeType::Err(s) => write!(f, "{}", s),
-//         }
-//     }
-// }
 
 #[derive(Debug, Clone, Copy)]
 pub enum EdgeType {
     Normal,
-    Branch(bool),
+    Branch(bool), // 分支，带有 Y/N 等标签
 }
 
 pub type Graph = StableDiGraph<GraphNodeType, EdgeType>;
+// ANCHOR_END: nodeandedge
 
-// #[derive(Clone)]
+// ANCHOR: GraphContext
 struct GraphContext {
     pub graph: Graph,
     pub break_target: NodeIndex,
     pub continue_target: NodeIndex,
     #[allow(dead_code)]
-    pub global_begin: NodeIndex,
-    pub global_end: NodeIndex,
-    pub local_source: NodeIndex,
-    pub local_sink: NodeIndex,
+    pub global_begin: NodeIndex, // 全图起点
+    pub global_end: NodeIndex,   // 全图终点
+    pub local_source: NodeIndex, // 局部起点
+    pub local_sink: NodeIndex,   // 局部终点
 }
+// ANCHOR_END: GraphContext
 
 #[derive(Clone)]
 pub struct GraphWrapper {
@@ -71,6 +61,7 @@ impl GraphContext {
         }
     }
 }
+// ANCHOR: creategraphs
 impl ProgramNode {
     pub fn create_graphs(&self) -> Vec<GraphWrapper> {
         let mut graphs = vec![];
@@ -90,6 +81,8 @@ impl ProgramNode {
         graphs
     }
 }
+// ANCHOR_END: creategraphs
+
 fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
     // local_source -> [...current parsing...] -> local_sink
     let mut builder = FmtBuilder::new();
@@ -109,6 +102,7 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
                     .graph
                     .add_edge(sub_source, sub_sink, EdgeType::Normal);
             } else {
+                // ANCHOR: stsloop
                 for i in &v.statements {
                     context.local_source = sub_source;
                     context.local_sink = sub_sink;
@@ -118,6 +112,7 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
                         sub_sink = context.graph.add_node(GraphNodeType::Dummy);
                     }
                 }
+                // ANCHOR_END: stsloop
             }
             context
                 .graph
@@ -125,7 +120,6 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
             context.local_source = local_source;
             context.local_sink = local_sink;
         }
-
         NodeEnum::Continue(s) => {
             // local_source -> current -> continue_target
             s.format(&mut builder);
@@ -180,11 +174,9 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
                 .add_edge(sub_sink, local_sink, EdgeType::Normal);
             context.local_source = sub_source;
             context.local_sink = sub_sink;
-            // context must be restored after calling this function
-            // only graph should be changed
-            // so it is OK to process the other branch directly
+            // 调用前构建虚节点作为锚点
             build_graph(Box::new(NodeEnum::STS(*s.then)), context);
-            // restore context
+            // 调用后要恢复原来的锚点
             context.local_source = local_source;
             context.local_sink = local_sink;
 
@@ -305,7 +297,7 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
                 .graph
                 .add_edge(current, local_sink, EdgeType::Normal);
         }
-        NodeEnum::Comment(_) => {
+        NodeEnum::Comment(_) | NodeEnum::Empty(_) => {
             // local_source -> local_sink
             context
                 .graph
@@ -338,9 +330,7 @@ fn remove_zero_in_degree_nodes(graph: &mut Graph) -> bool {
         .any(|x| x.is_some())
 }
 
-// remove the first node which predicate(node) == True
-// return true if successfully remove a node
-// return false if no node is available
+/// 删除满足条件的节点，成功返回true，否则返回false
 fn remove_single_node<F>(graph: &mut Graph, predicate: F) -> bool
 where
     F: Fn(NodeIndex, &GraphNodeType) -> bool,
@@ -375,12 +365,15 @@ where
     }
 }
 
+// ANCHOR: fromast
 pub fn from_ast(ast: Box<NodeEnum>) -> Graph {
     let mut ctx = GraphContext::new();
     build_graph(ast, &mut ctx);
-    // dbg!(petgraph::dot::Dot::new(&ctx.graph));
+    // 删除入度为 0 的节点
     while remove_zero_in_degree_nodes(&mut ctx.graph) {}
+    // 删除虚节点
     while remove_single_node(&mut ctx.graph, |_, t| *t == GraphNodeType::Dummy) {}
+    // 删除空节点
     let remove_empty_nodes: fn(NodeIndex, &GraphNodeType) -> bool = |_, t| match t {
         GraphNodeType::Node(t) => t.is_empty() || t.trim() == ";",
         _ => false,
@@ -388,3 +381,4 @@ pub fn from_ast(ast: Box<NodeEnum>) -> Graph {
     while remove_single_node(&mut ctx.graph, remove_empty_nodes) {}
     ctx.graph
 }
+// ANCHOR_END: fromast
