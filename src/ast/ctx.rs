@@ -52,7 +52,7 @@ use std::rc::Rc;
 /// Context for code generation
 pub struct Ctx<'a> {
     pub generic_types: FxHashMap<String, Rc<RefCell<PLType>>>,
-    pub need_highlight: bool,
+    pub need_highlight: usize,
     pub plmod: Mod,
     pub father: Option<&'a Ctx<'a>>, // father context, for symbol lookup
     pub function: Option<ValueHandle>, // current function
@@ -62,7 +62,7 @@ pub struct Ctx<'a> {
     pub continue_block: Option<BlockHandle>, // the block to jump when continue
     pub break_block: Option<BlockHandle>,    // the block to jump to when break
     pub return_block: Option<(BlockHandle, Option<ValueHandle>)>, // the block to jump to when return and value
-    pub errs: &'a RefCell<Vec<PLDiag>>,                           // diagnostic list
+    pub errs: &'a RefCell<FxHashSet<PLDiag>>,                     // diagnostic list
     pub edit_pos: Option<Pos>,                                    // lsp params
     pub table: FxHashMap<
         String,
@@ -82,7 +82,7 @@ pub struct Ctx<'a> {
 impl<'a, 'ctx> Ctx<'a> {
     pub fn new(
         src_file_path: &'a str,
-        errs: &'a RefCell<Vec<PLDiag>>,
+        errs: &'a RefCell<FxHashSet<PLDiag>>,
         edit_pos: Option<Pos>,
         config: Config,
         db: &'a dyn Db,
@@ -95,7 +95,7 @@ impl<'a, 'ctx> Ctx<'a> {
             .unwrap()
             .to_string();
         let mut ctx = Ctx {
-            need_highlight: true,
+            need_highlight: 0,
             generic_types: FxHashMap::default(),
             plmod: Mod::new(f, src_file_path.to_string()),
             father: None,
@@ -361,7 +361,7 @@ impl<'a, 'ctx> Ctx<'a> {
 
     pub fn add_diag(&self, dia: PLDiag) -> PLDiag {
         let dia2 = dia.clone();
-        self.errs.borrow_mut().push(dia);
+        self.errs.borrow_mut().insert(dia);
         dia2
     }
     // load type* to type
@@ -526,12 +526,13 @@ impl<'a, 'ctx> Ctx<'a> {
 
     fn get_tp_completions(&self, m: &mut FxHashMap<String, CompletionItem>) {
         for (k, f) in self.plmod.types.iter() {
-            let tp = match *RefCell::borrow(&f) {
+            let tp = match &*f.borrow() {
                 PLType::FN(_) => continue,
                 PLType::ARR(_) => continue,
                 PLType::PLACEHOLDER(_) => CompletionItemKind::STRUCT,
-                PLType::GENERIC(_) => CompletionItemKind::STRUCT,
+                PLType::GENERIC(_) => CompletionItemKind::TYPE_PARAMETER,
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
+                PLType::TRAIT(_) => CompletionItemKind::INTERFACE,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::VOID => CompletionItemKind::KEYWORD,
                 PLType::POINTER(_) => todo!(),
@@ -581,6 +582,7 @@ impl<'a, 'ctx> Ctx<'a> {
                     CompletionItemKind::FUNCTION
                 }
                 PLType::STRUCT(_) => CompletionItemKind::STRUCT,
+                PLType::TRAIT(_) => CompletionItemKind::INTERFACE,
                 PLType::ARR(_) => CompletionItemKind::KEYWORD,
                 PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
                 PLType::GENERIC(_) => CompletionItemKind::STRUCT,
@@ -610,7 +612,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn push_semantic_token(&self, range: Range, tp: SemanticTokenType, modifiers: u32) {
-        if !self.need_highlight {
+        if self.need_highlight != 0 {
             return;
         }
         self.plmod.semantic_tokens_builder.borrow_mut().push(
@@ -620,7 +622,7 @@ impl<'a, 'ctx> Ctx<'a> {
         )
     }
     pub fn push_type_hints(&self, range: Range, pltype: Rc<RefCell<PLType>>) {
-        if !self.need_highlight {
+        if self.need_highlight != 0 {
             return;
         }
         let hint = InlayHint {
@@ -638,7 +640,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.plmod.hints.borrow_mut().push(hint);
     }
     pub fn push_param_hint(&self, range: Range, name: String) {
-        if !self.need_highlight {
+        if self.need_highlight != 0 {
             return;
         }
         let hint = InlayHint {
@@ -705,7 +707,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn save_if_comment_doc_hover(&self, range: Range, docs: Option<Vec<Box<NodeEnum>>>) {
-        if !self.need_highlight {
+        if self.need_highlight != 0 {
             return;
         }
         let mut content = vec![];
@@ -723,7 +725,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn save_if_hover(&self, range: Range, value: HoverContents) {
-        if !self.need_highlight {
+        if self.need_highlight != 0 {
             return;
         }
         self.plmod.hovers.borrow_mut().insert(

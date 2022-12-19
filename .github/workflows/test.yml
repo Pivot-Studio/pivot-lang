@@ -1,12 +1,18 @@
 name: test
 on:
   pull_request:
-    branches:
-      - master
+    paths:
+    - '**.rs'
+    - '**/Cargo.*'
+    - '.github/workflows/**.yml'
+    - '**.pi'
+    - '**/Kagari.*'
   push:
     branches:
       - "master"
       - "release/*"
+      - "staging"
+      - "trying"
 
 jobs:
   container-test-job:

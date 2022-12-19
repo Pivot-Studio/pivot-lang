@@ -1,6 +1,11 @@
+use ariadne::{ColorGenerator, Fmt, Label, Report, ReportKind, Source};
+use dyn_fmt::AsStrFormatExt;
 use internal_macro::range;
 use lazy_static::lazy_static;
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    fmt::{Display, Formatter},
+};
 macro_rules! define_error {
     ($(
         $ident:ident = $string_keyword:expr
@@ -70,7 +75,7 @@ define_error!(
     ARRAY_INDEX_OUT_OF_BOUNDS = "array index out of bounds",
     NEEDED_INDEX_FOR_ARRAY_ELEMENT_ACCESS = "needed index for array element access",
     SIZE_MUST_BE_INT = "size must be int",
-    TYPE_MISMATCH = "mismatch",
+    TYPE_MISMATCH = "type mismatch",
     ILLEGAL_GET_FIELD_OPERATION = "illegal get field operation",
     NOT_A_POINTER = "not a pointer",
     CAN_NOT_REF_CONSTANT = "can not ref constant",
@@ -78,7 +83,10 @@ define_error!(
     GENERIC_CANNOT_BE_INFER = "generic can not be infer",
     DUPLICATE_METHOD = "duplicate method",
     GENERIC_PARAM_LEN_MISMATCH = "generic param len mismatch",
-    NOT_GENERIC_TYPE = "not generic type"
+    NOT_GENERIC_TYPE = "not generic type",
+    EXPECT_TRAIT_TYPE = "expect trait type",
+    METHOD_NOT_IN_TRAIT = "method not in trait def",
+    METHOD_NOT_IN_IMPL = "method required in trait not found in impl block"
 );
 macro_rules! define_warn {
     ($(
@@ -87,7 +95,7 @@ macro_rules! define_warn {
         #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, Default)]
         #[allow(non_camel_case_types, dead_code)]
         pub enum WarnCode {
-            #[default] UNKNOWN = 1919810,
+            #[default] UNKNOWN = 1919809,
             $($ident),*
         }
         $(pub const $ident: &'static str = $string_keyword;)*
@@ -104,7 +112,7 @@ define_warn! {
     UNREACHABLE_STATEMENT= "unreachable statement"
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DiagCode {
     Err(ErrorCode),
     Warn(WarnCode),
@@ -115,49 +123,97 @@ impl Default for DiagCode {
         DiagCode::Err(ErrorCode::UNKNOWN)
     }
 }
+impl Display for DiagCode {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            DiagCode::Err(e) => write!(f, "E{}", *e as u32),
+            DiagCode::Warn(w) => write!(f, "W{}", *w as u32),
+        }
+    }
+}
 
 use lsp_types::{Diagnostic, DiagnosticSeverity};
 
-use super::range::Range;
+use super::{
+    ctx::Ctx,
+    range::{Pos, Range},
+};
 
 /// # PLDiag
 /// Diagnostic for pivot-lang
 #[range]
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct PLDiag {
     code: DiagCode,
     help: Option<Box<String>>,
-    labels: Vec<LabeledSpan>,
+    labels: Vec<(Range, Option<(String, Vec<String>)>)>,
 }
 
 const PL_DIAG_SOURCE: &str = "plsp";
 
-impl PLDiag {
-    fn to_file_diag(&self, path: &str, source: &str) -> TerminalDiag {
-        let linestart = self.range.start.offset - self.range.start.column + 1;
-        let mut start = self.range.start;
-        start.offset = linestart;
-        start.column = 1;
-        let mut me = self.clone();
-        if start != self.range.end && me.labels.len() == 0 {
-            me.add_label(self.range, Some("here".to_string()));
-        }
-        TerminalDiag {
-            diag: self.get_diagnostic().clone(),
-            path: path.to_string(),
-            source_code: source.to_string(),
-            labels: me.labels,
-            help: self.help.clone(),
-        }
+impl Pos {
+    pub fn utf8_offset(&self, doc: &Source) -> usize {
+        doc.line(self.line - 1).unwrap().offset() + self.column - 1
     }
-    pub fn print(&self, path: &str, doc: &str) {
-        let mut r = self.get_diagnostic().range.clone();
-        r.start.character = 0;
-        let a = miette::Report::new(self.to_file_diag(path, doc));
-        println!("{a:?}");
+}
+
+impl PLDiag {
+    pub fn print(&self, path: &str, doc: Source) {
+        if self.code == DiagCode::Err(ErrorCode::COMPLETION) {
+            println!()
+        }
+        let mut colors = ColorGenerator::new();
+
+        let mut rb = Report::build(
+            self.get_report_kind(),
+            path,
+            self.range.start.utf8_offset(&doc),
+        )
+        .with_code(self.code)
+        .with_message(self.get_msg());
+        let mut labels = vec![];
+        if self.labels.len() == 0 {
+            labels.push((self.range, Some(("here".to_string(), vec![]))));
+        }
+
+        for (range, txt) in labels.iter().chain(self.labels.iter()) {
+            let color = colors.next();
+            let mut lab = Label::new((
+                path,
+                range.start.utf8_offset(&doc)..range.end.utf8_offset(&doc),
+            ));
+            if let Some((tpl, args)) = txt {
+                let mut msg = tpl.clone();
+                msg = msg.format(
+                    &args
+                        .iter()
+                        .map(|s| s.fg(color).to_string())
+                        .collect::<Vec<_>>(),
+                );
+                lab = lab.with_message(msg);
+            }
+            rb = rb.with_label(lab.with_color(color));
+        }
+        if let Some(help) = &self.help {
+            rb = rb.with_help(help);
+        }
+        let r = rb.finish();
+        r.eprint((path, doc)).unwrap();
+    }
+    fn get_report_kind(&self) -> ReportKind {
+        match self.code {
+            DiagCode::Err(_) => ReportKind::Error,
+            DiagCode::Warn(_) => ReportKind::Warning,
+        }
     }
     pub fn is_err(&self) -> bool {
         self.get_diagnostic().severity == Some(DiagnosticSeverity::ERROR)
+    }
+    pub fn get_msg(&self) -> String {
+        match self.code {
+            DiagCode::Err(code) => ERR_MSG[&code].to_string(),
+            DiagCode::Warn(code) => WARN_MSG[&code].to_string(),
+        }
     }
     pub fn get_diagnostic(&self) -> Diagnostic {
         match self.code {
@@ -188,14 +244,11 @@ impl PLDiag {
         self.help = Some(Box::new(help.to_string()));
         self
     }
-
-    pub fn add_label(&mut self, range: Range, label: Option<String>) -> &mut Self {
-        let startoffset = miette::ByteOffset::from(range.start.offset);
-        let mut len = miette::ByteOffset::from(range.end.offset - range.start.offset);
-        if len == 0 {
-            len = 1;
-        }
-        self.labels.push(LabeledSpan::new(label, startoffset, len));
+    pub fn add_to_ctx(&self, ctx: &Ctx) -> PLDiag {
+        ctx.add_diag(self.clone())
+    }
+    pub fn add_label(&mut self, range: Range, label: Option<(String, Vec<String>)>) -> &mut Self {
+        self.labels.push((range, label));
         self
     }
 
@@ -205,105 +258,5 @@ impl PLDiag {
             code: DiagCode::Warn(code),
             ..Default::default()
         }
-    }
-}
-
-use miette::{Diagnostic as MietteDiagnostic, LabeledSpan, Severity};
-
-#[derive(Debug, Clone)]
-pub struct TerminalDiag {
-    pub path: String,
-    pub diag: Diagnostic,
-    pub source_code: String,
-    pub labels: Vec<LabeledSpan>,
-    pub help: Option<Box<String>>,
-}
-
-impl TerminalDiag {
-    fn get_code(&self) -> String {
-        let code = match self.diag.code.as_ref().unwrap() {
-            lsp_types::NumberOrString::Number(n) => *n,
-            lsp_types::NumberOrString::String(_) => todo!(),
-        };
-        match self.diag.severity {
-            Some(DiagnosticSeverity::ERROR) => {
-                format!("E{}", code)
-            }
-            Some(DiagnosticSeverity::WARNING) => {
-                format!("W{}", code)
-            }
-            _ => "????".to_string(),
-        }
-    }
-}
-
-impl std::fmt::Display for TerminalDiag {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{}", self.diag.message.clone()))
-    }
-}
-
-impl std::error::Error for TerminalDiag {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        None
-    }
-
-    fn description(&self) -> &str {
-        "description() is deprecated; use Display"
-    }
-
-    fn cause(&self) -> Option<&dyn std::error::Error> {
-        self.source()
-    }
-}
-
-impl MietteDiagnostic for TerminalDiag {
-    fn code<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
-        Some(Box::new(self.get_code()))
-    }
-
-    fn severity(&self) -> Option<miette::Severity> {
-        Some(match self.diag.severity {
-            Some(s) => match s {
-                DiagnosticSeverity::ERROR => Severity::Error,
-                DiagnosticSeverity::WARNING => Severity::Warning,
-                DiagnosticSeverity::INFORMATION => Severity::Advice,
-                DiagnosticSeverity::HINT => Severity::Advice,
-                _ => todo!(),
-            },
-            None => todo!(),
-        })
-    }
-
-    fn help<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
-        match &self.help {
-            Some(h) => Some(Box::new(h.clone())),
-            None => None,
-        }
-    }
-
-    fn url<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
-        Some(Box::new(format!(
-            "{}:{}:{}",
-            self.path,
-            self.diag.range.start.line + 1,
-            self.diag.range.start.character + 1
-        )))
-    }
-
-    fn source_code(&self) -> Option<&dyn miette::SourceCode> {
-        Some(&self.source_code)
-    }
-
-    fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
-        Some(Box::new(self.labels.clone().into_iter()))
-    }
-
-    fn related<'a>(&'a self) -> Option<Box<dyn Iterator<Item = &'a dyn MietteDiagnostic> + 'a>> {
-        None
-    }
-
-    fn diagnostic_source(&self) -> Option<&dyn MietteDiagnostic> {
-        None
     }
 }

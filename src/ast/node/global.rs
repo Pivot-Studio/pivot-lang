@@ -13,7 +13,8 @@ pub struct GlobalNode {
     pub var: VarNode,
     pub exp: Box<NodeEnum>,
 }
-impl Node for GlobalNode {
+
+impl PrintTrait for GlobalNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
@@ -21,6 +22,9 @@ impl Node for GlobalNode {
         self.var.print(tabs + 1, false, line.clone());
         self.exp.print(tabs + 1, true, line.clone());
     }
+}
+
+impl Node for GlobalNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,

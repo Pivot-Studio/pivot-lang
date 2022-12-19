@@ -6,8 +6,8 @@ use nom::error::{FromExternalError, ParseError};
 use nom::multi::fold_many0;
 use nom::sequence::{delimited, preceded, tuple};
 use nom::IResult;
-use nom_locate::LocatedSpan;
-type Span<'a> = LocatedSpan<&'a str>;
+
+use crate::nomparser::Span;
 use internal_macro::{test_parser, test_parser_error};
 
 use crate::ast::node::string_literal::StringNode;

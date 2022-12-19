@@ -5,11 +5,11 @@ use nom::{
     bytes::complete::tag,
     combinator::{eof, map_res, recognize},
     multi::many0,
-    sequence::{delimited, terminated, tuple},
+    sequence::{delimited, preceded, terminated, tuple},
     IResult,
 };
-use nom_locate::LocatedSpan;
-type Span<'a> = LocatedSpan<&'a str>;
+
+use crate::nomparser::Span;
 use crate::{
     ast::range::Range,
     ast::{
@@ -33,6 +33,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let mut fntypes = vec![];
     let mut globaldefs = vec![];
     let mut uses = vec![];
+    let mut traits = vec![];
     loop {
         let top = top_level_statement(input);
         if let Ok((i, t)) = top {
@@ -82,13 +83,14 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     }
                     nodes.push(Box::new(im.into()));
                 }
+                TopLevel::TraitDef(tr) => {
+                    traits.push(tr.clone());
+                    nodes.push(Box::new(tr.into()));
+                }
             }
             input = i;
         } else if let Err(err) = top {
-            let e: Result<
-                (LocatedSpan<&str>, LocatedSpan<&str>),
-                nom::Err<nom::error::Error<Span>>,
-            > = eof(input);
+            let e: Result<(Span, Span), nom::Err<nom::error::Error<Span>>> = eof(input);
             if e.is_ok() {
                 break;
             }
@@ -103,6 +105,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
             globaldefs,
             range: Range::new(old, input),
             uses,
+            traits,
         }
         .into(),
     );
@@ -129,6 +132,9 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
         }),
         map_res(del_newline_or_space!(comment), |c| {
             Ok::<_, Error>(Box::new(TopLevel::Common(c)))
+        }),
+        map_res(del_newline_or_space!(trait_def), |c| {
+            Ok::<_, Error>(Box::new(TopLevel::TraitDef(*c)))
         }),
         map_res(
             del_newline_or_space!(except(

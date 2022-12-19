@@ -123,13 +123,27 @@ impl FileCompileInput {
 #[salsa::tracked]
 impl MemDocsInput {
     #[salsa::tracked(lru = 32)]
-    pub fn get_file_content(self, db: &dyn Db) -> Option<SourceProgram> {
+    pub fn get_current_file_content(self, db: &dyn Db) -> Option<SourceProgram> {
         let re = self
             .docs(db)
             .lock()
             .unwrap()
             .borrow_mut()
             .get_file_content(db, self.file(db));
+        if let Some(c) = re {
+            Some(c)
+        } else {
+            None
+        }
+    }
+    #[salsa::tracked(lru = 32)]
+    pub fn get_file_content(self, db: &dyn Db, f: String) -> Option<SourceProgram> {
+        let re = self
+            .docs(db)
+            .lock()
+            .unwrap()
+            .borrow_mut()
+            .get_file_content(db, &f);
         if let Some(c) = re {
             Some(c)
         } else {
@@ -230,7 +244,7 @@ mod tests {
 
     #[test]
     fn test_mem_docs() {
-        let mut db = &mut Database::default();
+        let db = &mut Database::default();
         let mut mem_docs = MemDocs::new();
         mem_docs.insert(
             db,

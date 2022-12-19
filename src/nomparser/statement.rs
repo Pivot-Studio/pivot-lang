@@ -6,9 +6,8 @@ use nom::{
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult,
 };
-use nom_locate::LocatedSpan;
-use std::fmt::Error;
-type Span<'a> = LocatedSpan<&'a str>;
+
+use crate::nomparser::Span;
 use crate::{
     ast::node::ret::RetNode,
     ast::range::Range,
@@ -22,6 +21,7 @@ use crate::{
     },
 };
 use internal_macro::{test_parser, test_parser_error};
+use std::fmt::Error;
 
 use super::*;
 

@@ -7,8 +7,8 @@ use nom::{
     sequence::{delimited, pair, preceded, tuple},
     IResult,
 };
-use nom_locate::LocatedSpan;
-type Span<'a> = LocatedSpan<&'a str>;
+
+use crate::nomparser::Span;
 use crate::{
     ast::node::function::FuncCallNode,
     ast::{
@@ -140,7 +140,7 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                             FuncCallNode {
                                 generic_params,
                                 range,
-                                id: res,
+                                callee: res,
                                 paralist: args,
                                 comments: vec![op.1],
                             }
@@ -166,6 +166,7 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                         } else {
                             let mut end = res.range().end;
                             end.column = end.column + 1;
+                            end.offset = end.offset + 1;
                             range = res.range().start.to(end);
                         }
                         Box::new(
@@ -236,7 +237,7 @@ fn parantheses_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delimited(
             tag_token(TokenType::LPAREN),
-            logic_exp,
+            parse_with_ex(logic_exp, false),
             tag_token(TokenType::RPAREN),
         ),
         |exp| {

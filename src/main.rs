@@ -3,6 +3,7 @@ pub struct Jar(
     nomparser::SourceProgram,
     nomparser::parse,
     mem_docs::MemDocsInput,
+    mem_docs::MemDocsInput_get_current_file_content,
     mem_docs::MemDocsInput_get_file_content,
     mem_docs::MemDocsInput_get_file_params,
     mem_docs::EmitParams,

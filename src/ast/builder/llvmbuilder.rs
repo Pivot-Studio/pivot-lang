@@ -14,10 +14,10 @@ use inkwell::{
     debug_info::*,
     module::{FlagBehavior, Linkage, Module},
     targets::{InitializationConfig, Target, TargetMachine},
-    types::{ArrayType, BasicType, BasicTypeEnum, StructType},
+    types::{ArrayType, BasicType, BasicTypeEnum, FunctionType, StructType},
     values::{
-        AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue,
-        PointerValue,
+        AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, CallableValue,
+        FunctionValue, PointerValue,
     },
     AddressSpace, FloatPredicate, IntPredicate, OptimizationLevel,
 };
@@ -228,6 +228,33 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             PriType::BOOL => self.context.bool_type().as_basic_type_enum(),
         }
     }
+
+    fn get_fn_type(&self, f: &FNType, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
+        let mut param_types = vec![];
+        for param_pltype in f.param_pltypes.iter() {
+            param_types.push(
+                self.get_basic_type_op(
+                    &param_pltype
+                        .get_type(ctx, &self.clone().into())
+                        .unwrap()
+                        .borrow(),
+                    ctx,
+                )
+                .unwrap()
+                .into(),
+            );
+        }
+        let fn_type = self
+            .get_ret_type(
+                &f.ret_pltype
+                    .get_type(ctx, &self.clone().into())
+                    .unwrap()
+                    .borrow(),
+                ctx,
+            )
+            .fn_type(&param_types, false);
+        fn_type
+    }
     /// # get_basic_type_op
     /// get the basic type of the type
     /// used in code generation
@@ -251,12 +278,12 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 }),
             },
             PLType::FN(f) => Some(
-                self.get_or_insert_fn(f, ctx)
-                    .get_type()
-                    .ptr_type(inkwell::AddressSpace::Global)
+                self.get_fn_type(f, ctx)
+                    .ptr_type(AddressSpace::Generic)
                     .as_basic_type_enum(),
             ),
             PLType::STRUCT(s) => Some(self.struct_type(s, ctx).as_basic_type_enum()),
+            PLType::TRAIT(s) => Some(self.struct_type(s, ctx).as_basic_type_enum()),
             PLType::ARR(a) => Some(self.arr_type(a, ctx).as_basic_type_enum()),
             PLType::PRIMITIVE(t) => Some(self.get_pri_basic_type(t)),
             PLType::VOID => None,
@@ -352,12 +379,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             offset + debug_type.get_size_in_bits(),
         )
     }
+
     /// # get_ditype
     /// get the debug info type of the pltype
     fn get_ditype(&self, pltp: &PLType, ctx: &mut Ctx<'a>) -> Option<DIType<'ctx>> {
         let td = self.targetmachine.get_target_data();
         match pltp {
-            PLType::FN(_) => None,
+            PLType::FN(_) => self.get_ditype(&PLType::PRIMITIVE(PriType::I64), ctx),
             PLType::GENERIC(g) => {
                 if g.curpltype.is_some() {
                     let pltype = g.curpltype.as_ref().unwrap();
@@ -380,7 +408,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         .as_type(),
                 )
             }
-            PLType::STRUCT(x) => {
+            PLType::STRUCT(x) | PLType::TRAIT(x) => {
                 // 若已经生成过，直接查表返回
                 if RefCell::borrow(&self.ditypes).contains_key(&x.get_st_full_name()) {
                     return Some(
@@ -506,30 +534,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if let Some(v) = self.module.get_function(&llvmname) {
             return v;
         }
-        let mut param_types = vec![];
-        for param_pltype in pltp.param_pltypes.iter() {
-            param_types.push(
-                self.get_basic_type_op(
-                    &param_pltype
-                        .get_type(ctx, &self.clone().into())
-                        .unwrap()
-                        .borrow(),
-                    ctx,
-                )
-                .unwrap()
-                .into(),
-            );
-        }
-        let fn_type = self
-            .get_ret_type(
-                &pltp
-                    .ret_pltype
-                    .get_type(ctx, &self.clone().into())
-                    .unwrap()
-                    .borrow(),
-                ctx,
-            )
-            .fn_type(&param_types, false);
+        let fn_type = self.get_fn_type(pltp, ctx);
         let fn_value = self
             .module
             .add_function(&llvmname, fn_type, Some(Linkage::External));
@@ -593,6 +598,47 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 }
 impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
+    fn bitcast(
+        &self,
+        ctx: &mut Ctx<'a>,
+        from: ValueHandle,
+        to: &PLType,
+        name: &str,
+    ) -> ValueHandle {
+        let lv = self.get_llvm_value(from).unwrap();
+        let re = if lv.is_function_value() {
+            self.builder.build_bitcast(
+                lv.into_function_value()
+                    .as_global_value()
+                    .as_pointer_value(),
+                self.get_basic_type_op(to, ctx).unwrap(),
+                name,
+            )
+        } else {
+            self.builder.build_bitcast(
+                lv.into_pointer_value(),
+                self.get_basic_type_op(to, ctx).unwrap(),
+                name,
+            )
+        };
+        self.get_llvm_value_handle(&re.as_any_value_enum())
+    }
+    fn pointer_cast(
+        &self,
+        ctx: &mut Ctx<'a>,
+        from: ValueHandle,
+        to: &PLType,
+        name: &str,
+    ) -> ValueHandle {
+        let lv = self.get_llvm_value(from).unwrap();
+
+        let re = self.builder.build_pointer_cast(
+            lv.into_pointer_value(),
+            self.get_basic_type_op(to, ctx).unwrap().into_pointer_type(),
+            name,
+        );
+        self.get_llvm_value_handle(&re.as_any_value_enum())
+    }
     fn get_global_var_handle(&self, name: &str) -> Option<ValueHandle> {
         match self.module.get_global(name) {
             Some(value) => Some(self.get_llvm_value_handle(&value.as_any_value_enum())),
@@ -788,7 +834,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     fn build_call(&self, f: ValueHandle, args: &[ValueHandle]) -> Option<ValueHandle> {
         let builder = self.builder;
         let f = self.get_llvm_value(f).unwrap();
-        let f = f.into_function_value();
+        let f: CallableValue = if f.is_function_value() {
+            f.into_function_value().into()
+        } else {
+            f.into_pointer_value().try_into().unwrap()
+        };
         let args = args
             .iter()
             .map(|v| {

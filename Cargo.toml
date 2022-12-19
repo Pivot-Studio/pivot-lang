@@ -19,7 +19,6 @@ rowan = "0.15.10"
 dissimilar = "1.0.4"
 stderrlog = "0.5.4"
 log = "0.4"
-as-any = "0.3.0"
 clap = { version = "4.0.18", features = ["derive"] }
 colored = "2.0.0"
 serde = "1.0.145"
@@ -33,7 +32,8 @@ enum_dispatch = "0.3.8"
 threadpool = "1.8.1"
 dunce = "1.0.3"
 toml = "0.5.9"
-miette = { version = "5.5.0", features = ["fancy"] }
+ariadne = "0.1.5"
+dyn-fmt = "0.3.0"
 petgraph = "0.6.2"
 
 [dependencies.nom]

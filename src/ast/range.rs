@@ -1,8 +1,7 @@
 use lsp_types::Position;
 
 use super::diag::{ErrorCode, PLDiag, WarnCode};
-
-type Span<'a> = nom_locate::LocatedSpan<&'a str>;
+use crate::nomparser::Span;
 
 /// # Pos
 /// source code position in file
@@ -13,7 +12,7 @@ pub struct Pos {
     pub offset: usize, // 0based
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, PartialOrd)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Default, PartialOrd, Hash)]
 pub struct Range {
     pub start: Pos,
     pub end: Pos,
@@ -96,12 +95,12 @@ impl Range {
         Range {
             start: Pos {
                 line: start.location_line() as usize,
-                column: start.get_column(),
+                column: start.get_utf8_column(),
                 offset: start.location_offset(),
             },
             end: Pos {
                 line: end.location_line() as usize,
-                column: end.get_column(),
+                column: end.get_utf8_column(),
                 offset: end.location_offset(),
             },
         }

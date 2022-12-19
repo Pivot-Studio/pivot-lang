@@ -1,5 +1,12 @@
 use std::fmt::Error;
 
+use crate::nomparser::Span;
+use crate::{
+    ast::node::types::StructDefNode,
+    ast::node::{types::StructInitNode, NodeEnum, RangeTrait},
+    ast::{node::types::StructInitFieldNode, tokens::TokenType},
+};
+use internal_macro::test_parser;
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -9,13 +16,6 @@ use nom::{
     IResult,
 };
 use nom_locate::LocatedSpan;
-type Span<'a> = LocatedSpan<&'a str>;
-use crate::{
-    ast::node::types::StructDefNode,
-    ast::node::{types::StructInitNode, NodeEnum, RangeTrait},
-    ast::{node::types::StructInitFieldNode, tokens::TokenType},
-};
-use internal_macro::test_parser;
 
 use super::*;
 
@@ -101,11 +101,17 @@ fn struct_init_field(input: Span) -> IResult<Span, Box<StructInitFieldNode>> {
 /// struct_init = type_name "{" (struct_init_field ("," struct_init_field)* )? "}" ;
 /// ```
 pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    if input.extra {
+        // extra为true代表在if的逻辑表达区域内，为了避免二义性 跳过 struct init
+        return Err(nom::Err::Error(
+            nom::error::Error::<LocatedSpan<&str, bool>>::new(input, nom::error::ErrorKind::Fail),
+        ));
+    }
     map_res(
         tuple((
             type_name,
             opt(generic_param_def),
-            tag_token(TokenType::LBRACE),
+            del_newline_or_space!(tag_token(TokenType::LBRACE)),
             alt((
                 map_res(
                     pair(
@@ -138,7 +144,7 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 }),
             )),
             many0(comment),
-            tag_token(TokenType::RBRACE),
+            del_newline_or_space!(tag_token(TokenType::RBRACE)),
         )),
         |(name, generic_params, _, (fields, lcomment), rcomment, _)| {
             let range = if fields.len() > 0 {

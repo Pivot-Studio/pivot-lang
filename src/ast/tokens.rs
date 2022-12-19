@@ -71,7 +71,8 @@ define_tokens!(
     INGNORE = "_",
     DOUBLE_QUOTE = "\"",
     TRUE = "true",
-    FALSE = "false"
+    FALSE = "false",
+    TRAIT = "trait"
 );
 impl TokenType {
     pub fn get_str(&self) -> &'static str {

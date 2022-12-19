@@ -1,12 +1,11 @@
 use std::fmt::Error;
 
+use crate::nomparser::Span;
+use crate::{ast::range::Range, ast::tokens::TokenType};
 use nom::{
     bytes::complete::tag, character::complete::space0, combinator::map_res, error::ParseError,
     sequence::delimited, AsChar, IResult, InputTake, InputTakeAtPosition, Parser,
 };
-use nom_locate::LocatedSpan;
-type Span<'a> = LocatedSpan<&'a str>;
-use crate::{ast::range::Range, ast::tokens::TokenType};
 
 use super::*;
 
@@ -26,6 +25,23 @@ where
     <I as InputTakeAtPosition>::Item: AsChar + Clone,
 {
     delimited(space0, parser, space0)
+}
+pub fn parse_with_ex<'a, O, E, G>(
+    mut parser: G,
+    extra: bool,
+) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, O, E>
+where
+    G: Parser<Span<'a>, O, E>,
+    E: ParseError<Span<'a>>,
+{
+    move |i| {
+        let mut newi = i;
+        let prevex = newi.extra;
+        newi.extra = extra;
+        let (mut newi, re) = parser.parse(newi)?;
+        newi.extra = prevex;
+        Ok((newi, re))
+    }
 }
 
 pub fn take_utf8_split<'a>(sp: &Span<'a>) -> (Span<'a>, Span<'a>) {

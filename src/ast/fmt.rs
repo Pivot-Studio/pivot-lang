@@ -8,6 +8,7 @@ use super::{
         function::{FuncCallNode, FuncDefNode},
         global::GlobalNode,
         implement::ImplNode,
+        interface::TraitDefNode,
         operator::{BinOpNode, TakeOpNode, UnaryOpNode},
         pkg::{ExternIdNode, UseNode},
         pointer::{PointerOpEnum, PointerOpNode},
@@ -398,7 +399,7 @@ impl FmtBuilder {
         self.enter();
     }
     pub fn parse_func_call_node(&mut self, node: &FuncCallNode) {
-        node.id.format(self);
+        node.callee.format(self);
         if let Some(generic_params) = &node.generic_params {
             generic_params.format(self);
         }
@@ -572,5 +573,30 @@ impl FmtBuilder {
         self.double_quote();
         self.token(&node.content);
         self.double_quote();
+    }
+    pub fn parse_trait_def_node(&mut self, node: &TraitDefNode) {
+        // for c in node.precom.iter() {
+        //     c.format(self);
+        // }
+        self.prefix();
+        self.token("trait");
+        self.space();
+        self.token(node.id.name.as_str());
+        if let Some(generics) = &node.generics {
+            generics.format(self);
+        }
+        self.space();
+        self.l_brace();
+        self.add_tab();
+        for m in &node.methods {
+            m.format(self);
+        }
+        self.enter();
+        self.sub_tab();
+        self.prefix();
+        self.r_brace();
+        self.enter();
+        // 顶层节点加空格
+        self.enter();
     }
 }

@@ -1,3 +1,5 @@
+use crate::nomparser::Span;
+use crate::{ast::node::comment::CommentNode, ast::range::Range};
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_until},
@@ -6,8 +8,6 @@ use nom::{
     IResult, InputTake,
 };
 use nom_locate::LocatedSpan;
-type Span<'a> = LocatedSpan<&'a str>;
-use crate::{ast::node::comment::CommentNode, ast::range::Range};
 
 use super::*;
 
@@ -17,7 +17,7 @@ pub fn comment(input: Span) -> IResult<Span, Box<NodeEnum>> {
             alt((tag("///"), tag("//"))),
             alt((terminated(take_until("\n"), tag("\n")), rest)),
         ),
-        |(a, c): (LocatedSpan<&str>, LocatedSpan<&str>)| {
+        |(a, c): (LocatedSpan<&str, bool>, LocatedSpan<&str, bool>)| {
             res_enum(
                 CommentNode {
                     comment: c.to_string(),
