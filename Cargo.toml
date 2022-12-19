@@ -34,6 +34,8 @@ threadpool = "1.8.1"
 dunce = "1.0.3"
 toml = "0.5.9"
 miette = { version = "5.5.0", features = ["fancy"] }
+petgraph = "0.6.2"
+
 [dependencies.nom]
 version = "7"
 features = ["alloc"]

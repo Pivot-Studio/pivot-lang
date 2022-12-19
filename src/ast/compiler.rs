@@ -32,6 +32,7 @@ use std::{
 pub struct Options {
     pub genir: bool,
     pub printast: bool,
+    pub flow: bool,
     pub optimization: HashOptimizationLevel,
     pub fmt: bool,
 }
@@ -77,6 +78,7 @@ pub enum ActionType {
     Hover,
     Compile,
     PrintAst,
+    Flow,
     Fmt,
     LspFmt,
     Hint,
@@ -183,6 +185,11 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     if op.fmt {
         let time = now.elapsed();
         info!("gen source done, time: {:?}", time);
+        return;
+    }
+    if op.flow {
+        let time = now.elapsed();
+        info!("gen flow done, time: {:?}", time);
         return;
     }
     let mut mods = compile_dry::accumulated::<ModBuffer>(db, docs);

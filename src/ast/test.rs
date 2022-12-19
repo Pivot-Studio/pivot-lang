@@ -398,6 +398,7 @@ mod test {
                 optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
                 genir: true,
                 printast: false,
+                flow: false,
                 fmt: false,
             },
         );
@@ -414,6 +415,7 @@ mod test {
                 optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
                 genir: false,
                 printast: true,
+                flow: false,
                 fmt: false,
             },
         );

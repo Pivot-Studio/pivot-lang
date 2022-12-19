@@ -18,3 +18,5 @@ out.*
 *.asm
 *out
 *.dSYM
+*.dot
+dots

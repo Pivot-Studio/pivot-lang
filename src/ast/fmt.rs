@@ -28,6 +28,7 @@ use super::{
     tokens::TokenType,
 };
 
+#[derive(Clone)]
 pub struct FmtBuilder {
     buf: String,
     tabs: usize,
