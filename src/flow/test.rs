@@ -21,7 +21,7 @@ mod test {
             D4 -> D1;
             D0 -> D4;
             }"
-            .replace(|c: char| c.is_whitespace(), "");
+        .replace(|c: char| c.is_whitespace(), "");
         let out = Dot::new(true)
             .generate_from_graph(&graph, &"test".to_string())
             .replace(|c: char| c.is_whitespace(), "");
@@ -77,7 +77,7 @@ mod test {
             D4:s->D9:n[xlabel=Y];
             D11->D1;D0->D4;
             }"
-            .replace(|c: char| c.is_whitespace(), "");
+        .replace(|c: char| c.is_whitespace(), "");
         let out = Dot::new(true)
             .generate_from_graph(&graph, &"test".to_string())
             .replace(|c: char| c.is_whitespace(), "");
@@ -112,7 +112,7 @@ mod test {
             D13->D1;
             D0->D7;
             }"
-            .replace(|c: char| c.is_whitespace(), "");
+        .replace(|c: char| c.is_whitespace(), "");
         let out = Dot::new(true)
             .generate_from_graph(&graph, &"test".to_string())
             .replace(|c: char| c.is_whitespace(), "");
