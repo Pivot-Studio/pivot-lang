@@ -5,7 +5,7 @@ use petgraph::stable_graph::{NodeIndex, StableDiGraph};
 use petgraph::visit::{EdgeRef, IntoNodeReferences};
 use petgraph::EdgeDirection;
 pub mod display;
-
+pub mod test;
 // ANCHOR: nodeandedge
 #[derive(Debug, Clone, PartialEq)]
 pub enum GraphNodeType {
