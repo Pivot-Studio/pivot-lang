@@ -528,7 +528,7 @@ dependencies = [
  "either",
  "inkwell_internals",
  "libc",
- "llvm-sys",
+ "llvm-sys 140.0.3",
  "once_cell",
  "parking_lot",
 ]
@@ -551,7 +551,7 @@ dependencies = [
  "comment_macro",
  "ctor",
  "fmt_macro",
- "llvm-sys",
+ "llvm-sys 150.0.3",
  "range_macro",
  "test_parser_macro",
 ]
@@ -609,6 +609,19 @@ name = "llvm-sys"
 version = "140.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b9eda9cc6f86672152125b1e112d66ab8797b7917fb202e2faee912caa76413"
+dependencies = [
+ "cc",
+ "lazy_static",
+ "libc",
+ "regex",
+ "semver",
+]
+
+[[package]]
+name = "llvm-sys"
+version = "150.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fab12165825f9fe4a9afa32c17bf55a4014a7f0385c5969975f2d04d36cd611c"
 dependencies = [
  "cc",
  "lazy_static",
@@ -820,7 +833,7 @@ dependencies = [
  "inkwell",
  "internal_macro",
  "lazy_static",
- "llvm-sys",
+ "llvm-sys 150.0.3",
  "log",
  "lsp-server",
  "lsp-types",
