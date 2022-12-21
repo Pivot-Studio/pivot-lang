@@ -107,6 +107,8 @@ pub fn create_llvm_deps<'ctx>(
         module.add_metadata_flag("CodeView", FlagBehavior::Warning, metacv); // TODO: is this needed for windows debug?
     }
     let tm = get_target_machine(inkwell::OptimizationLevel::None);
+    module.set_triple(&tm.get_triple());
+    module.set_data_layout(&tm.get_target_data().get_data_layout());
     (module, builder, dibuilder, compile_unit, tm)
 }
 

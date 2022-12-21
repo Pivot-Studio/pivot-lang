@@ -115,6 +115,10 @@ impl Program {
             NodeEnum::Program(p) => p,
             _ => panic!("not a program"),
         };
+        let params = self.params(db);
+        let f1 = self.docs(db).file(db);
+        let f2 = params.file(db);
+        let is_active_file = dunce::canonicalize(f1).unwrap() == dunce::canonicalize(f2).unwrap();
 
         let mut modmap = FxHashMap::<String, Mod>::default();
         if PathBuf::from(self.params(db).file(db))
@@ -179,12 +183,11 @@ impl Program {
         let abs = dunce::canonicalize(filepath).unwrap();
         let dir = abs.parent().unwrap().to_str().unwrap();
         let fname = abs.file_name().unwrap().to_str().unwrap();
-        let params = self.params(db);
         // 不要修改这里，除非你知道自己在干什么
         // 除了当前用户正打开的文件外，其他文件的编辑位置都输入None，这样可以保证每次用户修改的时候，
         // 未被修改的文件的`emit_file`参数与之前一致，不会被重新分析
         // 修改这里可能导致所有文件被重复分析，从而导致lsp性能下降
-        let pos = if self.docs(db).file(db) == params.file(db) {
+        let pos = if is_active_file {
             self.docs(db).edit_pos(db)
         } else {
             None
@@ -242,7 +245,7 @@ impl Program {
         let m = emit_file(db, p);
         let plmod = m.plmod(db);
         let params = self.params(db);
-        if self.docs(db).file(db) == params.file(db) {
+        if is_active_file {
             if pos.is_some() {
                 Completions::push(
                     db,
