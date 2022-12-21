@@ -20,6 +20,7 @@ out.*
 *.dSYM
 *.dot
 dots
+*testfile
 .DS_Store
 !7zr.exe
 *.info
