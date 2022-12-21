@@ -89,7 +89,9 @@ impl FileCompileInput {
     #[salsa::tracked(lru = 32)]
     pub fn get_emit_params(self, db: &dyn Db) -> EmitParams {
         let file = self.file(db);
-        if self.docs(db).file(db) != file {
+        if dunce::canonicalize(self.docs(db).file(db)).unwrap()
+            != dunce::canonicalize(file).unwrap()
+        {
             let action = if self.docs(db).action(db) == ActionType::Compile
                 || self.docs(db).action(db) == ActionType::PrintAst
             {
@@ -151,14 +153,17 @@ impl MemDocsInput {
     }
     #[salsa::tracked(lru = 32)]
     pub fn get_file_params(self, db: &dyn Db, f: String, entry: bool) -> Option<FileCompileInput> {
-        let mut file = f;
+        let mut file = dunce::canonicalize(f)
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
         let path = get_config_path(file.clone());
         if path.is_err() {
             log::error!("lsp error: {}", path.err().unwrap());
             return None;
         }
         let path = path.unwrap();
-        let buf = PathBuf::from(path.clone());
+        let buf = dunce::canonicalize(PathBuf::from(path.clone())).unwrap();
         let parant = buf.parent().unwrap();
         let re = get_config(
             db,
@@ -173,12 +178,10 @@ impl MemDocsInput {
             log::error!("lsp error: {}", re.err().unwrap());
             return None;
         }
-        let mut config = re.unwrap();
-        config.entry = parant.join(config.entry).to_str().unwrap().to_string();
+        let config = re.unwrap();
         if entry {
             file = config.entry.clone();
         }
-        config.root = parant.to_str().unwrap().to_string();
         Some(FileCompileInput::new(
             db,
             file.clone(),

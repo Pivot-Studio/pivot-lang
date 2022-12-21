@@ -14,27 +14,6 @@ pub struct Database {
 }
 // ANCHOR_END: db_struct
 
-impl Database {
-    /// Enable logging of each salsa event.
-    #[cfg(test)]
-    pub fn enable_logging(self) -> Self {
-        assert!(self.logs.is_none());
-        Self {
-            storage: self.storage,
-            logs: Some(Default::default()),
-        }
-    }
-
-    #[cfg(test)]
-    pub fn take_logs(&mut self) -> Vec<String> {
-        if let Some(logs) = &self.logs {
-            std::mem::take(&mut *logs.lock().unwrap())
-        } else {
-            panic!("logs not enabled");
-        }
-    }
-}
-
 // ANCHOR: db_impl
 impl salsa::Database for Database {
     fn salsa_event(&self, event: salsa::Event) {

@@ -59,7 +59,8 @@ pub struct Dependency {
 
 pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     let config = entry.text(db);
-
+    let mut config_root = PathBuf::from(entry.path(db)); // xxx/Kagari.toml
+    config_root.pop();
     let re = toml::from_str(&config);
     if let Err(re) = re {
         return Err(format!("配置文件解析错误:{:?}", re));
@@ -70,7 +71,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
         return Err("未设置环境变量KAGARI_LIB_ROOT，无法找到系统库".to_string());
     }
     let mut deps = BTreeMap::<String, Dependency>::default();
-    let libroot = PathBuf::from(libroot.unwrap());
+    let libroot = dunce::canonicalize(PathBuf::from(libroot.unwrap())).unwrap();
     let libroot = libroot.read_dir();
     if libroot.is_err() {
         return Err("KAGARI_LIB_ROOT没有指向合法的目录，无法找到系统库".to_string());
@@ -80,7 +81,11 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
         if let Ok(path) = x {
             if path.path().is_dir() {
                 let mut dep = Dependency::default();
-                dep.path = path.path().to_str().unwrap().to_string();
+                dep.path = dunce::canonicalize(path.path())
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string();
                 deps.insert(path.file_name().to_str().unwrap().to_string(), dep);
             }
         }
@@ -90,10 +95,33 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     } else {
         let mut rawdeps = config.deps.unwrap();
         for (k, v) in rawdeps.iter_mut() {
+            if PathBuf::from(&v.path).is_absolute() {
+                v.path = dunce::canonicalize(&v.path)
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string();
+            } else {
+                v.path = dunce::canonicalize(config_root.join(&v.path))
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string();
+            }
             deps.insert(k.clone(), v.clone());
         }
         config.deps = Some(deps);
     }
+    config.root = dunce::canonicalize(config_root.clone())
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+    config.entry = dunce::canonicalize(config_root.join(&config.entry))
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
     Ok(config)
 }
 #[cfg(target_os = "linux")]
