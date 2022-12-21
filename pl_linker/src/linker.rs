@@ -46,7 +46,6 @@ pub fn create_with_target(target: &spec::Target) -> Box<dyn Linker> {
 
 pub trait Linker {
     fn add_object(&mut self, path: &Path) -> Result<(), LinkerError>;
-    fn build_shared_object(&mut self, path: &Path) -> Result<(), LinkerError>;
     fn push_args(&mut self, arg: &str);
     fn finalize(&mut self) -> Result<(), LinkerError>;
 }
@@ -111,22 +110,6 @@ impl Linker for LdLinker {
         self.args.push(path_str);
         Ok(())
     }
-
-    fn build_shared_object(&mut self, path: &Path) -> Result<(), LinkerError> {
-        let path_str = path
-            .to_str()
-            .ok_or_else(|| LinkerError::PathError(path.to_owned()))?;
-
-        // Link as dynamic library
-        self.args.push("--shared".to_owned());
-
-        // Specify output path
-        self.args.push("-o".to_owned());
-        self.args.push(path_str.to_owned());
-
-        Ok(())
-    }
-
     fn finalize(&mut self) -> Result<(), LinkerError> {
         if let Ok(libpath) = env::var("LD_LIBRARY_PATH") {
             libpath.split(':').for_each(|lib| {
@@ -212,28 +195,6 @@ impl Ld64Linker {
         self.args.push(format!("{}", sdk_root.display()));
         Ok(())
     }
-
-    fn add_load_command(&mut self) {
-        let (major, minor, patch) = match self.target.options.min_os_version {
-            None => return,
-            Some(min) => min,
-        };
-
-        let arch = &self.target.arch;
-        let os = &self.target.options.os;
-
-        let load_command = match os.as_ref() {
-            "macos" => "-macosx_version_min",
-            "ios" | "watchos" | "tvos" => match arch.as_ref() {
-                "x86_64" => "-ios_simulator_version_min",
-                _ => "-iphoneos_version_min",
-            },
-            _ => unreachable!(),
-        };
-
-        self.args.push(load_command.to_string());
-        self.args.push(format!("{}.{}.{}", major, minor, patch));
-    }
 }
 
 impl Linker for Ld64Linker {
@@ -243,34 +204,6 @@ impl Linker for Ld64Linker {
             .ok_or_else(|| LinkerError::PathError(path.to_owned()))?
             .to_owned();
         self.args.push(path_str);
-        Ok(())
-    }
-
-    fn build_shared_object(&mut self, path: &Path) -> Result<(), LinkerError> {
-        let path_str = path
-            .to_str()
-            .ok_or_else(|| LinkerError::PathError(path.to_owned()))?;
-
-        let filename_str = path
-            .file_name()
-            .expect("path must have a filename")
-            .to_str()
-            .ok_or_else(|| LinkerError::PathError(path.to_owned()))?;
-
-        // Link as dynamic library
-        self.args.push("-dylib".to_owned());
-
-        // Specify output path
-        self.args.push("-o".to_owned());
-        self.args.push(path_str.to_owned());
-
-        // Ensure that the `install_name` is not a full path as it is used as a unique identifier on
-        // MacOS
-        self.args.push("-install_name".to_owned());
-        self.args.push(filename_str.to_owned());
-
-        self.add_load_command();
-
         Ok(())
     }
 
@@ -310,26 +243,6 @@ impl Linker for MsvcLinker {
         Ok(())
     }
 
-    fn build_shared_object(&mut self, path: &Path) -> Result<(), LinkerError> {
-        let dll_path_str = path
-            .to_str()
-            .ok_or_else(|| LinkerError::PathError(path.to_owned()))?;
-
-        let dll_lib_path_str = path
-            .to_str()
-            .ok_or_else(|| LinkerError::PathError(path.to_owned()))?;
-
-        self.args.push("/DLL".to_owned());
-        self.args.push("/NOENTRY".to_owned());
-        // self.args.push(format!("/EXPORT:{}", abi::GET_INFO_FN_NAME));
-        // self.args
-        //     .push(format!("/EXPORT:{}", abi::GET_VERSION_FN_NAME));
-        // self.args
-        //     .push(format!("/EXPORT:{}", abi::SET_ALLOCATOR_HANDLE_FN_NAME));
-        self.args.push(format!("/IMPLIB:{}", dll_lib_path_str));
-        self.args.push(format!("/OUT:{}", dll_path_str));
-        Ok(())
-    }
     fn finalize(&mut self) -> Result<(), LinkerError> {
         // self.push_args("-defaultlib:libucrt");
         self.push_args("-defaultlib:libcmt");
