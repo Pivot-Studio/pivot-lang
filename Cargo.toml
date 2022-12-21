@@ -22,7 +22,7 @@ stderrlog = "0.5.4"
 log = "0.4"
 clap = { version = "4.0.18", features = ["derive"] }
 colored = "2.0.0"
-serde = "1.0.145"
+serde = "1.0.151"
 lsp-types = { branch = "master", features = ["proposed"], git = "https://github.com/Pivot-Studio/lsp-types" }
 lsp-server = "0.6.0"
 serde_json = "1.0.85"
