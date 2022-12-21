@@ -40,7 +40,7 @@ jobs:
         cp nginx.conf book/nginx.conf
         cp book.yaml book/book.yaml
       working-directory: book
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: book
         path: book/book
