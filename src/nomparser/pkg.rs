@@ -21,11 +21,11 @@ use super::*;
 pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         preceded(
-            tag_token(TokenType::USE),
+            tag_token_word(TokenType::USE),
             delspace(tuple((
-                separated_list1(tag_token(TokenType::DOUBLE_COLON), identifier),
-                opt(tag_token(TokenType::DOUBLE_COLON)),
-                opt(tag_token(TokenType::COLON)),
+                separated_list1(tag_token_symbol(TokenType::DOUBLE_COLON), identifier),
+                opt(tag_token_symbol(TokenType::DOUBLE_COLON)),
+                opt(tag_token_symbol(TokenType::COLON)),
             ))),
         ),
         |(ns, opt, opt2)| {

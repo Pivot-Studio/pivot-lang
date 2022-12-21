@@ -51,12 +51,12 @@ use super::*;
 pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
-            tag_token(TokenType::IF),
+            tag_token_word(TokenType::IF),
             parse_with_ex(logic_exp, true),
             statement_block,
             opt(delspace(comment)),
             opt(preceded(
-                tag_token(TokenType::ELSE),
+                tag_token_word(TokenType::ELSE),
                 alt((
                     if_statement,
                     map_res(statement_block, |n| res_enum(n.into())),
@@ -104,7 +104,7 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 pub fn while_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
-            tag_token(TokenType::WHILE),
+            tag_token_word(TokenType::WHILE),
             alt_except(
                 logic_exp,
                 "{",
@@ -166,11 +166,11 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 pub fn for_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
-            tag_token(TokenType::FOR),
+            tag_token_word(TokenType::FOR),
             opt(alt((assignment, new_variable))),
-            tag_token(TokenType::SEMI),
+            tag_token_symbol(TokenType::SEMI),
             logic_exp,
-            tag_token(TokenType::SEMI),
+            tag_token_symbol(TokenType::SEMI),
             opt(assignment),
             statement_block,
             opt(delspace(comment)),
@@ -204,8 +204,8 @@ pub fn for_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 pub fn break_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
-            tag_token(TokenType::BREAK),
-            tag_token(TokenType::SEMI),
+            tag_token_word(TokenType::BREAK),
+            tag_token_symbol(TokenType::SEMI),
             opt(delspace(comment)),
         )),
         |(_, _, optcomment)| {
@@ -228,8 +228,8 @@ pub fn break_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 pub fn continue_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
-            tag_token(TokenType::CONTINUE),
-            tag_token(TokenType::SEMI),
+            tag_token_word(TokenType::CONTINUE),
+            tag_token_symbol(TokenType::SEMI),
             opt(delspace(comment)),
         )),
         |(_, _, optcomment)| {

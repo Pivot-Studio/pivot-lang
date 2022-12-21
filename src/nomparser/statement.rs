@@ -27,7 +27,7 @@ use super::*;
 
 fn empty_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
-        preceded(tag_token(TokenType::SEMI), opt(delspace(comment))),
+        preceded(tag_token_symbol(TokenType::SEMI), opt(delspace(comment))),
         |optcomment| {
             let comments = if let Some(com) = optcomment {
                 vec![vec![com]]
@@ -55,9 +55,9 @@ fn empty_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
     delspace(map_res(
         tuple((
-            del_newline_or_space!(tag_token(TokenType::LBRACE)),
+            del_newline_or_space!(tag_token_symbol(TokenType::LBRACE)),
             many0(del_newline_or_space!(statement)),
-            del_newline_or_space!(tag_token(TokenType::RBRACE)),
+            del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
         )),
         |((_, start), v, (_, end))| {
             let range = start.start.to(end.end);
@@ -107,10 +107,10 @@ fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
-            tag_token(TokenType::LET),
+            tag_token_word(TokenType::LET),
             identifier,
-            opt(pair(tag_token(TokenType::COLON), type_name)),
-            opt(pair(tag_token(TokenType::ASSIGN), logic_exp)),
+            opt(pair(tag_token_symbol(TokenType::COLON), type_name)),
+            opt(pair(tag_token_symbol(TokenType::ASSIGN), logic_exp)),
         )),
         |((_, start), a, tp, v)| {
             let mut end = a.range.end;
@@ -140,7 +140,7 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("a = 1")]
 pub fn assignment(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
-        tuple((pointer_exp, tag_token(TokenType::ASSIGN), logic_exp)),
+        tuple((pointer_exp, tag_token_symbol(TokenType::ASSIGN), logic_exp)),
         |(left, _op, right)| {
             let range = left.range().start.to(right.range().end);
             res_enum(
@@ -168,9 +168,9 @@ pub fn assignment(input: Span) -> IResult<Span, Box<NodeEnum>> {
 fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
-            tag_token(TokenType::RETURN),
+            tag_token_word(TokenType::RETURN),
             opt(logic_exp),
-            tag_token(TokenType::SEMI),
+            tag_token_symbol(TokenType::SEMI),
             opt(delspace(comment)),
         )),
         |((_, range), val, _, optcomment)| {
@@ -207,9 +207,9 @@ fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 pub fn global_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
-            tag_token(TokenType::CONST),
+            tag_token_word(TokenType::CONST),
             identifier,
-            tag_token(TokenType::ASSIGN),
+            tag_token_symbol(TokenType::ASSIGN),
             logic_exp,
         )),
         |(_, var, _, exp)| {

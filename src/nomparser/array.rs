@@ -21,12 +21,12 @@ use super::*;
 pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
-            tag_token(TokenType::LBRACKET),
+            tag_token_symbol(TokenType::LBRACKET),
             separated_list0(
-                tag_token(TokenType::COMMA),
+                tag_token_symbol(TokenType::COMMA),
                 del_newline_or_space!(logic_exp),
             ),
-            tag_token(TokenType::RBRACKET),
+            tag_token_symbol(TokenType::RBRACKET),
         )),
         |((_, lb), exps, (_, rb))| {
             let range = lb.start.to(rb.end);
@@ -41,9 +41,9 @@ pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
 pub fn array_element_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
     delspace(map_res(
         tuple((
-            tag_token(TokenType::LBRACKET),
+            tag_token_symbol(TokenType::LBRACKET),
             opt(logic_exp),
-            tag_token(TokenType::RBRACKET),
+            tag_token_symbol(TokenType::RBRACKET),
             many0(comment),
         )),
         |(_, idx, (_, rr), com)| {

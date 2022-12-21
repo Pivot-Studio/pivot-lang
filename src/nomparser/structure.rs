@@ -29,16 +29,16 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((
             many0(del_newline_or_space!(comment)),
-            tag_token(TokenType::STRUCT),
+            tag_token_word(TokenType::STRUCT),
             identifier,
             opt(generic_type_def),
-            del_newline_or_space!(tag_token(TokenType::LBRACE)),
+            del_newline_or_space!(tag_token_symbol(TokenType::LBRACE)),
             many0(tuple((
                 del_newline_or_space!(typed_identifier),
-                opt(tag_token(TokenType::SEMI)),
+                opt(tag_token_symbol(TokenType::SEMI)),
                 opt(comment),
             ))),
-            del_newline_or_space!(tag_token(TokenType::RBRACE)),
+            del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
         )),
         |(doc, (_, start), id, generics, _, fields, (_, end))| {
             let range = start.start.to(end.end);
@@ -81,7 +81,7 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
 /// special: del newline or space
 fn struct_init_field(input: Span) -> IResult<Span, Box<StructInitFieldNode>> {
     del_newline_or_space!(map_res(
-        tuple((identifier, tag_token(TokenType::COLON), logic_exp,)),
+        tuple((identifier, tag_token_symbol(TokenType::COLON), logic_exp,)),
         |(id, _, exp)| {
             let range = id.range.start.to(exp.range().end);
             Ok::<_, Error>(Box::new(StructInitFieldNode {
@@ -111,14 +111,14 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
         tuple((
             type_name,
             opt(generic_param_def),
-            del_newline_or_space!(tag_token(TokenType::LBRACE)),
+            del_newline_or_space!(tag_token_symbol(TokenType::LBRACE)),
             alt((
                 map_res(
                     pair(
                         many0(tuple((
                             terminated(
                                 del_newline_or_space!(struct_init_field),
-                                tag_token(TokenType::COMMA),
+                                tag_token_symbol(TokenType::COMMA),
                             ),
                             many0(comment),
                         ))),
@@ -144,7 +144,7 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 }),
             )),
             many0(comment),
-            del_newline_or_space!(tag_token(TokenType::RBRACE)),
+            del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
         )),
         |(name, generic_params, _, (fields, lcomment), rcomment, _)| {
             let range = if fields.len() > 0 {

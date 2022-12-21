@@ -48,21 +48,21 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((
             many0(del_newline_or_space!(comment)),
-            tag_token(TokenType::FN),
+            tag_token_word(TokenType::FN),
             identifier,
             opt(generic_type_def),
-            tag_token(TokenType::LPAREN),
+            tag_token_symbol(TokenType::LPAREN),
             del_newline_or_space!(separated_list0(
-                tag_token(TokenType::COMMA),
+                tag_token_symbol(TokenType::COMMA),
                 del_newline_or_space!(typed_identifier),
             )),
-            tag_token(TokenType::RPAREN),
+            tag_token_symbol(TokenType::RPAREN),
             type_name,
             alt((
                 map_res(statement_block, |b| {
                     Ok::<_, Error>((Some(b.clone()), b.range))
                 }),
-                map_res(tag_token(TokenType::SEMI), |(_, range)| {
+                map_res(tag_token_symbol(TokenType::SEMI), |(_, range)| {
                     Ok::<_, Error>((None, range))
                 }),
             )),
@@ -104,12 +104,12 @@ pub fn call_function_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEn
     delspace(map_res(
         tuple((
             opt(generic_param_def),
-            tag_token(TokenType::LPAREN),
+            tag_token_symbol(TokenType::LPAREN),
             del_newline_or_space!(separated_list0(
-                tag_token(TokenType::COMMA),
+                tag_token_symbol(TokenType::COMMA),
                 del_newline_or_space!(logic_exp)
             )),
-            tag_token(TokenType::RPAREN),
+            tag_token_symbol(TokenType::RPAREN),
             many0(comment),
         )),
         |(generic, (_, st), paras, (_, end), com)| {

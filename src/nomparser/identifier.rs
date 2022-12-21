@@ -37,9 +37,12 @@ use super::*;
 pub fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
-            separated_list1(tag_token(TokenType::DOUBLE_COLON), delspace(identifier)),
-            opt(tag_token(TokenType::DOUBLE_COLON)), // 容忍未写完的语句
-            opt(tag_token(TokenType::COLON)),        // 容忍未写完的语句
+            separated_list1(
+                tag_token_symbol(TokenType::DOUBLE_COLON),
+                delspace(identifier),
+            ),
+            opt(tag_token_symbol(TokenType::DOUBLE_COLON)), // 容忍未写完的语句
+            opt(tag_token_symbol(TokenType::COLON)),        // 容忍未写完的语句
         )),
         |(mut ns, opt, opt2)| {
             let id = ns.pop().unwrap();
@@ -88,7 +91,7 @@ pub fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> 
     delspace(map_res(
         tuple((
             identifier,
-            tag_token(TokenType::COLON),
+            tag_token_symbol(TokenType::COLON),
             opt(type_name),
             opt(comment),
         )),

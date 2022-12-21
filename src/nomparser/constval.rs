@@ -36,16 +36,16 @@ pub fn number(input: Span) -> IResult<Span, Box<NodeEnum>> {
     Ok((re, Box::new(node.into())))
 }
 
-#[test_parser("true")]
+#[test_parser(" true")]
 #[test_parser("false")]
 #[test_parser_error("tru")]
 #[test_parser_error("fales")]
 pub fn bool_const(input: Span) -> IResult<Span, Box<NodeEnum>> {
     alt((
-        map_res(tag_token(TokenType::TRUE), |(_, range)| {
+        map_res(tag_token_word(TokenType::TRUE), |(_, range)| {
             res_enum(BoolConstNode { value: true, range }.into())
         }),
-        map_res(tag_token(TokenType::FALSE), |(_, range)| {
+        map_res(tag_token_word(TokenType::FALSE), |(_, range)| {
             res_enum(
                 BoolConstNode {
                     value: false,
@@ -70,8 +70,8 @@ fn float(input: Span) -> IResult<Span, Span> {
             opt(tuple((
                 one_of("eE"),
                 opt(alt((
-                    tag_token(TokenType::PLUS),
-                    tag_token(TokenType::MINUS),
+                    tag_token_symbol(TokenType::PLUS),
+                    tag_token_symbol(TokenType::MINUS),
                 ))),
                 decimal,
             ))),
@@ -81,8 +81,8 @@ fn float(input: Span) -> IResult<Span, Span> {
             opt(preceded(char('.'), decimal)),
             one_of("eE"),
             opt(alt((
-                tag_token(TokenType::PLUS),
-                tag_token(TokenType::MINUS),
+                tag_token_symbol(TokenType::PLUS),
+                tag_token_symbol(TokenType::MINUS),
             ))),
             decimal,
         ))), // Case three: 42. and 42.42
