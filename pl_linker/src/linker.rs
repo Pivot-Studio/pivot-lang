@@ -1,7 +1,6 @@
 use core::fmt;
 use mun_target::spec::{self, LinkerFlavor};
 use std::env;
-use std::ffi::OsStr;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
@@ -75,38 +74,31 @@ impl LdLinker {
         }
     }
 }
-fn find_lib_paths_from(from: &str) -> Vec<PathBuf> {
-    let mut paths = vec![];
-    let lib_root = PathBuf::from(from);
-    search_lib_path(&lib_root, &["a", "so"], &mut paths);
-    paths
-}
-
-fn search_lib_path(path: &PathBuf, lib_exts: &[&str], paths: &mut Vec<PathBuf>) {
-    if path.is_dir() {
-        let mut is_in = false;
-        for sub_path in path.read_dir().unwrap() {
-            let sub_path = sub_path.unwrap().path();
-            if sub_path.is_dir() && !sub_path.is_symlink() {
-                search_lib_path(&sub_path, lib_exts, paths);
-            } else if !is_in
-                && lib_exts
-                    .iter()
-                    .any(|ext| sub_path.extension() == Some(OsStr::new(ext)))
-            {
-                paths.push(path.to_path_buf());
-                is_in = true;
-            }
-        }
-    }
-}
 
 fn find_linux_lib_paths() -> Vec<PathBuf> {
-    let mut paths = find_lib_paths_from("/usr/lib");
-    paths.extend(find_lib_paths_from("/lib"));
-    paths.extend(find_lib_paths_from("/usr/lib64"));
-    paths.extend(find_lib_paths_from("/lib64"));
-    paths.extend(find_lib_paths_from("/usr/lib"));
+    fn gcc_version() -> String {
+        let mut command = Command::new("gcc");
+        command.arg("--version");
+        let output = command.output().expect("Failed to execute command");
+        let output_str = std::str::from_utf8(&output.stdout).expect("Invalid UTF-8 output");
+        output_str
+            .split_whitespace()
+            .nth(2)
+            .expect("Failed to parse version")
+            .split(".")
+            .nth(0)
+            .expect("Failed to parse version")
+            .to_string()
+    }
+    let mut paths = vec![];
+    let sys_lib_dirs = vec!["/lib", "/usr/lib", "/lib64", "/usr/lib64"];
+    let version = gcc_version();
+    sys_lib_dirs.iter().for_each(|&d| {
+        paths.extend([
+            PathBuf::from(format!("{}/x86_64-linux-gnu/", d)),
+            PathBuf::from(format!("{}/gcc/x86_64-linux-gnu/{}/", d, version)),
+        ])
+    });
     paths
 }
 
@@ -140,11 +132,6 @@ impl Linker for LdLinker {
             libpath.split(':').for_each(|lib| {
                 self.push_args(&format!("-L{}", lib));
             });
-        }
-        let p = PathBuf::from("/usr/bin/../lib/gcc/x86_64-linux-gnu/");
-        if let Ok(dir) = p.read_dir() {
-            let f = dir.last().unwrap().unwrap();
-            self.push_args(&format!("-L{}", f.path().to_str().unwrap()));
         }
         let paths = find_linux_lib_paths();
         paths.iter().for_each(|lib| {
