@@ -411,9 +411,10 @@ mod test {
         #[cfg(target_os = "windows")]
         let exe = exe.with_extension("exe");
         let exe = dunce::canonicalize(&exe).expect("static compiled file not found");
-        Command::new(exe.to_str().unwrap())
+        let o = Command::new(exe.to_str().unwrap())
             .output()
             .expect("failed to execute compiled program");
+        assert!(o.status.success());
         input.set_action(&mut db).to(ActionType::PrintAst);
         compile(
             &db,
