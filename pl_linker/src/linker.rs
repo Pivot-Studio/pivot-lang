@@ -121,11 +121,24 @@ impl Linker for LdLinker {
         });
         // libs and link args
         [
+            "-pie", 
+            "-zrelro", 
+            "--hash-style=gnu", 
+            "--build-id", 
+            "--eh-frame-hdr", 
+            "-melf_x86_64", 
             "-dynamic-linker=/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
-            "/lib/x86_64-linux-gnu/crt1.o",
+            "/lib/x86_64-linux-gnu/Scrt1.o",
+            "/lib/x86_64-linux-gnu/crti.o",
+            // "/usr/lib/gcc/x86_64-linux-gnu/<version>/crtbeginS.o",
             "-lc",
             "-lpthread",
             "-lgcc_s",
+            "-lgcc",
+            "--no-as-needed",
+            "-ldl",
+            // "/usr/lib/gcc/x86_64-linux-gnu/<version>/crtendS.o",
+            "/lib/x86_64-linux-gnu/crtn.o",
         ]
         .iter()
         .for_each(|arg| {
