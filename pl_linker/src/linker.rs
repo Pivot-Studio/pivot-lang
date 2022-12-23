@@ -74,7 +74,7 @@ impl LdLinker {
     }
 }
 
-fn find_linux_lib_paths() -> Vec<PathBuf> {
+fn get_linux_lib_paths() -> Vec<String> {
     fn gcc_version() -> String {
         let mut command = Command::new("gcc");
         command.arg("--version");
@@ -90,13 +90,16 @@ fn find_linux_lib_paths() -> Vec<PathBuf> {
             .to_string()
     }
     let mut paths = vec![];
-    let sys_lib_dirs = vec!["/lib", "/usr/lib", "/lib64", "/usr/lib64"];
+    if let Ok(libpath) = env::var("LD_LIBRARY_PATH") {
+        paths.extend(libpath.split(':').map(|s| s.to_string()));
+    }
     let version = gcc_version();
-    sys_lib_dirs.iter().for_each(|&d| {
-        paths.extend([
-            PathBuf::from(format!("{}/x86_64-linux-gnu/", d)),
-            PathBuf::from(format!("{}/gcc/x86_64-linux-gnu/{}/", d, version)),
-        ])
+    [
+        "/lib", "/usr/lib", "/lib64", "/usr/lib64",
+        "/usr/lib/x86_64-linux-gnu", 
+        &format!("/usr/lib/gcc/x86_64-linux-gnu/{}/", version),
+    ].iter().for_each(|path| {
+        paths.push(path.to_string());
     });
     paths
 }
@@ -111,18 +114,24 @@ impl Linker for LdLinker {
         Ok(())
     }
     fn finalize(&mut self) -> Result<(), LinkerError> {
-        if let Ok(libpath) = env::var("LD_LIBRARY_PATH") {
-            libpath.split(':').for_each(|lib| {
-                self.push_args(&format!("-L{}", lib));
-            });
-        }
-        let paths = find_linux_lib_paths();
+        // libpath
+        let paths = get_linux_lib_paths();
         paths.iter().for_each(|lib| {
-            self.push_args(&format!("-L{}", lib.to_str().unwrap()));
+            self.push_args(&format!("-L{}", lib.as_str()));
         });
-        self.push_args("-lc");
-        self.push_args("-lpthread");
-        self.push_args("-lgcc_s");
+        // libs and link args
+        [
+            "-dynamic-linker=/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
+            "/lib/x86_64-linux-gnu/crt1.o",
+            "-lc",
+            "-lpthread",
+            "-lgcc_s",
+        ]
+        .iter()
+        .for_each(|arg| {
+            self.push_args(arg);
+        });
+        // link
         lld_rs::link(lld_rs::LldFlavor::Elf, &self.args)
             .ok()
             .map_err(LinkerError::LinkError)
