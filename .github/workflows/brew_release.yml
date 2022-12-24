@@ -33,8 +33,8 @@ jobs:
 
           # Custom dependencies in case other formulas are needed to build the current one.
           # Optional - multiline string.
-          depends_on: |
-            "llvm@14"
+          # depends_on: |
+          #   "llvm@14"
           # Custom install command for your formula.
           # Required - string.
           install: |
