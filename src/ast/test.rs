@@ -39,6 +39,7 @@ mod test {
         } else {
             None
         };
+
         // let db = Database::default();
         let input = MemDocsInput::new(
             db,
@@ -49,7 +50,7 @@ mod test {
             params,
             pos,
         );
-        compile_dry(db, input);
+        compile_dry(db, input).unwrap();
         compile_dry::accumulated::<A>(db, input)
     }
 
@@ -373,7 +374,7 @@ mod test {
     #[test]
     #[cfg(feature = "jit")]
     fn test_jit() {
-        use std::path::PathBuf;
+        use std::{path::PathBuf, process::Command};
 
         use crate::ast::compiler::{compile, run, Options};
 
@@ -390,6 +391,7 @@ mod test {
         );
         let outplb = "testout.bc";
         let out = "testout";
+
         compile(
             &db,
             input,
@@ -406,6 +408,14 @@ mod test {
             &PathBuf::from(outplb).as_path(),
             inkwell::OptimizationLevel::Default,
         );
+        let exe = PathBuf::from(out);
+        #[cfg(target_os = "windows")]
+        let exe = exe.with_extension("exe");
+        let exe = dunce::canonicalize(&exe).expect("static compiled file not found");
+        let o = Command::new(exe.to_str().unwrap())
+            .output()
+            .expect("failed to execute compiled program");
+        assert!(o.status.success());
         input.set_action(&mut db).to(ActionType::PrintAst);
         compile(
             &db,

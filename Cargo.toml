@@ -7,12 +7,13 @@ authors = ["The pivot-lang Authors"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm14-0"] }
+inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm14-0", "no-libffi-linking"] }
 indexmap = "1.9.2"
 lazy_static = "1.4.0"
 paste = "1.0"
 llvm-sys = "140"
 internal_macro = { path = "./internal_macro" }
+pl_linker = { path = "./pl_linker" }
 vm = { path = "./vm", optional = true, features = ["jit"] }
 nom_locate = "4.0.0"
 rowan = "0.15.10"
@@ -52,5 +53,6 @@ path = "src/main.rs"
 members = [
     "internal_macro",
     "vm",
+    "pl_linker",
 ]
 

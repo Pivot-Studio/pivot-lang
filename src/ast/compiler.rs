@@ -16,16 +16,15 @@ use inkwell::{
     context::Context,
     module::Module,
     passes::{PassManager, PassManagerBuilder},
-    targets::FileType,
     OptimizationLevel,
 };
 use log::{info, trace, warn};
+use pl_linker::{linker::create_with_target, mun_target::spec::Target};
 use rustc_hash::FxHashSet;
-use std::process::Command;
 use std::{
     env,
     fs::{self, remove_file},
-    path::Path,
+    path::{Path, PathBuf},
     time::Instant,
 };
 
@@ -103,18 +102,18 @@ pub fn run(p: &Path, opt: OptimizationLevel) {
 }
 
 #[salsa::tracked]
-pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) {
+pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
     let path = get_config_path(docs.file(db).to_string());
     if path.is_err() {
         log::error!("lsp error: {}", path.err().unwrap());
-        return;
+        return None;
     }
 
     let input = docs.get_file_params(db, docs.file(db).clone(), true);
     if input.is_none() {
-        return;
+        return None;
     }
-    compile_dry_file(db, input.unwrap());
+    compile_dry_file(db, input.unwrap())
 }
 
 #[salsa::tracked]
@@ -148,7 +147,7 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
 #[salsa::tracked]
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let now = Instant::now();
-    compile_dry(db, docs);
+    compile_dry(db, docs).unwrap();
     let errs = compile_dry::accumulated::<Diagnostics>(db, docs);
     let mut errs_num = 0;
     if errs.len() > 0 {
@@ -215,10 +214,6 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         log::debug!("rm {}", m.to_str().unwrap());
     }
     llvmmod.verify().unwrap();
-    let tm = get_target_machine(op.optimization.to_llvm());
-    let mut f = out.to_string();
-    f.push_str(".asm");
-
     if op.optimization != HashOptimizationLevel::None {
         let pass_manager_builder = PassManagerBuilder::create();
 
@@ -248,17 +243,21 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         let llp = Path::new(&s[..]);
         fs::write(llp, llvmmod.to_string()).unwrap();
     }
-    tm.write_to_file(&llvmmod, FileType::Assembly, Path::new(&f))
-        .unwrap();
     let mut fo = out.to_string();
     let mut out = out.to_string();
+    let pl_target = Target::host_target().expect("get host target failed");
     out.push_str(".bc");
+    let tm = get_target_machine(op.optimization.to_llvm());
+    llvmmod.set_triple(&tm.get_triple());
+    llvmmod.set_data_layout(&tm.get_target_data().get_data_layout());
     llvmmod.write_bitcode_to_path(Path::new(&out));
     println!("jit executable file writted to: {}", &out);
-    let mut cmd = Command::new("clang-14");
+    let mut t = create_with_target(&pl_target);
+
+    // let mut cmd = Command::new("clang-14");
     if cfg!(target_os = "linux") {
         trace!("target os is linux");
-        cmd.arg("-ltinfo");
+        // cmd.arg("-ltinfo");
     }
     let root = env::var("PL_ROOT");
     if root.is_err() {
@@ -268,28 +267,34 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let root = root.unwrap();
     let vmpath;
     if cfg!(target_os = "windows") {
-        cmd = Command::new("clang");
-        f = out;
+        // cmd = Command::new("clang");
+        // f = out.clone();
         fo.push_str(".exe");
-        vmpath = format!("{}/vm.lib", root);
-        cmd.arg("-lws2_32")
-            .arg("-lbcrypt")
-            .arg("-luserenv")
-            .arg("-ladvapi32");
+        vmpath = format!("{}\\vm.lib", root);
+        // cmd.arg("-lws2_32")
+        //     .arg("-lbcrypt")
+        //     .arg("-luserenv")
+        //     .arg("-ladvapi32");
     } else {
-        vmpath = format!("{}/libvm.a", root);
-        cmd.arg("-pthread").arg("-ldl");
+        let mut p = PathBuf::from(&root);
+        p.push("libvm.a");
+        vmpath = dunce::canonicalize(&p)
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        // cmd.arg("-pthread").arg("-ldl");
     }
 
-    cmd.arg(format!("-O{}", op.optimization as u32))
-        .arg(&f)
-        .arg(&vmpath)
-        .arg("-o")
-        .arg(&fo)
-        .arg("-g");
-    let res = cmd.status();
-    if res.is_err() || !res.as_ref().unwrap().success() {
-        warn!("{}", format!("link failed: {}", res.unwrap()).bright_red());
+    t.add_object(Path::new(&out)).unwrap();
+    t.add_object(Path::new(&vmpath)).unwrap();
+    t.output_to(&fo);
+    let res = t.finalize();
+    if res.is_err() {
+        eprint!(
+            "{}",
+            format!("link failed: {}", res.unwrap_err()).bright_red()
+        );
     } else {
         println!("link succ, output file: {}", fo);
     }

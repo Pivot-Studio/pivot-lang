@@ -3,18 +3,15 @@ NC='\033[0m'
 RED='\033[0;31m'
 
 if [ "$1" = configure ]; then
-    if [[ -z "${KAGARI_LIB_ROOT}" ]]; then
-        echo "export KAGARI_LIB_ROOT=/pl/planglib" >> ~/.bashrc
-        echo "export PL_ROOT=/pl" >> ~/.bashrc
-    fi
     echo "${GREEN}"
     echo "-------------------------------------------------------------------"
-    echo "Successfully installed pivot-lang compiler with JIT feature!"
+    echo "Successfully installed pivot-lang compiler!"
     echo "the pivot-lang compiler is now available as 'plc' command"
-    echo "${RED}**jit feature does not support debug**"
-    echo "you may need to restart your shell to load environment variables"
-    echo "to install aot feature, please install clang-14 manually"
-    echo "see https://apt.llvm.org/ for more details"
+    echo "${RED}在开始使用plc之前，您需要设定两个环境变量"
+    echo "请使用以下命令在当前终端中配置环境变量："
+    echo " $ export KAGARI_LIB_ROOT=/pl/planglib"
+    echo " $ export PL_ROOT=/pl"
+    echo "如果您希望以后新创建的终端能直接使用plc，请将以上两行命令添加到~/.bashrc文件中"
     echo "-------------------------------------------------------------------"
     echo "${NC}"
 fi

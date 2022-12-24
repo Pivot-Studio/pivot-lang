@@ -50,19 +50,8 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Cache LLVM and Clang
-        id: cache-llvm
-        uses: actions/cache@v2
-        with:
-          path: ${{ runner.temp }}/llvm
-          key: llvm-14
-      - name: Install LLVM and Clang
-        if: ${{ matrix.config.os != 'windows-latest' }}
-        uses: KyleMayes/install-llvm-action@v1
-        with:
-          version: "14"
-          directory: ${{ runner.temp }}/llvm
-          cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+      - name: Install LLVM
+        uses: Pivot-Studio/setup-llvm@main
       
       - name: set up win scoop
         if: ${{ matrix.config.os == 'windows-latest' }}
@@ -91,21 +80,18 @@ jobs:
         if: ${{ matrix.config.os == 'windows-latest' }}
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
-          LLVM_SYS_140_PREFIX: ${{ runner.temp }}\llvm
         run: cargo build --release --verbose
 
       - name: Cargo build
         if: ${{ matrix.config.os != 'windows-latest' }}
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
-          LLVM_SYS_140_PREFIX: ${{ runner.temp }}/llvm
         run: cargo build --release
 
       - name: Cargo build vm
         if: ${{ matrix.config.os != 'windows-latest' }}
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
-          LLVM_SYS_140_PREFIX: ${{ runner.temp }}/llvm
         run: cd vm && cargo build --release
 
       - run: mkdir -p ${{ matrix.config.dir }}

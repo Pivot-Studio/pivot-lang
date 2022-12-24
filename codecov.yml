@@ -9,3 +9,8 @@ coverage:
         # basic
         target: 50%
         threshold: 1%
+ignore:
+  - "src/lsp/mod.rs"
+  - "src/lsp/helpers.rs"
+  - "src/lsp/dispatcher.rs"
+  - "src/main.rs"
