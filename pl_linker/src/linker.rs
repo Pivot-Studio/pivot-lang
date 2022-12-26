@@ -75,29 +75,13 @@ impl LdLinker {
 }
 
 fn get_linux_lib_paths() -> Vec<String> {
-    fn gcc_version() -> String {
-        let mut command = Command::new("gcc");
-        command.arg("--version");
-        let output = command.output().expect("Failed to execute command");
-        let output_str = std::str::from_utf8(&output.stdout).expect("Invalid UTF-8 output");
-        output_str
-            .split_whitespace()
-            .nth(2)
-            .expect("Failed to parse version")
-            .split(".")
-            .nth(0)
-            .expect("Failed to parse version")
-            .to_string()
-    }
     let mut paths = vec![];
     if let Ok(libpath) = env::var("LD_LIBRARY_PATH") {
         paths.extend(libpath.split(':').map(|s| s.to_string()));
     }
-    let version = gcc_version();
     [
         "/lib", "/usr/lib", "/lib64", "/usr/lib64",
         "/usr/lib/x86_64-linux-gnu", 
-        &format!("/usr/lib/gcc/x86_64-linux-gnu/{}/", version),
     ].iter().for_each(|path| {
         paths.push(path.to_string());
     });
@@ -133,8 +117,7 @@ impl Linker for LdLinker {
             // "/usr/lib/gcc/x86_64-linux-gnu/<version>/crtbeginS.o",
             "-lc",
             "-lpthread",
-            "-lgcc_s",
-            "-lgcc",
+            "-lunwind",
             "--no-as-needed",
             "-ldl",
             // "/usr/lib/gcc/x86_64-linux-gnu/<version>/crtendS.o",
