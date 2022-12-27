@@ -414,7 +414,13 @@ mod test {
         let o = Command::new(exe.to_str().unwrap())
             .output()
             .expect("failed to execute compiled program");
-        assert!(o.status.success());
+        assert!(
+            o.status.success(),
+            "static compiled program failed with status {:?} and output {:?} and error {:?}",
+            o.status,
+            String::from_utf8_lossy(&o.stdout),
+            String::from_utf8_lossy(&o.stderr)
+        );
         input.set_action(&mut db).to(ActionType::PrintAst);
         compile(
             &db,

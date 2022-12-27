@@ -292,8 +292,15 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
             .to_string();
         // cmd.arg("-pthread").arg("-ldl");
     }
-    for o in objs {
-        t.add_object(o.as_path()).unwrap();
+    #[cfg(target_os = "windows")]
+    {
+        t.add_object(&Path::new(&out)).unwrap();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        for o in objs {
+            t.add_object(o.as_path()).unwrap();
+        }
     }
     t.add_object(Path::new(&vmpath)).unwrap();
     t.output_to(&fo);

@@ -497,14 +497,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 return Some(st);
             }
             PLType::PRIMITIVE(pt) => {
+                let mut size = td.get_bit_size(&self.get_pri_basic_type(pt));
+                if size < 8 {
+                    size = 8; // walkaround for lldb <Unable to determine byte size.> issue
+                }
                 return Some(
                     self.dibuilder
-                        .create_basic_type(
-                            &pt.get_name(),
-                            td.get_bit_size(&self.get_pri_basic_type(pt)),
-                            get_dw_ate_encoding(pt),
-                            0,
-                        )
+                        .create_basic_type(&pt.get_name(), size, get_dw_ate_encoding(pt), 0)
                         .unwrap()
                         .as_type(),
                 );
