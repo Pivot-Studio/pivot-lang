@@ -24,7 +24,7 @@ use internal_macro::{test_parser, test_parser_error};
 use std::fmt::Error;
 
 use super::*;
-
+#[test_parser(";")]
 fn empty_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         preceded(tag_token_symbol(TokenType::SEMI), opt(delspace(comment))),
@@ -104,6 +104,7 @@ fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 }
 
 #[test_parser("let a = 1")]
+#[test_parser_error("leta = 1")]
 pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
@@ -161,6 +162,8 @@ pub fn assignment(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("return;")]
 #[test_parser("return a;")]
 #[test_parser("return 1 + 2;")]
+#[test_parser_error("returntrue;")]
+#[test_parser_error("return1 + 2;")]
 #[test_parser_error("return a = 2;")]
 // ```
 // return_statement = "return" logic_exp newline ;
@@ -204,6 +207,7 @@ fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 }
 
 #[test_parser("const a = 1")]
+#[test_parser_error("consta = 1")]
 pub fn global_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((

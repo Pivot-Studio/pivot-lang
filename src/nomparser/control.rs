@@ -45,6 +45,13 @@ use super::*;
     return;
 }"#
 )]
+#[test_parser_error(
+    "ifa > 1 { 
+    a = 1;
+} else {
+    a = 2;
+}"
+)]
 /// ```ebnf
 /// if_statement = "if" logic_exp statement_block ("else" (if_statement | statement_block))? ;
 /// ```
@@ -94,6 +101,12 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 )]
 #[test_parser(
     "while true {
+    let a = b;
+}
+"
+)]
+#[test_parser_error(
+    "whiletrue {
     let a = b;
 }
 "
@@ -159,7 +172,16 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 
     }"
 )]
-
+#[test_parser_error(
+    "forlet i = 0; i < 5; i = i + 1{
+                
+    }"
+)]
+#[test_parser_error(
+    "for leti = 0; i < 5; i = i + 1{
+                
+    }"
+)]
 /// ```enbf
 /// for_statement = "for" (assignment | new_variable) ";" logic_exp ";" assignment statement_block;
 /// ```

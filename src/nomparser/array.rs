@@ -1,5 +1,6 @@
 use std::fmt::Error;
 
+use internal_macro::test_parser;
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -18,6 +19,14 @@ use crate::{
 
 use super::*;
 
+#[test_parser("[1,2,3]")]
+#[test_parser(
+    "[
+        1,
+        2,
+        x
+    ]"
+)]
 pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
@@ -35,6 +44,7 @@ pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
     )(input)
 }
 
+#[test_parser("[123]")]
 /// ```ebnf
 /// array_element_op = ('[' logic_exp ']') ;
 /// ```

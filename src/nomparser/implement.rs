@@ -8,7 +8,7 @@ use nom::{
     IResult,
 };
 
-use internal_macro::test_parser;
+use internal_macro::{test_parser, test_parser_error};
 
 use super::*;
 
@@ -42,6 +42,14 @@ use super::*;
             return 0;
         }
         fn f2(x: int) int {
+            x = x+1;
+            return 0;
+        }
+    }"
+)]
+#[test_parser_error(
+    "impla::b::c {
+        fn f(x: int) int {
             x = x+1;
             return 0;
         }

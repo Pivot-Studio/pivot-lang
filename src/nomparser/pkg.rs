@@ -7,7 +7,7 @@ use nom::{
 
 use crate::nomparser::Span;
 use crate::{ast::node::pkg::UseNode, ast::tokens::TokenType};
-use internal_macro::test_parser;
+use internal_macro::{test_parser, test_parser_error};
 
 use super::*;
 
@@ -18,6 +18,8 @@ use super::*;
 #[test_parser("use a::")]
 #[test_parser("use a")]
 #[test_parser("use a:")]
+#[test_parser_error("usea")]
+#[test_parser_error("usea:")]
 pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         preceded(

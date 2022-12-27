@@ -6,7 +6,7 @@ use crate::{
     ast::node::{types::StructInitNode, NodeEnum, RangeTrait},
     ast::{node::types::StructInitFieldNode, tokens::TokenType},
 };
-use internal_macro::test_parser;
+use internal_macro::{test_parser, test_parser_error};
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -21,6 +21,12 @@ use super::*;
 
 #[test_parser(
     "struct mystruct<A|B|C> {
+    myname: int;//123
+    myname2: int;
+}"
+)]
+#[test_parser_error(
+    "structmystruct<A|B|C> {
     myname: int;//123
     myname2: int;
 }"

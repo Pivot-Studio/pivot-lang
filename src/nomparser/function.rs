@@ -12,7 +12,7 @@ use nom::{
 use crate::nomparser::Span;
 use crate::{ast::node::function::FuncDefNode, ast::tokens::TokenType};
 
-use internal_macro::test_parser;
+use internal_macro::{test_parser, test_parser_error};
 
 use super::*;
 
@@ -44,6 +44,7 @@ use super::*;
     "
 )]
 #[test_parser("fn f( \n) int;")]
+#[test_parser_error("fnf( \n) int;")]
 pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((

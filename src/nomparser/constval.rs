@@ -57,6 +57,10 @@ pub fn bool_const(input: Span) -> IResult<Span, Box<NodeEnum>> {
     ))(input)
 }
 
+#[test_parser("123")]
+#[test_parser("12_3")]
+#[test_parser("1_2_3")]
+#[test_parser_error("1 23")]
 fn decimal(input: Span) -> IResult<Span, Span> {
     recognize(many1(terminated(one_of("0123456789"), many0(char('_')))))(input)
 }

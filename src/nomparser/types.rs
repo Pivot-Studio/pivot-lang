@@ -11,7 +11,7 @@ use crate::{
         tokens::TokenType,
     },
 };
-use internal_macro::test_parser;
+use internal_macro::{test_parser, test_parser_error};
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -142,6 +142,11 @@ pub fn generic_param_def(input: Span) -> IResult<Span, Box<GenericParamNode>> {
 /// ```
 #[test_parser(
     "trait mytrait<A|B|C> {
+    fn a() A;
+}"
+)]
+#[test_parser_error(
+    "traitmytrait<A|B|C> {
     fn a() A;
 }"
 )]
