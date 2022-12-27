@@ -40,7 +40,6 @@ pub trait IRBuilder<'a, 'ctx> {
         line: u32,
         pltp: &PLType,
     ) -> ValueHandle;
-    fn alloc_vtp(&self, name: &str, v: ValueHandle) -> ValueHandle;
     fn alloc(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle;
     fn build_conditional_branch(
         &self,

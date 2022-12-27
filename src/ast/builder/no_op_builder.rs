@@ -47,10 +47,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
         0
     }
 
-    fn alloc_vtp(&self, _name: &str, _v: super::ValueHandle) -> super::ValueHandle {
-        0
-    }
-
     fn alloc(
         &self,
         _name: &str,

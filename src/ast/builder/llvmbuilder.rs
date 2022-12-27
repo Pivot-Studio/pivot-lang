@@ -898,6 +898,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     }
     fn alloc(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle {
         let builder = self.builder;
+        builder.unset_current_debug_location();
         let lb = builder.get_insert_block().unwrap();
         match self
             .builder
@@ -919,17 +920,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             }
             None => panic!("alloc get entry failed!"),
         }
-    }
-    fn alloc_vtp(&self, name: &str, v: ValueHandle) -> ValueHandle {
-        let alloca = self.builder.build_alloca::<BasicTypeEnum>(
-            self.get_llvm_value(v)
-                .unwrap()
-                .get_type()
-                .try_into()
-                .unwrap(),
-            name,
-        );
-        self.get_llvm_value_handle(&alloca.as_any_value_enum())
     }
     fn build_struct_gep(
         &self,

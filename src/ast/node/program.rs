@@ -392,7 +392,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let mut hasher = DefaultHasher::new();
         params.fullpath(db).hash(&mut hasher);
         let hashed = format!(
-            "{}_{:x}",
+            "target/{}_{:x}",
             Path::new(&params.file(db))
                 .with_extension("")
                 .to_str()

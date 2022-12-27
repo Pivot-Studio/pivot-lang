@@ -159,7 +159,7 @@ impl Node for FuncCallNode {
             Some(v) => Ok((
                 {
                     builder.rm_curr_debug_location();
-                    let ptr = builder.alloc_vtp("ret_alloc_tmp", v);
+                    let ptr = builder.alloc("ret_alloc_tmp", &rettp.borrow(), ctx);
                     builder.build_store(ptr, v);
                     Some(plv!(ptr))
                 },

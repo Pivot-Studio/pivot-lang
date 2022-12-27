@@ -144,6 +144,10 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
 
 #[salsa::tracked]
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
+    let targetdir = PathBuf::from("target");
+    if !targetdir.exists() {
+        fs::create_dir(&targetdir).unwrap();
+    }
     let now = Instant::now();
     compile_dry(db, docs).unwrap();
     let errs = compile_dry::accumulated::<Diagnostics>(db, docs);
@@ -189,9 +193,15 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         return;
     }
     let mut mods = compile_dry::accumulated::<ModBuffer>(db, docs);
+    let mut objs = vec![];
     let ctx = Context::create();
     let m = mods.pop().unwrap();
+    let tm = get_target_machine(op.optimization.to_llvm());
     let llvmmod = Module::parse_bitcode_from_path(m.clone(), &ctx).unwrap();
+    let o = m.with_extension("o");
+    tm.write_to_file(&llvmmod, inkwell::targets::FileType::Object, &o)
+        .unwrap();
+    objs.push(o);
     let mut set = FxHashSet::default();
     set.insert(m.clone());
     _ = remove_file(m.clone()).unwrap();
@@ -201,8 +211,13 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
             continue;
         }
         set.insert(m.clone());
+        let o = m.with_extension("o");
         // println!("{}", m.clone().to_str().unwrap());
-        _ = llvmmod.link_in_module(Module::parse_bitcode_from_path(m.clone(), &ctx).unwrap());
+        let module = Module::parse_bitcode_from_path(m.clone(), &ctx).unwrap();
+        tm.write_to_file(&module, inkwell::targets::FileType::Object, &o)
+            .unwrap();
+        objs.push(o);
+        _ = llvmmod.link_in_module(module);
         _ = remove_file(m.clone()).unwrap();
         log::debug!("rm {}", m.to_str().unwrap());
     }
@@ -240,7 +255,6 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let mut out = out.to_string();
     let pl_target = Target::host_target().expect("get host target failed");
     out.push_str(".bc");
-    let tm = get_target_machine(op.optimization.to_llvm());
     llvmmod.set_triple(&tm.get_triple());
     llvmmod.set_data_layout(&tm.get_target_data().get_data_layout());
     llvmmod.write_bitcode_to_path(Path::new(&out));
@@ -278,8 +292,9 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
             .to_string();
         // cmd.arg("-pthread").arg("-ldl");
     }
-
-    t.add_object(Path::new(&out)).unwrap();
+    for o in objs {
+        t.add_object(o.as_path()).unwrap();
+    }
     t.add_object(Path::new(&vmpath)).unwrap();
     t.output_to(&fo);
     let res = t.finalize();
