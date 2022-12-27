@@ -80,9 +80,14 @@ fn get_linux_lib_paths() -> Vec<String> {
         paths.extend(libpath.split(':').map(|s| s.to_string()));
     }
     [
-        "/lib", "/usr/lib", "/lib64", "/usr/lib64",
-        "/usr/lib/x86_64-linux-gnu", 
-    ].iter().for_each(|path| {
+        "/lib",
+        "/usr/lib",
+        "/lib64",
+        "/usr/lib64",
+        "/usr/lib/x86_64-linux-gnu",
+    ]
+    .iter()
+    .for_each(|path| {
         paths.push(path.to_string());
     });
     paths
@@ -105,12 +110,12 @@ impl Linker for LdLinker {
         });
         // libs and link args
         [
-            "-pie", 
-            "-zrelro", 
-            "--hash-style=gnu", 
-            "--build-id", 
-            "--eh-frame-hdr", 
-            "-melf_x86_64", 
+            "-pie",
+            "-zrelro",
+            "--hash-style=gnu",
+            "--build-id",
+            "--eh-frame-hdr",
+            "-melf_x86_64",
             "-dynamic-linker=/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2",
             "/lib/x86_64-linux-gnu/Scrt1.o",
             "/lib/x86_64-linux-gnu/crti.o",

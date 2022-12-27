@@ -1,6 +1,7 @@
 use super::ctx::Ctx;
 
 use crate::ast::builder::BuilderEnum;
+use crate::utils::get_hash_code;
 
 use super::diag::PLDiag;
 
@@ -635,6 +636,10 @@ pub struct STType {
 }
 
 impl STType {
+    pub fn get_type_code(&self) -> u64 {
+        let full_name = self.get_st_full_name();
+        get_hash_code(full_name)
+    }
     pub fn append_name_with_generic(&self) -> String {
         if self.need_gen_code() {
             let typeinfer = self

@@ -281,7 +281,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             },
             PLType::FN(f) => Some(
                 self.get_fn_type(f, ctx)
-                    .ptr_type(AddressSpace::Generic)
+                    .ptr_type(AddressSpace::default())
                     .as_basic_type_enum(),
             ),
             PLType::STRUCT(s) => Some(self.struct_type(s, ctx).as_basic_type_enum()),
@@ -292,7 +292,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             PLType::POINTER(p) => Some(
                 self.get_basic_type_op(&p.borrow(), ctx)
                     .unwrap()
-                    .ptr_type(AddressSpace::Generic)
+                    .ptr_type(AddressSpace::default())
                     .as_basic_type_enum(),
             ),
             PLType::PLACEHOLDER(p) => Some({
@@ -349,7 +349,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             let placeholder =
                 unsafe { self.dibuilder.create_placeholder_derived_type(self.context) };
             let td = self.targetmachine.get_target_data();
-            let etp = self.context.i8_type().ptr_type(AddressSpace::Generic);
+            let etp = self.context.i8_type().ptr_type(AddressSpace::default());
             let size = td.get_bit_size(&etp);
             x.borrow_mut().push(MemberType {
                 ditype: placeholder,
@@ -467,12 +467,12 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                                 "",
                                 elemdi,
                                 td.get_bit_size(
-                                    &sttp.ptr_type(AddressSpace::Generic).as_basic_type_enum(),
+                                    &sttp.ptr_type(AddressSpace::default()).as_basic_type_enum(),
                                 ),
                                 td.get_preferred_alignment(
-                                    &sttp.ptr_type(AddressSpace::Generic).as_basic_type_enum(),
+                                    &sttp.ptr_type(AddressSpace::default()).as_basic_type_enum(),
                                 ),
-                                AddressSpace::Generic,
+                                AddressSpace::default(),
                             )
                             .as_type();
                     }
@@ -515,13 +515,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let etp = &self
                     .get_basic_type_op(&p.borrow(), ctx)
                     .unwrap()
-                    .ptr_type(AddressSpace::Generic)
+                    .ptr_type(AddressSpace::default())
                     .as_basic_type_enum();
                 let size = td.get_bit_size(etp);
                 let align = td.get_preferred_alignment(etp);
                 Some(
                     self.dibuilder
-                        .create_pointer_type("", elemdi, size, align, AddressSpace::Generic)
+                        .create_pointer_type("", elemdi, size, align, AddressSpace::default())
                         .as_type(),
                 )
             }
@@ -717,7 +717,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let gc = self.builder.build_load(self.get_gc(ctx), "gc");
         let stackptr = self.builder.build_pointer_cast(
             stackptr.into_pointer_value(),
-            self.context.i64_type().ptr_type(AddressSpace::Generic),
+            self.context.i64_type().ptr_type(AddressSpace::default()),
             "stackptr",
         );
         self.builder
@@ -751,7 +751,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let gc = self.builder.build_load(self.get_gc(ctx), "gc");
         let stackptr = self.builder.build_pointer_cast(
             stackptr.into_pointer_value(),
-            self.context.i64_type().ptr_type(AddressSpace::Generic),
+            self.context.i64_type().ptr_type(AddressSpace::default()),
             "stackptr",
         );
         self.builder

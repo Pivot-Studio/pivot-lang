@@ -330,6 +330,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 if ty != expect {
                     let derefed = self.auto_deref_tp(ty.clone());
                     match (&*expect.clone().borrow(), &*derefed.borrow()) {
+                        // struct to trait
                         (PLType::TRAIT(t), PLType::STRUCT(st)) => {
                             let handle = builder.alloc("tmp_traitv", &expect.borrow(), self);
                             if st
@@ -386,6 +387,10 @@ impl<'a, 'ctx> Ctx<'a> {
                             );
                             let v_ptr = builder.build_struct_gep(handle, 1, "v_tmp").unwrap();
                             builder.build_store(v_ptr, v);
+                            let type_hash = builder.build_struct_gep(handle, 0, "tp_hash").unwrap();
+                            let hash = st.get_type_code();
+                            let hash = builder.int_value(&PriType::U64, hash, false);
+                            builder.build_store(type_hash, hash);
                             return Ok((
                                 Some(PLValue {
                                     value: handle,

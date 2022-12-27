@@ -93,7 +93,7 @@ impl TraitDefNode {
         // type hash
         order_fields.push(Field {
             index: i,
-            typenode: Box::new(TypeNameNode::new_from_str("i64").into()),
+            typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
             name: "tmp".to_string(),
             range: Default::default(),
             refs: Rc::new(RefCell::new(vec![])),
