@@ -354,6 +354,7 @@ fn test_generic_fn_complex<A|B|C>(a: i64, x: A, y: B, z: C) void {
 }
 
 fn main() i64 {
+    let a = true;
     let a1 = [[[1, 2], [1, 2]]];
     io::printi64ln(a1[0][0][0]);
     test_struct();

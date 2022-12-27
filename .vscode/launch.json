@@ -55,6 +55,12 @@
             "preLaunchTask": "install debug plc"
         },
         {
+            "type": "pivot",
+            "request": "launch",
+            "name": "pivot-lang: Launch",
+            "program": "${workspaceFolder}/test/Kagari.toml"
+        },
+        {
             "type": "lldb",
             "request": "launch",
             "name": "(Unix based system)launch test.pi debug",
