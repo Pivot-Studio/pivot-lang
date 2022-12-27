@@ -28,3 +28,7 @@
 # CONTRIBUTING
 
 - [Contributing](./CONTRIBUTING-CN.md)
+
+# Blogs
+
+- [About pivot lang](blogs/aboutpl.md)

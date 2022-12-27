@@ -16,9 +16,6 @@ method就是隶属于某个结构体的函数，它们与普通函数**没有**�
 ```
 在一个包中，可以定义外部引入的包中结构体的`method` . 
 
-```pivot-lang
-{{#include ../../../test/main.pi:extern_impl}}
-```
 
 调用method的时候，使用`<receiver类型>.<method>`即可 
 
