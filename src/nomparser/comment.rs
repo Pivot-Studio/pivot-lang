@@ -1,5 +1,6 @@
 use crate::nomparser::Span;
 use crate::{ast::node::comment::CommentNode, ast::range::Range};
+use internal_macro::{test_parser, test_parser_error};
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_until},
@@ -11,6 +12,9 @@ use nom_locate::LocatedSpan;
 
 use super::*;
 
+#[test_parser("//123")]
+#[test_parser("/// 123\n")]
+#[test_parser_error("/ / 123\n")]
 pub fn comment(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         pair(

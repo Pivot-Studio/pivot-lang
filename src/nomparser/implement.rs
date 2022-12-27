@@ -8,7 +8,7 @@ use nom::{
     IResult,
 };
 
-use internal_macro::test_parser;
+use internal_macro::{test_parser, test_parser_error};
 
 use super::*;
 
@@ -47,16 +47,24 @@ use super::*;
         }
     }"
 )]
+#[test_parser_error(
+    "impla::b::c {
+        fn f(x: int) int {
+            x = x+1;
+            return 0;
+        }
+    }"
+)]
 pub fn impl_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((
-            tag_token(TokenType::IMPL),
-            opt(pair(type_name, tag_token(TokenType::FOR))),
+            tag_token_word(TokenType::IMPL),
+            opt(pair(type_name, tag_token_word(TokenType::FOR))),
             type_name,
-            del_newline_or_space!(tag_token(TokenType::LBRACE)),
+            del_newline_or_space!(tag_token_symbol(TokenType::LBRACE)),
             many0(del_newline_or_space!(function_def)),
             many0(comment),
-            del_newline_or_space!(tag_token(TokenType::RBRACE)),
+            del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
         )),
         |(_, o, tp, (_, start), func_def, comment0, (_, end))| {
             res_box(Box::new(TopLevel::ImplDef(ImplNode {

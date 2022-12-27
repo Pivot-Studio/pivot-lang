@@ -11,7 +11,7 @@ use crate::{
         tokens::TokenType,
     },
 };
-use internal_macro::test_parser;
+use internal_macro::{test_parser, test_parser_error};
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -26,7 +26,7 @@ use super::*;
 pub fn type_name(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
     delspace(map_res(
         pair(
-            many0(tag_token(TokenType::TAKE_VAL)),
+            many0(tag_token_symbol(TokenType::TAKE_VAL)),
             alt((basic_type, array_type)),
         ),
         |(pts, n)| {
@@ -66,11 +66,11 @@ fn basic_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
 fn array_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
     map_res(
         tuple((
-            tag_token(TokenType::LBRACKET),
+            tag_token_symbol(TokenType::LBRACKET),
             type_name,
-            tag_token(TokenType::MUL),
+            tag_token_symbol(TokenType::MUL),
             number,
-            tag_token(TokenType::RBRACKET),
+            tag_token_symbol(TokenType::RBRACKET),
         )),
         |(_, tp, _, size, _)| {
             let range = size.range().start.to(tp.range().end);
@@ -94,9 +94,9 @@ fn array_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
 pub fn generic_type_def(input: Span) -> IResult<Span, Box<GenericDefNode>> {
     map_res(
         tuple((
-            tag_token(TokenType::LESS),
-            separated_list1(tag_token(TokenType::GENERIC_SEP), identifier),
-            tag_token(TokenType::GREATER),
+            tag_token_symbol(TokenType::LESS),
+            separated_list1(tag_token_symbol(TokenType::GENERIC_SEP), identifier),
+            tag_token_symbol(TokenType::GREATER),
         )),
         |(lf, ids, ri)| {
             let range = lf.1.start.to(ri.1.end);
@@ -117,15 +117,15 @@ pub fn generic_type_def(input: Span) -> IResult<Span, Box<GenericDefNode>> {
 pub fn generic_param_def(input: Span) -> IResult<Span, Box<GenericParamNode>> {
     map_res(
         tuple((
-            tag_token(TokenType::LESS),
+            tag_token_symbol(TokenType::LESS),
             separated_list1(
-                tag_token(TokenType::GENERIC_SEP),
+                tag_token_symbol(TokenType::GENERIC_SEP),
                 alt((
                     map_res(type_name, |x| Ok::<_, Error>(Some(x))),
-                    map_res(tag_token(TokenType::INGNORE), |_| Ok::<_, Error>(None)),
+                    map_res(tag_token_word(TokenType::INGNORE), |_| Ok::<_, Error>(None)),
                 )),
             ),
-            tag_token(TokenType::GREATER),
+            tag_token_symbol(TokenType::GREATER),
         )),
         |(lf, ids, ri)| {
             let range = lf.1.start.to(ri.1.end);
@@ -145,15 +145,20 @@ pub fn generic_param_def(input: Span) -> IResult<Span, Box<GenericParamNode>> {
     fn a() A;
 }"
 )]
+#[test_parser_error(
+    "traitmytrait<A|B|C> {
+    fn a() A;
+}"
+)]
 pub fn trait_def(input: Span) -> IResult<Span, Box<TraitDefNode>> {
     map_res(
         tuple((
-            tag_token(TokenType::TRAIT),
+            tag_token_word(TokenType::TRAIT),
             identifier,
             opt(generic_type_def),
-            del_newline_or_space!(tag_token(TokenType::LBRACE)),
+            del_newline_or_space!(tag_token_symbol(TokenType::LBRACE)),
             many0(del_newline_or_space!(function_def)),
-            del_newline_or_space!(tag_token(TokenType::RBRACE)),
+            del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
         )),
         |(_, id, generics, _, defs, (_, rr))| {
             let range = id.range().start.to(rr.end);

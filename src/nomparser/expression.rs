@@ -56,7 +56,10 @@ fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
         pointer_exp,
         map_res(
             tuple((
-                alt((tag_token(TokenType::MINUS), tag_token(TokenType::NOT))),
+                alt((
+                    tag_token_symbol(TokenType::MINUS),
+                    tag_token_symbol(TokenType::NOT),
+                )),
                 pointer_exp,
             )),
             |((op, op_range), exp)| {
@@ -83,8 +86,8 @@ pub fn pointer_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(pair(
             many0(alt((
-                tag_token(TokenType::TAKE_PTR),
-                tag_token(TokenType::TAKE_VAL),
+                tag_token_symbol(TokenType::TAKE_PTR),
+                tag_token_symbol(TokenType::TAKE_VAL),
             ))),
             complex_exp,
         )),
@@ -221,7 +224,7 @@ fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 fn take_exp_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
     delspace(map_res(
         preceded(
-            tag_token(TokenType::DOT),
+            tag_token_symbol(TokenType::DOT),
             pair(opt(identifier), many0(comment)),
         ),
         |(idx, coms)| Ok::<_, Error>((ComplexOp::FieldOp(idx), coms)),
@@ -236,9 +239,9 @@ fn take_exp_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
 fn parantheses_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delimited(
-            tag_token(TokenType::LPAREN),
+            tag_token_symbol(TokenType::LPAREN),
             parse_with_ex(logic_exp, false),
-            tag_token(TokenType::RPAREN),
+            tag_token_symbol(TokenType::RPAREN),
         ),
         |exp| {
             res_enum(
