@@ -177,11 +177,6 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 
     }"
 )]
-#[test_parser_error(
-    "for leti = 0; i < 5; i = i + 1{
-                
-    }"
-)]
 /// ```enbf
 /// for_statement = "for" (assignment | new_variable) ";" logic_exp ";" assignment statement_block;
 /// ```
