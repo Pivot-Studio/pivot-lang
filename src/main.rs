@@ -64,7 +64,20 @@ use lsp::{
 
 /// Pivot Lang compiler program
 #[derive(Parser)]
-#[clap(author, version, about, long_about = None)]
+#[clap(author, version, about=r#"
+_______   __                        __            __                                    
+|       \ |  \                      |  \          |  \                                   
+| $$$$$$$\ \$$ __     __   ______  _| $$_         | $$       ______   _______    ______  
+| $$__/ $$|  \|  \   /  \ /      \|   $$ \        | $$      |      \ |       \  /      \ 
+| $$    $$| $$ \$$\ /  $$|  $$$$$$\\$$$$$$        | $$       \$$$$$$\| $$$$$$$\|  $$$$$$\
+| $$$$$$$ | $$  \$$\  $$ | $$  | $$ | $$ __       | $$      /      $$| $$  | $$| $$  | $$
+| $$      | $$   \$$ $$  | $$__/ $$ | $$|  \      | $$_____|  $$$$$$$| $$  | $$| $$__| $$
+| $$      | $$    \$$$    \$$    $$  \$$  $$      | $$     \\$$    $$| $$  | $$ \$$    $$
+ \$$       \$$     \$      \$$$$$$    \$$$$        \$$$$$$$$ \$$$$$$$ \$$   \$$ _\$$$$$$$
+                                                                               |  \__| $$
+                                                                                \$$    $$
+                                                                                 \$$$$$$ 
+"#, long_about = None)]
 struct Cli {
     /// Name of the source file
     #[clap(value_parser)]
@@ -75,13 +88,22 @@ struct Cli {
     out: String,
 
     /// verbose level
-    /// - 0: only error
-    /// - 1: error and warning
-    /// - 2: error, warning and info
-    /// - 3: error, warning, info and debug
-    /// - 4: error, warning, info, debug and trace
-    #[clap(short, long, default_value = "1")]
-    verbose: u32,
+    /// - default: error and warning
+    /// - v: error, warning and info
+    /// - vv: error, warning, info and debug
+    /// - vvv: error, warning, info, debug and trace
+    #[clap(
+        short,
+        long,
+        default_value = "0",
+        action = clap::ArgAction::Count,
+        help = r"verbose level
+- default: error and warning
+- v: error, warning and info
+- vv: error, warning, info and debug
+- vvv: error, warning, info, debug and trace"
+    )]
+    verbose: u8,
 
     /// quiet mode
     #[clap(long, default_value = "false")]
@@ -118,6 +140,7 @@ enum RunCommand {
     },
     /// Start the language server
     Lsp,
+    /// Format current project
     Fmt,
 }
 
@@ -135,7 +158,7 @@ fn main() {
     logger
         .module(module_path!())
         .quiet(cli.quiet)
-        .verbosity(cli.verbose as usize);
+        .verbosity(cli.verbose as usize + 1);
 
     let fmt = match cli.command {
         Some(RunCommand::Fmt) => true,
