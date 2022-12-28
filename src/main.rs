@@ -40,6 +40,7 @@ impl<DB> Db for DB where DB: ?Sized + salsa::DbWithJar<Jar> {}
 
 mod ast;
 mod db;
+mod flow;
 mod lsp;
 mod nomparser;
 mod utils;
@@ -89,6 +90,10 @@ struct Cli {
     /// print ast
     #[clap(long)]
     printast: bool,
+
+    /// generate flow chart
+    #[clap(long)]
+    flow: bool,
 
     /// generate ir
     #[clap(long)]
@@ -145,10 +150,13 @@ fn main() {
         let op = compiler::Options {
             genir: cli.genir,
             printast: cli.printast,
+            flow: cli.flow,
             fmt,
             optimization: opt,
         };
-        let action = if cli.printast {
+        let action = if cli.flow {
+            ActionType::Flow
+        } else if cli.printast {
             ActionType::PrintAst
         } else if fmt {
             ActionType::Fmt

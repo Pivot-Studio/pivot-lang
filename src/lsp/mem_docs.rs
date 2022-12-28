@@ -94,6 +94,7 @@ impl FileCompileInput {
         {
             let action = if self.docs(db).action(db) == ActionType::Compile
                 || self.docs(db).action(db) == ActionType::PrintAst
+                || self.docs(db).action(db) == ActionType::Flow
             {
                 self.docs(db).action(db)
             } else {

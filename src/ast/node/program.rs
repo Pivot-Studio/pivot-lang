@@ -11,6 +11,7 @@ use crate::ast::compiler::{compile_dry_file, ActionType};
 use crate::ast::ctx::{self, Ctx};
 use crate::ast::plmod::LSPDef;
 use crate::ast::plmod::Mod;
+use crate::flow::display::Dot;
 use crate::lsp::mem_docs::{EmitParams, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
@@ -25,6 +26,7 @@ use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
+use std::fs;
 use std::fs::OpenOptions;
 use std::hash::{Hash, Hasher};
 use std::io::prelude::*;
@@ -239,6 +241,36 @@ impl Program {
                 let diff = text::diff(&oldcode, &newcode);
                 let line_index = text::LineIndex::new(&oldcode);
                 PLFormat::push(db, diff.into_text_edit(&line_index));
+            }
+            ActionType::Flow => {
+                if let NodeEnum::Program(pro) = *nn {
+                    // create dot dir
+                    // let mut dotpath = PathBuf::from(p.dir(db));
+                    let mut dotpath = PathBuf::from("./");
+                    dotpath.push("dots");
+                    if !dotpath.exists() {
+                        std::fs::create_dir(dotpath.clone()).unwrap();
+                    }
+                    let graphs = pro.create_graphs();
+                    for graph in graphs {
+                        let dot = Dot::new(true); // true 曲线; false 折线
+                        let dot_str = dot.generate_from_graph(&graph.graph, &graph.name);
+                        // write to file
+                        let path = format!(
+                            "{}/{}_{}.dot",
+                            dotpath.to_str().unwrap(),
+                            p.fullpath(db)
+                                .replace(|c: char| { !c.is_ascii_alphanumeric() }, "_")
+                                .replace(".pi", ""),
+                            graph.name
+                        );
+                        let mut file = fs::File::create(path.clone()).unwrap();
+                        file.write_all(dot_str.as_bytes()).unwrap();
+                        println!("{} {}", "Written to file".bright_cyan(), path.green());
+                        print!("{}", dot_str);
+                        println!("{}","You can view the flow chart on https://dreampuf.github.io/GraphvizOnline\n".bright_cyan());
+                    }
+                }
             }
             _ => {}
         }
