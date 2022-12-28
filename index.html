@@ -309,7 +309,9 @@ use_statement = &quot;use&quot; identifier (&quot;::&quot; identifier)* &quot;;&
 
 string_literal = &quot;\&quot;&quot; [^&quot;]* &quot;\&quot;&quot; ;
 
-trait_def = &quot;trait&quot; identifier generic_type_def? &quot;{&quot; function_def* &quot;}&quot; ;
+trait_def = &quot;trait&quot; identifier generic_type_def? (&quot;:&quot; type_add)? &quot;{&quot; function_def* &quot;}&quot; ;
+
+type_add = type_name (&quot;+&quot; type_name)* ;
 
 </code></pre>
 

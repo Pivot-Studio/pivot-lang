@@ -307,7 +307,9 @@ use_statement = &quot;use&quot; identifier (&quot;::&quot; identifier)* &quot;;&
 
 string_literal = &quot;\&quot;&quot; [^&quot;]* &quot;\&quot;&quot; ;
 
-trait_def = &quot;trait&quot; identifier generic_type_def? &quot;{&quot; function_def* &quot;}&quot; ;
+trait_def = &quot;trait&quot; identifier generic_type_def? (&quot;:&quot; type_add)? &quot;{&quot; function_def* &quot;}&quot; ;
+
+type_add = type_name (&quot;+&quot; type_name)* ;
 
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="quick-start-a-short-introduction-to-the-language"><a class="header" href="#quick-start-a-short-introduction-to-the-language">Quick Start: A short introduction to the language</a></h1>
