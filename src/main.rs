@@ -64,47 +64,69 @@ use lsp::{
 
 /// Pivot Lang compiler program
 #[derive(Parser)]
-#[clap(author, version, about, long_about = None)]
+#[command(author, version, about=r#"
+_______   __                        __            __                                    
+|       \ |  \                      |  \          |  \                                   
+| $$$$$$$\ \$$ __     __   ______  _| $$_         | $$       ______   _______    ______  
+| $$__/ $$|  \|  \   /  \ /      \|   $$ \        | $$      |      \ |       \  /      \ 
+| $$    $$| $$ \$$\ /  $$|  $$$$$$\\$$$$$$        | $$       \$$$$$$\| $$$$$$$\|  $$$$$$\
+| $$$$$$$ | $$  \$$\  $$ | $$  | $$ | $$ __       | $$      /      $$| $$  | $$| $$  | $$
+| $$      | $$   \$$ $$  | $$__/ $$ | $$|  \      | $$_____|  $$$$$$$| $$  | $$| $$__| $$
+| $$      | $$    \$$$    \$$    $$  \$$  $$      | $$     \\$$    $$| $$  | $$ \$$    $$
+ \$$       \$$     \$      \$$$$$$    \$$$$        \$$$$$$$$ \$$$$$$$ \$$   \$$ _\$$$$$$$
+                                                                               |  \__| $$
+                                                                                \$$    $$
+                                                                                 \$$$$$$ 
+"#, long_about = None)]
 struct Cli {
     /// Name of the source file
-    #[clap(value_parser)]
+    #[arg(value_parser)]
     name: Option<String>,
 
     /// output file
-    #[clap(short, long, value_parser, default_value = "out")]
+    #[arg(short, long, value_parser, default_value = "out")]
     out: String,
 
     /// verbose level
-    /// - 0: only error
-    /// - 1: error and warning
-    /// - 2: error, warning and info
-    /// - 3: error, warning, info and debug
-    /// - 4: error, warning, info, debug and trace
-    #[clap(short, long, default_value = "1")]
-    verbose: u32,
+    /// - default: error and warning
+    /// - v: error, warning and info
+    /// - vv: error, warning, info and debug
+    /// - vvv: error, warning, info, debug and trace
+    #[arg(
+        short,
+        long,
+        default_value = "1",
+        help = r"verbose level
+- 0: only error
+- 1(default): error and warning
+- 2: error, warning and info
+- 3: error, warning, info and debug
+- 4: error, warning, info, debug and trace"
+    )]
+    verbose: u8,
 
     /// quiet mode
-    #[clap(long, default_value = "false")]
+    #[arg(long, default_value = "false")]
     quiet: bool,
 
     /// print ast
-    #[clap(long)]
+    #[arg(long)]
     printast: bool,
 
     /// generate flow chart
-    #[clap(long)]
+    #[arg(long)]
     flow: bool,
 
     /// generate ir
-    #[clap(long)]
+    #[arg(long)]
     genir: bool,
 
     /// optimization level, 0-3
-    #[clap(short = 'O', value_parser, default_value = "0")]
+    #[arg(short = 'O', value_parser, default_value = "0")]
     optimization: u64,
 
     /// print source fmt
-    #[clap(subcommand)]
+    #[command(subcommand)]
     command: Option<RunCommand>,
 }
 
@@ -113,11 +135,12 @@ enum RunCommand {
     /// JIT run the compiled program
     Run {
         /// Name of the compiled file
-        #[clap(value_parser)]
+        #[arg(value_parser)]
         name: String,
     },
     /// Start the language server
     Lsp,
+    /// Format current project
     Fmt,
 }
 
