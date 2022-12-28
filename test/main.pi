@@ -153,6 +153,9 @@ impl TestTrait for mod1::Mod1 {
     }
 
 }
+impl TestTrait2 for mod1::Mod1 {
+
+}
 
 fn test_trait() void {
     let x = mod1::Mod1{
@@ -381,9 +384,13 @@ fn main() i64 {
     test_trait();
     return 0;
 }
-trait TestTrait {
+trait TestTrait:TestTrait2 {
     fn name() void;
     fn test_ret(i:i64) i64;
+}
+
+trait TestTrait2 {
+
 }
 
 fn test_many_params(a: i64, b: i64, c: i64, d: i64) void {

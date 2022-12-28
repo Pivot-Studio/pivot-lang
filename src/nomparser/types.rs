@@ -12,6 +12,7 @@ use crate::{
     },
 };
 use internal_macro::{test_parser, test_parser_error};
+use nom::sequence::preceded;
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -156,12 +157,19 @@ pub fn trait_def(input: Span) -> IResult<Span, Box<TraitDefNode>> {
             tag_token_word(TokenType::TRAIT),
             identifier,
             opt(generic_type_def),
+            opt(preceded(tag_token_symbol(TokenType::COLON), type_add)),
             del_newline_or_space!(tag_token_symbol(TokenType::LBRACE)),
             many0(del_newline_or_space!(function_def)),
             del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
         )),
-        |(_, id, generics, _, defs, (_, rr))| {
+        |(_, id, generics, derives, _, defs, (_, rr))| {
             let range = id.range().start.to(rr.end);
+            let mut de = vec![];
+            if let Some(derives) = derives {
+                for d in derives {
+                    de.push(d);
+                }
+            }
             Ok::<_, Error>(Box::new(TraitDefNode {
                 id,
                 generics,
@@ -173,7 +181,25 @@ pub fn trait_def(input: Span) -> IResult<Span, Box<TraitDefNode>> {
                     })
                     .collect(),
                 range,
+                derives: de,
             }))
         },
+    )(input)
+}
+
+/// ```enbf
+/// type_add = type_name ("+" type_name)* ;
+/// ```
+#[test_parser("a+b+c")]
+#[test_parser("a")]
+#[test_parser(
+    "a + b
+    +
+    c"
+)]
+fn type_add(input: Span) -> IResult<Span, Vec<Box<TypeNodeEnum>>> {
+    separated_list1(
+        del_newline_or_space!(tag_token_symbol(TokenType::PLUS)),
+        type_name,
     )(input)
 }

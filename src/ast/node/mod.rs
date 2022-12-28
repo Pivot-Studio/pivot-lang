@@ -243,6 +243,7 @@ impl<'a, 'ctx> Ctx<'a> {
         let expect = expect.unwrap();
         let range = node.range();
         let pri: Result<PrimaryNode, _> = (*node.clone()).try_into();
+        // basic type implicit cast
         if let Ok(pri) = pri {
             let num: Result<NumNode, _> = (*pri.value.clone()).try_into();
             if let Ok(numnode) = num {
@@ -333,16 +334,7 @@ impl<'a, 'ctx> Ctx<'a> {
                         // struct to trait
                         (PLType::TRAIT(t), PLType::STRUCT(st)) => {
                             let handle = builder.alloc("tmp_traitv", &expect.borrow(), self);
-                            if st
-                                .impls
-                                .iter()
-                                .find(|i| {
-                                    let ty1: &PLType = &i.borrow();
-                                    let ty2: &PLType = &expect.borrow();
-                                    ty1 == ty2
-                                })
-                                .is_none()
-                            {
+                            if !st.implements_trait(t) {
                                 return Err(mismatch_err!(
                                     self,
                                     range,
