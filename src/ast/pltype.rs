@@ -632,10 +632,27 @@ pub struct STType {
     pub refs: Rc<RefCell<Vec<Location>>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub generic_map: IndexMap<String, Rc<RefCell<PLType>>>,
-    pub impls: Vec<Rc<RefCell<PLType>>>,
+    pub impls: FxHashMap<String, Rc<RefCell<PLType>>>,
+    pub derives: Vec<Rc<RefCell<PLType>>>,
 }
 
 impl STType {
+    pub fn implements(&self, tp: &PLType) -> bool {
+        self.impls.get(&tp.get_full_elm_name()).is_some()
+    }
+    pub fn implements_trait(&self, tp: &STType) -> bool {
+        let re = self.impls.get(&tp.get_st_full_name()).is_some();
+        if !re {
+            return re;
+        }
+        for de in &tp.derives {
+            let re = self.implements(&de.borrow());
+            if !re {
+                return re;
+            }
+        }
+        true
+    }
     pub fn get_type_code(&self) -> u64 {
         let full_name = self.get_st_full_name();
         get_hash_code(full_name)

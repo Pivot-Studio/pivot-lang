@@ -15,6 +15,7 @@ pub struct TraitDefNode {
     pub id: Box<VarNode>,
     pub generics: Option<Box<GenericDefNode>>,
     pub methods: Vec<FuncDefNode>,
+    pub derives: Vec<Box<TypeNodeEnum>>,
 }
 
 impl PrintTrait for TraitDefNode {
@@ -39,8 +40,11 @@ impl Node for TraitDefNode {
         for g in &mut self.generics {
             g.emit(ctx, builder)?;
         }
-        for method in &mut self.methods {
-            method.emit(ctx, builder)?;
+        for de in &self.derives {
+            de.emit_highlight(ctx);
+        }
+        for method in &self.methods {
+            method.emit_highlight(ctx);
         }
         Ok((None, None, TerminatorEnum::NONE))
     }
@@ -65,7 +69,8 @@ impl TraitDefNode {
             refs: Rc::new(RefCell::new(vec![])),
             doc: vec![],
             generic_map,
-            impls: vec![],
+            impls: FxHashMap::default(),
+            derives: vec![],
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
@@ -89,6 +94,10 @@ impl TraitDefNode {
                     pltype.clone().borrow().get_range().unwrap(),
                 );
             }
+        }
+        let mut derives = vec![];
+        for de in &self.derives {
+            derives.push(de.get_type(ctx, builder)?);
         }
         // type hash
         order_fields.push(Field {
@@ -125,6 +134,7 @@ impl TraitDefNode {
                 range: field.range,
                 refs: Rc::new(RefCell::new(vec![])),
             };
+            field.get_type(ctx, builder)?;
 
             ctx.set_if_refs(f.refs.clone(), field.id.range);
             fields.insert(id.name.to_string(), f.clone());
@@ -143,6 +153,7 @@ impl TraitDefNode {
         if let PLType::TRAIT(st) = &mut *pltype.borrow_mut() {
             st.fields = fields;
             st.ordered_fields = newf;
+            st.derives = derives;
             // st.doc = self.doc.clone();
         }
         ctx.set_if_refs_tp(pltype.clone(), self.id.range);

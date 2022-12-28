@@ -63,7 +63,8 @@ impl Node for ImplNode {
                             .add_label(t.range(), Some(("type {}".to_string(), vec![name])))
                             .add_to_ctx(ctx);
                     };
-                    sttp.impls.push(trait_tp);
+                    sttp.impls
+                        .insert(trait_tp.clone().borrow().get_full_elm_name(), trait_tp);
                 }
                 ctx.send_if_go_to_def(self.target.range(), sttp.range, sttp.path.clone());
             }
