@@ -83,7 +83,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li><li class="chapter-item expanded "><a href="references/method.html"><strong aria-hidden="true">3.2.</strong> Method</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li></ol></li><li class="chapter-item expanded "><a href="lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lsp/design.html"><strong aria-hidden="true">5.1.</strong> Design</a></li><li class="chapter-item expanded "><a href="lsp/diagnostic.html"><strong aria-hidden="true">5.2.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/gc.html"><strong aria-hidden="true">6.1.1.</strong> gc</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">CONTRIBUTING</li><li class="chapter-item expanded "><a href="CONTRIBUTING-CN.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li class="chapter-item expanded affix "><li class="part-title">Blogs</li><li class="chapter-item expanded "><a href="blogs/aboutpl.html"><strong aria-hidden="true">8.</strong> About pivot lang</a></li></ol>            </div>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li><li class="chapter-item expanded "><a href="references/method.html"><strong aria-hidden="true">3.2.</strong> Method</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li><li class="chapter-item expanded "><a href="compiler/flow.html"><strong aria-hidden="true">4.3.</strong> Flow Chart</a></li></ol></li><li class="chapter-item expanded "><a href="lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lsp/design.html"><strong aria-hidden="true">5.1.</strong> Design</a></li><li class="chapter-item expanded "><a href="lsp/diagnostic.html"><strong aria-hidden="true">5.2.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/gc.html"><strong aria-hidden="true">6.1.1.</strong> gc</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">CONTRIBUTING</li><li class="chapter-item expanded "><a href="CONTRIBUTING-CN.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li class="chapter-item expanded affix "><li class="part-title">Blogs</li><li class="chapter-item expanded "><a href="blogs/aboutpl.html"><strong aria-hidden="true">8.</strong> About pivot lang</a></li></ol>            </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
@@ -608,8 +608,9 @@ pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNode
     if let Err(e) = re {
         return Err(format!(&quot;{:?}&quot;, e));
     }
+    let (_, node) = re.unwrap();
     log::info!(&quot;parse {:?}&quot;, source.path(db));
-    Ok(ProgramNodeWrapper::new(db, re.unwrap().1))
+    Ok(ProgramNodeWrapper::new(db, node.clone()))
 }
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ast-1"><a class="header" href="#ast-1">AST</a></h1>
@@ -755,6 +756,140 @@ ProgramNode
                  └─ VarNode: bool
 ...
 </code></pre>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="flow-chart"><a class="header" href="#flow-chart">Flow Chart</a></h1>
+<p>这是一个附加功能，它将为每个函数生成流程图，以 <code>.dot</code> 文件格式输出，<code>.dot</code> 文件可通过</p>
+<ul>
+<li><a href="https://graphviz.org/">Graphviz</a></li>
+<li><a href="https://dreampuf.github.io/GraphvizOnline">Graphviz Online</a></li>
+</ul>
+<p>查看。</p>
+<h2 id="依赖"><a class="header" href="#依赖">依赖</a></h2>
+<ul>
+<li><a href="https://github.com/petgraph/petgraph">petgraph</a></li>
+</ul>
+<h2 id="实现"><a class="header" href="#实现">实现</a></h2>
+<p>流程图的生成包含两个步骤：</p>
+<ul>
+<li>由 AST 生成 <code>图</code> 数据结构</li>
+<li>根据 <code>图</code> 生成 <code>.dot文件</code></li>
+</ul>
+<h3 id="图的生成"><a class="header" href="#图的生成">图的生成</a></h3>
+<p>我们以函数为单位生成 <code>graph</code> ，而 AST 根节点为 <code>ProgramNode</code>，因此我们需要遍历其 <code>fntypes</code>
+，逐个生成 <code>graph</code> 最终得到一个 <code>Vec</code> ：</p>
+<pre><code class="language-rust no_run noplayground">impl ProgramNode {
+   pub fn create_graphs(&amp;self) -&gt; Vec&lt;GraphWrapper&gt; {
+       let mut graphs = vec![];
+       for func in &amp;self.fntypes {
+           if let Some(body) = func.body.clone() {
+               let graph = from_ast(Box::new(NodeEnum::STS(body)));
+               graphs.push(GraphWrapper {
+                   name: func
+                       .id
+                       .name
+                       .clone()
+                       .replace(|c: char| !c.is_ascii_alphanumeric(), &quot;_&quot;),
+                   graph,
+               });
+           }
+       }
+       graphs
+   }
+}
+</code></pre>
+<p>接下来实现 <code>from_ast()</code> 函数，它接收一个 <code>NodeEnum</code>（这是一个 <code>Statements</code> 节点）， 返回一个完整的 <code>Graph</code>，具体分为两步：</p>
+<ul>
+<li>初步构建图(<code>build_graph()</code>)</li>
+<li>去除不必要节点(<code>0入度节点</code>,<code>虚节点</code>,<code>空节点</code>))</li>
+</ul>
+<pre><code class="language-rust no_run noplayground">pub fn from_ast(ast: Box&lt;NodeEnum&gt;) -&gt; Graph {
+   let mut ctx = GraphContext::new();
+   build_graph(ast, &amp;mut ctx);
+   // 删除入度为 0 的节点
+   while remove_zero_in_degree_nodes(&amp;mut ctx.graph) {}
+   // 删除虚节点
+   while remove_single_node(&amp;mut ctx.graph, |_, t| *t == GraphNodeType::Dummy) {}
+   // 删除空节点
+   let remove_empty_nodes: fn(NodeIndex, &amp;GraphNodeType) -&gt; bool = |_, t| match t {
+       GraphNodeType::Node(t) =&gt; t.is_empty() || t.trim() == &quot;;&quot;,
+       _ =&gt; false,
+   };
+   while remove_single_node(&amp;mut ctx.graph, remove_empty_nodes) {}
+   ctx.graph
+}
+</code></pre>
+<p>主要介绍构建图的环节。</p>
+<p>定义图的 <code>节点</code> 与 <code>边</code> ：</p>
+<pre><code class="language-rust no_run noplayground">#[derive(Debug, Clone, PartialEq)]
+pub enum GraphNodeType {
+   Dummy,               // 虚节点
+   Begin,               // 起点
+   End,                 // 终点
+   Node(String),        // 普通节点
+   Err(String, String), // 错误节点
+   Choice(String),      // 选择节点
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum EdgeType {
+   Normal,
+   Branch(bool), // 分支，带有 Y/N 等标签
+}
+
+pub type Graph = StableDiGraph&lt;GraphNodeType, EdgeType&gt;;
+</code></pre>
+<p><code>build_graph()</code>函数以 <code>Statement</code> 为单位，针对不同节点构建不同的图结构，为了方便的连接节点，我们定义了 <code>GraphContext</code> 用于存储上下文信息:</p>
+<pre><code class="language-rust no_run noplayground">struct GraphContext {
+   pub graph: Graph,
+   pub break_target: NodeIndex,
+   pub continue_target: NodeIndex,
+   #[allow(dead_code)]
+   pub global_begin: NodeIndex, // 全图起点
+   pub global_end: NodeIndex,   // 全图终点
+   pub local_source: NodeIndex, // 局部起点
+   pub local_sink: NodeIndex,   // 局部终点
+}
+</code></pre>
+<p>每次调用 <code>build_graph()</code> 前，我们需要为构建部分提供两个 <code>锚点(local_source, local_sink)</code> ，第一次调用时，<code>锚点</code> 即为起点和终点，
+以后每次调用前，均需构建两个虚节点，作为<code>锚点</code>(虚节点之后将被去掉)。</p>
+<p>对于不涉及分支、循环、跳转的简单语句，图结构较为简单：</p>
+<pre><code>local_source -&gt; current -&gt; local_sink
+
+local_source ------------&gt; local_sink // 注释
+
+local_source ---&gt; ERR ---&gt; local_sink // 错误
+</code></pre>
+<p>分支及循环语句则较为复杂(以 <code>IF语句</code> 为例)：</p>
+<pre><code>IF:                /--Y--&gt; sub_source -----&gt; [...body...] ------&gt; sub_sink -&gt;-\
+                  /                                                            \
+local_source -&gt; cond                                                        local_sink
+                  \                                                           /
+                   \--N--&gt; sub_source1 -&gt; Option&lt;[...els...]&gt; -&gt; sub_sink -&gt;-/
+
+</code></pre>
+<p><code>if.body</code> 及 <code>if.els</code> 部分可以通过递归调用 <code>build_graph()</code> 构建，但是需要先生成两个虚节点，并<strong>暂时</strong>赋给 <code>ctx</code>，构建完毕后，
+<code>ctx</code> 的 <code>local_source/sink</code>需要还原</p>
+<p>对于语句块，对每个语句调用 <code>build_graph()</code> ，每次将 <code>sub_source</code> 更改为 <code>sub_sink</code> ，<code>sub_sink</code> 则重新创建：</p>
+<pre><code class="language-rust no_run noplayground">               for i in &amp;v.statements {
+                   context.local_source = sub_source;
+                   context.local_sink = sub_sink;
+                   build_graph(i.clone(), context);
+                   if i != v.statements.last().unwrap() {
+                       sub_source = sub_sink;
+                       sub_sink = context.graph.add_node(GraphNodeType::Dummy);
+                   }
+               }
+</code></pre>
+<h3 id="dot-文件生成"><a class="header" href="#dot-文件生成">.dot 文件生成</a></h3>
+<p>我们只需按dot语法格式生成图的点/边的信息即可。下面是一个简单的dot文件：</p>
+<pre><code>digraph _pointer_struct__name_params {
+    D0 [shape=box, style=rounded, label=&quot;begin&quot;, fontname=&quot;&quot;];
+    {rank = sink; D1 [shape=box, style=rounded, label=&quot;end&quot;, fontname=&quot;&quot;];}
+    D4 [shape=box, label=&quot;return\l&quot;, fontname=&quot;&quot;];
+    D4 -&gt; D1;
+    D0 -&gt; D4;
+}
+</code></pre>
+<p>可以在<a href="https://dreampuf.github.io/GraphvizOnline">Graphviz Online</a>查看对应流程图。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="language-server"><a class="header" href="#language-server">Language Server</a></h1>
 <p>Pivot Lang的Language Server（以下简称LSP）是一个用于为编译器提供语法支持的组件，它同时被用于在编译期间生成诊断信息。</p>
 <blockquote>
