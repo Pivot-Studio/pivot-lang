@@ -93,7 +93,8 @@ pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, S
     if let Err(e) = re {
         return Err(format!("{:?}", e));
     }
+    let (_, node) = re.unwrap();
     log::info!("parse {:?}", source.path(db));
-    Ok(ProgramNodeWrapper::new(db, re.unwrap().1))
+    Ok(ProgramNodeWrapper::new(db, node.clone()))
 }
 // ANCHOR_END: parse
