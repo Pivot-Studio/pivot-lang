@@ -47,7 +47,6 @@ use std::cell::RefCell;
 
 use std::path::Path;
 
-
 use std::sync::Arc;
 /// # Ctx
 /// Context for code generation
