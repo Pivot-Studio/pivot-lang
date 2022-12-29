@@ -295,8 +295,9 @@ mod test {
         );
         assert!(refs.len() > 0);
         let locs = refs[0].clone();
-        assert_eq!(locs.len(), 3);
+        assert_eq!(locs.borrow().len(), 3);
         assert!(locs
+            .borrow()
             .iter()
             .find(|l| {
                 let ok = l.uri.to_string().contains("test/lsp/mod.pi");
@@ -307,6 +308,7 @@ mod test {
             })
             .is_some());
         assert!(locs
+            .borrow()
             .iter()
             .find(|l| {
                 let ok = l.uri.to_string().contains("test/lsp/test_completion.pi");
@@ -317,6 +319,7 @@ mod test {
             })
             .is_some());
         assert!(locs
+            .borrow()
             .iter()
             .find(|l| {
                 let ok = l.uri.to_string().contains("test/lsp/mod2.pi");

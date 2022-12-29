@@ -3,6 +3,7 @@ use super::*;
 use super::{types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
+use crate::ast::plmod::RwVec;
 use crate::ast::pltype::{eq, get_type_deep, FNType, PLType};
 use crate::plv;
 use indexmap::IndexMap;
@@ -271,14 +272,14 @@ impl FuncDefNode {
             param_pltypes.push(para.typenode.clone());
             param_name.push(para.id.name.clone());
         }
-        let refs = vec![];
+        let refs = RwVec::new();
         let mut ftp = FNType {
             name: self.id.name.clone(),
             ret_pltype: self.ret.clone(),
             param_pltypes,
             param_names: param_name,
             range: self.range,
-            refs: Arc::new(RefCell::new(refs)),
+            refs: Arc::new(refs),
             doc: self.doc.clone(),
             llvmname: if self.declare {
                 self.id.name.clone()

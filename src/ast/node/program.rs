@@ -303,7 +303,7 @@ impl Program {
                 let re = res.range((Unbounded, Included(&range))).last();
                 if let Some((range, res)) = re {
                     if pos.is_in(*range) {
-                        PLReferences::push(db, res.borrow().clone());
+                        PLReferences::push(db, res.clone());
                     }
                 }
             }

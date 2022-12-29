@@ -9,6 +9,7 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
+use crate::ast::plmod::RwVec;
 use crate::ast::pltype::get_type_deep;
 use crate::ast::pltype::{eq, ARRType, Field, GenericType, PLType, STType};
 use crate::plv;
@@ -406,7 +407,7 @@ impl StructDefNode {
             fields: FxHashMap::default(),
             ordered_fields: vec![],
             range: self.range(),
-            refs: Arc::new(RefCell::new(vec![])),
+            refs: Arc::new(RwVec::new()),
             doc: vec![],
             generic_map,
             impls: FxHashMap::default(),
@@ -448,7 +449,7 @@ impl StructDefNode {
                 typenode: field.typenode.clone(),
                 name: field.id.name.clone(),
                 range: field.range,
-                refs: Arc::new(RefCell::new(vec![])),
+                refs: Arc::new(RwVec::new()),
             };
             let tpre = field.typenode.get_type(ctx, builder);
             if tpre.is_err() {

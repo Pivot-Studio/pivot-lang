@@ -9,6 +9,7 @@ use super::plmod::CompletionItemWrapper;
 use super::plmod::GlobalVar;
 use super::plmod::LSPDef;
 use super::plmod::Mod;
+use super::plmod::RwVec;
 use super::pltype::add_primitive_types;
 use super::pltype::FNType;
 use super::pltype::PLType;
@@ -70,7 +71,7 @@ pub struct Ctx<'a> {
             ValueHandle,
             Arc<RefCell<PLType>>,
             Range,
-            Arc<RefCell<Vec<Location>>>,
+            Arc<RwVec<Location>>,
         ),
     >, // variable table
     pub config: Config,                                           // config
@@ -186,7 +187,7 @@ impl<'a, 'ctx> Ctx<'a> {
         ValueHandle,
         Arc<RefCell<PLType>>,
         Range,
-        Arc<RefCell<Vec<Location>>>,
+        Arc<RwVec<Location>>,
         bool,
     )> {
         let v = self.table.get(name);
@@ -226,7 +227,7 @@ impl<'a, 'ctx> Ctx<'a> {
         if self.table.contains_key(&name) {
             return Err(self.add_diag(range.new_err(ErrorCode::REDECLARATION)));
         }
-        let refs = Arc::new(RefCell::new(vec![]));
+        let refs = Arc::new(RwVec::new());
         if is_const {
             self.plmod
                 .add_global_symbol(name, pltype.clone(), range, refs.clone())?;
@@ -430,7 +431,7 @@ impl<'a, 'ctx> Ctx<'a> {
         );
     }
 
-    pub fn set_if_refs(&self, refs: Arc<RefCell<Vec<Location>>>, range: Range) {
+    pub fn set_if_refs(&self, refs: Arc<RwVec<Location>>, range: Range) {
         refs.borrow_mut().push(self.get_location(range));
         self.plmod.refs.borrow_mut().insert(range, refs.clone());
     }

@@ -1,4 +1,5 @@
 use super::ctx::Ctx;
+use super::plmod::RwVec;
 
 use crate::ast::builder::BuilderEnum;
 use crate::utils::get_hash_code;
@@ -271,7 +272,7 @@ impl PLType {
     /// get the references of the type
     /// used in find references
     /// void type and primitive types has no references
-    pub fn get_refs(&self) -> Option<Arc<RefCell<Vec<Location>>>> {
+    pub fn get_refs(&self) -> Option<Arc<RwVec<Location>>> {
         match self {
             PLType::FN(f) => Some(f.refs.clone()),
             PLType::STRUCT(s) => Some(s.refs.clone()),
@@ -403,7 +404,7 @@ pub struct Field {
     pub typenode: Box<TypeNodeEnum>,
     pub name: String,
     pub range: Range,
-    pub refs: Arc<RefCell<Vec<Location>>>,
+    pub refs: Arc<RwVec<Location>>,
 }
 
 impl Field {
@@ -430,7 +431,7 @@ pub struct FNType {
     pub param_names: Vec<String>,
     pub ret_pltype: Box<TypeNodeEnum>,
     pub range: Range,
-    pub refs: Arc<RefCell<Vec<Location>>>,
+    pub refs: Arc<RwVec<Location>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub method: bool,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
@@ -630,7 +631,7 @@ pub struct STType {
     pub fields: FxHashMap<String, Field>,
     pub ordered_fields: Vec<Field>,
     pub range: Range,
-    pub refs: Arc<RefCell<Vec<Location>>>,
+    pub refs: Arc<RwVec<Location>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub impls: FxHashMap<String, Arc<RefCell<PLType>>>,
