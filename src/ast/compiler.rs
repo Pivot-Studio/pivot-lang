@@ -113,7 +113,16 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
     if input.is_none() {
         return None;
     }
-    compile_dry_file(db, input.unwrap())
+    let re = compile_dry_file(db, input.unwrap());
+    if let Some(res) = db.get_ref_str() {
+        re.and_then(|plmod| {
+            plmod
+                .plmod(db)
+                .get_refs(&res, db, &mut FxHashSet::default());
+            Some(())
+        });
+    }
+    re
 }
 
 #[salsa::tracked]

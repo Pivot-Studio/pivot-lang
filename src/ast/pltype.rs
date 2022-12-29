@@ -1,5 +1,5 @@
 use super::ctx::Ctx;
-use super::plmod::RwVec;
+// use super::plmod::RwVec;
 
 use crate::ast::builder::BuilderEnum;
 use crate::utils::get_hash_code;
@@ -33,7 +33,7 @@ use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::DocumentSymbol;
 use lsp_types::InsertTextFormat;
-use lsp_types::Location;
+
 use lsp_types::SymbolKind;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
@@ -268,21 +268,17 @@ impl PLType {
             false
         }
     }
-    /// # get_refs
-    /// get the references of the type
-    /// used in find references
-    /// void type and primitive types has no references
-    pub fn get_refs(&self) -> Option<Arc<RwVec<Location>>> {
+    /// # if_refs
+    /// if support find refs
+    pub fn if_refs(&self, f: impl FnOnce(&PLType)) {
         match self {
-            PLType::FN(f) => Some(f.refs.clone()),
-            PLType::STRUCT(s) => Some(s.refs.clone()),
-            PLType::ARR(_) => None,
-            PLType::PRIMITIVE(_) => None,
-            PLType::VOID => None,
-            PLType::POINTER(_) => None,
-            PLType::GENERIC(_) => None,
-            PLType::PLACEHOLDER(_) => None,
-            PLType::TRAIT(t) => Some(t.refs.clone()),
+            PLType::FN(_) | PLType::STRUCT(_) | PLType::TRAIT(_) => f(self),
+            PLType::ARR(_) => (),
+            PLType::PRIMITIVE(_) => (),
+            PLType::VOID => (),
+            PLType::POINTER(_) => (),
+            PLType::GENERIC(_) => (),
+            PLType::PLACEHOLDER(_) => (),
         }
     }
 
@@ -332,7 +328,7 @@ impl PLType {
     pub fn get_full_elm_name<'a, 'ctx>(&self) -> String {
         match self {
             PLType::GENERIC(g) => g.name.clone(),
-            PLType::FN(fu) => fu.name.clone(),
+            PLType::FN(fu) => fu.llvmname.clone(),
             PLType::STRUCT(st) => st.get_st_full_name(),
             PLType::TRAIT(st) => st.get_st_full_name(),
             PLType::PRIMITIVE(pri) => pri.get_name(),
@@ -404,7 +400,7 @@ pub struct Field {
     pub typenode: Box<TypeNodeEnum>,
     pub name: String,
     pub range: Range,
-    pub refs: Arc<RwVec<Location>>,
+    // pub refs: Arc<RwVec<Location>>,
 }
 
 impl Field {
@@ -431,7 +427,7 @@ pub struct FNType {
     pub param_names: Vec<String>,
     pub ret_pltype: Box<TypeNodeEnum>,
     pub range: Range,
-    pub refs: Arc<RwVec<Location>>,
+    // pub refs: Arc<RwVec<Location>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub method: bool,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
@@ -631,7 +627,7 @@ pub struct STType {
     pub fields: FxHashMap<String, Field>,
     pub ordered_fields: Vec<Field>,
     pub range: Range,
-    pub refs: Arc<RwVec<Location>>,
+    // pub refs: Arc<RwVec<Location>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub impls: FxHashMap<String, Arc<RefCell<PLType>>>,
