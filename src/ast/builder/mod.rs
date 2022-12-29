@@ -3,7 +3,7 @@
 /// 2. 所有涉及llvm类型的函数（包括参数或返回值）都应该是private的
 pub mod llvmbuilder;
 pub mod no_op_builder;
-use std::{cell::RefCell, path::Path, rc::Rc};
+use std::{cell::RefCell, path::Path, sync::Arc};
 
 use enum_dispatch::enum_dispatch;
 use inkwell::{values::BasicValueEnum, FloatPredicate, IntPredicate};
@@ -35,7 +35,7 @@ pub trait IRBuilder<'a, 'ctx> {
     fn add_global(
         &self,
         name: &str,
-        pltype: Rc<RefCell<PLType>>,
+        pltype: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
         line: u32,
         pltp: &PLType,
@@ -123,7 +123,7 @@ pub trait IRBuilder<'a, 'ctx> {
     fn get_or_add_global(
         &self,
         name: &str,
-        pltype: Rc<RefCell<PLType>>,
+        pltype: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
     ) -> ValueHandle;
     fn build_load(&self, ptr: ValueHandle, name: &str) -> ValueHandle;
@@ -131,9 +131,9 @@ pub trait IRBuilder<'a, 'ctx> {
         &self,
         range: Range,
         v: ValueHandle,
-        tp: Rc<RefCell<PLType>>,
+        tp: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
-    ) -> Result<(ValueHandle, Rc<RefCell<PLType>>), PLDiag>;
+    ) -> Result<(ValueHandle, Arc<RefCell<PLType>>), PLDiag>;
     fn get_function(&self, name: &str) -> Option<ValueHandle>;
     fn build_call(&self, f: ValueHandle, args: &[ValueHandle]) -> Option<ValueHandle>;
     fn add_function(

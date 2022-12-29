@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crate::ast::{ctx::Ctx, pltype::PLType};
 
 use super::{IRBuilder, ValueHandle};
@@ -39,7 +41,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
     fn add_global(
         &self,
         _name: &str,
-        _pltype: std::rc::Rc<std::cell::RefCell<crate::ast::pltype::PLType>>,
+        _pltype: Arc<std::cell::RefCell<crate::ast::pltype::PLType>>,
         _ctx: &mut crate::ast::ctx::Ctx<'a>,
         _line: u32,
         _pltp: &crate::ast::pltype::PLType,
@@ -237,7 +239,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
     fn get_or_add_global(
         &self,
         _name: &str,
-        _pltype: std::rc::Rc<std::cell::RefCell<crate::ast::pltype::PLType>>,
+        _pltype: Arc<std::cell::RefCell<crate::ast::pltype::PLType>>,
         _ctx: &mut crate::ast::ctx::Ctx<'a>,
     ) -> super::ValueHandle {
         0
@@ -251,12 +253,12 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
         &self,
         _range: crate::ast::range::Range,
         _v: super::ValueHandle,
-        tp: std::rc::Rc<std::cell::RefCell<crate::ast::pltype::PLType>>,
+        tp: Arc<std::cell::RefCell<crate::ast::pltype::PLType>>,
         _ctx: &mut crate::ast::ctx::Ctx<'a>,
     ) -> Result<
         (
             super::ValueHandle,
-            std::rc::Rc<std::cell::RefCell<crate::ast::pltype::PLType>>,
+            Arc<std::cell::RefCell<crate::ast::pltype::PLType>>,
         ),
         crate::ast::diag::PLDiag,
     > {

@@ -4,7 +4,7 @@
 use std::{
     cell::{Cell, RefCell},
     path::Path,
-    rc::Rc,
+    sync::Arc,
 };
 
 use inkwell::{
@@ -114,10 +114,10 @@ pub fn create_llvm_deps<'ctx>(
 
 #[derive(Clone)]
 pub struct LLVMBuilder<'a, 'ctx> {
-    handle_table: Rc<RefCell<FxHashMap<ValueHandle, AnyValueEnum<'ctx>>>>,
-    handle_reverse_table: Rc<RefCell<FxHashMap<AnyValueEnum<'ctx>, ValueHandle>>>,
-    block_table: Rc<RefCell<FxHashMap<BlockHandle, BasicBlock<'ctx>>>>,
-    block_reverse_table: Rc<RefCell<FxHashMap<BasicBlock<'ctx>, BlockHandle>>>,
+    handle_table: Arc<RefCell<FxHashMap<ValueHandle, AnyValueEnum<'ctx>>>>,
+    handle_reverse_table: Arc<RefCell<FxHashMap<AnyValueEnum<'ctx>, ValueHandle>>>,
+    block_table: Arc<RefCell<FxHashMap<BlockHandle, BasicBlock<'ctx>>>>,
+    block_reverse_table: Arc<RefCell<FxHashMap<BasicBlock<'ctx>, BlockHandle>>>,
     context: &'ctx Context,                // llvm context
     builder: &'a Builder<'ctx>,            // llvm builder
     module: &'a Module<'ctx>,              // llvm module
@@ -125,8 +125,8 @@ pub struct LLVMBuilder<'a, 'ctx> {
     diunit: &'a DICompileUnit<'ctx>,       // debug info unit
     targetmachine: &'a TargetMachine,      // might be used in debug info
     discope: Cell<DIScope<'ctx>>,          // debug info scope
-    ditypes_placeholder: Rc<RefCell<FxHashMap<String, RefCell<Vec<MemberType<'ctx>>>>>>, // hold the generated debug info type place holder
-    ditypes: Rc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
+    ditypes_placeholder: Arc<RefCell<FxHashMap<String, RefCell<Vec<MemberType<'ctx>>>>>>, // hold the generated debug info type place holder
+    ditypes: Arc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
 }
 
 pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
@@ -167,12 +167,12 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             diunit,
             targetmachine: tm,
             discope: Cell::new(diunit.get_file().as_debug_info_scope()),
-            ditypes: Rc::new(RefCell::new(FxHashMap::default())),
-            ditypes_placeholder: Rc::new(RefCell::new(FxHashMap::default())),
-            handle_table: Rc::new(RefCell::new(FxHashMap::default())),
-            handle_reverse_table: Rc::new(RefCell::new(FxHashMap::default())),
-            block_table: Rc::new(RefCell::new(FxHashMap::default())),
-            block_reverse_table: Rc::new(RefCell::new(FxHashMap::default())),
+            ditypes: Arc::new(RefCell::new(FxHashMap::default())),
+            ditypes_placeholder: Arc::new(RefCell::new(FxHashMap::default())),
+            handle_table: Arc::new(RefCell::new(FxHashMap::default())),
+            handle_reverse_table: Arc::new(RefCell::new(FxHashMap::default())),
+            block_table: Arc::new(RefCell::new(FxHashMap::default())),
+            block_reverse_table: Arc::new(RefCell::new(FxHashMap::default())),
         }
     }
     fn get_llvm_value_handle(&self, value: &AnyValueEnum<'ctx>) -> ValueHandle {
@@ -580,7 +580,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     fn get_or_add_global_value(
         &self,
         name: &str,
-        pltype: Rc<RefCell<PLType>>,
+        pltype: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
     ) -> PointerValue<'ctx> {
         let global = self.get_global_var_handle(name);
@@ -776,7 +776,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     fn get_or_add_global(
         &self,
         name: &str,
-        pltype: Rc<RefCell<PLType>>,
+        pltype: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
     ) -> ValueHandle {
         self.get_llvm_value_handle(
@@ -796,9 +796,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         &self,
         range: Range,
         v: ValueHandle,
-        tp: Rc<RefCell<PLType>>,
+        tp: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
-    ) -> Result<(ValueHandle, Rc<RefCell<PLType>>), PLDiag> {
+    ) -> Result<(ValueHandle, Arc<RefCell<PLType>>), PLDiag> {
         let handle = v;
         let v = self.get_llvm_value(handle).unwrap();
         if !v.is_pointer_value() {
@@ -1356,7 +1356,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     fn add_global(
         &self,
         name: &str,
-        pltype: Rc<RefCell<PLType>>,
+        pltype: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
         line: u32,
         pltp: &PLType,

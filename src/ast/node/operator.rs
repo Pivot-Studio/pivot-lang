@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::primary::VarNode;
 use super::*;
 
@@ -244,7 +246,7 @@ impl Node for BinOpNode {
                         // )))
                         Some(plv!(bool_origin))
                     },
-                    Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
+                    Some(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
                 ),
                 PLType::PRIMITIVE(PriType::F64 | PriType::F32) => (
@@ -258,7 +260,7 @@ impl Node for BinOpNode {
                         // )))
                         Some(plv!(bool_origin))
                     },
-                    Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
+                    Some(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
                 ),
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::VALUE_NOT_COMPARABLE))),
@@ -372,7 +374,7 @@ impl Node for TakeOpNode {
                                         is_const: false,
                                         receiver: Some(headptr),
                                     }),
-                                    Some(Rc::new(RefCell::new(PLType::FN(mthd)))),
+                                    Some(Arc::new(RefCell::new(PLType::FN(mthd)))),
                                     TerminatorEnum::NONE,
                                 ));
                             } else {

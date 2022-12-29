@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 
 use crate::ast::builder::BuilderEnum;
@@ -53,7 +55,7 @@ impl Node for PointerOpNode {
                 }
             }
             PointerOpEnum::ADDR => {
-                tp = Some(Rc::new(RefCell::new(PLType::POINTER(tp.unwrap()))));
+                tp = Some(Arc::new(RefCell::new(PLType::POINTER(tp.unwrap()))));
                 if value.is_const {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::CAN_NOT_REF_CONSTANT)));
                 }
