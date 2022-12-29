@@ -1,17 +1,17 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use lsp_types::{
     CompletionItem, DocumentSymbol, GotoDefinitionResponse, Hover, InlayHint, Location,
     SemanticTokens, SignatureHelp, TextEdit,
 };
 
-use super::diag::PLDiag;
+use super::{diag::PLDiag, plmod::RwVec};
 
 #[salsa::accumulator]
 pub struct Diagnostics((String, Vec<PLDiag>));
 
 #[salsa::accumulator]
-pub struct PLReferences(Vec<Location>);
+pub struct PLReferences(Arc<RwVec<Location>>);
 
 #[salsa::accumulator]
 pub struct GotoDef(GotoDefinitionResponse);

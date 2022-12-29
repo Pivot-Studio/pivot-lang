@@ -30,13 +30,13 @@ use std::collections::BTreeMap;
 
 use std::path::PathBuf;
 
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobalVar {
     pub tp: Arc<RefCell<PLType>>,
     pub range: Range,
-    pub loc: Arc<RefCell<Vec<Location>>>,
+    pub loc: Arc<RwVec<Location>>,
 }
 
 /// # Mod
@@ -56,7 +56,7 @@ pub struct Mod {
     /// structs methods
     pub methods: FxHashMap<String, FxHashMap<String, FNType>>,
     pub defs: LSPRangeMap<Range, LSPDef>,
-    pub refs: LSPRangeMap<Range, Arc<RefCell<Vec<Location>>>>,
+    pub refs: LSPRangeMap<Range, Arc<RwVec<Location>>>,
     pub sig_helps: LSPRangeMap<Range, SignatureHelp>,
     pub hovers: LSPRangeMap<Range, Hover>,
     pub completions: Arc<RefCell<Vec<CompletionItemWrapper>>>,
@@ -65,6 +65,39 @@ pub struct Mod {
     pub hints: Arc<RefCell<Box<Vec<InlayHint>>>>,
     pub doc_symbols: Arc<RefCell<Box<Vec<DocumentSymbol>>>>,
     // pub hints: Arc<RefCell<Box<Vec<InlayHint>>>>,
+}
+
+/// # RwVec
+/// a vec with rwlock
+/// auto implements Eq and PartialEq
+#[derive(Debug)]
+pub struct RwVec<T> {
+    inner: RwLock<Vec<T>>,
+}
+
+impl<T> PartialEq for RwVec<T>
+where
+    T: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        &*self.inner.read().unwrap() == &*other.inner.read().unwrap()
+    }
+}
+
+impl<T> Eq for RwVec<T> where T: Eq {}
+
+impl<T> RwVec<T> {
+    pub fn borrow_mut(&self) -> std::sync::RwLockWriteGuard<Vec<T>> {
+        self.inner.write().unwrap()
+    }
+    pub fn borrow(&self) -> std::sync::RwLockReadGuard<Vec<T>> {
+        self.inner.read().unwrap()
+    }
+    pub fn new() -> Self {
+        Self {
+            inner: RwLock::new(Vec::new()),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -146,7 +179,7 @@ impl Mod {
         name: String,
         tp: Arc<RefCell<PLType>>,
         range: Range,
-        refs: Arc<RefCell<Vec<Location>>>,
+        refs: Arc<RwVec<Location>>,
     ) -> Result<(), PLDiag> {
         if self.global_table.contains_key(&name) {
             return Err(range.new_err(ErrorCode::UNDEFINED_TYPE));
