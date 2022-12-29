@@ -35,7 +35,6 @@ use std::path::{Path, PathBuf};
 
 use std::sync::Arc;
 
-
 #[range]
 #[fmt]
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -304,7 +303,7 @@ impl Program {
                 let re = res.range((Unbounded, Included(&range))).last();
                 if let Some((range, res)) = re {
                     if pos.is_in(*range) {
-                        PLReferences::push(db, res.clone());
+                        PLReferences::push(db, res.borrow().clone());
                     }
                 }
             }
@@ -453,10 +452,10 @@ pub struct ModWrapper {
     pub plmod: Mod,
 }
 
-// unsafe impl Send for Mod {
+/// 尽管实际上Mod并不是线程安全的，但是它的使用特性导致
+/// 他的内容实际上几乎只会在生成的mod里被修改，当他作为依赖项
+/// 给别的mod使用的时候几乎是只读的，所以它不需要真的线程安全，
+/// 只需要实现接口来骗过rust
+unsafe impl Send for Mod {}
 
-// }
-
-// unsafe impl Sync for Mod {
-
-// }
+unsafe impl Sync for Mod {}

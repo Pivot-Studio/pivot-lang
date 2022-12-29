@@ -233,7 +233,7 @@ fn main_loop(
             let sender = connection.sender.clone();
             let mut rf = vec![];
             for r in refs {
-                for r in r.borrow().iter() {
+                for r in r.clone().iter() {
                     rf.push(r.clone());
                 }
             }

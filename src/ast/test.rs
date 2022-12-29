@@ -294,7 +294,7 @@ mod test {
             "test/lsp/mod.pi",
         );
         assert!(refs.len() > 0);
-        let locs = refs[0].borrow();
+        let locs = refs[0].clone();
         assert_eq!(locs.len(), 3);
         assert!(locs
             .iter()
