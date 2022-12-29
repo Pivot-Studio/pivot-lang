@@ -142,7 +142,10 @@ impl VarNode {
                 TerminatorEnum::NONE,
             ));
             ctx.send_if_go_to_def(self.range, dst, ctx.plmod.path.clone());
-            ctx.set_if_refs(refs, self.range);
+            refs.and_then(|refs| {
+                ctx.set_if_refs(refs, self.range);
+                Some(())
+            });
             return o;
         }
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
@@ -170,7 +173,7 @@ impl VarNode {
                 | PLType::PLACEHOLDER(_) => {
                     if let PLType::STRUCT(st) | PLType::TRAIT(st) = &*tp.clone().borrow() {
                         ctx.send_if_go_to_def(self.range, st.range, ctx.plmod.path.clone());
-                        ctx.set_if_refs(st.refs.clone(), self.range);
+                        // ctx.set_if_refs(st.refs.clone(), self.range);
                     }
                     return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
                 }

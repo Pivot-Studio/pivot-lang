@@ -335,7 +335,7 @@ impl Node for TakeOpNode {
                                     0,
                                 );
                                 index = field.index;
-                                ctx.set_if_refs(field.refs.clone(), range);
+                                // ctx.set_if_refs(field.refs.clone(), range);
                                 ctx.send_if_go_to_def(range, field.range, s.path.clone());
 
                                 if is_trait {
