@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 
 use crate::ast::builder::BuilderEnum;
@@ -64,7 +66,7 @@ impl Node for BoolConstNode {
                 self.value as u64,
                 true
             ))),
-            Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
+            Some(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
             TerminatorEnum::NONE,
         ))
     }
@@ -94,14 +96,14 @@ impl Node for NumNode {
             let b = builder.int_value(&PriType::I64, x, true);
             return Ok((
                 Some(plv!(b)),
-                Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::I64)))),
+                Some(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::I64)))),
                 TerminatorEnum::NONE,
             ));
         } else if let Num::FLOAT(x) = self.value {
             let b = builder.float_value(&PriType::F64, x);
             return Ok((
                 Some(plv!(b)),
-                Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::F64)))),
+                Some(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::F64)))),
                 TerminatorEnum::NONE,
             ));
         }

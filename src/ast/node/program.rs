@@ -32,7 +32,9 @@ use std::hash::{Hash, Hasher};
 use std::io::prelude::*;
 use std::ops::Bound::*;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
+
+use std::sync::Arc;
+
 
 #[range]
 #[fmt]
@@ -88,7 +90,7 @@ impl Node for ProgramNode {
             _ = x.emit_global(ctx, builder);
         });
         ctx.clear_init_fn(builder);
-        ctx.plmod.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(
+        ctx.plmod.semantic_tokens_builder = Arc::new(RefCell::new(Box::new(
             SemanticTokensBuilder::new(ctx.plmod.path.to_string()),
         )));
         // node parser
@@ -450,3 +452,11 @@ pub struct ProgramNodeWrapper {
 pub struct ModWrapper {
     pub plmod: Mod,
 }
+
+// unsafe impl Send for Mod {
+
+// }
+
+// unsafe impl Sync for Mod {
+
+// }

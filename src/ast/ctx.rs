@@ -47,11 +47,12 @@ use std::cell::RefCell;
 
 use std::path::Path;
 
-use std::rc::Rc;
+
+use std::sync::Arc;
 /// # Ctx
 /// Context for code generation
 pub struct Ctx<'a> {
-    pub generic_types: FxHashMap<String, Rc<RefCell<PLType>>>,
+    pub generic_types: FxHashMap<String, Arc<RefCell<PLType>>>,
     pub need_highlight: usize,
     pub plmod: Mod,
     pub father: Option<&'a Ctx<'a>>, // father context, for symbol lookup
@@ -68,15 +69,15 @@ pub struct Ctx<'a> {
         String,
         (
             ValueHandle,
-            Rc<RefCell<PLType>>,
+            Arc<RefCell<PLType>>,
             Range,
-            Rc<RefCell<Vec<Location>>>,
+            Arc<RefCell<Vec<Location>>>,
         ),
     >, // variable table
     pub config: Config,                                           // config
     pub usegc: bool,
     pub db: &'a dyn Db,
-    pub rettp: Option<Rc<RefCell<PLType>>>,
+    pub rettp: Option<Arc<RefCell<PLType>>>,
 }
 
 impl<'a, 'ctx> Ctx<'a> {
@@ -184,9 +185,9 @@ impl<'a, 'ctx> Ctx<'a> {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Option<(
         ValueHandle,
-        Rc<RefCell<PLType>>,
+        Arc<RefCell<PLType>>,
         Range,
-        Rc<RefCell<Vec<Location>>>,
+        Arc<RefCell<Vec<Location>>>,
         bool,
     )> {
         let v = self.table.get(name);
@@ -219,14 +220,14 @@ impl<'a, 'ctx> Ctx<'a> {
         &mut self,
         name: String,
         pv: ValueHandle,
-        pltype: Rc<RefCell<PLType>>,
+        pltype: Arc<RefCell<PLType>>,
         range: Range,
         is_const: bool,
     ) -> Result<(), PLDiag> {
         if self.table.contains_key(&name) {
             return Err(self.add_diag(range.new_err(ErrorCode::REDECLARATION)));
         }
-        let refs = Rc::new(RefCell::new(vec![]));
+        let refs = Arc::new(RefCell::new(vec![]));
         if is_const {
             self.plmod
                 .add_global_symbol(name, pltype.clone(), range, refs.clone())?;
@@ -239,7 +240,7 @@ impl<'a, 'ctx> Ctx<'a> {
         Ok(())
     }
 
-    pub fn get_type(&self, name: &str, range: Range) -> Result<Rc<RefCell<PLType>>, PLDiag> {
+    pub fn get_type(&self, name: &str, range: Range) -> Result<Arc<RefCell<PLType>>, PLDiag> {
         if let Some(pv) = self.generic_types.get(name) {
             return Ok(pv.clone());
         }
@@ -258,7 +259,7 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn get_or_add_global<'b>(
         &'b mut self,
         name: &str,
-        pltype: Rc<RefCell<PLType>>,
+        pltype: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> ValueHandle {
         builder.get_or_add_global(name, pltype, self)
@@ -299,7 +300,7 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn add_type(
         &mut self,
         name: String,
-        pltype: Rc<RefCell<PLType>>,
+        pltype: Arc<RefCell<PLType>>,
         range: Range,
     ) -> Result<(), PLDiag> {
         if let PLType::GENERIC(g) = &*pltype.borrow() {
@@ -320,7 +321,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.plmod.types.insert(name, pltype.clone());
         Ok(())
     }
-    pub fn add_type_without_check(&mut self, pltype: Rc<RefCell<PLType>>) {
+    pub fn add_type_without_check(&mut self, pltype: Arc<RefCell<PLType>>) {
         if let PLType::GENERIC(g) = &*pltype.borrow() {
             if g.curpltype.is_some() {
                 return self.add_type_without_check(g.curpltype.as_ref().unwrap().clone());
@@ -333,17 +334,17 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         self.plmod.types.insert(name, pltype.clone());
     }
-    pub fn add_generic_type(&mut self, name: String, pltype: Rc<RefCell<PLType>>, range: Range) {
+    pub fn add_generic_type(&mut self, name: String, pltype: Arc<RefCell<PLType>>, range: Range) {
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
         self.generic_types.insert(name, pltype.clone());
     }
-    pub fn move_generic_types(&mut self) -> FxHashMap<String, Rc<RefCell<PLType>>> {
+    pub fn move_generic_types(&mut self) -> FxHashMap<String, Arc<RefCell<PLType>>> {
         self.generic_types.clone()
     }
-    pub fn reset_generic_types(&mut self, mp: FxHashMap<String, Rc<RefCell<PLType>>>) {
+    pub fn reset_generic_types(&mut self, mp: FxHashMap<String, Arc<RefCell<PLType>>>) {
         self.generic_types = mp
     }
-    pub fn add_doc_symbols(&mut self, pltype: Rc<RefCell<PLType>>) {
+    pub fn add_doc_symbols(&mut self, pltype: Arc<RefCell<PLType>>) {
         match &*RefCell::borrow(&pltype) {
             PLType::FN(f) => {
                 if !f.method {
@@ -369,9 +370,9 @@ impl<'a, 'ctx> Ctx<'a> {
         &'b mut self,
         range: Range,
         v: PLValue,
-        tp: Rc<RefCell<PLType>>,
+        tp: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Result<(ValueHandle, Rc<RefCell<PLType>>), PLDiag> {
+    ) -> Result<(ValueHandle, Arc<RefCell<PLType>>), PLDiag> {
         let v = v.value;
         builder.try_load2var(range, v, tp, self)
     }
@@ -399,7 +400,7 @@ impl<'a, 'ctx> Ctx<'a> {
         Location::new(self.get_file_url(), range.to_diag_range())
     }
 
-    pub fn set_if_refs_tp(&self, tp: Rc<RefCell<PLType>>, range: Range) {
+    pub fn set_if_refs_tp(&self, tp: Arc<RefCell<PLType>>, range: Range) {
         if let Some(tprefs) = tp.borrow().get_refs() {
             tprefs.borrow_mut().push(self.get_location(range));
             self.plmod.refs.borrow_mut().insert(range, tprefs.clone());
@@ -430,7 +431,7 @@ impl<'a, 'ctx> Ctx<'a> {
         );
     }
 
-    pub fn set_if_refs(&self, refs: Rc<RefCell<Vec<Location>>>, range: Range) {
+    pub fn set_if_refs(&self, refs: Arc<RefCell<Vec<Location>>>, range: Range) {
         refs.borrow_mut().push(self.get_location(range));
         self.plmod.refs.borrow_mut().insert(range, refs.clone());
     }
@@ -621,7 +622,7 @@ impl<'a, 'ctx> Ctx<'a> {
             modifiers,
         )
     }
-    pub fn push_type_hints(&self, range: Range, pltype: Rc<RefCell<PLType>>) {
+    pub fn push_type_hints(&self, range: Range, pltype: Arc<RefCell<PLType>>) {
         if self.need_highlight != 0 {
             return;
         }
@@ -740,10 +741,10 @@ impl<'a, 'ctx> Ctx<'a> {
     /// 自动解引用，有几层解几层
     pub fn auto_deref<'b>(
         &'b self,
-        tp: Rc<RefCell<PLType>>,
+        tp: Arc<RefCell<PLType>>,
         value: ValueHandle,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> (Rc<RefCell<PLType>>, ValueHandle) {
+    ) -> (Arc<RefCell<PLType>>, ValueHandle) {
         let mut tp = tp;
         let mut value = value;
         loop {
@@ -760,7 +761,7 @@ impl<'a, 'ctx> Ctx<'a> {
 
     /// # auto_deref_tp
     /// 自动解pltype引用，有几层解几层
-    pub fn auto_deref_tp(&self, tp: Rc<RefCell<PLType>>) -> Rc<RefCell<PLType>> {
+    pub fn auto_deref_tp(&self, tp: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
         let mut tp = tp;
         loop {
             match &*RefCell::borrow(&tp.clone()) {

@@ -60,13 +60,13 @@ impl TraitDefNode {
         if let Some(generics) = &self.generics {
             generic_map = generics.gen_generic_type(ctx);
         }
-        let stu = Rc::new(RefCell::new(PLType::TRAIT(STType {
+        let stu = Arc::new(RefCell::new(PLType::TRAIT(STType {
             name: self.id.name.clone(),
             path: ctx.plmod.path.clone(),
             fields: FxHashMap::default(),
             ordered_fields: vec![],
             range: self.range(),
-            refs: Rc::new(RefCell::new(vec![])),
+            refs: Arc::new(RefCell::new(vec![])),
             doc: vec![],
             generic_map,
             impls: FxHashMap::default(),
@@ -105,7 +105,7 @@ impl TraitDefNode {
             typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
             name: "tmp".to_string(),
             range: Default::default(),
-            refs: Rc::new(RefCell::new(vec![])),
+            refs: Arc::new(RefCell::new(vec![])),
         });
         i = i + 1;
         // pointer to real value
@@ -117,7 +117,7 @@ impl TraitDefNode {
             })),
             name: "tmp".to_string(),
             range: Default::default(),
-            refs: Rc::new(RefCell::new(vec![])),
+            refs: Arc::new(RefCell::new(vec![])),
         });
         i = i + 1;
         let pltype = ctx.get_type(&self.id.name.as_str(), self.range)?;
@@ -132,7 +132,7 @@ impl TraitDefNode {
                 typenode: Box::new(tp.into()),
                 name: field.id.name.clone(),
                 range: field.range,
-                refs: Rc::new(RefCell::new(vec![])),
+                refs: Arc::new(RefCell::new(vec![])),
             };
             field.get_type(ctx, builder)?;
 

@@ -29,13 +29,14 @@ use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use std::path::PathBuf;
-use std::rc::Rc;
+
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobalVar {
-    pub tp: Rc<RefCell<PLType>>,
+    pub tp: Arc<RefCell<PLType>>,
     pub range: Range,
-    pub loc: Rc<RefCell<Vec<Location>>>,
+    pub loc: Arc<RefCell<Vec<Location>>>,
 }
 
 /// # Mod
@@ -47,7 +48,7 @@ pub struct Mod {
     /// file path of the module
     pub path: String,
     /// func and types
-    pub types: FxHashMap<String, Rc<RefCell<PLType>>>,
+    pub types: FxHashMap<String, Arc<RefCell<PLType>>>,
     /// sub mods
     pub submods: FxHashMap<String, Mod>,
     /// global variable table
@@ -55,15 +56,15 @@ pub struct Mod {
     /// structs methods
     pub methods: FxHashMap<String, FxHashMap<String, FNType>>,
     pub defs: LSPRangeMap<Range, LSPDef>,
-    pub refs: LSPRangeMap<Range, Rc<RefCell<Vec<Location>>>>,
+    pub refs: LSPRangeMap<Range, Arc<RefCell<Vec<Location>>>>,
     pub sig_helps: LSPRangeMap<Range, SignatureHelp>,
     pub hovers: LSPRangeMap<Range, Hover>,
-    pub completions: Rc<RefCell<Vec<CompletionItemWrapper>>>,
-    pub completion_gened: Rc<RefCell<Gened>>,
-    pub semantic_tokens_builder: Rc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
-    pub hints: Rc<RefCell<Box<Vec<InlayHint>>>>,
-    pub doc_symbols: Rc<RefCell<Box<Vec<DocumentSymbol>>>>,
-    // pub hints: Rc<RefCell<Box<Vec<InlayHint>>>>,
+    pub completions: Arc<RefCell<Vec<CompletionItemWrapper>>>,
+    pub completion_gened: Arc<RefCell<Gened>>,
+    pub semantic_tokens_builder: Arc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
+    pub hints: Arc<RefCell<Box<Vec<InlayHint>>>>,
+    pub doc_symbols: Arc<RefCell<Box<Vec<DocumentSymbol>>>>,
+    // pub hints: Arc<RefCell<Box<Vec<InlayHint>>>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -88,7 +89,7 @@ impl Gened {
     }
 }
 
-type LSPRangeMap<T, V> = Rc<RefCell<BTreeMap<T, V>>>;
+type LSPRangeMap<T, V> = Arc<RefCell<BTreeMap<T, V>>>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LSPDef {
@@ -105,17 +106,17 @@ impl Mod {
             submods: FxHashMap::default(),
             global_table: FxHashMap::default(),
             methods: FxHashMap::default(),
-            defs: Rc::new(RefCell::new(BTreeMap::new())),
-            refs: Rc::new(RefCell::new(BTreeMap::new())),
-            sig_helps: Rc::new(RefCell::new(BTreeMap::new())),
-            hovers: Rc::new(RefCell::new(BTreeMap::new())),
-            completions: Rc::new(RefCell::new(vec![])),
-            completion_gened: Rc::new(RefCell::new(Gened(false))),
-            semantic_tokens_builder: Rc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
+            defs: Arc::new(RefCell::new(BTreeMap::new())),
+            refs: Arc::new(RefCell::new(BTreeMap::new())),
+            sig_helps: Arc::new(RefCell::new(BTreeMap::new())),
+            hovers: Arc::new(RefCell::new(BTreeMap::new())),
+            completions: Arc::new(RefCell::new(vec![])),
+            completion_gened: Arc::new(RefCell::new(Gened(false))),
+            semantic_tokens_builder: Arc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
                 "builder".to_string(),
             )))),
-            hints: Rc::new(RefCell::new(Box::new(vec![]))),
-            doc_symbols: Rc::new(RefCell::new(Box::new(vec![]))),
+            hints: Arc::new(RefCell::new(Box::new(vec![]))),
+            doc_symbols: Arc::new(RefCell::new(Box::new(vec![]))),
         }
     }
     pub fn new_child(&self) -> Self {
@@ -143,9 +144,9 @@ impl Mod {
     pub fn add_global_symbol(
         &mut self,
         name: String,
-        tp: Rc<RefCell<PLType>>,
+        tp: Arc<RefCell<PLType>>,
         range: Range,
-        refs: Rc<RefCell<Vec<Location>>>,
+        refs: Arc<RefCell<Vec<Location>>>,
     ) -> Result<(), PLDiag> {
         if self.global_table.contains_key(&name) {
             return Err(range.new_err(ErrorCode::UNDEFINED_TYPE));
@@ -160,16 +161,16 @@ impl Mod {
         );
         Ok(())
     }
-    pub fn get_type(&self, name: &str) -> Option<Rc<RefCell<PLType>>> {
+    pub fn get_type(&self, name: &str) -> Option<Arc<RefCell<PLType>>> {
         let v = self.types.get(name);
         if let Some(pv) = v {
             return Some(pv.clone());
         }
         if let Some(x) = PriType::try_from_str(name) {
-            return Some(Rc::new(RefCell::new(PLType::PRIMITIVE(x))));
+            return Some(Arc::new(RefCell::new(PLType::PRIMITIVE(x))));
         }
         if name == "void" {
-            return Some(Rc::new(RefCell::new(PLType::VOID)));
+            return Some(Arc::new(RefCell::new(PLType::VOID)));
         }
         None
     }

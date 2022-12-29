@@ -9,7 +9,7 @@ use indexmap::IndexMap;
 use internal_macro::{comments, fmt, range};
 use lsp_types::SemanticTokenType;
 use std::cell::RefCell;
-use std::rc::Rc;
+
 use std::vec;
 #[range]
 #[fmt]
@@ -218,7 +218,7 @@ impl TypeNode for FuncDefNode {
     fn eq_or_infer<'a, 'ctx, 'b>(
         &self,
         _ctx: &'b mut Ctx<'a>,
-        _pltype: Rc<RefCell<PLType>>,
+        _pltype: Arc<RefCell<PLType>>,
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<bool, PLDiag> {
         todo!()
@@ -244,7 +244,7 @@ impl FuncDefNode {
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Result<Rc<RefCell<PLType>>, PLDiag> {
+    ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
         let mut param_pltypes = Vec::new();
         let mut param_name = Vec::new();
         let mut method = false;
@@ -278,7 +278,7 @@ impl FuncDefNode {
             param_pltypes,
             param_names: param_name,
             range: self.range,
-            refs: Rc::new(RefCell::new(refs)),
+            refs: Arc::new(RefCell::new(refs)),
             doc: self.doc.clone(),
             llvmname: if self.declare {
                 self.id.name.clone()
@@ -287,14 +287,14 @@ impl FuncDefNode {
             },
             method,
             generic_map,
-            generic_infer: Rc::new(RefCell::new(IndexMap::default())),
+            generic_infer: Arc::new(RefCell::new(IndexMap::default())),
             generic: self.generics.is_some(),
             node: Box::new(self.clone()),
         };
         if self.generics.is_none() {
             builder.get_or_insert_fn_handle(&ftp, ctx);
         }
-        let pltype = Rc::new(RefCell::new(PLType::FN(ftp.clone())));
+        let pltype = Arc::new(RefCell::new(PLType::FN(ftp.clone())));
         ctx.set_if_refs_tp(pltype.clone(), self.id.range);
         ctx.add_doc_symbols(pltype.clone());
         if method {
@@ -422,10 +422,10 @@ impl FuncDefNode {
                             .to_string();
                         place_holder_fn.name = name.clone();
                         place_holder_fn.generic_map.clear();
-                        place_holder_fn.generic_infer = Rc::new(RefCell::new(IndexMap::default()));
+                        place_holder_fn.generic_infer = Arc::new(RefCell::new(IndexMap::default()));
                         fntype.generic_infer.borrow_mut().insert(
                             name,
-                            Rc::new(RefCell::new(PLType::FN(place_holder_fn.clone()))),
+                            Arc::new(RefCell::new(PLType::FN(place_holder_fn.clone()))),
                         );
                     }
                 }
