@@ -9,7 +9,7 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
-use crate::ast::plmod::RwVec;
+
 use crate::ast::pltype::get_type_deep;
 use crate::ast::pltype::{eq, ARRType, Field, GenericType, PLType, STType};
 use crate::plv;
@@ -407,7 +407,7 @@ impl StructDefNode {
             fields: FxHashMap::default(),
             ordered_fields: vec![],
             range: self.range(),
-            refs: Arc::new(RwVec::new()),
+            // refs: Arc::new(RwVec::new()),
             doc: vec![],
             generic_map,
             impls: FxHashMap::default(),
@@ -449,7 +449,7 @@ impl StructDefNode {
                 typenode: field.typenode.clone(),
                 name: field.id.name.clone(),
                 range: field.range,
-                refs: Arc::new(RwVec::new()),
+                // refs: Arc::new(RwVec::new()),
             };
             let tpre = field.typenode.get_type(ctx, builder);
             if tpre.is_err() {
@@ -463,7 +463,7 @@ impl StructDefNode {
                 _ => {}
             };
 
-            ctx.set_if_refs(f.refs.clone(), field.id.range);
+            // ctx.set_if_refs(f.refs.clone(), field.id.range);
             fields.insert(id.name.to_string(), f.clone());
             order_fields.push(f);
             ctx.set_if_refs_tp(tp.clone(), field.typenode.range());
@@ -596,7 +596,7 @@ impl Node for StructInitNode {
                 ));
             }
             field_init_values.push((field.index, value));
-            ctx.set_if_refs(field.refs.clone(), field_id_range);
+            // ctx.set_if_refs(field.refs.clone(), field_id_range);
         }
         if self.fields.len() < self.comments.len() {
             ctx.emit_comment_highlight(&self.comments[idx]);

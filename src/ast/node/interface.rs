@@ -2,7 +2,6 @@ use super::primary::VarNode;
 use super::*;
 use crate::ast::{
     ctx::Ctx,
-    plmod::RwVec,
     pltype::{Field, STType},
 };
 use indexmap::IndexMap;
@@ -67,7 +66,7 @@ impl TraitDefNode {
             fields: FxHashMap::default(),
             ordered_fields: vec![],
             range: self.range(),
-            refs: Arc::new(RwVec::new()),
+            // refs: Arc::new(RwVec::new()),
             doc: vec![],
             generic_map,
             impls: FxHashMap::default(),
@@ -106,7 +105,7 @@ impl TraitDefNode {
             typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
             name: "tmp".to_string(),
             range: Default::default(),
-            refs: Arc::new(RwVec::new()),
+            // refs: Arc::new(RwVec::new()),
         });
         i = i + 1;
         // pointer to real value
@@ -118,7 +117,7 @@ impl TraitDefNode {
             })),
             name: "tmp".to_string(),
             range: Default::default(),
-            refs: Arc::new(RwVec::new()),
+            // refs: Arc::new(RwVec::new()),
         });
         i = i + 1;
         let pltype = ctx.get_type(&self.id.name.as_str(), self.range)?;
@@ -133,11 +132,11 @@ impl TraitDefNode {
                 typenode: Box::new(tp.into()),
                 name: field.id.name.clone(),
                 range: field.range,
-                refs: Arc::new(RwVec::new()),
+                // refs: Arc::new(RwVec::new()),
             };
             field.get_type(ctx, builder)?;
 
-            ctx.set_if_refs(f.refs.clone(), field.id.range);
+            // ctx.set_if_refs(f.refs.clone(), field.id.range);
             fields.insert(id.name.to_string(), f.clone());
             order_fields.push(f);
             i = i + 1;

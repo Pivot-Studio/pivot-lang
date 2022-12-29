@@ -299,11 +299,19 @@ impl Program {
             ActionType::FindReferences => {
                 let (pos, _) = params.params(db).unwrap();
                 let range = pos.to(pos);
-                let res = plmod.refs.borrow();
+                let res = plmod.local_refs.borrow();
                 let re = res.range((Unbounded, Included(&range))).last();
                 if let Some((range, res)) = re {
                     if pos.is_in(*range) {
-                        PLReferences::push(db, res.clone());
+                        PLReferences::push(db, res.borrow().clone());
+                    }
+                }
+                let res = plmod.glob_refs.borrow();
+                let re = res.range((Unbounded, Included(&range))).last();
+                if let Some((range, res)) = re {
+                    if pos.is_in(*range) {
+                        // plmod.get_refs(res, db);
+                        db.set_ref_str(Some(res.clone()));
                     }
                 }
             }

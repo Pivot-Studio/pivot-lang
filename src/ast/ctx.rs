@@ -9,7 +9,7 @@ use super::plmod::CompletionItemWrapper;
 use super::plmod::GlobalVar;
 use super::plmod::LSPDef;
 use super::plmod::Mod;
-use super::plmod::RwVec;
+use super::plmod::MutVec;
 use super::pltype::add_primitive_types;
 use super::pltype::FNType;
 use super::pltype::PLType;
@@ -71,7 +71,7 @@ pub struct Ctx<'a> {
             ValueHandle,
             Arc<RefCell<PLType>>,
             Range,
-            Arc<RwVec<Location>>,
+            Arc<MutVec<Location>>,
         ),
     >, // variable table
     pub config: Config,                                           // config
@@ -187,12 +187,12 @@ impl<'a, 'ctx> Ctx<'a> {
         ValueHandle,
         Arc<RefCell<PLType>>,
         Range,
-        Arc<RwVec<Location>>,
+        Option<Arc<MutVec<Location>>>,
         bool,
     )> {
         let v = self.table.get(name);
         if let Some((h, pltype, range, refs)) = v {
-            return Some((*h, pltype.clone(), range.clone(), refs.clone(), false));
+            return Some((*h, pltype.clone(), range.clone(), Some(refs.clone()), false));
         }
         if let Some(father) = self.father {
             return father.get_symbol(name, builder);
@@ -200,7 +200,7 @@ impl<'a, 'ctx> Ctx<'a> {
         if let Some(GlobalVar {
             tp: pltype,
             range,
-            loc: refs,
+            // loc: refs,
         }) = self.plmod.get_global_symbol(name)
         {
             return Some((
@@ -209,7 +209,7 @@ impl<'a, 'ctx> Ctx<'a> {
                     .unwrap(),
                 pltype.clone(),
                 range.clone(),
-                refs.clone(),
+                None,
                 true,
             ));
         }
@@ -227,10 +227,9 @@ impl<'a, 'ctx> Ctx<'a> {
         if self.table.contains_key(&name) {
             return Err(self.add_diag(range.new_err(ErrorCode::REDECLARATION)));
         }
-        let refs = Arc::new(RwVec::new());
+        let refs = Arc::new(RefCell::new(vec![]));
         if is_const {
-            self.plmod
-                .add_global_symbol(name, pltype.clone(), range, refs.clone())?;
+            self.plmod.add_global_symbol(name, pltype.clone(), range)?;
         } else {
             self.table
                 .insert(name, (pv, pltype.clone(), range, refs.clone()));
@@ -401,10 +400,21 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn set_if_refs_tp(&self, tp: Arc<RefCell<PLType>>, range: Range) {
-        if let Some(tprefs) = tp.borrow().get_refs() {
-            tprefs.borrow_mut().push(self.get_location(range));
-            self.plmod.refs.borrow_mut().insert(range, tprefs.clone());
-        }
+        tp.borrow().if_refs(|tp| {
+            let name = tp.get_full_elm_name();
+            self.plmod
+                .glob_refs
+                .borrow_mut()
+                .insert(range, name.clone());
+            let mut rm = self.plmod.refs_map.borrow_mut();
+            if let Some(refsmap) = rm.get(&name) {
+                refsmap.borrow_mut().push(self.get_location(range));
+            } else {
+                let v = RefCell::new(vec![]);
+                v.borrow_mut().push(self.get_location(range));
+                rm.insert(name, Arc::new(v));
+            }
+        })
     }
 
     pub fn set_if_sig(&self, range: Range, name: String, params: &[String], n: u32) {
@@ -431,9 +441,9 @@ impl<'a, 'ctx> Ctx<'a> {
         );
     }
 
-    pub fn set_if_refs(&self, refs: Arc<RwVec<Location>>, range: Range) {
+    pub fn set_if_refs(&self, refs: Arc<MutVec<Location>>, range: Range) {
         refs.borrow_mut().push(self.get_location(range));
-        self.plmod.refs.borrow_mut().insert(range, refs.clone());
+        self.plmod.local_refs.borrow_mut().insert(range, refs);
     }
 
     pub fn send_if_go_to_def(&self, range: Range, destrange: Range, file: String) {

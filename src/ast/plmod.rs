@@ -1,3 +1,4 @@
+use super::accumulators::PLReferences;
 use super::diag::{ErrorCode, PLDiag};
 
 use super::pltype::FNType;
@@ -8,6 +9,7 @@ use super::pltype::STType;
 use super::range::Range;
 
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
+use crate::Db;
 
 use lsp_types::Command;
 use lsp_types::CompletionItem;
@@ -23,20 +25,20 @@ use lsp_types::Location;
 
 use lsp_types::SignatureHelp;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use std::path::PathBuf;
 
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobalVar {
     pub tp: Arc<RefCell<PLType>>,
     pub range: Range,
-    pub loc: Arc<RwVec<Location>>,
+    // pub loc: Arc<RwVec<Location>>,
 }
 
 /// # Mod
@@ -56,7 +58,10 @@ pub struct Mod {
     /// structs methods
     pub methods: FxHashMap<String, FxHashMap<String, FNType>>,
     pub defs: LSPRangeMap<Range, LSPDef>,
-    pub refs: LSPRangeMap<Range, Arc<RwVec<Location>>>,
+    // pub refcache:LSPRangeMap<String, Arc<RwVec<Location>>>,
+    pub local_refs: LSPRangeMap<Range, Arc<MutVec<Location>>>, // hold local vars
+    pub glob_refs: LSPRangeMap<Range, String>,                 // hold global refs
+    pub refs_map: LSPRangeMap<String, Arc<MutVec<Location>>>,
     pub sig_helps: LSPRangeMap<Range, SignatureHelp>,
     pub hovers: LSPRangeMap<Range, Hover>,
     pub completions: Arc<RefCell<Vec<CompletionItemWrapper>>>,
@@ -67,38 +72,7 @@ pub struct Mod {
     // pub hints: Arc<RefCell<Box<Vec<InlayHint>>>>,
 }
 
-/// # RwVec
-/// a vec with rwlock
-/// auto implements Eq and PartialEq
-#[derive(Debug)]
-pub struct RwVec<T> {
-    inner: RwLock<Vec<T>>,
-}
-
-impl<T> PartialEq for RwVec<T>
-where
-    T: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        &*self.inner.read().unwrap() == &*other.inner.read().unwrap()
-    }
-}
-
-impl<T> Eq for RwVec<T> where T: Eq {}
-
-impl<T> RwVec<T> {
-    pub fn borrow_mut(&self) -> std::sync::RwLockWriteGuard<Vec<T>> {
-        self.inner.write().unwrap()
-    }
-    pub fn borrow(&self) -> std::sync::RwLockReadGuard<Vec<T>> {
-        self.inner.read().unwrap()
-    }
-    pub fn new() -> Self {
-        Self {
-            inner: RwLock::new(Vec::new()),
-        }
-    }
-}
+pub type MutVec<T> = RefCell<Vec<T>>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CompletionItemWrapper(pub CompletionItem);
@@ -140,7 +114,7 @@ impl Mod {
             global_table: FxHashMap::default(),
             methods: FxHashMap::default(),
             defs: Arc::new(RefCell::new(BTreeMap::new())),
-            refs: Arc::new(RefCell::new(BTreeMap::new())),
+            // refs: Arc::new(RefCell::new(BTreeMap::new())),
             sig_helps: Arc::new(RefCell::new(BTreeMap::new())),
             hovers: Arc::new(RefCell::new(BTreeMap::new())),
             completions: Arc::new(RefCell::new(vec![])),
@@ -150,6 +124,10 @@ impl Mod {
             )))),
             hints: Arc::new(RefCell::new(Box::new(vec![]))),
             doc_symbols: Arc::new(RefCell::new(Box::new(vec![]))),
+            // refcache:Arc::new(RefCell::new(BTreeMap::new())),
+            local_refs: Arc::new(RefCell::new(BTreeMap::new())),
+            glob_refs: Arc::new(RefCell::new(BTreeMap::new())),
+            refs_map: Arc::new(RefCell::new(BTreeMap::new())),
         }
     }
     pub fn new_child(&self) -> Self {
@@ -161,7 +139,7 @@ impl Mod {
             global_table: FxHashMap::default(),
             methods: self.methods.clone(),
             defs: self.defs.clone(),
-            refs: self.refs.clone(),
+            // refs: self.refs.clone(),
             sig_helps: self.sig_helps.clone(),
             hovers: self.hovers.clone(),
             completions: self.completions.clone(),
@@ -169,7 +147,27 @@ impl Mod {
             semantic_tokens_builder: self.semantic_tokens_builder.clone(),
             hints: self.hints.clone(),
             doc_symbols: self.doc_symbols.clone(),
+            // refcache:self.refcache.clone(),
+            local_refs: self.local_refs.clone(),
+            glob_refs: self.glob_refs.clone(),
+            refs_map: self.refs_map.clone(),
         }
+    }
+    pub fn get_refs(&self, name: &str, db: &dyn Db, set: &mut FxHashSet<String>) {
+        if set.contains(&self.path) {
+            return;
+        }
+        set.insert(self.path.clone());
+        self.push_refs(name, db);
+        for m in self.submods.values() {
+            m.get_refs(name, db, set);
+        }
+    }
+    pub fn push_refs(&self, name: &str, db: &dyn Db) {
+        self.refs_map.borrow().get(name).and_then(|res| {
+            PLReferences::push(db, res.borrow().clone());
+            Some(())
+        });
     }
     pub fn get_global_symbol(&self, name: &str) -> Option<&GlobalVar> {
         self.global_table.get(name)
@@ -179,7 +177,7 @@ impl Mod {
         name: String,
         tp: Arc<RefCell<PLType>>,
         range: Range,
-        refs: Arc<RwVec<Location>>,
+        // refs: Arc<RwVec<Location>>,
     ) -> Result<(), PLDiag> {
         if self.global_table.contains_key(&name) {
             return Err(range.new_err(ErrorCode::UNDEFINED_TYPE));
@@ -189,7 +187,7 @@ impl Mod {
             GlobalVar {
                 tp,
                 range,
-                loc: refs,
+                // loc: refs,
             },
         );
         Ok(())
