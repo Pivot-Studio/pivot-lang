@@ -715,7 +715,7 @@ dependencies = [
 [[package]]
 name = "lsp-types"
 version = "0.93.2"
-source = "git+https://github.com/Pivot-Studio/lsp-types?branch=master#09c2b5f7c054b449104c5b672d2ad269074892cf"
+source = "git+https://github.com/Pivot-Studio/lsp-types?branch=master#bd31d48ad0ddd8025c3ecf3d882922beba65342a"
 dependencies = [
  "bitflags",
  "serde",
