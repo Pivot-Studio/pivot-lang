@@ -1029,6 +1029,24 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .unwrap(),
         );
     }
+
+    fn build_phi(
+        &self,
+        pltype: &PLType,
+        ctx: &mut Ctx<'a>,
+        vbs: &[(ValueHandle, BlockHandle)],
+    ) -> ValueHandle {
+        let phi = self
+            .builder
+            .build_phi(self.get_basic_type_op(pltype, ctx).unwrap(), "");
+        for (value, block) in vbs {
+            let value = self.get_llvm_value(*value).unwrap().into_int_value();
+            let block = self.get_llvm_block(*block).unwrap();
+            phi.add_incoming(&[(&value, block)]);
+        }
+        self.get_llvm_value_handle(&phi.as_any_value_enum())
+    }
+
     fn build_unconditional_branch(&self, bb: BlockHandle) {
         let bb = self.get_llvm_block(bb).unwrap();
         self.builder.build_unconditional_branch(bb);
@@ -1317,6 +1335,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                     .as_any_value_enum(),
             ),
         );
+    }
+    fn get_cur_basic_block(&self) -> BlockHandle {
+        self.get_llvm_block_handle(self.builder.get_insert_block().unwrap())
     }
     fn get_last_basic_block(&self, v: ValueHandle) -> BlockHandle {
         let v = self.get_llvm_value(v).unwrap().into_function_value();

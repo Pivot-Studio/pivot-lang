@@ -87,6 +87,7 @@ pub trait IRBuilder<'a, 'ctx> {
     fn delete_block(&self, b: BlockHandle);
     fn finalize_debug(&self);
     fn float_value(&self, ty: &PriType, v: f64) -> ValueHandle;
+    fn get_cur_basic_block(&self) -> BlockHandle;
     fn get_first_basic_block(&self, v: ValueHandle) -> BlockHandle;
     fn get_first_instruction(&self, bb: BlockHandle) -> Option<ValueHandle>;
     fn get_last_basic_block(&self, v: ValueHandle) -> BlockHandle;
@@ -104,6 +105,12 @@ pub trait IRBuilder<'a, 'ctx> {
     fn rm_curr_debug_location(&self);
     fn try_set_fn_dbg(&self, pos: Pos, f: ValueHandle);
     fn write_bitcode_to_path(&self, path: &Path) -> bool;
+    fn build_phi(
+        &self,
+        pltype: &PLType,
+        ctx: &mut Ctx<'a>,
+        vbs: &[(ValueHandle, BlockHandle)],
+    ) -> ValueHandle;
     fn build_unconditional_branch(&self, bb: BlockHandle);
     fn position_at_end_block(&self, block: BlockHandle);
     fn add_body_to_struct_type(&self, name: &str, order_fields: &[Field], ctx: &mut Ctx<'a>);

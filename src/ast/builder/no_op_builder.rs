@@ -133,7 +133,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
     fn float_value(&self, _ty: &crate::ast::pltype::PriType, _v: f64) -> super::ValueHandle {
         0
     }
-
+    fn get_cur_basic_block(&self) -> super::BlockHandle {
+        0
+    }
     fn get_first_basic_block(&self, _v: super::ValueHandle) -> super::BlockHandle {
         0
     }
@@ -178,7 +180,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
     fn write_bitcode_to_path(&self, _path: &std::path::Path) -> bool {
         true
     }
-
+    fn build_phi(
+        &self,
+        _pltype: &PLType,
+        _ctx: &mut Ctx<'a>,
+        _vbs: &[(ValueHandle, super::BlockHandle)],
+    ) -> ValueHandle {
+        0
+    }
     fn build_unconditional_branch(&self, _bb: super::BlockHandle) {}
 
     fn position_at_end_block(&self, _block: super::BlockHandle) {}
