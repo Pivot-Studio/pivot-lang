@@ -145,6 +145,10 @@ impl VarNode {
             refs.and_then(|refs| {
                 ctx.set_if_refs(refs, self.range);
                 Some(())
+            })
+            .or_else(|| {
+                ctx.set_glob_refs(&ctx.plmod.get_full_name(&self.name), self.range);
+                Some(())
             });
             return o;
         }

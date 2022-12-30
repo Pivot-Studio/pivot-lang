@@ -12,6 +12,7 @@ use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::pltype::add_primitive_types;
 use super::pltype::FNType;
+use super::pltype::Field;
 use super::pltype::PLType;
 
 use super::pltype::STType;
@@ -197,12 +198,7 @@ impl<'a, 'ctx> Ctx<'a> {
         if let Some(father) = self.father {
             return father.get_symbol(name, builder);
         }
-        if let Some(GlobalVar {
-            tp: pltype,
-            range,
-            // loc: refs,
-        }) = self.plmod.get_global_symbol(name)
-        {
+        if let Some(GlobalVar { tp: pltype, range }) = self.plmod.get_global_symbol(name) {
             return Some((
                 builder
                     .get_global_var_handle(&self.plmod.get_full_name(name))
@@ -227,15 +223,16 @@ impl<'a, 'ctx> Ctx<'a> {
         if self.table.contains_key(&name) {
             return Err(self.add_diag(range.new_err(ErrorCode::REDECLARATION)));
         }
-        let refs = Arc::new(RefCell::new(vec![]));
         if is_const {
+            self.set_glob_refs(&self.plmod.get_full_name(&name), range);
             self.plmod.add_global_symbol(name, pltype.clone(), range)?;
         } else {
+            let refs = Arc::new(RefCell::new(vec![]));
             self.table
                 .insert(name, (pv, pltype.clone(), range, refs.clone()));
+            self.set_if_refs(refs, range);
         }
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
-        self.set_if_refs(refs, range);
         Ok(())
     }
 
@@ -402,19 +399,30 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn set_if_refs_tp(&self, tp: Arc<RefCell<PLType>>, range: Range) {
         tp.borrow().if_refs(|tp| {
             let name = tp.get_full_elm_name();
-            self.plmod
-                .glob_refs
-                .borrow_mut()
-                .insert(range, name.clone());
-            let mut rm = self.plmod.refs_map.borrow_mut();
-            if let Some(refsmap) = rm.get(&name) {
-                refsmap.borrow_mut().push(self.get_location(range));
-            } else {
-                let v = RefCell::new(vec![]);
-                v.borrow_mut().push(self.get_location(range));
-                rm.insert(name, Arc::new(v));
-            }
+            self.set_glob_refs(&name, range)
         })
+    }
+
+    pub fn set_field_refs(&self, pltype: Arc<RefCell<PLType>>, f: &Field, range: Range) {
+        self.set_glob_refs(
+            &format!("{}..{}", &pltype.borrow().get_full_elm_name(), f.name),
+            range,
+        );
+    }
+
+    pub fn set_glob_refs(&self, name: &str, range: Range) {
+        self.plmod
+            .glob_refs
+            .borrow_mut()
+            .insert(range, name.to_string());
+        let mut rm = self.plmod.refs_map.borrow_mut();
+        if let Some(refsmap) = rm.get(name) {
+            refsmap.borrow_mut().push(self.get_location(range));
+        } else {
+            let v = RefCell::new(vec![]);
+            v.borrow_mut().push(self.get_location(range));
+            rm.insert(name.to_string(), Arc::new(v));
+        }
     }
 
     pub fn set_if_sig(&self, range: Range, name: String, params: &[String], n: u32) {
@@ -469,10 +477,6 @@ impl<'a, 'ctx> Ctx<'a> {
 
     pub fn get_completions_in_ns(&self, ns: &str) -> Vec<CompletionItem> {
         let mut m = FxHashMap::default();
-        // self.get_var_completions_in_ns(ns, &mut m);
-        // self.get_pltp_completions_in_ns(ns, &mut m);
-        // self.get_keyword_completions_in_ns(ns, &mut m);
-        // self.plmod.get_ns_completions_pri_in_ns(ns, &mut m);
         self.get_const_completions_in_ns(ns, &mut m);
         self.get_type_completions_in_ns(ns, &mut m);
 
@@ -679,7 +683,7 @@ impl<'a, 'ctx> Ctx<'a> {
             "if", "else", "while", "for", "return", "struct", "let", "true", "false",
         ];
         let loopkeys = vec!["break", "continue"];
-        let toplevel = vec!["fn", "struct", "const", "use", "impl"];
+        let toplevel = vec!["fn", "struct", "const", "use", "impl", "trait"];
         if self.father.is_none() {
             for k in toplevel {
                 vmap.insert(

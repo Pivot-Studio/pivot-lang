@@ -301,11 +301,15 @@ impl Program {
                 let range = pos.to(pos);
                 let res = plmod.local_refs.borrow();
                 let re = res.range((Unbounded, Included(&range))).last();
+                let mut pushed = false;
                 if let Some((range, res)) = re {
                     if pos.is_in(*range) {
                         PLReferences::push(db, res.borrow().clone());
+                        pushed = true;
+                        db.set_ref_str(None);
                     }
-                } else {
+                }
+                if !pushed {
                     let res = plmod.glob_refs.borrow();
                     let re = res.range((Unbounded, Included(&range))).last();
                     if let Some((range, res)) = re {
