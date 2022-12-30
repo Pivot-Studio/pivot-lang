@@ -449,7 +449,6 @@ impl StructDefNode {
                 typenode: field.typenode.clone(),
                 name: field.id.name.clone(),
                 range: field.range,
-                // refs: Arc::new(RwVec::new()),
             };
             let tpre = field.typenode.get_type(ctx, builder);
             if tpre.is_err() {
@@ -462,8 +461,8 @@ impl StructDefNode {
                 }
                 _ => {}
             };
-
-            // ctx.set_if_refs(f.refs.clone(), field.id.range);
+            ctx.set_field_refs(pltype.clone(), &f, f.range);
+            ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
             fields.insert(id.name.to_string(), f.clone());
             order_fields.push(f);
             ctx.set_if_refs_tp(tp.clone(), field.typenode.range());
@@ -596,7 +595,7 @@ impl Node for StructInitNode {
                 ));
             }
             field_init_values.push((field.index, value));
-            // ctx.set_if_refs(field.refs.clone(), field_id_range);
+            ctx.set_field_refs(pltype.clone(), &field, field_id_range);
         }
         if self.fields.len() < self.comments.len() {
             ctx.emit_comment_highlight(&self.comments[idx]);
