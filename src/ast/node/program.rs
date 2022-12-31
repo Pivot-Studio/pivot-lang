@@ -32,7 +32,8 @@ use std::hash::{Hash, Hasher};
 use std::io::prelude::*;
 use std::ops::Bound::*;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
+
+use std::sync::Arc;
 
 #[range]
 #[fmt]
@@ -88,7 +89,7 @@ impl Node for ProgramNode {
             _ = x.emit_global(ctx, builder);
         });
         ctx.clear_init_fn(builder);
-        ctx.plmod.semantic_tokens_builder = Rc::new(RefCell::new(Box::new(
+        ctx.plmod.semantic_tokens_builder = Arc::new(RefCell::new(Box::new(
             SemanticTokensBuilder::new(ctx.plmod.path.to_string()),
         )));
         // node parser
@@ -298,11 +299,23 @@ impl Program {
             ActionType::FindReferences => {
                 let (pos, _) = params.params(db).unwrap();
                 let range = pos.to(pos);
-                let res = plmod.refs.borrow();
+                let res = plmod.local_refs.borrow();
                 let re = res.range((Unbounded, Included(&range))).last();
+                let mut pushed = false;
                 if let Some((range, res)) = re {
                     if pos.is_in(*range) {
-                        PLReferences::push(db, res.clone());
+                        PLReferences::push(db, res.borrow().clone());
+                        pushed = true;
+                        db.set_ref_str(None);
+                    }
+                }
+                if !pushed {
+                    let res = plmod.glob_refs.borrow();
+                    let re = res.range((Unbounded, Included(&range))).last();
+                    if let Some((range, res)) = re {
+                        if pos.is_in(*range) {
+                            db.set_ref_str(Some(res.clone()));
+                        }
                     }
                 }
             }
@@ -450,3 +463,11 @@ pub struct ProgramNodeWrapper {
 pub struct ModWrapper {
     pub plmod: Mod,
 }
+
+/// 尽管实际上Mod并不是线程安全的，但是它的使用特性导致
+/// 他的内容实际上几乎只会在生成的mod里被修改，当他作为依赖项
+/// 给别的mod使用的时候几乎是只读的，所以它不需要真的线程安全，
+/// 只需要实现接口来骗过rust
+unsafe impl Send for Mod {}
+
+unsafe impl Sync for Mod {}

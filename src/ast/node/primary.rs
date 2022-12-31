@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 
 use crate::ast::builder::BuilderEnum;
@@ -64,7 +66,7 @@ impl Node for BoolConstNode {
                 self.value as u64,
                 true
             ))),
-            Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
+            Some(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
             TerminatorEnum::NONE,
         ))
     }
@@ -94,14 +96,14 @@ impl Node for NumNode {
             let b = builder.int_value(&PriType::I64, x, true);
             return Ok((
                 Some(plv!(b)),
-                Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::I64)))),
+                Some(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::I64)))),
                 TerminatorEnum::NONE,
             ));
         } else if let Num::FLOAT(x) = self.value {
             let b = builder.float_value(&PriType::F64, x);
             return Ok((
                 Some(plv!(b)),
-                Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::F64)))),
+                Some(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::F64)))),
                 TerminatorEnum::NONE,
             ));
         }
@@ -140,7 +142,14 @@ impl VarNode {
                 TerminatorEnum::NONE,
             ));
             ctx.send_if_go_to_def(self.range, dst, ctx.plmod.path.clone());
-            ctx.set_if_refs(refs, self.range);
+            refs.and_then(|refs| {
+                ctx.set_if_refs(refs, self.range);
+                Some(())
+            })
+            .or_else(|| {
+                ctx.set_glob_refs(&ctx.plmod.get_full_name(&self.name), self.range);
+                Some(())
+            });
             return o;
         }
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
@@ -168,7 +177,7 @@ impl VarNode {
                 | PLType::PLACEHOLDER(_) => {
                     if let PLType::STRUCT(st) | PLType::TRAIT(st) = &*tp.clone().borrow() {
                         ctx.send_if_go_to_def(self.range, st.range, ctx.plmod.path.clone());
-                        ctx.set_if_refs(st.refs.clone(), self.range);
+                        // ctx.set_if_refs(st.refs.clone(), self.range);
                     }
                     return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
                 }

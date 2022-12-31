@@ -1,4 +1,4 @@
-use std::{cell::RefCell, path::PathBuf, rc::Rc};
+use std::path::PathBuf;
 
 use lsp_types::{
     CompletionItem, DocumentSymbol, GotoDefinitionResponse, Hover, InlayHint, Location,
@@ -11,7 +11,7 @@ use super::diag::PLDiag;
 pub struct Diagnostics((String, Vec<PLDiag>));
 
 #[salsa::accumulator]
-pub struct PLReferences(Rc<RefCell<Vec<Location>>>);
+pub struct PLReferences(Vec<Location>);
 
 #[salsa::accumulator]
 pub struct GotoDef(GotoDefinitionResponse);

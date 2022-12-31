@@ -1,5 +1,6 @@
 use std::cell::RefCell;
-use std::rc::Rc;
+
+use std::sync::Arc;
 
 use crate::ast::ctx::Ctx;
 
@@ -102,11 +103,11 @@ pub trait TypeNode: RangeTrait + FmtTrait + PrintTrait {
     fn eq_or_infer<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        pltype: Rc<RefCell<PLType>>,
+        pltype: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<bool, PLDiag>;
 }
-type TypeNodeResult = Result<Rc<RefCell<PLType>>, PLDiag>;
+type TypeNodeResult = Result<Arc<RefCell<PLType>>, PLDiag>;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 #[enum_dispatch(Node, RangeTrait, FmtTrait, PrintTrait)]
@@ -180,7 +181,7 @@ pub trait PrintTrait {
 pub type NodeResult = Result<
     (
         Option<PLValue>,
-        Option<Rc<RefCell<PLType>>>, //type
+        Option<Arc<RefCell<PLType>>>, //type
         TerminatorEnum,
     ),
     PLDiag,
@@ -233,7 +234,7 @@ impl<'a, 'ctx> Ctx<'a> {
     fn emit_with_expectation<'b>(
         &'b mut self,
         node: &mut Box<NodeEnum>,
-        expect: Option<Rc<RefCell<PLType>>>,
+        expect: Option<Arc<RefCell<PLType>>>,
         expectrange: Range,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
@@ -372,7 +373,7 @@ impl<'a, 'ctx> Ctx<'a> {
                             let v = builder.bitcast(
                                 self,
                                 v,
-                                &PLType::POINTER(Rc::new(RefCell::new(PLType::PRIMITIVE(
+                                &PLType::POINTER(Arc::new(RefCell::new(PLType::PRIMITIVE(
                                     PriType::I64,
                                 )))),
                                 "traitcast_tmp",

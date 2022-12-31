@@ -1,4 +1,5 @@
 use super::ctx::Ctx;
+// use super::plmod::RwVec;
 
 use crate::ast::builder::BuilderEnum;
 use crate::utils::get_hash_code;
@@ -32,11 +33,12 @@ use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
 use lsp_types::DocumentSymbol;
 use lsp_types::InsertTextFormat;
-use lsp_types::Location;
+
 use lsp_types::SymbolKind;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
-use std::rc::Rc;
+
+use std::sync::Arc;
 
 /// # PLType
 /// Type for pivot-lang
@@ -48,7 +50,7 @@ pub enum PLType {
     ARR(ARRType),
     PRIMITIVE(PriType),
     VOID,
-    POINTER(Rc<RefCell<PLType>>),
+    POINTER(Arc<RefCell<PLType>>),
     GENERIC(GenericType),
     PLACEHOLDER(PlaceHolderType),
     TRAIT(STType),
@@ -109,7 +111,7 @@ impl PriType {
         }
     }
 }
-pub fn eq(l: Rc<RefCell<PLType>>, r: Rc<RefCell<PLType>>) -> bool {
+pub fn eq(l: Arc<RefCell<PLType>>, r: Arc<RefCell<PLType>>) -> bool {
     match (&*l.borrow(), &*r.borrow()) {
         (PLType::GENERIC(l), PLType::GENERIC(r)) => {
             if l == r {
@@ -193,7 +195,7 @@ fn new_exid_node(modname: &str, name: &str, range: Range) -> Box<TypeNodeEnum> {
         range,
     }))
 }
-pub fn get_type_deep(pltype: Rc<RefCell<PLType>>) -> Rc<RefCell<PLType>> {
+pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
     match &*pltype.borrow() {
         PLType::GENERIC(g) => {
             if g.curpltype.is_some() {
@@ -266,21 +268,17 @@ impl PLType {
             false
         }
     }
-    /// # get_refs
-    /// get the references of the type
-    /// used in find references
-    /// void type and primitive types has no references
-    pub fn get_refs(&self) -> Option<Rc<RefCell<Vec<Location>>>> {
+    /// # if_refs
+    /// if support find refs
+    pub fn if_refs(&self, f: impl FnOnce(&PLType)) {
         match self {
-            PLType::FN(f) => Some(f.refs.clone()),
-            PLType::STRUCT(s) => Some(s.refs.clone()),
-            PLType::ARR(_) => None,
-            PLType::PRIMITIVE(_) => None,
-            PLType::VOID => None,
-            PLType::POINTER(_) => None,
-            PLType::GENERIC(_) => None,
-            PLType::PLACEHOLDER(_) => None,
-            PLType::TRAIT(t) => Some(t.refs.clone()),
+            PLType::FN(_) | PLType::STRUCT(_) | PLType::TRAIT(_) => f(self),
+            PLType::ARR(_) => (),
+            PLType::PRIMITIVE(_) => (),
+            PLType::VOID => (),
+            PLType::POINTER(_) => (),
+            PLType::GENERIC(_) => (),
+            PLType::PLACEHOLDER(_) => (),
         }
     }
 
@@ -330,7 +328,7 @@ impl PLType {
     pub fn get_full_elm_name<'a, 'ctx>(&self) -> String {
         match self {
             PLType::GENERIC(g) => g.name.clone(),
-            PLType::FN(fu) => fu.name.clone(),
+            PLType::FN(fu) => fu.llvmname.clone(),
             PLType::STRUCT(st) => st.get_st_full_name(),
             PLType::TRAIT(st) => st.get_st_full_name(),
             PLType::PRIMITIVE(pri) => pri.get_name(),
@@ -402,7 +400,7 @@ pub struct Field {
     pub typenode: Box<TypeNodeEnum>,
     pub name: String,
     pub range: Range,
-    pub refs: Rc<RefCell<Vec<Location>>>,
+    // pub refs: Arc<RwVec<Location>>,
 }
 
 impl Field {
@@ -429,11 +427,11 @@ pub struct FNType {
     pub param_names: Vec<String>,
     pub ret_pltype: Box<TypeNodeEnum>,
     pub range: Range,
-    pub refs: Rc<RefCell<Vec<Location>>>,
+    // pub refs: Arc<RwVec<Location>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub method: bool,
-    pub generic_map: IndexMap<String, Rc<RefCell<PLType>>>,
-    pub generic_infer: Rc<RefCell<IndexMap<String, Rc<RefCell<PLType>>>>>,
+    pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
+    pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
     pub generic: bool,
     pub node: Box<FuncDefNode>,
 }
@@ -511,10 +509,10 @@ impl FNType {
         );
         res.name = name.clone();
         res.generic_map.clear();
-        res.generic_infer = Rc::new(RefCell::new(IndexMap::default()));
+        res.generic_infer = Arc::new(RefCell::new(IndexMap::default()));
         self.generic_infer
             .borrow_mut()
-            .insert(name, Rc::new(RefCell::new(PLType::FN(res.clone()))));
+            .insert(name, Arc::new(RefCell::new(PLType::FN(res.clone()))));
 
         let block = ctx.block;
         ctx.need_highlight = ctx.need_highlight + 1;
@@ -612,12 +610,12 @@ impl FNType {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ARRType {
-    pub element_type: Rc<RefCell<PLType>>,
+    pub element_type: Arc<RefCell<PLType>>,
     pub size: u32,
 }
 
 impl ARRType {
-    pub fn get_elem_type<'a, 'ctx>(&'a self) -> Rc<RefCell<PLType>> {
+    pub fn get_elem_type<'a, 'ctx>(&'a self) -> Arc<RefCell<PLType>> {
         self.element_type.clone()
     }
 }
@@ -629,11 +627,11 @@ pub struct STType {
     pub fields: FxHashMap<String, Field>,
     pub ordered_fields: Vec<Field>,
     pub range: Range,
-    pub refs: Rc<RefCell<Vec<Location>>>,
+    // pub refs: Arc<RwVec<Location>>,
     pub doc: Vec<Box<NodeEnum>>,
-    pub generic_map: IndexMap<String, Rc<RefCell<PLType>>>,
-    pub impls: FxHashMap<String, Rc<RefCell<PLType>>>,
-    pub derives: Vec<Rc<RefCell<PLType>>>,
+    pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
+    pub impls: FxHashMap<String, Arc<RefCell<PLType>>>,
+    pub derives: Vec<Arc<RefCell<PLType>>>,
 }
 
 impl STType {
@@ -688,7 +686,7 @@ impl STType {
         }
         let mut res = self.clone();
         res.name = name;
-        ctx.add_type_without_check(Rc::new(RefCell::new(PLType::STRUCT(res.clone()))));
+        ctx.add_type_without_check(Arc::new(RefCell::new(PLType::STRUCT(res.clone()))));
         res.ordered_fields = self
             .ordered_fields
             .iter()
@@ -790,85 +788,93 @@ pub fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a>) {
     let pltype_i128 = PLType::PRIMITIVE(PriType::I128);
     ctx.plmod.types.insert(
         "i128".to_string(),
-        Rc::new(RefCell::new(pltype_i128.clone())),
+        Arc::new(RefCell::new(pltype_i128.clone())),
     );
 
     let pltype_i64 = PLType::PRIMITIVE(PriType::I64);
-    ctx.plmod
-        .types
-        .insert("i64".to_string(), Rc::new(RefCell::new(pltype_i64.clone())));
+    ctx.plmod.types.insert(
+        "i64".to_string(),
+        Arc::new(RefCell::new(pltype_i64.clone())),
+    );
 
     let pltype_i32 = PLType::PRIMITIVE(PriType::I32);
-    ctx.plmod
-        .types
-        .insert("i32".to_string(), Rc::new(RefCell::new(pltype_i32.clone())));
+    ctx.plmod.types.insert(
+        "i32".to_string(),
+        Arc::new(RefCell::new(pltype_i32.clone())),
+    );
 
     let pltype_i16 = PLType::PRIMITIVE(PriType::I16);
-    ctx.plmod
-        .types
-        .insert("i16".to_string(), Rc::new(RefCell::new(pltype_i16.clone())));
+    ctx.plmod.types.insert(
+        "i16".to_string(),
+        Arc::new(RefCell::new(pltype_i16.clone())),
+    );
 
     let pltype_i8 = PLType::PRIMITIVE(PriType::I8);
     ctx.plmod
         .types
-        .insert("i8".to_string(), Rc::new(RefCell::new(pltype_i8.clone())));
+        .insert("i8".to_string(), Arc::new(RefCell::new(pltype_i8.clone())));
 
     let pltype_u128 = PLType::PRIMITIVE(PriType::U128);
     ctx.plmod.types.insert(
         "u128".to_string(),
-        Rc::new(RefCell::new(pltype_u128.clone())),
+        Arc::new(RefCell::new(pltype_u128.clone())),
     );
 
     let pltype_u64 = PLType::PRIMITIVE(PriType::U64);
-    ctx.plmod
-        .types
-        .insert("u64".to_string(), Rc::new(RefCell::new(pltype_u64.clone())));
+    ctx.plmod.types.insert(
+        "u64".to_string(),
+        Arc::new(RefCell::new(pltype_u64.clone())),
+    );
 
     let pltype_u32 = PLType::PRIMITIVE(PriType::U32);
-    ctx.plmod
-        .types
-        .insert("u32".to_string(), Rc::new(RefCell::new(pltype_u32.clone())));
+    ctx.plmod.types.insert(
+        "u32".to_string(),
+        Arc::new(RefCell::new(pltype_u32.clone())),
+    );
 
     let pltype_u16 = PLType::PRIMITIVE(PriType::U16);
-    ctx.plmod
-        .types
-        .insert("u16".to_string(), Rc::new(RefCell::new(pltype_u16.clone())));
+    ctx.plmod.types.insert(
+        "u16".to_string(),
+        Arc::new(RefCell::new(pltype_u16.clone())),
+    );
 
     let pltype_u8 = PLType::PRIMITIVE(PriType::U8);
     ctx.plmod
         .types
-        .insert("u8".to_string(), Rc::new(RefCell::new(pltype_u8.clone())));
+        .insert("u8".to_string(), Arc::new(RefCell::new(pltype_u8.clone())));
 
     let pltype_f64 = PLType::PRIMITIVE(PriType::F64);
-    ctx.plmod
-        .types
-        .insert("f64".to_string(), Rc::new(RefCell::new(pltype_f64.clone())));
+    ctx.plmod.types.insert(
+        "f64".to_string(),
+        Arc::new(RefCell::new(pltype_f64.clone())),
+    );
 
     let pltype_f32 = PLType::PRIMITIVE(PriType::F32);
-    ctx.plmod
-        .types
-        .insert("f32".to_string(), Rc::new(RefCell::new(pltype_f32.clone())));
+    ctx.plmod.types.insert(
+        "f32".to_string(),
+        Arc::new(RefCell::new(pltype_f32.clone())),
+    );
 
     let pltype_bool = PLType::PRIMITIVE(PriType::BOOL);
     ctx.plmod.types.insert(
         "bool".to_string(),
-        Rc::new(RefCell::new(pltype_bool.clone())),
+        Arc::new(RefCell::new(pltype_bool.clone())),
     );
 
     let pltype_void = PLType::VOID;
     ctx.plmod.types.insert(
         "void".to_string(),
-        Rc::new(RefCell::new(pltype_void.clone())),
+        Arc::new(RefCell::new(pltype_void.clone())),
     );
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenericType {
     pub name: String,
     pub range: Range,
-    pub curpltype: Option<Rc<RefCell<PLType>>>,
+    pub curpltype: Option<Arc<RefCell<PLType>>>,
 }
 impl GenericType {
-    pub fn set_type(&mut self, pltype: Rc<RefCell<PLType>>) {
+    pub fn set_type(&mut self, pltype: Arc<RefCell<PLType>>) {
         self.curpltype = Some(pltype);
     }
     pub fn clear_type(&mut self) {
@@ -881,7 +887,7 @@ impl GenericType {
             range,
         };
         let name_in_map = p.get_place_holder_name();
-        let pltype = Rc::new(RefCell::new(PLType::PLACEHOLDER(p)));
+        let pltype = Arc::new(RefCell::new(PLType::PLACEHOLDER(p)));
         self.curpltype = Some(pltype.clone());
         ctx.add_type(name_in_map, pltype, range).unwrap();
     }
@@ -933,11 +939,11 @@ macro_rules! generic_impl {
                         .iter()
                         .map(|(k, pltype)| {
                             if let PLType::GENERIC(g) = &*pltype.borrow() {
-                                return (k.clone(), Rc::new(RefCell::new(PLType::GENERIC(g.clone()))));
+                                return (k.clone(), Arc::new(RefCell::new(PLType::GENERIC(g.clone()))));
                             }
                             unreachable!()
                         })
-                        .collect::<IndexMap<String, Rc<RefCell<PLType>>>>();
+                        .collect::<IndexMap<String, Arc<RefCell<PLType>>>>();
                     res.clear_generic();
                     res
                 }

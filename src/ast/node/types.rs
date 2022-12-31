@@ -1,5 +1,6 @@
 use std::cell::RefCell;
-use std::rc::Rc;
+
+use std::sync::Arc;
 
 use super::primary::VarNode;
 use super::*;
@@ -8,6 +9,7 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
+
 use crate::ast::pltype::get_type_deep;
 use crate::ast::pltype::{eq, ARRType, Field, GenericType, PLType, STType};
 use crate::plv;
@@ -131,7 +133,7 @@ impl TypeNode for TypeNameNode {
             } else {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER)));
             }
-            pltype = Rc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
+            pltype = Arc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
         }
         ctx.add_type_without_check(pltype.clone());
         Ok(pltype)
@@ -140,7 +142,7 @@ impl TypeNode for TypeNameNode {
     fn eq_or_infer<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        right: Rc<RefCell<PLType>>,
+        right: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<bool, PLDiag> {
         if let Some(generic_params) = &self.generic_params {
@@ -232,7 +234,7 @@ impl TypeNode for ArrayTypeNameNode {
                     element_type: pltype,
                     size: sz as u32,
                 };
-                let arrtype = Rc::new(RefCell::new(PLType::ARR(arrtype)));
+                let arrtype = Arc::new(RefCell::new(PLType::ARR(arrtype)));
                 return Ok(arrtype);
             }
         }
@@ -246,7 +248,7 @@ impl TypeNode for ArrayTypeNameNode {
     fn eq_or_infer<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        pltype: Rc<RefCell<PLType>>,
+        pltype: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<bool, PLDiag> {
         match &*pltype.borrow() {
@@ -289,7 +291,7 @@ impl TypeNode for PointerTypeNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> TypeNodeResult {
         let pltype = self.elm.get_type(ctx, builder)?;
-        let pltype = Rc::new(RefCell::new(PLType::POINTER(pltype)));
+        let pltype = Arc::new(RefCell::new(PLType::POINTER(pltype)));
         Ok(pltype)
     }
 
@@ -300,7 +302,7 @@ impl TypeNode for PointerTypeNode {
     fn eq_or_infer<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        pltype: Rc<RefCell<PLType>>,
+        pltype: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<bool, PLDiag> {
         match &*pltype.borrow() {
@@ -399,13 +401,13 @@ impl StructDefNode {
         if let Some(generics) = &self.generics {
             generic_map = generics.gen_generic_type(ctx);
         }
-        let stu = Rc::new(RefCell::new(PLType::STRUCT(STType {
+        let stu = Arc::new(RefCell::new(PLType::STRUCT(STType {
             name: self.id.name.clone(),
             path: ctx.plmod.path.clone(),
             fields: FxHashMap::default(),
             ordered_fields: vec![],
             range: self.range(),
-            refs: Rc::new(RefCell::new(vec![])),
+            // refs: Arc::new(RwVec::new()),
             doc: vec![],
             generic_map,
             impls: FxHashMap::default(),
@@ -447,7 +449,6 @@ impl StructDefNode {
                 typenode: field.typenode.clone(),
                 name: field.id.name.clone(),
                 range: field.range,
-                refs: Rc::new(RefCell::new(vec![])),
             };
             let tpre = field.typenode.get_type(ctx, builder);
             if tpre.is_err() {
@@ -460,8 +461,8 @@ impl StructDefNode {
                 }
                 _ => {}
             };
-
-            ctx.set_if_refs(f.refs.clone(), field.id.range);
+            ctx.set_field_refs(pltype.clone(), &f, f.range);
+            ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
             fields.insert(id.name.to_string(), f.clone());
             order_fields.push(f);
             ctx.set_if_refs_tp(tp.clone(), field.typenode.range());
@@ -594,7 +595,7 @@ impl Node for StructInitNode {
                 ));
             }
             field_init_values.push((field.index, value));
-            ctx.set_if_refs(field.refs.clone(), field_id_range);
+            ctx.set_field_refs(pltype.clone(), &field, field_id_range);
         }
         if self.fields.len() < self.comments.len() {
             ctx.emit_comment_highlight(&self.comments[idx]);
@@ -610,7 +611,7 @@ impl Node for StructInitNode {
                 ));
             }
         }
-        let pltype = Rc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
+        let pltype = Arc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
         // let tp = sttype.struct_type(ctx).as_basic_type_enum().clone();
         let struct_pointer = builder.alloc("initstruct", &PLType::STRUCT(sttype), ctx); //alloc(ctx, tp, "initstruct");
         field_init_values.iter().for_each(|(index, value)| {
@@ -691,7 +692,7 @@ impl Node for ArrayInitNode {
         }
         return Ok((
             Some(plv!(arr)),
-            Some(Rc::new(RefCell::new(PLType::ARR(ARRType {
+            Some(Arc::new(RefCell::new(PLType::ARR(ARRType {
                 element_type: tp0.unwrap(),
                 size: sz,
             })))),
@@ -739,7 +740,7 @@ impl GenericDefNode {
     pub fn gen_generic_type<'a, 'ctx>(
         &self,
         _: &mut Ctx<'a>,
-    ) -> IndexMap<String, Rc<RefCell<PLType>>> {
+    ) -> IndexMap<String, Arc<RefCell<PLType>>> {
         let mut res = IndexMap::default();
         for g in self.generics.iter() {
             let range = g.range;
@@ -749,7 +750,7 @@ impl GenericDefNode {
                 range: range.clone(),
                 curpltype: None,
             };
-            res.insert(name, Rc::new(RefCell::new(PLType::GENERIC(gentype))));
+            res.insert(name, Arc::new(RefCell::new(PLType::GENERIC(gentype))));
         }
         res
     }
@@ -794,7 +795,7 @@ impl GenericParamNode {
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Result<Vec<Option<Rc<RefCell<PLType>>>>, PLDiag> {
+    ) -> Result<Vec<Option<Arc<RefCell<PLType>>>>, PLDiag> {
         let mut res = vec![];
         for g in self.generics.iter() {
             if g.is_none() {

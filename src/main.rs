@@ -34,9 +34,10 @@ pub struct Jar(
     program::LspParams,
 );
 
-pub trait Db: salsa::DbWithJar<Jar> {}
-
-impl<DB> Db for DB where DB: ?Sized + salsa::DbWithJar<Jar> {}
+pub trait Db: salsa::DbWithJar<Jar> {
+    fn set_ref_str(&self, ref_str: Option<String>);
+    fn get_ref_str(&self) -> Option<String>;
+}
 
 mod ast;
 mod db;

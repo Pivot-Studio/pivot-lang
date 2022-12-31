@@ -167,7 +167,8 @@ impl Node for ExternIdNode {
         if let Some(symbol) = plmod.get_global_symbol(&self.id.name) {
             ctx.push_semantic_token(self.id.range, SemanticTokenType::VARIABLE, 0);
             let pltype = symbol.tp.clone();
-            ctx.set_if_refs(symbol.loc.clone(), self.range);
+            ctx.set_glob_refs(&plmod.get_full_name(&self.id.name), self.id.range);
+            // ctx.set_if_refs(symbol.loc.clone(), self.range);
             ctx.send_if_go_to_def(self.range, symbol.range, plmod.path.clone());
             let g = ctx.get_or_add_global(
                 &plmod.get_full_name(&self.id.name),

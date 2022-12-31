@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, sync::Arc};
 
 use crate::{
     ast::{
@@ -45,8 +45,8 @@ impl Node for StringNode {
                 res.set_const(true);
                 res
             }),
-            Some(Rc::new(RefCell::new(PLType::ARR(ARRType {
-                element_type: Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::U8))),
+            Some(Arc::new(RefCell::new(PLType::ARR(ARRType {
+                element_type: Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::U8))),
                 size: self.content.len() as u32,
             })))),
             TerminatorEnum::NONE,
