@@ -136,46 +136,39 @@ impl Node for BinOpNode {
                         // +---------------------------------------------------+
                         // |                            phi incoming 1         |
                         // |                               /                   |
-                        // |  left ----> long --->[--right--] ----> and.merge  |  = right
-                        // |   \                                     /         |
-                        // |    \--------------> short ------------>/          |  = left
+                        // |  left(cur)---------------------------> merge      |  = left
+                        // |     \                                   /         |
+                        // |      \------------long[--right--]----->/          |  = right
                         // |                         \                         |
                         // |                      phi incoming 2               |
                         // +---------------------------------------------------+
+                        let incoming_bb1 = builder.get_cur_basic_block(); // get incoming block 1
                         let long_bb = builder.append_basic_block(ctx.function.unwrap(), "long");
-                        let short_bb = builder.append_basic_block(ctx.function.unwrap(), "short");
+                        let merge_bb = builder.append_basic_block(ctx.function.unwrap(), "merge");
                         if self.op.0 == TokenType::AND {
-                            // AND : it's longer when left is true
-                            builder.build_conditional_branch(left, long_bb, short_bb);
+                            // AND : goto long_bb if left is true
+                            builder.build_conditional_branch(left, long_bb, merge_bb);
                         } else {
-                            // OR  : it's longer when left is false
-                            builder.build_conditional_branch(left, short_bb, long_bb);
+                            // OR  : goto long_bb if left is false
+                            builder.build_conditional_branch(left, merge_bb, long_bb);
                         }
-                        // long basic block
+                        // long bb (emit right & goto merge)
                         builder.position_at_end_block(long_bb);
-                        let (rv, rpltype, _) = ctx.emit_with_expectation(
-                            &mut self.right,
-                            lpltype.clone(),
-                            lrange,
-                            builder,
-                        )?;
+                        let (rv, rpltype, _) =
+                            ctx.emit_with_expectation(&mut self.right, lpltype, lrange, builder)?;
                         if rv.is_none() {
                             return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
                         }
                         let (right, _rtp) =
                             ctx.try_load2var(rrange, rv.unwrap(), rpltype.unwrap(), builder)?;
-                        let bb = builder.get_cur_basic_block(); // get incoming block 1
-                        let merge_bb = builder.append_basic_block(ctx.function.unwrap(), "merge");
+                        let incoming_bb2 = builder.get_cur_basic_block(); // get incoming block 2
                         builder.build_unconditional_branch(merge_bb);
-                        // short basic block
-                        builder.position_at_end_block(short_bb); // this is incoming block 2
-                        builder.build_unconditional_branch(merge_bb);
-                        // merge basic block
+                        // merge bb
                         builder.position_at_end_block(merge_bb);
                         let phi = builder.build_phi(
                             &PLType::PRIMITIVE(PriType::BOOL),
                             ctx,
-                            &[(right, bb), (left, short_bb)],
+                            &[(left, incoming_bb1), (right, incoming_bb2)],
                         );
                         // Some(plv!(builder.build_int_z_extend(
                         //     bool_origin,
@@ -223,7 +216,7 @@ impl Node for BinOpNode {
             | TokenType::LEQ
             | TokenType::GEQ
             | TokenType::GREATER
-            | TokenType::LESS => match *lpltype.clone().unwrap().borrow() {
+            | TokenType::LESS => match *lpltype.unwrap().borrow() {
                 PLType::PRIMITIVE(
                     PriType::I128
                     | PriType::I64
