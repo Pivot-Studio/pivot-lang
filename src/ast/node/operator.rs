@@ -184,7 +184,7 @@ impl Node for BinOpNode {
                         // )))
                         Some(plv!(phi))
                     },
-                    Some(Rc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
+                    Some(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
                     TerminatorEnum::NONE,
                 ),
                 _ => {
