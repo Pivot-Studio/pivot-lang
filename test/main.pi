@@ -137,7 +137,28 @@ fn test_const() void {
     io::printi64ln(a);
     return;
 }
-
+fn true_with_pnanic(pos: i64)bool{
+    io::printi64ln(pos);
+    panic::pl_panic();
+    return true;
+}
+fn test_minimal_eval()void{
+    let x = (false&&true_with_pnanic(112231))||(true||!true_with_pnanic(112232));
+    if (true||true_with_pnanic(112233))&&(false&&!true_with_pnanic(112234)||x){
+        io::printi64ln(0);
+    }else{
+        panic::pl_panic();
+    }
+    for let i = 10; i<15 && (i>100||true);i=i+1{
+        io::printi64ln(i);
+    }
+    let i = 0;
+    while i>100||(i<5&&i<=6) {
+        i = i + 1;
+        io::printi64ln(20+i);
+    }
+    return;
+}
 impl TestTrait for mod1::Mod1 {
     //
     /// ### xxx
@@ -364,6 +385,7 @@ fn main() i64 {
     test_if_else();
     test_complex();
     test_const();
+    test_minimal_eval();
     test_mod_struct();
     test_loop();
     test_ret_struct_arr();
