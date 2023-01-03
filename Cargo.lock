@@ -766,7 +766,7 @@ dependencies = [
 [[package]]
 name = "mun_target"
 version = "0.4.0"
-source = "git+https://github.com/mun-lang/mun.git#4c7213b0b522b4f8e89afe23593d7c3a3ef0d029"
+source = "git+https://github.com/mun-lang/mun.git#3a565642dee1ee4dea908621e9f8a90cc8bf0e22"
 dependencies = [
  "log",
 ]
