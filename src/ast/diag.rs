@@ -85,6 +85,7 @@ define_error!(
     GENERIC_PARAM_LEN_MISMATCH = "generic param len mismatch",
     NOT_GENERIC_TYPE = "not generic type",
     EXPECT_TRAIT_TYPE = "expect trait type",
+    EXPECT_STRUCT_TYPE = "expect struct type",
     METHOD_NOT_IN_TRAIT = "method not in trait def",
     METHOD_NOT_IN_IMPL = "method required in trait not found in impl block"
 );

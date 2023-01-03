@@ -556,7 +556,12 @@ impl Node for StructInitNode {
         ctx.set_if_refs_tp(pltype.clone(), self.typename.range());
         let mut sttype = match &mut *pltype.clone().borrow_mut() {
             PLType::STRUCT(s) => s.clone(),
-            _ => unreachable!(),
+            _ => {
+                return Err(self
+                    .range
+                    .new_err(ErrorCode::EXPECT_STRUCT_TYPE)
+                    .add_to_ctx(ctx))
+            }
         };
         ctx.send_if_go_to_def(self.typename.range(), sttype.range, sttype.path.clone());
         let mp = ctx.move_generic_types();
