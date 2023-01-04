@@ -143,6 +143,11 @@ enum RunCommand {
     Lsp,
     /// Format current project
     Fmt,
+    /// Make a new pl package at path
+    New {
+        #[clap(value_parser)]
+        name: String,
+    },
 }
 
 fn main() {
@@ -214,6 +219,9 @@ fn main() {
             }
             RunCommand::Fmt {} => {
                 println!("fmt command is not implemented yet");
+            }
+            RunCommand::New { name } => {
+                utils::plc_new::init_package(name);
             }
         }
     } else {
