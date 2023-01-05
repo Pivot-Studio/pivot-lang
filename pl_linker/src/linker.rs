@@ -69,7 +69,12 @@ struct LdLinker {
 impl LdLinker {
     fn new(target: &spec::Target) -> Self {
         LdLinker {
-            args: target.options.pre_link_args.clone(),
+            args: target
+                .options
+                .pre_link_args
+                .iter()
+                .map(|x| x.to_string())
+                .collect(),
         }
     }
 }
@@ -156,14 +161,19 @@ impl Ld64Linker {
             .next()
             .expect("LLVM target must have a hyphen");
 
-        let mut args = target.options.pre_link_args.clone();
+        let mut args: Vec<String> = target
+            .options
+            .pre_link_args
+            .iter()
+            .map(|x| x.to_string())
+            .collect();
         args.push(format!("-arch"));
         args.push(format!("{}", arch_name));
-        let (a, b, c) = target.options.min_os_version.unwrap();
-        args.push(format!("-platform_version"));
-        args.push(format!("{}", target.options.os));
-        args.push(format!("{}.{}.{}", a, b, c));
-        args.push(format!("{}.{}.{}", a, b + 1, c));
+        // let (a, b, c) = target.options.min_os_version.unwrap();
+        // args.push(format!("-platform_version"));
+        // args.push(format!("{}", target.options.os));
+        // args.push(format!("{}.{}.{}", a, b, c));
+        // args.push(format!("{}.{}.{}", a, b + 1, c));
 
         Ld64Linker {
             args,
@@ -238,7 +248,12 @@ struct MsvcLinker {
 impl MsvcLinker {
     fn new(target: &spec::Target) -> Self {
         MsvcLinker {
-            args: target.options.pre_link_args.clone(),
+            args: target
+                .options
+                .pre_link_args
+                .iter()
+                .map(|x| x.to_string())
+                .collect(),
         }
     }
 }
