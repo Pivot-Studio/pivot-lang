@@ -1,0 +1,7 @@
+use core::panic;
+const a = 100;
+fn test_const() void {
+    panic::assert(a == 100);
+    return;
+}
+

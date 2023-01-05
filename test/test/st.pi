@@ -1,0 +1,103 @@
+use core::panic;
+struct A {
+    x: i64;
+}
+
+struct struct_father {
+    a: i64;
+    b: i64;
+    c: struct_child;
+}
+
+struct struct_child {
+    a: i64;
+    b: [i64 * 1];
+}
+
+struct pointer_struct {
+    ptr2: **pointer_struct;
+    ptr: *struct_child;
+}
+
+fn ret_astruct() A {
+    return A{
+        x: 10000
+    };
+}
+
+fn ret_arr() [i64 * 3] {
+    return [1, 10000, 3];
+}
+
+fn ret_struct() struct_child {
+    return struct_child{
+        a: 10
+    };
+}
+
+fn dangling() *pointer_struct {
+    let a = pointer_struct{
+        ptr: &struct_child{
+            a: 10
+        }
+    };
+    return &a;
+}
+
+fn test_ret_struct() void {
+    panic::assert(ret_struct().a == 10);
+    return;
+}
+
+fn test_struct_father() void {
+    let s = struct_father{
+        a: 2,
+        b: 2,
+        c: struct_child{
+            a: 2,
+            b: [1101]
+        }
+    };
+    panic::assert(s.a == 2);
+    panic::assert(s.c.a == 2);
+    panic::assert(s.c.b[0] == 1101);
+    return;
+}
+
+fn test_self_ref() void {
+    let a = pointer_struct{
+        ptr2: &&pointer_struct{
+            ptr2: &&pointer_struct{
+                ptr: &struct_child{
+                    a: 100
+                }
+            }
+        }
+    };
+    panic::assert(a.ptr2.ptr2.ptr.a == 100);
+    return;
+}
+
+fn test_dangling() void {
+    let x = dangling();
+    panic::assert(x.ptr.a == 10);
+    return;
+}
+
+fn test_ret_struct_arr() void {
+    let s = ret_astruct().x;
+    panic::assert(s == 10000);
+    let a = ret_arr()[1];
+    panic::assert(a == 10000);
+    return;
+}
+
+fn test_struct() void {
+    test_ret_struct();
+    test_dangling();
+    test_self_ref();
+    test_struct_father();
+    test_ret_struct_arr();
+    return;
+}
+

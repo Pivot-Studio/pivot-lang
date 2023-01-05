@@ -1,0 +1,33 @@
+use core::panic;
+fn test_warn() void {
+    return;
+    let x = 1;
+    panic::pl_panic();
+}
+
+fn test_primitives() void {
+    let test: i8 = 1;
+    test = -test;
+    let test2: i8 = test + 1;
+    let testf32: f32 = 1.1;
+    testf32 = -testf32;
+    testf32 = testf32 + 1.2;
+    let utest: u8 = 1;
+    utest = utest + 2;
+    return;
+}
+
+fn test_vm_link() i64;
+
+fn test_vm() void {
+    panic::assert(test_vm_link() == 66);
+    return;
+}
+
+fn test_simple() void {
+    test_vm();
+    test_primitives();
+    test_warn();
+    return;
+}
+
