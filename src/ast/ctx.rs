@@ -49,6 +49,7 @@ use std::cell::RefCell;
 
 use std::path::Path;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 /// # Ctx
 /// Context for code generation
@@ -385,6 +386,27 @@ impl<'a, 'ctx> Ctx<'a> {
                 self.plmod.completions.borrow_mut().extend(comps);
                 self.plmod.completion_gened.borrow_mut().set_true();
             }
+        }
+    }
+
+    fn set_mod(&mut self, plmod: Mod) -> Mod {
+        let m = self.plmod.clone();
+        self.plmod = plmod;
+        m
+    }
+
+    pub fn run_in_st_mod<F: Fn(&mut Ctx, &STType)>(&mut self, st: &STType, f: F)  {
+        let p = PathBuf::from(&st.path);
+        let mut oldm = None;
+        if st.path != self.plmod.path {
+            let s = p.file_name().unwrap().to_str().unwrap();
+            let m = s.split(".").next().unwrap();
+            let m = self.plmod.submods.get(m).unwrap();
+            oldm = Some(self.set_mod(m.clone()));   
+        }
+        f(self, st);
+        if let Some(m) = oldm {
+            self.set_mod(m);
         }
     }
 

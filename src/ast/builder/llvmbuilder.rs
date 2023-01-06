@@ -3,7 +3,7 @@
 /// 2. 所有涉及llvm类型的函数（包括参数或返回值）都应该是private的
 use std::{
     cell::{Cell, RefCell},
-    path::Path,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 
@@ -541,31 +541,33 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .add_function(&llvmname, fn_type, Some(Linkage::External));
         fn_value
     }
-    fn struct_type(&self, pltp: &STType, ctx: &mut Ctx<'a>) -> StructType<'ctx> {
+    fn struct_type(& self, pltp: &STType, ctx: &mut Ctx<'a>) -> StructType<'ctx> {
         let st = self.module.get_struct_type(&pltp.get_st_full_name());
         if let Some(st) = st {
             return st;
         }
         let st = self.context.opaque_struct_type(&pltp.get_st_full_name());
-        st.set_body(
-            &pltp
-                .ordered_fields
-                .clone()
-                .into_iter()
-                .map(|order_field| {
-                    self.get_basic_type_op(
-                        &order_field
-                            .typenode
-                            .get_type(ctx, &self.clone().into())
-                            .unwrap()
-                            .borrow(),
-                        ctx,
-                    )
-                    .unwrap()
-                })
-                .collect::<Vec<_>>(),
-            false,
-        );
+        ctx.run_in_st_mod(pltp, move |ctx,pltp|{
+            st.set_body(
+                &pltp
+                    .ordered_fields
+                    .clone()
+                    .into_iter()
+                    .map(|order_field| {
+                        self.get_basic_type_op(
+                            &order_field
+                                .typenode
+                                .get_type(ctx, &self.clone().into())
+                                .unwrap()
+                                .borrow(),
+                            ctx,
+                        )
+                        .unwrap()
+                    })
+                    .collect::<Vec<_>>(),
+                false,
+            );
+        });
         st
     }
 
