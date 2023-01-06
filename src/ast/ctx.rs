@@ -395,14 +395,14 @@ impl<'a, 'ctx> Ctx<'a> {
         m
     }
 
-    pub fn run_in_st_mod<F: Fn(&mut Ctx, &STType)>(&mut self, st: &STType, f: F)  {
+    pub fn run_in_st_mod<'b, F: FnMut(&mut Ctx<'a>, &STType)>(&'b mut self, st: &STType, mut f: F) {
         let p = PathBuf::from(&st.path);
         let mut oldm = None;
         if st.path != self.plmod.path {
             let s = p.file_name().unwrap().to_str().unwrap();
             let m = s.split(".").next().unwrap();
             let m = self.plmod.submods.get(m).unwrap();
-            oldm = Some(self.set_mod(m.clone()));   
+            oldm = Some(self.set_mod(m.clone()));
         }
         f(self, st);
         if let Some(m) = oldm {

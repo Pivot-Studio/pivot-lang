@@ -3,7 +3,7 @@
 /// 2. 所有涉及llvm类型的函数（包括参数或返回值）都应该是private的
 use std::{
     cell::{Cell, RefCell},
-    path::{Path, PathBuf},
+    path::Path,
     sync::Arc,
 };
 
@@ -425,15 +425,19 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 self.ditypes_placeholder
                     .borrow_mut()
                     .insert(x.get_st_full_name(), RefCell::new(vec![]));
-                let m = x
-                    .ordered_fields
-                    .iter()
-                    .map(|v| {
-                        let (tp, off) = self.get_field_di_type(v, ctx, offset);
-                        offset = off;
-                        tp
-                    })
-                    .collect::<Vec<_>>();
+                let mut m = vec![];
+                ctx.run_in_st_mod(x, |ctx, x| {
+                    m = x
+                        .ordered_fields
+                        .iter()
+                        .map(|v| {
+                            let (tp, off) = self.get_field_di_type(v, ctx, offset);
+                            offset = off;
+                            tp
+                        })
+                        .collect::<Vec<_>>();
+                });
+
                 let sttp = self.struct_type(x, ctx);
                 let st = self
                     .dibuilder
@@ -541,13 +545,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .add_function(&llvmname, fn_type, Some(Linkage::External));
         fn_value
     }
-    fn struct_type(& self, pltp: &STType, ctx: &mut Ctx<'a>) -> StructType<'ctx> {
+    fn struct_type(&self, pltp: &STType, ctx: &mut Ctx<'a>) -> StructType<'ctx> {
         let st = self.module.get_struct_type(&pltp.get_st_full_name());
         if let Some(st) = st {
             return st;
         }
         let st = self.context.opaque_struct_type(&pltp.get_st_full_name());
-        ctx.run_in_st_mod(pltp, move |ctx,pltp|{
+        ctx.run_in_st_mod(pltp, |ctx, pltp| {
             st.set_body(
                 &pltp
                     .ordered_fields
