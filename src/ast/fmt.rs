@@ -372,6 +372,12 @@ impl FmtBuilder {
     pub fn parse_impl_node(&mut self, node: &ImplNode) {
         self.token("impl");
         self.space();
+        if node.impl_trait.is_some() {
+            node.impl_trait.as_ref().unwrap().0.format(self);
+            self.space();
+            self.token("for");
+            self.space();
+        }
         node.target.format(self);
         self.space();
         self.l_brace();
@@ -587,11 +593,11 @@ impl FmtBuilder {
         }
         self.space();
         self.l_brace();
+        self.enter();
         self.add_tab();
         for m in &node.methods {
             m.format(self);
         }
-        self.enter();
         self.sub_tab();
         self.prefix();
         self.r_brace();

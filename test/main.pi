@@ -11,6 +11,7 @@ fn main() i64 {
     generic::test_generic();
     method::test_impl();
     st::test_struct();
+    constant::test_const();
     traits::test_trait();
     simple::test_simple();
     flow::test_flow();
