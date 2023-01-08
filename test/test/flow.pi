@@ -1,0 +1,48 @@
+use core::panic;
+fn true_with_pnanic() bool {
+    panic::pl_panic();
+    return true;
+}
+
+fn test_loop() void {
+    let i = 0;
+    while i < 7 {
+        if i == 3 {
+            i = 5;
+            continue;
+        }
+        if i == 5 {
+            break;
+        }
+        i = i + 1;
+    }
+    panic::assert(i == 5);
+    let j = 0;
+    for let i = 0; i <= 10; i = i + 1 {
+        j = j + i;
+    }
+    panic::assert(j == 55);
+    return;
+}
+
+fn test_minimal_eval() void {
+    let x = (false && true_with_pnanic()) || (true || !true_with_pnanic());
+    if (true || true_with_pnanic()) && (false && !true_with_pnanic() || x) {
+    } else {
+        panic::pl_panic();
+    }
+    for let i = 10; i < 15 && (i > 100 || true); i = i + 1 {
+    }
+    let i = 0;
+    while i > 100 || (i < 5 && i <= 6) {
+        i = i + 1;
+    }
+    return;
+}
+
+fn test_flow() void {
+    test_minimal_eval();
+    test_loop();
+    return;
+}
+

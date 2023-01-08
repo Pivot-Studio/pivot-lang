@@ -425,15 +425,19 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 self.ditypes_placeholder
                     .borrow_mut()
                     .insert(x.get_st_full_name(), RefCell::new(vec![]));
-                let m = x
-                    .ordered_fields
-                    .iter()
-                    .map(|v| {
-                        let (tp, off) = self.get_field_di_type(v, ctx, offset);
-                        offset = off;
-                        tp
-                    })
-                    .collect::<Vec<_>>();
+                let mut m = vec![];
+                ctx.run_in_st_mod(x, |ctx, x| {
+                    m = x
+                        .ordered_fields
+                        .iter()
+                        .map(|v| {
+                            let (tp, off) = self.get_field_di_type(v, ctx, offset);
+                            offset = off;
+                            tp
+                        })
+                        .collect::<Vec<_>>();
+                });
+
                 let sttp = self.struct_type(x, ctx);
                 let st = self
                     .dibuilder
@@ -547,25 +551,27 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             return st;
         }
         let st = self.context.opaque_struct_type(&pltp.get_st_full_name());
-        st.set_body(
-            &pltp
-                .ordered_fields
-                .clone()
-                .into_iter()
-                .map(|order_field| {
-                    self.get_basic_type_op(
-                        &order_field
-                            .typenode
-                            .get_type(ctx, &self.clone().into())
-                            .unwrap()
-                            .borrow(),
-                        ctx,
-                    )
-                    .unwrap()
-                })
-                .collect::<Vec<_>>(),
-            false,
-        );
+        ctx.run_in_st_mod(pltp, |ctx, pltp| {
+            st.set_body(
+                &pltp
+                    .ordered_fields
+                    .clone()
+                    .into_iter()
+                    .map(|order_field| {
+                        self.get_basic_type_op(
+                            &order_field
+                                .typenode
+                                .get_type(ctx, &self.clone().into())
+                                .unwrap()
+                                .borrow(),
+                            ctx,
+                        )
+                        .unwrap()
+                    })
+                    .collect::<Vec<_>>(),
+                false,
+            );
+        });
         st
     }
 

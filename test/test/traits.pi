@@ -1,0 +1,34 @@
+use project1::mod1;
+use core::panic;
+trait TestTrait {
+    fn name() void;
+
+    fn set(i: i64) i64;
+
+}
+
+struct A {
+    x: i64;
+}
+
+impl TestTrait for A {
+    fn name() void {
+        return;
+    }
+
+    fn set(i: i64) i64 {
+        self.x = i;
+        return i;
+    }
+
+}
+
+fn test_trait() void {
+    let x = A{};
+    let dd: TestTrait;
+    dd = x;
+    let re = dd.set(100);
+    panic::assert(re == 100);
+    return;
+}
+

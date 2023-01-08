@@ -1,0 +1,47 @@
+fn test_if_else() void {
+    test_if_only(true);
+    test_if_else_ret(true);
+    test_if_ret_only(true);
+    test_else_ret_only(true);
+    test_not_ret(true);
+    return;
+}
+
+fn test_if_only(judge: bool) void {
+    if judge {
+        return;
+    }
+    return;
+}
+
+fn test_if_else_ret(judge: bool) void {
+    if judge {
+        return;
+    } else {
+        return;
+    }
+}
+
+fn test_if_ret_only(judge: bool) void {
+    if judge {
+        return;
+    } else {
+    }
+    return;
+}
+
+fn test_else_ret_only(judge: bool) void {
+    if judge {
+    } else {
+        return;
+    }
+    return;
+}
+
+fn test_not_ret(judge: bool) void {
+    if judge {
+    } else {
+    }
+    return;
+}
+
