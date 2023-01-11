@@ -54,5 +54,6 @@ members = [
     "internal_macro",
     "vm",
     "pl_linker",
+    "immix",
 ]
 
