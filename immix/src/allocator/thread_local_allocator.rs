@@ -30,9 +30,9 @@ use super::GlobalAllocator;
 pub struct ThreadLocalAllocator {
     global_allocator: *mut GlobalAllocator,
     unavailable_blocks: Vec<*mut Block>,
-    current_block: *mut Block,
     recyclable_blocks: Vec<*mut Block>,
     lock: ReentrantMutex<()>,
+    cursor: *mut u8,
 }
 
 impl ThreadLocalAllocator {
@@ -47,17 +47,19 @@ impl ThreadLocalAllocator {
         Self {
             global_allocator,
             unavailable_blocks: Vec::new(),
-            current_block: std::ptr::null_mut(),
             recyclable_blocks: Vec::new(),
             lock: ReentrantMutex::new(()),
+            cursor: std::ptr::null_mut(),
         }
     }
 
     /// # alloc
     ///
-    /// Allocate an object from current block.
+    /// 优先从recycle blocks中分配，每用完一个recycle block则将block从
+    /// recycle列表中移除，移入unavailable blocks中。当recycle blocks为空时，申请新的
+    /// 空block进行分配
     ///
-    /// If current block is full, get a new block from global allocator.
+    /// TODO: 中等对象分配实现overflow alloc，大对象分配使用large obj alloc
     ///
     /// ## Parameters
     ///
@@ -66,25 +68,52 @@ impl ThreadLocalAllocator {
     /// ## Return
     ///
     /// * `*mut u8` - object pointer
-    // pub fn alloc(&mut self, size: usize) -> *mut u8 {
-    //     let _lock = self.lock.lock();
+    pub fn alloc(&mut self, size: usize) -> *mut u8 {
+        // 空cursor，代表刚启动或者recycle block全用光了
+        if self.cursor.is_null() {
+            let block = self.get_block();
+            self.cursor = unsafe { (*block).get_nth_line(3) };
+            unsafe {
+                let (s, l, nxt) = (*block).alloc(size, self.cursor).unwrap();
+                let re = (*block).get_nth_line(s as usize);
+                nxt.or_else(|| {
+                    self.cursor = std::ptr::null_mut();
+                    None
+                })
+                .and_then(|n| {
+                    self.cursor = n;
+                    None::<()>
+                });
+                return re;
+            }
+        }
 
-    //     if self.current_block.is_null() {
-    //         self.current_block = self.get_block();
-    //     }
-
-    //     let current_block = self.current_block;
-
-    //     let ptr = unsafe { (*current_block).alloc(size) };
-
-    //     if ptr.is_null() {
-    //         self.current_block = self.get_block();
-    //         let current_block = self.current_block;
-    //         unsafe { (*current_block).alloc(size) }
-    //     } else {
-    //         ptr
-    //     }
-    // }
+        let f = self.recyclable_blocks.first().unwrap();
+        let (s, _, nxt) = unsafe { (**f).alloc(size, self.cursor).unwrap() };
+        let re = unsafe { (**f).get_nth_line(s as usize) };
+        nxt.or_else(|| {
+            // 当前block被用完，将它从recyclable blocks中移除，加入unavailable blocks
+            let used_block = self.recyclable_blocks.pop().unwrap();
+            self.unavailable_blocks.push(used_block);
+            // 如果还有recyclable_blocks 则指向下一个block的第一个可用line
+            self.recyclable_blocks
+                .first()
+                .and_then(|b| {
+                    self.cursor = unsafe { (**b).get_nth_line(3) };
+                    Some(())
+                })
+                .or_else(|| {
+                    self.cursor = std::ptr::null_mut();
+                    None
+                });
+            None
+        })
+        .and_then(|n| {
+            self.cursor = n;
+            None::<()>
+        });
+        re
+    }
 
     /// # get_block
     ///

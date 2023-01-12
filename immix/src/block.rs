@@ -238,15 +238,13 @@ mod tests {
             // 第一个hole应该是从第三行开始，长度是253
             assert_eq!(block.find_first_hole(), Some((3, 253)));
             // 标记hole隔一行之后的第一行为已使用
-            block.line_map[4] = 1;
+            block.set_line_used(4);
             // 获取下一个hole，应该是从第五行开始，长度是251
             assert_eq!(block.find_next_hole((3, 1)), Some((5, 251)));
             // 标记hole隔一行之后五行为已使用
-            block.line_map[6] = 1;
-            block.line_map[7] = 1;
-            block.line_map[8] = 1;
-            block.line_map[9] = 1;
-            block.line_map[10] = 1;
+            for i in 6..=10 {
+                block.set_line_used(i);
+            }
             // 获取下一个hole，应该是从第十一行开始，长度是245
             assert_eq!(block.find_next_hole((5, 5)), Some((11, 245)));
         };
