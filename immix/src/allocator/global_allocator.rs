@@ -1,4 +1,4 @@
-use parking_lot::ReentrantMutex;
+use parking_lot::{lock_api::RawMutex, ReentrantMutex};
 
 use crate::{block::Block, consts::BLOCK_SIZE, mmap::Mmap};
 
@@ -35,7 +35,7 @@ impl GlobalAllocator {
     /// 从mmap的heap空间之中获取一个Option<* mut Block>，如果heap空间不够了，就返回None
     ///
     /// 每次分配block会让current增加一个block的大小
-    fn alloc_block(&mut self) -> Option<*mut Block> {
+    fn alloc_block(&self) -> Option<*mut Block> {
         let current = self.current;
         let heap_end = self.heap_end;
 
@@ -47,10 +47,6 @@ impl GlobalAllocator {
 
         let block = Block::new(current);
 
-        let current = self.current;
-        let next = unsafe { current.add(BLOCK_SIZE) };
-        self.current = next;
-
         Some(block)
     }
 
@@ -58,11 +54,12 @@ impl GlobalAllocator {
     ///
     /// 从free_blocks中获取一个可用的block，如果没有可用的block，就从mmap的heap空间之中获取一个新block
     pub fn get_block(&mut self) -> *mut Block {
-        _ = self.lock.lock();
+        let _lock = self.lock.lock();
         let block = if let Some(block) = self.free_blocks.pop() {
             block
         } else {
             let b = self.alloc_block().unwrap();
+            self.current = unsafe { self.current.add(BLOCK_SIZE) };
             self.mmap.commit(b as *mut Block as *mut u8, BLOCK_SIZE);
             b
         };
@@ -78,7 +75,7 @@ impl GlobalAllocator {
     where
         I: IntoIterator<Item = &'static mut Block>,
     {
-        _ = self.lock.lock();
+        let _lock = self.lock.lock();
         for block in blocks {
             self.free_blocks.push(block);
             self.mmap

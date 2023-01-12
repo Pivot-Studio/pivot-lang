@@ -1,6 +1,6 @@
+mod allocator;
 mod block;
 mod consts;
-mod global_allocator;
 mod mmap;
 
 pub fn add(left: usize, right: usize) -> usize {
