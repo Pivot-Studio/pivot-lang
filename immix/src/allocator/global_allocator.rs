@@ -10,6 +10,8 @@ pub struct GlobalAllocator {
     mmap: Mmap,
     /// current heap pointer
     current: *mut u8,
+    /// heap start
+    heap_start: *mut u8,
     /// heap end
     heap_end: *mut u8,
     /// 所有被归还的Block都会被放到这个Vec里面
@@ -26,6 +28,7 @@ impl GlobalAllocator {
         let mmap = Mmap::new(size);
         Self {
             current: mmap.aligned(),
+            heap_start: mmap.aligned(),
             heap_end: mmap.end(),
             mmap,
             free_blocks: Vec::new(),
@@ -61,6 +64,9 @@ impl GlobalAllocator {
             let b = self.alloc_block().unwrap();
             self.current = unsafe { self.current.add(BLOCK_SIZE) };
             self.mmap.commit(b as *mut Block as *mut u8, BLOCK_SIZE);
+            unsafe {
+                (*b).reset_header();
+            }
             b
         };
         block
@@ -73,7 +79,7 @@ impl GlobalAllocator {
     /// 将blocks放回free_blocks中，所有放回的空间会被标记为DONT_NEED
     pub fn return_blocks<I>(&mut self, blocks: I)
     where
-        I: IntoIterator<Item = &'static mut Block>,
+        I: IntoIterator<Item = *mut Block>,
     {
         let _lock = self.lock.lock();
         for block in blocks {
@@ -81,5 +87,11 @@ impl GlobalAllocator {
             self.mmap
                 .dontneed(block as *mut Block as *mut u8, BLOCK_SIZE);
         }
+    }
+
+    /// # in heap
+    /// 判断一个指针是否在heap之中
+    pub fn in_heap(&self, ptr: *mut u8) -> bool {
+        ptr >= self.heap_start && ptr < self.heap_end
     }
 }

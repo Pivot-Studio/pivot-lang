@@ -12,11 +12,13 @@ pub struct Block {
     /// 如果是小对象，那么大小为1，自然存的下。如果是中等对象，那么line_map中将有多行
     /// 对应该object，所以可以借用下一个byte的高3位来存储object的大小。这样一共有8位空间
     /// 用于存储object size，而line size最大256正好存的下
-    pub line_map: [u8; NUM_LINES_PER_BLOCK],
+    line_map: [u8; NUM_LINES_PER_BLOCK],
     /// 第一个hole的起始行号
-    pub first_hole_line_idx: u8,
+    first_hole_line_idx: u8,
     /// 第一个hole的长度（行数
-    pub first_hole_line_len: u8,
+    first_hole_line_len: u8,
+    /// 是否被标记
+    pub marked: bool,
 }
 
 impl Block {
@@ -31,10 +33,65 @@ impl Block {
                 line_map: [0; NUM_LINES_PER_BLOCK],
                 first_hole_line_idx: 3, // 跳过前三行，都用来放metadata。浪费一点空间（metadata从0.8%->1.2%）
                 first_hole_line_len: (NUM_LINES_PER_BLOCK - 3) as u8,
+                marked: false,
             });
 
             &mut *ptr
         }
+    }
+
+    pub fn reset_header(&mut self) {
+        self.first_hole_line_idx = 3;
+        self.first_hole_line_len = (NUM_LINES_PER_BLOCK - 3) as u8;
+        self.marked = false;
+        self.line_map = [0; NUM_LINES_PER_BLOCK];
+    }
+
+    /// # correct_header
+    /// 重置block的header
+    /// 1. 根据line_map中存储的mark重置line_map中的used
+    /// 2. 重置first_hole_line_idx
+    /// 3. 重置first_hole_line_len
+    /// 4. 重置marked
+    pub fn correct_header(&mut self) {
+        let mut idx = 3;
+        let mut len = 0;
+        let mut first_hole_line_idx = 3;
+        let mut first_hole_line_len = 0;
+
+        while idx < NUM_LINES_PER_BLOCK {
+            // 如果是空行
+            if self.line_map[idx] & 1 == 0 {
+                len += 1;
+            } else {
+                // 非空行
+                // 如果没被标记了，那么将used bit置为0
+                if self.line_map[idx] & 2 == 0 {
+                    self.line_map[idx] &= !1;
+                }
+
+                // 这里遇到了第一个洞的结尾，设置第一个洞的数据
+                if len > 0 {
+                    if first_hole_line_len == 0 {
+                        first_hole_line_idx = idx as u8 - len;
+                        first_hole_line_len = len;
+                    }
+                    len = 0;
+                }
+            }
+            idx += 1;
+        }
+
+        if len > 0 {
+            if first_hole_line_len == 0 {
+                first_hole_line_idx = (idx - len as usize) as u8;
+                first_hole_line_len = len;
+            }
+        }
+
+        self.first_hole_line_idx = first_hole_line_idx;
+        self.first_hole_line_len = first_hole_line_len;
+        self.marked = false;
     }
 
     /// # find_next_hole
@@ -125,7 +182,7 @@ impl Block {
     /// # Safety
     ///
     /// The caller must ensure that the index is valid.
-    unsafe fn set_line_mark(&mut self, idx: usize) {
+    pub unsafe fn set_line_mark(&mut self, idx: usize) {
         debug_assert!(idx < NUM_LINES_PER_BLOCK);
         self.line_map[idx] |= 0b10;
     }
@@ -137,7 +194,7 @@ impl Block {
     /// # Safety
     ///
     /// The caller must ensure that the index is valid.
-    unsafe fn get_obj_line_size(&mut self, idx: usize) -> usize {
+    unsafe fn get_obj_line_size(&self, idx: usize) -> usize {
         debug_assert!(idx < NUM_LINES_PER_BLOCK);
         if self.line_map[idx] & 0b100 == 0 {
             // small object
@@ -146,6 +203,36 @@ impl Block {
             // medium object
             ((self.line_map[idx] >> 3) | (self.line_map[idx + 1] & !0b111)) as usize + 1
         }
+    }
+
+    /// # get_obj_line_size_from_ptr
+    ///
+    /// get the line size of the object by the pointer
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the pointer is valid.
+    pub unsafe fn get_obj_line_size_from_ptr(&self, ptr: *mut u8) -> (usize, usize) {
+        let line_idx = (ptr as usize - self as *const Self as usize) / LINE_SIZE;
+        (line_idx, self.get_obj_line_size(line_idx))
+    }
+
+    /// # from_obj_ptr
+    ///
+    /// get the block from a pointer
+    ///
+    /// note that the pointer does not need to be exactly at the start of the block
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the pointer is valid.
+    pub unsafe fn from_obj_ptr(ptr: *mut u8) -> &'static mut Self {
+        // ptr may not be at the start of the block
+        // the block start address is the nearest multiple of BLOCK_SIZE
+        // get the block start address
+        let ptr = ptr as usize;
+        let block_start = ptr - (ptr % BLOCK_SIZE);
+        &mut *(block_start as *mut Self)
     }
 
     /// # clear_line_mark

@@ -76,10 +76,10 @@ impl ThreadLocalAllocator {
         // mid size object & small size object
         // 空cursor，代表刚启动或者recycle block全用光了
         if self.cursor.is_null() {
-            let block = self.get_block();
+            let block = self.get_new_block();
             self.cursor = unsafe { (*block).get_nth_line(3) };
             unsafe {
-                let (s, l, nxt) = (*block).alloc(size, self.cursor).unwrap();
+                let (s, _, nxt) = (*block).alloc(size, self.cursor).unwrap();
                 let re = (*block).get_nth_line(s as usize);
                 nxt.or_else(|| {
                     self.cursor = std::ptr::null_mut();
@@ -87,14 +87,15 @@ impl ThreadLocalAllocator {
                 })
                 .and_then(|n| {
                     self.cursor = n;
+                    self.recyclable_blocks.push(block);
                     None::<()>
                 });
                 return re;
             }
         }
         let f = self.recyclable_blocks.first().unwrap();
-        let res = unsafe { (**f).alloc(size, self.cursor)};
-        if res.is_none() && size > LINE_SIZE  {
+        let res = unsafe { (**f).alloc(size, self.cursor) };
+        if res.is_none() && size > LINE_SIZE {
             // mid size object alloc failed, try to overflow_alloc
             return self.overflow_alloc(size);
         }
@@ -125,19 +126,19 @@ impl ThreadLocalAllocator {
     }
 
     /// # overflow_alloc
-    /// 
+    ///
     /// 从global allocator中获取新block进行分配。
-    /// 
+    ///
     /// ## Parameters
-    /// 
+    ///
     /// * `size` - object size
-    /// 
+    ///
     /// ## Return
-    /// 
+    ///
     /// * `*mut u8` - object pointer
     pub fn overflow_alloc(&mut self, size: usize) -> *mut u8 {
         // 获取新block
-        let new_block = self.get_block();
+        let new_block = self.get_new_block();
         self.cursor = unsafe { (*new_block).get_nth_line(3) };
         // alloc
         let (s, l, nxt) = unsafe { (*new_block).alloc(size, self.cursor).unwrap() };
@@ -157,7 +158,8 @@ impl ThreadLocalAllocator {
                     None
                 });
             None
-        }).and_then(|n|{
+        })
+        .and_then(|n| {
             // new_block未被用完，将它加入recyclable blocks
             self.recyclable_blocks.push(new_block);
             self.cursor = n;
@@ -165,26 +167,17 @@ impl ThreadLocalAllocator {
         });
         re
     }
-    
-    /// # get_block
+
+    /// # get_new_block
     ///
-    /// Get a block from global allocator.
-    ///
-    /// If there is a recyclable block, get it from recyclable blocks.
-    ///
-    /// Otherwise, get a new block from global allocator.
+    /// get a new block from global allocator.
     ///
     /// ## Return
     ///
     /// * `*mut Block` - block pointer
-    fn get_block(&mut self) -> *mut Block {
-        if let Some(block) = self.recyclable_blocks.pop() {
-            block
-        } else {
-            let block = unsafe { (&mut *self.global_allocator).get_block() };
-            self.unavailable_blocks.push(block);
-            block
-        }
+    fn get_new_block(&mut self) -> *mut Block {
+        let block = unsafe { (&mut *self.global_allocator).get_block() };
+        block
     }
 
     /// # recycle
@@ -200,6 +193,56 @@ impl ThreadLocalAllocator {
         if self.unavailable_blocks.contains(&block) {
             self.unavailable_blocks.retain(|&b| b != block);
             self.recyclable_blocks.push(block);
+        }
+    }
+
+    /// # in_heap
+    pub fn in_heap(&self, ptr: *mut u8) -> bool {
+        unsafe { (*self.global_allocator).in_heap(ptr) }
+    }
+
+    /// # sweep
+    ///
+    /// Iterate all blocks, if a block is not marked, free it.
+    /// Correct all remain blocks' headers, and classify them
+    /// into recyclable blocks and unavailable blocks.
+    pub fn sweep(&mut self) {
+        let _lock = self.lock.lock();
+        let mut recyclable_blocks = Vec::new();
+        let mut unavailable_blocks = Vec::new();
+        let mut free_blocks = Vec::new();
+        let mut cursor = std::ptr::null_mut::<u8>();
+        unsafe {
+            for block in self.recyclable_blocks.iter() {
+                let block = *block;
+                if (*block).marked {
+                    (*block).correct_header();
+                    recyclable_blocks.push(block);
+                    if cursor.is_null() {
+                        cursor = (*block).get_nth_line(3);
+                    }
+                } else {
+                    free_blocks.push(block);
+                }
+            }
+            for block in self.unavailable_blocks.iter() {
+                let block = *block;
+                if (*block).marked {
+                    (*block).correct_header();
+                    unavailable_blocks.push(block);
+                    if cursor.is_null() {
+                        cursor = (*block).get_nth_line(3);
+                    }
+                } else {
+                    free_blocks.push(block);
+                }
+            }
+        }
+        self.recyclable_blocks = recyclable_blocks;
+        self.unavailable_blocks = unavailable_blocks;
+        self.cursor = cursor;
+        unsafe {
+            (&mut *self.global_allocator).return_blocks(free_blocks.into_iter());
         }
     }
 }
