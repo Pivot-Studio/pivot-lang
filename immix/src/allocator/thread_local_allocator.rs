@@ -8,7 +8,7 @@
 
 use parking_lot::ReentrantMutex;
 
-use crate::block::Block;
+use crate::{block::Block, consts::LINE_SIZE};
 
 use super::GlobalAllocator;
 
@@ -55,11 +55,11 @@ impl ThreadLocalAllocator {
 
     /// # alloc
     ///
-    /// 优先从recycle blocks中分配，每用完一个recycle block则将block从
-    /// recycle列表中移除，移入unavailable blocks中。当recycle blocks为空时，申请新的
-    /// 空block进行分配
+    /// 优先从recycle blocks中分配，如果中对象分配失败，使用overflow_alloc，
+    /// 每用完一个recycle block则将block从recycle列表中移除，移入unavailable blocks中。
+    /// 当recycle blocks为空时，申请新的空block进行分配
     ///
-    /// TODO: 中等对象分配实现overflow alloc，大对象分配使用large obj alloc
+    /// TODO: 大对象分配使用large obj alloc
     ///
     /// ## Parameters
     ///
@@ -69,6 +69,11 @@ impl ThreadLocalAllocator {
     ///
     /// * `*mut u8` - object pointer
     pub fn alloc(&mut self, size: usize) -> *mut u8 {
+        // big size object
+        // if () {
+        //     todo!()
+        // }
+        // mid size object & small size object
         // 空cursor，代表刚启动或者recycle block全用光了
         if self.cursor.is_null() {
             let block = self.get_block();
@@ -87,9 +92,13 @@ impl ThreadLocalAllocator {
                 return re;
             }
         }
-
         let f = self.recyclable_blocks.first().unwrap();
-        let (s, _, nxt) = unsafe { (**f).alloc(size, self.cursor).unwrap() };
+        let res = unsafe { (**f).alloc(size, self.cursor)};
+        if res.is_none() && size > LINE_SIZE  {
+            // mid size object alloc failed, try to overflow_alloc
+            return self.overflow_alloc(size);
+        }
+        let (s, _, nxt) = res.unwrap();
         let re = unsafe { (**f).get_nth_line(s as usize) };
         nxt.or_else(|| {
             // 当前block被用完，将它从recyclable blocks中移除，加入unavailable blocks
@@ -115,6 +124,48 @@ impl ThreadLocalAllocator {
         re
     }
 
+    /// # overflow_alloc
+    /// 
+    /// 从global allocator中获取新block进行分配。
+    /// 
+    /// ## Parameters
+    /// 
+    /// * `size` - object size
+    /// 
+    /// ## Return
+    /// 
+    /// * `*mut u8` - object pointer
+    pub fn overflow_alloc(&mut self, size: usize) -> *mut u8 {
+        // 获取新block
+        let new_block = self.get_block();
+        self.cursor = unsafe { (*new_block).get_nth_line(3) };
+        // alloc
+        let (s, l, nxt) = unsafe { (*new_block).alloc(size, self.cursor).unwrap() };
+        let re = unsafe { (*new_block).get_nth_line(s as usize) };
+        nxt.or_else(|| {
+            // new_block被用完，将它加入unavailable blocks
+            self.unavailable_blocks.push(new_block);
+            // 如果还有recyclable_blocks 则指向下一个block的第一个可用line
+            self.recyclable_blocks
+                .first()
+                .and_then(|b| {
+                    self.cursor = unsafe { (**b).get_nth_line(3) };
+                    Some(())
+                })
+                .or_else(|| {
+                    self.cursor = std::ptr::null_mut();
+                    None
+                });
+            None
+        }).and_then(|n|{
+            // new_block未被用完，将它加入recyclable blocks
+            self.recyclable_blocks.push(new_block);
+            self.cursor = n;
+            None::<()>
+        });
+        re
+    }
+    
     /// # get_block
     ///
     /// Get a block from global allocator.

@@ -249,6 +249,10 @@ impl Block {
                 let ptr = self.get_nth_line(next_cursor_line);
                 return Some((start, line_size, Some(ptr)));
             }
+            if size > LINE_SIZE {
+                // 中对象，尝试一次就跳出
+                break;
+            }
             hole = self.find_next_hole((start, len));
         }
         None
@@ -333,6 +337,17 @@ mod tests {
             // |  6   | 空
             // |  7   | 空
             // ......
+            // 分配失败
+            // ......
+            assert_eq!(block.alloc(129, cursor), None);
+            assert_eq!(block.first_hole_line_idx, 4);
+            assert_eq!(block.first_hole_line_len, 1);
+
+            let cursor = (block as *mut Block as usize + LINE_SIZE * 6) as *mut u8;
+            let (start, len, newcursor) = block
+                .alloc((256 - 6) * LINE_SIZE, cursor)
+                .expect("cannot alloc new line");
+            // 从第6行开始分配，长度为256-6
             // 分配后：
             // --------
             // |  0   | meta
@@ -343,29 +358,32 @@ mod tests {
             // |  5   | 已使用
             // |  6   | 已使用
             // |  7   | 已使用
-            // |  8   | 空
+            // |  8   | 已使用
             // ......
-            let (start, len, newcursor) = block.alloc(129, cursor).expect("cannot alloc new line");
-            assert_eq!(start, 6);
-            assert_eq!(len, 2);
-            assert_eq!(newcursor, Some(block.get_nth_line(8)));
-            assert_eq!(block.first_hole_line_idx, 4);
-            assert_eq!(block.first_hole_line_len, 1);
-            let cursor = newcursor.unwrap();
+            // |  255 | 已使用
             let l = block.get_obj_line_size(6);
-            assert_eq!(l, 2);
-            let (start, len, newcursor) = block
-                .alloc((256 - 8) * LINE_SIZE, cursor)
-                .expect("cannot alloc new line");
-            let l = block.get_obj_line_size(8);
-            assert_eq!(l, 256 - 8);
-            assert_eq!(start, 8);
-            assert_eq!(len, (256 - 8) as u8);
+            assert_eq!(l, 256 - 6);
+            assert_eq!(start, 6);
+            assert_eq!(len, (256 - 6) as u8);
             assert_eq!(newcursor, None);
             assert_eq!(block.first_hole_line_idx, 4);
             assert_eq!(block.first_hole_line_len, 1);
             let cursor = (block as *mut Block as usize + LINE_SIZE * 3) as *mut u8;
             let (start, len, newcursor) = block.alloc(128, cursor).expect("cannot alloc new line");
+            // 从第4行开始分配，长度为1
+            // 分配后：
+            // --------
+            // |  0   | meta
+            // |  1   | meta
+            // |  2   | meta
+            // |  3   | 已使用
+            // |  4   | 已使用
+            // |  5   | 已使用
+            // |  6   | 已使用
+            // |  7   | 已使用
+            // |  8   | 已使用
+            // ......
+            // |  255 | 已使用
             assert_eq!(start, 4);
             assert_eq!(len, 1);
             assert_eq!(newcursor, Some(block.get_nth_line(5)));
