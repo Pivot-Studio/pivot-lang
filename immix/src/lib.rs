@@ -1,5 +1,6 @@
 mod allocator;
 mod block;
+mod collector;
 mod consts;
 mod mmap;
 

@@ -6,7 +6,12 @@ use crate::consts::{BLOCK_SIZE, LINE_SIZE, NUM_LINES_PER_BLOCK};
 ///
 /// **the leading 3 lines are reserved for metadata.**
 pub struct Block {
-    /// 从右往左，第一个bit是标识是否为空，第二个bit是mark bit
+    /// 从右往左，第一个bit是标识是否为空，第二个bit是mark bit，第三个bit标识是否是中对象
+    /// 剩下的5位记录object大小（单位：line）
+    ///
+    /// 如果是小对象，那么大小为1，自然存的下。如果是中等对象，那么line_map中将有多行
+    /// 对应该object，所以可以借用下一个byte的高3位来存储object的大小。这样一共有8位空间
+    /// 用于存储object size，而line size最大256正好存的下
     pub line_map: [u8; NUM_LINES_PER_BLOCK],
     /// 第一个hole的起始行号
     pub first_hole_line_idx: u8,
@@ -125,6 +130,24 @@ impl Block {
         self.line_map[idx] |= 0b10;
     }
 
+    /// # get_obj_line_size
+    ///
+    /// get the size of the object start at the line at nth index
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the index is valid.
+    unsafe fn get_obj_line_size(&mut self, idx: usize) -> usize {
+        debug_assert!(idx < NUM_LINES_PER_BLOCK);
+        if self.line_map[idx] & 0b100 == 0 {
+            // small object
+            1
+        } else {
+            // medium object
+            ((self.line_map[idx] >> 3) | (self.line_map[idx + 1] & !0b111)) as usize + 1
+        }
+    }
+
     /// # clear_line_mark
     ///
     /// clear the line at nth index mark
@@ -197,6 +220,14 @@ impl Block {
                 // 标记为已使用
                 for i in start..=start - 1 + line_size {
                     self.set_line_used(i as usize);
+                }
+                // 中对象
+                if line_size > 1 {
+                    // 存的数字实际上是line_size-1，因为长度不能为0，且这样byte正好能存下256
+                    let line_size = line_size - 1;
+                    self.line_map[start as usize] |= 0b100;
+                    self.line_map[start as usize] |= line_size << 3;
+                    self.line_map[start as usize + 1] |= line_size & 0b11100000;
                 }
                 // 更新first_hole_line_idx和first_hole_line_len
                 if start == self.first_hole_line_idx {
@@ -287,6 +318,8 @@ mod tests {
             assert_eq!(newcursor, Some(block.get_nth_line(4)));
             assert_eq!(block.first_hole_line_idx, 4);
             assert_eq!(block.first_hole_line_len, 1);
+            let l = block.get_obj_line_size(3);
+            assert_eq!(l, 1);
             let cursor = newcursor.unwrap();
             // 从第4行开始分配，长度为129
             // 分配前：
@@ -319,9 +352,13 @@ mod tests {
             assert_eq!(block.first_hole_line_idx, 4);
             assert_eq!(block.first_hole_line_len, 1);
             let cursor = newcursor.unwrap();
+            let l = block.get_obj_line_size(6);
+            assert_eq!(l, 2);
             let (start, len, newcursor) = block
                 .alloc((256 - 8) * LINE_SIZE, cursor)
                 .expect("cannot alloc new line");
+            let l = block.get_obj_line_size(8);
+            assert_eq!(l, 256 - 8);
             assert_eq!(start, 8);
             assert_eq!(len, (256 - 8) as u8);
             assert_eq!(newcursor, None);
