@@ -59,7 +59,6 @@ impl Block {
         self.first_hole_line_idx = 3;
         self.first_hole_line_len = (NUM_LINES_PER_BLOCK - 3) as u8;
         self.marked = false;
-        self.line_map = [0; NUM_LINES_PER_BLOCK];
     }
 
     /// # correct_header

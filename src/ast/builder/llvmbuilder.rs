@@ -175,6 +175,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             block_reverse_table: Arc::new(RefCell::new(FxHashMap::default())),
         }
     }
+
     fn get_llvm_value_handle(&self, value: &AnyValueEnum<'ctx>) -> ValueHandle {
         let len = self.handle_table.borrow().len();
         let nh = match self.handle_reverse_table.borrow().get(value) {
@@ -1385,5 +1386,128 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         global.set_initializer(&base_type.const_zero());
         global.set_metadata(exp.as_metadata_value(self.context), 0);
         self.get_llvm_value_handle(&global.as_any_value_enum())
+    }
+    fn gen_st_visit_function(
+        &self,
+        ctx: &mut Ctx<'a>,
+        v: &STType,
+        param_tps: &[Arc<RefCell<PLType>>],
+    ) {
+        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::default());
+        let visit_ftp = self
+            .context
+            .void_type()
+            .fn_type(&[i8ptrtp.into()], false)
+            .ptr_type(AddressSpace::default());
+        let visit_arr_ftp = self
+            .context
+            .void_type()
+            .fn_type(&[i8ptrtp.into(), self.context.i32_type().into()], false)
+            .ptr_type(AddressSpace::default());
+        let ptrtp = self.struct_type(v, ctx).ptr_type(AddressSpace::default());
+        let ty = ptrtp.get_element_type().into_struct_type();
+        let ftp = self.context.void_type().fn_type(
+            &[
+                ptrtp.into(),
+                visit_ftp.into(),
+                visit_ftp.into(),
+                visit_ftp.into(),
+                visit_arr_ftp.into(),
+                visit_ftp.into(),
+            ],
+            false,
+        );
+        let f = self.module.add_function(
+            &(ty.get_name().unwrap().to_str().unwrap().to_string() + "@"),
+            ftp,
+            None,
+        );
+        let bb = self.context.append_basic_block(f, "entry");
+        self.builder.position_at_end(bb);
+        let fieldn = ty.count_fields();
+        let st = f.get_nth_param(0).unwrap().into_pointer_value();
+        // iterate all fields but the first
+        for i in 1..fieldn {
+            let field_pltp = &*param_tps[i as usize - 1].borrow();
+            let visit_ptr_f: CallableValue = f
+                .get_nth_param(1)
+                .unwrap()
+                .into_pointer_value()
+                .try_into()
+                .unwrap();
+            let visit_st_f: CallableValue = f
+                .get_nth_param(2)
+                .unwrap()
+                .into_pointer_value()
+                .try_into()
+                .unwrap();
+            let visit_trait_f: CallableValue = f
+                .get_nth_param(3)
+                .unwrap()
+                .into_pointer_value()
+                .try_into()
+                .unwrap();
+            let visit_arr_f: CallableValue = f
+                .get_nth_param(4)
+                .unwrap()
+                .into_pointer_value()
+                .try_into()
+                .unwrap();
+            let visit_atom_f: CallableValue = f
+                .get_nth_param(5)
+                .unwrap()
+                .into_pointer_value()
+                .try_into()
+                .unwrap();
+            let field = ty.get_field_type_at_index(i).unwrap();
+            let f = self.builder.build_struct_gep(st, i, "gep").unwrap();
+            // 指针类型，递归调用visit函数
+            if field.is_pointer_type() {
+                let ptr = self.builder.build_load(f, "load");
+                let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
+                self.builder
+                    .build_call(visit_ptr_f, &[casted.into()], "call");
+            }
+            // 数组类型，递归调用visit函数
+            else if field.is_array_type() {
+                let ptr = f;
+                let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
+                if field.into_array_type().get_element_type().is_pointer_type() {
+                    self.builder.build_call(
+                        visit_arr_f,
+                        &[
+                            casted.into(),
+                            field.into_array_type().size_of().unwrap().into(),
+                        ],
+                        "call",
+                    );
+                } else {
+                    self.builder
+                        .build_call(visit_atom_f, &[casted.into()], "call");
+                }
+            }
+            // 结构体类型，递归调用visit函数
+            else if let PLType::STRUCT(_) = field_pltp {
+                let ptr = f;
+                let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
+                self.builder
+                    .build_call(visit_st_f, &[casted.into()], "call");
+            }
+            // trait类型，递归调用visit函数
+            else if let PLType::TRAIT(_) = field_pltp {
+                let ptr = f;
+                let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
+                self.builder
+                    .build_call(visit_trait_f, &[casted.into()], "call");
+            }
+            // 原子类型，直接调用visit函数
+            else {
+                let ptr = f;
+                let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
+                self.builder
+                    .build_call(visit_atom_f, &[casted.into()], "call");
+            }
+        }
+        self.builder.build_return(None);
     }
 }

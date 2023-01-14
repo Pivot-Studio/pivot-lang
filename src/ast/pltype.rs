@@ -1,3 +1,5 @@
+use super::builder::IRBuilder;
+use super::builder::ValueHandle;
 use super::ctx::Ctx;
 // use super::plmod::RwVec;
 
@@ -433,7 +435,7 @@ pub struct FNType {
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
     pub generic: bool,
-    pub node: Box<FuncDefNode>,
+    pub node: Option<Box<FuncDefNode>>,
 }
 
 impl TryFrom<PLType> for FNType {
@@ -516,8 +518,12 @@ impl FNType {
 
         let block = ctx.block;
         ctx.need_highlight = ctx.need_highlight + 1;
-        self.node
-            .gen_fntype(ctx, false, builder, Some(self.clone()))?;
+        let f = self.clone();
+        if let Some(n) = &mut self.node {
+            n.gen_fntype(ctx, false, builder, Some(f))?;
+        } else {
+            unreachable!()
+        }
         ctx.need_highlight = ctx.need_highlight - 1;
         ctx.position_at_end(block.unwrap(), builder);
 
@@ -627,7 +633,6 @@ pub struct STType {
     pub fields: FxHashMap<String, Field>,
     pub ordered_fields: Vec<Field>,
     pub range: Range,
-    // pub refs: Arc<RwVec<Location>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub impls: FxHashMap<String, Arc<RefCell<PLType>>>,

@@ -154,6 +154,7 @@ impl GlobalAllocator {
             self.current = unsafe { self.current.add(BLOCK_SIZE) };
             self.mmap.commit(b as *mut Block as *mut u8, BLOCK_SIZE);
             unsafe {
+                core::ptr::write_bytes(b as *mut u8, 0, BLOCK_SIZE);
                 (*b).reset_header();
             }
             b

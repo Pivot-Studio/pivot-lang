@@ -1,6 +1,9 @@
-use std::sync::Arc;
+use std::{cell::RefCell, sync::Arc};
 
-use crate::ast::{ctx::Ctx, pltype::PLType};
+use crate::ast::{
+    ctx::Ctx,
+    pltype::{PLType, STType},
+};
 
 use super::{IRBuilder, ValueHandle};
 
@@ -427,5 +430,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
 
     fn build_int_neg(&self, _v: super::ValueHandle, _name: &str) -> super::ValueHandle {
         0
+    }
+
+    fn gen_st_visit_function(
+        &self,
+        ctx: &mut Ctx<'a>,
+        _v: &STType,
+        _param_tps: &[Arc<RefCell<PLType>>],
+    ) {
     }
 }

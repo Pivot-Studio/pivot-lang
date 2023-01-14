@@ -15,7 +15,7 @@ use super::{
     ctx::Ctx,
     diag::PLDiag,
     node::{types::TypedIdentifierNode, TypeNodeEnum},
-    pltype::{FNType, Field, PLType, PriType},
+    pltype::{FNType, Field, PLType, PriType, STType},
     range::{Pos, Range},
 };
 
@@ -173,6 +173,12 @@ pub trait IRBuilder<'a, 'ctx> {
     fn append_basic_block(&self, func: ValueHandle, name: &str) -> BlockHandle;
     fn build_int_truncate(&self, v: ValueHandle, dest_ty: &PriType, name: &str) -> ValueHandle;
     fn build_int_neg(&self, v: ValueHandle, name: &str) -> ValueHandle;
+    fn gen_st_visit_function(
+        &self,
+        ctx: &mut Ctx<'a>,
+        v: &STType,
+        param_tps: &[Arc<RefCell<PLType>>],
+    );
 }
 
 pub type ValueHandle = usize;

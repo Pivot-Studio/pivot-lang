@@ -290,7 +290,7 @@ impl FuncDefNode {
             generic_map,
             generic_infer: Arc::new(RefCell::new(IndexMap::default())),
             generic: self.generics.is_some(),
-            node: Box::new(self.clone()),
+            node: Some(Box::new(self.clone())),
         };
         if self.generics.is_none() {
             builder.get_or_insert_fn_handle(&ftp, ctx);

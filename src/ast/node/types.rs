@@ -425,7 +425,16 @@ impl StructDefNode {
         let mp = ctx.move_generic_types();
         let mut fields = FxHashMap::<String, Field>::default();
         let mut order_fields = Vec::<Field>::new();
-        let mut i = 0;
+        // gcrtti fields
+        let vtable_field = Field {
+            index: 0,
+            typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
+            name: "_vtable".to_string(),
+            range: Default::default(),
+        };
+        fields.insert("_vtable".to_string(), vtable_field.clone());
+        order_fields.push(vtable_field);
+        let mut i = 1;
         // add generic type before field add type
         if let Some(generics) = &mut self.generics {
             let generic_map = generics.gen_generic_type(ctx);
@@ -437,6 +446,7 @@ impl StructDefNode {
                 );
             }
         }
+        let mut field_pltps = vec![];
         let pltype = ctx.get_type(&self.id.name.as_str(), self.range)?;
         let clone_map = ctx.plmod.types.clone();
         for (field, has_semi) in self.fields.iter() {
@@ -455,6 +465,7 @@ impl StructDefNode {
                 continue;
             }
             let tp = tpre.unwrap();
+            field_pltps.push(tp.clone());
             match &*tp.borrow() {
                 PLType::STRUCT(sttp) => {
                     ctx.send_if_go_to_def(field.typenode.range(), sttp.range, sttp.path.clone());
@@ -478,6 +489,7 @@ impl StructDefNode {
         }
         ctx.plmod.types = clone_map;
         if let PLType::STRUCT(st) = &mut *pltype.borrow_mut() {
+            builder.gen_st_visit_function(ctx, st, &field_pltps);
             st.fields = fields;
             st.ordered_fields = newf;
             st.doc = self.doc.clone();
