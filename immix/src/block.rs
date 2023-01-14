@@ -40,6 +40,21 @@ impl Block {
         }
     }
 
+    /// show first several lines of the block
+    // pub fn show(&self) {
+    //     for i in 3..7 {
+    //         println!("line_map[{}]: {:08b}", i, self.line_map[i]);
+    //     }
+    // }
+
+    /// return the used size of the block
+    pub fn get_size(&self) -> usize{
+        self.line_map[0..NUM_LINES_PER_BLOCK]
+            .iter()
+            .filter(|&&x| x & 1 == 1)
+            .map(|_| 1)
+            .sum::<usize>()
+    }
     pub fn reset_header(&mut self) {
         self.first_hole_line_idx = 3;
         self.first_hole_line_len = (NUM_LINES_PER_BLOCK - 3) as u8;
@@ -69,7 +84,8 @@ impl Block {
                 if self.line_map[idx] & 2 == 0 {
                     self.line_map[idx] &= !1;
                 }
-
+                // 重置mark bit
+                self.line_map[idx] &= !2;
                 // 这里遇到了第一个洞的结尾，设置第一个洞的数据
                 if len > 0 {
                     if first_hole_line_len == 0 {

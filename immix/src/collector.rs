@@ -35,6 +35,16 @@ impl Collector {
         }
     }
 
+    /// # get_size
+    /// 
+    /// Get the size of allocated space.
+    /// 
+    /// ## Return
+    /// 
+    /// * `usize` - size
+    pub fn get_size(&self) -> usize {
+        self.thread_local_allocator.get_size()
+    }
     /// # alloc
     ///
     /// Allocate a new object.
@@ -145,24 +155,27 @@ mod tests {
             let ptr2 = gc.alloc(64);
             let _ = gc.alloc(64);
             let _ = gc.alloc(64);
-            // let size = gc.get_size();
             // get rust stack pointer point to ptr1
             let rustptr = (&mut ptr1) as *mut *mut u8 as *mut u8;
-            // assert_eq!(size, 256);
+            // println!("1");
+            assert_eq!(gc.get_size(), 4);
             gc.add_root(rustptr, 8);
             // set ptr1 point to ptr2
             set_point_to(ptr1, ptr2, 0);
             gc.collect();
-            // assert_eq!(gc.get_size(), 128);
+            // println!("2");
+            assert_eq!(gc.get_size(), 2);
             // set ptr1 empty
             *(ptr1 as *mut i64) = 0;
             gc.collect();
-            // assert_eq!(gc.get_size(), 64);
+            // println!("3");
+            assert_eq!(gc.get_size(), 1);
             // remove gc root
             gc.remove_root(rustptr);
             gc.collect();
+            // println!("4");
+            assert_eq!(gc.get_size(), 0);
             print!("{} {}", ptr1 as usize, ptr2 as usize)
-
             // assert_eq!(gc.get_size(), 0);
         }
     }

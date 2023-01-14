@@ -8,7 +8,7 @@
 
 use parking_lot::ReentrantMutex;
 
-use crate::{block::Block, consts::LINE_SIZE};
+use crate::{block::Block, consts::{LINE_SIZE, BLOCK_SIZE}};
 
 use super::GlobalAllocator;
 
@@ -53,13 +53,32 @@ impl ThreadLocalAllocator {
         }
     }
 
+    /// # get_size
+    /// 
+    /// Get the size of allocated space.
+    /// 
+    /// ## Return
+    /// 
+    /// * `usize` - size
+    pub fn get_size(&self) -> usize {
+        let mut size = 0;
+        // println!("unavailable blocks:");
+        for block in &self.unavailable_blocks {
+            // unsafe{(**block).show();}
+            size += unsafe { (**block).get_size() };
+        }
+        // println!("recyclable blocks:");
+        for block in &self.recyclable_blocks {
+            // unsafe{(**block).show();}
+            size += unsafe { (**block).get_size() };
+        }
+        size
+    }
     /// # alloc
     ///
     /// 优先从recycle blocks中分配，如果中对象分配失败，使用overflow_alloc，
     /// 每用完一个recycle block则将block从recycle列表中移除，移入unavailable blocks中。
     /// 当recycle blocks为空时，申请新的空block进行分配
-    ///
-    /// TODO: 大对象分配使用large obj alloc
     ///
     /// ## Parameters
     ///
@@ -70,9 +89,9 @@ impl ThreadLocalAllocator {
     /// * `*mut u8` - object pointer
     pub fn alloc(&mut self, size: usize) -> *mut u8 {
         // big size object
-        // if () {
-        //     todo!()
-        // }
+        if size > ((BLOCK_SIZE / LINE_SIZE - 3) / 4 - 1) * LINE_SIZE {
+            return self.big_obj_alloc(size);
+        }
         // mid size object & small size object
         // 空cursor，代表刚启动或者recycle block全用光了
         if self.cursor.is_null() {
@@ -166,6 +185,20 @@ impl ThreadLocalAllocator {
             None::<()>
         });
         re
+    }
+    /// # big_obj_alloc
+    /// 
+    /// 大对象分配
+    /// 
+    /// ## Parameters
+    /// 
+    /// * `size` - object size
+    /// 
+    /// ## Return
+    /// 
+    /// * `*mut u8` - object pointer
+    pub fn big_obj_alloc(&mut self, size: usize) -> *mut u8 {
+        unsafe{ (*self.global_allocator).alloc_big_object(size) }
     }
 
     /// # get_new_block
