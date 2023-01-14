@@ -8,7 +8,10 @@
 
 use parking_lot::ReentrantMutex;
 
-use crate::{block::Block, consts::{LINE_SIZE, BLOCK_SIZE}};
+use crate::{
+    block::Block,
+    consts::{BLOCK_SIZE, LINE_SIZE},
+};
 
 use super::GlobalAllocator;
 
@@ -54,11 +57,11 @@ impl ThreadLocalAllocator {
     }
 
     /// # get_size
-    /// 
+    ///
     /// Get the size of allocated space.
-    /// 
+    ///
     /// ## Return
-    /// 
+    ///
     /// * `usize` - size
     pub fn get_size(&self) -> usize {
         let mut size = 0;
@@ -187,18 +190,18 @@ impl ThreadLocalAllocator {
         re
     }
     /// # big_obj_alloc
-    /// 
+    ///
     /// 大对象分配
-    /// 
+    ///
     /// ## Parameters
-    /// 
+    ///
     /// * `size` - object size
-    /// 
+    ///
     /// ## Return
-    /// 
+    ///
     /// * `*mut u8` - object pointer
     pub fn big_obj_alloc(&mut self, size: usize) -> *mut u8 {
-        unsafe{ (*self.global_allocator).alloc_big_object(size) }
+        unsafe { (*self.global_allocator).alloc_big_object(size) }
     }
 
     /// # get_new_block

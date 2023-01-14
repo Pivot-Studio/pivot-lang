@@ -1,7 +1,5 @@
-use super::builder::IRBuilder;
-use super::builder::ValueHandle;
 use super::ctx::Ctx;
-// use super::plmod::RwVec;
+use crate::ast::builder::IRBuilder;
 
 use crate::ast::builder::BuilderEnum;
 use crate::utils::get_hash_code;
@@ -706,9 +704,12 @@ impl STType {
                 nf
             })
             .collect::<Vec<Field>>();
+        let mut field_pltps = vec![];
         res.ordered_fields.iter().for_each(|f| {
+            field_pltps.push(f.typenode.get_type(ctx, builder).unwrap());
             res.fields.insert(f.name.clone(), f.clone());
         });
+        builder.gen_st_visit_function(ctx, &res, &field_pltps);
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
         pltype.replace(PLType::STRUCT(res.clone()));

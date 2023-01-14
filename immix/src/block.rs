@@ -48,7 +48,7 @@ impl Block {
     // }
 
     /// return the used size of the block
-    pub fn get_size(&self) -> usize{
+    pub fn get_size(&self) -> usize {
         self.line_map[0..NUM_LINES_PER_BLOCK]
             .iter()
             .filter(|&&x| x & 1 == 1)

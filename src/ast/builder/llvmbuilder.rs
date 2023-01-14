@@ -231,6 +231,41 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             PriType::BOOL => self.context.bool_type().as_basic_type_enum(),
         }
     }
+    fn get_or_insert_st_visit_fn_handle(&self, p: &PointerValue<'ctx>) -> FunctionValue<'ctx> {
+        let ptrtp = p.get_type();
+        let ty = ptrtp.get_element_type().into_struct_type();
+        let llvmname = ty.get_name().unwrap().to_str().unwrap().to_string() + "@";
+        if let Some(v) = self.module.get_function(&llvmname) {
+            return v;
+        }
+        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::default());
+        let visit_ftp = self
+            .context
+            .void_type()
+            .fn_type(&[i8ptrtp.into()], false)
+            .ptr_type(AddressSpace::default());
+        let visit_arr_ftp = self
+            .context
+            .void_type()
+            .fn_type(&[i8ptrtp.into(), self.context.i32_type().into()], false)
+            .ptr_type(AddressSpace::default());
+        let ftp = self.context.void_type().fn_type(
+            &[
+                ptrtp.into(),
+                visit_ftp.into(),
+                visit_ftp.into(),
+                visit_ftp.into(),
+                visit_arr_ftp.into(),
+                visit_ftp.into(),
+            ],
+            false,
+        );
+        let fn_type = ftp;
+        let fn_value = self
+            .module
+            .add_function(&llvmname, fn_type, Some(Linkage::External));
+        fn_value
+    }
 
     fn get_fn_type(&self, f: &FNType, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
         let mut param_types = vec![];
@@ -266,13 +301,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             PLType::GENERIC(g) => match &g.curpltype {
                 Some(pltype) => self.get_basic_type_op(&pltype.borrow(), ctx),
                 None => Some({
-                    let name = &format!("__generic__{}", g.name);
+                    let name = &format!("__placeholder__{}", g.name);
                     self.module
                         .get_struct_type(name)
                         .or(Some({
                             let st = self
                                 .context
-                                .opaque_struct_type(&format!("__generic__{}", g.name));
+                                .opaque_struct_type(&format!("__placeholder__{}", g.name));
                             st.set_body(&[], false);
                             st
                         }))
@@ -917,6 +952,16 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             Some(alloca) => {
                 builder.position_at_end(alloca);
                 let p = builder.build_alloca(self.get_basic_type_op(pltype, ctx).unwrap(), name);
+                if let PLType::STRUCT(_) = pltype {
+                    let f = self.get_or_insert_st_visit_fn_handle(&p);
+                    let i = self.builder.build_ptr_to_int(
+                        f.as_global_value().as_pointer_value(),
+                        self.context.i64_type(),
+                        "_vtable",
+                    );
+                    let vtable = self.builder.build_struct_gep(p, 0, "vtable").unwrap();
+                    self.builder.build_store(vtable, i);
+                }
                 self.gc_add_root(p.as_basic_value_enum(), ctx);
                 ctx.roots
                     .borrow_mut()
@@ -1393,6 +1438,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         v: &STType,
         param_tps: &[Arc<RefCell<PLType>>],
     ) {
+        let currentbb = self.builder.get_insert_block();
+        self.builder.unset_current_debug_location();
         let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::default());
         let visit_ftp = self
             .context
@@ -1509,5 +1556,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             }
         }
         self.builder.build_return(None);
+        if let Some(currentbb) = currentbb {
+            self.builder.position_at_end(currentbb);
+        }
     }
 }

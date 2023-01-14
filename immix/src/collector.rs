@@ -36,11 +36,11 @@ impl Collector {
     }
 
     /// # get_size
-    /// 
+    ///
     /// Get the size of allocated space.
-    /// 
+    ///
     /// ## Return
-    /// 
+    ///
     /// * `usize` - size
     pub fn get_size(&self) -> usize {
         self.thread_local_allocator.get_size()

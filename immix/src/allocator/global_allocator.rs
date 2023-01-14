@@ -3,7 +3,7 @@ use parking_lot::{lock_api::RawMutex, ReentrantMutex};
 use crate::{block::Block, consts::BLOCK_SIZE, mmap::Mmap};
 
 /// # Big object mmap
-/// 
+///
 /// Big object mmap, used to allocate big objects.
 pub struct BigObjectMmap {
     /// mmap region
@@ -32,14 +32,14 @@ impl BigObjectMmap {
     /// # Alloc big object
     ///
     /// Alloc big object from big object mmap.
-    /// 
+    ///
     /// Return a pointer to the allocated memory.
     pub fn alloc(&mut self, size: usize) -> *mut u8 {
         let _lock = self.lock.lock();
         let current = self.current;
         let heap_end = self.heap_end;
 
-        if unsafe{current.add(size)} >= heap_end {
+        if unsafe { current.add(size) } >= heap_end {
             panic!("big object mmap out of memory");
         }
 
@@ -50,14 +50,14 @@ impl BigObjectMmap {
         current
     }
     /// # Realloc big object
-    /// 
+    ///
     /// Realloc big object from big object mmap.
     pub fn realloc(&mut self, ptr: *mut u8, old_size: usize, new_size: usize) -> *mut u8 {
         let _lock = self.lock.lock();
         let current = self.current;
         let heap_end = self.heap_end;
 
-        if unsafe{current.add(new_size)} >= heap_end {
+        if unsafe { current.add(new_size) } >= heap_end {
             panic!("big object mmap out of memory");
         }
 
@@ -75,7 +75,7 @@ impl BigObjectMmap {
     }
 
     /// # Free big object
-    /// 
+    ///
     /// Free big object from big object mmap.
     pub fn free(&mut self, ptr: *mut u8, size: usize) {
         let _lock = self.lock.lock();
