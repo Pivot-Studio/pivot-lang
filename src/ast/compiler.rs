@@ -229,13 +229,12 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         set.insert(m.clone());
         let o = m.with_extension("o");
         // println!("{}", m.clone().to_str().unwrap());
-        let module = Module::parse_bitcode_from_path(m.clone(), &ctx).unwrap();
+        let module = Module::parse_bitcode_from_path(m.clone(), &ctx)
+            .expect(format!("parse {} failed", m.to_str().unwrap()).as_str());
         tm.write_to_file(&module, inkwell::targets::FileType::Object, &o)
             .unwrap();
         objs.push(o);
         _ = llvmmod.link_in_module(module);
-        _ = remove_file(m.clone()).unwrap();
-        log::debug!("rm {}", m.to_str().unwrap());
     }
     llvmmod.verify().unwrap();
     if op.optimization != HashOptimizationLevel::None {

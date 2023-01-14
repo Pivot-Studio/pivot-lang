@@ -717,7 +717,10 @@ impl STType {
     }
     pub fn get_field_completions(&self) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
-        for (name, _) in &self.fields {
+        for (name, f) in &self.fields {
+            if f.index == 0 {
+                continue;
+            }
             completions.push(CompletionItem {
                 kind: Some(CompletionItemKind::FIELD),
                 label: name.clone(),
