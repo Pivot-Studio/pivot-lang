@@ -177,7 +177,7 @@ pub trait IRBuilder<'a, 'ctx> {
         &self,
         ctx: &mut Ctx<'a>,
         v: &STType,
-        param_tps: &[Arc<RefCell<PLType>>],
+        field_tps: &[Arc<RefCell<PLType>>],
     );
 }
 

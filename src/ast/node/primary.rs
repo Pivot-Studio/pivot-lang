@@ -230,7 +230,8 @@ impl Node for ArrayElementNode {
             }
             let elemptr = {
                 let index = &[builder.int_value(&PriType::I64, 0, false), index];
-                builder.build_in_bounds_gep(arr.value, index, "element_ptr")
+                let real_arr = builder.build_struct_gep(arr.value, 1, "real_arr").unwrap();
+                builder.build_in_bounds_gep(real_arr, index, "element_ptr")
             };
             ctx.emit_comment_highlight(&self.comments[0]);
             return Ok((

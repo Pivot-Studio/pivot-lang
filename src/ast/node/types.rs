@@ -702,9 +702,10 @@ impl Node for ArrayInitNode {
             }),
             ctx,
         );
+        let real_arr = builder.build_struct_gep(arr, 1, "real_arr").unwrap();
 
         for (i, (v, _)) in exps.into_iter().enumerate() {
-            let ptr = builder.build_const_in_bounds_gep(arr, &[0, i as u64], "elem_ptr");
+            let ptr = builder.build_const_in_bounds_gep(real_arr, &[0, i as u64], "elem_ptr");
             builder.build_store(ptr, v);
         }
         return Ok((

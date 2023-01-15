@@ -436,7 +436,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
         &self,
         _ctx: &mut Ctx<'a>,
         _v: &STType,
-        _param_tps: &[Arc<RefCell<PLType>>],
+        _field_tps: &[Arc<RefCell<PLType>>],
     ) {
     }
 }

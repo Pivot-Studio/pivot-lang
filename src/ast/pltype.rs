@@ -612,6 +612,7 @@ impl FNType {
     }
 }
 
+/// TODO: add vtable for arrtype
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ARRType {
     pub element_type: Arc<RefCell<PLType>>,

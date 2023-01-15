@@ -1,9 +1,9 @@
 use crate::consts::{BLOCK_SIZE, LINE_SIZE, NUM_LINES_PER_BLOCK};
 
 /// # Object type
-/// 
+///
 /// Object types. Used to support precise GC.
-/// 
+///
 /// need 3 bits to represent.
 pub enum ObjectType {
     /// Atomic object, means the object does not contain any pointers.
@@ -19,8 +19,6 @@ pub enum ObjectType {
     SmallPointerArray,
 }
 
-
-
 /// A block is a 32KB memory region.
 ///
 /// A block is divided into 256 lines, each line is 128 bytes.
@@ -29,11 +27,7 @@ pub enum ObjectType {
 pub struct Block {
     /// |                           LINE HEADER(1 byte)                         |
     /// |    7   |    6   |    5   |    4   |    3   |    2   |    1   |    0   |
-    /// |    small arr size (1-8)  |      object type         | marked |  used  |
-    /// small arr size 只在SmallPointerArray时有效，单位是（指针数量/2），用来优化遍历  
-    /// 
-    /// 如果是PointerArray，那么需要组合两个LineHeader，的small arr size获取一个能表示1-64的数，
-    /// 单位为LINE
+    /// |         not used         |      object type         | marked |  used  |
     line_map: [u8; NUM_LINES_PER_BLOCK],
     /// 第一个hole的起始行号
     first_hole_line_idx: u8,
