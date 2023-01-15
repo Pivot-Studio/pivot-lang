@@ -1,17 +1,39 @@
 use crate::consts::{BLOCK_SIZE, LINE_SIZE, NUM_LINES_PER_BLOCK};
 
+/// # Object type
+/// 
+/// Object types. Used to support precise GC.
+/// 
+/// need 3 bits to represent.
+pub enum ObjectType {
+    /// Atomic object, means the object does not contain any pointers.
+    Atomic,
+    /// Trait object, only contains one heap pointer at offset 1.
+    Trait,
+    /// Array of pointers, contains many heap pointers.
+    PointerArray,
+    /// Struct object, may contains many heap pointers. An iterator function is
+    /// needed(generated my compiler) to iterate through all pointers.
+    Struct,
+    /// Small array of pointers, no more than a LINE_SIZE.
+    SmallPointerArray,
+}
+
+
+
 /// A block is a 32KB memory region.
 ///
 /// A block is divided into 256 lines, each line is 128 bytes.
 ///
 /// **the leading 3 lines are reserved for metadata.**
 pub struct Block {
-    /// 从右往左，第一个bit是标识是否为空，第二个bit是mark bit，第三个bit标识是否是中对象
-    /// 剩下的5位记录object大小（单位：line）
-    ///
-    /// 如果是小对象，那么大小为1，自然存的下。如果是中等对象，那么line_map中将有多行
-    /// 对应该object，所以可以借用下一个byte的高3位来存储object的大小。这样一共有8位空间
-    /// 用于存储object size，而line size最大256正好存的下
+    /// |                           LINE HEADER(1 byte)                         |
+    /// |    7   |    6   |    5   |    4   |    3   |    2   |    1   |    0   |
+    /// |    small arr size (1-8)  |      object type         | marked |  used  |
+    /// small arr size 只在SmallPointerArray时有效，单位是（指针数量/2），用来优化遍历  
+    /// 
+    /// 如果是PointerArray，那么需要组合两个LineHeader，的small arr size获取一个能表示1-64的数，
+    /// 单位为LINE
     line_map: [u8; NUM_LINES_PER_BLOCK],
     /// 第一个hole的起始行号
     first_hole_line_idx: u8,

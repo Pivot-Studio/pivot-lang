@@ -1432,6 +1432,28 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         global.set_metadata(exp.as_metadata_value(self.context), 0);
         self.get_llvm_value_handle(&global.as_any_value_enum())
     }
+    /// ```ignore
+    /// struct A {
+    ///    a: i32,
+    ///    b: *i32,
+    ///    c: *A,
+    ///    d: B,
+    ///    e: [i32; 3],
+    ///    f: [*i32; 3],
+    ///    g: [A; 3], // TODO 没考虑到
+    ///    h: Trait,
+    ///    i: *[*i32; 3],
+    /// }
+    /// visit_ptr(&a.b);
+    /// visit_ptr(&a.c);
+    /// a.d.vtable(visitfns..);
+    /// visit_arr(&a.e, 3);
+    /// for i in 0..3 {
+    ///     a.f[i].vtable(visitfns..);
+    /// }
+    /// visit_trait(&a.h);
+    /// visit_ptr(&a.i);
+    /// ```
     fn gen_st_visit_function(
         &self,
         ctx: &mut Ctx<'a>,
@@ -1500,12 +1522,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .into_pointer_value()
                 .try_into()
                 .unwrap();
-            let visit_atom_f: CallableValue = f
-                .get_nth_param(5)
-                .unwrap()
-                .into_pointer_value()
-                .try_into()
-                .unwrap();
             let field = ty.get_field_type_at_index(i).unwrap();
             let f = self.builder.build_struct_gep(st, i, "gep").unwrap();
             // 指针类型，递归调用visit函数
@@ -1528,9 +1544,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                         ],
                         "call",
                     );
-                } else {
-                    self.builder
-                        .build_call(visit_atom_f, &[casted.into()], "call");
                 }
             }
             // 结构体类型，递归调用visit函数
@@ -1547,13 +1560,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 self.builder
                     .build_call(visit_trait_f, &[casted.into()], "call");
             }
-            // 原子类型，直接调用visit函数
-            else {
-                let ptr = f;
-                let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
-                self.builder
-                    .build_call(visit_atom_f, &[casted.into()], "call");
-            }
+            // 其他为原子类型，跳过
         }
         self.builder.build_return(None);
         if let Some(currentbb) = currentbb {
