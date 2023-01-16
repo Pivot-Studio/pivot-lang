@@ -1,22 +1,23 @@
+use int_enum::IntEnum;
+
 use crate::consts::{BLOCK_SIZE, LINE_SIZE, NUM_LINES_PER_BLOCK};
 
 /// # Object type
 ///
 /// Object types. Used to support precise GC.
 ///
-/// need 3 bits to represent.
+/// need 2 bits to represent.
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, IntEnum)]
 pub enum ObjectType {
     /// Atomic object, means the object does not contain any pointers.
-    Atomic,
+    Atomic = 0,
     /// Trait object, only contains one heap pointer at offset 1.
-    Trait,
-    /// Array of pointers, contains many heap pointers.
-    PointerArray,
-    /// Struct object, may contains many heap pointers. An iterator function is
-    /// needed(generated my compiler) to iterate through all pointers.
-    Struct,
-    /// Small array of pointers, no more than a LINE_SIZE.
-    SmallPointerArray,
+    Trait = 1,
+    /// Complex object, contains multiple heap pointers.
+    ///
+    /// A complex object must provide a `visit` method to iterate through all heap pointers.
+    Complex = 2,
 }
 
 /// A block is a 32KB memory region.
@@ -27,7 +28,7 @@ pub enum ObjectType {
 pub struct Block {
     /// |                           LINE HEADER(1 byte)                         |
     /// |    7   |    6   |    5   |    4   |    3   |    2   |    1   |    0   |
-    /// |         not used         |      object type         | marked |  used  |
+    /// |            not used               |    object type  | marked |  used  |
     line_map: [u8; NUM_LINES_PER_BLOCK],
     /// 第一个hole的起始行号
     first_hole_line_idx: u8,
