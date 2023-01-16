@@ -18,6 +18,19 @@ pub enum ObjectType {
     ///
     /// A complex object must provide a `visit` method to iterate through all heap pointers.
     Complex = 2,
+    /// Pointer object, contains one heap pointer.
+    Pointer = 3,
+}
+
+type LineHeader = u8;
+
+pub trait LineHeaderExt {
+    fn get_used(&self) -> bool;
+    fn get_marked(&self) -> bool;
+    fn get_obj_type(&self) -> ObjectType;
+    fn set_used(&mut self, used: bool);
+    fn set_marked(&mut self, marked: bool);
+    fn set_obj_type(&mut self, obj_type: ObjectType);
 }
 
 /// A block is a 32KB memory region.
@@ -29,13 +42,53 @@ pub struct Block {
     /// |                           LINE HEADER(1 byte)                         |
     /// |    7   |    6   |    5   |    4   |    3   |    2   |    1   |    0   |
     /// |            not used               |    object type  | marked |  used  |
-    line_map: [u8; NUM_LINES_PER_BLOCK],
+    line_map: [LineHeader; NUM_LINES_PER_BLOCK],
     /// 第一个hole的起始行号
     first_hole_line_idx: u8,
     /// 第一个hole的长度（行数
     first_hole_line_len: u8,
     /// 是否被标记
     pub marked: bool,
+}
+
+impl LineHeaderExt for LineHeader {
+    fn get_used(&self) -> bool {
+        self & 0b1 == 0b1
+    }
+
+    fn get_marked(&self) -> bool {
+        self & 0b10 == 0b10
+    }
+
+    fn get_obj_type(&self) -> ObjectType {
+        match (self >> 2) & 0b11 {
+            0 => ObjectType::Atomic,
+            1 => ObjectType::Trait,
+            2 => ObjectType::Complex,
+            _ => unreachable!(),
+        }
+    }
+
+    fn set_used(&mut self, used: bool) {
+        if used {
+            *self |= 0b1;
+        } else {
+            *self &= !0b1;
+        }
+    }
+
+    fn set_marked(&mut self, marked: bool) {
+        if marked {
+            *self |= 0b10;
+        } else {
+            *self &= !0b10;
+        }
+    }
+
+    fn set_obj_type(&mut self, obj_type: ObjectType) {
+        *self &= !0b110;
+        *self |= (obj_type as u8) << 2;
+    }
 }
 
 impl Block {
@@ -183,72 +236,6 @@ impl Block {
         (self as *mut Self as *mut u8).add(idx * LINE_SIZE)
     }
 
-    /// # set_line_used
-    ///
-    /// set the line at nth index as used
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure that the index is valid.
-    unsafe fn set_line_used(&mut self, idx: usize) {
-        debug_assert!(idx < NUM_LINES_PER_BLOCK);
-        self.line_map[idx] |= 1;
-    }
-
-    /// # set_line_unused
-    ///
-    /// set the line at nth index as unused
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure that the index is valid.
-    unsafe fn set_line_unused(&mut self, idx: usize) {
-        debug_assert!(idx < NUM_LINES_PER_BLOCK);
-        self.line_map[idx] &= !1;
-    }
-
-    /// # set_line_mark
-    ///
-    /// set the line at nth index as marked
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure that the index is valid.
-    pub unsafe fn set_line_mark(&mut self, idx: usize) {
-        debug_assert!(idx < NUM_LINES_PER_BLOCK);
-        self.line_map[idx] |= 0b10;
-    }
-
-    /// # get_obj_line_size
-    ///
-    /// get the size of the object start at the line at nth index
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure that the index is valid.
-    unsafe fn get_obj_line_size(&self, idx: usize) -> usize {
-        debug_assert!(idx < NUM_LINES_PER_BLOCK);
-        if self.line_map[idx] & 0b100 == 0 {
-            // small object
-            1
-        } else {
-            // medium object
-            ((self.line_map[idx] >> 3) | (self.line_map[idx + 1] & !0b111)) as usize + 1
-        }
-    }
-
-    /// # get_obj_line_size_from_ptr
-    ///
-    /// get the line size of the object by the pointer
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure that the pointer is valid.
-    pub unsafe fn get_obj_line_size_from_ptr(&self, ptr: *mut u8) -> (usize, usize) {
-        let line_idx = (ptr as usize - self as *const Self as usize) / LINE_SIZE;
-        (line_idx, self.get_obj_line_size(line_idx))
-    }
-
     /// # from_obj_ptr
     ///
     /// get the block from a pointer
@@ -267,40 +254,14 @@ impl Block {
         &mut *(block_start as *mut Self)
     }
 
-    /// # clear_line_mark
-    ///
-    /// clear the line at nth index mark
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure that the index is valid.
-    unsafe fn clear_line_mark(&mut self, idx: usize) {
-        debug_assert!(idx < NUM_LINES_PER_BLOCK);
-        self.line_map[idx] &= !0b10;
+    pub unsafe fn get_line_header_from_addr(&mut self, addr: *mut u8) -> &mut LineHeader {
+        let idx = self.get_line_idx_from_addr(addr);
+        self.get_nth_line_header(idx)
     }
 
-    /// # is_line_used
-    ///
-    /// check if the line at nth index is used
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure that the index is valid.
-    pub unsafe fn is_line_used(&mut self, idx: usize) -> bool {
+    pub unsafe fn get_nth_line_header(&mut self, idx: usize) -> &mut LineHeader {
         debug_assert!(idx < NUM_LINES_PER_BLOCK);
-        self.line_map[idx] & 1 == 1
-    }
-
-    /// # is_line_marked
-    ///
-    /// check if the line at nth index is marked
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure that the index is valid.
-    pub unsafe fn is_line_marked(&mut self, idx: usize) -> bool {
-        debug_assert!(idx < NUM_LINES_PER_BLOCK);
-        self.line_map[idx] & 0b10 == 0b10
+        self.line_map.get_mut(idx).unwrap()
     }
 
     /// # get_line_idx_from_addr
@@ -330,6 +291,7 @@ impl Block {
         &mut self,
         size: usize,
         cursor: *mut u8,
+        obj_type: ObjectType,
     ) -> Option<(u8, u8, Option<*mut u8>)> {
         let cursor = self.get_line_idx_from_addr(cursor) as u8;
         let mut hole = self.find_next_hole((cursor, 0));
@@ -338,16 +300,12 @@ impl Block {
                 let line_size = ((size - 1) / LINE_SIZE + 1) as u8;
                 // 标记为已使用
                 for i in start..=start - 1 + line_size {
-                    self.set_line_used(i as usize);
+                    let header = self.line_map.get_mut(i as usize).unwrap();
+                    header.set_used(true);
                 }
-                // 中对象
-                if line_size > 1 {
-                    // 存的数字实际上是line_size-1，因为长度不能为0，且这样byte正好能存下256
-                    let line_size = line_size - 1;
-                    self.line_map[start as usize] |= 0b100;
-                    self.line_map[start as usize] |= line_size << 3;
-                    self.line_map[start as usize + 1] |= line_size & 0b11100000;
-                }
+                // 设置起始line header的obj_type
+                let header = self.line_map.get_mut(start as usize).unwrap();
+                header.set_obj_type(obj_type);
                 // 更新first_hole_line_idx和first_hole_line_len
                 if start == self.first_hole_line_idx {
                     self.first_hole_line_idx += line_size;
@@ -380,7 +338,7 @@ impl Block {
 
 #[cfg(test)]
 mod tests {
-    use crate::{allocator::GlobalAllocator, consts::LINE_SIZE};
+    use crate::{allocator::GlobalAllocator, block::LineHeaderExt, consts::LINE_SIZE};
 
     use super::Block;
 
@@ -392,12 +350,14 @@ mod tests {
             // 第一个hole应该是从第三行开始，长度是253
             assert_eq!(block.find_first_hole(), Some((3, 253)));
             // 标记hole隔一行之后的第一行为已使用
-            block.set_line_used(4);
+            let header = block.get_nth_line_header(4);
+            header.set_used(true);
             // 获取下一个hole，应该是从第五行开始，长度是251
             assert_eq!(block.find_next_hole((3, 1)), Some((5, 251)));
             // 标记hole隔一行之后五行为已使用
             for i in 6..=10 {
-                block.set_line_used(i);
+                let header = block.get_nth_line_header(i as usize);
+                header.set_used(true);
             }
             // 获取下一个hole，应该是从第十一行开始，长度是245
             assert_eq!(block.find_next_hole((5, 5)), Some((11, 245)));
@@ -409,7 +369,7 @@ mod tests {
             let mut ga = GlobalAllocator::new(1024 * 1024 * 1024);
             let block = &mut *ga.get_block();
             // 设置第5行已被使用
-            block.set_line_used(5);
+            block.get_nth_line_header(5).set_used(true);
             block.first_hole_line_len = 2;
             // 从第三行开始分配，长度为128
             // 分配前：
@@ -435,14 +395,16 @@ mod tests {
             // |  7   | 空
             // ......
             let cursor = (block as *mut Block as usize + LINE_SIZE * 3) as *mut u8;
-            let (start, len, newcursor) = block.alloc(128, cursor).expect("cannot alloc new line");
+            let (start, len, newcursor) = block
+                .alloc(128, cursor, crate::block::ObjectType::Atomic)
+                .expect("cannot alloc new line");
             assert_eq!(start, 3);
             assert_eq!(len, 1);
             assert_eq!(newcursor, Some(block.get_nth_line(4)));
             assert_eq!(block.first_hole_line_idx, 4);
             assert_eq!(block.first_hole_line_len, 1);
-            let l = block.get_obj_line_size(3);
-            assert_eq!(l, 1);
+            let l = block.get_nth_line_header(3).get_obj_type();
+            assert_eq!(l, crate::block::ObjectType::Atomic);
             let cursor = newcursor.unwrap();
             // 从第4行开始分配，长度为129
             // 分配前：
@@ -458,13 +420,20 @@ mod tests {
             // ......
             // 分配失败
             // ......
-            assert_eq!(block.alloc(129, cursor), None);
+            assert_eq!(
+                block.alloc(129, cursor, crate::block::ObjectType::Atomic),
+                None
+            );
             assert_eq!(block.first_hole_line_idx, 4);
             assert_eq!(block.first_hole_line_len, 1);
 
             let cursor = (block as *mut Block as usize + LINE_SIZE * 6) as *mut u8;
             let (start, len, newcursor) = block
-                .alloc((256 - 6) * LINE_SIZE, cursor)
+                .alloc(
+                    (256 - 6) * LINE_SIZE,
+                    cursor,
+                    crate::block::ObjectType::Complex,
+                )
                 .expect("cannot alloc new line");
             // 从第6行开始分配，长度为256-6
             // 分配后：
@@ -480,15 +449,17 @@ mod tests {
             // |  8   | 已使用
             // ......
             // |  255 | 已使用
-            let l = block.get_obj_line_size(6);
-            assert_eq!(l, 256 - 6);
+            let l = block.get_nth_line_header(6).get_obj_type();
+            assert_eq!(l, crate::block::ObjectType::Complex);
             assert_eq!(start, 6);
             assert_eq!(len, (256 - 6) as u8);
             assert_eq!(newcursor, None);
             assert_eq!(block.first_hole_line_idx, 4);
             assert_eq!(block.first_hole_line_len, 1);
             let cursor = (block as *mut Block as usize + LINE_SIZE * 3) as *mut u8;
-            let (start, len, newcursor) = block.alloc(128, cursor).expect("cannot alloc new line");
+            let (start, len, newcursor) = block
+                .alloc(128, cursor, crate::block::ObjectType::Atomic)
+                .expect("cannot alloc new line");
             // 从第4行开始分配，长度为1
             // 分配后：
             // --------

@@ -198,13 +198,14 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let visit_ftp = self
             .context
             .void_type()
-            .fn_type(&[i8ptrtp.into()], false)
+            .fn_type(&[i8ptrtp.into(), i8ptrtp.into()], false)
             .ptr_type(AddressSpace::default());
         let ptrtp = self.arr_type(v, ctx).ptr_type(AddressSpace::default());
         let ty = ptrtp.get_element_type().into_struct_type();
         let ftp = self.context.void_type().fn_type(
             &[
                 ptrtp.into(),
+                i8ptrtp.into(),
                 visit_ftp.into(),
                 visit_ftp.into(),
                 visit_ftp.into(),
@@ -250,8 +251,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 "elm",
             )
         };
+        let visitor = f.get_nth_param(1).unwrap().into_pointer_value();
         let visit_ptr_f: CallableValue = f
-            .get_nth_param(1)
+            .get_nth_param(2)
             .unwrap()
             .into_pointer_value()
             .try_into()
@@ -259,13 +261,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         // complex type needs to provide a visit function by itself
         // which is stored in the first field of the struct
         let visit_complex_f: CallableValue = f
-            .get_nth_param(2)
+            .get_nth_param(3)
             .unwrap()
             .into_pointer_value()
             .try_into()
             .unwrap();
         let visit_trait_f: CallableValue = f
-            .get_nth_param(3)
+            .get_nth_param(4)
             .unwrap()
             .into_pointer_value()
             .try_into()
@@ -274,16 +276,18 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             PLType::ARR(_) | PLType::STRUCT(_) => {
                 // call the visit_complex function
                 self.builder
-                    .build_call(visit_complex_f, &[elm.into()], "call");
+                    .build_call(visit_complex_f, &[visitor.into(), elm.into()], "call");
             }
             PLType::POINTER(_) => {
                 // call the visit_ptr function
-                self.builder.build_call(visit_ptr_f, &[elm.into()], "call");
+                let elm = self.builder.build_load(elm, "elm").into_pointer_value();
+                self.builder
+                    .build_call(visit_ptr_f, &[visitor.into(), elm.into()], "call");
             }
             PLType::TRAIT(_) => {
                 // call the visit_trait function
                 self.builder
-                    .build_call(visit_trait_f, &[elm.into()], "call");
+                    .build_call(visit_trait_f, &[visitor.into(), elm.into()], "call");
             }
             _ => {}
         }
@@ -353,11 +357,12 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let visit_ftp = self
             .context
             .void_type()
-            .fn_type(&[i8ptrtp.into()], false)
+            .fn_type(&[i8ptrtp.into(), i8ptrtp.into()], false)
             .ptr_type(AddressSpace::default());
         let ftp = self.context.void_type().fn_type(
             &[
                 ptrtp.into(),
+                i8ptrtp.into(),
                 visit_ftp.into(),
                 visit_ftp.into(),
                 visit_ftp.into(),
@@ -1631,13 +1636,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let visit_ftp = self
             .context
             .void_type()
-            .fn_type(&[i8ptrtp.into()], false)
+            .fn_type(&[i8ptrtp.into(), i8ptrtp.into()], false)
             .ptr_type(AddressSpace::default());
         let ptrtp = self.struct_type(v, ctx).ptr_type(AddressSpace::default());
         let ty = ptrtp.get_element_type().into_struct_type();
         let ftp = self.context.void_type().fn_type(
             &[
                 ptrtp.into(),
+                i8ptrtp.into(),
                 visit_ftp.into(),
                 visit_ftp.into(),
                 visit_ftp.into(),
@@ -1656,8 +1662,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         // iterate all fields but the first
         for i in 1..fieldn {
             let field_pltp = &*field_tps[i as usize - 1].borrow();
+            let visitor = f.get_nth_param(1).unwrap().into_pointer_value();
             let visit_ptr_f: CallableValue = f
-                .get_nth_param(1)
+                .get_nth_param(2)
                 .unwrap()
                 .into_pointer_value()
                 .try_into()
@@ -1665,46 +1672,45 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             // complex type needs to provide a visit function by itself
             // which is stored in the first field of the struct
             let visit_complex_f: CallableValue = f
-                .get_nth_param(2)
-                .unwrap()
-                .into_pointer_value()
-                .try_into()
-                .unwrap();
-            let visit_trait_f: CallableValue = f
                 .get_nth_param(3)
                 .unwrap()
                 .into_pointer_value()
                 .try_into()
                 .unwrap();
-            let field = ty.get_field_type_at_index(i).unwrap();
+            let visit_trait_f: CallableValue = f
+                .get_nth_param(4)
+                .unwrap()
+                .into_pointer_value()
+                .try_into()
+                .unwrap();
             let f = self.builder.build_struct_gep(st, i, "gep").unwrap();
             // 指针类型，递归调用visit函数
-            if field.is_pointer_type() {
+            if let PLType::POINTER(_) = field_pltp {
                 let ptr = self.builder.build_load(f, "load");
                 let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
                 self.builder
-                    .build_call(visit_ptr_f, &[casted.into()], "call");
+                    .build_call(visit_ptr_f, &[visitor.into(), casted.into()], "call");
             }
             // 数组类型，递归调用visit函数
             else if let PLType::ARR(_) = field_pltp {
                 let ptr = f;
                 let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
                 self.builder
-                    .build_call(visit_complex_f, &[casted.into()], "call");
+                    .build_call(visit_complex_f, &[visitor.into(), casted.into()], "call");
             }
             // 结构体类型，递归调用visit函数
             else if let PLType::STRUCT(_) = field_pltp {
                 let ptr = f;
                 let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
                 self.builder
-                    .build_call(visit_complex_f, &[casted.into()], "call");
+                    .build_call(visit_complex_f, &[visitor.into(), casted.into()], "call");
             }
             // trait类型，递归调用visit函数
             else if let PLType::TRAIT(_) = field_pltp {
                 let ptr = f;
                 let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
                 self.builder
-                    .build_call(visit_trait_f, &[casted.into()], "call");
+                    .build_call(visit_trait_f, &[visitor.into(), casted.into()], "call");
             }
             // 其他为原子类型，跳过
         }

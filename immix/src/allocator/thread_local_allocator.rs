@@ -9,7 +9,7 @@
 use parking_lot::ReentrantMutex;
 
 use crate::{
-    block::Block,
+    block::{Block, ObjectType},
     consts::{BLOCK_SIZE, LINE_SIZE},
 };
 
@@ -86,11 +86,12 @@ impl ThreadLocalAllocator {
     /// ## Parameters
     ///
     /// * `size` - object size
+    /// * `obj_type` - object type
     ///
     /// ## Return
     ///
     /// * `*mut u8` - object pointer
-    pub fn alloc(&mut self, size: usize) -> *mut u8 {
+    pub fn alloc(&mut self, size: usize, obj_type: ObjectType) -> *mut u8 {
         // big size object
         if size > ((BLOCK_SIZE / LINE_SIZE - 3) / 4 - 1) * LINE_SIZE {
             return self.big_obj_alloc(size);
@@ -101,7 +102,7 @@ impl ThreadLocalAllocator {
             let block = self.get_new_block();
             self.cursor = unsafe { (*block).get_nth_line(3) };
             unsafe {
-                let (s, _, nxt) = (*block).alloc(size, self.cursor).unwrap();
+                let (s, _, nxt) = (*block).alloc(size, self.cursor, obj_type).unwrap();
                 let re = (*block).get_nth_line(s as usize);
                 nxt.or_else(|| {
                     self.cursor = std::ptr::null_mut();
@@ -116,10 +117,10 @@ impl ThreadLocalAllocator {
             }
         }
         let f = self.recyclable_blocks.first().unwrap();
-        let res = unsafe { (**f).alloc(size, self.cursor) };
+        let res = unsafe { (**f).alloc(size, self.cursor, obj_type) };
         if res.is_none() && size > LINE_SIZE {
             // mid size object alloc failed, try to overflow_alloc
-            return self.overflow_alloc(size);
+            return self.overflow_alloc(size, obj_type);
         }
         let (s, _, nxt) = res.unwrap();
         let re = unsafe { (**f).get_nth_line(s as usize) };
@@ -158,12 +159,12 @@ impl ThreadLocalAllocator {
     /// ## Return
     ///
     /// * `*mut u8` - object pointer
-    pub fn overflow_alloc(&mut self, size: usize) -> *mut u8 {
+    pub fn overflow_alloc(&mut self, size: usize, obj_type: ObjectType) -> *mut u8 {
         // 获取新block
         let new_block = self.get_new_block();
         self.cursor = unsafe { (*new_block).get_nth_line(3) };
         // alloc
-        let (s, l, nxt) = unsafe { (*new_block).alloc(size, self.cursor).unwrap() };
+        let (s, l, nxt) = unsafe { (*new_block).alloc(size, self.cursor, obj_type).unwrap() };
         let re = unsafe { (*new_block).get_nth_line(s as usize) };
         nxt.or_else(|| {
             // new_block被用完，将它加入unavailable blocks
