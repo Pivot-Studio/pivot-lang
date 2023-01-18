@@ -15,7 +15,7 @@ llvm-sys = "140"
 internal_macro = { path = "./internal_macro" }
 pl_linker = { path = "./pl_linker" }
 vm = { path = "./vm", optional = true, features = ["jit"] }
-nom_locate = "4.0.0"
+nom_locate = "4.1.0"
 rowan = "0.15.10"
 dissimilar = "1.0.4"
 stderrlog = "0.5.4"
