@@ -217,22 +217,6 @@ impl ThreadLocalAllocator {
         block
     }
 
-    /// # recycle
-    ///
-    /// Recycle a block.
-    ///
-    /// ## Parameters
-    ///
-    /// * `block` - block pointer
-    pub fn recycle(&mut self, block: *mut Block) {
-        let _lock = self.lock.lock();
-
-        if self.unavailable_blocks.contains(&block) {
-            self.unavailable_blocks.retain(|&b| b != block);
-            self.recyclable_blocks.push(block);
-        }
-    }
-
     /// # in_heap
     pub fn in_heap(&self, ptr: *mut u8) -> bool {
         unsafe { (*self.global_allocator).in_heap(ptr) }

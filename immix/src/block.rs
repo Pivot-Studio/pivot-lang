@@ -217,6 +217,7 @@ impl Block {
     /// Return the start line index and the length of the hole (u8, u8).
     ///
     /// If no hole found, return `None`.
+    #[cfg(test)]
     pub fn find_first_hole(&self) -> Option<(u8, u8)> {
         if self.first_hole_line_len == 0 {
             return None;

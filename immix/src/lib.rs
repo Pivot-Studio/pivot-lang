@@ -1,20 +1,16 @@
+use std::cell::RefCell;
+
+use collector::Collector;
+
 mod allocator;
 mod block;
 mod collector;
 mod consts;
 mod mmap;
 
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+thread_local! {
+    pub static SPACE: RefCell< Collector> = {
+        let gc = Collector::new(1024 * 1024 * 1024);
+        RefCell::new(gc)
+    };
 }

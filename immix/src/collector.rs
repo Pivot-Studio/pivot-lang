@@ -1,9 +1,10 @@
-use std::{collections::VecDeque, marker::PhantomData};
+use std::collections::VecDeque;
 
+use libc::malloc;
 use rustc_hash::FxHashMap;
 
 use crate::{
-    allocator::ThreadLocalAllocator,
+    allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
 };
 
@@ -19,7 +20,7 @@ use crate::{
 /// * `roots` - gc roots
 /// * `queue` - gc queue
 pub struct Collector {
-    thread_local_allocator: ThreadLocalAllocator,
+    thread_local_allocator: *mut ThreadLocalAllocator,
     roots: FxHashMap<usize, ObjectType>,
     queue: *mut VecDeque<*mut u8>,
 }
@@ -28,20 +29,39 @@ pub type VisitFunc = unsafe fn(&Collector, *mut u8);
 
 pub type VtableFunc = fn(*mut u8, &Collector, VisitFunc, VisitFunc, VisitFunc);
 
+impl Drop for Collector {
+    fn drop(&mut self) {
+        unsafe {
+            libc::free(self.thread_local_allocator as *mut libc::c_void);
+            libc::free(self.queue as *mut libc::c_void);
+        }
+    }
+}
+
 impl Collector {
     /// # new
     /// Create a new collector.
     ///
     /// ## Parameters
-    /// * `thread_local_allocator` - thread-local allocator
-    pub fn new(
-        thread_local_allocator: ThreadLocalAllocator,
-        queue: &mut VecDeque<*mut u8>,
-    ) -> Self {
-        Self {
-            thread_local_allocator,
-            roots: FxHashMap::default(),
-            queue: queue as *mut VecDeque<*mut u8>,
+    /// * `heap_size` - heap size
+    pub fn new(heap_size: usize) -> Self {
+        unsafe {
+            let ga = GlobalAllocator::new(heap_size);
+            let mem = malloc(core::mem::size_of::<GlobalAllocator>()).cast::<GlobalAllocator>();
+            mem.write(ga);
+            let tla = ThreadLocalAllocator::new(mem.as_mut().unwrap());
+            let mem =
+                malloc(core::mem::size_of::<ThreadLocalAllocator>()).cast::<ThreadLocalAllocator>();
+            mem.write(tla);
+            let queue = VecDeque::new();
+            let memqueue =
+                malloc(core::mem::size_of::<VecDeque<*mut u8>>()).cast::<VecDeque<*mut u8>>();
+            memqueue.write(queue);
+            Self {
+                thread_local_allocator: mem,
+                roots: FxHashMap::default(),
+                queue: memqueue,
+            }
         }
     }
 
@@ -53,7 +73,7 @@ impl Collector {
     ///
     /// * `usize` - size
     pub fn get_size(&self) -> usize {
-        self.thread_local_allocator.get_size()
+        unsafe { self.thread_local_allocator.as_mut().unwrap().get_size() }
     }
     /// # alloc
     ///
@@ -66,8 +86,14 @@ impl Collector {
     /// ## Return
     /// * `ptr` - object pointer
     pub fn alloc(&mut self, size: usize, obj_type: ObjectType) -> *mut u8 {
-        let ptr = self.thread_local_allocator.alloc(size, obj_type);
-        ptr
+        unsafe {
+            let ptr = self
+                .thread_local_allocator
+                .as_mut()
+                .unwrap()
+                .alloc(size, obj_type);
+            ptr
+        }
     }
 
     /// # add_root
@@ -92,7 +118,7 @@ impl Collector {
     /// precise mark a pointer
     unsafe fn mark_ptr(&self, ptr: *mut u8) {
         // mark it if it is in heap
-        if self.thread_local_allocator.in_heap(ptr) {
+        if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
             let block = Block::from_obj_ptr(ptr);
             block.marked = true;
             let line_header = block.get_line_header_from_addr(ptr);
@@ -150,7 +176,7 @@ impl Collector {
                 match obj_type {
                     ObjectType::Atomic => {
                         let obj = *(root as *mut *mut u8);
-                        if self.thread_local_allocator.in_heap(obj) {
+                        if self.thread_local_allocator.as_mut().unwrap().in_heap(obj) {
                             (*self.queue).push_back(obj);
                         }
                     }
@@ -180,7 +206,9 @@ impl Collector {
 
     /// # sweep
     pub fn sweep(&mut self) {
-        self.thread_local_allocator.sweep();
+        unsafe {
+            self.thread_local_allocator.as_mut().unwrap().sweep();
+        }
     }
 
     /// # collect
@@ -195,12 +223,9 @@ impl Collector {
 mod tests {
     use std::mem::size_of;
 
-    use crate::allocator::GlobalAllocator;
+    use crate::SPACE;
 
     use super::*;
-    unsafe fn set_point_to(ptr1: *mut u8, ptr2: *mut u8, offset: i64) {
-        (ptr1 as *mut *mut u8).offset(offset as isize).write(ptr2);
-    }
 
     struct GCTestObj {
         _vtable: VtableFunc,
@@ -223,42 +248,46 @@ mod tests {
     }
     #[test]
     fn test_basic_gc() {
-        unsafe {
-            let mut ga = GlobalAllocator::new(1024 * 1024 * 1024);
-            let tla = ThreadLocalAllocator::new(&mut ga);
-            let mut queue = VecDeque::new();
-            let mut gc = Collector::new(tla, &mut queue);
-            let mut a = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
-            let b = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
-            (*a).b = b;
-            (*a).c = 1;
-            (*a)._vtable = gctest_vtable;
-            (*b)._vtable = gctest_vtable;
-            (*b).c = 2;
-            let rustptr = (&mut a) as *mut *mut GCTestObj as *mut u8;
-            gc.add_root(rustptr, ObjectType::Atomic);
-            let size1 = gc.get_size();
-            gc.collect();
-            let size2 = gc.get_size();
-            assert_eq!(size1, size2);
-            let d = gc.alloc(size_of::<u64>(), ObjectType::Atomic) as *mut u64;
-            (*b).d = d;
-            (*d) = 3;
-            gc.collect();
-            let size3 = gc.get_size();
-            assert!(size3 > size2);
-            (*a).d = d;
-            gc.collect();
-            let size4 = gc.get_size();
-            assert_eq!(size3, size4);
-            (*a).b = a;
-            gc.collect();
-            let size5 = gc.get_size();
-            assert!(size5 < size4);
-            (*a).d = core::ptr::null_mut();
-            gc.collect();
-            let size6 = gc.get_size();
-            assert!(size5 > size6);
-        }
+        let _ = std::thread::spawn(|| {
+            SPACE.with(|gc| unsafe {
+                let mut gc = gc.borrow_mut();
+                let mut a = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
+                let b = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
+                (*a).b = b;
+                (*a).c = 1;
+                (*a)._vtable = gctest_vtable;
+                (*b)._vtable = gctest_vtable;
+                (*b).c = 2;
+                let rustptr = (&mut a) as *mut *mut GCTestObj as *mut u8;
+                gc.add_root(rustptr, ObjectType::Atomic);
+                let size1 = gc.get_size();
+                gc.collect();
+                let size2 = gc.get_size();
+                assert_eq!(size1, size2);
+                let d = gc.alloc(size_of::<u64>(), ObjectType::Atomic) as *mut u64;
+                (*b).d = d;
+                (*d) = 3;
+                gc.collect();
+                let size3 = gc.get_size();
+                assert!(size3 > size2);
+                (*a).d = d;
+                gc.collect();
+                let size4 = gc.get_size();
+                assert_eq!(size3, size4);
+                (*a).b = a;
+                gc.collect();
+                let size5 = gc.get_size();
+                assert!(size5 < size4);
+                (*a).d = core::ptr::null_mut();
+                gc.collect();
+                let size6 = gc.get_size();
+                assert!(size5 > size6);
+                gc.remove_root(rustptr);
+                gc.collect();
+                let size7 = gc.get_size();
+                assert_eq!(0, size7);
+            });
+        })
+        .join();
     }
 }
