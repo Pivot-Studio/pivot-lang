@@ -56,6 +56,21 @@ impl ThreadLocalAllocator {
         }
     }
 
+    pub fn print_stats(&self) {
+        println!("unavailable blocks:");
+        for block in &self.unavailable_blocks {
+            unsafe {
+                (**block).show();
+            }
+        }
+        println!("recyclable blocks:");
+        for block in &self.recyclable_blocks {
+            unsafe {
+                (**block).show();
+            }
+        }
+    }
+
     /// # get_size
     ///
     /// Get the size of allocated space.

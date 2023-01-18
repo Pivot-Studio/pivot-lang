@@ -110,12 +110,10 @@ impl Block {
         }
     }
 
-    /// show first several lines of the block
-    // pub fn show(&self) {
-    //     for i in 3..7 {
-    //         println!("line_map[{}]: {:08b}", i, self.line_map[i]);
-    //     }
-    // }
+    pub fn show(&self) {
+        println!("size: {}", self.get_size());
+        println!("line_map: {:?}", self.line_map);
+    }
 
     /// return the used size of the block
     pub fn get_size(&self) -> usize {

@@ -1,4 +1,4 @@
-use parking_lot::{lock_api::RawMutex, ReentrantMutex};
+use parking_lot::ReentrantMutex;
 
 use crate::{block::Block, consts::BLOCK_SIZE, mmap::Mmap};
 
@@ -103,6 +103,8 @@ pub struct GlobalAllocator {
     big_object_mmap: BigObjectMmap,
 }
 
+unsafe impl Sync for GlobalAllocator {}
+
 impl GlobalAllocator {
     /// Create a new global allocator.
     ///
@@ -135,8 +137,6 @@ impl GlobalAllocator {
             return None;
         }
 
-        self.mmap.commit(current, BLOCK_SIZE);
-
         let block = Block::new(current);
 
         Some(block)
@@ -153,12 +153,12 @@ impl GlobalAllocator {
             let b = self.alloc_block().unwrap();
             self.current = unsafe { self.current.add(BLOCK_SIZE) };
             self.mmap.commit(b as *mut Block as *mut u8, BLOCK_SIZE);
-            unsafe {
-                core::ptr::write_bytes(b as *mut u8, 0, BLOCK_SIZE);
-                (*b).reset_header();
-            }
             b
         };
+        unsafe {
+            core::ptr::write_bytes(block as *mut u8, 0, BLOCK_SIZE);
+            (*block).reset_header();
+        }
         block
     }
 

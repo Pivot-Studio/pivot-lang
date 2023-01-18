@@ -1,4 +1,4 @@
-use std::collections::VecDeque;
+use std::{collections::VecDeque, sync::atomic::Ordering};
 
 use libc::malloc;
 use rustc_hash::FxHashMap;
@@ -6,6 +6,8 @@ use rustc_hash::FxHashMap;
 use crate::{
     allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
+    GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_WAITING, GC_RUNNING, GC_SWEEPING,
+    GC_SWEEP_WAITING,
 };
 
 /// # Collector
@@ -23,6 +25,7 @@ pub struct Collector {
     thread_local_allocator: *mut ThreadLocalAllocator,
     roots: FxHashMap<usize, ObjectType>,
     queue: *mut VecDeque<*mut u8>,
+    id: usize,
 }
 
 pub type VisitFunc = unsafe fn(&Collector, *mut u8);
@@ -34,6 +37,7 @@ impl Drop for Collector {
         unsafe {
             libc::free(self.thread_local_allocator as *mut libc::c_void);
             libc::free(self.queue as *mut libc::c_void);
+            GC_COLLECTOR_COUNT.fetch_sub(1, Ordering::Relaxed);
         }
     }
 }
@@ -44,12 +48,11 @@ impl Collector {
     ///
     /// ## Parameters
     /// * `heap_size` - heap size
-    pub fn new(heap_size: usize) -> Self {
+    pub fn new(ga: &mut GlobalAllocator) -> Self {
+        GC_COLLECTOR_COUNT.fetch_add(1, Ordering::SeqCst);
+        let id = GC_ID.fetch_add(1, Ordering::Relaxed);
         unsafe {
-            let ga = GlobalAllocator::new(heap_size);
-            let mem = malloc(core::mem::size_of::<GlobalAllocator>()).cast::<GlobalAllocator>();
-            mem.write(ga);
-            let tla = ThreadLocalAllocator::new(mem.as_mut().unwrap());
+            let tla = ThreadLocalAllocator::new(ga);
             let mem =
                 malloc(core::mem::size_of::<ThreadLocalAllocator>()).cast::<ThreadLocalAllocator>();
             mem.write(tla);
@@ -61,6 +64,7 @@ impl Collector {
                 thread_local_allocator: mem,
                 roots: FxHashMap::default(),
                 queue: memqueue,
+                id,
             }
         }
     }
@@ -165,11 +169,36 @@ impl Collector {
         self.mark_ptr(ptr);
     }
 
+    pub fn print_stats(&self) {
+        unsafe {
+            self.thread_local_allocator.as_ref().unwrap().print_stats();
+        }
+    }
+    pub fn get_id(&self) -> usize {
+        self.id
+    }
+
     /// # mark
     /// From gc roots, mark all reachable objects.
     ///
     /// this mark function is __precise__
     pub fn mark(&mut self) {
+        GC_RUNNING.store(true, Ordering::Release);
+        let gcs = GC_COLLECTOR_COUNT.load(Ordering::SeqCst);
+        let v = GC_MARK_WAITING.fetch_add(1, Ordering::SeqCst);
+        if v + 1 != gcs {
+            while !GC_MARKING.load(Ordering::Acquire) {
+                // 防止 gc count 改变（一个线程在gc时消失了
+                if GC_COLLECTOR_COUNT.load(Ordering::SeqCst) == v + 1 {
+                    GC_MARKING.store(true, Ordering::Release);
+                    break;
+                }
+                core::hint::spin_loop();
+            }
+        } else {
+            GC_MARKING.store(true, Ordering::Release);
+        }
+
         for (root, obj_type) in self.roots.iter() {
             let root = *root as *mut u8;
             unsafe {
@@ -202,12 +231,44 @@ impl Collector {
                 self.mark_ptr(obj);
             }
         }
+
+        let v = GC_MARK_WAITING.fetch_sub(1, Ordering::SeqCst);
+
+        if v - 1 == 0 {
+            GC_MARKING.store(false, Ordering::SeqCst);
+        } else {
+            while GC_MARKING.load(Ordering::SeqCst) {
+                core::hint::spin_loop();
+            }
+        }
     }
 
     /// # sweep
     pub fn sweep(&mut self) {
+        let gcs = GC_COLLECTOR_COUNT.load(Ordering::SeqCst);
+        let v = GC_SWEEP_WAITING.fetch_add(1, Ordering::SeqCst);
+        if v + 1 != gcs {
+            while !GC_SWEEPING.load(Ordering::SeqCst) {
+                if GC_COLLECTOR_COUNT.load(Ordering::SeqCst) == v + 1 {
+                    GC_SWEEPING.store(true, Ordering::Release);
+                    break;
+                }
+                core::hint::spin_loop();
+            }
+        } else {
+            GC_SWEEPING.store(true, Ordering::SeqCst);
+        }
         unsafe {
             self.thread_local_allocator.as_mut().unwrap().sweep();
+        }
+        let v = GC_SWEEP_WAITING.fetch_sub(1, Ordering::SeqCst);
+        if v - 1 == 0 {
+            GC_SWEEPING.store(false, Ordering::SeqCst);
+            GC_RUNNING.store(false, Ordering::Release);
+        } else {
+            while GC_SWEEPING.load(Ordering::SeqCst) {
+                core::hint::spin_loop();
+            }
         }
     }
 
@@ -247,47 +308,67 @@ mod tests {
         }
     }
     #[test]
-    fn test_basic_gc() {
-        let _ = std::thread::spawn(|| {
-            SPACE.with(|gc| unsafe {
-                let mut gc = gc.borrow_mut();
-                let mut a = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
-                let b = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
-                (*a).b = b;
-                (*a).c = 1;
-                (*a)._vtable = gctest_vtable;
-                (*b)._vtable = gctest_vtable;
-                (*b).c = 2;
-                let rustptr = (&mut a) as *mut *mut GCTestObj as *mut u8;
-                gc.add_root(rustptr, ObjectType::Atomic);
-                let size1 = gc.get_size();
-                gc.collect();
-                let size2 = gc.get_size();
-                assert_eq!(size1, size2);
-                let d = gc.alloc(size_of::<u64>(), ObjectType::Atomic) as *mut u64;
-                (*b).d = d;
-                (*d) = 3;
-                gc.collect();
-                let size3 = gc.get_size();
-                assert!(size3 > size2);
-                (*a).d = d;
-                gc.collect();
-                let size4 = gc.get_size();
-                assert_eq!(size3, size4);
-                (*a).b = a;
-                gc.collect();
-                let size5 = gc.get_size();
-                assert!(size5 < size4);
-                (*a).d = core::ptr::null_mut();
-                gc.collect();
-                let size6 = gc.get_size();
-                assert!(size5 > size6);
-                gc.remove_root(rustptr);
-                gc.collect();
-                let size7 = gc.get_size();
-                assert_eq!(0, size7);
+    fn test_basic_multiple_thread_gc() {
+        let mut handles = vec![];
+        for _ in 0..10 {
+            let t = std::thread::spawn(|| {
+                SPACE.with(|gc| unsafe {
+                    let mut gc = gc.borrow_mut();
+                    println!("thread1 gcid = {}", gc.get_id());
+                    let mut a =
+                        gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
+                    let b = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
+                    (*a).b = b;
+                    (*a).c = 1;
+                    (*a)._vtable = gctest_vtable;
+                    (*b)._vtable = gctest_vtable;
+                    (*b).c = 2;
+                    let rustptr = (&mut a) as *mut *mut GCTestObj as *mut u8;
+                    gc.add_root(rustptr, ObjectType::Atomic);
+                    let size1 = gc.get_size();
+                    gc.collect();
+                    let size2 = gc.get_size();
+                    assert_eq!(size1, size2);
+                    let d = gc.alloc(size_of::<u64>(), ObjectType::Atomic) as *mut u64;
+                    (*b).d = d;
+                    (*d) = 3;
+                    gc.collect();
+                    let size3 = gc.get_size();
+                    assert!(size3 > size2);
+                    (*a).d = d;
+                    gc.collect();
+                    let size4 = gc.get_size();
+                    assert_eq!(size3, size4);
+                    (*a).b = a;
+                    gc.collect();
+                    let size5 = gc.get_size();
+                    assert!(size5 < size4);
+                    (*a).d = core::ptr::null_mut();
+                    gc.collect();
+                    let size6 = gc.get_size();
+                    assert!(size5 > size6);
+                    gc.remove_root(rustptr);
+                    gc.collect();
+                    let size7 = gc.get_size();
+                    assert_eq!(0, size7);
+                    let mut a =
+                        gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
+                    let b = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
+                    (*a).b = b;
+                    (*a).c = 1;
+                    (*a)._vtable = gctest_vtable;
+                    (*b)._vtable = gctest_vtable;
+                    (*b).c = 2;
+                    let rustptr = (&mut a) as *mut *mut GCTestObj as *mut u8;
+                    gc.add_root(rustptr, ObjectType::Atomic);
+                    let size1 = gc.get_size();
+                    assert_eq!(size1, 2)
+                });
             });
-        })
-        .join();
+            handles.push(t);
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
     }
 }
