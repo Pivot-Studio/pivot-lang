@@ -29,6 +29,13 @@ impl BigObjectMmap {
             lock: ReentrantMutex::new(()),
         }
     }
+
+    pub fn state(&self) {
+        println!("current: {:p}", self.current);
+        println!("heap_start: {:p}", self.heap_start);
+        println!("heap_end: {:p}", self.heap_end);
+    }
+
     /// # Alloc big object
     ///
     /// Alloc big object from big object mmap.

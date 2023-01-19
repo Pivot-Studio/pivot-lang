@@ -1,4 +1,4 @@
-.PHONY: devlinux devmac vm install fmt test clean
+.PHONY: devlinux devmac vm install fmt test clean bench
 devlinux:
 	@echo "export KAGARI_LIB_ROOT=$$(pwd)/planglib">>~/.bashrc
 	@echo "export PL_ROOT=$$(pwd)/target/release/">>~/.bashrc
@@ -23,3 +23,6 @@ test:
 
 clean:
 	@rm -f *.ll && rm -f *.bc && rm -rf *.dSYM && rm -f testout* && rm -f out*  && rm -f *.o
+
+bench:
+	@cargo bench --all

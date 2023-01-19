@@ -33,9 +33,9 @@ mod _win {
             unsafe { self.start.add(offset) as *mut u8 }
         }
 
-        pub fn start(&self) -> *mut u8 {
-            self.start
-        }
+        // pub fn start(&self) -> *mut u8 {
+        //     self.start
+        // }
         pub fn end(&self) -> *mut u8 {
             self.end
         }

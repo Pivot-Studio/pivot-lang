@@ -179,7 +179,7 @@ impl ThreadLocalAllocator {
         let new_block = self.get_new_block();
         self.cursor = unsafe { (*new_block).get_nth_line(3) };
         // alloc
-        let (s, l, nxt) = unsafe { (*new_block).alloc(size, self.cursor, obj_type).unwrap() };
+        let (s, _, nxt) = unsafe { (*new_block).alloc(size, self.cursor, obj_type).unwrap() };
         let re = unsafe { (*new_block).get_nth_line(s as usize) };
         nxt.or_else(|| {
             // new_block被用完，将它加入unavailable blocks
