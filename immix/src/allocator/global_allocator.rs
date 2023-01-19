@@ -150,7 +150,9 @@ impl GlobalAllocator {
         let block = if let Some(block) = self.free_blocks.pop() {
             block
         } else {
-            let b = self.alloc_block().unwrap();
+            let b = self
+                .alloc_block()
+                .expect("global allocator is out of memory!");
             self.current = unsafe { self.current.add(BLOCK_SIZE) };
             self.mmap.commit(b as *mut Block as *mut u8, BLOCK_SIZE);
             b

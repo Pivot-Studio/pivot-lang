@@ -126,6 +126,7 @@ impl Block {
     pub fn reset_header(&mut self) {
         self.first_hole_line_idx = 3;
         self.first_hole_line_len = (NUM_LINES_PER_BLOCK - 3) as u8;
+        self.line_map = [0; NUM_LINES_PER_BLOCK];
         self.marked = false;
     }
 
@@ -307,6 +308,7 @@ impl Block {
                 header.set_obj_type(obj_type);
                 // 更新first_hole_line_idx和first_hole_line_len
                 if start == self.first_hole_line_idx {
+                    self.first_hole_line_idx = self.first_hole_line_idx.saturating_add(line_size);
                     self.first_hole_line_len -= line_size;
                 }
                 if self.first_hole_line_len == 0 {
@@ -316,8 +318,6 @@ impl Block {
                         self.first_hole_line_idx = idx;
                         self.first_hole_line_len = len;
                     }
-                } else {
-                    self.first_hole_line_idx += line_size;
                 }
                 let next_cursor_line = start as usize + line_size as usize;
                 if next_cursor_line >= NUM_LINES_PER_BLOCK {

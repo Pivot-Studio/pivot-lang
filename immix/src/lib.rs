@@ -3,17 +3,19 @@ use std::{
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
-use collector::Collector;
 use lazy_static::lazy_static;
 use libc::malloc;
-
-use crate::allocator::GlobalAllocator;
 
 mod allocator;
 mod block;
 mod collector;
 mod consts;
 mod mmap;
+
+pub use allocator::*;
+pub use block::*;
+pub use collector::*;
+pub use consts::*;
 
 thread_local! {
     pub static SPACE: RefCell< Collector> = unsafe {

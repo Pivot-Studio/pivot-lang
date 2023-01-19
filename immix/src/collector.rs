@@ -411,6 +411,10 @@ mod tests {
             println!("gc{} gc time = {:?}", gc.get_id(), time.elapsed());
             let size2 = gc.get_size();
             assert_eq!(live_obj, size2);
+            gc.remove_root(rustptr);
+            gc.collect();
+            let size3 = gc.get_size();
+            assert_eq!(size3, 0);
         });
     }
 

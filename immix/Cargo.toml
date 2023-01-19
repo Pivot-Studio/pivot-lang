@@ -14,3 +14,8 @@ lazy_static = "1.4.0"
 
 [dev-dependencies]
 rand = "0.8.5"
+criterion = "0.3"
+
+[[bench]]
+name = "immix_bench"
+harness = false
