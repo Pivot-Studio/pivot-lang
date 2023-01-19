@@ -51,7 +51,7 @@ jobs:
       - name: Cargo check
         uses: actions-rs/cargo@v1
         with:
-          command: check
+          command: build
           args: --all-targets
 
   test:
@@ -87,14 +87,14 @@ jobs:
         with:
           submodules: true
 
-      - name: Install LLVM
-        uses: Pivot-Studio/setup-llvm@main
-
       - name: Install packages
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install libasound2-dev libudev-dev
+        
+      - name: Install LLVM
+        uses: Pivot-Studio/setup-llvm@main
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
@@ -103,16 +103,8 @@ jobs:
           override: true
           components: rustfmt, llvm-tools-preview
 
-      - uses: actions/cache@v3
-        name: Cache Cargo
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install latest llvm-cov release
         uses: taiki-e/install-action@cargo-llvm-cov
