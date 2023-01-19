@@ -136,6 +136,7 @@ impl GlobalAllocator {
         if current >= heap_end {
             return None;
         }
+        self.mmap.commit(current, BLOCK_SIZE);
 
         let block = Block::new(current);
 
@@ -148,13 +149,13 @@ impl GlobalAllocator {
     pub fn get_block(&mut self) -> *mut Block {
         let _lock = self.lock.lock();
         let block = if let Some(block) = self.free_blocks.pop() {
+            self.mmap.commit(block as *mut u8, BLOCK_SIZE);
             block
         } else {
             let b = self
                 .alloc_block()
                 .expect("global allocator is out of memory!");
             self.current = unsafe { self.current.add(BLOCK_SIZE) };
-            self.mmap.commit(b as *mut Block as *mut u8, BLOCK_SIZE);
             b
         };
         unsafe {

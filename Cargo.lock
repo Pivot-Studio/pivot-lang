@@ -644,6 +644,7 @@ dependencies = [
  "parking_lot",
  "rand",
  "rustc-hash",
+ "winapi",
 ]
 
 [[package]]

@@ -11,6 +11,8 @@ libc = "0.2"
 parking_lot = "0.12.1"
 rustc-hash = "1.1.0"
 lazy_static = "1.4.0"
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser","memoryapi"] }
 
 [dev-dependencies]
 rand = "0.8.5"
