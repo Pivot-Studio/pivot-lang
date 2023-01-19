@@ -288,6 +288,7 @@ impl Linker for MsvcLinker {
         });
 
         self.push_args("/NOLOGO");
+        self.push_args("/DEBUG");
         self.push_args("ws2_32.lib");
         self.push_args("bcrypt.lib");
         self.push_args("userenv.lib");

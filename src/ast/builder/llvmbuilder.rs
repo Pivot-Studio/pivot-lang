@@ -143,7 +143,7 @@ pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
             cpu,
             features,
             level,
-            inkwell::targets::RelocMode::Static,
+            inkwell::targets::RelocMode::Default,
             inkwell::targets::CodeModel::Default,
         )
         .unwrap()
