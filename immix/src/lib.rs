@@ -39,6 +39,26 @@ pub fn no_gc_thread() {
     drop(SPACE)
 }
 
+/// notify gc if a thread is going to stuck e.g.
+/// lock a mutex or doing sync io
+///
+/// during thread stucking, if a gc is triggered, it will skip waiting for this thread to
+/// reach a safe point
+pub fn thread_stuck_start() {
+    GC_COLLECTOR_COUNT.fetch_sub(1, Ordering::SeqCst);
+}
+
+/// notify gc a thread is not stuck anymore
+///
+/// if a gc is triggered during thread stucking, this function
+/// will block until the gc is finished
+pub fn thread_stuck_end() {
+    while GC_RUNNING.load(Ordering::Acquire) {
+        core::hint::spin_loop();
+    }
+    GC_COLLECTOR_COUNT.fetch_add(1, Ordering::SeqCst);
+}
+
 pub struct GAWrapper(*mut GlobalAllocator);
 
 /// collector count

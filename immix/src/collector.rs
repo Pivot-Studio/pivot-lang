@@ -284,6 +284,8 @@ impl Collector {
 mod tests {
     use std::mem::size_of;
 
+    use rand::random;
+
     use crate::SPACE;
 
     use super::*;
@@ -293,6 +295,7 @@ mod tests {
         b: *mut GCTestObj,
         c: u64,
         d: *mut u64,
+        e: *mut GCTestObj,
     }
     fn gctest_vtable(
         ptr: *mut u8,
@@ -305,6 +308,7 @@ mod tests {
         unsafe {
             mark_ptr(gc, (*obj).b as *mut u8);
             mark_ptr(gc, (*obj).d as *mut u8);
+            mark_ptr(gc, (*obj).e as *mut u8);
         }
     }
     #[test]
@@ -326,7 +330,9 @@ mod tests {
                     let rustptr = (&mut a) as *mut *mut GCTestObj as *mut u8;
                     gc.add_root(rustptr, ObjectType::Atomic);
                     let size1 = gc.get_size();
+                    let time = std::time::Instant::now();
                     gc.collect();
+                    println!("gc{} gc time = {:?}", gc.get_id(), time.elapsed());
                     let size2 = gc.get_size();
                     assert_eq!(size1, size2);
                     let d = gc.alloc(size_of::<u64>(), ObjectType::Atomic) as *mut u64;
@@ -365,6 +371,54 @@ mod tests {
                     assert_eq!(size1, 2)
                 });
             });
+            handles.push(t);
+        }
+        for h in handles {
+            h.join().unwrap();
+        }
+    }
+
+    unsafe fn alloc_test_obj(gc: &mut Collector) -> *mut GCTestObj {
+        let a = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
+        (*a)._vtable = gctest_vtable;
+        a
+    }
+
+    #[test]
+    fn test_complecated_single_thread_gc() {
+        SPACE.with(|gc| unsafe {
+            let mut gc = gc.borrow_mut();
+            println!("thread1 gcid = {}", gc.get_id());
+            let mut first_obj = alloc_test_obj(&mut gc);
+            let rustptr = (&mut first_obj) as *mut *mut GCTestObj as *mut u8;
+            let mut live_obj = 1;
+            let mut unused_objs = vec![&mut (*first_obj).b, &mut (*first_obj).e];
+            for _ in 0..1000 {
+                let obj = alloc_test_obj(&mut gc);
+                if random() {
+                    live_obj += 1;
+                    let father_ptr = unused_objs.pop().unwrap();
+                    *father_ptr = obj;
+                    unused_objs.push(&mut (*obj).b);
+                    unused_objs.push(&mut (*obj).e);
+                }
+            }
+            gc.add_root(rustptr, ObjectType::Atomic);
+            let size1 = gc.get_size();
+            assert_eq!(size1, 1001);
+            let time = std::time::Instant::now();
+            gc.collect();
+            println!("gc{} gc time = {:?}", gc.get_id(), time.elapsed());
+            let size2 = gc.get_size();
+            assert_eq!(live_obj, size2);
+        });
+    }
+
+    #[test]
+    fn test_complecated_multiple_thread_gc() {
+        let mut handles = vec![];
+        for _ in 0..10 {
+            let t = std::thread::spawn(|| test_complecated_single_thread_gc());
             handles.push(t);
         }
         for h in handles {

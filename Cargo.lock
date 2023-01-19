@@ -545,10 +545,10 @@ name = "immix"
 version = "0.1.0"
 dependencies = [
  "int-enum",
- "lazy_mut",
  "lazy_static",
  "libc",
  "parking_lot",
+ "rand",
  "rustc-hash",
 ]
 
@@ -660,15 +660,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49409df3e3bf0856b916e2ceaca09ee28e6871cf7d9ce97a692cacfdb2a25a47"
 dependencies = [
  "wasm-bindgen",
-]
-
-[[package]]
-name = "lazy_mut"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "767a23ea51ed54e6a9cd2a6d0fe156feb4934a4d95e585b55f4585577e195a5b"
-dependencies = [
- "libc",
 ]
 
 [[package]]
