@@ -1,4 +1,4 @@
-use std::{mem::size_of, ops::Add, time::Duration};
+use std::{mem::size_of, ops::Add, time::Duration, thread::available_parallelism};
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use immix::*;
@@ -8,7 +8,7 @@ fn immix_benchmark_multi_thread(c: &mut Criterion) {
     c.bench_function(
         &format!(
             "multithreads({}) gc benchmark--10000 small objects",
-            THREADS
+            available_parallelism().unwrap().get()
         ),
         |b| {
             b.iter_custom(|t| {
@@ -98,10 +98,9 @@ fn test_complecated_single_thread_gc() -> Duration {
     })
 }
 
-static THREADS: usize = 8;
 fn test_complecated_multiple_thread_gc() -> Duration {
     let mut handles = vec![];
-    for _ in 0..THREADS {
+    for _ in 0..available_parallelism().unwrap().get() {
         let t = std::thread::spawn(|| test_complecated_single_thread_gc());
         handles.push(t);
     }
