@@ -17,7 +17,7 @@ pl_linker = { path = "./pl_linker" }
 vm = { path = "./vm", optional = true, features = ["jit"] }
 nom_locate = "4.0.0"
 rowan = "0.15.10"
-dissimilar = "1.0.4"
+dissimilar = "1.0.6"
 stderrlog = "0.5.4"
 log = "0.4"
 clap = { version = "4.0.18", features = ["derive"] }
