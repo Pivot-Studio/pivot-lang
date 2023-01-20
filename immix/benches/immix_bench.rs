@@ -5,20 +5,26 @@ use immix::*;
 use rand::random;
 
 fn immix_benchmark_multi_thread(c: &mut Criterion) {
-    c.bench_function(
-        &format!(
-            "multithreads({}) gc benchmark--{} small objects",
-            available_parallelism().unwrap().get(),
-            OBJ_NUM
-        ),
-        |b| {
-            b.iter_custom(|t| {
-                let total = test_complecated_multiple_thread_gc(t as usize);
-                total
-            });
-        },
-    );
+    bench_n_threads(get_threads())(c);
 }
+
+fn bench_n_threads(n: usize) -> impl Fn(&mut Criterion) {
+    move |c: &mut Criterion| {
+        c.bench_function(
+            &format!(
+                "multithreads({}) gc benchmark--{} small objects",
+                n, OBJ_NUM
+            ),
+            |b| {
+                b.iter_custom(|t| {
+                    let total = test_complecated_multiple_thread_gc(t as usize, n);
+                    total
+                });
+            },
+        );
+    }
+}
+
 fn immix_benchmark_single_thread(c: &mut Criterion) {
     c.bench_function(
         &format!("singlethread gc benchmark--{} small objects", OBJ_NUM),
@@ -32,6 +38,10 @@ fn immix_benchmark_single_thread(c: &mut Criterion) {
 }
 
 const OBJ_NUM: usize = 10000;
+
+fn get_threads() -> usize {
+    available_parallelism().unwrap().get()
+}
 
 struct GCTestObj {
     _vtable: VtableFunc,
@@ -82,9 +92,7 @@ fn test_complecated_single_thread_gc(num_iter: usize) -> Duration {
             gc.add_root(rustptr, ObjectType::Atomic);
             let size1 = gc.get_size();
             assert_eq!(size1, OBJ_NUM + 1);
-            let time = std::time::Instant::now();
-            gc.collect();
-            let ctime = time.elapsed();
+            let ctime = gc.collect();
             // println!("gc{} gc time = {:?}", gc.get_id(), ctime);
             let size2 = gc.get_size();
             assert_eq!(live_obj, size2);
@@ -99,9 +107,9 @@ fn test_complecated_single_thread_gc(num_iter: usize) -> Duration {
     t
 }
 
-fn test_complecated_multiple_thread_gc(num_iter: usize) -> Duration {
+fn test_complecated_multiple_thread_gc(num_iter: usize, threads: usize) -> Duration {
     let mut handles = vec![];
-    for _ in 0..available_parallelism().unwrap().get() {
+    for _ in 0..threads {
         let t = std::thread::spawn(move || test_complecated_single_thread_gc(num_iter));
         handles.push(t);
     }
@@ -110,7 +118,7 @@ fn test_complecated_multiple_thread_gc(num_iter: usize) -> Duration {
         times.push(h.join().unwrap());
     }
     times.sort();
-    times[0]
+    times.pop().unwrap()
 }
 
 criterion_group!(
