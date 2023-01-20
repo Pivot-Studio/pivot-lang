@@ -10,6 +10,7 @@ mod allocator;
 mod block;
 mod collector;
 mod consts;
+mod macros;
 mod mmap;
 
 pub use allocator::*;
@@ -22,9 +23,7 @@ thread_local! {
     pub static SPACE: RefCell< Collector> = unsafe {
         // gc运行中的时候不能增加线程
         let l = GC_RW_LOCK.raw();
-        while !l.try_lock_exclusive() {
-            core::hint::spin_loop();
-        }
+        spin_until!(l.try_lock_exclusive());
         let gc = Collector::new(GLOBAL_ALLOCATOR.0.as_mut().unwrap());
         l.unlock_exclusive();
         RefCell::new(gc)
@@ -58,9 +57,7 @@ pub fn thread_stuck_start() {
 /// if a gc is triggered during thread stucking, this function
 /// will block until the gc is finished
 pub fn thread_stuck_end() {
-    while GC_RUNNING.load(Ordering::SeqCst) {
-        core::hint::spin_loop();
-    }
+    spin_until!(!GC_RUNNING.load(Ordering::SeqCst));
     GC_COLLECTOR_COUNT.fetch_add(1, Ordering::SeqCst);
 }
 
@@ -75,7 +72,7 @@ static GC_MARK_WAITING: AtomicUsize = AtomicUsize::new(0);
 
 static GC_MARKING: AtomicBool = AtomicBool::new(false);
 
-static GC_SWEEP_WAITING: AtomicUsize = AtomicUsize::new(0);
+static GC_SWEEPPING_NUM: AtomicUsize = AtomicUsize::new(0);
 
 static GC_SWEEPING: AtomicBool = AtomicBool::new(false);
 

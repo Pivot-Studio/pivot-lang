@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, sync::atomic::Ordering};
+use std::{collections::VecDeque, sync::atomic::Ordering, thread::yield_now};
 
 use libc::malloc;
 use parking_lot::lock_api::{RawRwLock, RawRwLockRecursive};
@@ -7,8 +7,8 @@ use rustc_hash::FxHashMap;
 use crate::{
     allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
-    GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_WAITING, GC_RUNNING, GC_RW_LOCK, GC_SWEEPING,
-    GC_SWEEP_WAITING,
+    spin_until, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_WAITING, GC_RUNNING, GC_RW_LOCK,
+    GC_SWEEPING, GC_SWEEPPING_NUM,
 };
 
 /// # Collector
@@ -184,18 +184,23 @@ impl Collector {
     ///
     /// this mark function is __precise__
     pub fn mark(&mut self) {
-        GC_RUNNING.store(true, Ordering::SeqCst);
-        let gcs = GC_COLLECTOR_COUNT.load(Ordering::SeqCst);
-        let v = GC_MARK_WAITING.fetch_add(1, Ordering::SeqCst);
+        GC_RUNNING.store(true, Ordering::Release);
+        let gcs = GC_COLLECTOR_COUNT.load(Ordering::Acquire);
+        let v = GC_MARK_WAITING.fetch_add(1, Ordering::Acquire);
         if v + 1 != gcs {
+            let mut i = 0;
             while !GC_MARKING.load(Ordering::Acquire) {
                 // 防止 gc count 改变（一个线程在gc时消失了
-                let gcs = GC_COLLECTOR_COUNT.load(Ordering::SeqCst);
+                let gcs = GC_COLLECTOR_COUNT.load(Ordering::Acquire);
                 if gcs == v + 1 {
                     GC_MARKING.store(true, Ordering::Release);
                     break;
                 }
                 core::hint::spin_loop();
+                i += 1;
+                if i % 100 == 0 {
+                    yield_now();
+                }
             }
         } else {
             GC_MARKING.store(true, Ordering::Release);
@@ -234,58 +239,46 @@ impl Collector {
             }
         }
 
-        let v = GC_MARK_WAITING.fetch_sub(1, Ordering::SeqCst);
+        let v = GC_MARK_WAITING.fetch_sub(1, Ordering::AcqRel);
 
         if v - 1 == 0 {
-            GC_MARKING.store(false, Ordering::SeqCst);
+            GC_MARKING.store(false, Ordering::Release);
         } else {
-            while GC_MARKING.load(Ordering::SeqCst) {
-                core::hint::spin_loop();
-            }
+            spin_until!(GC_MARKING.load(Ordering::Acquire) == false);
         }
     }
 
     /// # sweep
+    ///
+    /// since we did synchronization in mark, we don't need to do synchronization again in sweep
     pub fn sweep(&mut self) {
-        let gcs = GC_COLLECTOR_COUNT.load(Ordering::SeqCst);
-        let v = GC_SWEEP_WAITING.fetch_add(1, Ordering::SeqCst);
-        if v + 1 != gcs {
-            while !GC_SWEEPING.load(Ordering::SeqCst) {
-                if GC_COLLECTOR_COUNT.load(Ordering::SeqCst) == v + 1 {
-                    GC_SWEEPING.store(true, Ordering::Release);
-                    break;
-                }
-                core::hint::spin_loop();
-            }
-        } else {
-            GC_SWEEPING.store(true, Ordering::SeqCst);
-        }
+        GC_SWEEPPING_NUM.fetch_add(1, Ordering::AcqRel);
+        GC_SWEEPING.store(true, Ordering::Release);
         unsafe {
             self.thread_local_allocator.as_mut().unwrap().sweep();
         }
-        let v = GC_SWEEP_WAITING.fetch_sub(1, Ordering::SeqCst);
+        let v = GC_SWEEPPING_NUM.fetch_sub(1, Ordering::AcqRel);
         if v - 1 == 0 {
-            GC_SWEEPING.store(false, Ordering::SeqCst);
-            GC_RUNNING.store(false, Ordering::SeqCst);
+            GC_SWEEPING.store(false, Ordering::Release);
+            GC_RUNNING.store(false, Ordering::Release);
         } else {
-            while GC_SWEEPING.load(Ordering::SeqCst) {
-                core::hint::spin_loop();
-            }
+            spin_until!(!GC_SWEEPING.load(Ordering::Acquire));
         }
     }
 
     /// # collect
     /// Collect garbage.
-    pub fn collect(&mut self) {
+    pub fn collect(&mut self) -> std::time::Duration {
         let lock = unsafe { GC_RW_LOCK.raw() };
-        while !lock.try_lock_shared_recursive() {
-            core::hint::spin_loop();
-        }
+        spin_until!(lock.try_lock_shared_recursive());
+        let time = std::time::Instant::now();
         self.mark();
         self.sweep();
+        let time = time.elapsed();
         unsafe {
             lock.unlock_shared();
         }
+        time
     }
 }
 
