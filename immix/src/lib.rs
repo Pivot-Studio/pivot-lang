@@ -16,14 +16,17 @@ pub use allocator::*;
 pub use block::*;
 pub use collector::*;
 pub use consts::*;
+use parking_lot::{lock_api::RawRwLock, RwLock};
 
 thread_local! {
     pub static SPACE: RefCell< Collector> = unsafe {
         // gc运行中的时候不能增加线程
-        while GC_RUNNING.load(Ordering::Acquire) {
+        let l = GC_RW_LOCK.raw();
+        while !l.try_lock_exclusive() {
             core::hint::spin_loop();
         }
         let gc = Collector::new(GLOBAL_ALLOCATOR.0.as_mut().unwrap());
+        l.unlock_exclusive();
         RefCell::new(gc)
     };
 }
@@ -55,7 +58,7 @@ pub fn thread_stuck_start() {
 /// if a gc is triggered during thread stucking, this function
 /// will block until the gc is finished
 pub fn thread_stuck_end() {
-    while GC_RUNNING.load(Ordering::Acquire) {
+    while GC_RUNNING.load(Ordering::SeqCst) {
         core::hint::spin_loop();
     }
     GC_COLLECTOR_COUNT.fetch_add(1, Ordering::SeqCst);
@@ -79,5 +82,9 @@ static GC_SWEEPING: AtomicBool = AtomicBool::new(false);
 static GC_RUNNING: AtomicBool = AtomicBool::new(false);
 
 static GC_ID: AtomicUsize = AtomicUsize::new(0);
+
+lazy_static! {
+    pub static ref GC_RW_LOCK: RwLock<()> = RwLock::new(());
+}
 
 unsafe impl Sync for GAWrapper {}
