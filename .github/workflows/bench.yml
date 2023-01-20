@@ -1,0 +1,37 @@
+name: bench
+on:
+  pull_request:
+    paths:
+    - '**.rs'
+    - '**/Cargo.*'
+    - '.github/workflows/**.yml'
+  push:
+    branches:
+      - "master"
+      - "release/*"
+      - "staging"
+      - "trying"
+
+env:
+  CARGO_TERM_COLOR: always
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchimmix:
+    name: Benchmark immix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - uses: boa-dev/criterion-compare-action@v3
+        with:
+          cwd: "immix"
+          # Optional. Compare only this benchmark target
+          benchName: "immix_bench"
+          # Needed. The name of the branch to compare with. This default uses the branch which is being pulled against
+          branchName: ${{ github.base_ref }}
