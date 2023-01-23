@@ -158,6 +158,7 @@ impl Collector {
             return;
         }
         let vtable = *(ptr as *mut VtableFunc);
+        // let ptr = vtable as *mut u8;
         let v = vtable as i64;
         // println!("vtable: {:?}, ptr : {:p}", v, ptr);
         // 我不知道为什么，vtable为0的情况，这里如果写v == 0，进不去这个if。应该是rust的一个bug

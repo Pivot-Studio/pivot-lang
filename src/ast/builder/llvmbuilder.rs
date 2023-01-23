@@ -1241,7 +1241,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.discope.get(),
             None,
         );
-        self.builder.set_current_debug_location(self.context, loc);
+        self.builder.set_current_debug_location(loc);
     }
     fn insert_var_declare(
         &self,
