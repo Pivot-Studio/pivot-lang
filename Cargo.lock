@@ -1048,6 +1048,7 @@ dependencies = [
  "dunce",
  "dyn-fmt",
  "enum_dispatch",
+ "immix",
  "indexmap",
  "inkwell",
  "internal_macro",
@@ -1606,8 +1607,8 @@ name = "vm"
 version = "0.1.0"
 dependencies = [
  "backtrace",
+ "immix",
  "internal_macro",
- "libc",
  "rand",
 ]
 

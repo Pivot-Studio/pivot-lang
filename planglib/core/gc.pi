@@ -1,21 +1,9 @@
-fn DioGC__new_ptr() *i64;
+fn DioGC__malloc(size:i64, obj_type:u8) *i64;
 
-fn DioGC__malloc(gc:*i64,size:i64) *i64;
+fn DioGC__add_root(ptr:*i64, obj_type:u8) void;
 
-fn DioGC__free(gc:*i64,ptr:*i64) void;
+fn DioGC__rm_root(ptr:*i64) void;
 
-fn DioGC__add_root(gc:*i64,ptr:*i64) void;
+fn DioGC__collect() void;
 
-fn DioGC__rm_root(gc:*i64,ptr:*i64) void;
 
-fn DioGC__collect(gc:*i64) void;
-
-fn DioGC__get_size(gc:*i64) i64;
-
-const diogc = DioGC__new_ptr();
-
-// # get_heap_size
-// get current heap size
-fn get_heap_size() i64 {
-    return DioGC__get_size(diogc);
-}

@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+use immix::IntEnum;
 use inkwell::{
     basic_block::BasicBlock,
     builder::Builder,
@@ -174,6 +175,37 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             block_table: Arc::new(RefCell::new(FxHashMap::default())),
             block_reverse_table: Arc::new(RefCell::new(FxHashMap::default())),
         }
+    }
+
+    fn gc_add_root(&self, stackptr: BasicValueEnum<'ctx>, ctx: &mut Ctx<'a>, obj_type: u8) {
+        if !ctx.usegc {
+            return;
+        }
+        let gcmod = ctx.plmod.submods.get("gc").unwrap();
+        let f: FNType = gcmod
+            .get_type("DioGC__add_root")
+            .unwrap()
+            .borrow()
+            .clone()
+            .try_into()
+            .unwrap();
+        let f = self.get_or_insert_fn(&f, ctx);
+        let stackptr = self.builder.build_pointer_cast(
+            stackptr.into_pointer_value(),
+            self.context.i64_type().ptr_type(AddressSpace::default()),
+            "stackptr",
+        );
+        self.builder.build_call(
+            f,
+            &[
+                stackptr.into(),
+                self.context
+                    .i8_type()
+                    .const_int(obj_type as u64, false)
+                    .into(),
+            ],
+            "add_root",
+        );
     }
 
     fn get_llvm_value_handle(&self, value: &AnyValueEnum<'ctx>) -> ValueHandle {
@@ -774,11 +806,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         st
     }
 
-    fn get_gc(&self, ctx: &mut Ctx<'a>) -> PointerValue<'ctx> {
-        let gcmod = ctx.plmod.submods.get("gc").unwrap();
-        let gc = gcmod.get_global_symbol("diogc").unwrap();
-        self.get_or_add_global_value(&gcmod.get_full_name("diogc"), gc.tp.clone(), ctx)
-    }
     /// 用来获取外部模块的全局变量
     /// 如果没在当前module的全局变量表中找到，将会生成一个
     /// 该全局变量的声明
@@ -872,7 +899,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.get_llvm_value_handle(&self.get_or_insert_fn(pltp, ctx).as_any_value_enum())
     }
 
-    fn mv2heap(&self, val: ValueHandle, ctx: &mut Ctx<'a>) -> ValueHandle {
+    fn mv2heap(&self, val: ValueHandle, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle {
         if !ctx.usegc {
             return val;
         }
@@ -886,14 +913,17 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .try_into()
             .unwrap();
         let f = self.get_or_insert_fn(&f, ctx);
-        let gc = self.builder.build_load(self.get_gc(ctx), "gc");
         let td = self.targetmachine.get_target_data();
         let loaded = self.builder.build_load(val.into_pointer_value(), "loaded");
         let size = td.get_store_size(&loaded.get_type());
-        let size = self.context.i64_type().const_int(size as u64, true);
+        let size = self.context.i64_type().const_int(size as u64, false);
+        let tp = self
+            .context
+            .i8_type()
+            .const_int(tp.get_immix_type().int_value() as u64, false);
         let heapptr = self
             .builder
-            .build_call(f, &[gc.into(), size.into()], "gc_malloc")
+            .build_call(f, &[size.into(), tp.into()], "gc_malloc")
             .try_as_basic_value()
             .left()
             .unwrap();
@@ -904,28 +934,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         );
         self.builder.build_store(heapptr, loaded);
         self.get_llvm_value_handle(&heapptr.as_any_value_enum())
-    }
-    fn gc_add_root(&self, stackptr: BasicValueEnum<'ctx>, ctx: &mut Ctx<'a>) {
-        if !ctx.usegc {
-            return;
-        }
-        let gcmod = ctx.plmod.submods.get("gc").unwrap();
-        let f: FNType = gcmod
-            .get_type("DioGC__add_root")
-            .unwrap()
-            .borrow()
-            .clone()
-            .try_into()
-            .unwrap();
-        let f = self.get_or_insert_fn(&f, ctx);
-        let gc = self.builder.build_load(self.get_gc(ctx), "gc");
-        let stackptr = self.builder.build_pointer_cast(
-            stackptr.into_pointer_value(),
-            self.context.i64_type().ptr_type(AddressSpace::default()),
-            "stackptr",
-        );
-        self.builder
-            .build_call(f, &[gc.into(), stackptr.into()], "add_root");
     }
     fn gc_rm_root(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>) {
         if !ctx.usegc {
@@ -952,14 +960,12 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .try_into()
             .unwrap();
         let f = self.get_or_insert_fn(&f, ctx);
-        let gc = self.builder.build_load(self.get_gc(ctx), "gc");
         let stackptr = self.builder.build_pointer_cast(
             stackptr.into_pointer_value(),
             self.context.i64_type().ptr_type(AddressSpace::default()),
             "stackptr",
         );
-        self.builder
-            .build_call(f, &[gc.into(), stackptr.into()], "rm_root");
+        self.builder.build_call(f, &[stackptr.into()], "rm_root");
     }
     fn gc_collect(&self, ctx: &mut Ctx<'a>) {
         if !ctx.usegc {
@@ -975,8 +981,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .try_into()
             .unwrap();
         let f = self.get_or_insert_fn(&f, ctx);
-        let gc = self.builder.build_load(self.get_gc(ctx), "gc");
-        self.builder.build_call(f, &[gc.into()], "collect");
+        self.builder.build_call(f, &[], "collect");
     }
     fn get_or_add_global(
         &self,
@@ -1101,6 +1106,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         );
     }
     fn alloc(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle {
+        let td = self.targetmachine.get_target_data();
         let builder = self.builder;
         builder.unset_current_debug_location();
         let lb = builder.get_insert_block().unwrap();
@@ -1114,7 +1120,20 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         {
             Some(alloca) => {
                 builder.position_at_end(alloca);
-                let p = builder.build_alloca(self.get_basic_type_op(pltype, ctx).unwrap(), name);
+                let bt = self.get_basic_type_op(pltype, ctx).unwrap();
+                let p = builder.build_alloca(bt.clone(), name);
+                let size_val = self
+                    .context
+                    .i64_type()
+                    .const_int(td.get_store_size(&bt) as u64, false);
+                self.builder
+                    .build_memset(
+                        p,
+                        td.get_abi_alignment(&bt),
+                        self.context.i8_type().const_zero(),
+                        size_val,
+                    )
+                    .unwrap();
                 if let PLType::STRUCT(_) = pltype {
                     let f = self.get_or_insert_st_visit_fn_handle(&p);
                     let i = self.builder.build_ptr_to_int(
@@ -1134,7 +1153,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                     let vtable = self.builder.build_struct_gep(p, 0, "vtable").unwrap();
                     self.builder.build_store(vtable, i);
                 }
-                self.gc_add_root(p.as_basic_value_enum(), ctx);
+                self.gc_add_root(
+                    p.as_basic_value_enum(),
+                    ctx,
+                    pltype.get_immix_type().int_value(),
+                );
                 ctx.roots
                     .borrow_mut()
                     .push(self.get_llvm_value_handle(&p.as_any_value_enum()));

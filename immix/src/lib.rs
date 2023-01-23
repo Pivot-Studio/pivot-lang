@@ -3,6 +3,7 @@ use std::{
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 
+pub use int_enum::IntEnum;
 use lazy_static::lazy_static;
 use libc::malloc;
 
@@ -37,6 +38,54 @@ lazy_static! {
         mem.write(ga);
         GAWrapper(mem)
     };
+}
+
+/// This function is used to allocate a new object on the heap.
+/// The size of the object is given in bytes by the size argument.
+/// The object type is specified by the obj_type argument, which is a u8.
+/// This function is used to allocate all objects (except
+/// for the object header) on the heap,
+/// and it is used by both the GC and the user.
+/// This function is used by the user in the following manner:
+/// ```ignore
+/// let obj = gc_malloc(size, obj_type);
+/// ```
+/// where obj is a pointer to the newly allocated object.
+pub fn gc_malloc(size: usize, obj_type: u8) -> *mut u8 {
+    SPACE.with(|gc| {
+        // println!("start malloc");
+        let mut gc = gc.borrow_mut();
+        // println!("malloc");
+        gc.alloc(size, ObjectType::from_int(obj_type).unwrap())
+    })
+}
+
+/// This function is used to force a garbage collection.
+pub fn gc_collect() {
+    SPACE.with(|gc| {
+        // println!("start collect");
+        let mut gc = gc.borrow_mut();
+        gc.collect();
+        // println!("collect")
+    })
+}
+
+pub fn gc_add_root(root: *mut u8, obj_type: u8) {
+    SPACE.with(|gc| {
+        // println!("start add_root");
+        let mut gc = gc.borrow_mut();
+        gc.add_root(root, ObjectType::from_int(obj_type).unwrap());
+        // println!("add_root")
+    })
+}
+
+pub fn gc_remove_root(root: *mut u8) {
+    SPACE.with(|gc| {
+        // println!("start remove_root");
+        let mut gc = gc.borrow_mut();
+        gc.remove_root(root);
+        // println!("remove_root")
+    })
 }
 
 pub fn no_gc_thread() {

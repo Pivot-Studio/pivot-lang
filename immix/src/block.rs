@@ -61,12 +61,7 @@ impl LineHeaderExt for LineHeader {
     }
 
     fn get_obj_type(&self) -> ObjectType {
-        match (self >> 2) & 0b11 {
-            0 => ObjectType::Atomic,
-            1 => ObjectType::Trait,
-            2 => ObjectType::Complex,
-            _ => unreachable!(),
-        }
+        ObjectType::from_int((self >> 2) & 0b11).expect("invalid object type")
     }
 
     fn set_used(&mut self, used: bool) {
