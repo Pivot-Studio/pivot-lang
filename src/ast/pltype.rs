@@ -19,6 +19,7 @@ use super::node::Num;
 use super::node::TypeNode;
 use super::node::TypeNodeEnum;
 use super::range::Range;
+use immix::ObjectType;
 use indexmap::IndexMap;
 
 use inkwell::types::BasicMetadataTypeEnum;
@@ -208,6 +209,15 @@ pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
     }
 }
 impl PLType {
+    pub fn get_immix_type(&self) -> ObjectType {
+        match self {
+            PLType::STRUCT(_) | PLType::ARR(_) => ObjectType::Complex,
+            PLType::POINTER(_) => ObjectType::Pointer,
+            PLType::TRAIT(_) => ObjectType::Trait,
+            _ => ObjectType::Atomic,
+        }
+    }
+
     pub fn get_kind_name(&self) -> String {
         match self {
             PLType::PRIMITIVE(_) | PLType::VOID => "primitive".to_string(),

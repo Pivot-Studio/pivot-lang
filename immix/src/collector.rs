@@ -154,7 +154,16 @@ impl Collector {
     /// it self does not mark the object, but mark the object's fields by calling
     /// mark_ptr
     unsafe fn mark_complex(&self, ptr: *mut u8) {
+        if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
+            return;
+        }
         let vtable = *(ptr as *mut VtableFunc);
+        let v = vtable as i64;
+        // println!("vtable: {:?}, ptr : {:p}", v, ptr);
+        // 我不知道为什么，vtable为0的情况，这里如果写v == 0，进不去这个if。应该是rust的一个bug
+        if v < 1 && v > -1 {
+            return;
+        }
         vtable(
             ptr,
             self,
@@ -165,6 +174,9 @@ impl Collector {
     }
     /// precise mark a trait object
     unsafe fn mark_trait(&self, ptr: *mut u8) {
+        if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
+            return;
+        }
         let loaded = *(ptr as *mut *mut *mut u8);
         let ptr = *loaded.offset(1);
         self.mark_ptr(ptr);

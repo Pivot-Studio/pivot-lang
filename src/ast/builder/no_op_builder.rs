@@ -217,15 +217,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
         &self,
         _val: super::ValueHandle,
         _ctx: &mut crate::ast::ctx::Ctx<'a>,
+        _tp: &PLType,
     ) -> super::ValueHandle {
         0
-    }
-
-    fn gc_add_root(
-        &self,
-        _stackptr: inkwell::values::BasicValueEnum<'ctx>,
-        _ctx: &mut crate::ast::ctx::Ctx<'a>,
-    ) {
     }
 
     fn gc_rm_root(&self, _stackptr: super::ValueHandle, _ctx: &mut crate::ast::ctx::Ctx<'a>) {}
