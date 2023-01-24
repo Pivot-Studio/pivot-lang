@@ -996,16 +996,32 @@ impl MyStruct {
 <p>标记impl块时，导出的函数名称会变为<code>{structname}__{fnname}</code>的形式，函数允许使用receiver。更多高级用法参见<code>is_runtime</code>的rust doc</p>
 </blockquote>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="gc"><a class="header" href="#gc">GC</a></h1>
-<p>pivot-lang 是一门使用gc进行内存管理的语言。<br />
-pivot-lang 的gc目前是使用rust写的，采用非常简单的 <code>mark and sweep</code> 算法。
-栈变量采用<code>shadow stack</code>模式进行追踪。<br />
-目前gc的源代码在vm项目中</p>
 <blockquote>
-<p>目前的gc非常简单，也没做任何优化，属于能用就行。总代码量也很少，欢迎为我们改进它。</p>
+<p>！WIP：此页面描述的功能仍然在实验性阶段，可能有些细节没有实现完毕。</p>
 </blockquote>
-<h2 id="shadow-stack"><a class="header" href="#shadow-stack">Shadow Stack</a></h2>
-<p>pl的gc目前是精确gc，编译器会插入指令以让gc运行时能知道gcroot有哪些。gc记录的gcroot列表就是<code>shadow stack</code>。
-在mark阶段，gc会从<code>shadow stack</code>开始扫描。</p>
+<p>pivot-lang 是一门使用gc进行内存管理的语言。</p>
+<p>pivot-lang 的gc目前是使用rust写的，采用一种叫做<code>immix</code><a href="https://www.cs.utexas.edu/users/speedway/DaCapo/papers/immix-pldi-2008.pdf">[1]</a>的mark region算法。</p>
+<p>在以前的版本中，我们使用的是我们现在叫做<code>simple gc</code>的垃圾回收算法，他是一个简单的mark-sweep算法。
+它由于性能问题和不支持多线程等原因最终被<code>immix</code>取代。不过我们仍然保留了它的代码，并且设置了一个编译开关（<em>feature:simple_gc</em>），可以在编译时手动选择使用该gc算法。</p>
+<h2 id="simple-gc"><a class="header" href="#simple-gc">Simple GC</a></h2>
+<p>simple gc就和他的名字一样，<a href="https://github.com/Pivot-Studio/pivot-lang/blob/master/vm/src/gc/_simple_gc.rs">代码</a>十分简单（算法实现大概100行）。它没有自己的allocator，直接
+使用C中的<code>malloc</code>和<code>free</code>进行内存分配和释放。</p>
+<p>simple gc是一个<a href="https://www.cs.cornell.edu/courses/cs6120/2020fa/blog/modern-gc/">保守gc算法(Conservative Garbage Collection)</a>，它没有能力精确的分辨出哪些内存是指针，哪些不是。因此它会试图将所有的内存都当做指针来处理。</p>
+<p>目前simple gc不建议在生产环境中使用，其代码保留下来是为了方便我们在未来的版本中进行性能对比，以及为未来用于教育目的做准备。</p>
+<h2 id="immix-gc"><a class="header" href="#immix-gc">Immix GC</a></h2>
+<p>immix gc是一种mark region算法，它是一个精确的gc算法。但是请注意，它的精确建立在使用它
+的项目提供的特殊支持之上。可以认为目前我们的immix gc实现 <strong>是为pivot-lang量身定制</strong> 的。pl编译器为了和我们的immix gc配合，会在编译时专门生成一些额外的代码，如果缺少这些代码，immix gc将无法正常工作。
+所以虽然理论上我们可以将我们的immix gc用到其他项目中，这么做的效益很可能并不是很高--
+缺少编译器的支持，使用者将需要手动添加那些额外的代码。</p>
+<p>immix gc的实现代码在<a href="https://github.com/Pivot-Studio/pivot-lang/blob/master/immix">这里</a>。它是天生支持多线程使用的，但是我们的pivot-lang目前还不支持多线程。</p>
+<h3 id="目前存在的一些问题"><a class="header" href="#目前存在的一些问题">目前存在的一些问题</a></h3>
+<p>!!!NEED HELP!!!</p>
+<p>似乎在windows上性能明显差于linux和mac，但是说实话我并不是这方面的专家，如果有大佬了解这方面欢迎帮我吗优化。</p>
+<h2 id="benchmark"><a class="header" href="#benchmark">Benchmark</a></h2>
+<p>我们对两种gc算法进行了一些基准测试，事实证明immix gc的回收性能要比simple gc <strong>快近20倍</strong>。如果你对这些测试感兴趣，可以在项目根目录运行<code>make bench</code>查看immix的benchmark，或者运行<code>make bench-simple-gc</code>查看simple gc的benchmark。</p>
+<p>下方分别是simple gc和immix gc的benchmark结果，测试于2023年1月，commit 62b5c52c01e8133f5300e33a0131a50ba0c8d0de</p>
+<p><img src="systemlib/2023-01-24-23-23-55.png" alt="" /></p>
+<p><img src="systemlib/2023-01-24-23-25-06.png" alt="" /></p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="planglib"><a class="header" href="#planglib">planglib</a></h1>
 <p>planglib目录下的每一个文件夹都是一个系统模块，在编译的时候会自动被加入依赖中，不需要在配置文件中特殊配置。</p>
 <h2 id="planglib如何在编译期间被找到"><a class="header" href="#planglib如何在编译期间被找到">planglib如何在编译期间被找到</a></h2>
@@ -1043,7 +1059,7 @@ pivot-lang 的gc目前是使用rust写的，采用非常简单的 <code>mark and
 <h3 id="tests"><a class="header" href="#tests">Tests</a></h3>
 <p>强烈建议在提交修改的时候同时添加对应的测试，帮助我们将测试覆盖率保持在 <strong>85%</strong>, 帮助我们进一步完善测试也是相当欢迎的。</p>
 <p>请在提交pr前确认自己的修改能通过所有的测试(通过运行 <code>cargo test --all</code>)</p>
-<h3 id="benchmark"><a class="header" href="#benchmark">Benchmark</a></h3>
+<h3 id="benchmark-1"><a class="header" href="#benchmark-1">Benchmark</a></h3>
 <p>目前我们还没有基准测试，欢迎帮助我们添加基准测试。</p>
 <h3 id="文档"><a class="header" href="#文档">文档</a></h3>
 <p>参见 <a href="https://lang.pivotstudio.cn/">文档</a> 网站。对应源码在 <a href="https://github.com/Pivot-Studio/pivot-lang/tree/master/book">book</a> 目录中，欢迎帮助我们完善文档。</p>
