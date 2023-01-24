@@ -1609,8 +1609,10 @@ name = "vm"
 version = "0.1.0"
 dependencies = [
  "backtrace",
+ "criterion",
  "immix",
  "internal_macro",
+ "libc",
  "rand",
 ]
 

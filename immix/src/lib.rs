@@ -21,7 +21,7 @@ pub use consts::*;
 use parking_lot::{lock_api::RawRwLock, RwLock};
 
 thread_local! {
-    pub static SPACE: RefCell< Collector> = unsafe {
+    pub static SPACE: RefCell<Collector> = unsafe {
         // gc运行中的时候不能增加线程
         let l = GC_RW_LOCK.raw();
         spin_until!(l.try_lock_exclusive());

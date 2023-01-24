@@ -9,9 +9,11 @@ edition = "2021"
 internal_macro = { path = "../internal_macro",default-features = false }
 backtrace = "0.3"
 immix = { path = "../immix" }
+libc = { version = "0.2", optional = true }
 
 [dev-dependencies]
-rand = "0.8.5"
+rand = "0.8"
+criterion = "0.3"
 
 [lib]
 name = "vm"
@@ -19,6 +21,12 @@ path = "src/lib.rs"
 crate-type = ["staticlib", "lib"]
 
 [features]
-default = ["static"]
+default = ["static", "immix"]
 jit = ["internal_macro/jit"]
 static = ["internal_macro/static"]
+immix = []
+simple_gc = ["libc"]
+
+[[bench]]
+name = "simple_gc_bench"
+harness = false

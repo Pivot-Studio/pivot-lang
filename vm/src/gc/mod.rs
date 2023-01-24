@@ -1,30 +1,32 @@
-use immix::{gc_add_root, gc_collect, gc_malloc, gc_remove_root};
-use internal_macro::is_runtime;
+#[cfg(feature = "immix")]
+mod _immix {
+    use immix::{gc_add_root, gc_collect, gc_malloc, gc_remove_root};
+    use internal_macro::is_runtime;
 
-#[cfg(feature = "jit")]
-pub fn reg() {
-    // rust在release模式会优化掉我们的ctor函数，所以我们在这里调用一下
-    add_symbol_impl_diogc();
-}
+    #[cfg(feature = "jit")]
+    pub fn reg() {
+        // rust在release模式会优化掉我们的ctor函数，所以我们在这里调用一下
+        add_symbol_impl_diogc();
+    }
 
-pub struct DioGC();
+    struct DioGC();
 
-#[is_runtime] // jit注册
-impl DioGC {
-    pub unsafe fn malloc(size: u64, obj_type: u8) -> *mut u8 {
-        gc_malloc(size as usize, obj_type)
-    }
-    pub fn add_root(ptr: *mut u8, obj_type: u8) {
-        gc_add_root(ptr, obj_type)
-    }
-    pub fn rm_root(ptr: *mut u8) {
-        gc_remove_root(ptr)
-    }
-    pub unsafe fn collect() {
-        gc_collect()
-    }
-    pub fn about() {
-        let dio = "
+    #[is_runtime] // jit注册
+    impl DioGC {
+        pub unsafe fn malloc(size: u64, obj_type: u8) -> *mut u8 {
+            gc_malloc(size as usize, obj_type)
+        }
+        pub fn add_root(ptr: *mut u8, obj_type: u8) {
+            gc_add_root(ptr, obj_type)
+        }
+        pub fn rm_root(ptr: *mut u8) {
+            gc_remove_root(ptr)
+        }
+        pub unsafe fn collect() {
+            gc_collect()
+        }
+        pub fn about() {
+            let dio = "
         ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢹⡀⠀⠀⠀⠀⠀⠘⠀⣷⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⡀⠀⠀⠀⠙⢦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
         ⠀⠀⠀⠀⠀⠀⠀⠀⠀⡼⠃⠀⠀⠀⠀⠀⣤⠀⢏⠀⠀⠀⠀⢠⣠⡆⠀⠀⣦⡀⠀⠳⡀⠀⠀⠀⠀⠑⢄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈
         ⠀⠀⠀⠀⠀⠀⠀⠀⠐⣇⡀⠀⠀⠀⠀⠀⠘⠂⢈⣦⠀⣀⡀⠈⣟⢷⣄⠀⠘⣷⣄⠀⠹⣆⠀⠀⠀⠀⠀⠙⢦⣀⠀⠀⠀⠀⠀⠀⠀⢤
@@ -50,7 +52,14 @@ impl DioGC {
         ⠘⠁⠀⠀⠀⠀⡰⠁⠀⠀⢀⣠⠄⠒⠊⠉⠀⠀⠀⠀⠀⠀⠈⢢⡀⠀⢰⢡⠇⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
         ⠀⠀⠀⠀⢀⣼⣁⠤⠖⠊⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣽⣴⡾⠟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
         ⠀⠀⢀⣠⠞⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⣼⡟⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀";
-        println!("{}", dio);
-        println!("        Dio gc");
+            println!("{}", dio);
+            println!("        Dio gc");
+        }
     }
 }
+#[cfg(feature = "simple_gc")]
+mod _simple_gc;
+#[cfg(feature = "immix")]
+pub use _immix::*;
+#[cfg(feature = "simple_gc")]
+pub use _simple_gc::*;

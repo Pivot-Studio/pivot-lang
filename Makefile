@@ -26,3 +26,6 @@ clean:
 
 bench:
 	@cargo bench --all
+
+bench-simple-gc:
+	@cd vm && cargo bench --features=simple_gc --no-default-features
