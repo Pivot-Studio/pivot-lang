@@ -1,0 +1,10 @@
+
+running 5 tests
+test block::tests::test_block_hole ... ok
+test block::tests::test_alloc ... ok
+test collector::tests::test_complecated_single_thread_gc ... ok
+test collector::tests::test_complecated_multiple_thread_gc ... ok
+test collector::tests::test_basic_multiple_thread_gc ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+

@@ -58,9 +58,9 @@ fn gctest_vtable(
 ) {
     let obj = ptr as *mut GCTestObj;
     unsafe {
-        mark_ptr(gc, (*obj).b as *mut u8);
-        mark_ptr(gc, (*obj).d as *mut u8);
-        mark_ptr(gc, (*obj).e as *mut u8);
+        mark_ptr(gc, (&mut (*obj).b) as *mut *mut GCTestObj as *mut u8);
+        mark_ptr(gc, (&mut (*obj).d) as *mut *mut u64 as *mut u8);
+        mark_ptr(gc, (&mut (*obj).e) as *mut *mut GCTestObj as *mut u8);
     }
 }
 
@@ -89,13 +89,14 @@ fn test_complecated_single_thread_gc(num_iter: usize) -> Duration {
                     unused_objs.push(&mut (*obj).e);
                 }
             }
-            gc.add_root(rustptr, ObjectType::Atomic);
+            gc.add_root(rustptr, ObjectType::Pointer);
             let size1 = gc.get_size();
             assert_eq!(size1, OBJ_NUM + 1);
             let ctime = gc.collect();
             // println!("gc{} gc time = {:?}", gc.get_id(), ctime);
             let size2 = gc.get_size();
             assert_eq!(live_obj, size2);
+            // let ctime = gc.collect();
             gc.remove_root(rustptr);
             gc.collect();
             let size3 = gc.get_size();

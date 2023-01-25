@@ -312,7 +312,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             }
             PLType::POINTER(_) => {
                 // call the visit_ptr function
-                let elm = self.builder.build_load(elm, "elm").into_pointer_value();
                 self.builder
                     .build_call(visit_ptr_f, &[visitor.into(), elm.into()], "call");
             }
@@ -1709,7 +1708,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             let f = self.builder.build_struct_gep(st, i, "gep").unwrap();
             // 指针类型，递归调用visit函数
             if let PLType::POINTER(_) = field_pltp {
-                let ptr = self.builder.build_load(f, "load");
+                let ptr = f;
                 let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
                 self.builder
                     .build_call(visit_ptr_f, &[visitor.into(), casted.into()], "call");

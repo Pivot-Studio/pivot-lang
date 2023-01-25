@@ -54,7 +54,7 @@ lazy_static! {
 pub fn gc_malloc(size: usize, obj_type: u8) -> *mut u8 {
     SPACE.with(|gc| {
         // println!("start malloc");
-        let mut gc = gc.borrow_mut();
+        let gc = gc.borrow();
         // println!("malloc");
         gc.alloc(size, ObjectType::from_int(obj_type).unwrap())
     })

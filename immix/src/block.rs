@@ -1,4 +1,7 @@
+use std::sync::atomic::{AtomicU8, Ordering};
+
 use int_enum::IntEnum;
+use vector_map::VecMap;
 
 use crate::consts::{BLOCK_SIZE, LINE_SIZE, NUM_LINES_PER_BLOCK};
 
@@ -31,6 +34,11 @@ pub trait LineHeaderExt {
     fn set_used(&mut self, used: bool);
     fn set_marked(&mut self, marked: bool);
     fn set_obj_type(&mut self, obj_type: ObjectType);
+    fn set_is_head(&mut self, is_head: bool);
+    fn get_is_used_follow(&self) -> bool;
+    fn get_obj_line_size(&self, idx: usize, block: &mut Block) -> usize;
+    fn set_forwarded(&mut self, forwarded: bool);
+    fn get_forwarded(&self) -> bool;
 }
 
 /// A block is a 32KB memory region.
@@ -41,7 +49,7 @@ pub trait LineHeaderExt {
 pub struct Block {
     /// |                           LINE HEADER(1 byte)                         |
     /// |    7   |    6   |    5   |    4   |    3   |    2   |    1   |    0   |
-    /// |            not used               |    object type  | marked |  used  |
+    /// | is head|   eva  |     not used    |    object type  | marked |  used  |
     line_map: [LineHeader; NUM_LINES_PER_BLOCK],
     /// 第一个hole的起始行号
     first_hole_line_idx: u8,
@@ -49,6 +57,10 @@ pub struct Block {
     first_hole_line_len: u8,
     /// 是否被标记
     pub marked: bool,
+    /// 洞的数量
+    hole_num: usize,
+    available_line_num: usize,
+    eva_target: bool,
 }
 
 impl LineHeaderExt for LineHeader {
@@ -72,7 +84,31 @@ impl LineHeaderExt for LineHeader {
         }
     }
 
+    fn set_forwarded(&mut self, forwarded: bool) {
+        let atom_self = self as *mut u8 as *mut AtomicU8;
+        unsafe {
+            let value = (*atom_self).load(Ordering::SeqCst);
+            let forwarded = if forwarded {
+                value | 0b1000000
+            } else {
+                value & !0b1000000
+            };
+            (*atom_self).store(forwarded, Ordering::Release);
+        }
+    }
+
+    fn get_forwarded(&self) -> bool {
+        let atom_self = self as *const u8 as *const AtomicU8;
+        unsafe { (*atom_self).load(Ordering::Acquire) & 0b1000000 == 0b1000000 }
+    }
+
+    /// # set_marked
+    ///
+    /// 设置marked
+    ///
+    /// 如果一个对象占用多行，只有起始行会被标记
     fn set_marked(&mut self, marked: bool) {
+        debug_assert!(*self & 0b10000000 != 0);
         if marked {
             *self |= 0b10;
         } else {
@@ -80,9 +116,34 @@ impl LineHeaderExt for LineHeader {
         }
     }
 
+    fn get_obj_line_size(&self, idx: usize, block: &mut Block) -> usize {
+        // 自己必须是head
+        debug_assert!(*self & 0b10000000 != 0);
+        // 自己必须是used
+        debug_assert!(*self & 0b1 != 0);
+        // 往后遍历获取自身大小
+        let mut line_size = 1;
+        while idx + line_size < NUM_LINES_PER_BLOCK
+            && block.line_map[idx + line_size] & 0b10000001 == 0b00000001
+        {
+            line_size += 1;
+        }
+        line_size
+    }
+
     fn set_obj_type(&mut self, obj_type: ObjectType) {
         *self &= !0b110;
         *self |= (obj_type as u8) << 2;
+    }
+    fn set_is_head(&mut self, is_head: bool) {
+        if is_head {
+            *self |= 0b10000000;
+        } else {
+            *self &= !0b10000000;
+        }
+    }
+    fn get_is_used_follow(&self) -> bool {
+        self & 0b10000001 == 0b00000001
     }
 }
 
@@ -99,14 +160,26 @@ impl Block {
                 first_hole_line_idx: 3, // 跳过前三行，都用来放metadata。浪费一点空间（metadata从0.8%->1.2%）
                 first_hole_line_len: (NUM_LINES_PER_BLOCK - 3) as u8,
                 marked: false,
+                hole_num: 1,
+                available_line_num: NUM_LINES_PER_BLOCK - 3,
+                eva_target: false,
             });
 
             &mut *ptr
         }
     }
 
+    pub fn get_available_line_num_and_holes(&self) -> (usize, usize) {
+        (self.available_line_num, self.hole_num)
+    }
+
     pub fn show(&self) {
         println!("size: {}", self.get_size());
+        println!("first_hole_line_idx: {}", self.first_hole_line_idx);
+        println!("first_hole_line_len: {}", self.first_hole_line_len);
+        println!("marked: {}", self.marked);
+        println!("hole_num: {}", self.hole_num);
+        println!("available_line_num: {}", self.available_line_num);
         println!("line_map: {:?}", self.line_map);
     }
 
@@ -123,6 +196,8 @@ impl Block {
         self.first_hole_line_len = (NUM_LINES_PER_BLOCK - 3) as u8;
         self.line_map = [0; NUM_LINES_PER_BLOCK];
         self.marked = false;
+        self.hole_num = 1;
+        self.available_line_num = NUM_LINES_PER_BLOCK - 3
     }
 
     /// # correct_header
@@ -131,32 +206,44 @@ impl Block {
     /// 2. 重置first_hole_line_idx
     /// 3. 重置first_hole_line_len
     /// 4. 重置marked
-    pub fn correct_header(&mut self) {
+    pub fn correct_header(&mut self, mark_histogram: *mut VecMap<usize, usize>) {
         let mut idx = 3;
         let mut len = 0;
         let mut first_hole_line_idx = 3;
         let mut first_hole_line_len = 0;
+        let mut holes = 1;
+        let mut marked = false;
+        let mut marked_num = 0;
+        self.available_line_num = 0;
 
         while idx < NUM_LINES_PER_BLOCK {
-            // 如果是空行
-            if self.line_map[idx] & 1 == 0 {
+            // 未标记
+            if self.line_map[idx] & 0b10 == 0
+                && (!marked || (marked && self.line_map[idx] & 0b10000010 == 0b10000000))
+            {
                 len += 1;
+                self.line_map[idx] &= 0;
+                marked = false;
             } else {
-                // 非空行
-                // 如果没被标记了，那么将used bit置为0
-                if self.line_map[idx] & 2 == 0 {
-                    self.line_map[idx] &= !1;
+                // 如果是obj的第一个line且被标记了
+                if self.line_map[idx] & 0b10000010 == 0b10000010 {
+                    marked = true;
+                }
+                if marked {
+                    marked_num += 1;
                 }
                 // 重置mark bit
                 self.line_map[idx] &= !2;
-                // 这里遇到了第一个洞的结尾，设置第一个洞的数据
                 if len > 0 {
+                    // 这里遇到了第一个洞的结尾，设置第一个洞的数据
                     if first_hole_line_len == 0 {
                         first_hole_line_idx = idx as u8 - len;
                         first_hole_line_len = len;
                     }
+                    holes += 1;
                     len = 0;
                 }
+                self.available_line_num += 1;
             }
             idx += 1;
         }
@@ -171,6 +258,16 @@ impl Block {
         self.first_hole_line_idx = first_hole_line_idx;
         self.first_hole_line_len = first_hole_line_len;
         self.marked = false;
+        self.hole_num = holes;
+        self.eva_target = false;
+        // println!("holes: {}, first_idx: {} , first_len: {} {:?}", holes,first_hole_line_idx,first_hole_line_len,self.line_map.iter().map(|&x| x & 1).collect::<Vec<_>>());
+        unsafe {
+            if let Some(count) = (*mark_histogram).get_mut(&self.hole_num) {
+                *count += marked_num;
+            } else {
+                (*mark_histogram).insert(self.hole_num, marked_num);
+            }
+        }
     }
 
     /// # find_next_hole
@@ -211,7 +308,6 @@ impl Block {
     /// Return the start line index and the length of the hole (u8, u8).
     ///
     /// If no hole found, return `None`.
-    #[cfg(test)]
     pub fn find_first_hole(&self) -> Option<(u8, u8)> {
         if self.first_hole_line_len == 0 {
             return None;
@@ -249,9 +345,9 @@ impl Block {
         &mut *(block_start as *mut Self)
     }
 
-    pub unsafe fn get_line_header_from_addr(&mut self, addr: *mut u8) -> &mut LineHeader {
+    pub unsafe fn get_line_header_from_addr(&mut self, addr: *mut u8) -> (&mut LineHeader, usize) {
         let idx = self.get_line_idx_from_addr(addr);
-        self.get_nth_line_header(idx)
+        (self.get_nth_line_header(idx), idx)
     }
 
     pub unsafe fn get_nth_line_header(&mut self, idx: usize) -> &mut LineHeader {
@@ -266,10 +362,21 @@ impl Block {
     /// # Safety
     ///
     /// The caller must ensure that the address is in the block.
-    unsafe fn get_line_idx_from_addr(&mut self, addr: *mut u8) -> usize {
-        debug_assert!(addr >= self as *mut Self as *mut u8);
-        debug_assert!(addr < (self as *mut Self as *mut u8).add(BLOCK_SIZE));
-        (addr as usize - self as *mut Self as usize) / LINE_SIZE
+    unsafe fn get_line_idx_from_addr(&self, addr: *mut u8) -> usize {
+        debug_assert!(addr as *const u8 >= self as *const Self as *const u8);
+        debug_assert!((addr as *const u8) < (self as *const Self as *const u8).add(BLOCK_SIZE));
+        (addr as usize - self as *const Self as usize) / LINE_SIZE
+    }
+
+    /// # set_eva_threshold
+    ///
+    /// set the eva_target flag to true if the block's hole number is greater than the threshold
+    pub fn set_eva_threshold(&mut self, threshold: usize) {
+        self.eva_target = self.hole_num > threshold;
+    }
+
+    pub fn is_eva_candidate(&self) -> bool {
+        self.eva_target
     }
 
     /// # alloc
@@ -293,6 +400,11 @@ impl Block {
         while let Some((start, len)) = hole {
             if len as usize * LINE_SIZE >= size {
                 let line_size = ((size - 1) / LINE_SIZE + 1) as u8;
+                if len == line_size {
+                    // 正好匹配，那么减少一个hole
+                    self.hole_num -= 1;
+                }
+                self.available_line_num -= line_size as usize;
                 // 标记为已使用
                 for i in start..=start - 1 + line_size {
                     let header = self.line_map.get_mut(i as usize).unwrap();
@@ -301,6 +413,7 @@ impl Block {
                 // 设置起始line header的obj_type
                 let header = self.line_map.get_mut(start as usize).unwrap();
                 header.set_obj_type(obj_type);
+                header.set_is_head(true);
                 // 更新first_hole_line_idx和first_hole_line_len
                 if start == self.first_hole_line_idx {
                     self.first_hole_line_idx = self.first_hole_line_idx.saturating_add(line_size);
@@ -366,6 +479,7 @@ mod tests {
             // 设置第5行已被使用
             block.get_nth_line_header(5).set_used(true);
             block.first_hole_line_len = 2;
+            block.hole_num = 2;
             // 从第三行开始分配，长度为128
             // 分配前：
             // --------
