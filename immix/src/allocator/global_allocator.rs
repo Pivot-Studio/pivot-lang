@@ -154,22 +154,33 @@ impl GlobalAllocator {
     ///
     /// 从free_blocks中获取一个可用的block，如果没有可用的block，就从mmap的heap空间之中获取一个新block
     pub fn get_block(&mut self) -> *mut Block {
+        self.get_blocks(1)[0]
+    }
+
+    /// # get_blocks
+    ///
+    /// 从free_blocks中获取n个可用的block，如果没有可用的block，就从mmap的heap空间之中获取n个新block
+    pub fn get_blocks(&mut self, n: usize) -> Vec<*mut Block> {
         let _lock = self.lock.lock();
-        let block = if let Some(block) = self.free_blocks.pop() {
-            self.mmap.commit(block as *mut u8, BLOCK_SIZE);
-            block
-        } else {
-            let b = self
-                .alloc_block()
-                .expect("global allocator is out of memory!");
-            self.current = unsafe { self.current.add(BLOCK_SIZE) };
-            b
-        };
-        unsafe {
-            core::ptr::write_bytes(block as *mut u8, 0, BLOCK_SIZE);
-            (*block).reset_header();
+        let mut blocks = Vec::with_capacity(n);
+        for _ in 0..n {
+            let block = if let Some(block) = self.free_blocks.pop() {
+                self.mmap.commit(block as *mut u8, BLOCK_SIZE);
+                block
+            } else {
+                let b = self
+                    .alloc_block()
+                    .expect("global allocator is out of memory!");
+                self.current = unsafe { self.current.add(BLOCK_SIZE) };
+                b
+            };
+            unsafe {
+                core::ptr::write_bytes(block as *mut u8, 0, BLOCK_SIZE);
+                (*block).reset_header();
+            }
+            blocks.push(block);
         }
-        block
+        blocks
     }
 
     /// # return_blocks

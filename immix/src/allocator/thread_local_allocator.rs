@@ -12,6 +12,7 @@ use vector_map::VecMap;
 use crate::{
     block::{Block, ObjectType},
     consts::{BLOCK_SIZE, LINE_SIZE},
+    EVA_BLOCK_PROPORTION,
 };
 
 use super::GlobalAllocator;
@@ -35,8 +36,10 @@ pub struct ThreadLocalAllocator {
     global_allocator: *mut GlobalAllocator,
     unavailable_blocks: Vec<*mut Block>,
     recyclable_blocks: Vec<*mut Block>,
+    eva_blocks: Vec<*mut Block>,
     lock: ReentrantMutex<()>,
     cursor: *mut u8,
+    collect_mode: bool,
 }
 
 impl ThreadLocalAllocator {
@@ -54,7 +57,13 @@ impl ThreadLocalAllocator {
             recyclable_blocks: Vec::new(),
             lock: ReentrantMutex::new(()),
             cursor: std::ptr::null_mut(),
+            eva_blocks: Vec::new(),
+            collect_mode: false,
         }
+    }
+
+    pub fn set_collect_mode(&mut self, collect_mode: bool) {
+        self.collect_mode = collect_mode;
     }
 
     pub fn print_stats(&self) {
@@ -267,6 +276,9 @@ impl ThreadLocalAllocator {
     ///
     /// * `*mut Block` - block pointer
     fn get_new_block(&mut self) -> *mut Block {
+        if self.collect_mode && self.eva_blocks.len() > 0 {
+            return self.eva_blocks.pop().unwrap();
+        }
         let block = unsafe { (&mut *self.global_allocator).get_block() };
         block
     }
@@ -313,6 +325,26 @@ impl ThreadLocalAllocator {
         self.recyclable_blocks = recyclable_blocks;
         self.unavailable_blocks = unavailable_blocks;
         self.cursor = cursor;
+        let total_block_num =
+            self.recyclable_blocks.len() + self.unavailable_blocks.len() + self.eva_blocks.len();
+        let head_room_size = (EVA_BLOCK_PROPORTION * total_block_num as f64) as usize;
+        if self.eva_blocks.len() > head_room_size {
+            // 把多的加到free_blocks
+            let over_flow = self.eva_blocks.len() - head_room_size;
+            for _ in 0..over_flow {
+                free_blocks.push(self.eva_blocks.pop().unwrap());
+            }
+        } else {
+            // 尝试把少的从free_blocks取出来
+            let less = head_room_size - self.eva_blocks.len();
+            for _ in 0..less {
+                if let Some(block) = free_blocks.pop() {
+                    self.eva_blocks.push(block);
+                } else {
+                    break;
+                }
+            }
+        }
         unsafe {
             (&mut *self.global_allocator).return_blocks(free_blocks.into_iter());
         }

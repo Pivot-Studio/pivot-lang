@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     sync::atomic::{AtomicPtr, Ordering},
     thread::yield_now,
 };
@@ -29,7 +30,7 @@ use crate::{
 pub struct Collector {
     thread_local_allocator: *mut ThreadLocalAllocator,
     roots: FxHashMap<usize, ObjectType>,
-    // queue: *mut VecDeque<*mut u8>,
+    queue: *mut VecDeque<(*mut u8, ObjectType)>,
     id: usize,
     mark_histogram: *mut VecMap<usize, usize>,
 }
@@ -42,7 +43,8 @@ impl Drop for Collector {
     fn drop(&mut self) {
         unsafe {
             libc::free(self.thread_local_allocator as *mut libc::c_void);
-            // libc::free(self.queue as *mut libc::c_void);
+            libc::free(self.mark_histogram as *mut libc::c_void);
+            libc::free(self.queue as *mut libc::c_void);
             GC_COLLECTOR_COUNT.fetch_sub(1, Ordering::SeqCst);
         }
     }
@@ -62,19 +64,19 @@ impl Collector {
             let mem =
                 malloc(core::mem::size_of::<ThreadLocalAllocator>()).cast::<ThreadLocalAllocator>();
             mem.write(tla);
-            // let queue = VecDeque::new();
-            // let memqueue =
-            //     malloc(core::mem::size_of::<VecDeque<*mut u8>>()).cast::<VecDeque<*mut u8>>();
-            // memqueue.write(queue);
             let memvecmap =
                 malloc(core::mem::size_of::<VecMap<usize, usize>>()).cast::<VecMap<usize, usize>>();
             memvecmap.write(VecMap::with_capacity(NUM_LINES_PER_BLOCK));
+            let queue = VecDeque::new();
+            let memqueue = malloc(core::mem::size_of::<VecDeque<(*mut u8, ObjectType)>>())
+                .cast::<VecDeque<(*mut u8, ObjectType)>>();
+            memqueue.write(queue);
             Self {
                 thread_local_allocator: mem,
                 roots: FxHashMap::default(),
-                // queue: memqueue,
                 id,
                 mark_histogram: memvecmap,
+                queue: memqueue,
             }
         }
     }
@@ -162,7 +164,7 @@ impl Collector {
             let is_candidate = block.is_eva_candidate();
             if !is_candidate {
                 block.marked = true;
-            }else {
+            } else {
                 let (line_header, _) = block.get_line_header_from_addr(ptr);
                 if line_header.get_forwarded() {
                     self.correct_ptr(father);
@@ -177,14 +179,21 @@ impl Collector {
             if is_candidate {
                 let atomic_ptr = ptr as *mut AtomicPtr<u8>;
                 let old_loaded = (*atomic_ptr).load(Ordering::SeqCst);
-                let line_size = line_header.get_obj_line_size(idx, Block::from_obj_ptr(ptr));
-                let new_ptr = self.alloc(line_size * LINE_SIZE, line_header.get_obj_type());
+                let obj_line_size = line_header.get_obj_line_size(idx, Block::from_obj_ptr(ptr));
+                let new_ptr = self.alloc(obj_line_size * LINE_SIZE, line_header.get_obj_type());
                 let new_block = Block::from_obj_ptr(new_ptr);
                 let (new_line_header, _) = new_block.get_line_header_from_addr(new_ptr);
                 // 将数据复制到新的地址
-                core::ptr::copy_nonoverlapping(ptr, new_ptr, line_size * LINE_SIZE);
+                core::ptr::copy_nonoverlapping(ptr, new_ptr, obj_line_size * LINE_SIZE);
                 // core::ptr::copy_nonoverlapping(line_header as * const u8, new_line_header as * mut u8, line_size);
 
+                // 线程安全性说明
+                // 如果cas操作成功，代表没有别的线程与我们同时尝试驱逐这个模块
+                // 如果cas操作失败，代表别的线程已经驱逐了这个模块
+                // 此时虽然我们已经分配了驱逐空间并且将内容写入，但是我们还没有设置line_header的
+                // 标记位，所以这块地址很快会在sweep阶段被识别并且回收利用。
+                // 虽然这造成了一定程度的内存碎片化和潜在的重复操作，但是
+                // 这种情况理论上是很少见的，所以这么做问题不大
                 if let Ok(_) = (*atomic_ptr).compare_exchange_weak(
                     old_loaded,
                     new_ptr,
@@ -209,15 +218,7 @@ impl Collector {
             let obj_type = line_header.get_obj_type();
             match obj_type {
                 ObjectType::Atomic => {}
-                ObjectType::Complex => {
-                    self.mark_complex(ptr);
-                }
-                ObjectType::Trait => {
-                    self.mark_trait(ptr);
-                }
-                ObjectType::Pointer => {
-                    self.mark_ptr(ptr);
-                }
+                _ => (*self.queue).push_back((ptr, obj_type)),
             }
         }
     }
@@ -297,14 +298,23 @@ impl Collector {
             unsafe {
                 match obj_type {
                     ObjectType::Atomic => {}
+                    _ => (*self.queue).push_back((root, *obj_type)),
+                }
+            }
+        }
+        // iterate through queue and mark all reachable objects
+        unsafe {
+            while let Some((obj, obj_type)) = (*self.queue).pop_front() {
+                match obj_type {
+                    ObjectType::Atomic => {}
                     ObjectType::Complex => {
-                        self.mark_complex(root);
+                        self.mark_complex(obj);
                     }
                     ObjectType::Trait => {
-                        self.mark_trait(root);
+                        self.mark_trait(obj);
                     }
                     ObjectType::Pointer => {
-                        self.mark_ptr(root);
+                        self.mark_ptr(obj);
                     }
                 }
             }
@@ -348,6 +358,7 @@ impl Collector {
         // 如果设置的时候别的线程的mark已经开始，那么将无法保证能够纠正所有被驱逐的指针
         unsafe {
             if self.thread_local_allocator.as_mut().unwrap().should_eva() {
+                // 如果需要驱逐，首先计算驱逐阀域
                 let mut eva_threshold = 0;
                 let mut available_histogram: VecMap<usize, usize> =
                     VecMap::with_capacity(NUM_LINES_PER_BLOCK);
@@ -358,11 +369,9 @@ impl Collector {
                     .fill_available_histogram(&mut available_histogram);
                 let mut required_lines = 0;
                 let mark_histogram = &mut *self.mark_histogram;
-                // println!(
-                //     "available_histogram: {:?} mark_histogram: {:?} total_available: {}",
-                //     available_histogram, mark_histogram, available_lines
-                // );
                 for threshold in (0..(NUM_LINES_PER_BLOCK / 2)).rev() {
+                    // 从洞多到洞少遍历，计算剩余空间，直到空间不足
+                    // 此时洞的数量就是驱逐阀域
                     required_lines += *mark_histogram.get(&threshold).unwrap_or(&0);
                     available_lines = available_lines
                         .saturating_sub(*available_histogram.get(&threshold).unwrap_or(&0));
@@ -371,23 +380,23 @@ impl Collector {
                         break;
                     }
                 }
-                // println!("eva_threshold: {}", eva_threshold);
+                // 根据驱逐阀域标记每个block是否是驱逐目标
                 self.thread_local_allocator
                     .as_mut()
                     .unwrap()
                     .set_eva_threshold(eva_threshold);
-                // self.eva_threshold = eva_threshold;
-                // self.eva = true
             }
             (*self.mark_histogram).clear();
         }
         let lock = unsafe { GC_RW_LOCK.raw() };
         spin_until!(lock.try_lock_shared_recursive());
         let time = std::time::Instant::now();
+        // unsafe {self.thread_local_allocator.as_mut().unwrap().set_collect_mode(true);}
         self.mark();
         self.sweep();
         let time = time.elapsed();
         unsafe {
+            // self.thread_local_allocator.as_mut().unwrap().set_collect_mode(false);
             lock.unlock_shared();
         }
         time
@@ -606,6 +615,7 @@ mod tests {
 
     #[test]
     fn test_complecated_single_thread_gc() {
+        // 这个测试和test_complecated_multiple_thread_gc不能同时跑，用了全局变量会相互干扰
         let _lock = THE_RESOURCE.lock();
         TEST_OBJ_QUEUE.lock().clear();
         let re = single_thread(1000);
@@ -636,7 +646,6 @@ mod tests {
         }
         count + 1
     }
-    const STACK_SIZE: usize = 4 * 1024 * 1024;
     #[test]
     fn test_complecated_multiple_thread_gc() {
         let _lock = THE_RESOURCE.lock();
@@ -644,7 +653,6 @@ mod tests {
         let mut handles = vec![];
         for _ in 0..10 {
             let t = std::thread::Builder::new()
-                .stack_size(STACK_SIZE)
                 .spawn(|| {
                     // 睡眠一秒保证所有线程创建
                     sleep(Duration::from_secs(1));

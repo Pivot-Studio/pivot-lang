@@ -201,25 +201,23 @@ impl Block {
     }
 
     /// # correct_header
-    /// 重置block的header
-    /// 1. 根据line_map中存储的mark重置line_map中的used
-    /// 2. 重置first_hole_line_idx
-    /// 3. 重置first_hole_line_len
-    /// 4. 重置marked
+    /// 回收的最后阶段，重置block的header
     pub fn correct_header(&mut self, mark_histogram: *mut VecMap<usize, usize>) {
         let mut idx = 3;
         let mut len = 0;
         let mut first_hole_line_idx = 3;
         let mut first_hole_line_len = 0;
         let mut holes = 1;
+        // 这个marked代表之前是否有被标记的对象头出现
         let mut marked = false;
         let mut marked_num = 0;
         self.available_line_num = 0;
 
         while idx < NUM_LINES_PER_BLOCK {
-            // 未标记
-            if self.line_map[idx] & 0b10 == 0
-                && (!marked || (marked && self.line_map[idx] & 0b10000010 == 0b10000000))
+            // 未使用或者未标记
+            if !self.line_map[idx].get_used()
+                || (self.line_map[idx] & 0b10 == 0 //即使标记位为0，也有可能是被标记的对象数据体
+                    && (!marked || (marked && self.line_map[idx] & 0b10000010 == 0b10000000)))
             {
                 len += 1;
                 self.line_map[idx] &= 0;
