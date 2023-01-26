@@ -1652,7 +1652,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         v: &STType,
         field_tps: &[Arc<RefCell<PLType>>],
     ) {
-        let currentbb = self.builder.get_insert_block();
+        let currentbb = ctx.block;
         self.builder.unset_current_debug_location();
         let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::default());
         let visit_ftp = self
@@ -1738,7 +1738,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         }
         self.builder.build_return(None);
         if let Some(currentbb) = currentbb {
-            self.builder.position_at_end(currentbb);
+            self.builder.position_at_end(self.get_llvm_block(currentbb).unwrap());
         }
     }
 }
