@@ -147,6 +147,7 @@ impl Collector {
         let new_ptr = *(*ptr).load(Ordering::SeqCst);
         let ptr = ptr as *mut *mut u8;
         debug_assert!(!new_ptr.is_null());
+        // println!("correct ptr {:p} to {:p}", ptr, new_ptr);
         *ptr = new_ptr;
     }
 
@@ -161,6 +162,12 @@ impl Collector {
             let is_candidate = block.is_eva_candidate();
             if !is_candidate {
                 block.marked = true;
+            }else {
+                let (line_header, _) = block.get_line_header_from_addr(ptr);
+                if line_header.get_forwarded() {
+                    self.correct_ptr(father);
+                    return;
+                }
             }
             let (line_header, idx) = block.get_line_header_from_addr(ptr);
             if line_header.get_marked() {
@@ -170,10 +177,6 @@ impl Collector {
             if is_candidate {
                 let atomic_ptr = ptr as *mut AtomicPtr<u8>;
                 let old_loaded = (*atomic_ptr).load(Ordering::SeqCst);
-                if line_header.get_forwarded() {
-                    self.correct_ptr(father);
-                    return;
-                }
                 let line_size = line_header.get_obj_line_size(idx, Block::from_obj_ptr(ptr));
                 let new_ptr = self.alloc(line_size * LINE_SIZE, line_header.get_obj_type());
                 let new_block = Block::from_obj_ptr(new_ptr);
@@ -189,7 +192,7 @@ impl Collector {
                     Ordering::SeqCst,
                 ) {
                     // 成功驱逐
-                    // println!("{}: eva {} to {}", self.id, ptr as usize, new_ptr as usize);
+                    // println!("gc {}: eva {:p} to {:p}", self.id, ptr, new_ptr);
                     new_line_header.set_marked(true);
                     line_header.set_forwarded(true);
                     new_block.marked = true;
@@ -393,9 +396,12 @@ impl Collector {
 
 #[cfg(test)]
 mod tests {
-    use std::mem::size_of;
+    use std::{mem::size_of, thread::sleep, time::Duration};
 
+    use lazy_static::lazy_static;
+    use parking_lot::Mutex;
     use rand::random;
+    use rustc_hash::FxHashSet;
 
     use crate::SPACE;
 
@@ -498,12 +504,32 @@ mod tests {
         a
     }
 
-    #[test]
-    fn test_complecated_single_thread_gc() {
+    lazy_static! {
+        static ref TEST_OBJ_QUEUE: Mutex<Vec<TestObjWrap>> = Mutex::new(vec![]);
+    }
+    #[derive(Debug, PartialEq, Eq, Hash)]
+    struct TestObjWrap(*mut *mut GCTestObj);
+
+    unsafe impl Send for TestObjWrap {}
+    unsafe impl Sync for TestObjWrap {}
+
+    struct SingleThreadResult {
+        size1: usize,
+        expect_size1: usize,
+        size2: usize,
+        expect_size2: usize,
+        size3: usize,
+        expect_size3: usize,
+        expect_objs: usize,
+        set: FxHashSet<TestObjWrap>,
+    }
+
+    fn single_thread(obj_num: usize) -> SingleThreadResult {
         SPACE.with(|gc| unsafe {
             let mut gc = gc.borrow_mut();
             println!("thread1 gcid = {}", gc.get_id());
             let mut first_obj = alloc_test_obj(&mut gc);
+            println!("first_obj = {:p}", first_obj);
             let rustptr = (&mut first_obj) as *mut *mut GCTestObj as *mut u8;
             println!(
                 "gcid = {} rustptr point to {:p}",
@@ -511,64 +537,144 @@ mod tests {
                 *(rustptr as *mut *mut GCTestObj)
             );
             let mut live_obj = 1;
-            let mut unused_objs = vec![&mut (*first_obj).b, &mut (*first_obj).e];
-            for _ in 0..1000 {
+            TEST_OBJ_QUEUE
+                .lock()
+                .push(TestObjWrap(&mut (*first_obj).b as *mut *mut GCTestObj));
+            TEST_OBJ_QUEUE
+                .lock()
+                .push(TestObjWrap(&mut (*first_obj).e as *mut *mut GCTestObj));
+            // let mut unused_objs = vec![&mut (*first_obj).b, &mut (*first_obj).e];
+            let mut has_loop = false;
+            for _ in 0..obj_num {
                 let obj = alloc_test_obj(&mut gc);
                 if random() {
                     live_obj += 1;
-                    let father_ptr = unused_objs.pop().unwrap();
+                    let father_ptr = TEST_OBJ_QUEUE.lock().pop().unwrap().0;
                     *father_ptr = obj;
-                    unused_objs.push(&mut (*obj).b);
-                    unused_objs.push(&mut (*obj).e);
+                    if random() && random() && !has_loop {
+                        // 循环引用
+                        (*obj).b = first_obj;
+                        println!("live_obj = {} has loop", live_obj);
+                        has_loop = true;
+                    } else {
+                        TEST_OBJ_QUEUE
+                            .lock()
+                            .push(TestObjWrap(&mut (*obj).b as *mut *mut GCTestObj));
+                    }
+                    TEST_OBJ_QUEUE
+                        .lock()
+                        .push(TestObjWrap(&mut (*obj).e as *mut *mut GCTestObj));
                 }
             }
             gc.add_root(rustptr, ObjectType::Pointer);
             let size1 = gc.get_size();
-            assert_eq!(size1, 1001 * LINE_SIZE_OBJ);
+            // assert_eq!(size1, 1001 * LINE_SIZE_OBJ);
             let time = std::time::Instant::now();
             gc.collect();
             println!("gc{} gc time = {:?}", gc.get_id(), time.elapsed());
             let size2 = gc.get_size();
-            assert_eq!(live_obj * LINE_SIZE_OBJ, size2);
+            // assert_eq!(live_obj * LINE_SIZE_OBJ, size2);
             gc.collect();
             let size3 = gc.get_size();
-            assert_eq!(size2, size3);
+            // assert_eq!(size2, size3);
             let first_obj = *(rustptr as *mut *mut GCTestObj);
-            let objs = walk_obj(first_obj);
-            assert_eq!(objs, live_obj);
+            println!("new first_obj = {:p}", first_obj);
+            let mut set = FxHashSet::default();
+            let objs = walk_obj(first_obj, &mut set);
+            // assert_eq!(objs, live_obj);
+            assert_eq!(objs, set.len());
             gc.remove_root(rustptr);
             gc.collect();
-            let size3 = gc.get_size();
-            assert_eq!(size3, 0);
-        });
+            let size4 = gc.get_size();
+            assert_eq!(size4, 0);
+            SingleThreadResult {
+                size1,
+                expect_size1: (obj_num + 1) * LINE_SIZE_OBJ,
+                size2,
+                expect_size2: live_obj * LINE_SIZE_OBJ,
+                size3,
+                expect_size3: size2,
+                set,
+                expect_objs: live_obj,
+            }
+        })
     }
 
-    fn walk_obj(obj: *mut GCTestObj) -> usize {
+    lazy_static! {
+        static ref THE_RESOURCE: Mutex<()> = Mutex::new(());
+    }
+
+    #[test]
+    fn test_complecated_single_thread_gc() {
+        let _lock = THE_RESOURCE.lock();
+        TEST_OBJ_QUEUE.lock().clear();
+        let re = single_thread(1000);
+        assert_eq!(re.size1, re.expect_size1);
+        assert_eq!(re.size2, re.expect_size2);
+        assert_eq!(re.size3, re.expect_size3);
+        assert_eq!(re.set.len(), re.expect_objs);
+    }
+
+    fn walk_obj(obj: *mut GCTestObj, set: &mut FxHashSet<TestObjWrap>) -> usize {
         unsafe {
             let b = Block::from_obj_ptr(obj as *mut u8);
             let (h, _) = b.get_line_header_from_addr(obj as *mut u8);
             assert!(h.get_used());
         }
+        if set.contains(&TestObjWrap(obj as *mut *mut GCTestObj)) {
+            return 0;
+        }
         let mut count = 0;
+        set.insert(TestObjWrap(obj as *mut *mut GCTestObj));
         unsafe {
             if !(*obj).b.is_null() {
-                count += walk_obj((*obj).b);
+                count += walk_obj((*obj).b, set);
             }
             if !(*obj).e.is_null() {
-                count += walk_obj((*obj).e);
+                count += walk_obj((*obj).e, set);
             }
         }
         count + 1
     }
+    const STACK_SIZE: usize = 4 * 1024 * 1024;
     #[test]
     fn test_complecated_multiple_thread_gc() {
+        let _lock = THE_RESOURCE.lock();
+        TEST_OBJ_QUEUE.lock().clear();
         let mut handles = vec![];
         for _ in 0..10 {
-            let t = std::thread::spawn(|| test_complecated_single_thread_gc());
+            let t = std::thread::Builder::new()
+                .stack_size(STACK_SIZE)
+                .spawn(|| {
+                    // 睡眠一秒保证所有线程创建
+                    sleep(Duration::from_secs(1));
+                    single_thread(1000)
+                })
+                .unwrap();
             handles.push(t);
         }
+        let mut total_size1 = 0;
+        let mut total_target_size1 = 0;
+        let mut total_size2 = 0;
+        let mut total_target_size2 = 0;
+        let mut total_size3 = 0;
+        let mut total_target_size3 = 0;
+        let mut total_target_objs = 0;
+        let mut set = FxHashSet::default();
         for h in handles {
-            h.join().unwrap();
+            let re = h.join().unwrap();
+            total_size1 += re.size1;
+            total_target_size1 += re.expect_size1;
+            total_size2 += re.size2;
+            total_target_size2 += re.expect_size2;
+            total_size3 += re.size3;
+            total_target_size3 += re.expect_size3;
+            set.extend(re.set);
+            total_target_objs += re.expect_objs;
         }
+        assert_eq!(total_size1, total_target_size1);
+        assert_eq!(total_size2, total_target_size2);
+        assert_eq!(total_size3, total_target_size3);
+        assert_eq!(set.len(), total_target_objs);
     }
 }

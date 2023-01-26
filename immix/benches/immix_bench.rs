@@ -12,7 +12,7 @@ fn bench_n_threads(n: usize) -> impl Fn(&mut Criterion) {
     move |c: &mut Criterion| {
         c.bench_function(
             &format!(
-                "multithreads({}) gc benchmark--{} small objects",
+                "multithreads({}) gc benchmark--{} small objects(per thread)",
                 n, OBJ_NUM
             ),
             |b| {
