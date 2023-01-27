@@ -83,9 +83,9 @@ mod _unix {
                     -1,
                     0,
                 );
-                libc::madvise(map, size, libc::MADV_SEQUENTIAL);
+                let code = libc::madvise(map, size, libc::MADV_SEQUENTIAL);
                 if map == libc::MAP_FAILED {
-                    panic!("mmap failed");
+                    panic!("mmap failed, code: {}", code);
                 }
                 Self {
                     start: map as *mut u8,

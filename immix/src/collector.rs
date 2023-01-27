@@ -1,5 +1,6 @@
 use std::{
     collections::VecDeque,
+    ptr::drop_in_place,
     sync::atomic::{AtomicPtr, Ordering},
     thread::yield_now,
 };
@@ -42,6 +43,7 @@ pub type VtableFunc = fn(*mut u8, &Collector, VisitFunc, VisitFunc, VisitFunc);
 impl Drop for Collector {
     fn drop(&mut self) {
         unsafe {
+            drop_in_place(self.thread_local_allocator);
             libc::free(self.thread_local_allocator as *mut libc::c_void);
             libc::free(self.mark_histogram as *mut libc::c_void);
             libc::free(self.queue as *mut libc::c_void);

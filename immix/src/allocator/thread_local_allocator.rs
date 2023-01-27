@@ -42,6 +42,18 @@ pub struct ThreadLocalAllocator {
     collect_mode: bool,
 }
 
+impl Drop for ThreadLocalAllocator {
+    fn drop(&mut self) {
+        let global_allocator = unsafe { &mut *self.global_allocator };
+        global_allocator.return_blocks(
+            self.unavailable_blocks
+                .drain(..)
+                .chain(self.recyclable_blocks.drain(..))
+                .chain(self.eva_blocks.drain(..)),
+        );
+    }
+}
+
 impl ThreadLocalAllocator {
     /// # new
     ///
