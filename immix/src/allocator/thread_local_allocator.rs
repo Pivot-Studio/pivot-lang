@@ -124,6 +124,14 @@ impl ThreadLocalAllocator {
             .for_each(|block| unsafe { (**block).set_eva_threshold(threshold) });
     }
 
+
+    pub fn reset_line_maps(&mut self) {
+        self.recyclable_blocks
+            .iter()
+            .chain(self.unavailable_blocks.iter())
+            .for_each(|block| unsafe { (**block).reset_line_map() });
+    }
+
     /// # get_size
     ///
     /// Get the size of allocated space.
@@ -170,8 +178,7 @@ impl ThreadLocalAllocator {
             let block = self.get_new_block();
             self.cursor = unsafe { (*block).get_nth_line(3) };
             unsafe {
-                let (s, _, nxt) = (*block).alloc(size, self.cursor, obj_type).unwrap();
-                let re = (*block).get_nth_line(s as usize);
+                let (re,  nxt) = (*block).alloc(size, self.cursor, obj_type).unwrap();
                 nxt.or_else(|| {
                     self.cursor = std::ptr::null_mut();
                     self.unavailable_blocks.push(block);
@@ -207,8 +214,7 @@ impl ThreadLocalAllocator {
             // mid size object alloc failed, try to overflow_alloc
             return self.overflow_alloc(size, obj_type);
         }
-        let (s, _, nxt) = res.unwrap();
-        let re = unsafe { (**f).get_nth_line(s as usize) };
+        let (re,  nxt) = res.unwrap();
         nxt.or_else(|| {
             // 当前block被用完，将它从recyclable blocks中移除，加入unavailable blocks
             let used_block = self.recyclable_blocks.pop_front().unwrap();
@@ -249,12 +255,11 @@ impl ThreadLocalAllocator {
         // 获取新block
         let new_block = self.get_new_block();
         // alloc
-        let (s, _, nxt) = unsafe {
+        let (re, nxt) = unsafe {
             (*new_block)
                 .alloc(size, (*new_block).get_nth_line(3), obj_type)
                 .unwrap()
         };
-        let re = unsafe { (*new_block).get_nth_line(s as usize) };
         nxt.or_else(|| {
             // new_block被用完，将它加入unavailable blocks
             self.unavailable_blocks.push(new_block);

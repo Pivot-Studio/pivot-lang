@@ -13,7 +13,10 @@ mod collector;
 mod consts;
 mod macros;
 mod mmap;
+mod object;
 
+
+pub use object::*;
 pub use allocator::*;
 pub use block::*;
 pub use collector::*;

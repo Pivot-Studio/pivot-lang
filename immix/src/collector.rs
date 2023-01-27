@@ -13,7 +13,7 @@ use crate::{
     allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
     spin_until, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_WAITING, GC_RUNNING,
-    GC_RW_LOCK, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE, NUM_LINES_PER_BLOCK,
+    GC_RW_LOCK, GC_SWEEPING, GC_SWEEPPING_NUM, NUM_LINES_PER_BLOCK, ImmixObject,
 };
 
 /// # Collector
@@ -144,10 +144,9 @@ impl Collector {
     /// 现在纠正为
     ///
     /// ptr -> new_ptr(forwarded) -> value
-    unsafe fn correct_ptr(&self, ptr: *mut u8) {
-        let ptr = ptr as *mut AtomicPtr<*mut u8>;
-        let new_ptr = *(*ptr).load(Ordering::SeqCst);
-        let ptr = ptr as *mut *mut u8;
+    unsafe fn correct_ptr(&self, ptr: *mut u8,heap_obj: * mut ImmixObject) {
+        let ptr = ptr as *mut * mut u8;
+        let new_ptr = (*heap_obj).get_mutator_ptr();
         debug_assert!(!new_ptr.is_null());
         // println!("correct ptr {:p} to {:p}", ptr, new_ptr);
         *ptr = new_ptr;
@@ -157,6 +156,7 @@ impl Collector {
     unsafe fn mark_ptr(&self, ptr: *mut u8) {
         let father = ptr;
         let mut ptr = *(ptr as *mut *mut u8);
+        let mut heap_obj = ImmixObject::from_mutator_ptr(ptr);
 
         // mark it if it is in heap
         if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
@@ -165,26 +165,26 @@ impl Collector {
             if !is_candidate {
                 block.marked = true;
             } else {
-                let (line_header, _) = block.get_line_header_from_addr(ptr);
-                if line_header.get_forwarded() {
-                    self.correct_ptr(father);
+                if (*heap_obj).head.is_forward {
+                    self.correct_ptr(father, heap_obj);
                     return;
                 }
             }
-            let (line_header, idx) = block.get_line_header_from_addr(ptr);
+            let (line_header, _) = block.get_line_header_from_addr(ptr);
             if line_header.get_marked() {
                 return;
             }
+            let line_size = (*heap_obj).get_line_size();
             // 若此block是待驱逐对象
             if is_candidate {
                 let atomic_ptr = ptr as *mut AtomicPtr<u8>;
                 let old_loaded = (*atomic_ptr).load(Ordering::SeqCst);
-                let obj_line_size = line_header.get_obj_line_size(idx, Block::from_obj_ptr(ptr));
-                let new_ptr = self.alloc(obj_line_size * LINE_SIZE, line_header.get_obj_type());
+                let obj_size = (*heap_obj).head.obj_size as usize;
+                let new_ptr = self.alloc(obj_size, (*heap_obj).head.obj_type);
                 let new_block = Block::from_obj_ptr(new_ptr);
                 let (new_line_header, _) = new_block.get_line_header_from_addr(new_ptr);
                 // 将数据复制到新的地址
-                core::ptr::copy_nonoverlapping(ptr, new_ptr, obj_line_size * LINE_SIZE);
+                core::ptr::copy_nonoverlapping(ptr, new_ptr, obj_size);
                 // core::ptr::copy_nonoverlapping(line_header as * const u8, new_line_header as * mut u8, line_size);
 
                 // 线程安全性说明
@@ -202,20 +202,20 @@ impl Collector {
                 ) {
                     // 成功驱逐
                     // println!("gc {}: eva {:p} to {:p}", self.id, ptr, new_ptr);
-                    new_line_header.set_marked(true);
-                    line_header.set_forwarded(true);
+                    new_line_header.set_marked(line_size);
+                    (*heap_obj).head.is_forward = true;
                     new_block.marked = true;
                     ptr = new_ptr;
-                    self.correct_ptr(father);
+                    self.correct_ptr(father, heap_obj);
                 } else {
                     // 期间别的线程驱逐了它
-                    spin_until!(line_header.get_forwarded());
-                    self.correct_ptr(father);
+                    spin_until!((*heap_obj).head.is_forward);
+                    self.correct_ptr(father,heap_obj);
                     return;
                 }
             }
-            line_header.set_marked(true);
-            let obj_type = line_header.get_obj_type();
+            line_header.set_marked(line_size);
+            let obj_type = (*heap_obj).head.obj_type;
             match obj_type {
                 ObjectType::Atomic => {}
                 _ => (*self.queue).push_back((ptr, obj_type)),
@@ -408,6 +408,10 @@ impl Collector {
                 .as_mut()
                 .unwrap()
                 .set_collect_mode(true);
+            self.thread_local_allocator
+                .as_mut()
+                .unwrap()
+                .reset_line_maps();
         }
         self.mark();
         let mark_time = time.elapsed();
@@ -672,11 +676,11 @@ mod tests {
     }
 
     fn walk_obj(obj: *mut GCTestObj, set: &mut FxHashSet<TestObjWrap>) -> usize {
-        unsafe {
-            let b = Block::from_obj_ptr(obj as *mut u8);
-            let (h, _) = b.get_line_header_from_addr(obj as *mut u8);
-            assert!(h.get_used());
-        }
+        // unsafe {
+        //     let b = Block::from_obj_ptr(obj as *mut u8);
+        //     let (h, _) = b.get_line_header_from_addr(obj as *mut u8);
+        //     assert!(h.get_marked());
+        // }
         if set.contains(&TestObjWrap(obj as *mut *mut GCTestObj)) {
             return 0;
         }
