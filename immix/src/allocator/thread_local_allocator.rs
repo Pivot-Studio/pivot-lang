@@ -6,7 +6,8 @@
 //!
 //! When a thread-local allocator is dropped, it will return all blocks to global allocator.
 
-use parking_lot::ReentrantMutex;
+use std::collections::VecDeque;
+
 use vector_map::VecMap;
 
 use crate::{
@@ -35,9 +36,8 @@ use super::GlobalAllocator;
 pub struct ThreadLocalAllocator {
     global_allocator: *mut GlobalAllocator,
     unavailable_blocks: Vec<*mut Block>,
-    recyclable_blocks: Vec<*mut Block>,
+    recyclable_blocks: VecDeque<*mut Block>,
     eva_blocks: Vec<*mut Block>,
-    lock: ReentrantMutex<()>,
     cursor: *mut u8,
     collect_mode: bool,
 }
@@ -54,8 +54,7 @@ impl ThreadLocalAllocator {
         Self {
             global_allocator,
             unavailable_blocks: Vec::new(),
-            recyclable_blocks: Vec::new(),
-            lock: ReentrantMutex::new(()),
+            recyclable_blocks: VecDeque::new(),
             cursor: std::ptr::null_mut(),
             eva_blocks: Vec::new(),
             collect_mode: false,
@@ -78,6 +77,19 @@ impl ThreadLocalAllocator {
             unsafe {
                 (**block).show();
             }
+        }
+    }
+
+    pub fn iter<F>(&self, mut f: F)
+    where
+        F: FnMut(*mut u8),
+    {
+        for &b in self
+            .unavailable_blocks
+            .iter()
+            .chain(self.recyclable_blocks.iter())
+        {
+            unsafe { (*b).iter(&mut f) }
         }
     }
 
@@ -162,22 +174,23 @@ impl ThreadLocalAllocator {
                 let re = (*block).get_nth_line(s as usize);
                 nxt.or_else(|| {
                     self.cursor = std::ptr::null_mut();
+                    self.unavailable_blocks.push(block);
                     None
                 })
                 .and_then(|n| {
                     self.cursor = n;
-                    self.recyclable_blocks.push(block);
+                    self.recyclable_blocks.push_back(block);
                     None::<()>
                 });
                 return re;
             }
         }
-        let mut f = self.recyclable_blocks.first().unwrap();
+        let mut f = self.recyclable_blocks.front().unwrap();
         unsafe {
             while (**f).is_eva_candidate() {
-                let uf = self.recyclable_blocks.pop().unwrap();
+                let uf = self.recyclable_blocks.pop_front().unwrap();
                 self.unavailable_blocks.push(uf);
-                let ff = self.recyclable_blocks.first();
+                let ff = self.recyclable_blocks.front();
                 if ff.is_none() {
                     // recycle blocks全用光了
                     self.cursor = std::ptr::null_mut();
@@ -189,6 +202,7 @@ impl ThreadLocalAllocator {
             }
         }
         let res = unsafe { (**f).alloc(size, self.cursor, obj_type) };
+        // return std::ptr::null_mut();
         if res.is_none() && size > LINE_SIZE {
             // mid size object alloc failed, try to overflow_alloc
             return self.overflow_alloc(size, obj_type);
@@ -197,11 +211,11 @@ impl ThreadLocalAllocator {
         let re = unsafe { (**f).get_nth_line(s as usize) };
         nxt.or_else(|| {
             // 当前block被用完，将它从recyclable blocks中移除，加入unavailable blocks
-            let used_block = self.recyclable_blocks.pop().unwrap();
+            let used_block = self.recyclable_blocks.pop_front().unwrap();
             self.unavailable_blocks.push(used_block);
             // 如果还有recyclable_blocks 则指向下一个block的第一个可用line
             self.recyclable_blocks
-                .first()
+                .front()
                 .and_then(|b| {
                     self.cursor =
                         unsafe { (**b).get_nth_line((**b).find_first_hole().unwrap().0 as usize) };
@@ -248,7 +262,10 @@ impl ThreadLocalAllocator {
         })
         .and_then(|_| {
             // new_block未被用完，将它加入recyclable blocks
-            self.recyclable_blocks.push(new_block);
+            unsafe {
+                debug_assert!((*new_block).find_first_hole().is_some());
+            }
+            self.recyclable_blocks.push_back(new_block);
             None::<()>
         });
         re
@@ -294,29 +311,35 @@ impl ThreadLocalAllocator {
     /// Correct all remain blocks' headers, and classify them
     /// into recyclable blocks and unavailable blocks.
     pub fn sweep(&mut self, mark_histogram: *mut VecMap<usize, usize>) {
-        let _lock = self.lock.lock();
-        let mut recyclable_blocks = Vec::new();
+        let mut recyclable_blocks = VecDeque::new();
         let mut unavailable_blocks = Vec::new();
         let mut free_blocks = Vec::new();
         let mut cursor = std::ptr::null_mut::<u8>();
         unsafe {
-            for block in self.recyclable_blocks.iter() {
+            for block in self
+                .recyclable_blocks
+                .iter()
+                .chain(self.unavailable_blocks.iter())
+            {
                 let block = *block;
                 if (*block).marked {
                     (*block).correct_header(mark_histogram);
-                    recyclable_blocks.push(block);
-                    if cursor.is_null() {
-                        cursor = (*block).get_nth_line(3);
+                    let (line, hole) = (*block).get_available_line_num_and_holes();
+                    if line > 0 {
+                        debug_assert!(
+                            (*block).find_first_hole().is_some(),
+                            "line {}, hole {}",
+                            line,
+                            hole
+                        );
+                        recyclable_blocks.push_back(block);
+                        if cursor.is_null() {
+                            cursor = (*block)
+                                .get_nth_line((*block).find_first_hole().unwrap().0 as usize);
+                        }
+                    } else {
+                        unavailable_blocks.push(block);
                     }
-                } else {
-                    free_blocks.push(block);
-                }
-            }
-            for block in self.unavailable_blocks.iter() {
-                let block = *block;
-                if (*block).marked {
-                    (*block).correct_header(mark_histogram);
-                    unavailable_blocks.push(block);
                 } else {
                     free_blocks.push(block);
                 }

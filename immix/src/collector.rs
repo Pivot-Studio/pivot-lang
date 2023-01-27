@@ -12,8 +12,8 @@ use vector_map::VecMap;
 use crate::{
     allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
-    spin_until, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_WAITING, GC_RUNNING, GC_RW_LOCK,
-    GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE, NUM_LINES_PER_BLOCK,
+    spin_until, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_WAITING, GC_RUNNING,
+    GC_RW_LOCK, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE, NUM_LINES_PER_BLOCK,
 };
 
 /// # Collector
@@ -235,6 +235,9 @@ impl Collector {
         // let ptr = vtable as *mut u8;
         let v = vtable as i64;
         // println!("vtable: {:?}, ptr : {:p}", v, ptr);
+        // let a = *(ptr as *mut *mut u8);
+        // println!("a: {:p}", a);
+        // println!("vtable: {:?}, ptr : {:p}", v, ptr);
         // 我不知道为什么，vtable为0的情况，这里如果写v == 0，进不去这个if。应该是rust的一个bug
         if v < 1 && v > -1 {
             return;
@@ -264,6 +267,15 @@ impl Collector {
     }
     pub fn get_id(&self) -> usize {
         self.id
+    }
+
+    pub fn iter<F>(&self, f: F)
+    where
+        F: FnMut(*mut u8),
+    {
+        unsafe {
+            self.thread_local_allocator.as_ref().unwrap().iter(f);
+        }
     }
 
     /// # mark
@@ -351,13 +363,13 @@ impl Collector {
 
     /// # collect
     /// Collect garbage.
-    pub fn collect(&mut self) -> std::time::Duration {
+    pub fn collect(&mut self) -> (std::time::Duration, std::time::Duration) {
         // evacuation pre process
         // 这个过程要在完成safepoint同步之前完成，因为在驱逐的情况下
         // 他要设置每个block是否是驱逐目标
         // 如果设置的时候别的线程的mark已经开始，那么将无法保证能够纠正所有被驱逐的指针
         unsafe {
-            if self.thread_local_allocator.as_mut().unwrap().should_eva() {
+            if ENABLE_EVA && self.thread_local_allocator.as_mut().unwrap().should_eva() {
                 // 如果需要驱逐，首先计算驱逐阀域
                 let mut eva_threshold = 0;
                 let mut available_histogram: VecMap<usize, usize> =
@@ -391,15 +403,24 @@ impl Collector {
         let lock = unsafe { GC_RW_LOCK.raw() };
         spin_until!(lock.try_lock_shared_recursive());
         let time = std::time::Instant::now();
-        // unsafe {self.thread_local_allocator.as_mut().unwrap().set_collect_mode(true);}
-        self.mark();
-        self.sweep();
-        let time = time.elapsed();
         unsafe {
-            // self.thread_local_allocator.as_mut().unwrap().set_collect_mode(false);
+            self.thread_local_allocator
+                .as_mut()
+                .unwrap()
+                .set_collect_mode(true);
+        }
+        self.mark();
+        let mark_time = time.elapsed();
+        self.sweep();
+        let sweep_time = time.elapsed() - mark_time;
+        unsafe {
+            self.thread_local_allocator
+                .as_mut()
+                .unwrap()
+                .set_collect_mode(false);
             lock.unlock_shared();
         }
-        time
+        (mark_time, sweep_time)
     }
 }
 
@@ -416,13 +437,14 @@ mod tests {
 
     use super::*;
 
-    const LINE_SIZE_OBJ: usize = 2;
+    const LINE_SIZE_OBJ: usize = 1;
 
+    #[repr(C)]
     struct GCTestObj {
         _vtable: VtableFunc,
         b: *mut GCTestObj,
         c: u64,
-        _arr: [u8; 128],
+        // _arr: [u8; 128],
         d: *mut u64,
         e: *mut GCTestObj,
     }
@@ -442,6 +464,7 @@ mod tests {
     }
     #[test]
     fn test_basic_multiple_thread_gc() {
+        let _lock = THE_RESOURCE.lock();
         let mut handles = vec![];
         for _ in 0..10 {
             let t = std::thread::spawn(|| {
@@ -531,12 +554,15 @@ mod tests {
         expect_size3: usize,
         expect_objs: usize,
         set: FxHashSet<TestObjWrap>,
+        set2: FxHashSet<TestObjWrap>,
     }
 
     fn single_thread(obj_num: usize) -> SingleThreadResult {
         SPACE.with(|gc| unsafe {
+            // 睡眠一秒保证所有线程创建
             let mut gc = gc.borrow_mut();
             println!("thread1 gcid = {}", gc.get_id());
+            sleep(Duration::from_secs(1));
             let mut first_obj = alloc_test_obj(&mut gc);
             println!("first_obj = {:p}", first_obj);
             let rustptr = (&mut first_obj) as *mut *mut GCTestObj as *mut u8;
@@ -577,15 +603,31 @@ mod tests {
             }
             gc.add_root(rustptr, ObjectType::Pointer);
             let size1 = gc.get_size();
+
+            let mut set2 = FxHashSet::default();
+            let mut ii = 0;
+            gc.iter(|ptr| {
+                ii += 1;
+                // if set2.contains(&TestObjWrap(ptr as *mut *mut GCTestObj)) {
+                //     panic!("repeat ptr = {:p}", ptr);
+                // }
+                set2.insert(TestObjWrap(
+                    Block::from_obj_ptr(ptr) as *mut Block as *mut *mut GCTestObj
+                ));
+            });
+            println!("gc{} itered ", gc.get_id());
+
             // assert_eq!(size1, 1001 * LINE_SIZE_OBJ);
             let time = std::time::Instant::now();
             gc.collect();
             println!("gc{} gc time = {:?}", gc.get_id(), time.elapsed());
             let size2 = gc.get_size();
+
             // assert_eq!(live_obj * LINE_SIZE_OBJ, size2);
             gc.collect();
             let size3 = gc.get_size();
-            // assert_eq!(size2, size3);
+            // assert_eq!(ii, size3);
+            // assert_eq!(set2.len(), size3);
             let first_obj = *(rustptr as *mut *mut GCTestObj);
             println!("new first_obj = {:p}", first_obj);
             let mut set = FxHashSet::default();
@@ -594,6 +636,7 @@ mod tests {
             assert_eq!(objs, set.len());
             gc.remove_root(rustptr);
             gc.collect();
+
             let size4 = gc.get_size();
             assert_eq!(size4, 0);
             SingleThreadResult {
@@ -605,11 +648,13 @@ mod tests {
                 expect_size3: size2,
                 set,
                 expect_objs: live_obj,
+                set2,
             }
         })
     }
 
     lazy_static! {
+        /// gc测试不能并发啊进行，需要加锁
         static ref THE_RESOURCE: Mutex<()> = Mutex::new(());
     }
 
@@ -621,6 +666,7 @@ mod tests {
         let re = single_thread(1000);
         assert_eq!(re.size1, re.expect_size1);
         assert_eq!(re.size2, re.expect_size2);
+        assert_eq!(re.size3, re.size2);
         assert_eq!(re.size3, re.expect_size3);
         assert_eq!(re.set.len(), re.expect_objs);
     }
@@ -653,11 +699,7 @@ mod tests {
         let mut handles = vec![];
         for _ in 0..10 {
             let t = std::thread::Builder::new()
-                .spawn(|| {
-                    // 睡眠一秒保证所有线程创建
-                    sleep(Duration::from_secs(1));
-                    single_thread(1000)
-                })
+                .spawn(|| single_thread(1000))
                 .unwrap();
             handles.push(t);
         }
@@ -669,8 +711,9 @@ mod tests {
         let mut total_target_size3 = 0;
         let mut total_target_objs = 0;
         let mut set = FxHashSet::default();
+        let mut set2 = FxHashSet::default();
         for h in handles {
-            let re = h.join().unwrap();
+            let mut re = h.join().unwrap();
             total_size1 += re.size1;
             total_target_size1 += re.expect_size1;
             total_size2 += re.size2;
@@ -678,11 +721,25 @@ mod tests {
             total_size3 += re.size3;
             total_target_size3 += re.expect_size3;
             set.extend(re.set);
+            for s in re.set2.drain().into_iter() {
+                if set2.contains(&s) {
+                    println!("repeat ptr = {:p}", s.0);
+                }
+                set2.insert(s);
+            }
             total_target_objs += re.expect_objs;
         }
         assert_eq!(total_size1, total_target_size1);
         assert_eq!(total_size2, total_target_size2);
+        assert_eq!(total_size3, total_size2);
         assert_eq!(total_size3, total_target_size3);
+        for k in set2.iter() {
+            if !set.contains(k) {
+                println!("set2 not in set {:p}", k.0);
+            }
+        }
+        println!("set2 len {}", set2.len());
+        println!("size2 {} size3 {}", total_size2, total_size3);
         assert_eq!(set.len(), total_target_objs);
     }
 }

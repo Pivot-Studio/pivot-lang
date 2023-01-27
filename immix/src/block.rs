@@ -64,18 +64,19 @@ pub struct Block {
 }
 
 impl LineHeaderExt for LineHeader {
+    #[inline]
     fn get_used(&self) -> bool {
         self & 0b1 == 0b1
     }
-
+    #[inline]
     fn get_marked(&self) -> bool {
         self & 0b10 == 0b10
     }
-
+    #[inline]
     fn get_obj_type(&self) -> ObjectType {
         ObjectType::from_int((self >> 2) & 0b11).expect("invalid object type")
     }
-
+    #[inline]
     fn set_used(&mut self, used: bool) {
         if used {
             *self |= 0b1;
@@ -83,7 +84,7 @@ impl LineHeaderExt for LineHeader {
             *self &= !0b1;
         }
     }
-
+    #[inline]
     fn set_forwarded(&mut self, forwarded: bool) {
         let atom_self = self as *mut u8 as *mut AtomicU8;
         unsafe {
@@ -96,7 +97,7 @@ impl LineHeaderExt for LineHeader {
             (*atom_self).store(forwarded, Ordering::Release);
         }
     }
-
+    #[inline]
     fn get_forwarded(&self) -> bool {
         let atom_self = self as *const u8 as *const AtomicU8;
         unsafe { (*atom_self).load(Ordering::Acquire) & 0b1000000 == 0b1000000 }
@@ -107,6 +108,7 @@ impl LineHeaderExt for LineHeader {
     /// 设置marked
     ///
     /// 如果一个对象占用多行，只有起始行会被标记
+    #[inline]
     fn set_marked(&mut self, marked: bool) {
         debug_assert!(*self & 0b10000000 != 0);
         if marked {
@@ -115,7 +117,7 @@ impl LineHeaderExt for LineHeader {
             *self &= !0b10;
         }
     }
-
+    #[inline]
     fn get_obj_line_size(&self, idx: usize, block: &mut Block) -> usize {
         // 自己必须是head
         debug_assert!(*self & 0b10000000 != 0);
@@ -130,11 +132,12 @@ impl LineHeaderExt for LineHeader {
         }
         line_size
     }
-
+    #[inline]
     fn set_obj_type(&mut self, obj_type: ObjectType) {
-        *self &= !0b110;
+        // *self &= !0b110;
         *self |= (obj_type as u8) << 2;
     }
+    #[inline]
     fn set_is_head(&mut self, is_head: bool) {
         if is_head {
             *self |= 0b10000000;
@@ -142,6 +145,7 @@ impl LineHeaderExt for LineHeader {
             *self &= !0b10000000;
         }
     }
+    #[inline]
     fn get_is_used_follow(&self) -> bool {
         self & 0b10000001 == 0b00000001
     }
@@ -185,11 +189,23 @@ impl Block {
 
     /// return the used size of the block
     pub fn get_size(&self) -> usize {
-        self.line_map[0..NUM_LINES_PER_BLOCK]
+        self.line_map[3..NUM_LINES_PER_BLOCK]
             .iter()
             .filter(|&&x| x & 1 == 1)
             .map(|_| 1)
             .sum::<usize>()
+    }
+
+    pub fn iter<F>(&mut self, mut f: F)
+    where
+        F: FnMut(*mut u8),
+    {
+        let ptr = self as *mut Self as *mut u8;
+        self.line_map[0..NUM_LINES_PER_BLOCK]
+            .iter()
+            .enumerate()
+            .filter(|(_, x)| **x & 1 == 1)
+            .for_each(|(i, _)| unsafe { f(ptr.add(i * LINE_SIZE)) })
     }
     pub fn reset_header(&mut self) {
         self.first_hole_line_idx = 3;
@@ -207,7 +223,7 @@ impl Block {
         let mut len = 0;
         let mut first_hole_line_idx = 3;
         let mut first_hole_line_len = 0;
-        let mut holes = 1;
+        let mut holes = 0;
         // 这个marked代表之前是否有被标记的对象头出现
         let mut marked = false;
         let mut marked_num = 0;
@@ -222,6 +238,7 @@ impl Block {
                 len += 1;
                 self.line_map[idx] &= 0;
                 marked = false;
+                self.available_line_num += 1;
             } else {
                 // 如果是obj的第一个line且被标记了
                 if self.line_map[idx] & 0b10000010 == 0b10000010 {
@@ -241,7 +258,6 @@ impl Block {
                     holes += 1;
                     len = 0;
                 }
-                self.available_line_num += 1;
             }
             idx += 1;
         }
@@ -251,6 +267,7 @@ impl Block {
                 first_hole_line_idx = (idx - len as usize) as u8;
                 first_hole_line_len = len;
             }
+            holes += 1;
         }
 
         self.first_hole_line_idx = first_hole_line_idx;
@@ -277,7 +294,7 @@ impl Block {
     /// Return the start line index and the length of the hole (u8, u8).
     ///
     /// If no hole found, return `None`.
-    pub fn find_next_hole(&self, prev_hole: (u8, u8)) -> Option<(u8, u8)> {
+    pub fn find_next_hole(&self, prev_hole: (u8, u8), size_line: usize) -> Option<(u8, u8)> {
         let mut idx = prev_hole.0 as usize + prev_hole.1 as usize;
         let mut len = 0;
 
@@ -285,15 +302,22 @@ impl Block {
             // 如果是空行
             if self.line_map[idx] & 1 == 0 {
                 len += 1;
-            } else {
-                if len > 0 {
-                    return Some((idx as u8 - len, len));
+                if len as usize >= if size_line == 0 { 1 } else { size_line } {
+                    return Some((idx as u8 - len + 1, len));
                 }
+            } else {
+                if len as usize >= if size_line == 0 { 1 } else { size_line } {
+                    return Some((idx as u8 - len, len));
+                } else if len != 0 {
+                    // len = 0;
+                    return None;
+                }
+                len = 0;
             }
             idx += 1;
         }
 
-        if len > 0 {
+        if len as usize >= if size_line == 0 { 1 } else { size_line } {
             return Some(((idx - len as usize) as u8, len));
         }
         None
@@ -390,53 +414,48 @@ impl Block {
     pub unsafe fn alloc(
         &mut self,
         size: usize,
-        cursor: *mut u8,
+        _cursor: *mut u8,
         obj_type: ObjectType,
     ) -> Option<(u8, u8, Option<*mut u8>)> {
-        let cursor = self.get_line_idx_from_addr(cursor) as u8;
-        let mut hole = self.find_next_hole((cursor, 0));
-        while let Some((start, len)) = hole {
-            if len as usize * LINE_SIZE >= size {
-                let line_size = ((size - 1) / LINE_SIZE + 1) as u8;
-                if len == line_size {
-                    // 正好匹配，那么减少一个hole
+        let cursor = self.first_hole_line_idx;
+        let line_size = ((size - 1) / LINE_SIZE + 1) as u8;
+        let hole = self.find_next_hole((cursor, 0), line_size as usize);
+        // debug_assert!(hole.is_some(), "cursor {}, header {:?}, hole: {} av {} first idx {} first_len {}", cursor,self.line_map,self.hole_num,self.available_line_num, self.first_hole_line_idx,self.first_hole_line_len);
+        if let Some((start, len)) = hole {
+            self.available_line_num -= line_size as usize;
+            // 标记为已使用
+            for i in start..=start - 1 + line_size {
+                let header = self.line_map.get_mut(i as usize).unwrap();
+                header.set_used(true);
+            }
+            // 设置起始line header的obj_type
+            let header = self.line_map.get_mut(start as usize).unwrap();
+            // *header |= (obj_type as u8) << 2 | 0b10000000;
+            header.set_obj_type(obj_type);
+            header.set_is_head(true);
+            // 更新first_hole_line_idx和first_hole_line_len
+            if start == self.first_hole_line_idx {
+                self.first_hole_line_idx = self.first_hole_line_idx.saturating_add(line_size);
+                self.first_hole_line_len -= line_size;
+            }
+            if self.first_hole_line_len == 0 {
+                if let Some((idx, len)) =
+                    self.find_next_hole((self.first_hole_line_idx, self.first_hole_line_len), 1)
+                {
+                    self.first_hole_line_idx = idx;
+                    self.first_hole_line_len = len;
+                } else {
                     self.hole_num -= 1;
-                }
-                self.available_line_num -= line_size as usize;
-                // 标记为已使用
-                for i in start..=start - 1 + line_size {
-                    let header = self.line_map.get_mut(i as usize).unwrap();
-                    header.set_used(true);
-                }
-                // 设置起始line header的obj_type
-                let header = self.line_map.get_mut(start as usize).unwrap();
-                header.set_obj_type(obj_type);
-                header.set_is_head(true);
-                // 更新first_hole_line_idx和first_hole_line_len
-                if start == self.first_hole_line_idx {
-                    self.first_hole_line_idx = self.first_hole_line_idx.saturating_add(line_size);
-                    self.first_hole_line_len -= line_size;
-                }
-                if self.first_hole_line_len == 0 {
-                    if let Some((idx, len)) =
-                        self.find_next_hole((self.first_hole_line_idx, self.first_hole_line_len))
-                    {
-                        self.first_hole_line_idx = idx;
-                        self.first_hole_line_len = len;
-                    }
-                }
-                let next_cursor_line = start as usize + line_size as usize;
-                if next_cursor_line >= NUM_LINES_PER_BLOCK {
                     return Some((start, line_size, None));
                 }
-                let ptr = self.get_nth_line(next_cursor_line);
-                return Some((start, line_size, Some(ptr)));
             }
-            if size > LINE_SIZE {
-                // 中对象，尝试一次就跳出
-                break;
+            if self.first_hole_line_idx as usize > start as usize + len as usize && len == line_size
+            {
+                // 正好匹配，那么减少一个hole
+                self.hole_num -= 1;
             }
-            hole = self.find_next_hole((start, len));
+            let ptr = self.get_nth_line(self.first_hole_line_idx as usize);
+            return Some((start, line_size, Some(ptr)));
         }
         None
     }
@@ -459,14 +478,14 @@ mod tests {
             let header = block.get_nth_line_header(4);
             header.set_used(true);
             // 获取下一个hole，应该是从第五行开始，长度是251
-            assert_eq!(block.find_next_hole((3, 1)), Some((5, 251)));
+            assert_eq!(block.find_next_hole((3, 1), 0), Some((5, 1)));
             // 标记hole隔一行之后五行为已使用
             for i in 6..=10 {
                 let header = block.get_nth_line_header(i as usize);
                 header.set_used(true);
             }
             // 获取下一个hole，应该是从第十一行开始，长度是245
-            assert_eq!(block.find_next_hole((5, 5)), Some((11, 245)));
+            assert_eq!(block.find_next_hole((5, 5), 0), Some((11, 1)));
         };
     }
     #[test]
@@ -535,6 +554,8 @@ mod tests {
             assert_eq!(block.first_hole_line_len, 1);
 
             let cursor = (block as *mut Block as usize + LINE_SIZE * 6) as *mut u8;
+            block.first_hole_line_idx = 6;
+            block.first_hole_line_len = 250;
             let (start, len, newcursor) = block
                 .alloc(
                     (256 - 6) * LINE_SIZE,
@@ -542,6 +563,8 @@ mod tests {
                     crate::block::ObjectType::Complex,
                 )
                 .expect("cannot alloc new line");
+            block.first_hole_line_idx = 4;
+            block.first_hole_line_len = 1;
             // 从第6行开始分配，长度为256-6
             // 分配后：
             // --------
@@ -583,7 +606,7 @@ mod tests {
             // |  255 | 已使用
             assert_eq!(start, 4);
             assert_eq!(len, 1);
-            assert_eq!(newcursor, Some(block.get_nth_line(5)));
+            assert_eq!(newcursor, None);
             // assert_eq!(block.first_hole_line_idx, 255); 这个时候没hole了，此值无意义，len为0
             assert_eq!(block.first_hole_line_len, 0);
         }

@@ -33,7 +33,7 @@ thread_local! {
 
 lazy_static! {
     pub static ref GLOBAL_ALLOCATOR: GAWrapper = unsafe {
-        let ga = GlobalAllocator::new(1024 * 1024 * 1024);
+        let ga = GlobalAllocator::new(1024 * 1024 * 1024 * 100);
         let mem = malloc(core::mem::size_of::<GlobalAllocator>()).cast::<GlobalAllocator>();
         mem.write(ga);
         GAWrapper(mem)

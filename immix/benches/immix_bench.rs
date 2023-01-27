@@ -2,6 +2,7 @@ use std::{mem::size_of, thread::available_parallelism, time::Duration};
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use immix::*;
+use libc::malloc;
 use rand::random;
 
 fn immix_benchmark_multi_thread(c: &mut Criterion) {
@@ -18,7 +19,7 @@ fn bench_n_threads(n: usize) -> impl Fn(&mut Criterion) {
             |b| {
                 b.iter_custom(|t| {
                     let total = test_complecated_multiple_thread_gc(t as usize, n);
-                    total
+                    total.0 + total.1
                 });
             },
         );
@@ -31,10 +32,44 @@ fn immix_benchmark_single_thread(c: &mut Criterion) {
         |b| {
             b.iter_custom(|t| {
                 let total = test_complecated_single_thread_gc(t as usize);
-                total
+                total.0 + total.1
             });
         },
     );
+}
+
+fn immix_benchmark_single_thread_mark(c: &mut Criterion) {
+    c.bench_function(
+        &format!("singlethread gc mark benchmark--{} small objects", OBJ_NUM),
+        |b| {
+            b.iter_custom(|t| {
+                let total = test_complecated_single_thread_gc(t as usize);
+                total.0
+            });
+        },
+    );
+}
+fn immix_benchmark_single_thread_sweep(c: &mut Criterion) {
+    c.bench_function(
+        &format!("singlethread gc sweep benchmark--{} small objects", OBJ_NUM),
+        |b| {
+            b.iter_custom(|t| {
+                let total = test_complecated_single_thread_gc(t as usize);
+                total.1
+            });
+        },
+    );
+}
+
+fn immix_benchmark_single_thread_alloc(c: &mut Criterion) {
+    let mut g = c.benchmark_group("allocation bench");
+    g.bench_function(
+        &format!("singlethread gc alloc benchmark small objects"),
+        |b| b.iter(bench_allocation),
+    );
+    g.bench_function(&format!("malloc benchmark small objects"), |b| {
+        b.iter(bench_malloc)
+    });
 }
 
 const OBJ_NUM: usize = 10000;
@@ -43,6 +78,7 @@ fn get_threads() -> usize {
     available_parallelism().unwrap().get()
 }
 
+#[repr(C)]
 struct GCTestObj {
     _vtable: VtableFunc,
     b: *mut GCTestObj,
@@ -70,10 +106,11 @@ unsafe fn alloc_test_obj(gc: &mut Collector) -> *mut GCTestObj {
     a
 }
 
-fn test_complecated_single_thread_gc(num_iter: usize) -> Duration {
+fn test_complecated_single_thread_gc(num_iter: usize) -> (Duration, Duration) {
     let t = SPACE.with(|gc| unsafe {
         let mut gc = gc.borrow_mut();
-        let mut total = Duration::new(0, 0);
+        let mut total_mark = Duration::new(0, 0);
+        let mut total_sweep = Duration::new(0, 0);
         for _ in 0..num_iter {
             let mut first_obj = alloc_test_obj(&mut gc);
             let rustptr = (&mut first_obj) as *mut *mut GCTestObj as *mut u8;
@@ -101,14 +138,15 @@ fn test_complecated_single_thread_gc(num_iter: usize) -> Duration {
             gc.collect();
             let size3 = gc.get_size();
             assert_eq!(size3, 0);
-            total += ctime;
+            total_mark += ctime.0;
+            total_sweep += ctime.1;
         }
-        total
+        (total_mark, total_sweep)
     });
     t
 }
 
-fn test_complecated_multiple_thread_gc(num_iter: usize, threads: usize) -> Duration {
+fn test_complecated_multiple_thread_gc(num_iter: usize, threads: usize) -> (Duration, Duration) {
     let mut handles = vec![];
     for _ in 0..threads {
         let t = std::thread::spawn(move || test_complecated_single_thread_gc(num_iter));
@@ -118,13 +156,27 @@ fn test_complecated_multiple_thread_gc(num_iter: usize, threads: usize) -> Durat
     for h in handles {
         times.push(h.join().unwrap());
     }
-    times.sort();
+    times.sort_by(|k1, k2| (k1.0 + k1.1).cmp(&(k2.0 + k2.1)));
     times.pop().unwrap()
+}
+
+fn bench_allocation() -> *mut GCTestObj {
+    SPACE.with(|gc| unsafe {
+        let mut gc = gc.borrow_mut();
+        alloc_test_obj(&mut gc)
+    })
+}
+
+fn bench_malloc() -> *mut GCTestObj {
+    unsafe { malloc(size_of::<GCTestObj>()) as *mut GCTestObj }
 }
 
 criterion_group!(
     benches,
     immix_benchmark_multi_thread,
-    immix_benchmark_single_thread
+    immix_benchmark_single_thread,
+    immix_benchmark_single_thread_mark,
+    immix_benchmark_single_thread_sweep,
+    immix_benchmark_single_thread_alloc,
 );
 criterion_main!(benches);
