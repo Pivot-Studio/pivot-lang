@@ -13,7 +13,7 @@ use vector_map::VecMap;
 use crate::{
     block::{Block, ObjectType},
     consts::{BLOCK_SIZE, LINE_SIZE},
-    EVA_BLOCK_PROPORTION,
+    EVA_BLOCK_PROPORTION, NUM_LINES_PER_BLOCK,
 };
 
 use super::GlobalAllocator;
@@ -63,6 +63,9 @@ impl ThreadLocalAllocator {
 
     pub fn set_collect_mode(&mut self, collect_mode: bool) {
         self.collect_mode = collect_mode;
+        self.unavailable_blocks
+            .extend(self.recyclable_blocks.drain(..));
+        self.cursor = std::ptr::null_mut();
     }
 
     pub fn print_stats(&self) {
@@ -100,21 +103,8 @@ impl ThreadLocalAllocator {
         !self.recyclable_blocks.is_empty()
     }
 
-    pub fn fill_available_histogram(&self, histogram: &mut VecMap<usize, usize>) -> usize {
-        let mut total_available = 0;
-        self.recyclable_blocks
-            .iter()
-            .chain(self.unavailable_blocks.iter())
-            .for_each(|block| unsafe {
-                let (available, holes) = (**block).get_available_line_num_and_holes();
-                if let Some(v) = histogram.get_mut(&holes) {
-                    *v += available;
-                } else {
-                    histogram.insert(holes, available);
-                }
-                total_available += available;
-            });
-        total_available
+    pub fn get_available_lines(&self) -> usize {
+        self.eva_blocks.len() * NUM_LINES_PER_BLOCK
     }
 
     pub fn set_eva_threshold(&mut self, threshold: usize) {
@@ -123,7 +113,6 @@ impl ThreadLocalAllocator {
             .chain(self.unavailable_blocks.iter())
             .for_each(|block| unsafe { (**block).set_eva_threshold(threshold) });
     }
-
 
     pub fn reset_line_maps(&mut self) {
         self.recyclable_blocks
@@ -178,7 +167,7 @@ impl ThreadLocalAllocator {
             let block = self.get_new_block();
             self.cursor = unsafe { (*block).get_nth_line(3) };
             unsafe {
-                let (re,  nxt) = (*block).alloc(size, self.cursor, obj_type).unwrap();
+                let (re, nxt) = (*block).alloc(size, self.cursor, obj_type).unwrap();
                 nxt.or_else(|| {
                     self.cursor = std::ptr::null_mut();
                     self.unavailable_blocks.push(block);
@@ -210,11 +199,11 @@ impl ThreadLocalAllocator {
         }
         let res = unsafe { (**f).alloc(size, self.cursor, obj_type) };
         // return std::ptr::null_mut();
-        if res.is_none() && size > LINE_SIZE {
+        if res.is_none() && size + 8 > LINE_SIZE {
             // mid size object alloc failed, try to overflow_alloc
             return self.overflow_alloc(size, obj_type);
         }
-        let (re,  nxt) = res.unwrap();
+        let (re, nxt) = res.unwrap();
         nxt.or_else(|| {
             // 当前block被用完，将它从recyclable blocks中移除，加入unavailable blocks
             let used_block = self.recyclable_blocks.pop_front().unwrap();
@@ -367,6 +356,9 @@ impl ThreadLocalAllocator {
             let less = head_room_size - self.eva_blocks.len();
             for _ in 0..less {
                 if let Some(block) = free_blocks.pop() {
+                    unsafe {
+                        (*block).reset_header();
+                    }
                     self.eva_blocks.push(block);
                 } else {
                     break;

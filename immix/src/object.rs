@@ -2,9 +2,8 @@ use std::marker::PhantomData;
 
 use crate::{ObjectType, LINE_SIZE};
 
-
 #[repr(C)]
-pub struct ImmixObject{
+pub struct ImmixObject {
     pub head: ObjHeader,
     pub _phantom: PhantomData<usize>,
 }
@@ -17,7 +16,7 @@ impl ImmixObject {
         }
     }
     pub fn heap_size(&self) -> usize {
-        (self.head.obj_size+ 8) as usize
+        (self.head.obj_size + 8) as usize
     }
     pub fn init_header(&self, ptr: *mut u8) {
         unsafe {
@@ -35,9 +34,8 @@ impl ImmixObject {
 
     pub fn get_line_size(&self) -> usize {
         let size = self.heap_size();
-        (size -1)/LINE_SIZE + 1
+        (size - 1) / LINE_SIZE + 1
     }
-
 }
 
 #[repr(C)]
@@ -48,7 +46,7 @@ pub struct ObjHeader {
 }
 
 impl ObjHeader {
-    pub fn new(obj_type: ObjectType, obj_size: u32, is_forward:bool) -> ObjHeader {
+    pub fn new(obj_type: ObjectType, obj_size: u32, is_forward: bool) -> ObjHeader {
         ObjHeader {
             obj_type,
             obj_size,
@@ -56,5 +54,3 @@ impl ObjHeader {
         }
     }
 }
-
-

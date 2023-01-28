@@ -12,8 +12,8 @@ use vector_map::VecMap;
 use crate::{
     allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
-    spin_until, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_WAITING, GC_RUNNING,
-    GC_RW_LOCK, GC_SWEEPING, GC_SWEEPPING_NUM, NUM_LINES_PER_BLOCK, ImmixObject,
+    spin_until, ImmixObject, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_WAITING,
+    GC_RUNNING, GC_RW_LOCK, GC_SWEEPING, GC_SWEEPPING_NUM, NUM_LINES_PER_BLOCK,
 };
 
 /// # Collector
@@ -144,8 +144,8 @@ impl Collector {
     /// 现在纠正为
     ///
     /// ptr -> new_ptr(forwarded) -> value
-    unsafe fn correct_ptr(&self, ptr: *mut u8,heap_obj: * mut ImmixObject) {
-        let ptr = ptr as *mut * mut u8;
+    unsafe fn correct_ptr(&self, ptr: *mut u8, heap_obj: *mut ImmixObject) {
+        let ptr = ptr as *mut *mut u8;
         let new_ptr = (*heap_obj).get_mutator_ptr();
         debug_assert!(!new_ptr.is_null());
         // println!("correct ptr {:p} to {:p}", ptr, new_ptr);
@@ -210,7 +210,7 @@ impl Collector {
                 } else {
                     // 期间别的线程驱逐了它
                     spin_until!((*heap_obj).head.is_forward);
-                    self.correct_ptr(father,heap_obj);
+                    self.correct_ptr(father, heap_obj);
                     return;
                 }
             }
@@ -372,21 +372,28 @@ impl Collector {
             if ENABLE_EVA && self.thread_local_allocator.as_mut().unwrap().should_eva() {
                 // 如果需要驱逐，首先计算驱逐阀域
                 let mut eva_threshold = 0;
-                let mut available_histogram: VecMap<usize, usize> =
-                    VecMap::with_capacity(NUM_LINES_PER_BLOCK);
-                let mut available_lines = self
+                // let mut available_histogram: VecMap<usize, usize> =
+                //     VecMap::with_capacity(NUM_LINES_PER_BLOCK);
+                // let mut available_lines = self
+                //     .thread_local_allocator
+                //     .as_mut()
+                //     .unwrap()
+                //     .fill_available_histogram(&mut available_histogram);
+
+                let available_lines = self
                     .thread_local_allocator
                     .as_mut()
                     .unwrap()
-                    .fill_available_histogram(&mut available_histogram);
+                    .get_available_lines();
+
                 let mut required_lines = 0;
                 let mark_histogram = &mut *self.mark_histogram;
                 for threshold in (0..(NUM_LINES_PER_BLOCK / 2)).rev() {
                     // 从洞多到洞少遍历，计算剩余空间，直到空间不足
                     // 此时洞的数量就是驱逐阀域
                     required_lines += *mark_histogram.get(&threshold).unwrap_or(&0);
-                    available_lines = available_lines
-                        .saturating_sub(*available_histogram.get(&threshold).unwrap_or(&0));
+                    // available_lines = available_lines
+                    //     .saturating_sub(*available_histogram.get(&threshold).unwrap_or(&0));
                     if available_lines <= required_lines {
                         eva_threshold = threshold;
                         break;
@@ -417,6 +424,8 @@ impl Collector {
         let mark_time = time.elapsed();
         self.sweep();
         let sweep_time = time.elapsed() - mark_time;
+        // println!("mark time: {:?}", mark_time);
+        // println!("sweep time: {:?}", sweep_time);
         unsafe {
             self.thread_local_allocator
                 .as_mut()

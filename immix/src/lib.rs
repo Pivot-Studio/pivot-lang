@@ -15,12 +15,11 @@ mod macros;
 mod mmap;
 mod object;
 
-
-pub use object::*;
 pub use allocator::*;
 pub use block::*;
 pub use collector::*;
 pub use consts::*;
+pub use object::*;
 use parking_lot::{lock_api::RawRwLock, RwLock};
 
 thread_local! {

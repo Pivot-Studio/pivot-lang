@@ -1,7 +1,10 @@
 use int_enum::IntEnum;
 use vector_map::VecMap;
 
-use crate::{consts::{BLOCK_SIZE, LINE_SIZE, NUM_LINES_PER_BLOCK}, ImmixObject};
+use crate::{
+    consts::{BLOCK_SIZE, LINE_SIZE, NUM_LINES_PER_BLOCK},
+    ImmixObject,
+};
 
 /// # Object type
 ///
@@ -27,7 +30,7 @@ type LineHeader = u8;
 
 pub trait LineHeaderExt {
     fn get_marked(&self) -> bool;
-    fn set_marked(&mut self, lines:usize);
+    fn set_marked(&mut self, lines: usize);
 }
 
 /// A block is a 32KB memory region.
@@ -62,7 +65,7 @@ impl LineHeaderExt for LineHeader {
     ///
     /// 如果一个对象占用多行，只有起始行会被标记
     #[inline]
-    fn set_marked(&mut self, lines:usize) {
+    fn set_marked(&mut self, lines: usize) {
         let ptr = self as *mut u8;
         unsafe {
             ptr.write_bytes(1, lines);
@@ -142,6 +145,12 @@ impl Block {
     /// # correct_header
     /// 回收的最后阶段，重置block的header
     pub fn correct_header(&mut self, mark_histogram: *mut VecMap<usize, usize>) {
+        // self.marked = false;
+        // self.hole_num = 1;
+        // self.available_line_num = 200;
+        // self.first_hole_line_idx = 3;
+        // self.first_hole_line_len = 200;
+
         let mut idx = 3;
         let mut len = 0;
         let mut first_hole_line_idx = 3;
@@ -153,8 +162,7 @@ impl Block {
 
         while idx < NUM_LINES_PER_BLOCK {
             // 未使用或者未标记
-            if !self.line_map[idx].get_marked()
-            {
+            if !self.line_map[idx].get_marked() {
                 len += 1;
                 self.line_map[idx] = 0;
                 self.available_line_num += 1;
@@ -327,7 +335,7 @@ impl Block {
         size: usize,
         _cursor: *mut u8,
         obj_type: ObjectType,
-    ) -> Option<(* mut u8, Option<*mut u8>)> {
+    ) -> Option<(*mut u8, Option<*mut u8>)> {
         let cursor = self.first_hole_line_idx;
         let heap_obj = ImmixObject::new(obj_type, size);
         let size = heap_obj.heap_size();
