@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use parking_lot::ReentrantMutex;
 
 use crate::{block::Block, consts::BLOCK_SIZE, mmap::Mmap};
@@ -103,14 +105,27 @@ pub struct GlobalAllocator {
     /// heap end
     heap_end: *mut u8,
     /// 所有被归还的Block都会被放到这个Vec里面
-    free_blocks: Vec<*mut Block>,
+    free_blocks: VecDeque<(*mut Block, bool)>,
     /// lock
     lock: ReentrantMutex<()>,
     /// big object mmap
     big_object_mmap: BigObjectMmap,
+
+    last_get_block_time: std::time::Instant,
+
+    /// 一个周期内alloc的block数减去return的block数
+    /// 大于0表示内存使用量处于增加状态，小于0表示内存使用量处于减少状态
+    mem_usage_flag: i64,
+
+    /// 周期计数器，每个内存总体增加周期加1，每个内存总体不变/减少周期减1
+    round: i64,
 }
 
 unsafe impl Sync for GlobalAllocator {}
+
+const ROUND_THRESHOLD: i64 = 3;
+
+const ROUND_MIN_TIME_MILLIS: u128 = 300;
 
 impl GlobalAllocator {
     /// Create a new global allocator.
@@ -123,9 +138,12 @@ impl GlobalAllocator {
             heap_start: mmap.aligned(),
             heap_end: mmap.end(),
             mmap,
-            free_blocks: Vec::new(),
+            free_blocks: VecDeque::new(),
             lock: ReentrantMutex::new(()),
             big_object_mmap: BigObjectMmap::new(size),
+            last_get_block_time: std::time::Instant::now(),
+            mem_usage_flag: 0,
+            round: 0,
         }
     }
     /// 从big object mmap中分配一个大对象，大小为size
@@ -162,10 +180,13 @@ impl GlobalAllocator {
     /// 从free_blocks中获取n个可用的block，如果没有可用的block，就从mmap的heap空间之中获取n个新block
     pub fn get_blocks(&mut self, n: usize) -> Vec<*mut Block> {
         let _lock = self.lock.lock();
+        self.mem_usage_flag += n as i64;
         let mut blocks = Vec::with_capacity(n);
         for _ in 0..n {
-            let block = if let Some(block) = self.free_blocks.pop() {
-                self.mmap.commit(block as *mut u8, BLOCK_SIZE);
+            let block = if let Some((block, freed)) = self.free_blocks.pop_front() {
+                if freed {
+                    self.mmap.commit(block as *mut u8, BLOCK_SIZE);
+                }
                 block
             } else {
                 let b = self
@@ -179,6 +200,33 @@ impl GlobalAllocator {
                 (*block).reset_header();
             }
             blocks.push(block);
+        }
+        let now = std::time::Instant::now();
+        // 距离上次alloc时间超过1秒，把free_blocks中的block都dont need
+        if now.duration_since(self.last_get_block_time).as_millis() > ROUND_MIN_TIME_MILLIS {
+            self.last_get_block_time = now;
+            self.mem_usage_flag = 0;
+            if self.mem_usage_flag > 0 {
+                self.round += 1;
+            } else if self.mem_usage_flag <= 0 {
+                self.round -= 1;
+            }
+            if self.round <= -ROUND_THRESHOLD {
+                // 总体有三个周期处于内存不变或减少状态，进行dontneed
+                self.round = 0;
+                // println!("trigger dont need");
+                self.free_blocks
+                    .iter_mut()
+                    .filter(|(_, free)| !*free)
+                    .for_each(|(block, freed)| {
+                        if !*freed {
+                            self.mmap.dontneed(*block as *mut u8, BLOCK_SIZE);
+                            *freed = true;
+                        }
+                    });
+            } else if self.round >= ROUND_THRESHOLD {
+                self.round = 0;
+            }
         }
         blocks
     }
@@ -194,11 +242,20 @@ impl GlobalAllocator {
     {
         let _lock = self.lock.lock();
         for block in blocks {
-            self.free_blocks.push(block);
-            self.mmap
-                .dontneed(block as *mut Block as *mut u8, BLOCK_SIZE);
+            self.mem_usage_flag -= 1;
+            self.free_blocks.push_back((block, false));
+            // self.mmap
+            //     .dontneed(block as *mut Block as *mut u8, BLOCK_SIZE);
         }
     }
+
+    // pub fn gc_end(&mut self) {
+    //     let _lock = self.lock.lock();
+    //     self.free_blocks.iter().for_each(|block| {
+    //         self.mmap
+    //             .dontneed(*block as *mut Block as *mut u8, BLOCK_SIZE);
+    //     });
+    // }
 
     /// # in heap
     /// 判断一个指针是否在heap之中

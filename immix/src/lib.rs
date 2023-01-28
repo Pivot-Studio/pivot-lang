@@ -31,9 +31,15 @@ thread_local! {
     };
 }
 
+const DEFAULT_HEAP_SIZE: usize = 1024 * 1024 * 1024;
+
 lazy_static! {
     pub static ref GLOBAL_ALLOCATOR: GAWrapper = unsafe {
-        let ga = GlobalAllocator::new(1024 * 1024 * 1024);
+        let mut heap_size = DEFAULT_HEAP_SIZE;
+        if let Some(size) = option_env!("PL_IMMIX_HEAP_SIZE") {
+            heap_size = size.parse().unwrap();
+        }
+        let ga = GlobalAllocator::new(heap_size);
         let mem = malloc(core::mem::size_of::<GlobalAllocator>()).cast::<GlobalAllocator>();
         mem.write(ga);
         GAWrapper(mem)

@@ -63,6 +63,9 @@ fn immix_benchmark_single_thread_sweep(c: &mut Criterion) {
 
 fn immix_benchmark_single_thread_alloc(c: &mut Criterion) {
     let mut g = c.benchmark_group("allocation bench");
+    if let None = option_env!("PL_IMMIX_HEAP_SIZE") {
+        return;
+    }
     g.bench_function(
         &format!("singlethread gc alloc benchmark small objects"),
         |b| b.iter(bench_allocation),
