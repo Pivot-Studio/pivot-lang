@@ -22,3 +22,11 @@ criterion = "0.3"
 [[bench]]
 name = "immix_bench"
 harness = false
+
+
+[features]
+default = ["madv_dontneed"]
+madv_free = []
+madv_dontneed = []
+
+
