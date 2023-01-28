@@ -24,9 +24,13 @@ crate-type = ["staticlib", "lib"]
 default = ["static", "immix"]
 jit = ["internal_macro/jit"]
 static = ["internal_macro/static"]
-immix = []
+immix = ["immix/zero_init"]
 simple_gc = ["libc"]
 
 [[bench]]
 name = "simple_gc_bench"
 harness = false
+
+[profile.release]
+lto = "fat"
+opt-level = 3

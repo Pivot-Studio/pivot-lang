@@ -28,5 +28,10 @@ harness = false
 default = ["madv_dontneed"]
 madv_free = []
 madv_dontneed = []
+zero_init = []
 
+
+[profile.release]
+lto = "fat"
+opt-level = 3
 

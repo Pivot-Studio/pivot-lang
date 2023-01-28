@@ -1,4 +1,4 @@
-use std::{mem::size_of, thread::available_parallelism, time::Duration};
+use std::{mem::size_of, ptr::null_mut, thread::available_parallelism, time::Duration};
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use immix::*;
@@ -75,7 +75,7 @@ fn immix_benchmark_single_thread_alloc(c: &mut Criterion) {
     });
 }
 
-const OBJ_NUM: usize = 10000;
+const OBJ_NUM: usize = 65535;
 
 fn get_threads() -> usize {
     available_parallelism().unwrap().get()
@@ -105,7 +105,12 @@ fn gctest_vtable(
 
 unsafe fn alloc_test_obj(gc: &mut Collector) -> *mut GCTestObj {
     let a = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
-    (*a)._vtable = gctest_vtable;
+    a.write(GCTestObj {
+        _vtable: gctest_vtable,
+        b: null_mut(),
+        d: null_mut(),
+        e: null_mut(),
+    });
     a
 }
 
@@ -164,12 +169,13 @@ fn test_complecated_multiple_thread_gc(num_iter: usize, threads: usize) -> (Dura
 }
 
 fn bench_allocation() -> *mut GCTestObj {
-    SPACE.with(|gc| unsafe {
-        let mut gc = gc.borrow_mut();
-        alloc_test_obj(&mut gc)
+    SPACE.with(|gc| {
+        let gc = gc.borrow();
+        gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj
     })
 }
 
+#[inline(never)]
 fn bench_malloc() -> *mut GCTestObj {
     unsafe { malloc(size_of::<GCTestObj>()) as *mut GCTestObj }
 }

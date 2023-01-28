@@ -38,7 +38,6 @@ pub struct ThreadLocalAllocator {
     unavailable_blocks: Vec<*mut Block>,
     recyclable_blocks: VecDeque<*mut Block>,
     eva_blocks: Vec<*mut Block>,
-    cursor: *mut u8,
     collect_mode: bool,
 }
 
@@ -67,7 +66,6 @@ impl ThreadLocalAllocator {
             global_allocator,
             unavailable_blocks: Vec::new(),
             recyclable_blocks: VecDeque::new(),
-            cursor: std::ptr::null_mut(),
             eva_blocks: Vec::new(),
             collect_mode: false,
         }
@@ -177,23 +175,17 @@ impl ThreadLocalAllocator {
             return self.big_obj_alloc(size);
         }
         // mid size object & small size object
-        // 空cursor，代表刚启动或者recycle block全用光了
-        if self.cursor.is_null() {
+        // 刚启动或者recycle block全用光了
+        if self.recyclable_blocks.len() == 0 {
             let block = self.get_new_block();
-            self.cursor = unsafe { (*block).get_nth_line(3) };
             unsafe {
-                let (s, _, nxt) = (*block).alloc(size, self.cursor, obj_type).unwrap();
-                let re = (*block).get_nth_line(s as usize);
-                nxt.or_else(|| {
-                    self.cursor = std::ptr::null_mut();
+                let (s, nxt) = (*block).alloc(size, obj_type).unwrap();
+                let re = (*block).get_nth_line(s);
+                if !nxt {
                     self.unavailable_blocks.push(block);
-                    None
-                })
-                .and_then(|n| {
-                    self.cursor = n;
+                } else {
                     self.recyclable_blocks.push_back(block);
-                    None::<()>
-                });
+                }
                 return re;
             }
         }
@@ -205,44 +197,30 @@ impl ThreadLocalAllocator {
                 let ff = self.recyclable_blocks.front();
                 if ff.is_none() {
                     // recycle blocks全用光了
-                    self.cursor = std::ptr::null_mut();
                     return self.alloc(size, obj_type);
                 } else {
                     f = ff.unwrap()
                 }
-                self.cursor = (**f).get_nth_line((**f).find_first_hole().unwrap().0 as usize);
             }
         }
-        let res = unsafe { (**f).alloc(size, self.cursor, obj_type) };
+        let res = unsafe { (**f).alloc(size, obj_type) };
         // return std::ptr::null_mut();
-        if res.is_none() && size > LINE_SIZE {
+        if res.is_none() {
+            // if size <= LINE_SIZE {
+            //     unsafe{ (**f).show();}
+            //     panic!("mid size object alloc failed");
+            // }
+            debug_assert!(size > LINE_SIZE);
             // mid size object alloc failed, try to overflow_alloc
             return self.overflow_alloc(size, obj_type);
         }
-        let (s, _, nxt) = res.unwrap();
+        let (s, nxt) = res.unwrap();
         let re = unsafe { (**f).get_nth_line(s as usize) };
-        nxt.or_else(|| {
+        if !nxt {
             // 当前block被用完，将它从recyclable blocks中移除，加入unavailable blocks
             let used_block = self.recyclable_blocks.pop_front().unwrap();
             self.unavailable_blocks.push(used_block);
-            // 如果还有recyclable_blocks 则指向下一个block的第一个可用line
-            self.recyclable_blocks
-                .front()
-                .and_then(|b| {
-                    self.cursor =
-                        unsafe { (**b).get_nth_line((**b).find_first_hole().unwrap().0 as usize) };
-                    Some(())
-                })
-                .or_else(|| {
-                    self.cursor = std::ptr::null_mut();
-                    None
-                });
-            None
-        })
-        .and_then(|n| {
-            self.cursor = n;
-            None::<()>
-        });
+        }
         re
     }
 
@@ -261,25 +239,18 @@ impl ThreadLocalAllocator {
         // 获取新block
         let new_block = self.get_new_block();
         // alloc
-        let (s, _, nxt) = unsafe {
-            (*new_block)
-                .alloc(size, (*new_block).get_nth_line(3), obj_type)
-                .unwrap()
-        };
+        let (s, nxt) = unsafe { (*new_block).alloc(size, obj_type).unwrap() };
         let re = unsafe { (*new_block).get_nth_line(s as usize) };
-        nxt.or_else(|| {
+        if !nxt {
             // new_block被用完，将它加入unavailable blocks
             self.unavailable_blocks.push(new_block);
-            None
-        })
-        .and_then(|_| {
+        } else {
             // new_block未被用完，将它加入recyclable blocks
             unsafe {
                 debug_assert!((*new_block).find_first_hole().is_some());
             }
             self.recyclable_blocks.push_back(new_block);
-            None::<()>
-        });
+        }
         re
     }
     /// # big_obj_alloc
@@ -326,7 +297,6 @@ impl ThreadLocalAllocator {
         let mut recyclable_blocks = VecDeque::new();
         let mut unavailable_blocks = Vec::new();
         let mut free_blocks = Vec::new();
-        let mut cursor = std::ptr::null_mut::<u8>();
         unsafe {
             for block in self
                 .recyclable_blocks
@@ -345,10 +315,6 @@ impl ThreadLocalAllocator {
                             hole
                         );
                         recyclable_blocks.push_back(block);
-                        if cursor.is_null() {
-                            cursor = (*block)
-                                .get_nth_line((*block).find_first_hole().unwrap().0 as usize);
-                        }
                     } else {
                         unavailable_blocks.push(block);
                     }
@@ -359,7 +325,6 @@ impl ThreadLocalAllocator {
         }
         self.recyclable_blocks = recyclable_blocks;
         self.unavailable_blocks = unavailable_blocks;
-        self.cursor = cursor;
         let total_block_num =
             self.recyclable_blocks.len() + self.unavailable_blocks.len() + self.eva_blocks.len();
         let head_room_size = (EVA_BLOCK_PROPORTION * total_block_num as f64) as usize;

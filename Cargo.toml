@@ -58,3 +58,6 @@ members = [
     "immix",
 ]
 
+[profile.release]
+lto = "fat"
+opt-level = 3

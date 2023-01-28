@@ -428,7 +428,7 @@ impl Collector {
 
 #[cfg(test)]
 mod tests {
-    use std::{mem::size_of, thread::sleep, time::Duration};
+    use std::{mem::size_of, ptr::null_mut, thread::sleep, time::Duration};
 
     use lazy_static::lazy_static;
     use parking_lot::Mutex;
@@ -478,9 +478,14 @@ mod tests {
                     let b = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
                     (*a).b = b;
                     (*a).c = 1;
+                    (*a).d = null_mut();
+                    (*a).e = null_mut();
                     (*a)._vtable = gctest_vtable;
                     (*b)._vtable = gctest_vtable;
                     (*b).c = 2;
+                    (*b).d = null_mut();
+                    (*b).e = null_mut();
+                    (*b).b = null_mut();
                     let rustptr = (&mut a) as *mut *mut GCTestObj as *mut u8;
                     gc.add_root(rustptr, ObjectType::Pointer);
                     let size1 = gc.get_size();
@@ -534,7 +539,13 @@ mod tests {
 
     unsafe fn alloc_test_obj(gc: &mut Collector) -> *mut GCTestObj {
         let a = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
-        (*a)._vtable = gctest_vtable;
+        a.write(GCTestObj {
+            _vtable: gctest_vtable,
+            b: null_mut(),
+            c: 0,
+            d: null_mut(),
+            e: null_mut(),
+        });
         a
     }
 

@@ -3,11 +3,11 @@
 #[macro_export]
 macro_rules! spin_until {
     ($cond:expr) => {
-        let mut i:i32 = 0;
+        let mut i: i32 = 0;
         while !$cond {
             core::hint::spin_loop();
-            let (re,_) = i.overflowing_add(1);
-            i  = re;
+            let (re, _) = i.overflowing_add(1);
+            i = re;
             if i % 100 == 0 {
                 std::thread::yield_now();
             }
