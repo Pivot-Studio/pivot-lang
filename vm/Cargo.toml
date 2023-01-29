@@ -31,6 +31,3 @@ simple_gc = ["libc"]
 name = "simple_gc_bench"
 harness = false
 
-[profile.release]
-lto = "fat"
-opt-level = 3

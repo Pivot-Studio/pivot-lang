@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     collections::VecDeque,
     ptr::drop_in_place,
     sync::atomic::{AtomicPtr, Ordering},
@@ -13,8 +14,9 @@ use vector_map::VecMap;
 use crate::{
     allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
-    spin_until, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_WAITING, GC_RUNNING,
-    GC_RW_LOCK, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE, NUM_LINES_PER_BLOCK,
+    gc_is_auto_collect_enabled, spin_until, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING,
+    GC_MARK_WAITING, GC_RUNNING, GC_RW_LOCK, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE,
+    NUM_LINES_PER_BLOCK,
 };
 
 /// # Collector
@@ -34,6 +36,17 @@ pub struct Collector {
     queue: *mut VecDeque<(*mut u8, ObjectType)>,
     id: usize,
     mark_histogram: *mut VecMap<usize, usize>,
+    status: RefCell<CollectorStatus>,
+}
+
+struct CollectorStatus {
+    /// in bytes
+    collect_threshold: usize,
+    /// in bytes
+    bytes_allocated_since_last_gc: usize,
+    last_gc_time: std::time::Instant,
+    alloc_since_last_gc: usize,
+    collecting: bool,
 }
 
 pub type VisitFunc = unsafe fn(&Collector, *mut u8);
@@ -43,11 +56,13 @@ pub type VtableFunc = fn(*mut u8, &Collector, VisitFunc, VisitFunc, VisitFunc);
 impl Drop for Collector {
     fn drop(&mut self) {
         unsafe {
-            drop_in_place(self.thread_local_allocator);
+            if (*self.thread_local_allocator).is_live() {
+                GC_COLLECTOR_COUNT.fetch_sub(1, Ordering::SeqCst);
+                drop_in_place(self.thread_local_allocator);
+            }
             libc::free(self.thread_local_allocator as *mut libc::c_void);
             libc::free(self.mark_histogram as *mut libc::c_void);
             libc::free(self.queue as *mut libc::c_void);
-            GC_COLLECTOR_COUNT.fetch_sub(1, Ordering::SeqCst);
         }
     }
 }
@@ -79,7 +94,21 @@ impl Collector {
                 id,
                 mark_histogram: memvecmap,
                 queue: memqueue,
+                status: RefCell::new(CollectorStatus {
+                    collect_threshold: 100 * 1024,
+                    bytes_allocated_since_last_gc: 0,
+                    last_gc_time: std::time::Instant::now(),
+                    alloc_since_last_gc: 0,
+                    collecting: false,
+                }),
             }
+        }
+    }
+
+    pub fn unregister_current_thread(&self) {
+        GC_COLLECTOR_COUNT.fetch_sub(1, Ordering::SeqCst);
+        unsafe {
+            drop_in_place(self.thread_local_allocator);
         }
     }
 
@@ -104,12 +133,42 @@ impl Collector {
     /// ## Return
     /// * `ptr` - object pointer
     pub fn alloc(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
+        if gc_is_auto_collect_enabled() {
+            let mut status = self.status.borrow_mut();
+            if GC_RUNNING.load(Ordering::Relaxed) {
+                drop(status);
+                self.collect();
+            } else if status.bytes_allocated_since_last_gc > status.collect_threshold {
+                status.collect_threshold *= 2;
+                drop(status);
+                // println!("collecting");
+                self.collect();
+            } else {
+                let ep = status.last_gc_time.elapsed();
+                status.last_gc_time = std::time::Instant::now();
+                if status.alloc_since_last_gc > 1 && ep > std::time::Duration::from_secs_f64(0.1) {
+                    status.collect_threshold = status.collect_threshold / 10 * 7 + 1;
+                    drop(status);
+                    // println!("collecting1");
+                    self.collect();
+                } else {
+                    drop(status);
+                }
+            }
+            let mut status = self.status.borrow_mut();
+            status.alloc_since_last_gc += 1;
+            status.bytes_allocated_since_last_gc += ((size - 1) / LINE_SIZE + 1) * LINE_SIZE;
+        }
         unsafe {
             let ptr = self
                 .thread_local_allocator
                 .as_mut()
                 .unwrap()
                 .alloc(size, obj_type);
+            if ptr.is_null() {
+                self.collect();
+                return self.alloc(size, obj_type);
+            }
             ptr
         }
     }
@@ -263,6 +322,7 @@ impl Collector {
     }
 
     pub fn print_stats(&self) {
+        println!("gcstates:");
         unsafe {
             self.thread_local_allocator.as_ref().unwrap().print_stats();
         }
@@ -284,9 +344,10 @@ impl Collector {
     /// From gc roots, mark all reachable objects.
     ///
     /// this mark function is __precise__
-    pub fn mark(&mut self) {
+    pub fn mark(&self) {
         GC_RUNNING.store(true, Ordering::Release);
         let gcs = GC_COLLECTOR_COUNT.load(Ordering::Acquire);
+        // println!("gc {}: mark start gcs {}", self.id,gcs);
         let v = GC_MARK_WAITING.fetch_add(1, Ordering::Acquire);
         if v + 1 != gcs {
             let mut i = 0;
@@ -302,6 +363,9 @@ impl Collector {
                 if i % 100 == 0 {
                     yield_now();
                 }
+                // if i % 10000000==0{
+                //     println!("gc run {:?}", GC_RUNNING.load(Ordering::Acquire))
+                // }
             }
         } else {
             GC_MARKING.store(true, Ordering::Release);
@@ -345,7 +409,7 @@ impl Collector {
     /// # sweep
     ///
     /// since we did synchronization in mark, we don't need to do synchronization again in sweep
-    pub fn sweep(&mut self) {
+    pub fn sweep(&self) {
         GC_SWEEPPING_NUM.fetch_add(1, Ordering::AcqRel);
         GC_SWEEPING.store(true, Ordering::Release);
         unsafe {
@@ -365,7 +429,22 @@ impl Collector {
 
     /// # collect
     /// Collect garbage.
-    pub fn collect(&mut self) -> (std::time::Duration, std::time::Duration) {
+    pub fn collect(&self) -> (std::time::Duration, std::time::Duration) {
+        // println!(
+        //     "gc {} collecting...  size: {}",
+        //     self.id,  unsafe{ self.thread_local_allocator.as_mut().unwrap().get_size()}
+        // );
+        // self.print_stats();
+        let mut status = self.status.borrow_mut();
+        // println!("gc {} collecting... {}", self.id,status.bytes_allocated_since_last_gc);
+        if status.collecting {
+            return Default::default();
+        }
+        status.collecting = true;
+        status.bytes_allocated_since_last_gc = 0;
+        status.last_gc_time = std::time::Instant::now();
+        status.alloc_since_last_gc = 0;
+        drop(status);
         // evacuation pre process
         // 这个过程要在完成safepoint同步之前完成，因为在驱逐的情况下
         // 他要设置每个block是否是驱逐目标
@@ -422,6 +501,12 @@ impl Collector {
                 .set_collect_mode(false);
             lock.unlock_shared();
         }
+        // println!(
+        //     "gc {} collect done mark: {:?}, sweep: {:?}, size: {}",
+        //     self.id, mark_time, sweep_time, unsafe{ self.thread_local_allocator.as_mut().unwrap().get_size()}
+        // );
+        let mut status = self.status.borrow_mut();
+        status.collecting = false;
         (mark_time, sweep_time)
     }
 }

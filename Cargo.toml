@@ -61,3 +61,14 @@ members = [
 [profile.release]
 lto = "fat"
 opt-level = 3
+
+[profile.bench]
+opt-level = 3
+# debug = true
+debug-assertions = false
+overflow-checks = false
+lto = "fat"
+#panic = 'unwind' # This setting is always ignored.
+incremental = true
+codegen-units = 1
+# rpath = true

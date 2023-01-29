@@ -39,6 +39,7 @@ pub struct ThreadLocalAllocator {
     recyclable_blocks: VecDeque<*mut Block>,
     eva_blocks: Vec<*mut Block>,
     collect_mode: bool,
+    live: bool,
 }
 
 impl Drop for ThreadLocalAllocator {
@@ -50,6 +51,7 @@ impl Drop for ThreadLocalAllocator {
                 .chain(self.recyclable_blocks.drain(..))
                 .chain(self.eva_blocks.drain(..)),
         );
+        self.live = false;
     }
 }
 
@@ -68,21 +70,30 @@ impl ThreadLocalAllocator {
             recyclable_blocks: VecDeque::new(),
             eva_blocks: Vec::new(),
             collect_mode: false,
+            live: true,
         }
     }
+
+    pub fn is_live(&self) -> bool {
+        self.live
+    }
+
+    // pub fn has_emergency(&self) -> bool {
+    //     unsafe{(*self.global_allocator).out_of_space() && self.recyclable_blocks.len() == 0 }
+    // }
 
     pub fn set_collect_mode(&mut self, collect_mode: bool) {
         self.collect_mode = collect_mode;
     }
 
     pub fn print_stats(&self) {
-        println!("unavailable blocks:");
+        println!("unavailable blocks: {}", self.unavailable_blocks.len());
         for block in &self.unavailable_blocks {
             unsafe {
                 (**block).show();
             }
         }
-        println!("recyclable blocks:");
+        println!("recyclable blocks: {}", self.recyclable_blocks.len());
         for block in &self.recyclable_blocks {
             unsafe {
                 (**block).show();
@@ -178,6 +189,9 @@ impl ThreadLocalAllocator {
         // 刚启动或者recycle block全用光了
         if self.recyclable_blocks.len() == 0 {
             let block = self.get_new_block();
+            if block.is_null() {
+                return std::ptr::null_mut();
+            }
             unsafe {
                 let (s, nxt) = (*block).alloc(size, obj_type).unwrap();
                 let re = (*block).get_nth_line(s);
@@ -238,6 +252,9 @@ impl ThreadLocalAllocator {
     pub fn overflow_alloc(&mut self, size: usize, obj_type: ObjectType) -> *mut u8 {
         // 获取新block
         let new_block = self.get_new_block();
+        if new_block.is_null() {
+            return std::ptr::null_mut();
+        }
         // alloc
         let (s, nxt) = unsafe { (*new_block).alloc(size, obj_type).unwrap() };
         let re = unsafe { (*new_block).get_nth_line(s as usize) };

@@ -154,6 +154,17 @@ impl GlobalAllocator {
         self.big_object_mmap.alloc(size)
     }
 
+    pub fn unmap_all(&mut self) {
+        let _lock = self.lock.lock();
+        self.free_blocks.iter_mut().for_each(|(block, freed)| {
+            if *freed {
+                return;
+            }
+            self.mmap.dontneed(*block as *mut u8, BLOCK_SIZE);
+            *freed = true;
+        });
+    }
+
     /// 从mmap的heap空间之中获取一个Option<* mut Block>，如果heap空间不够了，就返回None
     ///
     /// 每次分配block会让current增加一个block的大小
@@ -161,21 +172,25 @@ impl GlobalAllocator {
         let current = self.current;
         let heap_end = self.heap_end;
 
-        // if current >= heap_end {
-        //     return None;
-        // }
-        // self.mmap.commit(current, BLOCK_SIZE);
-        if unsafe { current.add(BLOCK_SIZE * 32) } >= heap_end {
+        if current >= heap_end {
             return None;
         }
-        if (self.current as usize - self.heap_start as usize) / BLOCK_SIZE % 32 == 0 {
-            self.mmap.commit(current, BLOCK_SIZE * 32);
-        }
+        self.mmap.commit(current, BLOCK_SIZE);
+        // if unsafe { current.add(BLOCK_SIZE * 32) } >= heap_end {
+        //     return None;
+        // }
+        // if (self.current as usize - self.heap_start as usize) / BLOCK_SIZE % 32 == 0 {
+        //     self.mmap.commit(current, BLOCK_SIZE * 32);
+        // }
 
         let block = Block::new(current);
 
         Some(block)
     }
+
+    // pub fn out_of_space(&self) ->bool {
+    //     (self.heap_end as usize - self.current as usize) < BLOCK_SIZE && self.free_blocks.len() == 0
+    // }
 
     /// # get_block
     ///
@@ -187,7 +202,6 @@ impl GlobalAllocator {
         //     (*b).reset_header();
         // }
         // return b;
-
         let _lock = self.lock.lock();
         self.mem_usage_flag += 1;
         let block = if let Some((block, freed)) = self.free_blocks.pop_front() {
@@ -196,12 +210,13 @@ impl GlobalAllocator {
             }
             block
         } else {
-            let b = self
-                .alloc_block()
-                .expect("global allocator is out of memory!");
+            let b = self.alloc_block().unwrap_or(std::ptr::null_mut());
             self.current = unsafe { self.current.add(BLOCK_SIZE) };
             b
         };
+        if block.is_null() {
+            return block;
+        }
         unsafe {
             #[cfg(feature = "zero_init")]
             core::ptr::write_bytes(block as *mut u8, 0, BLOCK_SIZE);

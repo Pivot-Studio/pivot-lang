@@ -70,7 +70,7 @@ pub fn gc_malloc(size: usize, obj_type: u8) -> *mut u8 {
 pub fn gc_collect() {
     SPACE.with(|gc| {
         // println!("start collect");
-        let mut gc = gc.borrow_mut();
+        let gc = gc.borrow();
         gc.collect();
         // println!("collect")
     })
@@ -94,8 +94,22 @@ pub fn gc_remove_root(root: *mut u8) {
     })
 }
 
+pub fn gc_disable_auto_collect() {
+    GC_AUTOCOLLECT_ENABLE.store(false, Ordering::SeqCst);
+}
+
+pub fn gc_enable_auto_collect() {
+    GC_AUTOCOLLECT_ENABLE.store(true, Ordering::SeqCst);
+}
+
+pub fn gc_is_auto_collect_enabled() -> bool {
+    GC_AUTOCOLLECT_ENABLE.load(Ordering::SeqCst)
+}
+
 pub fn no_gc_thread() {
-    drop(SPACE)
+    SPACE.with(|gc| {
+        gc.borrow_mut().unregister_current_thread();
+    })
 }
 
 /// notify gc if a thread is going to stuck e.g.
@@ -118,6 +132,14 @@ pub fn thread_stuck_end() {
 
 pub struct GAWrapper(*mut GlobalAllocator);
 
+impl GAWrapper {
+    pub fn unmap_all(&self) {
+        unsafe {
+            self.0.as_mut().unwrap().unmap_all();
+        }
+    }
+}
+
 /// collector count
 ///
 /// should be the same as the number of threads
@@ -134,6 +156,8 @@ static GC_SWEEPING: AtomicBool = AtomicBool::new(false);
 static GC_RUNNING: AtomicBool = AtomicBool::new(false);
 
 static GC_ID: AtomicUsize = AtomicUsize::new(0);
+
+static GC_AUTOCOLLECT_ENABLE: AtomicBool = AtomicBool::new(false);
 
 lazy_static! {
     pub static ref GC_RW_LOCK: RwLock<()> = RwLock::new(());
