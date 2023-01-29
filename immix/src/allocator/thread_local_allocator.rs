@@ -44,6 +44,9 @@ pub struct ThreadLocalAllocator {
 
 impl Drop for ThreadLocalAllocator {
     fn drop(&mut self) {
+        if !self.live {
+            return;
+        }
         let global_allocator = unsafe { &mut *self.global_allocator };
         global_allocator.return_blocks(
             self.unavailable_blocks

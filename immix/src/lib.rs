@@ -108,7 +108,7 @@ pub fn gc_is_auto_collect_enabled() -> bool {
 
 pub fn no_gc_thread() {
     SPACE.with(|gc| {
-        gc.borrow_mut().unregister_current_thread();
+        gc.borrow().unregister_current_thread();
     })
 }
 
@@ -126,7 +126,7 @@ pub fn thread_stuck_start() {
 /// if a gc is triggered during thread stucking, this function
 /// will block until the gc is finished
 pub fn thread_stuck_end() {
-    spin_until!(!GC_RUNNING.load(Ordering::SeqCst));
+    spin_until!(!GC_RUNNING.load(Ordering::Acquire));
     GC_COLLECTOR_COUNT.fetch_add(1, Ordering::SeqCst);
 }
 
