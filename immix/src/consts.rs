@@ -10,4 +10,6 @@ pub const MAX_MEDIUM_OBJECT_SIZE: usize = BLOCK_SIZE;
 
 pub const EVA_BLOCK_PROPORTION: f64 = 0.025;
 
+pub const THRESHOLD_PROPORTION: f64 = 1.75;
+
 pub const ENABLE_EVA: bool = true;

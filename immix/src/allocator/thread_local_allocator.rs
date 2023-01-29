@@ -310,10 +310,11 @@ impl ThreadLocalAllocator {
     /// Iterate all blocks, if a block is not marked, free it.
     /// Correct all remain blocks' headers, and classify them
     /// into recyclable blocks and unavailable blocks.
-    pub fn sweep(&mut self, mark_histogram: *mut VecMap<usize, usize>) {
+    pub fn sweep(&mut self, mark_histogram: *mut VecMap<usize, usize>) -> usize {
         let mut recyclable_blocks = VecDeque::new();
         let mut unavailable_blocks = Vec::new();
         let mut free_blocks = Vec::new();
+        let mut total_used = 0;
         unsafe {
             for block in self
                 .recyclable_blocks
@@ -322,7 +323,7 @@ impl ThreadLocalAllocator {
             {
                 let block = *block;
                 if (*block).marked {
-                    (*block).correct_header(mark_histogram);
+                    total_used += (*block).correct_header(mark_histogram);
                     let (line, hole) = (*block).get_available_line_num_and_holes();
                     if line > 0 {
                         debug_assert!(
@@ -365,5 +366,6 @@ impl ThreadLocalAllocator {
         unsafe {
             (&mut *self.global_allocator).return_blocks(free_blocks.into_iter());
         }
+        total_used * LINE_SIZE
     }
 }

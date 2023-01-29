@@ -52,9 +52,9 @@ pub struct Block {
     /// | is head|   eva  |     not used    |    object type  | marked |  used  |
     line_map: [LineHeader; NUM_LINES_PER_BLOCK],
     /// 第一个hole的起始行号
-    first_hole_line_idx: usize,
+    cursor: usize,
     /// 第一个hole的长度（行数
-    first_hole_line_len: usize,
+    limit: usize,
     /// 是否被标记
     pub marked: bool,
     /// 洞的数量
@@ -161,8 +161,8 @@ impl Block {
             debug_assert!(ptr as usize % BLOCK_SIZE == 0);
             ptr.write(Self {
                 line_map: [0; NUM_LINES_PER_BLOCK],
-                first_hole_line_idx: 3, // 跳过前三行，都用来放metadata。浪费一点空间（metadata从0.8%->1.2%）
-                first_hole_line_len: (NUM_LINES_PER_BLOCK - 3),
+                cursor: 3, // 跳过前三行，都用来放metadata。浪费一点空间（metadata从0.8%->1.2%）
+                limit: (NUM_LINES_PER_BLOCK - 3),
                 marked: false,
                 hole_num: 1,
                 available_line_num: NUM_LINES_PER_BLOCK - 3,
@@ -179,8 +179,8 @@ impl Block {
 
     pub fn show(&self) {
         println!("size: {}", self.get_size());
-        println!("first_hole_line_idx: {}", self.first_hole_line_idx);
-        println!("first_hole_line_len: {}", self.first_hole_line_len);
+        println!("first_hole_line_idx: {}", self.cursor);
+        println!("first_hole_line_len: {}", self.limit);
         println!("marked: {}", self.marked);
         println!("hole_num: {}", self.hole_num);
         println!("available_line_num: {}", self.available_line_num);
@@ -208,8 +208,8 @@ impl Block {
             .for_each(|(i, _)| unsafe { f(ptr.add(i * LINE_SIZE)) })
     }
     pub fn reset_header(&mut self) {
-        self.first_hole_line_idx = 3;
-        self.first_hole_line_len = NUM_LINES_PER_BLOCK - 3;
+        self.cursor = 3;
+        self.limit = NUM_LINES_PER_BLOCK - 3;
         self.line_map = [0; NUM_LINES_PER_BLOCK];
         self.marked = false;
         self.hole_num = 1;
@@ -219,7 +219,7 @@ impl Block {
 
     /// # correct_header
     /// 回收的最后阶段，重置block的header
-    pub fn correct_header(&mut self, mark_histogram: *mut VecMap<usize, usize>) {
+    pub fn correct_header(&mut self, mark_histogram: *mut VecMap<usize, usize>) -> usize {
         let mut idx = 3;
         let mut len = 0;
         let mut first_hole_line_idx: usize = 3;
@@ -271,8 +271,8 @@ impl Block {
             holes += 1;
         }
 
-        self.first_hole_line_idx = first_hole_line_idx;
-        self.first_hole_line_len = first_hole_line_len;
+        self.cursor = first_hole_line_idx;
+        self.limit = first_hole_line_len;
         self.marked = false;
         self.hole_num = holes;
         self.eva_target = false;
@@ -284,6 +284,7 @@ impl Block {
                 (*mark_histogram).insert(self.hole_num, marked_num);
             }
         }
+        marked_num
     }
 
     /// # find_next_hole
@@ -342,10 +343,10 @@ impl Block {
     ///
     /// If no hole found, return `None`.
     pub fn find_first_hole(&self) -> Option<(usize, usize)> {
-        if self.first_hole_line_len == 0 {
+        if self.limit == 0 {
             return None;
         }
-        (self.first_hole_line_idx, self.first_hole_line_len).into()
+        (self.cursor, self.limit).into()
     }
 
     /// # get_nth_line
@@ -422,9 +423,9 @@ impl Block {
     /// The caller must ensure that the size is valid.
     #[inline]
     pub unsafe fn alloc(&mut self, size: usize, obj_type: ObjectType) -> Option<(usize, bool)> {
-        let cursor = self.first_hole_line_idx;
+        let cursor = self.cursor;
         let line_size = (size - 1) / LINE_SIZE + 1;
-        if line_size as usize + self.first_hole_line_idx as usize > NUM_LINES_PER_BLOCK {
+        if line_size as usize + self.cursor as usize > NUM_LINES_PER_BLOCK {
             return None;
         }
         let hole = self.find_next_hole((cursor, 0), line_size as usize);
@@ -442,23 +443,20 @@ impl Block {
             // header.set_obj_type(obj_type);
             // header.set_is_head(true);
             // 更新first_hole_line_idx和first_hole_line_len
-            if start == self.first_hole_line_idx {
-                self.first_hole_line_idx = self.first_hole_line_idx + line_size;
-                self.first_hole_line_len -= line_size;
+            if start == self.cursor {
+                self.cursor = self.cursor + line_size;
+                self.limit -= line_size;
             }
-            if self.first_hole_line_len == 0 {
-                if let Some((idx, len)) =
-                    self.find_next_hole((self.first_hole_line_idx, self.first_hole_line_len), 1)
-                {
-                    self.first_hole_line_idx = idx;
-                    self.first_hole_line_len = len;
+            if self.limit == 0 {
+                if let Some((idx, len)) = self.find_next_hole((self.cursor, self.limit), 1) {
+                    self.cursor = idx;
+                    self.limit = len;
                 } else {
                     self.hole_num -= 1;
                     return Some((start, false));
                 }
             }
-            if self.first_hole_line_idx as usize > start as usize + len as usize && len == line_size
-            {
+            if self.cursor as usize > start as usize + len as usize && len == line_size {
                 // 正好匹配，那么减少一个hole
                 self.hole_num -= 1;
             }
@@ -500,7 +498,7 @@ mod tests {
             let block = &mut *ga.get_block();
             // 设置第5行已被使用
             block.get_nth_line_header(5).set_used(true);
-            block.first_hole_line_len = 2;
+            block.limit = 2;
             block.hole_num = 2;
             // 从第三行开始分配，长度为128
             // 分配前：
@@ -530,8 +528,8 @@ mod tests {
                 .expect("cannot alloc new line");
             assert_eq!(start, 3);
             // assert_eq!(newcursor, Some(block.get_nth_line(4)));
-            assert_eq!(block.first_hole_line_idx, 4);
-            assert_eq!(block.first_hole_line_len, 1);
+            assert_eq!(block.cursor, 4);
+            assert_eq!(block.limit, 1);
             let l = block.get_nth_line_header(3).get_obj_type();
             assert_eq!(l, crate::block::ObjectType::Atomic);
             // 从第4行开始分配，长度为129
@@ -549,16 +547,16 @@ mod tests {
             // 分配失败
             // ......
             assert_eq!(block.alloc(129, crate::block::ObjectType::Atomic), None);
-            assert_eq!(block.first_hole_line_idx, 4);
-            assert_eq!(block.first_hole_line_len, 1);
+            assert_eq!(block.cursor, 4);
+            assert_eq!(block.limit, 1);
 
-            block.first_hole_line_idx = 6;
-            block.first_hole_line_len = 250;
+            block.cursor = 6;
+            block.limit = 250;
             let (start, newcursor) = block
                 .alloc((256 - 6) * LINE_SIZE, crate::block::ObjectType::Complex)
                 .expect("cannot alloc new line");
-            block.first_hole_line_idx = 4;
-            block.first_hole_line_len = 1;
+            block.cursor = 4;
+            block.limit = 1;
             // 从第6行开始分配，长度为256-6
             // 分配后：
             // --------
@@ -577,8 +575,8 @@ mod tests {
             assert_eq!(l, crate::block::ObjectType::Complex);
             assert_eq!(start, 6);
             assert_eq!(newcursor, false);
-            assert_eq!(block.first_hole_line_idx, 4);
-            assert_eq!(block.first_hole_line_len, 1);
+            assert_eq!(block.cursor, 4);
+            assert_eq!(block.limit, 1);
             let (start, newcursor) = block
                 .alloc(128, crate::block::ObjectType::Atomic)
                 .expect("cannot alloc new line");
@@ -599,7 +597,7 @@ mod tests {
             assert_eq!(start, 4);
             assert_eq!(newcursor, false);
             // assert_eq!(block.first_hole_line_idx, 255); 这个时候没hole了，此值无意义，len为0
-            assert_eq!(block.first_hole_line_len, 0);
+            assert_eq!(block.limit, 0);
         }
     }
 }

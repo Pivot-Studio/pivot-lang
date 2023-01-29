@@ -16,7 +16,7 @@ use crate::{
     block::{Block, LineHeaderExt, ObjectType},
     gc_is_auto_collect_enabled, spin_until, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING,
     GC_MARK_WAITING, GC_RUNNING, GC_RW_LOCK, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE,
-    NUM_LINES_PER_BLOCK,
+    NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION,
 };
 
 /// # Collector
@@ -44,8 +44,7 @@ struct CollectorStatus {
     collect_threshold: usize,
     /// in bytes
     bytes_allocated_since_last_gc: usize,
-    last_gc_time: std::time::Instant,
-    alloc_since_last_gc: usize,
+    last_gc_time: std::time::SystemTime,
     collecting: bool,
 }
 
@@ -95,10 +94,9 @@ impl Collector {
                 mark_histogram: memvecmap,
                 queue: memqueue,
                 status: RefCell::new(CollectorStatus {
-                    collect_threshold: 100 * 1024,
+                    collect_threshold: 512 * 1024,
                     bytes_allocated_since_last_gc: 0,
-                    last_gc_time: std::time::Instant::now(),
-                    alloc_since_last_gc: 0,
+                    last_gc_time: std::time::SystemTime::now(),
                     collecting: false,
                 }),
             }
@@ -133,30 +131,19 @@ impl Collector {
     /// ## Return
     /// * `ptr` - object pointer
     pub fn alloc(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
+        if GC_RUNNING.load(Ordering::Relaxed) {
+            self.collect();
+        }
         if gc_is_auto_collect_enabled() {
-            let mut status = self.status.borrow_mut();
-            if GC_RUNNING.load(Ordering::Relaxed) {
-                drop(status);
-                self.collect();
-            } else if status.bytes_allocated_since_last_gc > status.collect_threshold {
-                status.collect_threshold *= 2;
+            let status = self.status.borrow();
+            if status.collect_threshold < status.bytes_allocated_since_last_gc {
                 drop(status);
                 // println!("collecting");
                 self.collect();
             } else {
-                let ep = status.last_gc_time.elapsed();
-                status.last_gc_time = std::time::Instant::now();
-                if status.alloc_since_last_gc > 1 && ep > std::time::Duration::from_secs_f64(0.1) {
-                    status.collect_threshold = status.collect_threshold / 10 * 7 + 1;
-                    drop(status);
-                    // println!("collecting1");
-                    self.collect();
-                } else {
-                    drop(status);
-                }
+                drop(status);
             }
             let mut status = self.status.borrow_mut();
-            status.alloc_since_last_gc += 1;
             status.bytes_allocated_since_last_gc += ((size - 1) / LINE_SIZE + 1) * LINE_SIZE;
         }
         unsafe {
@@ -412,12 +399,13 @@ impl Collector {
     pub fn sweep(&self) {
         GC_SWEEPPING_NUM.fetch_add(1, Ordering::AcqRel);
         GC_SWEEPING.store(true, Ordering::Release);
-        unsafe {
+        let used = unsafe {
             self.thread_local_allocator
                 .as_mut()
                 .unwrap()
-                .sweep(self.mark_histogram);
-        }
+                .sweep(self.mark_histogram)
+        };
+        self.status.borrow_mut().collect_threshold = (used as f64 * THRESHOLD_PROPORTION) as usize;
         let v = GC_SWEEPPING_NUM.fetch_sub(1, Ordering::AcqRel);
         if v - 1 == 0 {
             GC_SWEEPING.store(false, Ordering::Release);
@@ -442,8 +430,7 @@ impl Collector {
         }
         status.collecting = true;
         status.bytes_allocated_since_last_gc = 0;
-        status.last_gc_time = std::time::Instant::now();
-        status.alloc_since_last_gc = 0;
+        status.last_gc_time = std::time::SystemTime::now();
         drop(status);
         // evacuation pre process
         // 这个过程要在完成safepoint同步之前完成，因为在驱逐的情况下
@@ -752,7 +739,7 @@ mod tests {
     }
 
     lazy_static! {
-        /// gc测试不能并发啊进行，需要加锁
+        /// gc测试不能并发进行，需要加锁
         static ref THE_RESOURCE: Mutex<()> = Mutex::new(());
     }
 
