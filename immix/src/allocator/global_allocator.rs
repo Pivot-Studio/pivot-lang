@@ -1,94 +1,9 @@
 use parking_lot::ReentrantMutex;
 
-use crate::{block::Block, consts::BLOCK_SIZE, mmap::Mmap};
+use crate::{block::Block, consts::BLOCK_SIZE, mmap::Mmap, bigobj::BigObj};
 
-/// # Big object mmap
-///
-/// Big object mmap, used to allocate big objects.
-pub struct BigObjectMmap {
-    /// mmap region
-    mmap: Mmap,
-    /// current heap pointer
-    current: *mut u8,
-    /// heap start
-    heap_start: *mut u8,
-    /// heap end
-    heap_end: *mut u8,
-    /// lock
-    lock: ReentrantMutex<()>,
-}
+use super::big_obj_allocator::BigObjAllocator;
 
-impl BigObjectMmap {
-    pub fn new(size: usize) -> Self {
-        let mmap = Mmap::new(size);
-        Self {
-            current: mmap.aligned(),
-            heap_start: mmap.aligned(),
-            heap_end: mmap.end(),
-            mmap,
-            lock: ReentrantMutex::new(()),
-        }
-    }
-
-    pub fn state(&self) {
-        println!("current: {:p}", self.current);
-        println!("heap_start: {:p}", self.heap_start);
-        println!("heap_end: {:p}", self.heap_end);
-    }
-
-    /// # Alloc big object
-    ///
-    /// Alloc big object from big object mmap.
-    ///
-    /// Return a pointer to the allocated memory.
-    pub fn alloc(&mut self, size: usize) -> *mut u8 {
-        let _lock = self.lock.lock();
-        let current = self.current;
-        let heap_end = self.heap_end;
-
-        if unsafe { current.add(size) } >= heap_end {
-            panic!("big object mmap out of memory");
-        }
-
-        self.mmap.commit(current, size);
-
-        self.current = unsafe { current.add(size) };
-
-        current
-    }
-    /// # Realloc big object
-    ///
-    /// Realloc big object from big object mmap.
-    pub fn realloc(&mut self, ptr: *mut u8, old_size: usize, new_size: usize) -> *mut u8 {
-        let _lock = self.lock.lock();
-        let current = self.current;
-        let heap_end = self.heap_end;
-
-        if unsafe { current.add(new_size) } >= heap_end {
-            panic!("big object mmap out of memory");
-        }
-
-        self.mmap.commit(current, new_size);
-
-        self.current = unsafe { current.add(new_size) };
-
-        unsafe {
-            std::ptr::copy_nonoverlapping(ptr, current, old_size);
-        }
-
-        self.mmap.dontneed(ptr, old_size);
-
-        current
-    }
-
-    /// # Free big object
-    ///
-    /// Free big object from big object mmap.
-    pub fn free(&mut self, ptr: *mut u8, size: usize) {
-        let _lock = self.lock.lock();
-        self.mmap.dontneed(ptr, size);
-    }
-}
 
 /// # Global allocator
 ///
@@ -107,7 +22,7 @@ pub struct GlobalAllocator {
     /// lock
     lock: ReentrantMutex<()>,
     /// big object mmap
-    big_object_mmap: BigObjectMmap,
+    pub big_obj_allocator: BigObjAllocator,
 }
 
 unsafe impl Sync for GlobalAllocator {}
@@ -119,20 +34,29 @@ impl GlobalAllocator {
     pub fn new(size: usize) -> Self {
         let mmap = Mmap::new(size);
         Self {
-            current: mmap.aligned(),
-            heap_start: mmap.aligned(),
+            current: mmap.aligned(BLOCK_SIZE),
+            heap_start: mmap.aligned(BLOCK_SIZE),
             heap_end: mmap.end(),
             mmap,
             free_blocks: Vec::new(),
             lock: ReentrantMutex::new(()),
-            big_object_mmap: BigObjectMmap::new(size),
+            big_obj_allocator: BigObjAllocator::new(size),
         }
     }
     /// 从big object mmap中分配一个大对象，大小为size
-    pub fn alloc_big_object(&mut self, size: usize) -> *mut u8 {
-        self.big_object_mmap.alloc(size)
+    pub fn get_big_obj(&mut self, size: usize) -> *mut BigObj {
+        self.big_obj_allocator.get_chunk(size)
     }
 
+    pub fn return_big_objs<I>(&mut self, objs: I)
+    where
+        I: IntoIterator<Item = *mut BigObj>,
+    {
+        let _lock = self.lock.lock();
+        for obj in objs {
+            self.big_obj_allocator.return_chunk(obj);
+        }
+    }
     /// 从mmap的heap空间之中获取一个Option<* mut Block>，如果heap空间不够了，就返回None
     ///
     /// 每次分配block会让current增加一个block的大小
@@ -204,5 +128,11 @@ impl GlobalAllocator {
     /// 判断一个指针是否在heap之中
     pub fn in_heap(&self, ptr: *mut u8) -> bool {
         ptr >= self.heap_start && ptr < self.heap_end
+    }
+
+    /// # in_big_heap
+    /// 判断一个指针是否是一个大对象
+    pub fn in_big_heap(&self, ptr: *mut u8) -> bool {
+        self.big_obj_allocator.in_heap(ptr)
     }
 }

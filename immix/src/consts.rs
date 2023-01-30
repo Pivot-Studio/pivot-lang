@@ -9,3 +9,5 @@ pub const MAX_SMALL_OBJECT_SIZE: usize = LINE_SIZE;
 pub const MAX_MEDIUM_OBJECT_SIZE: usize = BLOCK_SIZE;
 
 pub const EVA_BLOCK_PROPORTION: f64 = 0.025;
+
+pub const ALIGN: usize = 128;

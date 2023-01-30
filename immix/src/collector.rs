@@ -13,7 +13,7 @@ use crate::{
     allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
     spin_until, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_WAITING, GC_RUNNING, GC_RW_LOCK,
-    GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE, NUM_LINES_PER_BLOCK,
+    GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE, NUM_LINES_PER_BLOCK, HeaderExt,
 };
 
 /// # Collector
@@ -157,7 +157,20 @@ impl Collector {
     unsafe fn mark_ptr(&self, ptr: *mut u8) {
         let father = ptr;
         let mut ptr = *(ptr as *mut *mut u8);
-
+        // mark it if it is a big object
+        if self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr){
+            let big_obj = self.thread_local_allocator.as_mut().unwrap().big_obj_from_ptr(ptr).unwrap();
+            if (*big_obj).header.get_marked() {
+                return;
+            }
+            (*big_obj).header.set_marked(true);
+            let obj_type = (*big_obj).header.get_obj_type();
+            match obj_type {
+                ObjectType::Atomic => {}
+                _ => (*self.queue).push_back((ptr, obj_type)),
+            }
+            return;
+        }
         // mark it if it is in heap
         if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
             let block = Block::from_obj_ptr(ptr);
@@ -228,7 +241,8 @@ impl Collector {
     /// it self does not mark the object, but mark the object's fields by calling
     /// mark_ptr
     unsafe fn mark_complex(&self, ptr: *mut u8) {
-        if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
+        if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr)
+           &&!self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr) {
             return;
         }
         let vtable = *(ptr as *mut VtableFunc);
@@ -249,7 +263,8 @@ impl Collector {
     }
     /// precise mark a trait object
     unsafe fn mark_trait(&self, ptr: *mut u8) {
-        if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
+        if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr)
+           &&!self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr) {
             return;
         }
         let loaded = *(ptr as *mut *mut *mut u8);
@@ -401,6 +416,16 @@ impl Collector {
         }
         time
     }
+
+    /// # get_bigobjs_size
+    pub fn get_bigobjs_size(&self) -> usize {
+        unsafe{
+            self.thread_local_allocator
+                .as_ref()
+                .unwrap()
+                .get_bigobjs_size()
+        }
+    }
 }
 
 #[cfg(test)]
@@ -412,12 +437,12 @@ mod tests {
     use rand::random;
     use rustc_hash::FxHashSet;
 
-    use crate::SPACE;
+    use crate::{SPACE, BLOCK_SIZE, round_n_up};
 
     use super::*;
 
     const LINE_SIZE_OBJ: usize = 2;
-
+    
     struct GCTestObj {
         _vtable: VtableFunc,
         b: *mut GCTestObj,
@@ -426,6 +451,13 @@ mod tests {
         d: *mut u64,
         e: *mut GCTestObj,
     }
+    struct GCTestBigObj{
+        _vtable: VtableFunc,
+        b: *mut GCTestBigObj,
+        _arr: [u8; BLOCK_SIZE],
+        e: *mut GCTestBigObj,
+    }
+    const BIGOBJ_ALLOC_SIZE: usize = round_n_up!(size_of::<GCTestBigObj>() + 16, 128);
     fn gctest_vtable(
         ptr: *mut u8,
         gc: &Collector,
@@ -438,6 +470,19 @@ mod tests {
             mark_ptr(gc, (&mut (*obj).b) as *mut *mut GCTestObj as *mut u8);
             mark_ptr(gc, (&mut (*obj).d) as *mut *mut u64 as *mut u8);
             mark_ptr(gc, (&mut (*obj).e) as *mut *mut GCTestObj as *mut u8);
+        }
+    }
+    fn gctest_vtable_big(
+        ptr: *mut u8,
+        gc: &Collector,
+        mark_ptr: VisitFunc,
+        _mark_complex: VisitFunc,
+        _mark_trait: VisitFunc,
+    ) {
+        let obj = ptr as *mut GCTestBigObj;
+        unsafe {
+            mark_ptr(gc, (&mut (*obj).b) as *mut *mut GCTestBigObj as *mut u8);
+            mark_ptr(gc, (&mut (*obj).e) as *mut *mut GCTestBigObj as *mut u8);
         }
     }
     #[test]
@@ -505,6 +550,48 @@ mod tests {
         for h in handles {
             h.join().unwrap();
         }
+    }
+
+    #[test]
+    fn test_big_obj_gc() {
+        SPACE.with(|gc| unsafe {
+            let mut gc = gc.borrow_mut();
+            println!("thread1 gcid = {}", gc.get_id());
+            let mut a =
+                gc.alloc(size_of::<GCTestBigObj>(), ObjectType::Complex) as *mut GCTestBigObj;
+            let b = gc.alloc(size_of::<GCTestBigObj>(), ObjectType::Complex) as *mut GCTestBigObj;
+            (*a).b = b;
+            (*a)._vtable = gctest_vtable_big;
+            (*b)._vtable = gctest_vtable_big;
+            let rustptr = (&mut a) as *mut *mut GCTestBigObj as *mut u8;
+            gc.add_root(rustptr, ObjectType::Pointer);
+            let size1 = gc.get_bigobjs_size();
+            assert_eq!(size1, 2 * BIGOBJ_ALLOC_SIZE);
+            let time = std::time::Instant::now();
+            gc.collect();// 不回收，剩余 a b
+            println!("gc{} gc time = {:?}", gc.get_id(), time.elapsed());
+            let size2 = gc.get_bigobjs_size();
+            assert_eq!(size1, size2);
+            (*a).b = a;
+            gc.collect();// 回收，剩余 a
+            let size3 = gc.get_bigobjs_size();
+            assert!(size3 < size2);
+            gc.remove_root(rustptr);
+            
+            gc.collect();// 回收，不剩余
+            let size4 = gc.get_bigobjs_size();
+            assert_eq!(0, size4);
+            let mut a =
+                gc.alloc(size_of::<GCTestBigObj>(), ObjectType::Complex) as *mut GCTestBigObj;
+            let b = gc.alloc(size_of::<GCTestBigObj>(), ObjectType::Complex) as *mut GCTestBigObj;
+            (*a).b = b;
+            (*a)._vtable = gctest_vtable_big;
+            (*b)._vtable = gctest_vtable_big;
+            let rustptr = (&mut a) as *mut *mut GCTestBigObj as *mut u8;
+            gc.add_root(rustptr, ObjectType::Pointer);
+            let size1 = gc.get_bigobjs_size();
+            assert_eq!(size1, 2 * BIGOBJ_ALLOC_SIZE);
+        });
     }
 
     unsafe fn alloc_test_obj(gc: &mut Collector) -> *mut GCTestObj {

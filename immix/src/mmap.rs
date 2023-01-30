@@ -1,6 +1,6 @@
 #[cfg(windows)]
 mod _win {
-    use crate::consts::*;
+    use crate::{consts::*, aligned_ptr};
     use core::{ptr::null_mut, usize};
 
     use winapi::um::{
@@ -27,10 +27,9 @@ mod _win {
                 }
             }
         }
-        /// Return a `BLOCK_SIZE` aligned pointer to the mmap'ed region.
-        pub fn aligned(&self) -> *mut u8 {
-            let offset = BLOCK_SIZE - (self.start as usize) % BLOCK_SIZE;
-            unsafe { self.start.add(offset) as *mut u8 }
+        /// Return a `align` aligned pointer to the mmap'ed region.
+        pub fn aligned(&self, align: usize) -> *mut u8 {
+            aligned_ptr!(self.start, align)
         }
 
         // pub fn start(&self) -> *mut u8 {
@@ -65,7 +64,7 @@ mod _win {
 
 #[cfg(unix)]
 mod _unix {
-    use crate::consts::*;
+    use crate::round_n_up;
     pub struct Mmap {
         start: *mut u8,
         end: *mut u8,
@@ -94,10 +93,9 @@ mod _unix {
                 }
             }
         }
-        /// Return a `BLOCK_SIZE` aligned pointer to the mmap'ed region.
-        pub fn aligned(&self) -> *mut u8 {
-            let offset = BLOCK_SIZE - (self.start as usize) % BLOCK_SIZE;
-            unsafe { self.start.offset(offset as isize) as *mut u8 }
+        /// Return a `align` aligned pointer to the mmap'ed region.
+        pub fn aligned(&self, align: usize) -> *mut u8 {
+            round_n_up!(self.start as usize, align) as *mut u8
         }
 
         pub fn start(&self) -> *mut u8 {
