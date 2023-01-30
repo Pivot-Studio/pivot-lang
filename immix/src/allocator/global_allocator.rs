@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 use parking_lot::ReentrantMutex;
 
 use crate::{block::Block, consts::BLOCK_SIZE, mmap::Mmap};
@@ -105,7 +103,7 @@ pub struct GlobalAllocator {
     /// heap end
     heap_end: *mut u8,
     /// 所有被归还的Block都会被放到这个Vec里面
-    free_blocks: VecDeque<(*mut Block, bool)>,
+    free_blocks: Vec<(*mut Block, bool)>,
     /// lock
     lock: ReentrantMutex<()>,
     /// big object mmap
@@ -141,7 +139,7 @@ impl GlobalAllocator {
             heap_start: mmap.aligned(),
             heap_end: mmap.end(),
             mmap,
-            free_blocks: VecDeque::new(),
+            free_blocks: Vec::new(),
             lock: ReentrantMutex::new(()),
             big_object_mmap: BigObjectMmap::new(size),
             last_get_block_time: std::time::Instant::now(),
@@ -204,7 +202,7 @@ impl GlobalAllocator {
         // return b;
         let _lock = self.lock.lock();
         self.mem_usage_flag += 1;
-        let block = if let Some((block, freed)) = self.free_blocks.pop_front() {
+        let block = if let Some((block, freed)) = self.free_blocks.pop() {
             if freed {
                 self.mmap.commit(block as *mut u8, BLOCK_SIZE);
             }
@@ -264,7 +262,7 @@ impl GlobalAllocator {
         let _lock = self.lock.lock();
         for block in blocks {
             self.mem_usage_flag -= 1;
-            self.free_blocks.push_back((block, false));
+            self.free_blocks.push((block, false));
             // self.mmap
             //     .dontneed(block as *mut Block as *mut u8, BLOCK_SIZE);
         }

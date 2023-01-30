@@ -1,6 +1,5 @@
 use std::{
     cell::RefCell,
-    collections::VecDeque,
     ptr::drop_in_place,
     sync::atomic::{AtomicPtr, Ordering},
     thread::yield_now,
@@ -32,8 +31,8 @@ use crate::{
 /// * `queue` - gc queue
 pub struct Collector {
     thread_local_allocator: *mut ThreadLocalAllocator,
-    roots: FxHashMap<usize, ObjectType>,
-    queue: *mut VecDeque<(*mut u8, ObjectType)>,
+    roots: FxHashMap<*mut u8, ObjectType>,
+    queue: *mut Vec<(*mut u8, ObjectType)>,
     id: usize,
     mark_histogram: *mut VecMap<usize, usize>,
     status: RefCell<CollectorStatus>,
@@ -84,9 +83,10 @@ impl Collector {
             let memvecmap =
                 malloc(core::mem::size_of::<VecMap<usize, usize>>()).cast::<VecMap<usize, usize>>();
             memvecmap.write(VecMap::with_capacity(NUM_LINES_PER_BLOCK));
-            let queue = VecDeque::new();
-            let memqueue = malloc(core::mem::size_of::<VecDeque<(*mut u8, ObjectType)>>())
-                .cast::<VecDeque<(*mut u8, ObjectType)>>();
+            let queue = Vec::new();
+            let memqueue =
+                malloc(core::mem::size_of::<Vec<(*mut u8, ObjectType)>>())
+                    .cast::<Vec<(*mut u8, ObjectType)>>();
             memqueue.write(queue);
             Self {
                 thread_local_allocator: mem,
@@ -167,7 +167,7 @@ impl Collector {
     /// * `root` - root
     /// * `size` - root size
     pub fn add_root(&mut self, root: *mut u8, obj_type: ObjectType) {
-        self.roots.insert(root as usize, obj_type);
+        self.roots.insert(root, obj_type);
     }
 
     /// # remove_root
@@ -176,7 +176,7 @@ impl Collector {
     /// ## Parameters
     /// * `root` - root
     pub fn remove_root(&mut self, root: *mut u8) {
-        self.roots.remove(&(root as usize));
+        self.roots.remove(&(root));
     }
 
     /// used to correct forward pointer
@@ -266,7 +266,7 @@ impl Collector {
             let obj_type = line_header.get_obj_type();
             match obj_type {
                 ObjectType::Atomic => {}
-                _ => (*self.queue).push_back((ptr, obj_type)),
+                _ => (*self.queue).push((ptr, obj_type)),
             }
         }
     }
@@ -276,9 +276,9 @@ impl Collector {
     /// it self does not mark the object, but mark the object's fields by calling
     /// mark_ptr
     unsafe fn mark_complex(&self, ptr: *mut u8) {
-        if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
-            return;
-        }
+        // if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
+        //     return;
+        // }
         let vtable = *(ptr as *mut VtableFunc);
         // let ptr = vtable as *mut u8;
         let v = vtable as i64;
@@ -300,9 +300,9 @@ impl Collector {
     }
     /// precise mark a trait object
     unsafe fn mark_trait(&self, ptr: *mut u8) {
-        if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
-            return;
-        }
+        // if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
+        //     return;
+        // }
         let loaded = *(ptr as *mut *mut *mut u8);
         let ptr = *loaded.offset(1);
         self.mark_ptr(ptr);
@@ -359,17 +359,23 @@ impl Collector {
         }
 
         for (root, obj_type) in self.roots.iter() {
-            let root = (*root) as *mut u8;
             unsafe {
                 match obj_type {
                     ObjectType::Atomic => {}
-                    _ => (*self.queue).push_back((root, *obj_type)),
+                    ObjectType::Pointer => (*self.queue).push((*root, *obj_type)),
+                    _ => {
+                        if !self.thread_local_allocator.as_mut().unwrap().in_heap(*root) {
+                            continue;
+                        }
+                        (*self.queue).push((*root, *obj_type))
+                    }
                 }
             }
         }
         // iterate through queue and mark all reachable objects
         unsafe {
-            while let Some((obj, obj_type)) = (*self.queue).pop_front() {
+            // (*self.queue).extend(self.roots.iter().map(|(a,b)|(*a,*b)));
+            while let Some((obj, obj_type)) = (*self.queue).pop() {
                 match obj_type {
                     ObjectType::Atomic => {}
                     ObjectType::Complex => {
@@ -396,7 +402,7 @@ impl Collector {
     /// # sweep
     ///
     /// since we did synchronization in mark, we don't need to do synchronization again in sweep
-    pub fn sweep(&self) {
+    pub fn sweep(&self) -> usize {
         GC_SWEEPPING_NUM.fetch_add(1, Ordering::AcqRel);
         GC_SWEEPING.store(true, Ordering::Release);
         let used = unsafe {
@@ -413,11 +419,13 @@ impl Collector {
         } else {
             spin_until!(!GC_SWEEPING.load(Ordering::Acquire));
         }
+        used
     }
 
     /// # collect
     /// Collect garbage.
     pub fn collect(&self) -> (std::time::Duration, std::time::Duration) {
+        // let start_time = std::time::Instant::now();
         // println!(
         //     "gc {} collecting...  size: {}",
         //     self.id,  unsafe{ self.thread_local_allocator.as_mut().unwrap().get_size()}
@@ -479,7 +487,7 @@ impl Collector {
         }
         self.mark();
         let mark_time = time.elapsed();
-        self.sweep();
+        let _used = self.sweep();
         let sweep_time = time.elapsed() - mark_time;
         unsafe {
             self.thread_local_allocator
@@ -489,12 +497,17 @@ impl Collector {
             lock.unlock_shared();
         }
         // println!(
-        //     "gc {} collect done mark: {:?}, sweep: {:?}, size: {}",
-        //     self.id, mark_time, sweep_time, unsafe{ self.thread_local_allocator.as_mut().unwrap().get_size()}
+        //     "gc {} collect done, mark: {:?}, sweep: {:?}, size: {}, total: {:?}",
+        //     self.id,
+        //     mark_time,
+        //     sweep_time,
+        //     used,
+        //     start_time.elapsed()
         // );
         let mut status = self.status.borrow_mut();
         status.collecting = false;
         (mark_time, sweep_time)
+        // (Default::default(), Default::default())
     }
 }
 
