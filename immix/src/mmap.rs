@@ -1,6 +1,6 @@
 #[cfg(windows)]
 mod _win {
-    use crate::{consts::*, aligned_ptr};
+    use crate::round_n_up;
     use core::{ptr::null_mut, usize};
 
     use winapi::um::{
@@ -29,7 +29,7 @@ mod _win {
         }
         /// Return a `align` aligned pointer to the mmap'ed region.
         pub fn aligned(&self, align: usize) -> *mut u8 {
-            aligned_ptr!(self.start, align)
+            round_n_up!(self.start as usize, align) as *mut u8
         }
 
         // pub fn start(&self) -> *mut u8 {
