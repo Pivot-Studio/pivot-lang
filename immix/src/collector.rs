@@ -560,13 +560,6 @@ mod tests {
         d: *mut u64,
         e: *mut GCTestObj,
     }
-    struct GCTestBigObj{
-        _vtable: VtableFunc,
-        b: *mut GCTestBigObj,
-        _arr: [u8; BLOCK_SIZE],
-        e: *mut GCTestBigObj,
-    }
-    const BIGOBJ_ALLOC_SIZE: usize = round_n_up!(size_of::<GCTestBigObj>() + 16, 128);
     fn gctest_vtable(
         ptr: *mut u8,
         gc: &Collector,
@@ -581,6 +574,15 @@ mod tests {
             mark_ptr(gc, (&mut (*obj).e) as *mut *mut GCTestObj as *mut u8);
         }
     }
+
+    #[repr(C)]
+    struct GCTestBigObj{
+        _vtable: VtableFunc,
+        b: *mut GCTestBigObj,
+        _arr: [u8; BLOCK_SIZE],
+        d: *mut GCTestBigObj,
+    }
+    const BIGOBJ_ALLOC_SIZE: usize = round_n_up!(size_of::<GCTestBigObj>() + 16, 128);
     fn gctest_vtable_big(
         ptr: *mut u8,
         gc: &Collector,
@@ -591,7 +593,7 @@ mod tests {
         let obj = ptr as *mut GCTestBigObj;
         unsafe {
             mark_ptr(gc, (&mut (*obj).b) as *mut *mut GCTestBigObj as *mut u8);
-            mark_ptr(gc, (&mut (*obj).e) as *mut *mut GCTestBigObj as *mut u8);
+            mark_ptr(gc, (&mut (*obj).d) as *mut *mut GCTestBigObj as *mut u8);
         }
     }
     #[test]
@@ -690,6 +692,7 @@ mod tests {
                 gc.alloc(size_of::<GCTestBigObj>(), ObjectType::Complex) as *mut GCTestBigObj;
             let b = gc.alloc(size_of::<GCTestBigObj>(), ObjectType::Complex) as *mut GCTestBigObj;
             (*a).b = b;
+            (*a).d = null_mut();
             (*a)._vtable = gctest_vtable_big;
             (*b)._vtable = gctest_vtable_big;
             let rustptr = (&mut a) as *mut *mut GCTestBigObj as *mut u8;
@@ -713,13 +716,24 @@ mod tests {
             let mut a =
                 gc.alloc(size_of::<GCTestBigObj>(), ObjectType::Complex) as *mut GCTestBigObj;
             let b = gc.alloc(size_of::<GCTestBigObj>(), ObjectType::Complex) as *mut GCTestBigObj;
+            let c = gc.alloc(size_of::<GCTestBigObj>(), ObjectType::Complex) as *mut GCTestBigObj;
             (*a).b = b;
+            (*a).d = c;
             (*a)._vtable = gctest_vtable_big;
             (*b)._vtable = gctest_vtable_big;
+            (*c)._vtable = gctest_vtable_big;
             let rustptr = (&mut a) as *mut *mut GCTestBigObj as *mut u8;
             gc.add_root(rustptr, ObjectType::Pointer);
+            //  32896       32896       32896
+            // |  b  | <-- |  a  | --> |  c  |
+            //               ^ rustptr
             let size1 = gc.get_bigobjs_size();
-            assert_eq!(size1, 2 * BIGOBJ_ALLOC_SIZE);
+            assert_eq!(size1, 3 * BIGOBJ_ALLOC_SIZE);
+            (*a).b = null_mut();
+            (*a).d = null_mut();
+            gc.collect();// 回收，剩余 a
+            gc.remove_root(rustptr);
+            gc.collect();// 回收，不剩余, b a merge，a c merge。
         });
     }
 
