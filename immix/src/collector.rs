@@ -215,7 +215,7 @@ impl Collector {
             let obj_type = (*big_obj).header.get_obj_type();
             match obj_type {
                 ObjectType::Atomic => {}
-                _ => (*self.queue).push_back((ptr, obj_type)),
+                _ => (*self.queue).push((ptr, obj_type)),
             }
             return;
         }
