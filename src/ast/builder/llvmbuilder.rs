@@ -1738,7 +1738,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         }
         self.builder.build_return(None);
         if let Some(currentbb) = currentbb {
-            self.builder.position_at_end(self.get_llvm_block(currentbb).unwrap());
+            self.builder
+                .position_at_end(self.get_llvm_block(currentbb).unwrap());
         }
     }
 }

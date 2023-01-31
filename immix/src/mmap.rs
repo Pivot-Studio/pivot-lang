@@ -82,9 +82,9 @@ mod _unix {
                     -1,
                     0,
                 );
-                libc::madvise(map, size, libc::MADV_SEQUENTIAL);
+                let code = libc::madvise(map, size, libc::MADV_SEQUENTIAL);
                 if map == libc::MAP_FAILED {
-                    panic!("mmap failed");
+                    panic!("mmap failed, code: {}", code);
                 }
                 Self {
                     start: map as *mut u8,
@@ -107,6 +107,11 @@ mod _unix {
 
         pub fn dontneed(&self, page: *mut u8, size: usize) {
             unsafe {
+                #[cfg(all(target_os = "linux", feature = "madv_free"))]
+                libc::madvise(page as *mut _, size as _, libc::MADV_FREE);
+                #[cfg(all(target_os = "macos", feature = "madv_free"))]
+                libc::madvise(page as *mut _, size as _, libc::MADV_FREE_REUSE);
+                #[cfg(feature = "madv_dontneed")]
                 libc::madvise(page as *mut _, size as _, libc::MADV_DONTNEED);
             }
         }

@@ -32,9 +32,15 @@ thread_local! {
     };
 }
 
+const DEFAULT_HEAP_SIZE: usize = 1024 * 1024 * 1024;
+
 lazy_static! {
     pub static ref GLOBAL_ALLOCATOR: GAWrapper = unsafe {
-        let ga = GlobalAllocator::new(1024 * 1024 * 1024);
+        let mut heap_size = DEFAULT_HEAP_SIZE;
+        if let Some(size) = option_env!("PL_IMMIX_HEAP_SIZE") {
+            heap_size = size.parse().unwrap();
+        }
+        let ga = GlobalAllocator::new(heap_size);
         let mem = malloc(core::mem::size_of::<GlobalAllocator>()).cast::<GlobalAllocator>();
         mem.write(ga);
         GAWrapper(mem)
@@ -65,7 +71,7 @@ pub fn gc_malloc(size: usize, obj_type: u8) -> *mut u8 {
 pub fn gc_collect() {
     SPACE.with(|gc| {
         // println!("start collect");
-        let mut gc = gc.borrow_mut();
+        let gc = gc.borrow();
         gc.collect();
         // println!("collect")
     })
@@ -89,8 +95,22 @@ pub fn gc_remove_root(root: *mut u8) {
     })
 }
 
+pub fn gc_disable_auto_collect() {
+    GC_AUTOCOLLECT_ENABLE.store(false, Ordering::SeqCst);
+}
+
+pub fn gc_enable_auto_collect() {
+    GC_AUTOCOLLECT_ENABLE.store(true, Ordering::SeqCst);
+}
+
+pub fn gc_is_auto_collect_enabled() -> bool {
+    GC_AUTOCOLLECT_ENABLE.load(Ordering::SeqCst)
+}
+
 pub fn no_gc_thread() {
-    drop(SPACE)
+    SPACE.with(|gc| {
+        gc.borrow().unregister_current_thread();
+    })
 }
 
 /// notify gc if a thread is going to stuck e.g.
@@ -107,11 +127,19 @@ pub fn thread_stuck_start() {
 /// if a gc is triggered during thread stucking, this function
 /// will block until the gc is finished
 pub fn thread_stuck_end() {
-    spin_until!(!GC_RUNNING.load(Ordering::SeqCst));
+    spin_until!(!GC_RUNNING.load(Ordering::Acquire));
     GC_COLLECTOR_COUNT.fetch_add(1, Ordering::SeqCst);
 }
 
 pub struct GAWrapper(*mut GlobalAllocator);
+
+impl GAWrapper {
+    pub fn unmap_all(&self) {
+        unsafe {
+            self.0.as_mut().unwrap().unmap_all();
+        }
+    }
+}
 
 /// collector count
 ///
@@ -129,6 +157,8 @@ static GC_SWEEPING: AtomicBool = AtomicBool::new(false);
 static GC_RUNNING: AtomicBool = AtomicBool::new(false);
 
 static GC_ID: AtomicUsize = AtomicUsize::new(0);
+
+static GC_AUTOCOLLECT_ENABLE: AtomicBool = AtomicBool::new(false);
 
 lazy_static! {
     pub static ref GC_RW_LOCK: RwLock<()> = RwLock::new(());

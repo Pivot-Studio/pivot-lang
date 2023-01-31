@@ -1,5 +1,6 @@
 use std::{
-    collections::VecDeque,
+    cell::RefCell,
+    ptr::drop_in_place,
     sync::atomic::{AtomicPtr, Ordering},
     thread::yield_now,
 };
@@ -12,8 +13,9 @@ use vector_map::VecMap;
 use crate::{
     allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
-    spin_until, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_WAITING, GC_RUNNING, GC_RW_LOCK,
-    GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE, NUM_LINES_PER_BLOCK, HeaderExt,
+    gc_is_auto_collect_enabled, spin_until, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING,
+    GC_MARK_WAITING, GC_RUNNING, GC_RW_LOCK, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE,
+    NUM_LINES_PER_BLOCK, HeaderExt, THRESHOLD_PROPORTION,
 };
 
 /// # Collector
@@ -29,10 +31,20 @@ use crate::{
 /// * `queue` - gc queue
 pub struct Collector {
     thread_local_allocator: *mut ThreadLocalAllocator,
-    roots: FxHashMap<usize, ObjectType>,
-    queue: *mut VecDeque<(*mut u8, ObjectType)>,
+    roots: FxHashMap<*mut u8, ObjectType>,
+    queue: *mut Vec<(*mut u8, ObjectType)>,
     id: usize,
     mark_histogram: *mut VecMap<usize, usize>,
+    status: RefCell<CollectorStatus>,
+}
+
+struct CollectorStatus {
+    /// in bytes
+    collect_threshold: usize,
+    /// in bytes
+    bytes_allocated_since_last_gc: usize,
+    last_gc_time: std::time::SystemTime,
+    collecting: bool,
 }
 
 pub type VisitFunc = unsafe fn(&Collector, *mut u8);
@@ -41,11 +53,15 @@ pub type VtableFunc = fn(*mut u8, &Collector, VisitFunc, VisitFunc, VisitFunc);
 
 impl Drop for Collector {
     fn drop(&mut self) {
+        // println!("Collector {} is dropped", self.id);
         unsafe {
+            if (*self.thread_local_allocator).is_live() {
+                GC_COLLECTOR_COUNT.fetch_sub(1, Ordering::SeqCst);
+                drop_in_place(self.thread_local_allocator);
+            }
             libc::free(self.thread_local_allocator as *mut libc::c_void);
             libc::free(self.mark_histogram as *mut libc::c_void);
             libc::free(self.queue as *mut libc::c_void);
-            GC_COLLECTOR_COUNT.fetch_sub(1, Ordering::SeqCst);
         }
     }
 }
@@ -67,9 +83,10 @@ impl Collector {
             let memvecmap =
                 malloc(core::mem::size_of::<VecMap<usize, usize>>()).cast::<VecMap<usize, usize>>();
             memvecmap.write(VecMap::with_capacity(NUM_LINES_PER_BLOCK));
-            let queue = VecDeque::new();
-            let memqueue = malloc(core::mem::size_of::<VecDeque<(*mut u8, ObjectType)>>())
-                .cast::<VecDeque<(*mut u8, ObjectType)>>();
+            let queue = Vec::new();
+            let memqueue =
+                malloc(core::mem::size_of::<Vec<(*mut u8, ObjectType)>>())
+                    .cast::<Vec<(*mut u8, ObjectType)>>();
             memqueue.write(queue);
             Self {
                 thread_local_allocator: mem,
@@ -77,7 +94,20 @@ impl Collector {
                 id,
                 mark_histogram: memvecmap,
                 queue: memqueue,
+                status: RefCell::new(CollectorStatus {
+                    collect_threshold: 512 * 1024,
+                    bytes_allocated_since_last_gc: 0,
+                    last_gc_time: std::time::SystemTime::now(),
+                    collecting: false,
+                }),
             }
+        }
+    }
+
+    pub fn unregister_current_thread(&self) {
+        GC_COLLECTOR_COUNT.fetch_sub(1, Ordering::SeqCst);
+        unsafe {
+            drop_in_place(self.thread_local_allocator);
         }
     }
 
@@ -102,12 +132,30 @@ impl Collector {
     /// ## Return
     /// * `ptr` - object pointer
     pub fn alloc(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
+        if gc_is_auto_collect_enabled() {
+            if GC_RUNNING.load(Ordering::Acquire) {
+                self.collect();
+            }
+            let status = self.status.borrow();
+            if status.collect_threshold < status.bytes_allocated_since_last_gc {
+                drop(status);
+                self.collect();
+            } else {
+                drop(status);
+            }
+            let mut status = self.status.borrow_mut();
+            status.bytes_allocated_since_last_gc += ((size - 1) / LINE_SIZE + 1) * LINE_SIZE;
+        }
         unsafe {
             let ptr = self
                 .thread_local_allocator
                 .as_mut()
                 .unwrap()
                 .alloc(size, obj_type);
+            if ptr.is_null() {
+                self.collect();
+                return self.alloc(size, obj_type);
+            }
             ptr
         }
     }
@@ -119,7 +167,7 @@ impl Collector {
     /// * `root` - root
     /// * `size` - root size
     pub fn add_root(&mut self, root: *mut u8, obj_type: ObjectType) {
-        self.roots.insert(root as usize, obj_type);
+        self.roots.insert(root, obj_type);
     }
 
     /// # remove_root
@@ -128,7 +176,7 @@ impl Collector {
     /// ## Parameters
     /// * `root` - root
     pub fn remove_root(&mut self, root: *mut u8) {
-        self.roots.remove(&(root as usize));
+        self.roots.remove(&(root));
     }
 
     /// used to correct forward pointer
@@ -231,7 +279,7 @@ impl Collector {
             let obj_type = line_header.get_obj_type();
             match obj_type {
                 ObjectType::Atomic => {}
-                _ => (*self.queue).push_back((ptr, obj_type)),
+                _ => (*self.queue).push((ptr, obj_type)),
             }
         }
     }
@@ -241,13 +289,16 @@ impl Collector {
     /// it self does not mark the object, but mark the object's fields by calling
     /// mark_ptr
     unsafe fn mark_complex(&self, ptr: *mut u8) {
-        if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr)
-           &&!self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr) {
-            return;
-        }
+        // if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr)
+        //    &&!self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr) {
+        //     return;
+        // }
         let vtable = *(ptr as *mut VtableFunc);
         // let ptr = vtable as *mut u8;
         let v = vtable as i64;
+        // println!("vtable: {:?}, ptr : {:p}", v, ptr);
+        // let a = *(ptr as *mut *mut u8);
+        // println!("a: {:p}", a);
         // println!("vtable: {:?}, ptr : {:p}", v, ptr);
         // 我不知道为什么，vtable为0的情况，这里如果写v == 0，进不去这个if。应该是rust的一个bug
         if v < 1 && v > -1 {
@@ -263,16 +314,17 @@ impl Collector {
     }
     /// precise mark a trait object
     unsafe fn mark_trait(&self, ptr: *mut u8) {
-        if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr)
-           &&!self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr) {
-            return;
-        }
+        // if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr)
+        //    &&!self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr) {
+        //     return;
+        // }
         let loaded = *(ptr as *mut *mut *mut u8);
         let ptr = *loaded.offset(1);
         self.mark_ptr(ptr);
     }
 
     pub fn print_stats(&self) {
+        println!("gc {} states:", self.id);
         unsafe {
             self.thread_local_allocator.as_ref().unwrap().print_stats();
         }
@@ -281,13 +333,23 @@ impl Collector {
         self.id
     }
 
+    pub fn iter<F>(&self, f: F)
+    where
+        F: FnMut(*mut u8),
+    {
+        unsafe {
+            self.thread_local_allocator.as_ref().unwrap().iter(f);
+        }
+    }
+
     /// # mark
     /// From gc roots, mark all reachable objects.
     ///
     /// this mark function is __precise__
-    pub fn mark(&mut self) {
+    pub fn mark(&self) {
         GC_RUNNING.store(true, Ordering::Release);
         let gcs = GC_COLLECTOR_COUNT.load(Ordering::Acquire);
+        // println!("gc {}: mark start gcs {}", self.id,gcs);
         let v = GC_MARK_WAITING.fetch_add(1, Ordering::Acquire);
         if v + 1 != gcs {
             let mut i = 0;
@@ -303,23 +365,32 @@ impl Collector {
                 if i % 100 == 0 {
                     yield_now();
                 }
+                // if i % 10000000==0{
+                //     println!("gc run {:?}", GC_RUNNING.load(Ordering::Acquire))
+                // }
             }
         } else {
             GC_MARKING.store(true, Ordering::Release);
         }
 
         for (root, obj_type) in self.roots.iter() {
-            let root = (*root) as *mut u8;
             unsafe {
                 match obj_type {
                     ObjectType::Atomic => {}
-                    _ => (*self.queue).push_back((root, *obj_type)),
+                    ObjectType::Pointer => (*self.queue).push((*root, *obj_type)),
+                    _ => {
+                        if !self.thread_local_allocator.as_mut().unwrap().in_heap(*root) {
+                            continue;
+                        }
+                        (*self.queue).push((*root, *obj_type))
+                    }
                 }
             }
         }
         // iterate through queue and mark all reachable objects
         unsafe {
-            while let Some((obj, obj_type)) = (*self.queue).pop_front() {
+            // (*self.queue).extend(self.roots.iter().map(|(a,b)|(*a,*b)));
+            while let Some((obj, obj_type)) = (*self.queue).pop() {
                 match obj_type {
                     ObjectType::Atomic => {}
                     ObjectType::Complex => {
@@ -346,15 +417,16 @@ impl Collector {
     /// # sweep
     ///
     /// since we did synchronization in mark, we don't need to do synchronization again in sweep
-    pub fn sweep(&mut self) {
+    pub fn sweep(&self) -> usize {
         GC_SWEEPPING_NUM.fetch_add(1, Ordering::AcqRel);
         GC_SWEEPING.store(true, Ordering::Release);
-        unsafe {
+        let used = unsafe {
             self.thread_local_allocator
                 .as_mut()
                 .unwrap()
-                .sweep(self.mark_histogram);
-        }
+                .sweep(self.mark_histogram)
+        };
+        self.status.borrow_mut().collect_threshold = (used as f64 * THRESHOLD_PROPORTION) as usize;
         let v = GC_SWEEPPING_NUM.fetch_sub(1, Ordering::AcqRel);
         if v - 1 == 0 {
             GC_SWEEPING.store(false, Ordering::Release);
@@ -362,17 +434,33 @@ impl Collector {
         } else {
             spin_until!(!GC_SWEEPING.load(Ordering::Acquire));
         }
+        used
     }
 
     /// # collect
     /// Collect garbage.
-    pub fn collect(&mut self) -> std::time::Duration {
+    pub fn collect(&self) -> (std::time::Duration, std::time::Duration) {
+        // let start_time = std::time::Instant::now();
+        // println!(
+        //     "gc {} collecting...  size: {}",
+        //     self.id,  unsafe{ self.thread_local_allocator.as_mut().unwrap().get_size()}
+        // );
+        // self.print_stats();
+        let mut status = self.status.borrow_mut();
+        // println!("gc {} collecting... {}", self.id,status.bytes_allocated_since_last_gc);
+        if status.collecting {
+            return Default::default();
+        }
+        status.collecting = true;
+        status.bytes_allocated_since_last_gc = 0;
+        status.last_gc_time = std::time::SystemTime::now();
+        drop(status);
         // evacuation pre process
         // 这个过程要在完成safepoint同步之前完成，因为在驱逐的情况下
         // 他要设置每个block是否是驱逐目标
         // 如果设置的时候别的线程的mark已经开始，那么将无法保证能够纠正所有被驱逐的指针
         unsafe {
-            if self.thread_local_allocator.as_mut().unwrap().should_eva() {
+            if ENABLE_EVA && self.thread_local_allocator.as_mut().unwrap().should_eva() {
                 // 如果需要驱逐，首先计算驱逐阀域
                 let mut eva_threshold = 0;
                 let mut available_histogram: VecMap<usize, usize> =
@@ -406,15 +494,35 @@ impl Collector {
         let lock = unsafe { GC_RW_LOCK.raw() };
         spin_until!(lock.try_lock_shared_recursive());
         let time = std::time::Instant::now();
-        // unsafe {self.thread_local_allocator.as_mut().unwrap().set_collect_mode(true);}
-        self.mark();
-        self.sweep();
-        let time = time.elapsed();
         unsafe {
-            // self.thread_local_allocator.as_mut().unwrap().set_collect_mode(false);
+            self.thread_local_allocator
+                .as_mut()
+                .unwrap()
+                .set_collect_mode(true);
+        }
+        self.mark();
+        let mark_time = time.elapsed();
+        let _used = self.sweep();
+        let sweep_time = time.elapsed() - mark_time;
+        unsafe {
+            self.thread_local_allocator
+                .as_mut()
+                .unwrap()
+                .set_collect_mode(false);
             lock.unlock_shared();
         }
-        time
+        // println!(
+        //     "gc {} collect done, mark: {:?}, sweep: {:?}, size: {}, total: {:?}",
+        //     self.id,
+        //     mark_time,
+        //     sweep_time,
+        //     used,
+        //     start_time.elapsed()
+        // );
+        let mut status = self.status.borrow_mut();
+        status.collecting = false;
+        (mark_time, sweep_time)
+        // (Default::default(), Default::default())
     }
 
     /// # get_bigobjs_size
@@ -430,24 +538,25 @@ impl Collector {
 
 #[cfg(test)]
 mod tests {
-    use std::{mem::size_of, thread::sleep, time::Duration};
+    use std::{mem::size_of, ptr::null_mut, thread::sleep, time::Duration};
 
     use lazy_static::lazy_static;
     use parking_lot::Mutex;
     use rand::random;
     use rustc_hash::FxHashSet;
 
-    use crate::{SPACE, BLOCK_SIZE, round_n_up};
+    use crate::{{no_gc_thread, SPACE, BLOCK_SIZE, round_n_up}};
 
     use super::*;
 
-    const LINE_SIZE_OBJ: usize = 2;
+    const LINE_SIZE_OBJ: usize = 1;
     
+    #[repr(C)]
     struct GCTestObj {
         _vtable: VtableFunc,
         b: *mut GCTestObj,
         c: u64,
-        _arr: [u8; 128],
+        // _arr: [u8; 128],
         d: *mut u64,
         e: *mut GCTestObj,
     }
@@ -487,6 +596,7 @@ mod tests {
     }
     #[test]
     fn test_basic_multiple_thread_gc() {
+        let _lock = THE_RESOURCE.lock();
         let mut handles = vec![];
         for _ in 0..10 {
             let t = std::thread::spawn(|| {
@@ -495,30 +605,39 @@ mod tests {
                     println!("thread1 gcid = {}", gc.get_id());
                     let mut a =
                         gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
-                    let b = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
-                    (*a).b = b;
+                    let rustptr = (&mut a) as *mut *mut GCTestObj as *mut u8;
+                    (*a).b = null_mut();
                     (*a).c = 1;
+                    (*a).d = null_mut();
+                    (*a).e = null_mut();
                     (*a)._vtable = gctest_vtable;
+                    gc.add_root(rustptr, ObjectType::Pointer);
+                    let b = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
+                    gc.print_stats();
+                    (*a).b = b;
                     (*b)._vtable = gctest_vtable;
                     (*b).c = 2;
-                    let rustptr = (&mut a) as *mut *mut GCTestObj as *mut u8;
-                    gc.add_root(rustptr, ObjectType::Pointer);
+                    (*b).d = null_mut();
+                    (*b).e = null_mut();
+                    (*b).b = null_mut();
                     let size1 = gc.get_size();
                     let time = std::time::Instant::now();
                     gc.collect();
                     println!("gc{} gc time = {:?}", gc.get_id(), time.elapsed());
                     let size2 = gc.get_size();
-                    assert_eq!(size1, size2);
+                    assert_eq!(size2, LINE_SIZE_OBJ * 2, "gc {}", gc.get_id());
+                    assert_eq!(size1, size2, "gc {}", gc.get_id());
                     let d = gc.alloc(size_of::<u64>(), ObjectType::Atomic) as *mut u64;
                     (*b).d = d;
                     (*d) = 3;
                     gc.collect();
                     let size3 = gc.get_size();
-                    assert!(size3 > size2);
+                    assert_eq!(size3, LINE_SIZE_OBJ * 3);
+                    assert!(size3 > size2, "gc {}", gc.get_id());
                     (*a).d = d;
                     gc.collect();
                     let size4 = gc.get_size();
-                    assert_eq!(size3, size4);
+                    assert_eq!(size3, size4, "gc {}", gc.get_id());
                     (*a).b = a;
                     gc.collect();
                     let size5 = gc.get_size();
@@ -533,16 +652,26 @@ mod tests {
                     assert_eq!(0, size7);
                     let mut a =
                         gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
+                    (*a).b = null_mut();
+                    (*a).c = 1;
+                    (*a).d = null_mut();
+                    (*a).e = null_mut();
+                    (*a)._vtable = gctest_vtable;
+                    let rustptr = (&mut a) as *mut *mut GCTestObj as *mut u8;
+                    gc.add_root(rustptr, ObjectType::Pointer);
                     let b = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
                     (*a).b = b;
                     (*a).c = 1;
                     (*a)._vtable = gctest_vtable;
                     (*b)._vtable = gctest_vtable;
                     (*b).c = 2;
-                    let rustptr = (&mut a) as *mut *mut GCTestObj as *mut u8;
-                    gc.add_root(rustptr, ObjectType::Pointer);
+                    (*b).d = null_mut();
+                    (*b).e = null_mut();
+                    (*b).b = null_mut();
                     let size1 = gc.get_size();
-                    assert_eq!(size1, 2 * LINE_SIZE_OBJ)
+                    assert_eq!(size1, 2 * LINE_SIZE_OBJ);
+                    // drop(gc);
+                    // no_gc_thread();
                 });
             });
             handles.push(t);
@@ -596,7 +725,13 @@ mod tests {
 
     unsafe fn alloc_test_obj(gc: &mut Collector) -> *mut GCTestObj {
         let a = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
-        (*a)._vtable = gctest_vtable;
+        a.write(GCTestObj {
+            _vtable: gctest_vtable,
+            b: null_mut(),
+            c: 0,
+            d: null_mut(),
+            e: null_mut(),
+        });
         a
     }
 
@@ -618,15 +753,19 @@ mod tests {
         expect_size3: usize,
         expect_objs: usize,
         set: FxHashSet<TestObjWrap>,
+        set2: FxHashSet<TestObjWrap>,
     }
 
     fn single_thread(obj_num: usize) -> SingleThreadResult {
         SPACE.with(|gc| unsafe {
+            // 睡眠一秒保证所有线程创建
             let mut gc = gc.borrow_mut();
             println!("thread1 gcid = {}", gc.get_id());
+            sleep(Duration::from_secs(1));
             let mut first_obj = alloc_test_obj(&mut gc);
             println!("first_obj = {:p}", first_obj);
             let rustptr = (&mut first_obj) as *mut *mut GCTestObj as *mut u8;
+            gc.add_root(rustptr, ObjectType::Pointer);
             println!(
                 "gcid = {} rustptr point to {:p}",
                 gc.get_id(),
@@ -662,17 +801,32 @@ mod tests {
                         .push(TestObjWrap(&mut (*obj).e as *mut *mut GCTestObj));
                 }
             }
-            gc.add_root(rustptr, ObjectType::Pointer);
             let size1 = gc.get_size();
+
+            let mut set2 = FxHashSet::default();
+            let mut ii = 0;
+            gc.iter(|ptr| {
+                ii += 1;
+                // if set2.contains(&TestObjWrap(ptr as *mut *mut GCTestObj)) {
+                //     panic!("repeat ptr = {:p}", ptr);
+                // }
+                set2.insert(TestObjWrap(
+                    Block::from_obj_ptr(ptr) as *mut Block as *mut *mut GCTestObj
+                ));
+            });
+            println!("gc{} itered ", gc.get_id());
+
             // assert_eq!(size1, 1001 * LINE_SIZE_OBJ);
             let time = std::time::Instant::now();
             gc.collect();
             println!("gc{} gc time = {:?}", gc.get_id(), time.elapsed());
             let size2 = gc.get_size();
+
             // assert_eq!(live_obj * LINE_SIZE_OBJ, size2);
             gc.collect();
             let size3 = gc.get_size();
-            // assert_eq!(size2, size3);
+            // assert_eq!(ii, size3);
+            // assert_eq!(set2.len(), size3);
             let first_obj = *(rustptr as *mut *mut GCTestObj);
             println!("new first_obj = {:p}", first_obj);
             let mut set = FxHashSet::default();
@@ -681,8 +835,9 @@ mod tests {
             assert_eq!(objs, set.len());
             gc.remove_root(rustptr);
             gc.collect();
-            let size4 = gc.get_size();
-            assert_eq!(size4, 0);
+            // evacuation might be triggered, so it mat not be zero
+            // let size4 = gc.get_size();
+            // assert_eq!(size4, 0);
             SingleThreadResult {
                 size1,
                 expect_size1: (obj_num + 1) * LINE_SIZE_OBJ,
@@ -692,11 +847,13 @@ mod tests {
                 expect_size3: size2,
                 set,
                 expect_objs: live_obj,
+                set2,
             }
         })
     }
 
     lazy_static! {
+        /// gc测试不能并发进行，需要加锁
         static ref THE_RESOURCE: Mutex<()> = Mutex::new(());
     }
 
@@ -706,8 +863,10 @@ mod tests {
         let _lock = THE_RESOURCE.lock();
         TEST_OBJ_QUEUE.lock().clear();
         let re = single_thread(1000);
+        no_gc_thread();
         assert_eq!(re.size1, re.expect_size1);
         assert_eq!(re.size2, re.expect_size2);
+        assert_eq!(re.size3, re.size2);
         assert_eq!(re.size3, re.expect_size3);
         assert_eq!(re.set.len(), re.expect_objs);
     }
@@ -740,11 +899,7 @@ mod tests {
         let mut handles = vec![];
         for _ in 0..10 {
             let t = std::thread::Builder::new()
-                .spawn(|| {
-                    // 睡眠一秒保证所有线程创建
-                    sleep(Duration::from_secs(1));
-                    single_thread(1000)
-                })
+                .spawn(|| single_thread(1000))
                 .unwrap();
             handles.push(t);
         }
@@ -756,8 +911,9 @@ mod tests {
         let mut total_target_size3 = 0;
         let mut total_target_objs = 0;
         let mut set = FxHashSet::default();
+        let mut set2 = FxHashSet::default();
         for h in handles {
-            let re = h.join().unwrap();
+            let mut re = h.join().unwrap();
             total_size1 += re.size1;
             total_target_size1 += re.expect_size1;
             total_size2 += re.size2;
@@ -765,11 +921,25 @@ mod tests {
             total_size3 += re.size3;
             total_target_size3 += re.expect_size3;
             set.extend(re.set);
+            for s in re.set2.drain().into_iter() {
+                if set2.contains(&s) {
+                    println!("repeat ptr = {:p}", s.0);
+                }
+                set2.insert(s);
+            }
             total_target_objs += re.expect_objs;
         }
         assert_eq!(total_size1, total_target_size1);
         assert_eq!(total_size2, total_target_size2);
+        assert_eq!(total_size3, total_size2);
         assert_eq!(total_size3, total_target_size3);
+        for k in set2.iter() {
+            if !set.contains(k) {
+                println!("set2 not in set {:p}", k.0);
+            }
+        }
+        println!("set2 len {}", set2.len());
+        println!("size2 {} size3 {}", total_size2, total_size3);
         assert_eq!(set.len(), total_target_objs);
     }
 }
