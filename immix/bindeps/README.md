@@ -1,0 +1,1 @@
+Walk around https://github.com/rust-lang/cargo/issues/1581#issuecomment-1216924878

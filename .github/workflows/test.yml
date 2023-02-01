@@ -117,13 +117,13 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --manifest-path vm/Cargo.toml --release --target-dir target
+          args: --manifest-path vm/Cargo.toml --release --target-dir target -vv
 
       - name: Test with latest nextest release
         uses: actions-rs/cargo@v1
         with:
           command: llvm-cov
-          args: nextest --workspace --lcov --output-path lcov.info --profile ci
+          args: nextest --workspace --lcov --output-path lcov.info --profile ci -vv
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3

@@ -155,6 +155,7 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
 
 #[salsa::tracked]
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
+    immix::register_llvm_gc_plugins();
     let targetdir = PathBuf::from("target");
     if !targetdir.exists() {
         fs::create_dir(&targetdir).unwrap();
@@ -301,7 +302,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         let mut p = PathBuf::from(&root);
         p.push("libvm.a");
         vmpath = dunce::canonicalize(&p)
-            .unwrap()
+            .expect("failed to find libvm")
             .to_str()
             .unwrap()
             .to_string();

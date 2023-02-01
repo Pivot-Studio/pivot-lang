@@ -513,6 +513,7 @@ impl Collector {
 
 #[cfg(test)]
 mod tests {
+    extern crate bindeps;
     use std::{mem::size_of, ptr::null_mut, thread::sleep, time::Duration};
 
     use lazy_static::lazy_static;

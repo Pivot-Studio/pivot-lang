@@ -11,6 +11,7 @@ mod allocator;
 mod block;
 mod collector;
 mod consts;
+mod llvm_stackmap;
 mod macros;
 mod mmap;
 
@@ -18,6 +19,7 @@ pub use allocator::*;
 pub use block::*;
 pub use collector::*;
 pub use consts::*;
+pub use llvm_stackmap::*;
 use parking_lot::{lock_api::RawRwLock, RwLock};
 
 thread_local! {

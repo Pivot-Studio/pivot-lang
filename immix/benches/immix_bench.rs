@@ -4,6 +4,7 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use immix::*;
 use libc::malloc;
 use rand::random;
+extern crate bindeps;
 
 fn immix_benchmark_multi_thread(c: &mut Criterion) {
     bench_n_threads(get_threads())(c);
