@@ -205,20 +205,6 @@ impl Collector {
     unsafe fn mark_ptr(&self, ptr: *mut u8) {
         let father = ptr;
         let mut ptr = *(ptr as *mut *mut u8);
-        // mark it if it is a big object
-        if self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr){
-            let big_obj = self.thread_local_allocator.as_mut().unwrap().big_obj_from_ptr(ptr).unwrap();
-            if (*big_obj).header.get_marked() {
-                return;
-            }
-            (*big_obj).header.set_marked(true);
-            let obj_type = (*big_obj).header.get_obj_type();
-            match obj_type {
-                ObjectType::Atomic => {}
-                _ => (*self.queue).push((ptr, obj_type)),
-            }
-            return;
-        }
         // mark it if it is in heap
         if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
             let block = Block::from_obj_ptr(ptr);
@@ -281,6 +267,21 @@ impl Collector {
                 ObjectType::Atomic => {}
                 _ => (*self.queue).push((ptr, obj_type)),
             }
+            return;
+        }
+        // mark it if it is a big object
+        if self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr){
+            let big_obj = self.thread_local_allocator.as_mut().unwrap().big_obj_from_ptr(ptr).unwrap();
+            if (*big_obj).header.get_marked() {
+                return;
+            }
+            (*big_obj).header.set_marked(true);
+            let obj_type = (*big_obj).header.get_obj_type();
+            match obj_type {
+                ObjectType::Atomic => {}
+                _ => (*self.queue).push((ptr, obj_type)),
+            }
+            return;
         }
     }
 

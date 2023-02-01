@@ -27,6 +27,15 @@ pub enum ObjectType {
 
 type LineHeader = u8;
 
+pub trait HeaderExt {
+    fn get_used(&self) -> bool;
+    fn get_marked(&self) -> bool;
+    fn get_obj_type(&self) -> ObjectType;
+    fn set_used(&mut self, used: bool);
+    fn set_marked(&mut self, marked: bool);
+    fn set_obj_type(&mut self, obj_type: ObjectType);
+}
+
 pub trait LineHeaderExt {
     fn set_is_head(&mut self, is_head: bool);
     fn get_is_used_follow(&self) -> bool;
@@ -57,15 +66,6 @@ pub struct Block {
     eva_target: bool,
 }
 
-pub trait HeaderExt {
-    fn get_used(&self) -> bool;
-    fn get_marked(&self) -> bool;
-    fn get_obj_type(&self) -> ObjectType;
-    fn set_used(&mut self, used: bool);
-    fn set_marked(&mut self, marked: bool);
-    fn set_obj_type(&mut self, obj_type: ObjectType);
-}
-
 impl HeaderExt for u8{
     #[inline]
     fn get_used(&self) -> bool {
@@ -87,10 +87,12 @@ impl HeaderExt for u8{
             *self &= !0b1;
         }
     }
+    #[inline]
     fn set_obj_type(&mut self, obj_type: ObjectType) {
-        *self &= !0b110;
+        // *self &= !0b110;
         *self |= (obj_type as u8) << 2;
     }
+    #[inline]
     fn set_marked(&mut self, marked: bool) {
         debug_assert!(*self & 0b10000000 != 0);
         if marked {
