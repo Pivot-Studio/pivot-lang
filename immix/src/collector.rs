@@ -15,7 +15,7 @@ use crate::{
     block::{Block, LineHeaderExt, ObjectType},
     gc_is_auto_collect_enabled, spin_until, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING,
     GC_MARK_WAITING, GC_RUNNING, GC_RW_LOCK, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE,
-    NUM_LINES_PER_BLOCK, HeaderExt, THRESHOLD_PROPORTION,
+    NUM_LINES_PER_BLOCK, HeaderExt, THRESHOLD_PROPORTION
 };
 
 /// # Collector
