@@ -27,13 +27,16 @@ pub enum ObjectType {
 
 type LineHeader = u8;
 
-pub trait LineHeaderExt {
+pub trait HeaderExt {
     fn get_used(&self) -> bool;
     fn get_marked(&self) -> bool;
     fn get_obj_type(&self) -> ObjectType;
     fn set_used(&mut self, used: bool);
     fn set_marked(&mut self, marked: bool);
     fn set_obj_type(&mut self, obj_type: ObjectType);
+}
+
+pub trait LineHeaderExt {
     fn set_is_head(&mut self, is_head: bool);
     fn get_is_used_follow(&self) -> bool;
     fn get_obj_line_size(&self, idx: usize, block: &mut Block) -> usize;
@@ -63,7 +66,7 @@ pub struct Block {
     eva_target: bool,
 }
 
-impl LineHeaderExt for LineHeader {
+impl HeaderExt for u8{
     #[inline]
     fn get_used(&self) -> bool {
         self & 0b1 == 0b1
@@ -85,6 +88,23 @@ impl LineHeaderExt for LineHeader {
         }
     }
     #[inline]
+    fn set_obj_type(&mut self, obj_type: ObjectType) {
+        // *self &= !0b110;
+        *self |= (obj_type as u8) << 2;
+    }
+    #[inline]
+    fn set_marked(&mut self, marked: bool) {
+        debug_assert!(*self & 0b10000000 != 0);
+        if marked {
+            *self |= 0b10;
+        } else {
+            *self &= !0b10;
+        }
+    }
+}
+impl LineHeaderExt for LineHeader {
+    
+    #[inline]
     fn set_forwarded(&mut self, forwarded: bool) {
         let atom_self = self as *mut u8 as *mut AtomicU8;
         unsafe {
@@ -103,21 +123,6 @@ impl LineHeaderExt for LineHeader {
         unsafe { (*atom_self).load(Ordering::Acquire) & 0b1000000 == 0b1000000 }
     }
 
-    /// # set_marked
-    ///
-    /// 设置marked
-    ///
-    /// 如果一个对象占用多行，只有起始行会被标记
-    #[inline]
-    fn set_marked(&mut self, marked: bool) {
-        debug_assert!(*self & 0b10000000 != 0);
-        if marked {
-            *self |= 0b10;
-        } else {
-            *self &= !0b10;
-        }
-    }
-    #[inline]
     fn get_obj_line_size(&self, idx: usize, block: &mut Block) -> usize {
         // 自己必须是head
         debug_assert!(*self & 0b10000000 != 0);
@@ -132,12 +137,7 @@ impl LineHeaderExt for LineHeader {
         }
         line_size
     }
-    #[inline]
-    fn set_obj_type(&mut self, obj_type: ObjectType) {
-        // *self &= !0b110;
-        *self |= (obj_type as u8) << 2;
-    }
-    #[inline]
+
     fn set_is_head(&mut self, is_head: bool) {
         if is_head {
             *self |= 0b10000000;
@@ -468,7 +468,7 @@ impl Block {
 
 #[cfg(test)]
 mod tests {
-    use crate::{allocator::GlobalAllocator, block::LineHeaderExt, consts::LINE_SIZE};
+    use crate::{allocator::GlobalAllocator, consts::LINE_SIZE, BLOCK_SIZE, HeaderExt};
 
     #[test]
     fn test_block_hole() {
@@ -598,6 +598,24 @@ mod tests {
             assert_eq!(newcursor, false);
             // assert_eq!(block.first_hole_line_idx, 255); 这个时候没hole了，此值无意义，len为0
             assert_eq!(block.limit, 0);
+
+            // test big alloc
+            let obj = ga.get_big_obj(BLOCK_SIZE);
+            ga.big_obj_allocator.state();
+            println!("obj: {:?}\n", obj);
+            // |      1       |
+
+            ga.return_big_objs(vec![obj]);
+
+            let obj = ga.get_big_obj(BLOCK_SIZE + 1);
+            ga.big_obj_allocator.state();
+            println!("obj: {:?}\n", obj);
+            // |      1*      |          2        |
+
+            let obj = ga.get_big_obj(BLOCK_SIZE - 1);
+            ga.big_obj_allocator.state();
+            println!("obj: {:?}\n", obj);
+            // |      3       |          2        |
         }
     }
 }
