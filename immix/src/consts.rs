@@ -13,3 +13,5 @@ pub const EVA_BLOCK_PROPORTION: f64 = 0.025;
 pub const THRESHOLD_PROPORTION: f64 = 1.75;
 
 pub const ENABLE_EVA: bool = true;
+
+pub const LLVM_GC_STRATEGY_NAME: &str = "plimmix";

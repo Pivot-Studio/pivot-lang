@@ -41,6 +41,8 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
   AP.OutStreamer.get()->SwitchSection(AP.getObjFileLowering().getDataSection());
   std::string symbol;
   symbol += "_GC_MAP_";
+  symbol += M.getSourceFileName();
+  // printf("symbol: %s \n", symbol.c_str());
 
   // *AP.OutStreamer.get()<< AP.MAI->getGlobalDirective();
   AP.emitGlobalConstant(M.getDataLayout(),M.getOrInsertGlobal(symbol, Type::getVoidTy(M.getContext())));
@@ -115,6 +117,23 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
       // Emit live root's offset within the stack frame.
       AP.OutStreamer.get()->AddComment("stack index (offset / wordsize)");
       AP.emitInt32(LI->StackOffset);
+      auto meta = LI->Metadata->getName();
+      if (meta.contains("ATOMIC"))
+      {
+        AP.emitInt32(0);
+      } else if (meta.contains("TRAIT"))
+      {
+        AP.emitInt32(1);
+      } else if (meta.contains("COMPLEX"))
+      {
+        AP.emitInt32(2);
+      } else if (meta.contains("POINTER"))
+      {
+        AP.emitInt32(3);
+      } else {
+        AP.emitInt32(4);
+      }
+      printf("%s\n", meta.bytes());
     }
   }
 }

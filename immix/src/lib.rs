@@ -11,16 +11,24 @@ mod allocator;
 mod block;
 mod collector;
 mod consts;
-mod llvm_stackmap;
 mod macros;
 mod mmap;
+#[cfg(feature = "llvm_stackmap")]
+mod llvm_stackmap;
+#[cfg(all(feature = "llvm_stackmap", feature = "llvm_pass"))]
+mod llvm_pass;
+#[cfg(feature = "llvm_stackmap")]
+pub use llvm_stackmap::*;
+#[cfg(all(feature = "llvm_stackmap", feature = "llvm_pass"))]
+pub use llvm_pass::*;
 
 pub use allocator::*;
 pub use block::*;
 pub use collector::*;
 pub use consts::*;
-pub use llvm_stackmap::*;
+
 use parking_lot::{lock_api::RawRwLock, RwLock};
+use rustc_hash::FxHashMap;
 
 thread_local! {
     pub static SPACE: RefCell<Collector> = unsafe {
@@ -32,7 +40,18 @@ thread_local! {
         RefCell::new(gc)
     };
 }
+#[cfg(feature = "llvm_stackmap")]
+lazy_static!{
+    static ref STACK_MAP:StackMapWrapper = {
+       StackMapWrapper { map: RefCell::new(FxHashMap::default()) }
+    };
+}
 
+pub struct StackMapWrapper {
+    pub map:RefCell< FxHashMap<*const u8, Function>>
+}
+unsafe impl Sync for StackMapWrapper {}
+unsafe impl Send for StackMapWrapper {}
 const DEFAULT_HEAP_SIZE: usize = 1024 * 1024 * 1024;
 
 lazy_static! {
@@ -78,6 +97,7 @@ pub fn gc_collect() {
     })
 }
 
+#[cfg(feature = "shadow_stack")]
 pub fn gc_add_root(root: *mut u8, obj_type: u8) {
     SPACE.with(|gc| {
         // println!("start add_root");
@@ -87,6 +107,7 @@ pub fn gc_add_root(root: *mut u8, obj_type: u8) {
     })
 }
 
+#[cfg(feature = "shadow_stack")]
 pub fn gc_remove_root(root: *mut u8) {
     SPACE.with(|gc| {
         // println!("start remove_root");
@@ -112,6 +133,11 @@ pub fn no_gc_thread() {
     SPACE.with(|gc| {
         gc.borrow().unregister_current_thread();
     })
+}
+
+#[cfg(feature = "llvm_stackmap")]
+pub fn gc_init(ptr:*mut u8) {
+    build_function_maps(ptr, & mut STACK_MAP.map.borrow_mut());
 }
 
 /// notify gc if a thread is going to stuck e.g.

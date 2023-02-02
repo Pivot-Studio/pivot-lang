@@ -213,14 +213,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
         0
     }
 
-    fn mv2heap(
-        &self,
-        _val: super::ValueHandle,
-        _ctx: &mut crate::ast::ctx::Ctx<'a>,
-        _tp: &PLType,
-    ) -> super::ValueHandle {
-        0
-    }
+    // fn mv2heap(
+    //     &self,
+    //     _val: super::ValueHandle,
+    //     _ctx: &mut crate::ast::ctx::Ctx<'a>,
+    //     _tp: &PLType,
+    // ) -> super::ValueHandle {
+    //     0
+    // }
 
     fn gc_rm_root(&self, _stackptr: super::ValueHandle, _ctx: &mut crate::ast::ctx::Ctx<'a>) {}
 

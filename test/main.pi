@@ -6,7 +6,9 @@ use project1::test::constant;
 use project1::test::traits;
 use project1::test::simple;
 use project1::test::flow;
+use core::panic;
 fn main() i64 {
+    panic::pl_panic();
     ifel::test_if_else();
     generic::test_generic();
     method::test_impl();

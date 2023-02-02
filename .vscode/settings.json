@@ -18,7 +18,9 @@
         "__hash_table": "cpp",
         "unordered_map": "cpp",
         "memory": "cpp",
-        "type_traits": "cpp"
+        "type_traits": "cpp",
+        "tuple": "cpp",
+        "test1.c": "cpp"
     },
     "C_Cpp.errorSquiggles": "enabled"
 }

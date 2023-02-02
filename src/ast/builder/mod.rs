@@ -115,7 +115,7 @@ pub trait IRBuilder<'a, 'ctx> {
     fn position_at_end_block(&self, block: BlockHandle);
     fn add_body_to_struct_type(&self, name: &str, order_fields: &[Field], ctx: &mut Ctx<'a>);
     fn get_or_insert_fn_handle(&self, pltp: &FNType, ctx: &mut Ctx<'a>) -> ValueHandle;
-    fn mv2heap(&self, val: ValueHandle, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle;
+    // fn mv2heap(&self, val: ValueHandle, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle;
     fn gc_rm_root(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>);
     fn gc_rm_root_current(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>);
     fn gc_collect(&self, ctx: &mut Ctx<'a>);

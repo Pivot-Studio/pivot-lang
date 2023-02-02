@@ -153,6 +153,7 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
     Some(program.emit(db))
 }
 
+
 #[salsa::tracked]
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     immix::register_llvm_gc_plugins();
@@ -212,7 +213,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let mut mods = compile_dry::accumulated::<ModBuffer>(db, docs);
     let mut objs = vec![];
     let ctx = Context::create();
-    let m = mods.pop().unwrap();
+    let m = mods.remove(0).path;
     let tm = get_target_machine(op.optimization.to_llvm());
     let llvmmod = Module::parse_bitcode_from_path(m.clone(), &ctx).unwrap();
     let o = m.with_extension("o");
@@ -224,6 +225,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     _ = remove_file(m.clone()).unwrap();
     log::debug!("rm {}", m.to_str().unwrap());
     for m in mods {
+        let m = m.path;
         if set.contains(&m) {
             continue;
         }
@@ -232,35 +234,36 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         // println!("{}", m.clone().to_str().unwrap());
         let module = Module::parse_bitcode_from_path(m.clone(), &ctx)
             .expect(format!("parse {} failed", m.to_str().unwrap()).as_str());
+        module.verify().unwrap();
         tm.write_to_file(&module, inkwell::targets::FileType::Object, &o)
             .unwrap();
         objs.push(o);
         _ = llvmmod.link_in_module(module);
     }
+    // run_immix_pass(& mut llvmmod as * mut Module as * mut u8);
     llvmmod.verify().unwrap();
+    let pass_manager_builder = PassManagerBuilder::create();
+    pass_manager_builder.set_optimization_level(op.optimization.to_llvm());
+    // Create FPM MPM
+    let fpm = PassManager::create(&llvmmod);
+    
+    let mpm:PassManager<Module> = PassManager::create(());
     if op.optimization != HashOptimizationLevel::None {
-        let pass_manager_builder = PassManagerBuilder::create();
-
-        pass_manager_builder.set_optimization_level(op.optimization.to_llvm());
         pass_manager_builder.set_size_level(2);
-
-        // Create FPM MPM
-        let fpm = PassManager::create(&llvmmod);
-        let mpm = PassManager::create(());
-
         pass_manager_builder.populate_function_pass_manager(&fpm);
         pass_manager_builder.populate_module_pass_manager(&mpm);
-        let b = fpm.initialize();
-        trace!("fpm init: {}", b);
-        for f in llvmmod.get_functions() {
-            let optimized = fpm.run_on(&f);
-            trace!("try to optimize func {}", f.get_name().to_str().unwrap());
-            let oped = if optimized { "yes" } else { "no" };
-            trace!("optimized: {}", oped,);
-        }
-        fpm.finalize();
-        mpm.run_on(&llvmmod);
+        pass_manager_builder.populate_lto_pass_manager(&mpm, false, true);
     }
+    let b = fpm.initialize();
+    trace!("fpm init: {}", b);
+    for f in llvmmod.get_functions() {
+        let optimized = fpm.run_on(&f);
+        trace!("try to optimize func {}", f.get_name().to_str().unwrap());
+        let oped = if optimized { "yes" } else { "no" };
+        trace!("optimized: {}", oped,);
+    }
+    fpm.finalize();
+    mpm.run_on(&llvmmod);
     if op.genir {
         let mut s = out.to_string();
         s.push_str(".ll");

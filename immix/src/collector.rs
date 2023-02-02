@@ -7,7 +7,6 @@ use std::{
 
 use libc::malloc;
 use parking_lot::lock_api::{RawRwLock, RawRwLockRecursive};
-use rustc_hash::FxHashMap;
 use vector_map::VecMap;
 
 use crate::{
@@ -17,6 +16,8 @@ use crate::{
     GC_MARK_WAITING, GC_RUNNING, GC_RW_LOCK, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE,
     NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION,
 };
+#[cfg(feature = "llvm_stackmap")]
+use crate::STACK_MAP;
 
 /// # Collector
 /// The collector is responsible for collecting garbage. It is the entry point for
@@ -31,6 +32,7 @@ use crate::{
 /// * `queue` - gc queue
 pub struct Collector {
     thread_local_allocator: *mut ThreadLocalAllocator,
+    #[cfg(feature = "shadow_stack")]
     roots: FxHashMap<*mut u8, ObjectType>,
     queue: *mut Vec<(*mut u8, ObjectType)>,
     id: usize,
@@ -90,6 +92,7 @@ impl Collector {
             memqueue.write(queue);
             Self {
                 thread_local_allocator: mem,
+                #[cfg(feature = "shadow_stack")]
                 roots: FxHashMap::default(),
                 id,
                 mark_histogram: memvecmap,
@@ -103,6 +106,7 @@ impl Collector {
             }
         }
     }
+
 
     pub fn unregister_current_thread(&self) {
         GC_COLLECTOR_COUNT.fetch_sub(1, Ordering::SeqCst);
@@ -166,6 +170,7 @@ impl Collector {
     /// ## Parameters
     /// * `root` - root
     /// * `size` - root size
+    #[cfg(feature = "shadow_stack")]
     pub fn add_root(&mut self, root: *mut u8, obj_type: ObjectType) {
         self.roots.insert(root, obj_type);
     }
@@ -175,6 +180,7 @@ impl Collector {
     ///
     /// ## Parameters
     /// * `root` - root
+    #[cfg(feature = "shadow_stack")]
     pub fn remove_root(&mut self, root: *mut u8) {
         self.roots.remove(&(root));
     }
@@ -303,9 +309,13 @@ impl Collector {
         // if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
         //     return;
         // }
-        let loaded = *(ptr as *mut *mut *mut u8);
-        let ptr = *loaded.offset(1);
-        self.mark_ptr(ptr);
+        let loaded = ptr as  *mut *mut u8;
+        let ptr = loaded.offset(1);
+        // the trait is not init
+        if ptr.is_null() {
+            return;
+        }
+        self.mark_ptr(ptr as *mut u8);
     }
 
     pub fn print_stats(&self) {
@@ -357,21 +367,99 @@ impl Collector {
         } else {
             GC_MARKING.store(true, Ordering::Release);
         }
-
-        for (root, obj_type) in self.roots.iter() {
-            unsafe {
-                match obj_type {
-                    ObjectType::Atomic => {}
-                    ObjectType::Pointer => (*self.queue).push((*root, *obj_type)),
-                    _ => {
-                        if !self.thread_local_allocator.as_mut().unwrap().in_heap(*root) {
-                            continue;
+        #[cfg(feature = "shadow_stack")]
+        {
+            for (root, obj_type) in self.roots.iter() {
+                unsafe {
+                    match obj_type {
+                        ObjectType::Atomic => {}
+                        ObjectType::Pointer => (*self.queue).push((*root, *obj_type)),
+                        _ => {
+                            if !self.thread_local_allocator.as_mut().unwrap().in_heap(*root) {
+                                continue;
+                            }
+                            (*self.queue).push((*root, *obj_type))
                         }
-                        (*self.queue).push((*root, *obj_type))
                     }
                 }
             }
         }
+        #[cfg(feature = "llvm_stackmap")]
+        {
+            let mut depth = 0;
+            backtrace::Backtrace::new_unresolved().frames().iter().for_each(
+                |frame| {
+                    let addr = frame.symbol_address() as *mut u8;
+                    let const_addr = addr as *const u8;
+                    let map = STACK_MAP.map.borrow();
+                    let f = map.get(& const_addr);
+                    if let Some(f) = f {
+                        f.iter_roots().for_each(|(root, obj_type)| {
+                            unsafe {
+                                let root = addr.offset(root as isize);
+                                let root = root as *mut u8;
+                                match obj_type {
+                                    ObjectType::Atomic => {}
+                                    ObjectType::Complex => {
+                                        if !self.thread_local_allocator.as_mut().unwrap().in_heap(root) {
+                                            return;
+                                        }
+                                        self.mark_complex(root);
+                                    }
+                                    ObjectType::Trait => {
+                                        if !self.thread_local_allocator.as_mut().unwrap().in_heap(root) {
+                                            return;
+                                        }
+                                        self.mark_trait(root);
+                                    }
+                                    ObjectType::Pointer => {
+                                        self.mark_ptr(root);
+                                    }
+                                }
+                            }
+                        });
+                    }
+                    depth += 1;
+                    // true
+                }
+            );
+            // backtrace::trace(|frame| {
+            //     let addr = frame.symbol_address() as *mut u8;
+            //     let const_addr = addr as *const u8;
+            //     let map = STACK_MAP.map.borrow();
+            //     let f = map.get(& const_addr);
+            //     if let Some(f) = f {
+            //         f.iter_roots().for_each(|(root, obj_type)| {
+            //             unsafe {
+            //                 let root = addr.offset(root as isize);
+            //                 let root = root as *mut u8;
+            //                 match obj_type {
+            //                     ObjectType::Atomic => {}
+            //                     ObjectType::Complex => {
+            //                         if !self.thread_local_allocator.as_mut().unwrap().in_heap(root) {
+            //                             return;
+            //                         }
+            //                         self.mark_complex(root);
+            //                     }
+            //                     ObjectType::Trait => {
+            //                         if !self.thread_local_allocator.as_mut().unwrap().in_heap(root) {
+            //                             return;
+            //                         }
+            //                         self.mark_trait(root);
+            //                     }
+            //                     ObjectType::Pointer => {
+            //                         self.mark_ptr(root);
+            //                     }
+            //                 }
+            //             }
+            //         });
+            //     }
+            //     depth += 1;
+            //     true
+            // });
+        
+        }
+        
         // iterate through queue and mark all reachable objects
         unsafe {
             // (*self.queue).extend(self.roots.iter().map(|(a,b)|(*a,*b)));
@@ -425,11 +513,11 @@ impl Collector {
     /// # collect
     /// Collect garbage.
     pub fn collect(&self) -> (std::time::Duration, std::time::Duration) {
-        // let start_time = std::time::Instant::now();
-        // println!(
-        //     "gc {} collecting...  size: {}",
-        //     self.id,  unsafe{ self.thread_local_allocator.as_mut().unwrap().get_size()}
-        // );
+        let start_time = std::time::Instant::now();
+        println!(
+            "gc {} collecting...  size: {}",
+            self.id,  unsafe{ self.thread_local_allocator.as_mut().unwrap().get_size()}
+        );
         // self.print_stats();
         let mut status = self.status.borrow_mut();
         // println!("gc {} collecting... {}", self.id,status.bytes_allocated_since_last_gc);
@@ -496,14 +584,14 @@ impl Collector {
                 .set_collect_mode(false);
             lock.unlock_shared();
         }
-        // println!(
-        //     "gc {} collect done, mark: {:?}, sweep: {:?}, size: {}, total: {:?}",
-        //     self.id,
-        //     mark_time,
-        //     sweep_time,
-        //     used,
-        //     start_time.elapsed()
-        // );
+        println!(
+            "gc {} collect done, mark: {:?}, sweep: {:?}, size: {}, total: {:?}",
+            self.id,
+            mark_time,
+            sweep_time,
+            _used,
+            start_time.elapsed()
+        );
         let mut status = self.status.borrow_mut();
         status.collecting = false;
         (mark_time, sweep_time)
@@ -512,6 +600,7 @@ impl Collector {
 }
 
 #[cfg(test)]
+#[cfg(feature = "shadow_stack")]
 mod tests {
     extern crate bindeps;
     use std::{mem::size_of, ptr::null_mut, thread::sleep, time::Duration};

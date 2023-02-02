@@ -4,47 +4,51 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use immix::*;
 extern crate bindeps;
 
+
 fn immix_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("plimmixgc");
     group.sample_size(10);
     gc_enable_auto_collect();
-    group.bench_function(
-        &format!("singlethread gc stress benchmark small objects"),
-        |b| {
-            b.iter_custom(|i| {
-                let mut total = Duration::new(0, 0);
-                for _ in 0..i {
-                    total += SPACE.with(|space| {
-                        let mut space = space.borrow_mut();
-                        let tt = gcbench(&mut space);
-                        // t.elapsed()
-                        tt
-                    });
+    #[cfg(feature = "shadow_stack")]
+    {
+        group.bench_function(
+            &format!("singlethread gc stress benchmark small objects"),
+            |b| {
+                b.iter_custom(|i| {
+                    let mut total = Duration::new(0, 0);
+                    for _ in 0..i {
+                        total += SPACE.with(|space| {
+                            let mut space = space.borrow_mut();
+                            let tt = gcbench(&mut space);
+                            // t.elapsed()
+                            tt
+                        });
+                    }
+                    total
+                });
+            },
+        );
+        no_gc_thread();
+        group.bench_function("multi-thread gc stress benchmark small objects", |b| {
+            b.iter(|| {
+                let mut threads = Vec::with_capacity(4);
+                for _ in 0..get_threads() {
+                    threads.push(std::thread::spawn(move || {
+                        SPACE.with(|space| {
+                            let mut space = space.borrow_mut();
+                            let tt = gcbench(&mut space);
+                            // t.elapsed()
+                            tt
+                        })
+                    }));
                 }
-                total
+    
+                while let Some(th) = threads.pop() {
+                    th.join().unwrap();
+                }
             });
-        },
-    );
-    no_gc_thread();
-    group.bench_function("multi-thread gc stress benchmark small objects", |b| {
-        b.iter(|| {
-            let mut threads = Vec::with_capacity(4);
-            for _ in 0..get_threads() {
-                threads.push(std::thread::spawn(move || {
-                    SPACE.with(|space| {
-                        let mut space = space.borrow_mut();
-                        let tt = gcbench(&mut space);
-                        // t.elapsed()
-                        tt
-                    })
-                }));
-            }
-
-            while let Some(th) = threads.pop() {
-                th.join().unwrap();
-            }
         });
-    });
+    }
 }
 
 #[repr(C)]
@@ -79,7 +83,7 @@ unsafe fn alloc_test_obj(gc: &mut Collector) -> *mut GCTestObj {
     });
     a
 }
-
+#[cfg(feature = "shadow_stack")]
 fn gcbench(space: &mut Collector) -> Duration {
     unsafe {
         let t = std::time::Instant::now();
@@ -106,6 +110,7 @@ fn tree_size(i: i32) -> i32 {
 fn num_iters(i: i32) -> i32 {
     2 * tree_size(K_STRETCH_TREE_DEPTH) / tree_size(i)
 }
+#[cfg(feature = "shadow_stack")]
 unsafe fn populate(idepth: i32, thisnode: *mut GCTestObj, space: &mut Collector) {
     if idepth <= 0 {
         return;
@@ -115,7 +120,7 @@ unsafe fn populate(idepth: i32, thisnode: *mut GCTestObj, space: &mut Collector)
     populate(idepth - 1, (*thisnode).e, space);
     populate(idepth - 1, (*thisnode).b, space);
 }
-
+#[cfg(feature = "shadow_stack")]
 unsafe fn make_tree(idepth: i32, space: &mut Collector) -> *mut GCTestObj {
     if idepth <= 0 {
         return alloc_test_obj(space);
@@ -138,6 +143,7 @@ unsafe fn make_tree(idepth: i32, space: &mut Collector) -> *mut GCTestObj {
     }
 }
 #[inline(never)]
+#[cfg(feature = "shadow_stack")]
 unsafe fn time_construction(depth: i32, space: &mut Collector) {
     let i_num_iters = num_iters(depth);
 

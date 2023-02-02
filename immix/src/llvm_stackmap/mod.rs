@@ -1,4 +1,7 @@
+use int_enum::IntEnum;
 use rustc_hash::FxHashMap;
+
+use crate::ObjectType;
 
 #[no_mangle]
 pub fn print_stack_map(mapptr: *const u8) {
@@ -6,7 +9,8 @@ pub fn print_stack_map(mapptr: *const u8) {
     println!("format_version: {}", format_version);
     let num_functions = get_num_functions(mapptr);
     println!("num_functions: {}", num_functions);
-    let map = build_function_maps(mapptr);
+    let mut map = FxHashMap::default();
+    build_function_maps(mapptr, & mut map);
     for (addr, func) in map.iter() {
         println!("addr: {:p}", *addr);
         println!("size: {}", func.size);
@@ -57,18 +61,22 @@ fn get_first_function_addr(mapptr: *const u8) -> *const u8 {
 pub struct Function {
     addr: *const u8,
     size: i32,
-    roots: Vec<i32>, // offset / wordsize
+    roots: Vec<(i32,ObjectType)>, // offset / wordsize
 }
 
 impl Function {
     pub fn new(ptr: *const u8) -> Function {
         let size = get_function_size(ptr);
+        // println!("size: {}", size);
         let roots = get_function_roots(ptr, size);
         Function {
             addr: unsafe { *(ptr as *const *const u8) },
             size,
             roots,
         }
+    }
+    pub fn iter_roots(&self) -> impl Iterator<Item = (i32,ObjectType)> + '_ {
+        self.roots.iter().copied()
     }
 }
 
@@ -79,34 +87,36 @@ fn get_function_size(ptr: *const u8) -> i32 {
     }
 }
 
-fn get_function_roots(ptr: *const u8, num: i32) -> Vec<i32> {
+fn get_function_roots(ptr: *const u8, num: i32) -> Vec<(i32,ObjectType)> {
     unsafe {
-        let ptr = ptr as *const i32;
+        let mut ptr = (ptr as *const i32).offset(3);
         let mut roots = Vec::new();
-        for i in 0..num {
-            roots.push(*ptr.offset((3 + i) as isize));
+        for _ in 0..num as isize {
+            // println!("root: {} {:p}", *ptr,ptr);
+            // println!("type: {} {:p}", *ptr.offset(1),ptr.offset(1));
+            roots.push((*ptr, ObjectType::from_int((*ptr.offset(1)).try_into().unwrap()).unwrap()));
+            ptr = ptr.offset(2);
         }
         roots
     }
 }
 
-pub fn build_function_maps(mapptr: *const u8) -> FxHashMap<*const u8, Function> {
-    let mut functions = FxHashMap::default();
+pub fn build_function_maps(mapptr: *const u8, functions: &mut FxHashMap<*const u8, Function>) {
     let num_functions = get_num_functions(mapptr);
     let mut ptr = get_first_function_addr(mapptr);
     for _ in 0..num_functions {
         let function = Function::new(ptr);
         let size = function.size;
         functions.insert(function.addr, function);
-        ptr = unsafe { ptr.add(align_up_to((12 + size * 4) as usize, 8)) };
+        ptr = unsafe { ptr.add(align_up_to((12 + size * 8) as usize, 8)) };
     }
-    functions
 }
 
 fn align_up_to(n: usize, align: usize) -> usize {
     (n + align - 1) & !(align - 1)
 }
 
+#[cfg(feature = "llvm_gc_plugin")]
 extern "C" {
     fn LLVMLinkPLImmixGC();
 }
@@ -118,6 +128,7 @@ extern "C" {
 ///
 /// A call to this function is required to compile the
 /// code using the `plimmix` gc strategy.
+#[cfg(feature = "llvm_gc_plugin")]
 pub fn register_llvm_gc_plugins() {
     unsafe {
         LLVMLinkPLImmixGC();

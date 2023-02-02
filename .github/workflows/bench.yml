@@ -41,6 +41,6 @@ jobs:
         with:
           cwd: "immix"
           # Optional. Compare only this benchmark target
-          benchName: "immix_bench"
+          # benchName: "immix_bench"
           # Needed. The name of the branch to compare with. This default uses the branch which is being pulled against
           branchName: ${{ github.base_ref }}
