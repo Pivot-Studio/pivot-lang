@@ -4,6 +4,7 @@ use std::env;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
+use std::process::Stdio;
 use thiserror::Error;
 
 use crate::apple::get_apple_sdk_root;
@@ -138,9 +139,21 @@ impl Linker for LdLinker {
             self.push_args(arg);
         });
         // link
-        lld_rs::link(lld_rs::LldFlavor::Elf, &self.args)
-            .ok()
-            .map_err(LinkerError::LinkError)
+        // use ld for default linker, as lld has a bug affcting backtrace
+        // https://github.com/rust-lang/backtrace-rs/issues/150
+        if Command::new("ld")
+            .args(&self.args)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .is_err()
+        {
+            lld_rs::link(lld_rs::LldFlavor::Elf, &self.args)
+                .ok()
+                .map_err(LinkerError::LinkError)
+        } else {
+            Ok(())
+        }
     }
 
     fn push_args(&mut self, arg: &str) {
@@ -230,10 +243,21 @@ impl Linker for Ld64Linker {
     fn finalize(&mut self) -> Result<(), LinkerError> {
         self.add_apple_sdk()?;
         self.args.push("-lSystem".to_owned());
-
-        lld_rs::link(lld_rs::LldFlavor::MachO, &self.args)
-            .ok()
-            .map_err(LinkerError::LinkError)
+        // use ld for default linker, as lld has a bug affcting backtrace
+        // https://github.com/rust-lang/backtrace-rs/issues/150
+        if Command::new("ld")
+            .args(&self.args)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .is_err()
+        {
+            lld_rs::link(lld_rs::LldFlavor::MachO, &self.args)
+                .ok()
+                .map_err(LinkerError::LinkError)
+        } else {
+            Ok(())
+        }
     }
 
     fn push_args(&mut self, arg: &str) {

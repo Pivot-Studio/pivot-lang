@@ -11,16 +11,12 @@ mod allocator;
 mod block;
 mod collector;
 mod consts;
+#[cfg(feature = "llvm_stackmap")]
+mod llvm_stackmap;
 mod macros;
 mod mmap;
 #[cfg(feature = "llvm_stackmap")]
-mod llvm_stackmap;
-#[cfg(all(feature = "llvm_stackmap", feature = "llvm_pass"))]
-mod llvm_pass;
-#[cfg(feature = "llvm_stackmap")]
 pub use llvm_stackmap::*;
-#[cfg(all(feature = "llvm_stackmap", feature = "llvm_pass"))]
-pub use llvm_pass::*;
 
 pub use allocator::*;
 pub use block::*;
@@ -28,6 +24,7 @@ pub use collector::*;
 pub use consts::*;
 
 use parking_lot::{lock_api::RawRwLock, RwLock};
+#[cfg(feature = "llvm_stackmap")]
 use rustc_hash::FxHashMap;
 
 thread_local! {
@@ -41,16 +38,21 @@ thread_local! {
     };
 }
 #[cfg(feature = "llvm_stackmap")]
-lazy_static!{
-    static ref STACK_MAP:StackMapWrapper = {
-       StackMapWrapper { map: RefCell::new(FxHashMap::default()) }
+lazy_static! {
+    static ref STACK_MAP: StackMapWrapper = {
+        StackMapWrapper {
+            map: RefCell::new(FxHashMap::default()),
+        }
     };
 }
 
+#[cfg(feature = "llvm_stackmap")]
 pub struct StackMapWrapper {
-    pub map:RefCell< FxHashMap<*const u8, Function>>
+    pub map: RefCell<FxHashMap<*const u8, Function>>,
 }
+#[cfg(feature = "llvm_stackmap")]
 unsafe impl Sync for StackMapWrapper {}
+#[cfg(feature = "llvm_stackmap")]
 unsafe impl Send for StackMapWrapper {}
 const DEFAULT_HEAP_SIZE: usize = 1024 * 1024 * 1024;
 
@@ -136,8 +138,9 @@ pub fn no_gc_thread() {
 }
 
 #[cfg(feature = "llvm_stackmap")]
-pub fn gc_init(ptr:*mut u8) {
-    build_function_maps(ptr, & mut STACK_MAP.map.borrow_mut());
+pub fn gc_init(ptr: *mut u8) {
+    // println!("stackmap: {:?}", &STACK_MAP.map.borrow());
+    build_root_maps(ptr, &mut STACK_MAP.map.borrow_mut());
 }
 
 /// notify gc if a thread is going to stuck e.g.
@@ -185,6 +188,9 @@ static GC_RUNNING: AtomicBool = AtomicBool::new(false);
 
 static GC_ID: AtomicUsize = AtomicUsize::new(0);
 
+#[cfg(feature = "auto_gc")]
+static GC_AUTOCOLLECT_ENABLE: AtomicBool = AtomicBool::new(true);
+#[cfg(not(feature = "auto_gc"))]
 static GC_AUTOCOLLECT_ENABLE: AtomicBool = AtomicBool::new(false);
 
 lazy_static! {

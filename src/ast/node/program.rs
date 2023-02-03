@@ -449,7 +449,13 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let p = pp.as_path();
         builder.write_bitcode_to_path(p);
         builder.print_to_file(&ll).unwrap();
-        ModBuffer::push(db, PLModBuffer { path: p.clone().to_path_buf(), is_main: builder.get_function("main").is_some() });
+        ModBuffer::push(
+            db,
+            PLModBuffer {
+                path: p.clone().to_path_buf(),
+                is_main: builder.get_function("main").is_some(),
+            },
+        );
     }
     ModWrapper::new(db, ctx.plmod)
 }

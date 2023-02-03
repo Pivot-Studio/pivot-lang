@@ -4,7 +4,6 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use immix::*;
 use libc::malloc;
 use rand::random;
-extern crate bindeps;
 
 fn immix_benchmark_multi_thread(c: &mut Criterion) {
     bench_n_threads(get_threads())(c);
@@ -117,7 +116,7 @@ unsafe fn alloc_test_obj(gc: &mut Collector) -> *mut GCTestObj {
 
 fn test_complecated_single_thread_gc(num_iter: usize) -> (Duration, Duration) {
     #[cfg(feature = "shadow_stack")]
-    {
+    return {
         let t = SPACE.with(|gc| unsafe {
             let mut gc = gc.borrow_mut();
             let mut total_mark = Duration::new(0, 0);
@@ -155,8 +154,10 @@ fn test_complecated_single_thread_gc(num_iter: usize) -> (Duration, Duration) {
             (total_mark, total_sweep)
         });
         t
-    }
+    };
+    #[cfg(not(feature = "shadow_stack"))]
     eprintln!("shadow stack is not enabled, skip the bench");
+    #[cfg(not(feature = "shadow_stack"))]
     (Duration::new(0, 100), Duration::new(0, 100))
 }
 

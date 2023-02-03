@@ -434,11 +434,10 @@ mod test {
     }
 
     #[test]
-    #[cfg(feature = "jit")]
-    fn test_jit() {
+    fn test_compile() {
         use std::{path::PathBuf, process::Command};
 
-        use crate::ast::compiler::{compile, run, Options};
+        use crate::ast::compiler::{compile, Options};
 
         let docs = MemDocs::new();
         let mut db = Database::default();
@@ -451,7 +450,7 @@ mod test {
             None,
             None,
         );
-        let outplb = "testout.bc";
+        // let outplb = "testout.bc";
         let out = "testout";
 
         compile(
@@ -459,17 +458,18 @@ mod test {
             input,
             out.to_string(),
             Options {
-                optimization: crate::ast::compiler::HashOptimizationLevel::Aggressive,
+                optimization: crate::ast::compiler::HashOptimizationLevel::None,
                 genir: true,
                 printast: false,
                 flow: false,
                 fmt: false,
             },
         );
-        run(
-            &PathBuf::from(outplb).as_path(),
-            inkwell::OptimizationLevel::Default,
-        );
+        // #[cfg(feature = "jit")]
+        // crate::ast::compiler::run(
+        //     &PathBuf::from(outplb).as_path(),
+        //     inkwell::OptimizationLevel::None,
+        // );
         let exe = PathBuf::from(out);
         #[cfg(target_os = "windows")]
         let exe = exe.with_extension("exe");

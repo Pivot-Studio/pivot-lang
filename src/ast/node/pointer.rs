@@ -61,7 +61,7 @@ impl Node for PointerOpNode {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::CAN_NOT_REF_CONSTANT)));
                 }
                 let val = value.value;
-                let v = builder.alloc("addr", &tp.clone().unwrap().borrow(), ctx);
+                let v = builder.alloc("addr", &tp.clone().unwrap().borrow(), ctx, None);
                 builder.build_store(v, val);
                 v.into()
             }

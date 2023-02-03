@@ -1,6 +1,6 @@
 #[cfg(feature = "immix")]
 mod _immix {
-    use immix::{gc_collect, gc_malloc};
+    use immix::gc_malloc;
     use internal_macro::is_runtime;
 
     #[cfg(feature = "jit")]
@@ -11,8 +11,8 @@ mod _immix {
     }
 
     #[is_runtime]
-    fn immix_gc_init(ptr:*mut u8) {
-        println!("gc init");
+    fn immix_gc_init(ptr: *mut u8) {
+        // println!("gc init");
         immix::gc_init(ptr)
     }
 
@@ -24,37 +24,25 @@ mod _immix {
     // });
     #[used]
     #[no_mangle]
-    pub static _IMMIX_OBJTYPE_ATOMIC:u8 = 0;
+    pub static _IMMIX_OBJTYPE_ATOMIC: u8 = 0;
     #[used]
     #[no_mangle]
-    pub static _IMMIX_OBJTYPE_TRAIT:u8 = 1;
+    pub static _IMMIX_OBJTYPE_TRAIT: u8 = 1;
     #[used]
     #[no_mangle]
-    pub static _IMMIX_OBJTYPE_COMPLEX:u8 = 2;
+    pub static _IMMIX_OBJTYPE_COMPLEX: u8 = 2;
     #[used]
     #[no_mangle]
-    pub static _IMMIX_OBJTYPE_POINTER:u8 = 3;
-    
+    pub static _IMMIX_OBJTYPE_POINTER: u8 = 3;
 
     struct DioGC();
 
     #[is_runtime] // jit注册
     impl DioGC {
         pub unsafe fn malloc(size: u64, obj_type: u8) -> *mut u8 {
-            gc_malloc(size as usize, obj_type)
-        }
-        pub fn add_root(ptr: *mut u8, obj_type: u8) {
-            // gc_add_root(ptr, obj_type)
-        }
-        pub fn rm_root(ptr: *mut u8) {
-            // gc_remove_root(ptr)
-        }
-        pub unsafe fn collect() {
-            backtrace::trace(|frame| {
-                println!("frame: {:?}", frame);
-                true
-            });
-            gc_collect()
+            let ptr = gc_malloc(size as usize, obj_type);
+            // println!("malloc: {:p} {} {}", ptr, size, obj_type);
+            ptr
         }
         pub fn about() {
             let dio = "
@@ -88,9 +76,9 @@ mod _immix {
         }
     }
 }
-#[cfg(feature = "simple_gc")]
+#[cfg(all(feature = "simple_gc", not(feature = "immix")))]
 mod _simple_gc;
 #[cfg(feature = "immix")]
 pub use _immix::*;
-#[cfg(feature = "simple_gc")]
+#[cfg(all(feature = "simple_gc", not(feature = "immix")))]
 pub use _simple_gc::*;

@@ -13,7 +13,7 @@ namespace {
   public:
     PLImmixGC() {
         UsesMetadata = true;
-        // NeededSafePoints = true;
+        NeededSafePoints = true;
     }
   };
 

@@ -40,7 +40,13 @@ pub trait IRBuilder<'a, 'ctx> {
         line: u32,
         pltp: &PLType,
     ) -> ValueHandle;
-    fn alloc(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle;
+    fn alloc(
+        &self,
+        name: &str,
+        pltype: &PLType,
+        ctx: &mut Ctx<'a>,
+        declare: Option<Pos>,
+    ) -> ValueHandle;
     fn build_conditional_branch(
         &self,
         cond: ValueHandle,
@@ -116,9 +122,9 @@ pub trait IRBuilder<'a, 'ctx> {
     fn add_body_to_struct_type(&self, name: &str, order_fields: &[Field], ctx: &mut Ctx<'a>);
     fn get_or_insert_fn_handle(&self, pltp: &FNType, ctx: &mut Ctx<'a>) -> ValueHandle;
     // fn mv2heap(&self, val: ValueHandle, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle;
-    fn gc_rm_root(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>);
-    fn gc_rm_root_current(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>);
-    fn gc_collect(&self, ctx: &mut Ctx<'a>);
+    // fn gc_rm_root(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>);
+    // fn gc_rm_root_current(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>);
+    // fn gc_collect(&self, ctx: &mut Ctx<'a>);
     fn get_or_add_global(
         &self,
         name: &str,
@@ -178,6 +184,7 @@ pub trait IRBuilder<'a, 'ctx> {
         v: &STType,
         field_tps: &[Arc<RefCell<PLType>>],
     );
+    fn get_stack_root(&self, v: ValueHandle) -> ValueHandle;
 }
 
 pub type ValueHandle = usize;

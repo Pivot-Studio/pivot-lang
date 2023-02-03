@@ -29,7 +29,7 @@ pub struct PLHover(Hover);
 pub struct ModBuffer(PLModBuffer);
 
 #[derive(Debug, Clone)]
-pub struct PLModBuffer{
+pub struct PLModBuffer {
     pub path: PathBuf,
     pub is_main: bool,
 }

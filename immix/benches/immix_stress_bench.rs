@@ -2,8 +2,6 @@ use std::{mem::size_of, thread::available_parallelism, time::Duration};
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use immix::*;
-extern crate bindeps;
-
 
 fn immix_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("plimmixgc");
@@ -42,7 +40,7 @@ fn immix_benchmark(c: &mut Criterion) {
                         })
                     }));
                 }
-    
+
                 while let Some(th) = threads.pop() {
                     th.join().unwrap();
                 }

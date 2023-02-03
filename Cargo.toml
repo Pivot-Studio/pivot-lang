@@ -15,7 +15,7 @@ llvm-sys = "140"
 internal_macro = { path = "./internal_macro" }
 pl_linker = { path = "./pl_linker" }
 vm = { path = "./vm", optional = true, features = ["jit"] }
-immix = { path = "./immix", features = ["llvm_pass", "llvm_gc_plugin"] }
+immix = { path = "./immix", features = ["llvm_gc_plugin", "llvm_stackmap"] }
 nom_locate = "4.0.0"
 rowan = "0.15.10"
 dissimilar = "1.0.4"
@@ -42,9 +42,12 @@ petgraph = "0.6.2"
 version = "7"
 features = ["alloc"]
 
+
+
 [features]
-default = ["jit"]
+default = ["static"]
 jit = ["vm"]
+static = ["immix/auto_gc"]
 
 [[bin]]
 name = "plc"
@@ -56,7 +59,6 @@ members = [
     "vm",
     "pl_linker",
     "immix",
-    "immix/bindeps",
 ]
 
 [profile.release]

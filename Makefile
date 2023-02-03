@@ -12,6 +12,10 @@ devmac:
 vm:
 	@cd vm && cargo build --release
 
+vmdebug:
+	@cd vm && cargo build
+	@cp target/debug/libvm.a target/release/libvm.a
+
 install:
 	@cargo install --path=.
 
@@ -29,3 +33,6 @@ bench:
 
 bench-simple-gc:
 	@cd vm && cargo bench --features=simple_gc --no-default-features
+
+cmake-clean:
+	@find . -name CMakeCache.txt -type f -delete

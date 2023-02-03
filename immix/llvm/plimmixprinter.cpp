@@ -59,56 +59,48 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
   // For each function...
   for (auto FI = Info.funcinfo_begin(), FE = Info.funcinfo_end(); FI != FE; ++FI) {
     GCFunctionInfo &MD = **FI;
-    
-
-    // A compact GC layout. Emit this data structure:
-    //
-    // struct {
-    //   int32_t PointCount;
-    //   void *SafePointAddress[PointCount];
-    //   int32_t StackFrameSize; // in words
-    //   int32_t StackArity;
-    //   int32_t LiveCount;
-    //   int32_t LiveOffsets[LiveCount];
-    // } __gcmap_<FUNCTIONNAME>;
 
     // Align to address width.
     AP.emitAlignment(llvm::Align(8));
   
-    // Emit PointCount.
+
     AP.OutStreamer.get()->AddComment("function address");
     const GlobalValue* GV = &MD.getFunction();
     AP.emitLabelPlusOffset(AP.getSymbol(GV)/*Hi*/, 0/*Offset*/, IntPtrSize/*Size*/);
-
-    // our gc does not need compiler to manually insert safepoints
-
-    // // And each safe point... 
-    // for (GCFunctionInfo::iterator PI = MD.begin(),
-    //                               PE = MD.end(); PI != PE; ++PI) {
-    //   // Emit the address of the safe point.
-    //   AP.OutStreamer.get()->AddComment("safe point address");
-    //   MCSymbol *Label = PI->Label;
-    //   AP.emitLabelPlusOffset(Label/*Hi*/, 0/*Offset*/, IntPtrSize/*Size*/);
-    // }
 
     // Stack information never change in safe points! Only print info from the
     // first call-site.
     GCFunctionInfo::iterator PI = MD.begin();
 
-    // // Emit the stack frame size.
-    // AP.OutStreamer.get()->AddComment("stack frame size (in words)");
-    // AP.emitInt32(MD.getFrameSize() / IntPtrSize);
+    // Emit the stack frame size.
+    AP.OutStreamer.get()->AddComment("stack frame size (in words)");
+    AP.emitInt32(MD.getFrameSize() / IntPtrSize);
 
-    // // Emit stack arity, i.e. the number of stacked arguments.
-    // unsigned RegisteredArgs = IntPtrSize == 4 ? 5 : 6;
-    // unsigned StackArity = MD.getFunction().arg_size() > RegisteredArgs ?
-    //                       MD.getFunction().arg_size() - RegisteredArgs : 0;
-    // AP.OutStreamer.get()->AddComment("stack arity");
-    // AP.emitInt32(StackArity);
+    // Emit stack arity, i.e. the number of stacked arguments.
+    unsigned RegisteredArgs = IntPtrSize == 4 ? 5 : 6;
+    unsigned StackArity = MD.getFunction().arg_size() > RegisteredArgs ?
+                          MD.getFunction().arg_size() - RegisteredArgs : 0;
+    AP.OutStreamer.get()->AddComment("stack arity");
+    AP.emitInt32(StackArity);
 
     // Emit the number of live roots in the function.
     AP.OutStreamer.get()->AddComment("live root count");
     AP.emitInt32(MD.live_size(PI));
+
+    // Emit PointCount.
+    AP.OutStreamer.get()->AddComment("safe point count");
+    AP.emitInt32(MD.size());
+
+    // And each safe point... 
+    for (GCFunctionInfo::iterator PI = MD.begin(),
+                                  PE = MD.end(); PI != PE; ++PI) {
+      // Emit the address of the safe point.
+      AP.OutStreamer.get()->AddComment("safe point address");
+      MCSymbol *Label = PI->Label;
+      AP.emitLabelPlusOffset(Label/*Hi*/, 0/*Offset*/, IntPtrSize/*Size*/);
+    }
+
+
 
     // And for each live root...
     for (GCFunctionInfo::live_iterator LI = MD.live_begin(PI),
@@ -133,7 +125,7 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
       } else {
         AP.emitInt32(4);
       }
-      printf("%s\n", meta.bytes());
+      // printf("%s\n", meta.bytes());
     }
   }
 }

@@ -208,7 +208,10 @@ fn main() {
                 #[cfg(feature = "jit")]
                 compiler::run(Path::new(name.as_str()), opt.to_llvm());
                 #[cfg(not(feature = "jit"))]
-                println!("feature jit is not enabled, cannot use run command");
+                println!(
+                    "feature jit is not enabled, cannot use run command, failed to compile {}",
+                    name
+                );
             }
             RunCommand::Lsp {} => {
                 logger

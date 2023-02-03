@@ -12,7 +12,6 @@ parking_lot = "0.12"
 rustc-hash = "1.1"
 lazy_static = "1.4"
 vector-map = "1.0"
-llvm-plugin = { version = "0.3", features = ["llvm14-0"] }
 backtrace = "0.3"
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser","memoryapi"] }
@@ -20,7 +19,6 @@ winapi = { version = "0.3", features = ["winuser","memoryapi"] }
 [dev-dependencies]
 rand = "0.8"
 criterion = "0.3"
-bindeps = { path = "./bindeps" }
 
 [[bench]]
 name = "immix_bench"
@@ -31,17 +29,20 @@ name = "immix_stress_bench"
 harness = false
 
 [features]
-default = ["madv_dontneed", "llvm_stackmap"]
+default = ["madv_dontneed", "shadow_stack"]
 madv_free = []
 madv_dontneed = []
 zero_init = []
 shadow_stack = []
 llvm_stackmap = []
-llvm_pass = []
 llvm_gc_plugin = []
+auto_gc = []
 
 
 [build-dependencies]
 cmake = "0.1"
+lazy_static = "1.0"
+regex = "1.0"
+semver = "0.11"
 
 
