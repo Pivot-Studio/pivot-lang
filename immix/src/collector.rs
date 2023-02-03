@@ -730,6 +730,8 @@ mod tests {
 
     #[test]
     fn test_big_obj_gc() {
+        gc_disable_auto_collect();
+        let _lock = THE_RESOURCE.lock();
         SPACE.with(|gc| unsafe {
             let mut gc = gc.borrow_mut();
             println!("thread1 gcid = {}", gc.get_id());
@@ -817,6 +819,7 @@ mod tests {
 
     fn single_thread(obj_num: usize) -> SingleThreadResult {
         gc_disable_auto_collect();
+        // let _lock = THE_RESOURCE.lock();
         SPACE.with(|gc| unsafe {
             // 睡眠一秒保证所有线程创建
             let mut gc = gc.borrow_mut();
