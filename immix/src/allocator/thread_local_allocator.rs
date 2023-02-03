@@ -201,7 +201,7 @@ impl ThreadLocalAllocator {
         }
         // mid size object & small size object
         // 刚启动或者recycle block全用光了
-        if self.recyclable_blocks.len() == 0 {
+        if self.recyclable_blocks.is_empty() {
             let block = self.get_new_block();
             if block.is_null() {
                 return std::ptr::null_mut();
@@ -243,7 +243,7 @@ impl ThreadLocalAllocator {
             return self.overflow_alloc(size, obj_type);
         }
         let (s, nxt) = res.unwrap();
-        let re = unsafe { (**f).get_nth_line(s as usize) };
+        let re = unsafe { (**f).get_nth_line(s) };
         if !nxt {
             // 当前block被用完，将它从recyclable blocks中移除，加入unavailable blocks
             let used_block = self.recyclable_blocks.pop_front().unwrap();
@@ -271,7 +271,7 @@ impl ThreadLocalAllocator {
         }
         // alloc
         let (s, nxt) = unsafe { (*new_block).alloc(size, obj_type).unwrap() };
-        let re = unsafe { (*new_block).get_nth_line(s as usize) };
+        let re = unsafe { (*new_block).get_nth_line(s) };
         if !nxt {
             // new_block被用完，将它加入unavailable blocks
             self.unavailable_blocks.push(new_block);
@@ -321,11 +321,11 @@ impl ThreadLocalAllocator {
     ///
     /// * `*mut Block` - block pointer
     fn get_new_block(&mut self) -> *mut Block {
-        if self.collect_mode && self.eva_blocks.len() > 0 {
+        if self.collect_mode && !self.eva_blocks.is_empty() {
             return self.eva_blocks.pop().unwrap();
         }
-        let block = unsafe { (&mut *self.global_allocator).get_block() };
-        block
+
+        unsafe { (*self.global_allocator).get_block() }
     }
 
     /// # in_heap
@@ -397,7 +397,7 @@ impl ThreadLocalAllocator {
             }
         }
         unsafe {
-            (&mut *self.global_allocator).return_blocks(free_blocks.into_iter());
+            (*self.global_allocator).return_blocks(free_blocks.into_iter());
         }
         let mut big_objs = Vec::new();
         for obj in self.big_objs.iter() {
@@ -405,7 +405,7 @@ impl ThreadLocalAllocator {
                 big_objs.push(*obj);
             } else {
                 unsafe {
-                    (&mut *self.global_allocator).return_big_objs([*obj]);
+                    (*self.global_allocator).return_big_objs([*obj]);
                 }
             }
             unsafe {

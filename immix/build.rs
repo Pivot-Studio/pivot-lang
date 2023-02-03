@@ -9,10 +9,7 @@ fn main() {
         println!("cargo:rerun-if-changed=llvm/plimmixprinter.cpp");
         println!("cargo:rerun-if-changed=llvm/plimmix.cpp");
         let dst = cmake::build("llvm");
-        println!(
-            "cargo:rustc-link-search=native={}/build",
-            dst.display().to_string()
-        );
+        println!("cargo:rustc-link-search=native={}/build", dst.display());
         println!("cargo:rustc-link-lib=static=plimmix_plugin");
 
         extern crate regex;
@@ -138,7 +135,7 @@ fn main() {
         /// Check whether the given version of LLVM is blocklisted,
         /// returning `Some(reason)` if it is.
         fn is_blocklisted_llvm(llvm_version: &Version) -> Option<&'static str> {
-            static BLOCKLIST: &'static [(u64, u64, u64, &'static str)] = &[];
+            static BLOCKLIST: &[(u64, u64, u64, &str)] = &[];
 
             if let Some(x) = env::var_os(&*ENV_IGNORE_BLOCKLIST) {
                 if &x == "YES" {
@@ -157,9 +154,9 @@ fn main() {
 
             for &(major, minor, patch, reason) in BLOCKLIST.iter() {
                 let bad_version = Version {
-                    major: major,
-                    minor: minor,
-                    patch: patch,
+                    major,
+                    minor,
+                    patch,
                     pre: vec![],
                     build: vec![],
                 };
@@ -259,17 +256,17 @@ fn main() {
                             &flag[2..]
                         }
                     } else {
-                        if flag.starts_with("-l") {
+                        if let Some(f) = flag.strip_prefix("-l") {
                             // Linker flags style, -lfoo
-                            return flag[2..].to_owned();
+                            return f.to_owned();
                         }
 
                         let maybe_lib = Path::new(&flag);
                         if maybe_lib.is_file() {
                             // Library on disk, likely an absolute path to a .so
-                            maybe_lib
-                                .parent()
-                                .map(|p| println!("cargo:rustc-link-search={}", p.display()));
+                            if let Some(p) = maybe_lib.parent() {
+                                println!("cargo:rustc-link-search={}", p.display())
+                            }
                             &maybe_lib.file_stem().unwrap().to_str().unwrap()[3..]
                         } else {
                             panic!("Unable to parse result of llvm-config --system-libs")
@@ -286,15 +283,13 @@ fn main() {
             if cfg!(target_env = "msvc") {
                 // MSVC doesn't need an explicit one.
                 None
-            } else if cfg!(target_os = "macos") {
+            } else if cfg!(target_os = "macos") || cfg!(target_os = "freebsd") {
                 // On OS X 10.9 and later, LLVM's libc++ is the default. On earlier
                 // releases GCC's libstdc++ is default. Unfortunately we can't
                 // reasonably detect which one we need (on older ones libc++ is
                 // available and can be selected with -stdlib=lib++), so assume the
                 // latest, at the cost of breaking the build on older OS releases
                 // when LLVM was built against libstdc++.
-                Some("c++")
-            } else if cfg!(target_os = "freebsd") {
                 Some("c++")
             } else {
                 // Otherwise assume GCC's libstdc++.
@@ -357,7 +352,7 @@ fn main() {
 
         let use_debug_msvcrt = env::var_os(&*ENV_USE_DEBUG_MSVCRT).is_some();
         if cfg!(target_env = "msvc") && (use_debug_msvcrt || is_llvm_debug()) {
-            println!("cargo:rustc-link-lib={}", "msvcrtd");
+            println!("cargo:rustc-link-lib=msvcrtd");
         }
     }
 }

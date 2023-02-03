@@ -424,26 +424,26 @@ impl Block {
     pub unsafe fn alloc(&mut self, size: usize, obj_type: ObjectType) -> Option<(usize, bool)> {
         let cursor = self.cursor;
         let line_size = (size - 1) / LINE_SIZE + 1;
-        if line_size as usize + self.cursor as usize > NUM_LINES_PER_BLOCK {
+        if line_size + self.cursor > NUM_LINES_PER_BLOCK {
             return None;
         }
-        let hole = self.find_next_hole((cursor, 0), line_size as usize);
+        let hole = self.find_next_hole((cursor, 0), line_size);
         // debug_assert!(hole.is_some(), "cursor {}, header {:?}, hole: {} av {} first idx {} first_len {}", cursor,self.line_map,self.hole_num,self.available_line_num, self.first_hole_line_idx,self.first_hole_line_len);
         if let Some((start, len)) = hole {
-            self.available_line_num -= line_size as usize;
+            self.available_line_num -= line_size;
             // 标记为已使用
             for i in start..=start - 1 + line_size {
-                let header = self.line_map.get_mut(i as usize).unwrap();
+                let header = self.line_map.get_mut(i).unwrap();
                 header.set_used(true);
             }
             // 设置起始line header的obj_type
-            let header = self.line_map.get_mut(start as usize).unwrap();
+            let header = self.line_map.get_mut(start).unwrap();
             *header |= (obj_type as u8) << 2 | 0b10000000;
             // header.set_obj_type(obj_type);
             // header.set_is_head(true);
             // 更新first_hole_line_idx和first_hole_line_len
             if start == self.cursor {
-                self.cursor = self.cursor + line_size;
+                self.cursor += line_size;
                 self.limit -= line_size;
             }
             if self.limit == 0 {
@@ -455,7 +455,7 @@ impl Block {
                     return Some((start, false));
                 }
             }
-            if self.cursor as usize > start as usize + len as usize && len == line_size {
+            if self.cursor > start + len && len == line_size {
                 // 正好匹配，那么减少一个hole
                 self.hole_num -= 1;
             }

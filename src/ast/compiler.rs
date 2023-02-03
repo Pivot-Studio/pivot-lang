@@ -325,10 +325,11 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     t.output_to(&fo);
     let res = t.finalize();
     if res.is_err() {
-        eprint!(
+        eprintln!(
             "{}",
             format!("link failed: {}", res.unwrap_err()).bright_red()
         );
+        eprintln!("target triple: {}", tm.get_triple());
     } else {
         println!("link succ, output file: {}", fo);
     }

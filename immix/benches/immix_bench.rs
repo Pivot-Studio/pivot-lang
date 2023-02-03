@@ -63,14 +63,14 @@ fn immix_benchmark_single_thread_sweep(c: &mut Criterion) {
 
 fn immix_benchmark_single_thread_alloc(c: &mut Criterion) {
     let mut g = c.benchmark_group("allocation bench");
-    if let None = option_env!("PL_IMMIX_HEAP_SIZE") {
+    if option_env!("PL_IMMIX_HEAP_SIZE").is_none() {
         return;
     }
     g.bench_function(
-        &format!("singlethread gc alloc benchmark small objects"),
+        &"singlethread gc alloc benchmark small objects".to_string(),
         |b| b.iter(bench_allocation),
     );
-    g.bench_function(&format!("malloc benchmark small objects"), |b| {
+    g.bench_function(&"malloc benchmark small objects".to_string(), |b| {
         b.iter(bench_malloc)
     });
 }
@@ -117,7 +117,7 @@ unsafe fn alloc_test_obj(gc: &mut Collector) -> *mut GCTestObj {
 fn test_complecated_single_thread_gc(num_iter: usize) -> (Duration, Duration) {
     #[cfg(feature = "shadow_stack")]
     return {
-        let t = SPACE.with(|gc| unsafe {
+        SPACE.with(|gc| unsafe {
             let mut gc = gc.borrow_mut();
             let mut total_mark = Duration::new(0, 0);
             let mut total_sweep = Duration::new(0, 0);
@@ -152,8 +152,7 @@ fn test_complecated_single_thread_gc(num_iter: usize) -> (Duration, Duration) {
                 total_sweep += ctime.1;
             }
             (total_mark, total_sweep)
-        });
-        t
+        })
     };
     #[cfg(not(feature = "shadow_stack"))]
     eprintln!("shadow stack is not enabled, skip the bench");

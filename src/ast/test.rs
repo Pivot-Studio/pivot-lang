@@ -3,8 +3,6 @@ mod test {
     use std::{
         cell::RefCell,
         sync::{Arc, Mutex},
-        thread::sleep,
-        time::Duration,
     };
 
     use lsp_types::{
@@ -475,7 +473,6 @@ mod test {
         let exe = PathBuf::from(out);
         #[cfg(target_os = "windows")]
         let exe = exe.with_extension("exe");
-        sleep(Duration::from_secs(1));
         let exe =
             dunce::canonicalize(&exe).expect(&format!("static compiled file not found {:?}", exe));
         let o = Command::new(exe.to_str().unwrap())

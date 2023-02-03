@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 internal_macro = { path = "../internal_macro",default-features = false }
 backtrace = "0.3"
-immix = { path = "../immix", features = ["llvm_stackmap"] }
+immix = { path = "../immix", features = ["llvm_stackmap", "auto_gc"] }
 libc = { version = "0.2", optional = true }
 
 [dev-dependencies]

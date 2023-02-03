@@ -4,7 +4,6 @@ use std::env;
 use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
-use std::process::Stdio;
 use thiserror::Error;
 
 use crate::apple::get_apple_sdk_root;
@@ -141,18 +140,25 @@ impl Linker for LdLinker {
         // link
         // use ld for default linker, as lld has a bug affcting backtrace
         // https://github.com/rust-lang/backtrace-rs/issues/150
-        if Command::new("ld")
-            .args(&self.args)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .is_err()
-        {
+
+        let re = Command::new("ld").args(&self.args).output();
+        if re.is_err() {
+            println!("ld not found, try to link with lld, this may break gc(https://github.com/rust-lang/backtrace-rs/issues/150)");
             lld_rs::link(lld_rs::LldFlavor::Elf, &self.args)
                 .ok()
                 .map_err(LinkerError::LinkError)
         } else {
-            Ok(())
+            let re = re.unwrap();
+            if !re.status.success() {
+                eprintln!(
+                    "link failed\n ld stdout: {}, stderr: {}",
+                    String::from_utf8_lossy(&re.stdout),
+                    String::from_utf8_lossy(&re.stderr)
+                );
+                Err(LinkerError::LinkError("link failed".to_string()))
+            } else {
+                Ok(())
+            }
         }
     }
 
@@ -168,20 +174,12 @@ struct Ld64Linker {
 
 impl Ld64Linker {
     fn new(target: &spec::Target) -> Self {
-        let arch_name = target
-            .llvm_target
-            .split('-')
-            .next()
-            .expect("LLVM target must have a hyphen");
-
-        let mut args: Vec<String> = target
+        let args: Vec<String> = target
             .options
             .pre_link_args
             .iter()
             .map(|x| x.to_string())
             .collect();
-        args.push(format!("-arch"));
-        args.push(format!("{}", arch_name));
         // let (a, b, c) = target.options.min_os_version.unwrap();
         // args.push(format!("-platform_version"));
         // args.push(format!("{}", target.options.os));
@@ -243,20 +241,34 @@ impl Linker for Ld64Linker {
     fn finalize(&mut self) -> Result<(), LinkerError> {
         self.add_apple_sdk()?;
         self.args.push("-lSystem".to_owned());
+        if self.target.arch == "x86_64" {
+            // x86似乎没有下方的bug
+            return lld_rs::link(lld_rs::LldFlavor::MachO, &self.args)
+                .ok()
+                .map_err(LinkerError::LinkError);
+        }
+            
         // use ld for default linker, as lld has a bug affcting backtrace
         // https://github.com/rust-lang/backtrace-rs/issues/150
-        if Command::new("ld")
-            .args(&self.args)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()
-            .is_err()
-        {
+        let re = Command::new("ld").args(&self.args).output();
+        if re.is_err() {
+            println!("ld not found, try to link with lld, this may break gc(https://github.com/rust-lang/backtrace-rs/issues/150)");
             lld_rs::link(lld_rs::LldFlavor::MachO, &self.args)
                 .ok()
                 .map_err(LinkerError::LinkError)
         } else {
-            Ok(())
+            let re = re.unwrap();
+            if !re.status.success() {
+                eprintln!(
+                    "link failed\nargs: {:?}\nld stdout: {}, stderr: {}",
+                    self.args,
+                    String::from_utf8_lossy(&re.stdout),
+                    String::from_utf8_lossy(&re.stderr)
+                );
+                Err(LinkerError::LinkError("link failed".to_string()))
+            } else {
+                Ok(())
+            }
         }
     }
 

@@ -98,7 +98,7 @@ impl Collector {
                 mark_histogram: memvecmap,
                 queue: memqueue,
                 status: RefCell::new(CollectorStatus {
-                    collect_threshold: 512 * 1024,
+                    collect_threshold: 1024,
                     bytes_allocated_since_last_gc: 0,
                     last_gc_time: std::time::SystemTime::now(),
                     collecting: false,
@@ -248,12 +248,10 @@ impl Collector {
                 // 标记位，所以这块地址很快会在sweep阶段被识别并且回收利用。
                 // 虽然这造成了一定程度的内存碎片化和潜在的重复操作，但是
                 // 这种情况理论上是很少见的，所以这么做问题不大
-                if let Ok(_) = (*atomic_ptr).compare_exchange_weak(
-                    old_loaded,
-                    new_ptr,
-                    Ordering::SeqCst,
-                    Ordering::SeqCst,
-                ) {
+                if (*atomic_ptr)
+                    .compare_exchange_weak(old_loaded, new_ptr, Ordering::SeqCst, Ordering::SeqCst)
+                    .is_ok()
+                {
                     // 成功驱逐
                     // println!("gc {}: eva {:p} to {:p}", self.id, ptr, new_ptr);
                     new_line_header.set_marked(true);
@@ -298,7 +296,6 @@ impl Collector {
                 ObjectType::Atomic => {}
                 _ => (*self.queue).push((ptr, obj_type)),
             }
-            return;
         }
     }
 
@@ -454,7 +451,7 @@ impl Collector {
         if v - 1 == 0 {
             GC_MARKING.store(false, Ordering::Release);
         } else {
-            spin_until!(GC_MARKING.load(Ordering::Acquire) == false);
+            spin_until!(!GC_MARKING.load(Ordering::Acquire));
         }
     }
 
@@ -484,7 +481,7 @@ impl Collector {
     /// # collect
     /// Collect garbage.
     pub fn collect(&self) -> (std::time::Duration, std::time::Duration) {
-        let start_time = std::time::Instant::now();
+        // let start_time = std::time::Instant::now();
         // println!(
         //     "gc {} collecting...  size: {}",
         //     self.id,  unsafe{ self.thread_local_allocator.as_mut().unwrap().get_size()}
@@ -555,14 +552,14 @@ impl Collector {
                 .set_collect_mode(false);
             lock.unlock_shared();
         }
-        println!(
-            "gc {} collect done, mark: {:?}, sweep: {:?}, size: {}, total: {:?}",
-            self.id,
-            mark_time,
-            sweep_time,
-            _used,
-            start_time.elapsed()
-        );
+        // println!(
+        //     "gc {} collect done, mark: {:?}, sweep: {:?}, size: {}, total: {:?}",
+        //     self.id,
+        //     mark_time,
+        //     sweep_time,
+        //     _used,
+        //     start_time.elapsed()
+        // );
         let mut status = self.status.borrow_mut();
         status.collecting = false;
         (mark_time, sweep_time)
@@ -986,7 +983,7 @@ mod tests {
             total_size3 += re.size3;
             total_target_size3 += re.expect_size3;
             set.extend(re.set);
-            for s in re.set2.drain().into_iter() {
+            for s in re.set2.drain() {
                 if set2.contains(&s) {
                     println!("repeat ptr = {:p}", s.0);
                 }

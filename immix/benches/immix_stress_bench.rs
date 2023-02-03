@@ -10,16 +10,16 @@ fn immix_benchmark(c: &mut Criterion) {
     #[cfg(feature = "shadow_stack")]
     {
         group.bench_function(
-            &format!("singlethread gc stress benchmark small objects"),
+            &"singlethread gc stress benchmark small objects".to_string(),
             |b| {
                 b.iter_custom(|i| {
                     let mut total = Duration::new(0, 0);
                     for _ in 0..i {
                         total += SPACE.with(|space| {
                             let mut space = space.borrow_mut();
-                            let tt = gcbench(&mut space);
+
                             // t.elapsed()
-                            tt
+                            gcbench(&mut space)
                         });
                     }
                     total
@@ -34,9 +34,9 @@ fn immix_benchmark(c: &mut Criterion) {
                     threads.push(std::thread::spawn(move || {
                         SPACE.with(|space| {
                             let mut space = space.borrow_mut();
-                            let tt = gcbench(&mut space);
+
                             // t.elapsed()
-                            tt
+                            gcbench(&mut space)
                         })
                     }));
                 }
@@ -96,8 +96,7 @@ fn gcbench(space: &mut Collector) -> Duration {
         }
         space.remove_root(rustptr);
 
-        let t = t.elapsed();
-        t
+        t.elapsed()
     }
 }
 
@@ -121,7 +120,7 @@ unsafe fn populate(idepth: i32, thisnode: *mut GCTestObj, space: &mut Collector)
 #[cfg(feature = "shadow_stack")]
 unsafe fn make_tree(idepth: i32, space: &mut Collector) -> *mut GCTestObj {
     if idepth <= 0 {
-        return alloc_test_obj(space);
+        alloc_test_obj(space)
     } else {
         let mut left = make_tree(idepth - 1, space);
         let rustptr1 = (&mut left) as *mut *mut GCTestObj as *mut u8;
