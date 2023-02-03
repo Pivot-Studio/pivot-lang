@@ -14,3 +14,10 @@ macro_rules! spin_until {
         }
     };
 }
+
+#[macro_export]
+macro_rules! round_n_up {
+    ($v:expr, $n:expr) => {
+        $v + $n - ($v - 1) % $n - 1
+    };
+}

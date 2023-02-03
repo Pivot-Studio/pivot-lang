@@ -1,3 +1,4 @@
+#[cfg(all(feature = "llvm_stackmap", feature = "llvm_gc_plugin"))]
 #[macro_use]
 extern crate lazy_static;
 

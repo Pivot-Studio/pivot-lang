@@ -17,6 +17,7 @@ mod macros;
 mod mmap;
 #[cfg(feature = "llvm_stackmap")]
 pub use llvm_stackmap::*;
+mod bigobj;
 
 pub use allocator::*;
 pub use block::*;
