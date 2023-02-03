@@ -52,7 +52,7 @@ jobs:
       - name: Cargo check
         uses: actions-rs/cargo@v1
         with:
-          command: build
+          command: check
           args: --all-targets
 
   test:
@@ -119,11 +119,11 @@ jobs:
           command: build
           args: --manifest-path vm/Cargo.toml --release --target-dir target -vv
 
-      - name: build plc
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --manifest-path Cargo.toml --target-dir target -vv
+      # - name: build plc
+      #   uses: actions-rs/cargo@v1
+      #   with:
+      #     command: build
+      #     args: --manifest-path Cargo.toml --target-dir target -vv
 
 
       - name: Test with latest nextest release

@@ -329,7 +329,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
             "{}",
             format!("link failed: {}", res.unwrap_err()).bright_red()
         );
-        eprintln!("target triple: {}", tm.get_triple());
+        // eprintln!("target triple: {}", tm.get_triple());
     } else {
         println!("link succ, output file: {}", fo);
     }

@@ -840,7 +840,7 @@ checksum = "f051f77a7c8e6957c0696eac88f26b0117e54f52d3fc682ab19397a8812846a4"
 [[package]]
 name = "lld_rs"
 version = "140.0.0"
-source = "git+https://github.com/Pivot-Studio/lld-rs.git?branch=main#f227c09ba3758bd33fce5714a1a7c6867151d32e"
+source = "git+https://github.com/Pivot-Studio/lld-rs.git?branch=main#386c7f7d01a235dccda9334afc09d7c018f88557"
 dependencies = [
  "cc",
  "lazy_static",

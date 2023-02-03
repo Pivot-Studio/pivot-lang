@@ -2,7 +2,6 @@
 # To find the cmake version run
 # $ cmake --version
 cmake_minimum_required(VERSION 3.5)
-
 # Set the project name
 project (plimmix)
 
@@ -50,5 +49,5 @@ llvm_map_components_to_libnames(
 )
 
 message(STATUS "LLVM_LIBS: ${llvm_libs}")
-
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MT")
 target_link_libraries(plimmix_plugin_shared plimmix_plugin ${llvm_libs})

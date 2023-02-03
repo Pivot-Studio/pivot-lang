@@ -30,27 +30,27 @@ fn main() {
         lazy_static! {
             /// A single path to search for LLVM in (containing bin/llvm-config)
             static ref ENV_LLVM_PREFIX: String =
-                format!("LLVM_SYS_{}_PREFIX", env!("CARGO_PKG_VERSION_MAJOR"));
+                format!("LLVM_SYS_{}_PREFIX", 140);
 
             /// If exactly "YES", ignore the version blocklist
             static ref ENV_IGNORE_BLOCKLIST: String =
-                format!("LLVM_SYS_{}_IGNORE_BLOCKLIST", env!("CARGO_PKG_VERSION_MAJOR"));
+                format!("LLVM_SYS_{}_IGNORE_BLOCKLIST", 140);
 
             /// If set, enforce precise correspondence between crate and binary versions.
             static ref ENV_STRICT_VERSIONING: String =
-                format!("LLVM_SYS_{}_STRICT_VERSIONING", env!("CARGO_PKG_VERSION_MAJOR"));
+                format!("LLVM_SYS_{}_STRICT_VERSIONING", 140);
 
             /// If set, do not attempt to strip irrelevant options for llvm-config --cflags
             static ref ENV_NO_CLEAN_CFLAGS: String =
-                format!("LLVM_SYS_{}_NO_CLEAN_CFLAGS", env!("CARGO_PKG_VERSION_MAJOR"));
+                format!("LLVM_SYS_{}_NO_CLEAN_CFLAGS", 140);
 
             /// If set and targeting MSVC, force the debug runtime library
             static ref ENV_USE_DEBUG_MSVCRT: String =
-                format!("LLVM_SYS_{}_USE_DEBUG_MSVCRT", env!("CARGO_PKG_VERSION_MAJOR"));
+                format!("LLVM_SYS_{}_USE_DEBUG_MSVCRT", 140);
 
             /// If set, always link against libffi
             static ref ENV_FORCE_FFI: String =
-                format!("LLVM_SYS_{}_FFI_WORKAROUND", env!("CARGO_PKG_VERSION_MAJOR"));
+                format!("LLVM_SYS_{}_FFI_WORKAROUND", 140);
         }
 
         lazy_static! {

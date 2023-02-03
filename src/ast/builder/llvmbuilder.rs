@@ -1612,7 +1612,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.diunit.get_file(),
             fntype.range.start.line as u32,
             subroutine_type,
-            true,
+            false,
             true,
             fntype.range.start.line as u32,
             DIFlags::PUBLIC,
