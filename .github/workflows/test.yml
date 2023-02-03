@@ -119,6 +119,13 @@ jobs:
           command: build
           args: --manifest-path vm/Cargo.toml --release --target-dir target -vv
 
+      - name: build plc
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --manifest-path Cargo.toml --target-dir target -vv
+
+
       - name: Test with latest nextest release
         uses: actions-rs/cargo@v1
         with:

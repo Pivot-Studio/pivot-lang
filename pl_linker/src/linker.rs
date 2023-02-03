@@ -137,29 +137,9 @@ impl Linker for LdLinker {
         .for_each(|arg| {
             self.push_args(arg);
         });
-        // link
-        // use ld for default linker, as lld has a bug affcting backtrace
-        // https://github.com/rust-lang/backtrace-rs/issues/150
-
-        let re = Command::new("ld").args(&self.args).output();
-        if re.is_err() {
-            println!("ld not found, try to link with lld, this may break gc(https://github.com/rust-lang/backtrace-rs/issues/150)");
-            lld_rs::link(lld_rs::LldFlavor::Elf, &self.args)
-                .ok()
-                .map_err(LinkerError::LinkError)
-        } else {
-            let re = re.unwrap();
-            if !re.status.success() {
-                eprintln!(
-                    "link failed\n ld stdout: {}, stderr: {}",
-                    String::from_utf8_lossy(&re.stdout),
-                    String::from_utf8_lossy(&re.stderr)
-                );
-                Err(LinkerError::LinkError("link failed".to_string()))
-            } else {
-                Ok(())
-            }
-        }
+        lld_rs::link(lld_rs::LldFlavor::Elf, &self.args)
+            .ok()
+            .map_err(LinkerError::LinkError)
     }
 
     fn push_args(&mut self, arg: &str) {
@@ -241,34 +221,33 @@ impl Linker for Ld64Linker {
     fn finalize(&mut self) -> Result<(), LinkerError> {
         self.add_apple_sdk()?;
         self.args.push("-lSystem".to_owned());
-        if self.target.arch == "x86_64" {
-            // x86似乎没有下方的bug
-            return lld_rs::link(lld_rs::LldFlavor::MachO, &self.args)
-                .ok()
-                .map_err(LinkerError::LinkError);
-        }
-            
-        // use ld for default linker, as lld has a bug affcting backtrace
-        // https://github.com/rust-lang/backtrace-rs/issues/150
-        let re = Command::new("ld").args(&self.args).output();
-        if re.is_err() {
-            println!("ld not found, try to link with lld, this may break gc(https://github.com/rust-lang/backtrace-rs/issues/150)");
+        if self.target.arch == "arm64" {
+            // use ld for default linker, as lld has a bug affcting backtrace on arm64 target
+            // https://github.com/rust-lang/backtrace-rs/issues/150
+            let re = Command::new("ld").args(&self.args).output();
+            if re.is_err() {
+                println!("ld not found, try to link with lld, this may break gc(https://github.com/rust-lang/backtrace-rs/issues/150)");
+                lld_rs::link(lld_rs::LldFlavor::MachO, &self.args)
+                    .ok()
+                    .map_err(LinkerError::LinkError)
+            } else {
+                let re = re.unwrap();
+                if !re.status.success() {
+                    eprintln!(
+                        "link failed\nargs: {:?}\nld stdout: {}, stderr: {}",
+                        self.args,
+                        String::from_utf8_lossy(&re.stdout),
+                        String::from_utf8_lossy(&re.stderr)
+                    );
+                    Err(LinkerError::LinkError("link failed".to_string()))
+                } else {
+                    Ok(())
+                }
+            }
+        } else {
             lld_rs::link(lld_rs::LldFlavor::MachO, &self.args)
                 .ok()
                 .map_err(LinkerError::LinkError)
-        } else {
-            let re = re.unwrap();
-            if !re.status.success() {
-                eprintln!(
-                    "link failed\nargs: {:?}\nld stdout: {}, stderr: {}",
-                    self.args,
-                    String::from_utf8_lossy(&re.stdout),
-                    String::from_utf8_lossy(&re.stderr)
-                );
-                Err(LinkerError::LinkError("link failed".to_string()))
-            } else {
-                Ok(())
-            }
         }
     }
 
