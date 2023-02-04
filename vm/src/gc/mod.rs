@@ -12,16 +12,15 @@ mod _immix {
 
     #[is_runtime]
     fn immix_gc_init(ptr: *mut u8) {
-        // println!("gc init");
+        _ = env_logger::Builder::from_env(
+            env_logger::Env::new()
+                .filter_or("GC_LOG", "error")
+                .write_style("GC_LOG_COLOR"),
+        )
+        .try_init();
         immix::gc_init(ptr)
     }
 
-    // let tp_const_name = format!("_IMMIX_OBJTYPE_{}", match tp {
-    //     ObjectType::Atomic => "ATOMIC",
-    //     ObjectType::Trait => "TRAIT",
-    //     ObjectType::Complex => "COMPLEX",
-    //     ObjectType::Pointer => "POINTER",
-    // });
     #[used]
     #[no_mangle]
     pub static _IMMIX_OBJTYPE_ATOMIC: u8 = 0;

@@ -147,10 +147,11 @@ impl MemDocsInput {
     }
     #[salsa::tracked(lru = 32)]
     pub fn get_file_params(self, db: &dyn Db, f: String, entry: bool) -> Option<FileCompileInput> {
-        let mut file = dunce::canonicalize(f)
-            .unwrap()
-            .to_string_lossy()
-            .to_string();
+        let f = dunce::canonicalize(f);
+        if f.is_err() {
+            return None;
+        }
+        let mut file = f.unwrap().to_string_lossy().to_string();
         let path = get_config_path(file.clone());
         if path.is_err() {
             log::error!("lsp error: {}", path.err().unwrap());

@@ -24,8 +24,6 @@ pub fn reg() {
 #[is_runtime]
 fn pl_panic() {
     println!("pivot lang panic occured!");
-    // std::backtrace::Backtrace::capture();
-    println!("panic {:?}", std::backtrace::Backtrace::capture());
     let bt = Backtrace::new();
     println!("{:?}", bt);
     exit(1);

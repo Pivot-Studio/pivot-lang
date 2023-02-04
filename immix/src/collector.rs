@@ -490,11 +490,8 @@ impl Collector {
     /// # collect
     /// Collect garbage.
     pub fn collect(&self) -> (std::time::Duration, std::time::Duration) {
-        // let start_time = std::time::Instant::now();
-        // println!(
-        //     "gc {} collecting...  size: {}",
-        //     self.id,  unsafe{ self.thread_local_allocator.as_mut().unwrap().get_size()}
-        // );
+        let start_time = std::time::Instant::now();
+        log::info!("gc {} collecting...", self.id);
         // self.print_stats();
         let mut status = self.status.borrow_mut();
         // println!("gc {} collecting... {}", self.id,status.bytes_allocated_since_last_gc);
@@ -561,14 +558,14 @@ impl Collector {
                 .set_collect_mode(false);
             lock.unlock_shared();
         }
-        // println!(
-        //     "gc {} collect done, mark: {:?}, sweep: {:?}, size: {}, total: {:?}",
-        //     self.id,
-        //     mark_time,
-        //     sweep_time,
-        //     _used,
-        //     start_time.elapsed()
-        // );
+        log::info!(
+            "gc {} collect done, mark: {:?}, sweep: {:?}, used heap size: {} byte, total: {:?}",
+            self.id,
+            mark_time,
+            sweep_time,
+            _used,
+            start_time.elapsed()
+        );
         let mut status = self.status.borrow_mut();
         status.collecting = false;
         (mark_time, sweep_time)

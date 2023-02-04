@@ -221,7 +221,7 @@ impl Linker for Ld64Linker {
     fn finalize(&mut self) -> Result<(), LinkerError> {
         self.add_apple_sdk()?;
         self.args.push("-lSystem".to_owned());
-        if self.target.arch == "arm64" {
+        if self.target.arch == "aarch64" || self.target.arch == "arm64" {
             // use ld for default linker, as lld has a bug affcting backtrace on arm64 target
             // https://github.com/rust-lang/backtrace-rs/issues/150
             let re = Command::new("ld").args(&self.args).output();

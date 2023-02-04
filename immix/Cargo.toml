@@ -13,6 +13,7 @@ rustc-hash = "1.1"
 lazy_static = "1.4"
 vector-map = "1.0"
 backtrace = "0.3"
+log = "0.4"
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser","memoryapi"] }
 
