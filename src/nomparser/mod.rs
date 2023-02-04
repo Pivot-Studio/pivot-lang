@@ -86,7 +86,7 @@ pub struct SourceProgram {
 }
 
 // ANCHOR: parse
-#[salsa::tracked(lru = 32)]
+#[salsa::tracked]
 pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, String> {
     let text = source.text(db);
     let re = program(Span::new_extra(text, false));

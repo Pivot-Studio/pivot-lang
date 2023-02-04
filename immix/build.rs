@@ -8,7 +8,7 @@ fn main() {
         println!("cargo:rerun-if-changed=build.rs");
         println!("cargo:rerun-if-changed=llvm/plimmixprinter.cpp");
         println!("cargo:rerun-if-changed=llvm/plimmix.cpp");
-        let dst = cmake::build("llvm");
+        let dst = cmake::Config::new("llvm").static_crt(true).build();
         println!("cargo:rustc-link-search=native={}/build", dst.display());
         println!("cargo:rustc-link-lib=static=plimmix_plugin");
 

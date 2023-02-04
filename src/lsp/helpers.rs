@@ -127,7 +127,11 @@ pub fn send_signature_help(
 }
 
 pub fn url_to_path(url: Url) -> String {
-    url.to_file_path().unwrap().to_str().unwrap().to_string()
+    dunce::canonicalize(url.to_file_path().unwrap().to_str().unwrap())
+        .expect("file not exists")
+        .to_str()
+        .unwrap()
+        .to_string()
 }
 
 pub fn position_to_offset(doc: &str, pos: lsp_types::Position) -> usize {

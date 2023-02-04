@@ -4,10 +4,7 @@
 use std::{
     cell::{Cell, RefCell},
     path::Path,
-    sync::{
-        atomic::{AtomicI32, Ordering},
-        Arc,
-    },
+    sync::Arc,
 };
 
 use immix::{IntEnum, ObjectType};
@@ -69,8 +66,6 @@ pub struct MemberType<'ctx> {
     pub ptr_depth: usize,
 }
 
-static ATOMIC_F_ID: AtomicI32 = AtomicI32::new(0);
-
 pub fn create_llvm_deps<'ctx>(
     context: &'ctx Context,
     dir: &str,
@@ -83,11 +78,7 @@ pub fn create_llvm_deps<'ctx>(
     TargetMachine,
 ) {
     let builder = context.create_builder();
-    let module = context.create_module(&format!(
-        "{}__{}",
-        file,
-        ATOMIC_F_ID.fetch_add(1, Ordering::SeqCst)
-    ));
+    let module = context.create_module(&format!("{}__{}", dir, file));
     let (dibuilder, compile_unit) = module.create_debug_info_builder(
         true,
         DWARFSourceLanguage::C,
@@ -111,12 +102,12 @@ pub fn create_llvm_deps<'ctx>(
     )]);
     module.add_metadata_flag("Debug Info Version", FlagBehavior::Warning, metav);
     // FIXME: win debug need these info, but currently it is broken
-    // if cfg!(target_os = "windows") {
-    //     let metacv = context.metadata_node(&[BasicMetadataValueEnum::IntValue(
-    //         context.i32_type().const_int(1, false),
-    //     )]);
-    //     module.add_metadata_flag("CodeView", FlagBehavior::Warning, metacv);
-    // }
+    if cfg!(target_os = "windows") {
+        let metacv = context.metadata_node(&[BasicMetadataValueEnum::IntValue(
+            context.i32_type().const_int(1, false),
+        )]);
+        module.add_metadata_flag("CodeView", FlagBehavior::Warning, metacv);
+    }
     let tm = get_target_machine(inkwell::OptimizationLevel::None);
     module.set_triple(&tm.get_triple());
     module.set_data_layout(&tm.get_target_data().get_data_layout());

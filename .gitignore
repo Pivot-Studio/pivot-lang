@@ -45,3 +45,9 @@ test.bash
 .cmake
 .vscode/c_cpp_properties.json
 build/build.ninja
+*.proj*
+*.vcxproj*
+*.sln
+*.dir
+Debug
+Release

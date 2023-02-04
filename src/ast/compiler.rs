@@ -4,6 +4,7 @@ use crate::{
         accumulators::{Diagnostics, ModBuffer},
         builder::llvmbuilder::get_target_machine,
         node::program::Program,
+        pass::MAP_NAMES,
     },
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
@@ -18,7 +19,7 @@ use inkwell::{
     passes::{PassManager, PassManagerBuilder},
     OptimizationLevel,
 };
-use log::{info, trace, warn};
+use log::{debug, info, trace, warn};
 use pl_linker::{linker::create_with_target, mun_target::spec::Target};
 use rustc_hash::FxHashSet;
 use std::{
@@ -116,7 +117,8 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
     if input.is_none() {
         return None;
     }
-    let re = compile_dry_file(db, input.unwrap());
+    let input = input.unwrap();
+    let re = compile_dry_file(db, input);
     if let Some(res) = db.get_ref_str() {
         re.and_then(|plmod| {
             plmod
@@ -134,12 +136,13 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
         // skip toml
         return None;
     }
-    // eprintln!("compile_dry_file: {:?}", docs.debug_all(db));
+    // eprintln!("compile_dry_file: {:#?}", docs.debug_all(db));
     let re = docs.get_file_content(db);
     if re.is_none() {
         return None;
     }
     let src = re.unwrap();
+    debug!("src {:#?} id {:?}", src.text(db), src);
     let parse_result = parse(db, src);
     if let Err(e) = parse_result {
         log::error!("source code parse failed {}", e);
@@ -183,6 +186,7 @@ fn run_passed(llvmmod: &Module, op: OptimizationLevel) {
 
 #[salsa::tracked]
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
+    MAP_NAMES.names.borrow_mut().clear();
     inkwell::execution_engine::ExecutionEngine::link_in_mc_jit();
     immix::register_llvm_gc_plugins();
     let targetdir = PathBuf::from("target");

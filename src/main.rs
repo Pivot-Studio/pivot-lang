@@ -10,7 +10,6 @@ pub struct Jar(
     mem_docs::FileCompileInput,
     mem_docs::FileCompileInput_get_file_content,
     mem_docs::FileCompileInput_get_emit_params,
-    mem_docs::MemDocsInputTracked,
     compiler::compile,
     compiler::compile_dry,
     compiler::compile_dry_file,

@@ -292,7 +292,8 @@ impl Linker for MsvcLinker {
                 self.push_args(&format!("-libpath:{}", lib.to_str().unwrap()));
             }
         }
-        get_win_sdk_lib_paths().iter().for_each(|p| {
+        let (linker, libs) = get_win_sdk_lib_paths();
+        libs.iter().for_each(|p| {
             self.push_args(&format!(
                 "-libpath:{}",
                 p.to_str()
@@ -309,9 +310,34 @@ impl Linker for MsvcLinker {
         self.push_args("userenv.lib");
         self.push_args("advapi32.lib");
 
-        lld_rs::link(lld_rs::LldFlavor::Coff, &self.args)
-            .ok()
-            .map_err(LinkerError::LinkError)
+        // use linker directly, since lld may report
+        // lld-link: error: The CodeView record is corrupted.
+        // lld_rs::link(lld_rs::LldFlavor::Coff, &self.args)
+        //     .ok()
+        //     .map_err(LinkerError::LinkError)
+        let re = Command::new(linker.expect("failed to find link.exe"))
+            .args(&self.args)
+            .output();
+
+        if re.is_err() {
+            return Err(LinkerError::LinkError(format!(
+                "link failed: {:?}",
+                re.err()
+            )));
+        } else {
+            let re = re.unwrap();
+            if !re.status.success() {
+                eprintln!(
+                    "link failed\nargs: {:?}\nld stdout: {}, stderr: {}",
+                    self.args,
+                    String::from_utf8_lossy(&re.stdout),
+                    String::from_utf8_lossy(&re.stderr)
+                );
+                Err(LinkerError::LinkError("link failed".to_string()))
+            } else {
+                Ok(())
+            }
+        }
     }
 
     fn push_args(&mut self, arg: &str) {
@@ -319,7 +345,7 @@ impl Linker for MsvcLinker {
     }
 }
 
-fn get_win_sdk_lib_paths() -> Vec<PathBuf> {
+fn get_win_sdk_lib_paths() -> (Option<PathBuf>, Vec<PathBuf>) {
     let mut paths = vec![];
     let re = Command::new(r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe")
         .args("-latest -property installationPath".split(" "))
@@ -331,6 +357,8 @@ fn get_win_sdk_lib_paths() -> Vec<PathBuf> {
             .trim(),
     );
     path.push("VC\\Tools\\MSVC");
+    let mut linker_path = None;
+
     path.read_dir().unwrap().for_each(|dir| {
         if paths.len() == 2 {
             return;
@@ -339,6 +367,12 @@ fn get_win_sdk_lib_paths() -> Vec<PathBuf> {
             if dir.path().is_symlink() || !dir.path().is_dir() {
                 return;
             }
+            let mut lp = dir.path();
+            lp.push("bin\\Hostx64\\x64\\link.exe");
+            if lp.exists() {
+                linker_path = Some(lp);
+            }
+
             let mut p = dir.path();
             p.push("lib\\x64");
             if p.exists() {
@@ -375,7 +409,7 @@ fn get_win_sdk_lib_paths() -> Vec<PathBuf> {
                                 paths.push(p);
                             }
                             if paths.len() == 4 {
-                                return paths;
+                                return (linker_path, paths);
                             } else {
                                 paths = paths[0..2].to_vec();
                             }
@@ -385,5 +419,5 @@ fn get_win_sdk_lib_paths() -> Vec<PathBuf> {
             }
         }
     }
-    paths
+    (linker_path, paths)
 }

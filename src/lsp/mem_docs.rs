@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use log::debug;
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -37,17 +38,6 @@ pub struct EmitParams {
 
 #[salsa::input]
 pub struct MemDocsInput {
-    pub docs: Arc<Mutex<RefCell<MemDocs>>>,
-    #[return_ref]
-    pub file: String,
-    pub op: Options,
-    pub action: ActionType,
-    pub params: Option<(Pos, Option<String>)>,
-    pub edit_pos: Option<Pos>,
-}
-
-#[salsa::input]
-pub struct MemDocsInputTracked {
     pub docs: Arc<Mutex<RefCell<MemDocs>>>,
     #[return_ref]
     pub file: String,
@@ -126,6 +116,8 @@ impl FileCompileInput {
 impl MemDocsInput {
     #[salsa::tracked(lru = 32)]
     pub fn get_current_file_content(self, db: &dyn Db) -> Option<SourceProgram> {
+        let f = self.file(db);
+        debug!("memdocinput get_current_file_content {}", f);
         let re = self
             .docs(db)
             .lock()
@@ -140,6 +132,7 @@ impl MemDocsInput {
     }
     #[salsa::tracked(lru = 32)]
     pub fn get_file_content(self, db: &dyn Db, f: String) -> Option<SourceProgram> {
+        debug!("memdocinput get_file_content {}", f);
         let re = self
             .docs(db)
             .lock()
@@ -200,12 +193,13 @@ impl MemDocs {
         }
     }
     pub fn change(&mut self, db: &mut dyn Db, range: lsp_types::Range, uri: String, text: String) {
-        let doc = self.docs.get_mut(&uri.as_str().to_string()).unwrap();
+        let doc = self.docs.get_mut(&uri).unwrap();
         let mut txt = doc.text(db).clone();
         txt.replace_range(
             position_to_offset(&txt, range.start)..position_to_offset(&txt, range.end),
             &text,
         );
+        debug!("{} change text to: {}", &uri.as_str().to_string(), txt);
         doc.set_text(db).to(txt);
     }
     pub fn insert(&mut self, db: &dyn Db, key: String, value: String, path: String) {
@@ -215,8 +209,12 @@ impl MemDocs {
         self.docs.get(key)
     }
     pub fn get_file_content(&mut self, db: &dyn Db, key: &str) -> Option<SourceProgram> {
+        // let sanitized = dunce::canonicalize(key).unwrap();
+        // let key = sanitized.to_str().unwrap();
+        debug!("mdmdoc get_file_content {}", key);
         let mem = self.get(key);
         if let Some(mem) = mem {
+            debug!("mdmdoc get_file_content result \n{}", mem.text(db));
             return Some(mem.clone());
         }
         let re = read_to_string(key);

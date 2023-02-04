@@ -435,6 +435,9 @@ mod test {
 
     #[test]
     fn test_compile() {
+        let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
+            .lock()
+            .unwrap();
         use std::{path::PathBuf, process::Command};
 
         use crate::ast::compiler::{compile, Options};

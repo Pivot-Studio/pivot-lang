@@ -7,7 +7,7 @@ use inkwell::{
 };
 
 lazy_static::lazy_static! {
-    static ref MAP_NAMES: NameListWrapper = {
+    pub static ref MAP_NAMES: NameListWrapper = {
         NameListWrapper { names: RefCell::new(vec![]) }
     };
 }
