@@ -7,15 +7,16 @@ use std::{
 
 use libc::malloc;
 use parking_lot::lock_api::{RawRwLock, RawRwLockRecursive};
-use rustc_hash::FxHashMap;
 use vector_map::VecMap;
 
+#[cfg(feature = "llvm_stackmap")]
+use crate::STACK_MAP;
 use crate::{
     allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
-    gc_is_auto_collect_enabled, spin_until, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING,
-    GC_MARK_WAITING, GC_RUNNING, GC_RW_LOCK, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE,
-    NUM_LINES_PER_BLOCK, HeaderExt, THRESHOLD_PROPORTION
+    gc_is_auto_collect_enabled, spin_until, HeaderExt, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID,
+    GC_MARKING, GC_MARK_WAITING, GC_RUNNING, GC_RW_LOCK, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE,
+    NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION,
 };
 
 /// # Collector
@@ -31,7 +32,8 @@ use crate::{
 /// * `queue` - gc queue
 pub struct Collector {
     thread_local_allocator: *mut ThreadLocalAllocator,
-    roots: FxHashMap<*mut u8, ObjectType>,
+    #[cfg(feature = "shadow_stack")]
+    roots: rustc_hash::FxHashMap<*mut u8, ObjectType>,
     queue: *mut Vec<(*mut u8, ObjectType)>,
     id: usize,
     mark_histogram: *mut VecMap<usize, usize>,
@@ -90,12 +92,13 @@ impl Collector {
             memqueue.write(queue);
             Self {
                 thread_local_allocator: mem,
-                roots: FxHashMap::default(),
+                #[cfg(feature = "shadow_stack")]
+                roots: rustc_hash::FxHashMap::default(),
                 id,
                 mark_histogram: memvecmap,
                 queue: memqueue,
                 status: RefCell::new(CollectorStatus {
-                    collect_threshold: 512 * 1024,
+                    collect_threshold: 1024,
                     bytes_allocated_since_last_gc: 0,
                     last_gc_time: std::time::SystemTime::now(),
                     collecting: false,
@@ -166,6 +169,7 @@ impl Collector {
     /// ## Parameters
     /// * `root` - root
     /// * `size` - root size
+    #[cfg(feature = "shadow_stack")]
     pub fn add_root(&mut self, root: *mut u8, obj_type: ObjectType) {
         self.roots.insert(root, obj_type);
     }
@@ -175,6 +179,7 @@ impl Collector {
     ///
     /// ## Parameters
     /// * `root` - root
+    #[cfg(feature = "shadow_stack")]
     pub fn remove_root(&mut self, root: *mut u8) {
         self.roots.remove(&(root));
     }
@@ -205,8 +210,10 @@ impl Collector {
     unsafe fn mark_ptr(&self, ptr: *mut u8) {
         let father = ptr;
         let mut ptr = *(ptr as *mut *mut u8);
+        // println!("mark ptr {:p} -> {:p}", father, ptr);
         // mark it if it is in heap
         if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
+            // println!("mark ptr succ {:p} -> {:p}", father, ptr);
             let block = Block::from_obj_ptr(ptr);
             let is_candidate = block.is_eva_candidate();
             if !is_candidate {
@@ -241,12 +248,10 @@ impl Collector {
                 // 标记位，所以这块地址很快会在sweep阶段被识别并且回收利用。
                 // 虽然这造成了一定程度的内存碎片化和潜在的重复操作，但是
                 // 这种情况理论上是很少见的，所以这么做问题不大
-                if let Ok(_) = (*atomic_ptr).compare_exchange_weak(
-                    old_loaded,
-                    new_ptr,
-                    Ordering::SeqCst,
-                    Ordering::SeqCst,
-                ) {
+                if (*atomic_ptr)
+                    .compare_exchange_weak(old_loaded, new_ptr, Ordering::SeqCst, Ordering::SeqCst)
+                    .is_ok()
+                {
                     // 成功驱逐
                     // println!("gc {}: eva {:p} to {:p}", self.id, ptr, new_ptr);
                     new_line_header.set_marked(true);
@@ -270,8 +275,18 @@ impl Collector {
             return;
         }
         // mark it if it is a big object
-        if self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr){
-            let big_obj = self.thread_local_allocator.as_mut().unwrap().big_obj_from_ptr(ptr).unwrap();
+        if self
+            .thread_local_allocator
+            .as_mut()
+            .unwrap()
+            .in_big_heap(ptr)
+        {
+            let big_obj = self
+                .thread_local_allocator
+                .as_mut()
+                .unwrap()
+                .big_obj_from_ptr(ptr)
+                .unwrap();
             if (*big_obj).header.get_marked() {
                 return;
             }
@@ -281,7 +296,6 @@ impl Collector {
                 ObjectType::Atomic => {}
                 _ => (*self.queue).push((ptr, obj_type)),
             }
-            return;
         }
     }
 
@@ -319,9 +333,13 @@ impl Collector {
         //    &&!self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr) {
         //     return;
         // }
-        let loaded = *(ptr as *mut *mut *mut u8);
-        let ptr = *loaded.offset(1);
-        self.mark_ptr(ptr);
+        let loaded = ptr as *mut *mut u8;
+        let ptr = loaded.offset(1);
+        // the trait is not init
+        if ptr.is_null() {
+            return;
+        }
+        self.mark_ptr(ptr as *mut u8);
     }
 
     pub fn print_stats(&self) {
@@ -373,21 +391,52 @@ impl Collector {
         } else {
             GC_MARKING.store(true, Ordering::Release);
         }
-
-        for (root, obj_type) in self.roots.iter() {
-            unsafe {
-                match obj_type {
-                    ObjectType::Atomic => {}
-                    ObjectType::Pointer => (*self.queue).push((*root, *obj_type)),
-                    _ => {
-                        if !self.thread_local_allocator.as_mut().unwrap().in_heap(*root) {
-                            continue;
+        #[cfg(feature = "shadow_stack")]
+        {
+            for (root, obj_type) in self.roots.iter() {
+                unsafe {
+                    match obj_type {
+                        ObjectType::Atomic => {}
+                        ObjectType::Pointer => (*self.queue).push((*root, *obj_type)),
+                        _ => {
+                            if !self.thread_local_allocator.as_mut().unwrap().in_heap(*root) {
+                                continue;
+                            }
+                            (*self.queue).push((*root, *obj_type))
                         }
-                        (*self.queue).push((*root, *obj_type))
                     }
                 }
             }
         }
+        #[cfg(feature = "llvm_stackmap")]
+        {
+            // println!("{:?}", &STACK_MAP.map.borrow());
+            let mut depth = 0;
+            backtrace::trace(|frame| {
+                let addr = frame.ip() as *mut u8;
+                let const_addr = addr as *const u8;
+                let map = STACK_MAP.map.borrow();
+                let f = map.get(&const_addr);
+                // backtrace::resolve_frame(frame,
+                //     |s|
+                //     {
+                //         println!("{}: {:?} ip: {:p}, address: {:p}, sp: {:?}", depth, s.name(), frame.ip(), const_addr, frame.sp());
+                //     }
+                // );
+                if let Some(f) = f {
+                    // println!("found fn in stackmap, f: {:?} sp: {:p}", f,frame.sp());
+                    f.iter_roots().for_each(|(offset, _obj_type)| unsafe {
+                        // println!("offset: {}", offset);
+                        let sp = frame.sp() as *mut u8;
+                        let root = sp.offset(offset as isize);
+                        self.mark_ptr(root);
+                    });
+                }
+                depth += 1;
+                true
+            });
+        }
+
         // iterate through queue and mark all reachable objects
         unsafe {
             // (*self.queue).extend(self.roots.iter().map(|(a,b)|(*a,*b)));
@@ -411,7 +460,7 @@ impl Collector {
         if v - 1 == 0 {
             GC_MARKING.store(false, Ordering::Release);
         } else {
-            spin_until!(GC_MARKING.load(Ordering::Acquire) == false);
+            spin_until!(!GC_MARKING.load(Ordering::Acquire));
         }
     }
 
@@ -517,7 +566,7 @@ impl Collector {
         //     self.id,
         //     mark_time,
         //     sweep_time,
-        //     used,
+        //     _used,
         //     start_time.elapsed()
         // );
         let mut status = self.status.borrow_mut();
@@ -528,7 +577,7 @@ impl Collector {
 
     /// # get_bigobjs_size
     pub fn get_bigobjs_size(&self) -> usize {
-        unsafe{
+        unsafe {
             self.thread_local_allocator
                 .as_ref()
                 .unwrap()
@@ -538,6 +587,7 @@ impl Collector {
 }
 
 #[cfg(test)]
+#[cfg(feature = "shadow_stack")]
 mod tests {
     use std::{mem::size_of, ptr::null_mut, thread::sleep, time::Duration};
 
@@ -546,12 +596,12 @@ mod tests {
     use rand::random;
     use rustc_hash::FxHashSet;
 
-    use crate::{{no_gc_thread, SPACE, BLOCK_SIZE, round_n_up}};
+    use crate::{gc_disable_auto_collect, no_gc_thread, round_n_up, BLOCK_SIZE, SPACE};
 
     use super::*;
 
     const LINE_SIZE_OBJ: usize = 1;
-    
+
     #[repr(C)]
     struct GCTestObj {
         _vtable: VtableFunc,
@@ -577,7 +627,7 @@ mod tests {
     }
 
     #[repr(C)]
-    struct GCTestBigObj{
+    struct GCTestBigObj {
         _vtable: VtableFunc,
         b: *mut GCTestBigObj,
         _arr: [u8; BLOCK_SIZE],
@@ -686,6 +736,8 @@ mod tests {
 
     #[test]
     fn test_big_obj_gc() {
+        gc_disable_auto_collect();
+        let _lock = THE_RESOURCE.lock();
         SPACE.with(|gc| unsafe {
             let mut gc = gc.borrow_mut();
             println!("thread1 gcid = {}", gc.get_id());
@@ -701,17 +753,17 @@ mod tests {
             let size1 = gc.get_bigobjs_size();
             assert_eq!(size1, 2 * BIGOBJ_ALLOC_SIZE);
             let time = std::time::Instant::now();
-            gc.collect();// 不回收，剩余 a b
+            gc.collect(); // 不回收，剩余 a b
             println!("gc{} gc time = {:?}", gc.get_id(), time.elapsed());
             let size2 = gc.get_bigobjs_size();
             assert_eq!(size1, size2);
             (*a).b = a;
-            gc.collect();// 回收，剩余 a
+            gc.collect(); // 回收，剩余 a
             let size3 = gc.get_bigobjs_size();
             assert!(size3 < size2);
             gc.remove_root(rustptr);
-            
-            gc.collect();// 回收，不剩余
+
+            gc.collect(); // 回收，不剩余
             let size4 = gc.get_bigobjs_size();
             assert_eq!(0, size4);
             let mut a =
@@ -732,9 +784,9 @@ mod tests {
             assert_eq!(size1, 3 * BIGOBJ_ALLOC_SIZE);
             (*a).b = null_mut();
             (*a).d = null_mut();
-            gc.collect();// 回收，剩余 a
+            gc.collect(); // 回收，剩余 a
             gc.remove_root(rustptr);
-            gc.collect();// 回收，不剩余, b a merge，a c merge。
+            gc.collect(); // 回收，不剩余, b a merge，a c merge。
         });
     }
 
@@ -772,6 +824,8 @@ mod tests {
     }
 
     fn single_thread(obj_num: usize) -> SingleThreadResult {
+        gc_disable_auto_collect();
+        // let _lock = THE_RESOURCE.lock();
         SPACE.with(|gc| unsafe {
             // 睡眠一秒保证所有线程创建
             let mut gc = gc.borrow_mut();
@@ -874,6 +928,7 @@ mod tests {
 
     #[test]
     fn test_complecated_single_thread_gc() {
+        gc_disable_auto_collect();
         // 这个测试和test_complecated_multiple_thread_gc不能同时跑，用了全局变量会相互干扰
         let _lock = THE_RESOURCE.lock();
         TEST_OBJ_QUEUE.lock().clear();
@@ -909,6 +964,7 @@ mod tests {
     }
     #[test]
     fn test_complecated_multiple_thread_gc() {
+        gc_disable_auto_collect();
         let _lock = THE_RESOURCE.lock();
         TEST_OBJ_QUEUE.lock().clear();
         let mut handles = vec![];
@@ -936,7 +992,7 @@ mod tests {
             total_size3 += re.size3;
             total_target_size3 += re.expect_size3;
             set.extend(re.set);
-            for s in re.set2.drain().into_iter() {
+            for s in re.set2.drain() {
                 if set2.contains(&s) {
                     println!("repeat ptr = {:p}", s.0);
                 }

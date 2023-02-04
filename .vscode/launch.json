@@ -52,7 +52,7 @@
             "request": "attach",
             "name": "debug lsp",
             "program": "plc",
-            "preLaunchTask": "install debug plc"
+            // "preLaunchTask": "install debug plc"
         },
         {
             "type": "pivot",
@@ -78,6 +78,13 @@
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
+        },
+        {
+            "name": "(Windows) 附加",
+            "type": "cppvsdbg",
+            "request": "attach",
+            "processId": "${command:pickProcess}",
+            "internalConsoleOptions": "openOnSessionStart"
         }
     ]
 }

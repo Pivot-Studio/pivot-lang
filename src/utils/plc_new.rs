@@ -60,7 +60,8 @@ fn main() i64 {{
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
+    pub static TEST_COMPILE_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
     use super::*;
     use crate::ast::compiler::{self, ActionType, HashOptimizationLevel};
     use crate::db::Database;
@@ -72,6 +73,7 @@ mod tests {
 
     #[test]
     fn test_init_package() {
+        let _l = TEST_COMPILE_MUTEX.lock().unwrap();
         let package_name = format!("plc_new_testfile");
         // test init_package
         init_package(package_name.clone());

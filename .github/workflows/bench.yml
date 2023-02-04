@@ -22,10 +22,25 @@ jobs:
         with:
           submodules: true
 
+      - name: Install packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install libasound2-dev libudev-dev
+
+      - name: Install Rust (stable)
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          override: true
+
+      - name: Install LLVM
+        uses: Pivot-Studio/setup-llvm@main
+
+      - uses: Swatinem/rust-cache@v2
       - uses: boa-dev/criterion-compare-action@v3
         with:
           cwd: "immix"
           # Optional. Compare only this benchmark target
-          benchName: "immix_bench"
+          # benchName: "immix_bench"
           # Needed. The name of the branch to compare with. This default uses the branch which is being pulled against
           branchName: ${{ github.base_ref }}

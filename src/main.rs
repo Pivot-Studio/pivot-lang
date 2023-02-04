@@ -10,7 +10,6 @@ pub struct Jar(
     mem_docs::FileCompileInput,
     mem_docs::FileCompileInput_get_file_content,
     mem_docs::FileCompileInput_get_emit_params,
-    mem_docs::MemDocsInputTracked,
     compiler::compile,
     compiler::compile_dry,
     compiler::compile_dry_file,
@@ -208,7 +207,10 @@ fn main() {
                 #[cfg(feature = "jit")]
                 compiler::run(Path::new(name.as_str()), opt.to_llvm());
                 #[cfg(not(feature = "jit"))]
-                println!("feature jit is not enabled, cannot use run command");
+                println!(
+                    "feature jit is not enabled, cannot use run command, failed to compile {}",
+                    name
+                );
             }
             RunCommand::Lsp {} => {
                 logger

@@ -1,6 +1,6 @@
 use parking_lot::ReentrantMutex;
 
-use crate::{mmap::Mmap, ALIGN, round_n_up, bigobj::BigObj};
+use crate::{bigobj::BigObj, mmap::Mmap, round_n_up, ALIGN};
 
 pub struct BigObjAllocator {
     mmap: Mmap,
@@ -11,7 +11,7 @@ pub struct BigObjAllocator {
     lock: ReentrantMutex<()>,
 }
 
-impl BigObjAllocator{
+impl BigObjAllocator {
     pub fn new(size: usize) -> Self {
         let mmap = Mmap::new(size);
         Self {
@@ -36,7 +36,7 @@ impl BigObjAllocator{
         let _lock = self.lock.lock();
         let current = self.current;
         let heap_end = self.heap_end;
-        let next = unsafe {current.add(size)};
+        let next = unsafe { current.add(size) };
 
         if next >= heap_end {
             panic!("big object mmap out of memory");
@@ -51,56 +51,64 @@ impl BigObjAllocator{
     }
 
     pub fn get_chunk(&mut self, size: usize) -> *mut BigObj {
-        let size = round_n_up!(size + 16, ALIGN);// 16 is the size of BigObj
+        let size = round_n_up!(size + 16, ALIGN); // 16 is the size of BigObj
         let _lock = self.lock.lock();
         for i in 0..self.unused_chunks.len() {
             let unused_obj = self.unused_chunks[i];
-            let unused_size = unsafe{(*unused_obj).size};
+            let unused_size = unsafe { (*unused_obj).size };
             if unused_size == size {
                 self.unused_chunks.remove(i);
                 // self.mmap.commit(unused_obj as *mut u8, size);
-                println!("get_chunk: {:p}[reused {}/{}]", unused_obj, size, unused_size);
+                println!(
+                    "get_chunk: {:p}[reused {}/{}]",
+                    unused_obj, size, unused_size
+                );
                 return unused_obj;
             } else if unused_size > size {
-                let ptr = unsafe{(unused_obj as *mut u8).add(unused_size - size)};
+                let ptr = unsafe { (unused_obj as *mut u8).add(unused_size - size) };
                 let new_obj = BigObj::new(ptr, size);
-                unsafe{ (*unused_obj).size -= size; }
+                unsafe {
+                    (*unused_obj).size -= size;
+                }
                 // self.mmap.commit(new_obj as *mut BigObj as *mut u8, size);
                 println!("get_chunk: {:p}[reused {}/{}]", new_obj, size, unused_size);
                 return new_obj;
             }
         }
-        
+
         let chunk = self.alloc_chunk(size).unwrap();
-        unsafe{ self.current = self.current.add(size)};
+        unsafe { self.current = self.current.add(size) };
         println!("get_chunk: {:p}[new {}]", chunk, size);
         chunk
-        
     }
 
     pub fn return_chunk(&mut self, obj: *mut BigObj) {
         let _lock = self.lock.lock();
-        let size = unsafe{(*obj).size};
+        let size = unsafe { (*obj).size };
         println!("ret_chunk: {:p}[size {}]", obj, size);
         let mut merged = false;
         // 合并相邻free_obj
         for i in 0..self.unused_chunks.len() {
             let unused_obj = self.unused_chunks[i];
             let unused_obj_ptr = unused_obj as *mut u8;
-            if unsafe{unused_obj_ptr.sub(size)} == obj as *mut u8 {
+            if unsafe { unused_obj_ptr.sub(size) } == obj as *mut u8 {
                 // |    return_obj    |  unused_obj  |
                 // after
                 // |    return_obj                   |
-                unsafe{ (*obj).size += (*unused_obj).size; }
+                unsafe {
+                    (*obj).size += (*unused_obj).size;
+                }
                 self.unused_chunks.remove(i);
                 self.unused_chunks.push(obj);
                 println!("merge_chunks: {:p} {:p}", obj, unused_obj);
                 merged = true;
-            } else if unsafe{unused_obj_ptr.add(size)} == obj as *mut u8 {
+            } else if unsafe { unused_obj_ptr.add(size) } == obj as *mut u8 {
                 // |  unused_obj  |    return_obj    |
                 // after
                 // |  unused_obj                     |
-                unsafe{ (*unused_obj).size += size; }
+                unsafe {
+                    (*unused_obj).size += size;
+                }
                 println!("merge_chunks: {:p} {:p}", unused_obj, obj);
                 merged = true;
             }
@@ -111,7 +119,7 @@ impl BigObjAllocator{
     }
 
     /// # in_heap
-    /// 
+    ///
     /// Check if a pointer is in the heap.
     pub fn in_heap(&self, ptr: *mut u8) -> bool {
         ptr >= self.heap_start && ptr < self.heap_end

@@ -630,7 +630,7 @@ impl Node for StructInitNode {
         }
         let pltype = Arc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
         // let tp = sttype.struct_type(ctx).as_basic_type_enum().clone();
-        let struct_pointer = builder.alloc("initstruct", &PLType::STRUCT(sttype), ctx); //alloc(ctx, tp, "initstruct");
+        let struct_pointer = builder.alloc("initstruct", &PLType::STRUCT(sttype), ctx, None); //alloc(ctx, tp, "initstruct");
         field_init_values.iter().for_each(|(index, value)| {
             let fieldptr = builder
                 .build_struct_gep(struct_pointer, *index, "fieldptr")
@@ -701,6 +701,7 @@ impl Node for ArrayInitNode {
                 size: exps.len() as u32,
             }),
             ctx,
+            None,
         );
         let real_arr = builder.build_struct_gep(arr, 1, "real_arr").unwrap();
 

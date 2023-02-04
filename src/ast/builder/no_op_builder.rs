@@ -57,7 +57,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
         _name: &str,
         _pltype: &crate::ast::pltype::PLType,
         _ctx: &mut crate::ast::ctx::Ctx<'a>,
+        _declare: Option<crate::ast::range::Pos>,
     ) -> super::ValueHandle {
+        0
+    }
+    fn get_stack_root(&self, _v: ValueHandle) -> ValueHandle {
         0
     }
 
@@ -212,26 +216,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
     ) -> super::ValueHandle {
         0
     }
-
-    fn mv2heap(
-        &self,
-        _val: super::ValueHandle,
-        _ctx: &mut crate::ast::ctx::Ctx<'a>,
-        _tp: &PLType,
-    ) -> super::ValueHandle {
-        0
-    }
-
-    fn gc_rm_root(&self, _stackptr: super::ValueHandle, _ctx: &mut crate::ast::ctx::Ctx<'a>) {}
-
-    fn gc_rm_root_current(
-        &self,
-        _stackptr: super::ValueHandle,
-        _ctx: &mut crate::ast::ctx::Ctx<'a>,
-    ) {
-    }
-
-    fn gc_collect(&self, _ctx: &mut crate::ast::ctx::Ctx<'a>) {}
 
     fn get_or_add_global(
         &self,

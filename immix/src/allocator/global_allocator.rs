@@ -1,9 +1,8 @@
 use parking_lot::ReentrantMutex;
 
-use crate::{block::Block, consts::BLOCK_SIZE, mmap::Mmap, bigobj::BigObj};
+use crate::{bigobj::BigObj, block::Block, consts::BLOCK_SIZE, mmap::Mmap};
 
 use super::big_obj_allocator::BigObjAllocator;
-
 
 /// # Global allocator
 ///
@@ -65,7 +64,6 @@ impl GlobalAllocator {
     /// 从big object mmap中分配一个大对象，大小为size
     pub fn get_big_obj(&mut self, size: usize) -> *mut BigObj {
         self.big_obj_allocator.get_chunk(size)
-    
     }
 
     pub fn unmap_all(&mut self) {

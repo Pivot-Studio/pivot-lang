@@ -15,3 +15,5 @@ pub const ALIGN: usize = 128;
 pub const THRESHOLD_PROPORTION: f64 = 1.75;
 
 pub const ENABLE_EVA: bool = true;
+
+pub const LLVM_GC_STRATEGY_NAME: &str = "plimmix";

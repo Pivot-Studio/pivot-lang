@@ -11,9 +11,10 @@ use std::collections::VecDeque;
 use vector_map::VecMap;
 
 use crate::{
+    bigobj::BigObj,
     block::{Block, ObjectType},
     consts::{BLOCK_SIZE, LINE_SIZE},
-    EVA_BLOCK_PROPORTION, bigobj::BigObj, HeaderExt,
+    HeaderExt, EVA_BLOCK_PROPORTION,
 };
 
 use super::GlobalAllocator;
@@ -200,7 +201,7 @@ impl ThreadLocalAllocator {
         }
         // mid size object & small size object
         // 刚启动或者recycle block全用光了
-        if self.recyclable_blocks.len() == 0 {
+        if self.recyclable_blocks.is_empty() {
             let block = self.get_new_block();
             if block.is_null() {
                 return std::ptr::null_mut();
@@ -242,7 +243,7 @@ impl ThreadLocalAllocator {
             return self.overflow_alloc(size, obj_type);
         }
         let (s, nxt) = res.unwrap();
-        let re = unsafe { (**f).get_nth_line(s as usize) };
+        let re = unsafe { (**f).get_nth_line(s) };
         if !nxt {
             // 当前block被用完，将它从recyclable blocks中移除，加入unavailable blocks
             let used_block = self.recyclable_blocks.pop_front().unwrap();
@@ -270,7 +271,7 @@ impl ThreadLocalAllocator {
         }
         // alloc
         let (s, nxt) = unsafe { (*new_block).alloc(size, obj_type).unwrap() };
-        let re = unsafe { (*new_block).get_nth_line(s as usize) };
+        let re = unsafe { (*new_block).get_nth_line(s) };
         if !nxt {
             // new_block被用完，将它加入unavailable blocks
             self.unavailable_blocks.push(new_block);
@@ -296,16 +297,15 @@ impl ThreadLocalAllocator {
     /// * `*mut u8` - object pointer
     pub fn big_obj_alloc(&mut self, size: usize, obj_type: ObjectType) -> *mut u8 {
         let obj = unsafe { (*self.global_allocator).get_big_obj(size) };
-        unsafe{(*obj).header.set_obj_type(obj_type)};
+        unsafe { (*obj).header.set_obj_type(obj_type) };
         self.big_objs.push(obj);
-        unsafe{(obj as *mut u8).add(16)}
-
+        unsafe { (obj as *mut u8).add(16) }
     }
 
     pub fn big_obj_from_ptr(&mut self, ptr: *mut u8) -> Option<*mut BigObj> {
         for obj in self.big_objs.iter() {
-            let start = unsafe{(*obj as *mut u8).add(16)};
-            let end = unsafe{(*obj as *mut u8).add((*(*obj)).size)};
+            let start = unsafe { (*obj as *mut u8).add(16) };
+            let end = unsafe { (*obj as *mut u8).add((*(*obj)).size) };
             if start <= ptr && end >= ptr {
                 return Some(*obj);
             }
@@ -321,11 +321,11 @@ impl ThreadLocalAllocator {
     ///
     /// * `*mut Block` - block pointer
     fn get_new_block(&mut self) -> *mut Block {
-        if self.collect_mode && self.eva_blocks.len() > 0 {
+        if self.collect_mode && !self.eva_blocks.is_empty() {
             return self.eva_blocks.pop().unwrap();
         }
-        let block = unsafe { (&mut *self.global_allocator).get_block() };
-        block
+
+        unsafe { (*self.global_allocator).get_block() }
     }
 
     /// # in_heap
@@ -397,18 +397,18 @@ impl ThreadLocalAllocator {
             }
         }
         unsafe {
-            (&mut *self.global_allocator).return_blocks(free_blocks.into_iter());
+            (*self.global_allocator).return_blocks(free_blocks.into_iter());
         }
         let mut big_objs = Vec::new();
         for obj in self.big_objs.iter() {
-            if unsafe { (*(*obj)).header.get_marked() }{
+            if unsafe { (*(*obj)).header.get_marked() } {
                 big_objs.push(*obj);
-            }else{
+            } else {
                 unsafe {
-                    (&mut *self.global_allocator).return_big_objs([*obj]);
+                    (*self.global_allocator).return_big_objs([*obj]);
                 }
             }
-            unsafe{
+            unsafe {
                 (*(*obj)).header &= !0b10;
             }
         }

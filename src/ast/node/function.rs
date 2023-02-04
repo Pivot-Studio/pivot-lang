@@ -160,7 +160,7 @@ impl Node for FuncCallNode {
             Some(v) => Ok((
                 {
                     builder.rm_curr_debug_location();
-                    let ptr = builder.alloc("ret_alloc_tmp", &rettp.borrow(), ctx);
+                    let ptr = builder.alloc("ret_alloc_tmp", &rettp.borrow(), ctx, None);
                     builder.build_store(ptr, v);
                     Some(plv!(ptr))
                 },
@@ -444,7 +444,7 @@ impl FuncDefNode {
                 _ => {
                     let pltype = self.ret.get_type(child, builder)?;
                     builder.rm_curr_debug_location();
-                    let retv = builder.alloc("retvalue", &pltype.borrow(), child);
+                    let retv = builder.alloc("retvalue", &pltype.borrow(), child, None);
                     // 返回值不能在函数结束时从root表移除
                     child.roots.borrow_mut().pop();
                     Some(retv)
@@ -455,11 +455,11 @@ impl FuncDefNode {
             if let Some(ptr) = ret_value_ptr {
                 let value = builder.build_load(ptr, "load_ret_tmp");
                 child.position_at_end(return_block, builder);
-                builder.gc_collect(child);
-                builder.gc_rm_root_current(ptr, child);
+                // builder.gc_collect(child);
+                // builder.gc_rm_root_current(ptr, child);
                 builder.build_return(Some(value));
             } else {
-                builder.gc_collect(child);
+                // builder.gc_collect(child);
                 builder.build_return(None);
             };
             child.position_at_end(entry, builder);
@@ -468,7 +468,8 @@ impl FuncDefNode {
                 let tp = para.get_type(child, builder)?;
                 let b = tp.clone();
                 let basetype = b.borrow();
-                let alloca = builder.alloc(&fntype.param_names[i], &basetype, child);
+                let alloca = builder.alloc(&fntype.param_names[i], &basetype, child, None);
+                // let stack_root = builder.get_stack_root(alloca);
                 // add alloc var debug info
                 builder.create_parameter_variable(
                     &fntype,

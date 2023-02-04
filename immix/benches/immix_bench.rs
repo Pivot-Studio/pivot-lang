@@ -63,14 +63,14 @@ fn immix_benchmark_single_thread_sweep(c: &mut Criterion) {
 
 fn immix_benchmark_single_thread_alloc(c: &mut Criterion) {
     let mut g = c.benchmark_group("allocation bench");
-    if let None = option_env!("PL_IMMIX_HEAP_SIZE") {
+    if option_env!("PL_IMMIX_HEAP_SIZE").is_none() {
         return;
     }
     g.bench_function(
-        &format!("singlethread gc alloc benchmark small objects"),
+        &"singlethread gc alloc benchmark small objects".to_string(),
         |b| b.iter(bench_allocation),
     );
-    g.bench_function(&format!("malloc benchmark small objects"), |b| {
+    g.bench_function(&"malloc benchmark small objects".to_string(), |b| {
         b.iter(bench_malloc)
     });
 }
@@ -115,43 +115,49 @@ unsafe fn alloc_test_obj(gc: &mut Collector) -> *mut GCTestObj {
 }
 
 fn test_complecated_single_thread_gc(num_iter: usize) -> (Duration, Duration) {
-    let t = SPACE.with(|gc| unsafe {
-        let mut gc = gc.borrow_mut();
-        let mut total_mark = Duration::new(0, 0);
-        let mut total_sweep = Duration::new(0, 0);
-        for _ in 0..num_iter {
-            let mut first_obj = alloc_test_obj(&mut gc);
-            let rustptr = (&mut first_obj) as *mut *mut GCTestObj as *mut u8;
-            let mut live_obj = 1;
-            let mut unused_objs = vec![&mut (*first_obj).b, &mut (*first_obj).e];
-            for _ in 0..OBJ_NUM {
-                let obj = alloc_test_obj(&mut gc);
-                if random() {
-                    live_obj += 1;
-                    let father_ptr = unused_objs.pop().unwrap();
-                    *father_ptr = obj;
-                    unused_objs.push(&mut (*obj).b);
-                    unused_objs.push(&mut (*obj).e);
+    #[cfg(feature = "shadow_stack")]
+    return {
+        SPACE.with(|gc| unsafe {
+            let mut gc = gc.borrow_mut();
+            let mut total_mark = Duration::new(0, 0);
+            let mut total_sweep = Duration::new(0, 0);
+            for _ in 0..num_iter {
+                let mut first_obj = alloc_test_obj(&mut gc);
+                let rustptr = (&mut first_obj) as *mut *mut GCTestObj as *mut u8;
+                let mut live_obj = 1;
+                let mut unused_objs = vec![&mut (*first_obj).b, &mut (*first_obj).e];
+                for _ in 0..OBJ_NUM {
+                    let obj = alloc_test_obj(&mut gc);
+                    if random() {
+                        live_obj += 1;
+                        let father_ptr = unused_objs.pop().unwrap();
+                        *father_ptr = obj;
+                        unused_objs.push(&mut (*obj).b);
+                        unused_objs.push(&mut (*obj).e);
+                    }
                 }
+                gc.add_root(rustptr, ObjectType::Pointer);
+                let size1 = gc.get_size();
+                assert_eq!(size1, OBJ_NUM + 1);
+                let ctime = gc.collect();
+                // println!("gc{} gc time = {:?}", gc.get_id(), ctime);
+                let size2 = gc.get_size();
+                assert_eq!(live_obj, size2);
+                // let ctime = gc.collect();
+                gc.remove_root(rustptr);
+                gc.collect();
+                let size3 = gc.get_size();
+                assert_eq!(size3, 0);
+                total_mark += ctime.0;
+                total_sweep += ctime.1;
             }
-            gc.add_root(rustptr, ObjectType::Pointer);
-            let size1 = gc.get_size();
-            assert_eq!(size1, OBJ_NUM + 1);
-            let ctime = gc.collect();
-            // println!("gc{} gc time = {:?}", gc.get_id(), ctime);
-            let size2 = gc.get_size();
-            assert_eq!(live_obj, size2);
-            // let ctime = gc.collect();
-            gc.remove_root(rustptr);
-            gc.collect();
-            let size3 = gc.get_size();
-            assert_eq!(size3, 0);
-            total_mark += ctime.0;
-            total_sweep += ctime.1;
-        }
-        (total_mark, total_sweep)
-    });
-    t
+            (total_mark, total_sweep)
+        })
+    };
+    #[cfg(not(feature = "shadow_stack"))]
+    eprintln!("shadow stack is not enabled, skip the bench");
+    #[cfg(not(feature = "shadow_stack"))]
+    (Duration::new(0, 100), Duration::new(0, 100))
 }
 
 fn test_complecated_multiple_thread_gc(num_iter: usize, threads: usize) -> (Duration, Duration) {

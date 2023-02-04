@@ -55,14 +55,14 @@ impl Node for PointerOpNode {
                 }
             }
             PointerOpEnum::ADDR => {
-                let old_tp = tp.clone().unwrap();
+                // let old_tp = tp.clone().unwrap();
                 tp = Some(Arc::new(RefCell::new(PLType::POINTER(tp.unwrap()))));
                 if value.is_const {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::CAN_NOT_REF_CONSTANT)));
                 }
                 let val = value.value;
-                let v = builder.alloc("addr", &tp.clone().unwrap().borrow(), ctx);
-                builder.build_store(v, builder.mv2heap(val, ctx, &old_tp.borrow()));
+                let v = builder.alloc("addr", &tp.clone().unwrap().borrow(), ctx, None);
+                builder.build_store(v, val);
                 v.into()
             }
         };

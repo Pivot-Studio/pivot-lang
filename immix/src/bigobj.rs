@@ -1,4 +1,3 @@
-
 use crate::consts::ALIGN;
 
 // big obj struct
@@ -13,8 +12,6 @@ pub struct BigObj {
 
 type BigObjHeader = u8;
 
-
-
 impl BigObj {
     /// Create a new block.
     ///
@@ -26,7 +23,7 @@ impl BigObj {
             debug_assert!(size % ALIGN == 0);
             ptr.write(Self {
                 header: 0b10000000,
-                size,// size of [[ obj_st |     data     ]]
+                size, // size of [[ obj_st |     data     ]]
             });
             &mut *ptr
         }
@@ -39,5 +36,4 @@ impl BigObj {
         self.header = 0b10000000;
         self.size = 0;
     }
-
 }

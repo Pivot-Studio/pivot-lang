@@ -71,15 +71,20 @@ impl Node for DefNode {
             exptp = pltype_opt;
         }
         let pltype = pltype.unwrap();
-        let ptr2value = builder.alloc(&self.var.name, &pltype.borrow(), ctx);
-        builder.build_dbg_location(self.var.range.start);
-        builder.insert_var_declare(
+        let ptr2value = builder.alloc(
             &self.var.name,
-            self.var.range.start,
             &pltype.borrow(),
-            ptr2value,
             ctx,
+            Some(self.var.range.start),
         );
+        // builder.build_dbg_location(self.var.range.start);
+        // builder.insert_var_declare(
+        //     &self.var.name,
+        //     self.var.range.start,
+        //     &pltype.borrow(),
+        //     ptr2value,
+        //     ctx,
+        // );
         ctx.add_symbol(
             self.var.name.clone(),
             ptr2value,
@@ -212,9 +217,9 @@ impl Node for StatementsNode {
             let (_, _, terminator_res) = re.unwrap();
             terminator = terminator_res;
         }
-        for root in ctx.roots.clone().borrow().iter() {
-            builder.gc_rm_root(*root, ctx)
-        }
+        // for root in ctx.roots.clone().borrow().iter() {
+        //     // builder.gc_rm_root(*root, ctx)
+        // }
         Ok((None, None, terminator))
     }
 }
