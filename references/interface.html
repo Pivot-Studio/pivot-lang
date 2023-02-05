@@ -3,7 +3,7 @@
     <head>
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
-        <title>Method - Pivot Lang</title>
+        <title>Trait - Pivot Lang</title>
                 
 
         <!-- Custom HTML head -->
@@ -83,7 +83,7 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="../tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="../tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="../tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="../references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li><li class="chapter-item expanded "><a href="../references/method.html" class="active"><strong aria-hidden="true">3.2.</strong> Method</a></li><li class="chapter-item expanded "><a href="../references/interface.html"><strong aria-hidden="true">3.3.</strong> Trait</a></li><li class="chapter-item expanded "><a href="../references/immix.html"><strong aria-hidden="true">3.4.</strong> Immix Gc</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="../compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="../compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li><li class="chapter-item expanded "><a href="../compiler/flow.html"><strong aria-hidden="true">4.3.</strong> Flow Chart</a></li></ol></li><li class="chapter-item expanded "><a href="../lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../lsp/design.html"><strong aria-hidden="true">5.1.</strong> Design</a></li><li class="chapter-item expanded "><a href="../lsp/diagnostic.html"><strong aria-hidden="true">5.2.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/gc.html"><strong aria-hidden="true">6.1.1.</strong> gc</a></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">CONTRIBUTING</li><li class="chapter-item expanded "><a href="../CONTRIBUTING-CN.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li class="chapter-item expanded affix "><li class="part-title">Blogs</li><li class="chapter-item expanded "><a href="../blogs/aboutpl.html"><strong aria-hidden="true">8.</strong> About pivot lang</a></li><li class="chapter-item expanded "><a href="../blogs/lsp_and_salsa.html"><strong aria-hidden="true">9.</strong> lsp and salsa</a></li></ol>            </div>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="../tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="../tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="../tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="../references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li><li class="chapter-item expanded "><a href="../references/method.html"><strong aria-hidden="true">3.2.</strong> Method</a></li><li class="chapter-item expanded "><a href="../references/interface.html" class="active"><strong aria-hidden="true">3.3.</strong> Trait</a></li><li class="chapter-item expanded "><a href="../references/immix.html"><strong aria-hidden="true">3.4.</strong> Immix Gc</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="../compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="../compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li><li class="chapter-item expanded "><a href="../compiler/flow.html"><strong aria-hidden="true">4.3.</strong> Flow Chart</a></li></ol></li><li class="chapter-item expanded "><a href="../lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../lsp/design.html"><strong aria-hidden="true">5.1.</strong> Design</a></li><li class="chapter-item expanded "><a href="../lsp/diagnostic.html"><strong aria-hidden="true">5.2.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/gc.html"><strong aria-hidden="true">6.1.1.</strong> gc</a></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">CONTRIBUTING</li><li class="chapter-item expanded "><a href="../CONTRIBUTING-CN.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li class="chapter-item expanded affix "><li class="part-title">Blogs</li><li class="chapter-item expanded "><a href="../blogs/aboutpl.html"><strong aria-hidden="true">8.</strong> About pivot lang</a></li><li class="chapter-item expanded "><a href="../blogs/lsp_and_salsa.html"><strong aria-hidden="true">9.</strong> lsp and salsa</a></li></ol>            </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
@@ -121,7 +121,7 @@
                                                                         <a href="https://github.com/Pivot-Studio/pivot-lang" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                                                                        <a href="https://github.com/Pivot-Studio/pivot-lang/edit/master/book/src/references/method.md" title="Suggest an edit" aria-label="Suggest an edit">
+                                                                        <a href="https://github.com/Pivot-Studio/pivot-lang/edit/master/book/src/references/interface.md" title="Suggest an edit" aria-label="Suggest an edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
                         
@@ -150,46 +150,33 @@
 
                 <div id="content" class="content">
                     <main>
-                        <h1 id="method"><a class="header" href="#method">Method</a></h1>
-<p>method就是隶属于某个结构体的函数，它们与普通函数<strong>没有</strong>本质区别。<br />
-所有的method都必须在impl块里声明，且method都会隐式的有个<code>self</code>参数，该参数是<code>impl</code>类型的指针 </p>
-<blockquote>
-<p>为什么pivot-lang的receiver是隐式的？因为我们有gc，所以没必要像rust那样显示的声明receiver类型，统一指针就可以解决几乎所有情况。</p>
-</blockquote>
-<blockquote>
-<p>可能存在的问题：不方便约束receiver不可变的情况</p>
-</blockquote>
-<h2 id="method-example"><a class="header" href="#method-example">Method Example</a></h2>
-<p>最简单的添加method的例子：</p>
-<pre><code class="language-pivot-lang">impl impl_struct {
-    fn add1() void {
-        self.x = self.x + 1;
-        return;
-    }
-
-    fn set(x: i64) void {
-        self.x = x;
-        return;
-    }
-
-}
-
+                        <h1 id="interface"><a class="header" href="#interface">Interface</a></h1>
+<p>接口设计</p>
+<h2 id="底层"><a class="header" href="#底层">底层</a></h2>
+<p>接口底层实现为结构体，具有如下的结构：</p>
+<pre><code>类型哈希
+---
+原值指针
+---
+方法1指针
+---
+方法2指针
+---
+。。。
+---
+方法n指针
 </code></pre>
-<p>在一个包中，可以定义外部引入的包中结构体的<code>method</code> . </p>
-<p>调用method的时候，使用<code>&lt;receiver类型&gt;.&lt;method&gt;</code>即可 </p>
-<pre><code class="language-pivot-lang">let a = A{};
-a.method();
-</code></pre>
+<p>对应pltype使用<code>PLTrait</code>，其实内部存储的是结构体类型<code>STType</code>。</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                                                    <a rel="prev" href="../references/module.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                                    <a rel="prev" href="../references/method.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
                         
-                                                    <a rel="next" href="../references/interface.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                                    <a rel="next" href="../references/immix.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
                         
@@ -199,11 +186,11 @@ a.method();
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                                    <a rel="prev" href="../references/module.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                    <a rel="prev" href="../references/method.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
                 
-                                    <a rel="next" href="../references/interface.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                    <a rel="next" href="../references/immix.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
                             </nav>
