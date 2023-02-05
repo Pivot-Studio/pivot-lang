@@ -4,46 +4,44 @@
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
         <title>Pivot Lang</title>
-                <meta name="robots" content="noindex" />
-                
+        <meta name="robots" content="noindex" />
+
 
         <!-- Custom HTML head -->
         
-
-        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
 
-                <link rel="icon" href="favicon.svg">
-                        <link rel="shortcut icon" href="favicon.png">
-                <link rel="stylesheet" href="css/variables.css">
+        <link rel="icon" href="favicon.svg">
+        <link rel="shortcut icon" href="favicon.png">
+        <link rel="stylesheet" href="css/variables.css">
         <link rel="stylesheet" href="css/general.css">
         <link rel="stylesheet" href="css/chrome.css">
-                <link rel="stylesheet" href="css/print.css" media="print">
-        
+        <link rel="stylesheet" href="css/print.css" media="print">
+
         <!-- Fonts -->
         <link rel="stylesheet" href="FontAwesome/css/font-awesome.css">
-                <link rel="stylesheet" href="fonts/fonts.css">
-        
+        <link rel="stylesheet" href="fonts/fonts.css">
+
         <!-- Highlight.js Stylesheets -->
         <link rel="stylesheet" href="highlight.css">
         <link rel="stylesheet" href="tomorrow-night.css">
         <link rel="stylesheet" href="ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
-                <link rel="stylesheet" href="././mdbook-admonish.css">
-        
-            </head>
+        <link rel="stylesheet" href="././mdbook-admonish.css">
+
+    </head>
     <body>
         <!-- Provide site root to javascript -->
-        <script type="text/javascript">
+        <script>
             var path_to_root = "";
             var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
         </script>
 
         <!-- Work around some values being stored in localStorage wrapped in quotes -->
-        <script type="text/javascript">
+        <script>
             try {
                 var theme = localStorage.getItem('mdbook-theme');
                 var sidebar = localStorage.getItem('mdbook-sidebar');
@@ -59,7 +57,7 @@
         </script>
 
         <!-- Set the theme before any content is loaded, prevents flash -->
-        <script type="text/javascript">
+        <script>
             var theme;
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
@@ -71,7 +69,7 @@
         </script>
 
         <!-- Hide / unhide sidebar before it is displayed -->
-        <script type="text/javascript">
+        <script>
             var html = document.querySelector('html');
             var sidebar = 'hidden';
             if (document.body.clientWidth >= 1080) {
@@ -84,15 +82,15 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li><li class="chapter-item expanded "><a href="references/method.html"><strong aria-hidden="true">3.2.</strong> Method</a></li><li class="chapter-item expanded "><a href="references/interface.html"><strong aria-hidden="true">3.3.</strong> Trait</a></li><li class="chapter-item expanded "><a href="references/immix.html"><strong aria-hidden="true">3.4.</strong> Immix Gc</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li><li class="chapter-item expanded "><a href="compiler/flow.html"><strong aria-hidden="true">4.3.</strong> Flow Chart</a></li></ol></li><li class="chapter-item expanded "><a href="lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lsp/design.html"><strong aria-hidden="true">5.1.</strong> Design</a></li><li class="chapter-item expanded "><a href="lsp/diagnostic.html"><strong aria-hidden="true">5.2.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/gc.html"><strong aria-hidden="true">6.1.1.</strong> gc</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">CONTRIBUTING</li><li class="chapter-item expanded "><a href="CONTRIBUTING-CN.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li class="chapter-item expanded affix "><li class="part-title">Blogs</li><li class="chapter-item expanded "><a href="blogs/aboutpl.html"><strong aria-hidden="true">8.</strong> About pivot lang</a></li><li class="chapter-item expanded "><a href="blogs/lsp_and_salsa.html"><strong aria-hidden="true">9.</strong> lsp and salsa</a></li></ol>            </div>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li><li class="chapter-item expanded "><a href="references/method.html"><strong aria-hidden="true">3.2.</strong> Method</a></li><li class="chapter-item expanded "><a href="references/interface.html"><strong aria-hidden="true">3.3.</strong> Trait</a></li><li class="chapter-item expanded "><a href="references/immix.html"><strong aria-hidden="true">3.4.</strong> Immix Gc</a></li><li class="chapter-item expanded "><a href="references/stackmap.html"><strong aria-hidden="true">3.5.</strong> Stack Map</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li><li class="chapter-item expanded "><a href="compiler/flow.html"><strong aria-hidden="true">4.3.</strong> Flow Chart</a></li></ol></li><li class="chapter-item expanded "><a href="lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="lsp/design.html"><strong aria-hidden="true">5.1.</strong> Design</a></li><li class="chapter-item expanded "><a href="lsp/diagnostic.html"><strong aria-hidden="true">5.2.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="systemlib/gc.html"><strong aria-hidden="true">6.1.1.</strong> gc</a></li></ol></li><li class="chapter-item expanded "><a href="systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">CONTRIBUTING</li><li class="chapter-item expanded "><a href="CONTRIBUTING-CN.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li class="chapter-item expanded affix "><li class="part-title">Blogs</li><li class="chapter-item expanded "><a href="blogs/aboutpl.html"><strong aria-hidden="true">8.</strong> About pivot lang</a></li><li class="chapter-item expanded "><a href="blogs/lsp_and_salsa.html"><strong aria-hidden="true">9.</strong> lsp and salsa</a></li></ol>
+            </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
         <div id="page-wrapper" class="page-wrapper">
 
             <div class="page">
-                
-                <div id="menu-bar-hover-placeholder"></div>
+                                <div id="menu-bar-hover-placeholder"></div>
                 <div id="menu-bar" class="menu-bar sticky bordered">
                     <div class="left-buttons">
                         <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
@@ -102,31 +100,31 @@
                             <i class="fa fa-paint-brush"></i>
                         </button>
                         <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
-                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
                         </ul>
-                                                <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
                             <i class="fa fa-search"></i>
                         </button>
-                                            </div>
+                    </div>
 
                     <h1 class="menu-title">Pivot Lang</h1>
 
                     <div class="right-buttons">
-                                                <a href="print.html" title="Print this book" aria-label="Print this book">
+                        <a href="print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                                                                        <a href="https://github.com/Pivot-Studio/pivot-lang" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/Pivot-Studio/pivot-lang" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                                                
+
                     </div>
                 </div>
 
-                                <div id="search-wrapper" class="hidden">
+                <div id="search-wrapper" class="hidden">
                     <form id="searchbar-outer" class="searchbar-outer">
                         <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
                     </form>
@@ -136,9 +134,9 @@
                         </ul>
                     </div>
                 </div>
-                
+
                 <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
-                <script type="text/javascript">
+                <script>
                     document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
                     document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
                     Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
@@ -327,7 +325,7 @@ type_add = type_name (&quot;+&quot; type_name)* ;
 </ul>
 <p>目前这两种方案使用的编译器是同一个可执行文件（plc），然而他们在依赖和功能上存在一些差别，
 下方是一个简单的对比图：</p>
-<table><thead><tr><th></th><th>jit</th><th>静态编译</th></tr></thead><tbody>
+<div class="table-wrapper"><table><thead><tr><th></th><th>jit</th><th>静态编译</th></tr></thead><tbody>
 <tr><td>完整的pivot lang功能支持</td><td>✅</td><td>✅</td></tr>
 <tr><td>生成可执行文件</td><td>❌</td><td>✅</td></tr>
 <tr><td>启动速度</td><td>❌</td><td>✅</td></tr>
@@ -336,6 +334,7 @@ type_add = type_name (&quot;+&quot; type_name)* ;
 <tr><td>运行时优化</td><td>✅</td><td>❌</td></tr>
 <tr><td>支持debug</td><td>❌</td><td>✅</td></tr>
 </tbody></table>
+</div>
 <p>可以看出，just in time模式的编译器依赖比静态编译少很多，因此如果你不需要debug功能，建议使用jit模式。如果你想要体验完整功能，建议使用静态编译。</p>
 <h2 id="windows"><a class="header" href="#windows">Windows</a></h2>
 <p>TODO</p>
@@ -605,18 +604,27 @@ a.method();
 <p>此页面仍在编写中，内容可能有疏漏</p>
 </div>
 </div>
-* [Overview](#overview)
-* [General Description](#general-description)
-* [Allocation](#allocation)
-  * [Global Allocator](#global-allocator)
-  * [Thread Local Allocator](#thread-local-allocator)
-* [Mark](#mark)
-* [Sweep](#sweep)
-  * [回收block](#回收block)
-  * [修正line header](#修正line-header)
-  * [计算evacuation信息](#计算evacuation信息)
-* [Evacuation](#evacuation)
-* [性能](#性能)
+<h2 id="table-of-contents"><a class="header" href="#table-of-contents">Table of Contents</a></h2>
+<ul>
+<li><a href="references/immix.html#overview">Overview</a></li>
+<li><a href="references/immix.html#general-description">General Description</a></li>
+<li><a href="references/immix.html#allocation">Allocation</a>
+<ul>
+<li><a href="references/immix.html#global-allocator">Global Allocator</a></li>
+<li><a href="references/immix.html#thread-local-allocator">Thread Local Allocator</a></li>
+</ul>
+</li>
+<li><a href="references/immix.html#mark">Mark</a></li>
+<li><a href="references/immix.html#sweep">Sweep</a>
+<ul>
+<li><a href="references/immix.html#%E5%9B%9E%E6%94%B6block">回收block</a></li>
+<li><a href="references/immix.html#%E4%BF%AE%E6%AD%A3line-header">修正line header</a></li>
+<li><a href="references/immix.html#%E8%AE%A1%E7%AE%97evacuation%E4%BF%A1%E6%81%AF">计算evacuation信息</a></li>
+</ul>
+</li>
+<li><a href="references/immix.html#evacuation">Evacuation</a></li>
+<li><a href="references/immix.html#%E6%80%A7%E8%83%BD">性能</a></li>
+</ul>
 <h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
 <p>此gc是我们基于<a href="https://www.cs.utexas.edu/users/speedway/DaCapo/papers/immix-pldi-2008.pdf">immix gc论文</a>实现的，
 大部分的实现细节都与论文一致，对于一些论文没提到的细节我们自行进行了实现，参考了很多别的gc项目。该gc是一个支持多线程使用的、
@@ -789,7 +797,7 @@ a.method();
 <li>root的精确定位</li>
 <li>对象的精确遍历</li>
 </ul>
-<p>我们的精确root定位是基于<strong>Stack Map</strong>的，这部分细节过于复杂，将在单独的文档中介绍。</p>
+<p>我们的精确root定位是基于<strong>Stack Map</strong>的，这部分细节过于复杂，将在<a href="references/stackmap.html">单独的文档</a>中介绍。</p>
 <p>对象的精确遍历是通过编译器支持实现的，plimmix将所有heap对象分类为以下4种：</p>
 <ul>
 <li>Atomic Object：原子对象，不包含指针的对象，如整数、浮点数、字符串等</li>
@@ -803,8 +811,7 @@ a.method();
 其签名为：</p>
 <pre><code class="language-rust ignore">pub type VisitFunc = unsafe fn(&amp;Collector, *mut u8);
 // vtable的签名，第一个函数是mark_ptr，第二个函数是mark_complex，第三个函数是mark_trait
-pub type VtableFunc = fn(*mut u8, &amp;Collector, VisitFunc, VisitFunc, VisitFunc);
-</code></pre>
+pub type VtableFunc = fn(*mut u8, &amp;Collector, VisitFunc, VisitFunc, VisitFunc);</code></pre>
 <p>在标记的时候，我们会调用对象的vtable对他进行遍历</p>
 <p>对于Trait Object，我们需要遍历他指向实际值的指针</p>
 <h2 id="sweep"><a class="header" href="#sweep">Sweep</a></h2>
@@ -851,10 +858,111 @@ pub type VtableFunc = fn(*mut u8, &amp;Collector, VisitFunc, VisitFunc, VisitFun
 </div>
 <h2 id="性能"><a class="header" href="#性能">性能</a></h2>
 <p>我们与bdwgc进行了很多比较，数据证明在大多数情况下，我们的分配算法略慢于bdwgc，与malloc速度相当，但是在回收的时候，我们的回收速度要快于bdwgc。
-对于一些复杂的测试，在触发回收的策略相同的情况下，我们的单线程总执行时间慢于bdwgc（
+对于一些复杂的测试，在触发回收的策略相同的情况下，我们的单线程总执行时间略慢于bdwgc（
 测试采用shadow stack算法，维护shadow stack的额外开销较高），但是在多线程情况下，我们的总执行时间明显快于bdwgc（约3倍）。</p>
 <p>如果你对性能感兴趣，可以在immix目录下使用<code>cargo bench</code>命令运行gc的基准测试。bdwgc测试代码基于复杂性考虑没有放在本仓库中，未来可能会单独在一个
 仓库中放出。</p>
+<p>immix作为天生并发的gc，并发情况下几乎能完全避免锁竞争的出现，因此在多线程情况下的性能优势是非常明显的。并且其分配算法很好的维护了空间局部性，理论上
+能带来更好的mutator性能。</p>
+<div style="break-before: page; page-break-before: always;"></div><h1 id="stak-map"><a class="header" href="#stak-map">Stak Map</a></h1>
+<ul>
+<li><a href="references/stackmap.html#introduction">Introduction</a></li>
+<li><a href="references/stackmap.html#%E7%BB%86%E8%8A%82%E5%AE%9E%E7%8E%B0">细节实现</a>
+<ul>
+<li><a href="references/stackmap.html#stackmap%E6%A0%BC%E5%BC%8F%E5%92%8C%E8%AF%BB%E5%8F%96%E6%96%B9%E5%BC%8F">stackmap格式和读取方式</a></li>
+<li><a href="references/stackmap.html#%E5%9F%BA%E4%BA%8Estackmap%E7%9A%84%E7%B2%BE%E7%A1%AEroot%E5%AE%9A%E4%BD%8D%E5%AE%9E%E7%8E%B0">基于stackmap的精确root定位实现</a></li>
+</ul>
+</li>
+</ul>
+<h2 id="introduction"><a class="header" href="#introduction">Introduction</a></h2>
+<p>stackmap是一种用于实现精确gc的机制，简单来说它会在编译期间根据编译器提供的信息在编译后的目标文件
+中插入栈变量的位置信息，这样在运行时gc扫描栈时就可以根据这些信息来确定栈上的变量的位置，从而完成精确回收。</p>
+<p>stackmap方式的精确回收相比shadow stack的方式有以下优点：</p>
+<ul>
+<li>无需维护gcroot链表，减少了开销</li>
+<li>避免了运行时调用维护gcroot链表的函数形成的开销</li>
+</ul>
+<p>但是同时它也有以下缺点：</p>
+<ul>
+<li>跨平台存在劣势，各个平台的栈结构和可执行文件结构都有差异，stackmap过于底层，跨平台很复杂</li>
+<li>stackmap在回收的时候需要遍历函数调用栈，遍历栈的跨平台实现也很复杂，而且很多现有库都有bug</li>
+</ul>
+<p>我们的stackmap功能基于llvm提供的一系列gc相关功能实现，llvm在这方面的文档十分混乱差劲，
+甚至官网文档代码有一部分无法编译，还有很多地方严重过时与实际情况不符，因此全网都难找到基于llvm
+实现stackmap功能的代码。本文档会尽量对这些部分进行说明。</p>
+<h2 id="细节实现"><a class="header" href="#细节实现">细节实现</a></h2>
+<h3 id="stackmap格式和读取方式"><a class="header" href="#stackmap格式和读取方式">stackmap格式和读取方式</a></h3>
+<p>llvm提供了一系列的gc相关api，首先是gc策略，我们可以给每个函数指定一个gc策略，并且llvm内置了一些gc策略。</p>
+<p>为了性能和方便考虑，我们的gc实现了自己的gc策略（plimmix），此策略通过一个自定义llvm插件实现。其代码在 <strong>immix/llvm</strong> 目录下
+两个C文件一个定义了我们的GC策略，一个定义了我们的stackmap格式和生成方式。</p>
+<p>我们的stackmap格式如下：</p>
+<pre><code>Header {
+  i64  : Stack Map Version (current version is 1)
+  i32  : function 数量
+}
+// 这里要对齐
+Functions[NumFunctions] {
+  u64 : Function Address
+  i32 : Stack Size（单位是8字节）
+  i32 : 需要压栈的函数变量数量（不同平台不一样，大部分平台前6个参数会用寄存器传）
+  i32 : root数量
+  i32 : safe point数量
+  SafePoints[NumSafePoints] {
+    u64: 地址
+  }
+  Roots[NumRoots] {
+    i32: root的偏移(相对栈指针)
+    i32: root的类型
+  }
+}
+</code></pre>
+<div id="admonition-gc-safepoint介绍" class="admonition tip">
+<div class="admonition-title">
+<p>gc safepoint介绍</p>
+<p><a class="admonition-anchor-link" href="references/stackmap.html#admonition-gc-safepoint介绍"></a></p>
+</div>
+<div>
+<p>safepoint说白了就是潜在的可以触发gc的点位，本来多用于进行多线程回收的同步：大部分gc
+回收算法在回收时（全部或一部分时间）是不允许mutator运行的，这个时候需要暂停所有mutator
+线程（stop the world），等回收完成后再恢复。使用safepoint机制的gc，在mutator线程运行到safepoint时会对
+一个特殊flag进行检查，以判断自己是否需要暂停进行gc。在我们的immix gc中，
+safepoint通常由其中一个工作线程在自己的safepoint发起，别的线程到达自己的下一个safepoint是会随即暂停，等到所有线程
+都暂停的时候再进行回收。我们的safepoint目前是在所有malloc点位，不过我们的llvm插件目前会将所有函数调用点位都当作
+safepoint处理。</p>
+<p>safepoint对于stackmap至关重要，因为在回收时gc就是通过在stackmap中查询当前暂停对应的safepoint地址来获取当前栈中的root集的。在暂停的时候safepoint地址在当前栈帧的ip寄存器中。</p>
+</div>
+</div>
+<p>我们的llvm插件会将stackmap信息生成到每个目标文件的数据段中，应用程序可以使用weak link的方式用对应的全局变量获取到这个数据标签对应的地址，然后就可以通过这个地址来获取到stackmap信息了。对应数据区域标签的命名规则是：<code>_GC_MAP_$source_file_name</code>，其中<code>$source_file_name</code>是对应llvm module中记录的的源文件名。</p>
+<p>stackmap有多种读取方式，下方是我们使用的方式：</p>
+<p>immix gc提供了<code>gc_init</code>函数，该函数接受一个stackmap指针，会加载该stackmap。我们的编译器
+会在编译的时候为每个模块生成一个初始化stackmap的函数，该函数以一定的规则命名，之后
+在生成主模块的的时候会自动在main函数开始处对这些初始化函数进行调用。</p>
+<p>这部分代码理论上可以通过llvm插件自动完成，这部分以后应该会进行实现。实现此功能之后，我们的immix gc将会成为可以方便的给任何基于llvm的语言接入的gc。</p>
+<p><code>gc_init</code>函数主要会读取stackmap中的数据并且进行遍历，之后生成一个哈希表，用于快速的查找对应的safepoint地址。这个哈希表的key是safepoint地址，value是safepoint所在
+函数的所有gcroot信息。</p>
+<h3 id="基于stackmap的精确root定位实现"><a class="header" href="#基于stackmap的精确root定位实现">基于stackmap的精确root定位实现</a></h3>
+<p>为了遍历函数调用栈，我们使用<code>backtrace.rs</code>包，该包封装了一些平台相关的函数调用栈遍历的实现。</p>
+<div id="admonition-warning" class="admonition warning">
+<div class="admonition-title">
+<p>Warning</p>
+<p><a class="admonition-anchor-link" href="references/stackmap.html#admonition-warning"></a></p>
+</div>
+<div>
+<p>栈爬取的实现不同平台差异巨大，很容易出现bug。目前我们发现在mac aarch64上如果使用lld进行链接会导致该backtrace包出现
+segment fault，这个问题目前使用ld替代lld进行规避。</p>
+</div>
+</div>
+<p>遍历的时候通过<code>backtrace.rs</code>拿到当前ip寄存器的值，然后去我们构建的stackmap中查找到当前函数栈的root进行遍历，遍历完成后继续向上层函数栈遍历。
+注意这里遍历的起点不在mutator代码中，而在gc代码中，所以遍历的开头和结尾查不到对应记录是完全正常的。</p>
+<div id="admonition-note" class="admonition note">
+<div class="admonition-title">
+<p>Note</p>
+<p><a class="admonition-anchor-link" href="references/stackmap.html#admonition-note"></a></p>
+</div>
+<div>
+<p>潜在优化点：其实从gc的函数到目标语言最底层函数的调用栈层数在运行时是固定的，所以这里其实可以优化，跳过前几个栈帧，直接从目标语言最底层函数开始遍历。</p>
+</div>
+</div>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="compiler"><a class="header" href="#compiler">Compiler</a></h1>
 <p>pivot-lang编译器（以下简称编译器）主要由三个部分组成：nom分析器、ast和llvm后端。</p>
 <h2 id="nom-parser"><a class="header" href="#nom-parser">Nom parser</a></h2>
@@ -891,8 +999,7 @@ pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNode
     let (_, node) = re.unwrap();
     log::info!(&quot;parse {:?}&quot;, source.path(db));
     Ok(ProgramNodeWrapper::new(db, node.clone()))
-}
-</code></pre>
+}</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ast-1"><a class="header" href="#ast-1">AST</a></h1>
 <p>抽象语法树是目前编译器中最复杂的部分，它是编译器的中间表示，也是编译器的核心。本节将介绍AST的设计和实现。</p>
 <h2 id="ast的设计"><a class="header" href="#ast的设计">AST的设计</a></h2>
@@ -911,19 +1018,16 @@ pub trait Node: RangeTrait + FmtTrait + PrintTrait {
 pub trait PrintTrait {
     fn print(&amp;self, tabs: usize, end: bool, line: Vec&lt;bool&gt;);
 }
-
 </code></pre>
 <p>你可能注意到了，<code>Node</code>trait继承了<code>RangeTrait</code>，这个trait定义了节点的位置信息。</p>
 <pre><code class="language-rust no_run noplayground">#[enum_dispatch]
 pub trait RangeTrait {
     fn range(&amp;self) -&gt; Range;
-}
-</code></pre>
+}</code></pre>
 <p>一般来说，<code>RangeTrait</code>的实现通过<code>#[range]</code>宏来自动生成，你不需要手动实现它。</p>
 <p><code>Node</code>接口中的<code>print</code>函数用于打印节点的信息，它会被用于调试。<code>print</code>打印的结果和<code>tree</code>的输出非常像，你需要用一些工具函数来
 格式化输出。以<code>ifnode</code>的<code>print</code>函数为例：</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>    fn print(&amp;self, tabs: usize, end: bool, mut line: Vec&lt;bool&gt;) {
         deal_line(tabs, &amp;mut line, end);
@@ -937,8 +1041,7 @@ pub trait RangeTrait {
             self.then.print(tabs + 1, true, line.clone());
         }
     }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p><code>emit</code>函数是生成llvm代码的核心，它会调用llvm api构造自己对应的llvm ir。在编译的时候，最上层节点的<code>emit</code>会被调用，
 该函数会递归的调用自己的子节点的<code>emit</code>函数，最终生成整个程序的llvm ir。<br />
 下方是<code>ifnode</code>的<code>emit</code>函数：</p>
@@ -994,8 +1097,7 @@ pub trait RangeTrait {
         }
         ctx.emit_comment_highlight(&amp;self.comments[0]);
         Ok((None, None, terminator))
-    }
-</code></pre>
+    }</code></pre>
 <p>emit函数的参数是节点自身，第二个参数是编译上下文。编译上下文中会包含一些需要透传的信息，比如符号表，llvmbuilder，lsp参数等。</p>
 <h2 id="打印ast结构"><a class="header" href="#打印ast结构">打印AST结构</a></h2>
 <p>plc命令行工具有打印ast的功能，你可以使用<code>plc xxx.pi --printast</code>命令来打印ast结构。<br />
@@ -1074,8 +1176,7 @@ ProgramNode
        }
        graphs
    }
-}
-</code></pre>
+}</code></pre>
 <p>接下来实现 <code>from_ast()</code> 函数，它接收一个 <code>NodeEnum</code>（这是一个 <code>Statements</code> 节点）， 返回一个完整的 <code>Graph</code>，具体分为两步：</p>
 <ul>
 <li>初步构建图(<code>build_graph()</code>)</li>
@@ -1095,8 +1196,7 @@ ProgramNode
    };
    while remove_single_node(&amp;mut ctx.graph, remove_empty_nodes) {}
    ctx.graph
-}
-</code></pre>
+}</code></pre>
 <p>主要介绍构建图的环节。</p>
 <p>定义图的 <code>节点</code> 与 <code>边</code> ：</p>
 <pre><code class="language-rust no_run noplayground">#[derive(Debug, Clone, PartialEq)]
@@ -1115,8 +1215,7 @@ pub enum EdgeType {
    Branch(bool), // 分支，带有 Y/N 等标签
 }
 
-pub type Graph = StableDiGraph&lt;GraphNodeType, EdgeType&gt;;
-</code></pre>
+pub type Graph = StableDiGraph&lt;GraphNodeType, EdgeType&gt;;</code></pre>
 <p><code>build_graph()</code>函数以 <code>Statement</code> 为单位，针对不同节点构建不同的图结构，为了方便的连接节点，我们定义了 <code>GraphContext</code> 用于存储上下文信息:</p>
 <pre><code class="language-rust no_run noplayground">struct GraphContext {
    pub graph: Graph,
@@ -1127,8 +1226,7 @@ pub type Graph = StableDiGraph&lt;GraphNodeType, EdgeType&gt;;
    pub global_end: NodeIndex,   // 全图终点
    pub local_source: NodeIndex, // 局部起点
    pub local_sink: NodeIndex,   // 局部终点
-}
-</code></pre>
+}</code></pre>
 <p>每次调用 <code>build_graph()</code> 前，我们需要为构建部分提供两个 <code>锚点(local_source, local_sink)</code> ，第一次调用时，<code>锚点</code> 即为起点和终点，
 以后每次调用前，均需构建两个虚节点，作为<code>锚点</code>(虚节点之后将被去掉)。</p>
 <p>对于不涉及分支、循环、跳转的简单语句，图结构较为简单：</p>
@@ -1157,8 +1255,7 @@ local_source -&gt; cond                                                        l
                        sub_source = sub_sink;
                        sub_sink = context.graph.add_node(GraphNodeType::Dummy);
                    }
-               }
-</code></pre>
+               }</code></pre>
 <h3 id="dot-文件生成"><a class="header" href="#dot-文件生成">.dot 文件生成</a></h3>
 <p>我们只需按dot语法格式生成图的点/边的信息即可。下面是一个简单的dot文件：</p>
 <pre><code>digraph _pointer_struct__name_params {
@@ -1257,15 +1354,13 @@ mod加一个叫做<code>reg</code>的函数，里边<strong>必须用到你会�
 <h2 id="使用is_runtime导出rust函数"><a class="header" href="#使用is_runtime导出rust函数">使用<code>is_runtime</code>导出rust函数</a></h2>
 <p>一个被<code>is_runtime</code>标记的rust函数在编译到静态库之后，在pivot-lang中声明对应的函数，即可像正常函数一样调用。例如：</p>
 <p>Rust:</p>
-<pre><pre class="playground"><code class="language-rust">
-<span class="boring">#![allow(unused)]
+<pre><pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span>#[is_runtime]
 fn printi64ln(i: i64) {
     println!(&quot;{}&quot;, i);
 }
-<span class="boring">}
-</span></code></pre></pre>
+<span class="boring">}</span></code></pre></pre>
 <p>Pivot Lang:</p>
 <pre><code class="language-pivot-lang">fn printi64ln(i: i64) void
 
@@ -1282,8 +1377,7 @@ impl MyStruct {
   pub fn myfunc1() {
       // ...
    }
-}
-</code></pre>
+}</code></pre>
 <p>标记impl块时，导出的函数名称会变为<code>{structname}__{fnname}</code>的形式，函数允许使用receiver。更多高级用法参见<code>is_runtime</code>的rust doc</p>
 </blockquote>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="gc"><a class="header" href="#gc">GC</a></h1>
@@ -1425,44 +1519,44 @@ impl MyStruct {
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                        
-                        
+
+
                         <div style="clear: both"></div>
                     </nav>
                 </div>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                
-                            </nav>
+
+            </nav>
 
         </div>
 
-        
-        
-        
-                <script type="text/javascript">
+
+
+
+        <script>
             window.playground_copyable = true;
         </script>
-        
-        
-                <script src="elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="mark.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="searcher.js" type="text/javascript" charset="utf-8"></script>
-        
-        <script src="clipboard.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="highlight.js" type="text/javascript" charset="utf-8"></script>
-        <script src="book.js" type="text/javascript" charset="utf-8"></script>
+
+
+        <script src="elasticlunr.min.js"></script>
+        <script src="mark.min.js"></script>
+        <script src="searcher.js"></script>
+
+        <script src="clipboard.min.js"></script>
+        <script src="highlight.js"></script>
+        <script src="book.js"></script>
 
         <!-- Custom JS scripts -->
-                <script type="text/javascript" src="mermaid.min.js"></script>
-                <script type="text/javascript" src="mermaid-init.js"></script>
-        
-                        <script type="text/javascript">
+        <script src="mermaid.min.js"></script>
+        <script src="mermaid-init.js"></script>
+
+        <script>
         window.addEventListener('load', function() {
             window.setTimeout(window.print, 100);
         });
         </script>
-                
+
     </body>
 </html>

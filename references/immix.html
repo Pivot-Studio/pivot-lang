@@ -4,45 +4,43 @@
         <!-- Book generated using mdBook -->
         <meta charset="UTF-8">
         <title>Immix Gc - Pivot Lang</title>
-                
+
 
         <!-- Custom HTML head -->
         
-
-        <meta content="text/html; charset=utf-8" http-equiv="Content-Type">
         <meta name="description" content="">
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="theme-color" content="#ffffff" />
 
-                <link rel="icon" href="../favicon.svg">
-                        <link rel="shortcut icon" href="../favicon.png">
-                <link rel="stylesheet" href="../css/variables.css">
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
         <link rel="stylesheet" href="../css/general.css">
         <link rel="stylesheet" href="../css/chrome.css">
-                <link rel="stylesheet" href="../css/print.css" media="print">
-        
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
         <!-- Fonts -->
         <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
-                <link rel="stylesheet" href="../fonts/fonts.css">
-        
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
         <!-- Highlight.js Stylesheets -->
         <link rel="stylesheet" href="../highlight.css">
         <link rel="stylesheet" href="../tomorrow-night.css">
         <link rel="stylesheet" href="../ayu-highlight.css">
 
         <!-- Custom theme stylesheets -->
-                <link rel="stylesheet" href="../././mdbook-admonish.css">
-        
-            </head>
+        <link rel="stylesheet" href="../././mdbook-admonish.css">
+
+    </head>
     <body>
         <!-- Provide site root to javascript -->
-        <script type="text/javascript">
+        <script>
             var path_to_root = "../";
             var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
         </script>
 
         <!-- Work around some values being stored in localStorage wrapped in quotes -->
-        <script type="text/javascript">
+        <script>
             try {
                 var theme = localStorage.getItem('mdbook-theme');
                 var sidebar = localStorage.getItem('mdbook-sidebar');
@@ -58,7 +56,7 @@
         </script>
 
         <!-- Set the theme before any content is loaded, prevents flash -->
-        <script type="text/javascript">
+        <script>
             var theme;
             try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
             if (theme === null || theme === undefined) { theme = default_theme; }
@@ -70,7 +68,7 @@
         </script>
 
         <!-- Hide / unhide sidebar before it is displayed -->
-        <script type="text/javascript">
+        <script>
             var html = document.querySelector('html');
             var sidebar = 'hidden';
             if (document.body.clientWidth >= 1080) {
@@ -83,15 +81,15 @@
 
         <nav id="sidebar" class="sidebar" aria-label="Table of contents">
             <div class="sidebar-scrollbox">
-                <ol class="chapter"><li class="chapter-item expanded "><a href="../../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="../tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="../tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="../tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="../references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li><li class="chapter-item expanded "><a href="../references/method.html"><strong aria-hidden="true">3.2.</strong> Method</a></li><li class="chapter-item expanded "><a href="../references/interface.html"><strong aria-hidden="true">3.3.</strong> Trait</a></li><li class="chapter-item expanded "><a href="../references/immix.html" class="active"><strong aria-hidden="true">3.4.</strong> Immix Gc</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="../compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="../compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li><li class="chapter-item expanded "><a href="../compiler/flow.html"><strong aria-hidden="true">4.3.</strong> Flow Chart</a></li></ol></li><li class="chapter-item expanded "><a href="../lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../lsp/design.html"><strong aria-hidden="true">5.1.</strong> Design</a></li><li class="chapter-item expanded "><a href="../lsp/diagnostic.html"><strong aria-hidden="true">5.2.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/gc.html"><strong aria-hidden="true">6.1.1.</strong> gc</a></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">CONTRIBUTING</li><li class="chapter-item expanded "><a href="../CONTRIBUTING-CN.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li class="chapter-item expanded affix "><li class="part-title">Blogs</li><li class="chapter-item expanded "><a href="../blogs/aboutpl.html"><strong aria-hidden="true">8.</strong> About pivot lang</a></li><li class="chapter-item expanded "><a href="../blogs/lsp_and_salsa.html"><strong aria-hidden="true">9.</strong> lsp and salsa</a></li></ol>            </div>
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../../../index.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="../tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="../tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="../tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="../references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li><li class="chapter-item expanded "><a href="../references/method.html"><strong aria-hidden="true">3.2.</strong> Method</a></li><li class="chapter-item expanded "><a href="../references/interface.html"><strong aria-hidden="true">3.3.</strong> Trait</a></li><li class="chapter-item expanded "><a href="../references/immix.html" class="active"><strong aria-hidden="true">3.4.</strong> Immix Gc</a></li><li class="chapter-item expanded "><a href="../references/stackmap.html"><strong aria-hidden="true">3.5.</strong> Stack Map</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="../compiler/index.html"><strong aria-hidden="true">4.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../compiler/parser.html"><strong aria-hidden="true">4.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="../compiler/ast.html"><strong aria-hidden="true">4.2.</strong> AST</a></li><li class="chapter-item expanded "><a href="../compiler/flow.html"><strong aria-hidden="true">4.3.</strong> Flow Chart</a></li></ol></li><li class="chapter-item expanded "><a href="../lsp/index.html"><strong aria-hidden="true">5.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../lsp/design.html"><strong aria-hidden="true">5.1.</strong> Design</a></li><li class="chapter-item expanded "><a href="../lsp/diagnostic.html"><strong aria-hidden="true">5.2.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/index.html"><strong aria-hidden="true">6.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/vm.html"><strong aria-hidden="true">6.1.</strong> vm</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/gc.html"><strong aria-hidden="true">6.1.1.</strong> gc</a></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/planglib.html"><strong aria-hidden="true">6.2.</strong> planglib</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">CONTRIBUTING</li><li class="chapter-item expanded "><a href="../CONTRIBUTING-CN.html"><strong aria-hidden="true">7.</strong> Contributing</a></li><li class="chapter-item expanded affix "><li class="part-title">Blogs</li><li class="chapter-item expanded "><a href="../blogs/aboutpl.html"><strong aria-hidden="true">8.</strong> About pivot lang</a></li><li class="chapter-item expanded "><a href="../blogs/lsp_and_salsa.html"><strong aria-hidden="true">9.</strong> lsp and salsa</a></li></ol>
+            </div>
             <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
         </nav>
 
         <div id="page-wrapper" class="page-wrapper">
 
             <div class="page">
-                
-                <div id="menu-bar-hover-placeholder"></div>
+                                <div id="menu-bar-hover-placeholder"></div>
                 <div id="menu-bar" class="menu-bar sticky bordered">
                     <div class="left-buttons">
                         <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
@@ -101,34 +99,34 @@
                             <i class="fa fa-paint-brush"></i>
                         </button>
                         <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
-                            <li role="none"><button role="menuitem" class="theme" id="light">Light (default)</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
                             <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
                         </ul>
-                                                <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
                             <i class="fa fa-search"></i>
                         </button>
-                                            </div>
+                    </div>
 
                     <h1 class="menu-title">Pivot Lang</h1>
 
                     <div class="right-buttons">
-                                                <a href="../print.html" title="Print this book" aria-label="Print this book">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
                             <i id="print-button" class="fa fa-print"></i>
                         </a>
-                                                                        <a href="https://github.com/Pivot-Studio/pivot-lang" title="Git repository" aria-label="Git repository">
+                        <a href="https://github.com/Pivot-Studio/pivot-lang" title="Git repository" aria-label="Git repository">
                             <i id="git-repository-button" class="fa fa-github"></i>
                         </a>
-                                                                        <a href="https://github.com/Pivot-Studio/pivot-lang/edit/master/book/src/references/immix.md" title="Suggest an edit" aria-label="Suggest an edit">
+                        <a href="https://github.com/Pivot-Studio/pivot-lang/edit/master/book/src/references/immix.md" title="Suggest an edit" aria-label="Suggest an edit">
                             <i id="git-edit-button" class="fa fa-edit"></i>
                         </a>
-                        
+
                     </div>
                 </div>
 
-                                <div id="search-wrapper" class="hidden">
+                <div id="search-wrapper" class="hidden">
                     <form id="searchbar-outer" class="searchbar-outer">
                         <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
                     </form>
@@ -138,9 +136,9 @@
                         </ul>
                     </div>
                 </div>
-                
+
                 <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
-                <script type="text/javascript">
+                <script>
                     document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
                     document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
                     Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
@@ -161,18 +159,27 @@
 <p>此页面仍在编写中，内容可能有疏漏</p>
 </div>
 </div>
-* [Overview](#overview)
-* [General Description](#general-description)
-* [Allocation](#allocation)
-  * [Global Allocator](#global-allocator)
-  * [Thread Local Allocator](#thread-local-allocator)
-* [Mark](#mark)
-* [Sweep](#sweep)
-  * [回收block](#回收block)
-  * [修正line header](#修正line-header)
-  * [计算evacuation信息](#计算evacuation信息)
-* [Evacuation](#evacuation)
-* [性能](#性能)
+<h2 id="table-of-contents"><a class="header" href="#table-of-contents">Table of Contents</a></h2>
+<ul>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#general-description">General Description</a></li>
+<li><a href="#allocation">Allocation</a>
+<ul>
+<li><a href="#global-allocator">Global Allocator</a></li>
+<li><a href="#thread-local-allocator">Thread Local Allocator</a></li>
+</ul>
+</li>
+<li><a href="#mark">Mark</a></li>
+<li><a href="#sweep">Sweep</a>
+<ul>
+<li><a href="#%E5%9B%9E%E6%94%B6block">回收block</a></li>
+<li><a href="#%E4%BF%AE%E6%AD%A3line-header">修正line header</a></li>
+<li><a href="#%E8%AE%A1%E7%AE%97evacuation%E4%BF%A1%E6%81%AF">计算evacuation信息</a></li>
+</ul>
+</li>
+<li><a href="#evacuation">Evacuation</a></li>
+<li><a href="#%E6%80%A7%E8%83%BD">性能</a></li>
+</ul>
 <h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
 <p>此gc是我们基于<a href="https://www.cs.utexas.edu/users/speedway/DaCapo/papers/immix-pldi-2008.pdf">immix gc论文</a>实现的，
 大部分的实现细节都与论文一致，对于一些论文没提到的细节我们自行进行了实现，参考了很多别的gc项目。该gc是一个支持多线程使用的、
@@ -345,7 +352,7 @@
 <li>root的精确定位</li>
 <li>对象的精确遍历</li>
 </ul>
-<p>我们的精确root定位是基于<strong>Stack Map</strong>的，这部分细节过于复杂，将在单独的文档中介绍。</p>
+<p>我们的精确root定位是基于<strong>Stack Map</strong>的，这部分细节过于复杂，将在<a href="stackmap.html">单独的文档</a>中介绍。</p>
 <p>对象的精确遍历是通过编译器支持实现的，plimmix将所有heap对象分类为以下4种：</p>
 <ul>
 <li>Atomic Object：原子对象，不包含指针的对象，如整数、浮点数、字符串等</li>
@@ -359,8 +366,7 @@
 其签名为：</p>
 <pre><code class="language-rust ignore">pub type VisitFunc = unsafe fn(&amp;Collector, *mut u8);
 // vtable的签名，第一个函数是mark_ptr，第二个函数是mark_complex，第三个函数是mark_trait
-pub type VtableFunc = fn(*mut u8, &amp;Collector, VisitFunc, VisitFunc, VisitFunc);
-</code></pre>
+pub type VtableFunc = fn(*mut u8, &amp;Collector, VisitFunc, VisitFunc, VisitFunc);</code></pre>
 <p>在标记的时候，我们会调用对象的vtable对他进行遍历</p>
 <p>对于Trait Object，我们需要遍历他指向实际值的指针</p>
 <h2 id="sweep"><a class="header" href="#sweep">Sweep</a></h2>
@@ -407,60 +413,62 @@ pub type VtableFunc = fn(*mut u8, &amp;Collector, VisitFunc, VisitFunc, VisitFun
 </div>
 <h2 id="性能"><a class="header" href="#性能">性能</a></h2>
 <p>我们与bdwgc进行了很多比较，数据证明在大多数情况下，我们的分配算法略慢于bdwgc，与malloc速度相当，但是在回收的时候，我们的回收速度要快于bdwgc。
-对于一些复杂的测试，在触发回收的策略相同的情况下，我们的单线程总执行时间慢于bdwgc（
+对于一些复杂的测试，在触发回收的策略相同的情况下，我们的单线程总执行时间略慢于bdwgc（
 测试采用shadow stack算法，维护shadow stack的额外开销较高），但是在多线程情况下，我们的总执行时间明显快于bdwgc（约3倍）。</p>
 <p>如果你对性能感兴趣，可以在immix目录下使用<code>cargo bench</code>命令运行gc的基准测试。bdwgc测试代码基于复杂性考虑没有放在本仓库中，未来可能会单独在一个
 仓库中放出。</p>
+<p>immix作为天生并发的gc，并发情况下几乎能完全避免锁竞争的出现，因此在多线程情况下的性能优势是非常明显的。并且其分配算法很好的维护了空间局部性，理论上
+能带来更好的mutator性能。</p>
 
                     </main>
 
                     <nav class="nav-wrapper" aria-label="Page navigation">
                         <!-- Mobile navigation buttons -->
-                                                    <a rel="prev" href="../references/interface.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                            <a rel="prev" href="../references/interface.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                                 <i class="fa fa-angle-left"></i>
                             </a>
-                        
-                                                    <a rel="next" href="../compiler/index.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+
+                            <a rel="next" href="../references/stackmap.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <i class="fa fa-angle-right"></i>
                             </a>
-                        
+
                         <div style="clear: both"></div>
                     </nav>
                 </div>
             </div>
 
             <nav class="nav-wide-wrapper" aria-label="Page navigation">
-                                    <a rel="prev" href="../references/interface.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                    <a rel="prev" href="../references/interface.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
                         <i class="fa fa-angle-left"></i>
                     </a>
-                
-                                    <a rel="next" href="../compiler/index.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+
+                    <a rel="next" href="../references/stackmap.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <i class="fa fa-angle-right"></i>
                     </a>
-                            </nav>
+            </nav>
 
         </div>
 
-        
-        
-        
-                <script type="text/javascript">
+
+
+
+        <script>
             window.playground_copyable = true;
         </script>
-        
-        
-                <script src="../elasticlunr.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../mark.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../searcher.js" type="text/javascript" charset="utf-8"></script>
-        
-        <script src="../clipboard.min.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../highlight.js" type="text/javascript" charset="utf-8"></script>
-        <script src="../book.js" type="text/javascript" charset="utf-8"></script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
 
         <!-- Custom JS scripts -->
-                <script type="text/javascript" src="../mermaid.min.js"></script>
-                <script type="text/javascript" src="../mermaid-init.js"></script>
-        
-        
+        <script src="../mermaid.min.js"></script>
+        <script src="../mermaid-init.js"></script>
+
+
     </body>
 </html>
