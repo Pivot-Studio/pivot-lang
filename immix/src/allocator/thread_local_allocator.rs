@@ -124,7 +124,7 @@ impl ThreadLocalAllocator {
     ///
     /// whether the collection should run evacuation algorithm
     pub fn should_eva(&self) -> bool {
-        !self.recyclable_blocks.is_empty()
+        self.recyclable_blocks.len() > 1
     }
 
     pub fn fill_available_histogram(&self, histogram: &mut VecMap<usize, usize>) -> usize {

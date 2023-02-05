@@ -202,7 +202,7 @@ impl Collector {
         let new_ptr = *(*ptr).load(Ordering::SeqCst);
         let ptr = ptr as *mut *mut u8;
         debug_assert!(!new_ptr.is_null());
-        // println!("correct ptr {:p} to {:p}", ptr, new_ptr);
+        log::trace!("gc {} correct ptr {:p} to {:p}", self.id, ptr, new_ptr);
         *ptr = new_ptr;
     }
 
@@ -253,7 +253,7 @@ impl Collector {
                     .is_ok()
                 {
                     // 成功驱逐
-                    // println!("gc {}: eva {:p} to {:p}", self.id, ptr, new_ptr);
+                    log::trace!("gc {}: eva {:p} to {:p}", self.id, ptr, new_ptr);
                     new_line_header.set_marked(true);
                     line_header.set_forwarded(true);
                     new_block.marked = true;
@@ -530,6 +530,7 @@ impl Collector {
                         break;
                     }
                 }
+                log::info!("gc {} eva threshold:{}", self.id, eva_threshold);
                 // 根据驱逐阀域标记每个block是否是驱逐目标
                 self.thread_local_allocator
                     .as_mut()

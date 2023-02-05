@@ -13,9 +13,17 @@ git-repository-url = "https://github.com/Pivot-Studio/pivot-lang"
 git-repository-icon = "fa-github"
 edit-url-template = "https://github.com/Pivot-Studio/pivot-lang/edit/master/book/{path}"
 additional-css = ["././mdbook-admonish.css"]
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
 
 [preprocessor]
 
 [preprocessor.admonish]
 command = "mdbook-admonish"
 assets_version = "2.0.0" # do not edit: managed by `mdbook-admonish install`
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[preprocessor.toc]
+command = "mdbook-toc"
+renderer = ["html"]
