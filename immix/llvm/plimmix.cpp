@@ -21,7 +21,6 @@ namespace {
   X("plimmix", "pivot-lang immix garbage collector.");
 }
 
-#include <llvm/IR/BuiltinGCs.h>
 
 extern "C" void LLVMLinkPLImmixGC() {
 }

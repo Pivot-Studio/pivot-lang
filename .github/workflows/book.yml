@@ -21,7 +21,7 @@ jobs:
     name: Book
     runs-on: ubuntu-latest
     env:
-      MDBOOK_VERSION: '0.4.12'
+      MDBOOK_VERSION: '0.4.24'
       MDBOOK_LINKCHECK_VERSION: '0.7.4'
       MDBOOK_MERMAID_VERSION: '0.8.3'
       MDBOOK_ADMONISH_VERSION: '1.8.0'

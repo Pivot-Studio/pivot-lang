@@ -13,6 +13,7 @@
   - [Method](./references/method.md)
   - [Trait](./references/interface.md)
   - [Immix Gc](./references/immix.md)
+  - [Stack Map](./references/stackmap.md)
 
 # How the project works internally
 
