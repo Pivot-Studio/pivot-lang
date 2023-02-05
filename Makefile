@@ -26,7 +26,8 @@ test:
 	@cargo test --all
 
 clean:
-	@rm -f *.ll && rm -f *.bc && rm -rf *.dSYM && rm -f testout* && rm -f out*  && rm -f *.o
+	@rm -rf out*
+	@cd target && rm -f *.ll && rm -f *.bc && rm -rf *.dSYM && rm -f testout* && rm -f out*  && rm -f *.o
 
 bench:
 	@cargo bench --all

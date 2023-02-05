@@ -6,6 +6,7 @@ use project1::test::constant;
 use project1::test::traits;
 use project1::test::simple;
 use project1::test::flow;
+use project1::test::list;
 fn main() i64 {
     ifel::test_if_else();
     generic::test_generic();
@@ -15,6 +16,7 @@ fn main() i64 {
     traits::test_trait();
     simple::test_simple();
     flow::test_flow();
+    list::test_list();
     return 0;
 }
 

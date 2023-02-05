@@ -438,7 +438,7 @@ impl FuncDefNode {
             let allocab = builder.append_basic_block(funcvalue, "alloc");
             let entry = builder.append_basic_block(funcvalue, "entry");
             let return_block = builder.append_basic_block(funcvalue, "return");
-            child.position_at_end(return_block, builder);
+            child.position_at_end(allocab, builder);
             let ret_value_ptr = match &*fntype.ret_pltype.get_type(child, builder)?.borrow() {
                 PLType::VOID => None,
                 _ => {
@@ -450,11 +450,10 @@ impl FuncDefNode {
                     Some(retv)
                 }
             };
-
+            child.position_at_end(return_block, builder);
             child.return_block = Some((return_block, ret_value_ptr));
             if let Some(ptr) = ret_value_ptr {
                 let value = builder.build_load(ptr, "load_ret_tmp");
-                child.position_at_end(return_block, builder);
                 // builder.gc_collect(child);
                 // builder.gc_rm_root_current(ptr, child);
                 builder.build_return(Some(value));

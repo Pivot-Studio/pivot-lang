@@ -205,7 +205,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let size = self.context.i64_type().const_int(size as u64, false);
         let heapptr = self
             .builder
-            .build_call(f, &[size.into(), tp.into()], "heapptr")
+            .build_call(f, &[size.into(), tp.into()], &format!("heapptr_{}", name))
             .try_as_basic_value()
             .left()
             .unwrap();
@@ -214,9 +214,20 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             llvmtp.ptr_type(AddressSpace::default()),
             name,
         );
+        let lb = self.builder.get_insert_block().unwrap();
+        let alloca = self
+            .builder
+            .get_insert_block()
+            .unwrap()
+            .get_parent()
+            .unwrap()
+            .get_first_basic_block()
+            .unwrap();
+        self.builder.position_at_end(alloca);
         let stack_ptr = self
             .builder
-            .build_alloca(llvmtp.ptr_type(Default::default()), "stack_ptr");
+            .build_alloca(llvmtp.ptr_type(AddressSpace::default()), "stack_ptr");
+        self.builder.position_at_end(lb);
         self.builder.build_store(stack_ptr, casted_result);
         self.gc_add_root(stack_ptr.as_basic_value_enum(), ctx, obj_type);
         (casted_result.into_pointer_value(), stack_ptr, llvmtp)
@@ -1185,70 +1196,55 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let td = self.targetmachine.get_target_data();
         let builder = self.builder;
         builder.unset_current_debug_location();
-        let lb = builder.get_insert_block().unwrap();
-        match self
-            .builder
-            .get_insert_block()
-            .unwrap()
-            .get_parent()
-            .unwrap()
-            .get_first_basic_block()
-        {
-            Some(alloca) => {
-                builder.position_at_end(alloca);
-                let bt = self.get_basic_type_op(pltype, ctx).unwrap();
-                let (p, stack_root, _) = self.gc_malloc(name, ctx, pltype);
-                // TODO: force user to manually init all structs, so we can remove this memset
-                let size_val = self
-                    .context
-                    .i64_type()
-                    .const_int(td.get_store_size(&bt) as u64, false);
-                self.builder
-                    .build_memset(
-                        p,
-                        td.get_abi_alignment(&bt),
-                        self.context.i8_type().const_zero(),
-                        size_val,
-                    )
-                    .unwrap();
-                if let PLType::STRUCT(_) = pltype {
-                    let f = self.get_or_insert_st_visit_fn_handle(&p);
-                    let i = self.builder.build_ptr_to_int(
-                        f.as_global_value().as_pointer_value(),
-                        self.context.i64_type(),
-                        "_vtable",
-                    );
-                    let vtable = self.builder.build_struct_gep(p, 0, "vtable").unwrap();
-                    self.builder.build_store(vtable, i);
-                } else if let PLType::ARR(tp) = pltype {
-                    let f = self.gen_or_get_arr_visit_function(ctx, tp);
-                    let i = self.builder.build_ptr_to_int(
-                        f.as_global_value().as_pointer_value(),
-                        self.context.i64_type(),
-                        "_vtable",
-                    );
-                    let vtable = self.builder.build_struct_gep(p, 0, "vtable").unwrap();
-                    self.builder.build_store(vtable, i);
-                }
-                declare.and_then(|p| {
-                    self.build_dbg_location(p);
-                    self.insert_var_declare(
-                        name,
-                        p,
-                        &PLType::POINTER(Arc::new(RefCell::new(pltype.clone()))),
-                        self.get_llvm_value_handle(&stack_root.as_any_value_enum()),
-                        ctx,
-                    );
-                    Some(())
-                });
-                let v_stack = self.get_llvm_value_handle(&stack_root.as_any_value_enum());
-                let v_heap = self.get_llvm_value_handle(&p.as_any_value_enum());
-                self.heap_stack_map.borrow_mut().insert(v_heap, v_stack);
-                builder.position_at_end(lb);
-                v_heap
-            }
-            None => panic!("alloc get entry failed!"),
+        let bt = self.get_basic_type_op(pltype, ctx).unwrap();
+        let (p, stack_root, _) = self.gc_malloc(name, ctx, pltype);
+        // TODO: force user to manually init all structs, so we can remove this memset
+        let size_val = self
+            .context
+            .i64_type()
+            .const_int(td.get_store_size(&bt) as u64, false);
+        self.builder
+            .build_memset(
+                p,
+                td.get_abi_alignment(&bt),
+                self.context.i8_type().const_zero(),
+                size_val,
+            )
+            .unwrap();
+        if let PLType::STRUCT(_) = pltype {
+            let f = self.get_or_insert_st_visit_fn_handle(&p);
+            let i = self.builder.build_ptr_to_int(
+                f.as_global_value().as_pointer_value(),
+                self.context.i64_type(),
+                "_vtable",
+            );
+            let vtable = self.builder.build_struct_gep(p, 0, "vtable").unwrap();
+            self.builder.build_store(vtable, i);
+        } else if let PLType::ARR(tp) = pltype {
+            let f = self.gen_or_get_arr_visit_function(ctx, tp);
+            let i = self.builder.build_ptr_to_int(
+                f.as_global_value().as_pointer_value(),
+                self.context.i64_type(),
+                "_vtable",
+            );
+            let vtable = self.builder.build_struct_gep(p, 0, "vtable").unwrap();
+            self.builder.build_store(vtable, i);
         }
+        declare.and_then(|p| {
+            self.build_dbg_location(p);
+            self.insert_var_declare(
+                name,
+                p,
+                &PLType::POINTER(Arc::new(RefCell::new(pltype.clone()))),
+                self.get_llvm_value_handle(&stack_root.as_any_value_enum()),
+                ctx,
+            );
+            Some(())
+        });
+        let v_stack = self.get_llvm_value_handle(&stack_root.as_any_value_enum());
+        let v_heap = self.get_llvm_value_handle(&p.as_any_value_enum());
+        self.heap_stack_map.borrow_mut().insert(v_heap, v_stack);
+        v_heap
     }
     fn build_struct_gep(
         &self,
