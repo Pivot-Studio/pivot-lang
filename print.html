@@ -596,18 +596,43 @@ a.method();
 <p>对应pltype使用<code>PLTrait</code>，其实内部存储的是结构体类型<code>STType</code>。</p>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="pivot-lang-immix-gc"><a class="header" href="#pivot-lang-immix-gc">pivot-lang immix gc</a></h1>
 <p>本文档将会描述pl使用的immix gc的一些实现细节与对外接口</p>
-<pre><code class="language-admonish">此页面仍在编写中，内容可能有疏漏
-</code></pre>
-<!-- toc -->
+<div id="admonition-note" class="admonition note">
+<div class="admonition-title">
+<p>Note</p>
+<p><a class="admonition-anchor-link" href="references/immix.html#admonition-note"></a></p>
+</div>
+<div>
+<p>此页面仍在编写中，内容可能有疏漏</p>
+</div>
+</div>
+* [Overview](#overview)
+* [General Description](#general-description)
+* [Allocation](#allocation)
+  * [Global Allocator](#global-allocator)
+  * [Thread Local Allocator](#thread-local-allocator)
+* [Mark](#mark)
+* [Sweep](#sweep)
+  * [回收block](#回收block)
+  * [修正line header](#修正line-header)
+  * [计算evacuation信息](#计算evacuation信息)
+* [Evacuation](#evacuation)
+* [性能](#性能)
 <h2 id="overview"><a class="header" href="#overview">Overview</a></h2>
 <p>此gc是我们基于<a href="https://www.cs.utexas.edu/users/speedway/DaCapo/papers/immix-pldi-2008.pdf">immix gc论文</a>实现的，
 大部分的实现细节都与论文一致，对于一些论文没提到的细节我们自行进行了实现，参考了很多别的gc项目。该gc是一个支持多线程使用的、
 基于shadow stack的，精确mark-region 非并发（Concurrency） 并行（Parallelism） gc。</p>
-<pre><code class="language-admonish tip title=&quot;gc的并发（Concurrency）与并行（Parallelism）&quot;">gc中并发和并行是两个不同的术语，并发gc指的是能够在应用不暂停的基础上进行回收的gc，
+<div id="admonition-gc的并发concurrency与并行parallelism" class="admonition tip">
+<div class="admonition-title">
+<p>gc的并发（Concurrency）与并行（Parallelism）</p>
+<p><a class="admonition-anchor-link" href="references/immix.html#admonition-gc的并发concurrency与并行parallelism"></a></p>
+</div>
+<div>
+<p>gc中并发和并行是两个不同的术语，并发gc指的是能够在应用不暂停的基础上进行回收的gc，
 而并行gc指的是gc在回收的时候能够使用多个线程同时进行工作。一个gc可以既是并行的也是并发的，
-我们的immix gc目前只具备并行能力
-</code></pre>
-<p>这里有一些创建该gc过程中我们主要参考的资料，列表如下：</p>
+我们的immix gc目前只具备并行能力</p>
+</div>
+</div>
+这里有一些创建该gc过程中我们主要参考的资料，列表如下：  
 <ul>
 <li><a href="https://www.cs.utexas.edu/users/speedway/DaCapo/papers/immix-pldi-2008.pdf">immix gc论文</a></li>
 <li><a href="https://github.com/playXE/libimmixcons">playxe 的 immixcons（immix gc的一个rust实现，回收存在bug）-- 很多底层内存相关代码是参考该gc完成的，还有在函数头中加入自定义遍历函数的做法</a></li>
@@ -619,35 +644,28 @@ a.method();
 <p>pl的组件包含一个全局的<code>GlobalAllocator</code>，然后每个<code>mutator</code>线程会包含一个独属于该线程的<code>Collector</code>，每个<code>Collector</code>中包含一个
 <code>ThreadLocalAllocator</code>。在线程使用gc相关功能的时候，该线程对应的<code>Collector</code>会自动被创建，直到线程结束或者
 用户手动调用销毁api。</p>
-<pre><code class="language-admonish tip title=&quot;部分immix gc术语介绍&quot;">**mutator**
-
-mutator指使用gc的用户程序，在有些文档里也被指代为gc的client
-
-**block**
-
-block是immix中全局分配器分配的基础单位，每个block的大小为32KB
-
-**line**
-
-line是block中的基本单位，每个line长度为128B，每个block中包含256个line
-
-**Global Allocator**
-
-全局分配器，简称GA，分配内存以block为单位
-
-**Thread Local Allocator**
-
-线程本地分配器，简称TLA，分配内存以line为单位，在自身的block中分配，如果没有可用的block，会向全局分配器申请
-
-**Collector**
-
-线程本地的回收器，在每次gc开始的时候会运行标记和驱逐算法，然后通知Thread Local Allocator进行清扫
-
-**Evacuation**
-
-驱逐算法，是一种反碎片化机制
-
-</code></pre>
+<div id="admonition-部分immix-gc术语介绍" class="admonition tip">
+<div class="admonition-title">
+<p>部分immix gc术语介绍</p>
+<p><a class="admonition-anchor-link" href="references/immix.html#admonition-部分immix-gc术语介绍"></a></p>
+</div>
+<div>
+<p><strong>mutator</strong></p>
+<p>mutator指使用gc的用户程序，在有些文档里也被指代为gc的client</p>
+<p><strong>block</strong></p>
+<p>block是immix中全局分配器分配的基础单位，每个block的大小为32KB</p>
+<p><strong>line</strong></p>
+<p>line是block中的基本单位，每个line长度为128B，每个block中包含256个line</p>
+<p><strong>Global Allocator</strong></p>
+<p>全局分配器，简称GA，分配内存以block为单位</p>
+<p><strong>Thread Local Allocator</strong></p>
+<p>线程本地分配器，简称TLA，分配内存以line为单位，在自身的block中分配，如果没有可用的block，会向全局分配器申请</p>
+<p><strong>Collector</strong></p>
+<p>线程本地的回收器，在每次gc开始的时候会运行标记和驱逐算法，然后通知Thread Local Allocator进行清扫</p>
+<p><strong>Evacuation</strong></p>
+<p>驱逐算法，是一种反碎片化机制</p>
+</div>
+</div>
 <p>下方是使用immix gc的应用程序的工作流程图：</p>
 <pre class="mermaid">graph LR;
     subgraph Program
@@ -696,17 +714,40 @@ line是block中的基本单位，每个line长度为128B，每个block中包含2
 并且将<code>current</code>指针向后移动一个block的距离。</p>
 <p>GA同时维护一个<code>free</code>动态数组，用于存储已经被回收的block，当GA需要分配新block的时候，会先从<code>free</code>数组中
 尝试取出一个block，如果<code>free</code>数组为空，才会分配新的block。</p>
-<pre><code class="language-admonish info">潜在的优化点：使用bitmap来记录block的使用情况，这样可以减少动态数组的开销
-</code></pre>
-<pre><code class="language-admonish warning">如果GA在分配新block的时候，发现`current`指针已经超出了初始申请的内存空间，会导致程序panic。这个行为应该在未来被改善
-</code></pre>
+<div id="admonition-info" class="admonition info">
+<div class="admonition-title">
+<p>Info</p>
+<p><a class="admonition-anchor-link" href="references/immix.html#admonition-info"></a></p>
+</div>
+<div>
+<p>潜在的优化点：使用bitmap来记录block的使用情况，这样可以减少动态数组的开销</p>
+</div>
+</div>
+<div id="admonition-warning" class="admonition warning">
+<div class="admonition-title">
+<p>Warning</p>
+<p><a class="admonition-anchor-link" href="references/immix.html#admonition-warning"></a></p>
+</div>
+<div>
+<p>如果GA在分配新block的时候，发现<code>current</code>指针已经超出了初始申请的内存空间，会导致程序panic。这个行为应该在未来被改善</p>
+</div>
+</div>
 <h3 id="thread-local-allocator"><a class="header" href="#thread-local-allocator">Thread Local Allocator</a></h3>
 <p>TLA是线程本地的，每个线程都会有一个TLA，负责分配line，和进行sweep回收。</p>
-<pre><code class="language-admonish tip title=&quot;部分TLA用到的术语介绍&quot;">- 小对象：小于line size的对象
-- 中对象：大于line size，小于block size/4（8KB）的对象
-- 大对象：大于block size/4的对象
-- hole：block中一个未被使用的连续空间称之为hole
-</code></pre>
+<div id="admonition-部分tla用到的术语介绍" class="admonition tip">
+<div class="admonition-title">
+<p>部分TLA用到的术语介绍</p>
+<p><a class="admonition-anchor-link" href="references/immix.html#admonition-部分tla用到的术语介绍"></a></p>
+</div>
+<div>
+<ul>
+<li>小对象：小于line size的对象</li>
+<li>中对象：大于line size，小于block size/4（8KB）的对象</li>
+<li>大对象：大于block size/4的对象</li>
+<li>hole：block中一个未被使用的连续空间称之为hole</li>
+</ul>
+</div>
+</div>
 <p>在每次回收的时候，TLA会将所有完全空闲的block回收给GA，所有部分空闲的block会被加入到<code>recycle</code>数组中，在之后的分配里被重复利用。
 所有完全被占用的block会被加入到<code>unavailable</code>数组中，不会被重复利用。</p>
 <p>TLA的小对象分配策略如下：</p>
@@ -722,18 +763,24 @@ line是block中的基本单位，每个line长度为128B，每个block中包含2
     F--否--&gt;H[返回分配空间的指针]
     G--&gt;H
 </pre>
-<pre><code class="language-admonish title=&quot;中对象、大对象分配策略&quot;">中对象存在一个问题，就是如果他采用小对象的分配策略，在recycle block中分配line，那么分配过程中可能跳过
-很多的小hole，而TLA的分配器在recycle block中分配的时候是**不回头**的，这样可能会导致：
-- 内存碎片增加
-- 分配时间变长
-
-因此，中对象分配的时候只会找recycle block中的第一个hole，如果这个hole装不下它，TLA会直接申请新的block来分配该对象，
-并且将这个block加入到recycle block中。
-
-大对象分配不使用mark region算法，它使用特殊的bigobject allocator来分配，是传统的mark free算法。
-
-因为程序中小对象的数量远远大于中对象和大对象，所以TLA的分配器会优先优化小对象分配，以增加性能
-</code></pre>
+<div id="admonition-中对象大对象分配策略" class="admonition note">
+<div class="admonition-title">
+<p>中对象、大对象分配策略</p>
+<p><a class="admonition-anchor-link" href="references/immix.html#admonition-中对象大对象分配策略"></a></p>
+</div>
+<div>
+<p>中对象存在一个问题，就是如果他采用小对象的分配策略，在recycle block中分配line，那么分配过程中可能跳过
+很多的小hole，而TLA的分配器在recycle block中分配的时候是<strong>不回头</strong>的，这样可能会导致：</p>
+<ul>
+<li>内存碎片增加</li>
+<li>分配时间变长</li>
+</ul>
+<p>因此，中对象分配的时候只会找recycle block中的第一个hole，如果这个hole装不下它，TLA会直接申请新的block来分配该对象，
+并且将这个block加入到recycle block中。</p>
+<p>大对象分配不使用mark region算法，它使用特殊的bigobject allocator来分配，是传统的mark free算法。</p>
+<p>因为程序中小对象的数量远远大于中对象和大对象，所以TLA的分配器会优先优化小对象分配，以增加性能</p>
+</div>
+</div>
 <h2 id="mark"><a class="header" href="#mark">Mark</a></h2>
 <p>Mark阶段的主要工作是标记所有被使用的line和block，以便在后续的sweep阶段进行回收。我们的mark算法是<strong>精确</strong>的，
 这点对evacuation算法的实现至关重要。</p>
@@ -776,8 +823,15 @@ pub type VtableFunc = fn(*mut u8, &amp;Collector, VisitFunc, VisitFunc, VisitFun
 <p>计算一个<code>mark</code>数组，该数组中下标为idx的元素值表示hole数量为idx的所有block的marked line的数量</p>
 <h2 id="evacuation"><a class="header" href="#evacuation">Evacuation</a></h2>
 <p>每次回收开始之前，我们会先判断是否需要进行反碎片化，目前的策略是只要recycle block&gt;1就进行反碎片化。</p>
-<pre><code class="language-admonish info">优化点：如果处于内存用尽的紧急情况也应当进行evacuation，且threshold应当设置的更低
-</code></pre>
+<div id="admonition-info-1" class="admonition info">
+<div class="admonition-title">
+<p>Info</p>
+<p><a class="admonition-anchor-link" href="references/immix.html#admonition-info-1"></a></p>
+</div>
+<div>
+<p>优化点：如果处于内存用尽的紧急情况也应当进行evacuation，且threshold应当设置的更低</p>
+</div>
+</div>
 <p>如果决定了需要进行反碎片化，那么我们会构建一个<code>available</code>数组，该数组中下标为idx的元素值表示hole数量为idx的所有block的可用line的数量，
 然后我们按照洞的数量从大到小遍历<code>available</code>和<code>mark</code>数组，会定义一个<code>required</code>值，该值在每次遍历的时候加上<code>mark</code>数组中的值，
 减去<code>available</code>数组中的值，如果某次循环后<code>required</code>值小于0，那么当前循环对应的hole数量+1就是我们evacuate的阈值（threshold）。
@@ -785,9 +839,16 @@ pub type VtableFunc = fn(*mut u8, &amp;Collector, VisitFunc, VisitFunc, VisitFun
 <p>真正的evacuation过程是在<code>mark</code>阶段一起完成的，我们会在遍历到处于待evacuate的block中的对象时，为它分配一个新的地址，并且
 将它原地址的值替换为一个指向新地址的指针（forward pointer），且将line header中的<code>forward</code>字段设置为<code>true</code>。之后如果再次遍历到
 该对象，收集器会修正指向原地址的指针的值。</p>
-<pre><code class="language-admonish tip title=&quot;多线程情况下驱逐算法的安全性&quot;">在多线程情况下，是存在两个线程同时驱逐一个对象的可能的，在这种情况下一些同步操作必不可少，但是并不需要加锁。
-我们通过一个cas操作来保证只有一个线程能够成功驱逐该对象。
-</code></pre>
+<div id="admonition-多线程情况下驱逐算法的安全性" class="admonition tip">
+<div class="admonition-title">
+<p>多线程情况下驱逐算法的安全性</p>
+<p><a class="admonition-anchor-link" href="references/immix.html#admonition-多线程情况下驱逐算法的安全性"></a></p>
+</div>
+<div>
+<p>在多线程情况下，是存在两个线程同时驱逐一个对象的可能的，在这种情况下一些同步操作必不可少，但是并不需要加锁。
+我们通过一个cas操作来保证只有一个线程能够成功驱逐该对象。</p>
+</div>
+</div>
 <h2 id="性能"><a class="header" href="#性能">性能</a></h2>
 <p>我们与bdwgc进行了很多比较，数据证明在大多数情况下，我们的分配算法略慢于bdwgc，与malloc速度相当，但是在回收的时候，我们的回收速度要快于bdwgc。
 对于一些复杂的测试，在触发回收的策略相同的情况下，我们的单线程总执行时间慢于bdwgc（
