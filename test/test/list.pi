@@ -1,0 +1,24 @@
+use core::panic;
+struct List {
+    val: i64;
+    next: *List;
+}
+
+fn test_list() void {
+    let head = List{};
+    let walk = &head;
+    for let i = 0; i < 10; i = i + 1 {
+        let new = List{
+            val: i
+        };
+        walk.next = &new;
+        walk = walk.next;
+    }
+    walk = &head;
+    for let i = 0; i < 10; i = i + 1 {
+        walk = walk.next;
+        panic::assert(walk.val == i);
+    }
+    return;
+}
+
