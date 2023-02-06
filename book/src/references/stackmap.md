@@ -54,6 +54,29 @@ Functions[NumFunctions] {
 }
 ```
 
+```mermaid
+graph LR;
+    subgraph Front[编译器前端]
+        A[插入gcroot指令]
+        B[生成stackmap初始化代码]
+        A-->B
+    end
+    B-->C
+    subgraph Back[LLVM]
+        C[目标代码生成]
+        D[生成原始stackmap数据]
+        C-->D
+    end
+    D-->E
+    subgraph Plugin[Immix 插件]
+        E[生成stackmap]
+        F[写入目标代码数据段]
+        E-->F
+    end
+
+    
+```
+
 ```admonish tip title="gc safepoint介绍"
 safepoint说白了就是潜在的可以触发gc的点位，本来多用于进行多线程回收的同步：大部分gc
 回收算法在回收时（全部或一部分时间）是不允许mutator运行的，这个时候需要暂停所有mutator
@@ -93,3 +116,10 @@ segment fault，这个问题目前使用ld替代lld进行规避。
 ```admonish 
 潜在优化点：其实从gc的函数到目标语言最底层函数的调用栈层数在运行时是固定的，所以这里其实可以优化，跳过前几个栈帧，直接从目标语言最底层函数开始遍历。
 ```
+
+## 参考资料
+
+1. [llvm stackmap 文档](https://llvm.org/docs/StackMaps.html)
+2. [llvm gc 文档](https://llvm.org/docs/GarbageCollection.html)
+3. [读取llvm默认生成的stackmap例子](https://github.com/KavinduZoysa/test-GCs)
+

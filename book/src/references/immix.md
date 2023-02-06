@@ -149,6 +149,7 @@ TLA是线程本地的，每个线程都会有一个TLA，负责分配line，和�
 所有完全被占用的block会被加入到`unavailable`数组中，不会被重复利用。
 
 TLA的小对象分配策略如下：
+<center>
 
 ```mermaid
 graph TD;
@@ -163,6 +164,8 @@ graph TD;
     F--否-->H[返回分配空间的指针]
     G-->H
 ```
+
+</center>
 
 ```admonish title="中对象、大对象分配策略"
 中对象存在一个问题，就是如果他采用小对象的分配策略，在recycle block中分配line，那么分配过程中可能跳过
