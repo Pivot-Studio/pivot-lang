@@ -157,6 +157,7 @@
 <li><a href="#%E5%9F%BA%E4%BA%8Estackmap%E7%9A%84%E7%B2%BE%E7%A1%AEroot%E5%AE%9A%E4%BD%8D%E5%AE%9E%E7%8E%B0">基于stackmap的精确root定位实现</a></li>
 </ul>
 </li>
+<li><a href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99">参考资料</a></li>
 </ul>
 <h2 id="introduction"><a class="header" href="#introduction">Introduction</a></h2>
 <p>stackmap是一种用于实现精确gc的机制，简单来说它会在编译期间根据编译器提供的信息在编译后的目标文件
@@ -200,6 +201,27 @@ Functions[NumFunctions] {
   }
 }
 </code></pre>
+<pre class="mermaid">graph LR;
+    subgraph Front[编译器前端]
+        A[插入gcroot指令]
+        B[生成stackmap初始化代码]
+        A--&gt;B
+    end
+    B--&gt;C
+    subgraph Back[LLVM]
+        C[目标代码生成]
+        D[生成原始stackmap数据]
+        C--&gt;D
+    end
+    D--&gt;E
+    subgraph Plugin[Immix 插件]
+        E[生成stackmap]
+        F[写入目标代码数据段]
+        E--&gt;F
+    end
+
+    
+</pre>
 <div id="admonition-gc-safepoint介绍" class="admonition tip">
 <div class="admonition-title">
 <p>gc safepoint介绍</p>
@@ -247,6 +269,12 @@ segment fault，这个问题目前使用ld替代lld进行规避。</p>
 <p>潜在优化点：其实从gc的函数到目标语言最底层函数的调用栈层数在运行时是固定的，所以这里其实可以优化，跳过前几个栈帧，直接从目标语言最底层函数开始遍历。</p>
 </div>
 </div>
+<h2 id="参考资料"><a class="header" href="#参考资料">参考资料</a></h2>
+<ol>
+<li><a href="https://llvm.org/docs/StackMaps.html">llvm stackmap 文档</a></li>
+<li><a href="https://llvm.org/docs/GarbageCollection.html">llvm gc 文档</a></li>
+<li><a href="https://github.com/KavinduZoysa/test-GCs">读取llvm默认生成的stackmap例子</a></li>
+</ol>
 
                     </main>
 

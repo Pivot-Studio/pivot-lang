@@ -759,6 +759,7 @@ a.method();
 <p>在每次回收的时候，TLA会将所有完全空闲的block回收给GA，所有部分空闲的block会被加入到<code>recycle</code>数组中，在之后的分配里被重复利用。
 所有完全被占用的block会被加入到<code>unavailable</code>数组中，不会被重复利用。</p>
 <p>TLA的小对象分配策略如下：</p>
+<center>
 <pre class="mermaid">graph TD;
     A[分配内存]--&gt;B{有recycle block?}
     B--是--&gt;C[从recycle block中分配line]
@@ -771,6 +772,7 @@ a.method();
     F--否--&gt;H[返回分配空间的指针]
     G--&gt;H
 </pre>
+</center>
 <div id="admonition-中对象大对象分配策略" class="admonition note">
 <div class="admonition-title">
 <p>中对象、大对象分配策略</p>
@@ -873,6 +875,7 @@ pub type VtableFunc = fn(*mut u8, &amp;Collector, VisitFunc, VisitFunc, VisitFun
 <li><a href="references/stackmap.html#%E5%9F%BA%E4%BA%8Estackmap%E7%9A%84%E7%B2%BE%E7%A1%AEroot%E5%AE%9A%E4%BD%8D%E5%AE%9E%E7%8E%B0">基于stackmap的精确root定位实现</a></li>
 </ul>
 </li>
+<li><a href="references/stackmap.html#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99">参考资料</a></li>
 </ul>
 <h2 id="introduction"><a class="header" href="#introduction">Introduction</a></h2>
 <p>stackmap是一种用于实现精确gc的机制，简单来说它会在编译期间根据编译器提供的信息在编译后的目标文件
@@ -916,6 +919,27 @@ Functions[NumFunctions] {
   }
 }
 </code></pre>
+<pre class="mermaid">graph LR;
+    subgraph Front[编译器前端]
+        A[插入gcroot指令]
+        B[生成stackmap初始化代码]
+        A--&gt;B
+    end
+    B--&gt;C
+    subgraph Back[LLVM]
+        C[目标代码生成]
+        D[生成原始stackmap数据]
+        C--&gt;D
+    end
+    D--&gt;E
+    subgraph Plugin[Immix 插件]
+        E[生成stackmap]
+        F[写入目标代码数据段]
+        E--&gt;F
+    end
+
+    
+</pre>
 <div id="admonition-gc-safepoint介绍" class="admonition tip">
 <div class="admonition-title">
 <p>gc safepoint介绍</p>
@@ -963,6 +987,12 @@ segment fault，这个问题目前使用ld替代lld进行规避。</p>
 <p>潜在优化点：其实从gc的函数到目标语言最底层函数的调用栈层数在运行时是固定的，所以这里其实可以优化，跳过前几个栈帧，直接从目标语言最底层函数开始遍历。</p>
 </div>
 </div>
+<h2 id="参考资料"><a class="header" href="#参考资料">参考资料</a></h2>
+<ol>
+<li><a href="https://llvm.org/docs/StackMaps.html">llvm stackmap 文档</a></li>
+<li><a href="https://llvm.org/docs/GarbageCollection.html">llvm gc 文档</a></li>
+<li><a href="https://github.com/KavinduZoysa/test-GCs">读取llvm默认生成的stackmap例子</a></li>
+</ol>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="compiler"><a class="header" href="#compiler">Compiler</a></h1>
 <p>pivot-lang编译器（以下简称编译器）主要由三个部分组成：nom分析器、ast和llvm后端。</p>
 <h2 id="nom-parser"><a class="header" href="#nom-parser">Nom parser</a></h2>

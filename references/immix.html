@@ -314,6 +314,7 @@
 <p>在每次回收的时候，TLA会将所有完全空闲的block回收给GA，所有部分空闲的block会被加入到<code>recycle</code>数组中，在之后的分配里被重复利用。
 所有完全被占用的block会被加入到<code>unavailable</code>数组中，不会被重复利用。</p>
 <p>TLA的小对象分配策略如下：</p>
+<center>
 <pre class="mermaid">graph TD;
     A[分配内存]--&gt;B{有recycle block?}
     B--是--&gt;C[从recycle block中分配line]
@@ -326,6 +327,7 @@
     F--否--&gt;H[返回分配空间的指针]
     G--&gt;H
 </pre>
+</center>
 <div id="admonition-中对象大对象分配策略" class="admonition note">
 <div class="admonition-title">
 <p>中对象、大对象分配策略</p>
