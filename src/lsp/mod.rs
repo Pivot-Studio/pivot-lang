@@ -18,6 +18,7 @@ pub mod helpers;
 pub mod mem_docs;
 pub mod semantic_tokens;
 pub mod text;
+use log::debug;
 use lsp_types::{
     notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
     request::{
@@ -404,6 +405,7 @@ fn main_loop(
             let diags = compile_dry::accumulated::<Diagnostics>(&db, docin);
             let sender = connection.sender.clone();
             pool.execute(move || {
+                debug!("diags: {:#?}", diags);
                 for (p, diags) in diags {
                     send_diagnostics(
                         &sender,

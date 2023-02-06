@@ -1,5 +1,5 @@
 use super::ctx::Ctx;
-// use super::plmod::RwVec;
+use crate::ast::builder::IRBuilder;
 
 use crate::ast::builder::BuilderEnum;
 use crate::utils::get_hash_code;
@@ -19,6 +19,7 @@ use super::node::Num;
 use super::node::TypeNode;
 use super::node::TypeNodeEnum;
 use super::range::Range;
+use immix::ObjectType;
 use indexmap::IndexMap;
 
 use inkwell::types::BasicMetadataTypeEnum;
@@ -208,6 +209,15 @@ pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
     }
 }
 impl PLType {
+    pub fn get_immix_type(&self) -> ObjectType {
+        match self {
+            PLType::STRUCT(_) | PLType::ARR(_) => ObjectType::Complex,
+            PLType::POINTER(_) => ObjectType::Pointer,
+            PLType::TRAIT(_) => ObjectType::Trait,
+            _ => ObjectType::Atomic,
+        }
+    }
+
     pub fn get_kind_name(&self) -> String {
         match self {
             PLType::PRIMITIVE(_) | PLType::VOID => "primitive".to_string(),
@@ -433,7 +443,7 @@ pub struct FNType {
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
     pub generic: bool,
-    pub node: Box<FuncDefNode>,
+    pub node: Option<Box<FuncDefNode>>,
 }
 
 impl TryFrom<PLType> for FNType {
@@ -516,8 +526,12 @@ impl FNType {
 
         let block = ctx.block;
         ctx.need_highlight = ctx.need_highlight + 1;
-        self.node
-            .gen_fntype(ctx, false, builder, Some(self.clone()))?;
+        let f = self.clone();
+        if let Some(n) = &mut self.node {
+            n.gen_fntype(ctx, false, builder, Some(f))?;
+        } else {
+            unreachable!()
+        }
         ctx.need_highlight = ctx.need_highlight - 1;
         ctx.position_at_end(block.unwrap(), builder);
 
@@ -608,6 +622,7 @@ impl FNType {
     }
 }
 
+/// TODO: add vtable for arrtype
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ARRType {
     pub element_type: Arc<RefCell<PLType>>,
@@ -627,7 +642,6 @@ pub struct STType {
     pub fields: FxHashMap<String, Field>,
     pub ordered_fields: Vec<Field>,
     pub range: Range,
-    // pub refs: Arc<RwVec<Location>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub impls: FxHashMap<String, Arc<RefCell<PLType>>>,
@@ -701,9 +715,12 @@ impl STType {
                 nf
             })
             .collect::<Vec<Field>>();
+        let mut field_pltps = vec![];
         res.ordered_fields.iter().for_each(|f| {
+            field_pltps.push(f.typenode.get_type(ctx, builder).unwrap());
             res.fields.insert(f.name.clone(), f.clone());
         });
+        builder.gen_st_visit_function(ctx, &res, &field_pltps);
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
         pltype.replace(PLType::STRUCT(res.clone()));
@@ -711,7 +728,10 @@ impl STType {
     }
     pub fn get_field_completions(&self) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
-        for (name, _) in &self.fields {
+        for (name, f) in &self.fields {
+            if f.index == 0 {
+                continue;
+            }
             completions.push(CompletionItem {
                 kind: Some(CompletionItemKind::FIELD),
                 label: name.clone(),

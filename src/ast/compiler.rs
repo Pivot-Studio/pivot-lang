@@ -4,6 +4,7 @@ use crate::{
         accumulators::{Diagnostics, ModBuffer},
         builder::llvmbuilder::get_target_machine,
         node::program::Program,
+        pass::MAP_NAMES,
     },
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
@@ -18,7 +19,7 @@ use inkwell::{
     passes::{PassManager, PassManagerBuilder},
     OptimizationLevel,
 };
-use log::{info, trace, warn};
+use log::{debug, info, trace, warn};
 use pl_linker::{linker::create_with_target, mun_target::spec::Target};
 use rustc_hash::FxHashSet;
 use std::{
@@ -64,8 +65,6 @@ impl HashOptimizationLevel {
     }
 }
 
-type MainFunc = unsafe extern "C" fn() -> i64;
-
 /// # ActionType
 /// lsp action type
 #[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
@@ -88,14 +87,19 @@ pub enum ActionType {
 
 #[cfg(feature = "jit")]
 pub fn run(p: &Path, opt: OptimizationLevel) {
+    type MainFunc = unsafe extern "C" fn() -> i64;
     use inkwell::support;
-
     vm::reg();
+    // FIXME: currently stackmap support on jit code is not possible due to
+    // lack of support in inkwell https://github.com/TheDan64/inkwell/issues/296
+    // so we disable gc in jit mode for now
+    immix::gc_disable_auto_collect();
     support::enable_llvm_pretty_stack_trace();
     let ctx = &Context::create();
     let re = Module::parse_bitcode_from_path(p, ctx).unwrap();
     let engine = re.create_jit_execution_engine(opt).unwrap();
     unsafe {
+        engine.run_static_constructors();
         let f = engine.get_function::<MainFunc>("main").unwrap();
         println!("ret = {}", f.call());
     }
@@ -113,7 +117,8 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
     if input.is_none() {
         return None;
     }
-    let re = compile_dry_file(db, input.unwrap());
+    let input = input.unwrap();
+    let re = compile_dry_file(db, input);
     if let Some(res) = db.get_ref_str() {
         re.and_then(|plmod| {
             plmod
@@ -131,12 +136,13 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
         // skip toml
         return None;
     }
-    // eprintln!("compile_dry_file: {:?}", docs.debug_all(db));
+    // eprintln!("compile_dry_file: {:#?}", docs.debug_all(db));
     let re = docs.get_file_content(db);
     if re.is_none() {
         return None;
     }
     let src = re.unwrap();
+    debug!("src {:#?} id {:?}", src.text(db), src);
     let parse_result = parse(db, src);
     if let Err(e) = parse_result {
         log::error!("source code parse failed {}", e);
@@ -153,8 +159,36 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
     Some(program.emit(db))
 }
 
+fn run_passed(llvmmod: &Module, op: OptimizationLevel) {
+    let pass_manager_builder = PassManagerBuilder::create();
+    pass_manager_builder.set_optimization_level(op);
+    // Create FPM MPM
+    let fpm = PassManager::create(llvmmod);
+
+    let mpm: PassManager<Module> = PassManager::create(());
+    if op != OptimizationLevel::None {
+        pass_manager_builder.set_size_level(2);
+        pass_manager_builder.populate_function_pass_manager(&fpm);
+        pass_manager_builder.populate_module_pass_manager(&mpm);
+        pass_manager_builder.populate_lto_pass_manager(&mpm, false, true);
+    }
+    let b = fpm.initialize();
+    trace!("fpm init: {}", b);
+    for f in llvmmod.get_functions() {
+        let optimized = fpm.run_on(&f);
+        trace!("try to optimize func {}", f.get_name().to_str().unwrap());
+        let oped = if optimized { "yes" } else { "no" };
+        trace!("optimized: {}", oped,);
+    }
+    fpm.finalize();
+    mpm.run_on(&llvmmod);
+}
+
 #[salsa::tracked]
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
+    MAP_NAMES.names.borrow_mut().clear();
+    inkwell::execution_engine::ExecutionEngine::link_in_mc_jit();
+    immix::register_llvm_gc_plugins();
     let targetdir = PathBuf::from("target");
     if !targetdir.exists() {
         fs::create_dir(&targetdir).unwrap();
@@ -211,7 +245,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let mut mods = compile_dry::accumulated::<ModBuffer>(db, docs);
     let mut objs = vec![];
     let ctx = Context::create();
-    let m = mods.pop().unwrap();
+    let m = mods.remove(0).path;
     let tm = get_target_machine(op.optimization.to_llvm());
     let llvmmod = Module::parse_bitcode_from_path(m.clone(), &ctx).unwrap();
     let o = m.with_extension("o");
@@ -223,44 +257,24 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     _ = remove_file(m.clone()).unwrap();
     log::debug!("rm {}", m.to_str().unwrap());
     for m in mods {
+        let m = m.path;
         if set.contains(&m) {
             continue;
         }
         set.insert(m.clone());
         let o = m.with_extension("o");
         // println!("{}", m.clone().to_str().unwrap());
-        let module = Module::parse_bitcode_from_path(m.clone(), &ctx).unwrap();
+        let module = Module::parse_bitcode_from_path(m.clone(), &ctx)
+            .expect(format!("parse {} failed", m.to_str().unwrap()).as_str());
+        run_passed(&module, op.optimization.to_llvm());
+        module.verify().unwrap();
         tm.write_to_file(&module, inkwell::targets::FileType::Object, &o)
             .unwrap();
         objs.push(o);
         _ = llvmmod.link_in_module(module);
-        _ = remove_file(m.clone()).unwrap();
-        log::debug!("rm {}", m.to_str().unwrap());
     }
+    // run_immix_pass(& mut llvmmod as * mut Module as * mut u8);
     llvmmod.verify().unwrap();
-    if op.optimization != HashOptimizationLevel::None {
-        let pass_manager_builder = PassManagerBuilder::create();
-
-        pass_manager_builder.set_optimization_level(op.optimization.to_llvm());
-        pass_manager_builder.set_size_level(2);
-
-        // Create FPM MPM
-        let fpm = PassManager::create(&llvmmod);
-        let mpm = PassManager::create(());
-
-        pass_manager_builder.populate_function_pass_manager(&fpm);
-        pass_manager_builder.populate_module_pass_manager(&mpm);
-        let b = fpm.initialize();
-        trace!("fpm init: {}", b);
-        for f in llvmmod.get_functions() {
-            let optimized = fpm.run_on(&f);
-            trace!("try to optimize func {}", f.get_name().to_str().unwrap());
-            let oped = if optimized { "yes" } else { "no" };
-            trace!("optimized: {}", oped,);
-        }
-        fpm.finalize();
-        mpm.run_on(&llvmmod);
-    }
     if op.genir {
         let mut s = out.to_string();
         s.push_str(".ll");
@@ -302,30 +316,24 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         let mut p = PathBuf::from(&root);
         p.push("libvm.a");
         vmpath = dunce::canonicalize(&p)
-            .unwrap()
+            .expect("failed to find libvm")
             .to_str()
             .unwrap()
             .to_string();
         // cmd.arg("-pthread").arg("-ldl");
     }
-    #[cfg(target_os = "windows")]
-    {
-        t.add_object(&Path::new(&out)).unwrap();
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        for o in objs {
-            t.add_object(o.as_path()).unwrap();
-        }
+    for o in objs {
+        t.add_object(o.as_path()).unwrap();
     }
     t.add_object(Path::new(&vmpath)).unwrap();
     t.output_to(&fo);
     let res = t.finalize();
     if res.is_err() {
-        eprint!(
+        eprintln!(
             "{}",
             format!("link failed: {}", res.unwrap_err()).bright_red()
         );
+        // eprintln!("target triple: {}", tm.get_triple());
     } else {
         println!("link succ, output file: {}", fo);
     }

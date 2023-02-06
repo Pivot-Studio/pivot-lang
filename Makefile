@@ -1,4 +1,4 @@
-.PHONY: devlinux devmac vm install fmt test clean
+.PHONY: devlinux devmac vm install fmt test clean bench
 devlinux:
 	@echo "export KAGARI_LIB_ROOT=$$(pwd)/planglib">>~/.bashrc
 	@echo "export PL_ROOT=$$(pwd)/target/release/">>~/.bashrc
@@ -12,6 +12,10 @@ devmac:
 vm:
 	@cd vm && cargo build --release
 
+vmdebug:
+	@cd vm && cargo build
+	@cp target/debug/libvm.a target/release/libvm.a
+
 install:
 	@cargo install --path=.
 
@@ -22,4 +26,14 @@ test:
 	@cargo test --all
 
 clean:
-	@rm -f *.ll && rm -f *.bc && rm -rf *.dSYM && rm -f testout* && rm -f out*  && rm -f *.o
+	@rm -rf out*
+	@cd target && rm -f *.ll && rm -f *.bc && rm -rf *.dSYM && rm -f testout* && rm -f out*  && rm -f *.o
+
+bench:
+	@cargo bench --all
+
+bench-simple-gc:
+	@cd vm && cargo bench --features=simple_gc --no-default-features
+
+cmake-clean:
+	@find . -name CMakeCache.txt -type f -delete

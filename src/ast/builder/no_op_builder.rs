@@ -1,6 +1,9 @@
-use std::sync::Arc;
+use std::{cell::RefCell, sync::Arc};
 
-use crate::ast::{ctx::Ctx, pltype::PLType};
+use crate::ast::{
+    ctx::Ctx,
+    pltype::{PLType, STType},
+};
 
 use super::{IRBuilder, ValueHandle};
 
@@ -54,7 +57,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
         _name: &str,
         _pltype: &crate::ast::pltype::PLType,
         _ctx: &mut crate::ast::ctx::Ctx<'a>,
+        _declare: Option<crate::ast::range::Pos>,
     ) -> super::ValueHandle {
+        0
+    }
+    fn get_stack_root(&self, _v: ValueHandle) -> ValueHandle {
         0
     }
 
@@ -209,32 +216,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
     ) -> super::ValueHandle {
         0
     }
-
-    fn mv2heap(
-        &self,
-        _val: super::ValueHandle,
-        _ctx: &mut crate::ast::ctx::Ctx<'a>,
-    ) -> super::ValueHandle {
-        0
-    }
-
-    fn gc_add_root(
-        &self,
-        _stackptr: inkwell::values::BasicValueEnum<'ctx>,
-        _ctx: &mut crate::ast::ctx::Ctx<'a>,
-    ) {
-    }
-
-    fn gc_rm_root(&self, _stackptr: super::ValueHandle, _ctx: &mut crate::ast::ctx::Ctx<'a>) {}
-
-    fn gc_rm_root_current(
-        &self,
-        _stackptr: super::ValueHandle,
-        _ctx: &mut crate::ast::ctx::Ctx<'a>,
-    ) {
-    }
-
-    fn gc_collect(&self, _ctx: &mut crate::ast::ctx::Ctx<'a>) {}
 
     fn get_or_add_global(
         &self,
@@ -427,5 +408,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
 
     fn build_int_neg(&self, _v: super::ValueHandle, _name: &str) -> super::ValueHandle {
         0
+    }
+
+    fn gen_st_visit_function(
+        &self,
+        _ctx: &mut Ctx<'a>,
+        _v: &STType,
+        _field_tps: &[Arc<RefCell<PLType>>],
+    ) {
     }
 }

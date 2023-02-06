@@ -2,7 +2,7 @@ use core::panic;
 struct impl_struct {
     x: i64;
 }
-
+/// ANCHOR: impl
 impl impl_struct {
     fn add1() void {
         self.x = self.x + 1;
@@ -15,6 +15,8 @@ impl impl_struct {
     }
 
 }
+
+/// ANCHOR_END: impl
 
 fn test_impl() void {
     let x = impl_struct{

@@ -334,7 +334,7 @@ impl<'a, 'ctx> Ctx<'a> {
                     match (&*expect.clone().borrow(), &*derefed.borrow()) {
                         // struct to trait
                         (PLType::TRAIT(t), PLType::STRUCT(st)) => {
-                            let handle = builder.alloc("tmp_traitv", &expect.borrow(), self);
+                            let handle = builder.alloc("tmp_traitv", &expect.borrow(), self, None);
                             if !st.implements_trait(t) {
                                 return Err(mismatch_err!(
                                     self,

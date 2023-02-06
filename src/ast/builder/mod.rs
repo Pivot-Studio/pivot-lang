@@ -6,7 +6,7 @@ pub mod no_op_builder;
 use std::{cell::RefCell, path::Path, sync::Arc};
 
 use enum_dispatch::enum_dispatch;
-use inkwell::{values::BasicValueEnum, FloatPredicate, IntPredicate};
+use inkwell::{FloatPredicate, IntPredicate};
 
 use self::llvmbuilder::LLVMBuilder;
 use self::no_op_builder::NoOpBuilder;
@@ -15,7 +15,7 @@ use super::{
     ctx::Ctx,
     diag::PLDiag,
     node::{types::TypedIdentifierNode, TypeNodeEnum},
-    pltype::{FNType, Field, PLType, PriType},
+    pltype::{FNType, Field, PLType, PriType, STType},
     range::{Pos, Range},
 };
 
@@ -40,7 +40,13 @@ pub trait IRBuilder<'a, 'ctx> {
         line: u32,
         pltp: &PLType,
     ) -> ValueHandle;
-    fn alloc(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle;
+    fn alloc(
+        &self,
+        name: &str,
+        pltype: &PLType,
+        ctx: &mut Ctx<'a>,
+        declare: Option<Pos>,
+    ) -> ValueHandle;
     fn build_conditional_branch(
         &self,
         cond: ValueHandle,
@@ -115,11 +121,10 @@ pub trait IRBuilder<'a, 'ctx> {
     fn position_at_end_block(&self, block: BlockHandle);
     fn add_body_to_struct_type(&self, name: &str, order_fields: &[Field], ctx: &mut Ctx<'a>);
     fn get_or_insert_fn_handle(&self, pltp: &FNType, ctx: &mut Ctx<'a>) -> ValueHandle;
-    fn mv2heap(&self, val: ValueHandle, ctx: &mut Ctx<'a>) -> ValueHandle;
-    fn gc_add_root(&self, stackptr: BasicValueEnum<'ctx>, ctx: &mut Ctx<'a>);
-    fn gc_rm_root(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>);
-    fn gc_rm_root_current(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>);
-    fn gc_collect(&self, ctx: &mut Ctx<'a>);
+    // fn mv2heap(&self, val: ValueHandle, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle;
+    // fn gc_rm_root(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>);
+    // fn gc_rm_root_current(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>);
+    // fn gc_collect(&self, ctx: &mut Ctx<'a>);
     fn get_or_add_global(
         &self,
         name: &str,
@@ -173,6 +178,13 @@ pub trait IRBuilder<'a, 'ctx> {
     fn append_basic_block(&self, func: ValueHandle, name: &str) -> BlockHandle;
     fn build_int_truncate(&self, v: ValueHandle, dest_ty: &PriType, name: &str) -> ValueHandle;
     fn build_int_neg(&self, v: ValueHandle, name: &str) -> ValueHandle;
+    fn gen_st_visit_function(
+        &self,
+        ctx: &mut Ctx<'a>,
+        v: &STType,
+        field_tps: &[Arc<RefCell<PLType>>],
+    );
+    fn get_stack_root(&self, v: ValueHandle) -> ValueHandle;
 }
 
 pub type ValueHandle = usize;

@@ -1,7 +1,14 @@
-// # pl_panic
-// this function will print a backtrace 
-// and exit the current process immediatly with code 1 . 
-// the backtrace may not work in jit mod
+/// # pl_panic
+/// This function will print a backtrace 
+/// and exit the current process immediatly with code 1 . 
+/// the backtrace may not work in jit mod
+/// 
+/// The implementation of this function is in the vm crate, 
+/// using `libunwind`. So linking to `libunwind` is required during
+/// static linking.
+/// 
+/// In the future, the implementation of this function may be changed,
+/// to remove the dependency on `libunwind`.
 fn pl_panic() void;
 fn assert(b:bool) void {
     if !b {

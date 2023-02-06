@@ -97,13 +97,13 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
         for (k, v) in rawdeps.iter_mut() {
             if PathBuf::from(&v.path).is_absolute() {
                 v.path = dunce::canonicalize(&v.path)
-                    .unwrap()
+                    .or_else(|e| Err(format!("error: {:?}", e)))?
                     .to_str()
                     .unwrap()
                     .to_string();
             } else {
                 v.path = dunce::canonicalize(config_root.join(&v.path))
-                    .unwrap()
+                    .or_else(|e| Err(format!("error: {:?}", e)))?
                     .to_str()
                     .unwrap()
                     .to_string();

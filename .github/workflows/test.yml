@@ -18,6 +18,7 @@ on:
 env:
   RUSTFLAGS: -Dwarnings
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -87,14 +88,14 @@ jobs:
         with:
           submodules: true
 
-      - name: Install LLVM
-        uses: Pivot-Studio/setup-llvm@main
-
       - name: Install packages
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install libasound2-dev libudev-dev
+        
+      - name: Install LLVM
+        uses: Pivot-Studio/setup-llvm@main
 
       - name: Install toolchain
         uses: actions-rs/toolchain@v1
@@ -103,16 +104,8 @@ jobs:
           override: true
           components: rustfmt, llvm-tools-preview
 
-      - uses: actions/cache@v3
-        name: Cache Cargo
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install latest llvm-cov release
         uses: taiki-e/install-action@cargo-llvm-cov
@@ -124,13 +117,20 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --manifest-path vm/Cargo.toml --release --target-dir target
+          args: --manifest-path vm/Cargo.toml --release --target-dir target -vv
+
+      # - name: build plc
+      #   uses: actions-rs/cargo@v1
+      #   with:
+      #     command: build
+      #     args: --manifest-path Cargo.toml --target-dir target -vv
+
 
       - name: Test with latest nextest release
         uses: actions-rs/cargo@v1
         with:
           command: llvm-cov
-          args: nextest --all-features --workspace --lcov --output-path lcov.info --profile ci
+          args: nextest --workspace --all-features --lcov --output-path lcov.info --profile ci -vv
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
@@ -140,3 +140,35 @@ jobs:
           name: ${{ matrix.os }}
           fail_ci_if_error: true
           verbose: true
+  style:
+    name: Check Style
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          override: true
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          command: fmt
+          args: --all -- --check
+
+      # - name: Install LLVM
+      #   uses: Pivot-Studio/setup-llvm@main
+
+      # - name: Run cargo clippy
+      #   uses: actions-rs/clippy-check@v1
+      #   with:
+      #     token: ${{ secrets.GITHUB_TOKEN }}
+      #     args: --all-features

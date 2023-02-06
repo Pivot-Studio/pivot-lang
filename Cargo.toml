@@ -7,7 +7,7 @@ authors = ["The pivot-lang Authors"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", features = ["llvm14-0", "no-libffi-linking"] }
+inkwell = { version = "0.1", features = ["llvm14-0", "no-libffi-linking"] }
 indexmap = "1.9.2"
 lazy_static = "1.4.0"
 paste = "1.0"
@@ -15,6 +15,7 @@ llvm-sys = "140"
 internal_macro = { path = "./internal_macro" }
 pl_linker = { path = "./pl_linker" }
 vm = { path = "./vm", optional = true, features = ["jit"] }
+immix = { path = "./immix", features = ["llvm_gc_plugin", "llvm_stackmap"] }
 nom_locate = "4.0.0"
 rowan = "0.15.10"
 dissimilar = "1.0.4"
@@ -41,9 +42,12 @@ petgraph = "0.6.2"
 version = "7"
 features = ["alloc"]
 
+
+
 [features]
-default = ["jit"]
+default = ["static"]
 jit = ["vm"]
+static = ["immix/auto_gc"]
 
 [[bin]]
 name = "plc"
@@ -54,5 +58,20 @@ members = [
     "internal_macro",
     "vm",
     "pl_linker",
+    "immix",
 ]
 
+[profile.release]
+lto = "fat"
+opt-level = 3
+
+[profile.bench]
+opt-level = 3
+# debug = true
+debug-assertions = false
+overflow-checks = false
+lto = "fat"
+#panic = 'unwind' # This setting is always ignored.
+incremental = true
+codegen-units = 1
+# rpath = true

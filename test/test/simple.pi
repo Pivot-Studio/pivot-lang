@@ -24,10 +24,20 @@ fn test_vm() void {
     return;
 }
 
+fn test_pointer() void {
+    let a = 1;
+    let b = &a;
+    *b = 100;
+    panic::assert(*b == 100);
+    panic::assert(a == 100);
+    return;
+}
+
 fn test_simple() void {
     test_vm();
     test_primitives();
     test_warn();
+    test_pointer();
     return;
 }
 

@@ -16,6 +16,7 @@ fn printi64ln(i: i64) {
     println!("{}", i);
 }
 
+#[cfg(feature = "jit")]
 pub fn reg() {
     gc::reg();
 }

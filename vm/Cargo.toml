@@ -7,16 +7,28 @@ edition = "2021"
 
 [dependencies]
 internal_macro = { path = "../internal_macro",default-features = false }
-libc = "0.2"
-rand = "0.8"
 backtrace = "0.3"
+immix = { path = "../immix", features = ["llvm_stackmap", "auto_gc"] }
+libc = { version = "0.2", optional = true }
+env_logger = "0.9"
+
+[dev-dependencies]
+rand = "0.8"
+criterion = "0.3"
 
 [lib]
 name = "vm"
 path = "src/lib.rs"
-crate-type = ["staticlib", "lib"]
+crate-type = ["staticlib", "lib", "cdylib"]
 
 [features]
-default = ["static"]
+default = ["static", "immix"]
 jit = ["internal_macro/jit"]
 static = ["internal_macro/static"]
+immix = ["immix/zero_init"]
+simple_gc = ["libc"]
+
+[[bench]]
+name = "simple_gc_bench"
+harness = false
+

@@ -6,6 +6,7 @@ pub mod diag;
 pub mod dot;
 pub mod fmt;
 pub mod node;
+pub mod pass;
 pub mod plmod;
 pub mod pltype;
 pub mod range;

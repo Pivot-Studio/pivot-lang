@@ -26,7 +26,13 @@ pub struct PLSemanticTokens(SemanticTokens);
 pub struct PLHover(Hover);
 
 #[salsa::accumulator]
-pub struct ModBuffer(PathBuf);
+pub struct ModBuffer(PLModBuffer);
+
+#[derive(Debug, Clone)]
+pub struct PLModBuffer {
+    pub path: PathBuf,
+    pub is_main: bool,
+}
 
 #[salsa::accumulator]
 pub struct PLFormat(Vec<TextEdit>);

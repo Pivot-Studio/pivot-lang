@@ -137,7 +137,6 @@ impl Linker for LdLinker {
         .for_each(|arg| {
             self.push_args(arg);
         });
-        // link
         lld_rs::link(lld_rs::LldFlavor::Elf, &self.args)
             .ok()
             .map_err(LinkerError::LinkError)
@@ -155,20 +154,12 @@ struct Ld64Linker {
 
 impl Ld64Linker {
     fn new(target: &spec::Target) -> Self {
-        let arch_name = target
-            .llvm_target
-            .split('-')
-            .next()
-            .expect("LLVM target must have a hyphen");
-
-        let mut args: Vec<String> = target
+        let args: Vec<String> = target
             .options
             .pre_link_args
             .iter()
             .map(|x| x.to_string())
             .collect();
-        args.push(format!("-arch"));
-        args.push(format!("{}", arch_name));
         // let (a, b, c) = target.options.min_os_version.unwrap();
         // args.push(format!("-platform_version"));
         // args.push(format!("{}", target.options.os));
@@ -230,10 +221,34 @@ impl Linker for Ld64Linker {
     fn finalize(&mut self) -> Result<(), LinkerError> {
         self.add_apple_sdk()?;
         self.args.push("-lSystem".to_owned());
-
-        lld_rs::link(lld_rs::LldFlavor::MachO, &self.args)
-            .ok()
-            .map_err(LinkerError::LinkError)
+        if self.target.arch == "aarch64" || self.target.arch == "arm64" {
+            // use ld for default linker, as lld has a bug affcting backtrace on arm64 target
+            // https://github.com/rust-lang/backtrace-rs/issues/150
+            let re = Command::new("ld").args(&self.args).output();
+            if re.is_err() {
+                println!("ld not found, try to link with lld, this may break gc(https://github.com/rust-lang/backtrace-rs/issues/150)");
+                lld_rs::link(lld_rs::LldFlavor::MachO, &self.args)
+                    .ok()
+                    .map_err(LinkerError::LinkError)
+            } else {
+                let re = re.unwrap();
+                if !re.status.success() {
+                    eprintln!(
+                        "link failed\nargs: {:?}\nld stdout: {}, stderr: {}",
+                        self.args,
+                        String::from_utf8_lossy(&re.stdout),
+                        String::from_utf8_lossy(&re.stderr)
+                    );
+                    Err(LinkerError::LinkError("link failed".to_string()))
+                } else {
+                    Ok(())
+                }
+            }
+        } else {
+            lld_rs::link(lld_rs::LldFlavor::MachO, &self.args)
+                .ok()
+                .map_err(LinkerError::LinkError)
+        }
     }
 
     fn push_args(&mut self, arg: &str) {
@@ -277,7 +292,8 @@ impl Linker for MsvcLinker {
                 self.push_args(&format!("-libpath:{}", lib.to_str().unwrap()));
             }
         }
-        get_win_sdk_lib_paths().iter().for_each(|p| {
+        let (linker, libs) = get_win_sdk_lib_paths();
+        libs.iter().for_each(|p| {
             self.push_args(&format!(
                 "-libpath:{}",
                 p.to_str()
@@ -288,14 +304,40 @@ impl Linker for MsvcLinker {
         });
 
         self.push_args("/NOLOGO");
+        self.push_args("/DEBUG");
         self.push_args("ws2_32.lib");
         self.push_args("bcrypt.lib");
         self.push_args("userenv.lib");
         self.push_args("advapi32.lib");
 
-        lld_rs::link(lld_rs::LldFlavor::Coff, &self.args)
-            .ok()
-            .map_err(LinkerError::LinkError)
+        // use linker directly, since lld may report
+        // lld-link: error: The CodeView record is corrupted.
+        // lld_rs::link(lld_rs::LldFlavor::Coff, &self.args)
+        //     .ok()
+        //     .map_err(LinkerError::LinkError)
+        let re = Command::new(linker.expect("failed to find link.exe"))
+            .args(&self.args)
+            .output();
+
+        if re.is_err() {
+            return Err(LinkerError::LinkError(format!(
+                "link failed: {:?}",
+                re.err()
+            )));
+        } else {
+            let re = re.unwrap();
+            if !re.status.success() {
+                eprintln!(
+                    "link failed\nargs: {:?}\nld stdout: {}, stderr: {}",
+                    self.args,
+                    String::from_utf8_lossy(&re.stdout),
+                    String::from_utf8_lossy(&re.stderr)
+                );
+                Err(LinkerError::LinkError("link failed".to_string()))
+            } else {
+                Ok(())
+            }
+        }
     }
 
     fn push_args(&mut self, arg: &str) {
@@ -303,7 +345,7 @@ impl Linker for MsvcLinker {
     }
 }
 
-fn get_win_sdk_lib_paths() -> Vec<PathBuf> {
+fn get_win_sdk_lib_paths() -> (Option<PathBuf>, Vec<PathBuf>) {
     let mut paths = vec![];
     let re = Command::new(r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe")
         .args("-latest -property installationPath".split(" "))
@@ -315,6 +357,8 @@ fn get_win_sdk_lib_paths() -> Vec<PathBuf> {
             .trim(),
     );
     path.push("VC\\Tools\\MSVC");
+    let mut linker_path = None;
+
     path.read_dir().unwrap().for_each(|dir| {
         if paths.len() == 2 {
             return;
@@ -323,6 +367,12 @@ fn get_win_sdk_lib_paths() -> Vec<PathBuf> {
             if dir.path().is_symlink() || !dir.path().is_dir() {
                 return;
             }
+            let mut lp = dir.path();
+            lp.push("bin\\Hostx64\\x64\\link.exe");
+            if lp.exists() {
+                linker_path = Some(lp);
+            }
+
             let mut p = dir.path();
             p.push("lib\\x64");
             if p.exists() {
@@ -359,7 +409,7 @@ fn get_win_sdk_lib_paths() -> Vec<PathBuf> {
                                 paths.push(p);
                             }
                             if paths.len() == 4 {
-                                return paths;
+                                return (linker_path, paths);
                             } else {
                                 paths = paths[0..2].to_vec();
                             }
@@ -369,5 +419,5 @@ fn get_win_sdk_lib_paths() -> Vec<PathBuf> {
             }
         }
     }
-    paths
+    (linker_path, paths)
 }

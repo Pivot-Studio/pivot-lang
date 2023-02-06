@@ -12,7 +12,7 @@ method就是隶属于某个结构体的函数，它们与普通函数**没有**�
 
 最简单的添加method的例子：  
 ```pivot-lang
-{{#include ../../../test/main.pi:impl}}
+{{#include ../../../test/test/method.pi:impl}}
 ```
 在一个包中，可以定义外部引入的包中结构体的`method` . 
 
