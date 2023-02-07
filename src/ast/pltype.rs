@@ -528,6 +528,7 @@ impl FNType {
         ctx.need_highlight = ctx.need_highlight + 1;
         let f = self.clone();
         if let Some(n) = &mut self.node {
+            builder.rm_curr_debug_location();
             n.gen_fntype(ctx, false, builder, Some(f))?;
         } else {
             unreachable!()
