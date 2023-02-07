@@ -37,6 +37,8 @@ toml = "0.5.9"
 ariadne = "0.1.5"
 dyn-fmt = "0.3.0"
 petgraph = "0.6.2"
+kagari = { path = "./kagari" }
+indicatif = "0.17"
 
 [dependencies.nom]
 version = "7"
@@ -59,6 +61,7 @@ members = [
     "vm",
     "pl_linker",
     "immix",
+    "kagari",
 ]
 
 [profile.release]

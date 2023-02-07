@@ -7,6 +7,8 @@ use project1::test::traits;
 use project1::test::simple;
 use project1::test::flow;
 use project1::test::list;
+use pl_test::main;
+
 fn main() i64 {
     ifel::test_if_else();
     generic::test_generic();
@@ -17,6 +19,7 @@ fn main() i64 {
     simple::test_simple();
     flow::test_flow();
     list::test_list();
+    main::simple_test();
     return 0;
 }
 

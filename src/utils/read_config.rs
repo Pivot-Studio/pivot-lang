@@ -3,7 +3,7 @@ use std::{env, path::PathBuf};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
-use crate::{nomparser::SourceProgram, Db};
+use crate::{ast::pass::COMPILE_PROGRESS, nomparser::SourceProgram, Db};
 
 pub fn get_config_path(current: String) -> Result<String, &'static str> {
     let mut cur_path = PathBuf::from(current);
@@ -54,9 +54,13 @@ pub struct Config {
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq, Default, Hash)]
 pub struct Dependency {
     pub version: Option<String>,
+    #[serde(default)]
     pub path: String,
+    pub git: Option<String>,
+    pub branch: Option<String>,
 }
 
+#[salsa::tracked]
 pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     let config = entry.text(db);
     let mut config_root = PathBuf::from(entry.path(db)); // xxx/Kagari.toml
@@ -65,6 +69,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     if let Err(re) = re {
         return Err(format!("配置文件解析错误:{:?}", re));
     }
+
     let mut config: Config = re.unwrap();
     let libroot = env::var("KAGARI_LIB_ROOT");
     if libroot.is_err() {
@@ -72,6 +77,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     }
     let mut deps = BTreeMap::<String, Dependency>::default();
     let libroot = dunce::canonicalize(PathBuf::from(libroot.unwrap())).unwrap();
+    let lib_path = libroot.clone();
     let libroot = libroot.read_dir();
     if libroot.is_err() {
         return Err("KAGARI_LIB_ROOT没有指向合法的目录，无法找到系统库".to_string());
@@ -90,25 +96,84 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
             }
         }
     }
+    let mut i = 1;
+    let mut err = None;
     if config.deps.is_none() {
         config.deps = Some(deps);
     } else {
-        let mut rawdeps = config.deps.unwrap();
-        for (k, v) in rawdeps.iter_mut() {
-            if PathBuf::from(&v.path).is_absolute() {
-                v.path = dunce::canonicalize(&v.path)
-                    .or_else(|e| Err(format!("error: {:?}", e)))?
-                    .to_str()
-                    .unwrap()
-                    .to_string();
-            } else {
-                v.path = dunce::canonicalize(config_root.join(&v.path))
-                    .or_else(|e| Err(format!("error: {:?}", e)))?
-                    .to_str()
-                    .unwrap()
-                    .to_string();
-            }
-            deps.insert(k.clone(), v.clone());
+        let mut rawdeps = config.deps.clone().unwrap();
+        let pb = COMPILE_PROGRESS.inner.borrow();
+        if pb.length() == None {
+            pb.set_length(rawdeps.len() as u64);
+        } else {
+            pb.inc_length(rawdeps.len() as u64);
+        }
+        pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
+        pb.set_message("正在分析依赖");
+        rawdeps.iter_mut().for_each(|(k, v)| {
+            v.git
+                .clone()
+                .and_then(|git| {
+                    pb.set_message("正在下载依赖");
+                    pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
+                    i = i + 1;
+                    v.branch
+                        .clone()
+                        .or_else(|| {
+                            pb.abandon_with_message(format!(
+                                "类型为git的依赖项{}未指定分支，无法下载依赖",
+                                k
+                            ));
+                            err = Some("类型为git的依赖项未指定分支，无法下载依赖".to_string());
+                            None
+                        })
+                        .and_then(|b| {
+                            let (child, target) =
+                                kagari::download_repo(&git, lib_path.to_str().unwrap(), &b);
+                            pb.set_message(format!("正在下载依赖{}", k));
+                            if child.is_some() {
+                                child.unwrap().wait().unwrap();
+                            }
+                            let mut dep = Dependency::default();
+                            dep.path = target.to_string_lossy().to_string();
+                            deps.insert(k.clone(), dep);
+                            Some(())
+                        })
+                })
+                .or_else(|| {
+                    pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
+                    i = i + 1;
+                    pb.set_message(format!("正在分析依赖{}", k));
+                    if PathBuf::from(&v.path).is_absolute() {
+                        _ = dunce::canonicalize(&v.path)
+                            .and_then(|p| {
+                                v.path = p.to_str().unwrap().to_string();
+                                Ok(p)
+                            })
+                            .or_else(|e| {
+                                pb.abandon_with_message(format!("error: {:?}", e));
+                                err = Some(format!("error: {:?}", e));
+                                Err(format!("error: {:?}", e))
+                            });
+                    } else {
+                        _ = dunce::canonicalize(config_root.join(&v.path))
+                            .and_then(|p| {
+                                v.path = p.to_str().unwrap().to_string();
+                                Ok(p)
+                            })
+                            .or_else(|e| {
+                                pb.abandon_with_message(format!("error: {:?}", e));
+                                err = Some(format!("error: {:?}", e));
+                                Err(format!("error: {:?}", e))
+                            });
+                    }
+                    deps.insert(k.clone(), v.clone());
+                    None
+                });
+            pb.inc(1);
+        });
+        if err.is_some() {
+            return Err(err.unwrap());
         }
         config.deps = Some(deps);
     }
