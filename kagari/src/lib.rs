@@ -1,13 +1,13 @@
 use std::{
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Output},
 };
 
 pub fn download_repo(
     repo_url: &str,
     target_dir: &str,
-    branch: &str,
-) -> (Option<std::process::Child>, PathBuf) {
+) -> (Option<Result<Output, std::io::Error>>, PathBuf) {
+    let branch = "default";
     let sub_dir = repo_url
         .strip_prefix("http://")
         .or_else(|| repo_url.strip_prefix("https://"))
@@ -23,40 +23,52 @@ pub fn download_repo(
         Some(
             Command::new("git")
                 .arg("clone")
-                .arg("--depth")
-                .arg("1")
+                // .arg("--depth")
+                // .arg("1")
                 .arg(repo_url)
                 .arg(".")
-                .arg("-b")
-                .arg(branch)
-                .arg("--single-branch")
+                // .arg("-b")
+                // .arg(branch)
+                // .arg("--single-branch")
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
                 .current_dir(target_dir.clone())
                 .spawn()
-                .expect("git clone failed"),
+                .expect("git clone failed")
+                .wait_with_output(),
         ),
         target_dir,
     )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-
-    #[test]
-    fn test_download_repo() {
-        let repo_url = "https://github.com/voml/voml.git";
-        let target_dir = "test_dir";
-        let (child, ret_target_dir) = download_repo(repo_url, target_dir, "master");
-        let status = child.unwrap().wait().unwrap();
-
-        assert!(status.success());
-        assert!(ret_target_dir.exists());
-        let (child, ret_target_dir) = download_repo(repo_url, target_dir, "master");
-        assert!(child.is_none());
-        assert!(ret_target_dir.exists());
-        fs::remove_dir_all(target_dir).unwrap();
+pub fn cp_to_hash_dir(repo_dir: &str, head: &str) -> PathBuf {
+    // checkout to head
+    _ = Command::new("git")
+        .current_dir(repo_dir.clone())
+        .arg("checkout")
+        .arg(head)
+        .output()
+        .unwrap();
+    let re = Command::new("git")
+        .current_dir(repo_dir.clone())
+        .arg("rev-parse")
+        .arg(head)
+        .output()
+        .unwrap();
+    let hash = std::str::from_utf8(&re.stdout);
+    let path = Path::new(repo_dir)
+        .parent()
+        .unwrap()
+        .join(hash.unwrap().trim());
+    if !path.exists() {
+        std::fs::create_dir_all(&path).expect("Failed to create target directory");
+        // copy repo_dir to hash_dir using std lib
+        fs_extra::dir::copy(
+            repo_dir,
+            path.clone(),
+            &fs_extra::dir::CopyOptions::new().content_only(true),
+        )
+        .unwrap();
     }
+    path
 }

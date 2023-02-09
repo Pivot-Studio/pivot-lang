@@ -1,6 +1,7 @@
-use std::{env, path::PathBuf};
+use std::{env, fs::read_to_string, path::PathBuf};
 
-use serde::Deserialize;
+use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use crate::{ast::pass::COMPILE_PROGRESS, nomparser::SourceProgram, Db};
@@ -57,7 +58,19 @@ pub struct Dependency {
     #[serde(default)]
     pub path: String,
     pub git: Option<String>,
-    pub branch: Option<String>,
+    pub head: Option<String>,
+}
+
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq, Default, Hash, Serialize)]
+pub struct ModSum {
+    pub name: String,
+    pub git: Option<GitInfo>,
+}
+
+#[derive(Deserialize, Clone, Debug, PartialEq, Eq, Default, Hash, Serialize)]
+pub struct GitInfo {
+    pub url: String,
+    pub commit: String,
 }
 
 #[salsa::tracked]
@@ -98,6 +111,11 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     }
     let mut i = 1;
     let mut err = None;
+    let lockfile = config_root.join("Kagari.lock");
+    let mut sums = toml::from_str::<FxHashMap<String, ModSum>>(
+        &read_to_string(lockfile.clone()).unwrap_or_default(),
+    )
+    .unwrap_or_default();
     if config.deps.is_none() {
         config.deps = Some(deps);
     } else {
@@ -117,7 +135,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
                     pb.set_message("正在下载依赖");
                     pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
                     i = i + 1;
-                    v.branch
+                    v.head
                         .clone()
                         .or_else(|| {
                             pb.abandon_with_message(format!(
@@ -127,13 +145,32 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
                             err = Some("类型为git的依赖项未指定分支，无法下载依赖".to_string());
                             None
                         })
-                        .and_then(|b| {
+                        .and_then(|mut b| {
                             let (child, target) =
-                                kagari::download_repo(&git, lib_path.to_str().unwrap(), &b);
+                                kagari::download_repo(&git, lib_path.to_str().unwrap());
                             pb.set_message(format!("正在下载依赖{}", k));
                             if child.is_some() {
-                                child.unwrap().wait().unwrap();
+                                child.unwrap().unwrap();
                             }
+                            if let Some(sum) = sums.get(k) {
+                                b = sum.git.clone().unwrap().commit;
+                            }
+                            let target = kagari::cp_to_hash_dir(target.to_str().unwrap(), &b);
+                            sums.insert(
+                                k.clone(),
+                                ModSum {
+                                    name: k.clone(),
+                                    git: Some(GitInfo {
+                                        url: git,
+                                        commit: target
+                                            .file_name()
+                                            .unwrap()
+                                            .to_str()
+                                            .unwrap()
+                                            .to_string(),
+                                    }),
+                                },
+                            );
                             let mut dep = Dependency::default();
                             dep.path = target.to_string_lossy().to_string();
                             deps.insert(k.clone(), dep);
@@ -177,6 +214,9 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
         }
         config.deps = Some(deps);
     }
+    toml::to_string_pretty(&sums)
+        .map_err(|e| format!("error: {:?}", e))
+        .and_then(|s| std::fs::write(lockfile, s).or_else(|e| Err(format!("error: {:?}", e))))?;
     config.root = dunce::canonicalize(config_root.clone())
         .unwrap()
         .to_str()

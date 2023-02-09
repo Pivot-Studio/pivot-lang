@@ -192,7 +192,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let pb = COMPILE_PROGRESS.inner.borrow();
     pb.enable_steady_tick(Duration::from_millis(50));
     let spinner_style = ProgressStyle::with_template(
-        "{prefix:.bold.dim} {spinner} [{bar:40.cyan/blue}] {wide_msg} ({eta})",
+        "{prefix:.bold.dim} {spinner} [{bar:40.cyan/blue}] {wide_msg:.green} ({eta})",
     )
     .unwrap()
     .progress_chars("#>-")
