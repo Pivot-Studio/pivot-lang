@@ -33,7 +33,7 @@ salsa = { package = "salsa-2022", git = "https://github.com/salsa-rs/salsa", bra
 enum_dispatch = "0.3.8"
 threadpool = "1.8.1"
 dunce = "1.0.3"
-toml = "0.5.9"
+toml = "0.7.2"
 ariadne = "0.1.5"
 dyn-fmt = "0.3.0"
 petgraph = "0.6.2"
