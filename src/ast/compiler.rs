@@ -4,7 +4,7 @@ use crate::{
         accumulators::{Diagnostics, ModBuffer},
         builder::llvmbuilder::get_target_machine,
         node::program::Program,
-        pass::MAP_NAMES,
+        pass::{COMPILE_PROGRESS, MAP_NAMES},
     },
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
@@ -13,6 +13,7 @@ use crate::{
 };
 use ariadne::Source;
 use colored::Colorize;
+use indicatif::{ProgressDrawTarget, ProgressState, ProgressStyle};
 use inkwell::{
     context::Context,
     module::Module,
@@ -24,9 +25,10 @@ use pl_linker::{linker::create_with_target, mun_target::spec::Target};
 use rustc_hash::FxHashSet;
 use std::{
     env,
+    fmt::Write,
     fs::{self, remove_file},
     path::{Path, PathBuf},
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Copy)]
@@ -186,7 +188,21 @@ fn run_passed(llvmmod: &Module, op: OptimizationLevel) {
 
 #[salsa::tracked]
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
-    MAP_NAMES.names.borrow_mut().clear();
+    MAP_NAMES.inner.borrow_mut().clear();
+    let pb = COMPILE_PROGRESS.inner.borrow();
+    pb.enable_steady_tick(Duration::from_millis(50));
+    let spinner_style = ProgressStyle::with_template(
+        "{prefix:.bold.dim} {spinner} [{bar:40.cyan/blue}] {wide_msg:.green} ({eta})",
+    )
+    .unwrap()
+    .progress_chars("#>-")
+    .with_key("eta", |state: &ProgressState, w: &mut dyn Write| {
+        write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap()
+    })
+    .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
+    pb.set_style(spinner_style);
+    pb.set_draw_target(ProgressDrawTarget::stderr());
+
     inkwell::execution_engine::ExecutionEngine::link_in_mc_jit();
     immix::register_llvm_gc_plugins();
     let targetdir = PathBuf::from("target");
@@ -195,6 +211,8 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     }
     let now = Instant::now();
     compile_dry(db, docs).unwrap();
+    pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
+    pb.finish_with_message("目标文件编译完成");
     let errs = compile_dry::accumulated::<Diagnostics>(db, docs);
     let mut errs_num = 0;
     if errs.len() > 0 {

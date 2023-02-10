@@ -1,23 +1,27 @@
 use std::cell::RefCell;
 
 use immix::LLVM_GC_STRATEGY_NAME;
+use indicatif::ProgressBar;
 use inkwell::{
     module::{Linkage, Module},
     AddressSpace,
 };
 
 lazy_static::lazy_static! {
-    pub static ref MAP_NAMES: NameListWrapper = {
-        NameListWrapper { names: RefCell::new(vec![]) }
+    pub static ref MAP_NAMES: GlobalMutWrapper<Vec<String>> = {
+        GlobalMutWrapper { inner: RefCell::new(vec![]) }
+    };
+    pub static ref COMPILE_PROGRESS: GlobalMutWrapper<ProgressBar> = {
+        GlobalMutWrapper { inner: RefCell::new(ProgressBar::hidden()) }
     };
 }
 
-pub struct NameListWrapper {
-    pub names: RefCell<Vec<String>>,
+pub struct GlobalMutWrapper<T> {
+    pub inner: RefCell<T>,
 }
 
-unsafe impl Send for NameListWrapper {}
-unsafe impl Sync for NameListWrapper {}
+unsafe impl<T> Send for GlobalMutWrapper<T> {}
+unsafe impl<T> Sync for GlobalMutWrapper<T> {}
 
 pub fn run_immix_pass(module: &Module) {
     let ctx = module.get_context();
@@ -27,7 +31,7 @@ pub fn run_immix_pass(module: &Module) {
     let stack_map = module.add_global(ctx.i8_type(), Default::default(), &gcmap_name);
     // println!("gcmap_name: {}", gcmap_name);
     MAP_NAMES
-        .names
+        .inner
         .borrow_mut()
         .push(gcmap_name.clone() + "__init");
     stack_map.set_linkage(Linkage::ExternalWeak);
@@ -55,7 +59,7 @@ pub fn run_immix_pass(module: &Module) {
             .and_then(|bb| bb.get_first_instruction())
             .and_then(|inst| {
                 builder.position_before(&inst);
-                MAP_NAMES.names.borrow().iter().for_each(|name| {
+                MAP_NAMES.inner.borrow().iter().for_each(|name| {
                     let f = module.get_function(name).unwrap_or_else(|| {
                         module.add_function(name, ctx.void_type().fn_type(&[], false), None)
                     });

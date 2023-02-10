@@ -9,6 +9,7 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::compiler::{compile_dry_file, ActionType};
 use crate::ast::ctx::{self, Ctx};
+use crate::ast::pass::COMPILE_PROGRESS;
 use crate::ast::plmod::LSPDef;
 use crate::ast::plmod::Mod;
 use crate::flow::display::Dot;
@@ -113,6 +114,7 @@ pub struct Program {
 impl Program {
     #[salsa::tracked(lru = 32)]
     pub fn emit(self, db: &dyn Db) -> ModWrapper {
+        let pb = COMPILE_PROGRESS.inner.borrow();
         let n = *self.node(db).node(db);
         let mut prog = match n {
             NodeEnum::Program(p) => p,
@@ -124,14 +126,9 @@ impl Program {
         let is_active_file = dunce::canonicalize(f1).unwrap() == dunce::canonicalize(f2).unwrap();
 
         let mut modmap = FxHashMap::<String, Mod>::default();
-        if PathBuf::from(self.params(db).file(db))
-            .with_extension("")
-            .file_name()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            != "gc"
-        {
+        let binding = PathBuf::from(self.params(db).file(db)).with_extension("");
+        let pkgname = binding.file_name().unwrap().to_str().unwrap();
+        if pkgname != "gc" {
             let core = Box::new(VarNode {
                 name: "core".to_string(),
                 range: Default::default(),
@@ -147,8 +144,21 @@ impl Program {
                 singlecolon: false,
             })));
         }
-        for u in prog.uses {
-            let u = if let NodeEnum::UseNode(p) = *u {
+        if pb.length().is_none() {
+            pb.set_length(1 + prog.uses.len() as u64);
+        } else {
+            pb.inc_length(1 + prog.uses.len() as u64);
+        }
+        for (i, u) in prog.uses.iter().enumerate() {
+            pb.set_message(format!(
+                "正在编译包{}的依赖项{}/{}",
+                pkgname,
+                i,
+                prog.uses.len()
+            ));
+            pb.inc(1);
+            pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
+            let u = if let NodeEnum::UseNode(p) = *u.clone() {
                 p
             } else {
                 continue;
@@ -275,6 +285,9 @@ impl Program {
             }
             _ => {}
         }
+        pb.set_message(format!("正在编译包{}", pkgname));
+        pb.inc(1);
+        pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
         let m = emit_file(db, p);
         let plmod = m.plmod(db);
         let params = self.params(db);
