@@ -36,7 +36,7 @@ dunce = "1.0.3"
 toml = "0.5.9"
 ariadne = "0.1.5"
 dyn-fmt = "0.3.0"
-petgraph = "0.6.2"
+petgraph = "0.6.3"
 kagari = { path = "./kagari" }
 indicatif = "0.17"
 
