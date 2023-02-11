@@ -13,20 +13,19 @@ use crate::{
 };
 use ariadne::Source;
 use colored::Colorize;
-use indicatif::{ProgressDrawTarget, ProgressState, ProgressStyle};
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use inkwell::{
     context::Context,
     module::Module,
     passes::{PassManager, PassManagerBuilder},
     OptimizationLevel,
 };
+use lazy_static::lazy_static;
 use log::{debug, info, trace, warn};
 use pl_linker::{linker::create_with_target, mun_target::spec::Target};
 use rustc_hash::FxHashSet;
 use std::{
-    env,
-    fmt::Write,
-    fs::{self, remove_file},
+    env, fs,
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
@@ -161,7 +160,7 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
     Some(program.emit(db))
 }
 
-fn run_passed(llvmmod: &Module, op: OptimizationLevel) {
+pub fn run_pass(llvmmod: &Module, op: OptimizationLevel) {
     let pass_manager_builder = PassManagerBuilder::create();
     pass_manager_builder.set_optimization_level(op);
     // Create FPM MPM
@@ -186,22 +185,25 @@ fn run_passed(llvmmod: &Module, op: OptimizationLevel) {
     mpm.run_on(&llvmmod);
 }
 
+lazy_static! {
+    static ref PROGRESS_STYLE: ProgressStyle = ProgressStyle::with_template(
+        "{prefix:.bold.dim} {spinner} [{bar:40.cyan/blue}] {wide_msg:.green} ({elapsed})",
+    )
+    .unwrap()
+    .progress_chars("#>-");
+    static ref MSG_PROGRESS_STYLE: ProgressStyle =
+        ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg:.green} ({elapsed})",)
+            .unwrap();
+}
+
 #[salsa::tracked]
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     MAP_NAMES.inner.borrow_mut().clear();
     let pb = COMPILE_PROGRESS.inner.borrow();
     pb.enable_steady_tick(Duration::from_millis(50));
-    let spinner_style = ProgressStyle::with_template(
-        "{prefix:.bold.dim} {spinner} [{bar:40.cyan/blue}] {wide_msg:.green} ({eta})",
-    )
-    .unwrap()
-    .progress_chars("#>-")
-    .with_key("eta", |state: &ProgressState, w: &mut dyn Write| {
-        write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap()
-    })
-    .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
-    pb.set_style(spinner_style);
+    pb.set_style(PROGRESS_STYLE.clone());
     pb.set_draw_target(ProgressDrawTarget::stderr());
+    pb.set_prefix(format!("[{:2}/{:2}]", 1, 3));
 
     inkwell::execution_engine::ExecutionEngine::link_in_mc_jit();
     immix::register_llvm_gc_plugins();
@@ -211,8 +213,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     }
     let now = Instant::now();
     compile_dry(db, docs).unwrap();
-    pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
-    pb.finish_with_message("目标文件编译完成");
+    pb.finish_with_message("中间代码编译完成");
     let errs = compile_dry::accumulated::<Diagnostics>(db, docs);
     let mut errs_num = 0;
     if errs.len() > 0 {
@@ -260,21 +261,19 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         info!("gen flow done, time: {:?}", time);
         return;
     }
-    let mut mods = compile_dry::accumulated::<ModBuffer>(db, docs);
+    let mods = compile_dry::accumulated::<ModBuffer>(db, docs);
     let mut objs = vec![];
     let ctx = Context::create();
-    let m = mods.remove(0).path;
     let tm = get_target_machine(op.optimization.to_llvm());
-    let llvmmod = Module::parse_bitcode_from_path(m.clone(), &ctx).unwrap();
-    let o = m.with_extension("o");
-    tm.write_to_file(&llvmmod, inkwell::targets::FileType::Object, &o)
-        .unwrap();
-    objs.push(o);
+    let llvmmod = ctx.create_module("main");
     let mut set = FxHashSet::default();
-    set.insert(m.clone());
-    _ = remove_file(m.clone()).unwrap();
-    log::debug!("rm {}", m.to_str().unwrap());
+    let pb = ProgressBar::new(mods.len() as u64);
+    pb.enable_steady_tick(Duration::from_millis(50));
+    pb.set_style(PROGRESS_STYLE.clone());
+    pb.set_prefix(format!("[{:2}/{:2}]", 2, 3));
     for m in mods {
+        pb.inc(1);
+        // pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
         let m = m.path;
         if set.contains(&m) {
             continue;
@@ -284,14 +283,27 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         // println!("{}", m.clone().to_str().unwrap());
         let module = Module::parse_bitcode_from_path(m.clone(), &ctx)
             .expect(format!("parse {} failed", m.to_str().unwrap()).as_str());
-        run_passed(&module, op.optimization.to_llvm());
+        pb.set_message(format!(
+            "正在优化模块 {} ",
+            module.get_name().to_str().unwrap().yellow()
+        ));
+        run_pass(&module, op.optimization.to_llvm());
+        pb.set_message(format!(
+            "正在生成模块 {} 的目标文件",
+            module.get_name().to_str().unwrap().yellow()
+        ));
         module.verify().unwrap();
         tm.write_to_file(&module, inkwell::targets::FileType::Object, &o)
             .unwrap();
         objs.push(o);
         _ = llvmmod.link_in_module(module);
     }
-    // run_immix_pass(& mut llvmmod as * mut Module as * mut u8);
+    pb.finish_with_message("目标文件编译优化完成");
+    let pb = ProgressBar::new(1);
+    pb.enable_steady_tick(Duration::from_millis(50));
+    pb.set_style(MSG_PROGRESS_STYLE.clone());
+    pb.set_prefix(format!("[{:2}/{:2}]", 3, 3));
+    pb.set_message("正在链接目标文件");
     llvmmod.verify().unwrap();
     if op.genir {
         let mut s = out.to_string();
@@ -306,7 +318,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     llvmmod.set_triple(&tm.get_triple());
     llvmmod.set_data_layout(&tm.get_target_data().get_data_layout());
     llvmmod.write_bitcode_to_path(Path::new(&out));
-    println!("jit executable file writted to: {}", &out);
+    // println!("jit executable file writted to: {}", &out);
     let mut t = create_with_target(&pl_target);
 
     // let mut cmd = Command::new("clang-14");
@@ -347,15 +359,17 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     t.output_to(&fo);
     let res = t.finalize();
     if res.is_err() {
+        pb.abandon_with_message("目标文件链接失败");
         eprintln!(
             "{}",
             format!("link failed: {}", res.unwrap_err()).bright_red()
         );
         // eprintln!("target triple: {}", tm.get_triple());
     } else {
-        println!("link succ, output file: {}", fo);
+        pb.finish_with_message("目标文件链接完成");
+        eprintln!("link succ, output file: {}", fo);
     }
     // //  TargetMachine::get_default_triple()
-    let time = now.elapsed();
-    println!("compile succ, time: {:?}", time);
+    // let time = now.elapsed();
+    // println!("compile succ, time: {:?}", time);
 }

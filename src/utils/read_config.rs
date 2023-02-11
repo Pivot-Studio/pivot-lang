@@ -126,14 +126,14 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
         } else {
             pb.inc_length(rawdeps.len() as u64);
         }
-        pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
+        // pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
         pb.set_message("正在分析依赖");
         rawdeps.iter_mut().for_each(|(k, v)| {
             v.git
                 .clone()
                 .and_then(|git| {
                     pb.set_message("正在下载依赖");
-                    pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
+                    // pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
                     i = i + 1;
                     v.head
                         .clone()
@@ -178,7 +178,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
                         })
                 })
                 .or_else(|| {
-                    pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
+                    // pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
                     i = i + 1;
                     pb.set_message(format!("正在分析依赖{}", k));
                     if PathBuf::from(&v.path).is_absolute() {
