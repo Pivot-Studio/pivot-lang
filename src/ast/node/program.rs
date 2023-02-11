@@ -157,7 +157,7 @@ impl Program {
                 prog.uses.len()
             ));
             pb.inc(1);
-            pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
+            // pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
             let u = if let NodeEnum::UseNode(p) = *u.clone() {
                 p
             } else {
@@ -287,7 +287,7 @@ impl Program {
         }
         pb.set_message(format!("正在编译包{}", pkgname));
         pb.inc(1);
-        pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
+        // pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
         let m = emit_file(db, p);
         let plmod = m.plmod(db);
         let params = self.params(db);
