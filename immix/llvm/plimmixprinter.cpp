@@ -51,6 +51,7 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
   AP.emitInt32(1);
   AP.emitAlignment(llvm::Align(8));
   AP.OutStreamer.get()->AddComment("function numbers");
+
   int i = 0;
   for (auto FI = Info.funcinfo_begin(), FE = Info.funcinfo_end(); FI != FE; ++FI) {
     i++;
@@ -127,6 +128,16 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
       }
       // printf("%s\n", meta.bytes());
     }
+  }
+  AP.OutStreamer.get()->AddComment("global numbers");
+  auto g = M.global_size();
+  AP.emitInt32(g);
+  // Align to address width.
+  AP.emitAlignment(llvm::Align(8));
+  for (auto GI = M.global_begin(), GE = M.global_end(); GI != GE; ++GI) {
+    AP.OutStreamer.get()->AddComment("global address");
+    const GlobalValue* GV = &*GI;
+    AP.emitLabelPlusOffset(AP.getSymbol(GV)/*Hi*/, 0/*Offset*/, IntPtrSize/*Size*/);
   }
 }
 

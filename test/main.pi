@@ -8,9 +8,11 @@ use project1::test::simple;
 use project1::test::flow;
 use project1::test::list;
 use pl_test::main;
+use std::io;
 
 fn main() i64 {
     ifel::test_if_else();
+    change_global();
     generic::test_generic();
     method::test_impl();
     st::test_struct();
@@ -20,6 +22,21 @@ fn main() i64 {
     flow::test_flow();
     list::test_list();
     main::simple_test();
+    io::printi64ln(a.a);
     return 0;
+}
+
+struct name {
+    a: i64;
+    b: i64;
+}
+
+const a = &name{
+    a: 1
+};
+
+fn change_global() void {
+    a.a = 100;
+    return;
 }
 
