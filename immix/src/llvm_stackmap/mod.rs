@@ -12,7 +12,8 @@ pub fn print_stack_map(mapptr: *const u8) {
     let num_functions = get_num_functions(mapptr);
     println!("num_functions: {}", num_functions);
     let mut map = FxHashMap::default();
-    build_root_maps(mapptr, &mut map);
+    let mut global_roots = vec![];
+    build_root_maps(mapptr, &mut map, &mut global_roots);
     for (addr, func) in map.iter() {
         println!("addr: {:p}", *addr);
         println!("size: {}", func.root_size);
@@ -20,25 +21,8 @@ pub fn print_stack_map(mapptr: *const u8) {
         println!("frame_size: {}", func.frame_size);
         println!("arg_num: {}", func.arg_num);
     }
+    println!("global_roots: {:?}", global_roots);
 }
-// example stackmap:
-// __GC_MAP_:
-// 	.long	1                               ; plimmix stackmap format version
-// 	.p2align	3
-// 	.long	8                               ; function numbers
-// 	.p2align	3
-// 	.quad	_main                           ; function address
-// 	.long	1                               ; live root count
-// 	.long	8                               ; stack index (offset / wordsize)
-// 	.p2align	3
-// 	.quad	_fuck_it                        ; function address
-// 	.long	0                               ; live root count
-// 	.p2align	3
-// 	.quad	_fuck_it_all                    ; function address
-// 	.long	0                               ; live root count
-// 	.p2align	3
-// 	.quad	_ff                             ; function address
-// 	.long	0                               ; live root count
 
 pub(crate) fn get_format_version(mapptr: *const u8) -> i32 {
     unsafe {
@@ -132,7 +116,11 @@ fn get_function_roots(ptr: *const u8, num: i32) -> (Vec<(i32, ObjectType)>, *con
     }
 }
 
-pub fn build_root_maps(mapptr: *const u8, roots: &mut FxHashMap<*const u8, Function>) {
+pub fn build_root_maps(
+    mapptr: *const u8,
+    roots: &mut FxHashMap<*const u8, Function>,
+    global_roots: &mut Vec<*const u8>,
+) {
     let num_functions = get_num_functions(mapptr);
     let mut ptr = get_first_function_addr(mapptr);
     for _ in 0..num_functions {
@@ -145,11 +133,24 @@ pub fn build_root_maps(mapptr: *const u8, roots: &mut FxHashMap<*const u8, Funct
         // roots.insert(function.addr, function);
         ptr = next_ptr;
     }
+    build_global_roots(ptr, global_roots);
 }
 
-// fn align_up_to(n: usize, align: usize) -> usize {
-//     (n + align - 1) & !(align - 1)
-// }
+fn build_global_roots(ptr: *const u8, global_roots: &mut Vec<*const u8>) {
+    let num_globals = unsafe { *(ptr as *const i32) };
+    let ptr = unsafe { ptr.add(4) };
+    let ptr = align_up_to(ptr as usize, 8) as *const u8;
+    let mut ptr = ptr as *const *const u8;
+    for _ in 0..num_globals {
+        let global = unsafe { *ptr };
+        global_roots.push(global);
+        ptr = unsafe { ptr.add(1) };
+    }
+}
+
+fn align_up_to(n: usize, align: usize) -> usize {
+    (n + align - 1) & !(align - 1)
+}
 
 #[cfg(feature = "llvm_gc_plugin")]
 extern "C" {

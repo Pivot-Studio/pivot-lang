@@ -43,6 +43,7 @@ lazy_static! {
     static ref STACK_MAP: StackMapWrapper = {
         StackMapWrapper {
             map: RefCell::new(FxHashMap::default()),
+            global_roots: RefCell::new(vec![]),
         }
     };
 }
@@ -50,6 +51,7 @@ lazy_static! {
 #[cfg(feature = "llvm_stackmap")]
 pub struct StackMapWrapper {
     pub map: RefCell<FxHashMap<*const u8, Function>>,
+    pub global_roots: RefCell<Vec<*const u8>>,
 }
 #[cfg(feature = "llvm_stackmap")]
 unsafe impl Sync for StackMapWrapper {}
@@ -141,7 +143,11 @@ pub fn no_gc_thread() {
 #[cfg(feature = "llvm_stackmap")]
 pub fn gc_init(ptr: *mut u8) {
     // println!("stackmap: {:?}", &STACK_MAP.map.borrow());
-    build_root_maps(ptr, &mut STACK_MAP.map.borrow_mut());
+    build_root_maps(
+        ptr,
+        &mut STACK_MAP.map.borrow_mut(),
+        &mut STACK_MAP.global_roots.borrow_mut(),
+    );
 }
 
 /// notify gc if a thread is going to stuck e.g.

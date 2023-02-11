@@ -52,6 +52,13 @@ Functions[NumFunctions] {
     i32: root的类型
   }
 }
+Global {
+  i32: global root数量
+  // 对齐
+  Roots[NumRoots] {
+    u64 : 地址
+  }
+}
 ```
 
 ```mermaid

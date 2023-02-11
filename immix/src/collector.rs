@@ -435,6 +435,13 @@ impl Collector {
                 depth += 1;
                 true
             });
+            STACK_MAP
+                .global_roots
+                .borrow()
+                .iter()
+                .for_each(|root| unsafe {
+                    self.mark_ptr((*root) as usize as *mut u8);
+                });
         }
 
         // iterate through queue and mark all reachable objects
