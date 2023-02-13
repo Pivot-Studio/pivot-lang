@@ -168,6 +168,21 @@ pub fn thread_stuck_end() {
     GC_COLLECTOR_COUNT.fetch_add(1, Ordering::SeqCst);
 }
 
+/// # set evacuation
+///
+/// 设置是否开启自动驱逐
+///
+/// 驱逐(evacuation)是immix一种去碎片化机制
+///
+/// 一般来说驱逐能带来更好的性能，但是请注意，驱逐会
+/// 改变mutator指针的指向，正常来说这种改动是自愈的，
+/// 在gc过程结束后mutator应当不会受到影响，但是如果
+/// mutator中**特殊**存储了指向堆内存的指针，且该数据不被gc
+/// 观测，那么驱逐可能会导致它指向错误的地址。
+pub fn set_evacuation(eva: bool) {
+    ENABLE_EVA.store(eva, Ordering::SeqCst);
+}
+
 pub struct GAWrapper(*mut GlobalAllocator);
 
 impl GAWrapper {
@@ -194,6 +209,8 @@ static GC_SWEEPING: AtomicBool = AtomicBool::new(false);
 static GC_RUNNING: AtomicBool = AtomicBool::new(false);
 
 static GC_ID: AtomicUsize = AtomicUsize::new(0);
+
+pub static ENABLE_EVA: AtomicBool = AtomicBool::new(true);
 
 #[cfg(feature = "auto_gc")]
 static GC_AUTOCOLLECT_ENABLE: AtomicBool = AtomicBool::new(true);

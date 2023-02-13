@@ -247,7 +247,45 @@ Sweep阶段的主要工作是：
 
 真正的evacuation过程是在`mark`阶段一起完成的，我们会在遍历到处于待evacuate的block中的对象时，为它分配一个新的地址，并且
 将它原地址的值替换为一个指向新地址的指针（forward pointer），且将line header中的`forward`字段设置为`true`。之后如果再次遍历到
-该对象，收集器会修正指向原地址的指针的值。
+该对象，收集器会修正指向原地址的指针的值，这一过程我们称之为自愈。
+
+请注意，一部分其他gc的驱逐算法中的自愈需要读写屏障的参与，immix不需要。这带来了较大的mutator性能提升。
+
+```admonish warning
+驱逐算法的正确性建立在我们的root定位和对象遍历的正确性之上，如果root定位和对象遍历不精确，
+建议禁用驱逐算法。这二者的不精确会导致驱逐算法修改的指针不能完全自愈。考虑下方场景：
+<pre>
+<code class="language-rust ignore hljs">
+struct Node {
+    next: *mut Node,
+    data: u32,
+}
+
+fn main() {
+    let mut root = Node {
+        next: null_mut(),
+        data: 0,
+    };
+    let stack_ptr = &mut root as * mut u8;
+    add_root(stack_ptr);
+}
+
+fn add_sub_ndoe(root: *mut Node) {
+    let mut node = Node {
+        next: null_mut(),
+        data: 0,
+    };
+    root.next = &mut node;
+}
+</code>
+</pre>
+在这个例子中，我们只添加了一个root即`main`中的`root`变量，尽管`add_sub_node`中的`node`变量和`root`参数也是root，
+但是不添加它们其实不会影响大部分gc在这个例子中的正确性。然而如果启用了驱逐算法，这个例子就很可能在运行时出错。
+假如`add_sub_node`函数中触发了gc，且gc决定进行驱逐，将`main`函数中的`root`变量移动到了新的地址，那么在gc过程中
+`stackptr`对应的指针指向的位置会自愈，更改为移动后的地址，但是`add_sub_node`函数中的`root`参数因为没被添加到root set中，
+这导致gc无法在回收过程中对其进行修正，就会进一步导致`root.next`指向的地址不正确，从而导致程序出错。
+```
+
 
 ```admonish tip title="多线程情况下驱逐算法的安全性"
 在多线程情况下，是存在两个线程同时驱逐一个对象的可能的，在这种情况下一些同步操作必不可少，但是并不需要加锁。

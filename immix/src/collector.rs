@@ -514,7 +514,9 @@ impl Collector {
         // 他要设置每个block是否是驱逐目标
         // 如果设置的时候别的线程的mark已经开始，那么将无法保证能够纠正所有被驱逐的指针
         unsafe {
-            if ENABLE_EVA && self.thread_local_allocator.as_mut().unwrap().should_eva() {
+            if ENABLE_EVA.load(Ordering::Relaxed)
+                && self.thread_local_allocator.as_mut().unwrap().should_eva()
+            {
                 // 如果需要驱逐，首先计算驱逐阀域
                 let mut eva_threshold = 0;
                 let mut available_histogram: VecMap<usize, usize> =
