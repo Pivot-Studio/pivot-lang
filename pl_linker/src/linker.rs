@@ -68,14 +68,15 @@ struct LdLinker {
 
 impl LdLinker {
     fn new(target: &spec::Target) -> Self {
-        LdLinker {
-            args: target
-                .options
-                .pre_link_args
-                .iter()
-                .map(|x| x.to_string())
-                .collect(),
+        let mut args = vec![];
+        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+        {
+            // https://github.com/flamegraph-rs/flamegraph
+            // https://crbug.com/919499#c16
+            args.push("--no-rosegment".to_owned());
         }
+        args.extend(target.options.pre_link_args.iter().map(|x| x.to_string()));
+        LdLinker { args }
     }
 }
 
