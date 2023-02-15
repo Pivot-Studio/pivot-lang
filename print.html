@@ -170,7 +170,7 @@
 <p><strong>重要</strong>：如果你想参与开发，请先在项目目录<code>make vm install</code>，然后根据自己是linux还是mac运行<code>make devlinux</code>或者<code>make devmac</code></p>
 <h2 id="特点"><a class="header" href="#特点">特点</a></h2>
 <ul>
-<li>同时支持aot和jit两种模式</li>
+<li>静态编译（jit模式与immix gc不兼容，因为llvm生成自定义stackmap<a href="https://llvm.org/docs/GarbageCollection.html#emitting-assembly-code-gcmetadataprinter">目前必需要静态编译</a>）</li>
 <li>极其方便的rust互操作</li>
 <li>支持debug</li>
 <li>支持lsp，自带vsc插件，能提供优秀的代码支持</li>
