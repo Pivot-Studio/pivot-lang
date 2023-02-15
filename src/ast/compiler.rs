@@ -313,6 +313,9 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     }
     let mut fo = out.to_string();
     let mut out = out.to_string();
+    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+    let pl_target = Target::search("x86_64-apple-darwin").expect("get target failed");
+    #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
     let pl_target = Target::host_target().expect("get host target failed");
     out.push_str(".bc");
     llvmmod.set_triple(&tm.get_triple());

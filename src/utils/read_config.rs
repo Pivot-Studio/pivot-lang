@@ -116,6 +116,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
         &read_to_string(lockfile.clone()).unwrap_or_default(),
     )
     .unwrap_or_default();
+    let mut sum_changed = false;
     if config.deps.is_none() {
         config.deps = Some(deps);
     } else {
@@ -154,6 +155,8 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
                             }
                             if let Some(sum) = sums.get(k) {
                                 b = sum.git.clone().unwrap().commit;
+                            } else {
+                                sum_changed = true;
                             }
                             let target = kagari::cp_to_hash_dir(target.to_str().unwrap(), &b);
                             sums.insert(
@@ -214,9 +217,13 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
         }
         config.deps = Some(deps);
     }
-    toml::to_string_pretty(&sums)
-        .map_err(|e| format!("error: {:?}", e))
-        .and_then(|s| std::fs::write(lockfile, s).or_else(|e| Err(format!("error: {:?}", e))))?;
+    if sum_changed {
+        toml::to_string_pretty(&sums)
+            .map_err(|e| format!("error: {:?}", e))
+            .and_then(|s| {
+                std::fs::write(lockfile, s).or_else(|e| Err(format!("error: {:?}", e)))
+            })?;
+    }
     config.root = dunce::canonicalize(config_root.clone())
         .unwrap()
         .to_str()
