@@ -29,7 +29,7 @@ https://lang.pivotstudio.cn
 **重要**：如果你想参与开发，请先在项目目录`make vm install`，然后根据自己是linux还是mac运行`make devlinux`或者`make devmac`
 
 ## 特点
-- 同时支持aot和jit两种模式
+- 静态编译（jit模式与immix gc不兼容，因为llvm生成自定义stackmap[目前必需要静态编译](https://llvm.org/docs/GarbageCollection.html#emitting-assembly-code-gcmetadataprinter)）
 - 极其方便的rust互操作
 - 支持debug
 - 支持lsp，自带vsc插件，能提供优秀的代码支持
