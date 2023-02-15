@@ -34,7 +34,17 @@ jobs:
         with:
           submodules: true
 
+      - name: Install rust
+        uses: actions-rs/toolchain@v1
+        if: ${{ matrix.config.os == 'macOS-latest' }}
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: aarch64-apple-darwin
+
       - name: Setup | Rust
+        if: ${{ matrix.config.os == 'ubuntu-latest' }}
         uses: ATiltedTree/setup-rust@v1
         with:
           rust-version: "1.62.1"
@@ -50,7 +60,17 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Install LLVM mac
+        if: ${{ matrix.config.os == 'macOS-latest' }}
+        run: |
+          mkdir arm-homebrew && curl -L https://github.com/Homebrew/brew/tarball/master | tar xz --strip 1 -C arm-homebrew
+          alias arm-brew='$(pwd)/arm-homebrew/bin/brew'
+          response=$(./arm-homebrew/bin/brew fetch --force --bottle-tag=arm64_big_sur llvm@14 | grep "Downloaded to")
+          parsed=($response)
+          ./arm-homebrew/bin/brew install $parsed[3]
+          echo "LLVM_SYS_140_PREFIX=$(./arm-homebrew/bin/brew --prefix llvm@14)" >> $GITHUB_ENV
       - name: Install LLVM
+        if: ${{ matrix.config.os == 'ubuntu-latest' }}
         uses: Pivot-Studio/setup-llvm@main
       
       - name: set up win scoop
@@ -83,16 +103,28 @@ jobs:
         run: cargo build --release --verbose
 
       - name: Cargo build
-        if: ${{ matrix.config.os != 'windows-latest' }}
+        if: ${{ matrix.config.os == 'ubuntu-latest' }}
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
         run: cargo build --release
 
-      - name: Cargo build vm
-        if: ${{ matrix.config.os != 'windows-latest' }}
+      - name: Cargo build mac
+        if: ${{ matrix.config.os == 'macOS-latest' }}
+        env:
+          RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
+        run: cargo build --release --target aarch64-apple-darwin
+
+      - name: Cargo build vm linux
+        if: ${{ matrix.config.os == 'ubuntu-latest' }}
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
         run: cd vm && cargo build --release
+
+      - name: Cargo build vm mac arm64
+        if: ${{ matrix.config.os == 'macOS-latest' }}
+        env:
+          RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
+        run: cd vm && cargo build --release --target aarch64-apple-darwin
 
       - run: mkdir -p ${{ matrix.config.dir }}
 
