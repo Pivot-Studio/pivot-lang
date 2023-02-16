@@ -321,8 +321,17 @@ type_add = type_name (&quot;+&quot; type_name)* ;
 <p>Pivot Lang存在两种不同的编译方案：</p>
 <ul>
 <li>静态编译：编译器会将源码编译成一个可执行文件，能给在操作系统上原生运行</li>
-<li>jit编译：编译器会将源码编译成一个字节码文件，然后在运行时使用编译器指令进行解释执行</li>
+<li><del>jit编译：编译器会将源码编译成一个字节码文件，然后在运行时使用编译器指令进行解释执行</del></li>
 </ul>
+<div id="admonition-warning" class="admonition warning">
+<div class="admonition-title">
+<p>Warning</p>
+<p><a class="admonition-anchor-link" href="tutorial/installation.html#admonition-warning"></a></p>
+</div>
+<div>
+<p>目前jit模式暂时不可用，因为它与我们新的immix gc不兼容，详细情况请看<a href="tutorial/../references/stackmap.html">这里</a></p>
+</div>
+</div>
 <p>目前这两种方案使用的编译器是同一个可执行文件（plc），然而他们在依赖和功能上存在一些差别，
 下方是一个简单的对比图：</p>
 <div class="table-wrapper"><table><thead><tr><th></th><th>jit</th><th>静态编译</th></tr></thead><tbody>
@@ -333,27 +342,33 @@ type_add = type_name (&quot;+&quot; type_name)* ;
 <tr><td>依赖预编译的pivot lang系统库</td><td>❌</td><td>✅</td></tr>
 <tr><td>运行时优化</td><td>✅</td><td>❌</td></tr>
 <tr><td>支持debug</td><td>❌</td><td>✅</td></tr>
+<tr><td>stackmap支持</td><td>❌</td><td>✅</td></tr>
 </tbody></table>
 </div>
 <p>可以看出，just in time模式的编译器依赖比静态编译少很多，因此如果你不需要debug功能，建议使用jit模式。如果你想要体验完整功能，建议使用静态编译。</p>
 <h2 id="windows"><a class="header" href="#windows">Windows</a></h2>
 <p>TODO</p>
 <h2 id="linux"><a class="header" href="#linux">Linux</a></h2>
-<p>目前我们对Ubuntu 20.04 LTS 和 Ubuntu 22.04 LTS提供了apt包。<br />
+<p>目前我们对架构为amd64的Ubuntu 20.04 LTS 和 Ubuntu 22.04 LTS提供了apt包。<br />
 首先你需要添加我们的apt源的gpg key：</p>
-<pre><code class="language-bash">wget -O -  https://apt.lang.pivotstudio.cn/public.key | sudo apt-key add -
+<pre><code class="language-bash">apt update
+apt install wget gnupg
+wget -O -  https://apt.lang.pivotstudio.cn/public.key | apt-key add -
 </code></pre>
 <p>然后添加我们的apt源：</p>
-<pre><code class="language-bash">sudo add-apt-repository &quot;deb [arch=amd64] https://apt.lang.pivotstudio.cn/repo focal main&quot;
-sudo add-apt-repository &quot;deb [arch=amd64] https://apt.lang.pivotstudio.cn/repo jammy main&quot;
+<pre><code class="language-bash">echo &quot;deb [arch=amd64] https://apt.lang.pivotstudio.cn/repo focal main
+# deb-src [arch=amd64] https://apt.lang.pivotstudio.cn/repo focal main
+deb [arch=amd64] https://apt.lang.pivotstudio.cn/repo jammy main
+# deb-src [arch=amd64] https://apt.lang.pivotstudio.cn/repo jammy main&quot;&gt;/etc/apt/sources.list.d/pl.list
+apt update
 </code></pre>
 <p>最后安装pivot lang编译器：</p>
-<pre><code class="language-bash">sudo apt install pivot-lang
+<pre><code class="language-bash">apt install pivot-lang
 </code></pre>
 <p>你可以运行<code>plc</code>来检查是否安装成功。</p>
-<p>请重启当前bash或者运行<code>source ~/.bashrc</code>来使环境变量生效。如果想安装<code>AOT</code>功能，请手动下载clang-14，下载方式见<a href="https://apt.llvm.org/">此处</a></p>
+<p>安装完成后请按照提示设置环境变量</p>
 <h2 id="macos"><a class="header" href="#macos">MacOS</a></h2>
-<p>目前最新版MacOS（非英特尔芯片）上的编译器可以使用<code>homebrew</code>进行安装。</p>
+<p>MacOS可以使用<code>homebrew</code>进行安装。</p>
 <p>首先你需要添加我们的homebrew tap：</p>
 <pre><code class="language-bash">brew tap pivot-studio/tap
 </code></pre>
