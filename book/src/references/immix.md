@@ -213,6 +213,73 @@ pub type VtableFunc = fn(*mut u8, &Collector, VisitFunc, VisitFunc, VisitFunc);
 
 对于Trait Object，我们需要遍历他指向实际值的指针
 
+下方是一个immix heap的示意图，其中`*`表示该对象会在mark阶段中被标记
+
+```mermaid
+graph LR;
+    subgraph Roots
+        Root1
+        Root2
+        Root3
+        Root4
+    end
+    subgraph HO[Heap]
+        AtomicObject1[AtomicObject1*]
+        AtomicObject2[AtomicObject2*]
+        AtomicObject3
+        PointerObject1[PointerObject1*]
+        PointerObject2[PointerObject2*]
+        ComplexObject1
+    end
+    subgraph ComplexObject1[ComplexObject1*]
+        VT1[VTable]
+        PF1[PointerField]
+        AF1[AtomicField]
+        ComplexField
+    end
+    subgraph ComplexField
+        VT2[VTable]
+        AF2[AtomicField]
+        PF2[PointerField]
+    end
+    PF1 --> PointerObject1
+    PF2 --> AtomicObject2
+    PointerObject1 --> AtomicObject1
+    PointerObject2 --> ComplexObject1
+    Root1 --> PointerObject1
+    Root2 --> PointerObject2
+    Root3 --> PointerObject1
+
+```
+
+对于`ComplexObject1`，他的vtable函数逻辑如下：
+```rust,ignore
+fn vtable_complex_obj1(&self, mark_ptr: VisitFunc, mark_complex: VisitFunc, mark_trait: VisitFunc){
+    mark_ptr(self.PointerField)
+    mark_complex(self.ComplexField)
+}
+```
+而对于`ComplexField`，他的vtable函数逻辑如下：
+```rust,ignore
+fn vtable_complex_field(&self, mark_ptr: VisitFunc, mark_complex: VisitFunc, mark_trait: VisitFunc){
+    mark_ptr(self.PointerField)
+}
+```
+
+实际上，`mark_complex`和`mark_trait`逻辑都十分简单：`mark_complex`只是调用对象的vtable函数，而
+`mark_trait`只是对实际指针调用`mark_ptr`，真正的标记和驱逐逻辑都在`mark_ptr`中实现。
+
+```admonish tip
+标记过程开始的时候，gc会load所有root指向的值，对他们调用`mark_ptr`，如果该值为gc堆中的对象，
+则会将该对象标记，并且再次load它指向的对象，若该对象非AtomicObject类型则加入到mark queue中。
+
+在mark queue中的对象，会被逐个取出，根据他们的类型对他们调用`mark_ptr`、`mark_complex`或者`mark_trait`，直到
+mark queue为空，则标记过程结束。
+
+尽管这的确可以看作是一个递归的过程，但是此过程一定不能使用递归的方式实现，因为递归的方式在复杂程序中可能会导致栈溢出。
+```
+
+
 ## Sweep
 
 Sweep阶段的主要工作是：
@@ -296,11 +363,19 @@ fn add_sub_ndoe(root: *mut Node) {
 ## 性能
 
 我们与bdwgc进行了很多比较，数据证明在大多数情况下，我们的分配算法略慢于bdwgc，与malloc速度相当，但是在回收的时候，我们的回收速度要快于bdwgc。
-对于一些复杂的测试，在触发回收的策略相同的情况下，我们的单线程总执行时间略慢于bdwgc（
-测试采用shadow stack算法，维护shadow stack的额外开销较高），但是在多线程情况下，我们的总执行时间明显快于bdwgc（约3倍）。
+对于一些复杂的测试，在触发回收的策略相同的情况下，我们的单线程总执行时间略慢于bdwgc，但是在多线程情况下，我们的总执行时间明显快于bdwgc，
+整体来说机器并行能力越强、测试时使用内存越多immix性能优势越大。
 
-如果你对性能感兴趣，可以在immix目录下使用`cargo bench`命令运行gc的基准测试。bdwgc测试代码基于复杂性考虑没有放在本仓库中，未来可能会单独在一个
-仓库中放出。
+使用github action进行的基准测试结果可以在[这里](https://chronostasys.github.io/bdwgcvsimmix-bench/report/)查看，由于github action使用的机器
+只有两个核心，所以测试线程数量为2，在此结果中，可以看到immix整体性能略差于bdwgc，但是差距小于单线程情况。
+
+你可以从[这里](https://github.com/Chronostasys/bdwgcvsimmix-bench)下载测试代码，在你的机器上运行并进行比较。这里我提供一组笔者机器上的测试数据截图  
+
+![](immix.png)
+
+![](bdw.png)
+
+测试环境为MacBook Pro (16-inch, 2021) Apple M1 Pro 16 GB，可以看出immix在此环境中已经具有近4倍的性能优势。
 
 immix作为天生并发的gc，并发情况下几乎能完全避免锁竞争的出现，因此在多线程情况下的性能优势是非常明显的。并且其分配算法很好的维护了空间局部性，理论上
 能带来更好的mutator性能。
