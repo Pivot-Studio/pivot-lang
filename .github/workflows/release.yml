@@ -19,6 +19,11 @@ jobs:
             arch: darwin-arm64
             artifacts: "plc"
             RUSTFLAGS: ""
+          - os: "macOS-latest"
+            dir: osx64
+            arch: darwin-amd64
+            artifacts: "plc"
+            RUSTFLAGS: ""
           - os: "ubuntu-latest"
             dir: linux64
             debdir: pivot-lang_0.1.0-1_amd64
@@ -161,6 +166,7 @@ jobs:
           version: 0.1.${{ github.run_number }} # refs/tags/v*.*.*
           arch: 'amd64'
           desc: 'pivot-lang compiler'
+          depends: build-essential, git, libunwind-dev, libxml2
       - name: move deb
         if: ${{ matrix.config.os == 'ubuntu-latest' }}
         run: |
