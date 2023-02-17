@@ -85,7 +85,7 @@ graph LR;
 ```
 
 ```admonish tip title="gc safepoint介绍"
-safepoint说白了就是潜在的可以触发gc的点位，本来多用于进行多线程回收的同步：大部分gc
+safepoint是潜在的可以触发gc的点位，本来多用于进行多线程回收的同步：大部分gc
 回收算法在回收时（全部或一部分时间）是不允许mutator运行的，这个时候需要暂停所有mutator
 线程（stop the world），等回收完成后再恢复。使用safepoint机制的gc，在mutator线程运行到safepoint时会对
 一个特殊flag进行检查，以判断自己是否需要暂停进行gc。在我们的immix gc中，
@@ -94,6 +94,12 @@ safepoint通常由其中一个工作线程在自己的safepoint发起，别的�
 safepoint处理。
 
 safepoint对于stackmap至关重要，因为在回收时gc就是通过在stackmap中查询当前暂停对应的safepoint地址来获取当前栈中的root集的。在暂停的时候safepoint地址在当前栈帧的ip寄存器中。
+
+由于gc回收需要等待所有线程到达safepoint，所以如果一个线程长期不到达safepoint，别的线程在回收的时候就可能会一直等待。因此
+immix提供一些工具函数。`thread_stuck_start`和`thread_stuck_end`，用于标记线程在执行某些长时间“卡住”的任务，在此期间
+该线程需要保证不会使用gc分配新的内存，否则可能导致内存安全问题。在线程被标记为stuck的阶段触发的gc会跳过同步该线程。`no_gc_thread`
+可以告知gc目前正在执行的线程不需要gc功能，该线程不会分配对应的ThreadLocalAllocator。
+
 ```
 
 我们的llvm插件会将stackmap信息生成到每个目标文件的数据段中，应用程序可以使用weak link的方式用对应的全局变量获取到这个数据标签对应的地址，然后就可以通过这个地址来获取到stackmap信息了。对应数据区域标签的命名规则是：`_GC_MAP_$source_file_name`，其中`$source_file_name`是对应llvm module中记录的的源文件名。

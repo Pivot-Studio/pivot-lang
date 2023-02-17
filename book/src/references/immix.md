@@ -217,7 +217,7 @@ pub type VtableFunc = fn(*mut u8, &Collector, VisitFunc, VisitFunc, VisitFunc);
 
 ```mermaid
 graph LR;
-    subgraph Roots
+    subgraph Stack
         Root1
         Root2
         Root3
@@ -314,7 +314,69 @@ Sweep阶段的主要工作是：
 
 真正的evacuation过程是在`mark`阶段一起完成的，我们会在遍历到处于待evacuate的block中的对象时，为它分配一个新的地址，并且
 将它原地址的值替换为一个指向新地址的指针（forward pointer），且将line header中的`forward`字段设置为`true`。之后如果再次遍历到
-该对象，收集器会修正指向原地址的指针的值，这一过程我们称之为自愈。
+该对象，收集器会修正指向原地址的指针的值，这一过程我们称之为自愈。该过程如下图所示  
+
+```mermaid
+graph TD;
+    subgraph BeforeEva
+        direction TB
+        EvaBlock
+        EmptyBlock
+        Pointer
+    end
+    subgraph EvaBlock
+        Line1
+        Line2
+        LineK[...]
+        LineN
+    end
+    subgraph Line1
+        Addr[addr: 0x1000]
+        Value[value: 0x4321]
+        Forward[forward: false]
+    end
+    subgraph EmptyBlock
+        EL1
+        ELK[...]
+    end
+    subgraph EL1[Line1]
+        AddrEL[addr: 0x2000]
+        ValueEL[value: 0x0000]
+    end
+    Pointer
+    Pointer-->Line1
+    subgraph AfterEva
+        direction TB
+        EvaBlock1
+        EmptyBlock1
+        Pointer1[Pointer]
+    end
+    subgraph EvaBlock1[EvaBlock]
+        Line11
+        Line21[Line2]
+        LineK1[...]
+        LineN1[LineN]
+    end
+    subgraph Line11[Line1]
+        Addr1[addr: 0x1000]
+        Value1[value: 0x2000]
+        Forward1[forward: true]
+    end
+    subgraph EmptyBlock1[EmptyBlock]
+        EL11
+        ELK1[...]
+    end
+    subgraph EL11[Line1]
+        AddrEL1[addr: 0x2000]
+        ValueEL1[value: 0x4321]
+    end
+    Pointer1-->EL11
+    BeforeEva-->AfterEva
+
+```
+
+每次驱逐是以分配的对象为单位，如果一个block被标记为待evacuate，那么在驱逐过程中，该block中的所有对象都一定会被驱逐。
+
 
 请注意，一部分其他gc的驱逐算法中的自愈需要读写屏障的参与，immix不需要。这带来了较大的mutator性能提升。
 
