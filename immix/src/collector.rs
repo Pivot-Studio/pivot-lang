@@ -2,11 +2,9 @@ use std::{
     cell::RefCell,
     ptr::drop_in_place,
     sync::atomic::{AtomicPtr, Ordering},
-    thread::yield_now,
 };
 
 use libc::malloc;
-use parking_lot::lock_api::{RawRwLock, RawRwLockRecursive};
 use vector_map::VecMap;
 
 #[cfg(feature = "llvm_stackmap")]
@@ -15,7 +13,7 @@ use crate::{
     allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
     gc_is_auto_collect_enabled, spin_until, HeaderExt, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID,
-    GC_MARKING, GC_MARK_WAITING, GC_RUNNING, GC_RW_LOCK, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE,
+    GC_MARKING, GC_MARK_COND, GC_RUNNING, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE,
     NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION,
 };
 
@@ -58,7 +56,10 @@ impl Drop for Collector {
         // println!("Collector {} is dropped", self.id);
         unsafe {
             if (*self.thread_local_allocator).is_live() {
-                GC_COLLECTOR_COUNT.fetch_sub(1, Ordering::SeqCst);
+                let mut v = GC_COLLECTOR_COUNT.lock();
+                v.0 = v.0 - 1;
+                drop(v);
+                GC_MARK_COND.notify_all();
                 drop_in_place(self.thread_local_allocator);
             }
             libc::free(self.thread_local_allocator as *mut libc::c_void);
@@ -75,7 +76,10 @@ impl Collector {
     /// ## Parameters
     /// * `heap_size` - heap size
     pub fn new(ga: &mut GlobalAllocator) -> Self {
-        GC_COLLECTOR_COUNT.fetch_add(1, Ordering::SeqCst);
+        let mut v = GC_COLLECTOR_COUNT.lock();
+        v.0 = v.0 + 1;
+        drop(v);
+        GC_MARK_COND.notify_all();
         let id = GC_ID.fetch_add(1, Ordering::Relaxed);
         unsafe {
             let tla = ThreadLocalAllocator::new(ga);
@@ -108,7 +112,10 @@ impl Collector {
     }
 
     pub fn unregister_current_thread(&self) {
-        GC_COLLECTOR_COUNT.fetch_sub(1, Ordering::SeqCst);
+        let mut v = GC_COLLECTOR_COUNT.lock();
+        v.0 = v.0 - 1;
+        drop(v);
+        GC_MARK_COND.notify_all();
         unsafe {
             drop_in_place(self.thread_local_allocator);
         }
@@ -367,30 +374,29 @@ impl Collector {
     /// this mark function is __precise__
     pub fn mark(&self) {
         GC_RUNNING.store(true, Ordering::Release);
-        let gcs = GC_COLLECTOR_COUNT.load(Ordering::Acquire);
-        // println!("gc {}: mark start gcs {}", self.id,gcs);
-        let v = GC_MARK_WAITING.fetch_add(1, Ordering::Acquire);
-        if v + 1 != gcs {
-            let mut i = 0;
-            while !GC_MARKING.load(Ordering::Acquire) {
-                // 防止 gc count 改变（一个线程在gc时消失了
-                let gcs = GC_COLLECTOR_COUNT.load(Ordering::Acquire);
-                if gcs == v + 1 {
+
+        let mut v = GC_COLLECTOR_COUNT.lock();
+        let (count, mut waiting) = *v;
+        waiting += 1;
+        *v = (count, waiting);
+        // println!("gc mark {}: waiting: {}, count: {}", self.id, waiting, count);
+        if waiting != count {
+            GC_MARK_COND.wait_while(&mut v, |(c, _)| {
+                // 线程数量变化了？
+                if waiting == *c {
                     GC_MARKING.store(true, Ordering::Release);
-                    break;
+                    GC_MARK_COND.notify_all();
+                    return false;
                 }
-                core::hint::spin_loop();
-                i += 1;
-                if i % 100 == 0 {
-                    yield_now();
-                }
-                // if i % 10000000==0{
-                //     println!("gc run {:?}", GC_RUNNING.load(Ordering::Acquire))
-                // }
-            }
+                !GC_MARKING.load(Ordering::Acquire)
+            });
+            drop(v);
         } else {
             GC_MARKING.store(true, Ordering::Release);
+            drop(v);
+            GC_MARK_COND.notify_all();
         }
+
         #[cfg(feature = "shadow_stack")]
         {
             for (root, obj_type) in self.roots.iter() {
@@ -463,11 +469,17 @@ impl Collector {
             }
         }
 
-        let v = GC_MARK_WAITING.fetch_sub(1, Ordering::AcqRel);
-        if v - 1 == 0 {
-            GC_MARKING.store(false, Ordering::Release);
+        let mut v = GC_COLLECTOR_COUNT.lock();
+        let (count, mut waiting) = *v;
+        waiting -= 1;
+        *v = (count, waiting);
+        // println!("gc {}: waiting: {}, count: {}", self.id, waiting, count);
+        if waiting != 0 {
+            GC_MARK_COND.wait_while(&mut v, |_| GC_MARKING.load(Ordering::Acquire));
         } else {
-            spin_until!(!GC_MARKING.load(Ordering::Acquire));
+            GC_MARKING.store(false, Ordering::Release);
+            drop(v);
+            GC_MARK_COND.notify_all();
         }
     }
 
@@ -475,6 +487,7 @@ impl Collector {
     ///
     /// since we did synchronization in mark, we don't need to do synchronization again in sweep
     pub fn sweep(&self) -> usize {
+        GC_RUNNING.store(false, Ordering::Release);
         GC_SWEEPPING_NUM.fetch_add(1, Ordering::AcqRel);
         GC_SWEEPING.store(true, Ordering::Release);
         let used = unsafe {
@@ -487,9 +500,6 @@ impl Collector {
         let v = GC_SWEEPPING_NUM.fetch_sub(1, Ordering::AcqRel);
         if v - 1 == 0 {
             GC_SWEEPING.store(false, Ordering::Release);
-            GC_RUNNING.store(false, Ordering::Release);
-        } else {
-            spin_until!(!GC_SWEEPING.load(Ordering::Acquire));
         }
         used
     }
@@ -548,8 +558,6 @@ impl Collector {
             }
             (*self.mark_histogram).clear();
         }
-        let lock = unsafe { GC_RW_LOCK.raw() };
-        spin_until!(lock.try_lock_shared_recursive());
         let time = std::time::Instant::now();
         unsafe {
             self.thread_local_allocator
@@ -566,7 +574,6 @@ impl Collector {
                 .as_mut()
                 .unwrap()
                 .set_collect_mode(false);
-            lock.unlock_shared();
         }
         log::info!(
             "gc {} collect done, mark: {:?}, sweep: {:?}, used heap size: {} byte, total: {:?}",
@@ -658,6 +665,8 @@ mod tests {
     fn test_basic_multiple_thread_gc() {
         let _lock = THE_RESOURCE.lock();
         let mut handles = vec![];
+        gc_disable_auto_collect();
+        no_gc_thread();
         for _ in 0..10 {
             let t = std::thread::spawn(|| {
                 SPACE.with(|gc| unsafe {

@@ -1,6 +1,9 @@
 use std::{
     cell::RefCell,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::{
+        atomic::{AtomicBool, AtomicUsize, Ordering},
+        Arc,
+    },
 };
 
 pub use int_enum::IntEnum;
@@ -24,17 +27,14 @@ pub use block::*;
 pub use collector::*;
 pub use consts::*;
 
-use parking_lot::{lock_api::RawRwLock, RwLock};
+use parking_lot::{Condvar, Mutex};
 #[cfg(feature = "llvm_stackmap")]
 use rustc_hash::FxHashMap;
 
 thread_local! {
     pub static SPACE: RefCell<Collector> = unsafe {
         // gc运行中的时候不能增加线程
-        let l = GC_RW_LOCK.raw();
-        spin_until!(l.try_lock_exclusive());
         let gc = Collector::new(GLOBAL_ALLOCATOR.0.as_mut().unwrap());
-        l.unlock_exclusive();
         RefCell::new(gc)
     };
 }
@@ -156,7 +156,10 @@ pub fn gc_init(ptr: *mut u8) {
 /// during thread stucking, if a gc is triggered, it will skip waiting for this thread to
 /// reach a safe point
 pub fn thread_stuck_start() {
-    GC_COLLECTOR_COUNT.fetch_sub(1, Ordering::SeqCst);
+    let mut v = GC_COLLECTOR_COUNT.lock();
+    v.0 = v.0 - 1;
+    drop(v);
+    GC_MARK_COND.notify_all();
 }
 
 /// notify gc a thread is not stuck anymore
@@ -164,8 +167,11 @@ pub fn thread_stuck_start() {
 /// if a gc is triggered during thread stucking, this function
 /// will block until the gc is finished
 pub fn thread_stuck_end() {
-    spin_until!(!GC_RUNNING.load(Ordering::Acquire));
-    GC_COLLECTOR_COUNT.fetch_add(1, Ordering::SeqCst);
+    let mut v = GC_COLLECTOR_COUNT.lock();
+    GC_MARK_COND.wait_while(&mut v, |_| GC_RUNNING.load(Ordering::SeqCst));
+    v.0 = v.0 + 1;
+    drop(v);
+    GC_MARK_COND.notify_all();
 }
 
 /// # set evacuation
@@ -196,11 +202,17 @@ impl GAWrapper {
 /// collector count
 ///
 /// should be the same as the number of threads
-static GC_COLLECTOR_COUNT: AtomicUsize = AtomicUsize::new(0);
+static GC_COLLECTOR_COUNT: Mutex<(usize, usize)> = Mutex::new((0, 0));
 
-static GC_MARK_WAITING: AtomicUsize = AtomicUsize::new(0);
+// static GC_MARK_WAITING: AtomicUsize = AtomicUsize::new(0);
 
 static GC_MARKING: AtomicBool = AtomicBool::new(false);
+
+// static GC_MARK_COND: Arc< Condvar> = Arc::new( Condvar::new());
+
+lazy_static! {
+    static ref GC_MARK_COND: Arc<Condvar> = Arc::new(Condvar::new());
+}
 
 static GC_SWEEPPING_NUM: AtomicUsize = AtomicUsize::new(0);
 
@@ -216,9 +228,5 @@ pub static ENABLE_EVA: AtomicBool = AtomicBool::new(true);
 static GC_AUTOCOLLECT_ENABLE: AtomicBool = AtomicBool::new(true);
 #[cfg(not(feature = "auto_gc"))]
 static GC_AUTOCOLLECT_ENABLE: AtomicBool = AtomicBool::new(false);
-
-lazy_static! {
-    pub static ref GC_RW_LOCK: RwLock<()> = RwLock::new(());
-}
 
 unsafe impl Sync for GAWrapper {}
