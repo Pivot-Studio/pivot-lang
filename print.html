@@ -833,7 +833,7 @@ pub type VtableFunc = fn(*mut u8, &amp;Collector, VisitFunc, VisitFunc, VisitFun
 <p>对于Trait Object，我们需要遍历他指向实际值的指针</p>
 <p>下方是一个immix heap的示意图，其中<code>*</code>表示该对象会在mark阶段中被标记</p>
 <pre class="mermaid">graph LR;
-    subgraph Roots
+    subgraph Stack
         Root1
         Root2
         Root3
@@ -922,7 +922,65 @@ mark queue为空，则标记过程结束。</p>
 在此之后根据<code>threshole</code>将所有洞数量大于等于<code>threshole</code>的block标记为待evacuate。</p>
 <p>真正的evacuation过程是在<code>mark</code>阶段一起完成的，我们会在遍历到处于待evacuate的block中的对象时，为它分配一个新的地址，并且
 将它原地址的值替换为一个指向新地址的指针（forward pointer），且将line header中的<code>forward</code>字段设置为<code>true</code>。之后如果再次遍历到
-该对象，收集器会修正指向原地址的指针的值，这一过程我们称之为自愈。</p>
+该对象，收集器会修正指向原地址的指针的值，这一过程我们称之为自愈。该过程如下图所示</p>
+<pre class="mermaid">graph TD;
+    subgraph BeforeEva
+        direction TB
+        EvaBlock
+        EmptyBlock
+        Pointer
+    end
+    subgraph EvaBlock
+        Line1
+        Line2
+        LineK[...]
+        LineN
+    end
+    subgraph Line1
+        Addr[addr: 0x1000]
+        Value[value: 0x4321]
+        Forward[forward: false]
+    end
+    subgraph EmptyBlock
+        EL1
+        ELK[...]
+    end
+    subgraph EL1[Line1]
+        AddrEL[addr: 0x2000]
+        ValueEL[value: 0x0000]
+    end
+    Pointer
+    Pointer--&gt;Line1
+    subgraph AfterEva
+        direction TB
+        EvaBlock1
+        EmptyBlock1
+        Pointer1[Pointer]
+    end
+    subgraph EvaBlock1[EvaBlock]
+        Line11
+        Line21[Line2]
+        LineK1[...]
+        LineN1[LineN]
+    end
+    subgraph Line11[Line1]
+        Addr1[addr: 0x1000]
+        Value1[value: 0x2000]
+        Forward1[forward: true]
+    end
+    subgraph EmptyBlock1[EmptyBlock]
+        EL11
+        ELK1[...]
+    end
+    subgraph EL11[Line1]
+        AddrEL1[addr: 0x2000]
+        ValueEL1[value: 0x4321]
+    end
+    Pointer1--&gt;EL11
+    BeforeEva--&gt;AfterEva
+
+</pre>
+<p>每次驱逐是以分配的对象为单位，如果一个block被标记为待evacuate，那么在驱逐过程中，该block中的所有对象都一定会被驱逐。</p>
 <p>请注意，一部分其他gc的驱逐算法中的自愈需要读写屏障的参与，immix不需要。这带来了较大的mutator性能提升。</p>
 <div id="admonition-warning-1" class="admonition warning">
 <div class="admonition-title">
@@ -1072,7 +1130,7 @@ Global {
 <p><a class="admonition-anchor-link" href="references/stackmap.html#admonition-gc-safepoint介绍"></a></p>
 </div>
 <div>
-<p>safepoint说白了就是潜在的可以触发gc的点位，本来多用于进行多线程回收的同步：大部分gc
+<p>safepoint是潜在的可以触发gc的点位，本来多用于进行多线程回收的同步：大部分gc
 回收算法在回收时（全部或一部分时间）是不允许mutator运行的，这个时候需要暂停所有mutator
 线程（stop the world），等回收完成后再恢复。使用safepoint机制的gc，在mutator线程运行到safepoint时会对
 一个特殊flag进行检查，以判断自己是否需要暂停进行gc。在我们的immix gc中，
@@ -1080,6 +1138,10 @@ safepoint通常由其中一个工作线程在自己的safepoint发起，别的�
 都暂停的时候再进行回收。我们的safepoint目前是在所有malloc点位，不过我们的llvm插件目前会将所有函数调用点位都当作
 safepoint处理。</p>
 <p>safepoint对于stackmap至关重要，因为在回收时gc就是通过在stackmap中查询当前暂停对应的safepoint地址来获取当前栈中的root集的。在暂停的时候safepoint地址在当前栈帧的ip寄存器中。</p>
+<p>由于gc回收需要等待所有线程到达safepoint，所以如果一个线程长期不到达safepoint，别的线程在回收的时候就可能会一直等待。因此
+immix提供一些工具函数。<code>thread_stuck_start</code>和<code>thread_stuck_end</code>，用于标记线程在执行某些长时间“卡住”的任务，在此期间
+该线程需要保证不会使用gc分配新的内存，否则可能导致内存安全问题。在线程被标记为stuck的阶段触发的gc会跳过同步该线程。<code>no_gc_thread</code>
+可以告知gc目前正在执行的线程不需要gc功能，该线程不会分配对应的ThreadLocalAllocator。</p>
 </div>
 </div>
 <p>我们的llvm插件会将stackmap信息生成到每个目标文件的数据段中，应用程序可以使用weak link的方式用对应的全局变量获取到这个数据标签对应的地址，然后就可以通过这个地址来获取到stackmap信息了。对应数据区域标签的命名规则是：<code>_GC_MAP_$source_file_name</code>，其中<code>$source_file_name</code>是对应llvm module中记录的的源文件名。</p>
