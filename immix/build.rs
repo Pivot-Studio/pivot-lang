@@ -56,7 +56,7 @@ fn main() {
         lazy_static! {
             /// LLVM version used by this version of the crate.
             static ref CRATE_VERSION: Version = {
-                let crate_version = Version::parse(env!("CARGO_PKG_VERSION"))
+                let crate_version = Version::parse("140.0.6")
                     .expect("Crate version is somehow not valid semver");
                 Version {
                     major: crate_version.major / 10,
