@@ -13,7 +13,7 @@ use crate::{
     allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
     gc_is_auto_collect_enabled, spin_until, HeaderExt, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID,
-    GC_MARKING, GC_MARK_COND, GC_RUNNING, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE,
+    GC_MARKING, GC_MARK_COND, GC_RUNNING, GC_STW_COUNT, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE,
     NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION,
 };
 
@@ -58,8 +58,8 @@ impl Drop for Collector {
             if (*self.thread_local_allocator).is_live() {
                 let mut v = GC_COLLECTOR_COUNT.lock();
                 v.0 = v.0 - 1;
-                drop(v);
                 GC_MARK_COND.notify_all();
+                drop(v);
                 drop_in_place(self.thread_local_allocator);
             }
             libc::free(self.thread_local_allocator as *mut libc::c_void);
@@ -78,8 +78,8 @@ impl Collector {
     pub fn new(ga: &mut GlobalAllocator) -> Self {
         let mut v = GC_COLLECTOR_COUNT.lock();
         v.0 = v.0 + 1;
-        drop(v);
         GC_MARK_COND.notify_all();
+        drop(v);
         let id = GC_ID.fetch_add(1, Ordering::Relaxed);
         unsafe {
             let tla = ThreadLocalAllocator::new(ga);
@@ -114,8 +114,8 @@ impl Collector {
     pub fn unregister_current_thread(&self) {
         let mut v = GC_COLLECTOR_COUNT.lock();
         v.0 = v.0 - 1;
-        drop(v);
         GC_MARK_COND.notify_all();
+        drop(v);
         unsafe {
             drop_in_place(self.thread_local_allocator);
         }
@@ -385,6 +385,7 @@ impl Collector {
                 // 线程数量变化了？
                 if waiting == *c {
                     GC_MARKING.store(true, Ordering::Release);
+                    GC_STW_COUNT.fetch_add(1, Ordering::Relaxed);
                     GC_MARK_COND.notify_all();
                     return false;
                 }
@@ -393,8 +394,9 @@ impl Collector {
             drop(v);
         } else {
             GC_MARKING.store(true, Ordering::Release);
-            drop(v);
+            GC_STW_COUNT.fetch_add(1, Ordering::Relaxed);
             GC_MARK_COND.notify_all();
+            drop(v);
         }
 
         #[cfg(feature = "shadow_stack")]
@@ -478,8 +480,8 @@ impl Collector {
             GC_MARK_COND.wait_while(&mut v, |_| GC_MARKING.load(Ordering::Acquire));
         } else {
             GC_MARKING.store(false, Ordering::Release);
-            drop(v);
             GC_MARK_COND.notify_all();
+            drop(v);
         }
     }
 

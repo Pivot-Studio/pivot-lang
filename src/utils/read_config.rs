@@ -121,7 +121,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
         config.deps = Some(deps);
     } else {
         let mut rawdeps = config.deps.clone().unwrap();
-        let pb = COMPILE_PROGRESS.inner.borrow();
+        let pb = &COMPILE_PROGRESS;
         if pb.length() == None {
             pb.set_length(rawdeps.len() as u64);
         } else {

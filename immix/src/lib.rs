@@ -158,8 +158,8 @@ pub fn gc_init(ptr: *mut u8) {
 pub fn thread_stuck_start() {
     let mut v = GC_COLLECTOR_COUNT.lock();
     v.0 = v.0 - 1;
-    drop(v);
     GC_MARK_COND.notify_all();
+    drop(v);
 }
 
 /// notify gc a thread is not stuck anymore
@@ -170,8 +170,8 @@ pub fn thread_stuck_end() {
     let mut v = GC_COLLECTOR_COUNT.lock();
     GC_MARK_COND.wait_while(&mut v, |_| GC_RUNNING.load(Ordering::SeqCst));
     v.0 = v.0 + 1;
-    drop(v);
     GC_MARK_COND.notify_all();
+    drop(v);
 }
 
 /// # set evacuation
@@ -222,6 +222,8 @@ static GC_RUNNING: AtomicBool = AtomicBool::new(false);
 
 static GC_ID: AtomicUsize = AtomicUsize::new(0);
 
+static GC_STW_COUNT: AtomicUsize = AtomicUsize::new(0);
+
 pub static ENABLE_EVA: AtomicBool = AtomicBool::new(true);
 
 #[cfg(feature = "auto_gc")]
@@ -230,3 +232,7 @@ static GC_AUTOCOLLECT_ENABLE: AtomicBool = AtomicBool::new(true);
 static GC_AUTOCOLLECT_ENABLE: AtomicBool = AtomicBool::new(false);
 
 unsafe impl Sync for GAWrapper {}
+
+pub fn get_gc_stw_num() -> usize {
+    GC_STW_COUNT.load(Ordering::SeqCst)
+}

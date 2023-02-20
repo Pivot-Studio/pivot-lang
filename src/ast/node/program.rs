@@ -114,7 +114,7 @@ pub struct Program {
 impl Program {
     #[salsa::tracked(lru = 32)]
     pub fn emit(self, db: &dyn Db) -> ModWrapper {
-        let pb = COMPILE_PROGRESS.inner.borrow();
+        let pb = &COMPILE_PROGRESS;
         let n = *self.node(db).node(db);
         let mut prog = match n {
             NodeEnum::Program(p) => p,

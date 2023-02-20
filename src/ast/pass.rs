@@ -11,8 +11,8 @@ lazy_static::lazy_static! {
     pub static ref MAP_NAMES: GlobalMutWrapper<Vec<String>> = {
         GlobalMutWrapper { inner: RefCell::new(vec![]) }
     };
-    pub static ref COMPILE_PROGRESS: GlobalMutWrapper<ProgressBar> = {
-        GlobalMutWrapper { inner: RefCell::new(ProgressBar::hidden()) }
+    pub static ref COMPILE_PROGRESS: ProgressBar = {
+        ProgressBar::hidden()
     };
 }
 

@@ -199,7 +199,7 @@ lazy_static! {
 #[salsa::tracked]
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     MAP_NAMES.inner.borrow_mut().clear();
-    let pb = COMPILE_PROGRESS.inner.borrow();
+    let pb = &COMPILE_PROGRESS;
     pb.enable_steady_tick(Duration::from_millis(50));
     pb.set_style(PROGRESS_STYLE.clone());
     pb.set_draw_target(ProgressDrawTarget::stderr());
