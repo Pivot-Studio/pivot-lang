@@ -157,8 +157,8 @@ fn main() {
                     major,
                     minor,
                     patch,
-                    pre: vec![],
-                    build: vec![],
+                    pre: Default::default(),
+                    build: Default::default(),
                 };
 
                 if &bad_version == llvm_version {
