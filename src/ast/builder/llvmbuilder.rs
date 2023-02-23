@@ -15,7 +15,7 @@ use inkwell::{
     debug_info::*,
     module::{FlagBehavior, Linkage, Module},
     targets::{InitializationConfig, Target, TargetMachine},
-    types::{BasicType, BasicTypeEnum, FunctionType, StructType},
+    types::{BasicType, BasicTypeEnum, FunctionType, PointerType, StructType},
     values::{
         AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, CallableValue,
         FunctionValue, PointerValue,
@@ -64,6 +64,14 @@ pub struct MemberType<'ctx> {
     pub name: String,
     pub di_file: DIFile<'ctx>,
     pub ptr_depth: usize,
+}
+
+fn get_nth_mark_fn<'ctx>(f: FunctionValue<'ctx>, n: u32) -> CallableValue<'ctx> {
+    f.get_nth_param(n)
+        .unwrap()
+        .into_pointer_value()
+        .try_into()
+        .unwrap()
 }
 
 pub fn create_llvm_deps<'ctx>(
@@ -305,18 +313,18 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         nh
     }
 
-    fn gen_or_get_arr_visit_function(&self, ctx: &mut Ctx<'a>, v: &ARRType) -> FunctionValue<'ctx> {
-        let currentbb = self.builder.get_insert_block();
-        self.builder.unset_current_debug_location();
+    fn visit_f_tp(&self) -> PointerType<'ctx> {
         let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::default());
-        let visit_ftp = self
-            .context
+        self.context
             .void_type()
             .fn_type(&[i8ptrtp.into(), i8ptrtp.into()], false)
-            .ptr_type(AddressSpace::default());
-        let ptrtp = self.arr_type(v, ctx).ptr_type(AddressSpace::default());
-        let ty = ptrtp.get_element_type().into_struct_type();
-        let ftp = self.context.void_type().fn_type(
+            .ptr_type(AddressSpace::default())
+    }
+
+    fn mark_fn_tp(&self, ptrtp: PointerType<'ctx>) -> FunctionType<'ctx> {
+        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::default());
+        let visit_ftp = self.visit_f_tp();
+        self.context.void_type().fn_type(
             &[
                 ptrtp.into(),
                 i8ptrtp.into(),
@@ -325,7 +333,15 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 visit_ftp.into(),
             ],
             false,
-        );
+        )
+    }
+
+    fn gen_or_get_arr_visit_function(&self, ctx: &mut Ctx<'a>, v: &ARRType) -> FunctionValue<'ctx> {
+        let currentbb = self.builder.get_insert_block();
+        self.builder.unset_current_debug_location();
+        let ptrtp = self.arr_type(v, ctx).ptr_type(AddressSpace::default());
+        let ty = ptrtp.get_element_type().into_struct_type();
+        let ftp = self.mark_fn_tp(ptrtp);
         let arr_tp = ty.get_field_type_at_index(1).unwrap().into_array_type();
         let fname = &(arr_tp.to_string() + "@" + &ctx.plmod.path);
         if let Some(f) = self.module.get_function(fname) {
@@ -366,26 +382,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             )
         };
         let visitor = f.get_nth_param(1).unwrap().into_pointer_value();
-        let visit_ptr_f: CallableValue = f
-            .get_nth_param(2)
-            .unwrap()
-            .into_pointer_value()
-            .try_into()
-            .unwrap();
+        let visit_ptr_f = get_nth_mark_fn(f, 2);
         // complex type needs to provide a visit function by itself
         // which is stored in the first field of the struct
-        let visit_complex_f: CallableValue = f
-            .get_nth_param(3)
-            .unwrap()
-            .into_pointer_value()
-            .try_into()
-            .unwrap();
-        let visit_trait_f: CallableValue = f
-            .get_nth_param(4)
-            .unwrap()
-            .into_pointer_value()
-            .try_into()
-            .unwrap();
+        let visit_complex_f = get_nth_mark_fn(f, 3);
+        let visit_trait_f = get_nth_mark_fn(f, 4);
         match &*v.element_type.borrow() {
             PLType::ARR(_) | PLType::STRUCT(_) => {
                 // call the visit_complex function
@@ -980,90 +981,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.get_llvm_value_handle(&self.get_or_insert_fn(pltp, ctx).as_any_value_enum())
     }
 
-    // fn mv2heap(&self, val: ValueHandle, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle {
-    //     if !ctx.usegc {
-    //         return val;
-    //     }
-    //     let val = self.get_llvm_value(val).unwrap();
-    //     let gcmod = ctx.plmod.submods.get("gc").unwrap();
-    //     let f: FNType = gcmod
-    //         .get_type("DioGC__malloc")
-    //         .unwrap()
-    //         .borrow()
-    //         .clone()
-    //         .try_into()
-    //         .unwrap();
-    //     let f = self.get_or_insert_fn(&f, ctx);
-    //     let td = self.targetmachine.get_target_data();
-    //     let loaded = self.builder.build_load(val.into_pointer_value(), "loaded");
-    //     let size = td.get_store_size(&loaded.get_type());
-    //     let size = self.context.i64_type().const_int(size as u64, false);
-    //     let tp = self
-    //         .context
-    //         .i8_type()
-    //         .const_int(tp.get_immix_type().int_value() as u64, false);
-    //     let heapptr = self
-    //         .builder
-    //         .build_call(f, &[size.into(), tp.into()], "gc_malloc")
-    //         .try_as_basic_value()
-    //         .left()
-    //         .unwrap();
-    //     let heapptr = self.builder.build_pointer_cast(
-    //         heapptr.into_pointer_value(),
-    //         val.get_type().into_pointer_type(),
-    //         "heapptr",
-    //     );
-    //     self.builder.build_store(heapptr, loaded);
-    //     self.get_llvm_value_handle(&heapptr.as_any_value_enum())
-    // }
-    // fn gc_rm_root(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>) {
-    //     if !ctx.usegc {
-    //         return;
-    //     }
-    //     self.builder.unset_current_debug_location();
-    //     let block = self.builder.get_insert_block().unwrap();
-    //     if let Some(inst) = block.get_first_instruction() {
-    //         self.builder.position_before(&inst);
-    //     }
-    //     self.gc_rm_root_current(stackptr, ctx);
-    // }
-    // fn gc_rm_root_current(&self, stackptr: ValueHandle, ctx: &mut Ctx<'a>) {
-    //     if !ctx.usegc {
-    //         return;
-    //     }
-    //     let stackptr = self.get_llvm_value(stackptr).unwrap();
-    //     let gcmod = ctx.plmod.submods.get("gc").unwrap();
-    //     let f: FNType = gcmod
-    //         .get_type("DioGC__rm_root")
-    //         .unwrap()
-    //         .borrow()
-    //         .clone()
-    //         .try_into()
-    //         .unwrap();
-    //     let f = self.get_or_insert_fn(&f, ctx);
-    //     let stackptr = self.builder.build_pointer_cast(
-    //         stackptr.into_pointer_value(),
-    //         self.context.i64_type().ptr_type(AddressSpace::default()),
-    //         "stackptr",
-    //     );
-    //     self.builder.build_call(f, &[stackptr.into()], "rm_root");
-    // }
-    // fn gc_collect(&self, ctx: &mut Ctx<'a>) {
-    //     if !ctx.usegc {
-    //         return;
-    //     }
-    //     self.builder.unset_current_debug_location();
-    //     let gcmod = ctx.plmod.submods.get("gc").unwrap();
-    //     let f: FNType = gcmod
-    //         .get_type("DioGC__collect")
-    //         .unwrap()
-    //         .borrow()
-    //         .clone()
-    //         .try_into()
-    //         .unwrap();
-    //     let f = self.get_or_insert_fn(&f, ctx);
-    //     self.builder.build_call(f, &[], "collect");
-    // }
     fn get_or_add_global(
         &self,
         name: &str,
@@ -1711,26 +1628,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         global.set_metadata(exp.as_metadata_value(self.context), 0);
         self.get_llvm_value_handle(&global.as_any_value_enum())
     }
-    /// ```ignore
-    /// struct A {
-    ///    a: i32,
-    ///    b: *i32,
-    ///    c: *A,
-    ///    d: B,
-    ///    e: [i32; 3],
-    ///    f: [*i32; 3],
-    ///    g: [A; 3], // TODO 没考虑到
-    ///    h: Trait,
-    ///    i: *[*i32; 3],
-    /// }
-    /// visit_ptr(&a.b);
-    /// visit_ptr(&a.c);
-    /// a.d.vtable(visitfns..);
-    /// a.e.vtable(visitfns..);
-    /// a.f.vtable(visitfns..);
-    /// visit_trait(&a.h);
-    /// visit_ptr(&a.i);
-    /// ```
+
     fn gen_st_visit_function(
         &self,
         ctx: &mut Ctx<'a>,
@@ -1740,23 +1638,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let currentbb = ctx.block;
         self.builder.unset_current_debug_location();
         let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::default());
-        let visit_ftp = self
-            .context
-            .void_type()
-            .fn_type(&[i8ptrtp.into(), i8ptrtp.into()], false)
-            .ptr_type(AddressSpace::default());
         let ptrtp = self.struct_type(v, ctx).ptr_type(AddressSpace::default());
         let ty = ptrtp.get_element_type().into_struct_type();
-        let ftp = self.context.void_type().fn_type(
-            &[
-                ptrtp.into(),
-                i8ptrtp.into(),
-                visit_ftp.into(),
-                visit_ftp.into(),
-                visit_ftp.into(),
-            ],
-            false,
-        );
+        let ftp = self.mark_fn_tp(ptrtp);
         let f = self.module.add_function(
             &(ty.get_name().unwrap().to_str().unwrap().to_string() + "@"),
             ftp,
@@ -1770,26 +1654,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         for i in 1..fieldn {
             let field_pltp = &*field_tps[i as usize - 1].borrow();
             let visitor = f.get_nth_param(1).unwrap().into_pointer_value();
-            let visit_ptr_f: CallableValue = f
-                .get_nth_param(2)
-                .unwrap()
-                .into_pointer_value()
-                .try_into()
-                .unwrap();
+            let visit_ptr_f = get_nth_mark_fn(f, 2);
             // complex type needs to provide a visit function by itself
             // which is stored in the first field of the struct
-            let visit_complex_f: CallableValue = f
-                .get_nth_param(3)
-                .unwrap()
-                .into_pointer_value()
-                .try_into()
-                .unwrap();
-            let visit_trait_f: CallableValue = f
-                .get_nth_param(4)
-                .unwrap()
-                .into_pointer_value()
-                .try_into()
-                .unwrap();
+            let visit_complex_f = get_nth_mark_fn(f, 3);
+            let visit_trait_f = get_nth_mark_fn(f, 4);
             let f = self.builder.build_struct_gep(st, i, "gep").unwrap();
             // 指针类型，递归调用visit函数
             if let PLType::POINTER(_) = field_pltp {

@@ -4,7 +4,7 @@ use crate::{
         accumulators::{Diagnostics, ModBuffer},
         builder::llvmbuilder::get_target_machine,
         node::program::Program,
-        pass::{COMPILE_PROGRESS, MAP_NAMES},
+        pass::MAP_NAMES,
     },
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
@@ -84,6 +84,12 @@ pub enum ActionType {
     Hint,
     DocSymbol,
     SignatureHelp,
+}
+
+lazy_static::lazy_static! {
+    pub static ref COMPILE_PROGRESS: ProgressBar = {
+        ProgressBar::hidden()
+    };
 }
 
 #[cfg(feature = "jit")]
@@ -198,7 +204,7 @@ lazy_static! {
 
 #[salsa::tracked]
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
-    MAP_NAMES.inner.borrow_mut().clear();
+    MAP_NAMES.inner.lock().borrow_mut().clear();
     let pb = &COMPILE_PROGRESS;
     pb.enable_steady_tick(Duration::from_millis(50));
     pb.set_style(PROGRESS_STYLE.clone());

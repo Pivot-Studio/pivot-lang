@@ -1175,6 +1175,7 @@ dependencies = [
  "lsp-types",
  "nom",
  "nom_locate",
+ "parking_lot",
  "paste",
  "petgraph",
  "pl_linker",

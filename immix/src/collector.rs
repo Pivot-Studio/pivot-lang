@@ -311,19 +311,9 @@ impl Collector {
     /// it self does not mark the object, but mark the object's fields by calling
     /// mark_ptr
     unsafe fn mark_complex(&self, ptr: *mut u8) {
-        // if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr)
-        //    &&!self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr) {
-        //     return;
-        // }
         let vtable = *(ptr as *mut VtableFunc);
-        // let ptr = vtable as *mut u8;
-        let v = vtable as i64;
-        // println!("vtable: {:?}, ptr : {:p}", v, ptr);
-        // let a = *(ptr as *mut *mut u8);
-        // println!("a: {:p}", a);
-        // println!("vtable: {:?}, ptr : {:p}", v, ptr);
-        // 我不知道为什么，vtable为0的情况，这里如果写v == 0，进不去这个if。应该是rust的一个bug
-        if v < 1 && v > -1 {
+        let vtable_ptr = vtable as *mut u8;
+        if vtable_ptr.is_null() {
             return;
         }
         vtable(
