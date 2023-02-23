@@ -1,27 +1,21 @@
 use std::cell::RefCell;
 
 use immix::LLVM_GC_STRATEGY_NAME;
-use indicatif::ProgressBar;
 use inkwell::{
     module::{Linkage, Module},
     AddressSpace,
 };
+use parking_lot::Mutex;
 
 lazy_static::lazy_static! {
     pub static ref MAP_NAMES: GlobalMutWrapper<Vec<String>> = {
-        GlobalMutWrapper { inner: RefCell::new(vec![]) }
-    };
-    pub static ref COMPILE_PROGRESS: ProgressBar = {
-        ProgressBar::hidden()
+        GlobalMutWrapper { inner: Mutex::new( RefCell::new(vec![])) }
     };
 }
 
 pub struct GlobalMutWrapper<T> {
-    pub inner: RefCell<T>,
+    pub inner: Mutex<RefCell<T>>,
 }
-
-unsafe impl<T> Send for GlobalMutWrapper<T> {}
-unsafe impl<T> Sync for GlobalMutWrapper<T> {}
 
 pub fn run_immix_pass(module: &Module) {
     let ctx = module.get_context();
@@ -32,10 +26,10 @@ pub fn run_immix_pass(module: &Module) {
     // println!("gcmap_name: {}", gcmap_name);
     MAP_NAMES
         .inner
+        .lock()
         .borrow_mut()
         .push(gcmap_name.clone() + "__init");
     stack_map.set_linkage(Linkage::ExternalWeak);
-    // module.get_function("main").unwrap().set_gc(LLVM_GC_STRATEGY_NAME);
     let ptr_tp = ctx.i8_type().ptr_type(AddressSpace::default());
     let init_f_tp = ctx.void_type().fn_type(&[ptr_tp.into()], false);
     let init_f = module.add_function("immix_gc_init", init_f_tp, None);
@@ -59,7 +53,7 @@ pub fn run_immix_pass(module: &Module) {
             .and_then(|bb| bb.get_first_instruction())
             .and_then(|inst| {
                 builder.position_before(&inst);
-                MAP_NAMES.inner.borrow().iter().for_each(|name| {
+                MAP_NAMES.inner.lock().borrow().iter().for_each(|name| {
                     let f = module.get_function(name).unwrap_or_else(|| {
                         module.add_function(name, ctx.void_type().fn_type(&[], false), None)
                     });

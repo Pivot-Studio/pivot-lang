@@ -52,4 +52,4 @@ build/build.ninja
 Debug
 Release
 kagari/test_dir
-planglib/github.com
+planglib/thirdparty

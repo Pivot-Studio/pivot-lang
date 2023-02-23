@@ -4,7 +4,7 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use crate::{ast::pass::COMPILE_PROGRESS, nomparser::SourceProgram, Db};
+use crate::{ast::compiler::COMPILE_PROGRESS, nomparser::SourceProgram, Db};
 
 pub fn get_config_path(current: String) -> Result<String, &'static str> {
     let mut cur_path = PathBuf::from(current);
@@ -98,7 +98,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     let libroot = libroot.unwrap();
     for x in libroot {
         if let Ok(path) = x {
-            if path.path().is_dir() {
+            if path.path().is_dir() && !path.file_name().eq("thirdparty") {
                 let mut dep = Dependency::default();
                 dep.path = dunce::canonicalize(path.path())
                     .unwrap()
@@ -109,6 +109,8 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
             }
         }
     }
+    let binding = lib_path.join("thirdparty");
+    let third_party = binding.to_str().unwrap();
     let mut i = 1;
     let mut err = None;
     let lockfile = config_root.join("Kagari.lock");
@@ -147,8 +149,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
                             None
                         })
                         .and_then(|mut b| {
-                            let (child, target) =
-                                kagari::download_repo(&git, lib_path.to_str().unwrap());
+                            let (child, target) = kagari::download_repo(&git, third_party);
                             pb.set_message(format!("正在下载依赖{}", k));
                             if child.is_some() {
                                 child.unwrap().unwrap();
