@@ -8,35 +8,35 @@ authors = ["The pivot-lang Authors"]
 
 [dependencies]
 inkwell = { version = "0.1", features = ["llvm14-0", "no-libffi-linking"] }
-indexmap = "1.9.2"
-lazy_static = "1.4.0"
+indexmap = "1.9"
+lazy_static = "1.4"
 paste = "1.0"
 llvm-sys = "140"
 internal_macro = { path = "./internal_macro" }
 pl_linker = { path = "./pl_linker" }
 vm = { path = "./vm", optional = true, features = ["jit"] }
 immix = { path = "./immix", features = ["llvm_gc_plugin", "llvm_stackmap"] }
-nom_locate = "4.0.0"
-rowan = "0.15.10"
-dissimilar = "1.0.4"
-stderrlog = "0.5.4"
+nom_locate = "4.0"
+rowan = "0.15"
+dissimilar = "1.0"
+stderrlog = "0.5"
 log = "0.4"
-clap = { version = "4.0.18", features = ["derive"] }
-colored = "2.0.0"
-serde = "1.0.145"
+clap = { version = "4.1", features = ["derive"] }
+colored = "2.0"
+serde = "1.0"
 lsp-types = { branch = "master", features = ["proposed"], git = "https://github.com/Pivot-Studio/lsp-types" }
-lsp-server = "0.6.0"
-serde_json = "1.0.85"
-rustc-hash = "1.1.0"
-crossbeam-channel = "0.5.6"
+lsp-server = "0.7"
+serde_json = "1.0"
+rustc-hash = "1.1"
+crossbeam-channel = "0.5"
 salsa = { package = "salsa-2022", git = "https://github.com/salsa-rs/salsa", branch = "master" }
-enum_dispatch = "0.3.8"
-threadpool = "1.8.1"
-dunce = "1.0.3"
-toml = "0.5.9"
-ariadne = "0.1.5"
-dyn-fmt = "0.3.0"
-petgraph = "0.6.2"
+enum_dispatch = "0.3"
+threadpool = "1.8"
+dunce = "1.0"
+toml = "0.7"
+ariadne = "0.1"
+dyn-fmt = "0.3"
+petgraph = "0.6"
 kagari = { path = "./kagari" }
 indicatif = "0.17"
 parking_lot = "0.12"
