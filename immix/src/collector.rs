@@ -311,11 +311,11 @@ impl Collector {
     /// it self does not mark the object, but mark the object's fields by calling
     /// mark_ptr
     unsafe fn mark_complex(&self, ptr: *mut u8) {
-        let vtable = *(ptr as *mut VtableFunc);
-        let vtable_ptr = vtable as *mut u8;
-        if vtable_ptr.is_null() {
+        let vptr = *(ptr as *mut *mut u8);
+        if vptr.is_null() {
             return;
         }
+        let vtable = *(ptr as *mut VtableFunc);
         vtable(
             ptr,
             self,
