@@ -30,7 +30,8 @@ clean:
 	@cd target && rm -f *.ll && rm -f *.bc && rm -rf *.dSYM && rm -f testout* && rm -f out*  && rm -f *.o
 
 bench:
-	@cargo bench --all
+	@cd immix && cargo bench 
+	@cd vm && cargo bench
 
 bench-simple-gc:
 	@cd vm && cargo bench --features=simple_gc --no-default-features
