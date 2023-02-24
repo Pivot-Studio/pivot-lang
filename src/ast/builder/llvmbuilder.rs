@@ -4,7 +4,7 @@
 use std::{
     cell::{Cell, RefCell},
     path::Path,
-    sync::Arc,
+    sync::{Arc, atomic::{AtomicI64, Ordering}},
 };
 
 use immix::{IntEnum, ObjectType};
@@ -46,6 +46,7 @@ const DW_ATE_BOOLEAN: u32 = 0x02;
 const DW_ATE_FLOAT: u32 = 0x04;
 const DW_ATE_SIGNED: u32 = 0x05;
 const DW_ATE_UNSIGNED: u32 = 0x07;
+static ID:AtomicI64 = AtomicI64::new(0);
 // const DW_TAG_REFERENCE_TYPE: u32 = 16;
 fn get_dw_ate_encoding<'a, 'ctx>(pritp: &PriType) -> u32 {
     match pritp {
@@ -194,7 +195,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         tp: &PLType,
     ) -> (PointerValue<'ctx>, PointerValue<'ctx>, BasicTypeEnum<'ctx>) {
         let obj_type = tp.get_immix_type().int_value();
-        let gcmod = ctx.plmod.submods.get("gc").unwrap();
+        let mut root_ctx = &*ctx;
+        while let Some(f) = root_ctx.father {
+            root_ctx = f
+        }
+        let gcmod = root_ctx.plmod.submods.get("gc").unwrap_or(&root_ctx.plmod);
         let f: FNType = gcmod
             .get_type("DioGC__malloc")
             .unwrap()
@@ -1226,7 +1231,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.get_llvm_value_handle(&gep.as_any_value_enum())
     }
     fn const_string(&self, s: &str) -> ValueHandle {
-        let s = self.context.const_string(s.as_bytes(), false);
+        let s = self.builder.build_global_string_ptr(s, format!("str_{}", ID.fetch_add(1, Ordering::Relaxed)).as_str());
+        let s = self.builder.build_bitcast(s, self.context.i8_type().ptr_type(Default::default()), "str");
         self.get_llvm_value_handle(&s.as_any_value_enum())
     }
     fn build_dbg_location(&self, pos: Pos) {

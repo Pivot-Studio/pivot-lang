@@ -20,6 +20,7 @@ use super::*;
 #[test_parser("10.")]
 #[test_parser("10.10")]
 #[test_parser("10")]
+#[test_parser("10_00_3")]
 pub fn number(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let (input, _) = space0(input)?;
     let (re, value) = alt((
@@ -28,7 +29,7 @@ pub fn number(input: Span) -> IResult<Span, Box<NodeEnum>> {
         }),
         map_res(decimal, |out| {
             // TODO:err tolerate
-            Ok::<Num, Error>(Num::INT(out.fragment().parse::<u64>().unwrap()))
+            Ok::<Num, Error>(Num::INT(out.fragment().replace("_", "").parse::<u64>().unwrap()))
         }),
     ))(input)?;
     let range = Range::new(input, re);

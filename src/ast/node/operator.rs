@@ -354,8 +354,13 @@ impl Node for TakeOpNode {
                             } else if let Some(mthd) = method {
                                 ctx.push_semantic_token(range, SemanticTokenType::METHOD, 0);
                                 let mut mthd = mthd.clone();
-                                mthd.param_pltypes
-                                    .insert(0, pltype.borrow().get_typenode(ctx));
+                                if let PLType::POINTER(_) = &*pltype.clone().borrow() {
+                                    mthd.param_pltypes
+                                    .insert(0, pltype.borrow().get_typenode(ctx));   
+                                }else {
+                                    mthd.param_pltypes
+                                    .insert(0, PLType::POINTER(pltype.clone()).get_typenode(ctx));
+                                }
                                 ctx.send_if_go_to_def(
                                     range,
                                     mthd.range,
