@@ -1,4 +1,5 @@
 use super::ctx::Ctx;
+use super::plmod::Mod;
 use crate::ast::builder::IRBuilder;
 
 use crate::ast::builder::BuilderEnum;
@@ -124,7 +125,9 @@ pub fn eq(l: Arc<RefCell<PLType>>, r: Arc<RefCell<PLType>>) -> bool {
     match &mut *l.borrow_mut() {
         PLType::GENERIC(l) => {
             if l.curpltype.is_some() {
-                return eq(l.curpltype.as_ref().unwrap().clone(), r);
+                let newl = l.curpltype.as_ref().unwrap().clone();
+                // drop(l);
+                return eq(newl, r);
             }
             l.set_type(r.clone());
             return true;
@@ -136,7 +139,11 @@ pub fn eq(l: Arc<RefCell<PLType>>, r: Arc<RefCell<PLType>>) -> bool {
         (PLType::VOID, PLType::VOID) => true,
         (PLType::POINTER(l), PLType::POINTER(r)) => eq(l.clone(), r.clone()),
         (PLType::ARR(l), PLType::ARR(r)) => {
-            eq(l.get_elem_type(), r.get_elem_type()) && l.size == r.size
+            let newl = l.get_elem_type().clone();
+            let newr = r.get_elem_type().clone();
+            // drop(l);
+            // drop(r);
+            eq(newl, newr) && l.size == r.size
         }
         (PLType::STRUCT(l), PLType::STRUCT(r)) => l.name == r.name && l.path == r.path,
         (PLType::FN(l), PLType::FN(r)) => l == r,
@@ -230,10 +237,10 @@ impl PLType {
             PLType::TRAIT(_) => "trait".to_string(),
         }
     }
-    pub fn get_typenode(&self, ctx: &Ctx) -> Box<TypeNodeEnum> {
+    pub fn get_typenode(&self, m: &Mod) -> Box<TypeNodeEnum> {
         match self {
             PLType::STRUCT(st) => {
-                if st.path == ctx.plmod.path {
+                if st.path == m.path {
                     new_typename_node(&st.name, st.range)
                 } else {
                     new_exid_node(
@@ -252,15 +259,15 @@ impl PLType {
                 }
             }
             PLType::ARR(arr) => new_arrtype_node(
-                arr.get_elem_type().borrow().get_typenode(ctx),
+                arr.get_elem_type().borrow().get_typenode(m),
                 arr.size as u64,
             ),
             PLType::PRIMITIVE(p) => new_typename_node(&p.get_name(), Default::default()),
             PLType::VOID => new_typename_node("void", Default::default()),
-            PLType::POINTER(p) => new_ptrtype_node(p.borrow().get_typenode(ctx)),
+            PLType::POINTER(p) => new_ptrtype_node(p.borrow().get_typenode(m)),
             PLType::GENERIC(g) => {
                 if g.curpltype.is_some() {
-                    g.curpltype.as_ref().unwrap().borrow().get_typenode(ctx)
+                    g.curpltype.as_ref().unwrap().borrow().get_typenode(m)
                 } else {
                     new_typename_node(&g.name, Default::default())
                 }
@@ -433,9 +440,9 @@ impl Field {
 pub struct FNType {
     pub name: String,     // name for lsp
     pub llvmname: String, // name in llvm ir
-    pub param_pltypes: Vec<Box<TypeNodeEnum>>,
+    pub param_pltypes: Vec<Arc<RefCell<PLType>>>,
     pub param_names: Vec<String>,
-    pub ret_pltype: Box<TypeNodeEnum>,
+    pub ret_pltype: Arc<RefCell<PLType>>,
     pub range: Range,
     // pub refs: Arc<RwVec<Location>>,
     pub doc: Vec<Box<NodeEnum>>,
@@ -465,8 +472,8 @@ impl FNType {
     pub fn eq_except_receiver<'a, 'ctx, 'b>(
         &self,
         other: &FNType,
-        ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        _ctx: &'b mut Ctx<'a>,
+        _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> bool {
         if self.name.split("::").last().unwrap() != other.name.split("::").last().unwrap() {
             return false;
@@ -475,13 +482,13 @@ impl FNType {
             return false;
         }
         for i in 1..self.param_pltypes.len() {
-            if self.param_pltypes[i].get_type(ctx, builder)
-                != other.param_pltypes[i].get_type(ctx, builder)
+            if self.param_pltypes[i]
+                != other.param_pltypes[i]
             {
                 return false;
             }
         }
-        self.ret_pltype.get_type(ctx, builder) == other.ret_pltype.get_type(ctx, builder)
+        self.ret_pltype == other.ret_pltype
     }
     pub fn append_name_with_generic(&self, name: String) -> String {
         if self.need_gen_code() {
@@ -536,20 +543,6 @@ impl FNType {
         ctx.need_highlight = ctx.need_highlight - 1;
         ctx.position_at_end(block.unwrap(), builder);
 
-        res.ret_pltype = self
-            .ret_pltype
-            .get_type(ctx, builder)
-            .unwrap()
-            .borrow()
-            .get_typenode(ctx);
-        res.param_pltypes = self
-            .param_pltypes
-            .iter()
-            .map(|p| {
-                let np = p.get_type(ctx, builder).unwrap().borrow().get_typenode(ctx);
-                np
-            })
-            .collect::<Vec<Box<TypeNodeEnum>>>();
         let pltype = self
             .generic_infer
             .borrow()
@@ -604,21 +597,21 @@ impl FNType {
                 params += &format!(
                     "{}: {}",
                     self.param_names[0],
-                    FmtBuilder::generate_node(&self.param_pltypes[0])
+                    self.param_pltypes[0].borrow().get_name()
                 );
             }
             for i in 1..self.param_names.len() {
                 params += &format!(
                     ", {}: {}",
                     self.param_names[i],
-                    FmtBuilder::generate_node(&self.param_pltypes[i])
+                    self.param_pltypes[0].borrow().get_name()
                 );
             }
         }
         format!(
             "fn ({}) {}",
             params,
-            FmtBuilder::generate_node(&self.ret_pltype)
+            self.ret_pltype.borrow().get_name()
         )
     }
 }
@@ -712,7 +705,7 @@ impl STType {
                     .get_type(ctx, builder)
                     .unwrap()
                     .borrow()
-                    .get_typenode(ctx);
+                    .get_typenode(&ctx.plmod);
                 nf
             })
             .collect::<Vec<Field>>();

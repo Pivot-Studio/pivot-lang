@@ -23,6 +23,11 @@ fn main() i64 {
     flow::test_flow();
     list::test_list();
     main::simple_test();
+    let s = "aadsada";
+    s.append("dasdsads");
+    s.name1(gc::name{});
+    s.append("123");
+    let d = 1_000_000;
     return 0;
 }
 

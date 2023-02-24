@@ -501,8 +501,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             param_types.push(
                 self.get_basic_type_op(
                     &param_pltype
-                        .get_type(ctx, &self.clone().into())
-                        .unwrap()
                         .borrow(),
                     ctx,
                 )
@@ -513,8 +511,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let fn_type = self
             .get_ret_type(
                 &f.ret_pltype
-                    .get_type(ctx, &self.clone().into())
-                    .unwrap()
                     .borrow(),
                 ctx,
             )
@@ -1561,8 +1557,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             pos.line as u32,
             self.get_ditype(
                 &fntype.param_pltypes[i]
-                    .get_type(child, &self.clone().into())
-                    .unwrap()
                     .borrow(),
                 child,
             )

@@ -18,6 +18,10 @@ fn int_to_ptr(i:i64) *u8;
 
 fn ptr_to_int(ptr:*u8) i64;
 
+struct name {
+    
+}
+
 impl string {
     fn append(str:string) void {
         let old = self.data;
@@ -30,6 +34,10 @@ impl string {
         self.data = new;
         self.len  = self.len + str.len;
         self.byte_len = self.byte_len + str.byte_len;
+        return;
+    }
+    fn name1(n:name) void {
+        
         return;
     }
 }
