@@ -134,8 +134,8 @@ impl TypeNode for TypeNameNode {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER)));
             }
             pltype = Arc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
+            ctx.add_type_without_check(pltype.clone());
         }
-        ctx.add_type_without_check(pltype.clone());
         Ok(pltype)
     }
 
