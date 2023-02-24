@@ -28,3 +28,13 @@ fn pl_panic() {
     println!("{:?}", bt);
     exit(1);
 }
+
+#[is_runtime]
+fn ptr_to_int(ptr: *const u8) -> i64 {
+    ptr as i64
+}
+
+#[is_runtime]
+fn int_to_ptr(i: i64) -> *const u8 {
+    i as *const u8
+}

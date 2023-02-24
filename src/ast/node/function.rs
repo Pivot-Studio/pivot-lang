@@ -79,7 +79,7 @@ impl Node for FuncCallNode {
         if plvalue.is_some() {
             let v = plvalue.unwrap();
             if let Some(receiver) = v.receiver {
-                para_values.push(receiver.into());
+                para_values.push(receiver);
                 skip = 1;
             }
             function = Some(v.value);
