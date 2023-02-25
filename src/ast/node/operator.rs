@@ -356,10 +356,12 @@ impl Node for TakeOpNode {
                                 let mut mthd = mthd.clone();
                                 if let PLType::POINTER(_) = &*pltype.clone().borrow() {
                                     mthd.param_pltypes
-                                    .insert(0, pltype.borrow().get_typenode(ctx));   
-                                }else {
-                                    mthd.param_pltypes
-                                    .insert(0, PLType::POINTER(pltype.clone()).get_typenode(ctx));
+                                        .insert(0, pltype.borrow().get_typenode(ctx));
+                                } else {
+                                    mthd.param_pltypes.insert(
+                                        0,
+                                        PLType::POINTER(pltype.clone()).get_typenode(ctx),
+                                    );
                                 }
                                 ctx.send_if_go_to_def(
                                     range,

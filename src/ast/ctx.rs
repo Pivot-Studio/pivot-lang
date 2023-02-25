@@ -394,8 +394,11 @@ impl<'a, 'ctx> Ctx<'a> {
         self.plmod = plmod;
         m
     }
-
-    pub fn run_in_st_mod<'b, F: FnMut(&mut Ctx<'a>, &STType)>(&'b mut self, st: &STType, mut f: F) {
+    pub fn run_in_st_mod_mut<'b, T, F: FnMut(&mut Ctx<'a>, &mut STType) -> Result<T, PLDiag>>(
+        &'b mut self,
+        st: &mut STType,
+        mut f: F,
+    ) -> Result<T, PLDiag> {
         let p = PathBuf::from(&st.path);
         let mut oldm = None;
         if st.path != self.plmod.path {
@@ -404,10 +407,30 @@ impl<'a, 'ctx> Ctx<'a> {
             let m = self.plmod.submods.get(m).unwrap();
             oldm = Some(self.set_mod(m.clone()));
         }
-        f(self, st);
+        let res = f(self, st);
         if let Some(m) = oldm {
             self.set_mod(m);
         }
+        res
+    }
+    pub fn run_in_st_mod<'b, T, F: FnMut(&mut Ctx<'a>, &STType) -> Result<T, PLDiag>>(
+        &'b mut self,
+        st: &STType,
+        mut f: F,
+    ) -> Result<T, PLDiag> {
+        let p = PathBuf::from(&st.path);
+        let mut oldm = None;
+        if st.path != self.plmod.path {
+            let s = p.file_name().unwrap().to_str().unwrap();
+            let m = s.split(".").next().unwrap();
+            let m = self.plmod.submods.get(m).unwrap();
+            oldm = Some(self.set_mod(m.clone()));
+        }
+        let res = f(self, st);
+        if let Some(m) = oldm {
+            self.set_mod(m);
+        }
+        res
     }
 
     pub fn run_in_fn_mod_mut<'b, T, F: FnMut(&mut Ctx<'a>, &mut FNType) -> Result<T, PLDiag>>(

@@ -4,7 +4,10 @@
 use std::{
     cell::{Cell, RefCell},
     path::Path,
-    sync::{Arc, atomic::{AtomicI64, Ordering}},
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        Arc,
+    },
 };
 
 use immix::{IntEnum, ObjectType};
@@ -46,7 +49,7 @@ const DW_ATE_BOOLEAN: u32 = 0x02;
 const DW_ATE_FLOAT: u32 = 0x04;
 const DW_ATE_SIGNED: u32 = 0x05;
 const DW_ATE_UNSIGNED: u32 = 0x07;
-static ID:AtomicI64 = AtomicI64::new(0);
+static ID: AtomicI64 = AtomicI64::new(0);
 // const DW_TAG_REFERENCE_TYPE: u32 = 16;
 fn get_dw_ate_encoding<'a, 'ctx>(pritp: &PriType) -> u32 {
     match pritp {
@@ -759,7 +762,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                             tp
                         })
                         .collect::<Vec<_>>();
-                });
+                    Ok(())
+                })
+                .unwrap();
                 let st = self
                     .dibuilder
                     .create_struct_type(
@@ -892,7 +897,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .collect::<Vec<_>>(),
                 false,
             );
-        });
+            Ok(())
+        })
+        .unwrap();
         st
     }
 
@@ -1234,8 +1241,15 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.get_llvm_value_handle(&gep.as_any_value_enum())
     }
     fn const_string(&self, s: &str) -> ValueHandle {
-        let s = self.builder.build_global_string_ptr(s, format!("str_{}", ID.fetch_add(1, Ordering::Relaxed)).as_str());
-        let s = self.builder.build_bitcast(s, self.context.i8_type().ptr_type(Default::default()), "str");
+        let s = self.builder.build_global_string_ptr(
+            s,
+            format!("str_{}", ID.fetch_add(1, Ordering::Relaxed)).as_str(),
+        );
+        let s = self.builder.build_bitcast(
+            s,
+            self.context.i8_type().ptr_type(Default::default()),
+            "str",
+        );
         self.get_llvm_value_handle(&s.as_any_value_enum())
     }
     fn build_dbg_location(&self, pos: Pos) {

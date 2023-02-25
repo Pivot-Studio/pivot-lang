@@ -39,19 +39,20 @@ impl Node for StringNode {
         let v = builder.const_string(&self.content);
         let gcmod = ctx.plmod.submods.get("gc").unwrap();
         let tp = gcmod.get_type("string").unwrap();
-        let alloca = builder.alloc(
-            "string",
-            &*tp.borrow(),
-            ctx,
-            None,
-        );
+        let alloca = builder.alloc("string", &*tp.borrow(), ctx, None);
         let len = builder.build_struct_gep(alloca, 1, "len").unwrap();
         let byte_len = builder.build_struct_gep(alloca, 2, "byte_len").unwrap();
         let read_arr = builder.build_struct_gep(alloca, 3, "real_arr").unwrap();
         builder.build_store(read_arr, v);
-        
-        builder.build_store(len, builder.int_value(&PriType::I64, self.content.len() as u64, true));
-        builder.build_store(byte_len, builder.int_value(&PriType::I64, self.content.bytes().count() as u64, true));
+
+        builder.build_store(
+            len,
+            builder.int_value(&PriType::I64, self.content.len() as u64, true),
+        );
+        builder.build_store(
+            byte_len,
+            builder.int_value(&PriType::I64, self.content.bytes().count() as u64, true),
+        );
         Ok((
             Some({
                 let mut res: PLValue = plv!(alloca);

@@ -578,48 +578,56 @@ impl Node for StructInitNode {
         ctx.send_if_go_to_def(self.typename.range(), sttype.range, sttype.path.clone());
         let mp = ctx.move_generic_types();
         sttype.clear_generic();
-        sttype.add_generic_type(ctx)?;
-        ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
         let mut field_init_values = vec![];
         let mut idx = 0;
-        for fieldinit in self.fields.iter_mut() {
-            let field_id_range = fieldinit.id.range;
-            let field_exp_range = fieldinit.exp.range();
-            let field = sttype.fields.get(&fieldinit.id.name);
-            if field.is_none() {
-                ctx.if_completion(self.range, || sttype.get_completions(&ctx));
-                return Err(ctx.add_diag(field_id_range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND)));
+        ctx.run_in_st_mod_mut(&mut sttype, |ctx, sttype| {
+            sttype.add_generic_type(ctx)?;
+            ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
+            for fieldinit in self.fields.iter_mut() {
+                let field_id_range = fieldinit.id.range;
+                let field_exp_range = fieldinit.exp.range();
+                let field = sttype.fields.get(&fieldinit.id.name);
+                if field.is_none() {
+                    ctx.if_completion(self.range, || sttype.get_completions(&ctx));
+                    return Err(
+                        ctx.add_diag(field_id_range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND))
+                    );
+                }
+                let field = field.unwrap();
+                let (value, value_pltype, _) = fieldinit.emit(ctx, builder)?;
+                idx += 1;
+                ctx.emit_comment_highlight(&self.comments[idx - 1]);
+                if value.is_none() || value_pltype.is_none() {
+                    return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
+                }
+                let (value, _) = ctx.try_load2var(
+                    field_exp_range,
+                    value.unwrap(),
+                    value_pltype.clone().unwrap(),
+                    builder,
+                )?;
+                let value_pltype = value_pltype.unwrap();
+                if !field.typenode.eq_or_infer(ctx, value_pltype, builder)? {
+                    return Err(ctx.add_diag(
+                        fieldinit
+                            .range
+                            .new_err(ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH),
+                    ));
+                }
+                field_init_values.push((field.index, value));
+                ctx.set_field_refs(pltype.clone(), &field, field_id_range);
             }
-            let field = field.unwrap();
-            let (value, value_pltype, _) = fieldinit.emit(ctx, builder)?;
-            idx += 1;
-            ctx.emit_comment_highlight(&self.comments[idx - 1]);
-            if value.is_none() || value_pltype.is_none() {
-                return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
-            }
-            let (value, _) = ctx.try_load2var(
-                field_exp_range,
-                value.unwrap(),
-                value_pltype.clone().unwrap(),
-                builder,
-            )?;
-            let value_pltype = value_pltype.unwrap();
-            if !field.typenode.eq_or_infer(ctx, value_pltype, builder)? {
-                return Err(ctx.add_diag(
-                    fieldinit
-                        .range
-                        .new_err(ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH),
-                ));
-            }
-            field_init_values.push((field.index, value));
-            ctx.set_field_refs(pltype.clone(), &field, field_id_range);
-        }
+            Ok(())
+        })?;
+
         if self.fields.len() < self.comments.len() {
             ctx.emit_comment_highlight(&self.comments[idx]);
         }
         if !sttype.generic_map.is_empty() {
             if sttype.need_gen_code() {
-                sttype = sttype.generic_infer_pltype(ctx, builder);
+                sttype = ctx.run_in_st_mod_mut(&mut sttype, |ctx, sttype| {
+                    Ok(sttype.generic_infer_pltype(ctx, builder))
+                })?;
             } else {
                 return Err(ctx.add_diag(
                     self.typename
