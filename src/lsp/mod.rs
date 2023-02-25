@@ -252,7 +252,7 @@ fn main_loop(
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::Completion);
             docin.set_edit_pos(&mut db).to(Some(pos));
-            docin.set_params(&mut db).to(Some((pos, trigger.clone())));
+            docin.set_params(&mut db).to(Some((pos, trigger)));
             compile_dry(&db, docin);
             if !completions.is_empty() {
                 let sender = connection.sender.clone();
@@ -274,7 +274,7 @@ fn main_loop(
             if newtokens.is_empty() {
                 newtokens.push(SemanticTokens::default());
             }
-            _ = tokens.insert(uri.clone(), newtokens[0].clone());
+            _ = tokens.insert(uri, newtokens[0].clone());
             let sender = connection.sender.clone();
             pool.execute(move || {
                 send_semantic_tokens(&sender, id, newtokens[0].clone());
@@ -292,7 +292,7 @@ fn main_loop(
             if newtokens.is_empty() {
                 newtokens.push(SemanticTokens::default());
             }
-            let old = tokens.insert(uri.clone(), newtokens[0].clone());
+            let old = tokens.insert(uri, newtokens[0].clone());
             let delta = diff_tokens(&old.unwrap().data, &newtokens[0].data);
             let sender = connection.sender.clone();
             pool.execute(move || {
@@ -308,7 +308,7 @@ fn main_loop(
         })
         .on::<Formatting, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
-            docin.set_file(&mut db).to(uri.clone());
+            docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::LspFmt);
             docin
                 .set_params(&mut db)
@@ -353,7 +353,7 @@ fn main_loop(
         })
         .on::<InlayHintRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
-            docin.set_file(&mut db).to(uri.clone());
+            docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::Hint);
             docin
                 .set_params(&mut db)
@@ -369,7 +369,7 @@ fn main_loop(
         })
         .on::<DocumentSymbolRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
-            docin.set_file(&mut db).to(uri.clone());
+            docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::DocSymbol);
             docin
                 .set_params(&mut db)
@@ -388,16 +388,16 @@ fn main_loop(
             for content_change in params.content_changes.iter() {
                 docs.lock().unwrap().borrow_mut().change(
                     &mut db,
-                    content_change.range.unwrap().clone(),
+                    content_change.range.unwrap(),
                     f.clone(),
                     content_change.text.clone(),
                 );
-                let mut pos = Pos::from_diag_pos(&content_change.range.unwrap().clone().end);
+                let mut pos = Pos::from_diag_pos(&content_change.range.unwrap().end);
                 pos.column += 1;
                 docin.set_edit_pos(&mut db).to(Some(pos));
                 docin.set_docs(&mut db).to(docs.clone());
             }
-            docin.set_file(&mut db).to(f.clone());
+            docin.set_file(&mut db).to(f);
 
             docin.set_action(&mut db).to(ActionType::Diagnostic);
             compile_dry(&db, docin);
@@ -424,7 +424,7 @@ fn main_loop(
                 f.clone(),
             );
             docin.set_docs(&mut db).to(docs.clone());
-            docin.set_file(&mut db).to(f.clone());
+            docin.set_file(&mut db).to(f);
             docin.set_action(&mut db).to(ActionType::Diagnostic);
             docin.set_params(&mut db).to(None);
             compile_dry(&db, docin);

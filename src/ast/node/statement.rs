@@ -99,7 +99,7 @@ impl Node for DefNode {
                 ctx.try_load2var(range, exp, exptp.unwrap(), builder)?.0,
             );
         }
-        return Ok((None, None, TerminatorEnum::NONE));
+        Ok((None, None, TerminatorEnum::NONE))
     }
 }
 #[range]
@@ -138,7 +138,7 @@ impl Node for AssignNode {
         }
         let (load, _) = ctx.try_load2var(exp_range, value.unwrap(), rpltype.unwrap(), builder)?;
         builder.build_store(ptr.unwrap().value, load);
-        return Ok((None, None, TerminatorEnum::NONE));
+        Ok((None, None, TerminatorEnum::NONE))
     }
 }
 

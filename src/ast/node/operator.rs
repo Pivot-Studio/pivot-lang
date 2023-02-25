@@ -316,7 +316,7 @@ impl Node for TakeOpNode {
                     match &*pltype.clone().borrow() {
                         PLType::STRUCT(s) | PLType::TRAIT(s) => {
                             let field = s.fields.get(&id.name);
-                            let method = s.find_method(&ctx, &id.name);
+                            let method = s.find_method(ctx, &id.name);
                             if let Some(field) = field {
                                 ctx.push_semantic_token(
                                     range,
@@ -350,23 +350,21 @@ impl Node for TakeOpNode {
                                         TerminatorEnum::NONE,
                                     ));
                                 }
-                                pltype = field.typenode.get_type(ctx, builder)?.clone();
+                                pltype = field.typenode.get_type(ctx, builder)?;
                             } else if let Some(mthd) = method {
                                 ctx.push_semantic_token(range, SemanticTokenType::METHOD, 0);
-                                let mut mthd = mthd.clone();
+                                let mut mthd = mthd;
                                 if let PLType::POINTER(_) = &*pltype.clone().borrow() {
                                     mthd.param_pltypes
                                         .insert(0, pltype.borrow().get_typenode(ctx));
                                 } else {
-                                    mthd.param_pltypes.insert(
-                                        0,
-                                        PLType::POINTER(pltype.clone()).get_typenode(ctx),
-                                    );
+                                    mthd.param_pltypes
+                                        .insert(0, PLType::POINTER(pltype).get_typenode(ctx));
                                 }
                                 ctx.send_if_go_to_def(
                                     range,
                                     mthd.range,
-                                    mthd.llvmname.split("..").nth(0).unwrap().to_string(),
+                                    mthd.llvmname.split("..").next().unwrap().to_string(),
                                 );
                                 return Ok((
                                     Some(PLValue {
@@ -409,6 +407,6 @@ impl Node for TakeOpNode {
             return Err(ctx.add_diag(self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION)));
         }
         ctx.emit_comment_highlight(&self.comments[0]);
-        Ok((res, Some(pltype.clone()), TerminatorEnum::NONE))
+        Ok((res, Some(pltype), TerminatorEnum::NONE))
     }
 }

@@ -153,7 +153,7 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
             del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
         )),
         |(name, generic_params, _, (fields, lcomment), rcomment, _)| {
-            let range = if fields.len() > 0 {
+            let range = if !fields.is_empty() {
                 name.range().start.to(fields.last().unwrap().range().end)
             } else {
                 name.range()

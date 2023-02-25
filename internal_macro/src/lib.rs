@@ -1,3 +1,4 @@
+#![allow(clippy::missing_safety_doc)]
 // Copy and modified from https://github.com/jauhien/iron-llvm
 // Copyright 2015 Jauhien Piatlicki.
 //

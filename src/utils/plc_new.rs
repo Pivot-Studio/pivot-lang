@@ -30,10 +30,10 @@ fn mk(opts: &mut NewOptions) {
     let path = &opts.path;
     let name = &opts.name;
 
-    fs::create_dir_all(&path).unwrap();
+    fs::create_dir_all(path).unwrap();
 
     fs::write(
-        &path.join("Kagari.toml"),
+        path.join("Kagari.toml"),
         format!(
             r#"entry = "main.pi"
 project = "{}"
@@ -45,15 +45,14 @@ project = "{}"
     .unwrap();
 
     fs::write(
-        &path.join("main.pi"),
-        format!(
-            r#"use std::io;
-fn main() i64 {{
+        path.join("main.pi"),
+        r#"use std::io;
+fn main() i64 {
     io::printi64ln(666);
     return 0;
-}}
+}
 "#
-        )
+        .to_string()
         .as_bytes(),
     )
     .unwrap();
@@ -74,9 +73,9 @@ pub mod tests {
     #[test]
     fn test_init_package() {
         let _l = TEST_COMPILE_MUTEX.lock().unwrap();
-        let package_name = format!("plc_new_testfile");
+        let package_name = "plc_new_testfile".to_string();
         // test init_package
-        init_package(package_name.clone());
+        init_package(package_name);
         assert!(fs::metadata("plc_new_testfile").is_ok());
 
         // test package_compile
@@ -98,7 +97,7 @@ pub mod tests {
             None,
             None,
         );
-        compiler::compile(&db, input, format!("plc_new_testout"), op);
+        compiler::compile(&db, input, "plc_new_testout".to_string(), op);
         #[cfg(target_os = "linux")]
         assert!(fs::metadata("plc_new_testout").is_ok());
 

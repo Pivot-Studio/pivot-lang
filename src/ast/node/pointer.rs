@@ -63,7 +63,7 @@ impl Node for PointerOpNode {
                 let val = value.value;
                 let v = builder.alloc("addr", &tp.clone().unwrap().borrow(), ctx, None);
                 builder.build_store(v, val);
-                v.into()
+                v
             }
         };
         Ok((Some(plv!(value)), tp, TerminatorEnum::NONE))

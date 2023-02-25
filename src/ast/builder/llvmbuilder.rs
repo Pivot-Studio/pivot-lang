@@ -218,7 +218,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .const_int(tp.get_immix_type().int_value() as u64, false);
         let td = self.targetmachine.get_target_data();
         let size = td.get_store_size(&llvmtp);
-        let size = self.context.i64_type().const_int(size as u64, false);
+        let size = self.context.i64_type().const_int(size, false);
         let heapptr = self
             .builder
             .build_call(f, &[size.into(), tp.into()], &format!("heapptr_{}", name))
@@ -289,7 +289,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         g.set_initializer(&self.context.i8_type().const_int(obj_type as u64, true));
                         Some(g)
                     })
-                    .and_then(|g| {
+                    .map(|g| {
                         self.builder.build_call(
                             f,
                             &[
@@ -298,7 +298,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                             ],
                             "add_root",
                         );
-                        Some(())
                     })
             });
     }
@@ -310,10 +309,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             None => len,
         };
         if nh == len {
-            self.handle_table.borrow_mut().insert(nh, value.clone());
-            self.handle_reverse_table
-                .borrow_mut()
-                .insert(value.clone(), nh);
+            self.handle_table.borrow_mut().insert(nh, *value);
+            self.handle_reverse_table.borrow_mut().insert(*value, nh);
         }
         nh
     }
@@ -352,7 +349,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if let Some(f) = self.module.get_function(fname) {
             return f;
         }
-        let f = self.module.add_function(&fname, ftp, None);
+        let f = self.module.add_function(fname, ftp, None);
         // the array is a struct, the first field is the visit function, the second field is the real array
         // array struct it self is the first parameter
         // the other three parameters are the visit function for different type
@@ -425,10 +422,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn get_llvm_value(&self, handle: ValueHandle) -> Option<AnyValueEnum<'ctx>> {
-        match self.handle_table.borrow().get(&handle) {
-            Some(value) => Some(value.clone()),
-            None => None,
-        }
+        self.handle_table.borrow().get(&handle).copied()
     }
     fn get_llvm_block_handle(&self, block: BasicBlock<'ctx>) -> BlockHandle {
         let len = self.block_table.borrow().len();
@@ -443,10 +437,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         nh
     }
     fn get_llvm_block(&self, handle: BlockHandle) -> Option<BasicBlock<'ctx>> {
-        match self.block_table.borrow().get(&handle) {
-            Some(block) => Some(*block),
-            None => None,
-        }
+        self.block_table.borrow().get(&handle).copied()
     }
     fn get_pri_basic_type(&self, tp: &PriType) -> BasicTypeEnum<'ctx> {
         match tp {
@@ -535,14 +526,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     let name = &format!("__placeholder__{}", g.name);
                     self.module
                         .get_struct_type(name)
-                        .or(Some({
+                        .unwrap_or({
                             let st = self
                                 .context
                                 .opaque_struct_type(&format!("__placeholder__{}", g.name));
                             st.set_body(&[], false);
                             st
-                        }))
-                        .unwrap()
+                        })
                         .into()
                 }),
             },
@@ -566,14 +556,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let name = &format!("__placeholder__{}", p.name);
                 self.module
                     .get_struct_type(name)
-                    .or(Some({
+                    .unwrap_or({
                         let st = self
                             .context
                             .opaque_struct_type(&format!("__placeholder__{}", p.name));
                         st.set_body(&[], false);
                         st
-                    }))
-                    .unwrap()
+                    })
                     .into()
             }),
         }
@@ -738,10 +727,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 // 若已经生成过，直接查表返回
                 if RefCell::borrow(&self.ditypes).contains_key(&x.get_st_full_name()) {
                     return Some(
-                        RefCell::borrow(&self.ditypes)
+                        *RefCell::borrow(&self.ditypes)
                             .get(&x.get_st_full_name())
-                            .unwrap()
-                            .clone(),
+                            .unwrap(),
                     );
                 }
                 // 生成占位符，为循环引用做准备
@@ -754,7 +742,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         .ordered_fields
                         .iter()
                         .map(|v| {
-                            let offset = td.offset_of_element(&sttp, v.index as u32).unwrap() * 8;
+                            let offset = td.offset_of_element(&sttp, v.index).unwrap() * 8;
                             let (tp, _) = self.get_field_di_type(v, ctx, offset);
                             tp
                         })
@@ -821,7 +809,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     }
                 }
                 self.ditypes.borrow_mut().insert(x.get_st_full_name(), st);
-                return Some(st);
+                Some(st)
             }
             PLType::PRIMITIVE(pt) => {
                 let mut size = td.get_bit_size(&self.get_pri_basic_type(pt));
@@ -967,10 +955,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.get_llvm_value_handle(&re.as_any_value_enum())
     }
     fn get_global_var_handle(&self, name: &str) -> Option<ValueHandle> {
-        match self.module.get_global(name) {
-            Some(value) => Some(self.get_llvm_value_handle(&value.as_any_value_enum())),
-            None => None,
-        }
+        self.module
+            .get_global(name)
+            .map(|value| self.get_llvm_value_handle(&value.as_any_value_enum()))
     }
     fn new_subscope(&self, start: Pos) {
         let scope = self.discope.get();
@@ -1022,7 +1009,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let handle = v;
         let v = self.get_llvm_value(handle).unwrap();
         if !v.is_pointer_value() {
-            return Ok(match v {
+            Ok(match v {
                 AnyValueEnum::ArrayValue(_)
                 | AnyValueEnum::IntValue(_)
                 | AnyValueEnum::FloatValue(_)
@@ -1030,7 +1017,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 | AnyValueEnum::StructValue(_)
                 | AnyValueEnum::VectorValue(_) => (handle, tp),
                 _ => return Err(ctx.add_diag(range.new_err(ErrorCode::EXPECT_VALUE))),
-            });
+            })
         } else {
             let tp = &tp;
             Ok((
@@ -1045,9 +1032,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
 
     fn get_function(&self, name: &str) -> Option<ValueHandle> {
         let f = self.module.get_function(name);
-        if f.is_none() {
-            return None;
-        }
+        f?;
         let f = f.unwrap();
         Some(self.get_llvm_value_handle(&f.as_any_value_enum()))
     }
@@ -1099,7 +1084,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let st = self.module.get_struct_type(name).unwrap();
         st.set_body(
             &order_fields
-                .into_iter()
+                .iter()
                 .map(|order_field| {
                     self.get_basic_type_op(
                         &order_field
@@ -1131,7 +1116,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let size_val = self
             .context
             .i64_type()
-            .const_int(td.get_store_size(&bt) as u64, false);
+            .const_int(td.get_store_size(&bt), false);
         self.builder
             .build_memset(
                 p,
@@ -1159,7 +1144,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             let vtable = self.builder.build_struct_gep(p, 0, "vtable").unwrap();
             self.builder.build_store(vtable, i);
         }
-        declare.and_then(|p| {
+        declare.map(|p| {
             self.build_dbg_location(p);
             self.insert_var_declare(
                 name,
@@ -1168,7 +1153,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 self.get_llvm_value_handle(&stack_root.as_any_value_enum()),
                 ctx,
             );
-            Some(())
         });
         let v_stack = self.get_llvm_value_handle(&stack_root.as_any_value_enum());
         let v_heap = self.get_llvm_value_handle(&p.as_any_value_enum());
@@ -1187,8 +1171,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         if let Ok(gep) = gep {
             return Ok(self.get_llvm_value_handle(&gep.as_any_value_enum()));
         } else {
-            return Err(());
-        };
+            Err(())
+        }
     }
     fn build_store(&self, ptr: ValueHandle, value: ValueHandle) {
         let value = self.get_llvm_value(value).unwrap();
@@ -1209,7 +1193,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.builder.build_in_bounds_gep(
                 ptr,
                 &index
-                    .into_iter()
+                    .iter()
                     .map(|i| self.context.i64_type().const_int(*i, false))
                     .collect::<Vec<_>>(),
                 name,
@@ -1229,7 +1213,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.builder.build_in_bounds_gep(
                 ptr,
                 &index
-                    .into_iter()
+                    .iter()
                     .map(|i| self.get_llvm_value(*i).unwrap().try_into().unwrap())
                     .collect::<Vec<_>>(),
                 name,
@@ -1324,7 +1308,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         if let Some(first) = first {
             return Some(self.get_llvm_value_handle(&first.as_any_value_enum()));
         } else {
-            return None;
+            None
         }
     }
     fn position_at(&self, v: ValueHandle) {
@@ -1348,7 +1332,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         Ok(())
     }
     fn write_bitcode_to_path(&self, path: &Path) -> bool {
-        run_immix_pass(&self.module);
+        run_immix_pass(self.module);
         self.module.write_bitcode_to_path(path)
     }
     fn int_value(&self, ty: &PriType, v: u64, sign_ext: bool) -> ValueHandle {
@@ -1518,7 +1502,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                         .add_diag(para.range.new_err(ErrorCode::VOID_TYPE_CANNOT_BE_PARAMETER)))
                 }
                 pltype => {
-                    param_ditypes.push(self.get_ditype(&pltype, child).unwrap());
+                    param_ditypes.push(self.get_ditype(pltype, child).unwrap());
                 }
             };
         }
@@ -1545,7 +1529,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let funcvalue = self.get_llvm_value(fnvalue).unwrap().into_function_value();
         funcvalue.set_subprogram(subprogram);
         // let discope = child.discope;
-        self.discope.set(subprogram.as_debug_info_scope().clone());
+        self.discope.set(subprogram.as_debug_info_scope());
         Ok(())
     }
     fn build_return(&self, v: Option<ValueHandle>) {

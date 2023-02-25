@@ -37,7 +37,7 @@ impl Dot {
                     format!(
                         "D{} [shape=box, label=\"{}\\l\", fontname=\"\"];\n",
                         id.index(),
-                        str.replace('\"', "\\\"").replace("\n","\\l")
+                        str.replace('\"', "\\\"").replace('\n',"\\l")
                     )
                     .as_str(),
                 ),
@@ -45,7 +45,7 @@ impl Dot {
                     format!(
                         "D{} [shape=diamond, label=\"{}?\\l\", fontname=\"\"];\n",
                         id.index(),
-                        str.replace('\"', "\\\"").replace("\n","\\l")
+                        str.replace('\"', "\\\"").replace('\n',"\\l")
                     )
                     .as_str(),
                 ),
@@ -53,8 +53,8 @@ impl Dot {
                     format!(
                         "D{} [shape=box, label=<<FONT>{}</FONT><BR/><FONT COLOR=\"red\">{}</FONT>>, fontname=\"\"];\n",
                         id.index(),
-                        src.replace('\"', "\\\"").replace("\n","\\l"),
-                        msg.replace('\"', "\\\"").replace("\n","\\l")
+                        src.replace('\"', "\\\"").replace('\n',"\\l"),
+                        msg.replace('\"', "\\\"").replace('\n',"\\l")
                     )
                     .as_str(),
                 ),

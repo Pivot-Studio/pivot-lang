@@ -44,13 +44,13 @@ pub fn download_repo(
 pub fn cp_to_hash_dir(repo_dir: &str, head: &str) -> PathBuf {
     // checkout to head
     _ = Command::new("git")
-        .current_dir(repo_dir.clone())
+        .current_dir(repo_dir)
         .arg("checkout")
         .arg(head)
         .output()
         .unwrap();
     let re = Command::new("git")
-        .current_dir(repo_dir.clone())
+        .current_dir(repo_dir)
         .arg("rev-parse")
         .arg(head)
         .output()

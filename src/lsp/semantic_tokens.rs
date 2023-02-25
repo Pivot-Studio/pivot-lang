@@ -173,8 +173,8 @@ impl SemanticTokensBuilder {
 
     /// Push a new token onto the builder
     pub(crate) fn push(&mut self, range: Range, token_index: u32, modifier_bitset: u32) {
-        let mut push_line = range.start.line as u32;
-        let mut push_char = range.start.character as u32;
+        let mut push_line = range.start.line;
+        let mut push_char = range.start.character;
 
         if !self.data.is_empty() {
             if self.prev_line > push_line {
@@ -199,15 +199,15 @@ impl SemanticTokensBuilder {
         let token = SemanticToken {
             delta_line: push_line,
             delta_start: push_char,
-            length: token_len as u32,
+            length: token_len,
             token_type: token_index,
             token_modifiers_bitset: modifier_bitset,
         };
 
         self.data.push(token);
 
-        self.prev_line = range.start.line as u32;
-        self.prev_char = range.start.character as u32;
+        self.prev_line = range.start.line;
+        self.prev_char = range.start.character;
     }
 
     pub(crate) fn build(&self) -> SemanticTokens {

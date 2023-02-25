@@ -275,8 +275,8 @@ impl<'a, 'ctx> Ctx<'a> {
                                     ))
                                 }
                             };
-                            let int = builder.int_value(tp, i, sign_ext);
-                            int
+
+                            builder.int_value(tp, i, sign_ext)
                         }
                         _ => {
                             return Err(mismatch_err!(
@@ -369,7 +369,7 @@ impl<'a, 'ctx> Ctx<'a> {
                                     .unwrap();
                                 builder.build_store(f_ptr, casted);
                             }
-                            let (_, v) = self.auto_deref(ty.clone(), value.unwrap().value, builder);
+                            let (_, v) = self.auto_deref(ty, value.unwrap().value, builder);
                             let v = builder.bitcast(
                                 self,
                                 v,
@@ -455,7 +455,7 @@ pub fn print_params(paralist: &[Box<TypedIdentifierNode>]) -> String {
             FmtBuilder::generate_node(&paralist[i].typenode)
         );
     }
-    return str;
+    str
 }
 
 #[macro_export]
@@ -474,7 +474,7 @@ macro_rules! handle_calc {
                 },
                 _ =>  return Err($ctx.add_diag(
                     $range.new_err(
-                    crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR),
+                    $crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR),
                 ))
             }
         }

@@ -65,7 +65,7 @@ pub fn is_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
             let initfnid = format_ident!("add_symbol_{}", str1);
             let fnid = input.sig.ident.clone();
 
-            return quote!(
+            quote!(
                 #[no_mangle]
                 pub unsafe extern "C" #input
                 #[cfg(feature = "jit")]
@@ -78,7 +78,7 @@ pub fn is_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
                     }
                 }
             )
-            .into();
+            .into()
         }
         AcceptInput::ItemImpl(input) => impl_macro_impl(&arg.input, &input),
     }
@@ -102,9 +102,9 @@ impl Parse for AttrInput {
                 input: AcceptAttrInput::Literal(f),
             });
         }
-        return Ok(AttrInput {
+        Ok(AttrInput {
             input: AcceptAttrInput::None,
-        });
+        })
     }
 }
 
@@ -131,7 +131,7 @@ impl Parse for MacroInput {
                 input: AcceptInput::ItemImpl(imp),
             });
         }
-        return Err(imp.err().unwrap());
+        Err(imp.err().unwrap())
     }
 }
 
@@ -168,7 +168,7 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
 
             let ret = clonedsig.output;
             let sfty = ast.self_ty.clone();
-            let first = inputs.clone().nth(0);
+            let first = inputs.clone().next();
             let cfn;
             if Option::is_none(&first) {
                 cfn = quote!(
@@ -220,7 +220,7 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
             #sigs
         )*
     };
-    return gen.into();
+    gen.into()
 }
 
 fn transform_params(params: Punctuated<syn::FnArg, syn::token::Comma>) -> Expr {

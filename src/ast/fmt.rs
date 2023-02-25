@@ -227,7 +227,7 @@ impl FmtBuilder {
         }
         self.l_brace();
         let mut len = 0;
-        if node.fields.len() > 0 {
+        if !node.fields.is_empty() {
             self.enter();
             self.add_tab();
             for field in &node.fields {
@@ -407,7 +407,7 @@ impl FmtBuilder {
             generic_params.format(self);
         }
         self.l_paren();
-        if node.paralist.len() > 0 {
+        if !node.paralist.is_empty() {
             let mut len = 0;
             for param in &node.paralist {
                 len += 1;
@@ -422,7 +422,7 @@ impl FmtBuilder {
     }
     pub fn parse_func_def_node(&mut self, node: &FuncDefNode) {
         let paralist = &node.paralist;
-        let params_print = print_params(&paralist);
+        let params_print = print_params(paralist);
         // self.enter();
         for c in node.precom.iter() {
             self.prefix();

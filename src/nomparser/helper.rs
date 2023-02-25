@@ -35,13 +35,13 @@ pub fn tag_token_word(token: TokenType) -> impl Fn(Span) -> IResult<Span, (Token
         let (s1, s2): (LocatedSpan<&str, bool>, LocatedSpan<&str, bool>) =
             preceded(space0, tag(token.get_str()))(input)?;
         if s1.starts_with(|c: char| is_alphanumeric(c as u8) || c == '_') {
-            return Err(nom::Err::Error(nom::error::Error::new(
+            Err(nom::Err::Error(nom::error::Error::new(
                 s2,
                 nom::error::ErrorKind::Tag,
-            )));
+            )))
         } else {
             let end = s2.take_split(token.get_str().len()).0;
-            return Ok((s1, (token, Range::new(s2, end))));
+            Ok((s1, (token, Range::new(s2, end))))
         }
     }
 }
@@ -79,7 +79,7 @@ pub fn take_utf8_split<'a>(sp: &Span<'a>) -> (Span<'a>, Span<'a>) {
         return sp.take_split(0);
     }
     while !sp.is_char_boundary(i) {
-        i = i + 1;
+        i += 1;
     }
     sp.take_split(i)
 }

@@ -300,7 +300,7 @@ impl Linker for MsvcLinker {
                 p.to_str()
                     .unwrap()
                     .trim_end_matches(|c| c == '\\')
-                    .replace(r"\", r"\\")
+                    .replace('\\', r"\\")
             ));
         });
 
@@ -349,7 +349,7 @@ impl Linker for MsvcLinker {
 fn get_win_sdk_lib_paths() -> (Option<PathBuf>, Vec<PathBuf>) {
     let mut paths = vec![];
     let re = Command::new(r"C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe")
-        .args("-latest -property installationPath".split(" "))
+        .args("-latest -property installationPath".split(' '))
         .output()
         .expect("failed to find visual studio");
     let mut path = PathBuf::from(

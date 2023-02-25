@@ -123,7 +123,7 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
         NodeEnum::Continue(s) => {
             // local_source -> current -> continue_target
             s.format(&mut builder);
-            let label = builder.generate().clone();
+            let label = builder.generate();
             let current = context.graph.add_node(GraphNodeType::Node(label));
             context
                 .graph
@@ -135,7 +135,7 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
         NodeEnum::Break(s) => {
             // local_source -> current -> break_target
             s.format(&mut builder);
-            let label = builder.generate().clone();
+            let label = builder.generate();
             let current = context.graph.add_node(GraphNodeType::Node(label));
             context
                 .graph
@@ -147,7 +147,7 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
         NodeEnum::Ret(s) => {
             // local_source -> current -> global_end
             s.format(&mut builder);
-            let label = builder.generate().clone();
+            let label = builder.generate();
             let current = context.graph.add_node(GraphNodeType::Node(label));
             context
                 .graph
@@ -161,7 +161,7 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
             //                   \                                                                 \
             //                    \---N--> sub_source1 -> Option<[...otherwise...]> -> sub_sink -> local_sink
             s.cond.format(&mut builder);
-            let cond_label = builder.generate().clone();
+            let cond_label = builder.generate();
             let cond = context.graph.add_node(GraphNodeType::Choice(cond_label));
             let sub_source = context.graph.add_node(GraphNodeType::Dummy);
             let sub_sink = context.graph.add_node(GraphNodeType::Dummy);
@@ -206,7 +206,7 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
             // continue: jump to cond
             // break: jump to local_sink
             s.cond.format(&mut builder);
-            let cond_label = builder.generate().clone();
+            let cond_label = builder.generate();
             let cond = context.graph.add_node(GraphNodeType::Choice(cond_label));
             let sub_source = context.graph.add_node(GraphNodeType::Dummy);
             let sub_sink = context.graph.add_node(GraphNodeType::Dummy);
@@ -239,18 +239,18 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
             // continue: jump to sub_sink
             // break: jump to local_sink
             s.cond.format(&mut builder);
-            let cond_label = builder.generate().clone();
+            let cond_label = builder.generate();
             let pre_label = if let Some(pre) = s.pre {
                 let mut builder1 = FmtBuilder::new();
                 pre.format(&mut builder1);
-                builder1.generate().clone()
+                builder1.generate()
             } else {
                 String::from("")
             };
             let opt_label = if let Some(opt) = s.opt {
                 let mut builder2 = FmtBuilder::new();
                 opt.format(&mut builder2);
-                builder2.generate().clone()
+                builder2.generate()
             } else {
                 String::from("")
             };
@@ -288,7 +288,7 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
         | NodeEnum::Take(_) => {
             // local_source -> current -> local_sink
             ast.format(&mut builder);
-            let label = builder.generate().clone();
+            let label = builder.generate();
             let current = context.graph.add_node(GraphNodeType::Node(label));
             context
                 .graph
@@ -306,7 +306,7 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
         NodeEnum::StErrorNode(e) => {
             // local_source -> ERR -> local_sink
             e.st.format(&mut builder);
-            let label = builder.generate().clone();
+            let label = builder.generate();
             let err = context.graph.add_node(GraphNodeType::Err(label, e.err.msg));
             context.graph.add_edge(local_source, err, EdgeType::Normal);
             context.graph.add_edge(err, local_sink, EdgeType::Normal);

@@ -30,7 +30,7 @@ pub fn number(input: Span) -> IResult<Span, Box<NodeEnum>> {
         map_res(decimal, |out| {
             // TODO:err tolerate
             Ok::<Num, Error>(Num::INT(
-                out.fragment().replace("_", "").parse::<u64>().unwrap(),
+                out.fragment().replace('_', "").parse::<u64>().unwrap(),
             ))
         }),
     ))(input)?;

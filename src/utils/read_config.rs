@@ -8,10 +8,8 @@ use crate::{ast::compiler::COMPILE_PROGRESS, nomparser::SourceProgram, Db};
 
 pub fn get_config_path(current: String) -> Result<String, &'static str> {
     let mut cur_path = PathBuf::from(current);
-    if cur_path.is_file() {
-        if cur_path.pop() == false {
-            return Err("找不到配置文件～");
-        }
+    if cur_path.is_file() && !cur_path.pop() {
+        return Err("找不到配置文件～");
     }
     let dir = cur_path.read_dir();
     if dir.is_err() {
@@ -22,7 +20,7 @@ pub fn get_config_path(current: String) -> Result<String, &'static str> {
         if let Ok(path) = x {
             if path.file_name().eq("Kagari.toml") {
                 if let Some(p) = cur_path.to_str() {
-                    let res = String::from(p.to_string());
+                    let res = p.to_string();
                     return Ok(res + "/Kagari.toml");
                 } else {
                     return Err("找不到配置文件～");
@@ -30,13 +28,13 @@ pub fn get_config_path(current: String) -> Result<String, &'static str> {
             }
         }
     }
-    if cur_path.pop() == false {
+    if !cur_path.pop() {
         return Err("找不到配置文件～");
     }
     let mut next_path = String::new();
 
     if let Some(p) = &cur_path.to_str() {
-        next_path.push_str(&p);
+        next_path.push_str(p);
     } else {
         return Err("找不到配置文件～");
     }
@@ -78,7 +76,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     let config = entry.text(db);
     let mut config_root = PathBuf::from(entry.path(db)); // xxx/Kagari.toml
     config_root.pop();
-    let re = toml::from_str(&config);
+    let re = toml::from_str(config);
     if let Err(re) = re {
         return Err(format!("配置文件解析错误:{:?}", re));
     }
@@ -124,7 +122,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     } else {
         let mut rawdeps = config.deps.clone().unwrap();
         let pb = &COMPILE_PROGRESS;
-        if pb.length() == None {
+        if pb.length().is_none() {
             pb.set_length(rawdeps.len() as u64);
         } else {
             pb.inc_length(rawdeps.len() as u64);
@@ -137,7 +135,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
                 .and_then(|git| {
                     pb.set_message("正在下载依赖");
                     // pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
-                    i = i + 1;
+                    i += 1;
                     v.head
                         .clone()
                         .or_else(|| {
@@ -148,7 +146,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
                             err = Some("类型为git的依赖项未指定分支，无法下载依赖".to_string());
                             None
                         })
-                        .and_then(|mut b| {
+                        .map(|mut b| {
                             let (child, target) = kagari::download_repo(&git, third_party);
                             pb.set_message(format!("正在下载依赖{}", k));
                             if child.is_some() {
@@ -178,34 +176,33 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
                             let mut dep = Dependency::default();
                             dep.path = target.to_string_lossy().to_string();
                             deps.insert(k.clone(), dep);
-                            Some(())
                         })
                 })
                 .or_else(|| {
                     // pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
-                    i = i + 1;
+                    i += 1;
                     pb.set_message(format!("正在分析依赖{}", k));
                     if PathBuf::from(&v.path).is_absolute() {
                         _ = dunce::canonicalize(&v.path)
-                            .and_then(|p| {
+                            .map(|p| {
                                 v.path = p.to_str().unwrap().to_string();
-                                Ok(p)
+                                p
                             })
-                            .or_else(|e| {
+                            .map_err(|e| {
                                 pb.abandon_with_message(format!("error: {:?}", e));
                                 err = Some(format!("error: {:?}", e));
-                                Err(format!("error: {:?}", e))
+                                format!("error: {:?}", e)
                             });
                     } else {
                         _ = dunce::canonicalize(config_root.join(&v.path))
-                            .and_then(|p| {
+                            .map(|p| {
                                 v.path = p.to_str().unwrap().to_string();
-                                Ok(p)
+                                p
                             })
-                            .or_else(|e| {
+                            .map_err(|e| {
                                 pb.abandon_with_message(format!("error: {:?}", e));
                                 err = Some(format!("error: {:?}", e));
-                                Err(format!("error: {:?}", e))
+                                format!("error: {:?}", e)
                             });
                     }
                     deps.insert(k.clone(), v.clone());
@@ -221,9 +218,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     if sum_changed {
         toml::to_string_pretty(&sums)
             .map_err(|e| format!("error: {:?}", e))
-            .and_then(|s| {
-                std::fs::write(lockfile, s).or_else(|e| Err(format!("error: {:?}", e)))
-            })?;
+            .and_then(|s| std::fs::write(lockfile, s).map_err(|e| format!("error: {:?}", e)))?;
     }
     config.root = dunce::canonicalize(config_root.clone())
         .unwrap()

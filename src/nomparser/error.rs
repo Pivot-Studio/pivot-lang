@@ -31,7 +31,7 @@ pub fn except<'a, E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt
         }
         let mut src = sp.fragment().to_string();
         let mut next;
-        while r.len() > 0 {
+        while !r.is_empty() {
             if i.len() == 0 {
                 break;
             }

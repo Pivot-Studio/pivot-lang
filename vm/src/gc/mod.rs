@@ -39,9 +39,8 @@ mod _immix {
     #[is_runtime] // jit注册
     impl DioGC {
         pub unsafe fn malloc(size: u64, obj_type: u8) -> *mut u8 {
-            let ptr = gc_malloc(size as usize, obj_type);
             // println!("malloc: {:p} {} {}", ptr, size, obj_type);
-            ptr
+            gc_malloc(size as usize, obj_type)
         }
         pub fn about() {
             let dio = "
@@ -75,9 +74,5 @@ mod _immix {
         }
     }
 }
-#[cfg(all(feature = "simple_gc", not(feature = "immix")))]
-mod _simple_gc;
 #[cfg(feature = "immix")]
 pub use _immix::*;
-#[cfg(all(feature = "simple_gc", not(feature = "immix")))]
-pub use _simple_gc::*;

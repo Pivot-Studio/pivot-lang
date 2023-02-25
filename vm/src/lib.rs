@@ -1,4 +1,5 @@
 #![allow(improper_ctypes_definitions)]
+#![allow(clippy::missing_safety_doc)]
 
 use std::process::exit;
 
@@ -8,7 +9,7 @@ pub mod gc;
 
 #[is_runtime]
 fn test_vm_link() -> i64 {
-    return 66;
+    66
 }
 
 #[is_runtime]

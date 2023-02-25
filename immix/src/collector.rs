@@ -57,7 +57,7 @@ impl Drop for Collector {
         unsafe {
             if (*self.thread_local_allocator).is_live() {
                 let mut v = GC_COLLECTOR_COUNT.lock();
-                v.0 = v.0 - 1;
+                v.0 -= 1;
                 GC_MARK_COND.notify_all();
                 drop(v);
                 drop_in_place(self.thread_local_allocator);
@@ -77,7 +77,7 @@ impl Collector {
     /// * `heap_size` - heap size
     pub fn new(ga: &mut GlobalAllocator) -> Self {
         let mut v = GC_COLLECTOR_COUNT.lock();
-        v.0 = v.0 + 1;
+        v.0 += 1;
         GC_MARK_COND.notify_all();
         drop(v);
         let id = GC_ID.fetch_add(1, Ordering::Relaxed);
@@ -113,7 +113,7 @@ impl Collector {
 
     pub fn unregister_current_thread(&self) {
         let mut v = GC_COLLECTOR_COUNT.lock();
-        v.0 = v.0 - 1;
+        v.0 -= 1;
         GC_MARK_COND.notify_all();
         drop(v);
         unsafe {
