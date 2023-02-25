@@ -580,9 +580,9 @@ impl Node for StructInitNode {
         sttype.clear_generic();
         let mut field_init_values = vec![];
         let mut idx = 0;
+        ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
         ctx.run_in_st_mod_mut(&mut sttype, |ctx, sttype| {
             sttype.add_generic_type(ctx)?;
-            ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
             for fieldinit in self.fields.iter_mut() {
                 let field_id_range = fieldinit.id.range;
                 let field_exp_range = fieldinit.exp.range();
