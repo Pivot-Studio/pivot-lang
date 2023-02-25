@@ -416,16 +416,6 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         params.params(db).config(db),
         db,
     );
-    if PathBuf::from(params.file(db))
-        .with_extension("")
-        .file_name()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        == "gc"
-    {
-        ctx.usegc = false;
-    }
     ctx.plmod.submods = params.submods(db);
     let m = &mut ctx;
     let node = params.node(db);

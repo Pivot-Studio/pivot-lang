@@ -8,8 +8,8 @@ use project1::test::simple;
 use project1::test::flow;
 use project1::test::list;
 use project1::test::module;
+use project1::test::string;
 use pl_test::main;
-
 fn main() i64 {
     ifel::test_if_else();
     generic::test_generic();
@@ -22,5 +22,7 @@ fn main() i64 {
     list::test_list();
     main::simple_test();
     module::test_module();
+    string::test_string();
     return 0;
 }
+

@@ -177,25 +177,6 @@ fn new_ptrtype_node(typenode: Box<TypeNodeEnum>) -> Box<TypeNodeEnum> {
         range: Default::default(),
     }))
 }
-// fn new_exid_node(modname: &str, name: &str, range: Range) -> Box<TypeNodeEnum> {
-//     Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
-//         id: Some(ExternIdNode {
-//             ns: vec![Box::new(VarNode {
-//                 name: modname.to_string(),
-//                 range,
-//             })],
-//             id: Box::new(VarNode {
-//                 name: name.to_string(),
-//                 range,
-//             }),
-//             complete: true,
-//             singlecolon: false,
-//             range,
-//         }),
-//         generic_params: None,
-//         range,
-//     }))
-// }
 pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
     match &*pltype.borrow() {
         PLType::GENERIC(g) => {
@@ -232,26 +213,7 @@ impl PLType {
     }
     pub fn get_typenode(&self, ctx: &Ctx) -> Box<TypeNodeEnum> {
         match self {
-            PLType::STRUCT(st) => {
-                // if st.path == ctx.plmod.path {
-                //     new_typename_node(&st.name, st.range)
-                // } else {
-                //     new_exid_node(
-                //         st.path
-                //             .split("/")
-                //             .collect::<Vec<_>>()
-                //             .last()
-                //             .unwrap()
-                //             .split(".")
-                //             .collect::<Vec<_>>()
-                //             .first()
-                //             .unwrap(),
-                //         &st.name,
-                //         st.range,
-                //     )
-                // }
-                new_typename_node(&st.name, st.range)
-            }
+            PLType::STRUCT(st) => new_typename_node(&st.name, st.range),
             PLType::ARR(arr) => new_arrtype_node(
                 arr.get_elem_type().borrow().get_typenode(ctx),
                 arr.size as u64,

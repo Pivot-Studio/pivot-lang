@@ -49,9 +49,6 @@ impl FmtBuilder {
         node.format(&mut b);
         b.generate()
     }
-    pub fn double_quote(&mut self) {
-        self.token("\"")
-    }
     pub fn generate(&self) -> String {
         self.buf.clone()
     }
@@ -576,9 +573,7 @@ impl FmtBuilder {
         self.r_angle_bracket();
     }
     pub fn parse_string_node(&mut self, node: &StringNode) {
-        self.double_quote();
-        self.token(&node.content);
-        self.double_quote();
+        self.token(&format!("{:?}", node.content));
     }
     pub fn parse_trait_def_node(&mut self, node: &TraitDefNode) {
         // for c in node.precom.iter() {

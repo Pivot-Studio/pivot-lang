@@ -479,7 +479,6 @@ impl FuncDefNode {
                 let b = tp.clone();
                 let basetype = b.borrow();
                 let alloca = builder.alloc(&fntype.param_names[i], &basetype, child, None);
-                // let stack_root = builder.get_stack_root(alloca);
                 // add alloc var debug info
                 builder.create_parameter_variable(
                     &fntype,

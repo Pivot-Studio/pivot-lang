@@ -245,14 +245,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .build_alloca(llvmtp.ptr_type(AddressSpace::default()), "stack_ptr");
         self.builder.position_at_end(lb);
         self.builder.build_store(stack_ptr, casted_result);
-        self.gc_add_root(stack_ptr.as_basic_value_enum(), ctx, obj_type);
+        self.gc_add_root(stack_ptr.as_basic_value_enum(), obj_type);
         (casted_result.into_pointer_value(), stack_ptr, llvmtp)
     }
 
-    fn gc_add_root(&self, stackptr: BasicValueEnum<'ctx>, ctx: &mut Ctx<'a>, obj_type: u8) {
-        if !ctx.usegc {
-            return;
-        }
+    fn gc_add_root(&self, stackptr: BasicValueEnum<'ctx>, obj_type: u8) {
         self.module
             .get_function("llvm.gcroot")
             .or_else(|| {
@@ -1577,10 +1574,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.diunit.get_file(),
             pos.line as u32,
             self.get_ditype(
-                &fntype.param_pltypes[i]
-                    .get_type(child, &self.clone().into())
-                    .unwrap()
-                    .borrow(),
+                &PLType::POINTER(
+                    fntype.param_pltypes[i]
+                        .get_type(child, &self.clone().into())
+                        .unwrap(),
+                ),
                 child,
             )
             .unwrap(),

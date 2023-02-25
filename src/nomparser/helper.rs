@@ -20,6 +20,15 @@ pub fn tag_token_symbol(token: TokenType) -> impl Fn(Span) -> IResult<Span, (Tok
     }
 }
 
+pub fn tag_token(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
+    move |input| {
+        map_res(tag(token.get_str()), |_out: Span| {
+            let end = _out.take_split(token.get_str().len()).0;
+            Ok::<(TokenType, Range), Error>((token, Range::new(_out, end)))
+        })(input)
+    }
+}
+
 /// 不能直接接 `字母`、`数字` 或 `_`，用于关键字
 pub fn tag_token_word(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
     move |input| {

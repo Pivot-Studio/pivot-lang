@@ -38,3 +38,9 @@ fn ptr_to_int(ptr: *const u8) -> i64 {
 fn int_to_ptr(i: i64) -> *const u8 {
     i as *const u8
 }
+
+#[is_runtime]
+fn print_raw(bs: *const u8, len: i64) {
+    let s = std::str::from_utf8(unsafe { std::slice::from_raw_parts(bs, len as usize) }).unwrap();
+    println!("{}", s);
+}

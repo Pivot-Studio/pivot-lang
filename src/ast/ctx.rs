@@ -77,7 +77,6 @@ pub struct Ctx<'a> {
         ),
     >, // variable table
     pub config: Config,                                           // config
-    pub usegc: bool,
     pub db: &'a dyn Db,
     pub rettp: Option<Arc<RefCell<PLType>>>,
 }
@@ -108,7 +107,6 @@ impl<'a, 'ctx> Ctx<'a> {
             edit_pos,
             table: FxHashMap::default(),
             config,
-            usegc: true,
             db,
             block: None,
             continue_block: None,
@@ -130,7 +128,6 @@ impl<'a, 'ctx> Ctx<'a> {
             edit_pos: self.edit_pos.clone(),
             table: FxHashMap::default(),
             config: self.config.clone(),
-            usegc: self.usegc,
             db: self.db.clone(),
             block: self.block,
             continue_block: self.continue_block,

@@ -165,9 +165,9 @@ where
 pub fn string_literal(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
-            tag_token_symbol(TokenType::DOUBLE_QUOTE),
+            tag_token(TokenType::DOUBLE_QUOTE),
             parse_string_content,
-            tag_token_symbol(TokenType::DOUBLE_QUOTE),
+            tag_token(TokenType::DOUBLE_QUOTE),
         )),
         |((_, st), s, (_, end))| {
             res_enum(
