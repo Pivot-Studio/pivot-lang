@@ -1,7 +1,22 @@
 use core::panic;
 const a = 100;
+struct name {
+    a: i64;
+    b: i64;
+}
+
+const b = &name{
+    a: 1
+};
+fn change_global() void {
+    b.a = 100;
+    return;
+}
+
 fn test_const() void {
     panic::assert(a == 100);
+    change_global();
+    panic::assert(b.a == 100);
     return;
 }
 

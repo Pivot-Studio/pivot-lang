@@ -410,6 +410,46 @@ impl<'a, 'ctx> Ctx<'a> {
         }
     }
 
+    pub fn run_in_fn_mod_mut<'b, T, F: FnMut(&mut Ctx<'a>, &mut FNType) -> Result<T, PLDiag>>(
+        &'b mut self,
+        fntype: &mut FNType,
+        mut f: F,
+    ) -> Result<T, PLDiag> {
+        let p = PathBuf::from(&fntype.path);
+        let mut oldm = None;
+        if fntype.path != self.plmod.path {
+            let s = p.file_name().unwrap().to_str().unwrap();
+            let m = s.split(".").next().unwrap();
+            let m = self.plmod.submods.get(m).unwrap();
+            oldm = Some(self.set_mod(m.clone()));
+        }
+        let res = f(self, fntype);
+        if let Some(m) = oldm {
+            self.set_mod(m);
+        }
+        res
+    }
+
+    pub fn run_in_fn_mod<'b, T, F: FnMut(&mut Ctx<'a>, &FNType) -> Result<T, PLDiag>>(
+        &'b mut self,
+        fntype: &FNType,
+        mut f: F,
+    ) -> Result<T, PLDiag> {
+        let p = PathBuf::from(&fntype.path);
+        let mut oldm = None;
+        if fntype.path != self.plmod.path {
+            let s = p.file_name().unwrap().to_str().unwrap();
+            let m = s.split(".").next().unwrap();
+            let m = self.plmod.submods.get(m).unwrap();
+            oldm = Some(self.set_mod(m.clone()));
+        }
+        let res = f(self, fntype);
+        if let Some(m) = oldm {
+            self.set_mod(m);
+        }
+        res
+    }
+
     pub fn get_file_url(&self) -> Url {
         Url::from_file_path(self.plmod.path.clone()).unwrap()
     }

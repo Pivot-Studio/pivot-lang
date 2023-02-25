@@ -491,30 +491,33 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn get_fn_type(&self, f: &FNType, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
-        let mut param_types = vec![];
-        for param_pltype in f.param_pltypes.iter() {
-            param_types.push(
-                self.get_basic_type_op(
-                    &param_pltype
+        ctx.run_in_fn_mod(f, |ctx, f| {
+            let mut param_types = vec![];
+            for param_pltype in f.param_pltypes.iter() {
+                param_types.push(
+                    self.get_basic_type_op(
+                        &param_pltype
+                            .get_type(ctx, &self.clone().into())
+                            .unwrap()
+                            .borrow(),
+                        ctx,
+                    )
+                    .unwrap()
+                    .into(),
+                );
+            }
+            let fn_type = self
+                .get_ret_type(
+                    &f.ret_pltype
                         .get_type(ctx, &self.clone().into())
                         .unwrap()
                         .borrow(),
                     ctx,
                 )
-                .unwrap()
-                .into(),
-            );
-        }
-        let fn_type = self
-            .get_ret_type(
-                &f.ret_pltype
-                    .get_type(ctx, &self.clone().into())
-                    .unwrap()
-                    .borrow(),
-                ctx,
-            )
-            .fn_type(&param_types, false);
-        fn_type
+                .fn_type(&param_types, false);
+            Ok(fn_type)
+        })
+        .unwrap()
     }
     /// # get_basic_type_op
     /// get the basic type of the type

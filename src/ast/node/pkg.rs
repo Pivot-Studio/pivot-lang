@@ -192,7 +192,7 @@ impl Node for ExternIdNode {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
                     Ok((None, Some(tp), TerminatorEnum::NONE))
                 }
-                _ => unreachable!(),
+                _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION))),
             };
             if let Some(range) = range {
                 ctx.send_if_go_to_def(self.range, *range, plmod.path.clone());

@@ -55,6 +55,7 @@ impl Node for FuncCallNode {
             PLType::FN(f) => f.new_pltype(),
             _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND))),
         };
+
         if let Some(generic_params) = &self.generic_params {
             let generic_params_range = generic_params.range.clone();
             generic_params.emit_highlight(ctx);
@@ -129,18 +130,25 @@ impl Node for FuncCallNode {
             value_pltypes.push((value_pltype, pararange));
         }
         // value check and generic infer
-        fntype.add_generic_type(ctx)?;
-        for (i, (value_pltype, pararange)) in value_pltypes.iter().enumerate() {
-            if !fntype.param_pltypes[i + skip as usize]
-                .clone()
-                .eq_or_infer(ctx, value_pltype.clone(), builder)?
-            {
-                return Err(ctx.add_diag(pararange.new_err(ErrorCode::PARAMETER_TYPE_NOT_MATCH)));
+        ctx.run_in_fn_mod_mut(&mut fntype, |ctx, fntype| {
+            fntype.add_generic_type(ctx)?;
+            for (i, (value_pltype, pararange)) in value_pltypes.iter().enumerate() {
+                if !fntype.param_pltypes[i + skip as usize]
+                    .clone()
+                    .eq_or_infer(ctx, value_pltype.clone(), builder)?
+                {
+                    return Err(
+                        ctx.add_diag(pararange.new_err(ErrorCode::PARAMETER_TYPE_NOT_MATCH))
+                    );
+                }
             }
-        }
+            Ok(())
+        })?;
         if !fntype.generic_map.is_empty() {
             if fntype.need_gen_code() {
-                fntype = fntype.generic_infer_pltype(ctx, builder)?
+                fntype = ctx.run_in_fn_mod_mut(&mut fntype, |ctx, fntype| {
+                    fntype.generic_infer_pltype(ctx, builder)
+                })?;
             } else {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER)));
             }
@@ -155,7 +163,9 @@ impl Node for FuncCallNode {
         };
         let ret = builder.build_call(function, &para_values);
         ctx.save_if_comment_doc_hover(id_range, Some(fntype.doc.clone()));
-        let rettp = fntype.ret_pltype.get_type(ctx, builder)?;
+        let rettp = ctx.run_in_fn_mod_mut(&mut fntype, |ctx, fntype| {
+            fntype.ret_pltype.get_type(ctx, builder)
+        })?;
         let res = match ret {
             Some(v) => Ok((
                 {
@@ -286,6 +296,7 @@ impl FuncDefNode {
             } else {
                 ctx.plmod.get_full_name(&self.id.name)
             },
+            path: ctx.plmod.path.clone(),
             method,
             generic_map,
             generic_infer: Arc::new(RefCell::new(IndexMap::default())),
