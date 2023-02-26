@@ -126,10 +126,11 @@ impl TypeNode for TypeNameNode {
                 i += 1;
             }
             if sttype.need_gen_code() {
-                let mp = ctx.move_generic_types();
-                sttype.add_generic_type(ctx)?;
-                sttype = sttype.generic_infer_pltype(ctx, builder);
-                ctx.reset_generic_types(mp);
+                ctx.protect_generic_context(|ctx| {
+                    sttype.add_generic_type(ctx)?;
+                    sttype = sttype.generic_infer_pltype(ctx, builder);
+                    Ok(())
+                })?;
                 pltype = Arc::new(RefCell::new(PLType::STRUCT(sttype)));
                 ctx.add_type_without_check(pltype.clone());
             } else {
@@ -160,42 +161,41 @@ impl TypeNode for TypeNameNode {
             if let (PLType::STRUCT(sttype), PLType::STRUCT(right)) =
                 (&mut *left.borrow_mut(), &*right.borrow())
             {
-                let mp = ctx.move_generic_types();
-                let generic_types = generic_params.get_generic_types(ctx, builder)?;
-                sttype.clear_generic();
-                sttype.add_generic_type(ctx)?;
-                if generic_params.generics.len() != sttype.generic_map.len() {
-                    return Err(ctx.add_diag(
-                        generic_params
-                            .range
-                            .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
-                    ));
-                }
-                let mut i = 0;
-                for (_, pltype) in sttype.generic_map.iter() {
-                    if generic_types[i].is_none()
-                        || !eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
-                    {
-                        return Err(
-                            ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER))
-                        );
+                return ctx.protect_generic_context(|ctx| {
+                    let generic_types = generic_params.get_generic_types(ctx, builder)?;
+                    sttype.clear_generic();
+                    sttype.add_generic_type(ctx)?;
+                    if generic_params.generics.len() != sttype.generic_map.len() {
+                        return Err(ctx.add_diag(
+                            generic_params
+                                .range
+                                .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
+                        ));
                     }
-                    i += 1;
-                }
-                for (k, leftfield) in sttype.fields.iter() {
-                    let rightpltype = right
-                        .fields
-                        .get(k)
-                        .unwrap()
-                        .typenode
-                        .get_type(ctx, builder)
-                        .unwrap();
-                    if !leftfield.typenode.eq_or_infer(ctx, rightpltype, builder)? {
-                        return Ok(false);
+                    let mut i = 0;
+                    for (_, pltype) in sttype.generic_map.iter() {
+                        if generic_types[i].is_none()
+                            || !eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
+                        {
+                            return Err(ctx
+                                .add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER)));
+                        }
+                        i += 1;
                     }
-                }
-                ctx.reset_generic_types(mp);
-                return Ok(true);
+                    for (k, leftfield) in sttype.fields.iter() {
+                        let rightpltype = right
+                            .fields
+                            .get(k)
+                            .unwrap()
+                            .typenode
+                            .get_type(ctx, builder)
+                            .unwrap();
+                        if !leftfield.typenode.eq_or_infer(ctx, rightpltype, builder)? {
+                            return Ok(false);
+                        }
+                    }
+                    return Ok(true);
+                });
             }
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::NOT_GENERIC_TYPE)));
         }
@@ -397,7 +397,7 @@ impl StructDefNode {
     ) {
         let mut generic_map = IndexMap::default();
         if let Some(generics) = &self.generics {
-            generic_map = generics.gen_generic_type(ctx);
+            generic_map = generics.gen_generic_type();
         }
         let stu = Arc::new(RefCell::new(PLType::STRUCT(STType {
             name: self.id.name.clone(),
@@ -420,83 +420,87 @@ impl StructDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<(), PLDiag> {
-        let mp = ctx.move_generic_types();
-        let mut fields = FxHashMap::<String, Field>::default();
-        let mut order_fields = Vec::<Field>::new();
-        // gcrtti fields
-        let vtable_field = Field {
-            index: 0,
-            typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
-            name: "_vtable".to_string(),
-            range: Default::default(),
-        };
-        fields.insert("_vtable".to_string(), vtable_field.clone());
-        order_fields.push(vtable_field);
-        let mut i = 1;
-        // add generic type before field add type
-        if let Some(generics) = &mut self.generics {
-            let generic_map = generics.gen_generic_type(ctx);
-            for (name, pltype) in generic_map.iter() {
-                ctx.add_generic_type(
-                    name.clone(),
-                    pltype.clone(),
-                    pltype.clone().borrow().get_range().unwrap(),
+        ctx.protect_generic_context(|ctx| {
+            let mut fields = FxHashMap::<String, Field>::default();
+            let mut order_fields = Vec::<Field>::new();
+            // gcrtti fields
+            let vtable_field = Field {
+                index: 0,
+                typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
+                name: "_vtable".to_string(),
+                range: Default::default(),
+            };
+            fields.insert("_vtable".to_string(), vtable_field.clone());
+            order_fields.push(vtable_field);
+            let mut i = 1;
+            // add generic type before field add type
+            if let Some(generics) = &mut self.generics {
+                let generic_map = generics.gen_generic_type();
+                for (name, pltype) in generic_map.iter() {
+                    ctx.add_generic_type(
+                        name.clone(),
+                        pltype.clone(),
+                        pltype.clone().borrow().get_range().unwrap(),
+                    );
+                }
+            }
+            let mut field_pltps = vec![];
+            let pltype = ctx.get_type(self.id.name.as_str(), self.range)?;
+            let clone_map = ctx.plmod.types.clone();
+            for (field, has_semi) in self.fields.iter() {
+                if !has_semi {
+                    ctx.add_diag(field.range.new_err(ErrorCode::COMPLETION));
+                }
+                let id = field.id.clone();
+                let f = Field {
+                    index: i,
+                    typenode: field.typenode.clone(),
+                    name: field.id.name.clone(),
+                    range: field.range,
+                };
+                let tpre = field.typenode.get_type(ctx, builder);
+                if tpre.is_err() {
+                    continue;
+                }
+                let tp = tpre.unwrap();
+                field_pltps.push(tp.clone());
+                match &*tp.borrow() {
+                    PLType::STRUCT(sttp) => {
+                        ctx.send_if_go_to_def(
+                            field.typenode.range(),
+                            sttp.range,
+                            sttp.path.clone(),
+                        );
+                    }
+                    _ => {}
+                };
+                ctx.set_field_refs(pltype.clone(), &f, f.range);
+                ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
+                fields.insert(id.name.to_string(), f.clone());
+                order_fields.push(f);
+                ctx.set_if_refs_tp(tp.clone(), field.typenode.range());
+                i += 1;
+            }
+            let newf = order_fields.clone();
+            if self.generics.is_none() {
+                builder.add_body_to_struct_type(
+                    &ctx.plmod.get_full_name(&self.id.name),
+                    &order_fields,
+                    ctx,
                 );
             }
-        }
-        let mut field_pltps = vec![];
-        let pltype = ctx.get_type(self.id.name.as_str(), self.range)?;
-        let clone_map = ctx.plmod.types.clone();
-        for (field, has_semi) in self.fields.iter() {
-            if !has_semi {
-                ctx.add_diag(field.range.new_err(ErrorCode::COMPLETION));
+            ctx.plmod.types = clone_map;
+            if let PLType::STRUCT(st) = &mut *pltype.borrow_mut() {
+                builder.gen_st_visit_function(ctx, st, &field_pltps);
+                st.fields = fields;
+                st.ordered_fields = newf;
+                st.doc = self.doc.clone();
             }
-            let id = field.id.clone();
-            let f = Field {
-                index: i,
-                typenode: field.typenode.clone(),
-                name: field.id.name.clone(),
-                range: field.range,
-            };
-            let tpre = field.typenode.get_type(ctx, builder);
-            if tpre.is_err() {
-                continue;
-            }
-            let tp = tpre.unwrap();
-            field_pltps.push(tp.clone());
-            match &*tp.borrow() {
-                PLType::STRUCT(sttp) => {
-                    ctx.send_if_go_to_def(field.typenode.range(), sttp.range, sttp.path.clone());
-                }
-                _ => {}
-            };
-            ctx.set_field_refs(pltype.clone(), &f, f.range);
-            ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
-            fields.insert(id.name.to_string(), f.clone());
-            order_fields.push(f);
-            ctx.set_if_refs_tp(tp.clone(), field.typenode.range());
-            i += 1;
-        }
-        let newf = order_fields.clone();
-        if self.generics.is_none() {
-            builder.add_body_to_struct_type(
-                &ctx.plmod.get_full_name(&self.id.name),
-                &order_fields,
-                ctx,
-            );
-        }
-        ctx.plmod.types = clone_map;
-        if let PLType::STRUCT(st) = &mut *pltype.borrow_mut() {
-            builder.gen_st_visit_function(ctx, st, &field_pltps);
-            st.fields = fields;
-            st.ordered_fields = newf;
-            st.doc = self.doc.clone();
-        }
-        ctx.set_if_refs_tp(pltype.clone(), self.id.range);
-        ctx.add_doc_symbols(pltype.clone());
-        ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
-        ctx.reset_generic_types(mp);
-        Ok(())
+            ctx.set_if_refs_tp(pltype.clone(), self.id.range);
+            ctx.add_doc_symbols(pltype.clone());
+            ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
+            Ok(())
+        })
     }
 }
 
@@ -574,81 +578,82 @@ impl Node for StructInitNode {
             }
         };
         ctx.send_if_go_to_def(self.typename.range(), sttype.range, sttype.path.clone());
-        let mp = ctx.move_generic_types();
-        sttype.clear_generic();
-        let mut field_init_values = vec![];
-        let mut idx = 0;
-        ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
-        ctx.run_in_st_mod_mut(&mut sttype, |ctx, sttype| {
-            sttype.add_generic_type(ctx)?;
-            for fieldinit in self.fields.iter_mut() {
-                let field_id_range = fieldinit.id.range;
-                let field_exp_range = fieldinit.exp.range();
-                let field = sttype.fields.get(&fieldinit.id.name);
-                if field.is_none() {
-                    ctx.if_completion(self.range, || sttype.get_completions(ctx));
-                    return Err(
-                        ctx.add_diag(field_id_range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND))
-                    );
+        ctx.protect_generic_context(|ctx| {
+            sttype.clear_generic();
+            let mut field_init_values = vec![];
+            let mut idx = 0;
+            ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
+            ctx.run_in_st_mod_mut(&mut sttype, |ctx, sttype| {
+                sttype.add_generic_type(ctx)?;
+                for fieldinit in self.fields.iter_mut() {
+                    let field_id_range = fieldinit.id.range;
+                    let field_exp_range = fieldinit.exp.range();
+                    let field = sttype.fields.get(&fieldinit.id.name);
+                    if field.is_none() {
+                        ctx.if_completion(self.range, || sttype.get_completions(ctx));
+                        return Err(
+                            ctx.add_diag(field_id_range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND))
+                        );
+                    }
+                    let field = field.unwrap();
+                    let (value, value_pltype, _) = fieldinit.emit(ctx, builder)?;
+                    idx += 1;
+                    ctx.emit_comment_highlight(&self.comments[idx - 1]);
+                    if value.is_none() || value_pltype.is_none() {
+                        return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
+                    }
+                    let (value, _) = ctx.try_load2var(
+                        field_exp_range,
+                        value.unwrap(),
+                        value_pltype.clone().unwrap(),
+                        builder,
+                    )?;
+                    let value_pltype = value_pltype.unwrap();
+                    if !field.typenode.eq_or_infer(ctx, value_pltype, builder)? {
+                        return Err(ctx.add_diag(
+                            fieldinit
+                                .range
+                                .new_err(ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH),
+                        ));
+                    }
+                    field_init_values.push((field.index, value));
+                    ctx.set_field_refs(pltype.clone(), field, field_id_range);
                 }
-                let field = field.unwrap();
-                let (value, value_pltype, _) = fieldinit.emit(ctx, builder)?;
-                idx += 1;
-                ctx.emit_comment_highlight(&self.comments[idx - 1]);
-                if value.is_none() || value_pltype.is_none() {
-                    return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
-                }
-                let (value, _) = ctx.try_load2var(
-                    field_exp_range,
-                    value.unwrap(),
-                    value_pltype.clone().unwrap(),
-                    builder,
-                )?;
-                let value_pltype = value_pltype.unwrap();
-                if !field.typenode.eq_or_infer(ctx, value_pltype, builder)? {
+                Ok(())
+            })?;
+
+            if self.fields.len() < self.comments.len() {
+                ctx.emit_comment_highlight(&self.comments[idx]);
+            }
+            if !sttype.generic_map.is_empty() {
+                if sttype.need_gen_code() {
+                    sttype = ctx.run_in_st_mod_mut(&mut sttype, |ctx, sttype| {
+                        Ok(sttype.generic_infer_pltype(ctx, builder))
+                    })?;
+                } else {
                     return Err(ctx.add_diag(
-                        fieldinit
-                            .range
-                            .new_err(ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH),
+                        self.typename
+                            .range()
+                            .new_err(ErrorCode::GENERIC_CANNOT_BE_INFER),
                     ));
                 }
-                field_init_values.push((field.index, value));
-                ctx.set_field_refs(pltype.clone(), field, field_id_range);
             }
-            Ok(())
-        })?;
-
-        if self.fields.len() < self.comments.len() {
-            ctx.emit_comment_highlight(&self.comments[idx]);
-        }
-        if !sttype.generic_map.is_empty() {
-            if sttype.need_gen_code() {
-                sttype = ctx.run_in_st_mod_mut(&mut sttype, |ctx, sttype| {
-                    Ok(sttype.generic_infer_pltype(ctx, builder))
-                })?;
-            } else {
-                return Err(ctx.add_diag(
-                    self.typename
-                        .range()
-                        .new_err(ErrorCode::GENERIC_CANNOT_BE_INFER),
-                ));
-            }
-        }
-        let pltype = Arc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
-        // let tp = sttype.struct_type(ctx).as_basic_type_enum().clone();
-        let struct_pointer = builder.alloc("initstruct", &PLType::STRUCT(sttype), ctx, None); //alloc(ctx, tp, "initstruct");
-        field_init_values.iter().for_each(|(index, value)| {
-            let fieldptr = builder
-                .build_struct_gep(struct_pointer, *index, "fieldptr")
-                .unwrap();
-            builder.build_store(fieldptr, *value);
-        });
-        ctx.reset_generic_types(mp);
-        Ok((
-            Some(plv!(struct_pointer)),
-            Some(pltype),
-            TerminatorEnum::NONE,
-        ))
+            let pltype = Arc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
+            // let tp = sttype.struct_type(ctx).as_basic_type_enum().clone();
+            let struct_pointer =
+                builder.alloc("initstruct", &PLType::STRUCT(sttype.clone()), ctx, None); //alloc(ctx, tp, "initstruct");
+            field_init_values.iter().for_each(|(index, value)| {
+                let fieldptr = builder
+                    .build_struct_gep(struct_pointer, *index, "fieldptr")
+                    .unwrap();
+                builder.build_store(fieldptr, *value);
+            });
+            Ok((
+                Some(plv!(struct_pointer)),
+                Some(pltype),
+                TerminatorEnum::NONE,
+            ))
+        })
     }
 }
 
@@ -762,10 +767,7 @@ impl GenericDefNode {
             ctx.push_semantic_token(g.range, SemanticTokenType::TYPE, 0);
         }
     }
-    pub fn gen_generic_type<'a, 'ctx>(
-        &self,
-        _: &mut Ctx<'a>,
-    ) -> IndexMap<String, Arc<RefCell<PLType>>> {
+    pub fn gen_generic_type<'a, 'ctx>(&self) -> IndexMap<String, Arc<RefCell<PLType>>> {
         let mut res = IndexMap::default();
         for g in self.generics.iter() {
             let range = g.range;
