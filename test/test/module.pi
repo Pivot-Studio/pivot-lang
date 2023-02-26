@@ -1,0 +1,16 @@
+use project1::test::sub_module;
+fn test_module() void {
+    let x = sub_module::A{};
+    sub_module::testfn(x);
+    x.testimpl();
+    let y = sub_module::test_generic(x);
+    y.testimpl();
+    let z = sub_module::B{
+        x: x
+    };
+    let a = sub_module::WithGeneric{
+        x: z
+    };
+    return;
+}
+

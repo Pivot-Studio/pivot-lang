@@ -1,3 +1,5 @@
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::missing_safety_doc)]
 use std::{
     cell::RefCell,
     sync::{
@@ -157,7 +159,7 @@ pub fn gc_init(ptr: *mut u8) {
 /// reach a safe point
 pub fn thread_stuck_start() {
     let mut v = GC_COLLECTOR_COUNT.lock();
-    v.0 = v.0 - 1;
+    v.0 -= 1;
     GC_MARK_COND.notify_all();
     drop(v);
 }
@@ -169,7 +171,7 @@ pub fn thread_stuck_start() {
 pub fn thread_stuck_end() {
     let mut v = GC_COLLECTOR_COUNT.lock();
     GC_MARK_COND.wait_while(&mut v, |_| GC_RUNNING.load(Ordering::SeqCst));
-    v.0 = v.0 + 1;
+    v.0 += 1;
     GC_MARK_COND.notify_all();
     drop(v);
 }

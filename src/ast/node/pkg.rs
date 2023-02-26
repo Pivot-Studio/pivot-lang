@@ -49,7 +49,7 @@ impl Node for UseNode {
     ) -> NodeResult {
         let mut path = PathBuf::from(&ctx.config.root);
         let head = self.ids[0].name.clone();
-        if self.ids.len() != 0 {
+        if !self.ids.is_empty() {
             // head is project name or deps name
             let dep = ctx.config.deps.as_ref().unwrap().get(&head);
             if head == ctx.config.project || dep.is_some() {
@@ -73,24 +73,22 @@ impl Node for UseNode {
                 return vec![];
             }
             let mut completions = get_ns_path_completions(path.to_str().unwrap());
-            if self.ids.len() < 2 {
-                if self.complete {
-                    completions.clear();
-                    if let Some(deps) = &ctx.config.deps {
-                        for (dep, _) in deps {
-                            completions.push(lsp_types::CompletionItem {
-                                label: dep.clone(),
-                                kind: Some(lsp_types::CompletionItemKind::MODULE),
-                                ..Default::default()
-                            });
-                        }
+            if self.ids.len() < 2 && self.complete {
+                completions.clear();
+                if let Some(deps) = &ctx.config.deps {
+                    for (dep, _) in deps {
+                        completions.push(lsp_types::CompletionItem {
+                            label: dep.clone(),
+                            kind: Some(lsp_types::CompletionItemKind::MODULE),
+                            ..Default::default()
+                        });
                     }
-                    completions.push(lsp_types::CompletionItem {
-                        label: ctx.config.project.clone(),
-                        kind: Some(lsp_types::CompletionItemKind::MODULE),
-                        ..Default::default()
-                    });
                 }
+                completions.push(lsp_types::CompletionItem {
+                    label: ctx.config.project.clone(),
+                    kind: Some(lsp_types::CompletionItemKind::MODULE),
+                    ..Default::default()
+                });
             }
             completions
         });
@@ -186,13 +184,13 @@ impl Node for ExternIdNode {
             ));
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
-            let range = &tp.clone().borrow().get_range();
+            let range = &tp.borrow().get_range();
             let re = match &*tp.clone().borrow() {
                 PLType::FN(_) => {
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
                     Ok((None, Some(tp), TerminatorEnum::NONE))
                 }
-                _ => unreachable!(),
+                _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION))),
             };
             if let Some(range) = range {
                 ctx.send_if_go_to_def(self.range, *range, plmod.path.clone());

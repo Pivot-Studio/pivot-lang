@@ -1,9 +1,31 @@
-fn DioGC__malloc(size:i64, obj_type:u8) *i64;
-
-fn DioGC__add_root(ptr:*i64, obj_type:u8) void;
-
-fn DioGC__rm_root(ptr:*i64) void;
+fn DioGC__malloc(size:i64, obj_type:u8) *u8;
 
 fn DioGC__collect() void;
 
+struct string {
+    len:i64;
+    byte_len:i64;
+    data:*u8;
+}
 
+fn memcpy(dst:*u8, src:*u8, len:i64) void;
+
+fn int_to_ptr(i:i64) *u8;
+
+fn ptr_to_int(ptr:*u8) i64;
+
+impl string {
+    fn append(str:string) void {
+        let old = self.data;
+        let atomic:u8 = 0;
+        let new = DioGC__malloc(self.byte_len+str.byte_len, atomic);
+        memcpy(new, old, self.byte_len);
+        let new_i_end = ptr_to_int(new) + self.byte_len;
+        let new_end = int_to_ptr(new_i_end);
+        memcpy(new_end, str.data, str.byte_len);
+        self.data = new;
+        self.len  = self.len + str.len;
+        self.byte_len = self.byte_len + str.byte_len;
+        return;
+    }
+}

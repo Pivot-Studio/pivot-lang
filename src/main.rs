@@ -1,3 +1,7 @@
+#![allow(clippy::vec_box)]
+#![allow(clippy::clone_double_ref)]
+#![allow(clippy::derive_ord_xor_partial_ord)]
+#![allow(clippy::missing_safety_doc)]
 #[salsa::jar(db = Db)]
 pub struct Jar(
     nomparser::SourceProgram,

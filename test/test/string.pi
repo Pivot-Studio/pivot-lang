@@ -1,0 +1,9 @@
+use std::io;
+fn test_string() void {
+    let s = "hello world!\n";
+    let ss = "你好啊！";
+    s.append(ss);
+    io::print_s(s);
+    return;
+}
+

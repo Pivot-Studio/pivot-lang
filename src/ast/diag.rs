@@ -173,7 +173,7 @@ impl PLDiag {
         .with_code(self.code)
         .with_message(self.get_msg());
         let mut labels = vec![];
-        if self.labels.len() == 0 {
+        if self.labels.is_empty() {
             labels.push((self.range, Some(("here".to_string(), vec![]))));
         }
 

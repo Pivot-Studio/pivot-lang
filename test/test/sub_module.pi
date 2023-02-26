@@ -1,0 +1,19 @@
+struct A {
+}
+struct B{
+    x:A;
+}
+struct WithGeneric<T> {
+    x:T;
+}
+fn testfn(x: A) void {
+    return;
+}
+impl A {
+    fn testimpl() void {
+        return;
+    }
+}
+fn test_generic<T>(x:T) T {
+    return x;
+}

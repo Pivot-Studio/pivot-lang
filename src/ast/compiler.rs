@@ -121,18 +121,15 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
     }
 
     let input = docs.get_file_params(db, docs.file(db).clone(), true);
-    if input.is_none() {
-        return None;
-    }
+    input?;
     let input = input.unwrap();
     let re = compile_dry_file(db, input);
     if let Some(res) = db.get_ref_str() {
-        re.and_then(|plmod| {
+        if let Some(plmod) = re {
             plmod
                 .plmod(db)
                 .get_refs(&res, db, &mut FxHashSet::default());
-            Some(())
-        });
+        }
     }
     re
 }
@@ -145,9 +142,7 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
     }
     // eprintln!("compile_dry_file: {:#?}", docs.debug_all(db));
     let re = docs.get_file_content(db);
-    if re.is_none() {
-        return None;
-    }
+    re?;
     let src = re.unwrap();
     debug!("src {:#?} id {:?}", src.text(db), src);
     let parse_result = parse(db, src);
@@ -188,7 +183,7 @@ pub fn run_pass(llvmmod: &Module, op: OptimizationLevel) {
         trace!("optimized: {}", oped,);
     }
     fpm.finalize();
-    mpm.run_on(&llvmmod);
+    mpm.run_on(llvmmod);
 }
 
 lazy_static! {
@@ -222,16 +217,16 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     pb.finish_with_message("中间代码编译完成");
     let errs = compile_dry::accumulated::<Diagnostics>(db, docs);
     let mut errs_num = 0;
-    if errs.len() > 0 {
+    if !errs.is_empty() {
         for e in errs.iter() {
             let path = &e.0;
             for e in e.1.iter() {
                 e.print(
-                    &path,
+                    path,
                     Source::from(docs.get_file_content(db, path.clone()).unwrap().text(db)),
                 );
                 if e.is_err() {
-                    errs_num = errs_num + 1
+                    errs_num += 1
                 }
             }
         }
@@ -288,7 +283,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         let o = m.with_extension("o");
         // println!("{}", m.clone().to_str().unwrap());
         let module = Module::parse_bitcode_from_path(m.clone(), &ctx)
-            .expect(format!("parse {} failed", m.to_str().unwrap()).as_str());
+            .unwrap_or_else(|_| panic!("parse {} failed", m.to_str().unwrap()));
         pb.set_message(format!(
             "正在优化模块 {} ",
             module.get_name().to_str().unwrap().yellow()
@@ -318,7 +313,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         fs::write(llp, llvmmod.to_string()).unwrap();
     }
     let mut fo = out.to_string();
-    let mut out = out.to_string();
+    let mut out = out;
     #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
     let pl_target = Target::search("x86_64-apple-darwin").expect("get target failed");
     #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]

@@ -51,7 +51,7 @@ pub fn run_immix_pass(module: &Module) {
         fmain
             .get_first_basic_block()
             .and_then(|bb| bb.get_first_instruction())
-            .and_then(|inst| {
+            .map(|inst| {
                 builder.position_before(&inst);
                 MAP_NAMES.inner.lock().borrow().iter().for_each(|name| {
                     let f = module.get_function(name).unwrap_or_else(|| {
@@ -59,7 +59,6 @@ pub fn run_immix_pass(module: &Module) {
                     });
                     builder.build_call(f, &[], "gc_init");
                 });
-                Some(())
             })
     });
 }

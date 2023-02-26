@@ -52,10 +52,10 @@ impl<'ctx> CodeGen<'ctx> {
         unsafe {
             let demo = self.execution_engine.get_function("sum");
             if let Ok(demo1) = demo {
-                return Some(demo1);
+                Some(demo1)
             } else {
                 println!("{}", demo.err().unwrap());
-                return None;
+                None
             }
         }
     }
@@ -112,5 +112,5 @@ fn test_add_symbol() -> Result<(), Box<dyn std::error::Error>> {
             assert_eq!(demo.call(x, y, z), x + y + z);
         }
     }
-    return Ok(());
+    Ok(())
 }

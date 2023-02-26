@@ -136,7 +136,7 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 res = match op.0 {
                     ComplexOp::CallOp((args, params_range, generic_params)) => {
                         let mut range = res.range();
-                        if args.len() > 0 {
+                        if !args.is_empty() {
                             range = res.range().start.to(params_range.end);
                         }
                         Box::new(
@@ -168,8 +168,8 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                             range = res.range().start.to(field.clone().unwrap().range().end);
                         } else {
                             let mut end = res.range().end;
-                            end.column = end.column + 1;
-                            end.offset = end.offset + 1;
+                            end.column += 1;
+                            end.offset += 1;
                             range = res.range().start.to(end);
                         }
                         Box::new(

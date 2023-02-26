@@ -126,7 +126,7 @@ mod test {
             ActionType::Completion,
             "test/lsp/test_completion.pi",
         );
-        assert!(comps.len() > 0);
+        assert!(!comps.is_empty());
         assert_eq!(comps[0].len(), 3);
         let compstr = vec!["a", "b", "c"];
         for comp in comps[0].iter() {
@@ -149,7 +149,7 @@ mod test {
             ActionType::Completion,
             "test/lsp/test_completion.pi",
         );
-        assert!(comps.len() > 0);
+        assert!(!comps.is_empty());
         let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
         assert!(lables.contains(&"test1".to_string()));
         assert!(lables.contains(&"name".to_string()));
@@ -170,7 +170,7 @@ mod test {
             ActionType::Completion,
             "test/lsp/test_completion.pi",
         );
-        assert!(comps.len() > 0);
+        assert!(!comps.is_empty());
         let lables = comps[0].iter().map(|c| c.label.clone()).collect::<Vec<_>>();
         assert!(lables.contains(&"test".to_string())); // self refernece
         assert!(lables.contains(&"i64".to_string()));
@@ -193,13 +193,12 @@ mod test {
             ActionType::Completion,
             "test/lsp/test_completion.pi",
         );
-        assert!(comps.len() > 0);
-        let lables = comps[0].iter().map(|c| c.clone()).collect::<Vec<_>>();
+        assert!(!comps.is_empty());
+        let lables = comps[0].to_vec();
         assert!(
             lables
                 .iter()
-                .find(|c| c.label == "mod" && c.kind == Some(CompletionItemKind::MODULE))
-                .is_some(),
+                .any(|c| c.label == "mod" && c.kind == Some(CompletionItemKind::MODULE)),
             "mod not found in completion"
         );
     }
@@ -219,13 +218,12 @@ mod test {
             ActionType::Completion,
             "test/lsp/test_completion.pi",
         );
-        assert!(comps.len() > 0);
-        let lables = comps[0].iter().map(|c| c.clone()).collect::<Vec<_>>();
+        assert!(!comps.is_empty());
+        let lables = comps[0].to_vec();
         assert!(
             lables
                 .iter()
-                .find(|c| c.label == "name" && c.kind == Some(CompletionItemKind::STRUCT))
-                .is_some(),
+                .any(|c| c.label == "name" && c.kind == Some(CompletionItemKind::STRUCT)),
             "name not found in completion"
         );
     }
@@ -237,8 +235,8 @@ mod test {
             ActionType::Hint,
             "test/lsp/test_completion.pi",
         );
-        assert!(hints.len() > 0);
-        assert!(hints[0].len() > 0);
+        assert!(!hints.is_empty());
+        assert!(!hints[0].is_empty());
         assert_eq!(
             hints[0][0].label,
             InlayHintLabel::String(": i64".to_string())
@@ -271,7 +269,7 @@ mod test {
             ActionType::GotoDef,
             "test/lsp/test_completion.pi",
         );
-        assert!(def.len() > 0);
+        assert!(!def.is_empty());
         if let GotoDefinitionResponse::Scalar(sc) = def[0].clone() {
             assert!(sc.uri.to_string().contains("test/lsp/mod.pi"));
             assert_eq!(sc.range, new_range(1, 0, 3, 1));
@@ -294,7 +292,7 @@ mod test {
             ActionType::Hover,
             "test/lsp/mod2.pi",
         );
-        assert!(hovers.len() > 0);
+        assert!(!hovers.is_empty());
         if let HoverContents::Array(v) = hovers[0].clone().contents {
             if let MarkedString::String(st) = v[0].clone() {
                 assert_eq!(st.trim(), "# content".to_string());
@@ -321,7 +319,7 @@ mod test {
             ActionType::SignatureHelp,
             "test/lsp/mod2.pi",
         );
-        assert!(hovers.len() > 0);
+        assert!(!hovers.is_empty());
         assert!(
             hovers[0]
                 .signatures
@@ -350,7 +348,7 @@ mod test {
             ActionType::FindReferences,
             "test/lsp/mod.pi",
         );
-        assert!(refs.len() > 0);
+        assert!(!refs.is_empty());
         let mut locs = vec![];
         for r in refs.iter() {
             for l in r.iter() {
@@ -398,8 +396,8 @@ mod test {
             ActionType::DocSymbol,
             "test/lsp/test_completion.pi",
         );
-        assert!(symbols.len() > 0);
-        assert!(symbols[0].len() > 0);
+        assert!(!symbols.is_empty());
+        assert!(!symbols[0].is_empty());
         let testst = symbols[0].iter().filter(|s| s.name == "test").last();
         assert!(testst.is_some(), "test struct not found");
         assert_eq!(
@@ -476,8 +474,8 @@ mod test {
         let exe = PathBuf::from(out);
         #[cfg(target_os = "windows")]
         let exe = exe.with_extension("exe");
-        let exe =
-            dunce::canonicalize(&exe).expect(&format!("static compiled file not found {:?}", exe));
+        let exe = dunce::canonicalize(&exe)
+            .unwrap_or_else(|_| panic!("static compiled file not found {:?}", exe));
         let o = Command::new(exe.to_str().unwrap())
             .output()
             .expect("failed to execute compiled program");

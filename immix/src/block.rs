@@ -218,7 +218,7 @@ impl Block {
 
     /// # correct_header
     /// 回收的最后阶段，重置block的header
-    pub fn correct_header(&mut self, mark_histogram: *mut VecMap<usize, usize>) -> usize {
+    pub unsafe fn correct_header(&mut self, mark_histogram: *mut VecMap<usize, usize>) -> usize {
         let mut idx = 3;
         let mut len = 0;
         let mut first_hole_line_idx: usize = 3;
@@ -276,12 +276,10 @@ impl Block {
         self.hole_num = holes;
         self.eva_target = false;
         // println!("holes: {}, first_idx: {} , first_len: {} {:?}", holes,first_hole_line_idx,first_hole_line_len,self.line_map.iter().map(|&x| x & 1).collect::<Vec<_>>());
-        unsafe {
-            if let Some(count) = (*mark_histogram).get_mut(&self.hole_num) {
-                *count += marked_num;
-            } else {
-                (*mark_histogram).insert(self.hole_num, marked_num);
-            }
+        if let Some(count) = (*mark_histogram).get_mut(&self.hole_num) {
+            *count += marked_num;
+        } else {
+            (*mark_histogram).insert(self.hole_num, marked_num);
         }
         marked_num
     }

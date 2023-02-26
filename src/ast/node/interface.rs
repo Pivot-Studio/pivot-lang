@@ -107,7 +107,7 @@ impl TraitDefNode {
             range: Default::default(),
             // refs: Arc::new(RwVec::new()),
         });
-        i = i + 1;
+        i += 1;
         // pointer to real value
         order_fields.push(Field {
             index: i,
@@ -119,8 +119,8 @@ impl TraitDefNode {
             range: Default::default(),
             // refs: Arc::new(RwVec::new()),
         });
-        i = i + 1;
-        let pltype = ctx.get_type(&self.id.name.as_str(), self.range)?;
+        i += 1;
+        let pltype = ctx.get_type(self.id.name.as_str(), self.range)?;
         let clone_map = ctx.plmod.types.clone();
         for field in self.methods.iter() {
             let mut tp = field.clone();
@@ -139,7 +139,7 @@ impl TraitDefNode {
             // ctx.set_if_refs(f.refs.clone(), field.id.range);
             fields.insert(id.name.to_string(), f.clone());
             order_fields.push(f);
-            i = i + 1;
+            i += 1;
         }
         let newf = order_fields.clone();
         if self.generics.is_none() {
@@ -157,7 +157,7 @@ impl TraitDefNode {
             // st.doc = self.doc.clone();
         }
         ctx.set_if_refs_tp(pltype.clone(), self.id.range);
-        ctx.add_doc_symbols(pltype.clone());
+        ctx.add_doc_symbols(pltype);
         // ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
         ctx.reset_generic_types(mp);
         Ok(())

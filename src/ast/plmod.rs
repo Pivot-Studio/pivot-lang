@@ -122,8 +122,8 @@ impl Mod {
             semantic_tokens_builder: Arc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
                 "builder".to_string(),
             )))),
-            hints: Arc::new(RefCell::new(Box::new(vec![]))),
-            doc_symbols: Arc::new(RefCell::new(Box::new(vec![]))),
+            hints: Arc::new(RefCell::new(Box::default())),
+            doc_symbols: Arc::new(RefCell::new(Box::default())),
             // refcache:Arc::new(RefCell::new(BTreeMap::new())),
             local_refs: Arc::new(RefCell::new(BTreeMap::new())),
             glob_refs: Arc::new(RefCell::new(BTreeMap::new())),
@@ -164,10 +164,9 @@ impl Mod {
         }
     }
     pub fn push_refs(&self, name: &str, db: &dyn Db) {
-        self.refs_map.borrow().get(name).and_then(|res| {
+        if let Some(res) = self.refs_map.borrow().get(name) {
             PLReferences::push(db, res.borrow().clone());
-            Some(())
-        });
+        }
     }
     pub fn get_global_symbol(&self, name: &str) -> Option<&GlobalVar> {
         self.global_table.get(name)
@@ -276,7 +275,7 @@ impl Mod {
     pub fn add_method(&mut self, tp: &STType, mthd: &str, fntp: FNType) -> Result<(), ()> {
         let full_name = tp.get_st_full_name();
         if let Some(m) = self.methods.get_mut(&full_name) {
-            if let Some(_) = m.get(mthd) {
+            if m.get(mthd).is_some() {
                 // duplicate method
                 return Err(());
             }
@@ -304,7 +303,7 @@ impl Mod {
     pub fn get_ns_completions(&self) -> Vec<CompletionItem> {
         let mut m = FxHashMap::default();
         self.get_ns_completions_pri(&mut m);
-        let cm = m.iter().map(|(_, v)| v.clone()).collect();
+        let cm = m.values().cloned().collect();
         cm
     }
 }
@@ -337,6 +336,6 @@ fn get_ns_path_completions_pri(path: &str, vmap: &mut FxHashMap<String, Completi
 pub fn get_ns_path_completions(path: &str) -> Vec<CompletionItem> {
     let mut m = FxHashMap::default();
     get_ns_path_completions_pri(path, &mut m);
-    let cm = m.iter().map(|(_, v)| v.clone()).collect();
+    let cm = m.values().cloned().collect();
     cm
 }

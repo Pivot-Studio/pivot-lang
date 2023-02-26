@@ -77,7 +77,6 @@ pub struct Ctx<'a> {
         ),
     >, // variable table
     pub config: Config,                                           // config
-    pub usegc: bool,
     pub db: &'a dyn Db,
     pub rettp: Option<Arc<RefCell<PLType>>>,
 }
@@ -108,7 +107,6 @@ impl<'a, 'ctx> Ctx<'a> {
             edit_pos,
             table: FxHashMap::default(),
             config,
-            usegc: true,
             db,
             block: None,
             continue_block: None,
@@ -127,10 +125,9 @@ impl<'a, 'ctx> Ctx<'a> {
             plmod: self.plmod.new_child(),
             father: Some(self),
             errs: self.errs,
-            edit_pos: self.edit_pos.clone(),
+            edit_pos: self.edit_pos,
             table: FxHashMap::default(),
             config: self.config.clone(),
-            usegc: self.usegc,
             db: self.db.clone(),
             block: self.block,
             continue_block: self.continue_block,
@@ -138,8 +135,8 @@ impl<'a, 'ctx> Ctx<'a> {
             return_block: self.return_block,
             roots: RefCell::new(Vec::new()),
             rettp: self.rettp.clone(),
-            init_func: self.init_func.clone(),
-            function: self.function.clone(),
+            init_func: self.init_func,
+            function: self.function,
         };
         add_primitive_types(&mut ctx);
         builder.new_subscope(start);
@@ -148,7 +145,7 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn set_init_fn<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
         self.function = Some(builder.add_function(
             &self.plmod.get_full_name("__init_global"),
-            &vec![],
+            &[],
             PLType::VOID,
             self,
         ));
@@ -194,7 +191,7 @@ impl<'a, 'ctx> Ctx<'a> {
     )> {
         let v = self.table.get(name);
         if let Some((h, pltype, range, refs)) = v {
-            return Some((*h, pltype.clone(), range.clone(), Some(refs.clone()), false));
+            return Some((*h, pltype.clone(), *range, Some(refs.clone()), false));
         }
         if let Some(father) = self.father {
             return father.get_symbol(name, builder);
@@ -205,7 +202,7 @@ impl<'a, 'ctx> Ctx<'a> {
                     .get_global_var_handle(&self.plmod.get_full_name(name))
                     .unwrap(),
                 pltype.clone(),
-                range.clone(),
+                *range,
                 None,
                 true,
             ));
@@ -226,11 +223,10 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         if is_const {
             self.set_glob_refs(&self.plmod.get_full_name(&name), range);
-            self.plmod.add_global_symbol(name, pltype.clone(), range)?;
+            self.plmod.add_global_symbol(name, pltype, range)?;
         } else {
             let refs = Arc::new(RefCell::new(vec![]));
-            self.table
-                .insert(name, (pv, pltype.clone(), range, refs.clone()));
+            self.table.insert(name, (pv, pltype, range, refs.clone()));
             self.set_if_refs(refs, range);
         }
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
@@ -264,7 +260,7 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn init_global<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
         let mut set: FxHashSet<String> = FxHashSet::default();
         for (_, sub) in &self.plmod.clone().submods {
-            self.init_global_walk(&sub, &mut set, builder);
+            self.init_global_walk(sub, &mut set, builder);
         }
 
         builder.rm_curr_debug_location();
@@ -315,7 +311,7 @@ impl<'a, 'ctx> Ctx<'a> {
             return Err(self.add_diag(range.new_err(ErrorCode::REDEFINE_TYPE)));
         }
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
-        self.plmod.types.insert(name, pltype.clone());
+        self.plmod.types.insert(name, pltype);
         Ok(())
     }
     pub fn add_type_without_check(&mut self, pltype: Arc<RefCell<PLType>>) {
@@ -329,11 +325,11 @@ impl<'a, 'ctx> Ctx<'a> {
         if self.plmod.types.contains_key(&name) {
             return;
         }
-        self.plmod.types.insert(name, pltype.clone());
+        self.plmod.types.insert(name, pltype);
     }
     pub fn add_generic_type(&mut self, name: String, pltype: Arc<RefCell<PLType>>, range: Range) {
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
-        self.generic_types.insert(name, pltype.clone());
+        self.generic_types.insert(name, pltype);
     }
     pub fn move_generic_types(&mut self) -> FxHashMap<String, Arc<RefCell<PLType>>> {
         self.generic_types.clone()
@@ -394,20 +390,83 @@ impl<'a, 'ctx> Ctx<'a> {
         self.plmod = plmod;
         m
     }
-
-    pub fn run_in_st_mod<'b, F: FnMut(&mut Ctx<'a>, &STType)>(&'b mut self, st: &STType, mut f: F) {
+    pub fn run_in_st_mod_mut<'b, T, F: FnMut(&mut Ctx<'a>, &mut STType) -> Result<T, PLDiag>>(
+        &'b mut self,
+        st: &mut STType,
+        mut f: F,
+    ) -> Result<T, PLDiag> {
         let p = PathBuf::from(&st.path);
         let mut oldm = None;
         if st.path != self.plmod.path {
             let s = p.file_name().unwrap().to_str().unwrap();
-            let m = s.split(".").next().unwrap();
+            let m = s.split('.').next().unwrap();
             let m = self.plmod.submods.get(m).unwrap();
             oldm = Some(self.set_mod(m.clone()));
         }
-        f(self, st);
+        let res = f(self, st);
         if let Some(m) = oldm {
             self.set_mod(m);
         }
+        res
+    }
+    pub fn run_in_st_mod<'b, T, F: FnMut(&mut Ctx<'a>, &STType) -> Result<T, PLDiag>>(
+        &'b mut self,
+        st: &STType,
+        mut f: F,
+    ) -> Result<T, PLDiag> {
+        let p = PathBuf::from(&st.path);
+        let mut oldm = None;
+        if st.path != self.plmod.path {
+            let s = p.file_name().unwrap().to_str().unwrap();
+            let m = s.split('.').next().unwrap();
+            let m = self.plmod.submods.get(m).unwrap();
+            oldm = Some(self.set_mod(m.clone()));
+        }
+        let res = f(self, st);
+        if let Some(m) = oldm {
+            self.set_mod(m);
+        }
+        res
+    }
+
+    pub fn run_in_fn_mod_mut<'b, T, F: FnMut(&mut Ctx<'a>, &mut FNType) -> Result<T, PLDiag>>(
+        &'b mut self,
+        fntype: &mut FNType,
+        mut f: F,
+    ) -> Result<T, PLDiag> {
+        let p = PathBuf::from(&fntype.path);
+        let mut oldm = None;
+        if fntype.path != self.plmod.path {
+            let s = p.file_name().unwrap().to_str().unwrap();
+            let m = s.split('.').next().unwrap();
+            let m = self.plmod.submods.get(m).unwrap();
+            oldm = Some(self.set_mod(m.clone()));
+        }
+        let res = f(self, fntype);
+        if let Some(m) = oldm {
+            self.set_mod(m);
+        }
+        res
+    }
+
+    pub fn run_in_fn_mod<'b, T, F: FnMut(&mut Ctx<'a>, &FNType) -> Result<T, PLDiag>>(
+        &'b mut self,
+        fntype: &FNType,
+        mut f: F,
+    ) -> Result<T, PLDiag> {
+        let p = PathBuf::from(&fntype.path);
+        let mut oldm = None;
+        if fntype.path != self.plmod.path {
+            let s = p.file_name().unwrap().to_str().unwrap();
+            let m = s.split('.').next().unwrap();
+            let m = self.plmod.submods.get(m).unwrap();
+            oldm = Some(self.set_mod(m.clone()));
+        }
+        let res = f(self, fntype);
+        if let Some(m) = oldm {
+            self.set_mod(m);
+        }
+        res
     }
 
     pub fn get_file_url(&self) -> Url {
@@ -480,7 +539,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.plmod.defs.borrow_mut().insert(
             range,
             LSPDef::Scalar(Location {
-                uri: Url::from_file_path(file.clone()).unwrap(),
+                uri: Url::from_file_path(file).unwrap(),
                 range: destrange.to_diag_range(),
             }),
         );
@@ -493,7 +552,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.get_var_completions(&mut m);
         self.get_keyword_completions(&mut m);
 
-        let cm = m.iter().map(|(_, v)| v.clone()).collect();
+        let cm = m.values().cloned().collect();
         cm
     }
 
@@ -502,7 +561,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.get_const_completions_in_ns(ns, &mut m);
         self.get_type_completions_in_ns(ns, &mut m);
 
-        let cm = m.iter().map(|(_, v)| v.clone()).collect();
+        let cm = m.values().cloned().collect();
         cm
     }
 
@@ -558,7 +617,7 @@ impl<'a, 'ctx> Ctx<'a> {
         let mut m = FxHashMap::default();
         self.get_tp_completions(&mut m);
         self.plmod.get_ns_completions_pri(&mut m);
-        m.iter().map(|(_, v)| v.clone()).collect()
+        m.values().cloned().collect()
     }
 
     fn get_tp_completions(&self, m: &mut FxHashMap<String, CompletionItem>) {

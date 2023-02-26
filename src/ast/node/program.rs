@@ -242,15 +242,15 @@ impl Program {
                     .truncate(true)
                     .open(p.fullpath(db))
                     .unwrap();
-                f.write(code.as_bytes()).unwrap();
+                f.write_all(code.as_bytes()).unwrap();
             }
             ActionType::LspFmt => {
                 let oldcode = p.file_content(db);
                 let mut builder = FmtBuilder::new();
                 nn.format(&mut builder);
                 let newcode = builder.generate();
-                let diff = text::diff(&oldcode, &newcode);
-                let line_index = text::LineIndex::new(&oldcode);
+                let diff = text::diff(oldcode, &newcode);
+                let line_index = text::LineIndex::new(oldcode);
                 PLFormat::push(db, diff.into_text_edit(&line_index));
             }
             ActionType::Flow => {
@@ -416,16 +416,6 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         params.params(db).config(db),
         db,
     );
-    if PathBuf::from(params.file(db))
-        .with_extension("")
-        .file_name()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        == "gc"
-    {
-        ctx.usegc = false;
-    }
     ctx.plmod.submods = params.submods(db);
     let m = &mut ctx;
     let node = params.node(db);
@@ -442,7 +432,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         db,
         (
             params.fullpath(db).clone(),
-            v.borrow().iter().map(|x| x.clone()).collect(),
+            v.borrow().iter().cloned().collect(),
         ),
     );
     if params.params(db).is_compile(db) {

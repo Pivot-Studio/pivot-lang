@@ -70,11 +70,7 @@ impl FileCompileInput {
             .unwrap()
             .borrow_mut()
             .get_file_content(db, self.file(db));
-        if let Some(c) = re {
-            Some(c)
-        } else {
-            None
-        }
+        re
     }
     #[salsa::tracked(lru = 32)]
     pub fn get_emit_params(self, db: &dyn Db) -> EmitParams {
@@ -124,11 +120,7 @@ impl MemDocsInput {
             .unwrap()
             .borrow_mut()
             .get_file_content(db, self.file(db));
-        if let Some(c) = re {
-            Some(c)
-        } else {
-            None
-        }
+        re
     }
     #[salsa::tracked(lru = 32)]
     pub fn get_file_content(self, db: &dyn Db, f: String) -> Option<SourceProgram> {
@@ -139,11 +131,7 @@ impl MemDocsInput {
             .unwrap()
             .borrow_mut()
             .get_file_content(db, &f);
-        if let Some(c) = re {
-            Some(c)
-        } else {
-            None
-        }
+        re
     }
     #[salsa::tracked(lru = 32)]
     pub fn get_file_params(self, db: &dyn Db, f: String, entry: bool) -> Option<FileCompileInput> {
@@ -179,7 +167,7 @@ impl MemDocsInput {
         }
         Some(FileCompileInput::new(
             db,
-            file.clone(),
+            file,
             parant.to_str().unwrap().to_string(),
             self,
             config,
@@ -216,12 +204,12 @@ impl MemDocs {
         let mem = self.get(key);
         if let Some(mem) = mem {
             debug!("mdmdoc get_file_content result \n{}", mem.text(db));
-            return Some(mem.clone());
+            return Some(*mem);
         }
         let re = read_to_string(key);
         if let Ok(re) = re {
             log::info!("read file from path{}", key);
-            self.insert(db, key.to_string(), re.clone(), key.to_string());
+            self.insert(db, key.to_string(), re, key.to_string());
             return self.get_file_content(db, key);
         }
         None

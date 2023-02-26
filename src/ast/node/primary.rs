@@ -142,9 +142,8 @@ impl VarNode {
                 TerminatorEnum::NONE,
             ));
             ctx.send_if_go_to_def(self.range, dst, ctx.plmod.path.clone());
-            refs.and_then(|refs| {
+            refs.map(|refs| {
                 ctx.set_if_refs(refs, self.range);
-                Some(())
             })
             .or_else(|| {
                 ctx.set_glob_refs(&ctx.plmod.get_full_name(&self.name), self.range);
@@ -240,7 +239,7 @@ impl Node for ArrayElementNode {
                 TerminatorEnum::NONE,
             ));
         }
-        return Err(ctx.add_diag(self.range.new_err(ErrorCode::CANNOT_INDEX_NON_ARRAY)));
+        Err(ctx.add_diag(self.range.new_err(ErrorCode::CANNOT_INDEX_NON_ARRAY)))
     }
 }
 

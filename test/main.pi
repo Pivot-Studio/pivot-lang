@@ -7,13 +7,11 @@ use project1::test::traits;
 use project1::test::simple;
 use project1::test::flow;
 use project1::test::list;
+use project1::test::module;
+use project1::test::string;
 use pl_test::main;
-use core::panic;
-
 fn main() i64 {
     ifel::test_if_else();
-    change_global();
-    panic::assert(a.a == 100);
     generic::test_generic();
     method::test_impl();
     st::test_struct();
@@ -23,20 +21,8 @@ fn main() i64 {
     flow::test_flow();
     list::test_list();
     main::simple_test();
+    module::test_module();
+    string::test_string();
     return 0;
-}
-
-struct name {
-    a: i64;
-    b: i64;
-}
-
-const a = &name{
-    a: 1
-};
-
-fn change_global() void {
-    a.a = 100;
-    return;
 }
 

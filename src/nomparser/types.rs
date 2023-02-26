@@ -76,14 +76,11 @@ fn array_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
         |(_, tp, _, size, _)| {
             let range = size.range().start.to(tp.range().end);
 
-            Ok::<_, Error>(Box::new(TypeNodeEnum::ArrayTypeNode(
-                ArrayTypeNameNode {
-                    id: tp,
-                    size,
-                    range,
-                }
-                .into(),
-            )))
+            Ok::<_, Error>(Box::new(TypeNodeEnum::ArrayTypeNode(ArrayTypeNameNode {
+                id: tp,
+                size,
+                range,
+            })))
         },
     )(input)
 }

@@ -39,7 +39,7 @@ macro_rules! semi_statement {
             let range = node.range();
             let r = Range::new(e,e);
             res_enum(StErrorNode{
-                range: range,
+                range,
                 st: node,
                 err:ErrorNode{
                     range: r,//Range{start: range.end, end: range.end},

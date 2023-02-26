@@ -9,12 +9,10 @@ edition = "2021"
 internal_macro = { path = "../internal_macro",default-features = false }
 backtrace = "0.3"
 immix = { path = "../immix", features = ["llvm_stackmap", "auto_gc"] }
-libc = { version = "0.2", optional = true }
 env_logger = "0.10"
 
 [dev-dependencies]
 rand = "0.8"
-criterion = "0.4"
 
 [lib]
 name = "vm"
@@ -26,9 +24,5 @@ default = ["static", "immix"]
 jit = ["internal_macro/jit"]
 static = ["internal_macro/static"]
 immix = ["immix/zero_init"]
-simple_gc = ["libc"]
 
-[[bench]]
-name = "simple_gc_bench"
-harness = false
 

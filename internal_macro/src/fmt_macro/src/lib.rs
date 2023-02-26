@@ -8,7 +8,7 @@ pub fn fmt(_args: TokenStream, input: TokenStream) -> TokenStream {
         syn::Data::Struct(_) => {
             let ident = &ast.ident;
             let fnid = format_ident!("{}", to_snake(format_ident!("parse{}", ident).to_string()));
-            return quote! {
+            quote! {
                 #ast
                 impl crate::ast::node::FmtTrait for #ident {
                     fn format(&self, builder: &mut crate::ast::fmt::FmtBuilder) {
@@ -16,7 +16,7 @@ pub fn fmt(_args: TokenStream, input: TokenStream) -> TokenStream {
                     }
                 }
             }
-            .into();
+            .into()
         }
         _ => panic!("`format` has to be used with structs "),
     }

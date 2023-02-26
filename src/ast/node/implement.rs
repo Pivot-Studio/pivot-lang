@@ -83,7 +83,7 @@ impl Node for ImplNode {
                 continue;
             }
             let tmp = pltype.unwrap();
-            if let Some(_) = &self.impl_trait {
+            if self.impl_trait.is_some() {
                 // 检查方法是否在trait中
                 let trait_tp = traittpandrange.clone().unwrap().0;
                 if let PLType::TRAIT(st) = &*trait_tp.borrow() {

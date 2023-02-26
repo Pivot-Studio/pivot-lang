@@ -1,10 +1,8 @@
-use std::{cell::RefCell, sync::Arc};
-
 use crate::{
     ast::{
         ctx::Ctx,
         node::{deal_line, tab},
-        pltype::{ARRType, PLType, PriType},
+        pltype::PriType,
     },
     plv,
 };
@@ -39,16 +37,29 @@ impl Node for StringNode {
     ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::STRING, 0);
         let v = builder.const_string(&self.content);
+        let gcmod = ctx.plmod.submods.get("gc").unwrap();
+        let tp = gcmod.get_type("string").unwrap();
+        let alloca = builder.alloc("string", &tp.borrow(), ctx, None);
+        let len = builder.build_struct_gep(alloca, 1, "len").unwrap();
+        let byte_len = builder.build_struct_gep(alloca, 2, "byte_len").unwrap();
+        let read_arr = builder.build_struct_gep(alloca, 3, "real_arr").unwrap();
+        builder.build_store(read_arr, v);
+
+        builder.build_store(
+            len,
+            builder.int_value(&PriType::I64, self.content.len() as u64, true),
+        );
+        builder.build_store(
+            byte_len,
+            builder.int_value(&PriType::I64, self.content.len() as u64, true),
+        );
         Ok((
             Some({
-                let mut res: PLValue = plv!(v);
+                let mut res: PLValue = plv!(alloca);
                 res.set_const(true);
                 res
             }),
-            Some(Arc::new(RefCell::new(PLType::ARR(ARRType {
-                element_type: Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::U8))),
-                size: self.content.len() as u32,
-            })))),
+            Some(tp),
             TerminatorEnum::NONE,
         ))
     }

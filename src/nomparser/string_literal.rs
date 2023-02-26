@@ -50,7 +50,7 @@ where
     // the function returns None, map_opt returns an error. In this case, because
     // not all u32 values are valid unicode code points, we have to fallibly
     // convert to char with from_u32.
-    map_opt(parse_u32, |value| std::char::from_u32(value))(input)
+    map_opt(parse_u32, std::char::from_u32)(input)
 }
 
 /// Parse an escaped character: \n, \t, \r, \u{00AC}, etc.
@@ -165,9 +165,9 @@ where
 pub fn string_literal(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
-            tag_token_symbol(TokenType::DOUBLE_QUOTE),
+            tag_token(TokenType::DOUBLE_QUOTE),
             parse_string_content,
-            tag_token_symbol(TokenType::DOUBLE_QUOTE),
+            tag_token(TokenType::DOUBLE_QUOTE),
         )),
         |((_, st), s, (_, end))| {
             res_enum(

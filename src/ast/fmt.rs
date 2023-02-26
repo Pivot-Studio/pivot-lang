@@ -49,9 +49,6 @@ impl FmtBuilder {
         node.format(&mut b);
         b.generate()
     }
-    pub fn double_quote(&mut self) {
-        self.token("\"")
-    }
     pub fn generate(&self) -> String {
         self.buf.clone()
     }
@@ -230,7 +227,7 @@ impl FmtBuilder {
         }
         self.l_brace();
         let mut len = 0;
-        if node.fields.len() > 0 {
+        if !node.fields.is_empty() {
             self.enter();
             self.add_tab();
             for field in &node.fields {
@@ -410,7 +407,7 @@ impl FmtBuilder {
             generic_params.format(self);
         }
         self.l_paren();
-        if node.paralist.len() > 0 {
+        if !node.paralist.is_empty() {
             let mut len = 0;
             for param in &node.paralist {
                 len += 1;
@@ -425,7 +422,7 @@ impl FmtBuilder {
     }
     pub fn parse_func_def_node(&mut self, node: &FuncDefNode) {
         let paralist = &node.paralist;
-        let params_print = print_params(&paralist);
+        let params_print = print_params(paralist);
         // self.enter();
         for c in node.precom.iter() {
             self.prefix();
@@ -576,9 +573,7 @@ impl FmtBuilder {
         self.r_angle_bracket();
     }
     pub fn parse_string_node(&mut self, node: &StringNode) {
-        self.double_quote();
-        self.token(&node.content);
-        self.double_quote();
+        self.token(&format!("{:?}", node.content));
     }
     pub fn parse_trait_def_node(&mut self, node: &TraitDefNode) {
         // for c in node.precom.iter() {
