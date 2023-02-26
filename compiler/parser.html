@@ -175,7 +175,7 @@ pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNode
     }
     let (_, node) = re.unwrap();
     log::info!(&quot;parse {:?}&quot;, source.path(db));
-    Ok(ProgramNodeWrapper::new(db, node.clone()))
+    Ok(ProgramNodeWrapper::new(db, node))
 }</code></pre>
 
                     </main>

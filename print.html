@@ -1216,7 +1216,7 @@ pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNode
     }
     let (_, node) = re.unwrap();
     log::info!(&quot;parse {:?}&quot;, source.path(db));
-    Ok(ProgramNodeWrapper::new(db, node.clone()))
+    Ok(ProgramNodeWrapper::new(db, node))
 }</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ast-1"><a class="header" href="#ast-1">AST</a></h1>
 <p>抽象语法树是目前编译器中最复杂的部分，它是编译器的中间表示，也是编译器的核心。本节将介绍AST的设计和实现。</p>
