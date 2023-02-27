@@ -39,6 +39,7 @@ mod _immix {
     #[is_runtime] // jit注册
     impl DioGC {
         pub unsafe fn malloc(size: u64, obj_type: u8) -> *mut u8 {
+            immix::gc_collect();
             let ptr = gc_malloc(size as usize, obj_type);
             // println!("malloc: {:p} {} {}", ptr, size, obj_type);
             ptr
