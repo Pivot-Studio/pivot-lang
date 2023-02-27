@@ -91,7 +91,8 @@ define_error!(
     EXPECT_PUBLIC_FUNCTION = "expect public function",
     EXPECT_PUBLIC_STRUCT = "expect public struct",
     EXPECT_PUBLIC_TRAIT = "expect public trait",
-    EXPECT_PUBLIC_FIELD = "expect public field"
+    EXPECT_PUBLIC_FIELD = "expect public field",
+    TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER = "trait method shall not have modifier"
 );
 macro_rules! define_warn {
     ($(

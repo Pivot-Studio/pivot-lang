@@ -136,7 +136,23 @@ impl TraitDefNode {
                     range: field.range,
                     modifier: Some((TokenType::PUB, field.range)),
                 };
-                field.get_type(ctx, builder)?;
+                _ = field.get_type(ctx, builder);
+
+                if let Some((m, r)) = field.modifier {
+                    r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)
+                        .add_label(
+                            r,
+                            Some((
+                                "modifier {} shall be removed".into(),
+                                vec![m.get_str().into()],
+                            )),
+                        )
+                        .add_help(
+                            "trait methods share the same modifier with trait, \
+                                so you shall not add modifier here",
+                        )
+                        .add_to_ctx(ctx);
+                }
 
                 // ctx.set_if_refs(f.refs.clone(), field.id.range);
                 fields.insert(id.name.to_string(), f.clone());

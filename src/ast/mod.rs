@@ -5,6 +5,7 @@ pub mod ctx;
 pub mod diag;
 pub mod dot;
 pub mod fmt;
+pub mod macros;
 pub mod node;
 pub mod pass;
 pub mod plmod;

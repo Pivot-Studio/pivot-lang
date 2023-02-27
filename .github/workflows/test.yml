@@ -69,13 +69,13 @@ jobs:
             CARGO_INCREMENTAL: 1
             CARGO_TARGET_DIR: "target"
             KAGARI_LIB_ROOT: /planglib
-            PL_ROOT: /target/release/
+            PL_ROOT: /target/debug/
           - os: "windows-latest"
             RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"
             CARGO_INCREMENTAL: 0
             CARGO_TARGET_DIR: "C:\\cargo-target-dir"
             KAGARI_LIB_ROOT: \planglib
-            PL_ROOT: \target\release
+            PL_ROOT: \target\debug
     env:
       RUSTFLAGS: ${{ matrix.RUSTFLAGS }}
       CARGO_INCREMENTAL: ${{ matrix.CARGO_INCREMENTAL }}
@@ -114,11 +114,11 @@ jobs:
       - name: Install latest nextest release
         uses: taiki-e/install-action@nextest
 
-      - name: build vm release
+      - name: build vm
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --manifest-path vm/Cargo.toml --release --target-dir target -vv
+          args: --manifest-path vm/Cargo.toml --target-dir target -vv
 
       # - name: build plc
       #   uses: actions-rs/cargo@v1

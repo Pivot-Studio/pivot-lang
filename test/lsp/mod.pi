@@ -2,3 +2,6 @@
 struct name {
     
 }
+pub struct pubname {
+    
+}

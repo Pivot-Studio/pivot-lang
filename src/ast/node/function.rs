@@ -171,6 +171,7 @@ impl Node for FuncCallNode {
                     {
                         builder.rm_curr_debug_location();
                         let ptr = builder.alloc("ret_alloc_tmp", &rettp.borrow(), ctx, None);
+                        let v = builder.build_load(v, "raw_ret");
                         builder.build_store(ptr, v);
                         Some(plv!(ptr))
                     },
@@ -454,7 +455,7 @@ impl FuncDefNode {
                 let allocab = builder.append_basic_block(funcvalue, "alloc");
                 let entry = builder.append_basic_block(funcvalue, "entry");
                 let return_block = builder.append_basic_block(funcvalue, "return");
-                child.position_at_end(allocab, builder);
+                child.position_at_end(entry, builder);
                 let ret_value_ptr = match &*fntype.ret_pltype.get_type(child, builder)?.borrow() {
                     PLType::VOID => None,
                     _ => {

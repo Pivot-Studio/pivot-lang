@@ -3,6 +3,7 @@ use super::tokens::TokenType;
 use crate::ast::builder::IRBuilder;
 
 use crate::ast::builder::BuilderEnum;
+use crate::skip_if_not_modified_by;
 use crate::utils::get_hash_code;
 
 use super::diag::PLDiag;
@@ -489,6 +490,13 @@ impl TryFrom<PLType> for FNType {
     }
 }
 impl FNType {
+    pub fn is_modified_by(&self, modifier: TokenType) -> bool {
+        if let Some((t, _)) = self.modifier {
+            t == modifier
+        } else {
+            false
+        }
+    }
     pub fn expect_pub(&self, ctx: &Ctx, range: Range) -> Result<(), PLDiag> {
         if ctx.plmod.path == self.path {
             return Ok(());
@@ -820,11 +828,14 @@ impl STType {
         pltype.replace(PLType::STRUCT(res.clone()));
         res
     }
-    pub fn get_field_completions(&self) -> Vec<CompletionItem> {
+    pub fn get_field_completions(&self, must_pub: bool) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
         for (name, f) in &self.fields {
             if f.index == 0 {
                 continue;
+            }
+            if must_pub {
+                skip_if_not_modified_by!(f.modifier, TokenType::PUB);
             }
             completions.push(CompletionItem {
                 kind: Some(CompletionItemKind::FIELD),
@@ -838,11 +849,12 @@ impl STType {
         completions
     }
     pub fn get_mthd_completions<'a, 'ctx>(&self, ctx: &Ctx<'a>) -> Vec<CompletionItem> {
-        ctx.plmod.get_methods_completions(&self.get_st_full_name())
+        ctx.plmod
+            .get_methods_completions(&self.get_st_full_name(), self.path != ctx.plmod.path)
     }
 
     pub fn get_completions<'a, 'ctx>(&self, ctx: &Ctx<'a>) -> Vec<CompletionItem> {
-        let mut coms = self.get_field_completions();
+        let mut coms = self.get_field_completions(self.path != ctx.plmod.path);
         coms.extend(self.get_mthd_completions(ctx));
         coms
     }

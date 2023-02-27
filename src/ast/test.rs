@@ -2,7 +2,8 @@
 mod test {
     use std::{
         cell::RefCell,
-        fs::read_to_string,
+        env::current_dir,
+        fs::{read_to_string, remove_file},
         sync::{Arc, Mutex},
     };
 
@@ -225,8 +226,8 @@ mod test {
         assert!(
             lables
                 .iter()
-                .any(|c| c.label == "name" && c.kind == Some(CompletionItemKind::STRUCT)),
-            "name not found in completion"
+                .any(|c| c.label == "pubname" && c.kind == Some(CompletionItemKind::STRUCT)),
+            "`pubname` not found in completion"
         );
     }
     #[test]
@@ -322,7 +323,21 @@ mod test {
             "test/lsp/mod2.pi",
         );
         let diags = format!("{:#?}", diags);
-        let expect = read_to_string("src/ast/test_lsp_diag.txt").unwrap();
+        let mut cwd = current_dir().unwrap();
+        cwd.push("xxx");
+        let binding = cwd.to_str().unwrap().to_string();
+        let re = binding.trim_end_matches("xxx");
+
+        #[cfg(not(target_os = "windows"))]
+        let expect = read_to_string("src/ast/test_lsp_diag.txt")
+            .unwrap()
+            .replace("<placeholder>", re);
+        #[cfg(target_os = "windows")]
+        let expect = read_to_string("src/ast/test_lsp_diag_win.txt")
+            .unwrap()
+            .replace("<placeholder>", &re.replace("\\", "\\\\"))
+            .replace("/", "\\")
+            .replace("\r\n", "\n");
         assert_eq!(diags, expect);
     }
 
@@ -455,6 +470,7 @@ mod test {
 
     #[test]
     fn test_compile() {
+        _ = remove_file("testout");
         let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
             .lock()
             .unwrap();

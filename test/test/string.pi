@@ -1,8 +1,15 @@
 use std::io;
+use core::panic;
 pub fn test_string() void {
     let s = "hello world!\n";
+    panic::assert(s.len == 13);
+    panic::assert(s.byte_len == 13);
     let ss = "你好啊！";
+    panic::assert(ss.len == 4);
+    panic::assert(ss.byte_len == 12);
     s.append(ss);
+    panic::assert(s.len == 17);
+    panic::assert(s.byte_len == 25);
     io::print_s(s);
     return;
 }
