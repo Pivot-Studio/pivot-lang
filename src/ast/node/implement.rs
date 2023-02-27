@@ -84,6 +84,23 @@ impl Node for ImplNode {
             }
             let tmp = pltype.unwrap();
             if self.impl_trait.is_some() {
+                // 检查是否有modifier
+                if let Some((m, r)) = method.modifier {
+                    r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)
+                        .add_label(
+                            r,
+                            Some((
+                                "modifier {} shall be removed".into(),
+                                vec![m.get_str().into()],
+                            )),
+                        )
+                        .add_help(
+                            "trait methods share the same modifier with \
+                            trait, so you shall not add modifier here",
+                        )
+                        .add_to_ctx(ctx);
+                }
+
                 // 检查方法是否在trait中
                 let trait_tp = traittpandrange.clone().unwrap().0;
                 if let PLType::TRAIT(st) = &*trait_tp.borrow() {

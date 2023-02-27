@@ -1,6 +1,6 @@
 [
     (
-        "/Users/bobli/src/pivot-lang/test/lsp/test_completion.pi",
+        "<placeholder>test/lsp/test_completion.pi",
         [
             PLDiag {
                 code: Err(
@@ -277,11 +277,11 @@
         ],
     ),
     (
-        "/Users/bobli/src/pivot-lang/planglib/core/gc.pi",
+        "<placeholder>planglib/core/gc.pi",
         [],
     ),
     (
-        "/Users/bobli/src/pivot-lang/test/lsp/trait1.pi",
+        "<placeholder>test/lsp/trait1.pi",
         [
             PLDiag {
                 code: Err(
@@ -420,7 +420,7 @@
         ],
     ),
     (
-        "/Users/bobli/src/pivot-lang/test/lsp/mod2.pi",
+        "<placeholder>test/lsp/mod2.pi",
         [
             PLDiag {
                 code: Err(
@@ -488,7 +488,7 @@
         ],
     ),
     (
-        "/Users/bobli/src/pivot-lang/test/lsp/mod.pi",
+        "<placeholder>test/lsp/mod.pi",
         [],
     ),
 ]

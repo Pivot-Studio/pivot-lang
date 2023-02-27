@@ -1,9 +1,9 @@
 use project1::mod1;
 use core::panic;
 trait TestTrait {
-    pub fn name() void;
+    fn name() void;
 
-    pub fn set(i: i64) i64;
+    fn set(i: i64) i64;
 
 }
 
@@ -12,11 +12,11 @@ pub struct A {
 }
 
 impl TestTrait for A {
-    pub fn name() void {
+    fn name() void {
         return;
     }
 
-    pub fn set(i: i64) i64 {
+    fn set(i: i64) i64 {
         self.x = i;
         return i;
     }
