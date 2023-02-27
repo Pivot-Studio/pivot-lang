@@ -1,19 +1,19 @@
-struct A {
+pub struct A {
 }
-struct B{
+pub struct B{
     x:A;
 }
-struct WithGeneric<T> {
+pub struct WithGeneric<T> {
     x:T;
 }
-fn testfn(x: A) void {
+pub fn testfn(x: A) void {
     return;
 }
 impl A {
-    fn testimpl() void {
+    pub fn testimpl() void {
         return;
     }
 }
-fn test_generic<T>(x:T) T {
+pub fn test_generic<T>(x:T) T {
     return x;
 }

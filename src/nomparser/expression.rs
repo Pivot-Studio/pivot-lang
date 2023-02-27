@@ -1,5 +1,3 @@
-use std::fmt::Error;
-
 use nom::{
     branch::alt,
     combinator::{map_res, opt},
@@ -227,7 +225,7 @@ fn take_exp_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
             tag_token_symbol(TokenType::DOT),
             pair(opt(identifier), many0(comment)),
         ),
-        |(idx, coms)| Ok::<_, Error>((ComplexOp::FieldOp(idx), coms)),
+        |(idx, coms)| Ok::<_, ()>((ComplexOp::FieldOp(idx), coms)),
     ))(input)
 }
 

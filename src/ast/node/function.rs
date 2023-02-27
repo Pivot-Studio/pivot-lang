@@ -5,6 +5,7 @@ use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 
 use crate::ast::pltype::{eq, get_type_deep, FNType, PLType};
+use crate::ast::tokens::TokenType;
 use crate::plv;
 use indexmap::IndexMap;
 use internal_macro::{comments, fmt, range};
@@ -199,6 +200,7 @@ pub struct FuncDefNode {
     pub declare: bool,
     pub generics: Option<Box<GenericDefNode>>,
     pub body: Option<StatementsNode>,
+    pub modifier: Option<(TokenType, Range)>,
 }
 
 impl TypeNode for FuncDefNode {
@@ -286,7 +288,6 @@ impl FuncDefNode {
             param_pltypes,
             param_names: param_name,
             range: self.range,
-            // refs: Arc::new(refs),
             doc: self.doc.clone(),
             llvmname: if self.declare {
                 self.id.name.clone()
@@ -299,6 +300,7 @@ impl FuncDefNode {
             generic_infer: Arc::new(RefCell::new(IndexMap::default())),
             generic: self.generics.is_some(),
             node: Some(Box::new(self.clone())),
+            modifier: self.modifier,
         };
         if self.generics.is_none() {
             builder.get_or_insert_fn_handle(&ftp, ctx);

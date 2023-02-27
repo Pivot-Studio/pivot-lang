@@ -2,6 +2,7 @@
 mod test {
     use std::{
         cell::RefCell,
+        fs::read_to_string,
         sync::{Arc, Mutex},
     };
 
@@ -13,7 +14,8 @@ mod test {
     use crate::{
         ast::{
             accumulators::{
-                Completions, DocSymbols, GotoDef, Hints, PLHover, PLReferences, PLSignatureHelp,
+                Completions, Diagnostics, DocSymbols, GotoDef, Hints, PLHover, PLReferences,
+                PLSignatureHelp,
             },
             compiler::{compile_dry, ActionType},
             range::Pos,
@@ -302,6 +304,26 @@ mod test {
         } else {
             panic!("expect goto def to be scalar, found {:?}", hovers[0])
         }
+    }
+
+    #[test]
+    fn test_private_struct_ref() {
+        let diags = test_lsp::<Diagnostics>(
+            &Database::default(),
+            Some((
+                Pos {
+                    line: 4,
+                    column: 19,
+                    offset: 0,
+                },
+                None,
+            )),
+            ActionType::Diagnostic,
+            "test/lsp/mod2.pi",
+        );
+        let diags = format!("{:#?}", diags);
+        let expect = read_to_string("src/ast/test_lsp_diag.txt").unwrap();
+        assert_eq!(diags, expect);
     }
 
     #[test]

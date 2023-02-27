@@ -1,13 +1,13 @@
 use project1::mod2;
-fn test_mod(args: i64) void {
+pub fn test_mod(args: i64) void {
     printi64ln(999999);
     return;
 }
 
-fn printi64ln(i: i64) void;
+pub fn printi64ln(i: i64) void;
 
 //415642154
-struct Mod1 {
+pub struct Mod1 {
     x: i64;
     y: mod2::Mod2;
 }

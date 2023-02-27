@@ -1,15 +1,15 @@
 use core::panic;
-struct impl_struct {
+pub struct impl_struct {
     x: i64;
 }
 /// ANCHOR: impl
 impl impl_struct {
-    fn add1() void {
+    pub fn add1() void {
         self.x = self.x + 1;
         return;
     }
 
-    fn set(x: i64) void {
+    pub fn set(x: i64) void {
         self.x = x;
         return;
     }
@@ -18,7 +18,7 @@ impl impl_struct {
 
 /// ANCHOR_END: impl
 
-fn test_impl() void {
+pub fn test_impl() void {
     let x = impl_struct{
         x: 99
     };

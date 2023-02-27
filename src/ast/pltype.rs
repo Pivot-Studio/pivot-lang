@@ -1,4 +1,5 @@
 use super::ctx::Ctx;
+use super::tokens::TokenType;
 use crate::ast::builder::IRBuilder;
 
 use crate::ast::builder::BuilderEnum;
@@ -255,7 +256,7 @@ impl PLType {
         }
     }
 
-    pub fn get_name<'a, 'ctx>(&self) -> String {
+    pub fn get_name(&self) -> String {
         match self {
             PLType::FN(fu) => fu.name.clone(),
             PLType::STRUCT(st) => st.name.clone(),
@@ -276,7 +277,7 @@ impl PLType {
             PLType::TRAIT(t) => t.name.clone(),
         }
     }
-    pub fn get_llvm_name<'a, 'ctx>(&self) -> String {
+    pub fn get_llvm_name(&self) -> String {
         match self {
             PLType::FN(fu) => fu.name.clone(),
             PLType::STRUCT(st) => st.name.clone(),
@@ -298,7 +299,7 @@ impl PLType {
         }
     }
 
-    pub fn get_full_elm_name<'a, 'ctx>(&self) -> String {
+    pub fn get_full_elm_name(&self) -> String {
         match self {
             PLType::GENERIC(g) => g.name.clone(),
             PLType::FN(fu) => fu.llvmname.clone(),
@@ -321,6 +322,73 @@ impl PLType {
         match self {
             PLType::POINTER(p) => p.borrow().get_ptr_depth() + 1,
             _ => 0,
+        }
+    }
+
+    pub fn expect_pub(&self, ctx: &Ctx, range: Range) -> Result<(), PLDiag> {
+        match self {
+            PLType::FN(f) => f.expect_pub(ctx, range),
+            PLType::STRUCT(s) => {
+                if s.path == ctx.plmod.path {
+                    return Ok(());
+                }
+                if let Some((t, _)) = s.modifier {
+                    if t != TokenType::PUB {
+                        Err(
+                            PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_STRUCT)
+                                .add_label(
+                                    range,
+                                    Some(("struct {} is not public".into(), vec![s.name.clone()])),
+                                )
+                                .add_help("try add `pub` modifier before the struct".into())
+                                .add_to_ctx(ctx),
+                        )
+                    } else {
+                        Ok(())
+                    }
+                } else {
+                    Err(
+                        PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_STRUCT)
+                            .add_label(
+                                range,
+                                Some(("struct {} is not public".into(), vec![s.name.clone()])),
+                            )
+                            .add_help("try add `pub` modifier before the struct".into())
+                            .add_to_ctx(ctx),
+                    )
+                }
+            }
+            PLType::TRAIT(t) => {
+                if t.path == ctx.plmod.path {
+                    return Ok(());
+                }
+                if let Some((tt, _)) = t.modifier {
+                    if tt != TokenType::PUB {
+                        Err(
+                            PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_STRUCT)
+                                .add_label(
+                                    range,
+                                    Some(("trait {} is not public".into(), vec![t.name.clone()])),
+                                )
+                                .add_help("try add `pub` modifier before the trait".into())
+                                .add_to_ctx(ctx),
+                        )
+                    } else {
+                        Ok(())
+                    }
+                } else {
+                    Err(
+                        PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_STRUCT)
+                            .add_label(
+                                range,
+                                Some(("trait {} is not public".into(), vec![t.name.clone()])),
+                            )
+                            .add_help("try add `pub` modifier before the trait".into())
+                            .add_to_ctx(ctx),
+                    )
+                }
+            }
+            _ => Ok(()),
         }
     }
 
@@ -373,7 +441,7 @@ pub struct Field {
     pub typenode: Box<TypeNodeEnum>,
     pub name: String,
     pub range: Range,
-    // pub refs: Arc<RwVec<Location>>,
+    pub modifier: Option<(TokenType, Range)>,
 }
 
 impl Field {
@@ -401,13 +469,13 @@ pub struct FNType {
     pub param_names: Vec<String>,
     pub ret_pltype: Box<TypeNodeEnum>,
     pub range: Range,
-    // pub refs: Arc<RwVec<Location>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub method: bool,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
     pub generic: bool,
     pub node: Option<Box<FuncDefNode>>,
+    pub modifier: Option<(TokenType, Range)>,
 }
 
 impl TryFrom<PLType> for FNType {
@@ -421,6 +489,36 @@ impl TryFrom<PLType> for FNType {
     }
 }
 impl FNType {
+    pub fn expect_pub(&self, ctx: &Ctx, range: Range) -> Result<(), PLDiag> {
+        if ctx.plmod.path == self.path {
+            return Ok(());
+        }
+        if let Some((t, _)) = self.modifier {
+            if t != TokenType::PUB {
+                Err(
+                    PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_FUNCTION)
+                        .add_label(
+                            range,
+                            Some(("function {} is not public".into(), vec![self.name.clone()])),
+                        )
+                        .add_help("try add `pub` modifier before the function".into())
+                        .add_to_ctx(ctx),
+                )
+            } else {
+                Ok(())
+            }
+        } else {
+            Err(
+                PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_FUNCTION)
+                    .add_label(
+                        range,
+                        Some(("function {} is not public".into(), vec![self.name.clone()])),
+                    )
+                    .add_help("try add `pub` modifier before the function".into())
+                    .add_to_ctx(ctx),
+            )
+        }
+    }
     /// 用来比较接口函数与实现函数是否相同
     ///
     /// 忽略第一个参数比较（receiver
@@ -611,9 +709,40 @@ pub struct STType {
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub impls: FxHashMap<String, Arc<RefCell<PLType>>>,
     pub derives: Vec<Arc<RefCell<PLType>>>,
+    pub modifier: Option<(TokenType, Range)>,
 }
 
 impl STType {
+    pub fn expect_field_pub(&self, ctx: &Ctx, f: &Field, range: Range) -> Result<(), PLDiag> {
+        if self.path == ctx.plmod.path {
+            return Ok(());
+        }
+        if let Some((t, _)) = f.modifier {
+            if t != TokenType::PUB {
+                Err(
+                    PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_FIELD)
+                        .add_label(
+                            range,
+                            Some(("field {} is not public".into(), vec![f.name.clone()])),
+                        )
+                        .add_help("try add `pub` modifier before the field".into())
+                        .add_to_ctx(ctx),
+                )
+            } else {
+                Ok(())
+            }
+        } else {
+            Err(
+                PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_FIELD)
+                    .add_label(
+                        range,
+                        Some(("field {} is not public".into(), vec![f.name.clone()])),
+                    )
+                    .add_help("try add `pub` modifier before the field".into())
+                    .add_to_ctx(ctx),
+            )
+        }
+    }
     pub fn implements(&self, tp: &PLType) -> bool {
         self.impls.get(&tp.get_full_elm_name()).is_some()
     }

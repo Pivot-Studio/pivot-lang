@@ -12,6 +12,7 @@ use crate::ast::diag::ErrorCode;
 
 use crate::ast::pltype::get_type_deep;
 use crate::ast::pltype::{eq, ARRType, Field, GenericType, PLType, STType};
+use crate::ast::tokens::TokenType;
 use crate::plv;
 use indexmap::IndexMap;
 
@@ -342,8 +343,9 @@ pub struct StructDefNode {
     pub precom: Vec<Box<NodeEnum>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub id: Box<VarNode>,
-    pub fields: Vec<(Box<TypedIdentifierNode>, bool)>,
+    pub fields: Vec<(Box<TypedIdentifierNode>, bool, Option<(TokenType, Range)>)>,
     pub generics: Option<Box<GenericDefNode>>,
+    pub modifier: Option<(TokenType, Range)>,
 }
 
 impl PrintTrait for StructDefNode {
@@ -357,7 +359,7 @@ impl PrintTrait for StructDefNode {
             c.print(tabs + 1, false, line.clone());
         }
         let mut i = self.fields.len();
-        for (field, _) in &self.fields {
+        for (field, _, _) in &self.fields {
             i -= 1;
             field.print(tabs + 1, i == 0, line.clone());
         }
@@ -375,7 +377,7 @@ impl Node for StructDefNode {
         if let Some(generics) = &mut self.generics {
             generics.emit(ctx, builder)?;
         }
-        for (field, has_semi) in self.fields.iter() {
+        for (field, has_semi, _) in self.fields.iter() {
             ctx.push_semantic_token(field.id.range, SemanticTokenType::PROPERTY, 0);
             field.typenode.emit_highlight(ctx);
             if !has_semi {
@@ -405,11 +407,11 @@ impl StructDefNode {
             fields: FxHashMap::default(),
             ordered_fields: vec![],
             range: self.range(),
-            // refs: Arc::new(RwVec::new()),
             doc: vec![],
             generic_map,
             impls: FxHashMap::default(),
             derives: vec![],
+            modifier: self.modifier,
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
@@ -429,6 +431,7 @@ impl StructDefNode {
             typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
             name: "_vtable".to_string(),
             range: Default::default(),
+            modifier: None,
         };
         fields.insert("_vtable".to_string(), vtable_field.clone());
         order_fields.push(vtable_field);
@@ -447,7 +450,7 @@ impl StructDefNode {
         let mut field_pltps = vec![];
         let pltype = ctx.get_type(self.id.name.as_str(), self.range)?;
         let clone_map = ctx.plmod.types.clone();
-        for (field, has_semi) in self.fields.iter() {
+        for (field, has_semi, modi) in self.fields.iter() {
             if !has_semi {
                 ctx.add_diag(field.range.new_err(ErrorCode::COMPLETION));
             }
@@ -457,6 +460,7 @@ impl StructDefNode {
                 typenode: field.typenode.clone(),
                 name: field.id.name.clone(),
                 range: field.range,
+                modifier: *modi,
             };
             let tpre = field.typenode.get_type(ctx, builder);
             if tpre.is_err() {

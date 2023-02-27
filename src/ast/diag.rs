@@ -87,7 +87,11 @@ define_error!(
     EXPECT_TRAIT_TYPE = "expect trait type",
     EXPECT_STRUCT_TYPE = "expect struct type",
     METHOD_NOT_IN_TRAIT = "method not in trait def",
-    METHOD_NOT_IN_IMPL = "method required in trait not found in impl block"
+    METHOD_NOT_IN_IMPL = "method required in trait not found in impl block",
+    EXPECT_PUBLIC_FUNCTION = "expect public function",
+    EXPECT_PUBLIC_STRUCT = "expect public struct",
+    EXPECT_PUBLIC_TRAIT = "expect public trait",
+    EXPECT_PUBLIC_FIELD = "expect public field"
 );
 macro_rules! define_warn {
     ($(
