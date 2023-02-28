@@ -1,9 +1,9 @@
-use std::fmt::Error;
-
 use crate::nomparser::Span;
 use crate::{ast::range::Range, ast::tokens::TokenType};
+use nom::character::complete::space1;
 use nom::character::is_alphanumeric;
-use nom::sequence::preceded;
+use nom::combinator::opt;
+use nom::sequence::{pair, preceded, terminated};
 use nom::{
     bytes::complete::tag, character::complete::space0, combinator::map_res, error::ParseError,
     sequence::delimited, AsChar, IResult, InputTake, InputTakeAtPosition, Parser,
@@ -11,22 +11,49 @@ use nom::{
 
 use super::*;
 
+/// parse token with space trimed
 pub fn tag_token_symbol(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
     move |input| {
         map_res(delspace(tag(token.get_str())), |_out: Span| {
             let end = _out.take_split(token.get_str().len()).0;
-            Ok::<(TokenType, Range), Error>((token, Range::new(_out, end)))
+            Ok::<(TokenType, Range), ()>((token, Range::new(_out, end)))
         })(input)
     }
 }
 
+/// parse raw token (no space trimed)
 pub fn tag_token(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
     move |input| {
         map_res(tag(token.get_str()), |_out: Span| {
             let end = _out.take_split(token.get_str().len()).0;
-            Ok::<(TokenType, Range), Error>((token, Range::new(_out, end)))
+            Ok::<(TokenType, Range), ()>((token, Range::new(_out, end)))
         })(input)
     }
+}
+
+/// parse modifier, basically same as `tag_token`, but ensure there is at least one space after it
+pub fn tag_modifier(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
+    move |input| {
+        map_res(terminated(tag(token.get_str()), space1), |_out: Span| {
+            let end = _out.take_split(token.get_str().len()).0;
+            Ok::<(TokenType, Range), ()>((token, Range::new(_out, end)))
+        })(input)
+    }
+}
+
+pub fn modifiable<'a, O, G>(
+    parser: G,
+    token: TokenType,
+) -> impl FnMut(
+    Span<'a>,
+) -> Result<
+    (Span<'a>, (Option<(TokenType, Range)>, O)),
+    nom::Err<nom::error::Error<Span<'a>>>,
+>
+where
+    G: Parser<Span<'a>, O, nom::error::Error<Span<'a>>>,
+{
+    pair(opt(tag_modifier(token)), parser)
 }
 
 /// 不能直接接 `字母`、`数字` 或 `_`，用于关键字
@@ -84,17 +111,17 @@ pub fn take_utf8_split<'a>(sp: &Span<'a>) -> (Span<'a>, Span<'a>) {
     sp.take_split(i)
 }
 
-pub fn res_enum(t: NodeEnum) -> Result<Box<NodeEnum>, Error> {
+pub fn res_enum(t: NodeEnum) -> Result<Box<NodeEnum>, ()> {
     res_box(Box::new(t))
 }
 
-pub fn res_box<T: ?Sized>(i: Box<T>) -> Result<Box<T>, Error> {
-    Ok::<_, Error>(i)
+pub fn res_box<T: ?Sized>(i: Box<T>) -> Result<Box<T>, ()> {
+    Ok::<_, ()>(i)
 }
 
 pub fn create_bin(
     (mut left, rights): (Box<NodeEnum>, Vec<((TokenType, Range), Box<NodeEnum>)>),
-) -> Result<Box<NodeEnum>, Error> {
+) -> Result<Box<NodeEnum>, ()> {
     for ((op, orange), right) in rights {
         let range = left.range().start.to(right.range().end);
         left = Box::new(

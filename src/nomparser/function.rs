@@ -1,5 +1,3 @@
-use std::fmt::Error;
-
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -49,7 +47,7 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((
             many0(del_newline_or_space!(comment)),
-            tag_token_word(TokenType::FN),
+            modifiable(tag_token_word(TokenType::FN), TokenType::PUB),
             identifier,
             opt(generic_type_def),
             tag_token_symbol(TokenType::LPAREN),
@@ -60,15 +58,13 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             tag_token_symbol(TokenType::RPAREN),
             type_name,
             alt((
-                map_res(statement_block, |b| {
-                    Ok::<_, Error>((Some(b.clone()), b.range))
-                }),
+                map_res(statement_block, |b| Ok::<_, ()>((Some(b.clone()), b.range))),
                 map_res(tag_token_symbol(TokenType::SEMI), |(_, range)| {
-                    Ok::<_, Error>((None, range))
+                    Ok::<_, ()>((None, range))
                 }),
             )),
         )),
-        |(doc, (_, start), id, generics, _, paras, _, ret, (body, end))| {
+        |(doc, (modifier, (_, start)), id, generics, _, paras, _, ret, (body, end))| {
             let range = start.start.to(end.end);
             let mut docs = vec![];
             let mut precoms = vec![];
@@ -90,8 +86,9 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 declare: body.is_none(),
                 generics,
                 body,
+                modifier,
             };
-            Ok::<_, Error>(Box::new(TopLevel::FuncType(node)))
+            Ok::<_, ()>(Box::new(TopLevel::FuncType(node)))
         },
     )(input)
 }
@@ -114,7 +111,7 @@ pub fn call_function_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEn
             many0(comment),
         )),
         |(generic, (_, st), paras, (_, end), com)| {
-            Ok::<_, Error>((
+            Ok::<_, ()>((
                 ComplexOp::CallOp((paras, st.start.to(end.end), generic)),
                 com,
             ))

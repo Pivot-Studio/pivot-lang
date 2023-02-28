@@ -318,6 +318,7 @@ impl Node for TakeOpNode {
                             let field = s.fields.get(&id.name);
                             let method = s.find_method(ctx, &id.name);
                             if let Some(field) = field {
+                                _ = s.expect_field_pub(ctx, field, range);
                                 ctx.push_semantic_token(
                                     range,
                                     if is_trait {
@@ -352,6 +353,7 @@ impl Node for TakeOpNode {
                                 }
                                 pltype = field.typenode.get_type(ctx, builder)?;
                             } else if let Some(mthd) = method {
+                                _ = mthd.expect_pub(ctx, range);
                                 ctx.push_semantic_token(range, SemanticTokenType::METHOD, 0);
                                 let mut mthd = mthd;
                                 if let PLType::POINTER(_) = &*pltype.clone().borrow() {

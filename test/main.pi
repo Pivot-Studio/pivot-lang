@@ -10,7 +10,7 @@ use project1::test::list;
 use project1::test::module;
 use project1::test::string;
 use pl_test::main;
-fn main() i64 {
+pub fn main() i64 {
     ifel::test_if_else();
     generic::test_generic();
     method::test_impl();

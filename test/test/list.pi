@@ -1,10 +1,10 @@
 use core::panic;
-struct List {
+pub struct List {
     val: i64;
     next: *List;
 }
 
-fn test_list() void {
+pub fn test_list() void {
     let head = List{};
     let walk = &head;
     for let i = 0; i < 10; i = i + 1 {

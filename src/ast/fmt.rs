@@ -197,7 +197,10 @@ impl FmtBuilder {
         self.space();
         self.l_brace();
         self.add_tab();
-        for (field, _i) in &node.fields {
+        for (field, _i, modi) in &node.fields {
+            if let Some((modi, _)) = modi {
+                self.token(modi.get_str());
+            }
             field.format(self);
         }
         self.enter();

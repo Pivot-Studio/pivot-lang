@@ -1,38 +1,38 @@
 use core::panic;
-struct GenericType<S|T> {
+pub struct GenericType<S|T> {
     x: S;
     y: *T;
 }
 
-struct GenericOutter<S> {
+pub struct GenericOutter<S> {
     x: GenericInner<S>;
 }
 
-struct GenericInner<T> {
+pub struct GenericInner<T> {
     x: T;
 }
 
-struct One<T> {
+pub struct One<T> {
     a: T;
 }
 
-struct Two<T> {
+pub struct Two<T> {
     b: One<T>;
 }
 
-struct Three<T> {
+pub struct Three<T> {
     c: Two<T>;
 }
 
-struct GenericSelfRef<T|S> {
+pub struct GenericSelfRef<T|S> {
     x: *GenericSelfRef<T|S>;
 }
 
-fn ret_generic1<T>() Three<T> {
+pub fn ret_generic1<T>() Three<T> {
     return Three<T>{};
 }
 
-fn ret_generic2<T>(x: T) Three<T> {
+pub fn ret_generic2<T>(x: T) Three<T> {
     let two = Two{
         b: One{
             a: x
@@ -43,12 +43,12 @@ fn ret_generic2<T>(x: T) Three<T> {
     };
 }
 
-fn generic<T>(x: T) T {
+pub fn generic<T>(x: T) T {
     let y = x;
     return y;
 }
 
-fn simple<T>(x: i64) i64 {
+pub fn simple<T>(x: i64) i64 {
     if x == 0 {
         return 0;
     }
@@ -61,7 +61,7 @@ fn simple<T>(x: i64) i64 {
     return simple<T>(x - 1) + simple<T>(x - 2);
 }
 
-fn complex<A|B|C>(a: i64, x: A, y: B, z: C) i64 {
+pub fn complex<A|B|C>(a: i64, x: A, y: B, z: C) i64 {
     if a == 0 {
         return 0;
     }
@@ -74,7 +74,7 @@ fn complex<A|B|C>(a: i64, x: A, y: B, z: C) i64 {
     return complex<B|A|C>(a - 1, y, x, z) + complex<C|A|_>(a - 2, z, x, y);
 }
 
-fn test_generic_simple() void {
+pub fn test_generic_simple() void {
     let x = generic(114514);
     let y = generic(true);
     panic::assert(y);
@@ -99,7 +99,7 @@ fn test_generic_simple() void {
     return;
 }
 
-fn test_generic_same_name() void {
+pub fn test_generic_same_name() void {
     let t = Three{
         c: Two{
             b: One{
@@ -114,7 +114,7 @@ fn test_generic_same_name() void {
     return;
 }
 
-fn test_ret_generic() void {
+pub fn test_ret_generic() void {
     let x = ret_generic1<i64>();
     let y = ret_generic2(true);
     let z = ret_generic2([1, 2, 3]);
@@ -125,12 +125,12 @@ fn test_ret_generic() void {
     return;
 }
 
-fn test_self_ref_generic() void {
+pub fn test_self_ref_generic() void {
     let x = GenericSelfRef<i64|bool>{};
     return;
 }
 
-fn test_generic_fn() void {
+pub fn test_generic_fn() void {
     let res = simple<bool>(10);
     panic::assert(res == 55);
     res = complex(10, true, [1, 23], &res);
@@ -138,7 +138,7 @@ fn test_generic_fn() void {
     return;
 }
 
-fn test_generic() void {
+pub fn test_generic() void {
     test_generic_simple();
     test_generic_same_name();
     test_ret_generic();

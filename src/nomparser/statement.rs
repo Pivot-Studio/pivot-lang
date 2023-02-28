@@ -21,7 +21,6 @@ use crate::{
     },
 };
 use internal_macro::{test_parser, test_parser_error};
-use std::fmt::Error;
 
 use super::*;
 #[test_parser(";")]
@@ -61,7 +60,7 @@ pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
         )),
         |((_, start), v, (_, end))| {
             let range = start.start.to(end.end);
-            Ok::<_, Error>(StatementsNode {
+            Ok::<_, ()>(StatementsNode {
                 statements: v,
                 range,
             })

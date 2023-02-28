@@ -1,4 +1,4 @@
-fn test_if_else() void {
+pub fn test_if_else() void {
     test_if_only(true);
     test_if_else_ret(true);
     test_if_ret_only(true);
@@ -7,14 +7,14 @@ fn test_if_else() void {
     return;
 }
 
-fn test_if_only(judge: bool) void {
+pub fn test_if_only(judge: bool) void {
     if judge {
         return;
     }
     return;
 }
 
-fn test_if_else_ret(judge: bool) void {
+pub fn test_if_else_ret(judge: bool) void {
     if judge {
         return;
     } else {
@@ -22,7 +22,7 @@ fn test_if_else_ret(judge: bool) void {
     }
 }
 
-fn test_if_ret_only(judge: bool) void {
+pub fn test_if_ret_only(judge: bool) void {
     if judge {
         return;
     } else {
@@ -30,7 +30,7 @@ fn test_if_ret_only(judge: bool) void {
     return;
 }
 
-fn test_else_ret_only(judge: bool) void {
+pub fn test_else_ret_only(judge: bool) void {
     if judge {
     } else {
         return;
@@ -38,7 +38,7 @@ fn test_else_ret_only(judge: bool) void {
     return;
 }
 
-fn test_not_ret(judge: bool) void {
+pub fn test_not_ret(judge: bool) void {
     if judge {
     } else {
     }

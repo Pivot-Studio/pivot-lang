@@ -17,19 +17,26 @@ pub fn download_repo(
     if !target_dir.exists() {
         std::fs::create_dir_all(&target_dir).expect("Failed to create target directory");
     } else {
-        return (None, target_dir);
+        return (
+            Some(
+                Command::new("git")
+                    .arg("pull")
+                    .stdout(std::process::Stdio::null())
+                    .stderr(std::process::Stdio::null())
+                    .current_dir(target_dir.clone())
+                    .spawn()
+                    .expect("git pull failed")
+                    .wait_with_output(),
+            ),
+            target_dir,
+        );
     }
     (
         Some(
             Command::new("git")
                 .arg("clone")
-                // .arg("--depth")
-                // .arg("1")
                 .arg(repo_url)
                 .arg(".")
-                // .arg("-b")
-                // .arg(branch)
-                // .arg("--single-branch")
                 .stdout(std::process::Stdio::null())
                 .stderr(std::process::Stdio::null())
                 .current_dir(target_dir.clone())

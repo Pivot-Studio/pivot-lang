@@ -65,6 +65,7 @@ pub mod tests {
     use crate::ast::compiler::{self, ActionType, HashOptimizationLevel};
     use crate::db::Database;
     use crate::lsp::mem_docs::{self, MemDocsInput};
+    use std::fs::remove_file;
     use std::{
         cell::RefCell,
         sync::{Arc, Mutex},
@@ -73,6 +74,7 @@ pub mod tests {
     #[test]
     fn test_init_package() {
         let _l = TEST_COMPILE_MUTEX.lock().unwrap();
+        _ = remove_file("plc_new_testout");
         let package_name = "plc_new_testfile".to_string();
         // test init_package
         init_package(package_name);

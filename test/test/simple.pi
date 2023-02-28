@@ -1,11 +1,11 @@
 use core::panic;
-fn test_warn() void {
+pub fn test_warn() void {
     return;
     let x = 1;
     panic::pl_panic();
 }
 
-fn test_primitives() void {
+pub fn test_primitives() void {
     let test: i8 = 1;
     test = -test;
     let test2: i8 = test + 1;
@@ -17,14 +17,14 @@ fn test_primitives() void {
     return;
 }
 
-fn test_vm_link() i64;
+pub fn test_vm_link() i64;
 
-fn test_vm() void {
+pub fn test_vm() void {
     panic::assert(test_vm_link() == 66);
     return;
 }
 
-fn test_pointer() void {
+pub fn test_pointer() void {
     let a = 1;
     let b = &a;
     *b = 100;
@@ -33,7 +33,7 @@ fn test_pointer() void {
     return;
 }
 
-fn test_simple() void {
+pub fn test_simple() void {
     test_vm();
     test_primitives();
     test_warn();

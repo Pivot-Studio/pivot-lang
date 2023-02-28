@@ -1,7 +1,11 @@
 use super::ctx::Ctx;
+use super::diag::ErrorCode;
+use super::tokens::TokenType;
 use crate::ast::builder::IRBuilder;
 
 use crate::ast::builder::BuilderEnum;
+use crate::if_not_modified_by;
+use crate::skip_if_not_modified_by;
 use crate::utils::get_hash_code;
 
 use super::diag::PLDiag;
@@ -189,6 +193,13 @@ pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
         _ => pltype.clone(),
     }
 }
+
+fn expect_pub_err(err: ErrorCode, ctx: &Ctx, range: Range, name: String) -> Result<(), PLDiag> {
+    Err(PLDiag::new_error(range, err)
+        .add_label(range, Some(("{} is not public".into(), vec![name])))
+        .add_help("try add `pub` modifier before it".into())
+        .add_to_ctx(ctx))
+}
 impl PLType {
     pub fn get_immix_type(&self) -> ObjectType {
         match self {
@@ -255,7 +266,7 @@ impl PLType {
         }
     }
 
-    pub fn get_name<'a, 'ctx>(&self) -> String {
+    pub fn get_name(&self) -> String {
         match self {
             PLType::FN(fu) => fu.name.clone(),
             PLType::STRUCT(st) => st.name.clone(),
@@ -276,7 +287,7 @@ impl PLType {
             PLType::TRAIT(t) => t.name.clone(),
         }
     }
-    pub fn get_llvm_name<'a, 'ctx>(&self) -> String {
+    pub fn get_llvm_name(&self) -> String {
         match self {
             PLType::FN(fu) => fu.name.clone(),
             PLType::STRUCT(st) => st.name.clone(),
@@ -298,7 +309,7 @@ impl PLType {
         }
     }
 
-    pub fn get_full_elm_name<'a, 'ctx>(&self) -> String {
+    pub fn get_full_elm_name(&self) -> String {
         match self {
             PLType::GENERIC(g) => g.name.clone(),
             PLType::FN(fu) => fu.llvmname.clone(),
@@ -321,6 +332,45 @@ impl PLType {
         match self {
             PLType::POINTER(p) => p.borrow().get_ptr_depth() + 1,
             _ => 0,
+        }
+    }
+
+    pub fn expect_pub(&self, ctx: &Ctx, range: Range) -> Result<(), PLDiag> {
+        match self {
+            PLType::FN(f) => f.expect_pub(ctx, range),
+            PLType::STRUCT(s) => {
+                if s.path == ctx.plmod.path {
+                    return Ok(());
+                }
+                if_not_modified_by!(
+                    s.modifier,
+                    TokenType::PUB,
+                    return expect_pub_err(
+                        super::diag::ErrorCode::EXPECT_PUBLIC_STRUCT,
+                        ctx,
+                        range,
+                        s.name.clone()
+                    )
+                );
+                Ok(())
+            }
+            PLType::TRAIT(t) => {
+                if t.path == ctx.plmod.path {
+                    return Ok(());
+                }
+                if_not_modified_by!(
+                    t.modifier,
+                    TokenType::PUB,
+                    return expect_pub_err(
+                        super::diag::ErrorCode::EXPECT_PUBLIC_TRAIT,
+                        ctx,
+                        range,
+                        t.name.clone()
+                    )
+                );
+                Ok(())
+            }
+            _ => Ok(()),
         }
     }
 
@@ -373,7 +423,7 @@ pub struct Field {
     pub typenode: Box<TypeNodeEnum>,
     pub name: String,
     pub range: Range,
-    // pub refs: Arc<RwVec<Location>>,
+    pub modifier: Option<(TokenType, Range)>,
 }
 
 impl Field {
@@ -401,13 +451,13 @@ pub struct FNType {
     pub param_names: Vec<String>,
     pub ret_pltype: Box<TypeNodeEnum>,
     pub range: Range,
-    // pub refs: Arc<RwVec<Location>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub method: bool,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
     pub generic: bool,
     pub node: Option<Box<FuncDefNode>>,
+    pub modifier: Option<(TokenType, Range)>,
 }
 
 impl TryFrom<PLType> for FNType {
@@ -421,6 +471,29 @@ impl TryFrom<PLType> for FNType {
     }
 }
 impl FNType {
+    pub fn is_modified_by(&self, modifier: TokenType) -> bool {
+        if let Some((t, _)) = self.modifier {
+            t == modifier
+        } else {
+            false
+        }
+    }
+    pub fn expect_pub(&self, ctx: &Ctx, range: Range) -> Result<(), PLDiag> {
+        if ctx.plmod.path == self.path {
+            return Ok(());
+        }
+        if_not_modified_by!(
+            self.modifier,
+            TokenType::PUB,
+            return expect_pub_err(
+                super::diag::ErrorCode::EXPECT_PUBLIC_FUNCTION,
+                ctx,
+                range,
+                self.name.clone()
+            )
+        );
+        Ok(())
+    }
     /// 用来比较接口函数与实现函数是否相同
     ///
     /// 忽略第一个参数比较（receiver
@@ -611,9 +684,40 @@ pub struct STType {
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub impls: FxHashMap<String, Arc<RefCell<PLType>>>,
     pub derives: Vec<Arc<RefCell<PLType>>>,
+    pub modifier: Option<(TokenType, Range)>,
 }
 
 impl STType {
+    pub fn expect_field_pub(&self, ctx: &Ctx, f: &Field, range: Range) -> Result<(), PLDiag> {
+        if self.path == ctx.plmod.path {
+            return Ok(());
+        }
+        if let Some((t, _)) = f.modifier {
+            if t != TokenType::PUB {
+                Err(
+                    PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_FIELD)
+                        .add_label(
+                            range,
+                            Some(("field {} is not public".into(), vec![f.name.clone()])),
+                        )
+                        .add_help("try add `pub` modifier before the field".into())
+                        .add_to_ctx(ctx),
+                )
+            } else {
+                Ok(())
+            }
+        } else {
+            Err(
+                PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_FIELD)
+                    .add_label(
+                        range,
+                        Some(("field {} is not public".into(), vec![f.name.clone()])),
+                    )
+                    .add_help("try add `pub` modifier before the field".into())
+                    .add_to_ctx(ctx),
+            )
+        }
+    }
     pub fn implements(&self, tp: &PLType) -> bool {
         self.impls.get(&tp.get_full_elm_name()).is_some()
     }
@@ -691,11 +795,14 @@ impl STType {
         pltype.replace(PLType::STRUCT(res.clone()));
         res
     }
-    pub fn get_field_completions(&self) -> Vec<CompletionItem> {
+    pub fn get_field_completions(&self, must_pub: bool) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
         for (name, f) in &self.fields {
             if f.index == 0 {
                 continue;
+            }
+            if must_pub {
+                skip_if_not_modified_by!(f.modifier, TokenType::PUB);
             }
             completions.push(CompletionItem {
                 kind: Some(CompletionItemKind::FIELD),
@@ -709,11 +816,12 @@ impl STType {
         completions
     }
     pub fn get_mthd_completions<'a, 'ctx>(&self, ctx: &Ctx<'a>) -> Vec<CompletionItem> {
-        ctx.plmod.get_methods_completions(&self.get_st_full_name())
+        ctx.plmod
+            .get_methods_completions(&self.get_st_full_name(), self.path != ctx.plmod.path)
     }
 
     pub fn get_completions<'a, 'ctx>(&self, ctx: &Ctx<'a>) -> Vec<CompletionItem> {
-        let mut coms = self.get_field_completions();
+        let mut coms = self.get_field_completions(self.path != ctx.plmod.path);
         coms.extend(self.get_mthd_completions(ctx));
         coms
     }

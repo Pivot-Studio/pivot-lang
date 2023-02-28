@@ -3,6 +3,7 @@ use super::*;
 use crate::ast::{
     ctx::Ctx,
     pltype::{Field, STType},
+    tokens::TokenType,
 };
 use indexmap::IndexMap;
 use internal_macro::{fmt, range};
@@ -16,6 +17,7 @@ pub struct TraitDefNode {
     pub generics: Option<Box<GenericDefNode>>,
     pub methods: Vec<FuncDefNode>,
     pub derives: Vec<Box<TypeNodeEnum>>,
+    pub modifier: Option<(TokenType, Range)>,
 }
 
 impl PrintTrait for TraitDefNode {
@@ -66,11 +68,11 @@ impl TraitDefNode {
             fields: FxHashMap::default(),
             ordered_fields: vec![],
             range: self.range(),
-            // refs: Arc::new(RwVec::new()),
             doc: vec![],
             generic_map,
             impls: FxHashMap::default(),
             derives: vec![],
+            modifier: self.modifier,
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
@@ -103,9 +105,9 @@ impl TraitDefNode {
             order_fields.push(Field {
                 index: i,
                 typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
-                name: "tmp".to_string(),
+                name: "__type_hash".to_string(),
                 range: Default::default(),
-                // refs: Arc::new(RwVec::new()),
+                modifier: None,
             });
             i += 1;
             // pointer to real value
@@ -115,9 +117,9 @@ impl TraitDefNode {
                     elm: Box::new(TypeNameNode::new_from_str("i64").into()),
                     range: Default::default(),
                 })),
-                name: "tmp".to_string(),
+                name: "__ptr".to_string(),
                 range: Default::default(),
-                // refs: Arc::new(RwVec::new()),
+                modifier: None,
             });
             i += 1;
             let pltype = ctx.get_type(self.id.name.as_str(), self.range)?;
@@ -132,9 +134,25 @@ impl TraitDefNode {
                     typenode: Box::new(tp.into()),
                     name: field.id.name.clone(),
                     range: field.range,
-                    // refs: Arc::new(RwVec::new()),
+                    modifier: Some((TokenType::PUB, field.range)),
                 };
-                field.get_type(ctx, builder)?;
+                _ = field.get_type(ctx, builder);
+
+                if let Some((m, r)) = field.modifier {
+                    r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)
+                        .add_label(
+                            r,
+                            Some((
+                                "modifier {} shall be removed".into(),
+                                vec![m.get_str().into()],
+                            )),
+                        )
+                        .add_help(
+                            "trait methods share the same modifier with trait, \
+                                so you shall not add modifier here",
+                        )
+                        .add_to_ctx(ctx);
+                }
 
                 // ctx.set_if_refs(f.refs.clone(), field.id.range);
                 fields.insert(id.name.to_string(), f.clone());

@@ -7,7 +7,7 @@ trait TestTrait {
 
 }
 
-struct A {
+pub struct A {
     x: i64;
 }
 
@@ -23,7 +23,7 @@ impl TestTrait for A {
 
 }
 
-fn test_trait() void {
+pub fn test_trait() void {
     let x = A{};
     let dd: TestTrait;
     dd = x;

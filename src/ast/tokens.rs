@@ -72,8 +72,10 @@ define_tokens!(
     DOUBLE_QUOTE = "\"",
     TRUE = "true",
     FALSE = "false",
-    TRAIT = "trait"
+    TRAIT = "trait",
+    PUB = "pub"
 );
+
 impl TokenType {
     pub fn get_str(&self) -> &'static str {
         TOKEN_TYPE_MAP[self]

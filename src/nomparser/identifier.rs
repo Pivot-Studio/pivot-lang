@@ -1,5 +1,3 @@
-use std::fmt::Error;
-
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -76,7 +74,7 @@ pub fn identifier(input: Span) -> IResult<Span, Box<VarNode>> {
         |out| {
             let a = TOKEN_STR_MAP.get(out.fragment());
             if a.is_some() {
-                return Err(Error {});
+                return Err(());
             }
             Ok(Box::new(VarNode {
                 name: out.to_string(),
