@@ -1,5 +1,5 @@
 use std::io;
-fn main() i64 {
+pub fn main() i64 {
     io::printi64ln(666);
     return 0;
 }

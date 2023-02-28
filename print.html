@@ -394,7 +394,7 @@ project = &quot;main&quot;
 <h3 id="源文件"><a class="header" href="#源文件">源文件</a></h3>
 <p>示例项目中的<code>main.pi</code>为源文件。其内容如下：</p>
 <pre><code class="language-pl">use std::io;
-fn main() i64 {
+pub fn main() i64 {
     io::printi64ln(666);
     return 0;
 }
@@ -573,12 +573,12 @@ fn main() void {
 <h2 id="method-example"><a class="header" href="#method-example">Method Example</a></h2>
 <p>最简单的添加method的例子：</p>
 <pre><code class="language-pivot-lang">impl impl_struct {
-    fn add1() void {
+    pub fn add1() void {
         self.x = self.x + 1;
         return;
     }
 
-    fn set(x: i64) void {
+    pub fn set(x: i64) void {
         self.x = x;
         return;
     }
