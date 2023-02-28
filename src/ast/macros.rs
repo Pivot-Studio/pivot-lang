@@ -1,12 +1,20 @@
 #[macro_export]
-macro_rules! skip_if_not_modified_by {
-    ($entity:expr,$modifier:expr) => {
+macro_rules! if_not_modified_by {
+    ($entity:expr,$modifier:expr, $logic:stmt) => {
         if let Some((t, _)) = $entity {
             if t != $modifier {
-                continue;
+                $logic
             }
         } else {
-            continue;
+            $logic
         }
+    };
+}
+
+#[macro_export]
+macro_rules! skip_if_not_modified_by {
+    ($entity:expr,$modifier:expr) => {
+        use crate::if_not_modified_by;
+        if_not_modified_by!($entity, $modifier, continue);
     };
 }

@@ -40,3 +40,12 @@ struct a {
 }
 use test::mod2;
 use test::trait1;
+
+fn traitname() void {
+    let st = trait1::testSt2{};
+    let a:trait1::TestTrait = st;
+    let d = st.a;
+    a.name();
+    trait1::new();
+    return;
+}

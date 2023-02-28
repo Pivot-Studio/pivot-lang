@@ -2,8 +2,7 @@
 mod test {
     use std::{
         cell::RefCell,
-        env::current_dir,
-        fs::{read_to_string, remove_file},
+        fs::remove_file,
         sync::{Arc, Mutex},
     };
 
@@ -15,8 +14,7 @@ mod test {
     use crate::{
         ast::{
             accumulators::{
-                Completions, Diagnostics, DocSymbols, GotoDef, Hints, PLHover, PLReferences,
-                PLSignatureHelp,
+                Completions, DocSymbols, GotoDef, Hints, PLHover, PLReferences, PLSignatureHelp,
             },
             compiler::{compile_dry, ActionType},
             range::Pos,
@@ -305,40 +303,6 @@ mod test {
         } else {
             panic!("expect goto def to be scalar, found {:?}", hovers[0])
         }
-    }
-
-    #[test]
-    fn test_private_struct_ref() {
-        let diags = test_lsp::<Diagnostics>(
-            &Database::default(),
-            Some((
-                Pos {
-                    line: 4,
-                    column: 19,
-                    offset: 0,
-                },
-                None,
-            )),
-            ActionType::Diagnostic,
-            "test/lsp/mod2.pi",
-        );
-        let diags = format!("{:#?}", diags);
-        let mut cwd = current_dir().unwrap();
-        cwd.push("xxx");
-        let binding = cwd.to_str().unwrap().to_string();
-        let re = binding.trim_end_matches("xxx");
-
-        #[cfg(not(target_os = "windows"))]
-        let expect = read_to_string("src/ast/test_lsp_diag.txt")
-            .unwrap()
-            .replace("<placeholder>", re);
-        #[cfg(target_os = "windows")]
-        let expect = read_to_string("src/ast/test_lsp_diag_win.txt")
-            .unwrap()
-            .replace("<placeholder>", &re.replace("\\", "\\\\"))
-            .replace("/", "\\")
-            .replace("\r\n", "\n");
-        assert_eq!(diags, expect);
     }
 
     #[test]

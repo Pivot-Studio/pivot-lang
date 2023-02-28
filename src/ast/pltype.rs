@@ -1,8 +1,10 @@
 use super::ctx::Ctx;
+use super::diag::ErrorCode;
 use super::tokens::TokenType;
 use crate::ast::builder::IRBuilder;
 
 use crate::ast::builder::BuilderEnum;
+use crate::if_not_modified_by;
 use crate::skip_if_not_modified_by;
 use crate::utils::get_hash_code;
 
@@ -191,6 +193,13 @@ pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
         _ => pltype.clone(),
     }
 }
+
+fn expect_pub_err(err: ErrorCode, ctx: &Ctx, range: Range, name: String) -> Result<(), PLDiag> {
+    Err(PLDiag::new_error(range, err)
+        .add_label(range, Some(("{} is not public".into(), vec![name])))
+        .add_help("try add `pub` modifier before it".into())
+        .add_to_ctx(ctx))
+}
 impl PLType {
     pub fn get_immix_type(&self) -> ObjectType {
         match self {
@@ -333,61 +342,33 @@ impl PLType {
                 if s.path == ctx.plmod.path {
                     return Ok(());
                 }
-                if let Some((t, _)) = s.modifier {
-                    if t != TokenType::PUB {
-                        Err(
-                            PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_STRUCT)
-                                .add_label(
-                                    range,
-                                    Some(("struct {} is not public".into(), vec![s.name.clone()])),
-                                )
-                                .add_help("try add `pub` modifier before the struct".into())
-                                .add_to_ctx(ctx),
-                        )
-                    } else {
-                        Ok(())
-                    }
-                } else {
-                    Err(
-                        PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_STRUCT)
-                            .add_label(
-                                range,
-                                Some(("struct {} is not public".into(), vec![s.name.clone()])),
-                            )
-                            .add_help("try add `pub` modifier before the struct".into())
-                            .add_to_ctx(ctx),
+                if_not_modified_by!(
+                    s.modifier,
+                    TokenType::PUB,
+                    return expect_pub_err(
+                        super::diag::ErrorCode::EXPECT_PUBLIC_STRUCT,
+                        ctx,
+                        range,
+                        s.name.clone()
                     )
-                }
+                );
+                Ok(())
             }
             PLType::TRAIT(t) => {
                 if t.path == ctx.plmod.path {
                     return Ok(());
                 }
-                if let Some((tt, _)) = t.modifier {
-                    if tt != TokenType::PUB {
-                        Err(
-                            PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_STRUCT)
-                                .add_label(
-                                    range,
-                                    Some(("trait {} is not public".into(), vec![t.name.clone()])),
-                                )
-                                .add_help("try add `pub` modifier before the trait".into())
-                                .add_to_ctx(ctx),
-                        )
-                    } else {
-                        Ok(())
-                    }
-                } else {
-                    Err(
-                        PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_STRUCT)
-                            .add_label(
-                                range,
-                                Some(("trait {} is not public".into(), vec![t.name.clone()])),
-                            )
-                            .add_help("try add `pub` modifier before the trait".into())
-                            .add_to_ctx(ctx),
+                if_not_modified_by!(
+                    t.modifier,
+                    TokenType::PUB,
+                    return expect_pub_err(
+                        super::diag::ErrorCode::EXPECT_PUBLIC_TRAIT,
+                        ctx,
+                        range,
+                        t.name.clone()
                     )
-                }
+                );
+                Ok(())
             }
             _ => Ok(()),
         }
@@ -501,31 +482,17 @@ impl FNType {
         if ctx.plmod.path == self.path {
             return Ok(());
         }
-        if let Some((t, _)) = self.modifier {
-            if t != TokenType::PUB {
-                Err(
-                    PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_FUNCTION)
-                        .add_label(
-                            range,
-                            Some(("function {} is not public".into(), vec![self.name.clone()])),
-                        )
-                        .add_help("try add `pub` modifier before the function".into())
-                        .add_to_ctx(ctx),
-                )
-            } else {
-                Ok(())
-            }
-        } else {
-            Err(
-                PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_FUNCTION)
-                    .add_label(
-                        range,
-                        Some(("function {} is not public".into(), vec![self.name.clone()])),
-                    )
-                    .add_help("try add `pub` modifier before the function".into())
-                    .add_to_ctx(ctx),
+        if_not_modified_by!(
+            self.modifier,
+            TokenType::PUB,
+            return expect_pub_err(
+                super::diag::ErrorCode::EXPECT_PUBLIC_FUNCTION,
+                ctx,
+                range,
+                self.name.clone()
             )
-        }
+        );
+        Ok(())
     }
     /// 用来比较接口函数与实现函数是否相同
     ///
