@@ -1,9 +1,11 @@
 use super::ctx::Ctx;
 use super::diag::ErrorCode;
 use super::tokens::TokenType;
+use crate::add_basic_types;
 use crate::ast::builder::IRBuilder;
 
 use crate::ast::builder::BuilderEnum;
+use crate::generic_impl;
 use crate::if_not_modified_by;
 use crate::skip_if_not_modified_by;
 use crate::utils::get_hash_code;
@@ -64,7 +66,6 @@ pub enum PLType {
 /// Primitive type for pivot-lang
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PriType {
-    // basetype: BasicTypeEnum<'ctx>,
     I8,
     I16,
     I32,
@@ -660,7 +661,6 @@ impl FNType {
     }
 }
 
-/// TODO: add vtable for arrtype
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ARRType {
     pub element_type: Arc<RefCell<PLType>>,
@@ -692,31 +692,18 @@ impl STType {
         if self.path == ctx.plmod.path {
             return Ok(());
         }
-        if let Some((t, _)) = f.modifier {
-            if t != TokenType::PUB {
-                Err(
-                    PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_FIELD)
-                        .add_label(
-                            range,
-                            Some(("field {} is not public".into(), vec![f.name.clone()])),
-                        )
-                        .add_help("try add `pub` modifier before the field".into())
-                        .add_to_ctx(ctx),
-                )
-            } else {
-                Ok(())
-            }
-        } else {
-            Err(
-                PLDiag::new_error(range, super::diag::ErrorCode::EXPECT_PUBLIC_FIELD)
-                    .add_label(
-                        range,
-                        Some(("field {} is not public".into(), vec![f.name.clone()])),
-                    )
-                    .add_help("try add `pub` modifier before the field".into())
-                    .add_to_ctx(ctx),
+
+        if_not_modified_by!(
+            f.modifier,
+            TokenType::PUB,
+            return expect_pub_err(
+                super::diag::ErrorCode::EXPECT_PUBLIC_FIELD,
+                ctx,
+                range,
+                f.name.clone()
             )
-        }
+        );
+        Ok(())
     }
     pub fn implements(&self, tp: &PLType) -> bool {
         self.impls.get(&tp.get_full_elm_name()).is_some()
@@ -878,71 +865,22 @@ impl STType {
 }
 
 pub fn add_primitive_types<'a, 'ctx>(ctx: &mut Ctx<'a>) {
-    let pltype_i128 = PLType::PRIMITIVE(PriType::I128);
-    ctx.plmod
-        .types
-        .insert("i128".to_string(), Arc::new(RefCell::new(pltype_i128)));
-
-    let pltype_i64 = PLType::PRIMITIVE(PriType::I64);
-    ctx.plmod
-        .types
-        .insert("i64".to_string(), Arc::new(RefCell::new(pltype_i64)));
-
-    let pltype_i32 = PLType::PRIMITIVE(PriType::I32);
-    ctx.plmod
-        .types
-        .insert("i32".to_string(), Arc::new(RefCell::new(pltype_i32)));
-
-    let pltype_i16 = PLType::PRIMITIVE(PriType::I16);
-    ctx.plmod
-        .types
-        .insert("i16".to_string(), Arc::new(RefCell::new(pltype_i16)));
-
-    let pltype_i8 = PLType::PRIMITIVE(PriType::I8);
-    ctx.plmod
-        .types
-        .insert("i8".to_string(), Arc::new(RefCell::new(pltype_i8)));
-
-    let pltype_u128 = PLType::PRIMITIVE(PriType::U128);
-    ctx.plmod
-        .types
-        .insert("u128".to_string(), Arc::new(RefCell::new(pltype_u128)));
-
-    let pltype_u64 = PLType::PRIMITIVE(PriType::U64);
-    ctx.plmod
-        .types
-        .insert("u64".to_string(), Arc::new(RefCell::new(pltype_u64)));
-
-    let pltype_u32 = PLType::PRIMITIVE(PriType::U32);
-    ctx.plmod
-        .types
-        .insert("u32".to_string(), Arc::new(RefCell::new(pltype_u32)));
-
-    let pltype_u16 = PLType::PRIMITIVE(PriType::U16);
-    ctx.plmod
-        .types
-        .insert("u16".to_string(), Arc::new(RefCell::new(pltype_u16)));
-
-    let pltype_u8 = PLType::PRIMITIVE(PriType::U8);
-    ctx.plmod
-        .types
-        .insert("u8".to_string(), Arc::new(RefCell::new(pltype_u8)));
-
-    let pltype_f64 = PLType::PRIMITIVE(PriType::F64);
-    ctx.plmod
-        .types
-        .insert("f64".to_string(), Arc::new(RefCell::new(pltype_f64)));
-
-    let pltype_f32 = PLType::PRIMITIVE(PriType::F32);
-    ctx.plmod
-        .types
-        .insert("f32".to_string(), Arc::new(RefCell::new(pltype_f32)));
-
-    let pltype_bool = PLType::PRIMITIVE(PriType::BOOL);
-    ctx.plmod
-        .types
-        .insert("bool".to_string(), Arc::new(RefCell::new(pltype_bool)));
-
+    add_basic_types!(
+        ctx.plmod.types,
+        i128,
+        i64,
+        i32,
+        i16,
+        i8,
+        u128,
+        u64,
+        u32,
+        u16,
+        u8,
+        f64,
+        f32,
+        bool
+    );
     let pltype_void = PLType::VOID;
     ctx.plmod
         .types
@@ -973,65 +911,7 @@ impl GenericType {
         ctx.add_type(name_in_map, pltype, range).unwrap();
     }
 }
-macro_rules! generic_impl {
-    ($($args:ident),*) => (
-        $(
-            impl $args {
-                pub fn need_gen_code(&self) -> bool {
-                    if self.generic_map.is_empty() {
-                        return false;
-                    }
-                    for (_, v) in self.generic_map.iter() {
-                        match &*v.clone().borrow() {
-                            PLType::GENERIC(g) => {
-                                if g.curpltype.is_none() {
-                                    return false;
-                                }
-                            }
-                            _ => unreachable!(),
-                        }
-                    }
-                    true
-                }
-                pub fn clear_generic(&mut self) {
-                    self.generic_map
-                        .iter_mut()
-                        .for_each(|(_, v)| match &mut *v.clone().borrow_mut() {
-                            PLType::GENERIC(g) => {
-                                g.clear_type();
-                            }
-                            _ => unreachable!(),
-                        })
-                }
-                pub fn add_generic_type(&self, ctx: &mut Ctx) -> Result<(), PLDiag> {
-                    for (name, g) in self.generic_map.iter() {
-                        ctx.add_generic_type(
-                            name.clone(),
-                            g.clone(),
-                            (&*g.clone().borrow()).get_range().unwrap(),
-                        );
-                    }
-                    Ok(())
-                }
-                pub fn new_pltype(&self) -> $args {
-                    let mut res = self.clone();
-                    res.generic_map = res
-                        .generic_map
-                        .iter()
-                        .map(|(k, pltype)| {
-                            if let PLType::GENERIC(g) = &*pltype.borrow() {
-                                return (k.clone(), Arc::new(RefCell::new(PLType::GENERIC(g.clone()))));
-                            }
-                            unreachable!()
-                        })
-                        .collect::<IndexMap<String, Arc<RefCell<PLType>>>>();
-                    res.clear_generic();
-                    res
-                }
-            }
-        )*
-    );
-}
+
 generic_impl!(FNType, STType);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceHolderType {
