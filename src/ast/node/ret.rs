@@ -3,12 +3,9 @@ use super::*;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::{ctx::Ctx, diag::ErrorCode};
-use internal_macro::{comments, fmt, range};
+use internal_macro::node;
 
-#[range]
-#[fmt]
-#[comments]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node(comment)]
 pub struct RetNode {
     pub value: Option<Box<NodeEnum>>,
 }

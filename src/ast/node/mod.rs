@@ -461,7 +461,7 @@ pub fn print_params(paralist: &[Box<TypedIdentifierNode>]) -> String {
 #[macro_export]
 macro_rules! handle_calc {
     ($ctx:ident, $op:ident, $opf:ident, $lpltype:ident, $left:ident, $right:ident, $range: expr,$builder:ident) => {
-        item! {
+        paste::item! {
             match *$lpltype.clone().unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::I128|PriType::I64|PriType::I32|PriType::I16|PriType::I8|
                     PriType::U128|PriType::U64|PriType::U32|PriType::U16|PriType::U8) => {

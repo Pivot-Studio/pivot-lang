@@ -1,13 +1,10 @@
 use super::*;
 use crate::ast::{ctx::Ctx, tokens::TokenType};
-use internal_macro::{comments, fmt, range};
+use internal_macro::node;
 use lsp_types::{DocumentSymbol, SymbolKind};
 use rustc_hash::FxHashSet;
 
-#[range]
-#[fmt]
-#[comments]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node(comment)]
 pub struct ImplNode {
     pub target: Box<TypeNodeEnum>,
     pub methods: Vec<Box<FuncDefNode>>,

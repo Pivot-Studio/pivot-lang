@@ -11,14 +11,12 @@ use crate::{
     },
     plv,
 };
-use internal_macro::{fmt, range};
+use internal_macro::node;
 use lsp_types::SemanticTokenType;
 
 use super::PrintTrait;
 use super::{primary::VarNode, Node, NodeResult, PLValue, TerminatorEnum};
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct UseNode {
     pub ids: Vec<Box<VarNode>>,
     /// 是否完整
@@ -103,9 +101,7 @@ impl Node for UseNode {
 /// 外部符号节点，可能会退化为内部符号节点（VarNode）
 ///
 /// TODO: 区分该节点与ExternTypeName节点，该节点不生成类型，只生成函数与变量/常量
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct ExternIdNode {
     pub ns: Vec<Box<VarNode>>,
     pub id: Box<VarNode>,

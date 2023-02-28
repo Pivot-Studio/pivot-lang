@@ -13,15 +13,9 @@ use crate::ast::tokens::TokenType;
 use crate::handle_calc;
 use crate::plv;
 use inkwell::IntPredicate;
-use internal_macro::comments;
-
-use internal_macro::fmt;
-use internal_macro::range;
+use internal_macro::node;
 use lsp_types::SemanticTokenType;
-use paste::item;
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct UnaryOpNode {
     pub op: (TokenType, Range),
     pub exp: Box<NodeEnum>,
@@ -93,9 +87,7 @@ impl Node for UnaryOpNode {
     }
 }
 
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct BinOpNode {
     pub left: Box<NodeEnum>,
     pub op: (TokenType, Range),
@@ -270,10 +262,7 @@ impl Node for BinOpNode {
     }
 }
 
-#[range]
-#[comments]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node(comment)]
 pub struct TakeOpNode {
     pub head: Box<NodeEnum>,
     pub field: Option<Box<VarNode>>,

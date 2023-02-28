@@ -21,7 +21,7 @@ use crate::Db;
 use colored::Colorize;
 use inkwell::context::Context;
 
-use internal_macro::{fmt, range};
+use internal_macro::node;
 use lsp_types::GotoDefinitionResponse;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
@@ -36,9 +36,7 @@ use std::path::{Path, PathBuf};
 
 use std::sync::Arc;
 
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct ProgramNode {
     pub nodes: Vec<Box<NodeEnum>>,
     pub structs: Vec<StructDefNode>,

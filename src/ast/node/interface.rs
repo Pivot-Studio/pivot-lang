@@ -6,12 +6,10 @@ use crate::ast::{
     tokens::TokenType,
 };
 use indexmap::IndexMap;
-use internal_macro::{fmt, range};
+use internal_macro::node;
 use rustc_hash::FxHashMap;
 
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct TraitDefNode {
     pub id: Box<VarNode>,
     pub generics: Option<Box<GenericDefNode>>,

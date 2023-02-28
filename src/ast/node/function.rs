@@ -8,15 +8,12 @@ use crate::ast::pltype::{eq, get_type_deep, FNType, PLType};
 use crate::ast::tokens::TokenType;
 use crate::plv;
 use indexmap::IndexMap;
-use internal_macro::{comments, fmt, range};
+use internal_macro::node;
 use lsp_types::SemanticTokenType;
 use std::cell::RefCell;
 
 use std::vec;
-#[range]
-#[fmt]
-#[comments]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node(comment)]
 pub struct FuncCallNode {
     pub generic_params: Option<Box<GenericParamNode>>,
     pub callee: Box<NodeEnum>,
@@ -191,9 +188,7 @@ impl Node for FuncCallNode {
         })
     }
 }
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct FuncDefNode {
     pub id: Box<VarNode>,
     pub paralist: Vec<Box<TypedIdentifierNode>>,
