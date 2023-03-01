@@ -44,6 +44,7 @@ pub struct ProgramNode {
     pub globaldefs: Vec<GlobalNode>,
     pub uses: Vec<Box<NodeEnum>>,
     pub traits: Vec<TraitDefNode>,
+    pub trait_impls: Vec<(String, String)>,
 }
 
 impl PrintTrait for ProgramNode {
@@ -81,6 +82,10 @@ impl Node for ProgramNode {
         }
         self.fntypes.iter_mut().for_each(|x| {
             _ = x.emit_func_def(ctx, builder);
+        });
+        self.trait_impls.iter().for_each(|x| {
+            let (struct_name, trait_name) = x;
+            ctx.plmod.add_impl(&struct_name, &trait_name)
         });
         // init global
         ctx.set_init_fn(builder);

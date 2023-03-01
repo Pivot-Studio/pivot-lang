@@ -1,5 +1,6 @@
 use super::ctx::Ctx;
 use super::diag::ErrorCode;
+use super::plmod::Mod;
 use super::tokens::TokenType;
 use crate::add_basic_types;
 use crate::ast::builder::IRBuilder;
@@ -683,12 +684,29 @@ pub struct STType {
     pub range: Range,
     pub doc: Vec<Box<NodeEnum>>,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
-    pub impls: FxHashMap<String, Arc<RefCell<PLType>>>,
     pub derives: Vec<Arc<RefCell<PLType>>>,
     pub modifier: Option<(TokenType, Range)>,
 }
 
 impl STType {
+    fn implements(&self, tp: &PLType, plmod: &Mod) -> bool {
+        plmod
+            .impls
+            .get(&self.get_st_full_name())
+            .and_then(|v| v.get(&tp.get_full_elm_name()))
+            .is_some()
+    }
+    pub fn implements_trait(&self, tp: &STType, plmod: &Mod) -> bool {
+        if self.implements_trait_curr_mod(&tp, plmod) {
+            return true;
+        }
+        for (_, plmod) in &plmod.submods {
+            if self.implements_trait(&tp, plmod) {
+                return true;
+            }
+        }
+        false
+    }
     pub fn expect_field_pub(&self, ctx: &Ctx, f: &Field, range: Range) -> Result<(), PLDiag> {
         if self.path == ctx.plmod.path {
             return Ok(());
@@ -706,16 +724,17 @@ impl STType {
         );
         Ok(())
     }
-    pub fn implements(&self, tp: &PLType) -> bool {
-        self.impls.get(&tp.get_full_elm_name()).is_some()
-    }
-    pub fn implements_trait(&self, tp: &STType) -> bool {
-        let re = self.impls.get(&tp.get_st_full_name()).is_some();
+    fn implements_trait_curr_mod(&self, tp: &STType, plmod: &Mod) -> bool {
+        let re = plmod
+            .impls
+            .get(&self.get_st_full_name())
+            .and_then(|v| v.get(&tp.get_st_full_name()))
+            .is_some();
         if !re {
             return re;
         }
         for de in &tp.derives {
-            let re = self.implements(&de.borrow());
+            let re = self.implements(&de.borrow(), plmod);
             if !re {
                 return re;
             }
@@ -741,7 +760,7 @@ impl STType {
         }
         unreachable!()
     }
-    pub fn generic_infer_pltype<'a, 'ctx, 'b>(
+    pub fn gen_code<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
@@ -912,7 +931,6 @@ impl GenericType {
         ctx.add_type(name_in_map, pltype, range).unwrap();
     }
 }
-
 generic_impl!(FNType, STType);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceHolderType {

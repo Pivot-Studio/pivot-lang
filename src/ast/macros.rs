@@ -55,9 +55,9 @@ macro_rules! generic_impl {
                     }
                     true
                 }
-                pub fn clear_generic(&mut self) {
+                pub fn clear_generic(&self) {
                     self.generic_map
-                        .iter_mut()
+                        .iter()
                         .for_each(|(_, v)| match &mut *v.clone().borrow_mut() {
                             PLType::GENERIC(g) => {
                                 g.clear_type();

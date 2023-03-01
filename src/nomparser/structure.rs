@@ -126,8 +126,7 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
     }
     map_res(
         tuple((
-            type_name,
-            opt(generic_param_def),
+            basic_type,
             del_newline_or_space!(tag_token_symbol(TokenType::LBRACE)),
             alt((
                 map_res(
@@ -163,18 +162,20 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
             many0(comment),
             del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
         )),
-        |(name, generic_params, _, (fields, lcomment), rcomment, _)| {
+        |(typename, _, (fields, lcomment), rcomment, _)| {
             let range = if !fields.is_empty() {
-                name.range().start.to(fields.last().unwrap().range().end)
+                typename
+                    .range()
+                    .start
+                    .to(fields.last().unwrap().range().end)
             } else {
-                name.range()
+                typename.range()
             };
             let mut comments = lcomment;
             comments.push(rcomment);
             res_enum(
                 StructInitNode {
-                    generic_params,
-                    typename: name,
+                    typename,
                     fields,
                     range,
                     comments,

@@ -20,7 +20,6 @@ impl TestTrait for A {
         self.x = i;
         return i;
     }
-
 }
 
 pub fn test_trait() void {

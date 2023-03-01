@@ -225,9 +225,6 @@ impl FmtBuilder {
 
     pub fn parse_struct_init_node(&mut self, node: &StructInitNode) {
         node.typename.format(self);
-        if let Some(generic_params) = &node.generic_params {
-            generic_params.format(self);
-        }
         self.l_brace();
         let mut len = 0;
         if !node.fields.is_empty() {

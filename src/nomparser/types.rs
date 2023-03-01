@@ -44,7 +44,7 @@ pub fn type_name(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
 
 #[test_parser("kfsh")]
 #[test_parser("kfsh<a|b|c>")]
-fn basic_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
+pub fn basic_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
     delspace(map_res(
         tuple((extern_identifier, opt(generic_param_def))),
         |(exid, generic_params)| {

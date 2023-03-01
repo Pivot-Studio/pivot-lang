@@ -71,7 +71,6 @@ impl TraitDefNode {
             range: self.range(),
             doc: vec![],
             generic_map,
-            impls: FxHashMap::default(),
             derives: vec![],
             modifier: self.modifier,
         })));

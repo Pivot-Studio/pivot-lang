@@ -71,7 +71,7 @@ pub fn complex<A|B|C>(a: i64, x: A, y: B, z: C) i64 {
     if a == 2 {
         return 1;
     }
-    return complex<B|A|C>(a - 1, y, x, z) + complex<C|A|_>(a - 2, z, x, y);
+    return complex<B|_|C>(a - 1, y, x, z) + complex<C|A|_>(a - 2, z, x, y);
 }
 
 pub fn test_generic_simple() void {
@@ -96,6 +96,11 @@ pub fn test_generic_simple() void {
         }
     };
     panic::assert(g.x.x == 998);
+    let half_infer = GenericType<i64|_>{
+        x: 999,
+        y: &a
+    };
+    panic::assert(half_infer.x == 999);
     return;
 }
 
