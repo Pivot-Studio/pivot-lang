@@ -5,12 +5,9 @@ use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
 
-use internal_macro::{comments, fmt, range};
+use internal_macro::node;
 use lsp_types::SemanticTokenType;
-#[range]
-#[comments]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node(comment)]
 pub struct DefNode {
     pub var: VarNode,
     pub tp: Option<Box<TypeNodeEnum>>,
@@ -77,14 +74,6 @@ impl Node for DefNode {
             ctx,
             Some(self.var.range.start),
         );
-        // builder.build_dbg_location(self.var.range.start);
-        // builder.insert_var_declare(
-        //     &self.var.name,
-        //     self.var.range.start,
-        //     &pltype.borrow(),
-        //     ptr2value,
-        //     ctx,
-        // );
         ctx.add_symbol(
             self.var.name.clone(),
             ptr2value,
@@ -102,9 +91,7 @@ impl Node for DefNode {
         Ok((None, None, TerminatorEnum::NONE))
     }
 }
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct AssignNode {
     pub var: Box<NodeEnum>,
     pub exp: Box<NodeEnum>,
@@ -142,10 +129,7 @@ impl Node for AssignNode {
     }
 }
 
-#[range]
-#[comments]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node(comment)]
 pub struct EmptyNode {}
 
 impl PrintTrait for EmptyNode {
@@ -167,9 +151,7 @@ impl Node for EmptyNode {
     }
 }
 
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct StatementsNode {
     pub statements: Vec<Box<NodeEnum>>,
 }

@@ -1,10 +1,9 @@
 use super::*;
 use crate::ast::ctx::Ctx;
-use internal_macro::{fmt, range};
+use internal_macro::node;
 use lsp_types::SemanticTokenType;
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+
+#[node]
 pub struct CommentNode {
     pub comment: String,
     pub is_doc: bool, // use "///" (is_doc:true)

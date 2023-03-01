@@ -9,14 +9,12 @@ use crate::{
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
-use internal_macro::{fmt, range};
+use internal_macro::node;
 use lsp_types::SemanticTokenType;
 
 use super::{Node, NodeResult, PLValue, PrintTrait, TerminatorEnum};
 
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct StringNode {
     pub content: String,
 }

@@ -2,11 +2,9 @@ use super::*;
 use crate::ast::{ctx::Ctx, diag::ErrorCode};
 
 use colored::Colorize;
-use internal_macro::{fmt, range};
+use internal_macro::node;
 
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct ErrorNode {
     pub msg: String,
     pub src: String,
@@ -38,9 +36,7 @@ impl Node for ErrorNode {
 
 /// # StErrorNode
 /// 表现一个因为缺少分号而错误的statement
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct StErrorNode {
     pub err: ErrorNode,
     pub st: Box<NodeEnum>,

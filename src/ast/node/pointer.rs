@@ -8,12 +8,9 @@ use crate::{
     ast::{ctx::Ctx, diag::ErrorCode},
     plv,
 };
-use internal_macro::{comments, fmt, range};
+use internal_macro::node;
 
-#[range]
-#[comments]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node(comment)]
 pub struct PointerOpNode {
     pub value: Box<NodeEnum>,
     pub op: PointerOpEnum,
