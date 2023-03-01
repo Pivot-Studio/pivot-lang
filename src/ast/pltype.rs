@@ -931,65 +931,6 @@ impl GenericType {
         ctx.add_type(name_in_map, pltype, range).unwrap();
     }
 }
-macro_rules! generic_impl {
-    ($($args:ident),*) => (
-        $(
-            impl $args {
-                pub fn need_gen_code(&self) -> bool {
-                    if self.generic_map.is_empty() {
-                        return false;
-                    }
-                    for (_, v) in self.generic_map.iter() {
-                        match &*v.clone().borrow() {
-                            PLType::GENERIC(g) => {
-                                if g.curpltype.is_none() {
-                                    return false;
-                                }
-                            }
-                            _ => unreachable!(),
-                        }
-                    }
-                    true
-                }
-                pub fn clear_generic(&self) {
-                    self.generic_map
-                        .iter()
-                        .for_each(|(_, v)| match &mut *v.clone().borrow_mut() {
-                            PLType::GENERIC(g) => {
-                                g.clear_type();
-                            }
-                            _ => unreachable!(),
-                        })
-                }
-                pub fn add_generic_type(&self, ctx: &mut Ctx) -> Result<(), PLDiag> {
-                    for (name, g) in self.generic_map.iter() {
-                        ctx.add_generic_type(
-                            name.clone(),
-                            g.clone(),
-                            (&*g.clone().borrow()).get_range().unwrap(),
-                        );
-                    }
-                    Ok(())
-                }
-                pub fn new_pltype(&self) -> $args {
-                    let mut res = self.clone();
-                    res.generic_map = res
-                        .generic_map
-                        .iter()
-                        .map(|(k, pltype)| {
-                            if let PLType::GENERIC(g) = &*pltype.borrow() {
-                                return (k.clone(), Arc::new(RefCell::new(PLType::GENERIC(g.clone()))));
-                            }
-                            unreachable!()
-                        })
-                        .collect::<IndexMap<String, Arc<RefCell<PLType>>>>();
-                    res.clear_generic();
-                    res
-                }
-            }
-        )*
-    );
-}
 generic_impl!(FNType, STType);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceHolderType {
