@@ -315,16 +315,10 @@ impl<'a, 'ctx> Ctx<'a> {
         Ok(())
     }
     pub fn add_type_without_check(&mut self, pltype: Arc<RefCell<PLType>>) {
-        if let PLType::GENERIC(g) = &*pltype.borrow() {
-            if g.curpltype.is_some() {
-                return self.add_type_without_check(g.curpltype.as_ref().unwrap().clone());
-            }
-            return;
+        if let PLType::GENERIC(_) = &*pltype.borrow() {
+            unreachable!()
         }
         let name = pltype.borrow().get_name();
-        if self.plmod.types.contains_key(&name) {
-            return;
-        }
         self.plmod.types.insert(name, pltype);
     }
     pub fn add_generic_type(&mut self, name: String, pltype: Arc<RefCell<PLType>>, range: Range) {

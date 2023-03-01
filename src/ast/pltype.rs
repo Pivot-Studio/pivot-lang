@@ -649,7 +649,7 @@ impl STType {
         }
         unreachable!()
     }
-    pub fn generic_infer_pltype<'a, 'ctx, 'b>(
+    pub fn gen_code<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
@@ -885,9 +885,9 @@ macro_rules! generic_impl {
                     }
                     true
                 }
-                pub fn clear_generic(&mut self) {
+                pub fn clear_generic(&self) {
                     self.generic_map
-                        .iter_mut()
+                        .iter()
                         .for_each(|(_, v)| match &mut *v.clone().borrow_mut() {
                             PLType::GENERIC(g) => {
                                 g.clear_type();
