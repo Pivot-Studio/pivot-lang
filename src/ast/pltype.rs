@@ -5,6 +5,7 @@ use crate::add_basic_types;
 use crate::ast::builder::IRBuilder;
 
 use crate::ast::builder::BuilderEnum;
+use crate::format_label;
 use crate::generic_impl;
 use crate::if_not_modified_by;
 use crate::skip_if_not_modified_by;
@@ -197,7 +198,7 @@ pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
 
 fn expect_pub_err(err: ErrorCode, ctx: &Ctx, range: Range, name: String) -> Result<(), PLDiag> {
     Err(PLDiag::new_error(range, err)
-        .add_label(range, Some(("{} is not public".into(), vec![name])))
+        .add_label(range, format_label!("{} is not public", name))
         .add_help("try add `pub` modifier before it".into())
         .add_to_ctx(ctx))
 }

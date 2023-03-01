@@ -1,6 +1,6 @@
 #[macro_export]
 macro_rules! if_not_modified_by {
-    ($entity:expr,$modifier:expr, $logic:stmt) => {
+    ($entity:expr, $modifier:expr, $logic:stmt) => {
         if let Some((t, _)) = $entity {
             if t != $modifier {
                 $logic
@@ -13,20 +13,20 @@ macro_rules! if_not_modified_by {
 
 #[macro_export]
 macro_rules! skip_if_not_modified_by {
-    ($entity:expr,$modifier:expr) => {
-        use crate::if_not_modified_by;
+    ($entity:expr, $modifier:expr) => {
+        use $crate::if_not_modified_by;
         if_not_modified_by!($entity, $modifier, continue);
     };
 }
 
 #[macro_export]
 macro_rules! add_basic_types {
-    ($map:expr,$(
+    ($map:expr, $(
         $ident:ident
     ),+) => {
         $(
             paste::paste! {
-                let [<pltype_ $ident>] = PLType::PRIMITIVE(PriType::[<$ident:upper>]);
+                let [<pltype_$ident>] = PLType::PRIMITIVE(PriType::[<$ident:upper>]);
                 $map
                 .insert(stringify!($ident).to_string(), Arc::new(RefCell::new( [<pltype_$ident>])));
             }
@@ -93,4 +93,19 @@ macro_rules! generic_impl {
             }
         )*
     );
+    ($($args:ident),*,) => (
+        $crate::generic_impl!($($args),*)
+    );
+}
+
+#[macro_export]
+macro_rules! format_label {
+    ($fmt:expr $(,$args:expr)*) => {
+        Some(($fmt.into(), vec![
+            $($args.into(),)*
+        ]))
+    };
+    ($fmt:expr $(,$args:expr)*,) => {
+        $crate::format_label!($fmt $(,$args)*)
+    };
 }

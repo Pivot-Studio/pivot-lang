@@ -10,6 +10,7 @@ use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::PLType;
 use crate::ast::pltype::PriType;
 use crate::ast::tokens::TokenType;
+use crate::format_label;
 use crate::handle_calc;
 use crate::plv;
 use inkwell::IntPredicate;
@@ -175,10 +176,7 @@ impl Node for BinOpNode {
                 _ => {
                     return Err(ctx
                         .add_diag(self.range.new_err(ErrorCode::LOGIC_OP_NOT_BOOL))
-                        .add_label(
-                            self.left.range(),
-                            Some(("expect bool here".to_string(), vec![])),
-                        )
+                        .add_label(self.left.range(), format_label!("expect bool here"))
                         .clone())
                 }
             });

@@ -1,9 +1,12 @@
 use super::primary::VarNode;
 use super::*;
-use crate::ast::{
-    ctx::Ctx,
-    pltype::{Field, STType},
-    tokens::TokenType,
+use crate::{
+    ast::{
+        ctx::Ctx,
+        pltype::{Field, STType},
+        tokens::TokenType,
+    },
+    format_label,
 };
 use indexmap::IndexMap;
 use internal_macro::node;
@@ -140,10 +143,7 @@ impl TraitDefNode {
                     r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)
                         .add_label(
                             r,
-                            Some((
-                                "modifier {} shall be removed".into(),
-                                vec![m.get_str().into()],
-                            )),
+                            format_label!("modifier {} shall be removed", m.get_str()),
                         )
                         .add_help(
                             "trait methods share the same modifier with trait, \

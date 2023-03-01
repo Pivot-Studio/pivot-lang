@@ -49,7 +49,7 @@ pub mod ret;
 pub mod statement;
 pub mod string_literal;
 pub mod types;
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TerminatorEnum {
     NONE,
     RETURN,
@@ -58,18 +58,10 @@ pub enum TerminatorEnum {
 }
 impl TerminatorEnum {
     pub fn is_none(self) -> bool {
-        if let TerminatorEnum::NONE = self {
-            true
-        } else {
-            false
-        }
+        self == TerminatorEnum::NONE
     }
     pub fn is_return(self) -> bool {
-        if let TerminatorEnum::RETURN = self {
-            true
-        } else {
-            false
-        }
+        self == TerminatorEnum::RETURN
     }
 }
 #[macro_export]
@@ -211,13 +203,10 @@ macro_rules! mismatch_err {
         $self.add_diag(
             $range
                 .new_err(ErrorCode::TYPE_MISMATCH)
-                .add_label(
-                    $range,
-                    Some(("type `{}`".to_string(), vec![$got.get_name()])),
-                )
+                .add_label($range, $crate::format_label!("type `{}`", $got.get_name()))
                 .add_label(
                     $exprange,
-                    Some(("type `{}`".to_string(), vec![$expect.get_name()])),
+                    $crate::format_label!("type `{}`", $expect.get_name()),
                 )
                 .clone(),
         )

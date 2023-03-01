@@ -1,5 +1,8 @@
 use super::*;
-use crate::ast::{ctx::Ctx, tokens::TokenType};
+use crate::{
+    ast::{ctx::Ctx, tokens::TokenType},
+    format_label,
+};
 use internal_macro::node;
 use lsp_types::{DocumentSymbol, SymbolKind};
 use rustc_hash::FxHashSet;
@@ -57,7 +60,7 @@ impl Node for ImplNode {
                     } else {
                         t.range()
                             .new_err(ErrorCode::EXPECT_TRAIT_TYPE)
-                            .add_label(t.range(), Some(("type {}".to_string(), vec![name])))
+                            .add_label(t.range(), format_label!("type {}", name)) //Some(("type {}".to_string(), vec![name])))
                             .add_to_ctx(ctx);
                     };
                     sttp.impls
@@ -86,10 +89,7 @@ impl Node for ImplNode {
                     r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)
                         .add_label(
                             r,
-                            Some((
-                                "modifier {} shall be removed".into(),
-                                vec![m.get_str().into()],
-                            )),
+                            format_label!("modifier {} shall be removed", m.get_str()),
                         )
                         .add_help(
                             "trait methods share the same modifier with \
@@ -130,14 +130,14 @@ impl Node for ImplNode {
                             .new_err(ErrorCode::METHOD_NOT_IN_TRAIT)
                             .add_label(
                                 method.range(),
-                                Some(("method {} not in trait {}".to_string(), vec![
-                                    method.id.name.split("::").last().unwrap().to_string(),
-                                    st.name.clone()
-                                ])),
+                                format_label!("method {} not in trait {}",
+                                    method.id.name.split("::").last().unwrap(),
+                                    &st.name
+                                ),
                             )
                             .add_label(
                                 st.range,
-                                Some(("trait {} def here".to_string(), vec![st.name.clone()])),
+                                format_label!("trait {} def here", &st.name),
                             ).add_help("move this method to another impl block or remove it from current impl block")
                             .add_to_ctx(ctx);
                     }
@@ -155,17 +155,15 @@ impl Node for ImplNode {
             r.new_err(ErrorCode::METHOD_NOT_IN_IMPL)
                 .add_label(
                     r,
-                    Some((
-                        "method {} not in impl block, whitch is required in trait {}".to_string(),
-                        vec![f, tp.borrow().get_name()],
-                    )),
+                    format_label!(
+                        "method {} not in impl block, whitch is required in trait {}",
+                        f,
+                        tp.borrow().get_name()
+                    ),
                 )
                 .add_label(
                     tp.borrow().get_range().unwrap(),
-                    Some((
-                        "trait {} def here".to_string(),
-                        vec![tp.borrow().get_name()],
-                    )),
+                    format_label!("trait {} def here", tp.borrow().get_name()),
                 )
                 .add_help("add the method to current impl block")
                 .add_to_ctx(ctx);

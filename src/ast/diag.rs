@@ -253,6 +253,12 @@ impl PLDiag {
     pub fn add_to_ctx(&self, ctx: &Ctx) -> PLDiag {
         ctx.add_diag(self.clone())
     }
+
+    /// Add a label to the diagnostic
+    ///
+    /// # Arguments
+    /// * `range` - The src range of the label
+    /// * `label` - The label text and arguments, you may use `format_label` macro to build it
     pub fn add_label(&mut self, range: Range, label: Option<(String, Vec<String>)>) -> &mut Self {
         self.labels.push((range, label));
         self

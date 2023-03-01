@@ -25,6 +25,11 @@ macro_rules! define_tokens {
             };
         }
     };
+    ($(
+        $ident:ident = $string_keyword:expr
+    ),*,) => {
+        define_tokens!($($ident = $string_keyword),*);
+    };
 }
 define_tokens!(
     PLUS = "+",
