@@ -69,7 +69,7 @@ pub struct Mod {
     pub semantic_tokens_builder: Arc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
     pub hints: Arc<RefCell<Box<Vec<InlayHint>>>>,
     pub doc_symbols: Arc<RefCell<Box<Vec<DocumentSymbol>>>>,
-    // pub hints: Arc<RefCell<Box<Vec<InlayHint>>>>,
+    pub impls: FxHashMap<String, FxHashSet<String>>,
 }
 
 pub type MutVec<T> = RefCell<Vec<T>>;
@@ -128,6 +128,7 @@ impl Mod {
             local_refs: Arc::new(RefCell::new(BTreeMap::new())),
             glob_refs: Arc::new(RefCell::new(BTreeMap::new())),
             refs_map: Arc::new(RefCell::new(BTreeMap::new())),
+            impls: FxHashMap::default(),
         }
     }
     pub fn new_child(&self) -> Self {
@@ -151,6 +152,7 @@ impl Mod {
             local_refs: self.local_refs.clone(),
             glob_refs: self.glob_refs.clone(),
             refs_map: self.refs_map.clone(),
+            impls: self.impls.clone(),
         }
     }
     pub fn get_refs(&self, name: &str, db: &dyn Db, set: &mut FxHashSet<String>) {
@@ -305,6 +307,17 @@ impl Mod {
         self.get_ns_completions_pri(&mut m);
         let cm = m.values().cloned().collect();
         cm
+    }
+
+    pub fn add_impl(&mut self, stname: &str, trait_tp_name: &str) {
+        let full_name = format!("{}..{}", self.path, stname);
+        if let Some(m) = self.impls.get_mut(&full_name) {
+            m.insert(format!("{}..{}", self.path, trait_tp_name));
+        } else {
+            let mut m = FxHashSet::default();
+            m.insert(format!("{}..{}", self.path, trait_tp_name));
+            self.impls.insert(full_name, m);
+        }
     }
 }
 

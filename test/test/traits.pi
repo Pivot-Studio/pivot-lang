@@ -11,6 +11,16 @@ struct A {
     x: i64;
 }
 
+fn test_trait() void {
+    let x = A{};
+    let dd: TestTrait;
+    dd = x;
+    let re = dd.set(100);
+    panic::assert(re == 100);
+    return;
+}
+
+
 impl TestTrait for A {
     fn name() void {
         return;
@@ -20,15 +30,4 @@ impl TestTrait for A {
         self.x = i;
         return i;
     }
-
 }
-
-fn test_trait() void {
-    // let x = A{};
-    // let dd: TestTrait;
-    // dd = x;
-    // let re = dd.set(100);
-    // panic::assert(re == 100);
-    return;
-}
-

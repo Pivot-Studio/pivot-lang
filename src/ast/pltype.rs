@@ -1,4 +1,5 @@
 use super::ctx::Ctx;
+use super::plmod::Mod;
 use crate::ast::builder::IRBuilder;
 
 use crate::ast::builder::BuilderEnum;
@@ -609,21 +610,39 @@ pub struct STType {
     pub range: Range,
     pub doc: Vec<Box<NodeEnum>>,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
-    pub impls: FxHashMap<String, Arc<RefCell<PLType>>>,
     pub derives: Vec<Arc<RefCell<PLType>>>,
 }
 
 impl STType {
-    pub fn implements(&self, tp: &PLType) -> bool {
-        self.impls.get(&tp.get_full_elm_name()).is_some()
+    fn implements(&self, tp: &PLType, plmod: &Mod) -> bool {
+        plmod
+            .impls
+            .get(&self.get_st_full_name())
+            .and_then(|v| v.get(&tp.get_full_elm_name()))
+            .is_some()
     }
-    pub fn implements_trait(&self, tp: &STType) -> bool {
-        let re = self.impls.get(&tp.get_st_full_name()).is_some();
+    pub fn implements_trait(&self, tp: &STType, plmod: &Mod) -> bool {
+        if self.implements_trait_curr_mod(&tp, plmod) {
+            return true;
+        }
+        for (_, plmod) in &plmod.submods {
+            if self.implements_trait(&tp, plmod) {
+                return true;
+            }
+        }
+        false
+    }
+    fn implements_trait_curr_mod(&self, tp: &STType, plmod: &Mod) -> bool {
+        let re = plmod
+            .impls
+            .get(&self.get_st_full_name())
+            .and_then(|v| v.get(&tp.get_st_full_name()))
+            .is_some();
         if !re {
             return re;
         }
         for de in &tp.derives {
-            let re = self.implements(&de.borrow());
+            let re = self.implements(&de.borrow(), plmod);
             if !re {
                 return re;
             }

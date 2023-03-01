@@ -425,7 +425,6 @@ impl StructDefNode {
             // refs: Arc::new(RwVec::new()),
             doc: vec![],
             generic_map,
-            impls: FxHashMap::default(),
             derives: vec![],
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));

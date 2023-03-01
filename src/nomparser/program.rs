@@ -34,6 +34,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let mut globaldefs = vec![];
     let mut uses = vec![];
     let mut traits = vec![];
+    let mut trait_impls = vec![];
     loop {
         let top = top_level_statement(input);
         if let Ok((i, t)) = top {
@@ -60,6 +61,10 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 TopLevel::ImplDef(mut im) => {
                     let imname = FmtBuilder::generate_node(&im.target);
                     let target = *im.target.clone();
+                    if let Some((t, _)) = &im.impl_trait {
+                        let trait_name = FmtBuilder::generate_node(&t);
+                        trait_impls.push((imname.clone(), trait_name));
+                    }
                     for mth in im.methods.iter_mut() {
                         mth.id.name = format!("|{}::{}", imname, mth.id.name);
                         mth.paralist.insert(
@@ -106,6 +111,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
             range: Range::new(old, input),
             uses,
             traits,
+            trait_impls,
         }
         .into(),
     );
