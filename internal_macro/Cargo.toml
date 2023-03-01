@@ -18,6 +18,8 @@ path = "src/fmt_macro"
 path = "src/comment_macro"
 [dependencies.test_parser_macro]
 path = "src/test_parser_macro"
+[dependencies.node_macro]
+path = "src/node_macro"
 
 [features]
 default = ["jit"]

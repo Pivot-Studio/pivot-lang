@@ -1,5 +1,5 @@
 use project1::test::sub_module;
-fn test_module() void {
+pub fn test_module() void {
     let x = sub_module::A{};
     sub_module::testfn(x);
     x.testimpl();

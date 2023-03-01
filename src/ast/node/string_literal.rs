@@ -9,14 +9,12 @@ use crate::{
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
-use internal_macro::{fmt, range};
+use internal_macro::node;
 use lsp_types::SemanticTokenType;
 
 use super::{Node, NodeResult, PLValue, PrintTrait, TerminatorEnum};
 
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct StringNode {
     pub content: String,
 }
@@ -47,7 +45,7 @@ impl Node for StringNode {
 
         builder.build_store(
             len,
-            builder.int_value(&PriType::I64, self.content.len() as u64, true),
+            builder.int_value(&PriType::I64, self.content.chars().count() as u64, true),
         );
         builder.build_store(
             byte_len,

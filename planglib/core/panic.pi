@@ -9,8 +9,8 @@
 /// 
 /// In the future, the implementation of this function may be changed,
 /// to remove the dependency on `libunwind`.
-fn pl_panic() void;
-fn assert(b:bool) void {
+pub fn pl_panic() void;
+pub fn assert(b:bool) void {
     if !b {
         pl_panic();
     }

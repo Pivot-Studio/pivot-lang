@@ -7,6 +7,7 @@ use super::pltype::PriType;
 use super::pltype::STType;
 
 use super::range::Range;
+use super::tokens::TokenType;
 
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::Db;
@@ -226,9 +227,12 @@ impl Mod {
         }
         name.to_string()
     }
-    pub fn get_methods_completions(&self, full_name: &str) -> Vec<CompletionItem> {
+    pub fn get_methods_completions(&self, full_name: &str, pub_only: bool) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
         let mut f = |name: &String, v: &FNType| {
+            if pub_only && !v.is_modified_by(TokenType::PUB) {
+                return;
+            }
             completions.push(CompletionItem {
                 kind: Some(CompletionItemKind::METHOD),
                 label: name.clone(),

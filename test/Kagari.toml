@@ -4,4 +4,4 @@ entry = "main.pi"
 
 [deps]
 project2 = { path = "project2" }
-pl_test = { git = "https://github.com/Pivot-Studio/pl_test.git", head = "edfd7c5" }
+pl_test = { git = "https://github.com/Pivot-Studio/pl_test.git", head = "main" }

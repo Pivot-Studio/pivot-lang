@@ -249,6 +249,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         (casted_result.into_pointer_value(), stack_ptr, llvmtp)
     }
 
+    /// 第一个参数必须是一个二重以上的指针，且不能是一重指针bitcast过来的二重指针
+    /// 否则可能导致bus error
     fn gc_add_root(&self, stackptr: BasicValueEnum<'ctx>, obj_type: u8) {
         self.module
             .get_function("llvm.gcroot")
@@ -1057,7 +1059,29 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         if v.right().is_some() {
             return None;
         }
-        Some(self.get_llvm_value_handle(&v.left().unwrap().as_any_value_enum()))
+        let ret = v.left().unwrap();
+        let tp = ret.get_type();
+        self.rm_curr_debug_location();
+        let cb = self.builder.get_insert_block().unwrap();
+        let alloca_block = self
+            .builder
+            .get_insert_block()
+            .unwrap()
+            .get_parent()
+            .unwrap()
+            .get_first_basic_block()
+            .unwrap();
+        self.builder.position_at_end(alloca_block);
+        let alloca = self.builder.build_alloca(tp, "ret_alloca");
+        self.builder.position_at_end(cb);
+        self.builder.build_store(alloca, ret);
+        if tp.is_pointer_type() {
+            self.gc_add_root(
+                alloca.as_basic_value_enum(),
+                ObjectType::Pointer.int_value(),
+            );
+        }
+        Some(self.get_llvm_value_handle(&alloca.as_any_value_enum()))
     }
     fn add_function(
         &self,

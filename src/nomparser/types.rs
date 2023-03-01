@@ -1,5 +1,3 @@
-use std::fmt::Error;
-
 use crate::nomparser::Span;
 use crate::{
     ast::node::types::{ArrayTypeNameNode, TypeNameNode},
@@ -55,7 +53,7 @@ pub fn basic_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
                 _ => unreachable!(),
             };
             let range = exid.range;
-            Ok::<_, Error>(Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
+            Ok::<_, ()>(Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
                 generic_params,
                 id: Some(exid),
                 range,
@@ -76,7 +74,7 @@ fn array_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
         |(_, tp, _, size, _)| {
             let range = size.range().start.to(tp.range().end);
 
-            Ok::<_, Error>(Box::new(TypeNodeEnum::ArrayTypeNode(ArrayTypeNameNode {
+            Ok::<_, ()>(Box::new(TypeNodeEnum::ArrayTypeNode(ArrayTypeNameNode {
                 id: tp,
                 size,
                 range,
@@ -98,7 +96,7 @@ pub fn generic_type_def(input: Span) -> IResult<Span, Box<GenericDefNode>> {
         )),
         |(lf, ids, ri)| {
             let range = lf.1.start.to(ri.1.end);
-            Ok::<_, Error>(Box::new(GenericDefNode {
+            Ok::<_, ()>(Box::new(GenericDefNode {
                 range,
                 generics: ids,
             }))
@@ -119,15 +117,15 @@ pub fn generic_param_def(input: Span) -> IResult<Span, Box<GenericParamNode>> {
             separated_list1(
                 tag_token_symbol(TokenType::GENERIC_SEP),
                 alt((
-                    map_res(type_name, |x| Ok::<_, Error>(Some(x))),
-                    map_res(tag_token_word(TokenType::INGNORE), |_| Ok::<_, Error>(None)),
+                    map_res(type_name, |x| Ok::<_, ()>(Some(x))),
+                    map_res(tag_token_word(TokenType::INGNORE), |_| Ok::<_, ()>(None)),
                 )),
             ),
             tag_token_symbol(TokenType::GREATER),
         )),
         |(lf, ids, ri)| {
             let range = lf.1.start.to(ri.1.end);
-            Ok::<_, Error>(Box::new(GenericParamNode {
+            Ok::<_, ()>(Box::new(GenericParamNode {
                 range,
                 generics: ids,
             }))
@@ -151,7 +149,7 @@ pub fn generic_param_def(input: Span) -> IResult<Span, Box<GenericParamNode>> {
 pub fn trait_def(input: Span) -> IResult<Span, Box<TraitDefNode>> {
     map_res(
         tuple((
-            tag_token_word(TokenType::TRAIT),
+            modifiable(tag_token_word(TokenType::TRAIT), TokenType::PUB),
             identifier,
             opt(generic_type_def),
             opt(preceded(tag_token_symbol(TokenType::COLON), type_add)),
@@ -159,7 +157,7 @@ pub fn trait_def(input: Span) -> IResult<Span, Box<TraitDefNode>> {
             many0(del_newline_or_space!(function_def)),
             del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
         )),
-        |(_, id, generics, derives, _, defs, (_, rr))| {
+        |((modifier, _), id, generics, derives, _, defs, (_, rr))| {
             let range = id.range().start.to(rr.end);
             let mut de = vec![];
             if let Some(derives) = derives {
@@ -167,7 +165,7 @@ pub fn trait_def(input: Span) -> IResult<Span, Box<TraitDefNode>> {
                     de.push(d);
                 }
             }
-            Ok::<_, Error>(Box::new(TraitDefNode {
+            Ok::<_, ()>(Box::new(TraitDefNode {
                 id,
                 generics,
                 methods: defs
@@ -179,6 +177,7 @@ pub fn trait_def(input: Span) -> IResult<Span, Box<TraitDefNode>> {
                     .collect(),
                 range,
                 derives: de,
+                modifier,
             }))
         },
     )(input)

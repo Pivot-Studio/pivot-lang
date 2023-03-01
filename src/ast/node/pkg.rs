@@ -11,14 +11,12 @@ use crate::{
     },
     plv,
 };
-use internal_macro::{fmt, range};
+use internal_macro::node;
 use lsp_types::SemanticTokenType;
 
 use super::PrintTrait;
 use super::{primary::VarNode, Node, NodeResult, PLValue, TerminatorEnum};
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct UseNode {
     pub ids: Vec<Box<VarNode>>,
     /// 是否完整
@@ -103,9 +101,7 @@ impl Node for UseNode {
 /// 外部符号节点，可能会退化为内部符号节点（VarNode）
 ///
 /// TODO: 区分该节点与ExternTypeName节点，该节点不生成类型，只生成函数与变量/常量
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct ExternIdNode {
     pub ns: Vec<Box<VarNode>>,
     pub id: Box<VarNode>,
@@ -187,6 +183,8 @@ impl Node for ExternIdNode {
             let range = &tp.borrow().get_range();
             let re = match &*tp.clone().borrow() {
                 PLType::FN(_) => {
+                    // 必须是public的
+                    _ = tp.borrow().expect_pub(ctx, self.range);
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
                     Ok((None, Some(tp), TerminatorEnum::NONE))
                 }
@@ -230,6 +228,8 @@ impl ExternIdNode {
             }
         }
         if let Some(tp) = plmod.get_type(&self.id.name) {
+            // 必须是public的
+            _ = tp.borrow().expect_pub(ctx, self.range);
             let re = match *tp.clone().borrow() {
                 PLType::STRUCT(_) | PLType::TRAIT(_) => Ok((None, Some(tp), TerminatorEnum::NONE)),
                 _ => unreachable!(),

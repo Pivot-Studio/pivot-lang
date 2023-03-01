@@ -7,19 +7,9 @@ trait TestTrait {
 
 }
 
-struct A {
+pub struct A {
     x: i64;
 }
-
-fn test_trait() void {
-    let x = A{};
-    let dd: TestTrait;
-    dd = x;
-    let re = dd.set(100);
-    panic::assert(re == 100);
-    return;
-}
-
 
 impl TestTrait for A {
     fn name() void {
@@ -31,3 +21,13 @@ impl TestTrait for A {
         return i;
     }
 }
+
+pub fn test_trait() void {
+    let x = A{};
+    let dd: TestTrait;
+    dd = x;
+    let re = dd.set(100);
+    panic::assert(re == 100);
+    return;
+}
+

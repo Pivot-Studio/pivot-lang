@@ -10,18 +10,13 @@ use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::PLType;
 use crate::ast::pltype::PriType;
 use crate::ast::tokens::TokenType;
+use crate::format_label;
 use crate::handle_calc;
 use crate::plv;
 use inkwell::IntPredicate;
-use internal_macro::comments;
-
-use internal_macro::fmt;
-use internal_macro::range;
+use internal_macro::node;
 use lsp_types::SemanticTokenType;
-use paste::item;
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct UnaryOpNode {
     pub op: (TokenType, Range),
     pub exp: Box<NodeEnum>,
@@ -93,9 +88,7 @@ impl Node for UnaryOpNode {
     }
 }
 
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct BinOpNode {
     pub left: Box<NodeEnum>,
     pub op: (TokenType, Range),
@@ -183,10 +176,7 @@ impl Node for BinOpNode {
                 _ => {
                     return Err(ctx
                         .add_diag(self.range.new_err(ErrorCode::LOGIC_OP_NOT_BOOL))
-                        .add_label(
-                            self.left.range(),
-                            Some(("expect bool here".to_string(), vec![])),
-                        )
+                        .add_label(self.left.range(), format_label!("expect bool here"))
                         .clone())
                 }
             });
@@ -270,10 +260,7 @@ impl Node for BinOpNode {
     }
 }
 
-#[range]
-#[comments]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node(comment)]
 pub struct TakeOpNode {
     pub head: Box<NodeEnum>,
     pub field: Option<Box<VarNode>>,
@@ -318,6 +305,7 @@ impl Node for TakeOpNode {
                             let field = s.fields.get(&id.name);
                             let method = s.find_method(ctx, &id.name);
                             if let Some(field) = field {
+                                _ = s.expect_field_pub(ctx, field, range);
                                 ctx.push_semantic_token(
                                     range,
                                     if is_trait {
@@ -352,6 +340,7 @@ impl Node for TakeOpNode {
                                 }
                                 pltype = field.typenode.get_type(ctx, builder)?;
                             } else if let Some(mthd) = method {
+                                _ = mthd.expect_pub(ctx, range);
                                 ctx.push_semantic_token(range, SemanticTokenType::METHOD, 0);
                                 let mut mthd = mthd;
                                 if let PLType::POINTER(_) = &*pltype.clone().borrow() {

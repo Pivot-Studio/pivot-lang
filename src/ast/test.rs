@@ -2,6 +2,7 @@
 mod test {
     use std::{
         cell::RefCell,
+        fs::remove_file,
         sync::{Arc, Mutex},
     };
 
@@ -223,8 +224,8 @@ mod test {
         assert!(
             lables
                 .iter()
-                .any(|c| c.label == "name" && c.kind == Some(CompletionItemKind::STRUCT)),
-            "name not found in completion"
+                .any(|c| c.label == "pubname" && c.kind == Some(CompletionItemKind::STRUCT)),
+            "`pubname` not found in completion"
         );
     }
     #[test]
@@ -433,6 +434,7 @@ mod test {
 
     #[test]
     fn test_compile() {
+        _ = remove_file("testout");
         let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
             .lock()
             .unwrap();

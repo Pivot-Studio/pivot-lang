@@ -1,5 +1,3 @@
-use std::fmt::Error;
-
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -126,7 +124,7 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
         map_res(
             del_newline_or_space!(semi_statement!(global_variable)),
             |node| {
-                Ok::<_, Error>(Box::new(if let NodeEnum::Global(g) = *node {
+                Ok::<_, ()>(Box::new(if let NodeEnum::Global(g) = *node {
                     TopLevel::GlobalDef(g)
                 } else {
                     TopLevel::Common(node)
@@ -134,13 +132,13 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
             },
         ),
         map_res(del_newline_or_space!(semi_statement!(use_statement)), |c| {
-            Ok::<_, Error>(Box::new(TopLevel::Use(c)))
+            Ok::<_, ()>(Box::new(TopLevel::Use(c)))
         }),
         map_res(del_newline_or_space!(comment), |c| {
-            Ok::<_, Error>(Box::new(TopLevel::Common(c)))
+            Ok::<_, ()>(Box::new(TopLevel::Common(c)))
         }),
         map_res(del_newline_or_space!(trait_def), |c| {
-            Ok::<_, Error>(Box::new(TopLevel::TraitDef(*c)))
+            Ok::<_, ()>(Box::new(TopLevel::TraitDef(*c)))
         }),
         map_res(
             del_newline_or_space!(except(
@@ -148,7 +146,7 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
                 "failed to parse top level statement",
                 ErrorCode::SYNTAX_ERROR_TOP_STATEMENT
             )),
-            |e| Ok::<_, Error>(Box::new(TopLevel::Common(e))),
+            |e| Ok::<_, ()>(Box::new(TopLevel::Common(e))),
         ),
     )))(input)
 }

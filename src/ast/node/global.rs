@@ -4,11 +4,9 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::diag::ErrorCode;
 
-use internal_macro::{fmt, range};
+use internal_macro::node;
 use lsp_types::SemanticTokenType;
-#[range]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node]
 pub struct GlobalNode {
     pub var: VarNode,
     pub exp: Box<NodeEnum>,

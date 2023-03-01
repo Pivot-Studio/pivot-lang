@@ -1,5 +1,3 @@
-use std::fmt::Error;
-
 use crate::nomparser::Span;
 use crate::{
     ast::node::types::StructDefNode,
@@ -25,8 +23,20 @@ use super::*;
     myname2: int;
 }"
 )]
+#[test_parser(
+    "pub struct mystruct<A|B|C> {
+    myname: int;//123
+    myname2: int;
+}"
+)]
 #[test_parser_error(
     "structmystruct<A|B|C> {
+    myname: int;//123
+    myname2: int;
+}"
+)]
+#[test_parser_error(
+    "pubstruct mystruct<A|B|C> {
     myname: int;//123
     myname2: int;
 }"
@@ -35,28 +45,28 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((
             many0(del_newline_or_space!(comment)),
-            tag_token_word(TokenType::STRUCT),
+            modifiable(tag_token_word(TokenType::STRUCT), TokenType::PUB),
             identifier,
             opt(generic_type_def),
             del_newline_or_space!(tag_token_symbol(TokenType::LBRACE)),
             many0(tuple((
-                del_newline_or_space!(typed_identifier),
+                del_newline_or_space!(modifiable(typed_identifier, TokenType::PUB)),
                 opt(tag_token_symbol(TokenType::SEMI)),
                 opt(comment),
             ))),
             del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
         )),
-        |(doc, (_, start), id, generics, _, fields, (_, end))| {
+        |(doc, (modifier, (_, start)), id, generics, _, fields, (_, end))| {
             let range = start.start.to(end.end);
             let mut fieldlist = vec![];
             for mut f in fields {
-                f.0.doc = None;
+                f.0 .1.doc = None;
                 if let Some(c) = &f.2 {
                     if let NodeEnum::Comment(c) = *c.clone() {
-                        f.0.doc = Some(c);
+                        f.0 .1.doc = Some(c);
                     }
                 }
-                fieldlist.push((f.0.clone(), f.1.is_some()));
+                fieldlist.push((f.0 .1.clone(), f.1.is_some(), f.0 .0));
             }
             let mut docs = vec![];
             let mut precoms = vec![];
@@ -68,13 +78,14 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                     precoms.push(Box::new(NodeEnum::Comment(com)));
                 }
             }
-            Ok::<_, Error>(Box::new(TopLevel::StructDef(StructDefNode {
+            Ok::<_, ()>(Box::new(TopLevel::StructDef(StructDefNode {
                 precom: precoms,
                 doc: docs,
                 id,
                 fields: fieldlist,
                 range,
                 generics,
+                modifier,
             })))
         },
     )(input)
@@ -90,7 +101,7 @@ fn struct_init_field(input: Span) -> IResult<Span, Box<StructInitFieldNode>> {
         tuple((identifier, tag_token_symbol(TokenType::COLON), logic_exp,)),
         |(id, _, exp)| {
             let range = id.range.start.to(exp.range().end);
-            Ok::<_, Error>(Box::new(StructInitFieldNode {
+            Ok::<_, ()>(Box::new(StructInitFieldNode {
                 id: *id,
                 exp,
                 range,
@@ -137,14 +148,14 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
                             coms.push(f.1);
                         }
                         fields.push(rfield);
-                        Ok::<_, Error>((fields, coms))
+                        Ok::<_, ()>((fields, coms))
                     },
                 ),
                 map_res(opt(del_newline_or_space!(struct_init_field)), |field| {
                     if field.is_some() {
-                        Ok::<_, Error>((vec![field.unwrap()], vec![]))
+                        Ok::<_, ()>((vec![field.unwrap()], vec![]))
                     } else {
-                        Ok::<_, Error>((vec![], vec![]))
+                        Ok::<_, ()>((vec![], vec![]))
                     }
                 }),
             )),

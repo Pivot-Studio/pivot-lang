@@ -1,5 +1,3 @@
-use std::fmt::Error;
-
 use nom::{
     branch::alt,
     character::complete::{one_of, space0},
@@ -25,11 +23,11 @@ pub fn number(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let (input, _) = space0(input)?;
     let (re, value) = alt((
         map_res(float, |out| {
-            Ok::<Num, Error>(Num::FLOAT(out.fragment().parse::<f64>().unwrap()))
+            Ok::<Num, ()>(Num::FLOAT(out.fragment().parse::<f64>().unwrap()))
         }),
         map_res(decimal, |out| {
             // TODO:err tolerate
-            Ok::<Num, Error>(Num::INT(
+            Ok::<Num, ()>(Num::INT(
                 out.fragment().replace('_', "").parse::<u64>().unwrap(),
             ))
         }),

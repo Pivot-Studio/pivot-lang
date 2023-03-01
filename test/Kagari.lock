@@ -1,6 +1,6 @@
 [pl_test]
-name = 'pl_test'
+name = "pl_test"
 
 [pl_test.git]
-url = 'https://github.com/Pivot-Studio/pl_test.git'
-commit = 'edfd7c57de3ae178ea6f24d1a6ec1d1732b07d4c'
+url = "https://github.com/Pivot-Studio/pl_test.git"
+commit = "ffcf2de5b5301ece8aab3e5b89d8b99b6d17d8de"

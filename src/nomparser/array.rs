@@ -1,5 +1,3 @@
-use std::fmt::Error;
-
 use internal_macro::test_parser;
 use nom::{
     branch::alt,
@@ -58,9 +56,9 @@ pub fn array_element_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEn
         )),
         |(_, idx, (_, rr), com)| {
             if let Some(idx) = idx {
-                Ok::<_, Error>((ComplexOp::IndexOp(idx), com))
+                Ok::<_, ()>((ComplexOp::IndexOp(idx), com))
             } else {
-                Ok::<_, Error>((
+                Ok::<_, ()>((
                     ComplexOp::IndexOp(Box::new(NodeEnum::Err(ErrorNode {
                         msg: String::from("Nedded index for array element access"),
                         src: String::from("[]"),

@@ -1,41 +1,41 @@
 use core::panic;
-struct A {
+pub struct A {
     x: i64;
 }
 
-struct struct_father {
+pub struct struct_father {
     a: i64;
     b: i64;
     c: struct_child;
 }
 
-struct struct_child {
+pub struct struct_child {
     a: i64;
     b: [i64 * 1];
 }
 
-struct pointer_struct {
+pub struct pointer_struct {
     ptr2: **pointer_struct;
     ptr: *struct_child;
 }
 
-fn ret_astruct() A {
+pub fn ret_astruct() A {
     return A{
         x: 10000
     };
 }
 
-fn ret_arr() [i64 * 3] {
+pub fn ret_arr() [i64 * 3] {
     return [1, 10000, 3];
 }
 
-fn ret_struct() struct_child {
+pub fn ret_struct() struct_child {
     return struct_child{
         a: 10
     };
 }
 
-fn dangling() *pointer_struct {
+pub fn dangling() *pointer_struct {
     let a = pointer_struct{
         ptr: &struct_child{
             a: 10
@@ -44,12 +44,12 @@ fn dangling() *pointer_struct {
     return &a;
 }
 
-fn test_ret_struct() void {
+pub fn test_ret_struct() void {
     panic::assert(ret_struct().a == 10);
     return;
 }
 
-fn test_struct_father() void {
+pub fn test_struct_father() void {
     let s = struct_father{
         a: 2,
         b: 2,
@@ -64,7 +64,7 @@ fn test_struct_father() void {
     return;
 }
 
-fn test_self_ref() void {
+pub fn test_self_ref() void {
     let a = pointer_struct{
         ptr2: &&pointer_struct{
             ptr2: &&pointer_struct{
@@ -78,13 +78,13 @@ fn test_self_ref() void {
     return;
 }
 
-fn test_dangling() void {
+pub fn test_dangling() void {
     let x = dangling();
     panic::assert(x.ptr.a == 10);
     return;
 }
 
-fn test_ret_struct_arr() void {
+pub fn test_ret_struct_arr() void {
     let s = ret_astruct().x;
     panic::assert(s == 10000);
     let a = ret_arr()[1];
@@ -92,7 +92,7 @@ fn test_ret_struct_arr() void {
     return;
 }
 
-fn test_struct() void {
+pub fn test_struct() void {
     test_ret_struct();
     test_dangling();
     test_self_ref();

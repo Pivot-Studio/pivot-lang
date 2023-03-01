@@ -3,12 +3,9 @@ use super::*;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::PriType;
-use internal_macro::{comments, fmt, range};
+use internal_macro::node;
 
-#[range]
-#[fmt]
-#[comments]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node(comment)]
 pub struct IfNode {
     pub cond: Box<NodeEnum>,
     pub then: Box<StatementsNode>,
@@ -90,10 +87,7 @@ impl Node for IfNode {
     // ANCHOR_END: emit
 }
 
-#[range]
-#[fmt]
-#[comments]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node(comment)]
 pub struct WhileNode {
     pub cond: Box<NodeEnum>,
     pub body: Box<StatementsNode>,
@@ -150,10 +144,7 @@ impl Node for WhileNode {
     }
 }
 
-#[range]
-#[fmt]
-#[comments]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node(comment)]
 pub struct ForNode {
     pub pre: Option<Box<NodeEnum>>,
     pub cond: Box<NodeEnum>,
@@ -234,10 +225,7 @@ impl Node for ForNode {
     }
 }
 
-#[range]
-#[comments]
-#[fmt]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node(comment)]
 pub struct BreakNode {}
 
 impl PrintTrait for BreakNode {
@@ -266,10 +254,7 @@ impl Node for BreakNode {
     }
 }
 
-#[range]
-#[fmt]
-#[comments]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[node(comment)]
 pub struct ContinueNode {}
 
 impl PrintTrait for ContinueNode {

@@ -18,11 +18,13 @@ use super::pltype::PLType;
 use super::pltype::STType;
 use super::range::Pos;
 use super::range::Range;
+use super::tokens::TokenType;
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::lsp::semantic_tokens::type_index;
 
+use crate::skip_if_not_modified_by;
 use crate::utils::read_config::Config;
 use crate::Db;
 
@@ -584,8 +586,12 @@ impl<'a, 'ctx> Ctx<'a> {
                 let mut insert_text = None;
                 let mut command = None;
                 let tp = match &*v.clone().borrow() {
-                    PLType::STRUCT(_) => CompletionItemKind::STRUCT,
+                    PLType::STRUCT(s) => {
+                        skip_if_not_modified_by!(s.modifier, TokenType::PUB);
+                        CompletionItemKind::STRUCT
+                    }
                     PLType::FN(f) => {
+                        skip_if_not_modified_by!(f.modifier, TokenType::PUB);
                         insert_text = Some(f.gen_snippet());
                         command = Some(Command::new(
                             "trigger help".to_string(),
@@ -761,7 +767,7 @@ impl<'a, 'ctx> Ctx<'a> {
             "if", "else", "while", "for", "return", "struct", "let", "true", "false",
         ];
         let loopkeys = vec!["break", "continue"];
-        let toplevel = vec!["fn", "struct", "const", "use", "impl", "trait"];
+        let toplevel = vec!["fn", "struct", "const", "use", "impl", "trait", "pub"];
         if self.father.is_none() {
             for k in toplevel {
                 vmap.insert(
