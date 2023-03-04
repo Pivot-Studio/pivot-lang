@@ -377,12 +377,12 @@ impl Node for StructDefNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.emit_comment_highlight(&self.precom);
         ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
         if let Some(generics) = &mut self.generics {
-            generics.emit(ctx, builder)?;
+            generics.emit_highlight(ctx);
         }
         for (field, has_semi, _) in self.fields.iter() {
             ctx.push_semantic_token(field.id.range, SemanticTokenType::PROPERTY, 0);
@@ -755,10 +755,9 @@ impl PrintTrait for GenericDefNode {
 impl Node for GenericDefNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
-        ctx: &'b mut Ctx<'a>,
+        _ctx: &'b mut Ctx<'a>,
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        self.emit_highlight(ctx);
         Ok((None, None, TerminatorEnum::NONE))
     }
 }
