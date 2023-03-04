@@ -9,6 +9,7 @@ use super::{
         global::GlobalNode,
         implement::ImplNode,
         interface::TraitDefNode,
+        macro_nodes::{MacroLoopStatementNode, MacroNode, MacroRuleNode},
         operator::{BinOpNode, TakeOpNode, UnaryOpNode},
         pkg::{ExternIdNode, UseNode},
         pointer::{PointerOpEnum, PointerOpNode},
@@ -600,4 +601,7 @@ impl FmtBuilder {
         // 顶层节点加空格
         self.enter();
     }
+    pub fn parse_macro_node(&mut self, _node: &MacroNode) {}
+    pub fn parse_macro_loop_statement_node(&mut self, _node: &MacroLoopStatementNode) {}
+    pub fn parse_macro_rule_node(&mut self, _node: &MacroRuleNode) {}
 }

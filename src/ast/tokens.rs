@@ -78,7 +78,15 @@ define_tokens!(
     TRUE = "true",
     FALSE = "false",
     TRAIT = "trait",
-    PUB = "pub"
+    PUB = "pub",
+    DOLLAR = "$",
+    MACRO_TYPE_ID = "@id",
+    MACRO_TYPE_STR = "@str",
+    MACRO_TYPE_EXPR = "@expr",
+    MACRO_TYPE_STMT = "@stmt",
+    MACRO_TYPE_STMTS = "@stmts",
+    MACRO = "macro",
+    ARROW = "=>",
 );
 
 impl TokenType {

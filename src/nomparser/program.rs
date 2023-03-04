@@ -21,7 +21,7 @@ use crate::{
     ast::{node::types::TypedIdentifierNode, tokens::TokenType},
 };
 
-use super::{implement::impl_def, *};
+use super::{implement::impl_def, macro_parse::macro_parser, *};
 
 pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let old = input;
@@ -121,6 +121,7 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
         del_newline_or_space!(function_def),
         del_newline_or_space!(struct_def),
         del_newline_or_space!(impl_def),
+        del_newline_or_space!(macro_parser),
         map_res(
             del_newline_or_space!(semi_statement!(global_variable)),
             |node| {

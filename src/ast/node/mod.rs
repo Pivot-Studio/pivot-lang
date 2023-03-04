@@ -17,6 +17,8 @@ use self::function::*;
 use self::global::*;
 use self::implement::ImplNode;
 use self::interface::TraitDefNode;
+use self::macro_nodes::MacroLoopStatementNode;
+use self::macro_nodes::MacroNode;
 use self::operator::*;
 use self::pkg::{ExternIdNode, UseNode};
 use self::pointer::PointerOpNode;
@@ -40,6 +42,7 @@ pub mod function;
 pub mod global;
 pub mod implement;
 pub mod interface;
+pub mod macro_nodes;
 pub mod operator;
 pub mod pkg;
 pub mod pointer;
@@ -139,6 +142,8 @@ pub enum NodeEnum {
     ImplNode(ImplNode),
     StringNode(StringNode),
     TraitDefNode(TraitDefNode),
+    MacroLoopStatementNode(MacroLoopStatementNode),
+    MacroNode(MacroNode),
 }
 // ANCHOR: range
 #[enum_dispatch]
