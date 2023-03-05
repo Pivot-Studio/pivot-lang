@@ -569,7 +569,7 @@ impl FNType {
         let f = self.clone();
         if let Some(n) = &mut self.node {
             builder.rm_curr_debug_location();
-            n.gen_fntype(ctx, false, builder, Some(f))?;
+            n.gen_fntype(ctx, false, builder, f)?;
         } else {
             unreachable!()
         }

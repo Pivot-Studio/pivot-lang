@@ -37,11 +37,11 @@ impl Node for TraitDefNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.id.range, SemanticTokenType::INTERFACE, 0);
         for g in &mut self.generics {
-            g.emit(ctx, builder)?;
+            g.emit_highlight(ctx);
         }
         for de in &self.derives {
             de.emit_highlight(ctx);
