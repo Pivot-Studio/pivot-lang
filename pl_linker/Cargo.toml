@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 lld_rs = { version = "140.0.0", default-features = false, git="https://github.com/Pivot-Studio/lld-rs.git", branch="main" }
-thiserror = "1.0.38"
+thiserror = "1.0.39"
 mun_target = { git="https://github.com/mun-lang/mun.git" }
 once_cell = { version = "1.4.0" }
 parking_lot = { version = "0.12.0", default-features = false }
