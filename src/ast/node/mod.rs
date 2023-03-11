@@ -17,6 +17,7 @@ use self::function::*;
 use self::global::*;
 use self::implement::ImplNode;
 use self::interface::TraitDefNode;
+use self::macro_nodes::MacroCallNode;
 use self::macro_nodes::MacroLoopStatementNode;
 use self::macro_nodes::MacroNode;
 use self::operator::*;
@@ -144,6 +145,7 @@ pub enum NodeEnum {
     TraitDefNode(TraitDefNode),
     MacroLoopStatementNode(MacroLoopStatementNode),
     MacroNode(MacroNode),
+    MacroCallNode(MacroCallNode),
 }
 // ANCHOR: range
 #[enum_dispatch]

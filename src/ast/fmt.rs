@@ -9,7 +9,7 @@ use super::{
         global::GlobalNode,
         implement::ImplNode,
         interface::TraitDefNode,
-        macro_nodes::{MacroLoopStatementNode, MacroNode, MacroRuleNode},
+        macro_nodes::{MacroCallNode, MacroLoopStatementNode, MacroNode, MacroRuleNode},
         operator::{BinOpNode, TakeOpNode, UnaryOpNode},
         pkg::{ExternIdNode, UseNode},
         pointer::{PointerOpEnum, PointerOpNode},
@@ -604,4 +604,5 @@ impl FmtBuilder {
     pub fn parse_macro_node(&mut self, _node: &MacroNode) {}
     pub fn parse_macro_loop_statement_node(&mut self, _node: &MacroLoopStatementNode) {}
     pub fn parse_macro_rule_node(&mut self, _node: &MacroRuleNode) {}
+    pub fn parse_macro_call_node(&mut self, _node: &MacroCallNode) {}
 }

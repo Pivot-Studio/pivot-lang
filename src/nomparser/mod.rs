@@ -85,9 +85,6 @@ pub struct SourceProgram {
     #[return_ref]
     pub path: String,
 }
-macro_rules! nothing {
-    ($($fmt:ident,+1dasda,)* / $a:expr) => {};
-}
 
 // ANCHOR: parse
 #[salsa::tracked]
@@ -97,7 +94,6 @@ pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, S
     if let Err(e) = re {
         return Err(format!("{:?}", e));
     }
-    nothing!(re , + 1dasda , re,+ 1dasda, / re);
     let (_, node) = re.unwrap();
     log::info!("parse {:?}", source.path(db));
 

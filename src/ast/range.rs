@@ -55,6 +55,13 @@ impl Pos {
             offset: 0,
         }
     }
+    pub fn from_span(span: &Span) -> Self {
+        Self {
+            line: span.location_line() as usize,
+            column: span.get_utf8_column(),
+            offset: span.location_offset(),
+        }
+    }
 }
 
 #[cfg(test)]

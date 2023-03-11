@@ -6,7 +6,6 @@ use nom::{
     IResult,
 };
 
-use crate::nomparser::Span;
 use crate::{
     ast::node::function::FuncCallNode,
     ast::{
@@ -14,9 +13,10 @@ use crate::{
         tokens::TokenType,
     },
 };
+use crate::{ast::node::macro_nodes::MacroCallNode, nomparser::Span};
 use internal_macro::{test_parser, test_parser_error};
 
-use super::{string_literal::string_literal, *};
+use super::{macro_parse::macro_call_op, string_literal::string_literal, *};
 
 #[test_parser("a&&b")]
 #[test_parser("a||b")]
@@ -115,6 +115,20 @@ pub fn pointer_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     )(input)
 }
 
+#[test_parser("adasda::c!(saddsada)")]
+fn macro_call_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    map_res(pair(extern_identifier, macro_call_op), |(name, op)| {
+        res_enum(
+            MacroCallNode {
+                range: name.range(),
+                callee: name,
+                args: op.to_string(),
+            }
+            .into(),
+        )
+    })(input)
+}
+
 /// ```ebnf
 /// complex_exp = primary_exp (take_exp_op|array_element_op|call_function_exp_op)*;
 /// ```
@@ -199,6 +213,7 @@ fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 array_init,
                 extern_identifier,
                 string_literal,
+                macro_call_exp,
             )),
             many0(comment),
         )),

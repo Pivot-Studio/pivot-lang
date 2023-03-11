@@ -3,7 +3,7 @@ use nom::{
     bytes::complete::{is_a, tag},
     combinator::{map_res, recognize},
     multi::{many0, many1},
-    sequence::{delimited, tuple},
+    sequence::{delimited, preceded, tuple},
     IResult,
 };
 
@@ -14,7 +14,7 @@ use crate::{
     nomparser::Span,
 };
 use crate::{ast::range::Range, ast::tokens::TokenType};
-use internal_macro::test_parser;
+use internal_macro::{test_parser, test_parser_error};
 
 use super::*;
 
@@ -181,4 +181,43 @@ fn macro_rule_parser(origin: Span) -> IResult<Span, MacroRuleNode> {
             body,
         },
     ))
+}
+
+#[test_parser(r#"!(a, b, c)"#)]
+#[test_parser(r#"!(a, (b) %@, c)"#)]
+#[test_parser_error(r#"!(a, (b %@, c)"#)]
+pub fn macro_call_op(origin: Span) -> IResult<Span, Span> {
+    preceded(
+        tag_token(TokenType::NOT),
+        delimited(
+            tag_token(TokenType::LPAREN),
+            recognize(many0(any_exp_with_parens)),
+            tag_token(TokenType::RPAREN),
+        ),
+    )(origin)
+}
+
+macro_rules! any_symbol {
+    () => {
+        alt((
+            recognize(many1(is_a(
+                "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_ ",
+            ))),
+            recognize(is_a(",=|-;&^%#@!<>[]{}\\/~`.*+?")),
+        ))
+    };
+}
+
+fn any_exp_with_parens(origin: Span) -> IResult<Span, String> {
+    alt((
+        map_res(
+            recognize(delimited(
+                tag_token(TokenType::LPAREN),
+                any_symbol!(),
+                tag_token(TokenType::RPAREN),
+            )),
+            |exp| Ok::<_, ()>(exp.to_string()),
+        ),
+        map_res(any_symbol!(), |exp: Span| Ok::<_, ()>(exp.to_string())),
+    ))(origin)
 }

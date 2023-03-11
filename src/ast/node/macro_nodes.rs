@@ -81,3 +81,28 @@ impl Node for MacroLoopStatementNode {
         Ok((None, None, TerminatorEnum::NONE))
     }
 }
+
+#[node]
+pub struct MacroCallNode {
+    pub args: String,
+    pub callee: Box<NodeEnum>,
+}
+
+impl PrintTrait for MacroCallNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("MacroCallNode");
+        self.callee.print(tabs + 1, false, line.clone());
+    }
+}
+
+impl Node for MacroCallNode {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> NodeResult {
+        Ok((None, None, TerminatorEnum::NONE))
+    }
+}
