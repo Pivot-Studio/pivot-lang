@@ -81,6 +81,7 @@ pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
 /// | newline
 /// ;
 /// ```
+#[test_parser("test!(a);")]
 pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
         semi_statement!(new_variable),

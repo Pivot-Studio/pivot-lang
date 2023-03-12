@@ -163,7 +163,9 @@ pub fn macro_parser(origin: Span) -> IResult<Span, Box<TopLevel>> {
 }
 
 fn macro_rule_parser(origin: Span) -> IResult<Span, MacroRuleNode> {
-    let (input, match_exp) = macro_match_exp(origin)?;
+    let (input, _) = tag_token_symbol_ex(TokenType::LPAREN)(origin)?;
+    let (input, match_exp) = macro_match_exp(input)?;
+    let (input, _) = tag_token_symbol_ex(TokenType::RPAREN)(input)?;
     let (input, _) = tag_token_symbol_ex(TokenType::ARROW)(input)?;
     let (input, _) = tag_token_symbol_ex(TokenType::LBRACE)(input)?;
     let (input, body) = many0(del_newline_or_space!(alt((

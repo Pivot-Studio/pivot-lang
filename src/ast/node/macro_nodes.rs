@@ -1,6 +1,9 @@
 use internal_macro::node;
 
+use crate::ast::ctx::MacroReplaceNode;
 use crate::ast::{range::Range, tokens::TokenType};
+use crate::nomparser::identifier::identifier;
+use crate::nomparser::Span;
 
 use super::*;
 use super::{primary::VarNode, NodeEnum};
@@ -29,8 +32,9 @@ impl Node for MacroNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
+        ctx.plmod.add_macro(&self);
         Ok((None, None, TerminatorEnum::NONE))
     }
 }
@@ -43,11 +47,41 @@ pub enum MacroMatchExp {
     Looper((Vec<MacroMatchExp>, Range, TokenType)),
 }
 
+impl MacroMatchExp {
+    pub fn parse(&self, ctx: &mut Ctx, args: Span) {
+        match self {
+            MacroMatchExp::Parameter(p) => {
+                p.parse(ctx, args);
+            }
+            MacroMatchExp::RawTokens(_) => todo!(),
+            MacroMatchExp::Parantheses(_) => todo!(),
+            MacroMatchExp::Looper(_) => todo!(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MacroMatchParameter {
     pub id: VarNode,
     pub tp: (TokenType, Range),
     pub range: Range,
+}
+
+impl MacroMatchParameter {
+    pub fn parse(&self, ctx: &mut Ctx, args: Span) {
+        match self.tp.0 {
+            TokenType::MACRO_TYPE_ID => {
+                let node = identifier(args).unwrap().1;
+                ctx.macro_vars
+                    .insert(self.id.name.clone(), MacroReplaceNode::VarNode(*node));
+            }
+            TokenType::MACRO_TYPE_STR => todo!(),
+            TokenType::MACRO_TYPE_EXPR => todo!(),
+            TokenType::MACRO_TYPE_STMT => todo!(),
+            TokenType::MACRO_TYPE_STMTS => todo!(),
+            _ => todo!(),
+        }
+    }
 }
 
 #[node]
@@ -75,10 +109,11 @@ impl PrintTrait for MacroLoopStatementNode {
 impl Node for MacroLoopStatementNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
-        ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        _ctx: &'b mut Ctx<'a>,
+        _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        Ok((None, None, TerminatorEnum::NONE))
+        todo!()
+        // Ok((None, None, TerminatorEnum::NONE))
     }
 }
 
@@ -103,6 +138,18 @@ impl Node for MacroCallNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
+        match &*self.callee {
+            NodeEnum::ExternIdNode(ex_node) => {
+                let m = ex_node.get_macro(ctx)?;
+                m.rules[0].match_exp.parse(ctx, self.args.as_str().into());
+                for n in m.rules[0].body.clone().iter_mut() {
+                    n.emit(ctx, builder)?;
+                }
+            }
+            _ => panic!("MacroCallNode::emit: callee is not an extern id node"),
+        }
+
         Ok((None, None, TerminatorEnum::NONE))
+        // Ok((None, None, TerminatorEnum::NONE))
     }
 }

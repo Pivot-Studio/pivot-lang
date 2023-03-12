@@ -5,6 +5,7 @@ use super::*;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
+use crate::ast::ctx::MacroReplaceNode;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{PLType, PriType};
 use crate::plv;
@@ -115,11 +116,35 @@ impl VarNode {
         tab(tabs, line.clone(), end);
         println!("VarNode: {}", self.name);
     }
+    fn is_macro_var(&self) -> bool {
+        self.name.starts_with("$")
+    }
+    pub fn get_name(&self, ctx: &Ctx) -> String {
+        if self.is_macro_var() {
+            let re = ctx.macro_vars.get(&self.name[1..]).unwrap();
+            if let MacroReplaceNode::VarNode(v) = re {
+                return v.name.clone();
+            } else {
+                todo!()
+            }
+        } else {
+            self.name.clone()
+        }
+    }
+
     pub fn emit<'a, 'ctx, 'b>(
         &self,
         ctx: &'b Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
+        if self.is_macro_var() {
+            let re = ctx.macro_vars.get(&self.name[1..]).unwrap();
+            if let MacroReplaceNode::VarNode(v) = re {
+                return v.emit(ctx, builder);
+            } else {
+                todo!()
+            }
+        }
         ctx.if_completion(self.range, || ctx.get_completions());
         let v = ctx.get_symbol(&self.name, builder);
         if let Some((v, pltype, dst, refs, is_const)) = v {
@@ -156,6 +181,14 @@ impl VarNode {
         Err(ctx.add_diag(self.range.new_err(ErrorCode::VAR_NOT_FOUND)))
     }
     pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a>) -> NodeResult {
+        if self.is_macro_var() {
+            let re = ctx.macro_vars.get(&self.name[1..]).unwrap();
+            if let MacroReplaceNode::VarNode(v) = re {
+                return v.get_type(ctx);
+            } else {
+                todo!()
+            }
+        }
         ctx.if_completion(self.range, || ctx.get_completions());
 
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {

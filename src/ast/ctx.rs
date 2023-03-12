@@ -3,6 +3,8 @@ use super::builder::ValueHandle;
 use super::diag::ErrorCode;
 use super::diag::PLDiag;
 
+use super::node::macro_nodes::MacroNode;
+use super::node::primary::VarNode;
 use super::node::NodeEnum;
 use super::node::PLValue;
 use super::plmod::CompletionItemWrapper;
@@ -81,6 +83,13 @@ pub struct Ctx<'a> {
     pub config: Config,                                           // config
     pub db: &'a dyn Db,
     pub rettp: Option<Arc<RefCell<PLType>>>,
+    pub macro_vars: FxHashMap<String, MacroReplaceNode>,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub enum MacroReplaceNode {
+    NodeEnum(NodeEnum),
+    VarNode(VarNode),
 }
 
 impl<'a, 'ctx> Ctx<'a> {
@@ -116,6 +125,7 @@ impl<'a, 'ctx> Ctx<'a> {
             return_block: None,
             roots: RefCell::new(Vec::new()),
             rettp: None,
+            macro_vars: FxHashMap::default(),
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -139,6 +149,7 @@ impl<'a, 'ctx> Ctx<'a> {
             rettp: self.rettp.clone(),
             init_func: self.init_func,
             function: self.function,
+            macro_vars: FxHashMap::default(),
         };
         add_primitive_types(&mut ctx);
         builder.new_subscope(start);
@@ -870,5 +881,15 @@ impl<'a, 'ctx> Ctx<'a> {
             }
         }
         tp
+    }
+
+    pub fn get_macro(&self, name: &str) -> Option<Arc<MacroNode>> {
+        if let Some(m) = self.plmod.macros.get(name) {
+            return Some(m.clone());
+        }
+        if let Some(father) = &self.father {
+            return father.get_macro(name);
+        }
+        None
     }
 }

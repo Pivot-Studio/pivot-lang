@@ -1,8 +1,8 @@
 #[macro_export]
 macro_rules! if_not_modified_by {
     ($entity:expr, $modifier:expr, $logic:stmt) => {
-        if let Some((t, _)) = $entity {
-            if t != $modifier {
+        if let Some((tt, _)) = $entity {
+            if tt != $modifier {
                 $logic
             }
         } else {

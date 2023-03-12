@@ -1,6 +1,8 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use crate::ast::builder::BuilderEnum;
+use crate::ast::diag::PLDiag;
 use crate::ast::plmod::get_ns_path_completions;
 use crate::{
     ast::{
@@ -14,6 +16,7 @@ use crate::{
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
 
+use super::macro_nodes::MacroNode;
 use super::PrintTrait;
 use super::{primary::VarNode, Node, NodeResult, PLValue, TerminatorEnum};
 #[node]
@@ -46,7 +49,7 @@ impl Node for UseNode {
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let mut path = PathBuf::from(&ctx.config.root);
-        let head = self.ids[0].name.clone();
+        let head = self.ids[0].get_name(ctx).clone();
         if !self.ids.is_empty() {
             // head is project name or deps name
             let dep = ctx.config.deps.as_ref().unwrap().get(&head);
@@ -56,7 +59,7 @@ impl Node for UseNode {
                     path = path.join(&dep.unwrap().path);
                 }
                 for i in 1..self.ids.len() {
-                    path = path.join(&self.ids[i].name);
+                    path = path.join(&self.ids[i].get_name(ctx));
                 }
             }
         }
@@ -141,7 +144,7 @@ impl Node for ExternIdNode {
                 if self.singlecolon {
                     return vec![];
                 }
-                ctx.get_completions_in_ns(&self.id.name)
+                ctx.get_completions_in_ns(&self.id.get_name(ctx))
                 // eprintln!("comp {:?}", completions);
             });
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION)));
@@ -151,21 +154,21 @@ impl Node for ExternIdNode {
         }
         let mut plmod = &ctx.plmod;
         for ns in self.ns.iter() {
-            let re = plmod.submods.get(&ns.name);
+            let re = plmod.submods.get(&ns.get_name(ctx));
             if let Some(re) = re {
                 plmod = re;
             } else {
                 return Err(ctx.add_diag(ns.range.new_err(ErrorCode::UNRESOLVED_MODULE)));
             }
         }
-        if let Some(symbol) = plmod.get_global_symbol(&self.id.name) {
+        if let Some(symbol) = plmod.get_global_symbol(&self.id.get_name(ctx)) {
             ctx.push_semantic_token(self.id.range, SemanticTokenType::VARIABLE, 0);
             let pltype = symbol.tp.clone();
-            ctx.set_glob_refs(&plmod.get_full_name(&self.id.name), self.id.range);
+            ctx.set_glob_refs(&plmod.get_full_name(&self.id.get_name(ctx)), self.id.range);
             // ctx.set_if_refs(symbol.loc.clone(), self.range);
             ctx.send_if_go_to_def(self.range, symbol.range, plmod.path.clone());
             let g = ctx.get_or_add_global(
-                &plmod.get_full_name(&self.id.name),
+                &plmod.get_full_name(&self.id.get_name(ctx)),
                 symbol.tp.clone(),
                 builder,
             );
@@ -179,7 +182,7 @@ impl Node for ExternIdNode {
                 TerminatorEnum::NONE,
             ));
         }
-        if let Some(tp) = plmod.get_type(&self.id.name) {
+        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx)) {
             let range = &tp.borrow().get_range();
             let re = match &*tp.clone().borrow() {
                 PLType::FN(_) => {
@@ -214,20 +217,20 @@ impl ExternIdNode {
                 if self.singlecolon {
                     return vec![];
                 }
-                ctx.get_completions_in_ns(&self.id.name)
+                ctx.get_completions_in_ns(&self.id.get_name(ctx))
             });
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION)));
         }
         let mut plmod = &ctx.plmod;
         for ns in self.ns.iter() {
-            let re = plmod.submods.get(&ns.name);
+            let re = plmod.submods.get(&ns.get_name(ctx));
             if let Some(re) = re {
                 plmod = re;
             } else {
                 return Err(ctx.add_diag(ns.range.new_err(ErrorCode::UNRESOLVED_MODULE)));
             }
         }
-        if let Some(tp) = plmod.get_type(&self.id.name) {
+        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx)) {
             // 必须是public的
             _ = tp.borrow().expect_pub(ctx, self.range);
             let re = match *tp.clone().borrow() {
@@ -237,5 +240,28 @@ impl ExternIdNode {
             return re;
         }
         Err(ctx.add_diag(self.range.new_err(ErrorCode::SYMBOL_NOT_FOUND)))
+    }
+
+    pub fn get_macro<'a, 'ctx>(&'a self, ctx: &Ctx<'a>) -> Result<Arc<MacroNode>, PLDiag> {
+        if self.ns.is_empty() {
+            // 如果该节点只有一个id，且完整，那么就是一个普通的包内符号，直接调用idnode
+            if let Some(m) = ctx.get_macro(&self.id.get_name(ctx)) {
+                return Ok(m.clone());
+            }
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::MACRO_NOT_FOUND)));
+        }
+        let mut plmod = &ctx.plmod;
+        for ns in self.ns.iter() {
+            let re = plmod.submods.get(&ns.get_name(ctx));
+            if let Some(re) = re {
+                plmod = re;
+            } else {
+                return Err(ctx.add_diag(ns.range.new_err(ErrorCode::UNRESOLVED_MODULE)));
+            }
+        }
+        if let Some(m) = plmod.macros.get(&self.id.get_name(ctx)) {
+            return Ok(m.clone());
+        }
+        Err(ctx.add_diag(self.range.new_err(ErrorCode::MACRO_NOT_FOUND)))
     }
 }

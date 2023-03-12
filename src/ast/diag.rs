@@ -25,6 +25,11 @@ macro_rules! define_error {
             };
         }
     };
+    ($(
+        $ident:ident = $string_keyword:expr
+    ),*,) => {
+        define_error!($($ident = $string_keyword),*);
+    };
 }
 define_error!(
     SYNTAX_ERROR_STATEMENT = "failed to parse statement",
@@ -92,7 +97,8 @@ define_error!(
     EXPECT_PUBLIC_STRUCT = "expect public struct",
     EXPECT_PUBLIC_TRAIT = "expect public trait",
     EXPECT_PUBLIC_FIELD = "expect public field",
-    TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER = "trait method shall not have modifier"
+    TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER = "trait method shall not have modifier",
+    MACRO_NOT_FOUND = "macro not found",
 );
 macro_rules! define_warn {
     ($(
