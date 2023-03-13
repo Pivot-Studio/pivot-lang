@@ -89,13 +89,7 @@ impl TraitDefNode {
             // add generic type before field add type
             if let Some(generics) = &mut self.generics {
                 let generic_map = generics.gen_generic_type();
-                for (name, pltype) in generic_map.iter() {
-                    ctx.add_generic_type(
-                        name.clone(),
-                        pltype.clone(),
-                        pltype.clone().borrow().get_range().unwrap(),
-                    );
-                }
+                ctx.add_generic_types(&generic_map);
             }
             let mut derives = vec![];
             for de in &self.derives {

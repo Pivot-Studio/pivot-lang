@@ -126,7 +126,7 @@ impl Node for FuncCallNode {
             }
             // value check and generic infer
             ctx.run_in_fn_mod_mut(&mut fntype, |ctx, fntype| {
-                fntype.add_generic_type(ctx)?;
+                ctx.add_generic_types(&fntype.generic_map);
                 for (i, (value_pltype, pararange)) in value_pltypes.iter().enumerate() {
                     if !fntype.param_pltypes[i + skip as usize]
                         .clone()
@@ -216,13 +216,7 @@ impl TypeNode for FuncDefNode {
             if let Some(generics) = &self.generics {
                 generic_map = generics.gen_generic_type();
             }
-            for (name, pltype) in generic_map.iter() {
-                ctx.add_generic_type(
-                    name.clone(),
-                    pltype.clone(),
-                    pltype.clone().borrow().get_range().unwrap(),
-                );
-            }
+            ctx.add_generic_types(&generic_map);
             for para in self.paralist.iter() {
                 let paramtype = para.typenode.get_type(ctx, builder)?;
                 ctx.set_if_refs_tp(paramtype.clone(), para.typenode.range());
@@ -343,7 +337,7 @@ impl FuncDefNode {
     ) -> Result<(), PLDiag> {
         let child = &mut ctx.new_child(self.range.start, builder);
         return child.protect_generic_context(|child| {
-            fntype.add_generic_type(child)?;
+            child.add_generic_types(&fntype.generic_map);
             if first && fntype.generic {
                 fntype
                     .generic_map

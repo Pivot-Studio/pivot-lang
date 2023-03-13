@@ -28,6 +28,7 @@ use crate::skip_if_not_modified_by;
 use crate::utils::read_config::Config;
 use crate::Db;
 
+use indexmap::IndexMap;
 use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
@@ -323,9 +324,19 @@ impl<'a, 'ctx> Ctx<'a> {
         let name = pltype.borrow().get_name();
         self.plmod.types.insert(name, pltype);
     }
-    pub fn add_generic_type(&mut self, name: String, pltype: Arc<RefCell<PLType>>, range: Range) {
+    #[inline]
+    fn add_generic_type(&mut self, name: String, pltype: Arc<RefCell<PLType>>, range: Range) {
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
         self.generic_types.insert(name, pltype);
+    }
+    pub fn add_generic_types(&mut self, generic_map: &IndexMap<String, Arc<RefCell<PLType>>>) {
+        for (name, pltype) in generic_map.iter() {
+            self.add_generic_type(
+                name.clone(),
+                pltype.clone(),
+                pltype.clone().borrow().get_range().unwrap(),
+            );
+        }
     }
     pub fn add_doc_symbols(&mut self, pltype: Arc<RefCell<PLType>>) {
         match &*RefCell::borrow(&pltype) {

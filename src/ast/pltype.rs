@@ -357,18 +357,18 @@ impl PLType {
                 );
                 Ok(())
             }
-            PLType::TRAIT(t) => {
-                if t.path == ctx.plmod.path {
+            PLType::TRAIT(st) => {
+                if st.path == ctx.plmod.path {
                     return Ok(());
                 }
                 if_not_modified_by!(
-                    t.modifier,
+                    st.modifier,
                     TokenType::PUB,
                     return expect_pub_err(
                         super::diag::ErrorCode::EXPECT_PUBLIC_TRAIT,
                         ctx,
                         range,
-                        t.name.clone()
+                        st.name.clone()
                     )
                 );
                 Ok(())
@@ -746,19 +746,16 @@ impl STType {
         get_hash_code(full_name)
     }
     pub fn append_name_with_generic(&self) -> String {
-        if self.need_gen_code() {
-            let typeinfer = self
-                .generic_map
-                .iter()
-                .map(|(_, v)| match &*v.clone().borrow() {
-                    PLType::GENERIC(g) => g.curpltype.as_ref().unwrap().borrow().get_name(),
-                    _ => unreachable!(),
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
-            return format!("{}<{}>", self.name, typeinfer);
-        }
-        unreachable!()
+        let typeinfer = self
+            .generic_map
+            .iter()
+            .map(|(_, v)| match &*v.clone().borrow() {
+                PLType::GENERIC(g) => g.curpltype.as_ref().unwrap().borrow().get_name(),
+                _ => unreachable!(),
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("{}<{}>", self.name, typeinfer)
     }
     pub fn gen_code<'a, 'ctx, 'b>(
         &self,

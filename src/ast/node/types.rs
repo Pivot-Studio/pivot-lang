@@ -136,14 +136,13 @@ impl TypeNode for TypeNameNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> TypeNodeResult {
         let mut pltype = self.get_origin_type_with_infer(ctx, builder)?;
-        if let Some(_) = &self.generic_params {
+        if self.generic_params.is_some() {
             let mut sttype = match &*pltype.borrow() {
                 PLType::STRUCT(s) => s.clone(),
                 _ => unreachable!(),
             };
             if sttype.need_gen_code() {
                 ctx.protect_generic_context(|ctx| {
-                    sttype.add_generic_type(ctx)?;
                     sttype = sttype.gen_code(ctx, builder);
                     Ok(())
                 })?;
@@ -162,43 +161,20 @@ impl TypeNode for TypeNameNode {
         right: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<bool, PLDiag> {
-        if let Some(generic_params) = &self.generic_params {
-            if self.id.is_none() {
-                return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_TYPE)));
-            }
-            let (_, left, _) = self.id.as_ref().unwrap().get_type(ctx)?;
-            let left = left.unwrap();
+        let left = self.get_origin_type_with_infer(ctx, builder)?;
+        if self.generic_params.is_some() {
             // name not match
             if left.borrow().get_name()
                 != right.borrow().get_name().split('<').collect::<Vec<_>>()[0]
             {
                 return Ok(false);
             }
-            if let (PLType::STRUCT(sttype), PLType::STRUCT(right)) =
-                (&mut *left.borrow_mut(), &*right.borrow())
+            if let (PLType::STRUCT(left), PLType::STRUCT(right)) =
+                (&*left.borrow(), &*right.borrow())
             {
                 return ctx.protect_generic_context(|ctx| {
-                    let generic_types = generic_params.get_generic_types(ctx, builder)?;
-                    sttype.clear_generic();
-                    sttype.add_generic_type(ctx)?;
-                    if generic_params.generics.len() != sttype.generic_map.len() {
-                        return Err(ctx.add_diag(
-                            generic_params
-                                .range
-                                .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
-                        ));
-                    }
-                    let mut i = 0;
-                    for (_, pltype) in sttype.generic_map.iter() {
-                        if generic_types[i].is_none()
-                            || !eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
-                        {
-                            return Err(ctx
-                                .add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER)));
-                        }
-                        i += 1;
-                    }
-                    for (k, leftfield) in sttype.fields.iter() {
+                    ctx.add_generic_types(&left.generic_map);
+                    for (k, leftfield) in left.fields.iter() {
                         let rightpltype = right
                             .fields
                             .get(k)
@@ -215,7 +191,7 @@ impl TypeNode for TypeNameNode {
             }
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::NOT_GENERIC_TYPE)));
         }
-        Ok(eq(self.get_type(ctx, builder)?, right))
+        Ok(eq(left, right))
     }
 }
 
@@ -445,13 +421,7 @@ impl StructDefNode {
             // add generic type before field add type
             if let Some(generics) = &mut self.generics {
                 let generic_map = generics.gen_generic_type();
-                for (name, pltype) in generic_map.iter() {
-                    ctx.add_generic_type(
-                        name.clone(),
-                        pltype.clone(),
-                        pltype.clone().borrow().get_range().unwrap(),
-                    );
-                }
+                ctx.add_generic_types(&generic_map);
             }
             let mut field_pltps = vec![];
             let pltype = ctx.get_type(self.id.name.as_str(), self.range)?;
@@ -590,7 +560,7 @@ impl Node for StructInitNode {
             let mut idx = 0;
             ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
             ctx.run_in_st_mod_mut(&mut sttype, |ctx, sttype| {
-                sttype.add_generic_type(ctx)?;
+                ctx.add_generic_types(&sttype.generic_map);
                 for fieldinit in self.fields.iter_mut() {
                     let field_id_range = fieldinit.id.range;
                     let field_exp_range = fieldinit.exp.range();
