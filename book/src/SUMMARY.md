@@ -12,11 +12,10 @@
   - [Module](./references/module.md)
   - [Method](./references/method.md)
   - [Trait](./references/interface.md)
-  - [Immix Gc](./references/immix.md)
-  - [Stack Map](./references/stackmap.md)
 
 # How the project works internally
 
+- [Dev Prepare](./dev-prepare.md)
 - [Compiler](./compiler/README.md)
   - [Parser](./compiler/parser.md)
   - [AST](./compiler/ast.md)
@@ -27,6 +26,8 @@
 - [System library](./systemlib/README.md)
   - [vm](./systemlib/vm.md)
     - [gc](./systemlib/gc.md)
+      - [Immix Gc](./systemlib/immix.md)
+      - [Stack Map](./systemlib/stackmap.md)
   - [planglib](./systemlib/planglib.md)
 
 # CONTRIBUTING

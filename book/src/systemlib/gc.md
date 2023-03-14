@@ -33,12 +33,6 @@ immix gc是一种mark region算法，它是一个精确的gc算法。但是请�
 immix gc的实现代码在[这里](https://github.com/Pivot-Studio/pivot-lang/blob/master/immix)。它是天生支持多线程使用的，但是我们的pivot-lang目前还不支持多线程。  
 
 
-### 目前存在的一些问题
-
-!!!NEED HELP!!!
-
-似乎在windows上性能明显差于linux和mac，但是说实话我并不是这方面的专家，如果有大佬了解这方面欢迎帮我吗优化。
-
 ## Benchmark
 
 我们对两种gc算法进行了一些基准测试，事实证明immix gc的回收性能要比simple gc __快近20倍__。如果你对这些测试感兴趣，可以在项目根目录运行`make bench`查看immix的benchmark，或者运行`make bench-simple-gc`查看simple gc的benchmark。  
