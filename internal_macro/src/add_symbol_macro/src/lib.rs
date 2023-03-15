@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use quote::{__private::Literal, format_ident, quote};
+use quote::{format_ident, quote};
 use syn::{
     self,
     parse::{Parse, ParseStream},
@@ -55,7 +55,7 @@ pub fn is_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
             if let AcceptAttrInput::None = arg.input {
                 str1 = input.sig.ident.to_string();
             } else if let AcceptAttrInput::Literal(arg) = arg.input {
-                str1 = arg.to_string();
+                str1 = arg.token().to_string();
                 str1.pop();
                 str1 = str1[1..].to_string();
             } else {
@@ -90,13 +90,13 @@ struct AttrInput {
 
 #[derive(Debug, Clone)]
 enum AcceptAttrInput {
-    Literal(Literal),
+    Literal(syn::LitStr),
     None,
 }
 
 impl Parse for AttrInput {
     fn parse(input: ParseStream) -> Result<Self, syn::Error> {
-        let f = input.parse::<Literal>();
+        let f = input.parse::<syn::LitStr>();
         if let Ok(f) = f {
             return Ok(AttrInput {
                 input: AcceptAttrInput::Literal(f),
@@ -147,7 +147,7 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
     if let AcceptAttrInput::None = arg {
         tp = ident.to_string();
     } else if let AcceptAttrInput::Literal(arg) = arg {
-        tp = arg.to_string();
+        tp = arg.token().to_string();
         tp.pop();
         tp = tp[1..].to_string();
     } else {
