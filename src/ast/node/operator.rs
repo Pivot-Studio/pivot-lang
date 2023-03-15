@@ -344,10 +344,12 @@ impl Node for TakeOpNode {
                                 ctx.push_semantic_token(range, SemanticTokenType::METHOD, 0);
                                 let mut mthd = mthd;
                                 if let PLType::POINTER(_) = &*pltype.clone().borrow() {
-                                    mthd.param_pltypes
+                                    mthd.fntype
+                                        .param_pltypes
                                         .insert(0, pltype.borrow().get_typenode(ctx));
                                 } else {
-                                    mthd.param_pltypes
+                                    mthd.fntype
+                                        .param_pltypes
                                         .insert(0, PLType::POINTER(pltype).get_typenode(ctx));
                                 }
                                 ctx.send_if_go_to_def(
@@ -357,7 +359,7 @@ impl Node for TakeOpNode {
                                 );
                                 return Ok((
                                     Some(PLValue {
-                                        value: builder.get_or_insert_fn_handle(&mthd, ctx),
+                                        value: 0,
                                         is_const: false,
                                         receiver: Some(headptr),
                                     }),

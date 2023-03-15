@@ -11,7 +11,7 @@ use super::plmod::LSPDef;
 use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::pltype::add_primitive_types;
-use super::pltype::FNType;
+use super::pltype::FNValue;
 use super::pltype::Field;
 use super::pltype::PLType;
 
@@ -174,7 +174,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.position_at_end(entry, builder);
         builder.build_return(None);
     }
-    pub fn add_method(&mut self, tp: &STType, mthd: &str, fntp: FNType, range: Range) {
+    pub fn add_method(&mut self, tp: &STType, mthd: &str, fntp: FNValue, range: Range) {
         if self.plmod.add_method(tp, mthd, fntp).is_err() {
             self.add_diag(range.new_err(ErrorCode::DUPLICATE_METHOD));
         }
@@ -340,9 +340,12 @@ impl<'a, 'ctx> Ctx<'a> {
     }
     pub fn add_doc_symbols(&mut self, pltype: Arc<RefCell<PLType>>) {
         match &*RefCell::borrow(&pltype) {
-            PLType::FN(f) => {
-                if !f.method {
-                    self.plmod.doc_symbols.borrow_mut().push(f.get_doc_symbol())
+            PLType::FN(fnvalue) => {
+                if !fnvalue.fntype.method {
+                    self.plmod
+                        .doc_symbols
+                        .borrow_mut()
+                        .push(fnvalue.get_doc_symbol())
                 }
             }
             PLType::STRUCT(st) => self
@@ -439,9 +442,9 @@ impl<'a, 'ctx> Ctx<'a> {
         res
     }
 
-    pub fn run_in_fn_mod_mut<'b, T, F: FnMut(&mut Ctx<'a>, &mut FNType) -> Result<T, PLDiag>>(
+    pub fn run_in_fn_mod_mut<'b, T, F: FnMut(&mut Ctx<'a>, &mut FNValue) -> Result<T, PLDiag>>(
         &'b mut self,
-        fntype: &mut FNType,
+        fntype: &mut FNValue,
         mut f: F,
     ) -> Result<T, PLDiag> {
         let p = PathBuf::from(&fntype.path);
@@ -459,9 +462,9 @@ impl<'a, 'ctx> Ctx<'a> {
         res
     }
 
-    pub fn run_in_fn_mod<'b, T, F: FnMut(&mut Ctx<'a>, &FNType) -> Result<T, PLDiag>>(
+    pub fn run_in_fn_mod<'b, T, F: FnMut(&mut Ctx<'a>, &FNValue) -> Result<T, PLDiag>>(
         &'b mut self,
-        fntype: &FNType,
+        fntype: &FNValue,
         mut f: F,
     ) -> Result<T, PLDiag> {
         let p = PathBuf::from(&fntype.path);
@@ -601,9 +604,9 @@ impl<'a, 'ctx> Ctx<'a> {
                         skip_if_not_modified_by!(s.modifier, TokenType::PUB);
                         CompletionItemKind::STRUCT
                     }
-                    PLType::FN(f) => {
-                        skip_if_not_modified_by!(f.modifier, TokenType::PUB);
-                        insert_text = Some(f.gen_snippet());
+                    PLType::FN(fnvalue) => {
+                        skip_if_not_modified_by!(fnvalue.fntype.modifier, TokenType::PUB);
+                        insert_text = Some(fnvalue.gen_snippet());
                         command = Some(Command::new(
                             "trigger help".to_string(),
                             "editor.action.triggerParameterHints".to_string(),

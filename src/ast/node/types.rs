@@ -142,11 +142,8 @@ impl TypeNode for TypeNameNode {
                 _ => unreachable!(),
             };
             if sttype.need_gen_code() {
-                ctx.protect_generic_context(|ctx| {
-                    sttype = sttype.gen_code(ctx, builder);
-                    Ok(())
-                })?;
-                pltype = Arc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
+                sttype = ctx.protect_generic_context(|ctx| Ok(sttype.gen_code(ctx, builder)))?;
+                pltype = Arc::new(RefCell::new(PLType::STRUCT(sttype)));
                 return Ok(pltype);
             } else {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER)));

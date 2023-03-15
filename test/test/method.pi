@@ -26,6 +26,16 @@ pub fn test_impl() void {
     panic::assert(x.x == 114514);
     x.add1();
     panic::assert(x.x == 114515);
+    let at = A{};
+    let res = at.abc(114514);
+    panic::assert(res == 114515);
     return;
+}
+
+struct A {}
+impl A {
+    fn abc<T>(x:T) T {
+        return x;
+    }
 }
 
