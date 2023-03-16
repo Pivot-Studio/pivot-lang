@@ -3,12 +3,11 @@ use crate::{ast::range::Range, ast::tokens::TokenType};
 use nom::character::complete::space1;
 use nom::character::is_alphanumeric;
 use nom::combinator::opt;
-use nom::multi::many0;
+
 use nom::sequence::{pair, preceded, terminated};
 use nom::{
-    branch::alt, bytes::complete::tag, character::complete::space0, combinator::map_res,
-    error::ParseError, sequence::delimited, AsChar, IResult, InputTake, InputTakeAtPosition,
-    Parser,
+    bytes::complete::tag, character::complete::space0, combinator::map_res, error::ParseError,
+    sequence::delimited, AsChar, IResult, InputTake, InputTakeAtPosition, Parser,
 };
 
 use super::*;

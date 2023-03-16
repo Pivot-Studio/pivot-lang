@@ -7,10 +7,9 @@ use crate::{
 use internal_macro::{test_parser, test_parser_error};
 use nom::{
     branch::alt,
-    bytes::complete::tag,
     combinator::{map_res, opt},
     multi::many0,
-    sequence::{delimited, pair, terminated, tuple},
+    sequence::{pair, terminated, tuple},
     IResult,
 };
 use nom_locate::LocatedSpan;

@@ -13,10 +13,9 @@ use internal_macro::{test_parser, test_parser_error};
 use nom::sequence::preceded;
 use nom::{
     branch::alt,
-    bytes::complete::tag,
     combinator::{map_res, opt},
     multi::{many0, separated_list1},
-    sequence::{delimited, pair, tuple},
+    sequence::{pair, tuple},
     IResult,
 };
 

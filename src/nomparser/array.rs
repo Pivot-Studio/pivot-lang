@@ -1,10 +1,8 @@
 use internal_macro::test_parser;
 use nom::{
-    branch::alt,
-    bytes::complete::tag,
     combinator::{map_res, opt},
     multi::{many0, separated_list0},
-    sequence::{delimited, tuple},
+    sequence::tuple,
     IResult,
 };
 

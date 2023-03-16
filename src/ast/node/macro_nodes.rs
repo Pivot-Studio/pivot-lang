@@ -1,12 +1,14 @@
 use internal_macro::node;
+use nom::IResult;
 
+use super::*;
+use super::{primary::VarNode, NodeEnum};
 use crate::ast::ctx::MacroReplaceNode;
 use crate::ast::{range::Range, tokens::TokenType};
 use crate::nomparser::identifier::identifier;
 use crate::nomparser::Span;
-
-use super::*;
-use super::{primary::VarNode, NodeEnum};
+use crate::{del_newline_or_space, format_label};
+use nom::bytes::complete::tag;
 
 #[node]
 pub struct MacroNode {
@@ -48,12 +50,27 @@ pub enum MacroMatchExp {
 }
 
 impl MacroMatchExp {
-    pub fn parse(&self, ctx: &mut Ctx, args: Span) {
+    pub fn parse<'a, 'b: 'a>(
+        &'b self,
+        ctx: &mut Ctx,
+        args: Span<'a>,
+    ) -> IResult<Span<'a>, (), PLDiag> {
         match self {
-            MacroMatchExp::Parameter(p) => {
-                p.parse(ctx, args);
+            MacroMatchExp::Parameter(p) => p.parse(ctx, args),
+            MacroMatchExp::RawTokens((t, r)) => {
+                let re: (Span, Span) =
+                    del_newline_or_space!(tag(t.as_str()))(args).map_err(|_: nom::Err<()>| {
+                        nom::Err::Error(
+                            r.new_err(ErrorCode::UNEXPECTED_TOKEN)
+                                .add_label(
+                                    *r,
+                                    format_label!("got {}, expect {}", *args.trim(), t.trim()),
+                                )
+                                .clone(),
+                        )
+                    })?;
+                Ok((re.0, ()))
             }
-            MacroMatchExp::RawTokens(_) => todo!(),
             MacroMatchExp::Parantheses(_) => todo!(),
             MacroMatchExp::Looper(_) => todo!(),
         }
@@ -68,12 +85,19 @@ pub struct MacroMatchParameter {
 }
 
 impl MacroMatchParameter {
-    pub fn parse(&self, ctx: &mut Ctx, args: Span) {
+    pub fn parse<'a, 'b: 'a>(
+        &'b self,
+        ctx: &mut Ctx,
+        args: Span<'a>,
+    ) -> IResult<Span<'a>, (), PLDiag> {
         match self.tp.0 {
             TokenType::MACRO_TYPE_ID => {
-                let node = identifier(args).unwrap().1;
+                let (new, node) = identifier(args).map_err(|_| {
+                    nom::Err::Error(self.range.new_err(ErrorCode::EXPECT_IDENTIFIER))
+                })?;
                 ctx.macro_vars
                     .insert(self.id.name.clone(), MacroReplaceNode::VarNode(*node));
+                Ok((new, ()))
             }
             TokenType::MACRO_TYPE_STR => todo!(),
             TokenType::MACRO_TYPE_EXPR => todo!(),
@@ -86,7 +110,7 @@ impl MacroMatchParameter {
 
 #[node]
 pub struct MacroRuleNode {
-    pub match_exp: MacroMatchExp,
+    pub match_exp: Vec<MacroMatchExp>,
     pub body: Vec<Box<NodeEnum>>,
 }
 
@@ -141,7 +165,19 @@ impl Node for MacroCallNode {
         match &*self.callee {
             NodeEnum::ExternIdNode(ex_node) => {
                 let m = ex_node.get_macro(ctx)?;
-                m.rules[0].match_exp.parse(ctx, self.args.as_str().into());
+                let mut span = self.args.as_str().into();
+                for e in m.rules[0].match_exp.iter() {
+                    (span, _) = e.parse(ctx, span).map_err(|e| {
+                        if let nom::Err::Error(e) = e {
+                            let mut e = e.clone();
+                            e.set_range(self.range)
+                                .add_label(self.range, format_label!("the macro is called here"))
+                                .add_to_ctx(ctx)
+                        } else {
+                            unreachable!()
+                        }
+                    })?;
+                }
                 for n in m.rules[0].body.clone().iter_mut() {
                     n.emit(ctx, builder)?;
                 }

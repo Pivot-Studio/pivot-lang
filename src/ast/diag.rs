@@ -99,6 +99,8 @@ define_error!(
     EXPECT_PUBLIC_FIELD = "expect public field",
     TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER = "trait method shall not have modifier",
     MACRO_NOT_FOUND = "macro not found",
+    EXPECT_IDENTIFIER = "expect identifier",
+    UNEXPECTED_TOKEN = "unexpected token",
 );
 macro_rules! define_warn {
     ($(
@@ -267,6 +269,11 @@ impl PLDiag {
     /// * `label` - The label text and arguments, you may use `format_label` macro to build it
     pub fn add_label(&mut self, range: Range, label: Option<(String, Vec<String>)>) -> &mut Self {
         self.labels.push((range, label));
+        self
+    }
+
+    pub fn set_range(&mut self, range: Range) -> &mut Self {
+        self.range = range;
         self
     }
 

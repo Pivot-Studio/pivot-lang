@@ -3,7 +3,7 @@ use nom::{
     bytes::complete::tag,
     combinator::{eof, map_res, recognize},
     multi::many0,
-    sequence::{delimited, preceded, terminated, tuple},
+    sequence::{preceded, terminated, tuple},
     IResult,
 };
 

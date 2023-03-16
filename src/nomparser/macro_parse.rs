@@ -1,6 +1,6 @@
 use nom::{
     branch::alt,
-    bytes::complete::{is_a, tag},
+    bytes::complete::is_a,
     combinator::{map_res, recognize},
     multi::{many0, many1},
     sequence::{delimited, preceded, tuple},
@@ -164,7 +164,7 @@ pub fn macro_parser(origin: Span) -> IResult<Span, Box<TopLevel>> {
 
 fn macro_rule_parser(origin: Span) -> IResult<Span, MacroRuleNode> {
     let (input, _) = tag_token_symbol_ex(TokenType::LPAREN)(origin)?;
-    let (input, match_exp) = macro_match_exp(input)?;
+    let (input, match_exp) = many0(macro_match_exp)(input)?;
     let (input, _) = tag_token_symbol_ex(TokenType::RPAREN)(input)?;
     let (input, _) = tag_token_symbol_ex(TokenType::ARROW)(input)?;
     let (input, _) = tag_token_symbol_ex(TokenType::LBRACE)(input)?;
@@ -203,7 +203,7 @@ macro_rules! any_symbol {
     () => {
         alt((
             recognize(many1(is_a(
-                "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_ ",
+                "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_ \n\r\t",
             ))),
             recognize(is_a(",=|-;&^%#@!<>[]{}\\/~`.*+?")),
         ))
