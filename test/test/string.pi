@@ -1,16 +1,15 @@
 use std::io;
 use core::panic;
 macro test {
-    ($a:@id = $b:@id) => {
+    ($a:@id = $b:@expr) => {
         io::print_s($a);
-        io::print_s($b);
+        io::printi64ln($b);
     };
 }
 
 pub fn test_string() void {
     let s = "hello world!\n";
-    test!(s 
-    = s);
+    test!(s = 1+2*(3+4));
     panic::assert(s.len == 13);
     panic::assert(s.byte_len == 13);
     let ss = "你好啊！";

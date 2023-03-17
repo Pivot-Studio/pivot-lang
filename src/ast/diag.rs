@@ -101,6 +101,8 @@ define_error!(
     MACRO_NOT_FOUND = "macro not found",
     EXPECT_IDENTIFIER = "expect identifier",
     UNEXPECTED_TOKEN = "unexpected token",
+    EXPECT_STRING = "expect string",
+    EXPECT_EXPRESSION = "expect expression",
 );
 macro_rules! define_warn {
     ($(

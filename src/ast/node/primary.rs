@@ -134,15 +134,16 @@ impl VarNode {
 
     pub fn emit<'a, 'ctx, 'b>(
         &self,
-        ctx: &'b Ctx<'a>,
+        ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         if self.is_macro_var() {
-            let re = ctx.macro_vars.get(&self.name[1..]).unwrap();
-            if let MacroReplaceNode::VarNode(v) = re {
-                return v.emit(ctx, builder);
-            } else {
-                todo!()
+            let re = ctx.macro_vars.get(&self.name[1..]).unwrap().clone();
+            match re {
+                MacroReplaceNode::VarNode(v) => return v.emit(ctx, builder),
+                MacroReplaceNode::NodeEnum(mut n) => {
+                    return n.emit(ctx, builder);
+                }
             }
         }
         ctx.if_completion(self.range, || ctx.get_completions());

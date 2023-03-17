@@ -1,6 +1,6 @@
 use nom::{
     branch::alt,
-    bytes::complete::is_a,
+    bytes::complete::{is_a, take_while1},
     combinator::{map_res, recognize},
     multi::{many0, many1},
     sequence::{delimited, preceded, tuple},
@@ -185,7 +185,7 @@ fn macro_rule_parser(origin: Span) -> IResult<Span, MacroRuleNode> {
     ))
 }
 
-#[test_parser(r#"!(a, b, c)"#)]
+#[test_parser(r#"!(s = 1+2*(3+4))"#)]
 #[test_parser(r#"!(a, (b) %@, c)"#)]
 #[test_parser_error(r#"!(a, (b %@, c)"#)]
 pub fn macro_call_op(origin: Span) -> IResult<Span, Span> {
@@ -199,27 +199,19 @@ pub fn macro_call_op(origin: Span) -> IResult<Span, Span> {
     )(origin)
 }
 
-macro_rules! any_symbol {
-    () => {
-        alt((
-            recognize(many1(is_a(
-                "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_ \n\r\t",
-            ))),
-            recognize(is_a(",=|-;&^%#@!<>[]{}\\/~`.*+?")),
-        ))
-    };
-}
-
+#[test_parser(r#"s = 1+2*3+4"#)]
 fn any_exp_with_parens(origin: Span) -> IResult<Span, String> {
     alt((
         map_res(
             recognize(delimited(
                 tag_token(TokenType::LPAREN),
-                any_symbol!(),
+                any_exp_with_parens,
                 tag_token(TokenType::RPAREN),
             )),
             |exp| Ok::<_, ()>(exp.to_string()),
         ),
-        map_res(any_symbol!(), |exp: Span| Ok::<_, ()>(exp.to_string())),
+        map_res(take_while1(|f| f != ')' && f != '('), |exp: Span| {
+            Ok::<_, ()>(exp.to_string())
+        }),
     ))(origin)
 }

@@ -5,8 +5,9 @@ use super::*;
 use super::{primary::VarNode, NodeEnum};
 use crate::ast::ctx::MacroReplaceNode;
 use crate::ast::{range::Range, tokens::TokenType};
+use crate::nomparser::helper::tag_token_symbol_ex;
 use crate::nomparser::identifier::identifier;
-use crate::nomparser::Span;
+use crate::nomparser::{expression, string_literal, Span};
 use crate::{del_newline_or_space, format_label};
 use nom::bytes::complete::tag;
 
@@ -71,7 +72,16 @@ impl MacroMatchExp {
                     })?;
                 Ok((re.0, ()))
             }
-            MacroMatchExp::Parantheses(_) => todo!(),
+            MacroMatchExp::Parantheses((ts, r)) => {
+                let (new, _) = tag_token_symbol_ex(TokenType::LPAREN)(args)
+                    .map_err(|_| nom::Err::Error(r.new_err(ErrorCode::UNEXPECTED_TOKEN)))?;
+                for t in ts {
+                    t.parse(ctx, new)?;
+                }
+                let (new, _) = tag_token_symbol_ex(TokenType::RPAREN)(args)
+                    .map_err(|_| nom::Err::Error(r.new_err(ErrorCode::UNEXPECTED_TOKEN)))?;
+                Ok((new, ()))
+            }
             MacroMatchExp::Looper(_) => todo!(),
         }
     }
@@ -99,8 +109,21 @@ impl MacroMatchParameter {
                     .insert(self.id.name.clone(), MacroReplaceNode::VarNode(*node));
                 Ok((new, ()))
             }
-            TokenType::MACRO_TYPE_STR => todo!(),
-            TokenType::MACRO_TYPE_EXPR => todo!(),
+            TokenType::MACRO_TYPE_STR => {
+                let (new, node) = del_newline_or_space!(string_literal::string_literal)(args)
+                    .map_err(|_| nom::Err::Error(self.range.new_err(ErrorCode::EXPECT_STRING)))?;
+                ctx.macro_vars
+                    .insert(self.id.name.clone(), MacroReplaceNode::NodeEnum(*node));
+                Ok((new, ()))
+            }
+            TokenType::MACRO_TYPE_EXPR => {
+                let (new, node) = expression::logic_exp(args).map_err(|_| {
+                    nom::Err::Error(self.range.new_err(ErrorCode::EXPECT_EXPRESSION))
+                })?;
+                ctx.macro_vars
+                    .insert(self.id.name.clone(), MacroReplaceNode::NodeEnum(*node));
+                Ok((new, ()))
+            }
             TokenType::MACRO_TYPE_STMT => todo!(),
             TokenType::MACRO_TYPE_STMTS => todo!(),
             _ => todo!(),
