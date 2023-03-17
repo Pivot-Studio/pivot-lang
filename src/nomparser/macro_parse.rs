@@ -53,8 +53,8 @@ fn macro_match_exp(input: Span) -> IResult<Span, MacroMatchExp> {
                     MACRO_TYPE_ID,
                     MACRO_TYPE_STR,
                     MACRO_TYPE_EXPR,
+                    MACRO_TYPE_STMTS,
                     MACRO_TYPE_STMT,
-                    MACRO_TYPE_STMTS
                 ),
             )),
             |(dollar, id, _, tp)| {
@@ -187,6 +187,12 @@ fn macro_rule_parser(origin: Span) -> IResult<Span, MacroRuleNode> {
 
 #[test_parser(r#"!(s = 1+2*(3+4))"#)]
 #[test_parser(r#"!(a, (b) %@, c)"#)]
+#[test_parser(
+    r#"!(s = 1+2*(3+4),
+io::print_s(s);
+io::printi64ln(1+2*(3+4));
+)"#
+)]
 #[test_parser_error(r#"!(a, (b %@, c)"#)]
 pub fn macro_call_op(origin: Span) -> IResult<Span, Span> {
     preceded(
@@ -199,13 +205,12 @@ pub fn macro_call_op(origin: Span) -> IResult<Span, Span> {
     )(origin)
 }
 
-#[test_parser(r#"s = 1+2*3+4"#)]
 fn any_exp_with_parens(origin: Span) -> IResult<Span, String> {
     alt((
         map_res(
             recognize(delimited(
                 tag_token(TokenType::LPAREN),
-                any_exp_with_parens,
+                many0(any_exp_with_parens),
                 tag_token(TokenType::RPAREN),
             )),
             |exp| Ok::<_, ()>(exp.to_string()),

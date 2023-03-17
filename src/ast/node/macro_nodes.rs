@@ -1,4 +1,5 @@
 use internal_macro::node;
+use nom::multi::many0;
 use nom::IResult;
 
 use super::*;
@@ -124,8 +125,24 @@ impl MacroMatchParameter {
                     .insert(self.id.name.clone(), MacroReplaceNode::NodeEnum(*node));
                 Ok((new, ()))
             }
-            TokenType::MACRO_TYPE_STMT => todo!(),
-            TokenType::MACRO_TYPE_STMTS => todo!(),
+            TokenType::MACRO_TYPE_STMT => {
+                let (new, node) = del_newline_or_space!(crate::nomparser::statement::statement)(
+                    args,
+                )
+                .map_err(|_| nom::Err::Error(self.range.new_err(ErrorCode::EXPECT_STATEMENT)))?;
+                ctx.macro_vars
+                    .insert(self.id.name.clone(), MacroReplaceNode::NodeEnum(*node));
+                Ok((new, ()))
+            }
+            TokenType::MACRO_TYPE_STMTS => {
+                let (new, nodes) = many0(del_newline_or_space!(
+                    crate::nomparser::statement::statement
+                ))(args)
+                .map_err(|_| nom::Err::Error(self.range.new_err(ErrorCode::EXPECT_STATEMENTS)))?;
+                ctx.macro_vars
+                    .insert(self.id.name.clone(), MacroReplaceNode::Statements(nodes));
+                Ok((new, ()))
+            }
             _ => todo!(),
         }
     }
@@ -168,6 +185,7 @@ impl Node for MacroLoopStatementNode {
 pub struct MacroCallNode {
     pub args: String,
     pub callee: Box<NodeEnum>,
+    pub inner_start: Pos,
 }
 
 impl PrintTrait for MacroCallNode {
@@ -188,7 +206,14 @@ impl Node for MacroCallNode {
         match &*self.callee {
             NodeEnum::ExternIdNode(ex_node) => {
                 let m = ex_node.get_macro(ctx)?;
-                let mut span = self.args.as_str().into();
+                let mut span = unsafe {
+                    Span::new_from_raw_offset(
+                        self.inner_start.offset,
+                        self.inner_start.line as u32,
+                        &self.args,
+                        false,
+                    )
+                };
                 for e in m.rules[0].match_exp.iter() {
                     (span, _) = e.parse(ctx, span).map_err(|e| {
                         if let nom::Err::Error(e) = e {

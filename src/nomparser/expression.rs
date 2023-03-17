@@ -10,6 +10,7 @@ use crate::{
     ast::node::function::FuncCallNode,
     ast::{
         node::pointer::{PointerOpEnum, PointerOpNode},
+        range::Pos,
         tokens::TokenType,
     },
 };
@@ -123,6 +124,7 @@ fn macro_call_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 range: name.range(),
                 callee: name,
                 args: op.to_string(),
+                inner_start: Pos::from_span(&op),
             }
             .into(),
         )

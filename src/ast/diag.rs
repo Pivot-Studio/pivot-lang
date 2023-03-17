@@ -103,6 +103,8 @@ define_error!(
     UNEXPECTED_TOKEN = "unexpected token",
     EXPECT_STRING = "expect string",
     EXPECT_EXPRESSION = "expect expression",
+    EXPECT_STATEMENT = "expect statement",
+    EXPECT_STATEMENTS = "expect statements",
 );
 macro_rules! define_warn {
     ($(

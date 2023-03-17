@@ -90,6 +90,7 @@ pub struct Ctx<'a> {
 pub enum MacroReplaceNode {
     NodeEnum(NodeEnum),
     VarNode(VarNode),
+    Statements(Vec<Box<NodeEnum>>),
 }
 
 impl<'a, 'ctx> Ctx<'a> {

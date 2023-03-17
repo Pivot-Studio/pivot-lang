@@ -144,6 +144,16 @@ impl VarNode {
                 MacroReplaceNode::NodeEnum(mut n) => {
                     return n.emit(ctx, builder);
                 }
+                MacroReplaceNode::Statements(mut ns) => {
+                    let mut res = None;
+                    let mut pltype = None;
+                    for n in ns.iter_mut() {
+                        let (v, t, _) = n.emit(ctx, builder)?;
+                        res = v;
+                        pltype = t;
+                    }
+                    return Ok((res, pltype, TerminatorEnum::NONE));
+                }
             }
         }
         ctx.if_completion(self.range, || ctx.get_completions());
