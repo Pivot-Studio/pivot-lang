@@ -76,12 +76,12 @@ impl Node for FuncCallNode {
             }
             let mut skip = 0;
             let mut para_values = vec![];
-            if plvalue.is_some() {
-                if let Some(receiver) = plvalue.unwrap().receiver {
+            let fn_handle = plvalue.and_then(|plvalue| {
+                if let Some(receiver) = plvalue.receiver {
                     (skip, para_values) = (1, vec![receiver]);
                 }
-            }
-            // funcvalue must use fntype to get a new one,can not use the return  plvalue of id node emit
+                Some(plvalue.value)
+            });
             if fnvalue.fntype.param_pltypes.len() - skip as usize != self.paralist.len() {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::PARAMETER_LENGTH_NOT_MATCH)));
             }
@@ -150,7 +150,11 @@ impl Node for FuncCallNode {
                     );
                 }
             }
-            let function = builder.get_or_insert_fn_handle(&fnvalue, ctx);
+            let function = if fn_handle.map_or(false, |x| x != usize::MAX) {
+                fn_handle.unwrap()
+            } else {
+                builder.get_or_insert_fn_handle(&fnvalue, ctx)
+            };
             builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
             let ret = builder.build_call(function, &para_values);
             ctx.save_if_comment_doc_hover(id_range, Some(fnvalue.doc.clone()));

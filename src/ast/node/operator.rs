@@ -359,7 +359,7 @@ impl Node for TakeOpNode {
                                 );
                                 return Ok((
                                     Some(PLValue {
-                                        value: 0,
+                                        value: usize::MAX,
                                         is_const: false,
                                         receiver: Some(headptr),
                                     }),
