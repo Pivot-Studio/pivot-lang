@@ -4,7 +4,6 @@ use super::diag::ErrorCode;
 use super::diag::PLDiag;
 
 use super::node::macro_nodes::MacroNode;
-use super::node::primary::VarNode;
 use super::node::NodeEnum;
 use super::node::PLValue;
 use super::plmod::CompletionItemWrapper;
@@ -84,13 +83,14 @@ pub struct Ctx<'a> {
     pub db: &'a dyn Db,
     pub rettp: Option<Arc<RefCell<PLType>>>,
     pub macro_vars: FxHashMap<String, MacroReplaceNode>,
+    pub macro_loop: bool,
+    pub macro_loop_idx: usize,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum MacroReplaceNode {
     NodeEnum(NodeEnum),
-    VarNode(VarNode),
-    Statements(Vec<Box<NodeEnum>>),
+    LoopNodeEnum(Vec<NodeEnum>),
 }
 
 impl<'a, 'ctx> Ctx<'a> {
@@ -127,6 +127,8 @@ impl<'a, 'ctx> Ctx<'a> {
             roots: RefCell::new(Vec::new()),
             rettp: None,
             macro_vars: FxHashMap::default(),
+            macro_loop: false,
+            macro_loop_idx: 0,
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -151,10 +153,42 @@ impl<'a, 'ctx> Ctx<'a> {
             init_func: self.init_func,
             function: self.function,
             macro_vars: FxHashMap::default(),
+            macro_loop: false,
+            macro_loop_idx: self.macro_loop_idx,
         };
         add_primitive_types(&mut ctx);
         builder.new_subscope(start);
         ctx
+    }
+
+    pub fn with_macro_loop<T>(&mut self, mut f: impl FnMut(&mut Self) -> T) -> T {
+        let old_macro_loop = self.macro_loop;
+        let old_macro_loop_idx = self.macro_loop_idx;
+        self.macro_loop_idx = 0;
+        self.macro_loop = true;
+        let mut result;
+        // TODO:
+        // throw error if loop_var.len() == 0
+        loop {
+            result = f(self);
+            self.macro_loop_idx += 1;
+            if !self.macro_loop {
+                break;
+            }
+        }
+        self.macro_loop = old_macro_loop;
+        self.macro_loop_idx = old_macro_loop_idx;
+        result
+    }
+    pub fn with_macro_loop_parse<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let old_macro_loop = self.macro_loop;
+        let old_macro_loop_idx = self.macro_loop_idx;
+        self.macro_loop_idx = 0;
+        self.macro_loop = true;
+        let result = f(self);
+        self.macro_loop = old_macro_loop;
+        self.macro_loop_idx = old_macro_loop_idx;
+        result
     }
     pub fn set_init_fn<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
         self.function = Some(builder.add_function(

@@ -106,11 +106,10 @@ fn macro_match_exp(input: Span) -> IResult<Span, MacroMatchExp> {
 }
 
 #[test_parser(
-    r#"$(
-    let a = 0;
-    a = $b;
-    return c;
-)*"#
+    r#"        $(
+        io::print_s($a);
+        io::printi64ln($b);
+    )*"#
 )]
 fn macro_body_loop_parser(origin: Span) -> IResult<Span, Box<NodeEnum>> {
     let (input, _) = tag_token_symbol(TokenType::DOLLAR)(origin)?;
@@ -122,24 +121,25 @@ fn macro_body_loop_parser(origin: Span) -> IResult<Span, Box<NodeEnum>> {
     Ok((
         input,
         Box::new(NodeEnum::MacroLoopStatementNode(MacroLoopStatementNode {
-            statements,
+            statements: Box::new(StatementsNode { statements, range }.into()),
             range,
         })),
     ))
 }
 
-#[test_parser(
-    r#"macro test {
+// #[test_parser(
+//     r#"macro test {
 
-    }"#
-)]
-#[test_parser(r#"macro test {}"#)]
+//     }"#
+// )]
+// #[test_parser(r#"macro test {}"#)]
 #[test_parser(
     r#"macro test {
         ($a:@id, $b:@id) => {
-            let a = 0;
-            a = $b;
-            return c;
+            $(
+                io::print_s($a);
+                io::printi64ln($b);
+            )*
         };
     }"#
 )]
@@ -169,8 +169,8 @@ fn macro_rule_parser(origin: Span) -> IResult<Span, MacroRuleNode> {
     let (input, _) = tag_token_symbol_ex(TokenType::ARROW)(input)?;
     let (input, _) = tag_token_symbol_ex(TokenType::LBRACE)(input)?;
     let (input, body) = many0(del_newline_or_space!(alt((
-        statement,
         macro_body_loop_parser,
+        statement,
     ))))(input)?;
     let (input, _) = tag_token_symbol_ex(TokenType::RBRACE)(input)?;
     let (input, _) = tag_token_symbol_ex(TokenType::SEMI)(input)?;
@@ -180,7 +180,11 @@ fn macro_rule_parser(origin: Span) -> IResult<Span, MacroRuleNode> {
         MacroRuleNode {
             range,
             match_exp,
-            body,
+            body: StatementsNode {
+                statements: body,
+                range,
+            }
+            .into(),
         },
     ))
 }

@@ -110,49 +110,27 @@ impl Node for NumNode {
 pub struct VarNode {
     pub name: String,
 }
-impl VarNode {
-    pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
-        deal_line(tabs, &mut line, end);
-        tab(tabs, line.clone(), end);
-        println!("VarNode: {}", self.name);
-    }
-    fn is_macro_var(&self) -> bool {
-        self.name.starts_with("$")
-    }
-    pub fn get_name(&self, ctx: &Ctx) -> String {
-        if self.is_macro_var() {
-            let re = ctx.macro_vars.get(&self.name[1..]).unwrap();
-            if let MacroReplaceNode::VarNode(v) = re {
-                return v.name.clone();
-            } else {
-                todo!()
-            }
-        } else {
-            self.name.clone()
-        }
-    }
 
-    pub fn emit<'a, 'ctx, 'b>(
-        &self,
+impl Node for VarNode {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         if self.is_macro_var() {
             let re = ctx.macro_vars.get(&self.name[1..]).unwrap().clone();
             match re {
-                MacroReplaceNode::VarNode(v) => return v.emit(ctx, builder),
                 MacroReplaceNode::NodeEnum(mut n) => {
                     return n.emit(ctx, builder);
                 }
-                MacroReplaceNode::Statements(mut ns) => {
-                    let mut res = None;
-                    let mut pltype = None;
-                    for n in ns.iter_mut() {
-                        let (v, t, _) = n.emit(ctx, builder)?;
-                        res = v;
-                        pltype = t;
+                MacroReplaceNode::LoopNodeEnum(mut loop_var) => {
+                    // TODO:
+                    // check if the loop_var is used in loop
+                    let re = loop_var[ctx.macro_loop_idx].emit(ctx, builder);
+                    if ctx.macro_loop_idx + 1 == loop_var.len() {
+                        ctx.macro_loop = false;
                     }
-                    return Ok((res, pltype, TerminatorEnum::NONE));
+                    return re;
                 }
             }
         }
@@ -191,10 +169,37 @@ impl VarNode {
         }
         Err(ctx.add_diag(self.range.new_err(ErrorCode::VAR_NOT_FOUND)))
     }
+}
+
+impl PrintTrait for VarNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("VarNode: {}", self.name);
+    }
+}
+
+impl VarNode {
+    fn is_macro_var(&self) -> bool {
+        self.name.starts_with("$")
+    }
+    pub fn get_name(&self, ctx: &Ctx) -> String {
+        if self.is_macro_var() {
+            let re = ctx.macro_vars.get(&self.name[1..]).unwrap();
+            if let MacroReplaceNode::NodeEnum(NodeEnum::Var(v)) = re {
+                return v.name.clone();
+            } else {
+                todo!()
+            }
+        } else {
+            self.name.clone()
+        }
+    }
+
     pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a>) -> NodeResult {
         if self.is_macro_var() {
             let re = ctx.macro_vars.get(&self.name[1..]).unwrap();
-            if let MacroReplaceNode::VarNode(v) = re {
+            if let MacroReplaceNode::NodeEnum(NodeEnum::Var(v)) = re {
                 return v.get_type(ctx);
             } else {
                 todo!()

@@ -108,6 +108,7 @@ type TypeNodeResult = Result<Arc<RefCell<PLType>>, PLDiag>;
 #[derive(Clone, PartialEq, Eq, Debug)]
 #[enum_dispatch(Node, RangeTrait, FmtTrait, PrintTrait)]
 pub enum NodeEnum {
+    Var(VarNode),
     Def(DefNode),
     Ret(RetNode),
     Assign(AssignNode),
