@@ -127,19 +127,23 @@ fn macro_body_loop_parser(origin: Span) -> IResult<Span, Box<NodeEnum>> {
     ))
 }
 
-// #[test_parser(
-//     r#"macro test {
-
-//     }"#
-// )]
-// #[test_parser(r#"macro test {}"#)]
 #[test_parser(
     r#"macro test {
-        ($a:@id, $b:@id) => {
+
+    }"#
+)]
+#[test_parser(r#"macro test {}"#)]
+#[test_parser(
+    r#"macro test {
+        ($($a:@id = $b:@expr,)*) => {
             $(
                 io::print_s($a);
                 io::printi64ln($b);
             )*
+    
+        };
+        ($a:@id) => {
+            io::print_s($a);
         };
     }"#
 )]
@@ -158,6 +162,7 @@ pub fn macro_parser(origin: Span) -> IResult<Span, Box<TopLevel>> {
             id: *id,
             rules,
             range,
+            file: "".into(),
         })))),
     ))
 }

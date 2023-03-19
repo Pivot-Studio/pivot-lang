@@ -1,7 +1,8 @@
-use ariadne::{ColorGenerator, Fmt, Label, Report, ReportKind, Source};
+use ariadne::{Cache, ColorGenerator, Fmt, Label, Report, ReportKind, Source};
 use dyn_fmt::AsStrFormatExt;
 use internal_macro::range;
 use lazy_static::lazy_static;
+use rustc_hash::FxHashMap;
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
@@ -105,6 +106,9 @@ define_error!(
     EXPECT_EXPRESSION = "expect expression",
     EXPECT_STATEMENT = "expect statement",
     EXPECT_STATEMENTS = "expect statements",
+    NO_MACRO_LOOP_VAR = "no macro loop var used in macro loop block",
+    MACRO_LOOP_VAR_USED_OUT_OF_LOOP = "macro loop var used out of loop",
+    MACRO_VAR_NOT_FOUND = "macro var not found",
 );
 macro_rules! define_warn {
     ($(
@@ -150,7 +154,9 @@ impl Display for DiagCode {
     }
 }
 
-use lsp_types::{Diagnostic, DiagnosticSeverity};
+use lsp_types::{Diagnostic, DiagnosticSeverity, Url};
+
+use crate::Db;
 
 use super::{
     ctx::Ctx,
@@ -164,7 +170,8 @@ use super::{
 pub struct PLDiag {
     code: DiagCode,
     help: Option<Box<String>>,
-    labels: Vec<(Range, Option<(String, Vec<String>)>)>,
+    labels: Vec<(Range, String, Option<(String, Vec<String>)>)>,
+    pub source: Option<String>,
 }
 
 const PL_DIAG_SOURCE: &str = "plsp";
@@ -174,33 +181,32 @@ impl Pos {
         doc.line(self.line - 1).unwrap().offset() + self.column - 1
     }
 }
-
+use std::fmt::Debug;
 impl PLDiag {
-    pub fn print(&self, path: &str, doc: Source) {
-        if self.code == DiagCode::Err(ErrorCode::COMPLETION) {
-            println!()
-        }
+    pub fn print(&self, path: &str, f: impl Fn(&dyn Db, &str) -> Source + 'static, db: &dyn Db) {
         let mut colors = ColorGenerator::new();
-
         let mut rb = Report::build(
             self.get_report_kind(),
             path,
-            self.range.start.utf8_offset(&doc),
+            self.range.start.utf8_offset(&f(db, path)),
         )
         .with_code(self.code)
         .with_message(self.get_msg());
         let mut labels = vec![];
-        if self.labels.is_empty() {
-            labels.push((self.range, Some(("here".to_string(), vec![]))));
-        }
+        labels.push((
+            self.range,
+            path.to_string(),
+            Some(("here".to_string(), vec![])),
+        ));
 
-        for (range, txt) in labels.iter().chain(self.labels.iter()) {
+        for (range, path, txt) in labels.iter().chain(self.labels.iter()) {
             let color = colors.next();
-            let mut lab = Label::new((
-                path,
-                range.start.utf8_offset(&doc)..range.end.utf8_offset(&doc),
-            ));
+            let mut lab;
             if let Some((tpl, args)) = txt {
+                lab = Label::new((
+                    path.as_str(),
+                    range.start.utf8_offset(&f(db, path))..range.end.utf8_offset(&f(db, path)),
+                ));
                 let mut msg = tpl.clone();
                 msg = msg.format(
                     &args
@@ -209,6 +215,11 @@ impl PLDiag {
                         .collect::<Vec<_>>(),
                 );
                 lab = lab.with_message(msg);
+            } else {
+                lab = Label::new((
+                    path,
+                    range.start.utf8_offset(&f(db, path))..range.end.utf8_offset(&f(db, path)),
+                ));
             }
             rb = rb.with_label(lab.with_color(color));
         }
@@ -216,7 +227,7 @@ impl PLDiag {
             rb = rb.with_help(help);
         }
         let r = rb.finish();
-        r.eprint((path, doc)).unwrap();
+        r.eprint(PLFileCache::new(db, Box::new(f))).unwrap();
     }
     fn get_report_kind(&self) -> ReportKind {
         match self.code {
@@ -225,7 +236,10 @@ impl PLDiag {
         }
     }
     pub fn is_err(&self) -> bool {
-        self.get_diagnostic().severity == Some(DiagnosticSeverity::ERROR)
+        match self.code {
+            DiagCode::Err(_) => true,
+            DiagCode::Warn(_) => false,
+        }
     }
     pub fn get_msg(&self) -> String {
         match self.code {
@@ -233,8 +247,8 @@ impl PLDiag {
             DiagCode::Warn(code) => WARN_MSG[&code].to_string(),
         }
     }
-    pub fn get_diagnostic(&self) -> Diagnostic {
-        match self.code {
+    pub fn get_diagnostic(&self, p: &str, diags: &mut FxHashMap<String, Vec<Diagnostic>>) {
+        let mut d = match self.code {
             DiagCode::Err(code) => Diagnostic::new_with_code_number(
                 self.range.to_diag_range(),
                 DiagnosticSeverity::ERROR,
@@ -249,7 +263,29 @@ impl PLDiag {
                 Some(PL_DIAG_SOURCE.to_string()),
                 WARN_MSG[&code].to_string(),
             ),
-        }
+        };
+        let mut labels = vec![];
+        self.labels.iter().for_each(|(range, file, txt)| {
+            let mut lab = lsp_types::DiagnosticRelatedInformation {
+                location: lsp_types::Location {
+                    uri: Url::from_file_path(file).unwrap(),
+                    range: range.to_diag_range(),
+                },
+                message: "related source here".to_string(),
+            };
+            if let Some((tpl, args)) = txt {
+                lab.message = tpl.clone();
+                lab.message = lab.message.format(args);
+            }
+            labels.push(lab);
+        });
+        d.related_information = Some(labels);
+        let p = if let Some(source) = &self.source {
+            source.clone()
+        } else {
+            p.to_string()
+        };
+        diags.entry(p.to_string()).or_default().push(d);
     }
     pub fn new_error(range: Range, code: ErrorCode) -> Self {
         PLDiag {
@@ -257,6 +293,10 @@ impl PLDiag {
             code: DiagCode::Err(code),
             ..Default::default()
         }
+    }
+    pub fn set_source(&mut self, source: &str) -> &mut Self {
+        self.source = Some(source.to_string());
+        self
     }
     pub fn add_help(&mut self, help: &str) -> &mut Self {
         self.help = Some(Box::new(help.to_string()));
@@ -271,8 +311,13 @@ impl PLDiag {
     /// # Arguments
     /// * `range` - The src range of the label
     /// * `label` - The label text and arguments, you may use `format_label` macro to build it
-    pub fn add_label(&mut self, range: Range, label: Option<(String, Vec<String>)>) -> &mut Self {
-        self.labels.push((range, label));
+    pub fn add_label(
+        &mut self,
+        range: Range,
+        file: String,
+        label: Option<(String, Vec<String>)>,
+    ) -> &mut Self {
+        self.labels.push((range, file, label));
         self
     }
 
@@ -287,5 +332,34 @@ impl PLDiag {
             code: DiagCode::Warn(code),
             ..Default::default()
         }
+    }
+}
+
+pub struct PLFileCache<'a> {
+    db: &'a dyn Db,
+    f: Box<dyn Fn(&'a dyn Db, &str) -> Source>,
+    cache: FxHashMap<String, Source>,
+}
+
+impl<'a> PLFileCache<'a> {
+    pub fn new(db: &'a dyn Db, f: Box<dyn Fn(&'a dyn Db, &str) -> Source>) -> Self {
+        Self {
+            db,
+            f,
+            cache: Default::default(),
+        }
+    }
+}
+
+impl<'a> Cache<&str> for PLFileCache<'a> {
+    fn fetch(&mut self, id: &&str) -> Result<&Source, Box<dyn std::fmt::Debug + '_>> {
+        if !self.cache.contains_key(*id) {
+            self.cache.insert((*id).to_string(), (self.f)(self.db, *id));
+        }
+        Ok(self.cache.get(*id).unwrap())
+    }
+
+    fn display<'b>(&self, id: &'b &str) -> Option<Box<dyn std::fmt::Display + 'b>> {
+        Some(Box::new(id))
     }
 }

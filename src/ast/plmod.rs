@@ -108,6 +108,21 @@ pub enum LSPDef {
 }
 
 impl Mod {
+    pub fn get_macro_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
+        for (k, _) in self.macros.iter() {
+            vmap.insert(
+                k.to_string(),
+                CompletionItem {
+                    label: k.to_string(),
+                    kind: Some(CompletionItemKind::FUNCTION),
+                    insert_text: Some(format!("{}!()", k)),
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
     pub fn new(name: String, path: String) -> Self {
         Self {
             name,

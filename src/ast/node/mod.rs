@@ -211,9 +211,14 @@ macro_rules! mismatch_err {
         $self.add_diag(
             $range
                 .new_err(ErrorCode::TYPE_MISMATCH)
-                .add_label($range, $crate::format_label!("type `{}`", $got.get_name()))
+                .add_label(
+                    $range,
+                    $self.get_file(),
+                    $crate::format_label!("type `{}`", $got.get_name()),
+                )
                 .add_label(
                     $exprange,
+                    $self.get_file(),
                     $crate::format_label!("type `{}`", $expect.get_name()),
                 )
                 .clone(),

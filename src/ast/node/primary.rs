@@ -118,18 +118,33 @@ impl Node for VarNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         if self.is_macro_var() {
-            let re = ctx.macro_vars.get(&self.name[1..]).unwrap().clone();
+            let re = ctx
+                .macro_vars
+                .get(&self.name[1..])
+                .ok_or_else(|| {
+                    self.range
+                        .new_err(ErrorCode::MACRO_VAR_NOT_FOUND)
+                        .add_help(&format!(
+                            "add a macro var named `{}` in the macro definition",
+                            self.name
+                        ))
+                        .add_to_ctx(ctx)
+                })?
+                .clone();
             match re {
                 MacroReplaceNode::NodeEnum(mut n) => {
                     return n.emit(ctx, builder);
                 }
                 MacroReplaceNode::LoopNodeEnum(mut loop_var) => {
-                    // TODO:
-                    // check if the loop_var is used in loop
-                    let re = loop_var[ctx.macro_loop_idx].emit(ctx, builder);
-                    if ctx.macro_loop_idx + 1 == loop_var.len() {
-                        ctx.macro_loop = false;
+                    if !ctx.macro_loop {
+                        return Err(self
+                            .range
+                            .new_err(ErrorCode::MACRO_LOOP_VAR_USED_OUT_OF_LOOP)
+                            .add_help("add a `macro loop` surrounding the macro body like $($var)*")
+                            .add_to_ctx(ctx));
                     }
+                    let re = loop_var[ctx.macro_loop_idx].emit(ctx, builder);
+                    ctx.macro_loop_len = loop_var.len();
                     return re;
                 }
             }

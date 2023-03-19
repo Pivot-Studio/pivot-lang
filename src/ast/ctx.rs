@@ -5,6 +5,7 @@ use super::diag::PLDiag;
 
 use super::node::macro_nodes::MacroNode;
 use super::node::NodeEnum;
+use super::node::NodeResult;
 use super::node::PLValue;
 use super::plmod::CompletionItemWrapper;
 use super::plmod::GlobalVar;
@@ -85,6 +86,9 @@ pub struct Ctx<'a> {
     pub macro_vars: FxHashMap<String, MacroReplaceNode>,
     pub macro_loop: bool,
     pub macro_loop_idx: usize,
+    pub macro_loop_len: usize,
+    pub temp_source: Option<String>,
+    pub in_macro: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -129,6 +133,9 @@ impl<'a, 'ctx> Ctx<'a> {
             macro_vars: FxHashMap::default(),
             macro_loop: false,
             macro_loop_idx: 0,
+            macro_loop_len: 0,
+            temp_source: None,
+            in_macro: false,
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -155,29 +162,46 @@ impl<'a, 'ctx> Ctx<'a> {
             macro_vars: FxHashMap::default(),
             macro_loop: false,
             macro_loop_idx: self.macro_loop_idx,
+            macro_loop_len: self.macro_loop_len,
+            temp_source: self.temp_source.clone(),
+            in_macro: self.in_macro,
         };
         add_primitive_types(&mut ctx);
         builder.new_subscope(start);
         ctx
     }
 
-    pub fn with_macro_loop<T>(&mut self, mut f: impl FnMut(&mut Self) -> T) -> T {
+    pub fn with_macro_loop(
+        &mut self,
+        mut f: impl FnMut(&mut Self) -> NodeResult,
+        r: Range,
+    ) -> NodeResult {
         let old_macro_loop = self.macro_loop;
         let old_macro_loop_idx = self.macro_loop_idx;
         self.macro_loop_idx = 0;
         self.macro_loop = true;
         let mut result;
-        // TODO:
-        // throw error if loop_var.len() == 0
         loop {
             result = f(self);
             self.macro_loop_idx += 1;
-            if !self.macro_loop {
+            if self.macro_loop_len == 0 {
+                // no loop variable used, return error
+                return Err(r.new_err(ErrorCode::NO_MACRO_LOOP_VAR));
+            }
+            if self.macro_loop_idx == self.macro_loop_len {
+                // loop end
                 break;
             }
         }
         self.macro_loop = old_macro_loop;
         self.macro_loop_idx = old_macro_loop_idx;
+        result
+    }
+    pub fn with_macro_emit(&mut self, f: impl FnOnce(&mut Self) -> NodeResult) -> NodeResult {
+        let old_in_macro = self.in_macro;
+        self.in_macro = true;
+        let result = f(self);
+        self.in_macro = old_in_macro;
         result
     }
     pub fn with_macro_loop_parse<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
@@ -389,7 +413,18 @@ impl<'a, 'ctx> Ctx<'a> {
         }
     }
 
-    pub fn add_diag(&self, dia: PLDiag) -> PLDiag {
+    pub fn with_diag_src<T>(&mut self, src: &str, f: impl FnOnce(&mut Self) -> T) -> T {
+        let old = self.temp_source.clone();
+        self.temp_source = Some(src.to_string());
+        let re = f(self);
+        self.temp_source = old;
+        re
+    }
+
+    pub fn add_diag(&self, mut dia: PLDiag) -> PLDiag {
+        if let Some(src) = &self.temp_source {
+            dia.set_source(src);
+        }
         let dia2 = dia.clone();
         self.errs.borrow_mut().insert(dia);
         dia2
@@ -518,6 +553,10 @@ impl<'a, 'ctx> Ctx<'a> {
         Url::from_file_path(self.plmod.path.clone()).unwrap()
     }
 
+    pub fn get_file(&self) -> String {
+        self.plmod.path.clone()
+    }
+
     pub fn get_location(&self, range: Range) -> Location {
         Location::new(self.get_file_url(), range.to_diag_range())
     }
@@ -596,6 +635,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.plmod.get_ns_completions_pri(&mut m);
         self.get_var_completions(&mut m);
         self.get_keyword_completions(&mut m);
+        self.get_macro_completions(&mut m);
 
         let cm = m.values().cloned().collect();
         cm
@@ -605,14 +645,21 @@ impl<'a, 'ctx> Ctx<'a> {
         let mut m = FxHashMap::default();
         self.get_const_completions_in_ns(ns, &mut m);
         self.get_type_completions_in_ns(ns, &mut m);
+        self.get_macro_completion_in_ns(ns, &mut m);
 
         let cm = m.values().cloned().collect();
         cm
     }
 
-    fn get_const_completions_in_ns(&self, ns: &str, m: &mut FxHashMap<String, CompletionItem>) {
+    fn with_ns(&self, ns: &str, f: impl FnOnce(&Mod)) {
         let ns = self.plmod.submods.get(ns);
         if let Some(ns) = ns {
+            f(ns);
+        }
+    }
+
+    fn get_const_completions_in_ns(&self, ns: &str, m: &mut FxHashMap<String, CompletionItem>) {
+        self.with_ns(ns, |ns| {
             for (k, v) in ns.global_table.iter() {
                 let mut item = CompletionItem {
                     label: k.to_string(),
@@ -622,12 +669,11 @@ impl<'a, 'ctx> Ctx<'a> {
                 item.detail = Some(v.tp.borrow().get_name());
                 m.insert(k.clone(), item);
             }
-        }
+        });
     }
 
     fn get_type_completions_in_ns(&self, ns: &str, m: &mut FxHashMap<String, CompletionItem>) {
-        let ns = self.plmod.submods.get(ns);
-        if let Some(ns) = ns {
+        self.with_ns(ns, |ns| {
             for (k, v) in ns.types.iter() {
                 let mut insert_text = None;
                 let mut command = None;
@@ -659,7 +705,13 @@ impl<'a, 'ctx> Ctx<'a> {
                 item.detail = Some(k.to_string());
                 m.insert(k.clone(), item);
             }
-        }
+        });
+    }
+
+    fn get_macro_completion_in_ns(&self, ns: &str, m: &mut FxHashMap<String, CompletionItem>) {
+        self.with_ns(ns, |ns| {
+            ns.get_macro_completions(m);
+        });
     }
 
     pub fn get_type_completions(&self) -> Vec<CompletionItem> {
@@ -709,6 +761,13 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         if let Some(father) = self.father {
             father.get_var_completions(vmap);
+        }
+    }
+
+    fn get_macro_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
+        self.plmod.get_macro_completions(vmap);
+        if let Some(father) = self.father {
+            father.get_macro_completions(vmap);
         }
     }
 
@@ -767,7 +826,7 @@ impl<'a, 'ctx> Ctx<'a> {
         )
     }
     pub fn push_type_hints(&self, range: Range, pltype: Arc<RefCell<PLType>>) {
-        if self.need_highlight != 0 {
+        if self.need_highlight != 0 || self.in_macro {
             return;
         }
         let hint = InlayHint {
@@ -785,7 +844,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.plmod.hints.borrow_mut().push(hint);
     }
     pub fn push_param_hint(&self, range: Range, name: String) {
-        if self.need_highlight != 0 {
+        if self.need_highlight != 0 || self.in_macro {
             return;
         }
         let hint = InlayHint {

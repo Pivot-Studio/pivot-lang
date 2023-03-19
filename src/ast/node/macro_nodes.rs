@@ -16,6 +16,7 @@ use nom::bytes::complete::tag;
 pub struct MacroNode {
     pub id: VarNode,
     pub rules: Vec<MacroRuleNode>,
+    pub file: String,
 }
 
 impl PrintTrait for MacroNode {
@@ -35,6 +36,8 @@ impl Node for MacroNode {
         ctx: &'b mut Ctx<'a>,
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
+        ctx.push_semantic_token(self.range, SemanticTokenType::MACRO, 0);
+        self.file = ctx.plmod.path.clone();
         ctx.plmod.add_macro(&self);
         Ok((None, None, TerminatorEnum::NONE))
     }
@@ -63,6 +66,7 @@ impl MacroMatchExp {
                             r.new_err(ErrorCode::UNEXPECTED_TOKEN)
                                 .add_label(
                                     *r,
+                                    ctx.get_file(),
                                     format_label!("got {}, expect {}", *args.trim(), t.trim()),
                                 )
                                 .clone(),
@@ -83,17 +87,10 @@ impl MacroMatchExp {
             MacroMatchExp::Looper((ts, _r, _m)) => {
                 let mut new = args;
                 loop {
-                    let mut should_break = false;
                     for t in ts {
-                        let re = ctx.with_macro_loop_parse(|ctx| t.parse(ctx, new));
-                        if re.is_err() {
-                            should_break = true;
-                            break;
-                        } else {
-                            new = re.unwrap().0;
-                        }
+                        (new, _) = ctx.with_macro_loop_parse(|ctx| t.parse(ctx, new))?;
                     }
-                    if should_break {
+                    if new.len() == 0 {
                         break;
                     }
                 }
@@ -157,7 +154,7 @@ impl MacroMatchParameter {
                 self.add_to_macro_var(ctx, sts.into());
                 Ok((new, ()))
             }
-            _ => todo!(),
+            _ => unreachable!(),
         }
     }
 
@@ -210,7 +207,7 @@ impl Node for MacroLoopStatementNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        ctx.with_macro_loop(|ctx| self.statements.emit(ctx, builder))
+        ctx.with_macro_loop(|ctx| self.statements.emit(ctx, builder), self.range)
     }
 }
 
@@ -238,7 +235,12 @@ impl Node for MacroCallNode {
     ) -> NodeResult {
         match &*self.callee {
             NodeEnum::ExternIdNode(ex_node) => {
+                for ns in &ex_node.ns {
+                    ctx.push_semantic_token(ns.range(), SemanticTokenType::NAMESPACE, 0);
+                }
+                ctx.push_semantic_token(ex_node.id.range(), SemanticTokenType::MACRO, 0);
                 let m = ex_node.get_macro(ctx)?;
+                let src = m.file.clone();
                 let mut span = unsafe {
                     Span::new_from_raw_offset(
                         self.inner_start.offset,
@@ -247,21 +249,57 @@ impl Node for MacroCallNode {
                         false,
                     )
                 };
-                // TODO: multiple match rule
-                for e in m.rules[0].match_exp.iter() {
-                    (span, _) = e.parse(ctx, span).map_err(|e| {
-                        if let nom::Err::Error(e) = e {
-                            let mut e = e.clone();
-                            e.add_label(self.range, format_label!("the macro is called here"))
-                                .add_to_ctx(ctx)
-                        } else {
-                            unreachable!()
+                let mut last_err: Option<PLDiag> = None;
+                for rule in &m.rules {
+                    let mut next = false;
+                    for e in rule.match_exp.iter() {
+                        let re = e.parse(ctx, span).map_err(|e| {
+                            if let nom::Err::Error(e) = e {
+                                let mut e = e.clone();
+                                e.add_label(
+                                    self.range,
+                                    ctx.get_file(),
+                                    format_label!("the macro is called here"),
+                                );
+                                // e.set_range(self.range);
+                                e
+                            } else {
+                                unreachable!()
+                            }
+                        });
+                        match re {
+                            Ok((new, _)) => {
+                                span = new;
+                            }
+                            Err(e) => {
+                                last_err = Some(e);
+                                next = true;
+                                continue;
+                            }
                         }
-                    })?;
+                    }
+                    if next {
+                        continue;
+                    }
+                    let mut b = rule.clone().body;
+                    let re = ctx
+                        .with_diag_src(&src, |ctx| ctx.with_macro_emit(|ctx| b.emit(ctx, builder)));
+                    match re {
+                        Ok(_) => {
+                            return Ok((None, None, TerminatorEnum::NONE));
+                        }
+                        Err(e) => {
+                            last_err = Some(e);
+                            continue;
+                        }
+                    }
                 }
-                m.rules[0].clone().body.emit(ctx, builder)?;
+                if let Some(e) = last_err {
+                    ctx.with_diag_src(&src, |ctx| e.add_to_ctx(ctx));
+                    return Err(e);
+                }
             }
-            _ => panic!("MacroCallNode::emit: callee is not an extern id node"),
+            _ => unreachable!(),
         }
 
         Ok((None, None, TerminatorEnum::NONE))

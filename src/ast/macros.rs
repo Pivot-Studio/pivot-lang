@@ -105,7 +105,7 @@ macro_rules! format_label {
             $($args.into(),)*
         ]))
     };
-    ($fmt:expr $(,$args:expr)*,) => {
+    ($fmt:expr$(,$args:expr)*,) => {
         $crate::format_label!($fmt $(,$args)*)
     };
 }

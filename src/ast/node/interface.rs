@@ -142,6 +142,7 @@ impl TraitDefNode {
                     r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)
                         .add_label(
                             r,
+                            ctx.get_file(),
                             format_label!("modifier {} shall be removed", m.get_str()),
                         )
                         .add_help(

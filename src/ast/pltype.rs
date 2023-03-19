@@ -199,7 +199,11 @@ pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
 
 fn expect_pub_err(err: ErrorCode, ctx: &Ctx, range: Range, name: String) -> Result<(), PLDiag> {
     Err(PLDiag::new_error(range, err)
-        .add_label(range, format_label!("{} is not public", name))
+        .add_label(
+            range,
+            ctx.get_file(),
+            format_label!("{} is not public", name),
+        )
         .add_help("try add `pub` modifier before it".into())
         .add_to_ctx(ctx))
 }

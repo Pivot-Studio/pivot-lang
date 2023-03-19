@@ -176,7 +176,11 @@ impl Node for BinOpNode {
                 _ => {
                     return Err(ctx
                         .add_diag(self.range.new_err(ErrorCode::LOGIC_OP_NOT_BOOL))
-                        .add_label(self.left.range(), format_label!("expect bool here"))
+                        .add_label(
+                            self.left.range(),
+                            ctx.get_file(),
+                            format_label!("expect bool here"),
+                        )
                         .clone())
                 }
             });
@@ -252,7 +256,7 @@ impl Node for BinOpNode {
                 return Err(ctx.add_diag(
                     self.range
                         .new_err(ErrorCode::UNRECOGNIZED_BIN_OPERATOR)
-                        .add_label(self.op.1, None)
+                        .add_label(self.op.1, ctx.get_file(), None)
                         .clone(),
                 ))
             }

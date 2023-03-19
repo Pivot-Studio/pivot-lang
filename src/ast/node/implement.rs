@@ -60,7 +60,7 @@ impl Node for ImplNode {
                     } else {
                         t.range()
                             .new_err(ErrorCode::EXPECT_TRAIT_TYPE)
-                            .add_label(t.range(), format_label!("type {}", name)) //Some(("type {}".to_string(), vec![name])))
+                            .add_label(t.range(), ctx.get_file(), format_label!("type {}", name)) //Some(("type {}".to_string(), vec![name])))
                             .add_to_ctx(ctx);
                     };
                     // ctx.plmod.add_impl(&sttp, trait_tp);
@@ -88,6 +88,7 @@ impl Node for ImplNode {
                     r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)
                         .add_label(
                             r,
+                            ctx.get_file(),
                             format_label!("modifier {} shall be removed", m.get_str()),
                         )
                         .add_help(
@@ -129,6 +130,7 @@ impl Node for ImplNode {
                             .new_err(ErrorCode::METHOD_NOT_IN_TRAIT)
                             .add_label(
                                 method.range(),
+                                ctx.get_file(),
                                 format_label!("method {} not in trait {}",
                                     method.id.name.split("::").last().unwrap(),
                                     &st.name
@@ -136,6 +138,7 @@ impl Node for ImplNode {
                             )
                             .add_label(
                                 st.range,
+                                ctx.get_file(),
                                 format_label!("trait {} def here", &st.name),
                             ).add_help("move this method to another impl block or remove it from current impl block")
                             .add_to_ctx(ctx);
@@ -154,6 +157,7 @@ impl Node for ImplNode {
             r.new_err(ErrorCode::METHOD_NOT_IN_IMPL)
                 .add_label(
                     r,
+                    ctx.get_file(),
                     format_label!(
                         "method {} not in impl block, whitch is required in trait {}",
                         f,
@@ -162,6 +166,7 @@ impl Node for ImplNode {
                 )
                 .add_label(
                     tp.borrow().get_range().unwrap(),
+                    ctx.get_file(),
                     format_label!("trait {} def here", tp.borrow().get_name()),
                 )
                 .add_help("add the method to current impl block")
