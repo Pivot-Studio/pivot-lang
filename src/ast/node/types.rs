@@ -142,8 +142,9 @@ impl TypeNode for TypeNameNode {
                 _ => unreachable!(),
             };
             if sttype.need_gen_code() {
-                ctx.add_generic_types(&sttype.generic_map);
-                sttype = ctx.protect_generic_context(|ctx| Ok(sttype.gen_code(ctx, builder)))?;
+                sttype = ctx.protect_generic_context(&sttype.generic_map, |ctx| {
+                    Ok(sttype.gen_code(ctx, builder))
+                })?;
                 pltype = Arc::new(RefCell::new(PLType::STRUCT(sttype)));
                 return Ok(pltype);
             } else {
@@ -170,8 +171,7 @@ impl TypeNode for TypeNameNode {
             if let (PLType::STRUCT(left), PLType::STRUCT(right)) =
                 (&*left.borrow(), &*right.borrow())
             {
-                return ctx.protect_generic_context(|ctx| {
-                    ctx.add_generic_types(&left.generic_map);
+                return ctx.protect_generic_context(&left.generic_map, |ctx| {
                     for (k, leftfield) in left.fields.iter() {
                         let rightpltype = right
                             .fields
@@ -378,10 +378,10 @@ impl StructDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) {
-        let mut generic_map = IndexMap::default();
-        if let Some(generics) = &self.generics {
-            generic_map = generics.gen_generic_type();
-        }
+        let generic_map = self
+            .generics
+            .as_ref()
+            .map_or(IndexMap::default(), |generics| generics.gen_generic_type());
         let stu = Arc::new(RefCell::new(PLType::STRUCT(STType {
             name: self.id.name.clone(),
             path: ctx.plmod.path.clone(),
@@ -402,7 +402,11 @@ impl StructDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<(), PLDiag> {
-        ctx.protect_generic_context(|ctx| {
+        let generic_map = self
+            .generics
+            .as_ref()
+            .map_or(IndexMap::default(), |generics| generics.gen_generic_type());
+        ctx.protect_generic_context(&generic_map, |ctx| {
             let mut fields = FxHashMap::<String, Field>::default();
             let mut order_fields = Vec::<Field>::new();
             // gcrtti fields
@@ -416,11 +420,6 @@ impl StructDefNode {
             fields.insert("_vtable".to_string(), vtable_field.clone());
             order_fields.push(vtable_field);
             let mut i = 1;
-            // add generic type before field add type
-            if let Some(generics) = &mut self.generics {
-                let generic_map = generics.gen_generic_type();
-                ctx.add_generic_types(&generic_map);
-            }
             let mut field_pltps = vec![];
             let pltype = ctx.get_type(self.id.name.as_str(), self.range)?;
             let clone_map = ctx.plmod.types.clone();
@@ -553,12 +552,11 @@ impl Node for StructInitNode {
             }
         };
         ctx.send_if_go_to_def(self.typename.range(), sttype.range, sttype.path.clone());
-        ctx.protect_generic_context(|ctx| {
+        ctx.protect_generic_context(&sttype.generic_map.clone(), |ctx| {
             let mut field_init_values = vec![];
             let mut idx = 0;
             ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
             ctx.run_in_st_mod_mut(&mut sttype, |ctx, sttype| {
-                ctx.add_generic_types(&sttype.generic_map);
                 for fieldinit in self.fields.iter_mut() {
                     let field_id_range = fieldinit.id.range;
                     let field_exp_range = fieldinit.exp.range();

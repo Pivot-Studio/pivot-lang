@@ -329,15 +329,6 @@ impl<'a, 'ctx> Ctx<'a> {
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
         self.generic_types.insert(name, pltype);
     }
-    pub fn add_generic_types(&mut self, generic_map: &IndexMap<String, Arc<RefCell<PLType>>>) {
-        for (name, pltype) in generic_map.iter() {
-            self.add_generic_type(
-                name.clone(),
-                pltype.clone(),
-                pltype.clone().borrow().get_range().unwrap(),
-            );
-        }
-    }
     pub fn add_doc_symbols(&mut self, pltype: Arc<RefCell<PLType>>) {
         match &*RefCell::borrow(&pltype) {
             PLType::FN(fnvalue) => {
@@ -396,9 +387,17 @@ impl<'a, 'ctx> Ctx<'a> {
     }
     pub fn protect_generic_context<'b, T, F: FnMut(&mut Ctx<'a>) -> Result<T, PLDiag>>(
         &mut self,
+        generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
         mut f: F,
     ) -> Result<T, PLDiag> {
         let mp = self.generic_types.clone();
+        for (name, pltype) in generic_map.iter() {
+            self.add_generic_type(
+                name.clone(),
+                pltype.clone(),
+                pltype.clone().borrow().get_range().unwrap(),
+            );
+        }
         let res = f(self);
         self.generic_types = mp;
         res

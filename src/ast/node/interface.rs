@@ -82,15 +82,15 @@ impl TraitDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<(), PLDiag> {
-        ctx.protect_generic_context(|ctx| {
+        let generic_map = self
+            .generics
+            .as_ref()
+            .map_or(IndexMap::default(), |generics| generics.gen_generic_type());
+        ctx.protect_generic_context(&generic_map, |ctx| {
             let mut fields = FxHashMap::<String, Field>::default();
             let mut order_fields = Vec::<Field>::new();
             let mut i = 0;
             // add generic type before field add type
-            if let Some(generics) = &mut self.generics {
-                let generic_map = generics.gen_generic_type();
-                ctx.add_generic_types(&generic_map);
-            }
             let mut derives = vec![];
             for de in &self.derives {
                 derives.push(de.get_type(ctx, builder)?);
