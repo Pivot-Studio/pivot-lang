@@ -9,6 +9,7 @@ use rustc_hash::FxHashSet;
 
 #[node(comment)]
 pub struct ImplNode {
+    pub generics: Option<Box<GenericDefNode>>,
     pub target: Box<TypeNodeEnum>,
     pub methods: Vec<Box<FuncDefNode>>,
     pub impl_trait: Option<(Box<TypeNodeEnum>, (TokenType, Range))>,

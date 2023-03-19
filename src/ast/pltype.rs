@@ -597,14 +597,7 @@ impl FNValue {
                 np
             })
             .collect::<Vec<Box<TypeNodeEnum>>>();
-        let pltype = self
-            .generic_infer
-            .borrow()
-            .get(&res.name)
-            .as_ref()
-            .unwrap()
-            .clone()
-            .clone();
+        let pltype = self.generic_infer.borrow().get(&res.name).unwrap().clone();
         pltype.replace(PLType::FN(res.clone()));
         Ok(res.clone())
     }

@@ -205,7 +205,9 @@ impl TypeNode for FuncDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> TypeNodeResult {
-        ctx.protect_generic_context(|ctx| {
+        let child = &mut ctx.new_child(self.range.start, builder);
+        let (pltype, flater) = child.protect_generic_context(|child| {
+            let mut flater = None;
             let mut param_pltypes = Vec::new();
             let mut param_name = Vec::new();
             let mut method = false;
@@ -214,10 +216,18 @@ impl TypeNode for FuncDefNode {
             if let Some(generics) = &self.generics {
                 generic_map = generics.gen_generic_type();
             }
-            ctx.add_generic_types(&generic_map);
+            child.add_generic_types(&generic_map);
+            generic_map
+                .iter()
+                .for_each(|(_, pltype)| match &mut *pltype.borrow_mut() {
+                    PLType::GENERIC(g) => {
+                        g.set_place_holder(child);
+                    }
+                    _ => unreachable!(),
+                });
             for para in self.paralist.iter() {
-                let paramtype = para.typenode.get_type(ctx, builder)?;
-                ctx.set_if_refs_tp(paramtype.clone(), para.typenode.range());
+                let paramtype = para.typenode.get_type(child, builder)?;
+                child.set_if_refs_tp(paramtype.clone(), para.typenode.range());
                 if first && para.id.name == "self" {
                     method = true;
                 }
@@ -225,7 +235,6 @@ impl TypeNode for FuncDefNode {
                 param_pltypes.push(para.typenode.clone());
                 param_name.push(para.id.name.clone());
             }
-            // let refs = RwVec::new();
             let mut fnvalue = FNValue {
                 name: self.id.name.clone(),
                 param_names: param_name,
@@ -234,9 +243,9 @@ impl TypeNode for FuncDefNode {
                 llvmname: if self.declare {
                     self.id.name.clone()
                 } else {
-                    ctx.plmod.get_full_name(&self.id.name)
+                    child.plmod.get_full_name(&self.id.name)
                 },
-                path: ctx.plmod.path.clone(),
+                path: child.plmod.path.clone(),
                 fntype: FNType {
                     ret_pltype: self.ret.clone(),
                     param_pltypes,
@@ -249,34 +258,41 @@ impl TypeNode for FuncDefNode {
                 node: Some(Box::new(self.clone())),
             };
             if self.generics.is_none() {
-                builder.get_or_insert_fn_handle(&fnvalue, ctx);
+                builder.get_or_insert_fn_handle(&fnvalue, child);
             }
             let pltype = Arc::new(RefCell::new(PLType::FN(fnvalue.clone())));
-            ctx.set_if_refs_tp(pltype.clone(), self.id.range);
-            ctx.add_doc_symbols(pltype.clone());
+            child.set_if_refs_tp(pltype.clone(), self.id.range);
+            child.add_doc_symbols(pltype.clone());
             if method {
                 let a = self
                     .paralist
                     .first()
                     .unwrap()
                     .typenode
-                    .get_type(ctx, builder)
+                    .get_type(child, builder)
                     .unwrap();
                 let mut b = a.borrow_mut();
                 if let PLType::POINTER(s) = &mut *b {
                     if let PLType::STRUCT(s) = &mut *s.borrow_mut() {
                         fnvalue.fntype.param_pltypes = fnvalue.fntype.param_pltypes[1..].to_vec();
-                        ctx.add_method(
-                            s,
-                            self.id.name.split("::").last().unwrap(),
-                            fnvalue.clone(),
-                            self.id.range,
-                        );
+                        let fullname = s.get_st_full_name();
+                        flater = Some(move |ctx: &mut Ctx| {
+                            ctx.add_method(
+                                &fullname,
+                                self.id.name.split("::").last().unwrap(),
+                                fnvalue.clone(),
+                                self.id.range,
+                            );
+                        });
                     }
                 }
             }
-            Ok(pltype)
-        })
+            Ok((pltype, flater))
+        })?;
+        if let Some(flater) = flater {
+            flater(ctx);
+        }
+        Ok(pltype)
     }
 
     fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) {
@@ -364,7 +380,7 @@ impl FuncDefNode {
             child.function = Some(funcvalue);
             builder.build_sub_program(
                 self.paralist.clone(),
-                self.ret.clone(),
+                fnvalue.fntype.ret_pltype.clone(),
                 &fnvalue,
                 funcvalue,
                 child,
@@ -377,10 +393,9 @@ impl FuncDefNode {
             let ret_value_ptr = match &*fnvalue.fntype.ret_pltype.get_type(child, builder)?.borrow()
             {
                 PLType::VOID => None,
-                _ => {
-                    let pltype = self.ret.get_type(child, builder)?;
+                other => {
                     builder.rm_curr_debug_location();
-                    let retv = builder.alloc("retvalue", &pltype.borrow(), child, None);
+                    let retv = builder.alloc("retvalue", other, child, None);
                     // 返回值不能在函数结束时从root表移除
                     child.roots.borrow_mut().pop();
                     Some(retv)
@@ -492,7 +507,11 @@ impl Node for FuncDefNode {
         }
         if self.body.is_some() {
             let fntype = match &*pltype.borrow() {
-                PLType::FN(fntype) => fntype.clone(),
+                PLType::FN(f) => {
+                    let mut res = f.clone();
+                    res.fntype = res.fntype.new_pltype();
+                    res
+                }
                 _ => return Ok((None, None, TerminatorEnum::NONE)),
             };
             self.gen_fntype(ctx, true, builder, fntype)?;

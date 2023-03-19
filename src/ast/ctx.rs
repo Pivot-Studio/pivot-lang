@@ -174,7 +174,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.position_at_end(entry, builder);
         builder.build_return(None);
     }
-    pub fn add_method(&mut self, tp: &STType, mthd: &str, fntp: FNValue, range: Range) {
+    pub fn add_method(&mut self, tp: &str, mthd: &str, fntp: FNValue, range: Range) {
         if self.plmod.add_method(tp, mthd, fntp).is_err() {
             self.add_diag(range.new_err(ErrorCode::DUPLICATE_METHOD));
         }

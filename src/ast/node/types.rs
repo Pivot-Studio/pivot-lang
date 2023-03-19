@@ -142,6 +142,7 @@ impl TypeNode for TypeNameNode {
                 _ => unreachable!(),
             };
             if sttype.need_gen_code() {
+                ctx.add_generic_types(&sttype.generic_map);
                 sttype = ctx.protect_generic_context(|ctx| Ok(sttype.gen_code(ctx, builder)))?;
                 pltype = Arc::new(RefCell::new(PLType::STRUCT(sttype)));
                 return Ok(pltype);
@@ -592,28 +593,28 @@ impl Node for StructInitNode {
                     field_init_values.push((field.index, value));
                     ctx.set_field_refs(pltype.clone(), field, field_id_range);
                 }
+                if !sttype.generic_map.is_empty() {
+                    if sttype.need_gen_code() {
+                        pltype = Arc::new(RefCell::new(PLType::STRUCT(
+                            ctx.run_in_st_mod_mut(sttype, |ctx, sttype| {
+                                Ok(sttype.gen_code(ctx, builder))
+                            })?,
+                        )));
+                    } else {
+                        return Err(ctx.add_diag(
+                            self.typename
+                                .range()
+                                .new_err(ErrorCode::GENERIC_CANNOT_BE_INFER),
+                        ));
+                    }
+                }
                 Ok(())
             })?;
 
             if self.fields.len() < self.comments.len() {
                 ctx.emit_comment_highlight(&self.comments[idx]);
             }
-            if !sttype.generic_map.is_empty() {
-                if sttype.need_gen_code() {
-                    sttype = ctx.run_in_st_mod_mut(&mut sttype, |ctx, sttype| {
-                        Ok(sttype.gen_code(ctx, builder))
-                    })?;
-                    pltype = Arc::new(RefCell::new(PLType::STRUCT(sttype.clone())));
-                } else {
-                    return Err(ctx.add_diag(
-                        self.typename
-                            .range()
-                            .new_err(ErrorCode::GENERIC_CANNOT_BE_INFER),
-                    ));
-                }
-            }
-            let struct_pointer =
-                builder.alloc("initstruct", &PLType::STRUCT(sttype.clone()), ctx, None); //alloc(ctx, tp, "initstruct");
+            let struct_pointer = builder.alloc("initstruct", &pltype.borrow(), ctx, None); //alloc(ctx, tp, "initstruct");
             field_init_values.iter().for_each(|(index, value)| {
                 let fieldptr = builder
                     .build_struct_gep(struct_pointer, *index, "fieldptr")

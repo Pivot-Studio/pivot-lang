@@ -4,7 +4,6 @@ use super::diag::{ErrorCode, PLDiag};
 use super::pltype::FNValue;
 use super::pltype::PLType;
 use super::pltype::PriType;
-use super::pltype::STType;
 
 use super::range::Range;
 use super::tokens::TokenType;
@@ -278,9 +277,8 @@ impl Mod {
         None
     }
 
-    pub fn add_method(&mut self, tp: &STType, mthd: &str, fntp: FNValue) -> Result<(), ()> {
-        let full_name = tp.get_st_full_name();
-        if let Some(m) = self.methods.get_mut(&full_name) {
+    pub fn add_method(&mut self, full_name: &str, mthd: &str, fntp: FNValue) -> Result<(), ()> {
+        if let Some(m) = self.methods.get_mut(full_name) {
             if m.get(mthd).is_some() {
                 // duplicate method
                 return Err(());
@@ -289,7 +287,7 @@ impl Mod {
         } else {
             let mut m = FxHashMap::default();
             m.insert(mthd.to_string(), fntp);
-            self.methods.insert(full_name, m);
+            self.methods.insert(full_name.to_string(), m);
         }
         Ok(())
     }

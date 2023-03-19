@@ -2,6 +2,7 @@ use super::*;
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
+use crate::ast::pltype::eq;
 use crate::ast::{ctx::Ctx, diag::ErrorCode};
 use internal_macro::node;
 
@@ -37,7 +38,7 @@ impl Node for RetNode {
             let (ret, tp, _) = ret.emit(ctx, builder)?;
             ctx.emit_comment_highlight(&self.comments[0]);
             let (ret, v) = ctx.try_load2var(self.range, ret.unwrap(), tp.unwrap(), builder)?;
-            if v != rettp.unwrap() {
+            if !eq(rettp.unwrap(), v) {
                 let err = ctx.add_diag(self.range.new_err(ErrorCode::RETURN_TYPE_MISMATCH));
                 return Err(err);
             }
