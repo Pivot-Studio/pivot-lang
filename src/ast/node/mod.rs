@@ -181,7 +181,7 @@ pub type NodeResult = Result<
 pub struct PLValue {
     pub value: ValueHandle,
     pub is_const: bool,
-    pub receiver: Option<ValueHandle>,
+    pub receiver: Option<(ValueHandle, Option<Arc<RefCell<PLType>>>)>,
 }
 impl PLValue {
     pub fn set_const(&mut self, is_const: bool) {

@@ -50,29 +50,26 @@ impl Node for ImplNode {
         }
         self.target.emit_highlight(ctx);
         let mut method_docsymbols = vec![];
-        let tp = self.target.get_type(ctx, builder)?;
-        match &mut *tp.borrow_mut() {
-            PLType::STRUCT(sttp) => {
-                if let Some((t, _)) = &self.impl_trait {
-                    let trait_tp = t.get_type(ctx, builder)?;
-                    let name = trait_tp.borrow().get_kind_name();
-                    if let PLType::TRAIT(st) = &*trait_tp.borrow_mut() {
-                        ctx.send_if_go_to_def(t.range(), st.range, st.path.clone());
-                    } else {
-                        t.range()
-                            .new_err(ErrorCode::EXPECT_TRAIT_TYPE)
-                            .add_label(t.range(), format_label!("type {}", name)) //Some(("type {}".to_string(), vec![name])))
-                            .add_to_ctx(ctx);
-                    };
-                    // ctx.plmod.add_impl(&sttp, trait_tp);
-                }
-                ctx.send_if_go_to_def(self.target.range(), sttp.range, sttp.path.clone());
+        if let TypeNodeEnum::PointerTypeNode(pt) = &*self.target {
+            if let TypeNodeEnum::BasicTypeNode(bt) = &*pt.elm {
+                let st_pltype = bt.get_origin_type_with_infer(ctx, builder)?;
+                if let PLType::STRUCT(sttp) = &*st_pltype.borrow() {
+                    if let Some((t, _)) = &self.impl_trait {
+                        let trait_tp = t.get_type(ctx, builder)?;
+                        let name = trait_tp.borrow().get_kind_name();
+                        if let PLType::TRAIT(st) = &*trait_tp.borrow_mut() {
+                            ctx.send_if_go_to_def(t.range(), st.range, st.path.clone());
+                        } else {
+                            t.range()
+                                .new_err(ErrorCode::EXPECT_TRAIT_TYPE)
+                                .add_label(t.range(), format_label!("type {}", name)) //Some(("type {}".to_string(), vec![name])))
+                                .add_to_ctx(ctx);
+                        };
+                    }
+                    ctx.send_if_go_to_def(self.target.range(), sttp.range, sttp.path.clone());
+                };
             }
-            _ => {
-                ctx.add_diag(self.target.range().new_err(ErrorCode::EXPECT_TYPE));
-            }
-        };
-
+        }
         for method in &mut self.methods {
             let res = method.emit(ctx, builder);
             if res.is_err() {

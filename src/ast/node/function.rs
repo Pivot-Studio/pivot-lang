@@ -74,9 +74,10 @@ impl Node for FuncCallNode {
         }
         let mut skip = 0;
         let mut para_values = vec![];
+        let mut receiver_type = None;
         let fn_handle = plvalue.and_then(|plvalue| {
-            if let Some(receiver) = plvalue.receiver {
-                (skip, para_values) = (1, vec![receiver]);
+            if let Some((receiver, tp)) = plvalue.receiver {
+                (skip, para_values, receiver_type) = (1, vec![receiver], tp);
             }
             Some(plvalue.value)
         });
@@ -125,11 +126,23 @@ impl Node for FuncCallNode {
         // value check and generic infer
         let res = ctx.protect_generic_context(&fnvalue.fntype.generic_map.clone(), |ctx| {
             ctx.run_in_fn_mod_mut(&mut fnvalue, |ctx, fnvalue| {
+                if let Some(receiver_pltype) = &receiver_type {
+                    if !fnvalue.fntype.param_pltypes[0].eq_or_infer(
+                        ctx,
+                        receiver_pltype.clone(),
+                        builder,
+                    )? {
+                        return Err(
+                            ctx.add_diag(self.range.new_err(ErrorCode::RECEIVER_CANNOT_BE_INFER))
+                        );
+                    }
+                }
                 for (i, (value_pltype, pararange)) in value_pltypes.iter().enumerate() {
-                    if !fnvalue.fntype.param_pltypes[i + skip as usize]
-                        .clone()
-                        .eq_or_infer(ctx, value_pltype.clone(), builder)?
-                    {
+                    if !fnvalue.fntype.param_pltypes[i + skip as usize].eq_or_infer(
+                        ctx,
+                        value_pltype.clone(),
+                        builder,
+                    )? {
                         return Err(
                             ctx.add_diag(pararange.new_err(ErrorCode::PARAMETER_TYPE_NOT_MATCH))
                         );
@@ -232,7 +245,7 @@ impl TypeNode for FuncDefNode {
                 param_pltypes.push(para.typenode.clone());
                 param_name.push(para.id.name.clone());
             }
-            let mut fnvalue = FNValue {
+            let fnvalue = FNValue {
                 name: self.id.name.clone(),
                 param_names: param_name,
                 range: self.range,
@@ -261,18 +274,16 @@ impl TypeNode for FuncDefNode {
             child.set_if_refs_tp(pltype.clone(), self.id.range);
             child.add_doc_symbols(pltype.clone());
             if method {
-                let a = self
+                let receiver_pltype = self
                     .paralist
                     .first()
                     .unwrap()
                     .typenode
                     .get_type(child, builder)
                     .unwrap();
-                let mut b = a.borrow_mut();
-                if let PLType::POINTER(s) = &mut *b {
-                    if let PLType::STRUCT(s) = &mut *s.borrow_mut() {
-                        fnvalue.fntype.param_pltypes = fnvalue.fntype.param_pltypes[1..].to_vec();
-                        let fullname = s.get_st_full_name();
+                if let PLType::POINTER(s) = &*receiver_pltype.borrow() {
+                    if let PLType::STRUCT(s) = &*s.borrow() {
+                        let fullname = s.get_st_full_name_except_generic();
                         flater = Some(move |ctx: &mut Ctx| {
                             ctx.add_method(
                                 &fullname,
@@ -282,7 +293,7 @@ impl TypeNode for FuncDefNode {
                             );
                         });
                     }
-                }
+                };
             }
             Ok((pltype, flater))
         })?;

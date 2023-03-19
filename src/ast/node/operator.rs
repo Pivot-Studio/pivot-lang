@@ -332,7 +332,7 @@ impl Node for TakeOpNode {
                                         Some(PLValue {
                                             value: fnv,
                                             is_const: false,
-                                            receiver: Some(headptr),
+                                            receiver: Some((headptr, None)),
                                         }),
                                         Some(re),
                                         TerminatorEnum::NONE,
@@ -342,16 +342,6 @@ impl Node for TakeOpNode {
                             } else if let Some(mthd) = method {
                                 _ = mthd.expect_pub(ctx, range);
                                 ctx.push_semantic_token(range, SemanticTokenType::METHOD, 0);
-                                let mut mthd = mthd;
-                                if let PLType::POINTER(_) = &*pltype.clone().borrow() {
-                                    mthd.fntype
-                                        .param_pltypes
-                                        .insert(0, pltype.borrow().get_typenode(ctx));
-                                } else {
-                                    mthd.fntype
-                                        .param_pltypes
-                                        .insert(0, PLType::POINTER(pltype).get_typenode(ctx));
-                                }
                                 ctx.send_if_go_to_def(
                                     range,
                                     mthd.range,
@@ -361,7 +351,10 @@ impl Node for TakeOpNode {
                                     Some(PLValue {
                                         value: usize::MAX,
                                         is_const: false,
-                                        receiver: Some(headptr),
+                                        receiver: Some((
+                                            headptr,
+                                            Some(Arc::new(RefCell::new(PLType::POINTER(pltype)))),
+                                        )),
                                     }),
                                     Some(Arc::new(RefCell::new(PLType::FN(mthd)))),
                                     TerminatorEnum::NONE,

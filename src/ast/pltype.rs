@@ -856,10 +856,15 @@ impl STType {
         completions
     }
     pub fn find_method<'a, 'ctx>(&self, ctx: &Ctx<'a>, method: &str) -> Option<FNValue> {
-        ctx.plmod.find_method(&self.get_st_full_name(), method)
+        ctx.plmod
+            .find_method(&self.get_st_full_name_except_generic(), method)
     }
     pub fn get_st_full_name(&self) -> String {
         format!("{}..{}", self.path, self.name)
+    }
+    pub fn get_st_full_name_except_generic(&self) -> String {
+        let full_name = self.get_st_full_name();
+        full_name.split('<').collect::<Vec<_>>()[0].to_string()
     }
     pub fn get_doc_symbol<'a, 'ctx>(&self) -> DocumentSymbol {
         let children: Vec<DocumentSymbol> = self

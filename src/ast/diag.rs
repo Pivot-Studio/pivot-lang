@@ -79,6 +79,7 @@ define_error!(
     CAN_NOT_REF_CONSTANT = "can not ref constant",
     ILLEGAL_SELF_RECURSION = "illegal self recursion, please use pointer",
     GENERIC_CANNOT_BE_INFER = "generic can not be infer",
+    RECEIVER_CANNOT_BE_INFER = "receiver can not be infer",
     DUPLICATE_METHOD = "duplicate method",
     GENERIC_PARAM_LEN_MISMATCH = "generic param len mismatch",
     NOT_GENERIC_TYPE = "not generic type",
