@@ -35,8 +35,11 @@ pub fn test_impl() void {
         y:false
     };
     let p3 = p1.mixup(p2);
+    let p4 = p2.mixup<i64|i64>(p1);
     panic::assert(p3.x == 1);
     panic::assert(!p3.y);
+    panic::assert(p4.y == 2);
+    panic::assert(p4.x);
     return;
 }
 struct Point<X|Y> {

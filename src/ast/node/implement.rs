@@ -33,6 +33,9 @@ impl Node for ImplNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
+        if let Some(generics) = &self.generics {
+            generics.emit_highlight(ctx);
+        }
         let mut traittpandrange = None;
         let mut traitfns = FxHashSet::default();
         if let Some((t, (_, r))) = &self.impl_trait {

@@ -58,7 +58,7 @@ impl Node for FuncCallNode {
         if let Some(generic_params) = &self.generic_params {
             let generic_params_range = generic_params.range;
             generic_params.emit_highlight(ctx);
-            if generic_params.generics.len() != fnvalue.fntype.generic_map.len() {
+            if generic_params.generics.len() != fnvalue.fntype.generics_size {
                 return Err(ctx.add_diag(
                     generic_params_range.new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
                 ));
@@ -66,6 +66,9 @@ impl Node for FuncCallNode {
             let generic_types = generic_params.get_generic_types(ctx, builder)?;
             let mut i = 0;
             for (_, pltype) in fnvalue.fntype.generic_map.iter() {
+                if i >= fnvalue.fntype.generics_size {
+                    break;
+                }
                 if generic_types[i].is_some() {
                     eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
                 }
@@ -208,6 +211,7 @@ pub struct FuncDefNode {
     pub generics: Option<Box<GenericDefNode>>,
     pub body: Option<StatementsNode>,
     pub modifier: Option<(TokenType, Range)>,
+    pub generics_size: usize, // the size of generics except the generics from impl node
 }
 
 impl TypeNode for FuncDefNode {
@@ -258,6 +262,7 @@ impl TypeNode for FuncDefNode {
                     generic_map: generic_map.clone(),
                     generic: self.generics.is_some(),
                     modifier: self.modifier,
+                    generics_size: self.generics_size,
                 },
                 generic_infer: Arc::new(RefCell::new(IndexMap::default())),
                 node: Some(Box::new(self.clone())),

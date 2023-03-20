@@ -452,6 +452,7 @@ pub struct FNType {
     pub modifier: Option<(TokenType, Range)>,
     pub method: bool,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
+    pub generics_size: usize, // the size of generics except the generics from impl node
 }
 impl FNType {}
 #[derive(Debug, Clone, PartialEq, Eq)]
