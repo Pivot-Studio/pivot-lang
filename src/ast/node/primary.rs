@@ -34,11 +34,12 @@ impl Node for PrimaryNode {
         res
     }
 }
-
+// ANCHOR: bool
 #[node]
 pub struct BoolConstNode {
     pub value: bool,
 }
+// ANCHOR_END: bool
 
 impl PrintTrait for BoolConstNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {

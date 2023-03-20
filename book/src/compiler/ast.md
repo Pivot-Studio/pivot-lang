@@ -12,12 +12,22 @@
 {{#include ../../../src/ast/node/mod.rs:node}}
 ```
 
+一般来说，所有的节点都需要加入`NodeEnum`中，并且使用`#[node]`proc macro进行修饰。
+同时需要在`fmt.rs`中加入format相关的函数。
+
+如果你想学习如何添加新的节点，可以先从简单的节点开始，比如`BoolConstNode`
+
+```rust,no_run,noplayground
+{{#include ../../../src/ast/node/primary.rs:bool}}
+```
+
+
 你可能注意到了，`Node`trait继承了`RangeTrait`，这个trait定义了节点的位置信息。  
 
 ```rust,no_run,noplayground
 {{#include ../../../src/ast/node/mod.rs:range}}
 ```
-一般来说，`RangeTrait`的实现通过`#[range]`宏来自动生成，你不需要手动实现它。  
+一般来说，`RangeTrait`的实现通过`#[node]`宏来自动生成，你不需要手动实现它。  
 
 `Node`接口中的`print`函数用于打印节点的信息，它会被用于调试。`print`打印的结果和`tree`的输出非常像，你需要用一些工具函数来
 格式化输出。以`ifnode`的`print`函数为例：  
@@ -34,7 +44,13 @@
 {{#include ../../../src/ast/node/control.rs:emit}}
 ```
 
-emit函数的参数是节点自身，第二个参数是编译上下文。编译上下文中会包含一些需要透传的信息，比如符号表，llvmbuilder，lsp参数等。  
+emit函数的第一个参数是节点自身，第二个参数是编译上下文。编译上下文中会包含一些需要透传的信息，比如符号表，lsp参数等，
+第三个参数是`builder`，用于生成中间代码。目前`builder`只有llvm的实现。
+
+emit函数的返回值比较复杂，它是一个`Result`枚举类型，它的`Ok`类型中包含一个`Option`的`PLValue`--这是代表该节点的运算结果，
+一般只有表达式节点有这个值，statement节点这里会返回`None`，除此之外还包含一个`Option`的`PLType`，这是代表该节点返回值的类型，
+最后一个是一个`TerminatorEnum`，用于分析某个路径是否有终结语句（break，continue，return，panic等）。返回值的`Err`类型是一个`PLDiag`，这个类型是用于报告错误的，包含了所有的错误信息。一般来说，在返回之前错误就会被加到编译上下文中，所以调用者不需要对其进行
+任何处理。
 
 
 ## 打印AST结构
