@@ -225,8 +225,7 @@ impl TypeNode for FuncDefNode {
             let mut flater = None;
             let mut param_pltypes = Vec::new();
             let mut param_name = Vec::new();
-            let mut method = false;
-            let mut first = true;
+            let method = !self.paralist.is_empty() && self.paralist[0].id.name == "self";
             generic_map
                 .iter()
                 .for_each(|(_, pltype)| match &mut *pltype.borrow_mut() {
@@ -238,10 +237,6 @@ impl TypeNode for FuncDefNode {
             for para in self.paralist.iter() {
                 let paramtype = para.typenode.get_type(child, builder)?;
                 child.set_if_refs_tp(paramtype.clone(), para.typenode.range());
-                if first && para.id.name == "self" {
-                    method = true;
-                }
-                first = false;
                 param_pltypes.push(para.typenode.clone());
                 param_name.push(para.id.name.clone());
             }
