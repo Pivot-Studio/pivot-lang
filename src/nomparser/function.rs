@@ -84,6 +84,7 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 doc: docs,
                 precom: precoms,
                 declare: body.is_none(),
+                generics_size: generics.as_ref().map_or(0, |g| g.generics.len()),
                 generics,
                 body,
                 modifier,

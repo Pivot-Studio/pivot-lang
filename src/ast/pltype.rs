@@ -54,7 +54,7 @@ use std::sync::Arc;
 /// including primitive type, struct type, function type, void type
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PLType {
-    FN(FNType),
+    FN(FNValue),
     STRUCT(STType),
     ARR(ARRType),
     PRIMITIVE(PriType),
@@ -357,18 +357,18 @@ impl PLType {
                 );
                 Ok(())
             }
-            PLType::TRAIT(t) => {
-                if t.path == ctx.plmod.path {
+            PLType::TRAIT(st) => {
+                if st.path == ctx.plmod.path {
                     return Ok(());
                 }
                 if_not_modified_by!(
-                    t.modifier,
+                    st.modifier,
                     TokenType::PUB,
                     return expect_pub_err(
                         super::diag::ErrorCode::EXPECT_PUBLIC_TRAIT,
                         ctx,
                         range,
-                        t.name.clone()
+                        st.name.clone()
                     )
                 );
                 Ok(())
@@ -444,26 +444,30 @@ impl Field {
         }
     }
 }
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FNType {
+    pub param_pltypes: Vec<Box<TypeNodeEnum>>,
+    pub ret_pltype: Box<TypeNodeEnum>,
+    pub generic: bool,
+    pub modifier: Option<(TokenType, Range)>,
+    pub method: bool,
+    pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
+    pub generics_size: usize, // the size of generics except the generics from impl node
+}
+impl FNType {}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FNValue {
     pub name: String,     // name for lsp
     pub llvmname: String, // name in llvm ir
     pub path: String,
-    pub param_pltypes: Vec<Box<TypeNodeEnum>>,
     pub param_names: Vec<String>,
-    pub ret_pltype: Box<TypeNodeEnum>,
     pub range: Range,
     pub doc: Vec<Box<NodeEnum>>,
-    pub method: bool,
-    pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
-    pub generic: bool,
     pub node: Option<Box<FuncDefNode>>,
-    pub modifier: Option<(TokenType, Range)>,
+    pub fntype: FNType,
 }
-
-impl TryFrom<PLType> for FNType {
+impl TryFrom<PLType> for FNValue {
     type Error = ();
 
     fn try_from(value: PLType) -> Result<Self, Self::Error> {
@@ -473,9 +477,9 @@ impl TryFrom<PLType> for FNType {
         }
     }
 }
-impl FNType {
+impl FNValue {
     pub fn is_modified_by(&self, modifier: TokenType) -> bool {
-        if let Some((t, _)) = self.modifier {
+        if let Some((t, _)) = self.fntype.modifier {
             t == modifier
         } else {
             false
@@ -486,7 +490,7 @@ impl FNType {
             return Ok(());
         }
         if_not_modified_by!(
-            self.modifier,
+            self.fntype.modifier,
             TokenType::PUB,
             return expect_pub_err(
                 super::diag::ErrorCode::EXPECT_PUBLIC_FUNCTION,
@@ -504,28 +508,30 @@ impl FNType {
     /// 因为接口函数的第一个参数是*i64，而实现函数的第一个参数是实现类型
     pub fn eq_except_receiver<'a, 'ctx, 'b>(
         &self,
-        other: &FNType,
+        other: &FNValue,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> bool {
         if self.name.split("::").last().unwrap() != other.name.split("::").last().unwrap() {
             return false;
         }
-        if self.param_pltypes.len() != other.param_pltypes.len() {
+        if self.fntype.param_pltypes.len() != other.fntype.param_pltypes.len() {
             return false;
         }
-        for i in 1..self.param_pltypes.len() {
-            if self.param_pltypes[i].get_type(ctx, builder)
-                != other.param_pltypes[i].get_type(ctx, builder)
+        for i in 1..self.fntype.param_pltypes.len() {
+            if self.fntype.param_pltypes[i].get_type(ctx, builder)
+                != other.fntype.param_pltypes[i].get_type(ctx, builder)
             {
                 return false;
             }
         }
-        self.ret_pltype.get_type(ctx, builder) == other.ret_pltype.get_type(ctx, builder)
+        self.fntype.ret_pltype.get_type(ctx, builder)
+            == other.fntype.ret_pltype.get_type(ctx, builder)
     }
     pub fn append_name_with_generic(&self, name: String) -> String {
-        if self.need_gen_code() {
+        if self.fntype.need_gen_code() {
             let typeinfer = self
+                .fntype
                 .generic_map
                 .iter()
                 .map(|(_, v)| match &*v.clone().borrow() {
@@ -543,7 +549,7 @@ impl FNType {
         &mut self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Result<FNType, PLDiag> {
+    ) -> Result<FNValue, PLDiag> {
         let name = self.append_name_with_generic(self.name.clone());
         if let Some(pltype) = self.generic_infer.borrow().get(&name) {
             if let PLType::FN(f) = &*pltype.borrow() {
@@ -558,7 +564,7 @@ impl FNType {
             name
         );
         res.name = name.clone();
-        res.generic_map.clear();
+        res.fntype.generic_map.clear();
         res.generic_infer = Arc::new(RefCell::new(IndexMap::default()));
         self.generic_infer
             .borrow_mut()
@@ -576,13 +582,15 @@ impl FNType {
         ctx.need_highlight -= 1;
         ctx.position_at_end(block.unwrap(), builder);
 
-        res.ret_pltype = self
+        res.fntype.ret_pltype = self
+            .fntype
             .ret_pltype
             .get_type(ctx, builder)
             .unwrap()
             .borrow()
             .get_typenode(ctx);
-        res.param_pltypes = self
+        res.fntype.param_pltypes = self
+            .fntype
             .param_pltypes
             .iter()
             .map(|p| {
@@ -590,21 +598,14 @@ impl FNType {
                 np
             })
             .collect::<Vec<Box<TypeNodeEnum>>>();
-        let pltype = self
-            .generic_infer
-            .borrow()
-            .get(&res.name)
-            .as_ref()
-            .unwrap()
-            .clone()
-            .clone();
+        let pltype = self.generic_infer.borrow().get(&res.name).unwrap().clone();
         pltype.replace(PLType::FN(res.clone()));
         Ok(res.clone())
     }
     pub fn gen_snippet(&self) -> String {
         let mut name = self.name.clone();
         let mut iter = self.param_names.iter();
-        if self.method {
+        if self.fntype.method {
             iter.next();
             name = name.split("::").last().unwrap().to_string();
         }
@@ -619,13 +620,13 @@ impl FNType {
     pub fn get_doc_symbol(&self) -> DocumentSymbol {
         #[allow(deprecated)]
         DocumentSymbol {
-            name: if self.method {
+            name: if self.fntype.method {
                 self.name.split("::").last().unwrap().to_string()
             } else {
                 self.name.clone()
             },
             detail: Some(self.get_signature()),
-            kind: if self.method {
+            kind: if self.fntype.method {
                 SymbolKind::METHOD
             } else {
                 SymbolKind::FUNCTION
@@ -640,25 +641,25 @@ impl FNType {
     pub fn get_signature(&self) -> String {
         let mut params = String::new();
         if !self.param_names.is_empty() {
-            if !self.method {
+            if !self.fntype.method {
                 params += &format!(
                     "{}: {}",
                     self.param_names[0],
-                    FmtBuilder::generate_node(&self.param_pltypes[0])
+                    FmtBuilder::generate_node(&self.fntype.param_pltypes[0])
                 );
             }
             for i in 1..self.param_names.len() {
                 params += &format!(
                     ", {}: {}",
                     self.param_names[i],
-                    FmtBuilder::generate_node(&self.param_pltypes[i])
+                    FmtBuilder::generate_node(&self.fntype.param_pltypes[i])
                 );
             }
         }
         format!(
             "fn ({}) {}",
             params,
-            FmtBuilder::generate_node(&self.ret_pltype)
+            FmtBuilder::generate_node(&self.fntype.ret_pltype)
         )
     }
 }
@@ -746,19 +747,16 @@ impl STType {
         get_hash_code(full_name)
     }
     pub fn append_name_with_generic(&self) -> String {
-        if self.need_gen_code() {
-            let typeinfer = self
-                .generic_map
-                .iter()
-                .map(|(_, v)| match &*v.clone().borrow() {
-                    PLType::GENERIC(g) => g.curpltype.as_ref().unwrap().borrow().get_name(),
-                    _ => unreachable!(),
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
-            return format!("{}<{}>", self.name, typeinfer);
-        }
-        unreachable!()
+        let typeinfer = self
+            .generic_map
+            .iter()
+            .map(|(_, v)| match &*v.clone().borrow() {
+                PLType::GENERIC(g) => g.curpltype.as_ref().unwrap().borrow().get_name(),
+                _ => unreachable!(),
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("{}<{}>", self.name, typeinfer)
     }
     pub fn gen_code<'a, 'ctx, 'b>(
         &self,
@@ -858,11 +856,16 @@ impl STType {
         }
         completions
     }
-    pub fn find_method<'a, 'ctx>(&self, ctx: &Ctx<'a>, method: &str) -> Option<FNType> {
-        ctx.plmod.find_method(&self.get_st_full_name(), method)
+    pub fn find_method<'a, 'ctx>(&self, ctx: &Ctx<'a>, method: &str) -> Option<FNValue> {
+        ctx.plmod
+            .find_method(&self.get_st_full_name_except_generic(), method)
     }
     pub fn get_st_full_name(&self) -> String {
         format!("{}..{}", self.path, self.name)
+    }
+    pub fn get_st_full_name_except_generic(&self) -> String {
+        let full_name = self.get_st_full_name();
+        full_name.split('<').collect::<Vec<_>>()[0].to_string()
     }
     pub fn get_doc_symbol<'a, 'ctx>(&self) -> DocumentSymbol {
         let children: Vec<DocumentSymbol> = self

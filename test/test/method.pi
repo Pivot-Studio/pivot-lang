@@ -26,6 +26,39 @@ pub fn test_impl() void {
     panic::assert(x.x == 114514);
     x.add1();
     panic::assert(x.x == 114515);
+    let p1 = Point{
+        x:1,
+        y:2
+    };
+    let p2 = Point{
+        x:true,
+        y:false
+    };
+    let p3 = p1.mixup(p2);
+    let p4 = p2.mixup<i64|i64>(p1);
+    panic::assert(p3.x == 1);
+    panic::assert(!p3.y);
+    panic::assert(p4.y == 2);
+    panic::assert(p4.x);
     return;
 }
+struct Point<X|Y> {
+    x:X;
+    y:Y;
+}
+impl<X1|Y1> Point<X1|Y1> {
+    fn mixup<X2|Y2>(other: Point<X2|Y2>)  Point<X1|Y2> {
+        return Point {
+            x: self.x,
+            y: other.y
+        };
+    }
+}
+// 目前推断是根据字段推断，如果没字段则会有bug
+// struct A<T> {}
+// impl<S> A<S> {
+//     fn abc() void {
+//         return;
+//     }
+// }
 

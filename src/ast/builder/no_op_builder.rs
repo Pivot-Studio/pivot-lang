@@ -110,7 +110,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
         &self,
         _paralist: Vec<Box<crate::ast::node::types::TypedIdentifierNode>>,
         _ret: Box<crate::ast::node::TypeNodeEnum>,
-        _fntype: &crate::ast::pltype::FNType,
+        _fntype: &crate::ast::pltype::FNValue,
         _fnvalue: super::ValueHandle,
         _child: &mut crate::ast::ctx::Ctx<'a>,
     ) -> Result<(), crate::ast::diag::PLDiag> {
@@ -125,7 +125,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
 
     fn create_parameter_variable(
         &self,
-        _fntype: &crate::ast::pltype::FNType,
+        _fntype: &crate::ast::pltype::FNValue,
         _pos: crate::ast::range::Pos,
         _i: usize,
         _child: &mut crate::ast::ctx::Ctx<'a>,
@@ -211,7 +211,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
 
     fn get_or_insert_fn_handle(
         &self,
-        _pltp: &crate::ast::pltype::FNType,
+        _pltp: &crate::ast::pltype::FNValue,
         _ctx: &mut crate::ast::ctx::Ctx<'a>,
     ) -> super::ValueHandle {
         0
