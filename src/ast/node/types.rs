@@ -8,10 +8,11 @@ use super::*;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
+use crate::ast::ctx::EqRes;
 use crate::ast::diag::ErrorCode;
 
 use crate::ast::pltype::get_type_deep;
-use crate::ast::pltype::{eq, ARRType, Field, GenericType, PLType, STType};
+use crate::ast::pltype::{ARRType, Field, GenericType, PLType, STType};
 use crate::ast::tokens::TokenType;
 use crate::plv;
 use indexmap::IndexMap;
@@ -85,10 +86,13 @@ impl TypeNameNode {
                     if let PLType::GENERIC(g) = &mut *st_generic_type.borrow_mut() {
                         g.curpltype = None;
                     }
-                    if !eq(
-                        st_generic_type.clone(),
-                        generic_types[i].as_ref().unwrap().clone(),
-                    ) {
+                    if !ctx
+                        .eq(
+                            st_generic_type.clone(),
+                            generic_types[i].as_ref().unwrap().clone(),
+                        )
+                        .eq
+                    {
                         return Err(
                             ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER))
                         );
@@ -159,14 +163,17 @@ impl TypeNode for TypeNameNode {
         ctx: &'b mut Ctx<'a>,
         right: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Result<bool, PLDiag> {
+    ) -> Result<EqRes, PLDiag> {
         let left = self.get_origin_type_with_infer(ctx, builder)?;
         if self.generic_params.is_some() {
             // name not match
             if left.borrow().get_name()
                 != right.borrow().get_name().split('<').collect::<Vec<_>>()[0]
             {
-                return Ok(false);
+                return Ok(EqRes {
+                    eq: false,
+                    need_up_cast: false,
+                });
             }
             if let (PLType::STRUCT(left), PLType::STRUCT(right)) =
                 (&*left.borrow(), &*right.borrow())
@@ -180,16 +187,26 @@ impl TypeNode for TypeNameNode {
                             .typenode
                             .get_type(ctx, builder)
                             .unwrap();
-                        if !leftfield.typenode.eq_or_infer(ctx, rightpltype, builder)? {
-                            return Ok(false);
+                        if !leftfield
+                            .typenode
+                            .eq_or_infer(ctx, rightpltype, builder)?
+                            .eq
+                        {
+                            return Ok(EqRes {
+                                eq: false,
+                                need_up_cast: false,
+                            });
                         }
                     }
-                    return Ok(true);
+                    return Ok(EqRes {
+                        eq: true,
+                        need_up_cast: false,
+                    });
                 });
             }
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::NOT_GENERIC_TYPE)));
         }
-        Ok(eq(left, right))
+        Ok(ctx.eq(left, right))
     }
 }
 
@@ -238,20 +255,26 @@ impl TypeNode for ArrayTypeNameNode {
         ctx: &'b mut Ctx<'a>,
         pltype: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Result<bool, PLDiag> {
+    ) -> Result<EqRes, PLDiag> {
         match &*pltype.borrow() {
             PLType::ARR(a) => {
                 if let NodeEnum::Num(num) = *self.size {
                     if let Num::INT(size) = num.value {
                         if a.size as u64 != size {
-                            return Ok(false);
+                            return Ok(EqRes {
+                                eq: false,
+                                need_up_cast: false,
+                            });
                         }
                         return self.id.eq_or_infer(ctx, a.element_type.clone(), builder);
                     }
                 }
                 Err(ctx.add_diag(self.range.new_err(ErrorCode::SIZE_MUST_BE_INT)))
             }
-            _ => Ok(false),
+            _ => Ok(EqRes {
+                eq: false,
+                need_up_cast: false,
+            }),
         }
     }
 }
@@ -290,10 +313,13 @@ impl TypeNode for PointerTypeNode {
         ctx: &'b mut Ctx<'a>,
         pltype: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Result<bool, PLDiag> {
+    ) -> Result<EqRes, PLDiag> {
         match &*pltype.borrow() {
             PLType::POINTER(p) => self.elm.eq_or_infer(ctx, p.clone(), builder),
-            _ => Ok(false),
+            _ => Ok(EqRes {
+                eq: false,
+                need_up_cast: false,
+            }),
         }
     }
 }
@@ -574,14 +600,9 @@ impl Node for StructInitNode {
                     if value.is_none() || value_pltype.is_none() {
                         return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
                     }
-                    let (value, _) = ctx.try_load2var(
-                        field_exp_range,
-                        value.unwrap(),
-                        value_pltype.clone().unwrap(),
-                        builder,
-                    )?;
+                    let value = ctx.try_load2var(field_exp_range, value.unwrap(), builder)?;
                     let value_pltype = value_pltype.unwrap();
-                    if !field.typenode.eq_or_infer(ctx, value_pltype, builder)? {
+                    if !field.typenode.eq_or_infer(ctx, value_pltype, builder)?.eq {
                         return Err(ctx.add_diag(
                             fieldinit
                                 .range
@@ -667,7 +688,7 @@ impl Node for ArrayInitNode {
                 return Err(ctx.add_diag(range.new_err(ErrorCode::ARRAY_TYPE_NOT_MATCH)));
             }
             let tp = tp.unwrap();
-            exps.push(ctx.try_load2var(range, v.unwrap(), tp, builder)?);
+            exps.push((ctx.try_load2var(range, v.unwrap(), builder)?, tp));
         }
         if tp0.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_INIT_EMPTY)));
@@ -742,6 +763,7 @@ impl GenericDefNode {
                 name: name.clone(),
                 range,
                 curpltype: None,
+                trait_impl: None,
             };
             res.insert(name, Arc::new(RefCell::new(PLType::GENERIC(gentype))));
         }

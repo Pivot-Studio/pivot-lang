@@ -234,16 +234,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
         &self,
         _range: crate::ast::range::Range,
         _v: super::ValueHandle,
-        tp: Arc<std::cell::RefCell<crate::ast::pltype::PLType>>,
         _ctx: &mut crate::ast::ctx::Ctx<'a>,
-    ) -> Result<
-        (
-            super::ValueHandle,
-            Arc<std::cell::RefCell<crate::ast::pltype::PLType>>,
-        ),
-        crate::ast::diag::PLDiag,
-    > {
-        Ok((0, tp))
+    ) -> Result<super::ValueHandle, crate::ast::diag::PLDiag> {
+        Ok(0)
     }
 
     fn get_function(&self, _name: &str) -> Option<super::ValueHandle> {

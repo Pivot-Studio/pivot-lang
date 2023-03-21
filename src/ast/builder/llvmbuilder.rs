@@ -1007,9 +1007,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         &self,
         range: Range,
         v: ValueHandle,
-        tp: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
-    ) -> Result<(ValueHandle, Arc<RefCell<PLType>>), PLDiag> {
+    ) -> Result<ValueHandle, PLDiag> {
         let handle = v;
         let v = self.get_llvm_value(handle).unwrap();
         if !v.is_pointer_value() {
@@ -1019,17 +1018,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 | AnyValueEnum::FloatValue(_)
                 | AnyValueEnum::PointerValue(_)
                 | AnyValueEnum::StructValue(_)
-                | AnyValueEnum::VectorValue(_) => (handle, tp),
+                | AnyValueEnum::VectorValue(_) => handle,
                 _ => return Err(ctx.add_diag(range.new_err(ErrorCode::EXPECT_VALUE))),
             })
         } else {
-            let tp = &tp;
-            Ok((
-                self.build_load(
-                    self.get_llvm_value_handle(&v.into_pointer_value().as_any_value_enum()),
-                    "loadtmp",
-                ),
-                tp.clone(),
+            Ok(self.build_load(
+                self.get_llvm_value_handle(&v.into_pointer_value().as_any_value_enum()),
+                "loadtmp",
             ))
         }
     }

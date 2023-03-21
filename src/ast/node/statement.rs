@@ -44,7 +44,6 @@ impl Node for DefNode {
         }
         let mut pltype = None;
         let mut expv = None;
-        let mut exptp = None;
         if let Some(tp) = &self.tp {
             tp.emit_highlight(ctx);
             pltype = Some(tp.get_type(ctx, builder)?);
@@ -65,7 +64,6 @@ impl Node for DefNode {
                 pltype = Some(tp);
             }
             expv = value;
-            exptp = pltype_opt;
         }
         let pltype = pltype.unwrap();
         let ptr2value = builder.alloc(
@@ -83,10 +81,7 @@ impl Node for DefNode {
         )?;
         if let Some(exp) = expv {
             builder.build_dbg_location(self.var.range.start);
-            builder.build_store(
-                ptr2value,
-                ctx.try_load2var(range, exp, exptp.unwrap(), builder)?.0,
-            );
+            builder.build_store(ptr2value, ctx.try_load2var(range, exp, builder)?);
         }
         Ok((None, None, TerminatorEnum::NONE))
     }
@@ -118,12 +113,12 @@ impl Node for AssignNode {
         if lpltype.is_none() {
             return Err(ctx.add_diag(self.var.range().new_err(ErrorCode::NOT_ASSIGNABLE)));
         }
-        let (value, rpltype, _) =
+        let (value, _, _) =
             ctx.emit_with_expectation(&mut self.exp, lpltype, self.var.range(), builder)?;
         if ptr.as_ref().unwrap().is_const {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::ASSIGN_CONST)));
         }
-        let (load, _) = ctx.try_load2var(exp_range, value.unwrap(), rpltype.unwrap(), builder)?;
+        let load = ctx.try_load2var(exp_range, value.unwrap(), builder)?;
         builder.build_store(ptr.unwrap().value, load);
         Ok((None, None, TerminatorEnum::NONE))
     }

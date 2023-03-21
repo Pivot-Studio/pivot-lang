@@ -8,7 +8,7 @@ use super::{
         function::{FuncCallNode, FuncDefNode},
         global::GlobalNode,
         implement::ImplNode,
-        interface::TraitDefNode,
+        interface::{TraitBoundNode, TraitDefNode},
         operator::{BinOpNode, TakeOpNode, UnaryOpNode},
         pkg::{ExternIdNode, UseNode},
         pointer::{PointerOpEnum, PointerOpNode},
@@ -583,9 +583,6 @@ impl FmtBuilder {
         self.token("trait");
         self.space();
         self.token(node.id.name.as_str());
-        if let Some(generics) = &node.generics {
-            generics.format(self);
-        }
         self.space();
         self.l_brace();
         self.enter();
@@ -599,5 +596,8 @@ impl FmtBuilder {
         self.enter();
         // 顶层节点加空格
         self.enter();
+    }
+    pub fn parse_trait_bound_node(&mut self, _node: &TraitBoundNode) {
+        todo!()
     }
 }

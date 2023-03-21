@@ -119,39 +119,6 @@ impl PriType {
         }
     }
 }
-pub fn eq(l: Arc<RefCell<PLType>>, r: Arc<RefCell<PLType>>) -> bool {
-    match (&*l.borrow(), &*r.borrow()) {
-        (PLType::GENERIC(l), PLType::GENERIC(r)) => {
-            if l == r {
-                return true;
-            }
-        }
-        _ => {}
-    }
-    match &mut *l.borrow_mut() {
-        PLType::GENERIC(l) => {
-            if l.curpltype.is_some() {
-                return eq(l.curpltype.as_ref().unwrap().clone(), r);
-            }
-            l.set_type(r);
-            return true;
-        }
-        _ => {}
-    }
-    match (&*l.borrow(), &*r.borrow()) {
-        (PLType::PRIMITIVE(l), PLType::PRIMITIVE(r)) => l == r,
-        (PLType::VOID, PLType::VOID) => true,
-        (PLType::POINTER(l), PLType::POINTER(r)) => eq(l.clone(), r.clone()),
-        (PLType::ARR(l), PLType::ARR(r)) => {
-            eq(l.get_elem_type(), r.get_elem_type()) && l.size == r.size
-        }
-        (PLType::STRUCT(l), PLType::STRUCT(r)) => l.name == r.name && l.path == r.path,
-        (PLType::FN(l), PLType::FN(r)) => l == r,
-        (PLType::PLACEHOLDER(l), PLType::PLACEHOLDER(r)) => l == r,
-        _ => false,
-    }
-}
-
 fn new_typename_node(name: &str, range: Range) -> Box<TypeNodeEnum> {
     Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
         id: Some(ExternIdNode {
@@ -914,6 +881,7 @@ pub struct GenericType {
     pub name: String,
     pub range: Range,
     pub curpltype: Option<Arc<RefCell<PLType>>>,
+    pub trait_impl: Option<Arc<RefCell<PLType>>>,
 }
 impl GenericType {
     pub fn set_type(&mut self, pltype: Arc<RefCell<PLType>>) {
@@ -923,6 +891,10 @@ impl GenericType {
         self.curpltype = None;
     }
     pub fn set_place_holder(&mut self, ctx: &mut Ctx) {
+        if let Some(trait_impl) = &self.trait_impl {
+            self.curpltype = Some(trait_impl.clone());
+            return;
+        }
         let range = self.range;
         let p = PlaceHolderType {
             name: self.name.clone(),

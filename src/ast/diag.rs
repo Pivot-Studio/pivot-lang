@@ -82,6 +82,7 @@ define_error!(
     RECEIVER_CANNOT_BE_INFER = "receiver can not be infer",
     DUPLICATE_METHOD = "duplicate method",
     GENERIC_PARAM_LEN_MISMATCH = "generic param len mismatch",
+    GENERIC_NOT_FOUND = "generic not found",
     NOT_GENERIC_TYPE = "not generic type",
     EXPECT_TRAIT_TYPE = "expect trait type",
     EXPECT_STRUCT_TYPE = "expect struct type",

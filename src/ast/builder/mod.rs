@@ -132,9 +132,8 @@ pub trait IRBuilder<'a, 'ctx> {
         &self,
         range: Range,
         v: ValueHandle,
-        tp: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
-    ) -> Result<(ValueHandle, Arc<RefCell<PLType>>), PLDiag>;
+    ) -> Result<ValueHandle, PLDiag>;
     fn get_function(&self, name: &str) -> Option<ValueHandle>;
     fn build_call(&self, f: ValueHandle, args: &[ValueHandle]) -> Option<ValueHandle>;
     fn add_function(

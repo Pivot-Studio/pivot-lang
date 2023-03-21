@@ -36,8 +36,7 @@ impl Node for GlobalNode {
 
         let (value, pltype, _) = self.exp.emit(ctx, builder)?;
         ctx.push_type_hints(self.var.range, pltype.clone().unwrap());
-        let (base_value, _tp) =
-            ctx.try_load2var(exp_range, value.unwrap(), pltype.unwrap(), builder)?;
+        let base_value = ctx.try_load2var(exp_range, value.unwrap(), builder)?;
         let res = ctx.get_symbol(&self.var.name, builder);
         if res.is_none() {
             return Ok((None, None, TerminatorEnum::NONE));
@@ -64,11 +63,10 @@ impl GlobalNode {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
         }
         let pltype = pltype_opt.unwrap();
-        let (_, tp) = ctx.try_load2var(exp_range, value.unwrap(), pltype.clone(), builder)?;
-        let base_type = tp;
+        ctx.try_load2var(exp_range, value.unwrap(), builder)?;
         let globalptr = builder.add_global(
             &ctx.plmod.get_full_name(&self.var.name),
-            base_type,
+            pltype.clone(),
             ctx,
             self.var.range.start.line as u32,
             &pltype.borrow(),

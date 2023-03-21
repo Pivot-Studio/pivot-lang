@@ -23,11 +23,47 @@ impl TestTrait for A {
 }
 
 pub fn test_trait() void {
-    let x = A{};
+    let x = &A{};
+    let y = A{};
+    let z = &&A{};
     let dd: TestTrait;
     dd = x;
+    dd = y;
+    dd = z;
     let re = dd.set(100);
     panic::assert(re == 100);
+    trait_param(x);
+    let re1 = trait_ret().set(1);
+    panic::assert(re1 == 1);
+    let re2 = trait_with_generic(x);
+    panic::assert(re2 == 999);
+    let re3 = trait_with_generic_ret(x,y);
+    panic::assert(re3.x == 999);
     return;
 }
+
+pub fn trait_param(x:TestTrait) void {
+    return;
+}
+pub fn trait_ret() TestTrait {
+    let x = A{};
+    return x;
+}
+pub fn trait_with_generic<T>(x:T) i64
+where 
+    T:TestTrait
+{
+    x.name();
+    return x.set(999);
+}
+pub fn trait_with_generic_ret<T|S>(x:T,y:S) T
+where 
+    T:TestTrait,
+    S:TestTrait
+{
+    x.name();
+    y.name();
+    return x;
+}
+
 

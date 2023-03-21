@@ -2,8 +2,8 @@ use super::*;
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
-use crate::ast::pltype::eq;
 use crate::ast::{ctx::Ctx, diag::ErrorCode};
+use crate::plv;
 use internal_macro::node;
 
 #[node(comment)]
@@ -28,37 +28,44 @@ impl Node for RetNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        let rettp = ctx.rettp.clone();
-        if let Some(ret) = &mut self.value {
-            if rettp.is_none() {
-                let err =
-                    ctx.add_diag(self.range.new_err(ErrorCode::RETURN_VALUE_IN_VOID_FUNCTION));
-                return Err(err);
-            }
-            let (ret, tp, _) = ret.emit(ctx, builder)?;
+        let ret_pltype = ctx.rettp.as_ref().unwrap().clone();
+        if let Some(ret_node) = &mut self.value {
+            let (value, value_pltype, _) = ret_node.emit(ctx, builder)?;
             ctx.emit_comment_highlight(&self.comments[0]);
-            let (ret, v) = ctx.try_load2var(self.range, ret.unwrap(), tp.unwrap(), builder)?;
-            if !eq(rettp.unwrap(), v) {
+            let value_pltype = value_pltype.unwrap();
+            let mut value = ctx.try_load2var(self.range, value.unwrap(), builder)?;
+            let eqres = ctx.eq(ret_pltype.clone(), value_pltype.clone());
+            if !eqres.eq {
                 let err = ctx.add_diag(self.range.new_err(ErrorCode::RETURN_TYPE_MISMATCH));
                 return Err(err);
             }
-
-            builder.build_store(ctx.return_block.unwrap().1.unwrap(), ret);
-            builder.build_unconditional_branch(ctx.return_block.unwrap().0);
-        } else {
-            if rettp.is_some() && &*rettp.unwrap().borrow() != &PLType::VOID {
-                ctx.emit_comment_highlight(&self.comments[0]);
-                let err = ctx.add_diag(
-                    self.range
-                        .new_err(ErrorCode::NO_RETURN_VALUE_IN_NON_VOID_FUNCTION),
-                );
-                return Err(err);
+            if eqres.need_up_cast {
+                let ptr2v = builder.alloc("tmp_up_cast_ptr", &*value_pltype.borrow(), ctx, None);
+                builder.build_store(ptr2v, value);
+                value = ctx.up_cast(
+                    ret_pltype,
+                    value_pltype.clone(),
+                    ret_node.range(),
+                    ret_node.range(),
+                    ptr2v,
+                    builder,
+                )?;
+                value = ctx.try_load2var(self.range, plv!(value), builder)?;
             }
-            builder.build_unconditional_branch(ctx.return_block.unwrap().0);
+            builder.build_store(ctx.return_block.unwrap().1.unwrap(), value);
+        } else if *ret_pltype.borrow() != PLType::VOID {
+            ctx.emit_comment_highlight(&self.comments[0]);
+            return Err(ctx.add_diag(
+                self.range
+                    .new_err(ErrorCode::NO_RETURN_VALUE_IN_NON_VOID_FUNCTION),
+            ));
         }
-        let ret = ctx.return_block.unwrap().0;
-        let inst = builder.get_first_instruction(ret).unwrap();
-        builder.position_at(inst);
+        builder.build_unconditional_branch(ctx.return_block.unwrap().0);
+        builder.position_at(
+            builder
+                .get_first_instruction(ctx.return_block.unwrap().0)
+                .unwrap(),
+        );
         Ok((None, None, TerminatorEnum::RETURN))
     }
 }
