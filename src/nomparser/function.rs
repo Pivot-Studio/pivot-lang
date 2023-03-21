@@ -3,12 +3,12 @@ use nom::{
     bytes::complete::tag,
     combinator::{map_res, opt},
     multi::{many0, separated_list0},
-    sequence::{delimited, tuple},
+    sequence::{delimited, preceded, tuple},
     IResult,
 };
 
-use crate::nomparser::Span;
 use crate::{ast::node::function::FuncDefNode, ast::tokens::TokenType};
+use crate::{ast::node::interface::TraitBoundNode, nomparser::Span};
 
 use internal_macro::{test_parser, test_parser_error};
 
@@ -41,6 +41,17 @@ use super::*;
     }
     "
 )]
+#[test_parser(
+    "fn f<T>() int 
+    where 
+        T:X,
+        S:Y
+    {
+        x = x+1;
+        return 0;
+    }
+    "
+)]
 #[test_parser("fn f( \n) int;")]
 #[test_parser_error("fnf( \n) int;")]
 pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
@@ -57,6 +68,13 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             )),
             tag_token_symbol(TokenType::RPAREN),
             type_name,
+            opt(del_newline_or_space!(preceded(
+                tag_token_symbol(TokenType::WHERE),
+                separated_list0(
+                    tag_token_symbol(TokenType::COMMA),
+                    del_newline_or_space!(trait_bound),
+                ),
+            ))),
             alt((
                 map_res(statement_block, |b| Ok::<_, ()>((Some(b.clone()), b.range))),
                 map_res(tag_token_symbol(TokenType::SEMI), |(_, range)| {
@@ -64,7 +82,18 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 }),
             )),
         )),
-        |(doc, (modifier, (_, start)), id, generics, _, paras, _, ret, (body, end))| {
+        |(
+            doc,
+            (modifier, (_, start)),
+            id,
+            generics,
+            _,
+            paras,
+            _,
+            ret,
+            trait_bounds,
+            (body, end),
+        )| {
             let range = start.start.to(end.end);
             let mut docs = vec![];
             let mut precoms = vec![];
@@ -80,6 +109,7 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 id,
                 paralist: paras,
                 ret,
+                trait_bounds,
                 range,
                 doc: docs,
                 precom: precoms,
@@ -118,4 +148,18 @@ pub fn call_function_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEn
             ))
         },
     ))(input)
+}
+
+pub fn trait_bound(input: Span) -> IResult<Span, Box<TraitBoundNode>> {
+    map_res(
+        tuple((identifier, tag_token_symbol(TokenType::COLON), type_name)),
+        |(generic, _, impl_trait)| {
+            let range = generic.range().start.to(impl_trait.range().end);
+            res_box(Box::new(TraitBoundNode {
+                generic,
+                impl_trait,
+                range,
+            }))
+        },
+    )(input)
 }

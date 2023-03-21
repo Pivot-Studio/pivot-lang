@@ -1,10 +1,11 @@
+use super::interface::TraitBoundNode;
 use super::statement::StatementsNode;
 use super::*;
 use super::{types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 
-use crate::ast::pltype::{eq, get_type_deep, FNType, FNValue, PLType};
+use crate::ast::pltype::{get_type_deep, FNType, FNValue, PLType};
 use crate::ast::tokens::TokenType;
 use crate::plv;
 use indexmap::IndexMap;
@@ -70,7 +71,7 @@ impl Node for FuncCallNode {
                     break;
                 }
                 if generic_types[i].is_some() {
-                    eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
+                    ctx.eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
                 }
                 i += 1;
             }
@@ -121,8 +122,7 @@ impl Node for FuncCallNode {
             }
             let value_pltype = value_pltype.unwrap();
             let value_pltype = get_type_deep(value_pltype);
-            let (load, _) =
-                ctx.try_load2var(pararange, value.unwrap(), value_pltype.clone(), builder)?;
+            let load = ctx.try_load2var(pararange, value.unwrap(), builder)?;
             para_values.push(load);
             value_pltypes.push((value_pltype, pararange));
         }
@@ -130,25 +130,43 @@ impl Node for FuncCallNode {
         let res = ctx.protect_generic_context(&fnvalue.fntype.generic_map.clone(), |ctx| {
             ctx.run_in_fn_mod_mut(&mut fnvalue, |ctx, fnvalue| {
                 if let Some(receiver_pltype) = &receiver_type {
-                    if !fnvalue.fntype.param_pltypes[0].eq_or_infer(
-                        ctx,
-                        receiver_pltype.clone(),
-                        builder,
-                    )? {
+                    if !fnvalue.fntype.param_pltypes[0]
+                        .eq_or_infer(ctx, receiver_pltype.clone(), builder)?
+                        .eq
+                    {
                         return Err(
                             ctx.add_diag(self.range.new_err(ErrorCode::RECEIVER_CANNOT_BE_INFER))
                         );
                     }
                 }
                 for (i, (value_pltype, pararange)) in value_pltypes.iter().enumerate() {
-                    if !fnvalue.fntype.param_pltypes[i + skip as usize].eq_or_infer(
+                    let eqres = fnvalue.fntype.param_pltypes[i + skip as usize].eq_or_infer(
                         ctx,
                         value_pltype.clone(),
                         builder,
-                    )? {
+                    )?;
+                    if !eqres.eq {
                         return Err(
                             ctx.add_diag(pararange.new_err(ErrorCode::PARAMETER_TYPE_NOT_MATCH))
                         );
+                    }
+                    if eqres.need_up_cast {
+                        let mut value = para_values[i + skip as usize];
+                        let ptr2v =
+                            builder.alloc("tmp_up_cast_ptr", &*value_pltype.borrow(), ctx, None);
+                        builder.build_store(ptr2v, value);
+                        let trait_pltype = fnvalue.fntype.param_pltypes[i + skip as usize]
+                            .get_type(ctx, builder)?;
+                        value = ctx.up_cast(
+                            trait_pltype,
+                            value_pltype.clone(),
+                            fnvalue.fntype.param_pltypes[i + skip as usize].range(),
+                            pararange.clone(),
+                            ptr2v,
+                            builder,
+                        )?;
+                        value = ctx.try_load2var(pararange.clone(), plv!(value), builder)?;
+                        para_values[i + skip as usize] = value;
                     }
                 }
                 Ok(())
@@ -212,6 +230,7 @@ pub struct FuncDefNode {
     pub body: Option<StatementsNode>,
     pub modifier: Option<(TokenType, Range)>,
     pub generics_size: usize, // the size of generics except the generics from impl node
+    pub trait_bounds: Option<Vec<Box<TraitBoundNode>>>,
 }
 
 impl TypeNode for FuncDefNode {
@@ -321,7 +340,7 @@ impl TypeNode for FuncDefNode {
         _ctx: &'b mut Ctx<'a>,
         _pltype: Arc<RefCell<PLType>>,
         _builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Result<bool, PLDiag> {
+    ) -> Result<EqRes, PLDiag> {
         todo!()
     }
 }

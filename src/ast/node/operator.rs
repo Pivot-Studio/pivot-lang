@@ -46,7 +46,7 @@ impl Node for UnaryOpNode {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::INVALID_UNARY_EXPRESSION)));
         }
         let pltype = pltype.unwrap();
-        let (exp, _) = ctx.try_load2var(exp_range, exp.unwrap(), pltype.clone(), builder)?;
+        let exp = ctx.try_load2var(exp_range, exp.unwrap(), builder)?;
         return Ok(match (&*pltype.borrow(), self.op.0) {
             (
                 PLType::PRIMITIVE(
@@ -118,8 +118,7 @@ impl Node for BinOpNode {
         if lv.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
         }
-        let (left, _ltp) =
-            ctx.try_load2var(lrange, lv.unwrap(), lpltype.clone().unwrap(), builder)?;
+        let left = ctx.try_load2var(lrange, lv.unwrap(), builder)?;
         if self.op.0 == TokenType::AND || self.op.0 == TokenType::OR {
             return Ok(match *lpltype.clone().unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::BOOL) => (
@@ -147,13 +146,12 @@ impl Node for BinOpNode {
                         }
                         // long bb (emit right & goto merge)
                         builder.position_at_end_block(long_bb);
-                        let (rv, rpltype, _) =
+                        let (rv, _, _) =
                             ctx.emit_with_expectation(&mut self.right, lpltype, lrange, builder)?;
                         if rv.is_none() {
                             return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
                         }
-                        let (right, _rtp) =
-                            ctx.try_load2var(rrange, rv.unwrap(), rpltype.unwrap(), builder)?;
+                        let right = ctx.try_load2var(rrange, rv.unwrap(), builder)?;
                         let incoming_bb2 = builder.get_cur_basic_block(); // get incoming block 2
                         builder.build_unconditional_branch(merge_bb);
                         // merge bb
@@ -181,12 +179,12 @@ impl Node for BinOpNode {
                 }
             });
         }
-        let (rv, rpltype, _) =
+        let (rv, _, _) =
             ctx.emit_with_expectation(&mut self.right, lpltype.clone(), lrange, builder)?;
         if rv.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
         }
-        let (right, _rtp) = ctx.try_load2var(rrange, rv.unwrap(), rpltype.unwrap(), builder)?;
+        let right = ctx.try_load2var(rrange, rv.unwrap(), builder)?;
         Ok(match self.op.0 {
             TokenType::PLUS => {
                 handle_calc!(ctx, add, float_add, lpltype, left, right, self.range, builder)

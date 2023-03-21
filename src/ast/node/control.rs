@@ -52,7 +52,7 @@ impl Node for IfNode {
                     .clone(),
             ));
         }
-        let (cond, _) = ctx.try_load2var(condrange, cond.unwrap(), pltype.unwrap(), builder)?;
+        let cond = ctx.try_load2var(condrange, cond.unwrap(), builder)?;
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
         builder.build_conditional_branch(cond, then_block, else_block);
         // then block
@@ -123,7 +123,7 @@ impl Node for WhileNode {
         if pltype.is_none() || !pltype.clone().unwrap().borrow().is(&PriType::BOOL) {
             return Err(ctx.add_diag(condrange.new_err(ErrorCode::WHILE_CONDITION_MUST_BE_BOOL)));
         }
-        let (cond, _) = ctx.try_load2var(condrange, cond.unwrap(), pltype.unwrap(), builder)?;
+        let cond = ctx.try_load2var(condrange, cond.unwrap(), builder)?;
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
         builder.build_conditional_branch(cond, body_block, after_block);
         ctx.position_at_end(body_block, builder);
@@ -197,7 +197,7 @@ impl Node for ForNode {
         if pltype.is_none() || !pltype.clone().unwrap().borrow().is(&PriType::BOOL) {
             return Err(ctx.add_diag(condrange.new_err(ErrorCode::FOR_CONDITION_MUST_BE_BOOL)));
         }
-        let (cond, _) = ctx.try_load2var(condrange, cond.unwrap(), pltype.unwrap(), builder)?;
+        let cond = ctx.try_load2var(condrange, cond.unwrap(), builder)?;
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
         builder.build_dbg_location(self.body.range().start);
         builder.build_conditional_branch(cond, body_block, after_block);

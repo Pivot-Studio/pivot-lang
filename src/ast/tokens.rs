@@ -78,7 +78,8 @@ define_tokens!(
     TRUE = "true",
     FALSE = "false",
     TRAIT = "trait",
-    PUB = "pub"
+    PUB = "pub",
+    WHERE = "where"
 );
 
 impl TokenType {
