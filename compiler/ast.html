@@ -221,7 +221,7 @@ pub trait RangeTrait {
                     .clone(),
             ));
         }
-        let (cond, _) = ctx.try_load2var(condrange, cond.unwrap(), pltype.unwrap(), builder)?;
+        let cond = ctx.try_load2var(condrange, cond.unwrap(), builder)?;
         let cond = builder.build_int_truncate(cond, &amp;PriType::BOOL, &quot;trunctemp&quot;);
         builder.build_conditional_branch(cond, then_block, else_block);
         // then block
