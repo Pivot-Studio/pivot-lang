@@ -244,6 +244,11 @@ impl TypeNode for FuncDefNode {
             .generics
             .as_ref()
             .map_or(IndexMap::default(), |generics| generics.gen_generic_type());
+        if let Some(trait_bounds) = &self.trait_bounds {
+            for trait_bound in trait_bounds.iter() {
+                trait_bound.set_traits(child, builder, &generic_map)?;
+            }
+        }
         let (pltype, flater) = child.protect_generic_context(&generic_map, |child| {
             let mut flater = None;
             let mut param_pltypes = Vec::new();
@@ -527,6 +532,12 @@ impl Node for FuncDefNode {
             ctx.push_semantic_token(para.typenode.range(), SemanticTokenType::TYPE, 0);
         }
         ctx.push_semantic_token(self.ret.range(), SemanticTokenType::TYPE, 0);
+        if let Some(trait_bounds) = &self.trait_bounds {
+            trait_bounds.iter().for_each(|trait_bound| {
+                ctx.push_semantic_token(trait_bound.generic.range, SemanticTokenType::PARAMETER, 0);
+                ctx.push_semantic_token(trait_bound.impl_trait.range(), SemanticTokenType::TYPE, 0);
+            });
+        }
         let pltype = ctx.get_type(&self.id.name, self.range)?;
         if pltype.borrow().get_range() != Some(self.range) {
             return Err(self.id.range.new_err(ErrorCode::REDEFINE_SYMBOL));

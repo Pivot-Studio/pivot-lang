@@ -960,6 +960,17 @@ impl<'a, 'ctx> Ctx<'a> {
                 if l.curpltype.is_some() {
                     return self.eq(l.curpltype.as_ref().unwrap().clone(), r);
                 }
+                if l.trait_impl.is_some() {
+                    if !self
+                        .eq(l.trait_impl.as_ref().unwrap().clone(), r.clone())
+                        .eq
+                    {
+                        return EqRes {
+                            eq: false,
+                            need_up_cast: false,
+                        };
+                    }
+                }
                 l.set_type(r);
                 return EqRes {
                     eq: true,
@@ -992,8 +1003,10 @@ impl<'a, 'ctx> Ctx<'a> {
                                 need_up_cast: true,
                             };
                         };
+                        false
+                    } else {
+                        true
                     }
-                    true
                 }
             },
             need_up_cast: false,

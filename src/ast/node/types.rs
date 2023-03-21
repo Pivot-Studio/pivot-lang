@@ -763,6 +763,7 @@ impl GenericDefNode {
                 name: name.clone(),
                 range,
                 curpltype: None,
+                trait_impl: None,
             };
             res.insert(name, Arc::new(RefCell::new(PLType::GENERIC(gentype))));
         }

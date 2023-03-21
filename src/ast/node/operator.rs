@@ -7,6 +7,7 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
+use crate::ast::pltype::get_type_deep;
 use crate::ast::pltype::PLType;
 use crate::ast::pltype::PriType;
 use crate::ast::tokens::TokenType;
@@ -287,7 +288,7 @@ impl Node for TakeOpNode {
         if pltype.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::INVALID_GET_FIELD)));
         }
-        let head_pltype = pltype.unwrap();
+        let head_pltype = get_type_deep(pltype.unwrap());
         if !matches!(
             &*head_pltype.clone().borrow(),
             PLType::STRUCT(_) | PLType::POINTER(_) | PLType::TRAIT(_)

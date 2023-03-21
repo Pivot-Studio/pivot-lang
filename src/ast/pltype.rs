@@ -881,6 +881,7 @@ pub struct GenericType {
     pub name: String,
     pub range: Range,
     pub curpltype: Option<Arc<RefCell<PLType>>>,
+    pub trait_impl: Option<Arc<RefCell<PLType>>>,
 }
 impl GenericType {
     pub fn set_type(&mut self, pltype: Arc<RefCell<PLType>>) {
@@ -890,6 +891,10 @@ impl GenericType {
         self.curpltype = None;
     }
     pub fn set_place_holder(&mut self, ctx: &mut Ctx) {
+        if let Some(trait_impl) = &self.trait_impl {
+            self.curpltype = Some(trait_impl.clone());
+            return;
+        }
         let range = self.range;
         let p = PlaceHolderType {
             name: self.name.clone(),

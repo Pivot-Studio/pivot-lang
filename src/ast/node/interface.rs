@@ -16,6 +16,32 @@ pub struct TraitBoundNode {
     pub generic: Box<VarNode>,
     pub impl_trait: Box<TypeNodeEnum>,
 }
+impl TraitBoundNode {
+    pub fn set_traits<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+        generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
+    ) -> Result<(), PLDiag> {
+        if !generic_map.contains_key(&self.generic.name) {
+            return Err(ctx.add_diag(self.generic.range().new_err(ErrorCode::GENERIC_NOT_FOUND)));
+        }
+        let trait_pltype = self.impl_trait.get_type(ctx, builder)?;
+        if matches!(*trait_pltype.borrow(), PLType::TRAIT(_)) {
+            let generic_type = generic_map.get(&self.generic.name).unwrap();
+            if let PLType::GENERIC(generic_type) = &mut *generic_type.borrow_mut() {
+                generic_type.trait_impl = Some(trait_pltype);
+                return Ok(());
+            }
+            unreachable!()
+        }
+        Err(ctx.add_diag(
+            self.impl_trait
+                .range()
+                .new_err(ErrorCode::EXPECT_TRAIT_TYPE),
+        ))
+    }
+}
 #[node]
 pub struct TraitDefNode {
     pub id: Box<VarNode>,
