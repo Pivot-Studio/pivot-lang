@@ -1,5 +1,5 @@
 use proc_macro::TokenStream;
-use quote::{__private::Literal, format_ident, quote};
+use quote::{format_ident, quote};
 use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
@@ -8,9 +8,9 @@ use syn::{parse_macro_input, ItemFn};
 #[proc_macro_attribute]
 pub fn test_parser(args: TokenStream, input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as ItemFn);
-    let args = parse_macro_input!(args as Literal);
+    let args = parse_macro_input!(args as syn::LitStr);
     let mut hasher = DefaultHasher::new();
-    args.to_string().hash(&mut hasher);
+    args.token().to_string().hash(&mut hasher);
     let test_fn = format_ident!(
         "parser_test_err_{}_{}",
         ast.sig.ident.to_string(),
@@ -38,9 +38,9 @@ pub fn test_parser(args: TokenStream, input: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn test_parser_error(args: TokenStream, input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as ItemFn);
-    let args = parse_macro_input!(args as Literal);
+    let args = parse_macro_input!(args as syn::LitStr);
     let mut hasher = DefaultHasher::new();
-    args.to_string().hash(&mut hasher);
+    args.token().to_string().hash(&mut hasher);
     let test_fn = format_ident!(
         "parser_test_err_{}_{}",
         ast.sig.ident.to_string(),

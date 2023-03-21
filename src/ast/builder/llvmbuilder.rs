@@ -34,7 +34,7 @@ use super::{
         ctx::Ctx,
         diag::ErrorCode,
         node::{types::TypedIdentifierNode, TypeNode, TypeNodeEnum},
-        pltype::{ARRType, FNType, Field, PLType, PriType, RetTypeEnum, STType},
+        pltype::{ARRType, FNValue, Field, PLType, PriType, RetTypeEnum, STType},
         range::{Pos, Range},
     },
     IRBuilder,
@@ -203,7 +203,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             root_ctx = f
         }
         let gcmod = root_ctx.plmod.submods.get("gc").unwrap_or(&root_ctx.plmod);
-        let f: FNType = gcmod
+        let f: FNValue = gcmod
             .get_type("DioGC__malloc")
             .unwrap()
             .borrow()
@@ -488,10 +488,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         fn_value
     }
 
-    fn get_fn_type(&self, f: &FNType, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
-        ctx.run_in_fn_mod(f, |ctx, f| {
+    fn get_fn_type(&self, fnvalue: &FNValue, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
+        ctx.run_in_fn_mod(fnvalue, |ctx, fnvalue| {
             let mut param_types = vec![];
-            for param_pltype in f.param_pltypes.iter() {
+            for param_pltype in fnvalue.fntype.param_pltypes.iter() {
                 param_types.push(
                     self.get_basic_type_op(
                         &param_pltype
@@ -506,7 +506,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             }
             let fn_type = self
                 .get_ret_type(
-                    &f.ret_pltype
+                    &fnvalue
+                        .fntype
+                        .ret_pltype
                         .get_type(ctx, &self.clone().into())
                         .unwrap()
                         .borrow(),
@@ -847,7 +849,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     /// try get function value from module
     ///
     /// if not found, create a declaration
-    fn get_or_insert_fn(&self, pltp: &FNType, ctx: &mut Ctx<'a>) -> FunctionValue<'ctx> {
+    fn get_or_insert_fn(&self, pltp: &FNValue, ctx: &mut Ctx<'a>) -> FunctionValue<'ctx> {
         let llvmname = pltp.append_name_with_generic(pltp.llvmname.clone());
         if let Some(v) = self.module.get_function(&llvmname) {
             return v;
@@ -978,7 +980,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.builder
             .position_at_end(self.block_table.borrow()[&block]);
     }
-    fn get_or_insert_fn_handle(&self, pltp: &FNType, ctx: &mut Ctx<'a>) -> ValueHandle {
+    fn get_or_insert_fn_handle(&self, pltp: &FNValue, ctx: &mut Ctx<'a>) -> ValueHandle {
         self.get_llvm_value_handle(&self.get_or_insert_fn(pltp, ctx).as_any_value_enum())
     }
 
@@ -1005,9 +1007,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         &self,
         range: Range,
         v: ValueHandle,
-        tp: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
-    ) -> Result<(ValueHandle, Arc<RefCell<PLType>>), PLDiag> {
+    ) -> Result<ValueHandle, PLDiag> {
         let handle = v;
         let v = self.get_llvm_value(handle).unwrap();
         if !v.is_pointer_value() {
@@ -1017,17 +1018,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 | AnyValueEnum::FloatValue(_)
                 | AnyValueEnum::PointerValue(_)
                 | AnyValueEnum::StructValue(_)
-                | AnyValueEnum::VectorValue(_) => (handle, tp),
+                | AnyValueEnum::VectorValue(_) => handle,
                 _ => return Err(ctx.add_diag(range.new_err(ErrorCode::EXPECT_VALUE))),
             })
         } else {
-            let tp = &tp;
-            Ok((
-                self.build_load(
-                    self.get_llvm_value_handle(&v.into_pointer_value().as_any_value_enum()),
-                    "loadtmp",
-                ),
-                tp.clone(),
+            Ok(self.build_load(
+                self.get_llvm_value_handle(&v.into_pointer_value().as_any_value_enum()),
+                "loadtmp",
             ))
         }
     }
@@ -1513,7 +1510,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         &self,
         paralist: Vec<Box<TypedIdentifierNode>>,
         ret: Box<TypeNodeEnum>,
-        fntype: &FNType,
+        fntype: &FNValue,
         fnvalue: ValueHandle,
         child: &mut Ctx<'a>,
     ) -> Result<(), PLDiag> {
@@ -1567,23 +1564,23 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     }
     fn create_parameter_variable(
         &self,
-        fntype: &FNType,
+        fnvalue: &FNValue,
         pos: Pos,
         i: usize,
         child: &mut Ctx<'a>,
-        fnvalue: ValueHandle,
+        value_handle: ValueHandle,
         alloca: ValueHandle,
         allocab: BlockHandle,
     ) {
         let divar = self.dibuilder.create_parameter_variable(
             self.discope.get(),
-            &fntype.param_names[i],
+            &fnvalue.param_names[i],
             i as u32,
             self.diunit.get_file(),
             pos.line as u32,
             self.get_ditype(
                 &PLType::POINTER(
-                    fntype.param_pltypes[i]
+                    fnvalue.fntype.param_pltypes[i]
                         .get_type(child, &self.clone().into())
                         .unwrap(),
                 ),
@@ -1602,7 +1599,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.builder.get_current_debug_location().unwrap(),
             self.get_llvm_block(allocab).unwrap(),
         );
-        let funcvalue = self.get_llvm_value(fnvalue).unwrap().into_function_value();
+        let funcvalue = self
+            .get_llvm_value(value_handle)
+            .unwrap()
+            .into_function_value();
         self.build_store(
             alloca,
             self.get_llvm_value_handle(

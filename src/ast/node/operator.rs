@@ -7,6 +7,7 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
+use crate::ast::pltype::get_type_deep;
 use crate::ast::pltype::PLType;
 use crate::ast::pltype::PriType;
 use crate::ast::tokens::TokenType;
@@ -46,7 +47,7 @@ impl Node for UnaryOpNode {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::INVALID_UNARY_EXPRESSION)));
         }
         let pltype = pltype.unwrap();
-        let (exp, _) = ctx.try_load2var(exp_range, exp.unwrap(), pltype.clone(), builder)?;
+        let exp = ctx.try_load2var(exp_range, exp.unwrap(), builder)?;
         return Ok(match (&*pltype.borrow(), self.op.0) {
             (
                 PLType::PRIMITIVE(
@@ -118,8 +119,7 @@ impl Node for BinOpNode {
         if lv.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
         }
-        let (left, _ltp) =
-            ctx.try_load2var(lrange, lv.unwrap(), lpltype.clone().unwrap(), builder)?;
+        let left = ctx.try_load2var(lrange, lv.unwrap(), builder)?;
         if self.op.0 == TokenType::AND || self.op.0 == TokenType::OR {
             return Ok(match *lpltype.clone().unwrap().borrow() {
                 PLType::PRIMITIVE(PriType::BOOL) => (
@@ -147,13 +147,12 @@ impl Node for BinOpNode {
                         }
                         // long bb (emit right & goto merge)
                         builder.position_at_end_block(long_bb);
-                        let (rv, rpltype, _) =
+                        let (rv, _, _) =
                             ctx.emit_with_expectation(&mut self.right, lpltype, lrange, builder)?;
                         if rv.is_none() {
                             return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
                         }
-                        let (right, _rtp) =
-                            ctx.try_load2var(rrange, rv.unwrap(), rpltype.unwrap(), builder)?;
+                        let right = ctx.try_load2var(rrange, rv.unwrap(), builder)?;
                         let incoming_bb2 = builder.get_cur_basic_block(); // get incoming block 2
                         builder.build_unconditional_branch(merge_bb);
                         // merge bb
@@ -185,12 +184,12 @@ impl Node for BinOpNode {
                 }
             });
         }
-        let (rv, rpltype, _) =
+        let (rv, _, _) =
             ctx.emit_with_expectation(&mut self.right, lpltype.clone(), lrange, builder)?;
         if rv.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
         }
-        let (right, _rtp) = ctx.try_load2var(rrange, rv.unwrap(), rpltype.unwrap(), builder)?;
+        let right = ctx.try_load2var(rrange, rv.unwrap(), builder)?;
         Ok(match self.op.0 {
             TokenType::PLUS => {
                 handle_calc!(ctx, add, float_add, lpltype, left, right, self.range, builder)
@@ -289,117 +288,107 @@ impl Node for TakeOpNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        let head = self.head.emit(ctx, builder)?;
-        let (mut res, pltype, _) = head;
+        let (plvalue, pltype, _) = self.head.emit(ctx, builder)?;
         if pltype.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::INVALID_GET_FIELD)));
         }
-        let mut pltype = pltype.unwrap();
-        if let Some(id) = &self.field {
-            res = match &*pltype.clone().borrow() {
-                PLType::STRUCT(_) | PLType::POINTER(_) | PLType::TRAIT(_) => {
-                    let (tp, s) = ctx.auto_deref(pltype, res.unwrap().value, builder);
-                    let headptr = s;
-                    pltype = tp;
-                    let index;
-                    let range = id.range();
-                    let is_trait = matches!(&*pltype.borrow(), PLType::TRAIT(_));
-                    match &*pltype.clone().borrow() {
-                        PLType::STRUCT(s) | PLType::TRAIT(s) => {
-                            let field = s.fields.get(&id.name);
-                            let method = s.find_method(ctx, &id.name);
-                            if let Some(field) = field {
-                                _ = s.expect_field_pub(ctx, field, range);
-                                ctx.push_semantic_token(
-                                    range,
-                                    if is_trait {
-                                        SemanticTokenType::METHOD
-                                    } else {
-                                        SemanticTokenType::PROPERTY
-                                    },
-                                    0,
-                                );
-                                index = field.index;
-                                ctx.set_field_refs(pltype.clone(), field, range);
-                                ctx.send_if_go_to_def(range, field.range, s.path.clone());
-
-                                if is_trait {
-                                    let re = field.typenode.get_type(ctx, builder)?;
-                                    let fnv = builder
-                                        .build_struct_gep(headptr, field.index, "mthd_ptr")
-                                        .unwrap();
-                                    let fnv = builder.build_load(fnv, "mthd_ptr_load");
-                                    let headptr =
-                                        builder.build_struct_gep(headptr, 1, "traitptr").unwrap();
-                                    let headptr = builder.build_load(headptr, "traitptr_load");
-                                    return Ok((
-                                        Some(PLValue {
-                                            value: fnv,
-                                            is_const: false,
-                                            receiver: Some(headptr),
-                                        }),
-                                        Some(re),
-                                        TerminatorEnum::NONE,
-                                    ));
-                                }
-                                pltype = field.typenode.get_type(ctx, builder)?;
-                            } else if let Some(mthd) = method {
-                                _ = mthd.expect_pub(ctx, range);
-                                ctx.push_semantic_token(range, SemanticTokenType::METHOD, 0);
-                                let mut mthd = mthd;
-                                if let PLType::POINTER(_) = &*pltype.clone().borrow() {
-                                    mthd.param_pltypes
-                                        .insert(0, pltype.borrow().get_typenode(ctx));
-                                } else {
-                                    mthd.param_pltypes
-                                        .insert(0, PLType::POINTER(pltype).get_typenode(ctx));
-                                }
-                                ctx.send_if_go_to_def(
-                                    range,
-                                    mthd.range,
-                                    mthd.llvmname.split("..").next().unwrap().to_string(),
-                                );
-                                return Ok((
-                                    Some(PLValue {
-                                        value: builder.get_or_insert_fn_handle(&mthd, ctx),
-                                        is_const: false,
-                                        receiver: Some(headptr),
-                                    }),
-                                    Some(Arc::new(RefCell::new(PLType::FN(mthd)))),
-                                    TerminatorEnum::NONE,
-                                ));
-                            } else {
-                                return Err(ctx.add_diag(
-                                    id.range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND),
-                                ));
-                            }
-                        }
-                        _ => {
-                            return Err(ctx.add_diag(id.range.new_err(ErrorCode::INVALID_GET_FIELD)))
-                        }
-                    }
-                    Some(plv!(builder
-                        .build_struct_gep(s, index, "structgep")
-                        .unwrap()))
-                }
-                _ => {
-                    return Err(
-                        ctx.add_diag(id.range.new_err(ErrorCode::ILLEGAL_GET_FIELD_OPERATION))
-                    )
-                }
-            }
+        let head_pltype = get_type_deep(pltype.unwrap());
+        if !matches!(
+            &*head_pltype.clone().borrow(),
+            PLType::STRUCT(_) | PLType::POINTER(_) | PLType::TRAIT(_)
+        ) {
+            return Err(ctx.add_diag(
+                self.head
+                    .range()
+                    .new_err(ErrorCode::ILLEGAL_GET_FIELD_OPERATION),
+            ));
         }
         if self.field.is_none() {
             // end with ".", gen completions
-            let tp = ctx.auto_deref_tp(pltype);
-            ctx.if_completion(self.range, || match &*tp.clone().borrow() {
-                PLType::STRUCT(s) => s.get_completions(ctx),
-                PLType::TRAIT(s) => s.get_trait_completions(ctx),
-                _ => vec![],
+            ctx.if_completion(self.range, || {
+                match &*ctx.auto_deref_tp(head_pltype).clone().borrow() {
+                    PLType::STRUCT(s) => s.get_completions(ctx),
+                    PLType::TRAIT(s) => s.get_trait_completions(ctx),
+                    _ => vec![],
+                }
             });
             return Err(ctx.add_diag(self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION)));
         }
-        ctx.emit_comment_highlight(&self.comments[0]);
-        Ok((res, Some(pltype), TerminatorEnum::NONE))
+        let id = self.field.as_ref().unwrap();
+        let id_range = id.range();
+        let (head_pltype, headptr) = ctx.auto_deref(head_pltype, plvalue.unwrap().value, builder);
+        match &*head_pltype.clone().borrow() {
+            PLType::TRAIT(s) => {
+                let field = s.fields.get(&id.name);
+                if let Some(field) = field {
+                    _ = s.expect_field_pub(ctx, field, id_range);
+                    ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
+                    ctx.set_field_refs(head_pltype.clone(), field, id_range);
+                    ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
+                    let re = field.typenode.get_type(ctx, builder)?;
+                    let fnv = builder
+                        .build_struct_gep(headptr, field.index, "mthd_ptr")
+                        .unwrap();
+                    let fnv = builder.build_load(fnv, "mthd_ptr_load");
+                    let headptr = builder.build_struct_gep(headptr, 1, "traitptr").unwrap();
+                    let headptr = builder.build_load(headptr, "traitptr_load");
+                    ctx.emit_comment_highlight(&self.comments[0]);
+                    return Ok((
+                        Some(PLValue {
+                            value: fnv,
+                            is_const: false,
+                            receiver: Some((headptr, None)),
+                        }),
+                        Some(re),
+                        TerminatorEnum::NONE,
+                    ));
+                }
+                return Err(ctx.add_diag(id.range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND)));
+            }
+            PLType::STRUCT(s) => {
+                if let Some(field) = s.fields.get(&id.name) {
+                    _ = s.expect_field_pub(ctx, field, id_range);
+                    ctx.push_semantic_token(id_range, SemanticTokenType::PROPERTY, 0);
+                    ctx.set_field_refs(head_pltype.clone(), field, id_range);
+                    ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
+                    return Ok((
+                        Some(plv!(builder
+                            .build_struct_gep(headptr, field.index, "structgep")
+                            .unwrap())),
+                        Some(field.typenode.get_type(ctx, builder)?),
+                        TerminatorEnum::NONE,
+                    ));
+                }
+                if let Some(mthd) = s.find_method(ctx, &id.name) {
+                    _ = mthd.expect_pub(ctx, id_range);
+                    ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
+                    ctx.send_if_go_to_def(
+                        id_range,
+                        mthd.range,
+                        mthd.llvmname.split("..").next().unwrap().to_string(),
+                    );
+                    return Ok((
+                        Some(PLValue {
+                            value: usize::MAX,
+                            is_const: false,
+                            receiver: Some((
+                                headptr,
+                                Some(Arc::new(RefCell::new(PLType::POINTER(head_pltype)))),
+                            )),
+                        }),
+                        Some(Arc::new(RefCell::new(PLType::FN(mthd)))),
+                        TerminatorEnum::NONE,
+                    ));
+                };
+                return Err(ctx.add_diag(id.range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND)));
+            }
+            _ => {
+                return Err(ctx.add_diag(
+                    self.head
+                        .range()
+                        .new_err(ErrorCode::ILLEGAL_GET_FIELD_OPERATION),
+                ))
+            }
+        }
     }
 }

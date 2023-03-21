@@ -34,6 +34,18 @@ use super::*;
     }"
 )]
 #[test_parser(
+    "impl <T> c {
+        fn f(x: int) int {
+            x = x+1;
+            return 0;
+        }
+        fn f2(x: int) int {
+            x = x+1;
+            return 0;
+        }
+    }"
+)]
+#[test_parser(
     "impl A for c {
         fn f(x: int) int {
             x = x+1;
@@ -57,6 +69,7 @@ pub fn impl_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((
             tag_token_word(TokenType::IMPL),
+            opt(generic_type_def),
             opt(pair(type_name, tag_token_word(TokenType::FOR))),
             type_name,
             del_newline_or_space!(tag_token_symbol(TokenType::LBRACE)),
@@ -64,10 +77,11 @@ pub fn impl_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             many0(comment),
             del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
         )),
-        |(_, o, tp, (_, start), func_def, comment0, (_, end))| {
+        |(_, generics, o, tp, (_, start), func_def, comment0, (_, end))| {
             res_box(Box::new(TopLevel::ImplDef(ImplNode {
                 range: start.start.to(end.end),
                 target: tp,
+                generics,
                 methods: func_def
                     .iter()
                     .map(|x| {

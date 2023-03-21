@@ -55,26 +55,6 @@ macro_rules! generic_impl {
                     }
                     true
                 }
-                pub fn clear_generic(&self) {
-                    self.generic_map
-                        .iter()
-                        .for_each(|(_, v)| match &mut *v.clone().borrow_mut() {
-                            PLType::GENERIC(g) => {
-                                g.clear_type();
-                            }
-                            _ => unreachable!(),
-                        })
-                }
-                pub fn add_generic_type(&self, ctx: &mut Ctx) -> Result<(), PLDiag> {
-                    for (name, g) in self.generic_map.iter() {
-                        ctx.add_generic_type(
-                            name.clone(),
-                            g.clone(),
-                            (&*g.clone().borrow()).get_range().unwrap(),
-                        );
-                    }
-                    Ok(())
-                }
                 pub fn new_pltype(&self) -> $args {
                     let mut res = self.clone();
                     res.generic_map = res
@@ -87,7 +67,14 @@ macro_rules! generic_impl {
                             unreachable!()
                         })
                         .collect::<IndexMap<String, Arc<RefCell<PLType>>>>();
-                    res.clear_generic();
+                    res.generic_map
+                        .iter()
+                        .for_each(|(_, v)| match &mut *v.clone().borrow_mut() {
+                            PLType::GENERIC(g) => {
+                                g.clear_type();
+                            }
+                            _ => unreachable!(),
+                        });
                     res
                 }
             }

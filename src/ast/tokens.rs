@@ -87,6 +87,7 @@ define_tokens!(
     MACRO_TYPE_STMTS = "@stmts",
     MACRO = "macro",
     ARROW = "=>",
+    WHERE = "where"
 );
 
 impl TokenType {

@@ -20,8 +20,8 @@ pub struct Two<T> {
     b: One<T>;
 }
 
-pub struct Three<T> {
-    c: Two<T>;
+pub struct Three<S> {
+    c: Two<S>;
 }
 
 pub struct GenericSelfRef<T|S> {
@@ -41,6 +41,10 @@ pub fn ret_generic2<T>(x: T) Three<T> {
     return Three{
         c: two
     };
+}
+
+pub fn get_field<T>(x: Three<T>) T {
+    return x.c.b.a;
 }
 
 pub fn generic<T>(x: T) T {
@@ -116,6 +120,7 @@ pub fn test_generic_same_name() void {
     b.c.b.a = true;
     panic::assert(b.c.b.a);
     panic::assert(t.c.b.a == 9999);
+    panic::assert(get_field(t) == 9999);
     return;
 }
 
@@ -127,6 +132,7 @@ pub fn test_ret_generic() void {
     x.c.b.a = 999;
     panic::assert(y.c.b.a);
     panic::assert(x.c.b.a == 999);
+    panic::assert(get_field(z)[0] == 1);
     return;
 }
 

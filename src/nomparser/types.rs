@@ -136,12 +136,12 @@ pub fn generic_param_def(input: Span) -> IResult<Span, Box<GenericParamNode>> {
 /// trait_def = "trait" identifier generic_type_def? "{" function_def* "}" ;
 /// ```
 #[test_parser(
-    "trait mytrait<A|B|C> {
+    "trait mytrait {
     fn a() A;
 }"
 )]
 #[test_parser_error(
-    "traitmytrait<A|B|C> {
+    "traitmytrait {
     fn a() A;
 }"
 )]
@@ -150,13 +150,12 @@ pub fn trait_def(input: Span) -> IResult<Span, Box<TraitDefNode>> {
         tuple((
             modifiable(tag_token_word(TokenType::TRAIT), TokenType::PUB),
             identifier,
-            opt(generic_type_def),
             opt(preceded(tag_token_symbol(TokenType::COLON), type_add)),
             del_newline_or_space!(tag_token_symbol(TokenType::LBRACE)),
             many0(del_newline_or_space!(function_def)),
             del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
         )),
-        |((modifier, _), id, generics, derives, _, defs, (_, rr))| {
+        |((modifier, _), id, derives, _, defs, (_, rr))| {
             let range = id.range().start.to(rr.end);
             let mut de = vec![];
             if let Some(derives) = derives {
@@ -166,7 +165,6 @@ pub fn trait_def(input: Span) -> IResult<Span, Box<TraitDefNode>> {
             }
             Ok::<_, ()>(Box::new(TraitDefNode {
                 id,
-                generics,
                 methods: defs
                     .into_iter()
                     .map(|x| match *x {

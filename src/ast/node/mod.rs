@@ -30,6 +30,7 @@ use self::string_literal::StringNode;
 use self::types::*;
 
 use super::builder::ValueHandle;
+use super::ctx::EqRes;
 use super::diag::ErrorCode;
 use super::diag::PLDiag;
 use super::fmt::FmtBuilder;
@@ -101,7 +102,7 @@ pub trait TypeNode: RangeTrait + FmtTrait + PrintTrait {
         ctx: &'b mut Ctx<'a>,
         pltype: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Result<bool, PLDiag>;
+    ) -> Result<EqRes, PLDiag>;
 }
 type TypeNodeResult = Result<Arc<RefCell<PLType>>, PLDiag>;
 
@@ -189,7 +190,7 @@ pub type NodeResult = Result<
 pub struct PLValue {
     pub value: ValueHandle,
     pub is_const: bool,
-    pub receiver: Option<ValueHandle>,
+    pub receiver: Option<(ValueHandle, Option<Arc<RefCell<PLType>>>)>,
 }
 impl PLValue {
     pub fn set_const(&mut self, is_const: bool) {
@@ -327,85 +328,26 @@ impl<'a, 'ctx> Ctx<'a> {
                 ));
             }
         }
-        let re = node.emit(self, builder)?;
-        let (value, ty, term) = re;
-        if value.is_some() {
-            if let Some(ty) = ty.clone() {
-                if ty != expect {
-                    let derefed = self.auto_deref_tp(ty.clone());
-                    match (&*expect.clone().borrow(), &*derefed.borrow()) {
-                        // struct to trait
-                        (PLType::TRAIT(t), PLType::STRUCT(st)) => {
-                            let handle = builder.alloc("tmp_traitv", &expect.borrow(), self, None);
-                            if !st.implements_trait(t, &self.plmod) {
-                                return Err(mismatch_err!(
-                                    self,
-                                    range,
-                                    expectrange,
-                                    expect.borrow(),
-                                    ty.borrow()
-                                ));
-                            }
-                            for (name, f) in &t.fields {
-                                let mthd = st.find_method(self, name);
-                                if mthd.is_none() {
-                                    return Err(mismatch_err!(
-                                        self,
-                                        range,
-                                        expectrange,
-                                        expect.borrow(),
-                                        ty.borrow()
-                                    ));
-                                }
-                                let mthd = mthd.unwrap();
-                                let fnhandle = builder.get_or_insert_fn_handle(&mthd, self);
-                                let targetftp = f.typenode.get_type(self, builder).unwrap();
-                                let casted = builder.bitcast(
-                                    self,
-                                    fnhandle,
-                                    &targetftp.borrow(),
-                                    "fncast_tmp",
-                                );
-                                let f_ptr = builder
-                                    .build_struct_gep(handle, f.index, "field_tmp")
-                                    .unwrap();
-                                builder.build_store(f_ptr, casted);
-                            }
-                            let (_, v) = self.auto_deref(ty, value.unwrap().value, builder);
-                            let v = builder.bitcast(
-                                self,
-                                v,
-                                &PLType::POINTER(Arc::new(RefCell::new(PLType::PRIMITIVE(
-                                    PriType::I64,
-                                )))),
-                                "traitcast_tmp",
-                            );
-                            let v_ptr = builder.build_struct_gep(handle, 1, "v_tmp").unwrap();
-                            builder.build_store(v_ptr, v);
-                            let type_hash = builder.build_struct_gep(handle, 0, "tp_hash").unwrap();
-                            let hash = st.get_type_code();
-                            let hash = builder.int_value(&PriType::U64, hash, false);
-                            builder.build_store(type_hash, hash);
-                            return Ok((
-                                Some(PLValue {
-                                    value: handle,
-                                    is_const: true,
-                                    receiver: None,
-                                }),
-                                Some(expect),
-                                term,
-                            ));
-                        }
-                        _ => (),
-                    };
-                    return Err(mismatch_err!(
-                        self,
-                        range,
-                        expectrange,
-                        expect.borrow(),
-                        ty.borrow()
-                    ));
-                }
+        let (value, ty, term) = node.emit(self, builder)?;
+        if let (Some(value), Some(ty)) = (&value, &ty) {
+            if *ty != expect {
+                let handle = self.up_cast(
+                    expect.clone(),
+                    ty.clone(),
+                    expectrange,
+                    range,
+                    value.value,
+                    builder,
+                )?;
+                return Ok((
+                    Some(PLValue {
+                        value: handle,
+                        is_const: true,
+                        receiver: None,
+                    }),
+                    Some(expect),
+                    term,
+                ));
             }
         }
         Ok((value, ty, term))

@@ -2,10 +2,9 @@ use super::accumulators::PLReferences;
 use super::diag::{ErrorCode, PLDiag};
 
 use super::node::macro_nodes::MacroNode;
-use super::pltype::FNType;
+use super::pltype::FNValue;
 use super::pltype::PLType;
 use super::pltype::PriType;
-use super::pltype::STType;
 
 use super::range::Range;
 use super::tokens::TokenType;
@@ -58,7 +57,7 @@ pub struct Mod {
     /// global variable table
     pub global_table: FxHashMap<String, GlobalVar>,
     /// structs methods
-    pub methods: FxHashMap<String, FxHashMap<String, FNType>>,
+    pub methods: FxHashMap<String, FxHashMap<String, FNValue>>,
     pub defs: LSPRangeMap<Range, LSPDef>,
     // pub refcache:LSPRangeMap<String, Arc<RwVec<Location>>>,
     pub local_refs: LSPRangeMap<Range, Arc<MutVec<Location>>>, // hold local vars
@@ -253,7 +252,7 @@ impl Mod {
     }
     pub fn get_methods_completions(&self, full_name: &str, pub_only: bool) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
-        let mut f = |name: &String, v: &FNType| {
+        let mut f = |name: &String, v: &FNValue| {
             if pub_only && !v.is_modified_by(TokenType::PUB) {
                 return;
             }
@@ -288,7 +287,7 @@ impl Mod {
         completions
     }
 
-    pub fn find_method(&self, full_name: &str, mthd: &str) -> Option<FNType> {
+    pub fn find_method(&self, full_name: &str, mthd: &str) -> Option<FNValue> {
         if let Some(m) = self.methods.get(full_name) {
             if let Some(v) = m.get(mthd) {
                 return Some(v.clone());
@@ -302,9 +301,8 @@ impl Mod {
         None
     }
 
-    pub fn add_method(&mut self, tp: &STType, mthd: &str, fntp: FNType) -> Result<(), ()> {
-        let full_name = tp.get_st_full_name();
-        if let Some(m) = self.methods.get_mut(&full_name) {
+    pub fn add_method(&mut self, full_name: &str, mthd: &str, fntp: FNValue) -> Result<(), ()> {
+        if let Some(m) = self.methods.get_mut(full_name) {
             if m.get(mthd).is_some() {
                 // duplicate method
                 return Err(());
@@ -313,7 +311,7 @@ impl Mod {
         } else {
             let mut m = FxHashMap::default();
             m.insert(mthd.to_string(), fntp);
-            self.methods.insert(full_name, m);
+            self.methods.insert(full_name.to_string(), m);
         }
         Ok(())
     }

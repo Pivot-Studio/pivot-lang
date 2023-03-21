@@ -271,12 +271,7 @@ impl Node for ArrayElementNode {
             // TODO: check if index is out of bounds
             let index_range = self.index.range();
             let (index, index_pltype, _) = self.index.emit(ctx, builder)?;
-            let (index, _) = ctx.try_load2var(
-                index_range,
-                index.unwrap(),
-                index_pltype.clone().unwrap(),
-                builder,
-            )?;
+            let index = ctx.try_load2var(index_range, index.unwrap(), builder)?;
             if index_pltype.is_none() || !index_pltype.unwrap().borrow().is(&PriType::I64) {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_INDEX_MUST_BE_INT)));
             }

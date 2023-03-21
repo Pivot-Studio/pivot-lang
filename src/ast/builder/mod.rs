@@ -15,7 +15,7 @@ use super::{
     ctx::Ctx,
     diag::PLDiag,
     node::{types::TypedIdentifierNode, TypeNodeEnum},
-    pltype::{FNType, Field, PLType, PriType, STType},
+    pltype::{FNValue, Field, PLType, PriType, STType},
     range::{Pos, Range},
 };
 
@@ -74,7 +74,7 @@ pub trait IRBuilder<'a, 'ctx> {
         &self,
         paralist: Vec<Box<TypedIdentifierNode>>,
         ret: Box<TypeNodeEnum>,
-        fntype: &FNType,
+        fntype: &FNValue,
         fnvalue: ValueHandle,
         child: &mut Ctx<'a>,
     ) -> Result<(), PLDiag>;
@@ -82,7 +82,7 @@ pub trait IRBuilder<'a, 'ctx> {
     fn const_string(&self, s: &str) -> ValueHandle;
     fn create_parameter_variable(
         &self,
-        fntype: &FNType,
+        fntype: &FNValue,
         pos: Pos,
         i: usize,
         child: &mut Ctx<'a>,
@@ -120,7 +120,7 @@ pub trait IRBuilder<'a, 'ctx> {
     fn build_unconditional_branch(&self, bb: BlockHandle);
     fn position_at_end_block(&self, block: BlockHandle);
     fn add_body_to_struct_type(&self, name: &str, order_fields: &[Field], ctx: &mut Ctx<'a>);
-    fn get_or_insert_fn_handle(&self, pltp: &FNType, ctx: &mut Ctx<'a>) -> ValueHandle;
+    fn get_or_insert_fn_handle(&self, pltp: &FNValue, ctx: &mut Ctx<'a>) -> ValueHandle;
     fn get_or_add_global(
         &self,
         name: &str,
@@ -132,9 +132,8 @@ pub trait IRBuilder<'a, 'ctx> {
         &self,
         range: Range,
         v: ValueHandle,
-        tp: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
-    ) -> Result<(ValueHandle, Arc<RefCell<PLType>>), PLDiag>;
+    ) -> Result<ValueHandle, PLDiag>;
     fn get_function(&self, name: &str) -> Option<ValueHandle>;
     fn build_call(&self, f: ValueHandle, args: &[ValueHandle]) -> Option<ValueHandle>;
     fn add_function(

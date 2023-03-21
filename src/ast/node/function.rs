@@ -1,10 +1,11 @@
+use super::interface::TraitBoundNode;
 use super::statement::StatementsNode;
 use super::*;
 use super::{types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 
-use crate::ast::pltype::{eq, get_type_deep, FNType, PLType};
+use crate::ast::pltype::{get_type_deep, FNType, FNValue, PLType};
 use crate::ast::tokens::TokenType;
 use crate::plv;
 use indexmap::IndexMap;
@@ -40,109 +41,140 @@ impl Node for FuncCallNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        // let currscope = ctx.discope;
-        ctx.protect_generic_context(|ctx| {
-            let id_range = self.callee.range();
-            let mut para_values = Vec::new();
-            let (plvalue, pltype, _) = self.callee.emit(ctx, builder)?;
-            if pltype.is_none() {
-                return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND)));
+        let id_range = self.callee.range();
+        let (plvalue, pltype, _) = self.callee.emit(ctx, builder)?;
+        if pltype.is_none() {
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND)));
+        }
+        let pltype = pltype.unwrap();
+        let mut fnvalue = match &*pltype.borrow() {
+            PLType::FN(f) => {
+                let mut res = f.clone();
+                res.fntype = res.fntype.new_pltype();
+                res
             }
-            let pltype = pltype.unwrap();
-            let mut fntype = match &*pltype.borrow() {
-                PLType::FN(f) => f.new_pltype(),
-                _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND))),
-            };
+            _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND))),
+        };
 
-            if let Some(generic_params) = &self.generic_params {
-                let generic_params_range = generic_params.range;
-                generic_params.emit_highlight(ctx);
-                if generic_params.generics.len() != fntype.generic_map.len() {
-                    return Err(ctx.add_diag(
-                        generic_params_range.new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
-                    ));
+        if let Some(generic_params) = &self.generic_params {
+            let generic_params_range = generic_params.range;
+            generic_params.emit_highlight(ctx);
+            if generic_params.generics.len() != fnvalue.fntype.generics_size {
+                return Err(ctx.add_diag(
+                    generic_params_range.new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
+                ));
+            }
+            let generic_types = generic_params.get_generic_types(ctx, builder)?;
+            let mut i = 0;
+            for (_, pltype) in fnvalue.fntype.generic_map.iter() {
+                if i >= fnvalue.fntype.generics_size {
+                    break;
                 }
-                let generic_types = generic_params.get_generic_types(ctx, builder)?;
-                let mut i = 0;
-                for (_, pltype) in fntype.generic_map.iter() {
-                    if generic_types[i].is_some() {
-                        eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
-                    }
-                    i += 1;
+                if generic_types[i].is_some() {
+                    ctx.eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
                 }
+                i += 1;
             }
-            let mut skip = 0;
-            let mut function = None;
-
-            if plvalue.is_some() {
-                let v = plvalue.unwrap();
-                if let Some(receiver) = v.receiver {
-                    para_values.push(receiver);
-                    skip = 1;
-                }
-                function = Some(v.value);
+        }
+        let mut skip = 0;
+        let mut para_values = vec![];
+        let mut receiver_type = None;
+        let fn_handle = plvalue.and_then(|plvalue| {
+            if let Some((receiver, tp)) = plvalue.receiver {
+                (skip, para_values, receiver_type) = (1, vec![receiver], tp);
             }
-            // funcvalue must use fntype to get a new one,can not use the return  plvalue of id node emit
-            if fntype.param_pltypes.len() - skip as usize != self.paralist.len() {
-                return Err(ctx.add_diag(self.range.new_err(ErrorCode::PARAMETER_LENGTH_NOT_MATCH)));
+            Some(plvalue.value)
+        });
+        if fnvalue.fntype.param_pltypes.len() - skip as usize != self.paralist.len() {
+            return Err(ctx.add_diag(self.range.new_err(ErrorCode::PARAMETER_LENGTH_NOT_MATCH)));
+        }
+        for (i, para) in self.paralist.iter_mut().enumerate() {
+            let pararange = para.range();
+            ctx.push_param_hint(pararange, fnvalue.param_names[i + skip as usize].clone());
+            ctx.set_if_sig(
+                para.range(),
+                fnvalue.name.clone().split("::").last().unwrap().to_string()
+                    + "("
+                    + fnvalue
+                        .param_names
+                        .iter()
+                        .enumerate()
+                        .map(|(i, s)| {
+                            s.clone()
+                                + ": "
+                                + FmtBuilder::generate_node(&fnvalue.fntype.param_pltypes[i])
+                                    .as_str()
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                        .as_str()
+                    + ")",
+                &fnvalue.param_names,
+                i as u32 + skip,
+            );
+        }
+        let mut value_pltypes = vec![];
+        for para in self.paralist.iter_mut() {
+            let pararange = para.range();
+            let (value, value_pltype, _) = para.emit(ctx, builder)?;
+            if value.is_none() || value_pltype.is_none() {
+                return Ok((None, None, TerminatorEnum::NONE));
             }
-            for (i, para) in self.paralist.iter_mut().enumerate() {
-                let pararange = para.range();
-                ctx.push_param_hint(pararange, fntype.param_names[i + skip as usize].clone());
-                ctx.set_if_sig(
-                    para.range(),
-                    fntype.name.clone().split("::").last().unwrap().to_string()
-                        + "("
-                        + fntype
-                            .param_names
-                            .iter()
-                            .enumerate()
-                            .map(|(i, s)| {
-                                s.clone()
-                                    + ": "
-                                    + FmtBuilder::generate_node(&fntype.param_pltypes[i]).as_str()
-                            })
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                            .as_str()
-                        + ")",
-                    &fntype.param_names,
-                    i as u32 + skip,
-                );
-            }
-            let mut value_pltypes = vec![];
-            for para in self.paralist.iter_mut() {
-                let pararange = para.range();
-                let (value, value_pltype, _) = para.emit(ctx, builder)?;
-                if value.is_none() || value_pltype.is_none() {
-                    return Ok((None, None, TerminatorEnum::NONE));
-                }
-                let value_pltype = value_pltype.unwrap();
-                let value_pltype = get_type_deep(value_pltype);
-                let (load, _) =
-                    ctx.try_load2var(pararange, value.unwrap(), value_pltype.clone(), builder)?;
-                para_values.push(load);
-                value_pltypes.push((value_pltype, pararange));
-            }
-            // value check and generic infer
-            ctx.run_in_fn_mod_mut(&mut fntype, |ctx, fntype| {
-                fntype.add_generic_type(ctx)?;
-                for (i, (value_pltype, pararange)) in value_pltypes.iter().enumerate() {
-                    if !fntype.param_pltypes[i + skip as usize]
-                        .clone()
-                        .eq_or_infer(ctx, value_pltype.clone(), builder)?
+            let value_pltype = value_pltype.unwrap();
+            let value_pltype = get_type_deep(value_pltype);
+            let load = ctx.try_load2var(pararange, value.unwrap(), builder)?;
+            para_values.push(load);
+            value_pltypes.push((value_pltype, pararange));
+        }
+        // value check and generic infer
+        let res = ctx.protect_generic_context(&fnvalue.fntype.generic_map.clone(), |ctx| {
+            ctx.run_in_fn_mod_mut(&mut fnvalue, |ctx, fnvalue| {
+                if let Some(receiver_pltype) = &receiver_type {
+                    if !fnvalue.fntype.param_pltypes[0]
+                        .eq_or_infer(ctx, receiver_pltype.clone(), builder)?
+                        .eq
                     {
+                        return Err(
+                            ctx.add_diag(self.range.new_err(ErrorCode::RECEIVER_CANNOT_BE_INFER))
+                        );
+                    }
+                }
+                for (i, (value_pltype, pararange)) in value_pltypes.iter().enumerate() {
+                    let eqres = fnvalue.fntype.param_pltypes[i + skip as usize].eq_or_infer(
+                        ctx,
+                        value_pltype.clone(),
+                        builder,
+                    )?;
+                    if !eqres.eq {
                         return Err(
                             ctx.add_diag(pararange.new_err(ErrorCode::PARAMETER_TYPE_NOT_MATCH))
                         );
                     }
+                    if eqres.need_up_cast {
+                        let mut value = para_values[i + skip as usize];
+                        let ptr2v =
+                            builder.alloc("tmp_up_cast_ptr", &*value_pltype.borrow(), ctx, None);
+                        builder.build_store(ptr2v, value);
+                        let trait_pltype = fnvalue.fntype.param_pltypes[i + skip as usize]
+                            .get_type(ctx, builder)?;
+                        value = ctx.up_cast(
+                            trait_pltype,
+                            value_pltype.clone(),
+                            fnvalue.fntype.param_pltypes[i + skip as usize].range(),
+                            pararange.clone(),
+                            ptr2v,
+                            builder,
+                        )?;
+                        value = ctx.try_load2var(pararange.clone(), plv!(value), builder)?;
+                        para_values[i + skip as usize] = value;
+                    }
                 }
                 Ok(())
             })?;
-            if !fntype.generic_map.is_empty() {
-                if fntype.need_gen_code() {
-                    fntype = ctx.run_in_fn_mod_mut(&mut fntype, |ctx, fntype| {
-                        fntype.generic_infer_pltype(ctx, builder)
+            if !fnvalue.fntype.generic_map.is_empty() {
+                if fnvalue.fntype.need_gen_code() {
+                    fnvalue = ctx.run_in_fn_mod_mut(&mut fnvalue, |ctx, fnvalue| {
+                        fnvalue.generic_infer_pltype(ctx, builder)
                     })?;
                 } else {
                     return Err(
@@ -150,20 +182,18 @@ impl Node for FuncCallNode {
                     );
                 }
             }
-            let function = if function.is_some() {
-                function.unwrap()
+            let function = if fn_handle.map_or(false, |x| x != usize::MAX) {
+                fn_handle.unwrap()
             } else {
-                builder.get_or_insert_fn_handle(&fntype, ctx)
+                builder.get_or_insert_fn_handle(&fnvalue, ctx)
             };
-            if let Some(f) = ctx.function {
-                builder.try_set_fn_dbg(self.range.start, f);
-            };
+            builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
             let ret = builder.build_call(function, &para_values);
-            ctx.save_if_comment_doc_hover(id_range, Some(fntype.doc.clone()));
-            let rettp = ctx.run_in_fn_mod_mut(&mut fntype, |ctx, fntype| {
-                fntype.ret_pltype.get_type(ctx, builder)
+            ctx.save_if_comment_doc_hover(id_range, Some(fnvalue.doc.clone()));
+            let rettp = ctx.run_in_fn_mod_mut(&mut fnvalue, |ctx, fnvalue| {
+                fnvalue.fntype.ret_pltype.get_type(ctx, builder)
             })?;
-            let res = match ret {
+            match ret {
                 Some(v) => Ok((
                     {
                         builder.rm_curr_debug_location();
@@ -181,11 +211,11 @@ impl Node for FuncCallNode {
                     TerminatorEnum::NONE,
                 )),
                 None => Ok((None, Some(rettp), TerminatorEnum::NONE)),
-            };
-            ctx.set_if_refs_tp(pltype, id_range);
-            ctx.emit_comment_highlight(&self.comments[0]);
-            res
-        })
+            }
+        });
+        ctx.set_if_refs_tp(pltype, id_range);
+        ctx.emit_comment_highlight(&self.comments[0]);
+        res
     }
 }
 #[node]
@@ -199,6 +229,8 @@ pub struct FuncDefNode {
     pub generics: Option<Box<GenericDefNode>>,
     pub body: Option<StatementsNode>,
     pub modifier: Option<(TokenType, Range)>,
+    pub generics_size: usize, // the size of generics except the generics from impl node
+    pub trait_bounds: Option<Vec<Box<TraitBoundNode>>>,
 }
 
 impl TypeNode for FuncDefNode {
@@ -207,82 +239,92 @@ impl TypeNode for FuncDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> TypeNodeResult {
-        ctx.protect_generic_context(|ctx| {
+        let child = &mut ctx.new_child(self.range.start, builder);
+        let generic_map = self
+            .generics
+            .as_ref()
+            .map_or(IndexMap::default(), |generics| generics.gen_generic_type());
+        if let Some(trait_bounds) = &self.trait_bounds {
+            for trait_bound in trait_bounds.iter() {
+                trait_bound.set_traits(child, builder, &generic_map)?;
+            }
+        }
+        let (pltype, flater) = child.protect_generic_context(&generic_map, |child| {
+            let mut flater = None;
             let mut param_pltypes = Vec::new();
             let mut param_name = Vec::new();
-            let mut method = false;
-            let mut first = true;
-            let mut generic_map = IndexMap::default();
-            if let Some(generics) = &self.generics {
-                generic_map = generics.gen_generic_type();
-            }
-            for (name, pltype) in generic_map.iter() {
-                ctx.add_generic_type(
-                    name.clone(),
-                    pltype.clone(),
-                    pltype.clone().borrow().get_range().unwrap(),
-                );
-            }
+            let method = !self.paralist.is_empty() && self.paralist[0].id.name == "self";
+            generic_map
+                .iter()
+                .for_each(|(_, pltype)| match &mut *pltype.borrow_mut() {
+                    PLType::GENERIC(g) => {
+                        g.set_place_holder(child);
+                    }
+                    _ => unreachable!(),
+                });
             for para in self.paralist.iter() {
-                let paramtype = para.typenode.get_type(ctx, builder)?;
-                ctx.set_if_refs_tp(paramtype.clone(), para.typenode.range());
-                if first && para.id.name == "self" {
-                    method = true;
-                }
-                first = false;
+                let paramtype = para.typenode.get_type(child, builder)?;
+                child.set_if_refs_tp(paramtype.clone(), para.typenode.range());
                 param_pltypes.push(para.typenode.clone());
                 param_name.push(para.id.name.clone());
             }
-            // let refs = RwVec::new();
-            let mut ftp = FNType {
+            let fnvalue = FNValue {
                 name: self.id.name.clone(),
-                ret_pltype: self.ret.clone(),
-                param_pltypes,
                 param_names: param_name,
                 range: self.range,
                 doc: self.doc.clone(),
                 llvmname: if self.declare {
                     self.id.name.clone()
                 } else {
-                    ctx.plmod.get_full_name(&self.id.name)
+                    child.plmod.get_full_name(&self.id.name)
                 },
-                path: ctx.plmod.path.clone(),
-                method,
-                generic_map,
+                path: child.plmod.path.clone(),
+                fntype: FNType {
+                    ret_pltype: self.ret.clone(),
+                    param_pltypes,
+                    method,
+                    generic_map: generic_map.clone(),
+                    generic: self.generics.is_some(),
+                    modifier: self.modifier,
+                    generics_size: self.generics_size,
+                },
                 generic_infer: Arc::new(RefCell::new(IndexMap::default())),
-                generic: self.generics.is_some(),
                 node: Some(Box::new(self.clone())),
-                modifier: self.modifier,
             };
             if self.generics.is_none() {
-                builder.get_or_insert_fn_handle(&ftp, ctx);
+                builder.get_or_insert_fn_handle(&fnvalue, child);
             }
-            let pltype = Arc::new(RefCell::new(PLType::FN(ftp.clone())));
-            ctx.set_if_refs_tp(pltype.clone(), self.id.range);
-            ctx.add_doc_symbols(pltype.clone());
+            let pltype = Arc::new(RefCell::new(PLType::FN(fnvalue.clone())));
+            child.set_if_refs_tp(pltype.clone(), self.id.range);
+            child.add_doc_symbols(pltype.clone());
             if method {
-                let a = self
+                let receiver_pltype = self
                     .paralist
                     .first()
                     .unwrap()
                     .typenode
-                    .get_type(ctx, builder)
+                    .get_type(child, builder)
                     .unwrap();
-                let mut b = a.borrow_mut();
-                if let PLType::POINTER(s) = &mut *b {
-                    if let PLType::STRUCT(s) = &mut *s.borrow_mut() {
-                        ftp.param_pltypes = ftp.param_pltypes[1..].to_vec();
-                        ctx.add_method(
-                            s,
-                            self.id.name.split("::").last().unwrap(),
-                            ftp.clone(),
-                            self.id.range,
-                        );
+                if let PLType::POINTER(s) = &*receiver_pltype.borrow() {
+                    if let PLType::STRUCT(s) = &*s.borrow() {
+                        let fullname = s.get_st_full_name_except_generic();
+                        flater = Some(move |ctx: &mut Ctx| {
+                            ctx.add_method(
+                                &fullname,
+                                self.id.name.split("::").last().unwrap(),
+                                fnvalue.clone(),
+                                self.id.range,
+                            );
+                        });
                     }
-                }
+                };
             }
-            Ok(pltype)
-        })
+            Ok((pltype, flater))
+        })?;
+        if let Some(flater) = flater {
+            flater(ctx);
+        }
+        Ok(pltype)
     }
 
     fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) {
@@ -303,7 +345,7 @@ impl TypeNode for FuncDefNode {
         _ctx: &'b mut Ctx<'a>,
         _pltype: Arc<RefCell<PLType>>,
         _builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Result<bool, PLDiag> {
+    ) -> Result<EqRes, PLDiag> {
         todo!()
     }
 }
@@ -339,40 +381,38 @@ impl FuncDefNode {
         ctx: &'b mut Ctx<'a>,
         first: bool,
         builder: &'b BuilderEnum<'a, 'ctx>,
-        fntype: FNType,
+        fnvalue: FNValue,
     ) -> Result<(), PLDiag> {
         let child = &mut ctx.new_child(self.range.start, builder);
-        return child.protect_generic_context(|child| {
-            fntype.add_generic_type(child)?;
-            if first && fntype.generic {
-                fntype
-                    .generic_map
-                    .iter()
-                    .for_each(|(_, pltype)| match &mut *pltype.borrow_mut() {
+        return child.protect_generic_context(&fnvalue.fntype.generic_map, |child| {
+            if first && fnvalue.fntype.generic {
+                fnvalue.fntype.generic_map.iter().for_each(|(_, pltype)| {
+                    match &mut *pltype.borrow_mut() {
                         PLType::GENERIC(g) => {
                             g.set_place_holder(child);
                         }
                         _ => unreachable!(),
-                    });
-                let mut place_holder_fn = fntype.clone();
+                    }
+                });
+                let mut place_holder_fn = fnvalue.clone();
                 let name = place_holder_fn.append_name_with_generic(place_holder_fn.name.clone());
                 place_holder_fn.llvmname = place_holder_fn
                     .llvmname
                     .replace(&place_holder_fn.name, &name);
                 place_holder_fn.name = name.clone();
-                place_holder_fn.generic_map.clear();
+                place_holder_fn.fntype.generic_map.clear();
                 place_holder_fn.generic_infer = Arc::new(RefCell::new(IndexMap::default()));
-                fntype.generic_infer.borrow_mut().insert(
+                fnvalue.generic_infer.borrow_mut().insert(
                     name,
                     Arc::new(RefCell::new(PLType::FN(place_holder_fn.clone()))),
                 );
             }
-            let funcvalue = builder.get_or_insert_fn_handle(&fntype, child);
+            let funcvalue = builder.get_or_insert_fn_handle(&fnvalue, child);
             child.function = Some(funcvalue);
             builder.build_sub_program(
                 self.paralist.clone(),
-                self.ret.clone(),
-                &fntype,
+                fnvalue.fntype.ret_pltype.clone(),
+                &fnvalue,
                 funcvalue,
                 child,
             )?;
@@ -381,12 +421,12 @@ impl FuncDefNode {
             let entry = builder.append_basic_block(funcvalue, "entry");
             let return_block = builder.append_basic_block(funcvalue, "return");
             child.position_at_end(entry, builder);
-            let ret_value_ptr = match &*fntype.ret_pltype.get_type(child, builder)?.borrow() {
+            let ret_value_ptr = match &*fnvalue.fntype.ret_pltype.get_type(child, builder)?.borrow()
+            {
                 PLType::VOID => None,
-                _ => {
-                    let pltype = self.ret.get_type(child, builder)?;
+                other => {
                     builder.rm_curr_debug_location();
-                    let retv = builder.alloc("retvalue", &pltype.borrow(), child, None);
+                    let retv = builder.alloc("retvalue", other, child, None);
                     // 返回值不能在函数结束时从root表移除
                     child.roots.borrow_mut().pop();
                     Some(retv)
@@ -402,14 +442,14 @@ impl FuncDefNode {
             };
             child.position_at_end(entry, builder);
             // alloc para
-            for (i, para) in fntype.param_pltypes.iter().enumerate() {
+            for (i, para) in fnvalue.fntype.param_pltypes.iter().enumerate() {
                 let tp = para.get_type(child, builder)?;
                 let b = tp.clone();
                 let basetype = b.borrow();
-                let alloca = builder.alloc(&fntype.param_names[i], &basetype, child, None);
+                let alloca = builder.alloc(&fnvalue.param_names[i], &basetype, child, None);
                 // add alloc var debug info
                 builder.create_parameter_variable(
-                    &fntype,
+                    &fnvalue,
                     self.paralist[i].range.start,
                     i,
                     child,
@@ -420,7 +460,7 @@ impl FuncDefNode {
                 let parapltype = tp;
                 child
                     .add_symbol(
-                        fntype.param_names[i].clone(),
+                        fnvalue.param_names[i].clone(),
                         alloca,
                         parapltype,
                         self.paralist[i].id.range,
@@ -439,7 +479,7 @@ impl FuncDefNode {
                 child.init_global(builder);
                 child.position_at_end(entry, builder);
             }
-            child.rettp = Some(fntype.ret_pltype.get_type(child, builder)?);
+            child.rettp = Some(fnvalue.fntype.ret_pltype.get_type(child, builder)?);
             let (_, _, terminator) = self.body.as_mut().unwrap().emit(child, builder)?;
             if !terminator.is_return() {
                 return Err(
@@ -492,13 +532,23 @@ impl Node for FuncDefNode {
             ctx.push_semantic_token(para.typenode.range(), SemanticTokenType::TYPE, 0);
         }
         ctx.push_semantic_token(self.ret.range(), SemanticTokenType::TYPE, 0);
+        if let Some(trait_bounds) = &self.trait_bounds {
+            trait_bounds.iter().for_each(|trait_bound| {
+                ctx.push_semantic_token(trait_bound.generic.range, SemanticTokenType::PARAMETER, 0);
+                ctx.push_semantic_token(trait_bound.impl_trait.range(), SemanticTokenType::TYPE, 0);
+            });
+        }
         let pltype = ctx.get_type(&self.id.name, self.range)?;
         if pltype.borrow().get_range() != Some(self.range) {
             return Err(self.id.range.new_err(ErrorCode::REDEFINE_SYMBOL));
         }
         if self.body.is_some() {
             let fntype = match &*pltype.borrow() {
-                PLType::FN(fntype) => fntype.clone(),
+                PLType::FN(f) => {
+                    let mut res = f.clone();
+                    res.fntype = res.fntype.new_pltype();
+                    res
+                }
                 _ => return Ok((None, None, TerminatorEnum::NONE)),
             };
             self.gen_fntype(ctx, true, builder, fntype)?;

@@ -7,15 +7,17 @@ use super::node::macro_nodes::MacroNode;
 use super::node::NodeEnum;
 use super::node::NodeResult;
 use super::node::PLValue;
+use super::node::TypeNode;
 use super::plmod::CompletionItemWrapper;
 use super::plmod::GlobalVar;
 use super::plmod::LSPDef;
 use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::pltype::add_primitive_types;
-use super::pltype::FNType;
+use super::pltype::FNValue;
 use super::pltype::Field;
 use super::pltype::PLType;
+use super::pltype::PriType;
 
 use super::pltype::STType;
 use super::range::Pos;
@@ -26,10 +28,12 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::lsp::semantic_tokens::type_index;
 
+use crate::mismatch_err;
 use crate::skip_if_not_modified_by;
 use crate::utils::read_config::Config;
 use crate::Db;
 
+use indexmap::IndexMap;
 use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
@@ -214,6 +218,63 @@ impl<'a, 'ctx> Ctx<'a> {
         self.macro_loop_idx = old_macro_loop_idx;
         result
     }
+    pub fn up_cast<'b>(
+        &mut self,
+        trait_pltype: Arc<RefCell<PLType>>,
+        st_pltype: Arc<RefCell<PLType>>,
+        trait_range: Range,
+        st_range: Range,
+        st_value: usize,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> Result<usize, PLDiag> {
+        let (st_pltype, st_value) = self.auto_deref(st_pltype, st_value, builder);
+        if let (PLType::TRAIT(t), PLType::STRUCT(st)) =
+            (&*trait_pltype.borrow(), &*st_pltype.borrow())
+        {
+            if !st.implements_trait(t, &self.plmod) {
+                return Err(mismatch_err!(
+                    self,
+                    st_range,
+                    trait_range,
+                    trait_pltype.borrow(),
+                    st_pltype.borrow()
+                ));
+            }
+            let trait_handle = builder.alloc("tmp_traitv", &trait_pltype.borrow(), self, None);
+            for (name, f) in &t.fields {
+                let mthd = st.find_method(self, name).unwrap();
+                let fnhandle = builder.get_or_insert_fn_handle(&mthd, self);
+                let targetftp = f.typenode.get_type(self, builder).unwrap();
+                let casted = builder.bitcast(self, fnhandle, &targetftp.borrow(), "fncast_tmp");
+                let f_ptr = builder
+                    .build_struct_gep(trait_handle, f.index, "field_tmp")
+                    .unwrap();
+                builder.build_store(f_ptr, casted);
+            }
+            let st_value = builder.bitcast(
+                self,
+                st_value,
+                &PLType::POINTER(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::I64)))),
+                "traitcast_tmp",
+            );
+            let v_ptr = builder.build_struct_gep(trait_handle, 1, "v_tmp").unwrap();
+            builder.build_store(v_ptr, st_value);
+            let type_hash = builder
+                .build_struct_gep(trait_handle, 0, "tp_hash")
+                .unwrap();
+            let hash = st.get_type_code();
+            let hash = builder.int_value(&PriType::U64, hash, false);
+            builder.build_store(type_hash, hash);
+            return Ok(trait_handle);
+        }
+        return Err(mismatch_err!(
+            self,
+            st_range,
+            trait_range,
+            trait_pltype.borrow(),
+            st_pltype.borrow()
+        ));
+    }
     pub fn set_init_fn<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
         self.function = Some(builder.add_function(
             &self.plmod.get_full_name("__init_global"),
@@ -243,7 +304,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.position_at_end(entry, builder);
         builder.build_return(None);
     }
-    pub fn add_method(&mut self, tp: &STType, mthd: &str, fntp: FNType, range: Range) {
+    pub fn add_method(&mut self, tp: &str, mthd: &str, fntp: FNValue, range: Range) {
         if self.plmod.add_method(tp, mthd, fntp).is_err() {
             self.add_diag(range.new_err(ErrorCode::DUPLICATE_METHOD));
         }
@@ -393,15 +454,19 @@ impl<'a, 'ctx> Ctx<'a> {
         let name = pltype.borrow().get_name();
         self.plmod.types.insert(name, pltype);
     }
-    pub fn add_generic_type(&mut self, name: String, pltype: Arc<RefCell<PLType>>, range: Range) {
+    #[inline]
+    fn add_generic_type(&mut self, name: String, pltype: Arc<RefCell<PLType>>, range: Range) {
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
         self.generic_types.insert(name, pltype);
     }
     pub fn add_doc_symbols(&mut self, pltype: Arc<RefCell<PLType>>) {
         match &*RefCell::borrow(&pltype) {
-            PLType::FN(f) => {
-                if !f.method {
-                    self.plmod.doc_symbols.borrow_mut().push(f.get_doc_symbol())
+            PLType::FN(fnvalue) => {
+                if !fnvalue.fntype.method {
+                    self.plmod
+                        .doc_symbols
+                        .borrow_mut()
+                        .push(fnvalue.get_doc_symbol())
                 }
             }
             PLType::STRUCT(st) => self
@@ -434,11 +499,9 @@ impl<'a, 'ctx> Ctx<'a> {
         &'b mut self,
         range: Range,
         v: PLValue,
-        tp: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Result<(ValueHandle, Arc<RefCell<PLType>>), PLDiag> {
-        let v = v.value;
-        builder.try_load2var(range, v, tp, self)
+    ) -> Result<ValueHandle, PLDiag> {
+        builder.try_load2var(range, v.value, self)
     }
     pub fn if_completion(
         &self,
@@ -463,9 +526,17 @@ impl<'a, 'ctx> Ctx<'a> {
     }
     pub fn protect_generic_context<'b, T, F: FnMut(&mut Ctx<'a>) -> Result<T, PLDiag>>(
         &mut self,
+        generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
         mut f: F,
     ) -> Result<T, PLDiag> {
         let mp = self.generic_types.clone();
+        for (name, pltype) in generic_map.iter() {
+            self.add_generic_type(
+                name.clone(),
+                pltype.clone(),
+                pltype.clone().borrow().get_range().unwrap(),
+            );
+        }
         let res = f(self);
         self.generic_types = mp;
         res
@@ -509,9 +580,9 @@ impl<'a, 'ctx> Ctx<'a> {
         res
     }
 
-    pub fn run_in_fn_mod_mut<'b, T, F: FnMut(&mut Ctx<'a>, &mut FNType) -> Result<T, PLDiag>>(
+    pub fn run_in_fn_mod_mut<'b, T, F: FnMut(&mut Ctx<'a>, &mut FNValue) -> Result<T, PLDiag>>(
         &'b mut self,
-        fntype: &mut FNType,
+        fntype: &mut FNValue,
         mut f: F,
     ) -> Result<T, PLDiag> {
         let p = PathBuf::from(&fntype.path);
@@ -529,9 +600,9 @@ impl<'a, 'ctx> Ctx<'a> {
         res
     }
 
-    pub fn run_in_fn_mod<'b, T, F: FnMut(&mut Ctx<'a>, &FNType) -> Result<T, PLDiag>>(
+    pub fn run_in_fn_mod<'b, T, F: FnMut(&mut Ctx<'a>, &FNValue) -> Result<T, PLDiag>>(
         &'b mut self,
-        fntype: &FNType,
+        fntype: &FNValue,
         mut f: F,
     ) -> Result<T, PLDiag> {
         let p = PathBuf::from(&fntype.path);
@@ -682,9 +753,9 @@ impl<'a, 'ctx> Ctx<'a> {
                         skip_if_not_modified_by!(s.modifier, TokenType::PUB);
                         CompletionItemKind::STRUCT
                     }
-                    PLType::FN(f) => {
-                        skip_if_not_modified_by!(f.modifier, TokenType::PUB);
-                        insert_text = Some(f.gen_snippet());
+                    PLType::FN(fnvalue) => {
+                        skip_if_not_modified_by!(fnvalue.fntype.modifier, TokenType::PUB);
+                        insert_text = Some(fnvalue.gen_snippet());
                         command = Some(Command::new(
                             "trigger help".to_string(),
                             "editor.action.triggerParameterHints".to_string(),
@@ -986,4 +1057,78 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         None
     }
+    // when need eq trait and sttype,the left mut be trait
+    pub fn eq(&self, l: Arc<RefCell<PLType>>, r: Arc<RefCell<PLType>>) -> EqRes {
+        match (&*l.borrow(), &*r.borrow()) {
+            (PLType::GENERIC(l), PLType::GENERIC(r)) => {
+                if l == r {
+                    return EqRes {
+                        eq: true,
+                        need_up_cast: false,
+                    };
+                }
+            }
+            _ => {}
+        }
+        match &mut *l.borrow_mut() {
+            PLType::GENERIC(l) => {
+                if l.curpltype.is_some() {
+                    return self.eq(l.curpltype.as_ref().unwrap().clone(), r);
+                }
+                if l.trait_impl.is_some() {
+                    if !self
+                        .eq(l.trait_impl.as_ref().unwrap().clone(), r.clone())
+                        .eq
+                    {
+                        return EqRes {
+                            eq: false,
+                            need_up_cast: false,
+                        };
+                    }
+                }
+                l.set_type(r);
+                return EqRes {
+                    eq: true,
+                    need_up_cast: false,
+                };
+            }
+            _ => {}
+        }
+        EqRes {
+            eq: match (&*l.borrow(), &*r.borrow()) {
+                (PLType::PRIMITIVE(l), PLType::PRIMITIVE(r)) => l == r,
+                (PLType::VOID, PLType::VOID) => true,
+                (PLType::POINTER(l), PLType::POINTER(r)) => self.eq(l.clone(), r.clone()).eq,
+                (PLType::ARR(l), PLType::ARR(r)) => {
+                    self.eq(l.get_elem_type(), r.get_elem_type()).eq && l.size == r.size
+                }
+                (PLType::STRUCT(l), PLType::STRUCT(r)) => l.name == r.name && l.path == r.path,
+                (PLType::FN(l), PLType::FN(r)) => l == r,
+                (PLType::PLACEHOLDER(l), PLType::PLACEHOLDER(r)) => l == r,
+                _ => {
+                    if l != r {
+                        let trait_pltype = l.clone();
+                        let st_pltype = r.clone();
+                        let st_pltype = self.auto_deref_tp(st_pltype);
+                        if let (PLType::TRAIT(t), PLType::STRUCT(st)) =
+                            (&*trait_pltype.borrow(), &*st_pltype.borrow())
+                        {
+                            return EqRes {
+                                eq: st.implements_trait(t, &self.plmod),
+                                need_up_cast: true,
+                            };
+                        };
+                        false
+                    } else {
+                        true
+                    }
+                }
+            },
+            need_up_cast: false,
+        }
+    }
+}
+pub struct EqRes {
+    pub eq: bool,
+    pub need_up_cast: bool,
 }
