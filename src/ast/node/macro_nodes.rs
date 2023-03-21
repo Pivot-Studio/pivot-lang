@@ -36,7 +36,9 @@ impl Node for MacroNode {
         ctx: &'b mut Ctx<'a>,
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        ctx.push_semantic_token(self.range, SemanticTokenType::MACRO, 0);
+        ctx.send_if_go_to_def(self.range, self.range, ctx.get_file());
+        ctx.set_glob_refs(&ctx.plmod.get_full_name(&self.id.name), self.id.range);
+        ctx.push_semantic_token(self.id.range, SemanticTokenType::MACRO, 0);
         self.file = ctx.plmod.path.clone();
         ctx.plmod.add_macro(&self);
         Ok((None, None, TerminatorEnum::NONE))
@@ -240,6 +242,8 @@ impl Node for MacroCallNode {
                 }
                 ctx.push_semantic_token(ex_node.id.range(), SemanticTokenType::MACRO, 0);
                 let m = ex_node.get_macro(ctx)?;
+                ctx.send_if_go_to_def(self.range, m.range, m.file.clone());
+                ctx.set_glob_refs(&format!("{}..{}", &m.file, &m.id.name), self.range);
                 let src = m.file.clone();
                 let mut span = unsafe {
                     Span::new_from_raw_offset(
@@ -261,7 +265,6 @@ impl Node for MacroCallNode {
                                     ctx.get_file(),
                                     format_label!("the macro is called here"),
                                 );
-                                // e.set_range(self.range);
                                 e
                             } else {
                                 unreachable!()
@@ -303,6 +306,5 @@ impl Node for MacroCallNode {
         }
 
         Ok((None, None, TerminatorEnum::NONE))
-        // Ok((None, None, TerminatorEnum::NONE))
     }
 }

@@ -9,11 +9,11 @@ use project1::test::flow;
 use project1::test::list;
 use project1::test::module;
 use project1::test::string;
+use project1::test::macros;
 use pl_test::main;
 use std::io;
 pub fn main() i64 {
-    let a = "hello world\n";
-    string::test!(a);
+    macros::test_macros();
     ifel::test_if_else();
     generic::test_generic();
     method::test_impl();
