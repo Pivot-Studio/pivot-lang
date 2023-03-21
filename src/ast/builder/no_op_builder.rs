@@ -247,6 +247,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
         &self,
         _f: super::ValueHandle,
         _args: &[super::ValueHandle],
+        _ret_type: &PLType,
+        _ctx: &mut Ctx<'a>,
     ) -> Option<super::ValueHandle> {
         Some(0)
     }

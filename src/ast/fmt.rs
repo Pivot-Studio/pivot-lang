@@ -8,8 +8,8 @@ use super::{
         function::{FuncCallNode, FuncDefNode},
         global::GlobalNode,
         implement::ImplNode,
-        macro_nodes::{MacroCallNode, MacroLoopStatementNode, MacroNode, MacroRuleNode},
         interface::{TraitBoundNode, TraitDefNode},
+        macro_nodes::{MacroCallNode, MacroLoopStatementNode, MacroNode, MacroRuleNode},
         operator::{BinOpNode, TakeOpNode, UnaryOpNode},
         pkg::{ExternIdNode, UseNode},
         pointer::{PointerOpEnum, PointerOpNode},
@@ -638,6 +638,7 @@ impl FmtBuilder {
         self.l_paren();
         self.token(&node.args);
         self.r_paren();
+    }
     pub fn parse_trait_bound_node(&mut self, _node: &TraitBoundNode) {
         todo!()
     }

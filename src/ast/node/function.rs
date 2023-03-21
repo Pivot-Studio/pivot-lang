@@ -188,20 +188,14 @@ impl Node for FuncCallNode {
                 builder.get_or_insert_fn_handle(&fnvalue, ctx)
             };
             builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
-            let ret = builder.build_call(function, &para_values);
-            ctx.save_if_comment_doc_hover(id_range, Some(fnvalue.doc.clone()));
             let rettp = ctx.run_in_fn_mod_mut(&mut fnvalue, |ctx, fnvalue| {
                 fnvalue.fntype.ret_pltype.get_type(ctx, builder)
             })?;
+            let ret = builder.build_call(function, &para_values, &rettp.borrow(), ctx);
+            ctx.save_if_comment_doc_hover(id_range, Some(fnvalue.doc.clone()));
             match ret {
                 Some(v) => Ok((
-                    {
-                        builder.rm_curr_debug_location();
-                        let ptr = builder.alloc("ret_alloc_tmp", &rettp.borrow(), ctx, None);
-                        let v = builder.build_load(v, "raw_ret");
-                        builder.build_store(ptr, v);
-                        Some(plv!(ptr))
-                    },
+                    { Some(plv!(v)) },
                     Some({
                         match &*rettp.clone().borrow() {
                             PLType::GENERIC(g) => g.curpltype.as_ref().unwrap().clone(),

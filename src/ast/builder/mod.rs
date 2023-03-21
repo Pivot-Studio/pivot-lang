@@ -135,7 +135,13 @@ pub trait IRBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
     ) -> Result<ValueHandle, PLDiag>;
     fn get_function(&self, name: &str) -> Option<ValueHandle>;
-    fn build_call(&self, f: ValueHandle, args: &[ValueHandle]) -> Option<ValueHandle>;
+    fn build_call(
+        &self,
+        f: ValueHandle,
+        args: &[ValueHandle],
+        ret_type: &PLType,
+        ctx: &mut Ctx<'a>,
+    ) -> Option<ValueHandle>;
     fn add_function(
         &self,
         name: &str,

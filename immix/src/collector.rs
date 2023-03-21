@@ -169,6 +169,17 @@ impl Collector {
             ptr
         }
     }
+    pub fn alloc_no_collect(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
+        unsafe {
+            let ptr = self
+                .thread_local_allocator
+                .as_mut()
+                .unwrap()
+                .alloc(size, obj_type);
+            debug_assert!(ptr.is_null() == false);
+            ptr
+        }
+    }
 
     /// # add_root
     /// Add a root to the collector.

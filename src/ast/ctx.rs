@@ -402,6 +402,8 @@ impl<'a, 'ctx> Ctx<'a> {
                 .get_function(&self.plmod.get_full_name("__init_global"))
                 .unwrap(),
             &[],
+            &PLType::VOID,
+            self,
         );
     }
     fn init_global_walk<'b>(
@@ -419,7 +421,7 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         let f = builder.add_function(&name, &[], PLType::VOID, self);
         builder.rm_curr_debug_location();
-        builder.build_call(f, &[]);
+        builder.build_call(f, &[], &PLType::VOID, self);
         set.insert(name);
     }
 

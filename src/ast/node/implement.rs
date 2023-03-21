@@ -65,7 +65,11 @@ impl Node for ImplNode {
                         } else {
                             t.range()
                                 .new_err(ErrorCode::EXPECT_TRAIT_TYPE)
-                                .add_label(t.range(), format_label!("type {}", name)) //Some(("type {}".to_string(), vec![name])))
+                                .add_label(
+                                    t.range(),
+                                    ctx.get_file(),
+                                    format_label!("type {}", name),
+                                ) //Some(("type {}".to_string(), vec![name])))
                                 .add_to_ctx(ctx);
                         };
                     }

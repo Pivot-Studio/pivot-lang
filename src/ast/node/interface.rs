@@ -159,8 +159,8 @@ impl TraitDefNode {
                     .add_help(
                         "trait methods share the same modifier with trait, \
                             so you shall not add modifier here",
-                )
-                .add_to_ctx(ctx);
+                    )
+                    .add_to_ctx(ctx);
             }
 
             // ctx.set_if_refs(f.refs.clone(), field.id.range);

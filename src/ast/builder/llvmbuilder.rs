@@ -191,11 +191,72 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             heap_stack_map: Arc::new(RefCell::new(FxHashMap::default())),
         }
     }
+    fn alloc_raw(
+        &self,
+        name: &str,
+        pltype: &PLType,
+        ctx: &mut Ctx<'a>,
+        declare: Option<Pos>,
+        malloc_fn: &str,
+    ) -> ValueHandle {
+        let td = self.targetmachine.get_target_data();
+        let builder = self.builder;
+        builder.unset_current_debug_location();
+        let bt = self.get_basic_type_op(pltype, ctx).unwrap();
+        let (p, stack_root, _) = self.gc_malloc(name, ctx, pltype, malloc_fn);
+        // TODO: force user to manually init all structs, so we can remove this memset
+        let size_val = self
+            .context
+            .i64_type()
+            .const_int(td.get_store_size(&bt), false);
+        self.builder
+            .build_memset(
+                p,
+                td.get_abi_alignment(&bt),
+                self.context.i8_type().const_zero(),
+                size_val,
+            )
+            .unwrap();
+        if let PLType::STRUCT(_) = pltype {
+            let f = self.get_or_insert_st_visit_fn_handle(&p);
+            let i = self.builder.build_ptr_to_int(
+                f.as_global_value().as_pointer_value(),
+                self.context.i64_type(),
+                "_vtable",
+            );
+            let vtable = self.builder.build_struct_gep(p, 0, "vtable").unwrap();
+            self.builder.build_store(vtable, i);
+        } else if let PLType::ARR(tp) = pltype {
+            let f = self.gen_or_get_arr_visit_function(ctx, tp);
+            let i = self.builder.build_ptr_to_int(
+                f.as_global_value().as_pointer_value(),
+                self.context.i64_type(),
+                "_vtable",
+            );
+            let vtable = self.builder.build_struct_gep(p, 0, "vtable").unwrap();
+            self.builder.build_store(vtable, i);
+        }
+        declare.map(|p| {
+            self.build_dbg_location(p);
+            self.insert_var_declare(
+                name,
+                p,
+                &PLType::POINTER(Arc::new(RefCell::new(pltype.clone()))),
+                self.get_llvm_value_handle(&stack_root.as_any_value_enum()),
+                ctx,
+            );
+        });
+        let v_stack = self.get_llvm_value_handle(&stack_root.as_any_value_enum());
+        let v_heap = self.get_llvm_value_handle(&p.as_any_value_enum());
+        self.heap_stack_map.borrow_mut().insert(v_heap, v_stack);
+        v_heap
+    }
     fn gc_malloc(
         &self,
         name: &str,
         ctx: &mut Ctx<'a>,
         tp: &PLType,
+        malloc_fn: &str,
     ) -> (PointerValue<'ctx>, PointerValue<'ctx>, BasicTypeEnum<'ctx>) {
         let obj_type = tp.get_immix_type().int_value();
         let mut root_ctx = &*ctx;
@@ -204,7 +265,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
         let gcmod = root_ctx.plmod.submods.get("gc").unwrap_or(&root_ctx.plmod);
         let f: FNValue = gcmod
-            .get_type("DioGC__malloc")
+            .get_type(malloc_fn)
             .unwrap()
             .borrow()
             .clone()
@@ -1036,7 +1097,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         Some(self.get_llvm_value_handle(&f.as_any_value_enum()))
     }
 
-    fn build_call(&self, f: ValueHandle, args: &[ValueHandle]) -> Option<ValueHandle> {
+    fn build_call(
+        &self,
+        f: ValueHandle,
+        args: &[ValueHandle],
+        ret_type: &PLType,
+        ctx: &mut Ctx<'a>,
+    ) -> Option<ValueHandle> {
         let builder = self.builder;
         let f = self.get_llvm_value(f).unwrap();
         let f: CallableValue = if f.is_function_value() {
@@ -1057,28 +1124,20 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             return None;
         }
         let ret = v.left().unwrap();
-        let tp = ret.get_type();
-        self.rm_curr_debug_location();
-        let cb = self.builder.get_insert_block().unwrap();
-        let alloca_block = self
-            .builder
-            .get_insert_block()
-            .unwrap()
-            .get_parent()
-            .unwrap()
-            .get_first_basic_block()
-            .unwrap();
-        self.builder.position_at_end(alloca_block);
-        let alloca = self.builder.build_alloca(tp, "ret_alloca");
-        self.builder.position_at_end(cb);
-        self.builder.build_store(alloca, ret);
-        if tp.is_pointer_type() {
-            self.gc_add_root(
-                alloca.as_basic_value_enum(),
-                ObjectType::Pointer.int_value(),
-            );
-        }
-        Some(self.get_llvm_value_handle(&alloca.as_any_value_enum()))
+
+        let alloca = self.alloc_raw(
+            "ret_alloca",
+            ret_type,
+            ctx,
+            None,
+            "DioGC__malloc_no_collect",
+        );
+
+        self.builder.build_store(
+            self.get_llvm_value(alloca).unwrap().into_pointer_value(),
+            ret,
+        );
+        Some(alloca)
     }
     fn add_function(
         &self,
@@ -1128,57 +1187,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
         declare: Option<Pos>,
     ) -> ValueHandle {
-        let td = self.targetmachine.get_target_data();
-        let builder = self.builder;
-        builder.unset_current_debug_location();
-        let bt = self.get_basic_type_op(pltype, ctx).unwrap();
-        let (p, stack_root, _) = self.gc_malloc(name, ctx, pltype);
-        // TODO: force user to manually init all structs, so we can remove this memset
-        let size_val = self
-            .context
-            .i64_type()
-            .const_int(td.get_store_size(&bt), false);
-        self.builder
-            .build_memset(
-                p,
-                td.get_abi_alignment(&bt),
-                self.context.i8_type().const_zero(),
-                size_val,
-            )
-            .unwrap();
-        if let PLType::STRUCT(_) = pltype {
-            let f = self.get_or_insert_st_visit_fn_handle(&p);
-            let i = self.builder.build_ptr_to_int(
-                f.as_global_value().as_pointer_value(),
-                self.context.i64_type(),
-                "_vtable",
-            );
-            let vtable = self.builder.build_struct_gep(p, 0, "vtable").unwrap();
-            self.builder.build_store(vtable, i);
-        } else if let PLType::ARR(tp) = pltype {
-            let f = self.gen_or_get_arr_visit_function(ctx, tp);
-            let i = self.builder.build_ptr_to_int(
-                f.as_global_value().as_pointer_value(),
-                self.context.i64_type(),
-                "_vtable",
-            );
-            let vtable = self.builder.build_struct_gep(p, 0, "vtable").unwrap();
-            self.builder.build_store(vtable, i);
-        }
-        declare.map(|p| {
-            self.build_dbg_location(p);
-            self.insert_var_declare(
-                name,
-                p,
-                &PLType::POINTER(Arc::new(RefCell::new(pltype.clone()))),
-                self.get_llvm_value_handle(&stack_root.as_any_value_enum()),
-                ctx,
-            );
-        });
-        let v_stack = self.get_llvm_value_handle(&stack_root.as_any_value_enum());
-        let v_heap = self.get_llvm_value_handle(&p.as_any_value_enum());
-        self.heap_stack_map.borrow_mut().insert(v_heap, v_stack);
-        v_heap
+        self.alloc_raw(name, pltype, ctx, declare, "DioGC__malloc")
     }
     fn build_struct_gep(
         &self,
