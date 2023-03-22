@@ -108,39 +108,64 @@ jobs:
           OS: ${{ matrix.config.os }}
         run: |
           import os
+          import shutil
           artifacts = os.environ['ARTIFACTS'].split()
           for artifact in artifacts:
             src = "target/release/%s" % artifact
             dst = os.environ['OUT_DIR'] + "/" + artifact
-            os.rename(src, dst)
+            shutil.copy(src, dst)
         shell: python
 
-      - name: Move artifacts
+      - name: Move libvm
         env:
           ARTIFACTS: libvm.a
           OUT_DIR: ${{ matrix.config.dir }}
           OS: ${{ matrix.config.os }}
         run: |
           import os
+          import shutil
           artifacts = os.environ['ARTIFACTS'].split()
           for artifact in artifacts:
             src = "target/release/%s" % artifact
             dst = os.environ['OUT_DIR'] + "/" + artifact
-            os.rename(src, dst)
+            shutil.copy(src, dst)
         shell: python
-      - name: Move lib
+      - name: Move pllib
         env:
           ARTIFACTS: planglib
           OUT_DIR: ${{ matrix.config.dir }}
           OS: ${{ matrix.config.os }}
         run: |
           import os
+          import shutil
           artifacts = os.environ['ARTIFACTS'].split()
           for artifact in artifacts:
             src = "%s" % artifact
             dst = os.environ['OUT_DIR'] + "/" + artifact
-            os.rename(src, dst)
+            shutil.copytree(src, dst)
         shell: python
+
+      - if: ${{ matrix.config.os == 'ubuntu-latest' }}
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      - if: ${{ matrix.config.os == 'ubuntu-latest' }}
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - if: ${{ matrix.config.os == 'ubuntu-latest' }}
+        name: Login to ali registry
+        uses: docker/login-action@v2
+        with:
+          registry: registry.cn-hangzhou.aliyuncs.com
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - if: ${{ matrix.config.os == 'ubuntu-latest' }}
+        name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          file: ./Dockerfile
+          tags: registry.cn-hangzhou.aliyuncs.com/pivot_studio/pivot_lang:latest
       - name: prepare deb
         if: ${{ matrix.config.os == 'ubuntu-latest' }}
         run: |
@@ -189,23 +214,6 @@ jobs:
           page_branch: master
           github_repository: Pivot-Studio/apt-repo
 
-      - name: Update apt repo
-        if: ${{ matrix.config.os == 'ubuntu-latest' }}
-        uses: Pivot-Studio/apt-repo-action@master
-        with:
-          github_token: ${{ secrets.PAT }}
-          repo_supported_arch: |
-            amd64
-          repo_supported_version: |
-            jammy
-            focal
-          file: ${{ steps.build-deb.outputs.file_name }}
-          file_target_version: focal
-          public_key: ${{ secrets.PUBLIC }}
-          private_key: ${{ secrets.PRIVATE }}
-          key_passphrase: ${{ secrets.SECRET }}
-          page_branch: master
-          github_repository: Pivot-Studio/apt-repo
       - name: tar artifacts
         if: ${{ matrix.config.os != 'windows-latest' }}
         env:

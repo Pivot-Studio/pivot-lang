@@ -3,6 +3,7 @@ NC='\033[0m'
 RED='\033[0;31m'
 
 if [ "$1" = configure ]; then
+    chmod +rw -R /pl
     echo "${GREEN}"
     echo "-------------------------------------------------------------------"
     echo "Successfully installed pivot-lang compiler!"
