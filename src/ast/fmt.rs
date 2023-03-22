@@ -9,6 +9,7 @@ use super::{
         global::GlobalNode,
         implement::ImplNode,
         interface::{TraitBoundNode, TraitDefNode},
+        macro_nodes::{MacroCallNode, MacroLoopStatementNode, MacroNode, MacroRuleNode},
         operator::{BinOpNode, TakeOpNode, UnaryOpNode},
         pkg::{ExternIdNode, UseNode},
         pointer::{PointerOpEnum, PointerOpNode},
@@ -596,6 +597,47 @@ impl FmtBuilder {
         self.enter();
         // 顶层节点加空格
         self.enter();
+    }
+    pub fn parse_macro_node(&mut self, node: &MacroNode) {
+        self.prefix();
+        self.token("macro");
+        self.space();
+        self.token(node.id.name.as_str());
+        self.space();
+        self.l_brace();
+        self.enter();
+        self.add_tab();
+        for m in &node.rules {
+            m.format(self);
+        }
+        self.sub_tab();
+        self.prefix();
+        self.r_brace();
+    }
+    pub fn parse_macro_loop_statement_node(&mut self, node: &MacroLoopStatementNode) {
+        self.token("$(");
+        node.statements.format(self);
+        self.token(")*");
+    }
+    pub fn parse_macro_rule_node(&mut self, node: &MacroRuleNode) {
+        self.prefix();
+        self.l_paren();
+        for _e in &node.match_exp {
+            todo!()
+        }
+        self.r_paren();
+        self.space();
+        self.token("=>");
+        self.space();
+        node.body.format(self);
+        self.enter();
+    }
+    pub fn parse_macro_call_node(&mut self, node: &MacroCallNode) {
+        node.callee.format(self);
+        self.token("!");
+        self.l_paren();
+        self.token(&node.args);
+        self.r_paren();
     }
     pub fn parse_trait_bound_node(&mut self, _node: &TraitBoundNode) {
         todo!()

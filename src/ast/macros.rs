@@ -1,8 +1,8 @@
 #[macro_export]
 macro_rules! if_not_modified_by {
     ($entity:expr, $modifier:expr, $logic:stmt) => {
-        if let Some((t, _)) = $entity {
-            if t != $modifier {
+        if let Some((tt, _)) = $entity {
+            if tt != $modifier {
                 $logic
             }
         } else {
@@ -92,7 +92,7 @@ macro_rules! format_label {
             $($args.into(),)*
         ]))
     };
-    ($fmt:expr $(,$args:expr)*,) => {
+    ($fmt:expr$(,$args:expr)*,) => {
         $crate::format_label!($fmt $(,$args)*)
     };
 }

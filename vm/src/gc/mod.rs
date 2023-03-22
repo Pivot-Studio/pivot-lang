@@ -39,10 +39,18 @@ mod _immix {
     #[is_runtime] // jit注册
     impl DioGC {
         pub unsafe fn malloc(size: u64, obj_type: u8) -> *mut u8 {
-            #[cfg(test)] // enable eager gc in test mode
+            #[cfg(any(test, debug_assertions))] // enable eager gc in test mode
             immix::gc_collect();
             // println!("malloc: {:p} {} {}", ptr, size, obj_type);
             gc_malloc(size as usize, obj_type)
+        }
+
+        pub unsafe fn malloc_no_collect(size: u64, obj_type: u8) -> *mut u8 {
+            immix::gc_malloc_no_collect(size as usize, obj_type)
+        }
+
+        pub unsafe fn collect() {
+            immix::gc_collect()
         }
         pub fn about() {
             let dio = "

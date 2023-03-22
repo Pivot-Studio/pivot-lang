@@ -1,9 +1,8 @@
 use nom::{
     branch::alt,
-    bytes::complete::tag,
     combinator::{map_res, opt},
     multi::{many0, separated_list0},
-    sequence::{delimited, preceded, tuple},
+    sequence::{preceded, tuple},
     IResult,
 };
 

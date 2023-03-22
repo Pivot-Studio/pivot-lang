@@ -1,0 +1,20 @@
+macro test {
+    ($($a:@id = $b:@expr,)*) => {
+        $(
+            io::print_s($a);
+            io::printi64ln($b);
+        )*
+
+    };
+    ($a:@id) => {
+        io::print_s($a);
+    };
+}
+
+use std::io;
+
+pub fn test_macros() void {
+    let a = "hello";
+    test!(a);
+    return;
+}

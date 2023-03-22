@@ -3,6 +3,7 @@ use crate::{ast::range::Range, ast::tokens::TokenType};
 use nom::character::complete::space1;
 use nom::character::is_alphanumeric;
 use nom::combinator::opt;
+
 use nom::sequence::{pair, preceded, terminated};
 use nom::{
     bytes::complete::tag, character::complete::space0, combinator::map_res, error::ParseError,
@@ -15,6 +16,16 @@ use super::*;
 pub fn tag_token_symbol(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
     move |input| {
         map_res(delspace(tag(token.get_str())), |_out: Span| {
+            let end = _out.take_split(token.get_str().len()).0;
+            Ok::<(TokenType, Range), ()>((token, Range::new(_out, end)))
+        })(input)
+    }
+}
+
+/// parse token with space and newline trimed
+pub fn tag_token_symbol_ex(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
+    move |input| {
+        map_res(del_newline_or_space!(tag(token.get_str())), |_out: Span| {
             let end = _out.take_split(token.get_str().len()).0;
             Ok::<(TokenType, Range), ()>((token, Range::new(_out, end)))
         })(input)

@@ -26,7 +26,7 @@ use lsp_types::{
         InlayHintRequest, References, SemanticTokensFullDeltaRequest, SemanticTokensFullRequest,
         SignatureHelpRequest,
     },
-    Hover, HoverContents, InitializeParams, MarkedString, OneOf, SemanticTokenModifier,
+    Diagnostic, Hover, HoverContents, InitializeParams, MarkedString, OneOf, SemanticTokenModifier,
     SemanticTokenType, SemanticTokens, SemanticTokensDelta, SemanticTokensOptions,
     ServerCapabilities, SignatureHelp, TextDocumentSyncKind, TextDocumentSyncOptions,
 };
@@ -397,7 +397,7 @@ fn main_loop(
                 docin.set_edit_pos(&mut db).to(Some(pos));
                 docin.set_docs(&mut db).to(docs.clone());
             }
-            docin.set_file(&mut db).to(f);
+            docin.set_file(&mut db).to(f.clone());
 
             docin.set_action(&mut db).to(ActionType::Diagnostic);
             compile_dry(&db, docin);
@@ -406,12 +406,17 @@ fn main_loop(
             let sender = connection.sender.clone();
             pool.execute(move || {
                 debug!("diags: {:#?}", diags);
-                for (p, diags) in diags {
-                    send_diagnostics(
-                        &sender,
-                        p,
-                        diags.iter().map(|x| x.get_diagnostic()).collect(),
-                    );
+                let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();
+                for (p, diags) in &diags {
+                    diags.iter().for_each(|x| x.get_diagnostic(&p, &mut m));
+                }
+                for (p, _) in &diags {
+                    if m.get(p).is_none() {
+                        send_diagnostics(&sender, p.to_string(), vec![]);
+                    }
+                }
+                for (f, d) in m {
+                    send_diagnostics(&sender, f, d);
                 }
             });
         })
@@ -424,19 +429,19 @@ fn main_loop(
                 f.clone(),
             );
             docin.set_docs(&mut db).to(docs.clone());
-            docin.set_file(&mut db).to(f);
+            docin.set_file(&mut db).to(f.clone());
             docin.set_action(&mut db).to(ActionType::Diagnostic);
             docin.set_params(&mut db).to(None);
             compile_dry(&db, docin);
             let diags = compile_dry::accumulated::<Diagnostics>(&db, docin);
             let sender = connection.sender.clone();
             pool.execute(move || {
+                let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();
                 for (p, diags) in diags {
-                    send_diagnostics(
-                        &sender,
-                        p,
-                        diags.iter().map(|x| x.get_diagnostic()).collect(),
-                    );
+                    diags.iter().for_each(|x| x.get_diagnostic(&p, &mut m));
+                }
+                for (f, d) in m {
+                    send_diagnostics(&sender, f, d);
                 }
             });
         })

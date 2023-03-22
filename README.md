@@ -172,4 +172,13 @@ trait_def = "trait" identifier generic_type_def? (":" type_add)? "{" function_de
 
 type_add = type_name ("+" type_name)* ;
 
+macro_match_exp = 
+    | any_exp_except_dollar_and_parantheses
+    | "$" identifier ":" tp
+    | "(" macro_match_exp * ")" "*"
+    | "(" macro_match_exp * ")" "+"
+    | "(" macro_match_exp * ")"
+    ;
+
+macro_match_arm = "(" macro_match_exp* ")" "=>" statement_block ;
 ```

@@ -217,13 +217,20 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     pb.finish_with_message("中间代码编译完成");
     let errs = compile_dry::accumulated::<Diagnostics>(db, docs);
     let mut errs_num = 0;
+    let mods = compile_dry::accumulated::<ModBuffer>(db, docs);
     if !errs.is_empty() {
         for e in errs.iter() {
-            let path = &e.0;
+            let mut path = e.0.clone();
             for e in e.1.iter() {
+                if let Some(src) = e.source.clone() {
+                    path = src;
+                }
                 e.print(
-                    path,
-                    Source::from(docs.get_file_content(db, path.clone()).unwrap().text(db)),
+                    &path,
+                    move |db, id| {
+                        Source::from(docs.get_file_content(db, id.to_string()).unwrap().text(db))
+                    },
+                    db,
                 );
                 if e.is_err() {
                     errs_num += 1
@@ -262,7 +269,6 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         info!("gen flow done, time: {:?}", time);
         return;
     }
-    let mods = compile_dry::accumulated::<ModBuffer>(db, docs);
     let mut objs = vec![];
     let ctx = Context::create();
     let tm = get_target_machine(op.optimization.to_llvm());

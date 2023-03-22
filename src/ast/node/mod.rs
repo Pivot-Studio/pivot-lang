@@ -17,6 +17,9 @@ use self::function::*;
 use self::global::*;
 use self::implement::ImplNode;
 use self::interface::TraitDefNode;
+use self::macro_nodes::MacroCallNode;
+use self::macro_nodes::MacroLoopStatementNode;
+use self::macro_nodes::MacroNode;
 use self::operator::*;
 use self::pkg::{ExternIdNode, UseNode};
 use self::pointer::PointerOpNode;
@@ -41,6 +44,7 @@ pub mod function;
 pub mod global;
 pub mod implement;
 pub mod interface;
+pub mod macro_nodes;
 pub mod operator;
 pub mod pkg;
 pub mod pointer;
@@ -105,6 +109,7 @@ type TypeNodeResult = Result<Arc<RefCell<PLType>>, PLDiag>;
 #[derive(Clone, PartialEq, Eq, Debug)]
 #[enum_dispatch(Node, RangeTrait, FmtTrait, PrintTrait)]
 pub enum NodeEnum {
+    Var(VarNode),
     Def(DefNode),
     Ret(RetNode),
     Assign(AssignNode),
@@ -140,6 +145,9 @@ pub enum NodeEnum {
     ImplNode(ImplNode),
     StringNode(StringNode),
     TraitDefNode(TraitDefNode),
+    MacroLoopStatementNode(MacroLoopStatementNode),
+    MacroNode(MacroNode),
+    MacroCallNode(MacroCallNode),
 }
 // ANCHOR: range
 #[enum_dispatch]
@@ -204,9 +212,14 @@ macro_rules! mismatch_err {
         $self.add_diag(
             $range
                 .new_err(ErrorCode::TYPE_MISMATCH)
-                .add_label($range, $crate::format_label!("type `{}`", $got.get_name()))
+                .add_label(
+                    $range,
+                    $self.get_file(),
+                    $crate::format_label!("type `{}`", $got.get_name()),
+                )
                 .add_label(
                     $exprange,
+                    $self.get_file(),
                     $crate::format_label!("type `{}`", $expect.get_name()),
                 )
                 .clone(),

@@ -3,7 +3,7 @@ use nom::{
     bytes::complete::tag,
     combinator::{map_res, opt, recognize},
     multi::many0,
-    sequence::{delimited, pair, preceded, terminated, tuple},
+    sequence::{pair, preceded, terminated, tuple},
     IResult,
 };
 
@@ -81,7 +81,8 @@ pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
 /// | newline
 /// ;
 /// ```
-fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
+#[test_parser("test!(a);")]
+pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
         semi_statement!(new_variable),
         semi_statement!(assignment),
@@ -95,7 +96,7 @@ fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
         empty_statement,
         comment,
         except(
-            "\n\r}",
+            "\n\r})",
             "failed to parse statement",
             ErrorCode::SYNTAX_ERROR_STATEMENT,
         ),

@@ -52,6 +52,7 @@ pub mod function;
 pub mod helper;
 pub mod identifier;
 pub mod implement;
+pub mod macro_parse;
 pub mod pkg;
 pub mod program;
 pub mod statement;
@@ -95,6 +96,7 @@ pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, S
     }
     let (_, node) = re.unwrap();
     log::info!("parse {:?}", source.path(db));
+
     Ok(ProgramNodeWrapper::new(db, node))
 }
 // ANCHOR_END: parse

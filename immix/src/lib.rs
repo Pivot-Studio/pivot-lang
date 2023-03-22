@@ -94,6 +94,17 @@ pub fn gc_malloc(size: usize, obj_type: u8) -> *mut u8 {
     })
 }
 
+/// This function is used to allocate a new object on the heap without logic
+/// triggering a garbage collection.
+pub fn gc_malloc_no_collect(size: usize, obj_type: u8) -> *mut u8 {
+    SPACE.with(|gc| {
+        // println!("start malloc_no_collect");
+        let gc = gc.borrow();
+        // println!("malloc_no_collect");
+        gc.alloc_no_collect(size, ObjectType::from_int(obj_type).unwrap())
+    })
+}
+
 /// This function is used to force a garbage collection.
 pub fn gc_collect() {
     SPACE.with(|gc| {

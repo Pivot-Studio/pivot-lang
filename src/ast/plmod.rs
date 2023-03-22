@@ -1,6 +1,7 @@
 use super::accumulators::PLReferences;
 use super::diag::{ErrorCode, PLDiag};
 
+use super::node::macro_nodes::MacroNode;
 use super::pltype::FNValue;
 use super::pltype::PLType;
 use super::pltype::PriType;
@@ -70,6 +71,7 @@ pub struct Mod {
     pub hints: Arc<RefCell<Box<Vec<InlayHint>>>>,
     pub doc_symbols: Arc<RefCell<Box<Vec<DocumentSymbol>>>>,
     pub impls: FxHashMap<String, FxHashSet<String>>,
+    pub macros: FxHashMap<String, Arc<MacroNode>>,
 }
 
 pub type MutVec<T> = RefCell<Vec<T>>;
@@ -105,6 +107,21 @@ pub enum LSPDef {
 }
 
 impl Mod {
+    pub fn get_macro_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
+        for (k, _) in self.macros.iter() {
+            vmap.insert(
+                k.to_string(),
+                CompletionItem {
+                    label: k.to_string(),
+                    kind: Some(CompletionItemKind::FUNCTION),
+                    insert_text: Some(format!("{}!()", k)),
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
     pub fn new(name: String, path: String) -> Self {
         Self {
             name,
@@ -129,6 +146,7 @@ impl Mod {
             glob_refs: Arc::new(RefCell::new(BTreeMap::new())),
             refs_map: Arc::new(RefCell::new(BTreeMap::new())),
             impls: FxHashMap::default(),
+            macros: FxHashMap::default(),
         }
     }
     pub fn new_child(&self) -> Self {
@@ -153,6 +171,7 @@ impl Mod {
             glob_refs: self.glob_refs.clone(),
             refs_map: self.refs_map.clone(),
             impls: self.impls.clone(),
+            macros: FxHashMap::default(),
         }
     }
     pub fn get_refs(&self, name: &str, db: &dyn Db, set: &mut FxHashSet<String>) {
@@ -172,6 +191,11 @@ impl Mod {
     }
     pub fn get_global_symbol(&self, name: &str) -> Option<&GlobalVar> {
         self.global_table.get(name)
+    }
+
+    pub fn add_macro(&mut self, node: &MacroNode) {
+        self.macros
+            .insert(node.id.name.clone(), Arc::new(node.clone()));
     }
     pub fn add_global_symbol(
         &mut self,

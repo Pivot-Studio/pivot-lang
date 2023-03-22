@@ -1,9 +1,20 @@
+#[macro_export]
 macro_rules! del_newline_or_space {
     ($e:expr) => {
-        delimited(
-            many0(alt((tag("\n"), tag("\r\n"), tag(" "), tag("\t")))),
+        nom::sequence::delimited(
+            nom::multi::many0(nom::branch::alt((
+                nom::bytes::complete::tag("\n"),
+                nom::bytes::complete::tag("\r\n"),
+                nom::bytes::complete::tag(" "),
+                nom::bytes::complete::tag("\t"),
+            ))),
             $e,
-            many0(alt((tag("\n"), tag("\r\n"), tag(" "), tag("\t")))),
+            nom::multi::many0(nom::branch::alt((
+                nom::bytes::complete::tag("\n"),
+                nom::bytes::complete::tag("\r\n"),
+                nom::bytes::complete::tag(" "),
+                nom::bytes::complete::tag("\t"),
+            ))),
         )
     };
 }

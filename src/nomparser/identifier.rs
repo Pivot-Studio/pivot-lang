@@ -29,6 +29,8 @@ use super::*;
 
 #[test_parser("a::a")]
 #[test_parser("b::c::b")]
+#[test_parser("b::c::$b")]
+#[test_parser("b::$c::$b")]
 #[test_parser("a")]
 #[test_parser("a:")]
 #[test_parser("a::")]
@@ -68,7 +70,7 @@ pub fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
 pub fn identifier(input: Span) -> IResult<Span, Box<VarNode>> {
     delspace(map_res(
         recognize(pair(
-            alt((alpha1::<Span, nom::error::Error<Span>>, tag("_"))),
+            alt((alpha1::<Span, nom::error::Error<Span>>, tag("_"), tag("$"))),
             many0_count(alt((alphanumeric1, tag("_")))),
         )),
         |out| {

@@ -5,6 +5,7 @@ use super::*;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
+use crate::ast::ctx::MacroReplaceNode;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{PLType, PriType};
 use crate::plv;
@@ -109,17 +110,45 @@ impl Node for NumNode {
 pub struct VarNode {
     pub name: String,
 }
-impl VarNode {
-    pub fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
-        deal_line(tabs, &mut line, end);
-        tab(tabs, line.clone(), end);
-        println!("VarNode: {}", self.name);
-    }
-    pub fn emit<'a, 'ctx, 'b>(
-        &self,
-        ctx: &'b Ctx<'a>,
+
+impl Node for VarNode {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
+        if self.is_macro_var() {
+            let re = ctx
+                .macro_vars
+                .get(&self.name[1..])
+                .ok_or_else(|| {
+                    self.range
+                        .new_err(ErrorCode::MACRO_VAR_NOT_FOUND)
+                        .add_help(&format!(
+                            "add a macro var named `{}` in the macro definition",
+                            self.name
+                        ))
+                        .add_to_ctx(ctx)
+                })?
+                .clone();
+            match re {
+                MacroReplaceNode::NodeEnum(mut n) => {
+                    return n.emit(ctx, builder);
+                }
+                MacroReplaceNode::LoopNodeEnum(mut loop_var) => {
+                    if !ctx.macro_loop {
+                        return Err(self
+                            .range
+                            .new_err(ErrorCode::MACRO_LOOP_VAR_USED_OUT_OF_LOOP)
+                            .add_help("add a `macro loop` surrounding the macro body like $($var)*")
+                            .add_to_ctx(ctx));
+                    }
+                    let re = loop_var[ctx.macro_loop_idx].emit(ctx, builder);
+                    ctx.macro_loop_len = loop_var.len();
+                    return re;
+                }
+            }
+        }
         ctx.if_completion(self.range, || ctx.get_completions());
         let v = ctx.get_symbol(&self.name, builder);
         if let Some((v, pltype, dst, refs, is_const)) = v {
@@ -155,7 +184,42 @@ impl VarNode {
         }
         Err(ctx.add_diag(self.range.new_err(ErrorCode::VAR_NOT_FOUND)))
     }
+}
+
+impl PrintTrait for VarNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("VarNode: {}", self.name);
+    }
+}
+
+impl VarNode {
+    fn is_macro_var(&self) -> bool {
+        self.name.starts_with("$")
+    }
+    pub fn get_name(&self, ctx: &Ctx) -> String {
+        if self.is_macro_var() {
+            let re = ctx.macro_vars.get(&self.name[1..]).unwrap();
+            if let MacroReplaceNode::NodeEnum(NodeEnum::Var(v)) = re {
+                return v.name.clone();
+            } else {
+                todo!()
+            }
+        } else {
+            self.name.clone()
+        }
+    }
+
     pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a>) -> NodeResult {
+        if self.is_macro_var() {
+            let re = ctx.macro_vars.get(&self.name[1..]).unwrap();
+            if let MacroReplaceNode::NodeEnum(NodeEnum::Var(v)) = re {
+                return v.get_type(ctx);
+            } else {
+                todo!()
+            }
+        }
         ctx.if_completion(self.range, || ctx.get_completions());
 
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
