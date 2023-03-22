@@ -310,6 +310,15 @@ trait_def = &quot;trait&quot; identifier generic_type_def? (&quot;:&quot; type_a
 
 type_add = type_name (&quot;+&quot; type_name)* ;
 
+macro_match_exp = 
+    | any_exp_except_dollar_and_parantheses
+    | &quot;$&quot; identifier &quot;:&quot; tp
+    | &quot;(&quot; macro_match_exp * &quot;)&quot; &quot;*&quot;
+    | &quot;(&quot; macro_match_exp * &quot;)&quot; &quot;+&quot;
+    | &quot;(&quot; macro_match_exp * &quot;)&quot;
+    ;
+
+macro_match_arm = &quot;(&quot; macro_match_exp* &quot;)&quot; &quot;=&gt;&quot; statement_block ;
 </code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="quick-start-a-short-introduction-to-the-language"><a class="header" href="#quick-start-a-short-introduction-to-the-language">Quick Start: A short introduction to the language</a></h1>
 <blockquote>
@@ -711,6 +720,7 @@ pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNode
     }
     let (_, node) = re.unwrap();
     log::info!(&quot;parse {:?}&quot;, source.path(db));
+
     Ok(ProgramNodeWrapper::new(db, node))
 }</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="ast-1"><a class="header" href="#ast-1">AST</a></h1>

@@ -312,6 +312,15 @@ trait_def = &quot;trait&quot; identifier generic_type_def? (&quot;:&quot; type_a
 
 type_add = type_name (&quot;+&quot; type_name)* ;
 
+macro_match_exp = 
+    | any_exp_except_dollar_and_parantheses
+    | &quot;$&quot; identifier &quot;:&quot; tp
+    | &quot;(&quot; macro_match_exp * &quot;)&quot; &quot;*&quot;
+    | &quot;(&quot; macro_match_exp * &quot;)&quot; &quot;+&quot;
+    | &quot;(&quot; macro_match_exp * &quot;)&quot;
+    ;
+
+macro_match_arm = &quot;(&quot; macro_match_exp* &quot;)&quot; &quot;=&gt;&quot; statement_block ;
 </code></pre>
 
                     </main>
