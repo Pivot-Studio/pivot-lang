@@ -6,6 +6,7 @@ use std::process::exit;
 use backtrace::Backtrace;
 use internal_macro::is_runtime;
 pub mod gc;
+pub mod logger;
 
 #[is_runtime]
 fn test_vm_link() -> i64 {

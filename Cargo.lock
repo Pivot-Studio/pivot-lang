@@ -1842,6 +1842,7 @@ dependencies = [
  "env_logger",
  "immix",
  "internal_macro",
+ "log",
  "rand 0.8.5",
 ]
 
