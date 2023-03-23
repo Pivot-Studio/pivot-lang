@@ -156,10 +156,22 @@
 <p>国内如果没代理安装rust比较困难，建议使用清华源进行安装，见<a href="https://mirrors.tuna.tsinghua.edu.cn/help/rustup/">此处</a></p>
 <p>安装完毕后，可以进行cargo换源设置，防止依赖无法下载，见<a href="https://mirrors.tuna.tsinghua.edu.cn/help/crates.io-index.git/">此处</a></p>
 <h2 id="llvm"><a class="header" href="#llvm">LLVM</a></h2>
-<p>Pivot-Lang目前使用LLVM 14作为后端，所以需要安装LLVM。如果你使用的是macOS，可以使用brew安装LLVM。</p>
+<p>Pivot-Lang目前使用LLVM 14作为后端，所以需要安装LLVM。如果你使用的是MacOS，可以使用brew安装LLVM。</p>
 <pre><code class="language-bash">brew install llvm@14
 </code></pre>
 <p>如果你使用的是ubuntu，可以使用<a href="https://github.com/Pivot-Studio/setup-llvm/blob/main/scripts/install_llvm.sh">这里</a>的脚本进行安装</p>
+<h2 id="环境变量"><a class="header" href="#环境变量">环境变量</a></h2>
+<p>开发项目需要正确配置一些环境变量才能让你保证开发时正确跑通测试。</p>
+<p>运行下方命令将会把项目需要的一些环境变量加入到你的初始化脚本中</p>
+<pre><code class="language-bash">make devlinux # linux
+make devmac # mac
+</code></pre>
+<p>注意这些命令都只需要跑一次</p>
+<h2 id="测试是否成功配置开发环境"><a class="header" href="#测试是否成功配置开发环境">测试是否成功配置开发环境</a></h2>
+<p>上方步骤完成后，可以运行下方命令进行测试</p>
+<pre><code class="language-bash">make test
+</code></pre>
+<p>如果上方命令都成功执行，那么恭喜你，你已经成功配置了开发环境</p>
 
                     </main>
 
