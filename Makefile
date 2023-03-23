@@ -2,12 +2,12 @@
 devlinux:
 	@echo "export KAGARI_LIB_ROOT=$$(pwd)/planglib">>~/.bashrc
 	@echo "export PL_ROOT=$$(pwd)/target/release/">>~/.bashrc
-	@echo "请重启终端和vsc应用更改"
+	@echo "环境变量已加入~/.bashrc，请重启终端和vsc应用更改"
 
 devmac:
 	@echo "export KAGARI_LIB_ROOT=$$(pwd)/planglib">>~/.bash_profile
 	@echo "export PL_ROOT=$$(pwd)/target/release/">>~/.bash_profile
-	@echo "请重启终端和vsc应用更改"
+	@echo "环境变量已加入~/.bash_profile，请重启终端和vsc应用更改"
 
 vm:
 	@cd vm && cargo build --release
@@ -22,7 +22,7 @@ install:
 fmt:
 	@cargo +stable fmt
 
-test:
+test: vmdebug
 	@cargo test --all
 
 clean:
