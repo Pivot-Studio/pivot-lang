@@ -34,7 +34,7 @@ enum_dispatch = "0.3"
 threadpool = "1.8"
 dunce = "1.0"
 toml = "0.7"
-ariadne = "0.1"
+ariadne = "0.2"
 dyn-fmt = "0.3"
 petgraph = "0.6"
 kagari = { path = "./kagari" }
