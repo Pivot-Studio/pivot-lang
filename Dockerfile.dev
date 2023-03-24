@@ -7,3 +7,19 @@ RUN apt-get update && apt-get install -y lsb-release wget && apt-get clean all
 RUN ./setup-llvm.sh
 RUN apt update
 RUN apt install -y git libxml2 build-essential libunwind-dev
+RUN apt-get update
+
+# Get Ubuntu packages
+RUN apt-get install -y \
+    build-essential \
+    curl
+
+# Update new packages
+RUN apt-get update
+
+COPY ./rust-toolchain .
+
+# Get Rust
+RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+RUN cargo
