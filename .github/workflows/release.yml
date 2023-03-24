@@ -4,7 +4,13 @@ on:
     branches:
       - master
       - release/*
-
+    paths:
+    - '**.rs'
+    - '**/Cargo.*'
+    - '.github/workflows/release.yml'
+    - '**.pi'
+    - '**/Kagari.*'
+    - 'codecov.yml'
 
 jobs:
   artifacts:
