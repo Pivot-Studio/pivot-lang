@@ -1,0 +1,5 @@
+👋 Welcome to Codespaces! You are on our Pivot-Lang's dev image. 
+
+You need to run `make devlinux && source ~/.bashrc` on the project root before start developing.
+
+For any cargo build issues, please try `cargo clean`, and rerun the build command.

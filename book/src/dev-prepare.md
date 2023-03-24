@@ -46,3 +46,16 @@ make test
 如果上方命令都成功执行，那么恭喜你，你已经成功配置了开发环境
 
 
+## 使用github codespace 进行开发
+
+使用github codespace进行开发的环境配置较为简单，但是请注意费用问题。
+
+
+点击以下链接即可创建一个包含pl开发环境的codespace
+
+[create codespace](https://github.com/codespaces/new?machine=standardLinux32gb&repo=535925143&ref=master&devcontainer_path=.devcontainer%2Fdevcontainer.json&location=SouthEastAsia)
+
+创建完毕后，建议使用本地vscode打开codespace中的项目进行开发
+
+
+

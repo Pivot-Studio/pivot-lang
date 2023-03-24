@@ -1,0 +1,9 @@
+FROM mcr.microsoft.com/devcontainers/base:ubuntu AS runner
+COPY ./.devcontainer/first-run-notice.txt /tmp/scripts/
+RUN mv -f /tmp/scripts/first-run-notice.txt /usr/local/etc/vscode-dev-containers/
+COPY ./setup-llvm.sh .
+RUN apt-get update && apt-get install -y gnupg2 software-properties-common cmake
+RUN apt-get update && apt-get install -y lsb-release wget && apt-get clean all
+RUN ./setup-llvm.sh
+RUN apt update
+RUN apt install -y git libxml2 build-essential libunwind-dev
