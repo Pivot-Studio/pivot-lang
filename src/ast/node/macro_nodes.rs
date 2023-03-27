@@ -40,8 +40,8 @@ impl Node for MacroNode {
         ctx.set_glob_refs(&ctx.plmod.get_full_name(&self.id.name), self.id.range);
         ctx.push_semantic_token(self.id.range, SemanticTokenType::MACRO, 0);
         self.file = ctx.plmod.path.clone();
-        ctx.plmod.add_macro(&self);
-        Ok((None, None, TerminatorEnum::NONE))
+        ctx.plmod.add_macro(self);
+        Ok((None, None, TerminatorEnum::None))
     }
 }
 
@@ -96,7 +96,7 @@ impl MacroMatchExp {
                         break;
                     }
                 }
-                return Ok((new, ()));
+                Ok((new, ()))
             }
         }
     }
@@ -258,8 +258,7 @@ impl Node for MacroCallNode {
                     let mut next = false;
                     for e in rule.match_exp.iter() {
                         let re = e.parse(ctx, span).map_err(|e| {
-                            if let nom::Err::Error(e) = e {
-                                let mut e = e.clone();
+                            if let nom::Err::Error(mut e) = e {
                                 e.add_label(
                                     self.range,
                                     ctx.get_file(),
@@ -289,7 +288,7 @@ impl Node for MacroCallNode {
                         .with_diag_src(&src, |ctx| ctx.with_macro_emit(|ctx| b.emit(ctx, builder)));
                     match re {
                         Ok(_) => {
-                            return Ok((None, None, TerminatorEnum::NONE));
+                            return Ok((None, None, TerminatorEnum::None));
                         }
                         Err(e) => {
                             last_err = Some(e);
@@ -305,6 +304,6 @@ impl Node for MacroCallNode {
             _ => unreachable!(),
         }
 
-        Ok((None, None, TerminatorEnum::NONE))
+        Ok((None, None, TerminatorEnum::None))
     }
 }

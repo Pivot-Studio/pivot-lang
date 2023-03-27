@@ -80,6 +80,7 @@ pub trait IRBuilder<'a, 'ctx> {
     ) -> Result<(), PLDiag>;
     fn clear_insertion_position(&self);
     fn const_string(&self, s: &str) -> ValueHandle;
+    #[allow(clippy::too_many_arguments)]
     fn create_parameter_variable(
         &self,
         fntype: &FNValue,
@@ -190,7 +191,7 @@ pub trait IRBuilder<'a, 'ctx> {
 
 pub type ValueHandle = usize;
 pub type BlockHandle = usize;
-
+#[allow(clippy::upper_case_acronyms)]
 #[enum_dispatch(IRBuilder)]
 pub enum BuilderEnum<'a, 'ctx> {
     LLVM(LLVMBuilder<'a, 'ctx>),

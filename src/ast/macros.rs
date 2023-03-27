@@ -26,7 +26,7 @@ macro_rules! add_basic_types {
     ),+) => {
         $(
             paste::paste! {
-                let [<pltype_$ident>] = PLType::PRIMITIVE(PriType::[<$ident:upper>]);
+                let [<pltype_$ident>] = PLType::Primitive(PriType::[<$ident:upper>]);
                 $map
                 .insert(stringify!($ident).to_string(), Arc::new(RefCell::new( [<pltype_$ident>])));
             }
@@ -45,7 +45,7 @@ macro_rules! generic_impl {
                     }
                     for (_, v) in self.generic_map.iter() {
                         match &*v.clone().borrow() {
-                            PLType::GENERIC(g) => {
+                            PLType::Generic(g) => {
                                 if g.curpltype.is_none() {
                                     return false;
                                 }
@@ -61,8 +61,8 @@ macro_rules! generic_impl {
                         .generic_map
                         .iter()
                         .map(|(k, pltype)| {
-                            if let PLType::GENERIC(g) = &*pltype.borrow() {
-                                return (k.clone(), Arc::new(RefCell::new(PLType::GENERIC(g.clone()))));
+                            if let PLType::Generic(g) = &*pltype.borrow() {
+                                return (k.clone(), Arc::new(RefCell::new(PLType::Generic(g.clone()))));
                             }
                             unreachable!()
                         })
@@ -70,7 +70,7 @@ macro_rules! generic_impl {
                     res.generic_map
                         .iter()
                         .for_each(|(_, v)| match &mut *v.clone().borrow_mut() {
-                            PLType::GENERIC(g) => {
+                            PLType::Generic(g) => {
                                 g.clear_type();
                             }
                             _ => unreachable!(),

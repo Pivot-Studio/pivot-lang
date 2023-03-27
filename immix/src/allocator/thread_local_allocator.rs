@@ -223,11 +223,10 @@ impl ThreadLocalAllocator {
                 let uf = self.recyclable_blocks.pop_front().unwrap();
                 self.unavailable_blocks.push(uf);
                 let ff = self.recyclable_blocks.front();
-                if ff.is_none() {
-                    // recycle blocks全用光了
-                    return self.alloc(size, obj_type);
+                if let Some(ff) = ff {
+                    f = ff;
                 } else {
-                    f = ff.unwrap()
+                    return self.alloc(size, obj_type);
                 }
             }
         }

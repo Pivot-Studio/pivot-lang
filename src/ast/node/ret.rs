@@ -40,7 +40,7 @@ impl Node for RetNode {
                 return Err(err);
             }
             if eqres.need_up_cast {
-                let ptr2v = builder.alloc("tmp_up_cast_ptr", &*value_pltype.borrow(), ctx, None);
+                let ptr2v = builder.alloc("tmp_up_cast_ptr", &value_pltype.borrow(), ctx, None);
                 builder.build_store(ptr2v, value);
                 value = ctx.up_cast(
                     ret_pltype,
@@ -53,7 +53,7 @@ impl Node for RetNode {
                 value = ctx.try_load2var(self.range, plv!(value), builder)?;
             }
             builder.build_store(ctx.return_block.unwrap().1.unwrap(), value);
-        } else if *ret_pltype.borrow() != PLType::VOID {
+        } else if *ret_pltype.borrow() != PLType::Void {
             ctx.emit_comment_highlight(&self.comments[0]);
             return Err(ctx.add_diag(
                 self.range
@@ -66,6 +66,6 @@ impl Node for RetNode {
                 .get_first_instruction(ctx.return_block.unwrap().0)
                 .unwrap(),
         );
-        Ok((None, None, TerminatorEnum::RETURN))
+        Ok((None, None, TerminatorEnum::Return))
     }
 }

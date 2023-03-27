@@ -16,15 +16,13 @@ pub fn get_config_path(current: String) -> Result<String, &'static str> {
         return Err("找不到配置文件～");
     }
     let dir = dir.unwrap();
-    for x in dir {
-        if let Ok(path) = x {
-            if path.file_name().eq("Kagari.toml") {
-                if let Some(p) = cur_path.to_str() {
-                    let res = p.to_string();
-                    return Ok(res + "/Kagari.toml");
-                } else {
-                    return Err("找不到配置文件～");
-                }
+    for path in dir.flatten() {
+        if path.file_name().eq("Kagari.toml") {
+            if let Some(p) = cur_path.to_str() {
+                let res = p.to_string();
+                return Ok(res + "/Kagari.toml");
+            } else {
+                return Err("找不到配置文件～");
             }
         }
     }
@@ -38,7 +36,7 @@ pub fn get_config_path(current: String) -> Result<String, &'static str> {
     } else {
         return Err("找不到配置文件～");
     }
-    return get_config_path(next_path);
+    get_config_path(next_path)
 }
 
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq, Default, Hash)]
@@ -94,17 +92,17 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
         return Err("KAGARI_LIB_ROOT没有指向合法的目录，无法找到系统库".to_string());
     }
     let libroot = libroot.unwrap();
-    for x in libroot {
-        if let Ok(path) = x {
-            if path.path().is_dir() && !path.file_name().eq("thirdparty") {
-                let mut dep = Dependency::default();
-                dep.path = dunce::canonicalize(path.path())
+    for path in libroot.flatten() {
+        if path.path().is_dir() && !path.file_name().eq("thirdparty") {
+            let dep = Dependency {
+                path: dunce::canonicalize(path.path())
                     .unwrap()
                     .to_str()
                     .unwrap()
-                    .to_string();
-                deps.insert(path.file_name().to_str().unwrap().to_string(), dep);
-            }
+                    .to_string(),
+                ..Default::default()
+            };
+            deps.insert(path.file_name().to_str().unwrap().to_string(), dep);
         }
     }
     let binding = lib_path.join("thirdparty");
@@ -149,8 +147,8 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
                         .map(|mut b| {
                             let (child, target) = kagari::download_repo(&git, third_party);
                             pb.set_message(format!("正在下载依赖{}", k));
-                            if child.is_some() {
-                                child.unwrap().unwrap();
+                            if let Some(child) = child {
+                                child.unwrap();
                             }
                             if let Some(sum) = sums.get(k) {
                                 b = sum.git.clone().unwrap().commit;
@@ -173,8 +171,10 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
                                     }),
                                 },
                             );
-                            let mut dep = Dependency::default();
-                            dep.path = target.to_string_lossy().to_string();
+                            let dep = Dependency {
+                                path: target.to_string_lossy().to_string(),
+                                ..Default::default()
+                            };
                             deps.insert(k.clone(), dep);
                         })
                 })
@@ -210,8 +210,8 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
                 });
             pb.inc(1);
         });
-        if err.is_some() {
-            return Err(err.unwrap());
+        if let Some(err) = err {
+            return Err(err);
         }
         config.deps = Some(deps);
     }

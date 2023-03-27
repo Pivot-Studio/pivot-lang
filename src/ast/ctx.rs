@@ -59,6 +59,13 @@ use std::path::Path;
 
 use std::path::PathBuf;
 use std::sync::Arc;
+#[derive(Clone)]
+pub struct PLSymbol {
+    pub value: ValueHandle,
+    pub pltype: Arc<RefCell<PLType>>,
+    pub range: Range,
+    pub refs: Option<Arc<MutVec<Location>>>,
+}
 /// # Ctx
 /// Context for code generation
 pub struct Ctx<'a> {
@@ -75,15 +82,7 @@ pub struct Ctx<'a> {
     pub return_block: Option<(BlockHandle, Option<ValueHandle>)>, // the block to jump to when return and value
     pub errs: &'a RefCell<FxHashSet<PLDiag>>,                     // diagnostic list
     pub edit_pos: Option<Pos>,                                    // lsp params
-    pub table: FxHashMap<
-        String,
-        (
-            ValueHandle,
-            Arc<RefCell<PLType>>,
-            Range,
-            Arc<MutVec<Location>>,
-        ),
-    >, // variable table
+    pub table: FxHashMap<String, PLSymbol>,                       // variable table
     pub config: Config,                                           // config
     pub db: &'a dyn Db,
     pub rettp: Option<Arc<RefCell<PLType>>>,
@@ -228,7 +227,7 @@ impl<'a, 'ctx> Ctx<'a> {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<usize, PLDiag> {
         let (st_pltype, st_value) = self.auto_deref(st_pltype, st_value, builder);
-        if let (PLType::TRAIT(t), PLType::STRUCT(st)) =
+        if let (PLType::Trait(t), PLType::Struct(st)) =
             (&*trait_pltype.borrow(), &*st_pltype.borrow())
         {
             if !st.implements_trait(t, &self.plmod) {
@@ -254,7 +253,7 @@ impl<'a, 'ctx> Ctx<'a> {
             let st_value = builder.bitcast(
                 self,
                 st_value,
-                &PLType::POINTER(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::I64)))),
+                &PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::I64)))),
                 "traitcast_tmp",
             );
             let v_ptr = builder.build_struct_gep(trait_handle, 1, "v_tmp").unwrap();
@@ -267,6 +266,7 @@ impl<'a, 'ctx> Ctx<'a> {
             builder.build_store(type_hash, hash);
             return Ok(trait_handle);
         }
+        #[allow(clippy::needless_return)]
         return Err(mismatch_err!(
             self,
             st_range,
@@ -279,7 +279,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.function = Some(builder.add_function(
             &self.plmod.get_full_name("__init_global"),
             &[],
-            PLType::VOID,
+            PLType::Void,
             self,
         ));
         self.init_func = self.function;
@@ -315,28 +315,24 @@ impl<'a, 'ctx> Ctx<'a> {
         &'b self,
         name: &str,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Option<(
-        ValueHandle,
-        Arc<RefCell<PLType>>,
-        Range,
-        Option<Arc<MutVec<Location>>>,
-        bool,
-    )> {
+    ) -> Option<(PLSymbol, bool)> {
         let v = self.table.get(name);
-        if let Some((h, pltype, range, refs)) = v {
-            return Some((*h, pltype.clone(), *range, Some(refs.clone()), false));
+        if let Some(symbol) = v {
+            return Some((symbol.clone(), false));
         }
         if let Some(father) = self.father {
             return father.get_symbol(name, builder);
         }
         if let Some(GlobalVar { tp: pltype, range }) = self.plmod.get_global_symbol(name) {
             return Some((
-                builder
-                    .get_global_var_handle(&self.plmod.get_full_name(name))
-                    .unwrap(),
-                pltype.clone(),
-                *range,
-                None,
+                PLSymbol {
+                    value: builder
+                        .get_global_var_handle(&self.plmod.get_full_name(name))
+                        .unwrap(),
+                    pltype: pltype.clone(),
+                    range: *range,
+                    refs: None,
+                },
                 true,
             ));
         }
@@ -359,7 +355,15 @@ impl<'a, 'ctx> Ctx<'a> {
             self.plmod.add_global_symbol(name, pltype, range)?;
         } else {
             let refs = Arc::new(RefCell::new(vec![]));
-            self.table.insert(name, (pv, pltype, range, refs.clone()));
+            self.table.insert(
+                name,
+                PLSymbol {
+                    value: pv,
+                    pltype,
+                    range,
+                    refs: Some(refs.clone()),
+                },
+            );
             self.set_if_refs(refs, range);
         }
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
@@ -392,7 +396,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
     pub fn init_global<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
         let mut set: FxHashSet<String> = FxHashSet::default();
-        for (_, sub) in &self.plmod.clone().submods {
+        for sub in self.plmod.clone().submods.values() {
             self.init_global_walk(sub, &mut set, builder);
         }
 
@@ -402,7 +406,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 .get_function(&self.plmod.get_full_name("__init_global"))
                 .unwrap(),
             &[],
-            &PLType::VOID,
+            &PLType::Void,
             self,
         );
     }
@@ -416,12 +420,12 @@ impl<'a, 'ctx> Ctx<'a> {
         if set.contains(&name) {
             return;
         }
-        for (_, sub) in &m.submods {
+        for sub in m.submods.values() {
             self.init_global_walk(sub, set, builder);
         }
-        let f = builder.add_function(&name, &[], PLType::VOID, self);
+        let f = builder.add_function(&name, &[], PLType::Void, self);
         builder.rm_curr_debug_location();
-        builder.build_call(f, &[], &PLType::VOID, self);
+        builder.build_call(f, &[], &PLType::Void, self);
         set.insert(name);
     }
 
@@ -431,7 +435,7 @@ impl<'a, 'ctx> Ctx<'a> {
         pltype: Arc<RefCell<PLType>>,
         range: Range,
     ) -> Result<(), PLDiag> {
-        if let PLType::GENERIC(g) = &*pltype.borrow() {
+        if let PLType::Generic(g) = &*pltype.borrow() {
             if g.curpltype.is_some() {
                 let cur = g.curpltype.as_ref().unwrap();
                 return self.add_type(
@@ -450,7 +454,7 @@ impl<'a, 'ctx> Ctx<'a> {
         Ok(())
     }
     pub fn add_type_without_check(&mut self, pltype: Arc<RefCell<PLType>>) {
-        if let PLType::GENERIC(_) = &*pltype.borrow() {
+        if let PLType::Generic(_) = &*pltype.borrow() {
             unreachable!()
         }
         let name = pltype.borrow().get_name();
@@ -463,7 +467,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
     pub fn add_doc_symbols(&mut self, pltype: Arc<RefCell<PLType>>) {
         match &*RefCell::borrow(&pltype) {
-            PLType::FN(fnvalue) => {
+            PLType::Fn(fnvalue) => {
                 if !fnvalue.fntype.method {
                     self.plmod
                         .doc_symbols
@@ -471,7 +475,7 @@ impl<'a, 'ctx> Ctx<'a> {
                         .push(fnvalue.get_doc_symbol())
                 }
             }
-            PLType::STRUCT(st) => self
+            PLType::Struct(st) => self
                 .plmod
                 .doc_symbols
                 .borrow_mut()
@@ -751,11 +755,11 @@ impl<'a, 'ctx> Ctx<'a> {
                 let mut insert_text = None;
                 let mut command = None;
                 let tp = match &*v.clone().borrow() {
-                    PLType::STRUCT(s) => {
+                    PLType::Struct(s) => {
                         skip_if_not_modified_by!(s.modifier, TokenType::PUB);
                         CompletionItemKind::STRUCT
                     }
-                    PLType::FN(fnvalue) => {
+                    PLType::Fn(fnvalue) => {
                         skip_if_not_modified_by!(fnvalue.fntype.modifier, TokenType::PUB);
                         insert_text = Some(fnvalue.gen_snippet());
                         command = Some(Command::new(
@@ -797,15 +801,15 @@ impl<'a, 'ctx> Ctx<'a> {
     fn get_tp_completions(&self, m: &mut FxHashMap<String, CompletionItem>) {
         for (k, f) in self.plmod.types.iter() {
             let tp = match &*f.borrow() {
-                PLType::FN(_) => continue,
-                PLType::ARR(_) => continue,
-                PLType::PLACEHOLDER(_) => CompletionItemKind::STRUCT,
-                PLType::GENERIC(_) => CompletionItemKind::TYPE_PARAMETER,
-                PLType::STRUCT(_) => CompletionItemKind::STRUCT,
-                PLType::TRAIT(_) => CompletionItemKind::INTERFACE,
-                PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
-                PLType::VOID => CompletionItemKind::KEYWORD,
-                PLType::POINTER(_) => todo!(),
+                PLType::Fn(_) => continue,
+                PLType::Arr(_) => continue,
+                PLType::PlaceHolder(_) => CompletionItemKind::STRUCT,
+                PLType::Generic(_) => CompletionItemKind::TYPE_PARAMETER,
+                PLType::Struct(_) => CompletionItemKind::STRUCT,
+                PLType::Trait(_) => CompletionItemKind::INTERFACE,
+                PLType::Primitive(_) => CompletionItemKind::KEYWORD,
+                PLType::Void => CompletionItemKind::KEYWORD,
+                PLType::Pointer(_) => todo!(),
             };
             m.insert(
                 k.to_string(),
@@ -849,7 +853,7 @@ impl<'a, 'ctx> Ctx<'a> {
             let mut insert_text = None;
             let mut command = None;
             let tp = match &*f.clone().borrow() {
-                PLType::FN(f) => {
+                PLType::Fn(f) => {
                     insert_text = Some(f.gen_snippet());
                     command = Some(Command::new(
                         "trigger help".to_string(),
@@ -858,14 +862,14 @@ impl<'a, 'ctx> Ctx<'a> {
                     ));
                     CompletionItemKind::FUNCTION
                 }
-                PLType::STRUCT(_) => CompletionItemKind::STRUCT,
-                PLType::TRAIT(_) => CompletionItemKind::INTERFACE,
-                PLType::ARR(_) => CompletionItemKind::KEYWORD,
-                PLType::PRIMITIVE(_) => CompletionItemKind::KEYWORD,
-                PLType::GENERIC(_) => CompletionItemKind::STRUCT,
-                PLType::VOID => CompletionItemKind::KEYWORD,
-                PLType::POINTER(_) => todo!(),
-                PLType::PLACEHOLDER(_) => CompletionItemKind::STRUCT,
+                PLType::Struct(_) => CompletionItemKind::STRUCT,
+                PLType::Trait(_) => CompletionItemKind::INTERFACE,
+                PLType::Arr(_) => CompletionItemKind::KEYWORD,
+                PLType::Primitive(_) => CompletionItemKind::KEYWORD,
+                PLType::Generic(_) => CompletionItemKind::STRUCT,
+                PLType::Void => CompletionItemKind::KEYWORD,
+                PLType::Pointer(_) => todo!(),
+                PLType::PlaceHolder(_) => CompletionItemKind::STRUCT,
             };
             if k.starts_with('|') {
                 // skip method
@@ -889,7 +893,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn push_semantic_token(&self, range: Range, tp: SemanticTokenType, modifiers: u32) {
-        if self.need_highlight != 0 {
+        if self.need_highlight != 0 || self.in_macro {
             return;
         }
         self.plmod.semantic_tokens_builder.borrow_mut().push(
@@ -1023,14 +1027,9 @@ impl<'a, 'ctx> Ctx<'a> {
     ) -> (Arc<RefCell<PLType>>, ValueHandle) {
         let mut tp = tp;
         let mut value = value;
-        loop {
-            match &*RefCell::borrow(&tp.clone()) {
-                PLType::POINTER(p) => {
-                    tp = p.clone();
-                    value = builder.build_load(value, "load");
-                }
-                _ => break,
-            }
+        while let PLType::Pointer(p) = &*tp.clone().borrow() {
+            tp = p.clone();
+            value = builder.build_load(value, "load");
         }
         (tp, value)
     }
@@ -1039,13 +1038,8 @@ impl<'a, 'ctx> Ctx<'a> {
     /// 自动解pltype引用，有几层解几层
     pub fn auto_deref_tp(&self, tp: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
         let mut tp = tp;
-        loop {
-            match &*RefCell::borrow(&tp.clone()) {
-                PLType::POINTER(p) => {
-                    tp = p.clone();
-                }
-                _ => break,
-            }
+        while let PLType::Pointer(p) = &*tp.clone().borrow() {
+            tp = p.clone()
         }
         tp
     }
@@ -1061,58 +1055,51 @@ impl<'a, 'ctx> Ctx<'a> {
     }
     // when need eq trait and sttype,the left mut be trait
     pub fn eq(&self, l: Arc<RefCell<PLType>>, r: Arc<RefCell<PLType>>) -> EqRes {
-        match (&*l.borrow(), &*r.borrow()) {
-            (PLType::GENERIC(l), PLType::GENERIC(r)) => {
-                if l == r {
-                    return EqRes {
-                        eq: true,
-                        need_up_cast: false,
-                    };
-                }
-            }
-            _ => {}
-        }
-        match &mut *l.borrow_mut() {
-            PLType::GENERIC(l) => {
-                if l.curpltype.is_some() {
-                    return self.eq(l.curpltype.as_ref().unwrap().clone(), r);
-                }
-                if l.trait_impl.is_some() {
-                    if !self
-                        .eq(l.trait_impl.as_ref().unwrap().clone(), r.clone())
-                        .eq
-                    {
-                        return EqRes {
-                            eq: false,
-                            need_up_cast: false,
-                        };
-                    }
-                }
-                l.set_type(r);
+        if let (PLType::Generic(l), PLType::Generic(r)) = (&*l.borrow(), &*r.borrow()) {
+            if l == r {
                 return EqRes {
                     eq: true,
                     need_up_cast: false,
                 };
             }
-            _ => {}
+        }
+        if let PLType::Generic(l) = &mut *l.borrow_mut() {
+            if l.curpltype.is_some() {
+                return self.eq(l.curpltype.as_ref().unwrap().clone(), r);
+            }
+            if l.trait_impl.is_some()
+                && !self
+                    .eq(l.trait_impl.as_ref().unwrap().clone(), r.clone())
+                    .eq
+            {
+                return EqRes {
+                    eq: false,
+                    need_up_cast: false,
+                };
+            }
+            l.set_type(r);
+            return EqRes {
+                eq: true,
+                need_up_cast: false,
+            };
         }
         EqRes {
             eq: match (&*l.borrow(), &*r.borrow()) {
-                (PLType::PRIMITIVE(l), PLType::PRIMITIVE(r)) => l == r,
-                (PLType::VOID, PLType::VOID) => true,
-                (PLType::POINTER(l), PLType::POINTER(r)) => self.eq(l.clone(), r.clone()).eq,
-                (PLType::ARR(l), PLType::ARR(r)) => {
+                (PLType::Primitive(l), PLType::Primitive(r)) => l == r,
+                (PLType::Void, PLType::Void) => true,
+                (PLType::Pointer(l), PLType::Pointer(r)) => self.eq(l.clone(), r.clone()).eq,
+                (PLType::Arr(l), PLType::Arr(r)) => {
                     self.eq(l.get_elem_type(), r.get_elem_type()).eq && l.size == r.size
                 }
-                (PLType::STRUCT(l), PLType::STRUCT(r)) => l.name == r.name && l.path == r.path,
-                (PLType::FN(l), PLType::FN(r)) => l == r,
-                (PLType::PLACEHOLDER(l), PLType::PLACEHOLDER(r)) => l == r,
+                (PLType::Struct(l), PLType::Struct(r)) => l.name == r.name && l.path == r.path,
+                (PLType::Fn(l), PLType::Fn(r)) => l == r,
+                (PLType::PlaceHolder(l), PLType::PlaceHolder(r)) => l == r,
                 _ => {
                     if l != r {
                         let trait_pltype = l.clone();
                         let st_pltype = r.clone();
                         let st_pltype = self.auto_deref_tp(st_pltype);
-                        if let (PLType::TRAIT(t), PLType::STRUCT(st)) =
+                        if let (PLType::Trait(t), PLType::Struct(st)) =
                             (&*trait_pltype.borrow(), &*st_pltype.borrow())
                         {
                             return EqRes {

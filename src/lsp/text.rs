@@ -31,7 +31,7 @@ pub fn diff(left: &str, right: &str) -> TextDiff {
     }
     builder
 }
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Indel {
     pub insert: String,
     pub delete: TextRange,

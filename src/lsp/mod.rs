@@ -159,7 +159,7 @@ fn main_loop(
     let pool = ThreadPool::new(n_workers);
     let mut db = db::Database::default();
     let _params: InitializeParams = serde_json::from_value(params).unwrap();
-    let docs = Arc::new(Mutex::new(RefCell::new(MemDocs::new())));
+    let docs = Arc::new(Mutex::new(RefCell::new(MemDocs::default())));
     let docin = MemDocsInput::new(
         &db,
         docs.clone(),
@@ -397,7 +397,7 @@ fn main_loop(
                 docin.set_edit_pos(&mut db).to(Some(pos));
                 docin.set_docs(&mut db).to(docs.clone());
             }
-            docin.set_file(&mut db).to(f.clone());
+            docin.set_file(&mut db).to(f);
 
             docin.set_action(&mut db).to(ActionType::Diagnostic);
             compile_dry(&db, docin);
@@ -408,7 +408,7 @@ fn main_loop(
                 debug!("diags: {:#?}", diags);
                 let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();
                 for (p, diags) in &diags {
-                    diags.iter().for_each(|x| x.get_diagnostic(&p, &mut m));
+                    diags.iter().for_each(|x| x.get_diagnostic(p, &mut m));
                 }
                 for (p, _) in &diags {
                     if m.get(p).is_none() {
@@ -423,13 +423,13 @@ fn main_loop(
         .on_noti::<DidOpenTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
             docs.lock().unwrap().borrow_mut().insert(
-                &mut db,
+                &db,
                 f.clone(),
                 params.text_document.text,
                 f.clone(),
             );
             docin.set_docs(&mut db).to(docs.clone());
-            docin.set_file(&mut db).to(f.clone());
+            docin.set_file(&mut db).to(f);
             docin.set_action(&mut db).to(ActionType::Diagnostic);
             docin.set_params(&mut db).to(None);
             compile_dry(&db, docin);

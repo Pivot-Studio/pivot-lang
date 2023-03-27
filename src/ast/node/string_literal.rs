@@ -58,7 +58,7 @@ impl Node for StringNode {
                 res
             }),
             Some(tp),
-            TerminatorEnum::NONE,
+            TerminatorEnum::None,
         ))
     }
 }

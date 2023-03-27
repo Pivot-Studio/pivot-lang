@@ -170,10 +170,7 @@ fn main() {
         .quiet(cli.quiet)
         .verbosity(cli.verbose as usize);
 
-    let fmt = match cli.command {
-        Some(RunCommand::Fmt) => true,
-        _ => false,
-    };
+    let fmt = matches!(cli.command, Some(RunCommand::Fmt));
     // You can check the value provided by positional arguments, or option arguments
     if let Some(name) = cli.name.as_deref() {
         logger.timestamp(stderrlog::Timestamp::Off).init().unwrap();
@@ -198,7 +195,7 @@ fn main() {
         };
         let mem = MemDocsInput::new(
             &db,
-            Arc::new(Mutex::new(RefCell::new(mem_docs::MemDocs::new()))),
+            Arc::new(Mutex::new(RefCell::new(mem_docs::MemDocs::default()))),
             abs.to_str().unwrap().to_string(),
             op,
             action,

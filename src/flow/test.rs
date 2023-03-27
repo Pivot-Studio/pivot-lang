@@ -13,7 +13,7 @@ mod test {
         }
         ";
         let (_, node) = statement_block(Span::from(s)).unwrap();
-        let graph = from_ast(Box::new(NodeEnum::STS(node)));
+        let graph = from_ast(Box::new(NodeEnum::Sts(node)));
         let exp = "digraph test {
             D0 [shape=box, style=rounded, label=\"begin\", fontname=\"\"];
             {rank = sink; D1 [shape=box, style=rounded, label=\"end\", fontname=\"\"];}
@@ -37,7 +37,7 @@ mod test {
         }
         ";
         let (_, node) = statement_block(Span::from(s)).unwrap();
-        let graph = from_ast(Box::new(NodeEnum::STS(node)));
+        let graph = from_ast(Box::new(NodeEnum::Sts(node)));
         let exp = "digraph test{
             D0[shape=box,style=rounded,label=\"begin\",fontname=\"\"];
             {rank=sink;D1[shape=box,style=rounded,label=\"end\",fontname=\"\"];}
@@ -65,7 +65,7 @@ mod test {
         }
         ";
         let (_, node) = statement_block(Span::from(s)).unwrap();
-        let graph = from_ast(Box::new(NodeEnum::STS(node)));
+        let graph = from_ast(Box::new(NodeEnum::Sts(node)));
         let exp = "digraph test{
             D0[shape=box,style=rounded,label=\"begin\",fontname=\"\"];
             {rank=sink;D1[shape=box,style=rounded,label=\"end\",fontname=\"\"];}
@@ -95,7 +95,7 @@ mod test {
         }
         ";
         let (_, node) = statement_block(Span::from(s)).unwrap();
-        let graph = from_ast(Box::new(NodeEnum::STS(node)));
+        let graph = from_ast(Box::new(NodeEnum::Sts(node)));
         let exp = "digraph test{
             D0[shape=box,style=rounded,label=\"begin\",fontname=\"\"];
             {rank=sink;D1[shape=box,style=rounded,label=\"end\",fontname=\"\"];}

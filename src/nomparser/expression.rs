@@ -96,8 +96,8 @@ pub fn pointer_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             for op in ops.into_iter().rev() {
                 let (op, op_range) = op;
                 let op = match op {
-                    TokenType::TAKE_PTR => PointerOpEnum::ADDR,
-                    TokenType::TAKE_VAL => PointerOpEnum::DEREF,
+                    TokenType::TAKE_PTR => PointerOpEnum::Addr,
+                    TokenType::TAKE_VAL => PointerOpEnum::Deref,
                     _ => unreachable!(),
                 };
                 let range = op_range.start.to(exp_range.end);
@@ -148,7 +148,7 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             let mut res = head;
             for op in ops {
                 res = match op.0 {
-                    ComplexOp::CallOp((args, params_range, generic_params)) => {
+                    ComplexOp::Call((args, params_range, generic_params)) => {
                         let mut range = res.range();
                         if !args.is_empty() {
                             range = res.range().start.to(params_range.end);
@@ -164,7 +164,7 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                             .into(),
                         )
                     }
-                    ComplexOp::IndexOp(index) => {
+                    ComplexOp::Index(index) => {
                         let range = res.range().start.to(index.range().end);
                         Box::new(
                             ArrayElementNode {
@@ -176,16 +176,15 @@ fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                             .into(),
                         )
                     }
-                    ComplexOp::FieldOp(field) => {
-                        let range;
-                        if field.is_some() {
-                            range = res.range().start.to(field.clone().unwrap().range().end);
+                    ComplexOp::Field(field) => {
+                        let range = if field.is_some() {
+                            res.range().start.to(field.clone().unwrap().range().end)
                         } else {
                             let mut end = res.range().end;
                             end.column += 1;
                             end.offset += 1;
-                            range = res.range().start.to(end);
-                        }
+                            res.range().start.to(end)
+                        };
                         Box::new(
                             TakeOpNode {
                                 range,
@@ -242,7 +241,7 @@ fn take_exp_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
             tag_token_symbol(TokenType::DOT),
             pair(opt(identifier), many0(comment)),
         ),
-        |(idx, coms)| Ok::<_, ()>((ComplexOp::FieldOp(idx), coms)),
+        |(idx, coms)| Ok::<_, ()>((ComplexOp::Field(idx), coms)),
     ))(input)
 }
 

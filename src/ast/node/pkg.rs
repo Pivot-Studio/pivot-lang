@@ -49,14 +49,14 @@ impl Node for UseNode {
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let mut path = PathBuf::from(&ctx.config.root);
-        let head = self.ids[0].get_name(ctx).clone();
+        let head = self.ids[0].get_name(ctx);
         if !self.ids.is_empty() {
             // head is project name or deps name
             let dep = ctx.config.deps.as_ref().unwrap().get(&head);
             if head == ctx.config.project || dep.is_some() {
                 // change path
-                if dep.is_some() {
-                    path = path.join(&dep.unwrap().path);
+                if let Some(dep) = dep {
+                    path = path.join(&dep.path);
                 }
                 for i in 1..self.ids.len() {
                     path = path.join(&self.ids[i].get_name(ctx));
@@ -77,7 +77,7 @@ impl Node for UseNode {
             if self.ids.len() < 2 && self.complete {
                 completions.clear();
                 if let Some(deps) = &ctx.config.deps {
-                    for (dep, _) in deps {
+                    for dep in deps.keys() {
                         completions.push(lsp_types::CompletionItem {
                             label: dep.clone(),
                             kind: Some(lsp_types::CompletionItemKind::MODULE),
@@ -96,7 +96,7 @@ impl Node for UseNode {
         if !self.complete {
             return Err(ctx.add_diag(self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION)));
         }
-        Ok((None, None, TerminatorEnum::NONE))
+        Ok((None, None, TerminatorEnum::None))
     }
 }
 
@@ -179,17 +179,17 @@ impl Node for ExternIdNode {
                     res
                 }),
                 Some(pltype),
-                TerminatorEnum::NONE,
+                TerminatorEnum::None,
             ));
         }
         if let Some(tp) = plmod.get_type(&self.id.get_name(ctx)) {
             let range = &tp.borrow().get_range();
             let re = match &*tp.clone().borrow() {
-                PLType::FN(_) => {
+                PLType::Fn(_) => {
                     // 必须是public的
                     _ = tp.borrow().expect_pub(ctx, self.range);
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
-                    Ok((None, Some(tp), TerminatorEnum::NONE))
+                    Ok((None, Some(tp), TerminatorEnum::None))
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION))),
             };
@@ -202,7 +202,7 @@ impl Node for ExternIdNode {
     }
 }
 impl ExternIdNode {
-    pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a>) -> NodeResult {
+    pub fn get_type(&self, ctx: &Ctx) -> NodeResult {
         if self.ns.is_empty() {
             if self.complete {
                 // 如果该节点只有一个id，且完整，那么就是一个普通的包内符号，直接调用idnode
@@ -234,7 +234,7 @@ impl ExternIdNode {
             // 必须是public的
             _ = tp.borrow().expect_pub(ctx, self.range);
             let re = match *tp.clone().borrow() {
-                PLType::STRUCT(_) | PLType::TRAIT(_) => Ok((None, Some(tp), TerminatorEnum::NONE)),
+                PLType::Struct(_) | PLType::Trait(_) => Ok((None, Some(tp), TerminatorEnum::None)),
                 _ => unreachable!(),
             };
             return re;
@@ -242,11 +242,11 @@ impl ExternIdNode {
         Err(ctx.add_diag(self.range.new_err(ErrorCode::SYMBOL_NOT_FOUND)))
     }
 
-    pub fn get_macro<'a, 'ctx>(&'a self, ctx: &Ctx<'a>) -> Result<Arc<MacroNode>, PLDiag> {
+    pub fn get_macro(&self, ctx: &Ctx) -> Result<Arc<MacroNode>, PLDiag> {
         if self.ns.is_empty() {
             // 如果该节点只有一个id，且完整，那么就是一个普通的包内符号，直接调用idnode
             if let Some(m) = ctx.get_macro(&self.id.get_name(ctx)) {
-                return Ok(m.clone());
+                return Ok(m);
             }
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::MACRO_NOT_FOUND)));
         }

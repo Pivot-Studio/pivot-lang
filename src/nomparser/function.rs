@@ -141,10 +141,7 @@ pub fn call_function_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEn
             many0(comment),
         )),
         |(generic, (_, st), paras, (_, end), com)| {
-            Ok::<_, ()>((
-                ComplexOp::CallOp((paras, st.start.to(end.end), generic)),
-                com,
-            ))
+            Ok::<_, ()>((ComplexOp::Call((paras, st.start.to(end.end), generic)), com))
         },
     ))(input)
 }

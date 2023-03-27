@@ -62,7 +62,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     let imname = FmtBuilder::generate_node(&im.target);
                     let target = *im.target.clone();
                     if let Some((t, _)) = &im.impl_trait {
-                        let trait_name = FmtBuilder::generate_node(&t);
+                        let trait_name = FmtBuilder::generate_node(t);
                         trait_impls.push((imname.clone(), trait_name));
                     }
                     for mth in im.methods.iter_mut() {
@@ -79,12 +79,10 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                                     name: "self".to_string(),
                                     range: Default::default(),
                                 },
-                                typenode: Box::new(TypeNodeEnum::PointerTypeNode(
-                                    PointerTypeNode {
-                                        elm: Box::new(target.clone()),
-                                        range: Default::default(),
-                                    },
-                                )),
+                                typenode: Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
+                                    elm: Box::new(target.clone()),
+                                    range: Default::default(),
+                                })),
                                 doc: None,
                                 range: Default::default(),
                             }),

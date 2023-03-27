@@ -41,9 +41,9 @@ impl Node for ImplNode {
         if let Some((t, (_, r))) = &self.impl_trait {
             let tp = t.get_type(ctx, builder);
             if let Ok(tp) = tp {
-                if let PLType::TRAIT(st) = &*tp.borrow() {
+                if let PLType::Trait(st) = &*tp.borrow() {
                     traittpandrange = Some((tp.clone(), t.range()));
-                    for (name, _) in &st.fields {
+                    for name in st.fields.keys() {
                         traitfns.insert(name.clone());
                     }
                 }
@@ -53,14 +53,14 @@ impl Node for ImplNode {
         }
         self.target.emit_highlight(ctx);
         let mut method_docsymbols = vec![];
-        if let TypeNodeEnum::PointerTypeNode(pt) = &*self.target {
-            if let TypeNodeEnum::BasicTypeNode(bt) = &*pt.elm {
+        if let TypeNodeEnum::Pointer(pt) = &*self.target {
+            if let TypeNodeEnum::Basic(bt) = &*pt.elm {
                 let st_pltype = bt.get_origin_type_with_infer(ctx, builder)?;
-                if let PLType::STRUCT(sttp) = &*st_pltype.borrow() {
+                if let PLType::Struct(sttp) = &*st_pltype.borrow() {
                     if let Some((t, _)) = &self.impl_trait {
                         let trait_tp = t.get_type(ctx, builder)?;
                         let name = trait_tp.borrow().get_kind_name();
-                        if let PLType::TRAIT(st) = &*trait_tp.borrow_mut() {
+                        if let PLType::Trait(st) = &*trait_tp.borrow_mut() {
                             ctx.send_if_go_to_def(t.range(), st.range, st.path.clone());
                         } else {
                             t.range()
@@ -105,31 +105,26 @@ impl Node for ImplNode {
 
                 // 检查方法是否在trait中
                 let trait_tp = traittpandrange.clone().unwrap().0;
-                if let PLType::TRAIT(st) = &*trait_tp.borrow() {
-                    if st
-                        .fields
-                        .iter()
-                        .find(|(_, f)| {
-                            let tp = f.typenode.get_type(ctx, builder);
-                            if tp.is_err() {
-                                return false;
-                            }
-                            let tp = tp.unwrap();
-                            let re = match (&*tp.borrow(), &*tmp.borrow()) {
-                                (PLType::FN(f1), PLType::FN(f2)) => {
-                                    if f1.eq_except_receiver(f2, ctx, builder) {
-                                        traitfns.remove(&f1.name);
-                                        true
-                                    } else {
-                                        false
-                                    }
+                if let PLType::Trait(st) = &*trait_tp.borrow() {
+                    if !st.fields.iter().any(|(_, f)| {
+                        let tp = f.typenode.get_type(ctx, builder);
+                        if tp.is_err() {
+                            return false;
+                        }
+                        let tp = tp.unwrap();
+                        let re = match (&*tp.borrow(), &*tmp.borrow()) {
+                            (PLType::Fn(f1), PLType::Fn(f2)) => {
+                                if f1.eq_except_receiver(f2, ctx, builder) {
+                                    traitfns.remove(&f1.name);
+                                    true
+                                } else {
+                                    false
                                 }
-                                _ => unreachable!(),
-                            };
-                            re
-                        })
-                        .is_none()
-                    {
+                            }
+                            _ => unreachable!(),
+                        };
+                        re
+                    }) {
                         method
                             .range()
                             .new_err(ErrorCode::METHOD_NOT_IN_TRAIT)
@@ -150,7 +145,7 @@ impl Node for ImplNode {
                     }
                 };
             }
-            let f = if let PLType::FN(f) = &*tmp.borrow() {
+            let f = if let PLType::Fn(f) = &*tmp.borrow() {
                 f.get_doc_symbol()
             } else {
                 continue;
@@ -190,6 +185,6 @@ impl Node for ImplNode {
             children: Some(method_docsymbols),
         };
         ctx.plmod.doc_symbols.borrow_mut().push(docsymbol);
-        Ok((None, None, TerminatorEnum::NONE))
+        Ok((None, None, TerminatorEnum::None))
     }
 }

@@ -56,17 +56,17 @@ pub mod string_literal;
 pub mod types;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TerminatorEnum {
-    NONE,
-    RETURN,
-    BREAK,
-    CONTINUE,
+    None,
+    Return,
+    Break,
+    Continue,
 }
 impl TerminatorEnum {
     pub fn is_none(self) -> bool {
-        self == TerminatorEnum::NONE
+        self == TerminatorEnum::None
     }
     pub fn is_return(self) -> bool {
-        self == TerminatorEnum::RETURN
+        self == TerminatorEnum::Return
     }
 }
 #[macro_export]
@@ -83,10 +83,10 @@ macro_rules! plv {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[enum_dispatch(TypeNode, RangeTrait, FmtTrait, PrintTrait)]
 pub enum TypeNodeEnum {
-    BasicTypeNode(TypeNameNode),
-    ArrayTypeNode(ArrayTypeNameNode),
-    PointerTypeNode(PointerTypeNode),
-    FuncTypeNode(FuncDefNode),
+    Basic(TypeNameNode),
+    Array(ArrayTypeNameNode),
+    Pointer(PointerTypeNode),
+    Func(FuncDefNode),
 }
 #[enum_dispatch]
 pub trait TypeNode: RangeTrait + FmtTrait + PrintTrait {
@@ -96,7 +96,7 @@ pub trait TypeNode: RangeTrait + FmtTrait + PrintTrait {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> TypeNodeResult;
-    fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a>);
+    fn emit_highlight(&self, ctx: &mut Ctx);
     fn eq_or_infer<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
@@ -129,7 +129,7 @@ pub enum NodeEnum {
     Num(NumNode),
     Bool(BoolConstNode),
     Err(ErrorNode),
-    STS(StatementsNode),
+    Sts(StatementsNode),
     Empty(EmptyNode),
     Comment(CommentNode),
     Program(program::ProgramNode),
@@ -199,8 +199,8 @@ impl PLValue {
 }
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Num {
-    INT(u64),
-    FLOAT(f64),
+    Int(u64),
+    Float(f64),
 }
 
 impl Eq for Num {
@@ -255,8 +255,8 @@ impl<'a, 'ctx> Ctx<'a> {
                 let num = numnode.value;
                 // TODO: check overflow
                 let v = match num {
-                    Num::INT(i) => match &*expect.borrow() {
-                        PLType::PRIMITIVE(tp) => {
+                    Num::Int(i) => match &*expect.borrow() {
+                        PLType::Primitive(tp) => {
                             let sign_ext = match tp {
                                 PriType::I8
                                 | PriType::I16
@@ -291,8 +291,8 @@ impl<'a, 'ctx> Ctx<'a> {
                             ))
                         }
                     },
-                    Num::FLOAT(f) => match &*expect.borrow() {
-                        PLType::PRIMITIVE(tp) => match tp {
+                    Num::Float(f) => match &*expect.borrow() {
+                        PLType::Primitive(tp) => match tp {
                             PriType::F32 | PriType::F64 => builder.float_value(tp, f),
                             _ => {
                                 return Err(mismatch_err!(
@@ -324,7 +324,7 @@ impl<'a, 'ctx> Ctx<'a> {
                         receiver: None,
                     }),
                     Some(expect),
-                    TerminatorEnum::NONE,
+                    TerminatorEnum::None,
                 ));
             }
         }
@@ -361,8 +361,8 @@ pub fn deal_line(tabs: usize, line: &mut Vec<bool>, end: bool) {
     }
 }
 pub fn tab(tabs: usize, line: Vec<bool>, end: bool) {
-    for i in 0..tabs {
-        if line[i] {
+    for item in line.iter().take(tabs) {
+        if *item {
             print!("    ");
         } else {
             print!(" │  ");
@@ -392,11 +392,11 @@ pub fn print_params(paralist: &[Box<TypedIdentifierNode>]) -> String {
             FmtBuilder::generate_node(&paralist[0].typenode)
         );
     }
-    for i in 1..paralist.len() {
+    for item in paralist.iter().skip(1) {
         str += &format!(
             ", {}: {}",
-            paralist[i].id.name,
-            FmtBuilder::generate_node(&paralist[i].typenode)
+            item.id.name,
+            FmtBuilder::generate_node(&item.typenode)
         );
     }
     str
@@ -407,14 +407,14 @@ macro_rules! handle_calc {
     ($ctx:ident, $op:ident, $opf:ident, $lpltype:ident, $left:ident, $right:ident, $range: expr,$builder:ident) => {
         paste::item! {
             match *$lpltype.clone().unwrap().borrow() {
-                PLType::PRIMITIVE(PriType::I128|PriType::I64|PriType::I32|PriType::I16|PriType::I8|
+                PLType::Primitive(PriType::I128|PriType::I64|PriType::I32|PriType::I16|PriType::I8|
                     PriType::U128|PriType::U64|PriType::U32|PriType::U16|PriType::U8) => {
                     return Ok((Some(plv!( $builder.[<build_int_$op>](
-                        $left, $right, "addtmp"))),Some($lpltype.unwrap()),TerminatorEnum::NONE));
+                        $left, $right, "addtmp"))),Some($lpltype.unwrap()),TerminatorEnum::None));
                 },
-                PLType::PRIMITIVE(PriType::F64|PriType::F32) => {
+                PLType::Primitive(PriType::F64|PriType::F32) => {
                     return Ok((Some(plv!( $builder.[<build_$opf>](
-                        $left, $right, "addtmp"))),Some($lpltype.unwrap()),TerminatorEnum::NONE));
+                        $left, $right, "addtmp"))),Some($lpltype.unwrap()),TerminatorEnum::None));
                 },
                 _ =>  return Err($ctx.add_diag(
                     $range.new_err(

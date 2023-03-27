@@ -119,7 +119,7 @@ impl Range {
         PLDiag::new_warn(*self, warn)
     }
 
-    pub fn to_diag_range(&self) -> lsp_types::Range {
+    pub fn to_diag_range(self) -> lsp_types::Range {
         if self.start.line < 1 {
             return Default::default();
         }
