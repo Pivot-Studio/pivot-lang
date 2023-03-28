@@ -1,6 +1,8 @@
 use log::{Record, Metadata,LevelFilter};
 use std::{env::{self}, str::FromStr,time::{SystemTime, UNIX_EPOCH}};
 
+///
+/// SimpleLogger is a logger with almost nothing dependency exclude std and log crates
 pub struct SimpleLogger{
     log_limit: LevelFilter
 }
@@ -31,7 +33,11 @@ impl SimpleLogger{
     // fn init(logger:Self) {
     //     Self::init_default_max_level(logger,LevelFilter::Trace);
     // }
-
+    
+    ///
+    /// initialize log with the SimpleLogger
+    /// the max_level in log will never make effects
+    /// since the logger implement enabled function by *LevelFilter*
     fn init_default_max_level(logger: Self) {
         match log::set_boxed_logger(Box::new(logger)){
             Ok(_)=>{
@@ -44,6 +50,9 @@ impl SimpleLogger{
         log::set_max_level(LevelFilter::Trace);
     }
 
+    ///
+    /// get the environment variable named *log_level_name*
+    /// return a default "null" string to lead a parse error
     fn get_env_log_level(log_level_name: &str)-> String{
         let env_result = env::var(log_level_name);
         match env_result{
@@ -66,7 +75,8 @@ impl log::Log for SimpleLogger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
-            println!("{} - {}", record.level(), record.args());
+            let date = DateTime::get_now_date();
+            eprintln!("[{:0>4}-{:0>2}-{:0>2} {:0>2}:{:0>2}:{:0>2}] {} - {}", date.year,date.month,date.day,date.hour,date.minute,date.second,record.level(), record.args());
         
         }
     }
@@ -74,6 +84,9 @@ impl log::Log for SimpleLogger {
     fn flush(&self) {}
 }
 
+///
+/// DateTime contains 6 fields to represents common date format
+/// provide get_now_date() to quickly get current date.
 pub struct DateTime{
     year: u64,
     month: u64,
@@ -231,7 +244,7 @@ impl DateTime{
 pub mod tests{
     use crate::logger::{SimpleLogger,DateTime};
     use log::{self, info, error, warn};
-    use std::time::{SystemTime, UNIX_EPOCH,Duration};
+    use std::time::{SystemTime, UNIX_EPOCH};
     #[test]
     fn test_logger(){
         SimpleLogger::init_from_env_default( "GC_LOG",log::LevelFilter::Error);
@@ -246,31 +259,18 @@ pub mod tests{
         SimpleLogger::init_from_env_default( "GC_LOG",log::LevelFilter::Error);
         SimpleLogger::init_from_env_default( "GC_LOG",log::LevelFilter::Error);
         error!("hello {}","moonold");
-
-    }
-
-    #[test]
-    fn test_logger_in_log(){
-        let a = log::logger();
-        let _b = log::logger();
-        let _c = log::logger();
-        let _d = log::logger();
-        let _e = log::logger();
-        a.flush();
-    }
-
-    #[test]
-    fn test_std_time(){
-        println!("{:?}",SystemTime::now());
-        println!("{:?}",UNIX_EPOCH);
-        println!("{:?}",UNIX_EPOCH+Duration::from_secs(800 * 86400));
     }
 
     #[test]
     fn test_from_days(){
-        let secs = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let secs = 1680016716;
         let date = DateTime::from_days_since_unix(secs);
-        println!("{}.{}.{}  {}h{}m{}s, {}secs passed",date.year,date.month,date.day,date.hour,date.minute,date.second,secs);
+        assert_eq!(date.year,2023);
+        assert_eq!(date.month,3);
+        assert_eq!(date.day,28);
+        assert_eq!(date.hour,23);
+        assert_eq!(date.minute,18);
+        assert_eq!(date.second,36);
     }
 }
 
