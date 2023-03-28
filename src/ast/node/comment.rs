@@ -24,6 +24,6 @@ impl Node for CommentNode {
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::COMMENT, 0);
-        Ok((None, None, TerminatorEnum::NONE))
+        Ok((None, None, TerminatorEnum::None))
     }
 }

@@ -56,24 +56,28 @@ impl BigObjAllocator {
         for i in 0..self.unused_chunks.len() {
             let unused_obj = self.unused_chunks[i];
             let unused_size = unsafe { (*unused_obj).size };
-            if unused_size == size {
-                self.unused_chunks.remove(i);
-                // self.mmap.commit(unused_obj as *mut u8, size);
-                println!(
-                    "get_chunk: {:p}[reused {}/{}]",
-                    unused_obj, size, unused_size
-                );
-                return unused_obj;
-            } else if unused_size > size {
-                let ptr = unsafe { (unused_obj as *mut u8).add(unused_size - size) };
-                let new_obj = BigObj::new(ptr, size);
-                unsafe {
-                    (*unused_obj).size -= size;
+            match unused_size.cmp(&size) {
+                std::cmp::Ordering::Less => {}
+                std::cmp::Ordering::Equal => {
+                    self.unused_chunks.remove(i);
+                    // self.mmap.commit(unused_obj as *mut u8, size);
+                    println!(
+                        "get_chunk: {:p}[reused {}/{}]",
+                        unused_obj, size, unused_size
+                    );
+                    return unused_obj;
                 }
-                // self.mmap.commit(new_obj as *mut BigObj as *mut u8, size);
-                println!("get_chunk: {:p}[reused {}/{}]", new_obj, size, unused_size);
-                return new_obj;
-            }
+                std::cmp::Ordering::Greater => {
+                    let ptr = unsafe { (unused_obj as *mut u8).add(unused_size - size) };
+                    let new_obj = BigObj::new(ptr, size);
+                    unsafe {
+                        (*unused_obj).size -= size;
+                    }
+                    // self.mmap.commit(new_obj as *mut BigObj as *mut u8, size);
+                    println!("get_chunk: {:p}[reused {}/{}]", new_obj, size, unused_size);
+                    return new_obj;
+                }
+            };
         }
 
         let chunk = self.alloc_chunk(size).unwrap();

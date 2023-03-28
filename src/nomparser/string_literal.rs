@@ -108,7 +108,7 @@ fn parse_literal<'a, E: ParseError<Span<'a>>>(input: Span<'a>) -> IResult<Span<'
 enum StringFragment<'a> {
     Literal(Span<'a>),
     EscapedChar(char),
-    EscapedWS,
+    EscapedWs,
 }
 
 /// Combine parse_literal, parse_escaped_whitespace, and parse_escaped_char
@@ -122,7 +122,7 @@ where
         // of that parser.
         map(parse_literal, StringFragment::Literal),
         map(parse_escaped_char, StringFragment::EscapedChar),
-        value(StringFragment::EscapedWS, parse_escaped_whitespace),
+        value(StringFragment::EscapedWs, parse_escaped_whitespace),
     ))(input)
 }
 
@@ -145,7 +145,7 @@ where
             match fragment {
                 StringFragment::Literal(s) => string.push_str(&s),
                 StringFragment::EscapedChar(c) => string.push(c),
-                StringFragment::EscapedWS => {}
+                StringFragment::EscapedWs => {}
             }
             string
         },

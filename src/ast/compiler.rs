@@ -56,7 +56,7 @@ impl Default for HashOptimizationLevel {
 }
 
 impl HashOptimizationLevel {
-    pub fn to_llvm(&self) -> OptimizationLevel {
+    pub fn to_llvm(self) -> OptimizationLevel {
         match self {
             HashOptimizationLevel::None => OptimizationLevel::None,
             HashOptimizationLevel::Less => OptimizationLevel::Less,
@@ -222,7 +222,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         for e in errs.iter() {
             let mut path = e.0.clone();
             for e in e.1.iter() {
-                if let Some(src) = e.source.clone() {
+                if let Some(src) = e.raw.source.clone() {
                     path = src;
                 }
                 e.print(
@@ -243,14 +243,14 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
                     "{}",
                     format!("compile failed: there is {} error", errs_num).bright_red()
                 );
-                println!("{}", format!("{}", dot::ERROR));
+                println!("{}", dot::ERROR);
                 return;
             }
             log::error!(
                 "{}",
                 format!("compile failed: there are {} errors", errs_num).bright_red()
             );
-            println!("{}", format!("{}", dot::TOOMANYERROR));
+            println!("{}", dot::TOOMANYERROR);
             return;
         }
     }
@@ -342,12 +342,11 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         return;
     }
     let root = root.unwrap();
-    let vmpath;
-    if cfg!(target_os = "windows") {
+    let vmpath = if cfg!(target_os = "windows") {
         // cmd = Command::new("clang");
         // f = out.clone();
         fo.push_str(".exe");
-        vmpath = format!("{}\\vm.lib", root);
+        format!("{}\\vm.lib", root)
         // cmd.arg("-lws2_32")
         //     .arg("-lbcrypt")
         //     .arg("-luserenv")
@@ -355,13 +354,13 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     } else {
         let mut p = PathBuf::from(&root);
         p.push("libvm.a");
-        vmpath = dunce::canonicalize(&p)
+        dunce::canonicalize(&p)
             .expect("failed to find libvm")
             .to_str()
             .unwrap()
-            .to_string();
+            .to_string()
         // cmd.arg("-pthread").arg("-ldl");
-    }
+    };
     for o in objs {
         t.add_object(o.as_path()).unwrap();
     }

@@ -8,13 +8,8 @@ use crate::ast::{
 use super::{IRBuilder, ValueHandle};
 
 /// 什么都不干的builder，用来测试和lsp模式
+#[derive(Default)]
 pub struct NoOpBuilder {}
-
-impl NoOpBuilder {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
 
 impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
     fn bitcast(

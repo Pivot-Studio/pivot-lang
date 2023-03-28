@@ -47,11 +47,11 @@ pub fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
         |(mut ns, opt, opt2)| {
             let id = ns.pop().unwrap();
             let mut range = id.range();
-            if opt.is_some() {
-                range = range.start.to(opt.unwrap().1.end);
+            if let Some(opt) = opt {
+                range = range.start.to(opt.1.end);
             }
-            if opt2.is_some() {
-                range = range.start.to(opt2.unwrap().1.end);
+            if let Some(opt2) = opt2 {
+                range = range.start.to(opt2.1.end);
             }
             res_enum(
                 ExternIdNode {
@@ -100,7 +100,7 @@ pub fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> 
             let mut tprange = range;
             tprange.end.column += 1;
             tprange.start = tprange.end;
-            let mut typenode = Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
+            let mut typenode = Box::new(TypeNodeEnum::Basic(TypeNameNode {
                 id: None,
                 range: tprange,
                 generic_params: None,

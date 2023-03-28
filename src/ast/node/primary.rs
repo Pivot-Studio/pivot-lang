@@ -63,8 +63,8 @@ impl Node for BoolConstNode {
                 self.value as u64,
                 true
             ))),
-            Some(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
-            TerminatorEnum::NONE,
+            Some(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL)))),
+            TerminatorEnum::None,
         ))
     }
 }
@@ -87,19 +87,19 @@ impl Node for NumNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::NUMBER, 0);
-        if let Num::INT(x) = self.value {
+        if let Num::Int(x) = self.value {
             let b = builder.int_value(&PriType::I64, x, true);
             return Ok((
                 Some(plv!(b)),
-                Some(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::I64)))),
-                TerminatorEnum::NONE,
+                Some(Arc::new(RefCell::new(PLType::Primitive(PriType::I64)))),
+                TerminatorEnum::None,
             ));
-        } else if let Num::FLOAT(x) = self.value {
+        } else if let Num::Float(x) = self.value {
             let b = builder.float_value(&PriType::F64, x);
             return Ok((
                 Some(plv!(b)),
-                Some(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::F64)))),
-                TerminatorEnum::NONE,
+                Some(Arc::new(RefCell::new(PLType::Primitive(PriType::F64)))),
+                TerminatorEnum::None,
             ));
         }
         panic!("not implemented")
@@ -150,34 +150,35 @@ impl Node for VarNode {
             }
         }
         ctx.if_completion(self.range, || ctx.get_completions());
-        let v = ctx.get_symbol(&self.name, builder);
-        if let Some((v, pltype, dst, refs, is_const)) = v {
+        if let Some((symbol, is_const)) = ctx.get_symbol(&self.name, builder) {
             ctx.push_semantic_token(self.range, SemanticTokenType::VARIABLE, 0);
             let o = Ok((
                 Some({
-                    let mut res: PLValue = plv!(v);
+                    let mut res: PLValue = plv!(symbol.value);
                     res.set_const(is_const);
                     res
                 }),
-                Some(pltype),
-                TerminatorEnum::NONE,
+                Some(symbol.pltype),
+                TerminatorEnum::None,
             ));
-            ctx.send_if_go_to_def(self.range, dst, ctx.plmod.path.clone());
-            refs.map(|refs| {
-                ctx.set_if_refs(refs, self.range);
-            })
-            .or_else(|| {
-                ctx.set_glob_refs(&ctx.plmod.get_full_name(&self.name), self.range);
-                Some(())
-            });
+            ctx.send_if_go_to_def(self.range, symbol.range, ctx.plmod.path.clone());
+            symbol
+                .refs
+                .map(|refs| {
+                    ctx.set_if_refs(refs, self.range);
+                })
+                .or_else(|| {
+                    ctx.set_glob_refs(&ctx.plmod.get_full_name(&self.name), self.range);
+                    Some(())
+                });
             return o;
         }
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match &*tp.borrow() {
-                PLType::FN(f) => {
+                PLType::Fn(f) => {
                     ctx.send_if_go_to_def(self.range, f.range, ctx.plmod.path.clone());
                     ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
-                    return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
+                    return Ok((None, Some(tp.clone()), TerminatorEnum::None));
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::VAR_NOT_FOUND))),
             }
@@ -196,13 +197,13 @@ impl PrintTrait for VarNode {
 
 impl VarNode {
     fn is_macro_var(&self) -> bool {
-        self.name.starts_with("$")
+        self.name.starts_with('$')
     }
     pub fn get_name(&self, ctx: &Ctx) -> String {
         if self.is_macro_var() {
             let re = ctx.macro_vars.get(&self.name[1..]).unwrap();
             if let MacroReplaceNode::NodeEnum(NodeEnum::Var(v)) = re {
-                return v.name.clone();
+                v.name.clone()
             } else {
                 todo!()
             }
@@ -211,7 +212,7 @@ impl VarNode {
         }
     }
 
-    pub fn get_type<'a, 'ctx>(&'a self, ctx: &Ctx<'a>) -> NodeResult {
+    pub fn get_type(&self, ctx: &Ctx) -> NodeResult {
         if self.is_macro_var() {
             let re = ctx.macro_vars.get(&self.name[1..]).unwrap();
             if let MacroReplaceNode::NodeEnum(NodeEnum::Var(v)) = re {
@@ -224,17 +225,17 @@ impl VarNode {
 
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match *tp.borrow() {
-                PLType::STRUCT(_)
-                | PLType::TRAIT(_)
-                | PLType::PRIMITIVE(_)
-                | PLType::VOID
-                | PLType::GENERIC(_)
-                | PLType::PLACEHOLDER(_) => {
-                    if let PLType::STRUCT(st) | PLType::TRAIT(st) = &*tp.clone().borrow() {
+                PLType::Struct(_)
+                | PLType::Trait(_)
+                | PLType::Primitive(_)
+                | PLType::Void
+                | PLType::Generic(_)
+                | PLType::PlaceHolder(_) => {
+                    if let PLType::Struct(st) | PLType::Trait(st) = &*tp.clone().borrow() {
                         ctx.send_if_go_to_def(self.range, st.range, ctx.plmod.path.clone());
                         // ctx.set_if_refs(st.refs.clone(), self.range);
                     }
-                    return Ok((None, Some(tp.clone()), TerminatorEnum::NONE));
+                    return Ok((None, Some(tp.clone()), TerminatorEnum::None));
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE))),
             }
@@ -266,7 +267,7 @@ impl Node for ArrayElementNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let (arr, pltype, _) = self.arr.emit(ctx, builder)?;
-        if let PLType::ARR(arrtp) = &*pltype.unwrap().borrow() {
+        if let PLType::Arr(arrtp) = &*pltype.unwrap().borrow() {
             let arr = arr.unwrap();
             // TODO: check if index is out of bounds
             let index_range = self.index.range();
@@ -284,7 +285,7 @@ impl Node for ArrayElementNode {
             return Ok((
                 Some(plv!(elemptr)),
                 Some(arrtp.element_type.clone()),
-                TerminatorEnum::NONE,
+                TerminatorEnum::None,
             ));
         }
         Err(ctx.add_diag(self.range.new_err(ErrorCode::CANNOT_INDEX_NON_ARRAY)))

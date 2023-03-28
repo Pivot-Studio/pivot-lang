@@ -68,8 +68,8 @@ pub struct Mod {
     pub completions: Arc<RefCell<Vec<CompletionItemWrapper>>>,
     pub completion_gened: Arc<RefCell<Gened>>,
     pub semantic_tokens_builder: Arc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
-    pub hints: Arc<RefCell<Box<Vec<InlayHint>>>>,
-    pub doc_symbols: Arc<RefCell<Box<Vec<DocumentSymbol>>>>,
+    pub hints: Arc<RefCell<Vec<InlayHint>>>,
+    pub doc_symbols: Arc<RefCell<Vec<DocumentSymbol>>>,
     pub impls: FxHashMap<String, FxHashSet<String>>,
     pub macros: FxHashMap<String, Arc<MacroNode>>,
 }
@@ -80,12 +80,6 @@ pub type MutVec<T> = RefCell<Vec<T>>;
 pub struct CompletionItemWrapper(pub CompletionItem);
 
 impl Eq for CompletionItemWrapper {}
-
-impl CompletionItemWrapper {
-    pub fn into_completions(&self) -> CompletionItem {
-        self.0.clone()
-    }
-}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Gened(bool);
 
@@ -139,8 +133,8 @@ impl Mod {
             semantic_tokens_builder: Arc::new(RefCell::new(Box::new(SemanticTokensBuilder::new(
                 "builder".to_string(),
             )))),
-            hints: Arc::new(RefCell::new(Box::default())),
-            doc_symbols: Arc::new(RefCell::new(Box::default())),
+            hints: Arc::new(RefCell::new(vec![])),
+            doc_symbols: Arc::new(RefCell::new(vec![])),
             // refcache:Arc::new(RefCell::new(BTreeMap::new())),
             local_refs: Arc::new(RefCell::new(BTreeMap::new())),
             glob_refs: Arc::new(RefCell::new(BTreeMap::new())),
@@ -223,10 +217,10 @@ impl Mod {
             return Some(pv.clone());
         }
         if let Some(x) = PriType::try_from_str(name) {
-            return Some(Arc::new(RefCell::new(PLType::PRIMITIVE(x))));
+            return Some(Arc::new(RefCell::new(PLType::Primitive(x))));
         }
         if name == "void" {
-            return Some(Arc::new(RefCell::new(PLType::VOID)));
+            return Some(Arc::new(RefCell::new(PLType::Void)));
         }
         None
     }
@@ -270,7 +264,7 @@ impl Mod {
                 ..Default::default()
             });
         };
-        for (_, m) in &self.submods {
+        for m in self.submods.values() {
             if m.methods.get(full_name).is_none() {
                 continue;
             }
@@ -293,7 +287,7 @@ impl Mod {
                 return Some(v.clone());
             }
         }
-        for (_, m) in &self.submods {
+        for m in self.submods.values() {
             if let Some(v) = m.find_method(full_name, mthd) {
                 return Some(v);
             }
@@ -352,23 +346,21 @@ fn get_ns_path_completions_pri(path: &str, vmap: &mut FxHashMap<String, Completi
     if dirs.is_err() {
         return;
     }
-    for k in PathBuf::from(path).read_dir().unwrap() {
-        if let Ok(d) = k {
-            let buf = d.path();
-            if !buf.is_dir() && buf.extension().is_some() && buf.extension().unwrap() != "pi" {
-                continue;
-            }
-            let buf = PathBuf::from(d.path().file_stem().unwrap().to_str().unwrap());
-            let x = buf.file_name().unwrap().to_str().unwrap();
-            vmap.insert(
-                x.to_string(),
-                CompletionItem {
-                    label: x.to_string(),
-                    kind: Some(CompletionItemKind::MODULE),
-                    ..Default::default()
-                },
-            );
+    for d in PathBuf::from(path).read_dir().unwrap().flatten() {
+        let buf = d.path();
+        if !buf.is_dir() && buf.extension().is_some() && buf.extension().unwrap() != "pi" {
+            continue;
         }
+        let buf = PathBuf::from(d.path().file_stem().unwrap().to_str().unwrap());
+        let x = buf.file_name().unwrap().to_str().unwrap();
+        vmap.insert(
+            x.to_string(),
+            CompletionItem {
+                label: x.to_string(),
+                kind: Some(CompletionItemKind::MODULE),
+                ..Default::default()
+            },
+        );
     }
 }
 

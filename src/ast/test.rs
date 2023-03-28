@@ -34,7 +34,7 @@ mod test {
         A: Accumulator,
         dyn Db + 'db: HasJar<<A as Accumulator>::Jar>,
     {
-        let docs = MemDocs::new();
+        let docs = MemDocs::default();
         let pos = if let Some((pos, _)) = params {
             Some(pos)
         } else {
@@ -57,7 +57,7 @@ mod test {
     #[test]
     fn test_memory_leak() {
         let db = &mut Database::default();
-        let docs = MemDocs::new();
+        let docs = MemDocs::default();
         let params = Some((
             Pos {
                 line: 2,
@@ -442,7 +442,7 @@ mod test {
 
         use crate::ast::compiler::{compile, Options};
 
-        let docs = MemDocs::new();
+        let docs = MemDocs::default();
         let mut db = Database::default();
         let input = MemDocsInput::new(
             &db,

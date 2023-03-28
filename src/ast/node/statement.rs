@@ -59,7 +59,7 @@ impl Node for DefNode {
             if value.is_none() {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
             }
-            let tp = pltype_opt.clone().unwrap();
+            let tp = pltype_opt.unwrap();
             if pltype.is_none() {
                 ctx.push_type_hints(self.var.range, tp.clone());
                 pltype = Some(tp);
@@ -84,7 +84,7 @@ impl Node for DefNode {
             builder.build_dbg_location(self.var.range.start);
             builder.build_store(ptr2value, ctx.try_load2var(range, exp, builder)?);
         }
-        Ok((None, None, TerminatorEnum::NONE))
+        Ok((None, None, TerminatorEnum::None))
     }
 }
 #[node]
@@ -121,7 +121,7 @@ impl Node for AssignNode {
         }
         let load = ctx.try_load2var(exp_range, value.unwrap(), builder)?;
         builder.build_store(ptr.unwrap().value, load);
-        Ok((None, None, TerminatorEnum::NONE))
+        Ok((None, None, TerminatorEnum::None))
     }
 }
 
@@ -143,7 +143,7 @@ impl Node for EmptyNode {
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.emit_comment_highlight(&self.comments[0]);
-        Ok((None, None, TerminatorEnum::NONE))
+        Ok((None, None, TerminatorEnum::None))
     }
 }
 
@@ -171,7 +171,7 @@ impl Node for StatementsNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        let mut terminator = TerminatorEnum::NONE;
+        let mut terminator = TerminatorEnum::None;
         for m in self.statements.iter_mut() {
             if let NodeEnum::Empty(_) = **m {
                 continue;
@@ -201,16 +201,19 @@ impl Node for StatementsNode {
             let (_, _, terminator_res) = re.unwrap();
             terminator = terminator_res;
         }
-        for (v, (_, _, range, refs)) in &ctx.table {
-            if refs.borrow().len() <= 1 && v != "self" {
-                range
-                    .new_warn(WarnCode::UNUSED_VARIABLE)
-                    .add_label(
-                        *range,
-                        ctx.get_file(),
-                        format_label!("Unused variable `{}`", v),
-                    )
-                    .add_to_ctx(ctx);
+        for (v, symbol) in &ctx.table {
+            if let Some(refs) = &symbol.refs {
+                if refs.borrow().len() <= 1 && v != "self" {
+                    symbol
+                        .range
+                        .new_warn(WarnCode::UNUSED_VARIABLE)
+                        .add_label(
+                            symbol.range,
+                            ctx.get_file(),
+                            format_label!("Unused variable `{}`", v),
+                        )
+                        .add_to_ctx(ctx);
+                }
             }
         }
         Ok((None, None, terminator))

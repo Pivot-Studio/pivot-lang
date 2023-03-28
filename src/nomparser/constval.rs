@@ -23,11 +23,11 @@ pub fn number(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let (input, _) = space0(input)?;
     let (re, value) = alt((
         map_res(float, |out| {
-            Ok::<Num, ()>(Num::FLOAT(out.fragment().parse::<f64>().unwrap()))
+            Ok::<Num, ()>(Num::Float(out.fragment().parse::<f64>().unwrap()))
         }),
         map_res(decimal, |out| {
             // TODO:err tolerate
-            Ok::<Num, ()>(Num::INT(
+            Ok::<Num, ()>(Num::Int(
                 out.fragment().replace('_', "").parse::<u64>().unwrap(),
             ))
         }),

@@ -27,9 +27,9 @@ impl TraitBoundNode {
             return Err(ctx.add_diag(self.generic.range().new_err(ErrorCode::GENERIC_NOT_FOUND)));
         }
         let trait_pltype = self.impl_trait.get_type(ctx, builder)?;
-        if matches!(*trait_pltype.borrow(), PLType::TRAIT(_)) {
+        if matches!(*trait_pltype.borrow(), PLType::Trait(_)) {
             let generic_type = generic_map.get(&self.generic.name).unwrap();
-            if let PLType::GENERIC(generic_type) = &mut *generic_type.borrow_mut() {
+            if let PLType::Generic(generic_type) = &mut *generic_type.borrow_mut() {
                 generic_type.trait_impl = Some(trait_pltype);
                 return Ok(());
             }
@@ -75,7 +75,7 @@ impl Node for TraitDefNode {
         for method in &self.methods {
             method.emit_highlight(ctx);
         }
-        Ok((None, None, TerminatorEnum::NONE))
+        Ok((None, None, TerminatorEnum::None))
     }
 }
 
@@ -85,7 +85,7 @@ impl TraitDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) {
-        let stu = Arc::new(RefCell::new(PLType::TRAIT(STType {
+        let stu = Arc::new(RefCell::new(PLType::Trait(STType {
             generic_map: IndexMap::default(),
             name: self.id.name.clone(),
             path: ctx.plmod.path.clone(),
@@ -124,7 +124,7 @@ impl TraitDefNode {
         // pointer to real value
         order_fields.push(Field {
             index: i,
-            typenode: Box::new(TypeNodeEnum::PointerTypeNode(PointerTypeNode {
+            typenode: Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
                 elm: Box::new(TypeNameNode::new_from_str("i64").into()),
                 range: Default::default(),
             })),
@@ -175,7 +175,7 @@ impl TraitDefNode {
             ctx,
         );
         ctx.plmod.types = clone_map;
-        if let PLType::TRAIT(st) = &mut *pltype.borrow_mut() {
+        if let PLType::Trait(st) = &mut *pltype.borrow_mut() {
             st.fields = fields;
             st.ordered_fields = newf;
             st.derives = derives;
@@ -194,7 +194,7 @@ fn new_i64ptr_tf_with_name(n: &str) -> TypedIdentifierNode {
             name: n.to_string(),
             range: Default::default(),
         },
-        typenode: Box::new(TypeNodeEnum::PointerTypeNode(PointerTypeNode {
+        typenode: Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
             elm: Box::new(TypeNameNode::new_from_str("i64").into()),
             range: Default::default(),
         })),

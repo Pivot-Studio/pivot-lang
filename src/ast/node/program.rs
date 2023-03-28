@@ -1,3 +1,4 @@
+#![allow(clippy::too_many_arguments)]
 use super::function::FuncDefNode;
 use super::types::StructDefNode;
 use super::*;
@@ -85,7 +86,7 @@ impl Node for ProgramNode {
         });
         self.trait_impls.iter().for_each(|x| {
             let (struct_name, trait_name) = x;
-            ctx.plmod.add_impl(&struct_name, &trait_name)
+            ctx.plmod.add_impl(struct_name, trait_name)
         });
         // init global
         ctx.set_init_fn(builder);
@@ -101,7 +102,7 @@ impl Node for ProgramNode {
             _ = x.emit(ctx, builder);
         });
         ctx.init_fn_ret(builder);
-        Ok((None, None, TerminatorEnum::NONE))
+        Ok((None, None, TerminatorEnum::None))
     }
 }
 
@@ -302,14 +303,14 @@ impl Program {
                         .completions
                         .borrow()
                         .iter()
-                        .map(|x| x.into_completions())
+                        .map(|x| x.0.clone())
                         .collect(),
                 );
             }
             let hints = plmod.hints.borrow().clone();
-            Hints::push(db, *hints);
+            Hints::push(db, hints);
             let docs = plmod.doc_symbols.borrow().clone();
-            DocSymbols::push(db, *docs);
+            DocSymbols::push(db, docs);
         }
         match params.action(db) {
             ActionType::FindReferences => {
@@ -340,11 +341,9 @@ impl Program {
                 let range = pos.to(pos);
                 let res = plmod.defs.borrow();
                 let re = res.range((Unbounded, Included(&range))).last();
-                if let Some((range, res)) = re {
-                    if let LSPDef::Scalar(def) = res {
-                        if pos.is_in(*range) {
-                            GotoDef::push(db, GotoDefinitionResponse::Scalar(def.clone()));
-                        }
+                if let Some((range, LSPDef::Scalar(def))) = re {
+                    if pos.is_in(*range) {
+                        GotoDef::push(db, GotoDefinitionResponse::Scalar(def.clone()));
                     }
                 }
             }
@@ -379,7 +378,6 @@ impl Program {
         m
     }
 }
-
 #[salsa::tracked]
 pub struct ProgramEmitParam {
     pub node: ProgramNodeWrapper,
@@ -424,7 +422,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     let node = params.node(db);
     let mut nn = node.node(db);
     let mut builder = &builder.into();
-    let noop = NoOpBuilder::new();
+    let noop = NoOpBuilder::default();
     let noop = noop.into();
     if !params.params(db).is_compile(db) {
         log::info!("not in compile mode, using no-op builder");

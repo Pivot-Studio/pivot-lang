@@ -37,11 +37,11 @@ pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 .range()
                 .start
                 .to(ns.last().unwrap().range().end);
-            if opt.is_some() {
-                range = range.start.to(opt.unwrap().1.end);
+            if let Some(opt) = opt {
+                range = range.start.to(opt.1.end);
             }
-            if opt2.is_some() {
-                range = range.start.to(opt2.unwrap().1.end);
+            if let Some(opt2) = opt2 {
+                range = range.start.to(opt2.1.end);
             }
             res_enum(NodeEnum::UseNode(UseNode {
                 ids: ns,

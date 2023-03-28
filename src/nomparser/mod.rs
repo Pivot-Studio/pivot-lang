@@ -73,9 +73,9 @@ pub enum TopLevel {
 
 #[derive(Clone)]
 pub enum ComplexOp {
-    CallOp((Vec<Box<NodeEnum>>, Range, Option<Box<GenericParamNode>>)),
-    IndexOp(Box<NodeEnum>),
-    FieldOp(Option<Box<VarNode>>),
+    Call((Vec<Box<NodeEnum>>, Range, Option<Box<GenericParamNode>>)),
+    Index(Box<NodeEnum>),
+    Field(Option<Box<VarNode>>),
 }
 
 #[salsa::input]

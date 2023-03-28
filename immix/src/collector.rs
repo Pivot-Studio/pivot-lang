@@ -176,7 +176,7 @@ impl Collector {
                 .as_mut()
                 .unwrap()
                 .alloc(size, obj_type);
-            debug_assert!(ptr.is_null() == false);
+            debug_assert!(!ptr.is_null());
             ptr
         }
     }

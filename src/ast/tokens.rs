@@ -8,6 +8,7 @@ macro_rules! define_tokens {
     ),*) => {
         #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash)]
         #[allow(non_camel_case_types)]
+        #[allow(clippy::upper_case_acronyms)]
         pub enum TokenType {
             $($ident),*
         }

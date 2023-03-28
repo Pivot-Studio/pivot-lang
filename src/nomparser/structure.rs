@@ -1,3 +1,4 @@
+use crate::ast::node::types::StructField;
 use crate::nomparser::Span;
 use crate::{
     ast::node::types::StructDefNode,
@@ -65,7 +66,11 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                         f.0 .1.doc = Some(c);
                     }
                 }
-                fieldlist.push((f.0 .1.clone(), f.1.is_some(), f.0 .0));
+                fieldlist.push(StructField {
+                    id: f.0 .1.clone(),
+                    has_semi: f.1.is_some(),
+                    modifier: f.0 .0,
+                });
             }
             let mut docs = vec![];
             let mut precoms = vec![];

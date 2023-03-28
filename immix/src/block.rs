@@ -233,7 +233,7 @@ impl Block {
             // 未使用或者未标记
             if !self.line_map[idx].get_used()
                 || (self.line_map[idx] & 0b10 == 0 //即使标记位为0，也有可能是被标记的对象数据体
-                    && (!marked || (marked && self.line_map[idx] & 0b10000010 == 0b10000000)))
+                    && (!marked || self.line_map[idx] & 0b10000010 == 0b10000000))
             {
                 len += 1;
                 self.line_map[idx] &= 0;

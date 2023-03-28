@@ -51,7 +51,7 @@ const DW_ATE_SIGNED: u32 = 0x05;
 const DW_ATE_UNSIGNED: u32 = 0x07;
 static ID: AtomicI64 = AtomicI64::new(0);
 // const DW_TAG_REFERENCE_TYPE: u32 = 16;
-fn get_dw_ate_encoding<'a, 'ctx>(pritp: &PriType) -> u32 {
+fn get_dw_ate_encoding(pritp: &PriType) -> u32 {
     match pritp {
         PriType::I8 | PriType::I16 | PriType::I32 | PriType::I64 | PriType::I128 => DW_ATE_SIGNED,
         PriType::U8 | PriType::U16 | PriType::U32 | PriType::U64 | PriType::U128 => DW_ATE_UNSIGNED,
@@ -70,7 +70,7 @@ pub struct MemberType<'ctx> {
     pub ptr_depth: usize,
 }
 
-fn get_nth_mark_fn<'ctx>(f: FunctionValue<'ctx>, n: u32) -> CallableValue<'ctx> {
+fn get_nth_mark_fn(f: FunctionValue, n: u32) -> CallableValue {
     f.get_nth_param(n)
         .unwrap()
         .into_pointer_value()
@@ -217,7 +217,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 size_val,
             )
             .unwrap();
-        if let PLType::STRUCT(_) = pltype {
+        if let PLType::Struct(_) = pltype {
             let f = self.get_or_insert_st_visit_fn_handle(&p);
             let i = self.builder.build_ptr_to_int(
                 f.as_global_value().as_pointer_value(),
@@ -226,7 +226,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             );
             let vtable = self.builder.build_struct_gep(p, 0, "vtable").unwrap();
             self.builder.build_store(vtable, i);
-        } else if let PLType::ARR(tp) = pltype {
+        } else if let PLType::Arr(tp) = pltype {
             let f = self.gen_or_get_arr_visit_function(ctx, tp);
             let i = self.builder.build_ptr_to_int(
                 f.as_global_value().as_pointer_value(),
@@ -236,16 +236,16 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             let vtable = self.builder.build_struct_gep(p, 0, "vtable").unwrap();
             self.builder.build_store(vtable, i);
         }
-        declare.map(|p| {
+        if let Some(p) = declare {
             self.build_dbg_location(p);
             self.insert_var_declare(
                 name,
                 p,
-                &PLType::POINTER(Arc::new(RefCell::new(pltype.clone()))),
+                &PLType::Pointer(Arc::new(RefCell::new(pltype.clone()))),
                 self.get_llvm_value_handle(&stack_root.as_any_value_enum()),
                 ctx,
             );
-        });
+        }
         let v_stack = self.get_llvm_value_handle(&stack_root.as_any_value_enum());
         let v_heap = self.get_llvm_value_handle(&p.as_any_value_enum());
         self.heap_stack_map.borrow_mut().insert(v_heap, v_stack);
@@ -453,17 +453,17 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let visit_complex_f = get_nth_mark_fn(f, 3);
         let visit_trait_f = get_nth_mark_fn(f, 4);
         match &*v.element_type.borrow() {
-            PLType::ARR(_) | PLType::STRUCT(_) => {
+            PLType::Arr(_) | PLType::Struct(_) => {
                 // call the visit_complex function
                 self.builder
                     .build_call(visit_complex_f, &[visitor.into(), elm.into()], "call");
             }
-            PLType::POINTER(_) => {
+            PLType::Pointer(_) => {
                 // call the visit_ptr function
                 self.builder
                     .build_call(visit_ptr_f, &[visitor.into(), elm.into()], "call");
             }
-            PLType::TRAIT(_) => {
+            PLType::Trait(_) => {
                 // call the visit_trait function
                 self.builder
                     .build_call(visit_trait_f, &[visitor.into(), elm.into()], "call");
@@ -543,10 +543,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             false,
         );
         let fn_type = ftp;
-        let fn_value = self
-            .module
-            .add_function(&llvmname, fn_type, Some(Linkage::External));
-        fn_value
+        self.module
+            .add_function(&llvmname, fn_type, Some(Linkage::External))
     }
 
     fn get_fn_type(&self, fnvalue: &FNValue, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
@@ -585,7 +583,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     /// used in code generation
     fn get_basic_type_op(&self, pltp: &PLType, ctx: &mut Ctx<'a>) -> Option<BasicTypeEnum<'ctx>> {
         match pltp {
-            PLType::GENERIC(g) => match &g.curpltype {
+            PLType::Generic(g) => match &g.curpltype {
                 Some(pltype) => self.get_basic_type_op(&pltype.borrow(), ctx),
                 None => Some({
                     let name = &format!("__placeholder__{}", g.name);
@@ -601,23 +599,23 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         .into()
                 }),
             },
-            PLType::FN(f) => Some(
+            PLType::Fn(f) => Some(
                 self.get_fn_type(f, ctx)
                     .ptr_type(AddressSpace::default())
                     .as_basic_type_enum(),
             ),
-            PLType::STRUCT(s) => Some(self.struct_type(s, ctx).as_basic_type_enum()),
-            PLType::TRAIT(s) => Some(self.struct_type(s, ctx).as_basic_type_enum()),
-            PLType::ARR(a) => Some(self.arr_type(a, ctx)),
-            PLType::PRIMITIVE(t) => Some(self.get_pri_basic_type(t)),
-            PLType::VOID => None,
-            PLType::POINTER(p) => Some(
+            PLType::Struct(s) => Some(self.struct_type(s, ctx).as_basic_type_enum()),
+            PLType::Trait(s) => Some(self.struct_type(s, ctx).as_basic_type_enum()),
+            PLType::Arr(a) => Some(self.arr_type(a, ctx)),
+            PLType::Primitive(t) => Some(self.get_pri_basic_type(t)),
+            PLType::Void => None,
+            PLType::Pointer(p) => Some(
                 self.get_basic_type_op(&p.borrow(), ctx)
                     .unwrap()
                     .ptr_type(AddressSpace::default())
                     .as_basic_type_enum(),
             ),
-            PLType::PLACEHOLDER(p) => Some({
+            PLType::PlaceHolder(p) => Some({
                 let name = &format!("__placeholder__{}", p.name);
                 self.module
                     .get_struct_type(name)
@@ -636,8 +634,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     /// get the return type, which is void type or primitive type
     fn get_ret_type(&self, pltp: &PLType, ctx: &mut Ctx<'a>) -> RetTypeEnum<'ctx> {
         match pltp {
-            PLType::VOID => RetTypeEnum::VOID(self.context.void_type()),
-            _ => RetTypeEnum::BASIC(self.get_basic_type_op(pltp, ctx).unwrap()),
+            PLType::Void => RetTypeEnum::Void(self.context.void_type()),
+            _ => RetTypeEnum::Basic(self.get_basic_type_op(pltp, ctx).unwrap()),
         }
     }
     /// array type in fact is a struct with two fields,
@@ -674,7 +672,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .borrow_mut()
             .get(&*RefCell::borrow(&field_pltype).get_full_elm_name())
         {
-            if !matches!(*RefCell::borrow(&field_pltype), PLType::POINTER(_)) {
+            if !matches!(*RefCell::borrow(&field_pltype), PLType::Pointer(_)) {
                 // 出现循环引用，但是不是指针
                 // TODO 应该只需要一层是指针就行，目前的检查要求每一层都是指针
                 ctx.add_diag(field.range.new_err(ErrorCode::ILLEGAL_SELF_RECURSION));
@@ -720,17 +718,17 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     fn get_ditype(&self, pltp: &PLType, ctx: &mut Ctx<'a>) -> Option<DIType<'ctx>> {
         let td = self.targetmachine.get_target_data();
         match pltp {
-            PLType::FN(_) => self.get_ditype(&PLType::PRIMITIVE(PriType::I64), ctx),
-            PLType::GENERIC(g) => {
+            PLType::Fn(_) => self.get_ditype(&PLType::Primitive(PriType::I64), ctx),
+            PLType::Generic(g) => {
                 if g.curpltype.is_some() {
                     let pltype = g.curpltype.as_ref().unwrap();
                     self.get_ditype(&pltype.clone().borrow(), ctx)
                 } else {
-                    self.get_ditype(&PLType::PRIMITIVE(PriType::I64), ctx)
+                    self.get_ditype(&PLType::Primitive(PriType::I64), ctx)
                 }
             }
-            PLType::PLACEHOLDER(_) => self.get_ditype(&PLType::PRIMITIVE(PriType::I64), ctx),
-            PLType::ARR(arr) => {
+            PLType::PlaceHolder(_) => self.get_ditype(&PLType::Primitive(PriType::I64), ctx),
+            PLType::Arr(arr) => {
                 let elemdi = self.get_ditype(&arr.element_type.borrow(), ctx)?;
                 let etp = &self
                     .get_basic_type_op(&arr.element_type.borrow(), ctx)
@@ -739,7 +737,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let size = td.get_bit_size(etp) * arr.size as u64;
                 let align = td.get_preferred_alignment(etp);
                 let st_size = td.get_bit_size(&arr_st_tp);
-                let vtabledi = self.get_ditype(&PLType::PRIMITIVE(PriType::U64), ctx)?;
+                let vtabledi = self.get_ditype(&PLType::Primitive(PriType::U64), ctx)?;
                 let offset = td.offset_of_element(&arr_st_tp, 0).unwrap();
                 let vtabletp = self.dibuilder.create_member_type(
                     self.diunit.get_file().as_debug_info_scope(),
@@ -787,7 +785,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .as_type();
                 Some(st)
             }
-            PLType::STRUCT(x) | PLType::TRAIT(x) => {
+            PLType::Struct(x) | PLType::Trait(x) => {
                 let sttp = self.struct_type(x, ctx);
                 // 若已经生成过，直接查表返回
                 if RefCell::borrow(&self.ditypes).contains_key(&x.get_st_full_name()) {
@@ -876,7 +874,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 self.ditypes.borrow_mut().insert(x.get_st_full_name(), st);
                 Some(st)
             }
-            PLType::PRIMITIVE(pt) => {
+            PLType::Primitive(pt) => {
                 let mut size = td.get_bit_size(&self.get_pri_basic_type(pt));
                 if size < 8 {
                     size = 8; // walkaround for lldb <Unable to determine byte size.> issue
@@ -888,8 +886,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         .as_type(),
                 );
             }
-            PLType::VOID => None,
-            PLType::POINTER(p) => {
+            PLType::Void => None,
+            PLType::Pointer(p) => {
                 let elemdi = self.get_ditype(&p.borrow(), ctx)?;
                 let etp = &self
                     .get_basic_type_op(&p.borrow(), ctx)
@@ -916,10 +914,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             return v;
         }
         let fn_type = self.get_fn_type(pltp, ctx);
-        let fn_value = self
-            .module
-            .add_function(&llvmname, fn_type, Some(Linkage::External));
-        fn_value
+        self.module
+            .add_function(&llvmname, fn_type, Some(Linkage::External))
     }
     fn struct_type(&self, pltp: &STType, ctx: &mut Ctx<'a>) -> StructType<'ctx> {
         let st = self.module.get_struct_type(&pltp.get_st_full_name());
@@ -1527,7 +1523,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         for para in paralist.iter() {
             let pltype = para.typenode.get_type(child, &self.clone().into())?;
             match &*pltype.borrow() {
-                PLType::VOID => {
+                PLType::Void => {
                     return Err(child
                         .add_diag(para.range.new_err(ErrorCode::VOID_TYPE_CANNOT_BE_PARAMETER)))
                 }
@@ -1571,6 +1567,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.builder.build_return(None);
         }
     }
+    #[allow(clippy::too_many_arguments)]
     fn create_parameter_variable(
         &self,
         fnvalue: &FNValue,
@@ -1588,7 +1585,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.diunit.get_file(),
             pos.line as u32,
             self.get_ditype(
-                &PLType::POINTER(
+                &PLType::Pointer(
                     fnvalue.fntype.param_pltypes[i]
                         .get_type(child, &self.clone().into())
                         .unwrap(),
@@ -1699,28 +1696,28 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             let visit_trait_f = get_nth_mark_fn(f, 4);
             let f = self.builder.build_struct_gep(st, i, "gep").unwrap();
             // 指针类型，递归调用visit函数
-            if let PLType::POINTER(_) = field_pltp {
+            if let PLType::Pointer(_) = field_pltp {
                 let ptr = f;
                 let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
                 self.builder
                     .build_call(visit_ptr_f, &[visitor.into(), casted.into()], "call");
             }
             // 数组类型，递归调用visit函数
-            else if let PLType::ARR(_) = field_pltp {
+            else if let PLType::Arr(_) = field_pltp {
                 let ptr = f;
                 let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
                 self.builder
                     .build_call(visit_complex_f, &[visitor.into(), casted.into()], "call");
             }
             // 结构体类型，递归调用visit函数
-            else if let PLType::STRUCT(_) = field_pltp {
+            else if let PLType::Struct(_) = field_pltp {
                 let ptr = f;
                 let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
                 self.builder
                     .build_call(visit_complex_f, &[visitor.into(), casted.into()], "call");
             }
             // trait类型，递归调用visit函数
-            else if let PLType::TRAIT(_) = field_pltp {
+            else if let PLType::Trait(_) = field_pltp {
                 let ptr = f;
                 let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
                 self.builder
