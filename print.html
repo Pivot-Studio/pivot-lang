@@ -807,7 +807,7 @@ pub trait RangeTrait {
         ctx.position_at_end(cond_block, builder);
         let condrange = self.cond.range();
         let (cond, pltype, _) = self.cond.emit(ctx, builder)?;
-        if pltype.is_none() || !pltype.clone().unwrap().borrow().is(&amp;PriType::BOOL) {
+        if pltype.is_none() || !pltype.unwrap().borrow().is(&amp;PriType::BOOL) {
             return Err(ctx.add_diag(
                 condrange
                     .new_err(ErrorCode::IF_CONDITION_MUST_BE_BOOL)
@@ -832,13 +832,13 @@ pub trait RangeTrait {
                 builder.build_unconditional_branch(after_block);
             }
             if then_terminator.is_return() &amp;&amp; else_terminator.is_return() {
-                TerminatorEnum::RETURN
+                TerminatorEnum::Return
             } else {
-                TerminatorEnum::NONE
+                TerminatorEnum::None
             }
         } else {
             builder.build_unconditional_branch(after_block);
-            TerminatorEnum::NONE
+            TerminatorEnum::None
         };
         ctx.position_at_end(after_block, builder);
         if terminator.is_return() {
@@ -917,7 +917,7 @@ ProgramNode
        let mut graphs = vec![];
        for func in &amp;self.fntypes {
            if let Some(body) = func.body.clone() {
-               let graph = from_ast(Box::new(NodeEnum::STS(body)));
+               let graph = from_ast(Box::new(NodeEnum::Sts(body)));
                graphs.push(GraphWrapper {
                    name: func
                        .id
@@ -953,7 +953,7 @@ ProgramNode
 }</code></pre>
 <p>主要介绍构建图的环节。</p>
 <p>定义图的 <code>节点</code> 与 <code>边</code> ：</p>
-<pre><code class="language-rust no_run noplayground">#[derive(Debug, Clone, PartialEq)]
+<pre><code class="language-rust no_run noplayground">#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GraphNodeType {
    Dummy,               // 虚节点
    Begin,               // 起点

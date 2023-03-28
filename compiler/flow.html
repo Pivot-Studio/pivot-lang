@@ -173,7 +173,7 @@
        let mut graphs = vec![];
        for func in &amp;self.fntypes {
            if let Some(body) = func.body.clone() {
-               let graph = from_ast(Box::new(NodeEnum::STS(body)));
+               let graph = from_ast(Box::new(NodeEnum::Sts(body)));
                graphs.push(GraphWrapper {
                    name: func
                        .id
@@ -209,7 +209,7 @@
 }</code></pre>
 <p>主要介绍构建图的环节。</p>
 <p>定义图的 <code>节点</code> 与 <code>边</code> ：</p>
-<pre><code class="language-rust no_run noplayground">#[derive(Debug, Clone, PartialEq)]
+<pre><code class="language-rust no_run noplayground">#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GraphNodeType {
    Dummy,               // 虚节点
    Begin,               // 起点
