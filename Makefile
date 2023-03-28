@@ -13,6 +13,7 @@ vm:
 	@cd vm && cargo build --release
 
 vmdebug:
+	@mkdir -p target/release
 	@cd vm && cargo build
 	@cp target/debug/libvm.a target/release/libvm.a
 

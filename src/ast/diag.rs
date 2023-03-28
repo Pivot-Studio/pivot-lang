@@ -131,9 +131,16 @@ macro_rules! define_warn {
             };
         }
     };
+    ($(
+        $ident:ident = $string_keyword:expr
+    ),*,) => {
+        define_warn!($($ident = $string_keyword),*);
+    };
 }
 define_warn! {
-    UNREACHABLE_STATEMENT= "unreachable statement"
+    UNREACHABLE_STATEMENT= "unreachable statement",
+    UNUSED_VARIABLE = "unused variable",
+    UNUSED_FUNCTION = "unused function",
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -156,7 +163,7 @@ impl Display for DiagCode {
     }
 }
 
-use lsp_types::{Diagnostic, DiagnosticSeverity, Url};
+use lsp_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag, Url};
 
 use crate::Db;
 
@@ -204,11 +211,23 @@ impl PLDiag {
         )
         .with_code(self.raw.code)
         .with_message(self.get_msg());
-        let labels = vec![PLLabel {
-            range: self.raw.range,
-            file: path.to_string(),
-            txt: Some(("here".to_string(), vec![])),
-        }];
+        let mut labels = vec![];
+        self.raw
+            .labels
+            .iter()
+            .find(|label| {
+                label.range.start == self.raw.range.start
+                    && self.raw.range.end == label.range.end
+                    && label.file == path
+            })
+            .or_else(|| {
+                labels.push(PLLabel {
+                    range: self.raw.range,
+                    file: path.to_string(),
+                    txt: Some(("here".to_string(), vec![])),
+                });
+                None
+            });
 
         for label in labels.iter().chain(self.raw.labels.iter()) {
             let color = colors.next();
@@ -269,13 +288,22 @@ impl PLDiag {
                 Some(PL_DIAG_SOURCE.to_string()),
                 ERR_MSG[&code].to_string(),
             ),
-            DiagCode::Warn(code) => Diagnostic::new_with_code_number(
-                self.raw.range.to_diag_range(),
-                DiagnosticSeverity::WARNING,
-                code as i32,
-                Some(PL_DIAG_SOURCE.to_string()),
-                WARN_MSG[&code].to_string(),
-            ),
+            DiagCode::Warn(code) => {
+                let mut warn = Diagnostic::new_with_code_number(
+                    self.raw.range.to_diag_range(),
+                    DiagnosticSeverity::WARNING,
+                    code as i32,
+                    Some(PL_DIAG_SOURCE.to_string()),
+                    WARN_MSG[&code].to_string(),
+                );
+                if code == WarnCode::UNUSED_FUNCTION
+                    || code == WarnCode::UNUSED_VARIABLE
+                    || code == WarnCode::UNREACHABLE_STATEMENT
+                {
+                    warn.tags = Some(vec![DiagnosticTag::UNNECESSARY]);
+                }
+                warn
+            }
         };
         let mut labels = vec![];
         self.raw.labels.iter().for_each(|label| {

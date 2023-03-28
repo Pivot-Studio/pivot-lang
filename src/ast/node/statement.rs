@@ -4,6 +4,7 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
+use crate::format_label;
 
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
@@ -180,9 +181,15 @@ impl Node for StatementsNode {
                     ctx.push_semantic_token(c.range, SemanticTokenType::COMMENT, 0);
                     continue;
                 }
-                ctx.add_diag(m.range().new_warn(WarnCode::UNREACHABLE_STATEMENT).add_help(
-                    "This statement will never be executed, because the previous statements contains a terminator. Try to remove it.",
-                ).clone());
+                ctx.add_diag(
+                    m.range()
+                        .new_warn(WarnCode::UNREACHABLE_STATEMENT)
+                        .add_help(
+                            "This statement will never be executed, because the previous \
+                            statements contains a terminator. Try to remove it.",
+                        )
+                        .clone(),
+                );
                 continue;
             }
             let pos = m.range().start;
@@ -194,9 +201,21 @@ impl Node for StatementsNode {
             let (_, _, terminator_res) = re.unwrap();
             terminator = terminator_res;
         }
-        // for root in ctx.roots.clone().borrow().iter() {
-        //     // builder.gc_rm_root(*root, ctx)
-        // }
+        for (v, symbol) in &ctx.table {
+            if let Some(refs) = &symbol.refs {
+                if refs.borrow().len() <= 1 && v != "self" {
+                    symbol
+                        .range
+                        .new_warn(WarnCode::UNUSED_VARIABLE)
+                        .add_label(
+                            symbol.range,
+                            ctx.get_file(),
+                            format_label!("Unused variable `{}`", v),
+                        )
+                        .add_to_ctx(ctx);
+                }
+            }
+        }
         Ok((None, None, terminator))
     }
 }
