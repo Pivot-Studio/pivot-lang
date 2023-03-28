@@ -1,5 +1,5 @@
 use log::{Record, Metadata,LevelFilter};
-use std::{env::{self}, str::FromStr};
+use std::{env::{self}, str::FromStr,time::{SystemTime, UNIX_EPOCH}};
 
 pub struct SimpleLogger{
     log_limit: LevelFilter
@@ -31,7 +31,6 @@ impl SimpleLogger{
     // fn init(logger:Self) {
     //     Self::init_default_max_level(logger,LevelFilter::Trace);
     // }
-
 
     fn init_default_max_level(logger: Self) {
         match log::set_boxed_logger(Box::new(logger)){
@@ -75,10 +74,164 @@ impl log::Log for SimpleLogger {
     fn flush(&self) {}
 }
 
+pub struct DateTime{
+    year: u64,
+    month: u64,
+    day: u64,
+    hour: u64,
+    minute: u64,
+    second: u64
+}
+impl DateTime{
+
+    pub fn get_now_date() -> Self{
+        match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(secs_since_unix)=>{
+                let seconds = secs_since_unix.as_secs();
+                Self::from_days_since_unix(seconds)
+            }
+            Err(_)=>{
+                Self::new_unix_date_utc0()
+            }
+        }
+    }
+
+    ///
+    /// used to calculate the date using given *seconds* param
+    /// the seconds is given to tell the duration since std::time::UNIX_EPOCH
+    pub fn from_days_since_unix(seconds : u64) -> Self{
+        const SECONDS_PER_DAY :u64 = 86400;
+        let mut seconds = Self::apply_utc(seconds);
+        let mut days = seconds/SECONDS_PER_DAY;
+        seconds %= SECONDS_PER_DAY;
+
+        let mut result_date = Self::new_unix_date_utc0();
+
+        while days>0{
+            let next_year_days = Self::get_days_this_year(&result_date);
+            let next_month_days = Self::get_days_this_month(&result_date);
+            if days >= next_year_days {
+                result_date.year += 1;
+                days -= next_year_days;
+            } else if days >= next_month_days{
+                result_date.month+= 1;
+                days-= next_month_days;
+            } else {
+                result_date.day += days;
+                days = 0;
+            }
+        }
+
+        Self::fill_within_day(&mut result_date,seconds);
+
+        result_date
+    }
+
+    ///
+    /// return a standard date at std::time::UNIX_EPOCH
+    fn new_unix_date_utc0()-> Self{
+        DateTime{
+            year:1970,
+            month:1,
+            day:1,
+            hour:0,
+            minute:0,
+            second:0,
+        }
+    }
+
+    ///
+    ///  set default utc to utc+8
+    ///  remain this function to apply to multi-TimeZone
+    fn get_utc()->u64{
+        8
+    }
+
+    ///
+    /// using the seconds remain to update date in a day
+    fn fill_within_day(date: &mut DateTime,mut seconds : u64){
+        const SECONDS_PER_HOUR :u64 = 3600;
+        const SECONDS_PER_MINUTE :u64 = 60;
+        
+        let hours = seconds/SECONDS_PER_HOUR;
+        date.hour += hours;
+        seconds %= SECONDS_PER_HOUR;
+
+        let minutes = seconds/SECONDS_PER_MINUTE;
+        date.minute += minutes;
+        seconds %= SECONDS_PER_MINUTE;
+
+        date.second = seconds;
+
+    }
+
+    ///
+    /// judge if the year is a leap year
+    pub fn is_leap_year(year: u64)-> bool{
+        if year%400==0 {
+            // while every four hundreds leaps
+            true
+        } else if year % 100 ==0 {
+            // but hundreds not
+            false
+        } else if year % 4 ==0 {
+            // every four year leaps
+            true
+        } else {
+            false
+        }
+    }
+
+    ///
+    /// get the total days in this year
+    fn get_days_this_year(date: &DateTime)-> u64{
+        if Self::is_leap_year(date.year){
+            366
+        } else {
+            365
+        }
+    }
+
+    ///
+    /// get the total days in this month
+    fn get_days_this_month(date: &DateTime)->u64{
+        match date.month {
+            1=>31,
+            2=>{
+                if Self::is_leap_year(date.year) {
+                    29
+                } else {
+                    28
+                }
+            },
+            3=>31,
+            4=>30,
+            5=>31,
+            6=>30,
+            7=>31,
+            8=>31,
+            9=>30,
+            10=>31,
+            11=>30,
+            12=>31,
+            _=>0
+        }
+    }
+
+    ///
+    /// apply the local system time with utc time zone
+    /// take the original system time seconds and 
+    fn apply_utc(secs : u64)-> u64{        
+        const SECONDS_PER_HOUR :u64 = 3600;
+        Self::get_utc()*SECONDS_PER_HOUR + secs 
+    }
+}
+
 #[cfg(test)]
 pub mod tests{
-    use crate::logger::SimpleLogger;
+    use crate::logger::{SimpleLogger,DateTime};
     use log::{self, info, error, warn};
+    use std::time::{SystemTime, UNIX_EPOCH,Duration};
     #[test]
     fn test_logger(){
         SimpleLogger::init_from_env_default( "GC_LOG",log::LevelFilter::Error);
@@ -104,6 +257,20 @@ pub mod tests{
         let _d = log::logger();
         let _e = log::logger();
         a.flush();
+    }
+
+    #[test]
+    fn test_std_time(){
+        println!("{:?}",SystemTime::now());
+        println!("{:?}",UNIX_EPOCH);
+        println!("{:?}",UNIX_EPOCH+Duration::from_secs(800 * 86400));
+    }
+
+    #[test]
+    fn test_from_days(){
+        let secs = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        let date = DateTime::from_days_since_unix(secs);
+        println!("{}.{}.{}  {}h{}m{}s, {}secs passed",date.year,date.month,date.day,date.hour,date.minute,date.second,secs);
     }
 }
 
