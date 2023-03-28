@@ -44,7 +44,7 @@ impl Node for IfNode {
         ctx.position_at_end(cond_block, builder);
         let condrange = self.cond.range();
         let (cond, pltype, _) = self.cond.emit(ctx, builder)?;
-        if pltype.is_none() || !pltype.clone().unwrap().borrow().is(&PriType::BOOL) {
+        if pltype.is_none() || !pltype.unwrap().borrow().is(&PriType::BOOL) {
             return Err(ctx.add_diag(
                 condrange
                     .new_err(ErrorCode::IF_CONDITION_MUST_BE_BOOL)
@@ -69,13 +69,13 @@ impl Node for IfNode {
                 builder.build_unconditional_branch(after_block);
             }
             if then_terminator.is_return() && else_terminator.is_return() {
-                TerminatorEnum::RETURN
+                TerminatorEnum::Return
             } else {
-                TerminatorEnum::NONE
+                TerminatorEnum::None
             }
         } else {
             builder.build_unconditional_branch(after_block);
-            TerminatorEnum::NONE
+            TerminatorEnum::None
         };
         ctx.position_at_end(after_block, builder);
         if terminator.is_return() {
@@ -120,7 +120,7 @@ impl Node for WhileNode {
         let condrange = self.cond.range();
         let start = self.cond.range().start;
         let (cond, pltype, _) = self.cond.emit(ctx, builder)?;
-        if pltype.is_none() || !pltype.clone().unwrap().borrow().is(&PriType::BOOL) {
+        if pltype.is_none() || !pltype.unwrap().borrow().is(&PriType::BOOL) {
             return Err(ctx.add_diag(condrange.new_err(ErrorCode::WHILE_CONDITION_MUST_BE_BOOL)));
         }
         let cond = ctx.try_load2var(condrange, cond.unwrap(), builder)?;
@@ -136,9 +136,9 @@ impl Node for WhileNode {
             None,
             None,
             if terminator.is_return() {
-                TerminatorEnum::RETURN
+                TerminatorEnum::Return
             } else {
-                TerminatorEnum::NONE
+                TerminatorEnum::None
             },
         ))
     }
@@ -194,7 +194,7 @@ impl Node for ForNode {
         let condrange = self.cond.range();
         let cond_start = self.cond.range().start;
         let (cond, pltype, _) = self.cond.emit(ctx, builder)?;
-        if pltype.is_none() || !pltype.clone().unwrap().borrow().is(&PriType::BOOL) {
+        if pltype.is_none() || !pltype.unwrap().borrow().is(&PriType::BOOL) {
             return Err(ctx.add_diag(condrange.new_err(ErrorCode::FOR_CONDITION_MUST_BE_BOOL)));
         }
         let cond = ctx.try_load2var(condrange, cond.unwrap(), builder)?;
@@ -217,9 +217,9 @@ impl Node for ForNode {
             None,
             None,
             if terminator.is_return() {
-                TerminatorEnum::RETURN
+                TerminatorEnum::Return
             } else {
-                TerminatorEnum::NONE
+                TerminatorEnum::None
             },
         ))
     }
@@ -250,7 +250,7 @@ impl Node for BreakNode {
             let err = ctx.add_diag(self.range.new_err(ErrorCode::BREAK_MUST_BE_IN_LOOP));
             return Err(err);
         }
-        Ok((None, None, TerminatorEnum::BREAK))
+        Ok((None, None, TerminatorEnum::Break))
     }
 }
 
@@ -278,6 +278,6 @@ impl Node for ContinueNode {
             let err = ctx.add_diag(self.range.new_err(ErrorCode::CONTINUE_MUST_BE_IN_LOOP));
             return Err(err);
         }
-        Ok((None, None, TerminatorEnum::CONTINUE))
+        Ok((None, None, TerminatorEnum::Continue))
     }
 }

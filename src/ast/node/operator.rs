@@ -50,21 +50,21 @@ impl Node for UnaryOpNode {
         let exp = ctx.try_load2var(exp_range, exp.unwrap(), builder)?;
         return Ok(match (&*pltype.borrow(), self.op.0) {
             (
-                PLType::PRIMITIVE(
+                PLType::Primitive(
                     PriType::I128 | PriType::I64 | PriType::I32 | PriType::I16 | PriType::I8,
                 ),
                 TokenType::MINUS,
             ) => (
                 Some(plv!(builder.build_int_neg(exp, "negtmp"))),
                 Some(pltype.clone()),
-                TerminatorEnum::NONE,
+                TerminatorEnum::None,
             ),
-            (PLType::PRIMITIVE(PriType::F64 | PriType::F32), TokenType::MINUS) => (
+            (PLType::Primitive(PriType::F64 | PriType::F32), TokenType::MINUS) => (
                 Some(plv!(builder.build_float_neg(exp, "negtmp"))),
                 Some(pltype.clone()),
-                TerminatorEnum::NONE,
+                TerminatorEnum::None,
             ),
-            (PLType::PRIMITIVE(PriType::BOOL), TokenType::NOT) => (
+            (PLType::Primitive(PriType::BOOL), TokenType::NOT) => (
                 {
                     let bool_origin = builder.build_int_compare(
                         IntPredicate::EQ,
@@ -80,7 +80,7 @@ impl Node for UnaryOpNode {
                     Some(plv!(bool_origin))
                 },
                 Some(pltype.clone()),
-                TerminatorEnum::NONE,
+                TerminatorEnum::None,
             ),
             (_exp, _op) => {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::INVALID_UNARY_EXPRESSION)));
@@ -122,7 +122,7 @@ impl Node for BinOpNode {
         let left = ctx.try_load2var(lrange, lv.unwrap(), builder)?;
         if self.op.0 == TokenType::AND || self.op.0 == TokenType::OR {
             return Ok(match *lpltype.clone().unwrap().borrow() {
-                PLType::PRIMITIVE(PriType::BOOL) => (
+                PLType::Primitive(PriType::BOOL) => (
                     {
                         // and: left && right
                         // or : left || right
@@ -158,7 +158,7 @@ impl Node for BinOpNode {
                         // merge bb
                         builder.position_at_end_block(merge_bb);
                         let phi = builder.build_phi(
-                            &PLType::PRIMITIVE(PriType::BOOL),
+                            &PLType::Primitive(PriType::BOOL),
                             ctx,
                             &[(left, incoming_bb1), (right, incoming_bb2)],
                         );
@@ -169,8 +169,8 @@ impl Node for BinOpNode {
                         // )))
                         Some(plv!(phi))
                     },
-                    Some(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
-                    TerminatorEnum::NONE,
+                    Some(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL)))),
+                    TerminatorEnum::None,
                 ),
                 _ => {
                     return Err(ctx
@@ -210,7 +210,7 @@ impl Node for BinOpNode {
             | TokenType::GEQ
             | TokenType::GREATER
             | TokenType::LESS => match *lpltype.unwrap().borrow() {
-                PLType::PRIMITIVE(
+                PLType::Primitive(
                     PriType::I128
                     | PriType::I64
                     | PriType::I32
@@ -232,10 +232,10 @@ impl Node for BinOpNode {
                         // )))
                         Some(plv!(bool_origin))
                     },
-                    Some(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
-                    TerminatorEnum::NONE,
+                    Some(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL)))),
+                    TerminatorEnum::None,
                 ),
-                PLType::PRIMITIVE(PriType::F64 | PriType::F32) => (
+                PLType::Primitive(PriType::F64 | PriType::F32) => (
                     {
                         let bool_origin =
                             builder.build_float_compare(self.op.0.get_fop(), left, right, "cmptmp");
@@ -246,8 +246,8 @@ impl Node for BinOpNode {
                         // )))
                         Some(plv!(bool_origin))
                     },
-                    Some(Arc::new(RefCell::new(PLType::PRIMITIVE(PriType::BOOL)))),
-                    TerminatorEnum::NONE,
+                    Some(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL)))),
+                    TerminatorEnum::None,
                 ),
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::VALUE_NOT_COMPARABLE))),
             },
@@ -294,8 +294,8 @@ impl Node for TakeOpNode {
         }
         let head_pltype = get_type_deep(pltype.unwrap());
         if !matches!(
-            &*head_pltype.clone().borrow(),
-            PLType::STRUCT(_) | PLType::POINTER(_) | PLType::TRAIT(_)
+            &*head_pltype.borrow(),
+            PLType::Struct(_) | PLType::Pointer(_) | PLType::Trait(_)
         ) {
             return Err(ctx.add_diag(
                 self.head
@@ -306,9 +306,9 @@ impl Node for TakeOpNode {
         if self.field.is_none() {
             // end with ".", gen completions
             ctx.if_completion(self.range, || {
-                match &*ctx.auto_deref_tp(head_pltype).clone().borrow() {
-                    PLType::STRUCT(s) => s.get_completions(ctx),
-                    PLType::TRAIT(s) => s.get_trait_completions(ctx),
+                match &*ctx.auto_deref_tp(head_pltype).borrow() {
+                    PLType::Struct(s) => s.get_completions(ctx),
+                    PLType::Trait(s) => s.get_trait_completions(ctx),
                     _ => vec![],
                 }
             });
@@ -318,12 +318,12 @@ impl Node for TakeOpNode {
         let id_range = id.range();
         let (head_pltype, headptr) = ctx.auto_deref(head_pltype, plvalue.unwrap().value, builder);
         match &*head_pltype.clone().borrow() {
-            PLType::TRAIT(s) => {
+            PLType::Trait(s) => {
                 let field = s.fields.get(&id.name);
                 if let Some(field) = field {
                     _ = s.expect_field_pub(ctx, field, id_range);
                     ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
-                    ctx.set_field_refs(head_pltype.clone(), field, id_range);
+                    ctx.set_field_refs(head_pltype, field, id_range);
                     ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
                     let re = field.typenode.get_type(ctx, builder)?;
                     let fnv = builder
@@ -340,23 +340,23 @@ impl Node for TakeOpNode {
                             receiver: Some((headptr, None)),
                         }),
                         Some(re),
-                        TerminatorEnum::NONE,
+                        TerminatorEnum::None,
                     ));
                 }
-                return Err(ctx.add_diag(id.range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND)));
+                Err(ctx.add_diag(id.range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND)))
             }
-            PLType::STRUCT(s) => {
+            PLType::Struct(s) => {
                 if let Some(field) = s.fields.get(&id.name) {
                     _ = s.expect_field_pub(ctx, field, id_range);
                     ctx.push_semantic_token(id_range, SemanticTokenType::PROPERTY, 0);
-                    ctx.set_field_refs(head_pltype.clone(), field, id_range);
+                    ctx.set_field_refs(head_pltype, field, id_range);
                     ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
                     return Ok((
                         Some(plv!(builder
                             .build_struct_gep(headptr, field.index, "structgep")
                             .unwrap())),
                         Some(field.typenode.get_type(ctx, builder)?),
-                        TerminatorEnum::NONE,
+                        TerminatorEnum::None,
                     ));
                 }
                 if let Some(mthd) = s.find_method(ctx, &id.name) {
@@ -373,22 +373,20 @@ impl Node for TakeOpNode {
                             is_const: false,
                             receiver: Some((
                                 headptr,
-                                Some(Arc::new(RefCell::new(PLType::POINTER(head_pltype)))),
+                                Some(Arc::new(RefCell::new(PLType::Pointer(head_pltype)))),
                             )),
                         }),
-                        Some(Arc::new(RefCell::new(PLType::FN(mthd)))),
-                        TerminatorEnum::NONE,
+                        Some(Arc::new(RefCell::new(PLType::Fn(mthd)))),
+                        TerminatorEnum::None,
                     ));
                 };
-                return Err(ctx.add_diag(id.range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND)));
+                Err(ctx.add_diag(id.range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND)))
             }
-            _ => {
-                return Err(ctx.add_diag(
-                    self.head
-                        .range()
-                        .new_err(ErrorCode::ILLEGAL_GET_FIELD_OPERATION),
-                ))
-            }
+            _ => Err(ctx.add_diag(
+                self.head
+                    .range()
+                    .new_err(ErrorCode::ILLEGAL_GET_FIELD_OPERATION),
+            )),
         }
     }
 }

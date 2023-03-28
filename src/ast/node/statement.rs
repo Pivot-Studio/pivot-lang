@@ -4,6 +4,7 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
+use crate::format_label;
 
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
@@ -58,7 +59,7 @@ impl Node for DefNode {
             if value.is_none() {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
             }
-            let tp = pltype_opt.clone().unwrap();
+            let tp = pltype_opt.unwrap();
             if pltype.is_none() {
                 ctx.push_type_hints(self.var.range, tp.clone());
                 pltype = Some(tp);
@@ -83,7 +84,7 @@ impl Node for DefNode {
             builder.build_dbg_location(self.var.range.start);
             builder.build_store(ptr2value, ctx.try_load2var(range, exp, builder)?);
         }
-        Ok((None, None, TerminatorEnum::NONE))
+        Ok((None, None, TerminatorEnum::None))
     }
 }
 #[node]
@@ -120,7 +121,7 @@ impl Node for AssignNode {
         }
         let load = ctx.try_load2var(exp_range, value.unwrap(), builder)?;
         builder.build_store(ptr.unwrap().value, load);
-        Ok((None, None, TerminatorEnum::NONE))
+        Ok((None, None, TerminatorEnum::None))
     }
 }
 
@@ -142,7 +143,7 @@ impl Node for EmptyNode {
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.emit_comment_highlight(&self.comments[0]);
-        Ok((None, None, TerminatorEnum::NONE))
+        Ok((None, None, TerminatorEnum::None))
     }
 }
 
@@ -170,7 +171,7 @@ impl Node for StatementsNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        let mut terminator = TerminatorEnum::NONE;
+        let mut terminator = TerminatorEnum::None;
         for m in self.statements.iter_mut() {
             if let NodeEnum::Empty(_) = **m {
                 continue;
@@ -180,9 +181,15 @@ impl Node for StatementsNode {
                     ctx.push_semantic_token(c.range, SemanticTokenType::COMMENT, 0);
                     continue;
                 }
-                ctx.add_diag(m.range().new_warn(WarnCode::UNREACHABLE_STATEMENT).add_help(
-                    "This statement will never be executed, because the previous statements contains a terminator. Try to remove it.",
-                ).clone());
+                ctx.add_diag(
+                    m.range()
+                        .new_warn(WarnCode::UNREACHABLE_STATEMENT)
+                        .add_help(
+                            "This statement will never be executed, because the previous \
+                            statements contains a terminator. Try to remove it.",
+                        )
+                        .clone(),
+                );
                 continue;
             }
             let pos = m.range().start;
@@ -194,9 +201,21 @@ impl Node for StatementsNode {
             let (_, _, terminator_res) = re.unwrap();
             terminator = terminator_res;
         }
-        // for root in ctx.roots.clone().borrow().iter() {
-        //     // builder.gc_rm_root(*root, ctx)
-        // }
+        for (v, symbol) in &ctx.table {
+            if let Some(refs) = &symbol.refs {
+                if refs.borrow().len() <= 1 && v != "self" {
+                    symbol
+                        .range
+                        .new_warn(WarnCode::UNUSED_VARIABLE)
+                        .add_label(
+                            symbol.range,
+                            ctx.get_file(),
+                            format_label!("Unused variable `{}`", v),
+                        )
+                        .add_to_ctx(ctx);
+                }
+            }
+        }
         Ok((None, None, terminator))
     }
 }

@@ -130,9 +130,7 @@ pub fn res_box<T: ?Sized>(i: Box<T>) -> Result<Box<T>, ()> {
     Ok::<_, ()>(i)
 }
 
-pub fn create_bin(
-    (mut left, rights): (Box<NodeEnum>, Vec<((TokenType, Range), Box<NodeEnum>)>),
-) -> Result<Box<NodeEnum>, ()> {
+pub fn create_bin((mut left, rights): PLBin) -> Result<Box<NodeEnum>, ()> {
     for ((op, orange), right) in rights {
         let range = left.range().start.to(right.range().end);
         left = Box::new(
@@ -147,3 +145,4 @@ pub fn create_bin(
     }
     res_box(left)
 }
+type PLBin = (Box<NodeEnum>, Vec<((TokenType, Range), Box<NodeEnum>)>);

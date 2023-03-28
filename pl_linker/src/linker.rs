@@ -226,13 +226,7 @@ impl Linker for Ld64Linker {
             // use ld for default linker, as lld has a bug affcting backtrace on arm64 target
             // https://github.com/rust-lang/backtrace-rs/issues/150
             let re = Command::new("ld").args(&self.args).output();
-            if re.is_err() {
-                println!("ld not found, try to link with lld, this may break gc(https://github.com/rust-lang/backtrace-rs/issues/150)");
-                lld_rs::link(lld_rs::LldFlavor::MachO, &self.args)
-                    .ok()
-                    .map_err(LinkerError::LinkError)
-            } else {
-                let re = re.unwrap();
+            if let Ok(re) = re {
                 if !re.status.success() {
                     eprintln!(
                         "link failed\nargs: {:?}\nld stdout: {}, stderr: {}",
@@ -244,6 +238,11 @@ impl Linker for Ld64Linker {
                 } else {
                     Ok(())
                 }
+            } else {
+                println!("ld not found, try to link with lld, this may break gc(https://github.com/rust-lang/backtrace-rs/issues/150)");
+                lld_rs::link(lld_rs::LldFlavor::MachO, &self.args)
+                    .ok()
+                    .map_err(LinkerError::LinkError)
             }
         } else {
             lld_rs::link(lld_rs::LldFlavor::MachO, &self.args)
@@ -319,14 +318,7 @@ impl Linker for MsvcLinker {
         let re = Command::new(linker.expect("failed to find link.exe"))
             .args(&self.args)
             .output();
-
-        if re.is_err() {
-            return Err(LinkerError::LinkError(format!(
-                "link failed: {:?}",
-                re.err()
-            )));
-        } else {
-            let re = re.unwrap();
+        if let Ok(re) = re {
             if !re.status.success() {
                 eprintln!(
                     "link failed\nargs: {:?}\nld stdout: {}, stderr: {}",
@@ -338,6 +330,11 @@ impl Linker for MsvcLinker {
             } else {
                 Ok(())
             }
+        } else {
+            Err(LinkerError::LinkError(format!(
+                "link failed: {:?}",
+                re.err()
+            )))
         }
     }
 
@@ -388,33 +385,29 @@ fn get_win_sdk_lib_paths() -> (Option<PathBuf>, Vec<PathBuf>) {
     });
     let sdkroot = PathBuf::from(r"C:\Program Files (x86)\Windows Kits\");
     assert!(sdkroot.is_dir(), "Windows SDK not found");
-    for dir in sdkroot.read_dir().unwrap() {
-        if let Ok(dir) = dir {
-            if dir.path().is_symlink() || !dir.path().is_dir() {
-                continue;
-            }
-            let mut p = dir.path();
-            p.push("Lib");
-            if p.is_dir() {
-                for d in p.read_dir().unwrap() {
-                    if let Ok(d) = d {
-                        if d.path().is_dir() {
-                            let mut p = d.path();
-                            p.push("ucrt\\x64");
-                            if p.exists() {
-                                paths.push(p);
-                            }
-                            let mut p = d.path();
-                            p.push("um\\x64");
-                            if p.exists() {
-                                paths.push(p);
-                            }
-                            if paths.len() == 4 {
-                                return (linker_path, paths);
-                            } else {
-                                paths = paths[0..2].to_vec();
-                            }
-                        }
+    for dir in sdkroot.read_dir().unwrap().flatten() {
+        if dir.path().is_symlink() || !dir.path().is_dir() {
+            continue;
+        }
+        let mut p = dir.path();
+        p.push("Lib");
+        if p.is_dir() {
+            for d in p.read_dir().unwrap().flatten() {
+                if d.path().is_dir() {
+                    let mut p = d.path();
+                    p.push("ucrt\\x64");
+                    if p.exists() {
+                        paths.push(p);
+                    }
+                    let mut p = d.path();
+                    p.push("um\\x64");
+                    if p.exists() {
+                        paths.push(p);
+                    }
+                    if paths.len() == 4 {
+                        return (linker_path, paths);
+                    } else {
+                        paths = paths[0..2].to_vec();
                     }
                 }
             }

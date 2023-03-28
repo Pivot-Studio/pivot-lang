@@ -7,7 +7,7 @@ use petgraph::EdgeDirection;
 pub mod display;
 pub mod test;
 // ANCHOR: nodeandedge
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GraphNodeType {
     Dummy,               // 虚节点
     Begin,               // 起点
@@ -67,7 +67,7 @@ impl ProgramNode {
         let mut graphs = vec![];
         for func in &self.fntypes {
             if let Some(body) = func.body.clone() {
-                let graph = from_ast(Box::new(NodeEnum::STS(body)));
+                let graph = from_ast(Box::new(NodeEnum::Sts(body)));
                 graphs.push(GraphWrapper {
                     name: func
                         .id
@@ -91,7 +91,7 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
     let break_target = context.break_target;
     let continue_target = context.continue_target;
     match *ast {
-        NodeEnum::STS(v) => {
+        NodeEnum::Sts(v) => {
             let mut sub_source = context.graph.add_node(GraphNodeType::Dummy);
             let mut sub_sink = context.graph.add_node(GraphNodeType::Dummy);
             context
@@ -175,7 +175,7 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
             context.local_source = sub_source;
             context.local_sink = sub_sink;
             // 调用前构建虚节点作为锚点
-            build_graph(Box::new(NodeEnum::STS(*s.then)), context);
+            build_graph(Box::new(NodeEnum::Sts(*s.then)), context);
             // 调用后要恢复原来的锚点
             context.local_source = local_source;
             context.local_sink = local_sink;
@@ -222,7 +222,7 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
             context.break_target = local_sink;
             context.local_source = sub_source;
             context.local_sink = sub_sink;
-            build_graph(Box::new(NodeEnum::STS(*s.body)), context);
+            build_graph(Box::new(NodeEnum::Sts(*s.body)), context);
             context.continue_target = continue_target;
             context.break_target = break_target;
             context.local_source = local_source;
@@ -274,7 +274,7 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
             context.break_target = local_sink;
             context.local_source = sub_source;
             context.local_sink = sub_sink;
-            build_graph(Box::new(NodeEnum::STS(*s.body)), context);
+            build_graph(Box::new(NodeEnum::Sts(*s.body)), context);
             context.continue_target = continue_target;
             context.break_target = break_target;
             context.local_source = local_source;

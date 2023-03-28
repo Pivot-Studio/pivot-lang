@@ -20,7 +20,7 @@ use crate::{
 
 use super::helpers::position_to_offset;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MemDocs {
     docs: FxHashMap<String, SourceProgram>,
 }
@@ -176,11 +176,6 @@ impl MemDocsInput {
 }
 
 impl MemDocs {
-    pub fn new() -> Self {
-        MemDocs {
-            docs: FxHashMap::default(),
-        }
-    }
     pub fn change(&mut self, db: &mut dyn Db, range: lsp_types::Range, uri: String, text: String) {
         let doc = self.docs.get_mut(&uri).unwrap();
         let mut txt = doc.text(db).clone();
@@ -235,7 +230,7 @@ mod tests {
     #[test]
     fn test_mem_docs() {
         let db = &mut Database::default();
-        let mut mem_docs = MemDocs::new();
+        let mut mem_docs = MemDocs::default();
         mem_docs.insert(
             db,
             "test".to_string(),

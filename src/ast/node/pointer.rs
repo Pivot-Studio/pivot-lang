@@ -18,8 +18,8 @@ pub struct PointerOpNode {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum PointerOpEnum {
-    DEREF,
-    ADDR,
+    Deref,
+    Addr,
 }
 
 impl PrintTrait for PointerOpNode {
@@ -40,20 +40,20 @@ impl Node for PointerOpNode {
         let (value, mut tp, _) = self.value.emit(ctx, builder)?;
         let value = value.unwrap();
         let value = match self.op {
-            PointerOpEnum::DEREF => {
+            PointerOpEnum::Deref => {
                 if tp.is_none() {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::NOT_A_POINTER)));
                 }
-                if let PLType::POINTER(tp1) = &*tp.unwrap().borrow() {
+                if let PLType::Pointer(tp1) = &*tp.unwrap().borrow() {
                     tp = Some(tp1.clone());
                     builder.build_load(value.value, "deref")
                 } else {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::NOT_A_POINTER)));
                 }
             }
-            PointerOpEnum::ADDR => {
+            PointerOpEnum::Addr => {
                 // let old_tp = tp.clone().unwrap();
-                tp = Some(Arc::new(RefCell::new(PLType::POINTER(tp.unwrap()))));
+                tp = Some(Arc::new(RefCell::new(PLType::Pointer(tp.unwrap()))));
                 if value.is_const {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::CAN_NOT_REF_CONSTANT)));
                 }
@@ -63,6 +63,6 @@ impl Node for PointerOpNode {
                 v
             }
         };
-        Ok((Some(plv!(value)), tp, TerminatorEnum::NONE))
+        Ok((Some(plv!(value)), tp, TerminatorEnum::None))
     }
 }

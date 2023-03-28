@@ -1,5 +1,0 @@
-status = [
-    "test/container-test-job",
-]
-delete_merged_branches = false
-timeout_sec = 1200 # 20 min

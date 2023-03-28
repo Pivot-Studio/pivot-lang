@@ -31,10 +31,7 @@ pub fn type_name(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
             let mut node = n;
             for _ in pts {
                 let range = node.range();
-                node = Box::new(TypeNodeEnum::PointerTypeNode(PointerTypeNode {
-                    elm: node,
-                    range,
-                }));
+                node = Box::new(TypeNodeEnum::Pointer(PointerTypeNode { elm: node, range }));
             }
             res_box(node)
         },
@@ -52,7 +49,7 @@ pub fn basic_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
                 _ => unreachable!(),
             };
             let range = exid.range;
-            Ok::<_, ()>(Box::new(TypeNodeEnum::BasicTypeNode(TypeNameNode {
+            Ok::<_, ()>(Box::new(TypeNodeEnum::Basic(TypeNameNode {
                 generic_params,
                 id: Some(exid),
                 range,
@@ -73,7 +70,7 @@ fn array_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
         |(_, tp, _, size, _)| {
             let range = size.range().start.to(tp.range().end);
 
-            Ok::<_, ()>(Box::new(TypeNodeEnum::ArrayTypeNode(ArrayTypeNameNode {
+            Ok::<_, ()>(Box::new(TypeNodeEnum::Array(ArrayTypeNameNode {
                 id: tp,
                 size,
                 range,

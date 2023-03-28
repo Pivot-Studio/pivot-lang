@@ -54,10 +54,10 @@ pub fn array_element_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEn
         )),
         |(_, idx, (_, rr), com)| {
             if let Some(idx) = idx {
-                Ok::<_, ()>((ComplexOp::IndexOp(idx), com))
+                Ok::<_, ()>((ComplexOp::Index(idx), com))
             } else {
                 Ok::<_, ()>((
-                    ComplexOp::IndexOp(Box::new(NodeEnum::Err(ErrorNode {
+                    ComplexOp::Index(Box::new(NodeEnum::Err(ErrorNode {
                         msg: String::from("Nedded index for array element access"),
                         src: String::from("[]"),
                         code: ErrorCode::NEEDED_INDEX_FOR_ARRAY_ELEMENT_ACCESS,

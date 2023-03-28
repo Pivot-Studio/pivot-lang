@@ -35,16 +35,16 @@ impl Node for GlobalNode {
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
 
         let (value, pltype, _) = self.exp.emit(ctx, builder)?;
-        ctx.push_type_hints(self.var.range, pltype.clone().unwrap());
+        ctx.push_type_hints(self.var.range, pltype.unwrap());
         let base_value = ctx.try_load2var(exp_range, value.unwrap(), builder)?;
         let res = ctx.get_symbol(&self.var.name, builder);
         if res.is_none() {
-            return Ok((None, None, TerminatorEnum::NONE));
+            return Ok((None, None, TerminatorEnum::None));
         }
-        let (globalptr, _, _, _, _) = res.unwrap();
+        let (global, _) = res.unwrap();
         ctx.position_at_end(entry, builder);
-        builder.build_store(globalptr, base_value);
-        Ok((None, None, TerminatorEnum::NONE))
+        builder.build_store(global.value, base_value);
+        Ok((None, None, TerminatorEnum::None))
     }
 }
 impl GlobalNode {

@@ -45,7 +45,7 @@ impl FmtBuilder {
             prefix: "    ",
         }
     }
-    pub fn generate_node(node: &Box<TypeNodeEnum>) -> String {
+    pub fn generate_node(node: &TypeNodeEnum) -> String {
         let mut b = FmtBuilder::new();
         node.format(&mut b);
         b.generate()
@@ -198,11 +198,11 @@ impl FmtBuilder {
         self.space();
         self.l_brace();
         self.add_tab();
-        for (field, _i, modi) in &node.fields {
-            if let Some((modi, _)) = modi {
+        for field in &node.fields {
+            if let Some((modi, _)) = field.modifier {
                 self.token(modi.get_str());
             }
-            field.format(self);
+            field.id.format(self);
         }
         self.enter();
         self.sub_tab();
@@ -297,9 +297,8 @@ impl FmtBuilder {
     pub fn parse_statements_node(&mut self, node: &StatementsNode) {
         self.enter();
         for statement in &node.statements {
-            match &**statement {
-                NodeEnum::Empty(_) => continue,
-                _ => {}
+            if let NodeEnum::Empty(_) = &**statement {
+                continue;
             }
             self.prefix();
             statement.format(self);
@@ -343,8 +342,8 @@ impl FmtBuilder {
     }
     pub fn parse_pointer_op_node(&mut self, node: &PointerOpNode) {
         match node.op {
-            PointerOpEnum::ADDR => self.and(),
-            PointerOpEnum::DEREF => self.asterisk(),
+            PointerOpEnum::Addr => self.and(),
+            PointerOpEnum::Deref => self.asterisk(),
         }
         node.value.format(self);
     }
@@ -553,9 +552,9 @@ impl FmtBuilder {
         self.token(node.value.to_string().as_str());
     }
     pub fn parse_num_node(&mut self, node: &NumNode) {
-        if let Num::INT(x) = node.value {
+        if let Num::Int(x) = node.value {
             self.token(x.to_string().as_str());
-        } else if let Num::FLOAT(x) = node.value {
+        } else if let Num::Float(x) = node.value {
             self.token(x.to_string().as_str());
         } else {
             panic!("not implemented")

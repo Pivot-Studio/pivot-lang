@@ -92,7 +92,7 @@ pub mod tests {
 
         let input = MemDocsInput::new(
             &db,
-            Arc::new(Mutex::new(RefCell::new(mem_docs::MemDocs::new()))),
+            Arc::new(Mutex::new(RefCell::new(mem_docs::MemDocs::default()))),
             "plc_new_testfile/main.pi".to_string(),
             Default::default(),
             ActionType::Compile,
