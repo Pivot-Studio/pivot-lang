@@ -43,14 +43,10 @@ impl SimpleLogger {
     /// the max_level in log will never make effects
     /// since the logger implement enabled function by *LevelFilter*
     fn init_default_max_level(logger: Self) {
-        match log::set_boxed_logger(Box::new(logger)) {
-            Ok(_) => {
-                // do nothing because succeeded
-            }
-            Err(_) => {
-                //do nothing because logger is set before
-            }
-        }
+        if log::set_boxed_logger(Box::new(logger)).is_ok() {
+            // do nothing because succeeded
+            // do nothing because logger is set before
+        };
         log::set_max_level(LevelFilter::Trace);
     }
 
@@ -193,11 +189,9 @@ impl DateTime {
         } else if year % 100 == 0 {
             // but hundreds not
             false
-        } else if year % 4 == 0 {
-            // every four year leaps
-            true
         } else {
-            false
+            // every four year leaps
+            year % 4 == 0
         }
     }
 
