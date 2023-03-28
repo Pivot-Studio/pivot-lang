@@ -244,7 +244,6 @@ impl DateTime{
 pub mod tests{
     use crate::logger::{SimpleLogger,DateTime};
     use log::{self, info, error, warn};
-    use std::time::{SystemTime, UNIX_EPOCH};
     #[test]
     fn test_logger(){
         SimpleLogger::init_from_env_default( "GC_LOG",log::LevelFilter::Error);
