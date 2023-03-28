@@ -435,17 +435,6 @@ impl<'a, 'ctx> Ctx<'a> {
         pltype: Arc<RefCell<PLType>>,
         range: Range,
     ) -> Result<(), PLDiag> {
-        if let PLType::Generic(g) = &*pltype.borrow() {
-            if g.curpltype.is_some() {
-                let cur = g.curpltype.as_ref().unwrap();
-                return self.add_type(
-                    cur.borrow().get_name(),
-                    cur.clone(),
-                    cur.borrow().get_range().unwrap(),
-                );
-            }
-            unreachable!()
-        }
         if self.plmod.types.contains_key(&name) {
             return Err(self.add_diag(range.new_err(ErrorCode::REDEFINE_TYPE)));
         }
@@ -801,15 +790,12 @@ impl<'a, 'ctx> Ctx<'a> {
     fn get_tp_completions(&self, m: &mut FxHashMap<String, CompletionItem>) {
         for (k, f) in self.plmod.types.iter() {
             let tp = match &*f.borrow() {
-                PLType::Fn(_) => continue,
-                PLType::Arr(_) => continue,
                 PLType::PlaceHolder(_) => CompletionItemKind::STRUCT,
                 PLType::Generic(_) => CompletionItemKind::TYPE_PARAMETER,
                 PLType::Struct(_) => CompletionItemKind::STRUCT,
                 PLType::Trait(_) => CompletionItemKind::INTERFACE,
-                PLType::Primitive(_) => CompletionItemKind::KEYWORD,
-                PLType::Void => CompletionItemKind::KEYWORD,
-                PLType::Pointer(_) => todo!(),
+                PLType::Primitive(_) | PLType::Void => CompletionItemKind::KEYWORD,
+                _ => continue,
             };
             m.insert(
                 k.to_string(),
@@ -1083,36 +1069,24 @@ impl<'a, 'ctx> Ctx<'a> {
                 need_up_cast: false,
             };
         }
+        if l != r {
+            let trait_pltype = l;
+            let st_pltype = self.auto_deref_tp(r);
+            if let (PLType::Trait(t), PLType::Struct(st)) =
+                (&*trait_pltype.borrow(), &*st_pltype.borrow())
+            {
+                return EqRes {
+                    eq: st.implements_trait(t, &self.plmod),
+                    need_up_cast: true,
+                };
+            };
+            return EqRes {
+                eq: false,
+                need_up_cast: false,
+            };
+        }
         EqRes {
-            eq: match (&*l.borrow(), &*r.borrow()) {
-                (PLType::Primitive(l), PLType::Primitive(r)) => l == r,
-                (PLType::Void, PLType::Void) => true,
-                (PLType::Pointer(l), PLType::Pointer(r)) => self.eq(l.clone(), r.clone()).eq,
-                (PLType::Arr(l), PLType::Arr(r)) => {
-                    self.eq(l.get_elem_type(), r.get_elem_type()).eq && l.size == r.size
-                }
-                (PLType::Struct(l), PLType::Struct(r)) => l.name == r.name && l.path == r.path,
-                (PLType::Fn(l), PLType::Fn(r)) => l == r,
-                (PLType::PlaceHolder(l), PLType::PlaceHolder(r)) => l == r,
-                _ => {
-                    if l != r {
-                        let trait_pltype = l.clone();
-                        let st_pltype = r.clone();
-                        let st_pltype = self.auto_deref_tp(st_pltype);
-                        if let (PLType::Trait(t), PLType::Struct(st)) =
-                            (&*trait_pltype.borrow(), &*st_pltype.borrow())
-                        {
-                            return EqRes {
-                                eq: st.implements_trait(t, &self.plmod),
-                                need_up_cast: true,
-                            };
-                        };
-                        false
-                    } else {
-                        true
-                    }
-                }
-            },
+            eq: true,
             need_up_cast: false,
         }
     }
