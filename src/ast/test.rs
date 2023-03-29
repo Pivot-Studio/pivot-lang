@@ -519,12 +519,14 @@ mod test {
 
     #[test]
     fn test_fmt() {
-        let text_edit = test_lsp::<PLFormat>(
-            &Database::default(),
-            None,
-            ActionType::LspFmt,
-            "test/fmt/test_fmt.pi",
-        );
+        #[cfg(target_os = "linux")]
+        let testfile = "test/fmt/test_fmt.pi";
+        #[cfg(target_os = "macos")]
+        let testfile = "test/fmt/test_fmt.pi";
+        #[cfg(target_os = "windows")]
+        let testfile = "test/fmt_windows/test_fmt.pi";
+        let text_edit =
+            test_lsp::<PLFormat>(&Database::default(), None, ActionType::LspFmt, testfile);
         debug_assert!(text_edit[0].is_empty());
     }
 }
