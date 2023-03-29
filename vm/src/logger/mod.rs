@@ -5,14 +5,12 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-///
 /// SimpleLogger is a logger with almost nothing dependency exclude std and log crates
 pub struct SimpleLogger {
     log_limit: LevelFilter,
 }
 
 impl SimpleLogger {
-    ///
     /// This will init logger with the log environment variable "log_level_name".
     /// if variable not exists or can't be parsed by LevelFilter::from_str,
     /// this function will set default_level as Error.
@@ -20,7 +18,6 @@ impl SimpleLogger {
         Self::init_from_env_default(log_level_name, LevelFilter::Error);
     }
 
-    ///
     /// This will init logger with the log environment variable "log_level_name".
     /// if variable not exists or can't be parsed by LevelFilter::from_str,
     /// this function will set default_level as given.
@@ -34,11 +31,6 @@ impl SimpleLogger {
         });
     }
 
-    // fn init(logger:Self) {
-    //     Self::init_default_max_level(logger,LevelFilter::Trace);
-    // }
-
-    ///
     /// initialize log with the SimpleLogger
     /// the max_level in log will never make effects
     /// since the logger implement enabled function by *LevelFilter*
@@ -50,7 +42,6 @@ impl SimpleLogger {
         log::set_max_level(LevelFilter::Trace);
     }
 
-    ///
     /// get the environment variable named *log_level_name*
     /// return a default "null" string to lead a parse error
     fn get_env_log_level(log_level_name: &str) -> String {
@@ -90,7 +81,6 @@ impl log::Log for SimpleLogger {
     fn flush(&self) {}
 }
 
-///
 /// DateTime contains 6 fields to represents common date format
 /// provide get_now_date() to quickly get current date.
 pub struct DateTime {
@@ -112,7 +102,6 @@ impl DateTime {
         }
     }
 
-    ///
     /// used to calculate the date using given *seconds* param
     /// the seconds is given to tell the duration since std::time::UNIX_EPOCH
     pub fn from_days_since_unix(seconds: u64) -> Self {
@@ -143,7 +132,6 @@ impl DateTime {
         result_date
     }
 
-    ///
     /// return a standard date at std::time::UNIX_EPOCH
     fn new_unix_date_utc0() -> Self {
         DateTime {
@@ -156,14 +144,12 @@ impl DateTime {
         }
     }
 
-    ///
     ///  set default utc to utc+8
     ///  remain this function to apply to multi-TimeZone
     fn get_utc() -> u64 {
         8
     }
 
-    ///
     /// using the seconds remain to update date in a day
     fn fill_within_day(date: &mut DateTime, mut seconds: u64) {
         const SECONDS_PER_HOUR: u64 = 3600;
@@ -180,7 +166,6 @@ impl DateTime {
         date.second = seconds;
     }
 
-    ///
     /// judge if the year is a leap year
     pub fn is_leap_year(year: u64) -> bool {
         if year % 400 == 0 {
@@ -195,7 +180,6 @@ impl DateTime {
         }
     }
 
-    ///
     /// get the total days in this year
     fn get_days_this_year(date: &DateTime) -> u64 {
         if Self::is_leap_year(date.year) {
@@ -205,7 +189,6 @@ impl DateTime {
         }
     }
 
-    ///
     /// get the total days in this month
     fn get_days_this_month(date: &DateTime) -> u64 {
         match date.month {
@@ -231,7 +214,6 @@ impl DateTime {
         }
     }
 
-    ///
     /// apply the local system time with utc time zone
     /// take the original system time seconds and
     fn apply_utc(secs: u64) -> u64 {

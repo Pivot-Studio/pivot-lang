@@ -11,17 +11,6 @@ mod _immix {
         add_symbol_immix_gc_init();
     }
 
-    // #[is_runtime]
-    // fn immix_gc_init_deprecated(ptr: *mut u8) {
-    //     _ = env_logger::Builder::from_env(
-    //         env_logger::Env::new()
-    //             .filter_or("GC_LOG", "error")
-    //             .write_style("GC_LOG_COLOR"),
-    //     )
-    //     .try_init();
-    //     immix::gc_init(ptr)
-    // }
-
     #[is_runtime]
     fn immix_gc_init(ptr: *mut u8) {
         SimpleLogger::init_from_env_default("GC_LOG", log::LevelFilter::Error);
