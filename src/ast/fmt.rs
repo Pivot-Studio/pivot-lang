@@ -440,7 +440,6 @@ impl FmtBuilder {
     pub fn parse_func_def_node(&mut self, node: &FuncDefNode) {
         let paralist = &node.paralist;
         let params_print = print_params(paralist);
-        // self.enter();
         for c in node.pre_comments.iter() {
             self.prefix();
             c.format(self);
@@ -597,8 +596,6 @@ impl FmtBuilder {
             self.token(x.to_string().as_str());
         } else if let Num::Float(x) = node.value {
             self.token(x.to_string().as_str());
-        } else {
-            panic!("not implemented")
         }
     }
     pub fn parse_generic_def_node(&mut self, node: &GenericDefNode) {

@@ -14,7 +14,8 @@ mod test {
     use crate::{
         ast::{
             accumulators::{
-                Completions, DocSymbols, GotoDef, Hints, PLHover, PLReferences, PLSignatureHelp,
+                Completions, DocSymbols, GotoDef, Hints, PLFormat, PLHover, PLReferences,
+                PLSignatureHelp,
             },
             compiler::{compile_dry, ActionType},
             range::Pos,
@@ -514,5 +515,16 @@ mod test {
             ActionType::LspFmt,
             "test/main.pi",
         );
+    }
+
+    #[test]
+    fn test_fmt() {
+        let text_edit = test_lsp::<PLFormat>(
+            &Database::default(),
+            None,
+            ActionType::LspFmt,
+            "test/fmt/test_fmt.pi",
+        );
+        debug_assert!(text_edit[0].is_empty());
     }
 }

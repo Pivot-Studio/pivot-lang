@@ -391,7 +391,7 @@ impl Node for StructDefNode {
             generics.emit_highlight(ctx);
         }
         for field in self.fields.iter() {
-            ctx.push_semantic_token(field.id.range, SemanticTokenType::PROPERTY, 0);
+            ctx.push_semantic_token(field.id.id.range, SemanticTokenType::PROPERTY, 0);
             field.id.typenode.emit_highlight(ctx);
             if !field.has_semi {
                 ctx.add_diag(field.id.range.new_err(ErrorCode::COMPLETION));
