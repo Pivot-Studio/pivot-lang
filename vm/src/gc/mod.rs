@@ -1,5 +1,6 @@
 #[cfg(feature = "immix")]
 mod _immix {
+    use crate::logger::SimpleLogger;
     use immix::gc_malloc;
     use internal_macro::is_runtime;
 
@@ -12,12 +13,8 @@ mod _immix {
 
     #[is_runtime]
     fn immix_gc_init(ptr: *mut u8) {
-        _ = env_logger::Builder::from_env(
-            env_logger::Env::new()
-                .filter_or("GC_LOG", "error")
-                .write_style("GC_LOG_COLOR"),
-        )
-        .try_init();
+        SimpleLogger::init_from_env_default("GC_LOG", log::LevelFilter::Error);
+
         immix::gc_init(ptr)
     }
 
