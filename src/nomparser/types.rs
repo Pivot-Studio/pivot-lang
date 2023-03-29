@@ -94,6 +94,7 @@ pub fn generic_type_def(input: Span) -> IResult<Span, Box<GenericDefNode>> {
             let range = lf.1.start.to(ri.1.end);
             Ok::<_, ()>(Box::new(GenericDefNode {
                 range,
+                generics_size: ids.len(),
                 generics: ids,
             }))
         },

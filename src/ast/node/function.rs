@@ -216,7 +216,7 @@ pub struct FuncDefNode {
     pub paralist: Vec<Box<TypedIdentifierNode>>,
     pub ret: Box<TypeNodeEnum>,
     pub doc: Vec<Box<NodeEnum>>,
-    pub precom: Vec<Box<NodeEnum>>,
+    pub pre_comments: Vec<Box<NodeEnum>>,
     pub declare: bool,
     pub generics: Option<Box<GenericDefNode>>,
     pub body: Option<StatementsNode>,
@@ -320,7 +320,7 @@ impl TypeNode for FuncDefNode {
     }
 
     fn emit_highlight(&self, ctx: &mut Ctx) {
-        ctx.emit_comment_highlight(&self.precom);
+        ctx.emit_comment_highlight(&self.pre_comments);
         ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
         if let Some(generics) = &self.generics {
             generics.emit_highlight(ctx);
@@ -492,7 +492,7 @@ impl PrintTrait for FuncDefNode {
         println!("FuncDefNode");
         tab(tabs + 1, line.clone(), false);
         println!("id: {}", self.id.name);
-        for c in self.precom.iter() {
+        for c in self.pre_comments.iter() {
             c.print(tabs + 1, false, line.clone());
         }
         for p in self.paralist.iter() {
@@ -514,7 +514,7 @@ impl Node for FuncDefNode {
     ) -> NodeResult {
         // hightlight
         ctx.save_if_comment_doc_hover(self.id.range, Some(self.doc.clone()));
-        ctx.emit_comment_highlight(&self.precom);
+        ctx.emit_comment_highlight(&self.pre_comments);
         ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
         if let Some(generics) = &mut self.generics {
             generics.emit_highlight(ctx);

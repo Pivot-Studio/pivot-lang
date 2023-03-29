@@ -2,6 +2,7 @@ use core::panic;
 pub struct impl_struct {
     x: i64;
 }
+
 /// ANCHOR: impl
 impl impl_struct {
     pub fn add1() void {
@@ -17,7 +18,6 @@ impl impl_struct {
 }
 
 /// ANCHOR_END: impl
-
 pub fn test_impl() void {
     let x = impl_struct{
         x: 99
@@ -27,12 +27,12 @@ pub fn test_impl() void {
     x.add1();
     panic::assert(x.x == 114515);
     let p1 = Point{
-        x:1,
-        y:2
+        x: 1,
+        y: 2
     };
     let p2 = Point{
-        x:true,
-        y:false
+        x: true,
+        y: false
     };
     let p3 = p1.mixup(p2);
     let p4 = p2.mixup<i64|i64>(p1);
@@ -42,18 +42,22 @@ pub fn test_impl() void {
     panic::assert(p4.x);
     return;
 }
+
 struct Point<X|Y> {
-    x:X;
-    y:Y;
+    x: X;
+    y: Y;
 }
+
 impl<X1|Y1> Point<X1|Y1> {
-    fn mixup<X2|Y2>(other: Point<X2|Y2>)  Point<X1|Y2> {
-        return Point {
+    fn mixup<X2|Y2>(other: Point<X2|Y2>) Point<X1|Y2> {
+        return Point{
             x: self.x,
             y: other.y
         };
     }
+
 }
+
 // 目前推断是根据字段推断，如果没字段则会有bug
 // struct A<T> {}
 // impl<S> A<S> {
@@ -61,4 +65,3 @@ impl<X1|Y1> Point<X1|Y1> {
 //         return;
 //     }
 // }
-

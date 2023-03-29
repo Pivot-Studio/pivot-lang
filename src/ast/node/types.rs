@@ -347,7 +347,7 @@ impl TypedIdentifierNode {
 
 #[node]
 pub struct StructDefNode {
-    pub precom: Vec<Box<NodeEnum>>,
+    pub pre_comments: Vec<Box<NodeEnum>>,
     pub doc: Vec<Box<NodeEnum>>,
     pub id: Box<VarNode>,
     pub fields: Vec<StructField>,
@@ -368,7 +368,7 @@ impl PrintTrait for StructDefNode {
         println!("StructDefNode");
         tab(tabs + 1, line.clone(), false);
         println!("id: {}", self.id.name);
-        for c in self.precom.iter() {
+        for c in self.pre_comments.iter() {
             c.print(tabs + 1, false, line.clone());
         }
         let mut i = self.fields.len();
@@ -385,7 +385,7 @@ impl Node for StructDefNode {
         ctx: &'b mut Ctx<'a>,
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        ctx.emit_comment_highlight(&self.precom);
+        ctx.emit_comment_highlight(&self.pre_comments);
         ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
         if let Some(generics) = &mut self.generics {
             generics.emit_highlight(ctx);
@@ -723,6 +723,7 @@ impl Node for ArrayInitNode {
 #[node]
 pub struct GenericDefNode {
     pub generics: Vec<Box<VarNode>>,
+    pub generics_size: usize,
 }
 
 impl PrintTrait for GenericDefNode {

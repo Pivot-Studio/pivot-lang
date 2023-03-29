@@ -185,10 +185,14 @@ impl FmtBuilder {
         }
     }
     pub fn parse_struct_def_node(&mut self, node: &StructDefNode) {
-        for c in node.precom.iter() {
+        for c in node.pre_comments.iter() {
             c.format(self);
         }
         self.prefix();
+        if let Some((modi, _)) = node.modifier {
+            self.token(modi.get_str());
+            self.space();
+        }
         self.token("struct");
         self.space();
         self.token(node.id.name.as_str());
@@ -199,10 +203,20 @@ impl FmtBuilder {
         self.l_brace();
         self.add_tab();
         for field in &node.fields {
+            self.enter();
+            self.prefix();
             if let Some((modi, _)) = field.modifier {
                 self.token(modi.get_str());
+                self.space();
             }
-            field.id.format(self);
+            self.token(field.id.id.name.as_str());
+            self.colon();
+            self.space();
+            field.id.typenode.format(self);
+            self.semicolon();
+            if let Some(doc) = &field.id.doc {
+                doc.format(self);
+            }
         }
         self.enter();
         self.sub_tab();
@@ -368,6 +382,9 @@ impl FmtBuilder {
     }
     pub fn parse_impl_node(&mut self, node: &ImplNode) {
         self.token("impl");
+        if let Some(generics) = &node.generics {
+            generics.format(self)
+        }
         self.space();
         if node.impl_trait.is_some() {
             node.impl_trait.as_ref().unwrap().0.format(self);
@@ -424,11 +441,15 @@ impl FmtBuilder {
         let paralist = &node.paralist;
         let params_print = print_params(paralist);
         // self.enter();
-        for c in node.precom.iter() {
+        for c in node.pre_comments.iter() {
             self.prefix();
             c.format(self);
         }
         self.prefix();
+        if let Some((modi, _)) = node.modifier {
+            self.token(modi.get_str());
+            self.space();
+        }
         self.token("fn");
         self.space();
         self.token(node.id.name.split("::").last().unwrap());
@@ -440,9 +461,29 @@ impl FmtBuilder {
         self.r_paren();
         self.space();
         node.ret.format(self);
+        if let Some(trait_bounds) = &node.trait_bounds {
+            self.enter();
+            self.token("where");
+            self.enter();
+            self.add_tab();
+            trait_bounds[0..trait_bounds.len() - 1]
+                .iter()
+                .for_each(|bound| {
+                    self.prefix();
+                    bound.format(self);
+                    self.comma();
+                    self.enter();
+                });
+            self.prefix();
+            trait_bounds.last().unwrap().format(self);
+            self.enter();
+            self.sub_tab();
+        }
         match &node.body {
             Some(body) => {
-                self.space();
+                if node.trait_bounds.is_none() {
+                    self.space();
+                }
                 self.l_brace();
                 self.add_tab();
                 body.format(self);
@@ -563,8 +604,7 @@ impl FmtBuilder {
     pub fn parse_generic_def_node(&mut self, node: &GenericDefNode) {
         self.l_angle_bracket();
         self.token(
-            &node
-                .generics
+            &node.generics[0..node.generics_size]
                 .iter()
                 .map(|g| g.name.clone())
                 .collect::<Vec<_>>()
@@ -638,7 +678,10 @@ impl FmtBuilder {
         self.token(&node.args);
         self.r_paren();
     }
-    pub fn parse_trait_bound_node(&mut self, _node: &TraitBoundNode) {
-        todo!()
+    pub fn parse_trait_bound_node(&mut self, node: &TraitBoundNode) {
+        node.generic.format(self);
+        self.token(":");
+        self.space();
+        node.impl_trait.format(self);
     }
 }

@@ -20,6 +20,7 @@ impl TestTrait for A {
         self.x = i;
         return i;
     }
+
 }
 
 pub fn test_trait() void {
@@ -37,33 +38,35 @@ pub fn test_trait() void {
     panic::assert(re1 == 1);
     let re2 = trait_with_generic(x);
     panic::assert(re2 == 999);
-    let re3 = trait_with_generic_ret(x,y);
+    let re3 = trait_with_generic_ret(x, y);
     panic::assert(re3.x == 999);
     return;
 }
 
-pub fn trait_param(x:TestTrait) void {
+pub fn trait_param(x: TestTrait) void {
     return;
 }
+
 pub fn trait_ret() TestTrait {
     let x = A{};
     return x;
 }
-pub fn trait_with_generic<T>(x:T) i64
-where 
-    T:TestTrait
+
+pub fn trait_with_generic<T>(x: T) i64
+where
+    T: TestTrait
 {
     x.name();
     return x.set(999);
 }
-pub fn trait_with_generic_ret<T|S>(x:T,y:S) T
-where 
-    T:TestTrait,
-    S:TestTrait
+
+pub fn trait_with_generic_ret<T|S>(x: T, y: S) T
+where
+    T: TestTrait,
+    S: TestTrait
 {
     x.name();
     y.name();
     return x;
 }
-
 
