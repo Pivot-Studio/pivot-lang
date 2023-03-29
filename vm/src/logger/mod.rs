@@ -192,7 +192,6 @@ impl DateTime {
     /// get the total days in this month
     fn get_days_this_month(date: &DateTime) -> u64 {
         match date.month {
-            1 => 31,
             2 => {
                 if Self::is_leap_year(date.year) {
                     29
@@ -200,16 +199,8 @@ impl DateTime {
                     28
                 }
             }
-            3 => 31,
-            4 => 30,
-            5 => 31,
-            6 => 30,
-            7 => 31,
-            8 => 31,
-            9 => 30,
-            10 => 31,
-            11 => 30,
-            12 => 31,
+            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+            4 | 6 | 9 | 11 => 30,
             _ => 0,
         }
     }
