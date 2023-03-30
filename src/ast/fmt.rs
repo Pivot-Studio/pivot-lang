@@ -25,6 +25,7 @@ use super::{
             ArrayInitNode, ArrayTypeNameNode, GenericDefNode, GenericParamNode, PointerTypeNode,
             StructDefNode, StructInitFieldNode, StructInitNode, TypeNameNode, TypedIdentifierNode,
         },
+        union::UnionDefNode,
         FmtTrait, NodeEnum, TypeNodeEnum,
     },
     tokens::TokenType,
@@ -687,5 +688,8 @@ impl FmtBuilder {
     }
     pub fn parse_multi_trait_node(&mut self, node: &MultiTraitNode) {
         node.traits.format(self)
+    }
+    pub fn parse_union_def_node(&mut self, node: &UnionDefNode) {
+        todo!()
     }
 }

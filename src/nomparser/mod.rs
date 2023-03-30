@@ -59,6 +59,7 @@ pub mod statement;
 pub mod string_literal;
 pub mod structure;
 pub mod types;
+pub mod union;
 
 #[derive(Debug, Clone)]
 pub enum TopLevel {

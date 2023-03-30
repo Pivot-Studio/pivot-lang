@@ -1,10 +1,14 @@
+use crate::ast::diag::ErrorCode;
+use crate::ast::node::error::{ErrorNode, StErrorNode};
 use crate::nomparser::Span;
 use crate::{ast::range::Range, ast::tokens::TokenType};
+use nom::branch::alt;
 use nom::character::complete::space1;
 use nom::character::is_alphanumeric;
-use nom::combinator::opt;
+use nom::combinator::{opt, recognize};
 
-use nom::sequence::{pair, preceded, terminated};
+use nom::multi::many0;
+use nom::sequence::{pair, preceded, terminated, tuple};
 use nom::{
     bytes::complete::tag, character::complete::space0, combinator::map_res, error::ParseError,
     sequence::delimited, AsChar, IResult, InputTake, InputTakeAtPosition, Parser,
@@ -42,13 +46,16 @@ pub fn tag_token(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType,
     }
 }
 
-/// parse modifier, basically same as `tag_token`, but ensure there is at least one space after it
+/// parse modifier, basically same as `tag_token`, but ensure there is at least one space or nl after it
 pub fn tag_modifier(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
     move |input| {
-        map_res(terminated(tag(token.get_str()), space1), |_out: Span| {
-            let end = _out.take_split(token.get_str().len()).0;
-            Ok::<(TokenType, Range), ()>((token, Range::new(_out, end)))
-        })(input)
+        del_newline_or_space!(map_res(
+            terminated(tag(token.get_str()), alt((space1, tag("\r\n"), tag("\n")))),
+            |_out: Span| {
+                let end = _out.take_split(token.get_str().len()).0;
+                Ok::<(TokenType, Range), ()>((token, Range::new(_out, end)))
+            }
+        ))(input)
     }
 }
 
@@ -146,3 +153,43 @@ pub fn create_bin((mut left, rights): PLBin) -> Result<Box<NodeEnum>, ()> {
     res_box(left)
 }
 type PLBin = (Box<NodeEnum>, Vec<((TokenType, Range), Box<NodeEnum>)>);
+
+pub fn semi_stmt<'a, G>(
+    p: G,
+    p2: G,
+) -> impl Parser<Span<'a>, Box<NodeEnum>, nom::error::Error<Span<'a>>>
+where
+    G: Parser<Span<'a>, Box<NodeEnum>, nom::error::Error<Span<'a>>>,
+{
+    alt((
+        terminated(p, tag_token_symbol(TokenType::SEMI)),
+        map_res(
+            tuple((
+                p2,
+                recognize(many0(alt((
+                    tag("\n"),
+                    tag("\r\n"),
+                    preceded(many0(tag(" ")), tag("\n")),
+                    tag("\t"),
+                )))),
+            )),
+            |(node, e)| {
+                let range = node.range();
+                let r = Range::new(e, e);
+                res_enum(
+                    StErrorNode {
+                        range,
+                        st: node,
+                        err: ErrorNode {
+                            range: r,
+                            msg: "missing semi".to_string(),
+                            code: ErrorCode::MISSING_SEMI,
+                            src: "".to_string(),
+                        },
+                    }
+                    .into(),
+                )
+            },
+        ),
+    ))
+}

@@ -28,6 +28,7 @@ use self::ret::*;
 use self::statement::*;
 use self::string_literal::StringNode;
 use self::types::*;
+use self::union::UnionDefNode;
 
 use super::builder::ValueHandle;
 use super::ctx::EqRes;
@@ -54,6 +55,7 @@ pub mod ret;
 pub mod statement;
 pub mod string_literal;
 pub mod types;
+pub mod union;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TerminatorEnum {
     None,
@@ -148,6 +150,7 @@ pub enum NodeEnum {
     MacroLoopStatementNode(MacroLoopStatementNode),
     MacroNode(MacroNode),
     MacroCallNode(MacroCallNode),
+    UnionDefNode(UnionDefNode),
 }
 // ANCHOR: range
 #[enum_dispatch]
