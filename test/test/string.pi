@@ -1,8 +1,6 @@
 use std::io;
 use core::panic;
 use project1::test::macros;
-
-
 pub fn test_string() void {
     let s = "hello world!\n";
     macros::test!(s = 1+2*(3+4), s = 5*2,);

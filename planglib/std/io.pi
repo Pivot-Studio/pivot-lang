@@ -1,8 +1,9 @@
 pub fn printi64ln(i: i64) void;
 
-pub fn print_raw(bs:*u8, len:i64) void;
+pub fn print_raw(bs: *u8, len: i64) void;
 
-pub fn print_s(s:gc::string) void{
+pub fn print_s(s: gc::string) void {
     print_raw(s.data, s.byte_len);
     return;
 }
+

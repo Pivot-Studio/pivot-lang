@@ -24,7 +24,7 @@ pub fn comment(input: Span) -> IResult<Span, Box<NodeEnum>> {
         |(a, c): (LocatedSpan<&str, bool>, LocatedSpan<&str, bool>)| {
             res_enum(
                 CommentNode {
-                    comment: c.to_string(),
+                    comment: c.trim_end_matches('\r').to_string(),
                     range: Range::new(input, c.take_split(c.len()).0),
                     is_doc: a.contains("///"),
                 }

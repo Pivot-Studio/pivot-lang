@@ -83,7 +83,7 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 }
             }
             Ok::<_, ()>(Box::new(TopLevel::StructDef(StructDefNode {
-                precom: precoms,
+                pre_comments: precoms,
                 doc: docs,
                 id,
                 fields: fieldlist,

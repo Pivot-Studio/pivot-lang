@@ -1,5 +1,4 @@
 use project1::sub::mod;
-
 pub fn test_mod(args: i64) void {
     return;
 }
@@ -7,3 +6,4 @@ pub fn test_mod(args: i64) void {
 pub struct Mod2 {
     y: bool;
 }
+
