@@ -49,6 +49,7 @@ const DW_ATE_BOOLEAN: u32 = 0x02;
 const DW_ATE_FLOAT: u32 = 0x04;
 const DW_ATE_SIGNED: u32 = 0x05;
 const DW_ATE_UNSIGNED: u32 = 0x07;
+pub const DW_TAG_union_type: u32 = 0x17;
 static ID: AtomicI64 = AtomicI64::new(0);
 // const DW_TAG_REFERENCE_TYPE: u32 = 16;
 fn get_dw_ate_encoding(pritp: &PriType) -> u32 {
@@ -628,6 +629,12 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     })
                     .into()
             }),
+            PLType::Union(_) => {
+                // all unions are represented as a struct with a tag(i8) and an i8 pointer
+                let  fields = vec![self.context.i8_type().into(),
+                self.context.i8_type().ptr_type(AddressSpace::default()).into()];
+                Some(self.context.struct_type(&fields, false).into())
+            },
         }
     }
     /// # get_ret_type
@@ -902,6 +909,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         .as_type(),
                 )
             }
+            PLType::Union(u) => {
+                
+            },
         }
     }
 

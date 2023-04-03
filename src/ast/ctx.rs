@@ -854,8 +854,9 @@ impl<'a, 'ctx> Ctx<'a> {
                 PLType::Primitive(_) => CompletionItemKind::KEYWORD,
                 PLType::Generic(_) => CompletionItemKind::STRUCT,
                 PLType::Void => CompletionItemKind::KEYWORD,
-                PLType::Pointer(_) => todo!(),
+                PLType::Pointer(_) => unreachable!(),
                 PLType::PlaceHolder(_) => CompletionItemKind::STRUCT,
+                PLType::Union(_) => CompletionItemKind::ENUM,
             };
             if k.starts_with('|') {
                 // skip method

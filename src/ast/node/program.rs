@@ -46,6 +46,7 @@ pub struct ProgramNode {
     pub uses: Vec<Box<NodeEnum>>,
     pub traits: Vec<TraitDefNode>,
     pub trait_impls: Vec<(String, String)>,
+    pub unions: Vec<UnionDefNode>,
 }
 
 impl PrintTrait for ProgramNode {

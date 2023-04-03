@@ -68,6 +68,7 @@ pub enum TopLevel {
     GlobalDef(GlobalNode),
     Common(Box<NodeEnum>),
     Use(Box<NodeEnum>),
+    Union(Box<NodeEnum>),
     ImplDef(ImplNode),
     TraitDef(TraitDefNode),
 }

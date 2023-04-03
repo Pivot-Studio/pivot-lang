@@ -63,7 +63,25 @@ pub enum PLType {
     Generic(GenericType),
     PlaceHolder(PlaceHolderType),
     Trait(STType),
+    Union(UnionType),
 }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnionType{
+    pub name: String,
+    pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
+    pub sum_types: Vec<Arc<RefCell<PLType>>>,
+    pub path: String,
+    pub modifier: Option<(TokenType, Range)>,
+    pub range: Range,
+}
+
+
+impl UnionType {
+    pub fn get_full_name(&self) -> String {
+        format!("{}..{}", self.path, self.name)
+    }
+}
+
 /// # PriType
 /// Primitive type for pivot-lang
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -195,6 +213,7 @@ impl PLType {
             PLType::PlaceHolder(_) => "placeholder".to_string(),
             PLType::Generic(_) => "generic".to_string(),
             PLType::Trait(_) => "trait".to_string(),
+            PLType::Union(_) => "union".to_string(),
         }
     }
     pub fn get_typenode(&self) -> Box<TypeNodeEnum> {
@@ -231,7 +250,7 @@ impl PLType {
     /// if support find refs
     pub fn if_refs(&self, f: impl FnOnce(&PLType)) {
         match self {
-            PLType::Fn(_) | PLType::Struct(_) | PLType::Trait(_) => f(self),
+            PLType::Fn(_) | PLType::Struct(_) | PLType::Trait(_) |PLType::Union(_) => f(self),
             PLType::Arr(_) => (),
             PLType::Primitive(_) => (),
             PLType::Void => (),
@@ -260,6 +279,7 @@ impl PLType {
             }
             PLType::PlaceHolder(p) => p.name.clone(),
             PLType::Trait(t) => t.name.clone(),
+            PLType::Union(u) => u.name.clone(),
         }
     }
     pub fn get_llvm_name(&self) -> String {
@@ -281,6 +301,7 @@ impl PLType {
                 }
             }
             PLType::PlaceHolder(p) => p.get_place_holder_name(),
+            PLType::Union(u) => u.name.clone(),
         }
     }
 
@@ -301,6 +322,7 @@ impl PLType {
             PLType::Void => "void".to_string(),
             PLType::Pointer(p) => p.borrow().get_full_elm_name(),
             PLType::PlaceHolder(p) => p.name.clone(),
+            PLType::Union(u) => u.get_full_name(),
         }
     }
     pub fn get_ptr_depth(&self) -> usize {
@@ -362,6 +384,7 @@ impl PLType {
             PLType::Pointer(_) => None,
             PLType::PlaceHolder(p) => Some(p.range),
             PLType::Trait(t) => Some(t.range),
+            PLType::Union(u) => Some(u.range),
         }
     }
 
