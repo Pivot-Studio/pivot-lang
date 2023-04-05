@@ -111,6 +111,7 @@ define_error!(
     NO_MACRO_LOOP_VAR = "no macro loop var used in macro loop block",
     MACRO_LOOP_VAR_USED_OUT_OF_LOOP = "macro loop var used out of loop",
     MACRO_VAR_NOT_FOUND = "macro var not found",
+    EXPECT_PUBLIC_UNION = "expect public union",
 );
 macro_rules! define_warn {
     ($(

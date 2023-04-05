@@ -630,11 +630,16 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .into()
             }),
             PLType::Union(_) => {
-                // all unions are represented as a struct with a tag(i8) and an i8 pointer
-                let  fields = vec![self.context.i8_type().into(),
-                self.context.i8_type().ptr_type(AddressSpace::default()).into()];
+                // all unions are represented as a struct with a tag(i64) and an i8ptr
+                let fields = vec![
+                    self.context.i64_type().into(),
+                    self.context
+                        .i8_type()
+                        .ptr_type(AddressSpace::default())
+                        .into(),
+                ];
                 Some(self.context.struct_type(&fields, false).into())
-            },
+            }
         }
     }
     /// # get_ret_type
@@ -910,8 +915,21 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 )
             }
             PLType::Union(u) => {
-                
-            },
+                let utp = self.get_basic_type_op(pltp, ctx).unwrap();
+                let tp = self.dibuilder.create_union_type(
+                    self.diunit.get_file().as_debug_info_scope(),
+                    &u.name,
+                    self.diunit.get_file(),
+                    u.range.start.line as u32 + 1,
+                    td.get_bit_size(&utp),
+                    td.get_abi_alignment(&utp),
+                    DIFlags::PUBLIC,
+                    &[], // TODO real elements
+                    0,
+                    &u.name,
+                );
+                Some(tp.as_type())
+            }
         }
     }
 

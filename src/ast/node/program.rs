@@ -76,6 +76,10 @@ impl Node for ProgramNode {
             // 提前加入占位符号，解决自引用问题
             def.add_to_symbols(ctx, builder);
         }
+        for def in self.unions.iter() {
+            // 提前加入占位符号，解决自引用问题
+            def.add_to_symbols(ctx, builder);
+        }
         for def in self.structs.iter_mut() {
             _ = def.emit_struct_def(ctx, builder);
         }

@@ -21,7 +21,7 @@ use crate::{
     ast::{node::types::TypedIdentifierNode, tokens::TokenType},
 };
 
-use super::{implement::impl_def, macro_parse::macro_parser, *, union::union_stmt};
+use super::{implement::impl_def, macro_parse::macro_parser, union::union_stmt, *};
 
 pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let old = input;
@@ -104,7 +104,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                         unions.push(un.clone());
                     }
                     nodes.push(u);
-                },
+                }
             }
             input = i;
         } else if let Err(err) = top {

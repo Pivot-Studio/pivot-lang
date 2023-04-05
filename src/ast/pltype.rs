@@ -66,15 +66,14 @@ pub enum PLType {
     Union(UnionType),
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UnionType{
+pub struct UnionType {
     pub name: String,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
-    pub sum_types: Vec<Arc<RefCell<PLType>>>,
+    pub sum_types: Vec<Box<TypeNodeEnum>>,
     pub path: String,
     pub modifier: Option<(TokenType, Range)>,
     pub range: Range,
 }
-
 
 impl UnionType {
     pub fn get_full_name(&self) -> String {
@@ -250,7 +249,7 @@ impl PLType {
     /// if support find refs
     pub fn if_refs(&self, f: impl FnOnce(&PLType)) {
         match self {
-            PLType::Fn(_) | PLType::Struct(_) | PLType::Trait(_) |PLType::Union(_) => f(self),
+            PLType::Fn(_) | PLType::Struct(_) | PLType::Trait(_) | PLType::Union(_) => f(self),
             PLType::Arr(_) => (),
             PLType::Primitive(_) => (),
             PLType::Void => (),
@@ -360,6 +359,22 @@ impl PLType {
                     TokenType::PUB,
                     return expect_pub_err(
                         super::diag::ErrorCode::EXPECT_PUBLIC_TRAIT,
+                        ctx,
+                        range,
+                        st.name.clone()
+                    )
+                );
+                Ok(())
+            }
+            PLType::Union(st) => {
+                if st.path == ctx.plmod.path {
+                    return Ok(());
+                }
+                if_not_modified_by!(
+                    st.modifier,
+                    TokenType::PUB,
+                    return expect_pub_err(
+                        super::diag::ErrorCode::EXPECT_PUBLIC_UNION,
                         ctx,
                         range,
                         st.name.clone()

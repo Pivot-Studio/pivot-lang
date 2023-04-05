@@ -18,6 +18,7 @@ use super::pltype::FNValue;
 use super::pltype::Field;
 use super::pltype::PLType;
 use super::pltype::PriType;
+use super::pltype::UnionType;
 
 use super::pltype::STType;
 use super::range::Pos;
@@ -55,6 +56,7 @@ use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use std::cell::RefCell;
 
+use std::collections::BTreeSet;
 use std::path::Path;
 
 use std::path::PathBuf;
@@ -265,6 +267,38 @@ impl<'a, 'ctx> Ctx<'a> {
             let hash = builder.int_value(&PriType::U64, hash, false);
             builder.build_store(type_hash, hash);
             return Ok(trait_handle);
+        } else if let PLType::Union(u) = &*trait_pltype.borrow() {
+            let union_members = self.run_in_union_mod(u, |ctx, u| {
+                let mut union_members = vec![];
+                for tp in &u.sum_types {
+                    let tp = tp.get_type(ctx, builder)?;
+                    union_members.push(tp);
+                }
+                Ok(union_members)
+            })?;
+            for (i, tp) in union_members.iter().enumerate() {
+                if &*tp.borrow() == &*st_pltype.borrow() {
+                    let union_handle =
+                        builder.alloc("tmp_unionv", &trait_pltype.borrow(), self, None);
+                    let union_value = builder
+                        .build_struct_gep(union_handle, 1, "union_value")
+                        .unwrap();
+                    let union_type_field = builder
+                        .build_struct_gep(union_handle, 0, "union_type")
+                        .unwrap();
+                    let union_type = builder.int_value(&PriType::U64, i as u64, false);
+                    builder.build_store(union_type_field, union_type);
+                    let st_value = builder.bitcast(
+                        self,
+                        st_value,
+                        &PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::I8)))),
+                        "traitcast_tmp",
+                    );
+                    builder.build_store(union_value, st_value);
+
+                    return Ok(union_handle);
+                }
+            }
         }
         #[allow(clippy::needless_return)]
         return Err(mismatch_err!(
@@ -569,6 +603,49 @@ impl<'a, 'ctx> Ctx<'a> {
             oldm = Some(self.set_mod(m.clone()));
         }
         let res = f(self, st);
+        if let Some(m) = oldm {
+            self.set_mod(m);
+        }
+        res
+    }
+
+    pub fn run_in_union_mod_mut<
+        'b,
+        T,
+        F: FnMut(&mut Ctx<'a>, &mut UnionType) -> Result<T, PLDiag>,
+    >(
+        &'b mut self,
+        st: &mut UnionType,
+        mut f: F,
+    ) -> Result<T, PLDiag> {
+        let p = PathBuf::from(&st.path);
+        let mut oldm = None;
+        if st.path != self.plmod.path {
+            let s = p.file_name().unwrap().to_str().unwrap();
+            let m = s.split('.').next().unwrap();
+            let m = self.plmod.submods.get(m).unwrap();
+            oldm = Some(self.set_mod(m.clone()));
+        }
+        let res = f(self, st);
+        if let Some(m) = oldm {
+            self.set_mod(m);
+        }
+        res
+    }
+    pub fn run_in_union_mod<'b, T, F: FnMut(&mut Ctx<'a>, &UnionType) -> Result<T, PLDiag>>(
+        &'b mut self,
+        u: &UnionType,
+        mut f: F,
+    ) -> Result<T, PLDiag> {
+        let p = PathBuf::from(&u.path);
+        let mut oldm = None;
+        if u.path != self.plmod.path {
+            let s = p.file_name().unwrap().to_str().unwrap();
+            let m = s.split('.').next().unwrap();
+            let m = self.plmod.submods.get(m).unwrap();
+            oldm = Some(self.set_mod(m.clone()));
+        }
+        let res = f(self, u);
         if let Some(m) = oldm {
             self.set_mod(m);
         }
