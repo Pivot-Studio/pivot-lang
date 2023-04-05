@@ -1,3 +1,5 @@
+use std::{cell::RefCell, cmp::{min_by, max_by}};
+
 use parking_lot::ReentrantMutex;
 
 use crate::{bigobj::BigObj, block::Block, consts::BLOCK_SIZE, mmap::Mmap};
@@ -8,16 +10,18 @@ use super::big_obj_allocator::BigObjAllocator;
 ///
 /// Only allocate blocks, shared between threads, need synchronization.
 pub struct GlobalAllocator {
-    /// mmap region
-    mmap: Mmap,
+    /// k=mmap.start, v=mmap
+    mmaps: RefCell<Vec<Mmap>>,
+    /// current mmap index
+    mmap_index: usize,
     /// current heap pointer
     current: *mut u8,
-    /// heap start
-    heap_start: *mut u8,
-    /// heap end
-    heap_end: *mut u8,
+    /// current mmap size
+    heap_size: usize,
+    min_mmap_start: *mut u8,
+    max_mmap_end: *mut u8,
     /// 所有被归还的Block都会被放到这个Vec里面
-    free_blocks: Vec<(*mut Block, bool)>,
+    free_blocks: Vec<(*mut Block, bool, usize)>,
     /// lock
     lock: ReentrantMutex<()>,
     /// big object mmap
@@ -45,14 +49,18 @@ impl GlobalAllocator {
     /// size is the max heap size
     pub fn new(size: usize) -> Self {
         let mmap = Mmap::new(size);
-
+        // println!("mmap start: {:p}, end: {:p}", mmap.start(), mmap.end());
+        let start = mmap.aligned(BLOCK_SIZE);
+        let end = mmap.end();
         // mmap.commit(mmap.aligned(), BLOCK_SIZE);
 
         Self {
-            current: mmap.aligned(BLOCK_SIZE),
-            heap_start: mmap.aligned(BLOCK_SIZE),
-            heap_end: mmap.end(),
-            mmap,
+            current: start,
+            mmaps: RefCell::new(vec![mmap]),
+            mmap_index: 0,
+            heap_size: size,
+            min_mmap_start: start,
+            max_mmap_end: end,
             free_blocks: Vec::new(),
             lock: ReentrantMutex::new(()),
             big_obj_allocator: BigObjAllocator::new(size),
@@ -68,15 +76,19 @@ impl GlobalAllocator {
 
     pub fn unmap_all(&mut self) {
         let _lock = self.lock.lock();
-        self.free_blocks.iter_mut().for_each(|(block, freed)| {
+        self.free_blocks.iter_mut().for_each(|(block, freed, mmap_index)| {
             if *freed {
                 return;
             }
-            self.mmap.dontneed(*block as *mut u8, BLOCK_SIZE);
+            // 根据block的地址获取mmap的index
+            let mmap = &self.mmaps.borrow()[*mmap_index];
+            mmap.dontneed(*block as *mut u8, BLOCK_SIZE);
             *freed = true;
         });
     }
-
+    pub fn heap_size(&self) -> usize {
+        self.heap_size
+    }
     pub fn return_big_objs<I>(&mut self, objs: I)
     where
         I: IntoIterator<Item = *mut BigObj>,
@@ -86,17 +98,32 @@ impl GlobalAllocator {
             self.big_obj_allocator.return_chunk(obj);
         }
     }
-    /// 从mmap的heap空间之中获取一个Option<* mut Block>，如果heap空间不够了，就返回None
+    /// 扩展堆接口
+    pub fn expand_heap(&mut self, size: usize) {
+        let _lock = self.lock.lock();
+        let mmap = Mmap::new(size);
+        let start = mmap.aligned(BLOCK_SIZE);
+        let end = mmap.end();
+        self.mmaps.borrow_mut().push(mmap);
+        self.heap_size += size;
+        self.min_mmap_start = min_by(self.min_mmap_start, start, |a, b| a.cmp(b));
+        self.max_mmap_end = max_by(self.max_mmap_end, end, |a, b| a.cmp(b));
+        self.current = start;
+        self.mmap_index += 1;
+    }
+
+    /// 从mmap的heap空间之中获取一个Option<* mut Block>，如果heap空间不够了，返回None
     ///
     /// 每次分配block会让current增加一个block的大小
     fn alloc_block(&self) -> Option<*mut Block> {
         let current = self.current;
-        let heap_end = self.heap_end;
+        let mmap = &self.mmaps.borrow()[self.mmap_index];
+        let heap_end = mmap.end();
 
-        if current >= heap_end {
+        if current > unsafe { heap_end.sub(BLOCK_SIZE) } {
             return None;
         }
-        self.mmap.commit(current, BLOCK_SIZE);
+        mmap.commit(current, BLOCK_SIZE);
         // if unsafe { current.add(BLOCK_SIZE * 32) } >= heap_end {
         //     return None;
         // }
@@ -104,7 +131,7 @@ impl GlobalAllocator {
         //     self.mmap.commit(current, BLOCK_SIZE * 32);
         // }
 
-        let block = Block::new(current);
+        let block = Block::new(current, self.mmap_index);
 
         Some(block)
     }
@@ -125,9 +152,10 @@ impl GlobalAllocator {
         // return b;
         let _lock = self.lock.lock();
         self.mem_usage_flag += 1;
-        let block = if let Some((block, freed)) = self.free_blocks.pop() {
+        let block = if let Some((block, freed, mmap_index)) = self.free_blocks.pop() {
             if freed {
-                self.mmap.commit(block as *mut u8, BLOCK_SIZE);
+                let mmap = &self.mmaps.borrow()[mmap_index];
+                mmap.commit(block as *mut u8, BLOCK_SIZE);
             }
             block
         } else {
@@ -159,10 +187,11 @@ impl GlobalAllocator {
                 // println!("trigger dont need");
                 self.free_blocks
                     .iter_mut()
-                    .filter(|(_, free)| !*free)
-                    .for_each(|(block, freed)| {
+                    .filter(|(_, free, _)| !*free)
+                    .for_each(|(block, freed, mmap_index)| {
                         if !*freed {
-                            self.mmap.dontneed(*block as *mut u8, BLOCK_SIZE);
+                            let mmap = &self.mmaps.borrow()[*mmap_index];
+                            mmap.dontneed(*block as *mut u8, BLOCK_SIZE);
                             *freed = true;
                         }
                     });
@@ -185,7 +214,8 @@ impl GlobalAllocator {
         let _lock = self.lock.lock();
         for block in blocks {
             self.mem_usage_flag -= 1;
-            self.free_blocks.push((block, false));
+            let mmap_index = unsafe { (*block).mmap_index };
+            self.free_blocks.push((block, false, mmap_index));
             // self.mmap
             //     .dontneed(block as *mut Block as *mut u8, BLOCK_SIZE);
         }
@@ -202,7 +232,10 @@ impl GlobalAllocator {
     /// # in heap
     /// 判断一个指针是否在heap之中
     pub fn in_heap(&self, ptr: *mut u8) -> bool {
-        ptr >= self.heap_start && ptr < self.heap_end
+        let ptr = ptr as usize;
+        let min = self.min_mmap_start as usize;
+        let max = self.max_mmap_end as usize;
+        ptr >= min && ptr <= max
     }
 
     /// # in_big_heap

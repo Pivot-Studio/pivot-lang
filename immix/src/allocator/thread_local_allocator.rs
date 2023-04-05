@@ -283,6 +283,19 @@ impl ThreadLocalAllocator {
         }
         re
     }
+    /// # extend_heap
+    /// 
+    /// 扩展堆
+    /// 
+    /// ## Parameters
+    /// 
+    /// * `size` - 扩展的大小
+    pub fn expand_heap(&mut self, size: usize) {
+        unsafe{(*self.global_allocator).expand_heap(size)};
+    }
+    pub fn heap_size(&self) -> usize {
+        unsafe{(*self.global_allocator).heap_size()}
+    }
     /// # big_obj_alloc
     ///
     /// 大对象分配

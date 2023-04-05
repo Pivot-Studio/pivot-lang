@@ -134,6 +134,20 @@ mod _unix {
             }
         }
     }
+    // #[cfg(test)]
+    // mod tests {
+    //     use crate::{BLOCK_SIZE, Block};
+
+    //     use super::*;
+    //     #[test]
+    //     fn test_mmap() {
+    //         let mmap1 = Mmap::new(8*BLOCK_SIZE);
+    //         let ptr1 = mmap1.aligned(BLOCK_SIZE);
+    //         mmap1.commit(ptr1, BLOCK_SIZE);
+    //         let b = Block::new(ptr1, 0);
+            
+    //     }
+    // }
 }
 
 #[cfg(unix)]

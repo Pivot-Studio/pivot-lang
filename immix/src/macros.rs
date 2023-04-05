@@ -21,3 +21,10 @@ macro_rules! round_n_up {
         $v + $n - ($v - 1) % $n - 1
     };
 }
+
+#[macro_export]
+macro_rules! round_n_down {
+    ($v:expr, $n:expr) => {
+        $v / $n * $n
+    };
+}

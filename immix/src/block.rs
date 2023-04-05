@@ -64,6 +64,8 @@ pub struct Block {
     hole_num: usize,
     available_line_num: usize,
     eva_target: bool,
+    /// 所在mmap的index
+    pub mmap_index: usize,
 }
 
 impl HeaderExt for u8 {
@@ -154,7 +156,7 @@ impl Block {
     /// Create a new block.
     ///
     /// at must be a `BLOCK_SIZE` aligned pointer.
-    pub fn new(at: *mut u8) -> &'static mut Self {
+    pub fn new(at: *mut u8, mmap_idx: usize) -> &'static mut Self {
         unsafe {
             let ptr = at as *mut Self;
             debug_assert!(ptr as usize % BLOCK_SIZE == 0);
@@ -166,6 +168,7 @@ impl Block {
                 hole_num: 1,
                 available_line_num: NUM_LINES_PER_BLOCK - 3,
                 eva_target: false,
+                mmap_index: mmap_idx,
             });
 
             &mut *ptr
