@@ -14,7 +14,7 @@ use crate::{
     block::{Block, LineHeaderExt, ObjectType},
     gc_is_auto_collect_enabled, spin_until, HeaderExt, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID,
     GC_MARKING, GC_MARK_COND, GC_RUNNING, GC_STW_COUNT, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE,
-    NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION,
+    NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION, DEFAULT_HEAP_SIZE,
 };
 
 /// # Collector
@@ -120,7 +120,9 @@ impl Collector {
             drop_in_place(self.thread_local_allocator);
         }
     }
-
+    fn heap_size(&self) -> usize {
+        unsafe { self.thread_local_allocator.as_mut().unwrap().heap_size() }
+    }
     /// # get_size
     ///
     /// Get the size of allocated space.
@@ -143,18 +145,10 @@ impl Collector {
     /// * `ptr` - object pointer
     pub fn alloc(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
         if gc_is_auto_collect_enabled() {
+            // 如果有线程正在等待，本线程也进入等待状态
             if GC_RUNNING.load(Ordering::Acquire) {
                 self.collect();
             }
-            let status = self.status.borrow();
-            if status.collect_threshold < status.bytes_allocated_since_last_gc {
-                drop(status);
-                self.collect();
-            } else {
-                drop(status);
-            }
-            let mut status = self.status.borrow_mut();
-            status.bytes_allocated_since_last_gc += ((size - 1) / LINE_SIZE + 1) * LINE_SIZE;
         }
         unsafe {
             let ptr = self
@@ -162,10 +156,19 @@ impl Collector {
                 .as_mut()
                 .unwrap()
                 .alloc(size, obj_type);
+            // 如果分配失败，选择扩展堆或者回收
             if ptr.is_null() {
-                self.collect();
+                let status = self.status.borrow();
+                if status.bytes_allocated_since_last_gc < self.heap_size() / 8 {
+                    self.thread_local_allocator.as_mut().unwrap().expand_heap(DEFAULT_HEAP_SIZE);
+                }else{
+                    drop(status);
+                    self.collect();
+                }
                 return self.alloc(size, obj_type);
             }
+            let mut status = self.status.borrow_mut();
+            status.bytes_allocated_since_last_gc += ((size - 1) / LINE_SIZE + 1) * LINE_SIZE;
             ptr
         }
     }
@@ -374,6 +377,7 @@ impl Collector {
     ///
     /// this mark function is __precise__
     pub fn mark(&self) {
+        // 有线程准备开始mark
         GC_RUNNING.store(true, Ordering::Release);
 
         let mut v = GC_COLLECTOR_COUNT.lock();
@@ -382,24 +386,28 @@ impl Collector {
         *v = (count, waiting);
         // println!("gc mark {}: waiting: {}, count: {}", self.id, waiting, count);
         if waiting != count {
+            // 还有线程没有进入等待
             GC_MARK_COND.wait_while(&mut v, |(c, _)| {
                 // 线程数量变化了？
                 if waiting == *c {
+                    // 线程减到count了，说明所有线程都已经进入等待
                     GC_MARKING.store(true, Ordering::Release);
                     GC_STW_COUNT.fetch_add(1, Ordering::Relaxed);
                     GC_MARK_COND.notify_all();
                     return false;
                 }
+                // 已经有线程进入mark了，等待它们完成
                 !GC_MARKING.load(Ordering::Acquire)
             });
             drop(v);
         } else {
+            // 所有线程都已经进入等待
             GC_MARKING.store(true, Ordering::Release);
             GC_STW_COUNT.fetch_add(1, Ordering::Relaxed);
             GC_MARK_COND.notify_all();
             drop(v);
         }
-
+        
         #[cfg(feature = "shadow_stack")]
         {
             for (root, obj_type) in self.roots.iter() {
