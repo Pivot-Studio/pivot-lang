@@ -329,6 +329,12 @@ impl PLDiag {
         };
         diags.entry(p).or_default().push(d);
     }
+    pub fn get_range(&self) -> Range {
+        self.raw.range
+    }
+    pub fn get_diag_code(&self) -> DiagCode {
+        self.raw.code
+    }
     pub fn new_error(range: Range, code: ErrorCode) -> Self {
         PLDiag {
             raw: Box::new(PLDiagRaw {

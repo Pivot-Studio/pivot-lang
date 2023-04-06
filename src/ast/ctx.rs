@@ -1056,14 +1056,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 }
                 if lg.trait_impl.is_some() {
                     if let PLType::Generic(r) = &*r.borrow() {
-                        if let Some(rt) = &r.trait_impl {
-                            if lg.trait_impl.as_ref().unwrap().clone() != rt.clone() {
-                                return EqRes {
-                                    eq: false,
-                                    need_up_cast: false,
-                                };
-                            }
-                        } else {
+                        if r.trait_impl != lg.trait_impl {
                             return EqRes {
                                 eq: false,
                                 need_up_cast: false,
