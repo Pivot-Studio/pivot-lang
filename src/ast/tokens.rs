@@ -90,7 +90,8 @@ define_tokens!(
     ARROW = "=>",
     WHERE = "where",
     TYPE = "type",
-    TYPE_OR = "|"
+    TYPE_OR = "|",
+    AS = "as",
 );
 
 impl TokenType {

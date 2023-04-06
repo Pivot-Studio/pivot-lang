@@ -44,6 +44,7 @@ pub mod error;
 #[macro_use]
 pub mod macros;
 pub mod array;
+pub mod cast;
 pub mod comment;
 pub mod constval;
 pub mod control;

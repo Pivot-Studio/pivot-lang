@@ -10,6 +10,7 @@ use enum_dispatch::enum_dispatch;
 
 use lsp_types::SemanticTokenType;
 
+use self::cast::AsNode;
 use self::comment::CommentNode;
 use self::control::*;
 use self::error::*;
@@ -38,6 +39,7 @@ use super::fmt::FmtBuilder;
 use super::pltype::{PLType, PriType};
 use super::range::{Pos, Range};
 
+pub mod cast;
 pub mod comment;
 pub mod control;
 pub mod error;
@@ -151,6 +153,7 @@ pub enum NodeEnum {
     MacroNode(MacroNode),
     MacroCallNode(MacroCallNode),
     UnionDefNode(UnionDefNode),
+    AsNode(AsNode),
 }
 // ANCHOR: range
 #[enum_dispatch]

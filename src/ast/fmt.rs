@@ -1,7 +1,10 @@
+use std::process::exit;
+
 use crate::{ast::node::Num, utils::read_config::enter};
 
 use super::{
     node::{
+        cast::AsNode,
         comment::CommentNode,
         control::{BreakNode, ContinueNode, ForNode, IfNode, WhileNode},
         error::{ErrorNode, StErrorNode},
@@ -691,5 +694,12 @@ impl FmtBuilder {
     }
     pub fn parse_union_def_node(&mut self, node: &UnionDefNode) {
         todo!()
+    }
+    pub fn parse_as_node(&mut self, node: &AsNode) {
+        node.expr.format(self);
+        self.space();
+        self.token("as");
+        self.space();
+        node.ty.format(self);
     }
 }

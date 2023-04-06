@@ -198,7 +198,7 @@ impl PLType {
             PLType::Struct(_) | PLType::Arr(_) => ObjectType::Complex,
             PLType::Pointer(_) => ObjectType::Pointer,
             PLType::Trait(_) => ObjectType::Trait,
-            PLType::Union(_) => ObjectType::Trait,// share same layout as trait
+            PLType::Union(_) => ObjectType::Trait, // share same layout as trait
             _ => ObjectType::Atomic,
         }
     }
