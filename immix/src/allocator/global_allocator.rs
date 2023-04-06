@@ -1,4 +1,7 @@
-use std::{cell::RefCell, cmp::{min_by, max_by}};
+use std::{
+    cell::RefCell,
+    cmp::{max_by, min_by},
+};
 
 use parking_lot::ReentrantMutex;
 
@@ -76,15 +79,17 @@ impl GlobalAllocator {
 
     pub fn unmap_all(&mut self) {
         let _lock = self.lock.lock();
-        self.free_blocks.iter_mut().for_each(|(block, freed, mmap_index)| {
-            if *freed {
-                return;
-            }
-            // 根据block的地址获取mmap的index
-            let mmap = &self.mmaps.borrow()[*mmap_index];
-            mmap.dontneed(*block as *mut u8, BLOCK_SIZE);
-            *freed = true;
-        });
+        self.free_blocks
+            .iter_mut()
+            .for_each(|(block, freed, mmap_index)| {
+                if *freed {
+                    return;
+                }
+                // 根据block的地址获取mmap的index
+                let mmap = &self.mmaps.borrow()[*mmap_index];
+                mmap.dontneed(*block as *mut u8, BLOCK_SIZE);
+                *freed = true;
+            });
     }
     pub fn heap_size(&self) -> usize {
         self.heap_size

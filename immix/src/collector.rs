@@ -12,9 +12,9 @@ use crate::STACK_MAP;
 use crate::{
     allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
-    gc_is_auto_collect_enabled, spin_until, HeaderExt, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID,
-    GC_MARKING, GC_MARK_COND, GC_RUNNING, GC_STW_COUNT, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE,
-    NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION, DEFAULT_HEAP_SIZE,
+    gc_is_auto_collect_enabled, spin_until, HeaderExt, DEFAULT_HEAP_SIZE, ENABLE_EVA,
+    GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_COND, GC_RUNNING, GC_STW_COUNT, GC_SWEEPING,
+    GC_SWEEPPING_NUM, LINE_SIZE, NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION,
 };
 
 /// # Collector
@@ -160,8 +160,11 @@ impl Collector {
             if ptr.is_null() {
                 let status = self.status.borrow();
                 if status.bytes_allocated_since_last_gc < self.heap_size() / 8 {
-                    self.thread_local_allocator.as_mut().unwrap().expand_heap(DEFAULT_HEAP_SIZE);
-                }else{
+                    self.thread_local_allocator
+                        .as_mut()
+                        .unwrap()
+                        .expand_heap(DEFAULT_HEAP_SIZE);
+                } else {
                     drop(status);
                     self.collect();
                 }
@@ -407,7 +410,7 @@ impl Collector {
             GC_MARK_COND.notify_all();
             drop(v);
         }
-        
+
         #[cfg(feature = "shadow_stack")]
         {
             for (root, obj_type) in self.roots.iter() {

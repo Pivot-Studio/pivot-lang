@@ -145,7 +145,7 @@ mod _unix {
     //         let ptr1 = mmap1.aligned(BLOCK_SIZE);
     //         mmap1.commit(ptr1, BLOCK_SIZE);
     //         let b = Block::new(ptr1, 0);
-            
+
     //     }
     // }
 }
