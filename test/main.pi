@@ -12,14 +12,13 @@ use project1::test::string;
 use project1::test::macros;
 use pl_test::main;
 use std::io;
-type A = i128 | f32;
+type A<T> = f32|T;
 pub fn test_union() i64 {
     let a: i128 = 1;
     let b: f32 = 1.0;
-    let c: A = a;
+    let c: A<i128> = a;
     let d = c;
     d = b;
-    d = ""
     return 0;
 }
 

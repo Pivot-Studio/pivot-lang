@@ -79,6 +79,45 @@ impl UnionType {
     pub fn get_full_name(&self) -> String {
         format!("{}..{}", self.path, self.name)
     }
+    pub fn append_name_with_generic(&self) -> String {
+        let typeinfer = self
+            .generic_map
+            .iter()
+            .map(|(_, v)| match &*v.clone().borrow() {
+                PLType::Generic(g) => g.curpltype.as_ref().unwrap().borrow().get_name(),
+                _ => unreachable!(),
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("{}<{}>", self.name, typeinfer)
+    }
+    pub fn gen_code<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> UnionType {
+        let name = self.append_name_with_generic();
+        if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
+            match &*pltype.borrow() {
+                PLType::Union(st) => {
+                    return st.clone();
+                }
+                _ => unreachable!(),
+            }
+        }
+        let mut res = self.clone();
+        res.name = name;
+        ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Union(res.clone()))));
+        res.sum_types = res
+            .sum_types
+            .iter()
+            .map(|t| t.get_type(ctx, builder).unwrap().borrow().get_typenode())
+            .collect();
+        res.generic_map.clear();
+        let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
+        pltype.replace(PLType::Union(res.clone()));
+        res
+    }
 }
 
 /// # PriType
@@ -237,6 +276,7 @@ impl PLType {
             }
             PLType::Trait(t) => new_typename_node(&t.name, t.range),
             PLType::Fn(_) => unreachable!(),
+            PLType::Union(u) => new_typename_node(&u.name, u.range),
         }
     }
     pub fn is(&self, pri_type: &PriType) -> bool {
@@ -946,7 +986,7 @@ impl GenericType {
         ctx.add_type(name_in_map, pltype, range).unwrap();
     }
 }
-generic_impl!(FnType, STType);
+generic_impl!(FnType, STType, UnionType);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceHolderType {
     pub name: String,

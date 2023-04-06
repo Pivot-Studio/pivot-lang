@@ -235,6 +235,8 @@ impl VarNode {
                     if let PLType::Struct(st) | PLType::Trait(st) = &*tp.clone().borrow() {
                         ctx.send_if_go_to_def(self.range, st.range, ctx.plmod.path.clone());
                         // ctx.set_if_refs(st.refs.clone(), self.range);
+                    } else if let PLType::Union(u) = &*tp.clone().borrow() {
+                        ctx.send_if_go_to_def(self.range, u.range, ctx.plmod.path.clone());
                     }
                     return Ok((None, Some(tp.clone()), TerminatorEnum::None));
                 }
