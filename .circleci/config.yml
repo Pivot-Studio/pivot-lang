@@ -14,9 +14,12 @@ jobs:
     steps:
       - checkout
       - run: |
+          if [[ $EUID == 0 ]]; then export SUDO=""; else # Check if we are root
+            export SUDO="sudo";
+          fi
           sudo apt-get update
           sudo apt-get install libasound2-dev libudev-dev
-          ./setup-llvm.sh
+          sudo ./setup-llvm.sh
           cd immix
           cargo bench
 workflows:
