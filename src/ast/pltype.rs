@@ -216,7 +216,8 @@ impl PLType {
             PLType::PlaceHolder(p) => {
                 new_typename_node(&p.get_place_holder_name(), Default::default())
             }
-            _ => unreachable!(),
+            PLType::Trait(t) => new_typename_node(&t.name, t.range),
+            PLType::Fn(_) => unreachable!(),
         }
     }
     pub fn is(&self, pri_type: &PriType) -> bool {

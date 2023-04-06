@@ -69,7 +69,10 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                         if let Some(g) = &mut mth.generics {
                             g.generics.append(generics_from_impl)
                         } else {
-                            mth.generics = im.generics.clone()
+                            mth.generics = im.generics.clone();
+                            if let Some(g) = &mut mth.generics {
+                                g.generics_size = 0;
+                            }
                         }
                         mth.id.name = format!("|{}::{}", imname, mth.id.name);
                         mth.paralist.insert(

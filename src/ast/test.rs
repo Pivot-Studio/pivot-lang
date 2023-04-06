@@ -14,10 +14,11 @@ mod test {
     use crate::{
         ast::{
             accumulators::{
-                Completions, DocSymbols, GotoDef, Hints, PLFormat, PLHover, PLReferences,
-                PLSignatureHelp,
+                Completions, Diagnostics, DocSymbols, GotoDef, Hints, PLFormat, PLHover,
+                PLReferences, PLSignatureHelp,
             },
             compiler::{compile_dry, ActionType},
+            diag::DiagCode,
             range::Pos,
         },
         db::Database,
@@ -56,6 +57,27 @@ mod test {
         compile_dry::accumulated::<A>(db, input)
     }
     #[test]
+    fn test_diag() {
+        let comps = test_lsp::<Diagnostics>(
+            &Database::default(),
+            None,
+            ActionType::Diagnostic,
+            "test/lsp_diag/test_diag.pi",
+        );
+        assert!(!comps.is_empty());
+        let (file, diag) = &comps[0];
+        assert!(file.contains("test_diag.pi"));
+        assert_eq!(diag.len(), 1);
+        assert_eq!(
+            new_diag_range(10, 14, 10, 15),
+            diag[0].get_range().to_diag_range()
+        );
+        assert_eq!(
+            diag[0].get_diag_code(),
+            DiagCode::Err(crate::ast::diag::ErrorCode::TYPE_MISMATCH)
+        );
+    }
+    #[test]
     fn test_memory_leak() {
         let db = &mut Database::default();
         let docs = MemDocs::default();
@@ -92,7 +114,7 @@ mod test {
             .to_string();
         input.docs(db).lock().unwrap().borrow_mut().change(
             db,
-            new_range(0, 0, 0, 0),
+            new_diag_range(0, 0, 0, 0),
             path,
             "\n".repeat(2),
         );
@@ -244,7 +266,7 @@ mod test {
             InlayHintLabel::String(": i64".to_string())
         );
     }
-    fn new_range(sl: u32, sc: u32, el: u32, ec: u32) -> lsp_types::Range {
+    fn new_diag_range(sl: u32, sc: u32, el: u32, ec: u32) -> lsp_types::Range {
         lsp_types::Range {
             start: lsp_types::Position {
                 line: sl,
@@ -274,7 +296,7 @@ mod test {
         assert!(!def.is_empty());
         if let GotoDefinitionResponse::Scalar(sc) = def[0].clone() {
             assert!(sc.uri.to_string().contains("test/lsp/mod.pi"));
-            assert_eq!(sc.range, new_range(1, 0, 3, 1));
+            assert_eq!(sc.range, new_diag_range(1, 0, 3, 1));
         } else {
             panic!("expect goto def to be scalar, found {:?}", def[0])
         }
@@ -363,7 +385,7 @@ mod test {
             .find(|l| {
                 let ok = l.uri.to_string().contains("test/lsp/mod.pi");
                 if ok {
-                    assert!(l.range == new_range(1, 7, 1, 11))
+                    assert!(l.range == new_diag_range(1, 7, 1, 11))
                 }
                 ok
             })
@@ -373,7 +395,7 @@ mod test {
             .find(|l| {
                 let ok = l.uri.to_string().contains("test/lsp/test_completion.pi");
                 if ok {
-                    assert!(l.range == new_range(38, 11, 38, 15))
+                    assert!(l.range == new_diag_range(38, 11, 38, 15))
                 }
                 ok
             })
@@ -383,7 +405,7 @@ mod test {
             .find(|l| {
                 let ok = l.uri.to_string().contains("test/lsp/mod2.pi");
                 if ok {
-                    assert!(l.range == new_range(3, 17, 3, 21))
+                    assert!(l.range == new_diag_range(3, 17, 3, 21))
                 }
                 ok
             })
@@ -408,7 +430,7 @@ mod test {
             "expect test's type to be struct, found {:?}",
             testst.unwrap().kind
         );
-        let expect = new_range(0, 0, 5, 1);
+        let expect = new_diag_range(0, 0, 5, 1);
         assert_eq!(
             testst.unwrap().range,
             expect,
@@ -423,7 +445,7 @@ mod test {
             "expect name1's type to be struct, found {:?}",
             name1fn.unwrap().kind
         );
-        let expect = new_range(26, 0, 29, 1);
+        let expect = new_diag_range(26, 0, 29, 1);
         assert_eq!(
             name1fn.unwrap().range,
             expect,

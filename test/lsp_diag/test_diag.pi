@@ -1,0 +1,17 @@
+trait TestTrait {
+}
+
+struct A {
+}
+
+impl TestTrait for A {
+}
+
+struct B<T> {
+    x: BInner<T>;
+}
+
+struct BInner<T: TestTrait> {
+    x: T;
+}
+
