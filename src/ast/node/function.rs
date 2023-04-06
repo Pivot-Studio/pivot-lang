@@ -69,8 +69,18 @@ impl Node for FuncCallNode {
                 if i >= fnvalue.fntype.generics_size {
                     break;
                 }
-                if generic_types[i].is_some() {
-                    ctx.eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
+                if generic_types[i].is_some()
+                    && !ctx
+                        .eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
+                        .eq
+                {
+                    return Err(ctx.add_diag(
+                        generic_params.generics[i]
+                            .as_ref()
+                            .unwrap()
+                            .range()
+                            .new_err(ErrorCode::TYPE_MISMATCH),
+                    ));
                 }
             }
         }
@@ -232,10 +242,13 @@ impl TypeNode for FuncDefNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> TypeNodeResult {
         let child = &mut ctx.new_child(self.range.start, builder);
-        let generic_map = self
-            .generics
-            .as_ref()
-            .map_or(IndexMap::default(), |generics| generics.gen_generic_type());
+        let generic_map = if let Some(generics) = &self.generics {
+            let mp = generics.gen_generic_type();
+            generics.set_traits(child, builder, &mp)?;
+            mp
+        } else {
+            IndexMap::default()
+        };
         if let Some(trait_bounds) = &self.trait_bounds {
             for trait_bound in trait_bounds.iter() {
                 trait_bound.set_traits(child, builder, &generic_map)?;
@@ -525,10 +538,9 @@ impl Node for FuncDefNode {
         }
         ctx.push_semantic_token(self.ret.range(), SemanticTokenType::TYPE, 0);
         if let Some(trait_bounds) = &self.trait_bounds {
-            trait_bounds.iter().for_each(|trait_bound| {
-                ctx.push_semantic_token(trait_bound.generic.range, SemanticTokenType::PARAMETER, 0);
-                ctx.push_semantic_token(trait_bound.impl_trait.range(), SemanticTokenType::TYPE, 0);
-            });
+            trait_bounds
+                .iter()
+                .for_each(|trait_bound| trait_bound.emit_highlight(ctx));
         }
         let pltype = ctx.get_type(&self.id.name, self.range)?;
         if pltype.borrow().get_range() != Some(self.range) {

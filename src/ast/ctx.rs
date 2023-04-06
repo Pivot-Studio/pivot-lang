@@ -1049,25 +1049,43 @@ impl<'a, 'ctx> Ctx<'a> {
                 };
             }
         }
-        if let PLType::Generic(l) = &mut *l.borrow_mut() {
-            if l.curpltype.is_some() {
-                return self.eq(l.curpltype.as_ref().unwrap().clone(), r);
-            }
-            if l.trait_impl.is_some()
-                && !self
-                    .eq(l.trait_impl.as_ref().unwrap().clone(), r.clone())
-                    .eq
-            {
+        if matches!(&*l.borrow(), PLType::Generic(_)) {
+            if let PLType::Generic(lg) = &mut *l.borrow_mut() {
+                if lg.curpltype.is_some() {
+                    return self.eq(lg.curpltype.as_ref().unwrap().clone(), r);
+                }
+                if lg.trait_impl.is_some() {
+                    if let PLType::Generic(r) = &*r.borrow() {
+                        if let Some(rt) = &r.trait_impl {
+                            if lg.trait_impl.as_ref().unwrap().clone() != rt.clone() {
+                                return EqRes {
+                                    eq: false,
+                                    need_up_cast: false,
+                                };
+                            }
+                        } else {
+                            return EqRes {
+                                eq: false,
+                                need_up_cast: false,
+                            };
+                        }
+                    } else if !self
+                        .eq(lg.trait_impl.as_ref().unwrap().clone(), r.clone())
+                        .eq
+                    {
+                        return EqRes {
+                            eq: false,
+                            need_up_cast: false,
+                        };
+                    }
+                }
+                lg.set_type(r);
                 return EqRes {
-                    eq: false,
+                    eq: true,
                     need_up_cast: false,
                 };
             }
-            l.set_type(r);
-            return EqRes {
-                eq: true,
-                need_up_cast: false,
-            };
+            unreachable!()
         }
         if l != r {
             let trait_pltype = l;

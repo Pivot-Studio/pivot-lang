@@ -14,11 +14,12 @@ mod test {
     use crate::{
         ast::{
             accumulators::{
-                Completions, DocSymbols, GotoDef, Hints, PLFormat, PLHover, PLReferences,
-                PLSignatureHelp,
+                Completions, Diagnostics, DocSymbols, GotoDef, Hints, PLFormat, PLHover,
+                PLReferences, PLSignatureHelp,
             },
             compiler::{compile_dry, ActionType},
-            range::Pos,
+            diag::PLDiag,
+            range::{Pos, Range},
         },
         db::Database,
         lsp::mem_docs::{MemDocs, MemDocsInput},
@@ -54,6 +55,42 @@ mod test {
         );
         compile_dry(db, input).unwrap();
         compile_dry::accumulated::<A>(db, input)
+    }
+    #[test]
+    fn test_diag() {
+        let comps = test_lsp::<Diagnostics>(
+            &Database::default(),
+            Some((
+                Pos {
+                    line: 10,
+                    column: 6,
+                    offset: 0,
+                },
+                None,
+            )),
+            ActionType::Completion,
+            "test/lsp_diag/test_diag.pi",
+        );
+        assert!(!comps.is_empty());
+        let (file, diag) = &comps[0];
+        assert!(file.contains("test_diag.pi"));
+        assert_eq!(diag.len(), 1);
+        let expect_diag = PLDiag::new_error(
+            Range {
+                start: Pos {
+                    line: 11,
+                    column: 15,
+                    offset: 89,
+                },
+                end: Pos {
+                    line: 11,
+                    column: 16,
+                    offset: 90,
+                },
+            },
+            crate::ast::diag::ErrorCode::TYPE_MISMATCH,
+        );
+        assert_eq!(expect_diag, diag[0]);
     }
     #[test]
     fn test_memory_leak() {

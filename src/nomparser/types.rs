@@ -87,7 +87,7 @@ pub fn generic_type_def(input: Span) -> IResult<Span, Box<GenericDefNode>> {
     map_res(
         tuple((
             tag_token_symbol(TokenType::LESS),
-            separated_list1(tag_token_symbol(TokenType::GENERIC_SEP), identifier),
+            separated_list1(tag_token_symbol(TokenType::GENERIC_SEP), trait_bound),
             tag_token_symbol(TokenType::GREATER),
         )),
         |(lf, ids, ri)| {

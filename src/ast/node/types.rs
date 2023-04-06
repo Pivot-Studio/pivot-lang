@@ -2,6 +2,7 @@ use std::cell::RefCell;
 
 use std::sync::Arc;
 
+use super::interface::TraitBoundNode;
 use super::primary::VarNode;
 use super::*;
 
@@ -93,9 +94,13 @@ impl TypeNameNode {
                         )
                         .eq
                     {
-                        return Err(
-                            ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER))
-                        );
+                        return Err(ctx.add_diag(
+                            generic_params.generics[i]
+                                .as_ref()
+                                .unwrap()
+                                .range()
+                                .new_err(ErrorCode::TYPE_MISMATCH),
+                        ));
                     }
                     i += 1;
                 }
@@ -410,10 +415,13 @@ impl StructDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) {
-        let generic_map = self
-            .generics
-            .as_ref()
-            .map_or(IndexMap::default(), |generics| generics.gen_generic_type());
+        let generic_map = if let Some(generics) = &self.generics {
+            let mp = generics.gen_generic_type();
+            _ = generics.set_traits(ctx, builder, &mp);
+            mp
+        } else {
+            IndexMap::default()
+        };
         let stu = Arc::new(RefCell::new(PLType::Struct(STType {
             name: self.id.name.clone(),
             path: ctx.plmod.path.clone(),
@@ -434,10 +442,12 @@ impl StructDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<(), PLDiag> {
-        let generic_map = self
-            .generics
-            .as_ref()
-            .map_or(IndexMap::default(), |generics| generics.gen_generic_type());
+        let pltype = ctx.get_type(self.id.name.as_str(), self.range)?;
+        let generic_map = if let PLType::Struct(st) = &mut *pltype.borrow_mut() {
+            st.generic_map.clone()
+        } else {
+            IndexMap::default()
+        };
         ctx.protect_generic_context(&generic_map, |ctx| {
             let mut fields = FxHashMap::<String, Field>::default();
             let mut order_fields = Vec::<Field>::new();
@@ -453,7 +463,6 @@ impl StructDefNode {
             order_fields.push(vtable_field);
             let mut i = 1;
             let mut field_pltps = vec![];
-            let pltype = ctx.get_type(self.id.name.as_str(), self.range)?;
             let clone_map = ctx.plmod.types.clone();
             for field in self.fields.iter() {
                 if !field.has_semi {
@@ -722,7 +731,7 @@ impl Node for ArrayInitNode {
 
 #[node]
 pub struct GenericDefNode {
-    pub generics: Vec<Box<VarNode>>,
+    pub generics: Vec<Box<TraitBoundNode>>,
     pub generics_size: usize,
 }
 
@@ -734,7 +743,7 @@ impl PrintTrait for GenericDefNode {
         let mut i = self.generics.len();
         for g in &self.generics {
             i -= 1;
-            g.print(tabs + 1, i == 0, line.clone());
+            g.generic.print(tabs + 1, i == 0, line.clone());
         }
     }
 }
@@ -751,14 +760,25 @@ impl Node for GenericDefNode {
 impl GenericDefNode {
     pub fn emit_highlight(&self, ctx: &mut Ctx) {
         for g in self.generics.iter() {
-            ctx.push_semantic_token(g.range, SemanticTokenType::TYPE, 0);
+            g.emit_highlight(ctx);
         }
+    }
+    pub fn set_traits<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+        generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
+    ) -> Result<(), PLDiag> {
+        for g in self.generics.iter() {
+            g.set_traits(ctx, builder, generic_map)?;
+        }
+        Ok(())
     }
     pub fn gen_generic_type(&self) -> IndexMap<String, Arc<RefCell<PLType>>> {
         let mut res = IndexMap::default();
         for g in self.generics.iter() {
             let range = g.range;
-            let name = g.name.clone();
+            let name = g.generic.name.clone();
             let gentype = GenericType {
                 name: name.clone(),
                 range,

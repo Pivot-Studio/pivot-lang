@@ -1,0 +1,3 @@
+project = "test"
+entry = "test_diag.pi"
+

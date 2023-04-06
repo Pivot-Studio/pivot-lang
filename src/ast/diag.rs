@@ -88,6 +88,7 @@ define_error!(
     GENERIC_CANNOT_BE_INFER = "generic can not be infer",
     RECEIVER_CANNOT_BE_INFER = "receiver can not be infer",
     DUPLICATE_METHOD = "duplicate method",
+    DUPLICATE_TRAIT_BOUND = "duplicate trait bound",
     GENERIC_PARAM_LEN_MISMATCH = "generic param len mismatch",
     GENERIC_NOT_FOUND = "generic not found",
     NOT_GENERIC_TYPE = "not generic type",

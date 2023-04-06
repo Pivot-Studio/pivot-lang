@@ -125,3 +125,19 @@ impl<X1|Y1> Point<X1|Y1> {
 
 }
 
+struct StWithTrait<T: TestTrait> {
+    x: Inner<T>;
+}
+
+impl<J: TestTrait> StWithTrait<J> {
+    fn call_trait() void {
+        self.x.y.name();
+        return;
+    }
+
+}
+
+struct Inner<T: TestTrait> {
+    y: T;
+}
+

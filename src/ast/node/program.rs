@@ -67,11 +67,11 @@ impl Node for ProgramNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         // emit structs
-        for def in self.structs.iter() {
+        for def in self.traits.iter() {
             // 提前加入占位符号，解决自引用问题
             def.add_to_symbols(ctx, builder);
         }
-        for def in self.traits.iter() {
+        for def in self.structs.iter() {
             // 提前加入占位符号，解决自引用问题
             def.add_to_symbols(ctx, builder);
         }

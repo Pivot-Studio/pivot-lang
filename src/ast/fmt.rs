@@ -8,7 +8,7 @@ use super::{
         function::{FuncCallNode, FuncDefNode},
         global::GlobalNode,
         implement::ImplNode,
-        interface::{TraitBoundNode, TraitDefNode},
+        interface::{MultiTraitNode, TraitBoundNode, TraitDefNode},
         macro_nodes::{MacroCallNode, MacroLoopStatementNode, MacroNode, MacroRuleNode},
         operator::{BinOpNode, TakeOpNode, UnaryOpNode},
         pkg::{ExternIdNode, UseNode},
@@ -599,15 +599,17 @@ impl FmtBuilder {
         }
     }
     pub fn parse_generic_def_node(&mut self, node: &GenericDefNode) {
-        self.l_angle_bracket();
-        self.token(
-            &node.generics[0..node.generics_size]
+        if node.generics_size > 0 {
+            self.l_angle_bracket();
+            node.generics[0..node.generics_size - 1]
                 .iter()
-                .map(|g| g.name.clone())
-                .collect::<Vec<_>>()
-                .join("|"),
-        );
-        self.r_angle_bracket();
+                .for_each(|g| {
+                    g.format(self);
+                    self.token("|");
+                });
+            node.generics[node.generics_size - 1].format(self);
+            self.r_angle_bracket();
+        }
     }
     pub fn parse_string_node(&mut self, node: &StringNode) {
         self.token(&format!("{:?}", node.content));
@@ -677,8 +679,13 @@ impl FmtBuilder {
     }
     pub fn parse_trait_bound_node(&mut self, node: &TraitBoundNode) {
         node.generic.format(self);
-        self.token(":");
-        self.space();
-        node.impl_trait.format(self);
+        if let Some(impl_trait) = &node.impl_trait {
+            self.token(":");
+            self.space();
+            impl_trait.format(self);
+        }
+    }
+    pub fn parse_multi_trait_node(&mut self, node: &MultiTraitNode) {
+        node.traits.format(self)
     }
 }
