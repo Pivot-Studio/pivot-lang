@@ -17,7 +17,11 @@ use crate::{
 use crate::{ast::node::macro_nodes::MacroCallNode, nomparser::Span};
 use internal_macro::{test_parser, test_parser_error};
 
-use super::{macro_parse::macro_call_op, string_literal::string_literal, *};
+use super::{cast::as_exp, macro_parse::macro_call_op, string_literal::string_literal, *};
+
+pub fn general_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    as_exp(input)
+}
 
 #[test_parser("a&&b")]
 #[test_parser("a||b")]
@@ -254,7 +258,7 @@ fn parantheses_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delimited(
             tag_token_symbol(TokenType::LPAREN),
-            parse_with_ex(logic_exp, false),
+            parse_with_ex(general_exp, false),
             tag_token_symbol(TokenType::RPAREN),
         ),
         |exp| {

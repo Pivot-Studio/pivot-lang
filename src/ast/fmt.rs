@@ -693,7 +693,23 @@ impl FmtBuilder {
         node.traits.format(self)
     }
     pub fn parse_union_def_node(&mut self, node: &UnionDefNode) {
-        todo!()
+        self.prefix();
+        self.token("type");
+        self.space();
+        self.token(node.name.name.as_str());
+        self.space();
+        self.equal();
+        self.enter();
+        self.add_tab();
+        for (i, m) in node.sum_types.iter().enumerate() {
+            if i > 0 {
+                self.token("|");
+                self.enter();
+            }
+            self.enter();
+            m.format(self);
+        }
+        self.enter();
     }
     pub fn parse_as_node(&mut self, node: &AsNode) {
         node.expr.format(self);

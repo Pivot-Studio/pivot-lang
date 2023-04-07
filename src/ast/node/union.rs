@@ -1,6 +1,6 @@
 use crate::ast::{
     diag::PLDiag,
-    node::{RangeTrait, TypeNode},
+    node::{deal_line, tab, RangeTrait, TypeNode},
 };
 use indexmap::IndexMap;
 use internal_macro::node;
@@ -46,8 +46,11 @@ impl Node for UnionDefNode {
 }
 
 impl PrintTrait for UnionDefNode {
-    fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
-        todo!()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("UnionTypeNode");
+        self.name.print(tabs + 1, false, line.clone());
     }
 }
 

@@ -111,7 +111,7 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
             tag_token_word(TokenType::LET),
             identifier,
             opt(pair(tag_token_symbol(TokenType::COLON), type_name)),
-            opt(pair(tag_token_symbol(TokenType::ASSIGN), logic_exp)),
+            opt(pair(tag_token_symbol(TokenType::ASSIGN), general_exp)),
         )),
         |((_, start), a, tp, v)| {
             let mut end = a.range.end;
@@ -141,7 +141,11 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("a = 1")]
 pub fn assignment(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
-        tuple((pointer_exp, tag_token_symbol(TokenType::ASSIGN), logic_exp)),
+        tuple((
+            pointer_exp,
+            tag_token_symbol(TokenType::ASSIGN),
+            general_exp,
+        )),
         |(left, _op, right)| {
             let range = left.range().start.to(right.range().end);
             res_enum(
@@ -172,7 +176,7 @@ fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
             tag_token_word(TokenType::RETURN),
-            opt(logic_exp),
+            opt(general_exp),
             tag_token_symbol(TokenType::SEMI),
             opt(delspace(comment)),
         )),
@@ -214,7 +218,7 @@ pub fn global_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
             tag_token_word(TokenType::CONST),
             identifier,
             tag_token_symbol(TokenType::ASSIGN),
-            logic_exp,
+            general_exp,
         )),
         |(_, var, _, exp)| {
             let range = var.range().start.to(exp.range().end);

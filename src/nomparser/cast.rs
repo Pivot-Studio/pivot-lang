@@ -17,9 +17,13 @@ use super::*;
 /// let a = 1 as i128 as f32;
 /// ```
 #[test_parser("1 as i128 as f32")]
-#[test_parser("(2.3+10-800*9).add(100)[0] as i128 as f32")]
+#[test_parser(
+    "(2.3+10-800*9).add(100)[0] as
+ i128 as f32"
+)]
+#[test_parser("(2.3+10-800*9).add(100)[0]")]
 pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    map_res(
+    del_newline_or_space!(map_res(
         pair(
             logic_exp,
             many0(pair(tag_modifier(TokenType::AS), type_name)),
@@ -38,5 +42,5 @@ pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             }
             res_box(exp)
         },
-    )(input)
+    ))(input)
 }

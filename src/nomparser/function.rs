@@ -138,7 +138,7 @@ pub fn call_function_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEn
             tag_token_symbol(TokenType::LPAREN),
             del_newline_or_space!(separated_list0(
                 tag_token_symbol(TokenType::COMMA),
-                del_newline_or_space!(logic_exp)
+                del_newline_or_space!(general_exp)
             )),
             tag_token_symbol(TokenType::RPAREN),
             many0(comment),

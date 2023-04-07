@@ -130,7 +130,7 @@ impl MacroMatchParameter {
                 Ok((new, ()))
             }
             TokenType::MACRO_TYPE_EXPR => {
-                let (new, node) = expression::logic_exp(args).map_err(|_| {
+                let (new, node) = expression::general_exp(args).map_err(|_| {
                     nom::Err::Error(self.range.new_err(ErrorCode::EXPECT_EXPRESSION))
                 })?;
                 self.add_to_macro_var(ctx, *node);
