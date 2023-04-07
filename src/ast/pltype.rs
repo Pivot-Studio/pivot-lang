@@ -157,6 +157,16 @@ impl PriType {
             PriType::BOOL => String::from("bool"),
         }
     }
+    pub fn signed(&self) -> bool {
+        match self {
+            PriType::I8 => true,
+            PriType::I16 => true,
+            PriType::I32 => true,
+            PriType::I64 => true,
+            PriType::I128 => true,
+            _ => false,
+        }
+    }
     pub fn try_from_str(str: &str) -> Option<Self> {
         match str {
             "i8" => Some(PriType::I8),

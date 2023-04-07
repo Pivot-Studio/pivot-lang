@@ -503,6 +503,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     fn get_llvm_block(&self, handle: BlockHandle) -> Option<BasicBlock<'ctx>> {
         self.block_table.borrow().get(&handle).copied()
     }
+
     fn get_pri_basic_type(&self, tp: &PriType) -> BasicTypeEnum<'ctx> {
         match tp {
             PriType::I8 => self.context.i8_type().into(),
@@ -1762,5 +1763,51 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
 
     fn get_stack_root(&self, v: ValueHandle) -> ValueHandle {
         *self.heap_stack_map.borrow().get(&v).unwrap()
+    }
+
+    fn cast_primitives(&self, handle: ValueHandle, tp: &PriType, target: &PriType) -> ValueHandle {
+        let val = self.get_llvm_value(handle).unwrap();
+        let signed = tp.signed();
+        let tp = self.get_pri_basic_type(tp);
+        let target = self.get_pri_basic_type(target);
+        if tp.is_int_type() && target.is_int_type() {
+            let val = val.into_int_value();
+            let target = target.into_int_type();
+            let val = self
+                .builder
+                .build_int_cast_sign_flag(val, target, signed, "cast");
+            return self.get_llvm_value_handle(&val.into());
+        } else if tp.is_float_type() && target.is_float_type() {
+            let val = val.into_float_value();
+            let target = target.into_float_type();
+            let val = self.builder.build_float_cast(val, target, "cast");
+            return self.get_llvm_value_handle(&val.into());
+        } else if tp.is_int_type() && target.is_float_type() {
+            let val = val.into_int_value();
+            let target = target.into_float_type();
+            if signed {
+                let val = self.builder.build_signed_int_to_float(val, target, "cast");
+                return self.get_llvm_value_handle(&val.into());
+            } else {
+                let val = self
+                    .builder
+                    .build_unsigned_int_to_float(val, target, "cast");
+                return self.get_llvm_value_handle(&val.into());
+            }
+        } else if tp.is_float_type() && target.is_int_type() {
+            let val = val.into_float_value();
+            let target = target.into_int_type();
+            if signed {
+                let val = self.builder.build_float_to_signed_int(val, target, "cast");
+                return self.get_llvm_value_handle(&val.into());
+            } else {
+                let val = self
+                    .builder
+                    .build_float_to_unsigned_int(val, target, "cast");
+                return self.get_llvm_value_handle(&val.into());
+            }
+        } else {
+            unreachable!()
+        }
     }
 }

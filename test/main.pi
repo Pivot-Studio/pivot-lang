@@ -19,6 +19,10 @@ pub fn test_union() i64 {
     let c: A<i128> = a;
     let d = c;
     d = b;
+    let e = a as f32;
+    e = 100.1;
+    let f = e as i64;
+    io::printi64ln(f);
     return 0;
 }
 
@@ -36,6 +40,7 @@ pub fn main() i64 {
     main::simple_test();
     module::test_module();
     string::test_string();
+    test_union();
     return 0;
 }
 

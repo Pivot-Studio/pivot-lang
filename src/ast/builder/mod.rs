@@ -187,6 +187,7 @@ pub trait IRBuilder<'a, 'ctx> {
         field_tps: &[Arc<RefCell<PLType>>],
     );
     fn get_stack_root(&self, v: ValueHandle) -> ValueHandle;
+    fn cast_primitives(&self, handle: ValueHandle, tp: &PriType, target: &PriType) -> ValueHandle;
 }
 
 pub type ValueHandle = usize;
