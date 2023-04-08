@@ -14,6 +14,8 @@ use pl_test::main;
 use std::io;
 type A<T> = f32|T;
 pub fn test_union() i64 {
+    let g : Option<i64> = None{};
+    g = 1 as i64;
     let a: i128 = 1;
     let b: f32 = 1.0;
     let c: A<i128> = a;
@@ -24,6 +26,11 @@ pub fn test_union() i64 {
     let f = e as i64;
     io::printi64ln(f);
     return 0;
+}
+
+pub fn name() Option<i64> {
+    let a  = 1;
+    return a;
 }
 
 pub fn main() i64 {

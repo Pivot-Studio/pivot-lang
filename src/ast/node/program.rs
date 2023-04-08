@@ -137,7 +137,8 @@ impl Program {
         let mut modmap = FxHashMap::<String, Mod>::default();
         let binding = PathBuf::from(self.params(db).file(db)).with_extension("");
         let pkgname = binding.file_name().unwrap().to_str().unwrap();
-        if pkgname != "gc" {
+        // 默认加入gc和builtin module
+        if pkgname != "gc" && pkgname != "builtin" {
             let core = Box::new(VarNode {
                 name: "core".to_string(),
                 range: Default::default(),
@@ -147,7 +148,18 @@ impl Program {
                 range: Default::default(),
             });
             prog.uses.push(Box::new(NodeEnum::UseNode(UseNode {
-                ids: vec![core, gc],
+                ids: vec![core.clone(), gc],
+                range: Default::default(),
+                complete: true,
+                singlecolon: false,
+            })));
+            let builtin = Box::new(VarNode {
+                name: "builtin".to_string(),
+                range: Default::default(),
+            });
+
+            prog.uses.push(Box::new(NodeEnum::UseNode(UseNode {
+                ids: vec![core, builtin],
                 range: Default::default(),
                 complete: true,
                 singlecolon: false,
@@ -423,6 +435,11 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         db,
     );
     ctx.plmod.submods = params.submods(db);
+    // imports all builtin symbols
+    if ctx.plmod.name != "builtin" && ctx.plmod.name != "gc" {
+        let builtin_mod = ctx.plmod.submods.get("builtin").unwrap().clone();
+        ctx.plmod.import_all_public_symbols_from(&builtin_mod);
+    }
     let m = &mut ctx;
     let node = params.node(db);
     let mut nn = node.node(db);

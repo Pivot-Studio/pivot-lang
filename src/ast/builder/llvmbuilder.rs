@@ -1810,4 +1810,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             unreachable!()
         }
     }
+    fn is_ptr(&self, v: ValueHandle) -> bool {
+        let val = self.get_llvm_value(v).unwrap();
+        val.get_type().is_pointer_type()
+    }
 }

@@ -415,4 +415,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
     ) -> ValueHandle {
         0
     }
+    fn is_ptr(&self, _v: ValueHandle) -> bool {
+        false
+    }
 }

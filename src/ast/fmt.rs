@@ -1,5 +1,3 @@
-use std::process::exit;
-
 use crate::{ast::node::Num, utils::read_config::enter};
 
 use super::{

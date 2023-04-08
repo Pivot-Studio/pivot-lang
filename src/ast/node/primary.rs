@@ -176,7 +176,7 @@ impl Node for VarNode {
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match &*tp.borrow() {
                 PLType::Fn(f) => {
-                    ctx.send_if_go_to_def(self.range, f.range, ctx.plmod.path.clone());
+                    ctx.send_if_go_to_def(self.range, f.range, f.path.clone());
                     ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
                     return Ok((None, Some(tp.clone()), TerminatorEnum::None));
                 }
@@ -233,10 +233,10 @@ impl VarNode {
                 | PLType::PlaceHolder(_)
                 | PLType::Union(_) => {
                     if let PLType::Struct(st) | PLType::Trait(st) = &*tp.clone().borrow() {
-                        ctx.send_if_go_to_def(self.range, st.range, ctx.plmod.path.clone());
+                        ctx.send_if_go_to_def(self.range, st.range, st.path.clone());
                         // ctx.set_if_refs(st.refs.clone(), self.range);
                     } else if let PLType::Union(u) = &*tp.clone().borrow() {
-                        ctx.send_if_go_to_def(self.range, u.range, ctx.plmod.path.clone());
+                        ctx.send_if_go_to_def(self.range, u.range, u.path.clone());
                     }
                     return Ok((None, Some(tp.clone()), TerminatorEnum::None));
                 }

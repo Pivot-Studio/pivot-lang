@@ -188,6 +188,7 @@ pub trait IRBuilder<'a, 'ctx> {
     );
     fn get_stack_root(&self, v: ValueHandle) -> ValueHandle;
     fn cast_primitives(&self, handle: ValueHandle, tp: &PriType, target: &PriType) -> ValueHandle;
+    fn is_ptr(&self, v: ValueHandle) -> bool;
 }
 
 pub type ValueHandle = usize;

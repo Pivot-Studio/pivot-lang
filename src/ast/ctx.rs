@@ -56,7 +56,6 @@ use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use std::cell::RefCell;
 
-use std::collections::BTreeSet;
 use std::path::Path;
 
 use std::path::PathBuf;
@@ -288,9 +287,15 @@ impl<'a, 'ctx> Ctx<'a> {
                         .unwrap();
                     let union_type = builder.int_value(&PriType::U64, i as u64, false);
                     builder.build_store(union_type_field, union_type);
+                    let mut ptr = st_value;
+                    if !builder.is_ptr(st_value) {
+                        // mv to heap
+                        ptr = builder.alloc("tmp", &st_pltype.borrow(), self, None);
+                        builder.build_store(ptr, st_value);
+                    }
                     let st_value = builder.bitcast(
                         self,
-                        st_value,
+                        ptr,
                         &PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::I8)))),
                         "traitcast_tmp",
                     );
@@ -1168,7 +1173,12 @@ impl<'a, 'ctx> Ctx<'a> {
                     eq: st.implements_trait(t, &self.plmod),
                     need_up_cast: true,
                 };
-            };
+            } else if let PLType::Union(_) = &*trait_pltype.borrow() {
+                return EqRes {
+                    eq: true,
+                    need_up_cast: true,
+                };
+            }
             return EqRes {
                 eq: false,
                 need_up_cast: false,
