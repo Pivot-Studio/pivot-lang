@@ -490,7 +490,9 @@ impl<'a, 'ctx> Ctx<'a> {
     }
     #[inline]
     fn add_generic_type(&mut self, name: String, pltype: Arc<RefCell<PLType>>, range: Range) {
-        self.send_if_go_to_def(range, range, self.plmod.path.clone());
+        if range != Range::default() {
+            self.send_if_go_to_def(range, range, self.plmod.path.clone());
+        }
         self.generic_types.insert(name, pltype);
     }
     pub fn add_doc_symbols(&mut self, pltype: Arc<RefCell<PLType>>) {
@@ -568,7 +570,7 @@ impl<'a, 'ctx> Ctx<'a> {
             self.add_generic_type(
                 name.clone(),
                 pltype.clone(),
-                pltype.clone().borrow().get_range().unwrap(),
+                pltype.clone().borrow().get_range().unwrap_or_default(),
             );
         }
         let res = f(self);

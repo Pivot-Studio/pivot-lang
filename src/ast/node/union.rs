@@ -1,6 +1,6 @@
 use crate::ast::{
     diag::PLDiag,
-    node::{deal_line, tab, RangeTrait, TypeNode},
+    node::{deal_line, tab, RangeTrait},
 };
 use indexmap::IndexMap;
 use internal_macro::node;

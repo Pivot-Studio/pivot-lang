@@ -19,6 +19,7 @@ pub fn test_union() i64 {
     let a: i128 = 1;
     let b: f32 = 1.0;
     let c: A<i128> = a;
+    let h = c as i128;
     let d = c;
     d = b;
     let e = a as f32;

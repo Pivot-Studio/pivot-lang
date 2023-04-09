@@ -25,7 +25,7 @@ use super::*;
 pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     del_newline_or_space!(map_res(
         pair(
-            logic_exp,
+            complex_exp,
             many0(pair(tag_modifier(TokenType::AS), type_name)),
         ),
         |(exp, casts)| {

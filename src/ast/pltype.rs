@@ -118,8 +118,22 @@ impl UnionType {
         pltype.replace(PLType::Union(res.clone()));
         res
     }
+    pub fn has_type<'a, 'ctx, 'b>(
+        &self,
+        pltype: &PLType,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> Option<usize> {
+        ctx.run_in_union_mod(self, |ctx, u| {
+            Ok(u.sum_types
+                .iter()
+                .enumerate()
+                .find(|(_, t)| &*t.get_type(ctx, builder).unwrap().borrow() == pltype))
+            .map(|x| x.map(|(i, _)| i))
+        })
+        .unwrap()
+    }
 }
-
 /// # PriType
 /// Primitive type for pivot-lang
 #[derive(Debug, Clone, PartialEq, Eq)]
