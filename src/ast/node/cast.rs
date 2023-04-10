@@ -259,3 +259,66 @@ fn get_option_type<'a, 'ctx, 'b>(
         _ => unreachable!(),
     };
 }
+
+#[node]
+pub struct IsNode {
+    pub expr: Box<NodeEnum>,
+    pub ty: Box<TypeNodeEnum>,
+}
+
+impl Node for IsNode {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> NodeResult {
+        let re = self.expr.emit(ctx, builder);
+        self.ty.emit_highlight(ctx);
+        let (val, tp, _) = re?;
+        let target_tp = self.ty.get_type(ctx, builder)?;
+        let val = val.unwrap().value;
+        let binding = tp.unwrap();
+        let tp = &*binding.borrow();
+        match tp {
+            PLType::Union(u) => {
+                if let Some(tag) = u.has_type(&*target_tp.borrow(), ctx, builder) {
+                    let tag_v = builder.build_struct_gep(val, 0, "tag").unwrap();
+                    let tag_v = builder.build_load(tag_v, "tag");
+                    let cond = builder.build_int_compare(
+                        IntPredicate::EQ,
+                        tag_v,
+                        builder.int_value(&PriType::U64, tag as u64, false),
+                        "tag.eq",
+                    );
+                    let cond = builder.try_load2var(Default::default(), cond, ctx).unwrap();
+                    let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
+                    Ok((
+                        Some(PLValue {
+                            value: cond,
+                            is_const: true,
+                            receiver: None,
+                        }),
+                        ctx.get_type("bool", Default::default()).ok(),
+                        TerminatorEnum::None,
+                    ))
+                } else {
+                    Err(self
+                        .ty
+                        .range()
+                        .new_err(ErrorCode::UNION_DOES_NOT_CONTAIN_TYPE)
+                        .add_to_ctx(ctx))
+                }
+            }
+            _ => Err(self
+                .range()
+                .new_err(ErrorCode::INVALID_IS_EXPR)
+                .add_help("`is` can only be used on union types")
+                .add_to_ctx(ctx)),
+        }
+    }
+}
+impl PrintTrait for IsNode {
+    fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
+        todo!()
+    }
+}

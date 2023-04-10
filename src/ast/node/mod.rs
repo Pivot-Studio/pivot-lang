@@ -11,6 +11,7 @@ use enum_dispatch::enum_dispatch;
 use lsp_types::SemanticTokenType;
 
 use self::cast::AsNode;
+use self::cast::IsNode;
 use self::comment::CommentNode;
 use self::control::*;
 use self::error::*;
@@ -154,6 +155,7 @@ pub enum NodeEnum {
     MacroCallNode(MacroCallNode),
     UnionDefNode(UnionDefNode),
     AsNode(AsNode),
+    IsNode(IsNode),
 }
 // ANCHOR: range
 #[enum_dispatch]

@@ -1,4 +1,7 @@
-use crate::ast::{node::cast::AsNode, tokens::TokenType};
+use crate::ast::{
+    node::cast::{AsNode, IsNode},
+    tokens::TokenType,
+};
 use internal_macro::test_parser;
 use nom::{
     branch::alt,
@@ -36,9 +39,10 @@ pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             opt(alt((
                 tag_token_symbol_ex(TokenType::NOT),
                 tag_token_symbol_ex(TokenType::QUESTION)
-            )))
+            ))),
+            opt(pair(tag_modifier(TokenType::IS), type_name))
         )),
-        |(exp, casts, tail)| {
+        |(exp, casts, tail, is)| {
             let mut exp = exp;
             let start = exp.range().start;
             for (_, ty) in casts {
@@ -49,6 +53,15 @@ pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     ty,
                     range,
                     tail,
+                }));
+            }
+            if let Some((_, ty)) = is {
+                let end = ty.range().end;
+                let range = start.to(end);
+                exp = Box::new(NodeEnum::IsNode(IsNode {
+                    expr: exp,
+                    ty,
+                    range,
                 }));
             }
             res_box(exp)

@@ -2,7 +2,7 @@ use crate::{ast::node::Num, utils::read_config::enter};
 
 use super::{
     node::{
-        cast::AsNode,
+        cast::{AsNode, IsNode},
         comment::CommentNode,
         control::{BreakNode, ContinueNode, ForNode, IfNode, WhileNode},
         error::{ErrorNode, StErrorNode},
@@ -713,6 +713,13 @@ impl FmtBuilder {
         node.expr.format(self);
         self.space();
         self.token("as");
+        self.space();
+        node.ty.format(self);
+    }
+    pub fn parse_is_node(&mut self, node: &IsNode) {
+        node.expr.format(self);
+        self.space();
+        self.token("is");
         self.space();
         node.ty.format(self);
     }

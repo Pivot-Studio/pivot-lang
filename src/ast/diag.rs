@@ -114,6 +114,8 @@ define_error!(
     EXPECT_PUBLIC_UNION = "expect public union",
     INVALID_UNION_CAST = "invalid union cast",
     INVALID_DIRECT_UNION_CAST = "invalid direct union cast",
+    UNION_DOES_NOT_CONTAIN_TYPE = "union does not contain type",
+    INVALID_IS_EXPR = "invalid `is` expression",
 );
 macro_rules! define_warn {
     ($(

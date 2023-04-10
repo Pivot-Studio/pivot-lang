@@ -15,6 +15,9 @@ use std::io;
 type A<T> = f32|T;
 pub fn test_union() i64 {
     let g : Option<i64> = None{};
+    if g is i64 {
+        io::printi64ln(8000);
+    }
     g = 1 as i64;
     let a: i128 = 1;
     let b: f32 = 1.0;
