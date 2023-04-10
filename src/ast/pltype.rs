@@ -172,14 +172,10 @@ impl PriType {
         }
     }
     pub fn signed(&self) -> bool {
-        match self {
-            PriType::I8 => true,
-            PriType::I16 => true,
-            PriType::I32 => true,
-            PriType::I64 => true,
-            PriType::I128 => true,
-            _ => false,
-        }
+        matches!(
+            self,
+            PriType::I8 | PriType::I16 | PriType::I32 | PriType::I64 | PriType::I128
+        )
     }
     pub fn try_from_str(str: &str) -> Option<Self> {
         match str {

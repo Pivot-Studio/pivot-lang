@@ -1786,35 +1786,35 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             let val = self
                 .builder
                 .build_int_cast_sign_flag(val, target, signed, "cast");
-            return self.get_llvm_value_handle(&val.into());
+            self.get_llvm_value_handle(&val.into())
         } else if tp.is_float_type() && target.is_float_type() {
             let val = val.into_float_value();
             let target = target.into_float_type();
             let val = self.builder.build_float_cast(val, target, "cast");
-            return self.get_llvm_value_handle(&val.into());
+            self.get_llvm_value_handle(&val.into())
         } else if tp.is_int_type() && target.is_float_type() {
             let val = val.into_int_value();
             let target = target.into_float_type();
             if signed {
                 let val = self.builder.build_signed_int_to_float(val, target, "cast");
-                return self.get_llvm_value_handle(&val.into());
+                self.get_llvm_value_handle(&val.into())
             } else {
                 let val = self
                     .builder
                     .build_unsigned_int_to_float(val, target, "cast");
-                return self.get_llvm_value_handle(&val.into());
+                self.get_llvm_value_handle(&val.into())
             }
         } else if tp.is_float_type() && target.is_int_type() {
             let val = val.into_float_value();
             let target = target.into_int_type();
             if signed {
                 let val = self.builder.build_float_to_signed_int(val, target, "cast");
-                return self.get_llvm_value_handle(&val.into());
+                self.get_llvm_value_handle(&val.into())
             } else {
                 let val = self
                     .builder
                     .build_float_to_unsigned_int(val, target, "cast");
-                return self.get_llvm_value_handle(&val.into());
+                self.get_llvm_value_handle(&val.into())
             }
         } else {
             unreachable!()

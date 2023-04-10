@@ -276,7 +276,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 Ok(union_members)
             })?;
             for (i, tp) in union_members.iter().enumerate() {
-                if &*tp.borrow() == &*st_pltype.borrow() {
+                if *tp.borrow() == *st_pltype.borrow() {
                     let union_handle =
                         builder.alloc("tmp_unionv", &trait_pltype.borrow(), self, None);
                     let union_value = builder

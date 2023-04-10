@@ -97,7 +97,7 @@ impl<'a, 'ctx> Ctx<'a> {
                         .add_help("cast a union to its member type directly is not allowed, use `?` or `!` after the cast expression")
                         .add_to_ctx(self));
                 }
-                if let Some(tag) = union.has_type(&target_ty, self, builder) {
+                if let Some(tag) = union.has_type(target_ty, self, builder) {
                     let (token, _) = node.tail.unwrap();
                     if token == TokenType::QUESTION {
                         Ok(self.cast_union_to(builder, val, tag, target_rc))
@@ -146,7 +146,7 @@ impl<'a, 'ctx> Ctx<'a> {
     ) -> (ValueHandle, Arc<RefCell<PLType>>) {
         let tag = builder.build_struct_gep(val, 0, "tag").unwrap();
         let result_tp = get_option_type(self, builder, target_ty).unwrap();
-        let result = builder.alloc("cast_result", &*result_tp.borrow(), self, None);
+        let result = builder.alloc("cast_result", &result_tp.borrow(), self, None);
         let result_tag_field = builder.build_struct_gep(result, 0, "tag").unwrap();
         let result_data_field = builder.build_struct_gep(result, 1, "data").unwrap();
         // check if the tag is the same
@@ -194,7 +194,7 @@ impl<'a, 'ctx> Ctx<'a> {
     ) -> (ValueHandle, Arc<RefCell<PLType>>) {
         let tag = builder.build_struct_gep(val, 0, "tag").unwrap();
         let result_tp = target_ty.clone();
-        let result = builder.alloc("cast_result", &*result_tp.borrow(), self, None);
+        let result = builder.alloc("cast_result", &result_tp.borrow(), self, None);
         // check if the tag is the same
         let tag = builder.build_load(tag, "tag");
         let cond_block = builder.append_basic_block(self.function.unwrap(), "if.cond");
@@ -241,8 +241,8 @@ fn get_option_type<'a, 'ctx, 'b>(
     target_ty: Arc<RefCell<PLType>>,
 ) -> TypeNodeResult {
     let pltype = ctx.get_type("Option", Default::default()).unwrap();
-
-    match &*pltype.borrow() {
+    let t = &*pltype.borrow();
+    match t {
         PLType::Union(sttype) => {
             let mut sttype = sttype.clone();
             if let PLType::Generic(g) = &mut *sttype.generic_map.get("T").unwrap().borrow_mut() {
@@ -253,13 +253,13 @@ fn get_option_type<'a, 'ctx, 'b>(
                     Ok(sttype.gen_code(ctx, builder))
                 })?;
                 let pltype = Arc::new(RefCell::new(PLType::Union(sttype)));
-                return Ok(pltype);
+                Ok(pltype)
             } else {
                 unreachable!()
             }
         }
         _ => unreachable!(),
-    };
+    }
 }
 
 #[node]
@@ -283,7 +283,7 @@ impl Node for IsNode {
         let tp = &*binding.borrow();
         match tp {
             PLType::Union(u) => {
-                if let Some(tag) = u.has_type(&*target_tp.borrow(), ctx, builder) {
+                if let Some(tag) = u.has_type(&target_tp.borrow(), ctx, builder) {
                     let tag_v = builder.build_struct_gep(val, 0, "tag").unwrap();
                     let tag_v = builder.build_load(tag_v, "tag");
                     let cond = builder.build_int_compare(
