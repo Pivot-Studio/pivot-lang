@@ -5,9 +5,9 @@ use crate::ast::{
 use internal_macro::test_parser;
 use nom::{
     branch::alt,
-    combinator::{map_res, opt},
+    combinator::{map_res, not, opt, peek},
     multi::many0,
-    sequence::{pair, tuple},
+    sequence::{pair, terminated, tuple},
     IResult,
 };
 
@@ -37,7 +37,10 @@ pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             complex_exp,
             many0(pair(tag_modifier(TokenType::AS), type_name)),
             opt(alt((
-                tag_token_symbol_ex(TokenType::NOT),
+                terminated(
+                    tag_token_symbol_ex(TokenType::NOT),
+                    peek(not(tag_token(TokenType::ASSIGN)))
+                ),
                 tag_token_symbol_ex(TokenType::QUESTION)
             ))),
             opt(pair(tag_modifier(TokenType::IS), type_name))

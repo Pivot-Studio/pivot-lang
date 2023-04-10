@@ -1,6 +1,5 @@
 use std::{cell::RefCell, sync::Arc};
 
-use indexmap::IndexMap;
 use inkwell::IntPredicate;
 use internal_macro::node;
 
@@ -9,7 +8,7 @@ use crate::{
         builder::{BuilderEnum, IRBuilder, ValueHandle},
         ctx::Ctx,
         diag::{ErrorCode, PLDiag},
-        node::TypeNode,
+        node::{deal_line, tab, TypeNode},
         pltype::{PLType, PriType},
         range::{Pos, Range},
         tokens::TokenType,
@@ -18,8 +17,7 @@ use crate::{
 };
 
 use super::{
-    pkg::ExternIdNode, primary::VarNode, types::TypeNameNode, Node, NodeEnum, NodeResult, PLValue,
-    PrintTrait, TerminatorEnum, TypeNodeEnum, TypeNodeResult,
+    Node, NodeEnum, NodeResult, PLValue, PrintTrait, TerminatorEnum, TypeNodeEnum, TypeNodeResult,
 };
 use crate::ast::node::RangeTrait;
 
@@ -52,8 +50,12 @@ impl Node for AsNode {
 }
 
 impl PrintTrait for AsNode {
-    fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
-        todo!()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("AsNode");
+        self.expr.print(tabs + 1, false, line.clone());
+        self.ty.print(tabs + 1, true, line.clone());
     }
 }
 
@@ -318,7 +320,11 @@ impl Node for IsNode {
     }
 }
 impl PrintTrait for IsNode {
-    fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
-        todo!()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("IsNode");
+        self.expr.print(tabs + 1, false, line.clone());
+        self.ty.print(tabs + 1, true, line.clone());
     }
 }

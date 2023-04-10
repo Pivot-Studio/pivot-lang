@@ -457,7 +457,11 @@ mod test {
 
     #[test]
     fn test_compile() {
-        _ = remove_file("testout");
+        let out = "testout";
+        let exe = PathBuf::from(out);
+        #[cfg(target_os = "windows")]
+        let exe = exe.with_extension("exe");
+        _ = remove_file(&exe);
         let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
             .lock()
             .unwrap();
@@ -477,7 +481,6 @@ mod test {
             None,
         );
         // let outplb = "testout.bc";
-        let out = "testout";
 
         compile(
             &db,
@@ -496,9 +499,6 @@ mod test {
         //     &PathBuf::from(outplb).as_path(),
         //     inkwell::OptimizationLevel::None,
         // );
-        let exe = PathBuf::from(out);
-        #[cfg(target_os = "windows")]
-        let exe = exe.with_extension("exe");
         let exe = dunce::canonicalize(&exe)
             .unwrap_or_else(|_| panic!("static compiled file not found {:?}", exe));
         let o = Command::new(exe.to_str().unwrap())

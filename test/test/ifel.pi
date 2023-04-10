@@ -7,6 +7,14 @@ pub fn test_if_else() void {
     return;
 }
 
+
+fn test_not_equal() void {
+    if 1 !=2 {
+        return;
+    }
+    return;
+}
+
 pub fn test_if_only(judge: bool) void {
     if judge {
         return;

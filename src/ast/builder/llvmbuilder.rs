@@ -49,7 +49,7 @@ const DW_ATE_BOOLEAN: u32 = 0x02;
 const DW_ATE_FLOAT: u32 = 0x04;
 const DW_ATE_SIGNED: u32 = 0x05;
 const DW_ATE_UNSIGNED: u32 = 0x07;
-pub const DW_TAG_union_type: u32 = 0x17;
+// pub const DW_TAG_union_type: u32 = 0x17;
 static ID: AtomicI64 = AtomicI64::new(0);
 // const DW_TAG_REFERENCE_TYPE: u32 = 16;
 fn get_dw_ate_encoding(pritp: &PriType) -> u32 {

@@ -392,7 +392,7 @@ fn main_loop(
                     f.clone(),
                     content_change.text.clone(),
                 );
-                let mut pos = Pos::from_diag_pos(&content_change.range.unwrap().end);
+                let mut pos = Pos::from_diag_pos(&content_change.range.unwrap().start);
                 pos.column += 1;
                 docin.set_edit_pos(&mut db).to(Some(pos));
                 docin.set_docs(&mut db).to(docs.clone());

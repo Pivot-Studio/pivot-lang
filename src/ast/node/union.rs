@@ -1,7 +1,4 @@
-use crate::ast::{
-    diag::PLDiag,
-    node::{deal_line, tab, RangeTrait},
-};
+use crate::ast::node::{deal_line, tab, RangeTrait};
 use indexmap::IndexMap;
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
@@ -17,7 +14,7 @@ use crate::ast::{
 
 use super::{
     primary::VarNode, types::GenericDefNode, Node, NodeResult, PrintTrait, TerminatorEnum,
-    TypeNodeEnum,
+    TypeNode, TypeNodeEnum,
 };
 
 #[node]
@@ -32,7 +29,7 @@ impl Node for UnionDefNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        _builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.name.range, SemanticTokenType::TYPE, 0);
         if let Some(generics) = &mut self.generics {
@@ -41,6 +38,17 @@ impl Node for UnionDefNode {
         for field in self.sum_types.iter() {
             ctx.push_semantic_token(field.range(), SemanticTokenType::TYPE, 0);
         }
+        let generic_map = self
+            .generics
+            .as_ref()
+            .map_or(IndexMap::default(), |generics| generics.gen_generic_type());
+
+        _ = ctx.protect_generic_context(&generic_map, |ctx| {
+            for tp in self.sum_types.iter_mut() {
+                _ = tp.get_type(ctx, builder);
+            }
+            Ok(())
+        });
         Ok((None, None, TerminatorEnum::None))
     }
 }
@@ -74,23 +82,5 @@ impl UnionDefNode {
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.name.name));
         _ = ctx.add_type(self.name.name.clone(), stu, self.name.range);
-    }
-    pub fn emit_union_def<'a, 'ctx, 'b>(
-        &mut self,
-        ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Result<(), PLDiag> {
-        // let tp = ctx.get_type(&self.name.name, self.range)?;
-        // let mut tp = tp.borrow_mut();
-        // if let PLType::Union(u) = &mut *tp {
-        //     for sum_type in self.sum_types.iter() {
-        //         let sum_type = sum_type.get_type(ctx, builder)?;
-        //         u.sum_types.push(sum_type);
-        //     }
-        // } else {
-        //     unreachable!()
-        // }
-        // Ok(())
-        todo!()
     }
 }

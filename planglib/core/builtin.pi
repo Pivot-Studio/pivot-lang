@@ -1,5 +1,5 @@
 
-pub struct None {
+struct None {
 }
 type Option<T> = T|None;
 
