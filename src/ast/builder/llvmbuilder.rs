@@ -1070,6 +1070,16 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.get_llvm_value_handle(&self.get_or_insert_fn(pltp, ctx).as_any_value_enum())
     }
 
+    fn get_or_insert_helper_fn_handle(&self, name: &str) -> ValueHandle {
+        if let Some(f) = self.module.get_function(name) {
+            self.get_llvm_value_handle(&f.as_any_value_enum())
+        } else {
+            let ftp = self.context.void_type().fn_type(&[], false);
+            let f = self.module.add_function(name, ftp, None);
+            self.get_llvm_value_handle(&f.as_any_value_enum())
+        }
+    }
+
     fn get_or_add_global(
         &self,
         name: &str,
@@ -1537,8 +1547,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.discope
                 .set(f.get_subprogram().unwrap().as_debug_info_scope());
             // ctx.discope = currscope;
-            self.build_dbg_location(pos)
         }
+        self.build_dbg_location(pos)
     }
     fn build_sub_program(
         &self,

@@ -113,6 +113,7 @@ define_error!(
     MACRO_VAR_NOT_FOUND = "macro var not found",
     EXPECT_PUBLIC_UNION = "expect public union",
     INVALID_UNION_CAST = "invalid union cast",
+    INVALID_DIRECT_UNION_CAST = "invalid direct union cast",
 );
 macro_rules! define_warn {
     ($(
@@ -219,8 +220,8 @@ impl PLDiag {
             .labels
             .iter()
             .find(|label| {
-                label.range.start == self.raw.range.start
-                    && self.raw.range.end == label.range.end
+                label.range.start.line == self.raw.range.start.line
+                    && self.raw.range.end.line == label.range.end.line
                     && label.file == path
             })
             .or_else(|| {

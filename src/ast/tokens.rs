@@ -92,6 +92,7 @@ define_tokens!(
     TYPE = "type",
     TYPE_OR = "|",
     AS = "as",
+    QUESTION = "?",
 );
 
 impl TokenType {

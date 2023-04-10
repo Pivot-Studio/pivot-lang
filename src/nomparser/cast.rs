@@ -1,6 +1,12 @@
 use crate::ast::{node::cast::AsNode, tokens::TokenType};
 use internal_macro::test_parser;
-use nom::{combinator::map_res, multi::many0, sequence::pair, IResult};
+use nom::{
+    branch::alt,
+    combinator::{map_res, opt},
+    multi::many0,
+    sequence::{pair, tuple},
+    IResult,
+};
 
 use super::*;
 
@@ -24,11 +30,15 @@ use super::*;
 #[test_parser("(2.3+10-800*9).add(100)[0]")]
 pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     del_newline_or_space!(map_res(
-        pair(
+        tuple((
             complex_exp,
             many0(pair(tag_modifier(TokenType::AS), type_name)),
-        ),
-        |(exp, casts)| {
+            opt(alt((
+                tag_token_symbol_ex(TokenType::NOT),
+                tag_token_symbol_ex(TokenType::QUESTION)
+            )))
+        )),
+        |(exp, casts, tail)| {
             let mut exp = exp;
             let start = exp.range().start;
             for (_, ty) in casts {
@@ -38,6 +48,7 @@ pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     expr: exp,
                     ty,
                     range,
+                    tail,
                 }));
             }
             res_box(exp)
