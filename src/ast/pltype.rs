@@ -95,12 +95,12 @@ impl UnionType {
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> UnionType {
+    ) -> Result<UnionType, PLDiag> {
         let name = self.append_name_with_generic();
         if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
             match &*pltype.borrow() {
                 PLType::Union(st) => {
-                    return st.clone();
+                    return Ok(st.clone());
                 }
                 _ => unreachable!(),
             }
@@ -108,15 +108,22 @@ impl UnionType {
         let mut res = self.clone();
         res.name = name;
         ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Union(res.clone()))));
-        res.sum_types = res
+
+        let (tps, errors): (Vec<_>, Vec<_>) = res
             .sum_types
             .iter()
-            .map(|t| t.get_type(ctx, builder).unwrap().borrow().get_typenode())
-            .collect();
+            .map(|t| {
+                Ok::<Box<TypeNodeEnum>, PLDiag>(t.get_type(ctx, builder)?.borrow().get_typenode())
+            })
+            .partition(Result::is_ok);
+        if !errors.is_empty() {
+            return Err(errors[0].clone().unwrap_err());
+        }
+        res.sum_types = tps.into_iter().map(Result::unwrap).collect::<Vec<_>>();
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
         pltype.replace(PLType::Union(res.clone()));
-        res
+        Ok(res)
     }
     pub fn has_type<'a, 'ctx, 'b>(
         &self,
@@ -829,12 +836,12 @@ impl STType {
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> STType {
+    ) -> Result<STType, PLDiag> {
         let name = self.append_name_with_generic();
         if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
             match &*pltype.borrow() {
                 PLType::Struct(st) => {
-                    return st.clone();
+                    return Ok(st.clone());
                 }
                 _ => unreachable!(),
             }
@@ -842,20 +849,19 @@ impl STType {
         let mut res = self.clone();
         res.name = name;
         ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Struct(res.clone()))));
-        res.ordered_fields = self
+        let (tps, errors): (Vec<_>, Vec<_>) = self
             .ordered_fields
             .iter()
             .map(|f| {
                 let mut nf = f.clone();
-                nf.typenode = f
-                    .typenode
-                    .get_type(ctx, builder)
-                    .unwrap()
-                    .borrow()
-                    .get_typenode();
-                nf
+                nf.typenode = f.typenode.get_type(ctx, builder)?.borrow().get_typenode();
+                Ok::<Field, PLDiag>(nf)
             })
-            .collect::<Vec<Field>>();
+            .partition(Result::is_ok);
+        if !errors.is_empty() {
+            return Err(errors.into_iter().map(Result::unwrap_err).next().unwrap());
+        }
+        res.ordered_fields = tps.into_iter().map(Result::unwrap).collect::<Vec<_>>();
         let mut field_pltps = vec![];
         res.ordered_fields.iter().for_each(|f| {
             field_pltps.push(f.typenode.get_type(ctx, builder).unwrap());
@@ -865,7 +871,7 @@ impl STType {
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
         pltype.replace(PLType::Struct(res.clone()));
-        res
+        Ok(res)
     }
     pub fn get_field_completions(&self, must_pub: bool) -> Vec<CompletionItem> {
         let mut completions = Vec::new();

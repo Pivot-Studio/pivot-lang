@@ -243,16 +243,16 @@ fn get_option_type<'a, 'ctx, 'b>(
     let pltype = ctx.get_type("Option", Default::default()).unwrap();
     let t = &*pltype.borrow();
     match t {
-        PLType::Union(sttype) => {
-            let mut sttype = sttype.clone();
-            if let PLType::Generic(g) = &mut *sttype.generic_map.get("T").unwrap().borrow_mut() {
+        PLType::Union(union) => {
+            let mut union = union.clone();
+            if let PLType::Generic(g) = &mut *union.generic_map.get("T").unwrap().borrow_mut() {
                 g.set_type(target_ty);
             }
-            if sttype.need_gen_code() {
-                sttype = ctx.protect_generic_context(&sttype.generic_map, |ctx| {
-                    Ok(sttype.gen_code(ctx, builder))
+            if union.need_gen_code() {
+                union = ctx.protect_generic_context(&union.generic_map, |ctx| {
+                    union.gen_code(ctx, builder)
                 })?;
-                let pltype = Arc::new(RefCell::new(PLType::Union(sttype)));
+                let pltype = Arc::new(RefCell::new(PLType::Union(union)));
                 Ok(pltype)
             } else {
                 unreachable!()

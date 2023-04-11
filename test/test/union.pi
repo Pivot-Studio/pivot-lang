@@ -1,5 +1,6 @@
 use core::panic;
 type A<T> = f32|T;
+type B<T> = i32|A<T>;
 pub fn test_union() i64 {
     let g : Option<i64> = None{};
     panic::assert(g is None);
@@ -15,7 +16,12 @@ pub fn test_union() i64 {
     let e = a as f32;
     e = 100.1;
     let f = e as i64;
-    panic::assert(f == 100);
+    let aa:B<i128> = d;
+    let bb = aa as i32?;
+    panic::assert(bb is None);
+    let cc = aa as A<i128>!;
+    let dd = cc as f32!;
+    panic::assert(dd == 1.0);
     let j = test_ret_union() as i64!;
     panic::assert(j == 101);
     return 0;

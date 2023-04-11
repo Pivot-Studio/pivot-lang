@@ -179,7 +179,7 @@ impl TypeNode for TypeNameNode {
                     let mut sttype = sttype.clone();
                     if sttype.need_gen_code() {
                         sttype = ctx.protect_generic_context(&sttype.generic_map, |ctx| {
-                            Ok(sttype.gen_code(ctx, builder))
+                            sttype.gen_code(ctx, builder)
                         })?;
                         let pltype = Arc::new(RefCell::new(PLType::Struct(sttype)));
                         return Ok(pltype);
@@ -193,7 +193,7 @@ impl TypeNode for TypeNameNode {
                     let mut sttype = sttype.clone();
                     if sttype.need_gen_code() {
                         sttype = ctx.protect_generic_context(&sttype.generic_map, |ctx| {
-                            Ok(sttype.gen_code(ctx, builder))
+                            sttype.gen_code(ctx, builder)
                         })?;
                         let pltype = Arc::new(RefCell::new(PLType::Union(sttype)));
                         return Ok(pltype);
@@ -670,7 +670,7 @@ impl Node for StructInitNode {
                     if sttype.need_gen_code() {
                         pltype = Arc::new(RefCell::new(PLType::Struct(
                             ctx.run_in_st_mod_mut(sttype, |ctx, sttype| {
-                                Ok(sttype.gen_code(ctx, builder))
+                                sttype.gen_code(ctx, builder)
                             })?,
                         )));
                     } else {

@@ -141,3 +141,34 @@ struct Inner<T: TestTrait> {
     y: T;
 }
 
+type AA<T> = f32 | T;
+type B<T> = i32 | AA<T>;
+pub fn test_union() i64 {
+    let g: Option<i64> = None{};
+    panic::assert(g is None);
+    g = 1 as i64;
+    let a: i128 = 1;
+    let b: f32 = 1.;
+    let c: AA<i128> = a;
+    let h = c as i128?;
+    let i = h as i128!;
+    panic::assert(i == 1);
+    let d = c;
+    d = b;
+    let e = a as f32;
+    e = 100.1;
+    let f = e as i64;
+    let aa: B<i128> = d;
+    let bb = aa as i32?;
+    panic::assert(bb is None);
+    let cc = aa as AA<i128>!;
+    let dd = cc as f32!;
+    panic::assert(dd == 1.);
+    let j = test_ret_union() as i64!;
+    panic::assert(j == 101);
+    return 0;
+}
+
+fn test_ret_union() Option<i64> {
+    return 101;
+}

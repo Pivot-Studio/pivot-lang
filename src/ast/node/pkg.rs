@@ -59,7 +59,7 @@ impl Node for UseNode {
                     path = path.join(&dep.path);
                 }
                 for i in 1..self.ids.len() {
-                    path = path.join(&self.ids[i].get_name(ctx));
+                    path = path.join(self.ids[i].get_name(ctx));
                 }
             }
         }
