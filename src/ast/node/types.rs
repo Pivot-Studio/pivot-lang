@@ -57,6 +57,7 @@ impl TypeNameNode {
         let (_, pltype, _) = self.id.as_ref().unwrap().get_type(ctx)?;
         ctx.if_completion(self.range, || ctx.get_type_completions());
         let pltype = pltype.unwrap();
+
         if let PLType::Struct(sttype) = &*pltype.clone().borrow() {
             let sttype = sttype.new_pltype();
             if let Some(generic_params) = &self.generic_params {
@@ -68,10 +69,8 @@ impl TypeNameNode {
                             .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
                     ));
                 }
-                let mut i = 0;
-                for (_, st_generic_type) in sttype.generic_map.iter() {
+                for (i, st_generic_type) in sttype.generic_map.values().enumerate() {
                     if generic_types[i].is_none() {
-                        i += 1;
                         continue;
                     }
                     if st_generic_type == generic_types[i].as_ref().unwrap() {
@@ -81,11 +80,7 @@ impl TypeNameNode {
                                 g.curpltype = Some(generic_types[i].as_ref().unwrap().clone());
                             }
                         }
-                        i += 1;
                         continue;
-                    }
-                    if let PLType::Generic(g) = &mut *st_generic_type.borrow_mut() {
-                        g.curpltype = None;
                     }
                     if !ctx
                         .eq(
@@ -102,7 +97,6 @@ impl TypeNameNode {
                                 .new_err(ErrorCode::TYPE_MISMATCH),
                         ));
                     }
-                    i += 1;
                 }
             }
             Ok(Arc::new(RefCell::new(PLType::Struct(sttype))))
@@ -117,28 +111,13 @@ impl TypeNameNode {
                             .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
                     ));
                 }
-                let mut i = 0;
-                for (_, st_generic_type) in untype.generic_map.iter() {
+                for (i, un_generic_type) in untype.generic_map.values().enumerate() {
                     if generic_types[i].is_none() {
-                        i += 1;
                         continue;
-                    }
-                    if st_generic_type == generic_types[i].as_ref().unwrap() {
-                        if let PLType::Generic(g) = &mut *st_generic_type.borrow_mut() {
-                            // self ref to avoid emit_struct_def check
-                            if g.curpltype.is_none() {
-                                g.curpltype = Some(generic_types[i].as_ref().unwrap().clone());
-                            }
-                        }
-                        i += 1;
-                        continue;
-                    }
-                    if let PLType::Generic(g) = &mut *st_generic_type.borrow_mut() {
-                        g.curpltype = None;
                     }
                     if !ctx
                         .eq(
-                            st_generic_type.clone(),
+                            un_generic_type.clone(),
                             generic_types[i].as_ref().unwrap().clone(),
                         )
                         .eq
@@ -151,7 +130,6 @@ impl TypeNameNode {
                                 .new_err(ErrorCode::TYPE_MISMATCH),
                         ));
                     }
-                    i += 1;
                 }
             }
             Ok(Arc::new(RefCell::new(PLType::Union(untype))))
