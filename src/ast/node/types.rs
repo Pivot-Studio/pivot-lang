@@ -57,6 +57,7 @@ impl TypeNameNode {
         let (_, pltype, _) = self.id.as_ref().unwrap().get_type(ctx)?;
         ctx.if_completion(self.range, || ctx.get_type_completions());
         let pltype = pltype.unwrap();
+
         if let PLType::Struct(sttype) = &*pltype.clone().borrow() {
             let sttype = sttype.new_pltype();
             if let Some(generic_params) = &self.generic_params {
@@ -68,10 +69,8 @@ impl TypeNameNode {
                             .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
                     ));
                 }
-                let mut i = 0;
-                for (_, st_generic_type) in sttype.generic_map.iter() {
+                for (i, st_generic_type) in sttype.generic_map.values().enumerate() {
                     if generic_types[i].is_none() {
-                        i += 1;
                         continue;
                     }
                     if st_generic_type == generic_types[i].as_ref().unwrap() {
@@ -81,11 +80,7 @@ impl TypeNameNode {
                                 g.curpltype = Some(generic_types[i].as_ref().unwrap().clone());
                             }
                         }
-                        i += 1;
                         continue;
-                    }
-                    if let PLType::Generic(g) = &mut *st_generic_type.borrow_mut() {
-                        g.curpltype = None;
                     }
                     if !ctx
                         .eq(
@@ -102,10 +97,42 @@ impl TypeNameNode {
                                 .new_err(ErrorCode::TYPE_MISMATCH),
                         ));
                     }
-                    i += 1;
                 }
             }
             Ok(Arc::new(RefCell::new(PLType::Struct(sttype))))
+        } else if let PLType::Union(untype) = &*pltype.clone().borrow() {
+            let untype = untype.new_pltype();
+            if let Some(generic_params) = &self.generic_params {
+                let generic_types = generic_params.get_generic_types(ctx, builder)?;
+                if generic_params.generics.len() != untype.generic_map.len() {
+                    return Err(ctx.add_diag(
+                        generic_params
+                            .range
+                            .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
+                    ));
+                }
+                for (i, un_generic_type) in untype.generic_map.values().enumerate() {
+                    if generic_types[i].is_none() {
+                        continue;
+                    }
+                    if !ctx
+                        .eq(
+                            un_generic_type.clone(),
+                            generic_types[i].as_ref().unwrap().clone(),
+                        )
+                        .eq
+                    {
+                        return Err(ctx.add_diag(
+                            generic_params.generics[i]
+                                .as_ref()
+                                .unwrap()
+                                .range()
+                                .new_err(ErrorCode::TYPE_MISMATCH),
+                        ));
+                    }
+                }
+            }
+            Ok(Arc::new(RefCell::new(PLType::Union(untype))))
         } else {
             Ok(pltype)
         }
@@ -138,27 +165,44 @@ impl TypeNode for TypeNameNode {
             generic_params.emit_highlight(ctx);
         }
     }
-
     fn get_type<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> TypeNodeResult {
-        let mut pltype = self.get_origin_type_with_infer(ctx, builder)?;
+        let pltype = self.get_origin_type_with_infer(ctx, builder)?;
         if self.generic_params.is_some() {
-            let mut sttype = match &*pltype.borrow() {
-                PLType::Struct(s) => s.clone(),
+            match &*pltype.borrow() {
+                PLType::Struct(sttype) => {
+                    let mut sttype = sttype.clone();
+                    if sttype.need_gen_code() {
+                        sttype = ctx.protect_generic_context(&sttype.generic_map, |ctx| {
+                            sttype.gen_code(ctx, builder)
+                        })?;
+                        let pltype = Arc::new(RefCell::new(PLType::Struct(sttype)));
+                        return Ok(pltype);
+                    } else {
+                        return Err(
+                            ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER))
+                        );
+                    }
+                }
+                PLType::Union(untype) => {
+                    let mut untype = untype.clone();
+                    if untype.need_gen_code() {
+                        untype = ctx.protect_generic_context(&untype.generic_map, |ctx| {
+                            untype.gen_code(ctx, builder)
+                        })?;
+                        let pltype = Arc::new(RefCell::new(PLType::Union(untype)));
+                        return Ok(pltype);
+                    } else {
+                        return Err(
+                            ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER))
+                        );
+                    }
+                }
                 _ => unreachable!(),
             };
-            if sttype.need_gen_code() {
-                sttype = ctx.protect_generic_context(&sttype.generic_map, |ctx| {
-                    Ok(sttype.gen_code(ctx, builder))
-                })?;
-                pltype = Arc::new(RefCell::new(PLType::Struct(sttype)));
-                return Ok(pltype);
-            } else {
-                return Err(ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER)));
-            }
         }
         Ok(pltype)
     }
@@ -624,7 +668,7 @@ impl Node for StructInitNode {
                     if sttype.need_gen_code() {
                         pltype = Arc::new(RefCell::new(PLType::Struct(
                             ctx.run_in_st_mod_mut(sttype, |ctx, sttype| {
-                                Ok(sttype.gen_code(ctx, builder))
+                                sttype.gen_code(ctx, builder)
                             })?,
                         )));
                     } else {

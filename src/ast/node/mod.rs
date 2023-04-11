@@ -10,6 +10,8 @@ use enum_dispatch::enum_dispatch;
 
 use lsp_types::SemanticTokenType;
 
+use self::cast::AsNode;
+use self::cast::IsNode;
 use self::comment::CommentNode;
 use self::control::*;
 use self::error::*;
@@ -28,6 +30,7 @@ use self::ret::*;
 use self::statement::*;
 use self::string_literal::StringNode;
 use self::types::*;
+use self::union::UnionDefNode;
 
 use super::builder::ValueHandle;
 use super::ctx::EqRes;
@@ -37,6 +40,7 @@ use super::fmt::FmtBuilder;
 use super::pltype::{PLType, PriType};
 use super::range::{Pos, Range};
 
+pub mod cast;
 pub mod comment;
 pub mod control;
 pub mod error;
@@ -54,6 +58,7 @@ pub mod ret;
 pub mod statement;
 pub mod string_literal;
 pub mod types;
+pub mod union;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TerminatorEnum {
     None,
@@ -148,6 +153,9 @@ pub enum NodeEnum {
     MacroLoopStatementNode(MacroLoopStatementNode),
     MacroNode(MacroNode),
     MacroCallNode(MacroCallNode),
+    UnionDefNode(UnionDefNode),
+    AsNode(AsNode),
+    IsNode(IsNode),
 }
 // ANCHOR: range
 #[enum_dispatch]

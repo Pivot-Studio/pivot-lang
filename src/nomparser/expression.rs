@@ -17,7 +17,11 @@ use crate::{
 use crate::{ast::node::macro_nodes::MacroCallNode, nomparser::Span};
 use internal_macro::{test_parser, test_parser_error};
 
-use super::{macro_parse::macro_call_op, string_literal::string_literal, *};
+use super::{cast::as_exp, macro_parse::macro_call_op, string_literal::string_literal, *};
+
+pub fn general_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    logic_exp(input)
+}
 
 #[test_parser("a&&b")]
 #[test_parser("a||b")]
@@ -88,7 +92,7 @@ pub fn pointer_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 tag_token_symbol(TokenType::TAKE_PTR),
                 tag_token_symbol(TokenType::TAKE_VAL),
             ))),
-            complex_exp,
+            as_exp,
         )),
         |(ops, exp)| {
             let exp_range = exp.range();
@@ -138,7 +142,7 @@ fn macro_call_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("a{}.d")]
 #[test_parser("ad")]
 #[test_parser("a<i64>{}")]
-fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
+pub fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         pair(
             primary_exp,
@@ -254,7 +258,7 @@ fn parantheses_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delimited(
             tag_token_symbol(TokenType::LPAREN),
-            parse_with_ex(logic_exp, false),
+            parse_with_ex(general_exp, false),
             tag_token_symbol(TokenType::RPAREN),
         ),
         |exp| {

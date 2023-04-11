@@ -10,8 +10,10 @@ use project1::test::list;
 use project1::test::module;
 use project1::test::string;
 use project1::test::macros;
+use project1::test::union;
 use pl_test::main;
 use std::io;
+
 pub fn main() i64 {
     macros::test_macros();
     ifel::test_if_else();
@@ -26,6 +28,7 @@ pub fn main() i64 {
     main::simple_test();
     module::test_module();
     string::test_string();
+    union::test_union();
     return 0;
 }
 

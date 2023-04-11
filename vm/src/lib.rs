@@ -32,6 +32,14 @@ fn pl_panic() {
 }
 
 #[is_runtime]
+fn __cast_panic() {
+    println!("invalid cast occured!");
+    let bt = Backtrace::new();
+    println!("{:?}", bt);
+    exit(1);
+}
+
+#[is_runtime]
 fn ptr_to_int(ptr: *const u8) -> i64 {
     ptr as i64
 }

@@ -303,15 +303,15 @@ impl Node for TakeOpNode {
                     .new_err(ErrorCode::ILLEGAL_GET_FIELD_OPERATION),
             ));
         }
+        ctx.if_completion(self.range, || {
+            match &*ctx.auto_deref_tp(head_pltype.clone()).borrow() {
+                PLType::Struct(s) => s.get_completions(ctx),
+                PLType::Trait(s) => s.get_trait_completions(ctx),
+                _ => vec![],
+            }
+        });
         if self.field.is_none() {
             // end with ".", gen completions
-            ctx.if_completion(self.range, || {
-                match &*ctx.auto_deref_tp(head_pltype).borrow() {
-                    PLType::Struct(s) => s.get_completions(ctx),
-                    PLType::Trait(s) => s.get_trait_completions(ctx),
-                    _ => vec![],
-                }
-            });
             return Err(ctx.add_diag(self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION)));
         }
         let id = self.field.as_ref().unwrap();

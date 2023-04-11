@@ -116,6 +116,23 @@ impl Mod {
         }
     }
 
+    /// import all public symbols from another module
+    ///
+    /// used to implements `use xxx::*;`
+    pub fn import_all_public_symbols_from(&mut self, other: &Self) {
+        for (k, v) in other.types.iter() {
+            match &*v.borrow() {
+                PLType::Fn(_) | PLType::Struct(_) | PLType::Trait(_) | PLType::Union(_) => {
+                    self.types.insert(k.to_string(), v.clone());
+                }
+                _ => (),
+            }
+        }
+        for (k, v) in other.methods.iter() {
+            self.methods.insert(k.to_string(), v.clone());
+        }
+    }
+
     pub fn new(name: String, path: String) -> Self {
         Self {
             name,

@@ -59,7 +59,7 @@ impl Node for UseNode {
                     path = path.join(&dep.path);
                 }
                 for i in 1..self.ids.len() {
-                    path = path.join(&self.ids[i].get_name(ctx));
+                    path = path.join(self.ids[i].get_name(ctx));
                 }
             }
         }
@@ -67,6 +67,15 @@ impl Node for UseNode {
             ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
         }
         if !path.with_extension("pi").exists() {
+            let path = path.parent().unwrap();
+            if self.ids.len() > 1 {
+                ctx.if_completion(self.range, || {
+                    if self.singlecolon {
+                        return vec![];
+                    }
+                    get_ns_path_completions(path.to_str().unwrap())
+                });
+            }
             ctx.add_diag(self.range.new_err(ErrorCode::UNRESOLVED_MODULE));
         }
         ctx.if_completion(self.range, || {
@@ -148,6 +157,10 @@ impl Node for ExternIdNode {
                 // eprintln!("comp {:?}", completions);
             });
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION)));
+        } else {
+            ctx.if_completion(self.range, || {
+                ctx.get_completions_in_ns(&self.ns[0].get_name(ctx))
+            });
         }
         for id in &self.ns {
             ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
@@ -220,6 +233,10 @@ impl ExternIdNode {
                 ctx.get_completions_in_ns(&self.id.get_name(ctx))
             });
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION)));
+        } else {
+            ctx.if_completion(self.range, || {
+                ctx.get_completions_in_ns(&self.ns[0].get_name(ctx))
+            });
         }
         let mut plmod = &ctx.plmod;
         for ns in self.ns.iter() {

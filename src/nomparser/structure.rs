@@ -102,7 +102,7 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
 /// special: del newline or space
 fn struct_init_field(input: Span) -> IResult<Span, Box<StructInitFieldNode>> {
     del_newline_or_space!(map_res(
-        tuple((identifier, tag_token_symbol(TokenType::COLON), logic_exp,)),
+        tuple((identifier, tag_token_symbol(TokenType::COLON), general_exp,)),
         |(id, _, exp)| {
             let range = id.range.start.to(exp.range().end);
             Ok::<_, ()>(Box::new(StructInitFieldNode {

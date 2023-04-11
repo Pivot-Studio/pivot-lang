@@ -30,7 +30,7 @@ esac
 
 # Add the right repository for the distro
 wget -qO - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
-add-apt-repository "${REPO_NAME}"
+add-apt-repository "${REPO_NAME}" --yes
 apt-get update
 
 # Install required packages
