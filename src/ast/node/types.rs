@@ -165,8 +165,6 @@ impl TypeNode for TypeNameNode {
             generic_params.emit_highlight(ctx);
         }
     }
-    // let a:A<T> =
-    // type A<T> = T|None
     fn get_type<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
@@ -189,13 +187,13 @@ impl TypeNode for TypeNameNode {
                         );
                     }
                 }
-                PLType::Union(sttype) => {
-                    let mut sttype = sttype.clone();
-                    if sttype.need_gen_code() {
-                        sttype = ctx.protect_generic_context(&sttype.generic_map, |ctx| {
-                            sttype.gen_code(ctx, builder)
+                PLType::Union(untype) => {
+                    let mut untype = untype.clone();
+                    if untype.need_gen_code() {
+                        untype = ctx.protect_generic_context(&untype.generic_map, |ctx| {
+                            untype.gen_code(ctx, builder)
                         })?;
-                        let pltype = Arc::new(RefCell::new(PLType::Union(sttype)));
+                        let pltype = Arc::new(RefCell::new(PLType::Union(untype)));
                         return Ok(pltype);
                     } else {
                         return Err(

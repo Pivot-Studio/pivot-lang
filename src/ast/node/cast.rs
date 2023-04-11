@@ -241,25 +241,21 @@ fn get_option_type<'a, 'ctx, 'b>(
     target_ty: Arc<RefCell<PLType>>,
 ) -> TypeNodeResult {
     let pltype = ctx.get_type("Option", Default::default()).unwrap();
-    let t = &*pltype.borrow();
-    match t {
-        PLType::Union(union) => {
-            let mut union = union.clone();
-            if let PLType::Generic(g) = &mut *union.generic_map.get("T").unwrap().borrow_mut() {
-                g.set_type(target_ty);
-            }
-            if union.need_gen_code() {
-                union = ctx.protect_generic_context(&union.generic_map, |ctx| {
-                    union.gen_code(ctx, builder)
-                })?;
-                let pltype = Arc::new(RefCell::new(PLType::Union(union)));
-                Ok(pltype)
-            } else {
-                unreachable!()
-            }
+    if let PLType::Union(union) = &*pltype.borrow() {
+        let mut union = union.clone();
+        if let PLType::Generic(g) = &mut *union.generic_map.get("T").unwrap().borrow_mut() {
+            g.set_type(target_ty);
         }
-        _ => unreachable!(),
-    }
+        if union.need_gen_code() {
+            union = ctx
+                .protect_generic_context(&union.generic_map, |ctx| union.gen_code(ctx, builder))?;
+            let pltype = Arc::new(RefCell::new(PLType::Union(union)));
+            return Ok(pltype);
+        } else {
+            unreachable!()
+        }
+    };
+    unreachable!()
 }
 
 #[node]
