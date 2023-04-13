@@ -252,6 +252,24 @@ impl TypeNode for TypeNameNode {
                         need_up_cast: false,
                     })
                 });
+            } else if let (PLType::Union(left), PLType::Union(right)) =
+                (&*left.borrow(), &*right.borrow())
+            {
+                return ctx.protect_generic_context(&left.generic_map, |ctx| {
+                    for (l, r) in left.sum_types.iter().zip(right.sum_types.iter()) {
+                        let r_type = r.get_type(ctx, builder)?;
+                        if !l.eq_or_infer(ctx, r_type, builder)?.eq {
+                            return Ok(EqRes {
+                                eq: false,
+                                need_up_cast: false,
+                            });
+                        }
+                    }
+                    Ok(EqRes {
+                        eq: true,
+                        need_up_cast: false,
+                    })
+                });
             }
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::NOT_GENERIC_TYPE)));
         }

@@ -133,7 +133,24 @@ impl<'a, 'ctx> Ctx<'a> {
                         .add_to_ctx(self))
                 }
             }
-            _ => todo!(),
+            _ => Err(node
+                .range()
+                .new_err(ErrorCode::INVALID_CAST)
+                .add_label(
+                    node.expr.range(),
+                    self.get_file(),
+                    format_label!("type of the expression is `{}`", ty.get_name()),
+                )
+                .add_label(
+                    node.ty.range(),
+                    self.get_file(),
+                    format_label!("target type is `{}`", target_ty.borrow().get_name()),
+                )
+                .add_help(
+                    "`as` cast can only be performed between primitives \
+                or from union types.",
+                )
+                .add_to_ctx(self)),
         }
     }
     /// Option<i128>

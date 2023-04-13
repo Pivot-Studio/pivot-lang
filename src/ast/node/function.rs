@@ -235,6 +235,8 @@ pub struct FuncDefNode {
     pub trait_bounds: Option<Vec<Box<TraitBoundNode>>>,
 }
 
+type OptFOnce<'a> = Option<Box<dyn FnOnce(&mut Ctx) + 'a>>; // Thank u, Rust!
+
 impl TypeNode for FuncDefNode {
     fn get_type<'a, 'ctx, 'b>(
         &self,
@@ -255,7 +257,7 @@ impl TypeNode for FuncDefNode {
             }
         }
         let (pltype, flater) = child.protect_generic_context(&generic_map, |child| {
-            let mut flater = None;
+            let mut flater: OptFOnce = None;
             let mut param_pltypes = Vec::new();
             let mut param_name = Vec::new();
             let method = !self.paralist.is_empty() && self.paralist[0].id.name == "self";
@@ -311,16 +313,30 @@ impl TypeNode for FuncDefNode {
                     .get_type(child, builder)
                     .unwrap();
                 if let PLType::Pointer(s) = &*receiver_pltype.borrow() {
-                    if let PLType::Struct(s) = &*s.borrow() {
-                        let fullname = s.get_st_full_name_except_generic();
-                        flater = Some(move |ctx: &mut Ctx| {
-                            ctx.add_method(
-                                &fullname,
-                                self.id.name.split("::").last().unwrap(),
-                                fnvalue.clone(),
-                                self.id.range,
-                            );
-                        });
+                    match &*s.borrow() {
+                        PLType::Struct(s) => {
+                            let fullname = s.get_st_full_name_except_generic();
+                            flater = Some(Box::new(move |ctx: &mut Ctx| {
+                                ctx.add_method(
+                                    &fullname,
+                                    self.id.name.split("::").last().unwrap(),
+                                    fnvalue.clone(),
+                                    self.id.range,
+                                );
+                            }));
+                        }
+                        PLType::Union(u) => {
+                            let fullname = u.get_full_name_except_generic();
+                            flater = Some(Box::new(move |ctx: &mut Ctx| {
+                                ctx.add_method(
+                                    &fullname,
+                                    self.id.name.split("::").last().unwrap(),
+                                    fnvalue.clone(),
+                                    self.id.range,
+                                );
+                            }));
+                        }
+                        _ => (), // 在impl的emit里会检查类型报错，这里不处理
                     }
                 };
             }

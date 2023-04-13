@@ -76,6 +76,14 @@ pub struct UnionType {
 }
 
 impl UnionType {
+    pub fn find_method(&self, ctx: &Ctx, method: &str) -> Option<FNValue> {
+        ctx.plmod
+            .find_method(&self.get_full_name_except_generic(), method)
+    }
+    pub fn get_full_name_except_generic(&self) -> String {
+        let full_name = self.get_full_name();
+        full_name.split('<').collect::<Vec<_>>()[0].to_string()
+    }
     pub fn get_full_name(&self) -> String {
         format!("{}..{}", self.path, self.name)
     }

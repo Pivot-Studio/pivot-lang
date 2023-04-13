@@ -295,7 +295,7 @@ impl Node for TakeOpNode {
         let head_pltype = get_type_deep(pltype.unwrap());
         if !matches!(
             &*head_pltype.borrow(),
-            PLType::Struct(_) | PLType::Pointer(_) | PLType::Trait(_)
+            PLType::Struct(_) | PLType::Pointer(_) | PLType::Trait(_) | PLType::Union(_)
         ) {
             return Err(ctx.add_diag(
                 self.head
@@ -381,6 +381,30 @@ impl Node for TakeOpNode {
                     ));
                 };
                 Err(ctx.add_diag(id.range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND)))
+            }
+            PLType::Union(union) => {
+                if let Some(mthd) = union.find_method(ctx, &id.name) {
+                    _ = mthd.expect_pub(ctx, id_range);
+                    ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
+                    ctx.send_if_go_to_def(
+                        id_range,
+                        mthd.range,
+                        mthd.llvmname.split("..").next().unwrap().to_string(),
+                    );
+                    return Ok((
+                        Some(PLValue {
+                            value: usize::MAX,
+                            is_const: false,
+                            receiver: Some((
+                                headptr,
+                                Some(Arc::new(RefCell::new(PLType::Pointer(head_pltype)))),
+                            )),
+                        }),
+                        Some(Arc::new(RefCell::new(PLType::Fn(mthd)))),
+                        TerminatorEnum::None,
+                    ));
+                };
+                Err(ctx.add_diag(id.range.new_err(ErrorCode::METHOD_NOT_FOUND)))
             }
             _ => Err(ctx.add_diag(
                 self.head

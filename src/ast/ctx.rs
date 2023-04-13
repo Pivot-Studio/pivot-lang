@@ -227,6 +227,45 @@ impl<'a, 'ctx> Ctx<'a> {
         st_value: usize,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<usize, PLDiag> {
+        if let PLType::Union(u) = &*trait_pltype.borrow() {
+            let union_members = self.run_in_union_mod(u, |ctx, u| {
+                let mut union_members = vec![];
+                for tp in &u.sum_types {
+                    let tp = tp.get_type(ctx, builder)?;
+                    union_members.push(tp);
+                }
+                Ok(union_members)
+            })?;
+            for (i, tp) in union_members.iter().enumerate() {
+                if *tp.borrow() == *st_pltype.borrow() {
+                    let union_handle =
+                        builder.alloc("tmp_unionv", &trait_pltype.borrow(), self, None);
+                    let union_value = builder
+                        .build_struct_gep(union_handle, 1, "union_value")
+                        .unwrap();
+                    let union_type_field = builder
+                        .build_struct_gep(union_handle, 0, "union_type")
+                        .unwrap();
+                    let union_type = builder.int_value(&PriType::U64, i as u64, false);
+                    builder.build_store(union_type_field, union_type);
+                    let mut ptr = st_value;
+                    if !builder.is_ptr(st_value) {
+                        // mv to heap
+                        ptr = builder.alloc("tmp", &st_pltype.borrow(), self, None);
+                        builder.build_store(ptr, st_value);
+                    }
+                    let st_value = builder.bitcast(
+                        self,
+                        ptr,
+                        &PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::I8)))),
+                        "traitcast_tmp",
+                    );
+                    builder.build_store(union_value, st_value);
+
+                    return Ok(union_handle);
+                }
+            }
+        }
         let (st_pltype, st_value) = self.auto_deref(st_pltype, st_value, builder);
         if let (PLType::Trait(t), PLType::Struct(st)) =
             (&*trait_pltype.borrow(), &*st_pltype.borrow())
@@ -266,44 +305,6 @@ impl<'a, 'ctx> Ctx<'a> {
             let hash = builder.int_value(&PriType::U64, hash, false);
             builder.build_store(type_hash, hash);
             return Ok(trait_handle);
-        } else if let PLType::Union(u) = &*trait_pltype.borrow() {
-            let union_members = self.run_in_union_mod(u, |ctx, u| {
-                let mut union_members = vec![];
-                for tp in &u.sum_types {
-                    let tp = tp.get_type(ctx, builder)?;
-                    union_members.push(tp);
-                }
-                Ok(union_members)
-            })?;
-            for (i, tp) in union_members.iter().enumerate() {
-                if *tp.borrow() == *st_pltype.borrow() {
-                    let union_handle =
-                        builder.alloc("tmp_unionv", &trait_pltype.borrow(), self, None);
-                    let union_value = builder
-                        .build_struct_gep(union_handle, 1, "union_value")
-                        .unwrap();
-                    let union_type_field = builder
-                        .build_struct_gep(union_handle, 0, "union_type")
-                        .unwrap();
-                    let union_type = builder.int_value(&PriType::U64, i as u64, false);
-                    builder.build_store(union_type_field, union_type);
-                    let mut ptr = st_value;
-                    if !builder.is_ptr(st_value) {
-                        // mv to heap
-                        ptr = builder.alloc("tmp", &st_pltype.borrow(), self, None);
-                        builder.build_store(ptr, st_value);
-                    }
-                    let st_value = builder.bitcast(
-                        self,
-                        ptr,
-                        &PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::I8)))),
-                        "traitcast_tmp",
-                    );
-                    builder.build_store(union_value, st_value);
-
-                    return Ok(union_handle);
-                }
-            }
         }
         #[allow(clippy::needless_return)]
         return Err(mismatch_err!(
