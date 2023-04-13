@@ -550,9 +550,9 @@ impl Node for FuncDefNode {
         }
         for para in self.paralist.iter() {
             ctx.push_semantic_token(para.id.range, SemanticTokenType::PARAMETER, 0);
-            ctx.push_semantic_token(para.typenode.range(), SemanticTokenType::TYPE, 0);
+            para.typenode.emit_highlight(ctx);
         }
-        ctx.push_semantic_token(self.ret.range(), SemanticTokenType::TYPE, 0);
+        self.ret.emit_highlight(ctx);
         if let Some(trait_bounds) = &self.trait_bounds {
             trait_bounds
                 .iter()
