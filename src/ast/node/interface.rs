@@ -115,7 +115,7 @@ impl TraitDefNode {
             path: ctx.plmod.path.clone(),
             fields: FxHashMap::default(),
             ordered_fields: vec![],
-            range: self.range(),
+            range: self.id.range(),
             doc: vec![],
             derives: vec![],
             modifier: self.modifier,
@@ -157,7 +157,7 @@ impl TraitDefNode {
             modifier: None,
         });
         i += 1;
-        let pltype = ctx.get_type(self.id.name.as_str(), self.range)?;
+        let pltype = ctx.get_type(self.id.name.as_str(), self.id.range)?;
         let clone_map = ctx.plmod.types.clone();
         for field in self.methods.iter() {
             let mut tp = field.clone();
@@ -205,7 +205,6 @@ impl TraitDefNode {
             st.derives = derives;
             // st.doc = self.doc.clone();
         }
-        ctx.set_if_refs_tp(pltype.clone(), self.id.range);
         ctx.add_doc_symbols(pltype);
         // ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
         Ok(())

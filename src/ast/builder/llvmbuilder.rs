@@ -266,7 +266,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
         let gcmod = root_ctx.plmod.submods.get("gc").unwrap_or(&root_ctx.plmod);
         let f: FNValue = gcmod
-            .get_type(malloc_fn)
+            .types
+            .get(malloc_fn)
             .unwrap()
             .borrow()
             .clone()

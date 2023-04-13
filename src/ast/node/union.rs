@@ -75,7 +75,7 @@ impl UnionDefNode {
         let stu = Arc::new(RefCell::new(PLType::Union(UnionType {
             name: self.name.name.clone(),
             path: ctx.plmod.path.clone(),
-            range: self.range,
+            range: self.name.range,
             generic_map,
             modifier: self.modifier,
             sum_types: self.sum_types.clone(),

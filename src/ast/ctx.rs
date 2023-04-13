@@ -412,9 +412,31 @@ impl<'a, 'ctx> Ctx<'a> {
 
     pub fn get_type(&self, name: &str, range: Range) -> Result<Arc<RefCell<PLType>>, PLDiag> {
         if let Some(pv) = self.generic_types.get(name) {
+            self.set_if_refs_tp(pv.clone(), range);
+            // let n = pv.borrow().get_llvm_name();
+            // let ns = n.split("..").collect::<Vec<_>>();
+            // let f = if ns.len() == 2  {
+            //     ns[0].to_string()
+            // }else {
+            //     self.plmod.path.clone()
+            // };
+            self.send_if_go_to_def(
+                range,
+                pv.borrow().get_range().unwrap_or(range),
+                self.plmod.path.clone(),
+            );
             return Ok(pv.clone());
         }
-        if let Some(pv) = self.plmod.types.get(name) {
+        if let Some(pv) = self.plmod.get_type(name, range, self) {
+            // self.set_if_refs_tp(pv.clone(),range);
+            // // let n = pv.borrow().get_llvm_name();
+            // // let ns = n.split("..").collect::<Vec<_>>();
+            // // let f = if ns.len() == 2  {
+            // //     ns[0].to_string()
+            // // }else {
+            // //     self.plmod.path.clone()
+            // // };
+            // self.send_if_go_to_def(range,pv.borrow().get_range().unwrap_or(range),self.plmod.path.clone());
             return Ok(pv.clone());
         }
         if let Some(father) = self.father {
@@ -478,6 +500,7 @@ impl<'a, 'ctx> Ctx<'a> {
         if self.plmod.types.contains_key(&name) {
             return Err(self.add_diag(range.new_err(ErrorCode::REDEFINE_TYPE)));
         }
+        self.set_if_refs_tp(pltype.clone(), range);
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
         self.plmod.types.insert(name, pltype);
         Ok(())
@@ -713,6 +736,9 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn set_if_refs_tp(&self, tp: Arc<RefCell<PLType>>, range: Range) {
+        if range == Default::default() {
+            return;
+        }
         tp.borrow().if_refs(|tp| {
             let name = tp.get_full_elm_name();
             self.set_glob_refs(&name, range)

@@ -47,7 +47,8 @@ impl Node for DefNode {
         let mut expv = None;
         if let Some(tp) = &self.tp {
             tp.emit_highlight(ctx);
-            pltype = Some(tp.get_type(ctx, builder)?);
+            let pltp = tp.get_type(ctx, builder)?;
+            pltype = Some(pltp);
         }
         if let Some(exp) = &mut self.exp {
             let (value, pltype_opt, _) =

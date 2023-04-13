@@ -384,8 +384,8 @@ impl PLType {
         match self {
             PLType::Generic(g) => g.name.clone(),
             PLType::Fn(fu) => fu.llvmname.clone(),
-            PLType::Struct(st) => st.get_st_full_name(),
-            PLType::Trait(st) => st.get_st_full_name(),
+            PLType::Struct(st) => st.get_st_full_name_except_generic(),
+            PLType::Trait(st) => st.get_st_full_name_except_generic(),
             PLType::Primitive(pri) => pri.get_name(),
             PLType::Arr(arr) => {
                 format!(
@@ -397,7 +397,7 @@ impl PLType {
             PLType::Void => "void".to_string(),
             PLType::Pointer(p) => p.borrow().get_full_elm_name(),
             PLType::PlaceHolder(p) => p.name.clone(),
-            PLType::Union(u) => u.get_full_name(),
+            PLType::Union(u) => u.get_full_name_except_generic(),
         }
     }
     pub fn get_ptr_depth(&self) -> usize {

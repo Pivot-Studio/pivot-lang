@@ -489,7 +489,7 @@ impl StructDefNode {
             path: ctx.plmod.path.clone(),
             fields: FxHashMap::default(),
             ordered_fields: vec![],
-            range: self.range(),
+            range: self.id.range(),
             doc: vec![],
             generic_map,
             derives: vec![],
@@ -504,7 +504,7 @@ impl StructDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<(), PLDiag> {
-        let pltype = ctx.get_type(self.id.name.as_str(), self.range)?;
+        let pltype = ctx.get_type(self.id.name.as_str(), self.id.range)?;
         let generic_map = if let PLType::Struct(st) = &mut *pltype.borrow_mut() {
             st.generic_map.clone()
         } else {
@@ -535,7 +535,7 @@ impl StructDefNode {
                     index: i,
                     typenode: field.id.typenode.clone(),
                     name: id.name.clone(),
-                    range: field.id.range,
+                    range: field.id.id.range,
                     modifier: field.modifier,
                 };
                 let tpre = field.id.typenode.get_type(ctx, builder);

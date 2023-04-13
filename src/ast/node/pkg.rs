@@ -195,20 +195,16 @@ impl Node for ExternIdNode {
                 TerminatorEnum::None,
             ));
         }
-        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx)) {
-            let range = &tp.borrow().get_range();
+        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {
             let re = match &*tp.clone().borrow() {
                 PLType::Fn(_) => {
                     // 必须是public的
                     _ = tp.borrow().expect_pub(ctx, self.range);
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
-                    Ok((None, Some(tp), TerminatorEnum::None))
+                    Ok((None, Some(tp.clone()), TerminatorEnum::None))
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION))),
             };
-            if let Some(range) = range {
-                ctx.send_if_go_to_def(self.range, *range, plmod.path.clone());
-            }
             return re;
         }
         Err(ctx.add_diag(self.range.new_err(ErrorCode::SYMBOL_NOT_FOUND)))
@@ -247,7 +243,7 @@ impl ExternIdNode {
                 return Err(ctx.add_diag(ns.range.new_err(ErrorCode::UNRESOLVED_MODULE)));
             }
         }
-        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx)) {
+        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {
             // 必须是public的
             _ = tp.borrow().expect_pub(ctx, self.range);
             let re = match *tp.clone().borrow() {

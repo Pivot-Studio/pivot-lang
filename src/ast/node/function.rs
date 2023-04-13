@@ -270,15 +270,14 @@ impl TypeNode for FuncDefNode {
                     _ => unreachable!(),
                 });
             for para in self.paralist.iter() {
-                let paramtype = para.typenode.get_type(child, builder)?;
-                child.set_if_refs_tp(paramtype.clone(), para.typenode.range());
+                _ = para.typenode.get_type(child, builder)?;
                 param_pltypes.push(para.typenode.clone());
                 param_name.push(para.id.name.clone());
             }
             let fnvalue = FNValue {
                 name: self.id.name.clone(),
                 param_names: param_name,
-                range: self.range,
+                range: self.id.range(),
                 doc: self.doc.clone(),
                 llvmname: if self.declare {
                     self.id.name.clone()
@@ -391,7 +390,7 @@ impl FuncDefNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<(), PLDiag> {
         if ctx.get_type(self.id.name.as_str(), self.id.range).is_ok() {
-            return Err(ctx.add_diag(self.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
+            return Err(ctx.add_diag(self.id.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
         }
         let pltype = self.get_type(ctx, builder)?;
         ctx.add_type(self.id.name.clone(), pltype, self.id.range)?;
@@ -558,8 +557,8 @@ impl Node for FuncDefNode {
                 .iter()
                 .for_each(|trait_bound| trait_bound.emit_highlight(ctx));
         }
-        let pltype = ctx.get_type(&self.id.name, self.range)?;
-        if pltype.borrow().get_range() != Some(self.range) {
+        let pltype = ctx.get_type(&self.id.name, self.id.range)?;
+        if pltype.borrow().get_range() != Some(self.id.range) {
             return Err(self.id.range.new_err(ErrorCode::REDEFINE_SYMBOL));
         }
         if self.body.is_some() {
