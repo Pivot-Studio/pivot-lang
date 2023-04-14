@@ -3,6 +3,7 @@ use std::cell::RefCell;
 use std::sync::Arc;
 
 use super::interface::TraitBoundNode;
+use super::node_result::NodeResultBuilder;
 use super::primary::VarNode;
 use super::*;
 
@@ -16,7 +17,6 @@ use crate::ast::plmod::MutVec;
 use crate::ast::pltype::get_type_deep;
 use crate::ast::pltype::{ARRType, Field, GenericType, PLType, STType};
 use crate::ast::tokens::TokenType;
-use crate::plv;
 use indexmap::IndexMap;
 
 use internal_macro::node;
@@ -55,9 +55,15 @@ impl TypeNameNode {
             ctx.if_completion(self.range, || ctx.get_type_completions());
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_TYPE)));
         }
-        let (_, pltype, _) = self.id.as_ref().unwrap().get_type(ctx)?;
+        let pltype = self
+            .id
+            .as_ref()
+            .unwrap()
+            .get_type(ctx)?
+            .get_value()
+            .unwrap()
+            .get_ty();
         ctx.if_completion(self.range, || ctx.get_type_completions());
-        let pltype = pltype.unwrap();
 
         if let PLType::Struct(sttype) = &*pltype.clone().borrow() {
             let sttype = sttype.new_pltype();
@@ -468,7 +474,7 @@ impl Node for StructDefNode {
                 ctx.push_semantic_token(doc.range, SemanticTokenType::COMMENT, 0);
             }
         }
-        Ok((None, None, TerminatorEnum::None))
+        Ok(Default::default())
     }
 }
 
@@ -602,8 +608,7 @@ impl Node for StructInitFieldNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        let (v, tp, _) = self.exp.emit(ctx, builder)?;
-        Ok((v, tp, TerminatorEnum::None))
+        self.exp.emit(ctx, builder)
     }
 }
 
@@ -666,14 +671,15 @@ impl Node for StructInitNode {
                         );
                     }
                     let field = field.unwrap();
-                    let (value, value_pltype, _) = fieldinit.emit(ctx, builder)?;
+                    let v = fieldinit.emit(ctx, builder)?.get_value();
                     idx += 1;
                     ctx.emit_comment_highlight(&self.comments[idx - 1]);
-                    if value.is_none() || value_pltype.is_none() {
+                    if v.is_none() {
                         return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
                     }
-                    let value = ctx.try_load2var(field_exp_range, value.unwrap(), builder)?;
-                    let value_pltype = value_pltype.unwrap();
+                    let v = v.unwrap();
+                    let value = ctx.try_load2var(field_exp_range, v.get_value(), builder)?;
+                    let value_pltype = v.get_ty();
                     if !field.typenode.eq_or_infer(ctx, value_pltype, builder)?.eq {
                         return Err(ctx.add_diag(
                             fieldinit
@@ -712,11 +718,7 @@ impl Node for StructInitNode {
                     .unwrap();
                 builder.build_store(fieldptr, *value);
             });
-            Ok((
-                Some(plv!(struct_pointer)),
-                Some(pltype.clone()),
-                TerminatorEnum::None,
-            ))
+            struct_pointer.new_output(pltype.clone()).to_result()
         })
     }
 }
@@ -752,15 +754,16 @@ impl Node for ArrayInitNode {
 
         for exp in self.exps.iter_mut() {
             let range = exp.range();
-            let (v, tp, _) = exp.emit(ctx, builder)?;
+            let v = exp.emit(ctx, builder)?.get_value();
             // 检查类型是否一致
             if tp0.is_none() {
-                tp0 = tp.clone();
-            } else if tp0 != tp {
+                tp0 = v.as_ref().map(|v| v.get_ty());
+            } else if tp0 != v.as_ref().map(|v| v.get_ty()) {
                 return Err(ctx.add_diag(range.new_err(ErrorCode::ARRAY_TYPE_NOT_MATCH)));
             }
-            let tp = tp.unwrap();
-            exps.push((ctx.try_load2var(range, v.unwrap(), builder)?, tp));
+            let v = v.unwrap();
+            let tp = v.get_ty();
+            exps.push((ctx.try_load2var(range, v.get_value(), builder)?, tp));
         }
         if tp0.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_INIT_EMPTY)));
@@ -782,14 +785,11 @@ impl Node for ArrayInitNode {
             let ptr = builder.build_const_in_bounds_gep(real_arr, &[0, i as u64], "elem_ptr");
             builder.build_store(ptr, v);
         }
-        Ok((
-            Some(plv!(arr)),
-            Some(Arc::new(RefCell::new(PLType::Arr(ARRType {
-                element_type: tp0.unwrap(),
-                size: sz,
-            })))),
-            TerminatorEnum::None,
-        ))
+        arr.new_output(Arc::new(RefCell::new(PLType::Arr(ARRType {
+            element_type: tp0.unwrap(),
+            size: sz,
+        }))))
+        .to_result()
     }
 }
 
@@ -818,7 +818,7 @@ impl Node for GenericDefNode {
         _ctx: &'b mut Ctx<'a>,
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        Ok((None, None, TerminatorEnum::None))
+        Ok(Default::default())
     }
 }
 impl GenericDefNode {
@@ -888,7 +888,7 @@ impl Node for GenericParamNode {
         _: &'b mut Ctx<'a>,
         _: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        Ok((None, None, TerminatorEnum::None))
+        Ok(Default::default())
     }
 }
 impl GenericParamNode {

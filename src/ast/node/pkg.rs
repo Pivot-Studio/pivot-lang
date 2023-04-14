@@ -4,21 +4,19 @@ use std::sync::Arc;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::diag::PLDiag;
 use crate::ast::plmod::get_ns_path_completions;
-use crate::{
-    ast::{
-        ctx::Ctx,
-        diag::ErrorCode,
-        node::{deal_line, tab},
-        pltype::PLType,
-    },
-    plv,
+use crate::ast::{
+    ctx::Ctx,
+    diag::ErrorCode,
+    node::{deal_line, tab},
+    pltype::PLType,
 };
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
 
 use super::macro_nodes::MacroNode;
+use super::node_result::NodeResultBuilder;
 use super::PrintTrait;
-use super::{primary::VarNode, Node, NodeResult, PLValue, TerminatorEnum};
+use super::{primary::VarNode, Node, NodeResult};
 #[node]
 pub struct UseNode {
     pub ids: Vec<Box<VarNode>>,
@@ -108,7 +106,7 @@ impl Node for UseNode {
         if !self.complete {
             return Err(ctx.add_diag(self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION)));
         }
-        Ok((None, None, TerminatorEnum::None))
+        Ok(Default::default())
     }
 }
 
@@ -181,22 +179,13 @@ impl Node for ExternIdNode {
             ctx.push_semantic_token(self.id.range, SemanticTokenType::VARIABLE, 0);
             let pltype = symbol.tp.clone();
             ctx.set_glob_refs(&plmod.get_full_name(&self.id.get_name(ctx)), self.id.range);
-            // ctx.set_if_refs(symbol.loc.clone(), self.range);
             ctx.send_if_go_to_def(self.range, symbol.range, plmod.path.clone());
             let g = ctx.get_or_add_global(
                 &plmod.get_full_name(&self.id.get_name(ctx)),
                 symbol.tp.clone(),
                 builder,
             );
-            return Ok((
-                Some({
-                    let mut res: PLValue = plv!(g);
-                    res.set_const(true);
-                    res
-                }),
-                Some(pltype),
-                TerminatorEnum::None,
-            ));
+            return g.new_output(pltype).set_const().to_result();
         }
         if let Some(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {
             let mtp = tp.clone();
@@ -205,7 +194,7 @@ impl Node for ExternIdNode {
                     // 必须是public的
                     _ = tp.borrow().expect_pub(ctx, self.range);
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
-                    Ok((None, Some(tp), TerminatorEnum::None))
+                    usize::MAX.new_output(tp).to_result()
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION))),
             };
@@ -251,7 +240,7 @@ impl ExternIdNode {
             // 必须是public的
             _ = tp.borrow().expect_pub(ctx, self.range);
             let re = match *tp.clone().borrow() {
-                PLType::Struct(_) | PLType::Trait(_) => Ok((None, Some(tp), TerminatorEnum::None)),
+                PLType::Struct(_) | PLType::Trait(_) => usize::MAX.new_output(tp).to_result(),
                 _ => unreachable!(),
             };
             return re;

@@ -99,7 +99,7 @@ impl Node for TraitDefNode {
         for method in &self.methods {
             method.emit_highlight(ctx);
         }
-        Ok((None, None, TerminatorEnum::None))
+        Ok(Default::default())
     }
 }
 

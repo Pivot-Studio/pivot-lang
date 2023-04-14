@@ -4,9 +4,8 @@ use super::diag::ErrorCode;
 use super::diag::PLDiag;
 
 use super::node::macro_nodes::MacroNode;
+use super::node::node_result::NodeResult;
 use super::node::NodeEnum;
-use super::node::NodeResult;
-use super::node::PLValue;
 use super::node::TypeNode;
 use super::plmod::CompletionItemWrapper;
 use super::plmod::GlobalVar;
@@ -532,10 +531,10 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn try_load2var<'b>(
         &'b mut self,
         range: Range,
-        v: PLValue,
+        v: ValueHandle,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<ValueHandle, PLDiag> {
-        builder.try_load2var(range, v.value, self)
+        builder.try_load2var(range, v, self)
     }
     pub fn if_completion(
         &self,

@@ -1,9 +1,9 @@
+use super::node_result::TerminatorEnum;
 use super::*;
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::{ctx::Ctx, diag::ErrorCode};
-use crate::plv;
 use internal_macro::node;
 
 #[node(comment)]
@@ -31,10 +31,10 @@ impl Node for RetNode {
         let ret_pltype = ctx.rettp.as_ref().unwrap().clone();
         if let Some(ret_node) = &mut self.value {
             //            let (value, value_pltype, _) = ctx.emit_with_expectation(ret_node, Some(ret_pltype.clone()), ret_pltype.borrow().get_range().unwrap_or_default(), builder)?;
-            let (value, value_pltype, _) = ret_node.emit(ctx, builder)?;
+            let v = ret_node.emit(ctx, builder)?.get_value().unwrap();
             ctx.emit_comment_highlight(&self.comments[0]);
-            let value_pltype = value_pltype.unwrap();
-            let mut value = ctx.try_load2var(self.range, value.unwrap(), builder)?;
+            let value_pltype = v.get_ty();
+            let mut value = ctx.try_load2var(self.range, v.get_value(), builder)?;
             let eqres = ctx.eq(ret_pltype.clone(), value_pltype.clone());
             if !eqres.eq {
                 let err = ctx.add_diag(self.range.new_err(ErrorCode::RETURN_TYPE_MISMATCH));
@@ -51,7 +51,7 @@ impl Node for RetNode {
                     ptr2v,
                     builder,
                 )?;
-                value = ctx.try_load2var(self.range, plv!(value), builder)?;
+                value = ctx.try_load2var(self.range, value, builder)?;
             }
             builder.build_store(ctx.return_block.unwrap().1.unwrap(), value);
         } else if *ret_pltype.borrow() != PLType::Void {
@@ -67,6 +67,6 @@ impl Node for RetNode {
                 .get_first_instruction(ctx.return_block.unwrap().0)
                 .unwrap(),
         );
-        Ok((None, None, TerminatorEnum::Return))
+        NodeOutput::new_term(TerminatorEnum::Return).to_result()
     }
 }

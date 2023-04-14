@@ -1,10 +1,7 @@
-use crate::{
-    ast::{
-        ctx::Ctx,
-        node::{deal_line, tab},
-        pltype::PriType,
-    },
-    plv,
+use crate::ast::{
+    ctx::Ctx,
+    node::{deal_line, tab},
+    pltype::PriType,
 };
 
 use crate::ast::builder::BuilderEnum;
@@ -12,7 +9,7 @@ use crate::ast::builder::IRBuilder;
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
 
-use super::{Node, NodeResult, PLValue, PrintTrait, TerminatorEnum};
+use super::{node_result::NodeResultBuilder, Node, NodeResult, PrintTrait};
 
 #[node]
 pub struct StringNode {
@@ -51,14 +48,6 @@ impl Node for StringNode {
             byte_len,
             builder.int_value(&PriType::I64, self.content.len() as u64, true),
         );
-        Ok((
-            Some({
-                let mut res: PLValue = plv!(alloca);
-                res.set_const(true);
-                res
-            }),
-            Some(tp),
-            TerminatorEnum::None,
-        ))
+        alloca.new_output(tp).set_const().to_result()
     }
 }

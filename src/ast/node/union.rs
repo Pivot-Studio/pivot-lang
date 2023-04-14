@@ -13,8 +13,7 @@ use crate::ast::{
 };
 
 use super::{
-    primary::VarNode, types::GenericDefNode, Node, NodeResult, PrintTrait, TerminatorEnum,
-    TypeNode, TypeNodeEnum,
+    primary::VarNode, types::GenericDefNode, Node, NodeResult, PrintTrait, TypeNode, TypeNodeEnum,
 };
 
 #[node]
@@ -51,7 +50,7 @@ impl Node for UnionDefNode {
             }
             Ok(())
         });
-        Ok((None, None, TerminatorEnum::None))
+        Ok(Default::default())
     }
 }
 

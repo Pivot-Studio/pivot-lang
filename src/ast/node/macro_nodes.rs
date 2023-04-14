@@ -41,7 +41,7 @@ impl Node for MacroNode {
         ctx.push_semantic_token(self.id.range, SemanticTokenType::MACRO, 0);
         self.file = ctx.plmod.path.clone();
         ctx.plmod.add_macro(self);
-        Ok((None, None, TerminatorEnum::None))
+        Ok(Default::default())
     }
 }
 
@@ -288,7 +288,7 @@ impl Node for MacroCallNode {
                         .with_diag_src(&src, |ctx| ctx.with_macro_emit(|ctx| b.emit(ctx, builder)));
                     match re {
                         Ok(_) => {
-                            return Ok((None, None, TerminatorEnum::None));
+                            return Ok(Default::default());
                         }
                         Err(e) => {
                             last_err = Some(e);
@@ -304,6 +304,6 @@ impl Node for MacroCallNode {
             _ => unreachable!(),
         }
 
-        Ok((None, None, TerminatorEnum::None))
+        Ok(Default::default())
     }
 }
