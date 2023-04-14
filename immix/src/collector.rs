@@ -160,6 +160,7 @@ impl Collector {
             if ptr.is_null() {
                 let status = self.status.borrow();
                 if status.bytes_allocated_since_last_gc < self.heap_size() / 8 {
+                    drop(status);
                     self.thread_local_allocator
                         .as_mut()
                         .unwrap()
@@ -172,6 +173,7 @@ impl Collector {
             }
             let mut status = self.status.borrow_mut();
             status.bytes_allocated_since_last_gc += ((size - 1) / LINE_SIZE + 1) * LINE_SIZE;
+            drop(status);
             ptr
         }
     }
