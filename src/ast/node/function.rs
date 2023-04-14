@@ -136,7 +136,7 @@ impl Node for FuncCallNode {
         }
         // value check and generic infer
         let res = ctx.protect_generic_context(&fnvalue.fntype.generic_map.clone(), |ctx| {
-            ctx.run_in_fn_mod_mut(&mut fnvalue, |ctx, fnvalue| {
+            ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
                 if let Some(receiver_pltype) = &receiver_type {
                     if !fnvalue.fntype.param_pltypes[0]
                         .eq_or_infer(ctx, receiver_pltype.clone(), builder)?
@@ -181,7 +181,7 @@ impl Node for FuncCallNode {
             })?;
             if !fnvalue.fntype.generic_map.is_empty() {
                 if fnvalue.fntype.need_gen_code() {
-                    fnvalue = ctx.run_in_fn_mod_mut(&mut fnvalue, |ctx, fnvalue| {
+                    fnvalue = ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
                         fnvalue.generic_infer_pltype(ctx, builder)
                     })?;
                 } else {
@@ -196,7 +196,7 @@ impl Node for FuncCallNode {
                 builder.get_or_insert_fn_handle(&fnvalue, ctx)
             };
             builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
-            let rettp = ctx.run_in_fn_mod_mut(&mut fnvalue, |ctx, fnvalue| {
+            let rettp = ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
                 fnvalue.fntype.ret_pltype.get_type(ctx, builder)
             })?;
             let ret = builder.build_call(function, &para_values, &rettp.borrow(), ctx);
@@ -245,7 +245,7 @@ impl TypeNode for FuncDefNode {
     ) -> TypeNodeResult {
         let child = &mut ctx.new_child(self.range.start, builder);
         let generic_map = if let Some(generics) = &self.generics {
-            let mp = generics.gen_generic_type();
+            let mp = generics.gen_generic_type(ctx);
             generics.set_traits(child, builder, &mp)?;
             mp
         } else {
@@ -270,15 +270,14 @@ impl TypeNode for FuncDefNode {
                     _ => unreachable!(),
                 });
             for para in self.paralist.iter() {
-                let paramtype = para.typenode.get_type(child, builder)?;
-                child.set_if_refs_tp(paramtype.clone(), para.typenode.range());
+                _ = para.typenode.get_type(child, builder)?;
                 param_pltypes.push(para.typenode.clone());
                 param_name.push(para.id.name.clone());
             }
             let fnvalue = FNValue {
                 name: self.id.name.clone(),
                 param_names: param_name,
-                range: self.range,
+                range: self.id.range(),
                 doc: self.doc.clone(),
                 llvmname: if self.declare {
                     self.id.name.clone()
@@ -297,6 +296,7 @@ impl TypeNode for FuncDefNode {
                 },
                 generic_infer: Arc::new(RefCell::new(IndexMap::default())),
                 node: Some(Box::new(self.clone())),
+                body_range: self.range,
             };
             if self.generics.is_none() {
                 builder.get_or_insert_fn_handle(&fnvalue, child);
@@ -391,7 +391,7 @@ impl FuncDefNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<(), PLDiag> {
         if ctx.get_type(self.id.name.as_str(), self.id.range).is_ok() {
-            return Err(ctx.add_diag(self.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
+            return Err(ctx.add_diag(self.id.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
         }
         let pltype = self.get_type(ctx, builder)?;
         ctx.add_type(self.id.name.clone(), pltype, self.id.range)?;
@@ -558,8 +558,8 @@ impl Node for FuncDefNode {
                 .iter()
                 .for_each(|trait_bound| trait_bound.emit_highlight(ctx));
         }
-        let pltype = ctx.get_type(&self.id.name, self.range)?;
-        if pltype.borrow().get_range() != Some(self.range) {
+        let pltype = ctx.get_type(&self.id.name, self.id.range)?;
+        if pltype.borrow().get_range() != Some(self.id.range) {
             return Err(self.id.range.new_err(ErrorCode::REDEFINE_SYMBOL));
         }
         if self.body.is_some() {

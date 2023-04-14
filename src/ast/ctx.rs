@@ -15,15 +15,12 @@ use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::pltype::add_primitive_types;
 use super::pltype::FNValue;
-use super::pltype::Field;
 use super::pltype::PLType;
 use super::pltype::PriType;
-use super::pltype::UnionType;
-
-use super::pltype::STType;
 use super::range::Pos;
 use super::range::Range;
 use super::tokens::TokenType;
+use super::traits::CustomType;
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
@@ -46,11 +43,7 @@ use lsp_types::InlayHintKind;
 use lsp_types::InsertTextFormat;
 use lsp_types::Location;
 use lsp_types::MarkedString;
-use lsp_types::ParameterInformation;
-use lsp_types::ParameterLabel;
 use lsp_types::SemanticTokenType;
-use lsp_types::SignatureHelp;
-use lsp_types::SignatureInformation;
 use lsp_types::Url;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
@@ -228,7 +221,7 @@ impl<'a, 'ctx> Ctx<'a> {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<usize, PLDiag> {
         if let PLType::Union(u) = &*trait_pltype.borrow() {
-            let union_members = self.run_in_union_mod(u, |ctx, u| {
+            let union_members = self.run_in_type_mod(u, |ctx, u| {
                 let mut union_members = vec![];
                 for tp in &u.sum_types {
                     let tp = tp.get_type(ctx, builder)?;
@@ -404,7 +397,7 @@ impl<'a, 'ctx> Ctx<'a> {
                     refs: Some(refs.clone()),
                 },
             );
-            self.set_if_refs(refs, range);
+            self.set_local_refs(refs, range);
         }
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
         Ok(())
@@ -412,10 +405,16 @@ impl<'a, 'ctx> Ctx<'a> {
 
     pub fn get_type(&self, name: &str, range: Range) -> Result<Arc<RefCell<PLType>>, PLDiag> {
         if let Some(pv) = self.generic_types.get(name) {
+            self.set_if_refs_tp(pv.clone(), range);
+            self.send_if_go_to_def(
+                range,
+                pv.borrow().get_range().unwrap_or(range),
+                self.plmod.path.clone(),
+            );
             return Ok(pv.clone());
         }
-        if let Some(pv) = self.plmod.types.get(name) {
-            return Ok(pv.clone());
+        if let Some(pv) = self.plmod.get_type(name, range, self) {
+            return Ok(pv);
         }
         if let Some(father) = self.father {
             let re = father.get_type(name, range);
@@ -478,6 +477,7 @@ impl<'a, 'ctx> Ctx<'a> {
         if self.plmod.types.contains_key(&name) {
             return Err(self.add_diag(range.new_err(ErrorCode::REDEFINE_TYPE)));
         }
+        self.set_if_refs_tp(pltype.clone(), range);
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
         self.plmod.types.insert(name, pltype);
         Ok(())
@@ -490,10 +490,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.plmod.types.insert(name, pltype);
     }
     #[inline]
-    fn add_generic_type(&mut self, name: String, pltype: Arc<RefCell<PLType>>, range: Range) {
-        if range != Range::default() {
-            self.send_if_go_to_def(range, range, self.plmod.path.clone());
-        }
+    fn add_generic_type(&mut self, name: String, pltype: Arc<RefCell<PLType>>) {
         self.generic_types.insert(name, pltype);
     }
     pub fn add_doc_symbols(&mut self, pltype: Arc<RefCell<PLType>>) {
@@ -568,86 +565,21 @@ impl<'a, 'ctx> Ctx<'a> {
     ) -> Result<T, PLDiag> {
         let mp = self.generic_types.clone();
         for (name, pltype) in generic_map.iter() {
-            self.add_generic_type(
-                name.clone(),
-                pltype.clone(),
-                pltype.clone().borrow().get_range().unwrap_or_default(),
-            );
+            self.add_generic_type(name.clone(), pltype.clone());
         }
         let res = f(self);
         self.generic_types = mp;
         res
     }
-    pub fn run_in_st_mod_mut<'b, T, F: FnMut(&mut Ctx<'a>, &mut STType) -> Result<T, PLDiag>>(
-        &'b mut self,
-        st: &mut STType,
-        mut f: F,
-    ) -> Result<T, PLDiag> {
-        let p = PathBuf::from(&st.path);
-        let mut oldm = None;
-        if st.path != self.plmod.path {
-            let s = p.file_name().unwrap().to_str().unwrap();
-            let m = s.split('.').next().unwrap();
-            let m = self.plmod.submods.get(m).unwrap();
-            oldm = Some(self.set_mod(m.clone()));
-        }
-        let res = f(self, st);
-        if let Some(m) = oldm {
-            self.set_mod(m);
-        }
-        res
-    }
-    pub fn run_in_st_mod<'b, T, F: FnMut(&mut Ctx<'a>, &STType) -> Result<T, PLDiag>>(
-        &'b mut self,
-        st: &STType,
-        mut f: F,
-    ) -> Result<T, PLDiag> {
-        let p = PathBuf::from(&st.path);
-        let mut oldm = None;
-        if st.path != self.plmod.path {
-            let s = p.file_name().unwrap().to_str().unwrap();
-            let m = s.split('.').next().unwrap();
-            let m = self.plmod.submods.get(m).unwrap();
-            oldm = Some(self.set_mod(m.clone()));
-        }
-        let res = f(self, st);
-        if let Some(m) = oldm {
-            self.set_mod(m);
-        }
-        res
-    }
 
-    pub fn run_in_union_mod_mut<
-        'b,
-        T,
-        F: FnMut(&mut Ctx<'a>, &mut UnionType) -> Result<T, PLDiag>,
-    >(
+    pub fn run_in_type_mod<'b, TP: CustomType, R, F: FnMut(&mut Ctx<'a>, &TP) -> R>(
         &'b mut self,
-        st: &mut UnionType,
+        u: &TP,
         mut f: F,
-    ) -> Result<T, PLDiag> {
-        let p = PathBuf::from(&st.path);
+    ) -> R {
+        let p = PathBuf::from(&u.get_path());
         let mut oldm = None;
-        if st.path != self.plmod.path {
-            let s = p.file_name().unwrap().to_str().unwrap();
-            let m = s.split('.').next().unwrap();
-            let m = self.plmod.submods.get(m).unwrap();
-            oldm = Some(self.set_mod(m.clone()));
-        }
-        let res = f(self, st);
-        if let Some(m) = oldm {
-            self.set_mod(m);
-        }
-        res
-    }
-    pub fn run_in_union_mod<'b, T, F: FnMut(&mut Ctx<'a>, &UnionType) -> Result<T, PLDiag>>(
-        &'b mut self,
-        u: &UnionType,
-        mut f: F,
-    ) -> Result<T, PLDiag> {
-        let p = PathBuf::from(&u.path);
-        let mut oldm = None;
-        if u.path != self.plmod.path {
+        if u.get_path() != self.plmod.path {
             let s = p.file_name().unwrap().to_str().unwrap();
             let m = s.split('.').next().unwrap();
             let m = self.plmod.submods.get(m).unwrap();
@@ -659,41 +591,20 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         res
     }
-
-    pub fn run_in_fn_mod_mut<'b, T, F: FnMut(&mut Ctx<'a>, &mut FNValue) -> Result<T, PLDiag>>(
+    pub fn run_in_type_mod_mut<'b, TP: CustomType, R, F: FnMut(&mut Ctx<'a>, &mut TP) -> R>(
         &'b mut self,
-        fntype: &mut FNValue,
+        u: &mut TP,
         mut f: F,
-    ) -> Result<T, PLDiag> {
-        let p = PathBuf::from(&fntype.path);
+    ) -> R {
+        let p = PathBuf::from(&u.get_path());
         let mut oldm = None;
-        if fntype.path != self.plmod.path {
+        if u.get_path() != self.plmod.path {
             let s = p.file_name().unwrap().to_str().unwrap();
             let m = s.split('.').next().unwrap();
             let m = self.plmod.submods.get(m).unwrap();
             oldm = Some(self.set_mod(m.clone()));
         }
-        let res = f(self, fntype);
-        if let Some(m) = oldm {
-            self.set_mod(m);
-        }
-        res
-    }
-
-    pub fn run_in_fn_mod<'b, T, F: FnMut(&mut Ctx<'a>, &FNValue) -> Result<T, PLDiag>>(
-        &'b mut self,
-        fntype: &FNValue,
-        mut f: F,
-    ) -> Result<T, PLDiag> {
-        let p = PathBuf::from(&fntype.path);
-        let mut oldm = None;
-        if fntype.path != self.plmod.path {
-            let s = p.file_name().unwrap().to_str().unwrap();
-            let m = s.split('.').next().unwrap();
-            let m = self.plmod.submods.get(m).unwrap();
-            oldm = Some(self.set_mod(m.clone()));
-        }
-        let res = f(self, fntype);
+        let res = f(self, u);
         if let Some(m) = oldm {
             self.set_mod(m);
         }
@@ -710,64 +621,6 @@ impl<'a, 'ctx> Ctx<'a> {
 
     pub fn get_location(&self, range: Range) -> Location {
         Location::new(self.get_file_url(), range.to_diag_range())
-    }
-
-    pub fn set_if_refs_tp(&self, tp: Arc<RefCell<PLType>>, range: Range) {
-        tp.borrow().if_refs(|tp| {
-            let name = tp.get_full_elm_name();
-            self.set_glob_refs(&name, range)
-        })
-    }
-
-    pub fn set_field_refs(&self, pltype: Arc<RefCell<PLType>>, f: &Field, range: Range) {
-        self.set_glob_refs(
-            &format!("{}..{}", &pltype.borrow().get_full_elm_name(), f.name),
-            range,
-        );
-    }
-
-    pub fn set_glob_refs(&self, name: &str, range: Range) {
-        self.plmod
-            .glob_refs
-            .borrow_mut()
-            .insert(range, name.to_string());
-        let mut rm = self.plmod.refs_map.borrow_mut();
-        if let Some(refsmap) = rm.get(name) {
-            refsmap.borrow_mut().push(self.get_location(range));
-        } else {
-            let v = RefCell::new(vec![]);
-            v.borrow_mut().push(self.get_location(range));
-            rm.insert(name.to_string(), Arc::new(v));
-        }
-    }
-
-    pub fn set_if_sig(&self, range: Range, name: String, params: &[String], n: u32) {
-        self.plmod.sig_helps.borrow_mut().insert(
-            range,
-            SignatureHelp {
-                signatures: vec![SignatureInformation {
-                    label: name,
-                    documentation: None,
-                    parameters: Some(
-                        params
-                            .iter()
-                            .map(|s| ParameterInformation {
-                                label: ParameterLabel::Simple(s.clone()),
-                                documentation: None,
-                            })
-                            .collect(),
-                    ),
-                    active_parameter: Some(n),
-                }],
-                active_signature: None,
-                active_parameter: None,
-            },
-        );
-    }
-
-    pub fn set_if_refs(&self, refs: Arc<MutVec<Location>>, range: Range) {
-        refs.borrow_mut().push(self.get_location(range));
-        self.plmod.local_refs.borrow_mut().insert(range, refs);
     }
 
     pub fn send_if_go_to_def(&self, range: Range, destrange: Range, file: String) {

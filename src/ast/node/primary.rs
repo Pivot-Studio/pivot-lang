@@ -165,7 +165,7 @@ impl Node for VarNode {
             symbol
                 .refs
                 .map(|refs| {
-                    ctx.set_if_refs(refs, self.range);
+                    ctx.set_local_refs(refs, self.range);
                 })
                 .or_else(|| {
                     ctx.set_glob_refs(&ctx.plmod.get_full_name(&self.name), self.range);

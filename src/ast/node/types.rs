@@ -12,6 +12,7 @@ use crate::ast::ctx::Ctx;
 use crate::ast::ctx::EqRes;
 use crate::ast::diag::ErrorCode;
 
+use crate::ast::plmod::MutVec;
 use crate::ast::pltype::get_type_deep;
 use crate::ast::pltype::{ARRType, Field, GenericType, PLType, STType};
 use crate::ast::tokens::TokenType;
@@ -478,7 +479,7 @@ impl StructDefNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) {
         let generic_map = if let Some(generics) = &self.generics {
-            let mp = generics.gen_generic_type();
+            let mp = generics.gen_generic_type(ctx);
             _ = generics.set_traits(ctx, builder, &mp);
             mp
         } else {
@@ -489,11 +490,12 @@ impl StructDefNode {
             path: ctx.plmod.path.clone(),
             fields: FxHashMap::default(),
             ordered_fields: vec![],
-            range: self.range(),
+            range: self.id.range(),
             doc: vec![],
             generic_map,
             derives: vec![],
             modifier: self.modifier,
+            body_range: self.range(),
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
@@ -504,7 +506,7 @@ impl StructDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<(), PLDiag> {
-        let pltype = ctx.get_type(self.id.name.as_str(), self.range)?;
+        let pltype = ctx.get_type(self.id.name.as_str(), self.id.range)?;
         let generic_map = if let PLType::Struct(st) = &mut *pltype.borrow_mut() {
             st.generic_map.clone()
         } else {
@@ -535,7 +537,7 @@ impl StructDefNode {
                     index: i,
                     typenode: field.id.typenode.clone(),
                     name: id.name.clone(),
-                    range: field.id.range,
+                    range: field.id.id.range,
                     modifier: field.modifier,
                 };
                 let tpre = field.id.typenode.get_type(ctx, builder);
@@ -652,7 +654,7 @@ impl Node for StructInitNode {
             let mut field_init_values = vec![];
             let mut idx = 0;
             ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
-            ctx.run_in_st_mod_mut(&mut sttype, |ctx, sttype| {
+            ctx.run_in_type_mod_mut(&mut sttype, |ctx, sttype| {
                 for fieldinit in self.fields.iter_mut() {
                     let field_id_range = fieldinit.id.range;
                     let field_exp_range = fieldinit.exp.range();
@@ -685,7 +687,7 @@ impl Node for StructInitNode {
                 if !sttype.generic_map.is_empty() {
                     if sttype.need_gen_code() {
                         pltype = Arc::new(RefCell::new(PLType::Struct(
-                            ctx.run_in_st_mod_mut(sttype, |ctx, sttype| {
+                            ctx.run_in_type_mod_mut(sttype, |ctx, sttype| {
                                 sttype.gen_code(ctx, builder)
                             })?,
                         )));
@@ -836,18 +838,22 @@ impl GenericDefNode {
         }
         Ok(())
     }
-    pub fn gen_generic_type(&self) -> IndexMap<String, Arc<RefCell<PLType>>> {
+    pub fn gen_generic_type(&self, ctx: &Ctx) -> IndexMap<String, Arc<RefCell<PLType>>> {
         let mut res = IndexMap::default();
         for g in self.generics.iter() {
-            let range = g.range;
+            let range = g.generic.range;
             let name = g.generic.name.clone();
             let gentype = GenericType {
                 name: name.clone(),
                 range,
                 curpltype: None,
                 trait_impl: None,
+                refs: Arc::new(MutVec::new(vec![])),
             };
-            res.insert(name, Arc::new(RefCell::new(PLType::Generic(gentype))));
+            let pltp = Arc::new(RefCell::new(PLType::Generic(gentype)));
+            ctx.send_if_go_to_def(range, range, ctx.get_file());
+            ctx.set_if_refs_tp(pltp.clone(), range);
+            res.insert(name, pltp);
         }
         res
     }

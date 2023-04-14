@@ -130,6 +130,7 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
                 .plmod(db)
                 .get_refs(&res, db, &mut FxHashSet::default());
         }
+        db.set_ref_str(None);
     }
     re
 }

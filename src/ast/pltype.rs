@@ -1,6 +1,7 @@
 use super::ctx::Ctx;
 use super::diag::ErrorCode;
 use super::plmod::Mod;
+use super::plmod::MutVec;
 use super::tokens::TokenType;
 use crate::add_basic_types;
 use crate::ast::builder::IRBuilder;
@@ -43,6 +44,7 @@ use lsp_types::CompletionItemKind;
 use lsp_types::DocumentSymbol;
 use lsp_types::InsertTextFormat;
 
+use lsp_types::Location;
 use lsp_types::SymbolKind;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
@@ -139,14 +141,13 @@ impl UnionType {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Option<usize> {
-        ctx.run_in_union_mod(self, |ctx, u| {
-            Ok(u.sum_types
+        ctx.run_in_type_mod(self, |ctx, u| {
+            u.sum_types
                 .iter()
                 .enumerate()
-                .find(|(_, t)| &*t.get_type(ctx, builder).unwrap().borrow() == pltype))
-            .map(|x| x.map(|(i, _)| i))
+                .find(|(_, t)| &*t.get_type(ctx, builder).unwrap().borrow() == pltype)
+                .map(|(i, _)| i)
         })
-        .unwrap()
     }
 }
 /// # PriType
@@ -323,14 +324,14 @@ impl PLType {
     }
     /// # if_refs
     /// if support find refs
-    pub fn if_refs(&self, f: impl FnOnce(&PLType)) {
+    pub fn if_refs(&self, f: impl FnOnce(&PLType), f_local: impl FnOnce(&GenericType)) {
         match self {
             PLType::Fn(_) | PLType::Struct(_) | PLType::Trait(_) | PLType::Union(_) => f(self),
             PLType::Arr(_) => (),
             PLType::Primitive(_) => (),
             PLType::Void => (),
             PLType::Pointer(_) => (),
-            PLType::Generic(_) => (),
+            PLType::Generic(g) => f_local(g),
             PLType::PlaceHolder(_) => (),
         }
     }
@@ -398,6 +399,26 @@ impl PLType {
             PLType::Pointer(p) => p.borrow().get_full_elm_name(),
             PLType::PlaceHolder(p) => p.name.clone(),
             PLType::Union(u) => u.get_full_name(),
+        }
+    }
+    pub fn get_full_elm_name_without_generic(&self) -> String {
+        match self {
+            PLType::Generic(g) => g.name.clone(),
+            PLType::Fn(fu) => fu.llvmname.clone(),
+            PLType::Struct(st) => st.get_st_full_name_except_generic(),
+            PLType::Trait(st) => st.get_st_full_name_except_generic(),
+            PLType::Primitive(pri) => pri.get_name(),
+            PLType::Arr(arr) => {
+                format!(
+                    "[{} * {}]",
+                    arr.element_type.borrow().get_full_elm_name(),
+                    arr.size
+                )
+            }
+            PLType::Void => "void".to_string(),
+            PLType::Pointer(p) => p.borrow().get_full_elm_name(),
+            PLType::PlaceHolder(p) => p.name.clone(),
+            PLType::Union(u) => u.get_full_name_except_generic(),
         }
     }
     pub fn get_ptr_depth(&self) -> usize {
@@ -548,6 +569,7 @@ pub struct FNValue {
     pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
     pub node: Option<Box<FuncDefNode>>,
     pub fntype: FnType,
+    pub body_range: Range,
 }
 impl TryFrom<PLType> for FNValue {
     type Error = ();
@@ -715,7 +737,7 @@ impl FNValue {
             },
             tags: None,
             deprecated: None,
-            range: self.range.to_diag_range(),
+            range: self.body_range.to_diag_range(),
             selection_range: self.range.to_diag_range(),
             children: None,
         }
@@ -769,6 +791,7 @@ pub struct STType {
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub derives: Vec<Arc<RefCell<PLType>>>,
     pub modifier: Option<(TokenType, Range)>,
+    pub body_range: Range,
 }
 
 impl STType {
@@ -961,7 +984,7 @@ impl STType {
             kind: SymbolKind::STRUCT,
             tags: None,
             deprecated: None,
-            range: self.range.to_diag_range(),
+            range: self.body_range.to_diag_range(),
             selection_range: self.range.to_diag_range(),
             children: Some(children),
         }
@@ -996,6 +1019,7 @@ pub struct GenericType {
     pub range: Range,
     pub curpltype: Option<Arc<RefCell<PLType>>>,
     pub trait_impl: Option<Arc<RefCell<PLType>>>,
+    pub refs: Arc<MutVec<Location>>,
 }
 impl GenericType {
     pub fn set_type(&mut self, pltype: Arc<RefCell<PLType>>) {

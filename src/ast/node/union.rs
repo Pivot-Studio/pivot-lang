@@ -41,7 +41,9 @@ impl Node for UnionDefNode {
         let generic_map = self
             .generics
             .as_ref()
-            .map_or(IndexMap::default(), |generics| generics.gen_generic_type());
+            .map_or(IndexMap::default(), |generics| {
+                generics.gen_generic_type(ctx)
+            });
 
         _ = ctx.protect_generic_context(&generic_map, |ctx| {
             for tp in self.sum_types.iter_mut() {
@@ -71,11 +73,13 @@ impl UnionDefNode {
         let generic_map = self
             .generics
             .as_ref()
-            .map_or(IndexMap::default(), |generics| generics.gen_generic_type());
+            .map_or(IndexMap::default(), |generics| {
+                generics.gen_generic_type(ctx)
+            });
         let stu = Arc::new(RefCell::new(PLType::Union(UnionType {
             name: self.name.name.clone(),
             path: ctx.plmod.path.clone(),
-            range: self.range,
+            range: self.name.range,
             generic_map,
             modifier: self.modifier,
             sum_types: self.sum_types.clone(),

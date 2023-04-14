@@ -67,7 +67,10 @@ impl Node for UseNode {
             ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
         }
         if !path.with_extension("pi").exists() {
-            let path = path.parent().unwrap();
+            let mut path = path.with_extension("");
+            if !path.exists() {
+                path = path.parent().unwrap().to_path_buf();
+            }
             if self.ids.len() > 1 {
                 ctx.if_completion(self.range, || {
                     if self.singlecolon {
@@ -195,9 +198,9 @@ impl Node for ExternIdNode {
                 TerminatorEnum::None,
             ));
         }
-        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx)) {
-            let range = &tp.borrow().get_range();
-            let re = match &*tp.clone().borrow() {
+        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {
+            let mtp = tp.clone();
+            let re = match &*mtp.borrow() {
                 PLType::Fn(_) => {
                     // 必须是public的
                     _ = tp.borrow().expect_pub(ctx, self.range);
@@ -206,9 +209,6 @@ impl Node for ExternIdNode {
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION))),
             };
-            if let Some(range) = range {
-                ctx.send_if_go_to_def(self.range, *range, plmod.path.clone());
-            }
             return re;
         }
         Err(ctx.add_diag(self.range.new_err(ErrorCode::SYMBOL_NOT_FOUND)))
@@ -247,7 +247,7 @@ impl ExternIdNode {
                 return Err(ctx.add_diag(ns.range.new_err(ErrorCode::UNRESOLVED_MODULE)));
             }
         }
-        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx)) {
+        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {
             // 必须是public的
             _ = tp.borrow().expect_pub(ctx, self.range);
             let re = match *tp.clone().borrow() {
