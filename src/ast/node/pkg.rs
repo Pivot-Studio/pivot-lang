@@ -199,12 +199,13 @@ impl Node for ExternIdNode {
             ));
         }
         if let Some(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {
-            let re = match &*tp.clone().borrow() {
+            let mtp = tp.clone();
+            let re = match &*mtp.borrow() {
                 PLType::Fn(_) => {
                     // 必须是public的
                     _ = tp.borrow().expect_pub(ctx, self.range);
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
-                    Ok((None, Some(tp.clone()), TerminatorEnum::None))
+                    Ok((None, Some(tp), TerminatorEnum::None))
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION))),
             };

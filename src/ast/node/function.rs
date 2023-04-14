@@ -245,7 +245,7 @@ impl TypeNode for FuncDefNode {
     ) -> TypeNodeResult {
         let child = &mut ctx.new_child(self.range.start, builder);
         let generic_map = if let Some(generics) = &self.generics {
-            let mp = generics.gen_generic_type();
+            let mp = generics.gen_generic_type(ctx);
             generics.set_traits(child, builder, &mp)?;
             mp
         } else {

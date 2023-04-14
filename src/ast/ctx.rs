@@ -15,7 +15,6 @@ use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::pltype::add_primitive_types;
 use super::pltype::FNValue;
-use super::pltype::Field;
 use super::pltype::PLType;
 use super::pltype::PriType;
 use super::range::Pos;
@@ -44,11 +43,7 @@ use lsp_types::InlayHintKind;
 use lsp_types::InsertTextFormat;
 use lsp_types::Location;
 use lsp_types::MarkedString;
-use lsp_types::ParameterInformation;
-use lsp_types::ParameterLabel;
 use lsp_types::SemanticTokenType;
-use lsp_types::SignatureHelp;
-use lsp_types::SignatureInformation;
 use lsp_types::Url;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
@@ -402,7 +397,7 @@ impl<'a, 'ctx> Ctx<'a> {
                     refs: Some(refs.clone()),
                 },
             );
-            self.set_if_refs(refs, range);
+            self.set_local_refs(refs, range);
         }
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
         Ok(())
@@ -419,7 +414,7 @@ impl<'a, 'ctx> Ctx<'a> {
             return Ok(pv.clone());
         }
         if let Some(pv) = self.plmod.get_type(name, range, self) {
-            return Ok(pv.clone());
+            return Ok(pv);
         }
         if let Some(father) = self.father {
             let re = father.get_type(name, range);
@@ -495,10 +490,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.plmod.types.insert(name, pltype);
     }
     #[inline]
-    fn add_generic_type(&mut self, name: String, pltype: Arc<RefCell<PLType>>, range: Range) {
-        if range != Range::default() {
-            self.send_if_go_to_def(range, range, self.plmod.path.clone());
-        }
+    fn add_generic_type(&mut self, name: String, pltype: Arc<RefCell<PLType>>) {
         self.generic_types.insert(name, pltype);
     }
     pub fn add_doc_symbols(&mut self, pltype: Arc<RefCell<PLType>>) {
@@ -573,11 +565,7 @@ impl<'a, 'ctx> Ctx<'a> {
     ) -> Result<T, PLDiag> {
         let mp = self.generic_types.clone();
         for (name, pltype) in generic_map.iter() {
-            self.add_generic_type(
-                name.clone(),
-                pltype.clone(),
-                pltype.clone().borrow().get_range().unwrap_or_default(),
-            );
+            self.add_generic_type(name.clone(), pltype.clone());
         }
         let res = f(self);
         self.generic_types = mp;
@@ -633,67 +621,6 @@ impl<'a, 'ctx> Ctx<'a> {
 
     pub fn get_location(&self, range: Range) -> Location {
         Location::new(self.get_file_url(), range.to_diag_range())
-    }
-
-    pub fn set_if_refs_tp(&self, tp: Arc<RefCell<PLType>>, range: Range) {
-        if range == Default::default() {
-            return;
-        }
-        tp.borrow().if_refs(|tp| {
-            let name = tp.get_full_elm_name_without_generic();
-            self.set_glob_refs(&name, range)
-        })
-    }
-
-    pub fn set_field_refs(&self, pltype: Arc<RefCell<PLType>>, f: &Field, range: Range) {
-        self.set_glob_refs(
-            &format!("{}..{}", &pltype.borrow().get_full_elm_name(), f.name),
-            range,
-        );
-    }
-
-    pub fn set_glob_refs(&self, name: &str, range: Range) {
-        self.plmod
-            .glob_refs
-            .borrow_mut()
-            .insert(range, name.to_string());
-        let mut rm = self.plmod.refs_map.borrow_mut();
-        if let Some(refsmap) = rm.get(name) {
-            refsmap.borrow_mut().push(self.get_location(range));
-        } else {
-            let v = RefCell::new(vec![]);
-            v.borrow_mut().push(self.get_location(range));
-            rm.insert(name.to_string(), Arc::new(v));
-        }
-    }
-
-    pub fn set_if_sig(&self, range: Range, name: String, params: &[String], n: u32) {
-        self.plmod.sig_helps.borrow_mut().insert(
-            range,
-            SignatureHelp {
-                signatures: vec![SignatureInformation {
-                    label: name,
-                    documentation: None,
-                    parameters: Some(
-                        params
-                            .iter()
-                            .map(|s| ParameterInformation {
-                                label: ParameterLabel::Simple(s.clone()),
-                                documentation: None,
-                            })
-                            .collect(),
-                    ),
-                    active_parameter: Some(n),
-                }],
-                active_signature: None,
-                active_parameter: None,
-            },
-        );
-    }
-
-    pub fn set_if_refs(&self, refs: Arc<MutVec<Location>>, range: Range) {
-        refs.borrow_mut().push(self.get_location(range));
-        self.plmod.local_refs.borrow_mut().insert(range, refs);
     }
 
     pub fn send_if_go_to_def(&self, range: Range, destrange: Range, file: String) {

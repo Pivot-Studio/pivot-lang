@@ -12,6 +12,7 @@ use crate::ast::ctx::Ctx;
 use crate::ast::ctx::EqRes;
 use crate::ast::diag::ErrorCode;
 
+use crate::ast::plmod::MutVec;
 use crate::ast::pltype::get_type_deep;
 use crate::ast::pltype::{ARRType, Field, GenericType, PLType, STType};
 use crate::ast::tokens::TokenType;
@@ -478,7 +479,7 @@ impl StructDefNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) {
         let generic_map = if let Some(generics) = &self.generics {
-            let mp = generics.gen_generic_type();
+            let mp = generics.gen_generic_type(ctx);
             _ = generics.set_traits(ctx, builder, &mp);
             mp
         } else {
@@ -837,18 +838,22 @@ impl GenericDefNode {
         }
         Ok(())
     }
-    pub fn gen_generic_type(&self) -> IndexMap<String, Arc<RefCell<PLType>>> {
+    pub fn gen_generic_type(&self, ctx: &Ctx) -> IndexMap<String, Arc<RefCell<PLType>>> {
         let mut res = IndexMap::default();
         for g in self.generics.iter() {
-            let range = g.range;
+            let range = g.generic.range;
             let name = g.generic.name.clone();
             let gentype = GenericType {
                 name: name.clone(),
                 range,
                 curpltype: None,
                 trait_impl: None,
+                refs: Arc::new(MutVec::new(vec![])),
             };
-            res.insert(name, Arc::new(RefCell::new(PLType::Generic(gentype))));
+            let pltp = Arc::new(RefCell::new(PLType::Generic(gentype)));
+            ctx.send_if_go_to_def(range, range, ctx.get_file());
+            ctx.set_if_refs_tp(pltp.clone(), range);
+            res.insert(name, pltp);
         }
         res
     }

@@ -1,6 +1,7 @@
 use super::ctx::Ctx;
 use super::diag::ErrorCode;
 use super::plmod::Mod;
+use super::plmod::MutVec;
 use super::tokens::TokenType;
 use crate::add_basic_types;
 use crate::ast::builder::IRBuilder;
@@ -43,6 +44,7 @@ use lsp_types::CompletionItemKind;
 use lsp_types::DocumentSymbol;
 use lsp_types::InsertTextFormat;
 
+use lsp_types::Location;
 use lsp_types::SymbolKind;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
@@ -322,14 +324,14 @@ impl PLType {
     }
     /// # if_refs
     /// if support find refs
-    pub fn if_refs(&self, f: impl FnOnce(&PLType)) {
+    pub fn if_refs(&self, f: impl FnOnce(&PLType), f_local: impl FnOnce(&GenericType)) {
         match self {
             PLType::Fn(_) | PLType::Struct(_) | PLType::Trait(_) | PLType::Union(_) => f(self),
             PLType::Arr(_) => (),
             PLType::Primitive(_) => (),
             PLType::Void => (),
             PLType::Pointer(_) => (),
-            PLType::Generic(_) => (),
+            PLType::Generic(g) => f_local(g),
             PLType::PlaceHolder(_) => (),
         }
     }
@@ -1017,6 +1019,7 @@ pub struct GenericType {
     pub range: Range,
     pub curpltype: Option<Arc<RefCell<PLType>>>,
     pub trait_impl: Option<Arc<RefCell<PLType>>>,
+    pub refs: Arc<MutVec<Location>>,
 }
 impl GenericType {
     pub fn set_type(&mut self, pltype: Arc<RefCell<PLType>>) {
