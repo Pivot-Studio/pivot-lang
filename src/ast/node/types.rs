@@ -494,6 +494,7 @@ impl StructDefNode {
             generic_map,
             derives: vec![],
             modifier: self.modifier,
+            body_range: self.range(),
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
@@ -652,7 +653,7 @@ impl Node for StructInitNode {
             let mut field_init_values = vec![];
             let mut idx = 0;
             ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
-            ctx.run_in_st_mod_mut(&mut sttype, |ctx, sttype| {
+            ctx.run_in_type_mod_mut(&mut sttype, |ctx, sttype| {
                 for fieldinit in self.fields.iter_mut() {
                     let field_id_range = fieldinit.id.range;
                     let field_exp_range = fieldinit.exp.range();
@@ -685,7 +686,7 @@ impl Node for StructInitNode {
                 if !sttype.generic_map.is_empty() {
                     if sttype.need_gen_code() {
                         pltype = Arc::new(RefCell::new(PLType::Struct(
-                            ctx.run_in_st_mod_mut(sttype, |ctx, sttype| {
+                            ctx.run_in_type_mod_mut(sttype, |ctx, sttype| {
                                 sttype.gen_code(ctx, builder)
                             })?,
                         )));

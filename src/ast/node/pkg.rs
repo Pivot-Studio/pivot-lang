@@ -67,7 +67,10 @@ impl Node for UseNode {
             ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
         }
         if !path.with_extension("pi").exists() {
-            let path = path.parent().unwrap();
+            let mut path = path.with_extension("");
+            if !path.exists() {
+                path = path.parent().unwrap().to_path_buf();
+            }
             if self.ids.len() > 1 {
                 ctx.if_completion(self.range, || {
                     if self.singlecolon {

@@ -551,7 +551,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn get_fn_type(&self, fnvalue: &FNValue, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
-        ctx.run_in_fn_mod(fnvalue, |ctx, fnvalue| {
+        ctx.run_in_type_mod(fnvalue, |ctx, fnvalue| {
             let mut param_types = vec![];
             for param_pltype in fnvalue.fntype.param_pltypes.iter() {
                 param_types.push(
@@ -577,9 +577,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     ctx,
                 )
                 .fn_type(&param_types, false);
-            Ok(fn_type)
+            fn_type
         })
-        .unwrap()
     }
     /// # get_basic_type_op
     /// get the basic type of the type
@@ -814,7 +813,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .borrow_mut()
                     .insert(x.get_st_full_name(), RefCell::new(vec![]));
                 let mut m = vec![];
-                ctx.run_in_st_mod(x, |ctx, x| {
+                ctx.run_in_type_mod(x, |ctx, x| {
                     m = x
                         .ordered_fields
                         .iter()
@@ -824,9 +823,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                             tp
                         })
                         .collect::<Vec<_>>();
-                    Ok(())
-                })
-                .unwrap();
+                });
                 let st = self
                     .dibuilder
                     .create_struct_type(
@@ -953,7 +950,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             return st;
         }
         let st = self.context.opaque_struct_type(&pltp.get_st_full_name());
-        ctx.run_in_st_mod(pltp, |ctx, pltp| {
+        ctx.run_in_type_mod(pltp, |ctx, pltp| {
             st.set_body(
                 &pltp
                     .ordered_fields
@@ -973,9 +970,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .collect::<Vec<_>>(),
                 false,
             );
-            Ok(())
-        })
-        .unwrap();
+        });
         st
     }
 

@@ -119,6 +119,7 @@ impl TraitDefNode {
             doc: vec![],
             derives: vec![],
             modifier: self.modifier,
+            body_range: self.range(),
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
