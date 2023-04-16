@@ -14,4 +14,4 @@ pub const ALIGN: usize = 128;
 
 pub const THRESHOLD_PROPORTION: f64 = 1.75;
 
-pub const LLVM_GC_STRATEGY_NAME: &str = "plimmix";
+pub const LLVM_GC_STRATEGY_NAME: &str = "statepoint-example";

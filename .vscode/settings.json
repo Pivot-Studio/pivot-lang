@@ -20,7 +20,8 @@
         "memory": "cpp",
         "type_traits": "cpp",
         "tuple": "cpp",
-        "test1.c": "cpp"
+        "test1.c": "cpp",
+        "stdexcept": "cpp"
     },
     "C_Cpp.errorSquiggles": "enabled"
 }

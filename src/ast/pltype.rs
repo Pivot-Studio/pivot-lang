@@ -1052,6 +1052,6 @@ pub struct PlaceHolderType {
 }
 impl PlaceHolderType {
     fn get_place_holder_name(&self) -> String {
-        format!("placeholder_::{}", self.name)
+        format!("p_{}", self.name)
     }
 }

@@ -459,6 +459,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         ),
     );
     if params.params(db).is_compile(db) {
+        builder.run_pass();
         builder.finalize_debug();
         let mut hasher = DefaultHasher::new();
         params.fullpath(db).hash(&mut hasher);

@@ -109,6 +109,7 @@ pub trait IRBuilder<'a, 'ctx> {
     fn int_value(&self, ty: &PriType, v: u64, sign_ext: bool) -> ValueHandle;
     fn position_at(&self, v: ValueHandle);
     fn print_to_file(&self, file: &Path) -> Result<(), String>;
+    fn run_pass(&self);
     fn rm_curr_debug_location(&self);
     fn try_set_fn_dbg(&self, pos: Pos, f: ValueHandle);
     fn write_bitcode_to_path(&self, path: &Path) -> bool;

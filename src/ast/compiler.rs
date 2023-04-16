@@ -17,10 +17,11 @@ use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use inkwell::{
     context::Context,
     module::Module,
-    passes::{PassManager, PassManagerBuilder},
-    OptimizationLevel,
+    passes::{PassManager, PassManagerBuilder, PassManagerSubType},
+    OptimizationLevel, values::FunctionValue,
 };
 use lazy_static::lazy_static;
+use llvm_sys::LLVMPassManager;
 use log::{debug, info, trace, warn};
 use pl_linker::{linker::create_with_target, mun_target::spec::Target};
 use rustc_hash::FxHashSet;
@@ -162,18 +163,18 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
     Some(program.emit(db))
 }
 
-pub fn run_pass(llvmmod: &Module, op: OptimizationLevel) {
+
+pub fn run_fpm<'ctx>(llvmmod: &Module<'ctx>, op: OptimizationLevel) -> PassManager<FunctionValue<'ctx>>{
     let pass_manager_builder = PassManagerBuilder::create();
     pass_manager_builder.set_optimization_level(op);
     // Create FPM MPM
     let fpm = PassManager::create(llvmmod);
-
-    let mpm: PassManager<Module> = PassManager::create(());
+    // immix::llvmadd_rewrite_statepoints_for_gcpass(pass_manager_raw.cast());
     if op != OptimizationLevel::None {
         pass_manager_builder.set_size_level(2);
         pass_manager_builder.populate_function_pass_manager(&fpm);
-        pass_manager_builder.populate_module_pass_manager(&mpm);
-        pass_manager_builder.populate_lto_pass_manager(&mpm, false, true);
+        // pass_manager_builder.populate_module_pass_manager(&mpm);
+        // pass_manager_builder.populate_lto_pass_manager(&mpm, false, true);
     }
     let b = fpm.initialize();
     trace!("fpm init: {}", b);
@@ -184,7 +185,31 @@ pub fn run_pass(llvmmod: &Module, op: OptimizationLevel) {
         trace!("optimized: {}", oped,);
     }
     fpm.finalize();
-    mpm.run_on(llvmmod);
+    fpm
+}
+
+pub fn run_pass<'ctx>(op: OptimizationLevel,pass_manager_raw:* mut LLVMPassManager) -> PassManager<Module<'ctx>> {
+    let pass_manager_builder = PassManagerBuilder::create();
+    pass_manager_builder.set_optimization_level(op);
+    // Create FPM MPM
+    immix::llvmadd_rewrite_statepoints_for_gcpass(pass_manager_raw.cast());
+    let mpm: PassManager<Module> = unsafe{PassManager::new(pass_manager_raw)};
+    if op != OptimizationLevel::None {
+        pass_manager_builder.set_size_level(2);
+        // pass_manager_builder.populate_function_pass_manager(&fpm);
+        pass_manager_builder.populate_module_pass_manager(&mpm);
+        pass_manager_builder.populate_lto_pass_manager(&mpm, false, true);
+    }
+    // let b = fpm.initialize();
+    // trace!("fpm init: {}", b);
+    // for f in llvmmod.get_functions() {
+    //     let optimized = fpm.run_on(&f);
+    //     trace!("try to optimize func {}", f.get_name().to_str().unwrap());
+    //     let oped = if optimized { "yes" } else { "no" };
+    //     trace!("optimized: {}", oped,);
+    // }
+    // fpm.finalize();
+    mpm
 }
 
 lazy_static! {
@@ -206,7 +231,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     pb.set_style(PROGRESS_STYLE.clone());
     pb.set_draw_target(ProgressDrawTarget::stderr());
     pb.set_prefix(format!("[{:2}/{:2}]", 1, 3));
-
+    #[cfg(feature = "jit")]
     inkwell::execution_engine::ExecutionEngine::link_in_mc_jit();
     immix::register_llvm_gc_plugins();
     let targetdir = PathBuf::from("target");
@@ -279,6 +304,10 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     pb.enable_steady_tick(Duration::from_millis(50));
     pb.set_style(PROGRESS_STYLE.clone());
     pb.set_prefix(format!("[{:2}/{:2}]", 2, 3));
+    let pass_manager_raw = unsafe{
+        Module::create(())
+    };
+    let mpm = run_pass( op.optimization.to_llvm(),pass_manager_raw);
     for m in mods {
         pb.inc(1);
         // pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
@@ -295,12 +324,18 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
             "正在优化模块 {} ",
             module.get_name().to_str().unwrap().yellow()
         ));
-        run_pass(&module, op.optimization.to_llvm());
+        // run_fpm(&module, op.optimization.to_llvm());
+        mpm.run_on(&module);
         pb.set_message(format!(
             "正在生成模块 {} 的目标文件",
             module.get_name().to_str().unwrap().yellow()
         ));
+        
+        module.print_to_file(format!("{}.ll",module.get_name().to_str().unwrap())).unwrap();
+        module.write_bitcode_to_path(& Path::new(&format!("{}.bc",module.get_name().to_str().unwrap())));
+        let module = Module::parse_bitcode_from_path(Path::new(&format!("{}.bc",module.get_name().to_str().unwrap())), &ctx).unwrap();
         module.verify().unwrap();
+        
         tm.write_to_file(&module, inkwell::targets::FileType::Object, &o)
             .unwrap();
         objs.push(o);

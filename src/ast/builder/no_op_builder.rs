@@ -421,4 +421,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
     fn get_or_insert_helper_fn_handle(&self, _name: &str) -> ValueHandle {
         0
     }
+
+    fn run_pass(&self) {
+    }
 }

@@ -436,6 +436,7 @@ impl Collector {
                     // println!("found fn in stackmap, f: {:?} sp: {:p}", f,frame.sp());
                     f.iter_roots().for_each(|(offset, _obj_type)| unsafe {
                         // println!("offset: {}", offset);
+                        // let ip = frame.ip() as *mut u8;
                         let sp = frame.sp() as *mut u8;
                         let root = sp.offset(offset as isize);
                         self.mark_ptr(root);

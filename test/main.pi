@@ -1,34 +1,3 @@
-use project1::test::ifel;
-use project1::test::generic;
-use project1::test::st;
-use project1::test::method;
-use project1::test::constant;
-use project1::test::traits;
-use project1::test::simple;
-use project1::test::flow;
-use project1::test::list;
-use project1::test::module;
-use project1::test::string;
-use project1::test::macros;
-use project1::test::union;
-use pl_test::main;
-use std::io;
-
-pub fn main() i64 {
-    macros::test_macros();
-    ifel::test_if_else();
-    generic::test_generic();
-    method::test_impl();
-    st::test_struct();
-    constant::test_const();
-    traits::test_trait();
-    simple::test_simple();
-    flow::test_flow();
-    list::test_list();
-    main::simple_test();
-    module::test_module();
-    string::test_string();
-    union::test_union();
-    return 0;
+pub fn complex<A|B|C>(a: i64, x: A, y: B, z: C) i64 {
+    return complex<B|_|C>(a - 1, y, x, z) + complex<C|A|_>(a - 2, z, x, y);
 }
-
