@@ -1,3 +1,4 @@
+use super::node_result::TerminatorEnum;
 use super::statement::StatementsNode;
 use super::*;
 use crate::ast::ctx::Ctx;
@@ -43,28 +44,24 @@ impl Node for IfNode {
         builder.build_unconditional_branch(cond_block);
         ctx.position_at_end(cond_block, builder);
         let condrange = self.cond.range();
-        let (cond, pltype, _) = self.cond.emit(ctx, builder)?;
-        if pltype.is_none() || !pltype.unwrap().borrow().is(&PriType::BOOL) {
-            return Err(ctx.add_diag(
-                condrange
-                    .new_err(ErrorCode::IF_CONDITION_MUST_BE_BOOL)
-                    .add_help("use a bool variable instead")
-                    .clone(),
-            ));
-        }
-        let cond = ctx.try_load2var(condrange, cond.unwrap(), builder)?;
+        let v = self.cond.emit(ctx, builder)?.get_value();
+        let code = ErrorCode::IF_CONDITION_MUST_BE_BOOL;
+        check_bool(&v, ctx, condrange, code)?;
+        let v = v.unwrap();
+        let cond = v.get_value();
+        let cond = ctx.try_load2var(condrange, cond, builder)?;
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
         builder.build_conditional_branch(cond, then_block, else_block);
         // then block
         ctx.position_at_end(then_block, builder);
-        let (_, _, then_terminator) = self.then.emit_child(ctx, builder)?;
+        let then_terminator = self.then.emit_child(ctx, builder)?.get_term();
         if then_terminator.is_none() {
             builder.build_unconditional_branch(after_block);
         }
         ctx.position_at_end(else_block, builder);
         let terminator = if let Some(el) = &mut self.els {
             let mut child = ctx.new_child(el.range().start, builder);
-            let (_, _, else_terminator) = el.emit(&mut child, builder)?;
+            let else_terminator = el.emit(&mut child, builder)?.get_term();
             if else_terminator.is_none() {
                 builder.build_unconditional_branch(after_block);
             }
@@ -82,9 +79,26 @@ impl Node for IfNode {
             builder.build_unconditional_branch(after_block);
         }
         ctx.emit_comment_highlight(&self.comments[0]);
-        Ok((None, None, terminator))
+        NodeOutput::default().with_term(terminator).to_result()
     }
     // ANCHOR_END: emit
+}
+
+fn check_bool(
+    v: &Option<NodeValue>,
+    ctx: &mut Ctx,
+    condrange: Range,
+    code: ErrorCode,
+) -> Result<(), PLDiag> {
+    if v.is_none() || !v.as_ref().unwrap().get_ty().borrow().is(&PriType::BOOL) {
+        return Err(ctx.add_diag(
+            condrange
+                .new_err(code)
+                .add_help("use a bool variable instead")
+                .clone(),
+        ));
+    }
+    Ok(())
 }
 
 #[node(comment)]
@@ -119,28 +133,26 @@ impl Node for WhileNode {
         ctx.position_at_end(cond_block, builder);
         let condrange = self.cond.range();
         let start = self.cond.range().start;
-        let (cond, pltype, _) = self.cond.emit(ctx, builder)?;
-        if pltype.is_none() || !pltype.unwrap().borrow().is(&PriType::BOOL) {
-            return Err(ctx.add_diag(condrange.new_err(ErrorCode::WHILE_CONDITION_MUST_BE_BOOL)));
-        }
-        let cond = ctx.try_load2var(condrange, cond.unwrap(), builder)?;
+        let v = self.cond.emit(ctx, builder)?.get_value();
+
+        check_bool(&v, ctx, condrange, ErrorCode::WHILE_CONDITION_MUST_BE_BOOL)?;
+        let cond = v.unwrap().get_value();
+        let cond = ctx.try_load2var(condrange, cond, builder)?;
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
         builder.build_conditional_branch(cond, body_block, after_block);
         ctx.position_at_end(body_block, builder);
-        let (_, _, terminator) = self.body.emit_child(ctx, builder)?;
+        let terminator = self.body.emit_child(ctx, builder)?.get_term();
         builder.build_dbg_location(start);
         builder.build_unconditional_branch(cond_block);
         ctx.position_at_end(after_block, builder);
         ctx.emit_comment_highlight(&self.comments[0]);
-        Ok((
-            None,
-            None,
-            if terminator.is_return() {
+        NodeOutput::default()
+            .with_term(if terminator.is_return() {
                 TerminatorEnum::Return
             } else {
                 TerminatorEnum::None
-            },
-        ))
+            })
+            .to_result()
     }
 }
 
@@ -193,11 +205,10 @@ impl Node for ForNode {
         builder.build_dbg_location(self.cond.range().start);
         let condrange = self.cond.range();
         let cond_start = self.cond.range().start;
-        let (cond, pltype, _) = self.cond.emit(ctx, builder)?;
-        if pltype.is_none() || !pltype.unwrap().borrow().is(&PriType::BOOL) {
-            return Err(ctx.add_diag(condrange.new_err(ErrorCode::FOR_CONDITION_MUST_BE_BOOL)));
-        }
-        let cond = ctx.try_load2var(condrange, cond.unwrap(), builder)?;
+        let v = self.cond.emit(ctx, builder)?.get_value();
+        check_bool(&v, ctx, condrange, ErrorCode::FOR_CONDITION_MUST_BE_BOOL)?;
+        let cond = v.unwrap().get_value();
+        let cond = ctx.try_load2var(condrange, cond, builder)?;
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
         builder.build_dbg_location(self.body.range().start);
         builder.build_conditional_branch(cond, body_block, after_block);
@@ -209,19 +220,17 @@ impl Node for ForNode {
         builder.build_dbg_location(cond_start);
         builder.build_unconditional_branch(cond_block);
         ctx.position_at_end(body_block, builder);
-        let (_, _, terminator) = self.body.emit_child(ctx, builder)?;
+        let terminator = self.body.emit_child(ctx, builder)?.get_term();
         builder.build_unconditional_branch(opt_block);
         ctx.position_at_end(after_block, builder);
         ctx.emit_comment_highlight(&self.comments[0]);
-        Ok((
-            None,
-            None,
-            if terminator.is_return() {
+        NodeOutput::default()
+            .with_term(if terminator.is_return() {
                 TerminatorEnum::Return
             } else {
                 TerminatorEnum::None
-            },
-        ))
+            })
+            .to_result()
     }
 }
 
@@ -250,7 +259,9 @@ impl Node for BreakNode {
             let err = ctx.add_diag(self.range.new_err(ErrorCode::BREAK_MUST_BE_IN_LOOP));
             return Err(err);
         }
-        Ok((None, None, TerminatorEnum::Break))
+        NodeOutput::default()
+            .with_term(TerminatorEnum::Break)
+            .to_result()
     }
 }
 
@@ -278,6 +289,8 @@ impl Node for ContinueNode {
             let err = ctx.add_diag(self.range.new_err(ErrorCode::CONTINUE_MUST_BE_IN_LOOP));
             return Err(err);
         }
-        Ok((None, None, TerminatorEnum::Continue))
+        NodeOutput::default()
+            .with_term(TerminatorEnum::Continue)
+            .to_result()
     }
 }

@@ -34,17 +34,18 @@ impl Node for GlobalNode {
         let exp_range = self.exp.range();
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
 
-        let (value, pltype, _) = self.exp.emit(ctx, builder)?;
-        ctx.push_type_hints(self.var.range, pltype.unwrap());
-        let base_value = ctx.try_load2var(exp_range, value.unwrap(), builder)?;
+        let v = self.exp.emit(ctx, builder)?.get_value();
+        let v = v.unwrap();
+        ctx.push_type_hints(self.var.range, v.get_ty());
+        let base_value = ctx.try_load2var(exp_range, v.get_value(), builder)?;
         let res = ctx.get_symbol(&self.var.name, builder);
         if res.is_none() {
-            return Ok((None, None, TerminatorEnum::None));
+            return Ok(Default::default());
         }
         let (global, _) = res.unwrap();
         ctx.position_at_end(entry, builder);
         builder.build_store(global.value, base_value);
-        Ok((None, None, TerminatorEnum::None))
+        Ok(Default::default())
     }
 }
 impl GlobalNode {
@@ -57,13 +58,13 @@ impl GlobalNode {
         if ctx.get_symbol(&self.var.name, builder).is_some() {
             return Err(ctx.add_diag(self.var.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
         }
-        // use nodebug builder to emit
-        let (value, pltype_opt, _) = self.exp.emit(ctx, builder)?;
-        if pltype_opt.is_none() {
+        let v = self.exp.emit(ctx, builder)?.get_value();
+        if v.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
         }
-        let pltype = pltype_opt.unwrap();
-        ctx.try_load2var(exp_range, value.unwrap(), builder)?;
+        let v = v.unwrap();
+        let pltype = v.get_ty();
+        ctx.try_load2var(exp_range, v.get_value(), builder)?;
         let globalptr = builder.add_global(
             &ctx.plmod.get_full_name(&self.var.name),
             pltype.clone(),
