@@ -212,28 +212,24 @@ pub trait RangeTrait {
         builder.build_unconditional_branch(cond_block);
         ctx.position_at_end(cond_block, builder);
         let condrange = self.cond.range();
-        let (cond, pltype, _) = self.cond.emit(ctx, builder)?;
-        if pltype.is_none() || !pltype.unwrap().borrow().is(&amp;PriType::BOOL) {
-            return Err(ctx.add_diag(
-                condrange
-                    .new_err(ErrorCode::IF_CONDITION_MUST_BE_BOOL)
-                    .add_help(&quot;use a bool variable instead&quot;)
-                    .clone(),
-            ));
-        }
-        let cond = ctx.try_load2var(condrange, cond.unwrap(), builder)?;
+        let v = self.cond.emit(ctx, builder)?.get_value();
+        let code = ErrorCode::IF_CONDITION_MUST_BE_BOOL;
+        check_bool(&amp;v, ctx, condrange, code)?;
+        let v = v.unwrap();
+        let cond = v.get_value();
+        let cond = ctx.try_load2var(condrange, cond, builder)?;
         let cond = builder.build_int_truncate(cond, &amp;PriType::BOOL, &quot;trunctemp&quot;);
         builder.build_conditional_branch(cond, then_block, else_block);
         // then block
         ctx.position_at_end(then_block, builder);
-        let (_, _, then_terminator) = self.then.emit_child(ctx, builder)?;
+        let then_terminator = self.then.emit_child(ctx, builder)?.get_term();
         if then_terminator.is_none() {
             builder.build_unconditional_branch(after_block);
         }
         ctx.position_at_end(else_block, builder);
         let terminator = if let Some(el) = &amp;mut self.els {
             let mut child = ctx.new_child(el.range().start, builder);
-            let (_, _, else_terminator) = el.emit(&amp;mut child, builder)?;
+            let else_terminator = el.emit(&amp;mut child, builder)?.get_term();
             if else_terminator.is_none() {
                 builder.build_unconditional_branch(after_block);
             }
@@ -251,7 +247,7 @@ pub trait RangeTrait {
             builder.build_unconditional_branch(after_block);
         }
         ctx.emit_comment_highlight(&amp;self.comments[0]);
-        Ok((None, None, terminator))
+        NodeOutput::default().with_term(terminator).to_result()
     }</code></pre>
 <p>emit函数的第一个参数是节点自身，第二个参数是编译上下文。编译上下文中会包含一些需要透传的信息，比如符号表，lsp参数等，
 第三个参数是<code>builder</code>，用于生成中间代码。目前<code>builder</code>只有llvm的实现。</p>
