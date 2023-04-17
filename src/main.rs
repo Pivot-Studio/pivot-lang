@@ -60,7 +60,7 @@ use ast::{
     compiler::{self, ActionType, HashOptimizationLevel},
     node::program,
 };
-use clap::{CommandFactory, Parser, Subcommand};
+use clap::{CommandFactory, FromArgMatches, Parser, Subcommand};
 use db::Database;
 use lsp::{
     mem_docs::{self, MemDocsInput},
@@ -159,7 +159,16 @@ enum RunCommand {
 }
 
 fn main() {
-    let cli = Cli::parse();
+    let mut matches = Cli::command()
+        .color(clap::ColorChoice::Always)
+        .get_matches();
+    let res = Cli::from_arg_matches_mut(&mut matches);
+    let cli = match res {
+        Ok(s) => s,
+        Err(e) => {
+            e.format(&mut Cli::command()).exit();
+        }
+    };
     let opt = match cli.optimization {
         0 => HashOptimizationLevel::None,
         1 => HashOptimizationLevel::Less,
@@ -235,6 +244,9 @@ fn main() {
         }
     } else {
         println!("No file provided");
-        Cli::command().print_help().unwrap();
+        Cli::command()
+            .color(clap::ColorChoice::Always)
+            .print_help()
+            .unwrap();
     }
 }
