@@ -96,6 +96,11 @@ lazy_static::lazy_static! {
 
 #[cfg(feature = "jit")]
 pub fn run(p: &Path, opt: OptimizationLevel) -> i64 {
+    // windows doesn't support jit with shadow stack yet
+    if cfg!(windows) {
+        eprintln!("jit is not yet supported on windows");
+        return 0;
+    }
     type MainFunc = unsafe extern "C" fn() -> i64;
     use std::ffi::CString;
 
