@@ -7,12 +7,12 @@ pub fn test_string() void {
     macros::test!(s);
     panic::assert(s.len == 13);
     panic::assert(s.byte_len == 13);
-    let ss = "你好啊！";
-    panic::assert(ss.len == 4);
-    panic::assert(ss.byte_len == 12);
+    let ss = "你好啊！\n";
+    panic::assert(ss.len == 5);
+    panic::assert(ss.byte_len == 13);
     s.append(ss);
-    panic::assert(s.len == 17);
-    panic::assert(s.byte_len == 25);
+    panic::assert(s.len == 18);
+    panic::assert(s.byte_len == 26);
     io::print_s(s);
     return;
 }

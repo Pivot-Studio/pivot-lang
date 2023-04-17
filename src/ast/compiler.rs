@@ -4,7 +4,7 @@ use crate::{
         accumulators::{Diagnostics, ModBuffer},
         builder::llvmbuilder::get_target_machine,
         node::program::Program,
-        pass::MAP_NAMES,
+        pass::{IS_JIT, MAP_NAMES},
     },
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
@@ -27,6 +27,7 @@ use rustc_hash::FxHashSet;
 use std::{
     env, fs,
     path::{Path, PathBuf},
+    sync::atomic::Ordering,
     time::{Duration, Instant},
 };
 
@@ -37,6 +38,7 @@ pub struct Options {
     pub flow: bool,
     pub optimization: HashOptimizationLevel,
     pub fmt: bool,
+    pub jit: bool,
 }
 
 #[repr(u32)]
@@ -95,20 +97,74 @@ lazy_static::lazy_static! {
 #[cfg(feature = "jit")]
 pub fn run(p: &Path, opt: OptimizationLevel) {
     type MainFunc = unsafe extern "C" fn() -> i64;
-    use inkwell::support;
+    use std::{ffi::CString, mem::MaybeUninit, process::exit, rc::Rc};
+
+    use immix::set_shadow_stack_addr;
+    use inkwell::{
+        execution_engine::ExecutionEngine, support, targets::InitializationConfig, AddressSpace,
+    };
+    use llvm_sys::execution_engine::{LLVMGetGlobalValueAddress, LLVMOpaqueExecutionEngine};
+    vm::logger::SimpleLogger::init_from_env_default("PL_LOG", log::LevelFilter::Error);
     vm::reg();
     // FIXME: currently stackmap support on jit code is not possible due to
     // lack of support in inkwell https://github.com/TheDan64/inkwell/issues/296
     // so we disable gc in jit mode for now
-    immix::gc_disable_auto_collect();
+    // immix::gc_disable_auto_collect();
+    extern "C" fn gc_init(ptr: *mut u8) {
+        println!("gc init {:p}", ptr);
+        immix::gc_init(ptr);
+    }
+    immix::set_shadow_stack(true);
+
     support::enable_llvm_pretty_stack_trace();
     let ctx = &Context::create();
     let re = Module::parse_bitcode_from_path(p, ctx).unwrap();
-    let engine = re.create_jit_execution_engine(opt).unwrap();
+    let chain = re.get_global("llvm_gc_root_chain").unwrap();
+    // chain.set_thread_local(true);
+    // chain.set_thread_local_mode(Some(inkwell::ThreadLocalMode::InitialExecTLSModel));
+    // add a new function to the module, which return address of llvm_gc_root_chain
+    let f = re.add_function(
+        "get_gc_root_chain",
+        ctx.i8_type()
+            .ptr_type(AddressSpace::default())
+            .fn_type(&[], false),
+        None,
+    );
+    let bb = ctx.append_basic_block(f, "entry");
+    let builder = ctx.create_builder();
+    builder.position_at_end(bb);
+    let casted = builder.build_bitcast(
+        chain,
+        ctx.i8_type().ptr_type(AddressSpace::default()),
+        "cast",
+    );
+    builder.build_return(Some(&casted));
+    re.verify().unwrap();
+    re.print_to_file("jit.ll").unwrap();
+    // re.as_mut_ptr()
+    inkwell::targets::Target::initialize_native(&InitializationConfig::default()).unwrap();
+    let mut engine: MaybeUninit<*mut LLVMOpaqueExecutionEngine> = MaybeUninit::uninit();
+    let engine = unsafe {
+        immix::CreatePLJITEngine(
+            engine.as_mut_ptr() as *mut _ as _,
+            re.as_mut_ptr() as _,
+            opt as u32,
+            gc_init,
+        );
+        let engine = engine.assume_init();
+        ExecutionEngine::new(Rc::new(engine), true)
+    };
+    // let engine = re.create_jit_execution_engine(opt).unwrap();
+
     unsafe {
         engine.run_static_constructors();
+
+        let c_str = CString::new("llvm_gc_root_chain").unwrap();
+        let addr = LLVMGetGlobalValueAddress(engine.as_mut_ptr(), c_str.as_ptr());
+
+        set_shadow_stack_addr(addr as *mut u8);
         let f = engine.get_function::<MainFunc>("main").unwrap();
-        println!("ret = {}", f.call());
+        exit(f.call() as i32)
     }
 }
 
@@ -200,12 +256,14 @@ lazy_static! {
 
 #[salsa::tracked]
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
+    let total_steps = if op.jit { 2 } else { 3 };
+    IS_JIT.store(op.jit, Ordering::Relaxed);
     MAP_NAMES.inner.lock().borrow_mut().clear();
     let pb = &COMPILE_PROGRESS;
     pb.enable_steady_tick(Duration::from_millis(50));
     pb.set_style(PROGRESS_STYLE.clone());
     pb.set_draw_target(ProgressDrawTarget::stderr());
-    pb.set_prefix(format!("[{:2}/{:2}]", 1, 3));
+    pb.set_prefix(format!("[{:2}/{:2}]", 1, total_steps));
 
     inkwell::execution_engine::ExecutionEngine::link_in_mc_jit();
     immix::register_llvm_gc_plugins();
@@ -278,7 +336,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let pb = ProgressBar::new(mods.len() as u64);
     pb.enable_steady_tick(Duration::from_millis(50));
     pb.set_style(PROGRESS_STYLE.clone());
-    pb.set_prefix(format!("[{:2}/{:2}]", 2, 3));
+    pb.set_prefix(format!("[{:2}/{:2}]", 2, total_steps));
     for m in mods {
         pb.inc(1);
         // pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
@@ -306,12 +364,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         objs.push(o);
         _ = llvmmod.link_in_module(module);
     }
-    pb.finish_with_message("目标文件编译优化完成");
-    let pb = ProgressBar::new(1);
-    pb.enable_steady_tick(Duration::from_millis(50));
-    pb.set_style(MSG_PROGRESS_STYLE.clone());
-    pb.set_prefix(format!("[{:2}/{:2}]", 3, 3));
-    pb.set_message("正在链接目标文件");
+    pb.finish_with_message("中间代码优化完成");
     llvmmod.verify().unwrap();
     if op.genir {
         let mut s = out.to_string();
@@ -321,64 +374,72 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     }
     let mut fo = out.to_string();
     let mut out = out;
-    #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
-    let pl_target = Target::search("x86_64-apple-darwin").expect("get target failed");
-    #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
-    let pl_target = Target::host_target().expect("get host target failed");
+    let pb = ProgressBar::new(1);
     out.push_str(".bc");
     llvmmod.set_triple(&tm.get_triple());
     llvmmod.set_data_layout(&tm.get_target_data().get_data_layout());
-    llvmmod.write_bitcode_to_path(Path::new(&out));
-    // println!("jit executable file writted to: {}", &out);
-    let mut t = create_with_target(&pl_target);
+    if op.jit {
+        llvmmod.write_bitcode_to_path(Path::new(&out));
+    } else {
+        pb.enable_steady_tick(Duration::from_millis(50));
+        pb.set_style(MSG_PROGRESS_STYLE.clone());
+        pb.set_prefix(format!("[{:2}/{:2}]", 3, total_steps));
+        pb.set_message("正在链接目标文件");
+        #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+        let pl_target = Target::search("x86_64-apple-darwin").expect("get target failed");
+        #[cfg(not(all(target_os = "macos", target_arch = "x86_64")))]
+        let pl_target = Target::host_target().expect("get host target failed");
+        let mut t = create_with_target(&pl_target);
 
-    // let mut cmd = Command::new("clang-14");
-    if cfg!(target_os = "linux") {
-        trace!("target os is linux");
-        // cmd.arg("-ltinfo");
+        // let mut cmd = Command::new("clang-14");
+        if cfg!(target_os = "linux") {
+            trace!("target os is linux");
+            // cmd.arg("-ltinfo");
+        }
+        let root = env::var("PL_ROOT");
+        if root.is_err() {
+            warn!("warn: PL_ROOT not set, skip linking libvm");
+            return;
+        }
+        let root = root.unwrap();
+        let vmpath = if cfg!(target_os = "windows") {
+            // cmd = Command::new("clang");
+            // f = out.clone();
+            fo.push_str(".exe");
+            format!("{}\\vm.lib", root)
+            // cmd.arg("-lws2_32")
+            //     .arg("-lbcrypt")
+            //     .arg("-luserenv")
+            //     .arg("-ladvapi32");
+        } else {
+            let mut p = PathBuf::from(&root);
+            p.push("libvm.a");
+            dunce::canonicalize(&p)
+                .expect("failed to find libvm")
+                .to_str()
+                .unwrap()
+                .to_string()
+            // cmd.arg("-pthread").arg("-ldl");
+        };
+        for o in objs {
+            t.add_object(o.as_path()).unwrap();
+        }
+        t.add_object(Path::new(&vmpath)).unwrap();
+        t.output_to(&fo);
+        let res = t.finalize();
+        if res.is_err() {
+            pb.abandon_with_message(format!("{}", "目标文件链接失败".red()));
+            eprintln!(
+                "{}",
+                format!("link failed: {}", res.unwrap_err()).bright_red()
+            );
+            // eprintln!("target triple: {}", tm.get_triple());
+        } else {
+            pb.finish_with_message("目标文件链接完成");
+            eprintln!("link succ, output file: {}", fo);
+        }
     }
-    let root = env::var("PL_ROOT");
-    if root.is_err() {
-        warn!("warn: PL_ROOT not set, skip linking libvm");
-        return;
-    }
-    let root = root.unwrap();
-    let vmpath = if cfg!(target_os = "windows") {
-        // cmd = Command::new("clang");
-        // f = out.clone();
-        fo.push_str(".exe");
-        format!("{}\\vm.lib", root)
-        // cmd.arg("-lws2_32")
-        //     .arg("-lbcrypt")
-        //     .arg("-luserenv")
-        //     .arg("-ladvapi32");
-    } else {
-        let mut p = PathBuf::from(&root);
-        p.push("libvm.a");
-        dunce::canonicalize(&p)
-            .expect("failed to find libvm")
-            .to_str()
-            .unwrap()
-            .to_string()
-        // cmd.arg("-pthread").arg("-ldl");
-    };
-    for o in objs {
-        t.add_object(o.as_path()).unwrap();
-    }
-    t.add_object(Path::new(&vmpath)).unwrap();
-    t.output_to(&fo);
-    let res = t.finalize();
-    if res.is_err() {
-        pb.abandon_with_message("目标文件链接失败");
-        eprintln!(
-            "{}",
-            format!("link failed: {}", res.unwrap_err()).bright_red()
-        );
-        // eprintln!("target triple: {}", tm.get_triple());
-    } else {
-        pb.finish_with_message("目标文件链接完成");
-        eprintln!("link succ, output file: {}", fo);
-    }
+    // println!("jit executable file writted to: {}", &out);
     // //  TargetMachine::get_default_triple()
     // let time = now.elapsed();
     // println!("compile succ, time: {:?}", time);

@@ -879,6 +879,7 @@ dependencies = [
  "ctor",
  "fmt_macro",
  "llvm-sys",
+ "log",
  "node_macro",
  "range_macro",
  "test_parser_macro",

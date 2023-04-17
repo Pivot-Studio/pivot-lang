@@ -547,6 +547,7 @@ mod test {
                 printast: false,
                 flow: false,
                 fmt: false,
+                jit: true,
             },
         );
         // #[cfg(feature = "jit")]
@@ -577,6 +578,7 @@ mod test {
                 printast: true,
                 flow: false,
                 fmt: false,
+                jit: true,
             },
         );
         test_lsp::<Completions>(

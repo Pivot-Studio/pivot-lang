@@ -14,7 +14,7 @@ use crate::{
     block::{Block, LineHeaderExt, ObjectType},
     gc_is_auto_collect_enabled, spin_until, HeaderExt, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID,
     GC_MARKING, GC_MARK_COND, GC_RUNNING, GC_STW_COUNT, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE,
-    NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION,
+    NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION, USE_SHADOW_STACK,
 };
 
 /// # Collector
@@ -224,6 +224,15 @@ impl Collector {
         *ptr = new_ptr;
     }
 
+    #[cfg(feature = "llvm_gc_plugin")]
+    extern "C" fn mark_ptr_callback(ptr: *mut u8, _tp: *mut u8) {
+        unsafe {
+            crate::SPACE.with(|gc| {
+                gc.borrow().mark_ptr(ptr);
+            });
+        }
+    }
+
     /// precise mark a pointer
     unsafe fn mark_ptr(&self, ptr: *mut u8) {
         let father = ptr;
@@ -419,38 +428,45 @@ impl Collector {
         }
         #[cfg(feature = "llvm_stackmap")]
         {
-            // println!("{:?}", &STACK_MAP.map.borrow());
-            let mut depth = 0;
-            backtrace::trace(|frame| {
-                let addr = frame.ip() as *mut u8;
-                let const_addr = addr as *const u8;
-                let map = STACK_MAP.map.borrow();
-                let f = map.get(&const_addr);
-                // backtrace::resolve_frame(frame,
-                //     |s|
-                //     {
-                //         println!("{}: {:?} ip: {:p}, address: {:p}, sp: {:?}", depth, s.name(), frame.ip(), const_addr, frame.sp());
-                //     }
-                // );
-                if let Some(f) = f {
-                    // println!("found fn in stackmap, f: {:?} sp: {:p}", f,frame.sp());
-                    f.iter_roots().for_each(|(offset, _obj_type)| unsafe {
-                        // println!("offset: {}", offset);
-                        let sp = frame.sp() as *mut u8;
-                        let root = sp.offset(offset as isize);
-                        self.mark_ptr(root);
-                    });
-                }
-                depth += 1;
-                true
-            });
-            STACK_MAP
-                .global_roots
-                .borrow()
-                .iter()
-                .for_each(|root| unsafe {
-                    self.mark_ptr((*root) as usize as *mut u8);
+            if USE_SHADOW_STACK.load(Ordering::Relaxed) {
+                #[cfg(feature = "llvm_gc_plugin")]
+                unsafe {
+                    crate::shadow_stack::visitGCRoots(Self::mark_ptr_callback)
+                };
+            } else {
+                // println!("{:?}", &STACK_MAP.map.borrow());
+                let mut depth = 0;
+                backtrace::trace(|frame| {
+                    let addr = frame.ip() as *mut u8;
+                    let const_addr = addr as *const u8;
+                    let map = STACK_MAP.map.borrow();
+                    let f = map.get(&const_addr);
+                    // backtrace::resolve_frame(frame,
+                    //     |s|
+                    //     {
+                    //         println!("{}: {:?} ip: {:p}, address: {:p}, sp: {:?}", depth, s.name(), frame.ip(), const_addr, frame.sp());
+                    //     }
+                    // );
+                    if let Some(f) = f {
+                        // println!("found fn in stackmap, f: {:?} sp: {:p}", f,frame.sp());
+                        f.iter_roots().for_each(|(offset, _obj_type)| unsafe {
+                            // println!("offset: {}", offset);
+                            let sp = frame.sp() as *mut u8;
+                            let root = sp.offset(offset as isize);
+                            self.mark_ptr(root);
+                        });
+                    }
+                    depth += 1;
+                    true
                 });
+                STACK_MAP
+                    .global_roots
+                    .borrow()
+                    .iter()
+                    .for_each(|root| unsafe {
+                        self.mark_ptr((*root) as usize as *mut u8);
+                    });
+            }
         }
 
         // iterate through queue and mark all reachable objects
