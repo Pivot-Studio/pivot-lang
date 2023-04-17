@@ -511,6 +511,48 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "jit")]
+    fn test_jit() {
+        use crate::ast::compiler::{compile, Options};
+        use std::path::PathBuf;
+        let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
+            .lock()
+            .unwrap();
+        let out = "testjitout";
+        let docs = MemDocs::default();
+        let db = Database::default();
+        let input = MemDocsInput::new(
+            &db,
+            Arc::new(Mutex::new(RefCell::new(docs))),
+            "test/main.pi".to_string(),
+            Default::default(),
+            ActionType::Compile,
+            None,
+            None,
+        );
+        let outplb = "testjitout.bc";
+        compile(
+            &db,
+            input,
+            out.to_string(),
+            Options {
+                optimization: crate::ast::compiler::HashOptimizationLevel::None,
+                genir: true,
+                printast: false,
+                flow: false,
+                fmt: false,
+                jit: true,
+            },
+        );
+        assert!(
+            crate::ast::compiler::run(
+                &PathBuf::from(outplb).as_path(),
+                inkwell::OptimizationLevel::None,
+            ) == 0,
+            "jit compiled program exit with non-zero status"
+        );
+    }
+    #[test]
     fn test_compile() {
         let out = "testout";
         let exe = PathBuf::from(out);
@@ -535,8 +577,6 @@ mod test {
             None,
             None,
         );
-        // let outplb = "testout.bc";
-
         compile(
             &db,
             input,
@@ -547,13 +587,9 @@ mod test {
                 printast: false,
                 flow: false,
                 fmt: false,
+                jit: false,
             },
         );
-        // #[cfg(feature = "jit")]
-        // crate::ast::compiler::run(
-        //     &PathBuf::from(outplb).as_path(),
-        //     inkwell::OptimizationLevel::None,
-        // );
         let exe = dunce::canonicalize(&exe)
             .unwrap_or_else(|_| panic!("static compiled file not found {:?}", exe));
         let o = Command::new(exe.to_str().unwrap())
@@ -577,6 +613,7 @@ mod test {
                 printast: true,
                 flow: false,
                 fmt: false,
+                jit: true,
             },
         );
         test_lsp::<Completions>(

@@ -126,6 +126,10 @@ struct Cli {
     #[arg(long)]
     genir: bool,
 
+    /// jit compile
+    #[arg(long)]
+    jit: bool,
+
     /// optimization level, 0-3
     #[arg(short = 'O', value_parser, default_value = "0")]
     optimization: u64,
@@ -183,6 +187,7 @@ fn main() {
             flow: cli.flow,
             fmt,
             optimization: opt,
+            jit: cli.jit,
         };
         let action = if cli.flow {
             ActionType::Flow
