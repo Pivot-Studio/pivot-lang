@@ -95,66 +95,47 @@ lazy_static::lazy_static! {
 }
 
 #[cfg(feature = "jit")]
-pub fn run(p: &Path, opt: OptimizationLevel) {
+pub fn run(p: &Path, opt: OptimizationLevel) -> i64 {
     type MainFunc = unsafe extern "C" fn() -> i64;
-    use std::{ffi::CString, mem::MaybeUninit, process::exit, rc::Rc};
+    use std::ffi::CString;
 
     use immix::set_shadow_stack_addr;
-    use inkwell::{
-        execution_engine::ExecutionEngine, support, targets::InitializationConfig, AddressSpace,
-    };
-    use llvm_sys::execution_engine::{LLVMGetGlobalValueAddress, LLVMOpaqueExecutionEngine};
+    use inkwell::support;
+    use llvm_sys::execution_engine::LLVMGetGlobalValueAddress;
     vm::logger::SimpleLogger::init_from_env_default("PL_LOG", log::LevelFilter::Error);
     vm::reg();
     // FIXME: currently stackmap support on jit code is not possible due to
     // lack of support in inkwell https://github.com/TheDan64/inkwell/issues/296
     // so we disable gc in jit mode for now
     // immix::gc_disable_auto_collect();
-    extern "C" fn gc_init(ptr: *mut u8) {
-        println!("gc init {:p}", ptr);
-        immix::gc_init(ptr);
-    }
+    // extern "C" fn gc_init(ptr: *mut u8) {
+    //     println!("gc init {:p}", ptr);
+    //     immix::gc_init(ptr);
+    // }
     immix::set_shadow_stack(true);
 
     support::enable_llvm_pretty_stack_trace();
     let ctx = &Context::create();
     let re = Module::parse_bitcode_from_path(p, ctx).unwrap();
-    let chain = re.get_global("llvm_gc_root_chain").unwrap();
-    // chain.set_thread_local(true);
-    // chain.set_thread_local_mode(Some(inkwell::ThreadLocalMode::InitialExecTLSModel));
-    // add a new function to the module, which return address of llvm_gc_root_chain
-    let f = re.add_function(
-        "get_gc_root_chain",
-        ctx.i8_type()
-            .ptr_type(AddressSpace::default())
-            .fn_type(&[], false),
-        None,
-    );
-    let bb = ctx.append_basic_block(f, "entry");
-    let builder = ctx.create_builder();
-    builder.position_at_end(bb);
-    let casted = builder.build_bitcast(
-        chain,
-        ctx.i8_type().ptr_type(AddressSpace::default()),
-        "cast",
-    );
-    builder.build_return(Some(&casted));
-    re.verify().unwrap();
-    re.print_to_file("jit.ll").unwrap();
+    // let chain = re.get_global("llvm_gc_root_chain").unwrap();
+    // // chain.set_thread_local(true);
+    // // chain.set_thread_local_mode(Some(inkwell::ThreadLocalMode::InitialExecTLSModel));
+    // // add a new function to the module, which return address of llvm_gc_root_chain
+
     // re.as_mut_ptr()
-    inkwell::targets::Target::initialize_native(&InitializationConfig::default()).unwrap();
-    let mut engine: MaybeUninit<*mut LLVMOpaqueExecutionEngine> = MaybeUninit::uninit();
-    let engine = unsafe {
-        immix::CreatePLJITEngine(
-            engine.as_mut_ptr() as *mut _ as _,
-            re.as_mut_ptr() as _,
-            opt as u32,
-            gc_init,
-        );
-        let engine = engine.assume_init();
-        ExecutionEngine::new(Rc::new(engine), true)
-    };
-    // let engine = re.create_jit_execution_engine(opt).unwrap();
+    // inkwell::targets::Target::initialize_native(&InitializationConfig::default()).unwrap();
+    // let mut engine: MaybeUninit<*mut LLVMOpaqueExecutionEngine> = MaybeUninit::uninit();
+    // let engine = unsafe {
+    //     immix::CreatePLJITEngine(
+    //         engine.as_mut_ptr() as *mut _ as _,
+    //         re.as_mut_ptr() as _,
+    //         opt as u32,
+    //         gc_init,
+    //     );
+    //     let engine = engine.assume_init();
+    //     ExecutionEngine::new(Rc::new(engine), true)
+    // };
+    let engine = re.create_jit_execution_engine(opt).unwrap();
 
     unsafe {
         engine.run_static_constructors();
@@ -164,7 +145,7 @@ pub fn run(p: &Path, opt: OptimizationLevel) {
 
         set_shadow_stack_addr(addr as *mut u8);
         let f = engine.get_function::<MainFunc>("main").unwrap();
-        exit(f.call() as i32)
+        f.call()
     }
 }
 
@@ -380,6 +361,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     llvmmod.set_data_layout(&tm.get_target_data().get_data_layout());
     if op.jit {
         llvmmod.write_bitcode_to_path(Path::new(&out));
+        eprintln!("jit executable file written to: {}", &out);
     } else {
         pb.enable_steady_tick(Duration::from_millis(50));
         pb.set_style(MSG_PROGRESS_STYLE.clone());

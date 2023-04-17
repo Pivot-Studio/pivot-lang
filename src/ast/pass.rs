@@ -20,8 +20,6 @@ pub struct GlobalMutWrapper<T> {
 pub static IS_JIT: AtomicBool = AtomicBool::new(false);
 
 pub fn run_immix_pass(module: &Module) {
-    let ctx = module.get_context();
-    let builder = ctx.create_builder();
     if IS_JIT.load(std::sync::atomic::Ordering::Relaxed) {
         // jit is using shadow stack, skip immix pass
         module.get_functions().for_each(|f| {
@@ -29,6 +27,8 @@ pub fn run_immix_pass(module: &Module) {
         });
         return;
     }
+    let ctx = module.get_context();
+    let builder = ctx.create_builder();
     // add global _GC_MAP_
     let gcmap_name = "_GC_MAP_".to_string() + module.get_source_file_name().to_str().unwrap();
     let stack_map = module.add_global(ctx.i8_type(), Default::default(), &gcmap_name);

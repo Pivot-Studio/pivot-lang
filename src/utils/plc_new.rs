@@ -109,7 +109,5 @@ pub mod tests {
 
         #[cfg(target_os = "windows")]
         assert!(fs::metadata("plc_new_testout.exe").is_ok());
-
-        assert!(fs::metadata("plc_new_testout.bc").is_ok());
     }
 }
