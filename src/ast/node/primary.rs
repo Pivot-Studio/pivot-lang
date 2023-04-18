@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use super::node_result::NodeResultBuilder;
 use super::*;
 
 use crate::ast::builder::BuilderEnum;
@@ -8,7 +9,6 @@ use crate::ast::ctx::Ctx;
 use crate::ast::ctx::MacroReplaceNode;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{PLType, PriType};
-use crate::plv;
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
 
@@ -57,15 +57,10 @@ impl Node for BoolConstNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::KEYWORD, 0);
-        Ok((
-            Some(plv!(builder.int_value(
-                &PriType::BOOL,
-                self.value as u64,
-                true
-            ))),
-            Some(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL)))),
-            TerminatorEnum::None,
-        ))
+        builder
+            .int_value(&PriType::BOOL, self.value as u64, true)
+            .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
+            .to_result()
     }
 }
 
@@ -89,18 +84,16 @@ impl Node for NumNode {
         ctx.push_semantic_token(self.range, SemanticTokenType::NUMBER, 0);
         if let Num::Int(x) = self.value {
             let b = builder.int_value(&PriType::I64, x, true);
-            return Ok((
-                Some(plv!(b)),
-                Some(Arc::new(RefCell::new(PLType::Primitive(PriType::I64)))),
-                TerminatorEnum::None,
-            ));
+            return b
+                .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::I64))))
+                .set_const()
+                .to_result();
         } else if let Num::Float(x) = self.value {
             let b = builder.float_value(&PriType::F64, x);
-            return Ok((
-                Some(plv!(b)),
-                Some(Arc::new(RefCell::new(PLType::Primitive(PriType::F64)))),
-                TerminatorEnum::None,
-            ));
+            return b
+                .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::F64))))
+                .set_const()
+                .to_result();
         }
         panic!("not implemented")
     }
@@ -152,20 +145,16 @@ impl Node for VarNode {
         ctx.if_completion(self.range, || ctx.get_completions());
         if let Some((symbol, is_const)) = ctx.get_symbol(&self.name, builder) {
             ctx.push_semantic_token(self.range, SemanticTokenType::VARIABLE, 0);
-            let o = Ok((
-                Some({
-                    let mut res: PLValue = plv!(symbol.value);
-                    res.set_const(is_const);
-                    res
-                }),
-                Some(symbol.pltype),
-                TerminatorEnum::None,
-            ));
+            let o = symbol
+                .value
+                .new_output(symbol.pltype)
+                .set_const_v(is_const)
+                .to_result();
             ctx.send_if_go_to_def(self.range, symbol.range, ctx.plmod.path.clone());
             symbol
                 .refs
                 .map(|refs| {
-                    ctx.set_if_refs(refs, self.range);
+                    ctx.set_local_refs(refs, self.range);
                 })
                 .or_else(|| {
                     ctx.set_glob_refs(&ctx.plmod.get_full_name(&self.name), self.range);
@@ -176,9 +165,9 @@ impl Node for VarNode {
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match &*tp.borrow() {
                 PLType::Fn(f) => {
-                    ctx.send_if_go_to_def(self.range, f.range, ctx.plmod.path.clone());
+                    ctx.send_if_go_to_def(self.range, f.range, f.path.clone());
                     ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
-                    return Ok((None, Some(tp.clone()), TerminatorEnum::None));
+                    return usize::MAX.new_output(tp.clone()).to_result();
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::VAR_NOT_FOUND))),
             }
@@ -230,12 +219,15 @@ impl VarNode {
                 | PLType::Primitive(_)
                 | PLType::Void
                 | PLType::Generic(_)
-                | PLType::PlaceHolder(_) => {
+                | PLType::PlaceHolder(_)
+                | PLType::Union(_) => {
                     if let PLType::Struct(st) | PLType::Trait(st) = &*tp.clone().borrow() {
-                        ctx.send_if_go_to_def(self.range, st.range, ctx.plmod.path.clone());
+                        ctx.send_if_go_to_def(self.range, st.range, st.path.clone());
                         // ctx.set_if_refs(st.refs.clone(), self.range);
+                    } else if let PLType::Union(u) = &*tp.clone().borrow() {
+                        ctx.send_if_go_to_def(self.range, u.range, u.path.clone());
                     }
-                    return Ok((None, Some(tp.clone()), TerminatorEnum::None));
+                    return usize::MAX.new_output(tp.clone()).to_result();
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE))),
             }
@@ -266,27 +258,25 @@ impl Node for ArrayElementNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        let (arr, pltype, _) = self.arr.emit(ctx, builder)?;
-        if let PLType::Arr(arrtp) = &*pltype.unwrap().borrow() {
-            let arr = arr.unwrap();
+        let v = self.arr.emit(ctx, builder)?.get_value().unwrap();
+        let pltype = v.get_ty();
+        if let PLType::Arr(arrtp) = &*pltype.borrow() {
+            let arr = v.get_value();
             // TODO: check if index is out of bounds
             let index_range = self.index.range();
-            let (index, index_pltype, _) = self.index.emit(ctx, builder)?;
-            let index = ctx.try_load2var(index_range, index.unwrap(), builder)?;
-            if index_pltype.is_none() || !index_pltype.unwrap().borrow().is(&PriType::I64) {
+            let v = self.index.emit(ctx, builder)?.get_value().unwrap();
+            let index = v.get_value();
+            let index = ctx.try_load2var(index_range, index, builder)?;
+            if !v.get_ty().borrow().is(&PriType::I64) {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_INDEX_MUST_BE_INT)));
             }
             let elemptr = {
                 let index = &[builder.int_value(&PriType::I64, 0, false), index];
-                let real_arr = builder.build_struct_gep(arr.value, 1, "real_arr").unwrap();
+                let real_arr = builder.build_struct_gep(arr, 1, "real_arr").unwrap();
                 builder.build_in_bounds_gep(real_arr, index, "element_ptr")
             };
             ctx.emit_comment_highlight(&self.comments[0]);
-            return Ok((
-                Some(plv!(elemptr)),
-                Some(arrtp.element_type.clone()),
-                TerminatorEnum::None,
-            ));
+            return elemptr.new_output(arrtp.element_type.clone()).to_result();
         }
         Err(ctx.add_diag(self.range.new_err(ErrorCode::CANNOT_INDEX_NON_ARRAY)))
     }

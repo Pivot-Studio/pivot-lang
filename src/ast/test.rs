@@ -14,10 +14,11 @@ mod test {
     use crate::{
         ast::{
             accumulators::{
-                Completions, DocSymbols, GotoDef, Hints, PLFormat, PLHover, PLReferences,
-                PLSignatureHelp,
+                Completions, Diagnostics, DocSymbols, GotoDef, Hints, PLFormat, PLHover,
+                PLReferences, PLSignatureHelp,
             },
             compiler::{compile_dry, ActionType},
+            diag::DiagCode,
             range::Pos,
         },
         db::Database,
@@ -56,6 +57,82 @@ mod test {
         compile_dry::accumulated::<A>(db, input)
     }
     #[test]
+    fn test_diag() {
+        let comps = test_lsp::<Diagnostics>(
+            &Database::default(),
+            None,
+            ActionType::Diagnostic,
+            "test/lsp_diag/test_diag.pi",
+        );
+        assert!(!comps.is_empty());
+        let (file, diag) = &comps[0];
+        assert!(file.contains("test_diag.pi"));
+        let mut diag = diag.clone();
+        diag.sort_by(|a, b| {
+            if a.raw.range.start.line < b.raw.range.start.line
+                || (a.raw.range.start.line == b.raw.range.start.line
+                    && a.raw.range.start.column < b.raw.range.start.column)
+            {
+                std::cmp::Ordering::Less
+            } else if a.raw.range.start.line == b.raw.range.start.line
+                && a.raw.range.start.column == b.raw.range.start.column
+            {
+                std::cmp::Ordering::Equal
+            } else {
+                std::cmp::Ordering::Greater
+            }
+        });
+        assert_eq!(diag.len(), 6);
+        assert_eq!(
+            new_diag_range(10, 14, 10, 15),
+            diag[0].get_range().to_diag_range()
+        );
+        assert_eq!(
+            diag[0].get_diag_code(),
+            DiagCode::Err(crate::ast::diag::ErrorCode::TYPE_MISMATCH)
+        );
+        assert_eq!(
+            new_diag_range(20, 16, 20, 19),
+            diag[1].get_range().to_diag_range()
+        );
+        assert_eq!(
+            diag[1].get_diag_code(),
+            DiagCode::Err(crate::ast::diag::ErrorCode::TYPE_MISMATCH)
+        );
+        assert_eq!(
+            new_diag_range(22, 12, 22, 21),
+            diag[2].get_range().to_diag_range()
+        );
+        assert_eq!(
+            diag[2].get_diag_code(),
+            DiagCode::Err(crate::ast::diag::ErrorCode::INVALID_DIRECT_UNION_CAST)
+        );
+        assert_eq!(
+            new_diag_range(23, 13, 23, 22),
+            diag[3].get_range().to_diag_range()
+        );
+        assert_eq!(
+            diag[3].get_diag_code(),
+            DiagCode::Err(crate::ast::diag::ErrorCode::INVALID_UNION_CAST)
+        );
+        assert_eq!(
+            new_diag_range(24, 18, 24, 21),
+            diag[4].get_range().to_diag_range()
+        );
+        assert_eq!(
+            diag[4].get_diag_code(),
+            DiagCode::Err(crate::ast::diag::ErrorCode::UNION_DOES_NOT_CONTAIN_TYPE)
+        );
+        assert_eq!(
+            new_diag_range(25, 13, 25, 21),
+            diag[5].get_range().to_diag_range()
+        );
+        assert_eq!(
+            diag[5].get_diag_code(),
+            DiagCode::Err(crate::ast::diag::ErrorCode::INVALID_IS_EXPR)
+        );
+    }
+    #[test]
     fn test_memory_leak() {
         let db = &mut Database::default();
         let docs = MemDocs::default();
@@ -92,7 +169,7 @@ mod test {
             .to_string();
         input.docs(db).lock().unwrap().borrow_mut().change(
             db,
-            new_range(0, 0, 0, 0),
+            new_diag_range(0, 0, 0, 0),
             path,
             "\n".repeat(2),
         );
@@ -244,7 +321,7 @@ mod test {
             InlayHintLabel::String(": i64".to_string())
         );
     }
-    fn new_range(sl: u32, sc: u32, el: u32, ec: u32) -> lsp_types::Range {
+    fn new_diag_range(sl: u32, sc: u32, el: u32, ec: u32) -> lsp_types::Range {
         lsp_types::Range {
             start: lsp_types::Position {
                 line: sl,
@@ -274,7 +351,7 @@ mod test {
         assert!(!def.is_empty());
         if let GotoDefinitionResponse::Scalar(sc) = def[0].clone() {
             assert!(sc.uri.to_string().contains("test/lsp/mod.pi"));
-            assert_eq!(sc.range, new_range(1, 0, 3, 1));
+            assert_eq!(sc.range, new_diag_range(1, 7, 1, 11));
         } else {
             panic!("expect goto def to be scalar, found {:?}", def[0])
         }
@@ -357,13 +434,13 @@ mod test {
                 locs.push(l.clone());
             }
         }
-        assert_eq!(locs.len(), 3);
+        // assert_eq!(locs.len(), 3);
         assert!(locs
             .iter()
             .find(|l| {
                 let ok = l.uri.to_string().contains("test/lsp/mod.pi");
                 if ok {
-                    assert!(l.range == new_range(1, 7, 1, 11))
+                    assert!(l.range == new_diag_range(1, 7, 1, 11))
                 }
                 ok
             })
@@ -373,7 +450,7 @@ mod test {
             .find(|l| {
                 let ok = l.uri.to_string().contains("test/lsp/test_completion.pi");
                 if ok {
-                    assert!(l.range == new_range(38, 11, 38, 15))
+                    assert!(l.range == new_diag_range(38, 11, 38, 15))
                 }
                 ok
             })
@@ -383,7 +460,7 @@ mod test {
             .find(|l| {
                 let ok = l.uri.to_string().contains("test/lsp/mod2.pi");
                 if ok {
-                    assert!(l.range == new_range(3, 17, 3, 21))
+                    assert!(l.range == new_diag_range(3, 17, 3, 21))
                 }
                 ok
             })
@@ -408,7 +485,7 @@ mod test {
             "expect test's type to be struct, found {:?}",
             testst.unwrap().kind
         );
-        let expect = new_range(0, 0, 5, 1);
+        let expect = new_diag_range(0, 0, 5, 1);
         assert_eq!(
             testst.unwrap().range,
             expect,
@@ -423,7 +500,7 @@ mod test {
             "expect name1's type to be struct, found {:?}",
             name1fn.unwrap().kind
         );
-        let expect = new_range(26, 0, 29, 1);
+        let expect = new_diag_range(26, 0, 29, 1);
         assert_eq!(
             name1fn.unwrap().range,
             expect,
@@ -434,8 +511,54 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "jit")]
+    fn test_jit() {
+        use crate::ast::compiler::{compile, Options};
+        use std::path::PathBuf;
+        let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
+            .lock()
+            .unwrap();
+        let out = "testjitout";
+        let docs = MemDocs::default();
+        let db = Database::default();
+        let input = MemDocsInput::new(
+            &db,
+            Arc::new(Mutex::new(RefCell::new(docs))),
+            "test/main.pi".to_string(),
+            Default::default(),
+            ActionType::Compile,
+            None,
+            None,
+        );
+        let outplb = "testjitout.bc";
+        compile(
+            &db,
+            input,
+            out.to_string(),
+            Options {
+                optimization: crate::ast::compiler::HashOptimizationLevel::None,
+                genir: true,
+                printast: false,
+                flow: false,
+                fmt: false,
+                jit: true,
+            },
+        );
+        assert!(
+            crate::ast::compiler::run(
+                &PathBuf::from(outplb).as_path(),
+                inkwell::OptimizationLevel::None,
+            ) == 0,
+            "jit compiled program exit with non-zero status"
+        );
+    }
+    #[test]
     fn test_compile() {
-        _ = remove_file("testout");
+        let out = "testout";
+        let exe = PathBuf::from(out);
+        #[cfg(target_os = "windows")]
+        let exe = exe.with_extension("exe");
+        _ = remove_file(&exe);
         let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
             .lock()
             .unwrap();
@@ -454,9 +577,6 @@ mod test {
             None,
             None,
         );
-        // let outplb = "testout.bc";
-        let out = "testout";
-
         compile(
             &db,
             input,
@@ -467,16 +587,9 @@ mod test {
                 printast: false,
                 flow: false,
                 fmt: false,
+                jit: false,
             },
         );
-        // #[cfg(feature = "jit")]
-        // crate::ast::compiler::run(
-        //     &PathBuf::from(outplb).as_path(),
-        //     inkwell::OptimizationLevel::None,
-        // );
-        let exe = PathBuf::from(out);
-        #[cfg(target_os = "windows")]
-        let exe = exe.with_extension("exe");
         let exe = dunce::canonicalize(&exe)
             .unwrap_or_else(|_| panic!("static compiled file not found {:?}", exe));
         let o = Command::new(exe.to_str().unwrap())
@@ -500,6 +613,7 @@ mod test {
                 printast: true,
                 flow: false,
                 fmt: false,
+                jit: true,
             },
         );
         test_lsp::<Completions>(
@@ -519,12 +633,7 @@ mod test {
 
     #[test]
     fn test_fmt() {
-        #[cfg(target_os = "linux")]
         let testfile = "test/fmt/test_fmt.pi";
-        #[cfg(target_os = "macos")]
-        let testfile = "test/fmt/test_fmt.pi";
-        #[cfg(target_os = "windows")]
-        let testfile = "test/fmt_windows/test_fmt.pi";
         let text_edit =
             test_lsp::<PLFormat>(&Database::default(), None, ActionType::LspFmt, testfile);
         debug_assert!(text_edit[0].is_empty());

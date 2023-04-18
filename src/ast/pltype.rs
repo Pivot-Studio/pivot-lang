@@ -1,6 +1,7 @@
 use super::ctx::Ctx;
 use super::diag::ErrorCode;
 use super::plmod::Mod;
+use super::plmod::MutVec;
 use super::tokens::TokenType;
 use crate::add_basic_types;
 use crate::ast::builder::IRBuilder;
@@ -43,6 +44,7 @@ use lsp_types::CompletionItemKind;
 use lsp_types::DocumentSymbol;
 use lsp_types::InsertTextFormat;
 
+use lsp_types::Location;
 use lsp_types::SymbolKind;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
@@ -63,6 +65,90 @@ pub enum PLType {
     Generic(GenericType),
     PlaceHolder(PlaceHolderType),
     Trait(STType),
+    Union(UnionType),
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnionType {
+    pub name: String,
+    pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
+    pub sum_types: Vec<Box<TypeNodeEnum>>,
+    pub path: String,
+    pub modifier: Option<(TokenType, Range)>,
+    pub range: Range,
+}
+
+impl UnionType {
+    pub fn find_method(&self, ctx: &Ctx, method: &str) -> Option<FNValue> {
+        ctx.plmod
+            .find_method(&self.get_full_name_except_generic(), method)
+    }
+    pub fn get_full_name_except_generic(&self) -> String {
+        let full_name = self.get_full_name();
+        full_name.split('<').collect::<Vec<_>>()[0].to_string()
+    }
+    pub fn get_full_name(&self) -> String {
+        format!("{}..{}", self.path, self.name)
+    }
+    pub fn append_name_with_generic(&self) -> String {
+        let typeinfer = self
+            .generic_map
+            .iter()
+            .map(|(_, v)| match &*v.clone().borrow() {
+                PLType::Generic(g) => g.curpltype.as_ref().unwrap().borrow().get_name(),
+                _ => unreachable!(),
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("{}<{}>", self.name, typeinfer)
+    }
+    pub fn gen_code<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> Result<UnionType, PLDiag> {
+        let name = self.append_name_with_generic();
+        if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
+            match &*pltype.borrow() {
+                PLType::Union(st) => {
+                    return Ok(st.clone());
+                }
+                _ => unreachable!(),
+            }
+        }
+        let mut res = self.clone();
+        res.name = name;
+        ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Union(res.clone()))));
+
+        let (tps, errors): (Vec<_>, Vec<_>) = res
+            .sum_types
+            .iter()
+            .map(|t| {
+                Ok::<Box<TypeNodeEnum>, PLDiag>(t.get_type(ctx, builder)?.borrow().get_typenode())
+            })
+            .partition(Result::is_ok);
+        if !errors.is_empty() {
+            return Err(errors[0].clone().unwrap_err());
+        }
+        res.sum_types = tps.into_iter().map(Result::unwrap).collect::<Vec<_>>();
+        res.generic_map.clear();
+        let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
+        pltype.replace(PLType::Union(res.clone()));
+        Ok(res)
+    }
+    pub fn has_type<'a, 'ctx, 'b>(
+        &self,
+        pltype: &PLType,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> Option<usize> {
+        ctx.run_in_type_mod(self, |ctx, u| {
+            u.sum_types
+                .iter()
+                .enumerate()
+                .find(|(_, t)| &*t.get_type(ctx, builder).unwrap().borrow() == pltype)
+                .map(|(i, _)| i)
+        })
+    }
 }
 /// # PriType
 /// Primitive type for pivot-lang
@@ -100,6 +186,12 @@ impl PriType {
             PriType::F64 => String::from("f64"),
             PriType::BOOL => String::from("bool"),
         }
+    }
+    pub fn signed(&self) -> bool {
+        matches!(
+            self,
+            PriType::I8 | PriType::I16 | PriType::I32 | PriType::I64 | PriType::I128
+        )
     }
     pub fn try_from_str(str: &str) -> Option<Self> {
         match str {
@@ -181,6 +273,7 @@ impl PLType {
             PLType::Struct(_) | PLType::Arr(_) => ObjectType::Complex,
             PLType::Pointer(_) => ObjectType::Pointer,
             PLType::Trait(_) => ObjectType::Trait,
+            PLType::Union(_) => ObjectType::Trait, // share same layout as trait
             _ => ObjectType::Atomic,
         }
     }
@@ -195,6 +288,7 @@ impl PLType {
             PLType::PlaceHolder(_) => "placeholder".to_string(),
             PLType::Generic(_) => "generic".to_string(),
             PLType::Trait(_) => "trait".to_string(),
+            PLType::Union(_) => "union".to_string(),
         }
     }
     pub fn get_typenode(&self) -> Box<TypeNodeEnum> {
@@ -216,7 +310,9 @@ impl PLType {
             PLType::PlaceHolder(p) => {
                 new_typename_node(&p.get_place_holder_name(), Default::default())
             }
-            _ => unreachable!(),
+            PLType::Trait(t) => new_typename_node(&t.name, t.range),
+            PLType::Fn(_) => unreachable!(),
+            PLType::Union(u) => new_typename_node(&u.name, u.range),
         }
     }
     pub fn is(&self, pri_type: &PriType) -> bool {
@@ -228,14 +324,14 @@ impl PLType {
     }
     /// # if_refs
     /// if support find refs
-    pub fn if_refs(&self, f: impl FnOnce(&PLType)) {
+    pub fn if_refs(&self, f: impl FnOnce(&PLType), f_local: impl FnOnce(&GenericType)) {
         match self {
-            PLType::Fn(_) | PLType::Struct(_) | PLType::Trait(_) => f(self),
+            PLType::Fn(_) | PLType::Struct(_) | PLType::Trait(_) | PLType::Union(_) => f(self),
             PLType::Arr(_) => (),
             PLType::Primitive(_) => (),
             PLType::Void => (),
             PLType::Pointer(_) => (),
-            PLType::Generic(_) => (),
+            PLType::Generic(g) => f_local(g),
             PLType::PlaceHolder(_) => (),
         }
     }
@@ -259,6 +355,7 @@ impl PLType {
             }
             PLType::PlaceHolder(p) => p.name.clone(),
             PLType::Trait(t) => t.name.clone(),
+            PLType::Union(u) => u.name.clone(),
         }
     }
     pub fn get_llvm_name(&self) -> String {
@@ -280,6 +377,7 @@ impl PLType {
                 }
             }
             PLType::PlaceHolder(p) => p.get_place_holder_name(),
+            PLType::Union(u) => u.name.clone(),
         }
     }
 
@@ -300,6 +398,27 @@ impl PLType {
             PLType::Void => "void".to_string(),
             PLType::Pointer(p) => p.borrow().get_full_elm_name(),
             PLType::PlaceHolder(p) => p.name.clone(),
+            PLType::Union(u) => u.get_full_name(),
+        }
+    }
+    pub fn get_full_elm_name_without_generic(&self) -> String {
+        match self {
+            PLType::Generic(g) => g.name.clone(),
+            PLType::Fn(fu) => fu.llvmname.clone(),
+            PLType::Struct(st) => st.get_st_full_name_except_generic(),
+            PLType::Trait(st) => st.get_st_full_name_except_generic(),
+            PLType::Primitive(pri) => pri.get_name(),
+            PLType::Arr(arr) => {
+                format!(
+                    "[{} * {}]",
+                    arr.element_type.borrow().get_full_elm_name(),
+                    arr.size
+                )
+            }
+            PLType::Void => "void".to_string(),
+            PLType::Pointer(p) => p.borrow().get_full_elm_name(),
+            PLType::PlaceHolder(p) => p.name.clone(),
+            PLType::Union(u) => u.get_full_name_except_generic(),
         }
     }
     pub fn get_ptr_depth(&self) -> usize {
@@ -344,6 +463,22 @@ impl PLType {
                 );
                 Ok(())
             }
+            PLType::Union(st) => {
+                if st.path == ctx.plmod.path {
+                    return Ok(());
+                }
+                if_not_modified_by!(
+                    st.modifier,
+                    TokenType::PUB,
+                    return expect_pub_err(
+                        super::diag::ErrorCode::EXPECT_PUBLIC_UNION,
+                        ctx,
+                        range,
+                        st.name.clone()
+                    )
+                );
+                Ok(())
+            }
             _ => Ok(()),
         }
     }
@@ -361,6 +496,7 @@ impl PLType {
             PLType::Pointer(_) => None,
             PLType::PlaceHolder(p) => Some(p.range),
             PLType::Trait(t) => Some(t.range),
+            PLType::Union(u) => Some(u.range),
         }
     }
 
@@ -433,6 +569,7 @@ pub struct FNValue {
     pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
     pub node: Option<Box<FuncDefNode>>,
     pub fntype: FnType,
+    pub body_range: Range,
 }
 impl TryFrom<PLType> for FNValue {
     type Error = ();
@@ -600,7 +737,7 @@ impl FNValue {
             },
             tags: None,
             deprecated: None,
-            range: self.range.to_diag_range(),
+            range: self.body_range.to_diag_range(),
             selection_range: self.range.to_diag_range(),
             children: None,
         }
@@ -654,6 +791,7 @@ pub struct STType {
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub derives: Vec<Arc<RefCell<PLType>>>,
     pub modifier: Option<(TokenType, Range)>,
+    pub body_range: Range,
 }
 
 impl STType {
@@ -729,12 +867,12 @@ impl STType {
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> STType {
+    ) -> Result<STType, PLDiag> {
         let name = self.append_name_with_generic();
         if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
             match &*pltype.borrow() {
                 PLType::Struct(st) => {
-                    return st.clone();
+                    return Ok(st.clone());
                 }
                 _ => unreachable!(),
             }
@@ -742,20 +880,19 @@ impl STType {
         let mut res = self.clone();
         res.name = name;
         ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Struct(res.clone()))));
-        res.ordered_fields = self
+        let (tps, errors): (Vec<_>, Vec<_>) = self
             .ordered_fields
             .iter()
             .map(|f| {
                 let mut nf = f.clone();
-                nf.typenode = f
-                    .typenode
-                    .get_type(ctx, builder)
-                    .unwrap()
-                    .borrow()
-                    .get_typenode();
-                nf
+                nf.typenode = f.typenode.get_type(ctx, builder)?.borrow().get_typenode();
+                Ok::<Field, PLDiag>(nf)
             })
-            .collect::<Vec<Field>>();
+            .partition(Result::is_ok);
+        if !errors.is_empty() {
+            return Err(errors.into_iter().map(Result::unwrap_err).next().unwrap());
+        }
+        res.ordered_fields = tps.into_iter().map(Result::unwrap).collect::<Vec<_>>();
         let mut field_pltps = vec![];
         res.ordered_fields.iter().for_each(|f| {
             field_pltps.push(f.typenode.get_type(ctx, builder).unwrap());
@@ -765,7 +902,7 @@ impl STType {
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
         pltype.replace(PLType::Struct(res.clone()));
-        res
+        Ok(res)
     }
     pub fn get_field_completions(&self, must_pub: bool) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
@@ -847,7 +984,7 @@ impl STType {
             kind: SymbolKind::STRUCT,
             tags: None,
             deprecated: None,
-            range: self.range.to_diag_range(),
+            range: self.body_range.to_diag_range(),
             selection_range: self.range.to_diag_range(),
             children: Some(children),
         }
@@ -882,6 +1019,7 @@ pub struct GenericType {
     pub range: Range,
     pub curpltype: Option<Arc<RefCell<PLType>>>,
     pub trait_impl: Option<Arc<RefCell<PLType>>>,
+    pub refs: Arc<MutVec<Location>>,
 }
 impl GenericType {
     pub fn set_type(&mut self, pltype: Arc<RefCell<PLType>>) {
@@ -906,7 +1044,7 @@ impl GenericType {
         ctx.add_type(name_in_map, pltype, range).unwrap();
     }
 }
-generic_impl!(FnType, STType);
+generic_impl!(FnType, STType, UnionType);
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceHolderType {
     pub name: String,

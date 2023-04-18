@@ -49,6 +49,7 @@ const DW_ATE_BOOLEAN: u32 = 0x02;
 const DW_ATE_FLOAT: u32 = 0x04;
 const DW_ATE_SIGNED: u32 = 0x05;
 const DW_ATE_UNSIGNED: u32 = 0x07;
+// pub const DW_TAG_union_type: u32 = 0x17;
 static ID: AtomicI64 = AtomicI64::new(0);
 // const DW_TAG_REFERENCE_TYPE: u32 = 16;
 fn get_dw_ate_encoding(pritp: &PriType) -> u32 {
@@ -265,7 +266,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
         let gcmod = root_ctx.plmod.submods.get("gc").unwrap_or(&root_ctx.plmod);
         let f: FNValue = gcmod
-            .get_type(malloc_fn)
+            .types
+            .get(malloc_fn)
             .unwrap()
             .borrow()
             .clone()
@@ -502,6 +504,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     fn get_llvm_block(&self, handle: BlockHandle) -> Option<BasicBlock<'ctx>> {
         self.block_table.borrow().get(&handle).copied()
     }
+
     fn get_pri_basic_type(&self, tp: &PriType) -> BasicTypeEnum<'ctx> {
         match tp {
             PriType::I8 => self.context.i8_type().into(),
@@ -548,7 +551,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn get_fn_type(&self, fnvalue: &FNValue, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
-        ctx.run_in_fn_mod(fnvalue, |ctx, fnvalue| {
+        ctx.run_in_type_mod(fnvalue, |ctx, fnvalue| {
             let mut param_types = vec![];
             for param_pltype in fnvalue.fntype.param_pltypes.iter() {
                 param_types.push(
@@ -574,9 +577,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     ctx,
                 )
                 .fn_type(&param_types, false);
-            Ok(fn_type)
+            fn_type
         })
-        .unwrap()
     }
     /// # get_basic_type_op
     /// get the basic type of the type
@@ -628,6 +630,17 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     })
                     .into()
             }),
+            PLType::Union(_) => {
+                // all unions are represented as a struct with a tag(i64) and an i8ptr
+                let fields = vec![
+                    self.context.i64_type().into(),
+                    self.context
+                        .i8_type()
+                        .ptr_type(AddressSpace::default())
+                        .into(),
+                ];
+                Some(self.context.struct_type(&fields, false).into())
+            }
         }
     }
     /// # get_ret_type
@@ -800,7 +813,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .borrow_mut()
                     .insert(x.get_st_full_name(), RefCell::new(vec![]));
                 let mut m = vec![];
-                ctx.run_in_st_mod(x, |ctx, x| {
+                ctx.run_in_type_mod(x, |ctx, x| {
                     m = x
                         .ordered_fields
                         .iter()
@@ -810,9 +823,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                             tp
                         })
                         .collect::<Vec<_>>();
-                    Ok(())
-                })
-                .unwrap();
+                });
                 let st = self
                     .dibuilder
                     .create_struct_type(
@@ -902,6 +913,22 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         .as_type(),
                 )
             }
+            PLType::Union(u) => {
+                let utp = self.get_basic_type_op(pltp, ctx).unwrap();
+                let tp = self.dibuilder.create_union_type(
+                    self.diunit.get_file().as_debug_info_scope(),
+                    &u.name,
+                    self.diunit.get_file(),
+                    u.range.start.line as u32 + 1,
+                    td.get_bit_size(&utp),
+                    td.get_abi_alignment(&utp),
+                    DIFlags::PUBLIC,
+                    &[], // TODO real elements
+                    0,
+                    &u.name,
+                );
+                Some(tp.as_type())
+            }
         }
     }
 
@@ -923,7 +950,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             return st;
         }
         let st = self.context.opaque_struct_type(&pltp.get_st_full_name());
-        ctx.run_in_st_mod(pltp, |ctx, pltp| {
+        ctx.run_in_type_mod(pltp, |ctx, pltp| {
             st.set_body(
                 &pltp
                     .ordered_fields
@@ -943,9 +970,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .collect::<Vec<_>>(),
                 false,
             );
-            Ok(())
-        })
-        .unwrap();
+        });
         st
     }
 
@@ -1039,6 +1064,16 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     }
     fn get_or_insert_fn_handle(&self, pltp: &FNValue, ctx: &mut Ctx<'a>) -> ValueHandle {
         self.get_llvm_value_handle(&self.get_or_insert_fn(pltp, ctx).as_any_value_enum())
+    }
+
+    fn get_or_insert_helper_fn_handle(&self, name: &str) -> ValueHandle {
+        if let Some(f) = self.module.get_function(name) {
+            self.get_llvm_value_handle(&f.as_any_value_enum())
+        } else {
+            let ftp = self.context.void_type().fn_type(&[], false);
+            let f = self.module.add_function(name, ftp, None);
+            self.get_llvm_value_handle(&f.as_any_value_enum())
+        }
     }
 
     fn get_or_add_global(
@@ -1508,8 +1543,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.discope
                 .set(f.get_subprogram().unwrap().as_debug_info_scope());
             // ctx.discope = currscope;
-            self.build_dbg_location(pos)
         }
+        self.build_dbg_location(pos)
     }
     fn build_sub_program(
         &self,
@@ -1734,5 +1769,55 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
 
     fn get_stack_root(&self, v: ValueHandle) -> ValueHandle {
         *self.heap_stack_map.borrow().get(&v).unwrap()
+    }
+
+    fn cast_primitives(&self, handle: ValueHandle, tp: &PriType, target: &PriType) -> ValueHandle {
+        let val = self.get_llvm_value(handle).unwrap();
+        let signed = tp.signed();
+        let tp = self.get_pri_basic_type(tp);
+        let target = self.get_pri_basic_type(target);
+        if tp.is_int_type() && target.is_int_type() {
+            let val = val.into_int_value();
+            let target = target.into_int_type();
+            let val = self
+                .builder
+                .build_int_cast_sign_flag(val, target, signed, "cast");
+            self.get_llvm_value_handle(&val.into())
+        } else if tp.is_float_type() && target.is_float_type() {
+            let val = val.into_float_value();
+            let target = target.into_float_type();
+            let val = self.builder.build_float_cast(val, target, "cast");
+            self.get_llvm_value_handle(&val.into())
+        } else if tp.is_int_type() && target.is_float_type() {
+            let val = val.into_int_value();
+            let target = target.into_float_type();
+            if signed {
+                let val = self.builder.build_signed_int_to_float(val, target, "cast");
+                self.get_llvm_value_handle(&val.into())
+            } else {
+                let val = self
+                    .builder
+                    .build_unsigned_int_to_float(val, target, "cast");
+                self.get_llvm_value_handle(&val.into())
+            }
+        } else if tp.is_float_type() && target.is_int_type() {
+            let val = val.into_float_value();
+            let target = target.into_int_type();
+            if signed {
+                let val = self.builder.build_float_to_signed_int(val, target, "cast");
+                self.get_llvm_value_handle(&val.into())
+            } else {
+                let val = self
+                    .builder
+                    .build_float_to_unsigned_int(val, target, "cast");
+                self.get_llvm_value_handle(&val.into())
+            }
+        } else {
+            unreachable!()
+        }
+    }
+    fn is_ptr(&self, v: ValueHandle) -> bool {
+        let val = self.get_llvm_value(v).unwrap();
+        val.get_type().is_pointer_type()
     }
 }

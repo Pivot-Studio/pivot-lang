@@ -6,7 +6,10 @@ use nom::{
     IResult,
 };
 
-use crate::{ast::node::function::FuncDefNode, ast::tokens::TokenType};
+use crate::{
+    ast::node::function::FuncDefNode,
+    ast::{node::interface::MultiTraitNode, tokens::TokenType},
+};
 use crate::{ast::node::interface::TraitBoundNode, nomparser::Span};
 
 use internal_macro::{test_parser, test_parser_error};
@@ -135,7 +138,7 @@ pub fn call_function_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEn
             tag_token_symbol(TokenType::LPAREN),
             del_newline_or_space!(separated_list0(
                 tag_token_symbol(TokenType::COMMA),
-                del_newline_or_space!(logic_exp)
+                del_newline_or_space!(general_exp)
             )),
             tag_token_symbol(TokenType::RPAREN),
             many0(comment),
@@ -148,9 +151,16 @@ pub fn call_function_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEn
 
 pub fn trait_bound(input: Span) -> IResult<Span, Box<TraitBoundNode>> {
     map_res(
-        tuple((identifier, tag_token_symbol(TokenType::COLON), type_name)),
-        |(generic, _, impl_trait)| {
-            let range = generic.range().start.to(impl_trait.range().end);
+        tuple((
+            identifier,
+            opt(preceded(tag_token_symbol(TokenType::COLON), multi_trait)),
+        )),
+        |(generic, impl_trait)| {
+            let range = if let Some(impl_trait) = &impl_trait {
+                generic.range.start.to(impl_trait.range().end)
+            } else {
+                generic.range
+            };
             res_box(Box::new(TraitBoundNode {
                 generic,
                 impl_trait,
@@ -158,4 +168,13 @@ pub fn trait_bound(input: Span) -> IResult<Span, Box<TraitBoundNode>> {
             }))
         },
     )(input)
+}
+
+pub fn multi_trait(input: Span) -> IResult<Span, Box<MultiTraitNode>> {
+    map_res(type_name, |traits| {
+        res_box(Box::new(MultiTraitNode {
+            range: traits.range(),
+            traits,
+        }))
+    })(input)
 }

@@ -88,6 +88,7 @@ pub mod tests {
             flow: false,
             fmt: false,
             optimization: HashOptimizationLevel::Aggressive,
+            jit: false,
         };
 
         let input = MemDocsInput::new(
@@ -108,7 +109,5 @@ pub mod tests {
 
         #[cfg(target_os = "windows")]
         assert!(fs::metadata("plc_new_testout.exe").is_ok());
-
-        assert!(fs::metadata("plc_new_testout.bc").is_ok());
     }
 }

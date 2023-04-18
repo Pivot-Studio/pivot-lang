@@ -2,13 +2,14 @@ use crate::{ast::node::Num, utils::read_config::enter};
 
 use super::{
     node::{
+        cast::{AsNode, IsNode},
         comment::CommentNode,
         control::{BreakNode, ContinueNode, ForNode, IfNode, WhileNode},
         error::{ErrorNode, StErrorNode},
         function::{FuncCallNode, FuncDefNode},
         global::GlobalNode,
         implement::ImplNode,
-        interface::{TraitBoundNode, TraitDefNode},
+        interface::{MultiTraitNode, TraitBoundNode, TraitDefNode},
         macro_nodes::{MacroCallNode, MacroLoopStatementNode, MacroNode, MacroRuleNode},
         operator::{BinOpNode, TakeOpNode, UnaryOpNode},
         pkg::{ExternIdNode, UseNode},
@@ -25,6 +26,7 @@ use super::{
             ArrayInitNode, ArrayTypeNameNode, GenericDefNode, GenericParamNode, PointerTypeNode,
             StructDefNode, StructInitFieldNode, StructInitNode, TypeNameNode, TypedIdentifierNode,
         },
+        union::UnionDefNode,
         FmtTrait, NodeEnum, TypeNodeEnum,
     },
     tokens::TokenType,
@@ -595,19 +597,26 @@ impl FmtBuilder {
         if let Num::Int(x) = node.value {
             self.token(x.to_string().as_str());
         } else if let Num::Float(x) = node.value {
-            self.token(x.to_string().as_str());
+            let s = x.to_string();
+            if s.contains('.') {
+                self.token(s.as_str());
+            } else {
+                self.token(&format!("{}.", s));
+            }
         }
     }
     pub fn parse_generic_def_node(&mut self, node: &GenericDefNode) {
-        self.l_angle_bracket();
-        self.token(
-            &node.generics[0..node.generics_size]
+        if node.generics_size > 0 {
+            self.l_angle_bracket();
+            node.generics[0..node.generics_size - 1]
                 .iter()
-                .map(|g| g.name.clone())
-                .collect::<Vec<_>>()
-                .join("|"),
-        );
-        self.r_angle_bracket();
+                .for_each(|g| {
+                    g.format(self);
+                    self.token("|");
+                });
+            node.generics[node.generics_size - 1].format(self);
+            self.r_angle_bracket();
+        }
     }
     pub fn parse_string_node(&mut self, node: &StringNode) {
         self.token(&format!("{:?}", node.content));
@@ -677,8 +686,56 @@ impl FmtBuilder {
     }
     pub fn parse_trait_bound_node(&mut self, node: &TraitBoundNode) {
         node.generic.format(self);
-        self.token(":");
+        if let Some(impl_trait) = &node.impl_trait {
+            self.token(":");
+            self.space();
+            impl_trait.format(self);
+        }
+    }
+    pub fn parse_multi_trait_node(&mut self, node: &MultiTraitNode) {
+        node.traits.format(self)
+    }
+    pub fn parse_union_def_node(&mut self, node: &UnionDefNode) {
+        self.prefix();
+        self.token("type");
         self.space();
-        node.impl_trait.format(self);
+        self.token(node.name.name.as_str());
+        if let Some(g) = node.generics.as_ref() {
+            g.format(self);
+        }
+        self.space();
+        self.equal();
+        self.space();
+        for (i, m) in node.sum_types.iter().enumerate() {
+            if i > 0 {
+                self.space();
+                self.token("|");
+                self.space();
+            }
+            m.format(self);
+        }
+        self.semicolon();
+        self.enter();
+    }
+    pub fn parse_as_node(&mut self, node: &AsNode) {
+        node.expr.format(self);
+        self.space();
+        self.token("as");
+        self.space();
+        node.ty.format(self);
+        if let Some((t, _)) = node.tail {
+            if t == TokenType::QUESTION {
+                self.token("?");
+            } else {
+                self.token("!");
+            }
+        }
+    }
+    pub fn parse_is_node(&mut self, node: &IsNode) {
+        node.expr.format(self);
+        self.space();
+        self.token("is");
+        self.space();
+        node.ty.format(self);
     }
 }

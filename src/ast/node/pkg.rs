@@ -4,21 +4,19 @@ use std::sync::Arc;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::diag::PLDiag;
 use crate::ast::plmod::get_ns_path_completions;
-use crate::{
-    ast::{
-        ctx::Ctx,
-        diag::ErrorCode,
-        node::{deal_line, tab},
-        pltype::PLType,
-    },
-    plv,
+use crate::ast::{
+    ctx::Ctx,
+    diag::ErrorCode,
+    node::{deal_line, tab},
+    pltype::PLType,
 };
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
 
 use super::macro_nodes::MacroNode;
+use super::node_result::NodeResultBuilder;
 use super::PrintTrait;
-use super::{primary::VarNode, Node, NodeResult, PLValue, TerminatorEnum};
+use super::{primary::VarNode, Node, NodeResult};
 #[node]
 pub struct UseNode {
     pub ids: Vec<Box<VarNode>>,
@@ -59,7 +57,7 @@ impl Node for UseNode {
                     path = path.join(&dep.path);
                 }
                 for i in 1..self.ids.len() {
-                    path = path.join(&self.ids[i].get_name(ctx));
+                    path = path.join(self.ids[i].get_name(ctx));
                 }
             }
         }
@@ -67,6 +65,18 @@ impl Node for UseNode {
             ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
         }
         if !path.with_extension("pi").exists() {
+            let mut path = path.with_extension("");
+            if !path.exists() {
+                path = path.parent().unwrap().to_path_buf();
+            }
+            if self.ids.len() > 1 {
+                ctx.if_completion(self.range, || {
+                    if self.singlecolon {
+                        return vec![];
+                    }
+                    get_ns_path_completions(path.to_str().unwrap())
+                });
+            }
             ctx.add_diag(self.range.new_err(ErrorCode::UNRESOLVED_MODULE));
         }
         ctx.if_completion(self.range, || {
@@ -96,7 +106,7 @@ impl Node for UseNode {
         if !self.complete {
             return Err(ctx.add_diag(self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION)));
         }
-        Ok((None, None, TerminatorEnum::None))
+        Ok(Default::default())
     }
 }
 
@@ -148,6 +158,10 @@ impl Node for ExternIdNode {
                 // eprintln!("comp {:?}", completions);
             });
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION)));
+        } else {
+            ctx.if_completion(self.range, || {
+                ctx.get_completions_in_ns(&self.ns[0].get_name(ctx))
+            });
         }
         for id in &self.ns {
             ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
@@ -165,37 +179,25 @@ impl Node for ExternIdNode {
             ctx.push_semantic_token(self.id.range, SemanticTokenType::VARIABLE, 0);
             let pltype = symbol.tp.clone();
             ctx.set_glob_refs(&plmod.get_full_name(&self.id.get_name(ctx)), self.id.range);
-            // ctx.set_if_refs(symbol.loc.clone(), self.range);
             ctx.send_if_go_to_def(self.range, symbol.range, plmod.path.clone());
             let g = ctx.get_or_add_global(
                 &plmod.get_full_name(&self.id.get_name(ctx)),
                 symbol.tp.clone(),
                 builder,
             );
-            return Ok((
-                Some({
-                    let mut res: PLValue = plv!(g);
-                    res.set_const(true);
-                    res
-                }),
-                Some(pltype),
-                TerminatorEnum::None,
-            ));
+            return g.new_output(pltype).set_const().to_result();
         }
-        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx)) {
-            let range = &tp.borrow().get_range();
-            let re = match &*tp.clone().borrow() {
+        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {
+            let mtp = tp.clone();
+            let re = match &*mtp.borrow() {
                 PLType::Fn(_) => {
                     // 必须是public的
                     _ = tp.borrow().expect_pub(ctx, self.range);
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
-                    Ok((None, Some(tp), TerminatorEnum::None))
+                    usize::MAX.new_output(tp).to_result()
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION))),
             };
-            if let Some(range) = range {
-                ctx.send_if_go_to_def(self.range, *range, plmod.path.clone());
-            }
             return re;
         }
         Err(ctx.add_diag(self.range.new_err(ErrorCode::SYMBOL_NOT_FOUND)))
@@ -220,6 +222,10 @@ impl ExternIdNode {
                 ctx.get_completions_in_ns(&self.id.get_name(ctx))
             });
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION)));
+        } else {
+            ctx.if_completion(self.range, || {
+                ctx.get_completions_in_ns(&self.ns[0].get_name(ctx))
+            });
         }
         let mut plmod = &ctx.plmod;
         for ns in self.ns.iter() {
@@ -230,11 +236,11 @@ impl ExternIdNode {
                 return Err(ctx.add_diag(ns.range.new_err(ErrorCode::UNRESOLVED_MODULE)));
             }
         }
-        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx)) {
+        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {
             // 必须是public的
             _ = tp.borrow().expect_pub(ctx, self.range);
             let re = match *tp.clone().borrow() {
-                PLType::Struct(_) | PLType::Trait(_) => Ok((None, Some(tp), TerminatorEnum::None)),
+                PLType::Struct(_) | PLType::Trait(_) => usize::MAX.new_output(tp).to_result(),
                 _ => unreachable!(),
             };
             return re;

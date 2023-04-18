@@ -3,6 +3,7 @@ mod _immix {
     use crate::logger::SimpleLogger;
     use immix::gc_malloc;
     use internal_macro::is_runtime;
+    use log::trace;
 
     #[cfg(feature = "jit")]
     pub fn reg() {
@@ -13,8 +14,9 @@ mod _immix {
 
     #[is_runtime]
     fn immix_gc_init(ptr: *mut u8) {
+        trace!("immix gc init, stackmap: {:p}", ptr);
         SimpleLogger::init_from_env_default("GC_LOG", log::LevelFilter::Error);
-
+        #[cfg(not(feature = "jit"))]
         immix::gc_init(ptr)
     }
 
@@ -36,17 +38,19 @@ mod _immix {
     #[is_runtime] // jit注册
     impl DioGC {
         pub unsafe fn malloc(size: u64, obj_type: u8) -> *mut u8 {
+            trace!("malloc: {} {}", size, obj_type);
             #[cfg(any(test, debug_assertions))] // enable eager gc in test mode
             immix::gc_collect();
-            // println!("malloc: {:p} {} {}", ptr, size, obj_type);
             gc_malloc(size as usize, obj_type)
         }
 
         pub unsafe fn malloc_no_collect(size: u64, obj_type: u8) -> *mut u8 {
+            trace!("malloc_no_collect: {} {}", size, obj_type);
             immix::gc_malloc_no_collect(size as usize, obj_type)
         }
 
         pub unsafe fn collect() {
+            trace!("manual collect");
             immix::gc_collect()
         }
         pub fn about() {

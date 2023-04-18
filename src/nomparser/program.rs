@@ -21,7 +21,7 @@ use crate::{
     ast::{node::types::TypedIdentifierNode, tokens::TokenType},
 };
 
-use super::{implement::impl_def, macro_parse::macro_parser, *};
+use super::{implement::impl_def, macro_parse::macro_parser, union::union_stmt, *};
 
 pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let old = input;
@@ -33,6 +33,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let mut uses = vec![];
     let mut traits = vec![];
     let mut trait_impls = vec![];
+    let mut unions = vec![];
     loop {
         let top = top_level_statement(input);
         if let Ok((i, t)) = top {
@@ -69,7 +70,10 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                         if let Some(g) = &mut mth.generics {
                             g.generics.append(generics_from_impl)
                         } else {
-                            mth.generics = im.generics.clone()
+                            mth.generics = im.generics.clone();
+                            if let Some(g) = &mut mth.generics {
+                                g.generics_size = 0;
+                            }
                         }
                         mth.id.name = format!("|{}::{}", imname, mth.id.name);
                         mth.paralist.insert(
@@ -95,6 +99,12 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     traits.push(tr.clone());
                     nodes.push(Box::new(tr.into()));
                 }
+                TopLevel::Union(u) => {
+                    if let NodeEnum::UnionDefNode(un) = *u.clone() {
+                        unions.push(un.clone());
+                    }
+                    nodes.push(u);
+                }
             }
             input = i;
         } else if let Err(err) = top {
@@ -115,6 +125,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
             uses,
             traits,
             trait_impls,
+            unions,
         }
         .into(),
     );
@@ -145,6 +156,9 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
         }),
         map_res(del_newline_or_space!(trait_def), |c| {
             Ok::<_, ()>(Box::new(TopLevel::TraitDef(*c)))
+        }),
+        map_res(del_newline_or_space!(union_stmt), |c| {
+            Ok::<_, ()>(Box::new(TopLevel::Union(c)))
         }),
         map_res(
             del_newline_or_space!(except(

@@ -29,7 +29,7 @@ pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
             tag_token_symbol(TokenType::LBRACKET),
             separated_list0(
                 tag_token_symbol(TokenType::COMMA),
-                del_newline_or_space!(logic_exp),
+                del_newline_or_space!(general_exp),
             ),
             tag_token_symbol(TokenType::RBRACKET),
         )),
@@ -48,7 +48,7 @@ pub fn array_element_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEn
     delspace(map_res(
         tuple((
             tag_token_symbol(TokenType::LBRACKET),
-            opt(logic_exp),
+            opt(general_exp),
             tag_token_symbol(TokenType::RBRACKET),
             many0(comment),
         )),

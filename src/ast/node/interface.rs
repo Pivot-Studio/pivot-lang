@@ -12,9 +12,26 @@ use indexmap::IndexMap;
 use internal_macro::node;
 use rustc_hash::FxHashMap;
 #[node]
+pub struct MultiTraitNode {
+    pub traits: Box<TypeNodeEnum>,
+}
+impl MultiTraitNode {
+    pub fn merge_traits<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
+        let trait_pltype = self.traits.get_type(ctx, builder)?;
+        if matches!(*trait_pltype.borrow(), PLType::Trait(_)) {
+            return Ok(trait_pltype);
+        }
+        Err(ctx.add_diag(self.range().new_err(ErrorCode::EXPECT_TRAIT_TYPE)))
+    }
+}
+#[node]
 pub struct TraitBoundNode {
     pub generic: Box<VarNode>,
-    pub impl_trait: Box<TypeNodeEnum>,
+    pub impl_trait: Option<Box<MultiTraitNode>>,
 }
 impl TraitBoundNode {
     pub fn set_traits<'a, 'ctx, 'b>(
@@ -26,20 +43,27 @@ impl TraitBoundNode {
         if !generic_map.contains_key(&self.generic.name) {
             return Err(ctx.add_diag(self.generic.range().new_err(ErrorCode::GENERIC_NOT_FOUND)));
         }
-        let trait_pltype = self.impl_trait.get_type(ctx, builder)?;
-        if matches!(*trait_pltype.borrow(), PLType::Trait(_)) {
+        if let Some(impl_trait) = &self.impl_trait {
+            let trait_pltype = impl_trait.merge_traits(ctx, builder)?;
             let generic_type = generic_map.get(&self.generic.name).unwrap();
             if let PLType::Generic(generic_type) = &mut *generic_type.borrow_mut() {
+                if generic_type.trait_impl.is_some() {
+                    return Err(
+                        ctx.add_diag(impl_trait.range().new_err(ErrorCode::DUPLICATE_TRAIT_BOUND))
+                    );
+                }
                 generic_type.trait_impl = Some(trait_pltype);
                 return Ok(());
             }
             unreachable!()
         }
-        Err(ctx.add_diag(
-            self.impl_trait
-                .range()
-                .new_err(ErrorCode::EXPECT_TRAIT_TYPE),
-        ))
+        Ok(())
+    }
+    pub fn emit_highlight(&self, ctx: &mut Ctx) {
+        ctx.push_semantic_token(self.generic.range, SemanticTokenType::TYPE, 0);
+        if let Some(impl_trait) = &self.impl_trait {
+            ctx.push_semantic_token(impl_trait.range(), SemanticTokenType::TYPE, 0);
+        }
     }
 }
 #[node]
@@ -75,7 +99,7 @@ impl Node for TraitDefNode {
         for method in &self.methods {
             method.emit_highlight(ctx);
         }
-        Ok((None, None, TerminatorEnum::None))
+        Ok(Default::default())
     }
 }
 
@@ -91,10 +115,11 @@ impl TraitDefNode {
             path: ctx.plmod.path.clone(),
             fields: FxHashMap::default(),
             ordered_fields: vec![],
-            range: self.range(),
+            range: self.id.range(),
             doc: vec![],
             derives: vec![],
             modifier: self.modifier,
+            body_range: self.range(),
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
@@ -133,7 +158,7 @@ impl TraitDefNode {
             modifier: None,
         });
         i += 1;
-        let pltype = ctx.get_type(self.id.name.as_str(), self.range)?;
+        let pltype = ctx.get_type(self.id.name.as_str(), self.id.range)?;
         let clone_map = ctx.plmod.types.clone();
         for field in self.methods.iter() {
             let mut tp = field.clone();
@@ -181,7 +206,6 @@ impl TraitDefNode {
             st.derives = derives;
             // st.doc = self.doc.clone();
         }
-        ctx.set_if_refs_tp(pltype.clone(), self.id.range);
         ctx.add_doc_symbols(pltype);
         // ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
         Ok(())

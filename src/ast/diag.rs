@@ -88,6 +88,7 @@ define_error!(
     GENERIC_CANNOT_BE_INFER = "generic can not be infer",
     RECEIVER_CANNOT_BE_INFER = "receiver can not be infer",
     DUPLICATE_METHOD = "duplicate method",
+    DUPLICATE_TRAIT_BOUND = "duplicate trait bound",
     GENERIC_PARAM_LEN_MISMATCH = "generic param len mismatch",
     GENERIC_NOT_FOUND = "generic not found",
     NOT_GENERIC_TYPE = "not generic type",
@@ -110,6 +111,13 @@ define_error!(
     NO_MACRO_LOOP_VAR = "no macro loop var used in macro loop block",
     MACRO_LOOP_VAR_USED_OUT_OF_LOOP = "macro loop var used out of loop",
     MACRO_VAR_NOT_FOUND = "macro var not found",
+    EXPECT_PUBLIC_UNION = "expect public union",
+    INVALID_UNION_CAST = "invalid union cast",
+    INVALID_DIRECT_UNION_CAST = "invalid direct union cast",
+    UNION_DOES_NOT_CONTAIN_TYPE = "union does not contain type",
+    INVALID_IS_EXPR = "invalid `is` expression",
+    INVALID_CAST = "invalid cast",
+    METHOD_NOT_FOUND = "method not found"
 );
 macro_rules! define_warn {
     ($(
@@ -216,8 +224,8 @@ impl PLDiag {
             .labels
             .iter()
             .find(|label| {
-                label.range.start == self.raw.range.start
-                    && self.raw.range.end == label.range.end
+                label.range.start.line == self.raw.range.start.line
+                    && self.raw.range.end.line == label.range.end.line
                     && label.file == path
             })
             .or_else(|| {
@@ -286,7 +294,16 @@ impl PLDiag {
                 DiagnosticSeverity::ERROR,
                 code as i32,
                 Some(PL_DIAG_SOURCE.to_string()),
-                ERR_MSG[&code].to_string(),
+                format!(
+                    "{} {}",
+                    ERR_MSG[&code],
+                    &self
+                        .raw
+                        .help
+                        .clone()
+                        .map(|h| format!("({})", h))
+                        .unwrap_or_default()
+                ),
             ),
             DiagCode::Warn(code) => {
                 let mut warn = Diagnostic::new_with_code_number(
@@ -294,7 +311,16 @@ impl PLDiag {
                     DiagnosticSeverity::WARNING,
                     code as i32,
                     Some(PL_DIAG_SOURCE.to_string()),
-                    WARN_MSG[&code].to_string(),
+                    format!(
+                        "{} {}",
+                        WARN_MSG[&code],
+                        &self
+                            .raw
+                            .help
+                            .clone()
+                            .map(|h| format!("({})", h))
+                            .unwrap_or_default()
+                    ),
                 );
                 if code == WarnCode::UNUSED_FUNCTION
                     || code == WarnCode::UNUSED_VARIABLE
@@ -327,6 +353,12 @@ impl PLDiag {
             p.to_string()
         };
         diags.entry(p).or_default().push(d);
+    }
+    pub fn get_range(&self) -> Range {
+        self.raw.range
+    }
+    pub fn get_diag_code(&self) -> DiagCode {
+        self.raw.code
     }
     pub fn new_error(range: Range, code: ErrorCode) -> Self {
         PLDiag {

@@ -58,8 +58,8 @@ impl Node for ImplNode {
                 ctx.if_completion(bt.range, || ctx.get_type_completions());
                 return Err(ctx.add_diag(bt.range.new_err(ErrorCode::EXPECT_TYPE)));
             }
-            let (_, pltype, _) = bt.id.as_ref().unwrap().get_type(ctx)?;
-            let st_pltype = pltype.unwrap();
+            let v = bt.id.as_ref().unwrap().get_type(ctx)?.get_value();
+            let st_pltype = v.unwrap().get_ty();
             if let PLType::Struct(sttp) = &*st_pltype.borrow() {
                 ctx.send_if_go_to_def(self.target.range(), sttp.range, sttp.path.clone());
             };
@@ -85,11 +85,11 @@ impl Node for ImplNode {
             if res.is_err() {
                 continue;
             }
-            let (_, pltype, _) = res.unwrap();
+            let pltype = res.unwrap().get_value();
             if pltype.is_none() {
                 continue;
             }
-            let tmp = pltype.unwrap();
+            let tmp = pltype.unwrap().get_ty();
             if self.impl_trait.is_some() {
                 // 检查是否有modifier
                 if let Some((m, r)) = method.modifier {
@@ -188,6 +188,6 @@ impl Node for ImplNode {
             children: Some(method_docsymbols),
         };
         ctx.plmod.doc_symbols.borrow_mut().push(docsymbol);
-        Ok((None, None, TerminatorEnum::None))
+        Ok(Default::default())
     }
 }

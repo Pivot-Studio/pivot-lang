@@ -44,6 +44,7 @@ pub mod error;
 #[macro_use]
 pub mod macros;
 pub mod array;
+pub mod cast;
 pub mod comment;
 pub mod constval;
 pub mod control;
@@ -59,6 +60,7 @@ pub mod statement;
 pub mod string_literal;
 pub mod structure;
 pub mod types;
+pub mod union;
 
 #[derive(Debug, Clone)]
 pub enum TopLevel {
@@ -67,6 +69,7 @@ pub enum TopLevel {
     GlobalDef(GlobalNode),
     Common(Box<NodeEnum>),
     Use(Box<NodeEnum>),
+    Union(Box<NodeEnum>),
     ImplDef(ImplNode),
     TraitDef(TraitDefNode),
 }
