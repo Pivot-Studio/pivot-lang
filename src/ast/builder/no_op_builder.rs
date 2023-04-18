@@ -9,9 +9,11 @@ use super::{IRBuilder, ValueHandle};
 
 /// 什么都不干的builder，用来测试和lsp模式
 #[derive(Default)]
-pub struct NoOpBuilder {}
+pub struct NoOpBuilder<'a, 'ctx> {
+    _phantom: std::marker::PhantomData<(&'a (), &'ctx ())>,
+}
 
-impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
+impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     fn bitcast(
         &self,
         _ctx: &mut Ctx<'a>,
@@ -289,7 +291,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
 
     fn build_float_compare(
         &self,
-        _op: inkwell::FloatPredicate,
+        _op: super::FloatPredicate,
         _lhs: super::ValueHandle,
         _rhs: super::ValueHandle,
         _name: &str,
@@ -299,7 +301,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
 
     fn build_int_compare(
         &self,
-        _op: inkwell::IntPredicate,
+        _op: super::IntPredicate,
         _lhs: super::ValueHandle,
         _rhs: super::ValueHandle,
         _name: &str,

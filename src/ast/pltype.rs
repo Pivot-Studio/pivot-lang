@@ -31,13 +31,6 @@ use super::range::Range;
 use immix::ObjectType;
 use indexmap::IndexMap;
 
-use inkwell::types::BasicMetadataTypeEnum;
-use inkwell::types::BasicType;
-use inkwell::types::BasicTypeEnum;
-use inkwell::types::FunctionType;
-
-use inkwell::types::VoidType;
-
 use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
@@ -502,24 +495,6 @@ impl PLType {
 
     pub fn is_void(&self) -> bool {
         matches!(self, PLType::Void)
-    }
-}
-
-pub enum RetTypeEnum<'ctx> {
-    Void(VoidType<'ctx>),
-    Basic(BasicTypeEnum<'ctx>),
-}
-
-impl<'ctx> RetTypeEnum<'ctx> {
-    pub fn fn_type(
-        &self,
-        param_types: &[BasicMetadataTypeEnum<'ctx>],
-        is_var_args: bool,
-    ) -> FunctionType<'ctx> {
-        match self {
-            RetTypeEnum::Void(t) => t.fn_type(param_types, is_var_args),
-            RetTypeEnum::Basic(t) => t.fn_type(param_types, is_var_args),
-        }
     }
 }
 

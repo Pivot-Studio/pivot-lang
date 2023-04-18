@@ -482,7 +482,7 @@ pub(crate) fn handle_errors(db: &dyn Db, docs: MemDocsInput) {
                 format!("compile failed: there are {} errors", errs_num).bright_red()
             );
             println!("{}", dot::TOOMANYERROR);
-            return;
+            
         }
     }
 }

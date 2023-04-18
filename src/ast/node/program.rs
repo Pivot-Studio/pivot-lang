@@ -3,7 +3,9 @@ use super::function::FuncDefNode;
 use super::types::StructDefNode;
 use super::*;
 use crate::ast::accumulators::*;
+#[cfg(feature = "llvm")]
 use crate::ast::builder::llvmbuilder::create_llvm_deps;
+#[cfg(feature = "llvm")]
 use crate::ast::builder::llvmbuilder::LLVMBuilder;
 use crate::ast::builder::no_op_builder::NoOpBuilder;
 use crate::ast::builder::BuilderEnum;
@@ -19,6 +21,7 @@ use crate::lsp::text;
 use crate::utils::read_config::ConfigWrapper;
 use crate::Db;
 use colored::Colorize;
+#[cfg(feature = "llvm")]
 use inkwell::context::Context;
 
 use internal_macro::node;
@@ -401,10 +404,7 @@ mod salsa_structs;
 #[salsa::tracked(lru = 32)]
 pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     log::info!("emit_file: {}", params.fullpath(db),);
-    let context = &Context::create();
-    let (a, b, c, d, e) = create_llvm_deps(context, params.dir(db), params.file(db));
     let v = RefCell::new(FxHashSet::default());
-    let builder = LLVMBuilder::new(context, &a, &b, &c, &d, &e);
     let mut ctx = ctx::Ctx::new(
         params.fullpath(db),
         &v,
@@ -419,16 +419,27 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         ctx.plmod.import_all_public_symbols_from(&builtin_mod);
     }
     let m = &mut ctx;
+    #[cfg(feature = "llvm")]
+    let context = &Context::create();
+    #[cfg(feature = "llvm")]
+    let (a, b, c, d, e) = create_llvm_deps(context, params.dir(db), params.file(db));
+    let builder = {
+        if !params.params(db).is_compile(db) {
+            let noop = NoOpBuilder::default();
+            noop.into()
+        } else {
+            #[cfg(not(feature = "llvm"))]
+            unreachable!("llvm feature is not enabled");
+            #[cfg(feature = "llvm")]
+            {
+                let builder = LLVMBuilder::new(context, &a, &b, &c, &d, &e);
+                builder.into()
+            }
+        }
+    };
     let node = params.node(db);
     let mut nn = node.node(db);
-    let mut builder = &builder.into();
-    let noop = NoOpBuilder::default();
-    let noop = noop.into();
-    if !params.params(db).is_compile(db) {
-        log::info!("not in compile mode, using no-op builder");
-        builder = &noop;
-    }
-    let _ = nn.emit(m, builder);
+    let _ = nn.emit(m, &builder);
     Diagnostics::push(
         db,
         (

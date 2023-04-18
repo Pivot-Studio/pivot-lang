@@ -1,12 +1,8 @@
 use super::node::program::ModWrapper;
+#[cfg(feature = "llvm")]
+use crate::ast::pass::{IS_JIT, MAP_NAMES};
 use crate::{
-    ast::{
-        accumulators::ModBuffer,
-        builder::llvmbuilder::get_target_machine,
-        diag::handle_errors,
-        node::program::Program,
-        pass::{IS_JIT, MAP_NAMES},
-    },
+    ast::{accumulators::ModBuffer, diag::handle_errors, node::program::Program},
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
     utils::read_config::get_config_path,
@@ -14,6 +10,7 @@ use crate::{
 };
 use colored::Colorize;
 use indicatif::{ProgressBar, ProgressDrawTarget};
+#[cfg(feature = "llvm")]
 use inkwell::{
     context::Context,
     module::Module,
@@ -34,7 +31,6 @@ mod options;
 
 pub use options::*;
 mod progress;
-
 pub use progress::*;
 #[cfg(feature = "jit")]
 mod jit;
@@ -93,6 +89,7 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
     Some(program.emit(db))
 }
 
+#[cfg(feature = "llvm")]
 pub fn run_pass(llvmmod: &Module, op: OptimizationLevel) {
     let pass_manager_builder = PassManagerBuilder::create();
     pass_manager_builder.set_optimization_level(op);
@@ -118,6 +115,13 @@ pub fn run_pass(llvmmod: &Module, op: OptimizationLevel) {
     mpm.run_on(llvmmod);
 }
 
+#[cfg(not(feature = "llvm"))]
+#[salsa::tracked]
+pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
+    unimplemented!()
+}
+
+#[cfg(feature = "llvm")]
 #[salsa::tracked]
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let total_steps = if op.jit { 2 } else { 3 };
@@ -142,7 +146,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
 
     let mut objs = vec![];
     let ctx = Context::create();
-    let tm = get_target_machine(op.optimization.to_llvm());
+    let tm = crate::ast::builder::llvmbuilder::get_target_machine(op.optimization.to_llvm());
     let llvmmod = ctx.create_module("main");
     let mut set = FxHashSet::default();
     let pb = ProgressBar::new(mods.len() as u64);

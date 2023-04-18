@@ -4,7 +4,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use lazy_static::lazy_static;
 
 lazy_static! {
-    pub static ref COMPILE_PROGRESS: ProgressBar = { ProgressBar::hidden() };
+    pub static ref COMPILE_PROGRESS: ProgressBar = ProgressBar::hidden();
 }
 
 pub(crate) static LOOKING_GLASS: Emoji<'_, '_> = Emoji("🔍  ", ":-)");

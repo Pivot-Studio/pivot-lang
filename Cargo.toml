@@ -7,15 +7,15 @@ authors = ["The pivot-lang Authors"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-inkwell = { version = "0.1", features = ["llvm14-0", "no-libffi-linking"] }
+inkwell = { version = "0.1", optional = true, features = ["llvm14-0", "no-libffi-linking"] }
 indexmap = "1.9"
 lazy_static = "1.4"
 paste = "1.0"
-llvm-sys = "140"
-internal_macro = { path = "./internal_macro" }
+llvm-sys = { version = "140", optional = true }
+internal_macro = { path = "./internal_macro", default-features = false }
 pl_linker = { path = "./pl_linker" }
 vm = { path = "./vm", optional = true, features = ["jit"] }
-immix = { path = "./immix", features = ["llvm_gc_plugin", "llvm_stackmap"] }
+immix = { path = "./immix", optional = true, features = ["llvm_gc_plugin", "llvm_stackmap"] }
 nom_locate = "4.0"
 rowan = "0.15"
 dissimilar = "1.0"
@@ -50,8 +50,9 @@ features = ["alloc"]
 
 
 [features]
-default = ["static", "jit"]
-jit = ["vm"]
+default = ["static", "jit", "llvm"]
+jit = ["vm","internal_macro/jit", "llvm"]
+llvm = ["inkwell", "llvm-sys", "immix"]
 static = ["immix/auto_gc"]
 
 [[bin]]

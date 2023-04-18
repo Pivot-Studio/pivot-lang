@@ -546,7 +546,7 @@ mod test {
         );
         assert!(
             crate::ast::compiler::run(
-                &PathBuf::from(outplb).as_path(),
+                PathBuf::from(outplb).as_path(),
                 inkwell::OptimizationLevel::None,
             ) == 0,
             "jit compiled program exit with non-zero status"

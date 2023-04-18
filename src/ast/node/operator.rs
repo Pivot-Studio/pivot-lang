@@ -4,6 +4,7 @@ use super::node_result::NodeResultBuilder;
 use super::primary::VarNode;
 use super::*;
 
+use super::super::builder::IntPredicate;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
@@ -14,7 +15,6 @@ use crate::ast::pltype::PriType;
 use crate::ast::tokens::TokenType;
 use crate::format_label;
 use crate::handle_calc;
-use inkwell::IntPredicate;
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
 #[node]

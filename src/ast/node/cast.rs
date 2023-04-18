@@ -1,6 +1,6 @@
 use std::{cell::RefCell, sync::Arc};
 
-use inkwell::IntPredicate;
+use super::super::builder::IntPredicate;
 use internal_macro::node;
 
 use crate::{

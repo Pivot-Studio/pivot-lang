@@ -1,3 +1,4 @@
+#[cfg(feature = "llvm")]
 use inkwell::OptimizationLevel;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Copy)]
@@ -26,6 +27,7 @@ impl Default for HashOptimizationLevel {
     }
 }
 
+#[cfg(feature = "llvm")]
 impl HashOptimizationLevel {
     pub fn to_llvm(self) -> OptimizationLevel {
         match self {

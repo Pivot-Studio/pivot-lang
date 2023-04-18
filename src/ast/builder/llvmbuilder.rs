@@ -1,3 +1,4 @@
+#![cfg(feature = "llvm")]
 /// 此包代码应该遵循以下原则：
 /// 1. 所有Builder的字段都应该private，不应该被外部直接访问
 /// 2. 所有涉及llvm类型的函数（包括参数或返回值）都应该是private的
@@ -18,7 +19,10 @@ use inkwell::{
     debug_info::*,
     module::{FlagBehavior, Linkage, Module},
     targets::{InitializationConfig, Target, TargetMachine},
-    types::{BasicType, BasicTypeEnum, FunctionType, PointerType, StructType},
+    types::{
+        BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, PointerType, StructType,
+        VoidType,
+    },
     values::{
         AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, CallableValue,
         FunctionValue, PointerValue,
@@ -34,7 +38,7 @@ use super::{
         ctx::Ctx,
         diag::ErrorCode,
         node::{types::TypedIdentifierNode, TypeNode, TypeNodeEnum},
-        pltype::{ARRType, FNValue, Field, PLType, PriType, RetTypeEnum, STType},
+        pltype::{ARRType, FNValue, Field, PLType, PriType, STType},
         range::{Pos, Range},
     },
     IRBuilder,
@@ -1426,26 +1430,27 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     }
     fn build_float_compare(
         &self,
-        op: FloatPredicate,
+        op: super::FloatPredicate,
         lhs: ValueHandle,
         rhs: ValueHandle,
         name: &str,
     ) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_float_value();
         let rhs = self.get_llvm_value(rhs).unwrap().into_float_value();
-        let v = self.builder.build_float_compare(op, lhs, rhs, name);
+
+        let v = self.builder.build_float_compare(op.into(), lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
     fn build_int_compare(
         &self,
-        op: IntPredicate,
+        op: super::IntPredicate,
         lhs: ValueHandle,
         rhs: ValueHandle,
         name: &str,
     ) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
         let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
-        let v = self.builder.build_int_compare(op, lhs, rhs, name);
+        let v = self.builder.build_int_compare(op.into(), lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
     fn build_int_neg(&self, v: ValueHandle, name: &str) -> ValueHandle {
@@ -1819,5 +1824,63 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     fn is_ptr(&self, v: ValueHandle) -> bool {
         let val = self.get_llvm_value(v).unwrap();
         val.get_type().is_pointer_type()
+    }
+}
+
+impl From<super::FloatPredicate> for FloatPredicate {
+    fn from(val: super::FloatPredicate) -> Self {
+        match val {
+            super::FloatPredicate::OEQ => FloatPredicate::OEQ,
+            super::FloatPredicate::OGT => FloatPredicate::OGT,
+            super::FloatPredicate::OGE => FloatPredicate::OGE,
+            super::FloatPredicate::OLT => FloatPredicate::OLT,
+            super::FloatPredicate::OLE => FloatPredicate::OLE,
+            super::FloatPredicate::ONE => FloatPredicate::ONE,
+            super::FloatPredicate::ORD => FloatPredicate::ORD,
+            super::FloatPredicate::UNO => FloatPredicate::UNO,
+            super::FloatPredicate::UEQ => FloatPredicate::UEQ,
+            super::FloatPredicate::UGT => FloatPredicate::UGT,
+            super::FloatPredicate::UGE => FloatPredicate::UGE,
+            super::FloatPredicate::ULT => FloatPredicate::ULT,
+            super::FloatPredicate::ULE => FloatPredicate::ULE,
+            super::FloatPredicate::UNE => FloatPredicate::UNE,
+            super::FloatPredicate::PredicateFalse => FloatPredicate::PredicateFalse,
+            super::FloatPredicate::PredicateTrue => FloatPredicate::PredicateTrue,
+        }
+    }
+}
+
+impl From<super::IntPredicate> for IntPredicate {
+    fn from(val: super::IntPredicate) -> Self {
+        match val {
+            super::IntPredicate::EQ => IntPredicate::EQ,
+            super::IntPredicate::NE => IntPredicate::NE,
+            super::IntPredicate::UGT => IntPredicate::UGT,
+            super::IntPredicate::UGE => IntPredicate::UGE,
+            super::IntPredicate::ULT => IntPredicate::ULT,
+            super::IntPredicate::ULE => IntPredicate::ULE,
+            super::IntPredicate::SGT => IntPredicate::SGT,
+            super::IntPredicate::SGE => IntPredicate::SGE,
+            super::IntPredicate::SLT => IntPredicate::SLT,
+            super::IntPredicate::SLE => IntPredicate::SLE,
+        }
+    }
+}
+
+enum RetTypeEnum<'ctx> {
+    Void(VoidType<'ctx>),
+    Basic(BasicTypeEnum<'ctx>),
+}
+
+impl<'ctx> RetTypeEnum<'ctx> {
+    fn fn_type(
+        &self,
+        param_types: &[BasicMetadataTypeEnum<'ctx>],
+        is_var_args: bool,
+    ) -> FunctionType<'ctx> {
+        match self {
+            RetTypeEnum::Void(t) => t.fn_type(param_types, is_var_args),
+            RetTypeEnum::Basic(t) => t.fn_type(param_types, is_var_args),
+        }
     }
 }
