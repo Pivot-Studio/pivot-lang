@@ -15,3 +15,15 @@ struct BInner<T: TestTrait> {
     x: T;
 }
 
+type AA = A|i64;
+
+fn test_mismatch() void {
+    let a: AA = 1.0;
+    let aa: AA = 1 as i64;
+    let b = aa as f32;
+    let bb = aa as f32!;
+    let c = aa is f32;
+    let cc = 1 is f32;
+    return;
+}
+

@@ -49,7 +49,7 @@ features = ["alloc"]
 
 
 [features]
-default = ["static"]
+default = ["static", "jit"]
 jit = ["vm"]
 static = ["immix/auto_gc"]
 

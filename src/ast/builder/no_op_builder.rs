@@ -2,7 +2,7 @@ use std::{cell::RefCell, sync::Arc};
 
 use crate::ast::{
     ctx::Ctx,
-    pltype::{PLType, STType},
+    pltype::{PLType, PriType, STType},
 };
 
 use super::{IRBuilder, ValueHandle};
@@ -406,5 +406,19 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder {
         _v: &STType,
         _field_tps: &[Arc<RefCell<PLType>>],
     ) {
+    }
+    fn cast_primitives(
+        &self,
+        _handle: ValueHandle,
+        _tp: &PriType,
+        _target: &PriType,
+    ) -> ValueHandle {
+        0
+    }
+    fn is_ptr(&self, _v: ValueHandle) -> bool {
+        false
+    }
+    fn get_or_insert_helper_fn_handle(&self, _name: &str) -> ValueHandle {
+        0
     }
 }

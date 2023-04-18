@@ -2,6 +2,7 @@ use crate::{ast::node::Num, utils::read_config::enter};
 
 use super::{
     node::{
+        cast::{AsNode, IsNode},
         comment::CommentNode,
         control::{BreakNode, ContinueNode, ForNode, IfNode, WhileNode},
         error::{ErrorNode, StErrorNode},
@@ -25,6 +26,7 @@ use super::{
             ArrayInitNode, ArrayTypeNameNode, GenericDefNode, GenericParamNode, PointerTypeNode,
             StructDefNode, StructInitFieldNode, StructInitNode, TypeNameNode, TypedIdentifierNode,
         },
+        union::UnionDefNode,
         FmtTrait, NodeEnum, TypeNodeEnum,
     },
     tokens::TokenType,
@@ -595,7 +597,12 @@ impl FmtBuilder {
         if let Num::Int(x) = node.value {
             self.token(x.to_string().as_str());
         } else if let Num::Float(x) = node.value {
-            self.token(x.to_string().as_str());
+            let s = x.to_string();
+            if s.contains('.') {
+                self.token(s.as_str());
+            } else {
+                self.token(&format!("{}.", s));
+            }
         }
     }
     pub fn parse_generic_def_node(&mut self, node: &GenericDefNode) {
@@ -687,5 +694,48 @@ impl FmtBuilder {
     }
     pub fn parse_multi_trait_node(&mut self, node: &MultiTraitNode) {
         node.traits.format(self)
+    }
+    pub fn parse_union_def_node(&mut self, node: &UnionDefNode) {
+        self.prefix();
+        self.token("type");
+        self.space();
+        self.token(node.name.name.as_str());
+        if let Some(g) = node.generics.as_ref() {
+            g.format(self);
+        }
+        self.space();
+        self.equal();
+        self.space();
+        for (i, m) in node.sum_types.iter().enumerate() {
+            if i > 0 {
+                self.space();
+                self.token("|");
+                self.space();
+            }
+            m.format(self);
+        }
+        self.semicolon();
+        self.enter();
+    }
+    pub fn parse_as_node(&mut self, node: &AsNode) {
+        node.expr.format(self);
+        self.space();
+        self.token("as");
+        self.space();
+        node.ty.format(self);
+        if let Some((t, _)) = node.tail {
+            if t == TokenType::QUESTION {
+                self.token("?");
+            } else {
+                self.token("!");
+            }
+        }
+    }
+    pub fn parse_is_node(&mut self, node: &IsNode) {
+        node.expr.format(self);
+        self.space();
+        self.token("is");
+        self.space();
+        node.ty.format(self);
     }
 }

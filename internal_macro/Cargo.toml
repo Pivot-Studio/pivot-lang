@@ -7,6 +7,8 @@ edition = "2021"
 
 [dependencies]
 ctor = "0.1"
+log = "0.4"
+
 llvm-sys = { version = "140", optional = true }
 [dependencies.add_symbol_macro]
 path = "src/add_symbol_macro"

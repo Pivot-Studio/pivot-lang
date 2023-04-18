@@ -59,7 +59,7 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
             tag_token_word(TokenType::IF),
-            parse_with_ex(logic_exp, true),
+            parse_with_ex(general_exp, true),
             statement_block,
             opt(delspace(comment)),
             opt(preceded(
@@ -119,7 +119,7 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
         delspace(tuple((
             tag_token_word(TokenType::WHILE),
             alt_except(
-                logic_exp,
+                general_exp,
                 "{",
                 "failed to parse while condition",
                 ErrorCode::WHILE_CONDITION_MUST_BE_BOOL,
@@ -186,7 +186,7 @@ pub fn for_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
             tag_token_word(TokenType::FOR),
             opt(alt((assignment, new_variable))),
             tag_token_symbol(TokenType::SEMI),
-            logic_exp,
+            general_exp,
             tag_token_symbol(TokenType::SEMI),
             opt(assignment),
             statement_block,

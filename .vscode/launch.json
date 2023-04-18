@@ -20,6 +20,19 @@
             ]
         },
         {
+            "name": "(Windows) debug compile",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/target/debug/plc.exe",
+            "args": [
+                "test/main.pi",
+                // "-O1"
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
             "type": "lldb",
             "request": "launch",
             "name": "debug compile lsp test",
