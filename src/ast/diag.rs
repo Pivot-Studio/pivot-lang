@@ -116,6 +116,8 @@ define_error!(
     INVALID_DIRECT_UNION_CAST = "invalid direct union cast",
     UNION_DOES_NOT_CONTAIN_TYPE = "union does not contain type",
     INVALID_IS_EXPR = "invalid `is` expression",
+    INVALID_CAST = "invalid cast",
+    METHOD_NOT_FOUND = "method not found"
 );
 macro_rules! define_warn {
     ($(
@@ -292,7 +294,16 @@ impl PLDiag {
                 DiagnosticSeverity::ERROR,
                 code as i32,
                 Some(PL_DIAG_SOURCE.to_string()),
-                ERR_MSG[&code].to_string(),
+                format!(
+                    "{} {}",
+                    ERR_MSG[&code],
+                    &self
+                        .raw
+                        .help
+                        .clone()
+                        .map(|h| format!("({})", h))
+                        .unwrap_or_default()
+                ),
             ),
             DiagCode::Warn(code) => {
                 let mut warn = Diagnostic::new_with_code_number(
@@ -300,7 +311,16 @@ impl PLDiag {
                     DiagnosticSeverity::WARNING,
                     code as i32,
                     Some(PL_DIAG_SOURCE.to_string()),
-                    WARN_MSG[&code].to_string(),
+                    format!(
+                        "{} {}",
+                        WARN_MSG[&code],
+                        &self
+                            .raw
+                            .help
+                            .clone()
+                            .map(|h| format!("({})", h))
+                            .unwrap_or_default()
+                    ),
                 );
                 if code == WarnCode::UNUSED_FUNCTION
                     || code == WarnCode::UNUSED_VARIABLE

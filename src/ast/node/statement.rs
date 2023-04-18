@@ -1,3 +1,4 @@
+use super::node_result::TerminatorEnum;
 use super::*;
 
 use crate::ast::builder::BuilderEnum;
@@ -47,24 +48,28 @@ impl Node for DefNode {
         let mut expv = None;
         if let Some(tp) = &self.tp {
             tp.emit_highlight(ctx);
-            pltype = Some(tp.get_type(ctx, builder)?);
+            let pltp = tp.get_type(ctx, builder)?;
+            pltype = Some(pltp);
         }
         if let Some(exp) = &mut self.exp {
-            let (value, pltype_opt, _) =
-                ctx.emit_with_expectation(exp, pltype.clone(), self.var.range(), builder)?;
+            let re = if let Some(pltype) = pltype.clone() {
+                ctx.emit_with_expectation(exp, pltype, self.var.range(), builder)?
+                    .get_value()
+            } else {
+                exp.emit(ctx, builder)?.get_value()
+            };
+
             // for err tolerate
-            if pltype_opt.is_none() {
+            if re.is_none() {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
             }
-            if value.is_none() {
-                return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
-            }
-            let tp = pltype_opt.unwrap();
+            let re = re.unwrap();
+            let tp = re.get_ty();
             if pltype.is_none() {
                 ctx.push_type_hints(self.var.range, tp.clone());
                 pltype = Some(tp);
             }
-            expv = value;
+            expv = Some(re.get_value());
         }
         let pltype = pltype.unwrap();
         let ptr2value = builder.alloc(
@@ -84,7 +89,7 @@ impl Node for DefNode {
             builder.build_dbg_location(self.var.range.start);
             builder.build_store(ptr2value, ctx.try_load2var(range, exp, builder)?);
         }
-        Ok((None, None, TerminatorEnum::None))
+        Ok(Default::default())
     }
 }
 #[node]
@@ -110,18 +115,24 @@ impl Node for AssignNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let exp_range = self.exp.range();
-        let (ptr, lpltype, _) = self.var.emit(ctx, builder)?;
-        if lpltype.is_none() {
+        let rel = self.var.emit(ctx, builder)?.get_value();
+        if rel.is_none() {
             return Err(ctx.add_diag(self.var.range().new_err(ErrorCode::NOT_ASSIGNABLE)));
         }
-        let (value, _, _) =
-            ctx.emit_with_expectation(&mut self.exp, lpltype, self.var.range(), builder)?;
-        if ptr.as_ref().unwrap().is_const {
+        let rel = rel.unwrap();
+        let ptr = rel.get_value();
+        let lpltype = rel.get_ty();
+        let value = ctx
+            .emit_with_expectation(&mut self.exp, lpltype, self.var.range(), builder)?
+            .get_value()
+            .unwrap()
+            .get_value();
+        if rel.is_const() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::ASSIGN_CONST)));
         }
-        let load = ctx.try_load2var(exp_range, value.unwrap(), builder)?;
-        builder.build_store(ptr.unwrap().value, load);
-        Ok((None, None, TerminatorEnum::None))
+        let load = ctx.try_load2var(exp_range, value, builder)?;
+        builder.build_store(ptr, load);
+        Ok(Default::default())
     }
 }
 
@@ -143,7 +154,7 @@ impl Node for EmptyNode {
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.emit_comment_highlight(&self.comments[0]);
-        Ok((None, None, TerminatorEnum::None))
+        Ok(Default::default())
     }
 }
 
@@ -198,8 +209,7 @@ impl Node for StatementsNode {
             if re.is_err() {
                 continue;
             }
-            let (_, _, terminator_res) = re.unwrap();
-            terminator = terminator_res;
+            terminator = re.unwrap().get_term();
         }
         for (v, symbol) in &ctx.table {
             if let Some(refs) = &symbol.refs {
@@ -216,7 +226,7 @@ impl Node for StatementsNode {
                 }
             }
         }
-        Ok((None, None, terminator))
+        NodeOutput::new_term(terminator).to_result()
     }
 }
 

@@ -107,7 +107,7 @@ impl Node for ProgramNode {
             _ = x.emit(ctx, builder);
         });
         ctx.init_fn_ret(builder);
-        Ok((None, None, TerminatorEnum::None))
+        Ok(Default::default())
     }
 }
 

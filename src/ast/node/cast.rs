@@ -13,11 +13,12 @@ use crate::{
         range::{Pos, Range},
         tokens::TokenType,
     },
-    format_label, plv,
+    format_label,
 };
 
 use super::{
-    Node, NodeEnum, NodeResult, PLValue, PrintTrait, TerminatorEnum, TypeNodeEnum, TypeNodeResult,
+    node_result::NodeResultBuilder, Node, NodeEnum, NodeResult, PrintTrait, TypeNodeEnum,
+    TypeNodeResult,
 };
 use crate::ast::node::RangeTrait;
 
@@ -36,16 +37,17 @@ impl Node for AsNode {
     ) -> NodeResult {
         let re = self.expr.emit(ctx, builder);
         self.ty.emit_highlight(ctx);
-        let (val, tp, _) = re?;
+        let v = re?.get_value();
+        let v = v.unwrap();
         let target_tp = self.ty.get_type(ctx, builder)?;
         let (val, target_tp) = ctx.force_cast_safe(
-            val.unwrap().value,
-            &tp.unwrap().borrow(),
+            v.get_value(),
+            &v.get_ty().borrow(),
             target_tp,
             builder,
             self,
         )?;
-        Ok((Some(plv!(val)), Some(target_tp), TerminatorEnum::None))
+        val.new_output(target_tp).to_result()
     }
 }
 
@@ -133,7 +135,24 @@ impl<'a, 'ctx> Ctx<'a> {
                         .add_to_ctx(self))
                 }
             }
-            _ => todo!(),
+            _ => Err(node
+                .range()
+                .new_err(ErrorCode::INVALID_CAST)
+                .add_label(
+                    node.expr.range(),
+                    self.get_file(),
+                    format_label!("type of the expression is `{}`", ty.get_name()),
+                )
+                .add_label(
+                    node.ty.range(),
+                    self.get_file(),
+                    format_label!("target type is `{}`", target_ty.borrow().get_name()),
+                )
+                .add_help(
+                    "`as` cast can only be performed between primitives \
+                or from union types.",
+                )
+                .add_to_ctx(self)),
         }
     }
     /// Option<i128>
@@ -272,10 +291,10 @@ impl Node for IsNode {
     ) -> NodeResult {
         let re = self.expr.emit(ctx, builder);
         self.ty.emit_highlight(ctx);
-        let (val, tp, _) = re?;
+        let v = re?.get_value().unwrap();
         let target_tp = self.ty.get_type(ctx, builder)?;
-        let val = val.unwrap().value;
-        let binding = tp.unwrap();
+        let val = v.get_value();
+        let binding = v.get_ty();
         let tp = &*binding.borrow();
         match tp {
             PLType::Union(u) => {
@@ -290,15 +309,9 @@ impl Node for IsNode {
                     );
                     let cond = builder.try_load2var(Default::default(), cond, ctx).unwrap();
                     let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
-                    Ok((
-                        Some(PLValue {
-                            value: cond,
-                            is_const: true,
-                            receiver: None,
-                        }),
-                        ctx.get_type("bool", Default::default()).ok(),
-                        TerminatorEnum::None,
-                    ))
+                    cond.new_output(ctx.get_type("bool", Default::default()).unwrap())
+                        .set_const()
+                        .to_result()
                 } else {
                     Err(self
                         .ty

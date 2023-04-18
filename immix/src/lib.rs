@@ -20,6 +20,7 @@ mod consts;
 mod llvm_stackmap;
 mod macros;
 mod mmap;
+mod shadow_stack;
 #[cfg(feature = "llvm_stackmap")]
 pub use llvm_stackmap::*;
 mod bigobj;
@@ -237,6 +238,8 @@ static GC_ID: AtomicUsize = AtomicUsize::new(0);
 
 static GC_STW_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+pub(crate) static USE_SHADOW_STACK: AtomicBool = AtomicBool::new(false);
+
 pub static ENABLE_EVA: AtomicBool = AtomicBool::new(true);
 
 #[cfg(feature = "auto_gc")]
@@ -248,4 +251,13 @@ unsafe impl Sync for GAWrapper {}
 
 pub fn get_gc_stw_num() -> usize {
     GC_STW_COUNT.load(Ordering::SeqCst)
+}
+
+pub fn set_shadow_stack(b: bool) {
+    USE_SHADOW_STACK.store(b, Ordering::Relaxed);
+}
+
+#[cfg(feature = "llvm_gc_plugin")]
+pub unsafe fn set_shadow_stack_addr(addr: *mut u8) {
+    shadow_stack::SetShadowStackAddr(addr)
 }

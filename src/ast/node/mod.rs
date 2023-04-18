@@ -22,6 +22,9 @@ use self::interface::TraitDefNode;
 use self::macro_nodes::MacroCallNode;
 use self::macro_nodes::MacroLoopStatementNode;
 use self::macro_nodes::MacroNode;
+use self::node_result::NodeOutput;
+use self::node_result::NodeResult;
+use self::node_result::NodeValue;
 use self::operator::*;
 use self::pkg::{ExternIdNode, UseNode};
 use self::pointer::PointerOpNode;
@@ -32,7 +35,6 @@ use self::string_literal::StringNode;
 use self::types::*;
 use self::union::UnionDefNode;
 
-use super::builder::ValueHandle;
 use super::ctx::EqRes;
 use super::diag::ErrorCode;
 use super::diag::PLDiag;
@@ -49,6 +51,7 @@ pub mod global;
 pub mod implement;
 pub mod interface;
 pub mod macro_nodes;
+pub mod node_result;
 pub mod operator;
 pub mod pkg;
 pub mod pointer;
@@ -59,31 +62,6 @@ pub mod statement;
 pub mod string_literal;
 pub mod types;
 pub mod union;
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TerminatorEnum {
-    None,
-    Return,
-    Break,
-    Continue,
-}
-impl TerminatorEnum {
-    pub fn is_none(self) -> bool {
-        self == TerminatorEnum::None
-    }
-    pub fn is_return(self) -> bool {
-        self == TerminatorEnum::Return
-    }
-}
-#[macro_export]
-macro_rules! plv {
-    ($e:expr) => {
-        PLValue {
-            value: $e,
-            is_const: false,
-            receiver: None,
-        }
-    };
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[enum_dispatch(TypeNode, RangeTrait, FmtTrait, PrintTrait)]
@@ -187,24 +165,7 @@ pub trait PrintTrait {
 }
 
 // ANCHOR_END: node
-pub type NodeResult = Result<
-    (
-        Option<PLValue>,
-        Option<Arc<RefCell<PLType>>>, //type
-        TerminatorEnum,
-    ),
-    PLDiag,
->;
-pub struct PLValue {
-    pub value: ValueHandle,
-    pub is_const: bool,
-    pub receiver: Option<(ValueHandle, Option<Arc<RefCell<PLType>>>)>,
-}
-impl PLValue {
-    pub fn set_const(&mut self, is_const: bool) {
-        self.is_const = is_const;
-    }
-}
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Num {
     Int(u64),
@@ -245,14 +206,10 @@ impl<'a, 'ctx> Ctx<'a> {
     fn emit_with_expectation<'b>(
         &'b mut self,
         node: &mut Box<NodeEnum>,
-        expect: Option<Arc<RefCell<PLType>>>,
+        expect: Arc<RefCell<PLType>>,
         expectrange: Range,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        if expect.is_none() {
-            return node.emit(self, builder);
-        }
-        let expect = expect.unwrap();
         let range = node.range();
         let pri: Result<PrimaryNode, _> = (*node.clone()).try_into();
         // basic type implicit cast
@@ -325,40 +282,21 @@ impl<'a, 'ctx> Ctx<'a> {
                 };
                 self.push_semantic_token(numnode.range(), SemanticTokenType::NUMBER, 0);
                 self.emit_comment_highlight(&pri.comments[1]);
-                return Ok((
-                    Some(PLValue {
-                        value: v,
-                        is_const: true,
-                        receiver: None,
-                    }),
-                    Some(expect),
-                    TerminatorEnum::None,
-                ));
+
+                return Ok(NodeOutput::new_value(NodeValue::new_const(v, expect)));
             }
         }
-        let (value, ty, term) = node.emit(self, builder)?;
-        if let (Some(value), Some(ty)) = (&value, &ty) {
-            if *ty != expect {
-                let handle = self.up_cast(
-                    expect.clone(),
-                    ty.clone(),
-                    expectrange,
-                    range,
-                    value.value,
-                    builder,
-                )?;
-                return Ok((
-                    Some(PLValue {
-                        value: handle,
-                        is_const: true,
-                        receiver: None,
-                    }),
-                    Some(expect),
-                    term,
-                ));
+        let re = node.emit(self, builder)?;
+        if let Some(nv) = re.get_value() {
+            let value = nv.get_value();
+            let ty = nv.get_ty();
+            if ty != expect {
+                let handle =
+                    self.up_cast(expect.clone(), ty, expectrange, range, value, builder)?;
+                return Ok(NodeOutput::new_value(NodeValue::new_const(handle, expect)));
             }
         }
-        Ok((value, ty, term))
+        Ok(re)
     }
 }
 pub fn deal_line(tabs: usize, line: &mut Vec<bool>, end: bool) {
@@ -414,15 +352,15 @@ pub fn print_params(paralist: &[Box<TypedIdentifierNode>]) -> String {
 macro_rules! handle_calc {
     ($ctx:ident, $op:ident, $opf:ident, $lpltype:ident, $left:ident, $right:ident, $range: expr,$builder:ident) => {
         paste::item! {
-            match *$lpltype.clone().unwrap().borrow() {
+            match *$lpltype.clone().borrow() {
                 PLType::Primitive(PriType::I128|PriType::I64|PriType::I32|PriType::I16|PriType::I8|
                     PriType::U128|PriType::U64|PriType::U32|PriType::U16|PriType::U8) => {
-                    return Ok((Some(plv!( $builder.[<build_int_$op>](
-                        $left, $right, "addtmp"))),Some($lpltype.unwrap()),TerminatorEnum::None));
+                    return Ok(NodeOutput::new_value(NodeValue::new($builder.[<build_int_$op>](
+                        $left, $right, "addtmp"), $lpltype)));
                 },
                 PLType::Primitive(PriType::F64|PriType::F32) => {
-                    return Ok((Some(plv!( $builder.[<build_$opf>](
-                        $left, $right, "addtmp"))),Some($lpltype.unwrap()),TerminatorEnum::None));
+                    return Ok(NodeOutput::new_value(NodeValue::new($builder.[<build_$opf>](
+                        $left, $right, "addtmp"), $lpltype)));
                 },
                 _ =>  return Err($ctx.add_diag(
                     $range.new_err(

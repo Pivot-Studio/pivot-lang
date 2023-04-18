@@ -53,3 +53,4 @@ Debug
 Release
 kagari/test_dir
 planglib/thirdparty
+immix/llvm/cmake-build-debug/build.ninja

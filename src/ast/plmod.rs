@@ -1,4 +1,5 @@
 use super::accumulators::PLReferences;
+use super::ctx::Ctx;
 use super::diag::{ErrorCode, PLDiag};
 
 use super::node::macro_nodes::MacroNode;
@@ -228,9 +229,15 @@ impl Mod {
         );
         Ok(())
     }
-    pub fn get_type(&self, name: &str) -> Option<Arc<RefCell<PLType>>> {
+    pub fn get_type(&self, name: &str, range: Range, ctx: &Ctx) -> Option<Arc<RefCell<PLType>>> {
         let v = self.types.get(name);
         if let Some(pv) = v {
+            ctx.set_if_refs_tp(pv.clone(), range);
+            ctx.send_if_go_to_def(
+                range,
+                pv.borrow().get_range().unwrap_or(range),
+                self.path.clone(),
+            );
             return Some(pv.clone());
         }
         if let Some(x) = PriType::try_from_str(name) {
