@@ -274,7 +274,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 ));
             }
             let trait_handle = builder.alloc("tmp_traitv", &trait_pltype.borrow(), self, None);
-            for (name, f) in &t.fields {
+            for (name, f) in t.fields.iter() {
                 let mthd = st.find_method(self, name).unwrap();
                 let fnhandle = builder.get_or_insert_fn_handle(&mthd, self);
                 let targetftp = f.typenode.get_type(self, builder).unwrap();

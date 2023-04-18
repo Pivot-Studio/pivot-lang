@@ -20,8 +20,8 @@ use crate::ast::tokens::TokenType;
 use indexmap::IndexMap;
 
 use internal_macro::node;
+use linked_hash_map::LinkedHashMap;
 use lsp_types::SemanticTokenType;
-use rustc_hash::FxHashMap;
 #[node]
 pub struct TypeNameNode {
     pub id: Option<ExternIdNode>,
@@ -494,14 +494,14 @@ impl StructDefNode {
         let stu = Arc::new(RefCell::new(PLType::Struct(STType {
             name: self.id.name.clone(),
             path: ctx.plmod.path.clone(),
-            fields: FxHashMap::default(),
-            ordered_fields: vec![],
+            fields: LinkedHashMap::new(),
             range: self.id.range(),
             doc: vec![],
             generic_map,
             derives: vec![],
             modifier: self.modifier,
             body_range: self.range(),
+            is_trait: false,
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
@@ -519,28 +519,16 @@ impl StructDefNode {
             IndexMap::default()
         };
         ctx.protect_generic_context(&generic_map, |ctx| {
-            let mut fields = FxHashMap::<String, Field>::default();
-            let mut order_fields = Vec::<Field>::new();
-            // gcrtti fields
-            let vtable_field = Field {
-                index: 0,
-                typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
-                name: "_vtable".to_string(),
-                range: Default::default(),
-                modifier: None,
-            };
-            fields.insert("_vtable".to_string(), vtable_field.clone());
-            order_fields.push(vtable_field);
-            let mut i = 1;
+            let mut fields = LinkedHashMap::new();
             let mut field_pltps = vec![];
             let clone_map = ctx.plmod.types.clone();
-            for field in self.fields.iter() {
+            for (i, field) in self.fields.iter().enumerate() {
                 if !field.has_semi {
                     ctx.add_diag(field.id.range.new_err(ErrorCode::COMPLETION));
                 }
                 let id = field.id.id.clone();
                 let f = Field {
-                    index: i,
+                    index: i as u32 + 1,
                     typenode: field.id.typenode.clone(),
                     name: id.name.clone(),
                     range: field.id.id.range,
@@ -558,24 +546,23 @@ impl StructDefNode {
                 ctx.set_field_refs(pltype.clone(), &f, f.range);
                 ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
                 fields.insert(id.name.to_string(), f.clone());
-                order_fields.push(f);
                 ctx.set_if_refs_tp(tp.clone(), field.id.typenode.range());
-                i += 1;
-            }
-            let newf = order_fields.clone();
-            if self.generics.is_none() {
-                builder.add_body_to_struct_type(
-                    &ctx.plmod.get_full_name(&self.id.name),
-                    &order_fields,
-                    ctx,
-                );
             }
             ctx.plmod.types = clone_map;
             if let PLType::Struct(st) = &mut *pltype.borrow_mut() {
-                builder.gen_st_visit_function(ctx, st, &field_pltps);
                 st.fields = fields;
-                st.ordered_fields = newf;
                 st.doc = self.doc.clone();
+            }
+            if let PLType::Struct(st) = &*pltype.borrow() {
+                if self.generics.is_none() {
+                    builder.add_body_to_struct_type(
+                        &ctx.plmod.get_full_name(&self.id.name),
+                        st,
+                        ctx,
+                    );
+                }
+                // gen st vist function must be called after add_body_to_struct_type
+                builder.gen_st_visit_function(ctx, st, &field_pltps);
             }
             ctx.set_if_refs_tp(pltype.clone(), self.id.range);
             ctx.add_doc_symbols(pltype.clone());

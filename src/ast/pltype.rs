@@ -32,6 +32,7 @@ use super::range::Range;
 use immix::ObjectType;
 use indexmap::IndexMap;
 
+use linked_hash_map::LinkedHashMap;
 use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
@@ -40,11 +41,9 @@ use lsp_types::InsertTextFormat;
 
 use lsp_types::Location;
 use lsp_types::SymbolKind;
-use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 
 use std::sync::Arc;
-
 /// # PLType
 /// Type for pivot-lang
 /// including primitive type, struct type, function type, void type
@@ -112,18 +111,11 @@ impl UnionType {
         let mut res = self.clone();
         res.name = name;
         ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Union(res.clone()))));
-
-        let (tps, errors): (Vec<_>, Vec<_>) = res
+        res.sum_types = self
             .sum_types
             .iter()
-            .map(|t| {
-                Ok::<Box<TypeNodeEnum>, PLDiag>(t.get_type(ctx, builder)?.borrow().get_typenode())
-            })
-            .partition(Result::is_ok);
-        if !errors.is_empty() {
-            return Err(errors[0].clone().unwrap_err());
-        }
-        res.sum_types = tps.into_iter().map(Result::unwrap).collect::<Vec<_>>();
+            .map(|t| t.get_type(ctx, builder).unwrap().borrow().get_typenode())
+            .collect();
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
         pltype.replace(PLType::Union(res.clone()));
@@ -761,17 +753,63 @@ impl ARRType {
 pub struct STType {
     pub name: String,
     pub path: String,
-    pub fields: FxHashMap<String, Field>,
-    pub ordered_fields: Vec<Field>,
+    pub fields: LinkedHashMap<String, Field>,
     pub range: Range,
     pub doc: Vec<Box<NodeEnum>>,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub derives: Vec<Arc<RefCell<PLType>>>,
     pub modifier: Option<(TokenType, Range)>,
     pub body_range: Range,
+    pub is_trait: bool,
 }
 
 impl STType {
+    // get all field include type_hash,ptr,vtable,this func only be used in llvmbuilder
+    pub fn get_all_field(&self) -> LinkedHashMap<String, Field> {
+        let mut fields = LinkedHashMap::new();
+        if self.is_trait {
+            fields.insert(
+                "__type_hash".to_string(),
+                Field {
+                    index: 0,
+                    typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
+                    name: "__type_hash".to_string(),
+                    range: Default::default(),
+                    modifier: None,
+                },
+            );
+            // pointer to real value
+            fields.insert(
+                "__ptr".to_string(),
+                Field {
+                    index: 1,
+                    typenode: Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
+                        elm: Box::new(TypeNameNode::new_from_str("i64").into()),
+                        range: Default::default(),
+                    })),
+                    name: "__ptr".to_string(),
+                    range: Default::default(),
+                    modifier: None,
+                },
+            );
+        } else {
+            // gcrtti fields
+            fields.insert(
+                "_vtable".to_string(),
+                Field {
+                    index: 0,
+                    typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
+                    name: "_vtable".to_string(),
+                    range: Default::default(),
+                    modifier: None,
+                },
+            );
+        }
+        self.fields.iter().for_each(|(k, v)| {
+            fields.insert(k.clone(), v.clone());
+        });
+        fields
+    }
     fn implements(&self, tp: &PLType, plmod: &Mod) -> bool {
         plmod
             .impls
@@ -857,24 +895,25 @@ impl STType {
         let mut res = self.clone();
         res.name = name;
         ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Struct(res.clone()))));
-        let (tps, errors): (Vec<_>, Vec<_>) = self
-            .ordered_fields
-            .iter()
+        res.fields = self
+            .fields
+            .values()
             .map(|f| {
                 let mut nf = f.clone();
-                nf.typenode = f.typenode.get_type(ctx, builder)?.borrow().get_typenode();
-                Ok::<Field, PLDiag>(nf)
+                nf.typenode = f
+                    .typenode
+                    .get_type(ctx, builder)
+                    .unwrap()
+                    .borrow()
+                    .get_typenode();
+                (nf.name.clone(), nf)
             })
-            .partition(Result::is_ok);
-        if !errors.is_empty() {
-            return Err(errors.into_iter().map(Result::unwrap_err).next().unwrap());
-        }
-        res.ordered_fields = tps.into_iter().map(Result::unwrap).collect::<Vec<_>>();
-        let mut field_pltps = vec![];
-        res.ordered_fields.iter().for_each(|f| {
-            field_pltps.push(f.typenode.get_type(ctx, builder).unwrap());
-            res.fields.insert(f.name.clone(), f.clone());
-        });
+            .collect();
+        let field_pltps = res
+            .fields
+            .values()
+            .map(|f| f.typenode.get_type(ctx, builder).unwrap())
+            .collect::<Vec<_>>();
         builder.gen_st_visit_function(ctx, &res, &field_pltps);
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
@@ -883,10 +922,7 @@ impl STType {
     }
     pub fn get_field_completions(&self, must_pub: bool) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
-        for (name, f) in &self.fields {
-            if f.index == 0 {
-                continue;
-            }
+        for (name, f) in self.fields.iter() {
             if must_pub {
                 skip_if_not_modified_by!(f.modifier, TokenType::PUB);
             }
@@ -918,7 +954,7 @@ impl STType {
     }
     pub fn get_trait_field_completions(&self) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
-        for (name, f) in &self.fields {
+        for (name, f) in self.fields.iter() {
             if let TypeNodeEnum::Func(func) = &*f.typenode {
                 completions.push(CompletionItem {
                     kind: Some(CompletionItemKind::METHOD),
@@ -950,8 +986,8 @@ impl STType {
     }
     pub fn get_doc_symbol(&self) -> DocumentSymbol {
         let children: Vec<DocumentSymbol> = self
-            .ordered_fields
-            .iter()
+            .fields
+            .values()
             .map(|order_field| order_field.get_doc_symbol())
             .collect();
         #[allow(deprecated)]

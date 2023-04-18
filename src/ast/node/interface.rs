@@ -10,7 +10,7 @@ use crate::{
 };
 use indexmap::IndexMap;
 use internal_macro::node;
-use rustc_hash::FxHashMap;
+use linked_hash_map::LinkedHashMap;
 #[node]
 pub struct MultiTraitNode {
     pub traits: Box<TypeNodeEnum>,
@@ -113,13 +113,13 @@ impl TraitDefNode {
             generic_map: IndexMap::default(),
             name: self.id.name.clone(),
             path: ctx.plmod.path.clone(),
-            fields: FxHashMap::default(),
-            ordered_fields: vec![],
+            fields: LinkedHashMap::default(),
             range: self.id.range(),
             doc: vec![],
             derives: vec![],
             modifier: self.modifier,
             body_range: self.range(),
+            is_trait: true,
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
@@ -129,44 +129,20 @@ impl TraitDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<(), PLDiag> {
-        let mut fields = FxHashMap::<String, Field>::default();
-        let mut order_fields = Vec::<Field>::new();
-        let mut i = 0;
+        let mut fields = LinkedHashMap::new();
         // add generic type before field add type
         let mut derives = vec![];
         for de in &self.derives {
             derives.push(de.get_type(ctx, builder)?);
         }
-        // type hash
-        order_fields.push(Field {
-            index: i,
-            typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
-            name: "__type_hash".to_string(),
-            range: Default::default(),
-            modifier: None,
-        });
-        i += 1;
-        // pointer to real value
-        order_fields.push(Field {
-            index: i,
-            typenode: Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
-                elm: Box::new(TypeNameNode::new_from_str("i64").into()),
-                range: Default::default(),
-            })),
-            name: "__ptr".to_string(),
-            range: Default::default(),
-            modifier: None,
-        });
-        i += 1;
         let pltype = ctx.get_type(self.id.name.as_str(), self.id.range)?;
-        let clone_map = ctx.plmod.types.clone();
-        for field in self.methods.iter() {
+        for (i, field) in self.methods.iter().enumerate() {
             let mut tp = field.clone();
             tp.paralist
                 .insert(0, Box::new(new_i64ptr_tf_with_name("self")));
             let id = field.id.clone();
             let f = Field {
-                index: i,
+                index: i as u32 + 2,
                 typenode: Box::new(tp.into()),
                 name: field.id.name.clone(),
                 range: field.range,
@@ -190,21 +166,11 @@ impl TraitDefNode {
 
             // ctx.set_if_refs(f.refs.clone(), field.id.range);
             fields.insert(id.name.to_string(), f.clone());
-            order_fields.push(f);
-            i += 1;
         }
-        let newf = order_fields.clone();
-        builder.add_body_to_struct_type(
-            &ctx.plmod.get_full_name(&self.id.name),
-            &order_fields,
-            ctx,
-        );
-        ctx.plmod.types = clone_map;
         if let PLType::Trait(st) = &mut *pltype.borrow_mut() {
             st.fields = fields;
-            st.ordered_fields = newf;
             st.derives = derives;
-            // st.doc = self.doc.clone();
+            builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&self.id.name), st, ctx);
         }
         ctx.add_doc_symbols(pltype);
         // ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
