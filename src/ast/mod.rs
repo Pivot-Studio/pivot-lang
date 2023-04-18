@@ -11,5 +11,7 @@ pub mod pass;
 pub mod plmod;
 pub mod pltype;
 pub mod range;
+pub mod references;
 pub mod test;
 pub mod tokens;
+pub mod traits;

@@ -1,13 +1,11 @@
 use std::sync::Arc;
 
+use super::node_result::NodeResultBuilder;
 use super::*;
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
-use crate::{
-    ast::{ctx::Ctx, diag::ErrorCode},
-    plv,
-};
+use crate::ast::{ctx::Ctx, diag::ErrorCode};
 use internal_macro::node;
 
 #[node(comment)]
@@ -37,32 +35,32 @@ impl Node for PointerOpNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
-        let (value, mut tp, _) = self.value.emit(ctx, builder)?;
-        let value = value.unwrap();
+        let v = self.value.emit(ctx, builder)?.get_value();
+        let v = v.unwrap();
+        let value = v.get_value();
+        let mut tp = v.get_ty();
+        let btp = tp.clone();
         let value = match self.op {
             PointerOpEnum::Deref => {
-                if tp.is_none() {
-                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::NOT_A_POINTER)));
-                }
-                if let PLType::Pointer(tp1) = &*tp.unwrap().borrow() {
-                    tp = Some(tp1.clone());
-                    builder.build_load(value.value, "deref")
+                if let PLType::Pointer(tp1) = &*btp.borrow() {
+                    tp = tp1.clone();
+                    builder.build_load(value, "deref")
                 } else {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::NOT_A_POINTER)));
                 }
             }
             PointerOpEnum::Addr => {
                 // let old_tp = tp.clone().unwrap();
-                tp = Some(Arc::new(RefCell::new(PLType::Pointer(tp.unwrap()))));
-                if value.is_const {
+                tp = Arc::new(RefCell::new(PLType::Pointer(tp)));
+                if v.is_const() {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::CAN_NOT_REF_CONSTANT)));
                 }
-                let val = value.value;
-                let v = builder.alloc("addr", &tp.clone().unwrap().borrow(), ctx, None);
+                let val = value;
+                let v = builder.alloc("addr", &tp.borrow(), ctx, None);
                 builder.build_store(v, val);
                 v
             }
         };
-        Ok((Some(plv!(value)), tp, TerminatorEnum::None))
+        value.new_output(tp).to_result()
     }
 }

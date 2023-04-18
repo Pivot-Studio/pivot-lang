@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::{cell::RefCell, sync::atomic::AtomicBool};
 
 use immix::LLVM_GC_STRATEGY_NAME;
 use inkwell::{
@@ -17,7 +17,16 @@ pub struct GlobalMutWrapper<T> {
     pub inner: Mutex<RefCell<T>>,
 }
 
+pub static IS_JIT: AtomicBool = AtomicBool::new(false);
+
 pub fn run_immix_pass(module: &Module) {
+    if IS_JIT.load(std::sync::atomic::Ordering::Relaxed) {
+        // jit is using shadow stack, skip immix pass
+        module.get_functions().for_each(|f| {
+            f.set_gc("shadow-stack");
+        });
+        return;
+    }
     let ctx = module.get_context();
     let builder = ctx.create_builder();
     // add global _GC_MAP_

@@ -18,6 +18,7 @@ pub unsafe fn add_symbol(name: &str, ptr: *const ()) {
     use llvm_sys::support;
     use std::os::raw::c_void;
     let name = std::ffi::CString::new(name).unwrap();
+    log::debug!("add symbol {} at {:p}", name.to_str().unwrap(), ptr);
     let addr = ptr as *mut c_void;
     support::LLVMAddSymbol(name.as_ptr(), addr)
 }
