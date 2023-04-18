@@ -41,6 +41,7 @@ kagari = { path = "./kagari" }
 indicatif = "0.17"
 parking_lot = "0.12"
 derivative = "2.2"
+console = "0.15"
 
 [dependencies.nom]
 version = "7"

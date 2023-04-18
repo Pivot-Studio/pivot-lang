@@ -27,6 +27,15 @@ pub struct UseNode {
     pub singlecolon: bool,
 }
 
+impl UseNode {
+    pub(crate) fn is_complete(&self) -> bool {
+        !self.ids.is_empty() && self.complete
+    }
+    pub(crate) fn get_last_id(&self) -> Option<String> {
+        self.ids.last().map(|x| x.as_ref().name.clone())
+    }
+}
+
 impl PrintTrait for UseNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

@@ -1,8 +1,9 @@
-use super::{dot, node::program::ModWrapper};
+use super::node::program::ModWrapper;
 use crate::{
     ast::{
-        accumulators::{Diagnostics, ModBuffer},
+        accumulators::ModBuffer,
         builder::llvmbuilder::get_target_machine,
+        diag::handle_errors,
         node::program::Program,
         pass::{IS_JIT, MAP_NAMES},
     },
@@ -11,148 +12,35 @@ use crate::{
     utils::read_config::get_config_path,
     Db,
 };
-use ariadne::Source;
 use colored::Colorize;
-use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use indicatif::{ProgressBar, ProgressDrawTarget};
 use inkwell::{
     context::Context,
     module::Module,
     passes::{PassManager, PassManagerBuilder},
     OptimizationLevel,
 };
-use lazy_static::lazy_static;
-use log::{debug, info, trace, warn};
+use log::{debug, trace, warn};
 use pl_linker::{linker::create_with_target, mun_target::spec::Target};
 use rustc_hash::FxHashSet;
 use std::{
     env, fs,
     path::{Path, PathBuf},
     sync::atomic::Ordering,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Copy)]
-pub struct Options {
-    pub genir: bool,
-    pub printast: bool,
-    pub flow: bool,
-    pub optimization: HashOptimizationLevel,
-    pub fmt: bool,
-    pub jit: bool,
-}
+mod options;
 
-#[repr(u32)]
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
-pub enum HashOptimizationLevel {
-    None = 0,
-    Less = 1,
-    Default = 2,
-    Aggressive = 3,
-}
+pub use options::*;
+mod progress;
 
-impl Default for HashOptimizationLevel {
-    /// Returns the default value for `OptimizationLevel`, namely `OptimizationLevel::Default`.
-    fn default() -> Self {
-        HashOptimizationLevel::Default
-    }
-}
-
-impl HashOptimizationLevel {
-    pub fn to_llvm(self) -> OptimizationLevel {
-        match self {
-            HashOptimizationLevel::None => OptimizationLevel::None,
-            HashOptimizationLevel::Less => OptimizationLevel::Less,
-            HashOptimizationLevel::Default => OptimizationLevel::Default,
-            HashOptimizationLevel::Aggressive => OptimizationLevel::Aggressive,
-        }
-    }
-}
-
-/// # ActionType
-/// lsp action type
-#[derive(Debug, Clone, PartialEq, Eq, Copy, Hash)]
-pub enum ActionType {
-    Completion,
-    GotoDef,
-    FindReferences,
-    SemanticTokensFull,
-    Diagnostic,
-    Hover,
-    Compile,
-    PrintAst,
-    Flow,
-    Fmt,
-    LspFmt,
-    Hint,
-    DocSymbol,
-    SignatureHelp,
-}
-
-lazy_static::lazy_static! {
-    pub static ref COMPILE_PROGRESS: ProgressBar = {
-        ProgressBar::hidden()
-    };
-}
+pub use progress::*;
+#[cfg(feature = "jit")]
+mod jit;
 
 #[cfg(feature = "jit")]
-pub fn run(p: &Path, opt: OptimizationLevel) -> i64 {
-    // windows doesn't support jit with shadow stack yet
-    if cfg!(windows) {
-        eprintln!("jit is not yet supported on windows");
-        return 0;
-    }
-    type MainFunc = unsafe extern "C" fn() -> i64;
-    use std::ffi::CString;
-
-    use immix::set_shadow_stack_addr;
-    use inkwell::support;
-    use llvm_sys::execution_engine::LLVMGetGlobalValueAddress;
-    vm::logger::SimpleLogger::init_from_env_default("PL_LOG", log::LevelFilter::Error);
-    vm::reg();
-    // FIXME: currently stackmap support on jit code is not possible due to
-    // lack of support in inkwell https://github.com/TheDan64/inkwell/issues/296
-    // so we disable gc in jit mode for now
-    // immix::gc_disable_auto_collect();
-    // extern "C" fn gc_init(ptr: *mut u8) {
-    //     println!("gc init {:p}", ptr);
-    //     immix::gc_init(ptr);
-    // }
-    immix::set_shadow_stack(true);
-
-    support::enable_llvm_pretty_stack_trace();
-    let ctx = &Context::create();
-    let re = Module::parse_bitcode_from_path(p, ctx).unwrap();
-    // let chain = re.get_global("llvm_gc_root_chain").unwrap();
-    // // chain.set_thread_local(true);
-    // // chain.set_thread_local_mode(Some(inkwell::ThreadLocalMode::InitialExecTLSModel));
-    // // add a new function to the module, which return address of llvm_gc_root_chain
-
-    // re.as_mut_ptr()
-    // inkwell::targets::Target::initialize_native(&InitializationConfig::default()).unwrap();
-    // let mut engine: MaybeUninit<*mut LLVMOpaqueExecutionEngine> = MaybeUninit::uninit();
-    // let engine = unsafe {
-    //     immix::CreatePLJITEngine(
-    //         engine.as_mut_ptr() as *mut _ as _,
-    //         re.as_mut_ptr() as _,
-    //         opt as u32,
-    //         gc_init,
-    //     );
-    //     let engine = engine.assume_init();
-    //     ExecutionEngine::new(Rc::new(engine), true)
-    // };
-    let engine = re.create_jit_execution_engine(opt).unwrap();
-
-    unsafe {
-        engine.run_static_constructors();
-
-        let c_str = CString::new("llvm_gc_root_chain").unwrap();
-        let addr = LLVMGetGlobalValueAddress(engine.as_mut_ptr(), c_str.as_ptr());
-
-        set_shadow_stack_addr(addr as *mut u8);
-        let f = engine.get_function::<MainFunc>("main").unwrap();
-        f.call()
-    }
-}
+pub use jit::*;
 
 #[salsa::tracked]
 pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
@@ -166,6 +54,7 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
     input?;
     let input = input.unwrap();
     let re = compile_dry_file(db, input);
+    // calculate find references results
     if let Some(res) = db.get_ref_str() {
         if let Some(plmod) = re {
             plmod
@@ -229,17 +118,6 @@ pub fn run_pass(llvmmod: &Module, op: OptimizationLevel) {
     mpm.run_on(llvmmod);
 }
 
-lazy_static! {
-    static ref PROGRESS_STYLE: ProgressStyle = ProgressStyle::with_template(
-        "{prefix:.bold.dim} {spinner} [{bar:40.cyan/blue}] {wide_msg:.green} ({elapsed})",
-    )
-    .unwrap()
-    .progress_chars("#>-");
-    static ref MSG_PROGRESS_STYLE: ProgressStyle =
-        ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg:.green} ({elapsed})",)
-            .unwrap();
-}
-
 #[salsa::tracked]
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let total_steps = if op.jit { 2 } else { 3 };
@@ -249,71 +127,19 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     pb.enable_steady_tick(Duration::from_millis(50));
     pb.set_style(PROGRESS_STYLE.clone());
     pb.set_draw_target(ProgressDrawTarget::stderr());
-    pb.set_prefix(format!("[{:2}/{:2}]", 1, total_steps));
-
+    pb.set_prefix(format!("{}[{:2}/{:2}]", LOOKING_GLASS, 1, total_steps));
+    #[cfg(feature = "jit")]
     inkwell::execution_engine::ExecutionEngine::link_in_mc_jit();
     immix::register_llvm_gc_plugins();
     let targetdir = PathBuf::from("target");
     if !targetdir.exists() {
         fs::create_dir(&targetdir).unwrap();
     }
-    let now = Instant::now();
     compile_dry(db, docs).unwrap();
     pb.finish_with_message("中间代码编译完成");
-    let errs = compile_dry::accumulated::<Diagnostics>(db, docs);
-    let mut errs_num = 0;
     let mods = compile_dry::accumulated::<ModBuffer>(db, docs);
-    if !errs.is_empty() {
-        for e in errs.iter() {
-            let mut path = e.0.clone();
-            for e in e.1.iter() {
-                if let Some(src) = e.raw.source.clone() {
-                    path = src;
-                }
-                e.print(
-                    &path,
-                    move |db, id| {
-                        Source::from(docs.get_file_content(db, id.to_string()).unwrap().text(db))
-                    },
-                    db,
-                );
-                if e.is_err() {
-                    errs_num += 1
-                }
-            }
-        }
-        if errs_num > 0 {
-            if errs_num == 1 {
-                log::error!(
-                    "{}",
-                    format!("compile failed: there is {} error", errs_num).bright_red()
-                );
-                println!("{}", dot::ERROR);
-                return;
-            }
-            log::error!(
-                "{}",
-                format!("compile failed: there are {} errors", errs_num).bright_red()
-            );
-            println!("{}", dot::TOOMANYERROR);
-            return;
-        }
-    }
-    if op.printast {
-        let time = now.elapsed();
-        info!("print ast done, time: {:?}", time);
-        return;
-    }
-    if op.fmt {
-        let time = now.elapsed();
-        info!("gen source done, time: {:?}", time);
-        return;
-    }
-    if op.flow {
-        let time = now.elapsed();
-        info!("gen flow done, time: {:?}", time);
-        return;
-    }
+    handle_errors(db, docs);
+
     let mut objs = vec![];
     let ctx = Context::create();
     let tm = get_target_machine(op.optimization.to_llvm());
@@ -322,7 +148,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let pb = ProgressBar::new(mods.len() as u64);
     pb.enable_steady_tick(Duration::from_millis(50));
     pb.set_style(PROGRESS_STYLE.clone());
-    pb.set_prefix(format!("[{:2}/{:2}]", 2, total_steps));
+    pb.set_prefix(format!("{}[{:2}/{:2}]", TRUCK, 2, total_steps));
     for m in mods {
         pb.inc(1);
         // pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
@@ -366,11 +192,11 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     llvmmod.set_data_layout(&tm.get_target_data().get_data_layout());
     if op.jit {
         llvmmod.write_bitcode_to_path(Path::new(&out));
-        eprintln!("jit executable file written to: {}", &out);
+        eprintln!("{}jit executable file written to: {}", SPARKLE, &out);
     } else {
         pb.enable_steady_tick(Duration::from_millis(50));
         pb.set_style(MSG_PROGRESS_STYLE.clone());
-        pb.set_prefix(format!("[{:2}/{:2}]", 3, total_steps));
+        pb.set_prefix(format!("{}[{:2}/{:2}]", CLIP, 3, total_steps));
         pb.set_message("正在链接目标文件");
         #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
         let pl_target = Target::search("x86_64-apple-darwin").expect("get target failed");
@@ -378,10 +204,8 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         let pl_target = Target::host_target().expect("get host target failed");
         let mut t = create_with_target(&pl_target);
 
-        // let mut cmd = Command::new("clang-14");
         if cfg!(target_os = "linux") {
             trace!("target os is linux");
-            // cmd.arg("-ltinfo");
         }
         let root = env::var("PL_ROOT");
         if root.is_err() {
@@ -390,14 +214,8 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         }
         let root = root.unwrap();
         let vmpath = if cfg!(target_os = "windows") {
-            // cmd = Command::new("clang");
-            // f = out.clone();
             fo.push_str(".exe");
             format!("{}\\vm.lib", root)
-            // cmd.arg("-lws2_32")
-            //     .arg("-lbcrypt")
-            //     .arg("-luserenv")
-            //     .arg("-ladvapi32");
         } else {
             let mut p = PathBuf::from(&root);
             p.push("libvm.a");
@@ -406,7 +224,6 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
                 .to_str()
                 .unwrap()
                 .to_string()
-            // cmd.arg("-pthread").arg("-ldl");
         };
         for o in objs {
             t.add_object(o.as_path()).unwrap();
@@ -420,14 +237,9 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
                 "{}",
                 format!("link failed: {}", res.unwrap_err()).bright_red()
             );
-            // eprintln!("target triple: {}", tm.get_triple());
         } else {
             pb.finish_with_message("目标文件链接完成");
-            eprintln!("link succ, output file: {}", fo);
+            eprintln!("{}link succ, output file: {}", SPARKLE, fo);
         }
     }
-    // println!("jit executable file writted to: {}", &out);
-    // //  TargetMachine::get_default_triple()
-    // let time = now.elapsed();
-    // println!("compile succ, time: {:?}", time);
 }

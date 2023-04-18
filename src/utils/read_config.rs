@@ -4,7 +4,11 @@ use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-use crate::{ast::compiler::COMPILE_PROGRESS, nomparser::SourceProgram, Db};
+use crate::{
+    ast::{compiler::COMPILE_PROGRESS, node::pkg::UseNode},
+    nomparser::SourceProgram,
+    Db,
+};
 
 pub fn get_config_path(current: String) -> Result<String, &'static str> {
     let mut cur_path = PathBuf::from(current);
@@ -46,6 +50,35 @@ pub struct Config {
     pub deps: Option<BTreeMap<String, Dependency>>,
     #[serde(skip)]
     pub root: String,
+}
+
+#[salsa::tracked]
+pub struct ConfigWrapper {
+    #[return_ref]
+    config: Config,
+    #[return_ref]
+    pub use_node: UseNode,
+}
+
+#[salsa::tracked]
+impl ConfigWrapper {
+    #[salsa::tracked(lru = 32)]
+    pub(crate) fn resolve_dep_path(self, db: &dyn Db) -> PathBuf {
+        let u = self.use_node(db);
+        let mut path = PathBuf::from(self.config(db).root.clone());
+        // 加载依赖包的路径
+        if let Some(cm) = &self.config(db).deps {
+            // 如果use的是依赖包
+            if let Some(dep) = cm.get(&u.ids[0].name) {
+                path = path.join(&dep.path);
+            }
+        }
+        for p in u.ids[1..].iter() {
+            path = path.join(p.name.clone());
+        }
+        path = path.with_extension("pi");
+        path
+    }
 }
 
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq, Default, Hash)]

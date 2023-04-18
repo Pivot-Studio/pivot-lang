@@ -14,10 +14,9 @@ use crate::ast::ctx::{self, Ctx};
 use crate::ast::plmod::LSPDef;
 use crate::ast::plmod::Mod;
 use crate::flow::display::Dot;
-use crate::lsp::mem_docs::{EmitParams, MemDocsInput};
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
-use crate::utils::read_config::Config;
+use crate::utils::read_config::ConfigWrapper;
 use crate::Db;
 use colored::Colorize;
 use inkwell::context::Context;
@@ -111,16 +110,48 @@ impl Node for ProgramNode {
     }
 }
 
-#[salsa::tracked]
-pub struct Program {
-    pub node: ProgramNodeWrapper,
-    pub params: EmitParams,
-    pub docs: MemDocsInput,
-    pub config: Config,
+lazy_static::lazy_static! {
+    static ref DEFAULT_USE_NODES: Vec<Box<NodeEnum>> = {
+        let core = Box::new(VarNode {
+            name: "core".to_string(),
+            range: Default::default(),
+        });
+        let gc = Box::new(VarNode {
+            name: "gc".to_string(),
+            range: Default::default(),
+        });
+        let mut uses = vec![];
+        uses.push(Box::new(NodeEnum::UseNode(UseNode {
+            ids: vec![core.clone(), gc],
+            range: Default::default(),
+            complete: true,
+            singlecolon: false,
+        })));
+        let builtin = Box::new(VarNode {
+            name: "builtin".to_string(),
+            range: Default::default(),
+        });
+
+        uses.push(Box::new(NodeEnum::UseNode(UseNode {
+            ids: vec![core, builtin],
+            range: Default::default(),
+            complete: true,
+            singlecolon: false,
+        })));
+        uses
+    };
 }
 
 #[salsa::tracked]
 impl Program {
+    #[salsa::tracked(lru = 32)]
+    pub(crate) fn is_active_file(self, db: &dyn Db) -> bool {
+        let params = self.params(db);
+        let f1 = self.docs(db).file(db);
+        let f2 = params.file(db);
+        dunce::canonicalize(f1).unwrap() == dunce::canonicalize(f2).unwrap()
+    }
+
     #[salsa::tracked(lru = 32)]
     pub fn emit(self, db: &dyn Db) -> ModWrapper {
         let pb = &COMPILE_PROGRESS;
@@ -130,46 +161,20 @@ impl Program {
             _ => panic!("not a program"),
         };
         let params = self.params(db);
-        let f1 = self.docs(db).file(db);
-        let f2 = params.file(db);
-        let is_active_file = dunce::canonicalize(f1).unwrap() == dunce::canonicalize(f2).unwrap();
 
         let mut modmap = FxHashMap::<String, Mod>::default();
         let binding = PathBuf::from(self.params(db).file(db)).with_extension("");
         let pkgname = binding.file_name().unwrap().to_str().unwrap();
         // 默认加入gc和builtin module
         if pkgname != "gc" && pkgname != "builtin" {
-            let core = Box::new(VarNode {
-                name: "core".to_string(),
-                range: Default::default(),
-            });
-            let gc = Box::new(VarNode {
-                name: "gc".to_string(),
-                range: Default::default(),
-            });
-            prog.uses.push(Box::new(NodeEnum::UseNode(UseNode {
-                ids: vec![core.clone(), gc],
-                range: Default::default(),
-                complete: true,
-                singlecolon: false,
-            })));
-            let builtin = Box::new(VarNode {
-                name: "builtin".to_string(),
-                range: Default::default(),
-            });
-
-            prog.uses.push(Box::new(NodeEnum::UseNode(UseNode {
-                ids: vec![core, builtin],
-                range: Default::default(),
-                complete: true,
-                singlecolon: false,
-            })));
+            prog.uses.extend_from_slice(&DEFAULT_USE_NODES);
         }
         if pb.length().is_none() {
             pb.set_length(1 + prog.uses.len() as u64);
         } else {
             pb.inc_length(1 + prog.uses.len() as u64);
         }
+        // load dependencies
         for (i, u) in prog.uses.iter().enumerate() {
             pb.set_message(format!(
                 "正在编译包{}的依赖项{}/{}",
@@ -178,40 +183,29 @@ impl Program {
                 prog.uses.len()
             ));
             pb.inc(1);
-            // pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
             let u = if let NodeEnum::UseNode(p) = *u.clone() {
                 p
             } else {
-                continue;
+                unreachable!()
             };
-            if u.ids.is_empty() || !u.complete {
+            if !u.is_complete() {
                 continue;
             }
-            let mut path = PathBuf::from(self.config(db).root);
-            // 加载依赖包的路径
-            if let Some(cm) = self.config(db).deps {
-                // 如果use的是依赖包
-                if let Some(dep) = cm.get(&u.ids[0].name) {
-                    path = path.join(&dep.path);
-                }
-            }
-            for p in u.ids[1..].iter() {
-                path = path.join(p.name.clone());
-            }
-            path = path.with_extension("pi");
+            let wrapper = ConfigWrapper::new(db, self.config(db), u);
+            let path = wrapper.resolve_dep_path(db);
             let f = path.to_str().unwrap().to_string();
-            // eprintln!("use {}", f.clone());
             let f = self.docs(db).get_file_params(db, f, false);
             if f.is_none() {
                 continue;
             }
             let f = f.unwrap();
+            // compile depency module first
             let m = compile_dry_file(db, f);
             if m.is_none() {
                 continue;
             }
             let m = m.unwrap();
-            modmap.insert(u.ids.last().unwrap().name.clone(), m.plmod(db));
+            modmap.insert(wrapper.use_node(db).get_last_id().unwrap(), m.plmod(db));
         }
         let filepath = Path::new(self.params(db).file(db));
         let abs = dunce::canonicalize(filepath).unwrap();
@@ -221,7 +215,7 @@ impl Program {
         // 除了当前用户正打开的文件外，其他文件的编辑位置都输入None，这样可以保证每次用户修改的时候，
         // 未被修改的文件的`emit_file`参数与之前一致，不会被重新分析
         // 修改这里可能导致所有文件被重复分析，从而导致lsp性能下降
-        let pos = if is_active_file {
+        let pos = if self.is_active_file(db) {
             self.docs(db).edit_pos(db)
         } else {
             None
@@ -249,6 +243,36 @@ impl Program {
         );
 
         let nn = p.node(db).node(db);
+        pb.set_message(format!("正在编译包{}", pkgname));
+        pb.inc(1);
+        // the actual compilation happens here
+        let m = emit_file(db, p);
+        let plmod = m.plmod(db);
+        if self.is_active_file(db) {
+            if pos.is_some() {
+                Completions::push(
+                    db,
+                    plmod
+                        .completions
+                        .borrow()
+                        .iter()
+                        .map(|x| x.0.clone())
+                        .collect(),
+                );
+            }
+            let hints = plmod.hints.borrow().clone();
+            Hints::push(db, hints);
+            let docs = plmod.doc_symbols.borrow().clone();
+            DocSymbols::push(db, docs);
+        }
+        self.handle_actions(db, p, nn, m);
+        m
+    }
+
+    /// Handle different actions
+    fn handle_actions(self, db: &dyn Db, p: ProgramEmitParam, nn: Box<NodeEnum>, m: ModWrapper) {
+        let params = self.params(db);
+        let plmod = m.plmod(db);
         match params.action(db) {
             ActionType::PrintAst => {
                 println!("file: {}", p.fullpath(db).green());
@@ -304,32 +328,6 @@ impl Program {
                     }
                 }
             }
-            _ => {}
-        }
-        pb.set_message(format!("正在编译包{}", pkgname));
-        pb.inc(1);
-        // pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
-        let m = emit_file(db, p);
-        let plmod = m.plmod(db);
-        let params = self.params(db);
-        if is_active_file {
-            if pos.is_some() {
-                Completions::push(
-                    db,
-                    plmod
-                        .completions
-                        .borrow()
-                        .iter()
-                        .map(|x| x.0.clone())
-                        .collect(),
-                );
-            }
-            let hints = plmod.hints.borrow().clone();
-            Hints::push(db, hints);
-            let docs = plmod.doc_symbols.borrow().clone();
-            DocSymbols::push(db, docs);
-        }
-        match params.action(db) {
             ActionType::FindReferences => {
                 let (pos, _) = params.params(db).unwrap();
                 let range = pos.to(pos);
@@ -392,34 +390,14 @@ impl Program {
             }
             _ => {}
         }
-        m
     }
 }
-#[salsa::tracked]
-pub struct ProgramEmitParam {
-    pub node: ProgramNodeWrapper,
-    #[return_ref]
-    pub dir: String,
-    #[return_ref]
-    pub file: String,
-    #[return_ref]
-    pub fullpath: String,
-    #[return_ref]
-    pub params: LspParams,
-    pub submods: FxHashMap<String, Mod>,
-    #[return_ref]
-    pub file_content: String,
-}
+pub use salsa_structs::*;
+mod salsa_structs;
 
-#[salsa::tracked]
-pub struct LspParams {
-    #[return_ref]
-    pub modpath: String,
-    pub params: Option<Pos>,
-    pub config: Config,
-    pub is_compile: bool,
-}
-
+/// # emit_file
+///
+/// compile a pi file to llvm ir, or do some lsp analysis
 #[salsa::tracked(lru = 32)]
 pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     log::info!("emit_file: {}", params.fullpath(db),);
@@ -484,16 +462,6 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         );
     }
     ModWrapper::new(db, ctx.plmod)
-}
-
-#[salsa::tracked]
-pub struct ProgramNodeWrapper {
-    pub node: Box<NodeEnum>,
-}
-
-#[salsa::tracked]
-pub struct ModWrapper {
-    pub plmod: Mod,
 }
 
 /// 尽管实际上Mod并不是线程安全的，但是它的使用特性导致

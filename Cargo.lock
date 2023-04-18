@@ -1215,6 +1215,7 @@ dependencies = [
  "ariadne",
  "clap 4.2.2",
  "colored",
+ "console",
  "crossbeam-channel",
  "derivative",
  "dissimilar",

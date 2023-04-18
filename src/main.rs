@@ -35,7 +35,10 @@ pub struct Jar(
     program::ProgramEmitParam,
     program::emit_file,
     program::LspParams,
+    program::Program_is_active_file,
     utils::read_config::get_config,
+    utils::read_config::ConfigWrapper,
+    utils::read_config::ConfigWrapper_resolve_dep_path,
 );
 
 pub trait Db: salsa::DbWithJar<Jar> {
