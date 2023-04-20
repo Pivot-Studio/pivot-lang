@@ -25,5 +25,3 @@ default = ["static", "immix"]
 jit = ["internal_macro/jit"]
 static = ["internal_macro/static"]
 immix = ["immix/zero_init"]
-
-

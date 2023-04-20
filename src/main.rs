@@ -2,49 +2,9 @@
 #![allow(clippy::clone_double_ref)]
 #![allow(clippy::derive_ord_xor_partial_ord)]
 #![allow(clippy::missing_safety_doc)]
-#[salsa::jar(db = Db)]
-pub struct Jar(
-    nomparser::SourceProgram,
-    nomparser::parse,
-    mem_docs::MemDocsInput,
-    mem_docs::MemDocsInput_get_current_file_content,
-    mem_docs::MemDocsInput_get_file_content,
-    mem_docs::MemDocsInput_get_file_params,
-    mem_docs::EmitParams,
-    mem_docs::FileCompileInput,
-    mem_docs::FileCompileInput_get_file_content,
-    mem_docs::FileCompileInput_get_emit_params,
-    compiler::compile,
-    compiler::compile_dry,
-    compiler::compile_dry_file,
-    accumulators::Diagnostics,
-    accumulators::PLReferences,
-    accumulators::GotoDef,
-    accumulators::Completions,
-    accumulators::PLSemanticTokens,
-    accumulators::PLHover,
-    accumulators::ModBuffer,
-    accumulators::PLFormat,
-    accumulators::Hints,
-    accumulators::DocSymbols,
-    accumulators::PLSignatureHelp,
-    program::Program,
-    program::Program_emit,
-    program::ProgramNodeWrapper,
-    program::ModWrapper,
-    program::ProgramEmitParam,
-    program::emit_file,
-    program::LspParams,
-    program::Program_is_active_file,
-    utils::read_config::get_config,
-    utils::read_config::ConfigWrapper,
-    utils::read_config::ConfigWrapper_resolve_dep_path,
-);
 
-pub trait Db: salsa::DbWithJar<Jar> {
-    fn set_ref_str(&self, ref_str: Option<String>);
-    fn get_ref_str(&self) -> Option<String>;
-}
+mod jar;
+pub use jar::*;
 
 mod ast;
 mod db;
@@ -58,11 +18,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use ast::{
-    accumulators,
-    compiler::{self, ActionType, HashOptimizationLevel},
-    node::program,
-};
+use ast::compiler::{self, ActionType, HashOptimizationLevel};
 use clap::{CommandFactory, Parser, Subcommand};
 use db::Database;
 use lsp::{
@@ -183,7 +139,7 @@ fn main() {
         logger.timestamp(stderrlog::Timestamp::Off).init().unwrap();
         let db = Database::default();
         let filepath = Path::new(name);
-        let abs = dunce::canonicalize(filepath).unwrap();
+        let abs = crate::utils::canonicalize(filepath).unwrap();
         let op = compiler::Options {
             genir: cli.genir,
             printast: cli.printast,

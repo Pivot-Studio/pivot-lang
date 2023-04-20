@@ -28,6 +28,7 @@ use super::node::Num;
 use super::node::TypeNode;
 use super::node::TypeNodeEnum;
 use super::range::Range;
+#[cfg(feature = "llvm")]
 use immix::ObjectType;
 use indexmap::IndexMap;
 
@@ -261,6 +262,7 @@ fn expect_pub_err(err: ErrorCode, ctx: &Ctx, range: Range, name: String) -> Resu
         .add_to_ctx(ctx))
 }
 impl PLType {
+    #[cfg(feature = "llvm")]
     pub fn get_immix_type(&self) -> ObjectType {
         match self {
             PLType::Struct(_) | PLType::Arr(_) => ObjectType::Complex,

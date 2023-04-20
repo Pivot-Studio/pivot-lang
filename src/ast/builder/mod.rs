@@ -203,6 +203,7 @@ pub enum BuilderEnum<'a, 'ctx> {
 
 // REVIEW: Maybe this belongs in some sort of prelude?
 /// This enum defines how to compare a `left` and `right` `IntValue`.
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum IntPredicate {
     /// Equal
@@ -238,6 +239,7 @@ pub enum IntPredicate {
 
 // REVIEW: Maybe this belongs in some sort of prelude?
 /// Defines how to compare a `left` and `right` `FloatValue`.
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum FloatPredicate {
     /// Returns true if `left` == `right` and neither are NaN

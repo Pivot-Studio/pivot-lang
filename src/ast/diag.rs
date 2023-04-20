@@ -172,9 +172,9 @@ impl Display for DiagCode {
     }
 }
 
-use lsp_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag, Url};
+use lsp_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag};
 
-use crate::{lsp::mem_docs::MemDocsInput, Db};
+use crate::{lsp::mem_docs::MemDocsInput, utils::url_from_path, Db};
 
 use super::{
     accumulators::Diagnostics,
@@ -338,7 +338,7 @@ impl PLDiag {
         self.raw.labels.iter().for_each(|label| {
             let mut lab = lsp_types::DiagnosticRelatedInformation {
                 location: lsp_types::Location {
-                    uri: Url::from_file_path(&label.file).unwrap(),
+                    uri: url_from_path(&label.file),
                     range: label.range.to_diag_range(),
                 },
                 message: "related source here".to_string(),
@@ -482,7 +482,6 @@ pub(crate) fn handle_errors(db: &dyn Db, docs: MemDocsInput) {
                 format!("compile failed: there are {} errors", errs_num).bright_red()
             );
             println!("{}", dot::TOOMANYERROR);
-            
         }
     }
 }

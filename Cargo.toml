@@ -13,7 +13,7 @@ lazy_static = "1.4"
 paste = "1.0"
 llvm-sys = { version = "140", optional = true }
 internal_macro = { path = "./internal_macro", default-features = false }
-pl_linker = { path = "./pl_linker" }
+pl_linker = { path = "./pl_linker", optional = true }
 vm = { path = "./vm", optional = true, features = ["jit"] }
 immix = { path = "./immix", optional = true, features = ["llvm_gc_plugin", "llvm_stackmap"] }
 nom_locate = "4.0"
@@ -31,7 +31,7 @@ rustc-hash = "1.1"
 crossbeam-channel = "0.5"
 salsa = { package = "salsa-2022", git = "https://github.com/salsa-rs/salsa", branch = "master" }
 enum_dispatch = "0.3"
-threadpool = "1.8"
+threadpool = {version = "1.8", optional = true}
 dunce = "1.0"
 toml = "0.7"
 ariadne = "0.2"
@@ -43,21 +43,34 @@ parking_lot = "0.12"
 derivative = "2.2"
 console = "0.15"
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+console_error_panic_hook = "0.1.7"
+wasm-logger = "0.2.0"
+
+
 [dependencies.nom]
 version = "7"
 features = ["alloc"]
 
 
-
-[features]
-default = ["static", "jit", "llvm"]
-jit = ["vm","internal_macro/jit", "llvm"]
-llvm = ["inkwell", "llvm-sys", "immix"]
-static = ["immix/auto_gc"]
-
 [[bin]]
 name = "plc"
 path = "src/main.rs"
+
+[lib]
+name = "plc"
+path = "src/lib.rs"
+crate-type = ["cdylib"]
+
+
+[features]
+default = ["thread", "llvm", "jit"]
+jit = ["vm", "internal_macro/jit", "llvm"]
+llvm = ["inkwell", "llvm-sys", "immix", "pl_linker"]
+thread = ["threadpool"]
+
+
 
 [workspace]
 members = [

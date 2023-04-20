@@ -28,6 +28,7 @@ use crate::lsp::semantic_tokens::type_index;
 use crate::mismatch_err;
 use crate::skip_if_not_modified_by;
 use crate::utils::read_config::Config;
+use crate::utils::url_from_path;
 use crate::Db;
 
 use indexmap::IndexMap;
@@ -612,7 +613,10 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn get_file_url(&self) -> Url {
-        Url::from_file_path(self.plmod.path.clone()).unwrap()
+        #[cfg(any(unix, windows, target_os = "redox", target_os = "wasi"))]
+        return Url::from_file_path(self.plmod.path.clone()).unwrap();
+        #[cfg(not(any(unix, windows, target_os = "redox", target_os = "wasi")))]
+        return Url::parse("https://example.net").unwrap();
     }
 
     pub fn get_file(&self) -> String {
@@ -627,7 +631,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.plmod.defs.borrow_mut().insert(
             range,
             LSPDef::Scalar(Location {
-                uri: Url::from_file_path(file).unwrap(),
+                uri: url_from_path(&file),
                 range: destrange.to_diag_range(),
             }),
         );

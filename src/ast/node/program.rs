@@ -152,11 +152,12 @@ impl Program {
         let params = self.params(db);
         let f1 = self.docs(db).file(db);
         let f2 = params.file(db);
-        dunce::canonicalize(f1).unwrap() == dunce::canonicalize(f2).unwrap()
+        crate::utils::canonicalize(f1).unwrap() == crate::utils::canonicalize(f2).unwrap()
     }
 
     #[salsa::tracked(lru = 32)]
     pub fn emit(self, db: &dyn Db) -> ModWrapper {
+        #[cfg(not(target_arch = "wasm32"))]
         let pb = &COMPILE_PROGRESS;
         let n = *self.node(db).node(db);
         let mut prog = match n {
@@ -169,9 +170,11 @@ impl Program {
         let binding = PathBuf::from(self.params(db).file(db)).with_extension("");
         let pkgname = binding.file_name().unwrap().to_str().unwrap();
         // 默认加入gc和builtin module
+        #[cfg(not(target_arch = "wasm32"))] // TODO support std on wasm
         if pkgname != "gc" && pkgname != "builtin" {
             prog.uses.extend_from_slice(&DEFAULT_USE_NODES);
         }
+        #[cfg(not(target_arch = "wasm32"))]
         if pb.length().is_none() {
             pb.set_length(1 + prog.uses.len() as u64);
         } else {
@@ -179,12 +182,14 @@ impl Program {
         }
         // load dependencies
         for (i, u) in prog.uses.iter().enumerate() {
+            #[cfg(not(target_arch = "wasm32"))]
             pb.set_message(format!(
                 "正在编译包{}的依赖项{}/{}",
                 pkgname,
                 i,
                 prog.uses.len()
             ));
+            #[cfg(not(target_arch = "wasm32"))]
             pb.inc(1);
             let u = if let NodeEnum::UseNode(p) = *u.clone() {
                 p
@@ -211,7 +216,7 @@ impl Program {
             modmap.insert(wrapper.use_node(db).get_last_id().unwrap(), m.plmod(db));
         }
         let filepath = Path::new(self.params(db).file(db));
-        let abs = dunce::canonicalize(filepath).unwrap();
+        let abs = crate::utils::canonicalize(filepath).unwrap();
         let dir = abs.parent().unwrap().to_str().unwrap();
         let fname = abs.file_name().unwrap().to_str().unwrap();
         // 不要修改这里，除非你知道自己在干什么
@@ -246,7 +251,9 @@ impl Program {
         );
 
         let nn = p.node(db).node(db);
+        #[cfg(not(target_arch = "wasm32"))]
         pb.set_message(format!("正在编译包{}", pkgname));
+        #[cfg(not(target_arch = "wasm32"))]
         pb.inc(1);
         // the actual compilation happens here
         let m = emit_file(db, p);
@@ -414,6 +421,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     );
     ctx.plmod.submods = params.submods(db);
     // imports all builtin symbols
+    #[cfg(not(target_arch = "wasm32"))] // TODO support std on wasm
     if ctx.plmod.name != "builtin" && ctx.plmod.name != "gc" {
         let builtin_mod = ctx.plmod.submods.get("builtin").unwrap().clone();
         ctx.plmod.import_all_public_symbols_from(&builtin_mod);

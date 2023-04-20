@@ -18,6 +18,7 @@ use inkwell::{
     OptimizationLevel,
 };
 use log::{debug, trace, warn};
+#[cfg(feature = "llvm")]
 use pl_linker::{linker::create_with_target, mun_target::spec::Target};
 use rustc_hash::FxHashSet;
 use std::{
@@ -65,6 +66,7 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
 #[salsa::tracked]
 pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrapper> {
     if docs.file(db).ends_with(".toml") {
+        log::error!("lsp error: toml file {}", docs.file(db));
         // skip toml
         return None;
     }
@@ -223,7 +225,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         } else {
             let mut p = PathBuf::from(&root);
             p.push("libvm.a");
-            dunce::canonicalize(&p)
+            crate::utils::canonicalize(&p)
                 .expect("failed to find libvm")
                 .to_str()
                 .unwrap()
