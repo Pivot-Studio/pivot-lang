@@ -23,8 +23,10 @@ use clap::{CommandFactory, Parser, Subcommand};
 use db::Database;
 use lsp::{
     mem_docs::{self, MemDocsInput},
-    start_lsp,
 };
+
+#[cfg(not(target_arch = "wasm32"))]
+use lsp::start_lsp;
 
 /// Pivot Lang compiler program
 #[derive(Parser)]
@@ -118,6 +120,8 @@ enum RunCommand {
 }
 
 fn main() {
+    #[cfg(target_arch = "wasm32")]
+    unimplemented!("compiler on wasm32 is not supported yet");
     let cli = Cli::parse();
     let opt = match cli.optimization {
         0 => HashOptimizationLevel::None,
@@ -183,6 +187,7 @@ fn main() {
                     .timestamp(stderrlog::Timestamp::Microsecond)
                     .init()
                     .unwrap();
+                #[cfg(not(target_arch = "wasm32"))]
                 start_lsp().unwrap();
             }
             RunCommand::Fmt {} => {

@@ -115,16 +115,22 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
         return Err(format!("配置文件解析错误:{:?}", re));
     }
     let mut config: Config = re.unwrap();
-    // let mut deps = BTreeMap::<String, Dependency>::default();
-    // let dep = Dependency {
-    //     path: crate::utils::canonicalize(path.path())
-    //         .unwrap()
-    //         .to_str()
-    //         .unwrap()
-    //         .to_string(),
-    //     ..Default::default()
-    // };
-    // deps.insert(path.file_name().to_str().unwrap().to_string(), dep);
+    // let d = crate::lsp::wasm::PLLIB_DIR;
+    let mut deps = BTreeMap::<String, Dependency>::default();
+    for path in crate::lsp::wasm::PLLIB_DIR.dirs() {
+        if  !path.contains("thirdparty") {
+            let dep = Dependency {
+                path: crate::utils::canonicalize(path.path())
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+                    .to_string(),
+                ..Default::default()
+            };
+            deps.insert(path.path().file_name().unwrap().to_str().unwrap().into(), dep);
+        }
+    }
+    config.deps = Some(deps);
     return Ok(config);
 }
 

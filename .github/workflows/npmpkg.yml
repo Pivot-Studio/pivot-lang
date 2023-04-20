@@ -1,0 +1,29 @@
+name: Publish Package to npmjs
+on:
+    push:
+      branches:
+        - master
+        - feat/npm_pkg
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        name: Install Rust (stable)
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          override: true
+      - name: install rust
+        run: cargo install wasm-pack
+      - name: build wasm
+        run: wasm-pack build --target bundler --no-default-features --scope pivot-lang --release
+      # Setup .npmrc file to publish to npm
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '16.x'
+          registry-url: 'https://registry.npmjs.org'
+      - run: cd pkg && npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

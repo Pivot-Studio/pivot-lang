@@ -41,4 +41,4 @@ cmake-clean:
 	@find . -name CMakeCache.txt -type f -delete
 
 lsp-wasm:
-	@wasm-pack build --target bundler --no-default-features
+	@wasm-pack build --target bundler --no-default-features --scope pivot-lang

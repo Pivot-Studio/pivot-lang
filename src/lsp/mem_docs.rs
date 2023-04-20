@@ -200,10 +200,10 @@ impl MemDocs {
     pub fn get_file_content(&mut self, db: &dyn Db, key: &str) -> Option<SourceProgram> {
         // let sanitized = crate::utils::canonicalize(key).unwrap();
         // let key = sanitized.to_str().unwrap();
-        debug!("mdmdoc get_file_content {}", key);
+        debug!("memdoc get_file_content {}", key);
         let mem = self.get(key);
         if let Some(mem) = mem {
-            debug!("mdmdoc get_file_content result \n{}", mem.text(db));
+            debug!("memdoc get_file_content result \n{}", mem.text(db));
             return Some(*mem);
         }
         let re = read_to_string(key);

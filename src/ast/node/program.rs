@@ -170,7 +170,7 @@ impl Program {
         let binding = PathBuf::from(self.params(db).file(db)).with_extension("");
         let pkgname = binding.file_name().unwrap().to_str().unwrap();
         // 默认加入gc和builtin module
-        #[cfg(not(target_arch = "wasm32"))] // TODO support std on wasm
+        // #[cfg(not(target_arch = "wasm32"))] // TODO support std on wasm
         if pkgname != "gc" && pkgname != "builtin" {
             prog.uses.extend_from_slice(&DEFAULT_USE_NODES);
         }
@@ -421,7 +421,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     );
     ctx.plmod.submods = params.submods(db);
     // imports all builtin symbols
-    #[cfg(not(target_arch = "wasm32"))] // TODO support std on wasm
+    // #[cfg(not(target_arch = "wasm32"))] // TODO support std on wasm
     if ctx.plmod.name != "builtin" && ctx.plmod.name != "gc" {
         let builtin_mod = ctx.plmod.submods.get("builtin").unwrap().clone();
         ctx.plmod.import_all_public_symbols_from(&builtin_mod);

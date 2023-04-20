@@ -317,14 +317,14 @@ fn main_loop(
                 });
             }
         })
-        .on::<DocumentSymbolRequest, _>(|id, params| {
-            let uri = url_to_path(params.text_document.uri);
-            docin.set_file(&mut db).to(uri);
-            docin.set_action(&mut db).to(ActionType::DocSymbol);
-            docin
-                .set_params(&mut db)
-                .to(Some((Default::default(), None)));
-            compile_dry(&db, docin);
+        .on::<DocumentSymbolRequest, _>(|id, _| {
+            // let uri = url_to_path(params.text_document.uri);
+            // docin.set_file(&mut db).to(uri);
+            // docin.set_action(&mut db).to(ActionType::DocSymbol);
+            // docin
+            //     .set_params(&mut db)
+            //     .to(Some((Default::default(), None)));
+            // compile_dry(&db, docin);
             let doc_symbols = compile_dry::accumulated::<DocSymbols>(&db, docin);
             let sender = connection.sender.clone();
             if !doc_symbols.is_empty() {

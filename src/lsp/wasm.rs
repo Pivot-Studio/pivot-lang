@@ -1,7 +1,7 @@
 use std::{
     borrow::Borrow,
     cell::RefCell,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex}, fmt::format,
 };
 
 use lazy_static::lazy_static;
@@ -11,10 +11,11 @@ use lsp_types::{
 };
 use rustc_hash::FxHashMap;
 use wasm_bindgen::prelude::wasm_bindgen;
+use include_dir::{include_dir, Dir};
 
 use crate::{
     ast::{
-        accumulators::{Completions, Diagnostics, Hints, PLSemanticTokens},
+        accumulators::{Completions, Diagnostics, DocSymbols, Hints, PLSemanticTokens},
         compiler::{compile_dry, ActionType},
         range::Pos,
     },
@@ -72,18 +73,9 @@ const LSP_DEMO_URI: &str = "http://www.test.com/main.pi";
 
 const LSP_DEMO_CONF_URI: &str = "http://www.test.com/Kagari.toml";
 
-// #[wasm_bindgen]
-// pub unsafe fn highlight(req:&str) {
-//     let mut db = & mut DB;
-//     let docs = Arc::new(Mutex::new(RefCell::new(MemDocs::default())));
-//     let mut tokens = FxHashMap::default();
-//     let mut completions: Vec<Vec<lsp_types::CompletionItem>> = vec![];
-// }
-
 #[wasm_bindgen]
 pub unsafe fn on_change_doc(req: &str) -> String {
-    console_error_panic_hook::set_once();
-    log::error!("req: {}", req);
+    log::info!("req: {}", req);
     let params: DidChangeTextDocumentParams = serde_json::from_str(req).unwrap();
     let docin = *DOCIN;
     let binding = &DB.inner;
@@ -106,8 +98,8 @@ pub unsafe fn on_change_doc(req: &str) -> String {
     docin.set_file(db).to(f);
 
     docin.set_action(db).to(ActionType::Diagnostic);
-    let re = compile_dry(db, docin).unwrap();
-    log::trace!("mod {:#?}", re.plmod(db));
+    let re = compile_dry(db, docin);
+    // log::trace!("mod {:#?}", re.plmod(db));
     // completions = compile_dry::accumulated::<Completions>(db, docin);
     let diags = compile_dry::accumulated::<Diagnostics>(db, docin);
     let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();
@@ -142,9 +134,47 @@ pub unsafe fn on_change_doc(req: &str) -> String {
     .to_string();
 }
 
+pub static PLLIB_DIR: Dir = include_dir!("./planglib");
+
+fn add_file(db: &mut Database, docs: Arc<Mutex<RefCell<MemDocs>>>, fpath:&str,content:&str) {
+    // include!(real_path);
+    // log::error!("add file: {}", fpath);
+    docs.lock().unwrap().borrow_mut().insert(
+        db,
+        fpath.into(),
+        content.into(),
+        fpath.into(),
+    );
+}
+
+fn add_fill_rec(db: &mut Database, docs: Arc<Mutex<RefCell<MemDocs>>>, dir:&Dir) {
+    dir.files().for_each(|f| {
+        let path = f.path();
+        f.contents_utf8().map(|x| {
+            add_file(db, docs.clone(), path.to_str().unwrap(), x);
+        });
+    });
+    dir.dirs().for_each(|d| {
+        add_fill_rec(db, docs.clone(), d);
+    });
+
+}
+
+fn add_pl_libs(db: &mut Database, docs: Arc<Mutex<RefCell<MemDocs>>>) {
+    for entry in PLLIB_DIR.dirs() {
+        let path = entry.path();
+        if path.starts_with("thirdparty"){
+            continue;
+        }
+        add_fill_rec(db, docs.clone(), entry);
+
+        // add_file(db, docs.clone(), path.to_str().unwrap(), content);
+    }
+}
 #[wasm_bindgen]
 pub fn set_init_content(content: &str) -> String {
-    wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
+    console_error_panic_hook::set_once();
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Error));
     let docin = *DOCIN;
     let binding = &DB.inner;
     let db = &mut *binding.borrow_mut();
@@ -163,12 +193,13 @@ pub fn set_init_content(content: &str) -> String {
             .to_string(),
         LSP_DEMO_CONF_URI.to_string(),
     );
+    add_pl_libs(db, docs.clone());
 
     docin.set_file(db).to(LSP_DEMO_URI.to_string());
 
     docin.set_action(db).to(ActionType::Diagnostic);
-    let re = compile_dry(db, docin).unwrap();
-    log::trace!("mod {:#?}", re.plmod(db));
+    let re = compile_dry(db, docin);
+    // log::trace!("mod {:#?}", re.plmod(db));
     // completions = compile_dry::accumulated::<Completions>(db, docin);
     let diags = compile_dry::accumulated::<Diagnostics>(db, docin);
     let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();
@@ -204,7 +235,7 @@ pub fn get_semantic_tokens() -> String {
     let db = &mut *binding.borrow_mut();
     docin.set_action(db).to(ActionType::SemanticTokensFull);
     docin.set_params(db).to(Some((Default::default(), None)));
-    compile_dry(db, docin).unwrap();
+    compile_dry(db, docin);
     // let docs = DOCIN.docs(db);
     let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(db, docin);
     if newtokens.is_empty() {
@@ -228,7 +259,7 @@ pub fn get_semantic_tokens_full() -> String {
     let db = &mut *binding.borrow_mut();
     docin.set_action(db).to(ActionType::SemanticTokensFull);
     docin.set_params(db).to(Some((Default::default(), None)));
-    compile_dry(db, docin).unwrap();
+    compile_dry(db, docin);
     // let docs = DOCIN.docs(db);
     let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(db, docin);
     if newtokens.is_empty() {
@@ -249,6 +280,7 @@ pub fn get_legend() -> String {
 
 #[wasm_bindgen]
 pub fn get_completions() -> String {
+    log::error!("get_completions {:#?}", &*COMPLETIONS.inner.borrow());
     return serde_json::to_value(COMPLETIONS.inner.borrow().clone())
         .unwrap()
         .to_string();
@@ -264,4 +296,14 @@ pub fn get_inlay_hints() -> String {
         hints.push(vec![]);
     }
     return serde_json::to_value(hints[0].clone()).unwrap().to_string();
+}
+
+#[wasm_bindgen]
+pub fn get_doc_symbol() -> String {
+    let docin = *DOCIN;
+    let binding = &DB.inner;
+    let db = &mut *binding.borrow_mut();
+    let doc_symbols = compile_dry::accumulated::<DocSymbols>(db, docin);
+    let symbol = &doc_symbols[0];
+    return serde_json::to_value(symbol).unwrap().to_string();
 }
