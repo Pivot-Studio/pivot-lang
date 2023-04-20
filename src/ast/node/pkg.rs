@@ -77,8 +77,11 @@ impl Node for UseNode {
             ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
         }
         #[cfg(target_arch = "wasm32")]
-        if crate::lsp::wasm::PLLIB_DIR.get_file(path.with_extension("pi")).is_some() {
-            return Ok(Default::default());   
+        if crate::lsp::wasm::PLLIB_DIR
+            .get_file(path.with_extension("pi"))
+            .is_some()
+        {
+            return Ok(Default::default());
         }
         if !path.with_extension("pi").exists() {
             let mut path = path.with_extension("");

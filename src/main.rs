@@ -21,9 +21,7 @@ use std::{
 use ast::compiler::{self, ActionType, HashOptimizationLevel};
 use clap::{CommandFactory, Parser, Subcommand};
 use db::Database;
-use lsp::{
-    mem_docs::{self, MemDocsInput},
-};
+use lsp::mem_docs::{self, MemDocsInput};
 
 #[cfg(not(target_arch = "wasm32"))]
 use lsp::start_lsp;

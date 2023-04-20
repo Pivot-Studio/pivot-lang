@@ -1,9 +1,11 @@
 use std::{
     borrow::Borrow,
     cell::RefCell,
-    sync::{Arc, Mutex}, fmt::format,
+    fmt::format,
+    sync::{Arc, Mutex},
 };
 
+use include_dir::{include_dir, Dir};
 use lazy_static::lazy_static;
 use lsp_types::{
     notification::DidChangeTextDocument, CompletionParams, Diagnostic, DidChangeTextDocumentParams,
@@ -11,7 +13,6 @@ use lsp_types::{
 };
 use rustc_hash::FxHashMap;
 use wasm_bindgen::prelude::wasm_bindgen;
-use include_dir::{include_dir, Dir};
 
 use crate::{
     ast::{
@@ -136,18 +137,16 @@ pub unsafe fn on_change_doc(req: &str) -> String {
 
 pub static PLLIB_DIR: Dir = include_dir!("./planglib");
 
-fn add_file(db: &mut Database, docs: Arc<Mutex<RefCell<MemDocs>>>, fpath:&str,content:&str) {
+fn add_file(db: &mut Database, docs: Arc<Mutex<RefCell<MemDocs>>>, fpath: &str, content: &str) {
     // include!(real_path);
     // log::error!("add file: {}", fpath);
-    docs.lock().unwrap().borrow_mut().insert(
-        db,
-        fpath.into(),
-        content.into(),
-        fpath.into(),
-    );
+    docs.lock()
+        .unwrap()
+        .borrow_mut()
+        .insert(db, fpath.into(), content.into(), fpath.into());
 }
 
-fn add_fill_rec(db: &mut Database, docs: Arc<Mutex<RefCell<MemDocs>>>, dir:&Dir) {
+fn add_fill_rec(db: &mut Database, docs: Arc<Mutex<RefCell<MemDocs>>>, dir: &Dir) {
     dir.files().for_each(|f| {
         let path = f.path();
         f.contents_utf8().map(|x| {
@@ -157,13 +156,12 @@ fn add_fill_rec(db: &mut Database, docs: Arc<Mutex<RefCell<MemDocs>>>, dir:&Dir)
     dir.dirs().for_each(|d| {
         add_fill_rec(db, docs.clone(), d);
     });
-
 }
 
 fn add_pl_libs(db: &mut Database, docs: Arc<Mutex<RefCell<MemDocs>>>) {
     for entry in PLLIB_DIR.dirs() {
         let path = entry.path();
-        if path.starts_with("thirdparty"){
+        if path.starts_with("thirdparty") {
             continue;
         }
         add_fill_rec(db, docs.clone(), entry);

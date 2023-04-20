@@ -118,7 +118,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     // let d = crate::lsp::wasm::PLLIB_DIR;
     let mut deps = BTreeMap::<String, Dependency>::default();
     for path in crate::lsp::wasm::PLLIB_DIR.dirs() {
-        if  !path.contains("thirdparty") {
+        if !path.contains("thirdparty") {
             let dep = Dependency {
                 path: crate::utils::canonicalize(path.path())
                     .unwrap()
@@ -127,7 +127,10 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
                     .to_string(),
                 ..Default::default()
             };
-            deps.insert(path.path().file_name().unwrap().to_str().unwrap().into(), dep);
+            deps.insert(
+                path.path().file_name().unwrap().to_str().unwrap().into(),
+                dep,
+            );
         }
     }
     config.deps = Some(deps);
