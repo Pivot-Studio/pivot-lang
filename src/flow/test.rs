@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod test {
+mod flowtest {
     use crate::{
         ast::node::NodeEnum,
         flow::{display::Dot, from_ast},

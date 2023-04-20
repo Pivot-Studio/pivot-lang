@@ -5,11 +5,10 @@ pub mod llvmbuilder;
 pub mod no_op_builder;
 use std::{cell::RefCell, path::Path, sync::Arc};
 
-use enum_dispatch::enum_dispatch;
-use inkwell::{FloatPredicate, IntPredicate};
-
+#[cfg(feature = "llvm")]
 use self::llvmbuilder::LLVMBuilder;
 use self::no_op_builder::NoOpBuilder;
+use enum_dispatch::enum_dispatch;
 
 use super::{
     ctx::Ctx,
@@ -197,6 +196,97 @@ pub type BlockHandle = usize;
 #[allow(clippy::upper_case_acronyms)]
 #[enum_dispatch(IRBuilder)]
 pub enum BuilderEnum<'a, 'ctx> {
+    #[cfg(feature = "llvm")]
     LLVM(LLVMBuilder<'a, 'ctx>),
-    NoOp(NoOpBuilder),
+    NoOp(NoOpBuilder<'a, 'ctx>),
+}
+
+// REVIEW: Maybe this belongs in some sort of prelude?
+/// This enum defines how to compare a `left` and `right` `IntValue`.
+#[allow(clippy::upper_case_acronyms)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum IntPredicate {
+    /// Equal
+    EQ,
+
+    /// Not Equal
+    NE,
+
+    /// Unsigned Greater Than
+    UGT,
+
+    /// Unsigned Greater Than or Equal
+    UGE,
+
+    /// Unsigned Less Than
+    ULT,
+
+    /// Unsigned Less Than or Equal
+    ULE,
+
+    /// Signed Greater Than
+    SGT,
+
+    /// Signed Greater Than or Equal
+    SGE,
+
+    /// Signed Less Than
+    SLT,
+
+    /// Signed Less Than or Equal
+    SLE,
+}
+
+// REVIEW: Maybe this belongs in some sort of prelude?
+/// Defines how to compare a `left` and `right` `FloatValue`.
+#[allow(clippy::upper_case_acronyms)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum FloatPredicate {
+    /// Returns true if `left` == `right` and neither are NaN
+    OEQ,
+
+    /// Returns true if `left` >= `right` and neither are NaN
+    OGE,
+
+    /// Returns true if `left` > `right` and neither are NaN
+    OGT,
+
+    /// Returns true if `left` <= `right` and neither are NaN
+    OLE,
+
+    /// Returns true if `left` < `right` and neither are NaN
+    OLT,
+
+    /// Returns true if `left` != `right` and neither are NaN
+    ONE,
+
+    /// Returns true if neither value is NaN
+    ORD,
+
+    /// Always returns false
+    PredicateFalse,
+
+    /// Always returns true
+    PredicateTrue,
+
+    /// Returns true if `left` == `right` or either is NaN
+    UEQ,
+
+    /// Returns true if `left` >= `right` or either is NaN
+    UGE,
+
+    /// Returns true if `left` > `right` or either is NaN
+    UGT,
+
+    /// Returns true if `left` <= `right` or either is NaN
+    ULE,
+
+    /// Returns true if `left` < `right` or either is NaN
+    ULT,
+
+    /// Returns true if `left` != `right` or either is NaN
+    UNE,
+
+    /// Returns true if either value is NaN
+    UNO,
 }

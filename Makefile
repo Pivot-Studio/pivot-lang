@@ -39,3 +39,6 @@ bench-simple-gc:
 
 cmake-clean:
 	@find . -name CMakeCache.txt -type f -delete
+
+lsp-wasm:
+	@wasm-pack build --target bundler --no-default-features

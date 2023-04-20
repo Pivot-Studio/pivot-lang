@@ -1,3 +1,4 @@
+#![cfg(feature = "llvm")]
 #[cfg(test)]
 #[cfg(feature = "jit")]
 use inkwell::builder::Builder;

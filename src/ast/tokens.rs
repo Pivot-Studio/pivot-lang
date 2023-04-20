@@ -1,7 +1,7 @@
-use inkwell::FloatPredicate;
-use inkwell::IntPredicate;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
+
+use super::builder::{FloatPredicate, IntPredicate};
 macro_rules! define_tokens {
     ($(
         $ident:ident = $string_keyword:expr

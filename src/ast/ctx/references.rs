@@ -20,7 +20,7 @@ use std::{cell::RefCell, sync::Arc};
 
 use lsp_types::*;
 
-use super::{
+use super::super::{
     ctx::Ctx,
     plmod::MutVec,
     pltype::{Field, PLType},

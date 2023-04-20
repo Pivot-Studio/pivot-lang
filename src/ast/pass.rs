@@ -1,6 +1,8 @@
+#![cfg(feature = "llvm")]
 use std::{cell::RefCell, sync::atomic::AtomicBool};
 
 use immix::LLVM_GC_STRATEGY_NAME;
+
 use inkwell::{
     module::{Linkage, Module},
     AddressSpace,

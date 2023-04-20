@@ -14,3 +14,5 @@ ignore:
   - "src/lsp/helpers.rs"
   - "src/lsp/dispatcher.rs"
   - "src/main.rs"
+  - "src/lsp/lspserver.rs"
+  - "src/lsp/wasm.rs"

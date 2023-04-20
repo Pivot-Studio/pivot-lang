@@ -1,0 +1,267 @@
+use std::{
+    borrow::Borrow,
+    cell::RefCell,
+    sync::{Arc, Mutex},
+};
+
+use lazy_static::lazy_static;
+use lsp_types::{
+    notification::DidChangeTextDocument, CompletionParams, Diagnostic, DidChangeTextDocumentParams,
+    SemanticTokens, SemanticTokensDelta, Url,
+};
+use rustc_hash::FxHashMap;
+use wasm_bindgen::prelude::wasm_bindgen;
+
+use crate::{
+    ast::{
+        accumulators::{Completions, Diagnostics, Hints, PLSemanticTokens},
+        compiler::{compile_dry, ActionType},
+        range::Pos,
+    },
+    db::{self, Database},
+    lsp::semantic_tokens::diff_tokens,
+    Db,
+};
+
+use super::{
+    config::SEMANTIC_LEGEND,
+    helpers::url_to_path,
+    mem_docs::{MemDocs, MemDocsInput},
+};
+
+pub struct GlobalMutWrapper<T> {
+    pub inner: RefCell<T>,
+}
+
+unsafe impl<T> Sync for GlobalMutWrapper<T> {}
+
+impl<T> GlobalMutWrapper<T> {
+    pub fn new(inner: T) -> Self {
+        Self {
+            inner: RefCell::new(inner),
+        }
+    }
+}
+
+lazy_static! {
+    static ref DB: GlobalMutWrapper<Database> = GlobalMutWrapper::new(Database::default());
+    static ref OLD_TOKENS: GlobalMutWrapper<SemanticTokens> =
+        GlobalMutWrapper::new(SemanticTokens::default());
+    static ref COMPLETIONS: GlobalMutWrapper<Vec<lsp_types::CompletionItem>> =
+        GlobalMutWrapper::new(vec![]);
+    static ref DOCIN: MemDocsInput = {
+        let b = &DB.inner;
+        let db = b.borrow_mut();
+        let docs = Arc::new(Mutex::new(RefCell::new(MemDocs::default())));
+        let doc = MemDocsInput::new(
+            &*db,
+            docs.clone(),
+            "".to_string(),
+            Default::default(),
+            ActionType::Diagnostic,
+            None,
+            None,
+        );
+        doc
+    };
+}
+
+unsafe impl Sync for Database {}
+
+const LSP_DEMO_URI: &str = "http://www.test.com/main.pi";
+
+const LSP_DEMO_CONF_URI: &str = "http://www.test.com/Kagari.toml";
+
+// #[wasm_bindgen]
+// pub unsafe fn highlight(req:&str) {
+//     let mut db = & mut DB;
+//     let docs = Arc::new(Mutex::new(RefCell::new(MemDocs::default())));
+//     let mut tokens = FxHashMap::default();
+//     let mut completions: Vec<Vec<lsp_types::CompletionItem>> = vec![];
+// }
+
+#[wasm_bindgen]
+pub unsafe fn on_change_doc(req: &str) -> String {
+    console_error_panic_hook::set_once();
+    log::error!("req: {}", req);
+    let params: DidChangeTextDocumentParams = serde_json::from_str(req).unwrap();
+    let docin = *DOCIN;
+    let binding = &DB.inner;
+    let db = &mut *binding.borrow_mut();
+    let docs = DOCIN.docs(db);
+    // let mut completions: Vec<Vec<lsp_types::CompletionItem>> = vec![];
+    let f = url_to_path(params.text_document.uri);
+    for content_change in params.content_changes.iter() {
+        docs.lock().unwrap().borrow_mut().change(
+            db,
+            content_change.range.unwrap(),
+            f.clone(),
+            content_change.text.clone(),
+        );
+        let mut pos = Pos::from_diag_pos(&content_change.range.unwrap().start);
+        pos.column += 1;
+        docin.set_edit_pos(db).to(Some(pos));
+        docin.set_docs(db).to(docs.clone());
+    }
+    docin.set_file(db).to(f);
+
+    docin.set_action(db).to(ActionType::Diagnostic);
+    let re = compile_dry(db, docin).unwrap();
+    log::trace!("mod {:#?}", re.plmod(db));
+    // completions = compile_dry::accumulated::<Completions>(db, docin);
+    let diags = compile_dry::accumulated::<Diagnostics>(db, docin);
+    let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();
+    for (p, diags) in &diags {
+        diags.iter().for_each(|x| x.get_diagnostic(p, &mut m));
+    }
+    let comps = compile_dry::accumulated::<Completions>(db, docin);
+    if comps.len() > 0 {
+        COMPLETIONS.inner.replace(comps[0].clone());
+    } else {
+        COMPLETIONS.inner.replace(vec![]);
+    }
+    log::trace!("diags: {:#?}", diags);
+    for (f, d) in m {
+        if !f.contains("main") {
+            continue;
+        }
+        return serde_json::to_value(lsp_types::PublishDiagnosticsParams {
+            uri: Url::parse(LSP_DEMO_URI).unwrap(),
+            diagnostics: d,
+            version: None,
+        })
+        .unwrap()
+        .to_string();
+    }
+    return serde_json::to_value(lsp_types::PublishDiagnosticsParams {
+        uri: Url::parse(LSP_DEMO_URI).unwrap(),
+        diagnostics: vec![],
+        version: None,
+    })
+    .unwrap()
+    .to_string();
+}
+
+#[wasm_bindgen]
+pub fn set_init_content(content: &str) -> String {
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Info));
+    let docin = *DOCIN;
+    let binding = &DB.inner;
+    let db = &mut *binding.borrow_mut();
+    let docs = docin.docs(db);
+    docs.lock().unwrap().borrow_mut().insert(
+        db,
+        LSP_DEMO_URI.to_string(),
+        content.to_string(),
+        LSP_DEMO_URI.to_string(),
+    );
+    docs.lock().unwrap().borrow_mut().insert(
+        db,
+        LSP_DEMO_CONF_URI.to_string(),
+        r#"entry = "http://www.test.com/main.pi"
+    project = "simple_test""#
+            .to_string(),
+        LSP_DEMO_CONF_URI.to_string(),
+    );
+
+    docin.set_file(db).to(LSP_DEMO_URI.to_string());
+
+    docin.set_action(db).to(ActionType::Diagnostic);
+    let re = compile_dry(db, docin).unwrap();
+    log::trace!("mod {:#?}", re.plmod(db));
+    // completions = compile_dry::accumulated::<Completions>(db, docin);
+    let diags = compile_dry::accumulated::<Diagnostics>(db, docin);
+    let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();
+    for (p, diags) in &diags {
+        diags.iter().for_each(|x| x.get_diagnostic(p, &mut m));
+    }
+    log::trace!("diags: {:#?}", diags);
+    for (f, d) in m {
+        if !f.contains("main") {
+            continue;
+        }
+        return serde_json::to_value(lsp_types::PublishDiagnosticsParams {
+            uri: Url::parse(LSP_DEMO_URI).unwrap(),
+            diagnostics: d,
+            version: None,
+        })
+        .unwrap()
+        .to_string();
+    }
+    return serde_json::to_value(lsp_types::PublishDiagnosticsParams {
+        uri: Url::parse(LSP_DEMO_URI).unwrap(),
+        diagnostics: vec![],
+        version: None,
+    })
+    .unwrap()
+    .to_string();
+}
+
+#[wasm_bindgen]
+pub fn get_semantic_tokens() -> String {
+    let docin = *DOCIN;
+    let binding = &DB.inner;
+    let db = &mut *binding.borrow_mut();
+    docin.set_action(db).to(ActionType::SemanticTokensFull);
+    docin.set_params(db).to(Some((Default::default(), None)));
+    compile_dry(db, docin).unwrap();
+    // let docs = DOCIN.docs(db);
+    let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(db, docin);
+    if newtokens.is_empty() {
+        newtokens.push(SemanticTokens::default());
+    }
+    let old = OLD_TOKENS.inner.replace(newtokens[0].clone());
+    let delta = diff_tokens(&old.data, &newtokens[0].data);
+    log::info!("tokens: {:#?}", delta);
+    return serde_json::to_value(SemanticTokensDelta {
+        result_id: None,
+        edits: delta,
+    })
+    .unwrap()
+    .to_string();
+}
+
+#[wasm_bindgen]
+pub fn get_semantic_tokens_full() -> String {
+    let docin = *DOCIN;
+    let binding = &DB.inner;
+    let db = &mut *binding.borrow_mut();
+    docin.set_action(db).to(ActionType::SemanticTokensFull);
+    docin.set_params(db).to(Some((Default::default(), None)));
+    compile_dry(db, docin).unwrap();
+    // let docs = DOCIN.docs(db);
+    let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(db, docin);
+    if newtokens.is_empty() {
+        newtokens.push(SemanticTokens::default());
+    }
+    let _ = OLD_TOKENS.inner.replace(newtokens[0].clone());
+    // let delta = diff_tokens(&old.data, &newtokens[0].data);
+    log::info!("tokens: {:#?}", &newtokens[0]);
+    return serde_json::to_value(&newtokens[0]).unwrap().to_string();
+}
+
+#[wasm_bindgen]
+pub fn get_legend() -> String {
+    return serde_json::to_value(SEMANTIC_LEGEND.clone())
+        .unwrap()
+        .to_string();
+}
+
+#[wasm_bindgen]
+pub fn get_completions() -> String {
+    return serde_json::to_value(COMPLETIONS.inner.borrow().clone())
+        .unwrap()
+        .to_string();
+}
+
+#[wasm_bindgen]
+pub fn get_inlay_hints() -> String {
+    let docin = *DOCIN;
+    let binding = &DB.inner;
+    let db = &mut *binding.borrow_mut();
+    let mut hints = compile_dry::accumulated::<Hints>(db, docin);
+    if hints.is_empty() {
+        hints.push(vec![]);
+    }
+    return serde_json::to_value(hints[0].clone()).unwrap().to_string();
+}

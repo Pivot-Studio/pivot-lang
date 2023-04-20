@@ -2,12 +2,14 @@ use crossbeam_channel::Sender;
 use lsp_server::{Message, RequestId};
 use lsp_types::{Diagnostic, DocumentSymbol, InlayHint, SemanticTokens, SemanticTokensDelta, Url};
 
+use crate::utils::url_from_path;
+
 pub fn send_diagnostics(sender: &Sender<Message>, uri: String, diagnostics: Vec<Diagnostic>) {
     sender
         .send(Message::Notification(lsp_server::Notification::new(
             "textDocument/publishDiagnostics".to_string(),
             serde_json::to_value(lsp_types::PublishDiagnosticsParams {
-                uri: lsp_types::Url::from_file_path(uri).unwrap(),
+                uri: url_from_path(&uri),
                 diagnostics,
                 version: None,
             })
@@ -127,11 +129,14 @@ pub fn send_signature_help(
 }
 
 pub fn url_to_path(url: Url) -> String {
-    dunce::canonicalize(url.to_file_path().unwrap().to_str().unwrap())
+    #[cfg(any(unix, windows, target_os = "redox", target_os = "wasi"))]
+    return crate::utils::canonicalize(url.to_file_path().unwrap().to_str().unwrap())
         .expect("file not exists")
         .to_str()
         .unwrap()
-        .to_string()
+        .to_string();
+    #[cfg(not(any(unix, windows, target_os = "redox", target_os = "wasi")))]
+    return url.to_string();
 }
 
 pub fn position_to_offset(doc: &str, pos: lsp_types::Position) -> usize {

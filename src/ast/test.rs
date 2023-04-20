@@ -162,7 +162,7 @@ mod test {
         );
         let m = compile_dry(db, input).unwrap();
         let mod1 = m.plmod(db);
-        let path = dunce::canonicalize("test/lsp/mod.pi")
+        let path = crate::utils::canonicalize("test/lsp/mod.pi")
             .unwrap()
             .to_str()
             .unwrap()
@@ -546,7 +546,7 @@ mod test {
         );
         assert!(
             crate::ast::compiler::run(
-                &PathBuf::from(outplb).as_path(),
+                PathBuf::from(outplb).as_path(),
                 inkwell::OptimizationLevel::None,
             ) == 0,
             "jit compiled program exit with non-zero status"
@@ -590,7 +590,7 @@ mod test {
                 jit: false,
             },
         );
-        let exe = dunce::canonicalize(&exe)
+        let exe = crate::utils::canonicalize(&exe)
             .unwrap_or_else(|_| panic!("static compiled file not found {:?}", exe));
         let o = Command::new(exe.to_str().unwrap())
             .output()

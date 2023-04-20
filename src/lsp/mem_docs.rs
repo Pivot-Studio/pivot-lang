@@ -70,13 +70,17 @@ impl FileCompileInput {
             .unwrap()
             .borrow_mut()
             .get_file_content(db, self.file(db));
+        if re.is_none() {
+            let f = self.file(db);
+            log::error!("lsp error: get_file_content failed {}", f);
+        }
         re
     }
     #[salsa::tracked(lru = 32)]
     pub fn get_emit_params(self, db: &dyn Db) -> EmitParams {
         let file = self.file(db);
-        if dunce::canonicalize(self.docs(db).file(db)).unwrap()
-            != dunce::canonicalize(file).unwrap()
+        if crate::utils::canonicalize(self.docs(db).file(db)).unwrap()
+            != crate::utils::canonicalize(file).unwrap()
         {
             let action = if self.docs(db).action(db) == ActionType::Compile
                 || self.docs(db).action(db) == ActionType::PrintAst
@@ -135,8 +139,9 @@ impl MemDocsInput {
     }
     #[salsa::tracked(lru = 32)]
     pub fn get_file_params(self, db: &dyn Db, f: String, entry: bool) -> Option<FileCompileInput> {
-        let f = dunce::canonicalize(f);
+        let f = crate::utils::canonicalize(f);
         if f.is_err() {
+            log::error!("lsp error: {}", f.err().unwrap());
             return None;
         }
         let mut file = f.unwrap().to_string_lossy().to_string();
@@ -146,7 +151,7 @@ impl MemDocsInput {
             return None;
         }
         let path = path.unwrap();
-        let buf = dunce::canonicalize(PathBuf::from(path.clone())).unwrap();
+        let buf = crate::utils::canonicalize(PathBuf::from(path.clone())).unwrap();
         let parant = buf.parent().unwrap();
         let re = get_config(
             db,
@@ -183,7 +188,7 @@ impl MemDocs {
             position_to_offset(&txt, range.start)..position_to_offset(&txt, range.end),
             &text,
         );
-        debug!("{} change text to: {}", &uri.as_str().to_string(), txt);
+        log::error!("{} change text to: {}", &uri.as_str().to_string(), txt);
         doc.set_text(db).to(txt);
     }
     pub fn insert(&mut self, db: &dyn Db, key: String, value: String, path: String) {
@@ -193,7 +198,7 @@ impl MemDocs {
         self.docs.get(key)
     }
     pub fn get_file_content(&mut self, db: &dyn Db, key: &str) -> Option<SourceProgram> {
-        // let sanitized = dunce::canonicalize(key).unwrap();
+        // let sanitized = crate::utils::canonicalize(key).unwrap();
         // let key = sanitized.to_str().unwrap();
         debug!("mdmdoc get_file_content {}", key);
         let mem = self.get(key);

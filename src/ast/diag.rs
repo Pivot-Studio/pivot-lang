@@ -1,4 +1,5 @@
 use ariadne::{Cache, ColorGenerator, Fmt, Label, Report, ReportKind, Source};
+use colored::Colorize;
 use dyn_fmt::AsStrFormatExt;
 use internal_macro::range;
 use lazy_static::lazy_static;
@@ -171,11 +172,13 @@ impl Display for DiagCode {
     }
 }
 
-use lsp_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag, Url};
+use lsp_types::{Diagnostic, DiagnosticSeverity, DiagnosticTag};
 
-use crate::Db;
+use crate::{lsp::mem_docs::MemDocsInput, utils::url_from_path, Db};
 
 use super::{
+    accumulators::Diagnostics,
+    compiler::compile_dry,
     ctx::Ctx,
     range::{Pos, Range},
 };
@@ -335,7 +338,7 @@ impl PLDiag {
         self.raw.labels.iter().for_each(|label| {
             let mut lab = lsp_types::DiagnosticRelatedInformation {
                 location: lsp_types::Location {
-                    uri: Url::from_file_path(&label.file).unwrap(),
+                    uri: url_from_path(&label.file),
                     range: label.range.to_diag_range(),
                 },
                 message: "related source here".to_string(),
@@ -438,5 +441,47 @@ impl<'a> Cache<&str> for PLFileCache<'a> {
 
     fn display<'b>(&self, id: &'b &str) -> Option<Box<dyn std::fmt::Display + 'b>> {
         Some(Box::new(id))
+    }
+}
+
+mod dot;
+
+pub(crate) fn handle_errors(db: &dyn Db, docs: MemDocsInput) {
+    let mut errs_num = 0;
+    let errs = compile_dry::accumulated::<Diagnostics>(db, docs);
+    if !errs.is_empty() {
+        for e in errs.iter() {
+            let mut path = e.0.clone();
+            for e in e.1.iter() {
+                if let Some(src) = e.raw.source.clone() {
+                    path = src;
+                }
+                e.print(
+                    &path,
+                    move |db, id| {
+                        Source::from(docs.get_file_content(db, id.to_string()).unwrap().text(db))
+                    },
+                    db,
+                );
+                if e.is_err() {
+                    errs_num += 1
+                }
+            }
+        }
+        if errs_num > 0 {
+            if errs_num == 1 {
+                log::error!(
+                    "{}",
+                    format!("compile failed: there is {} error", errs_num).bright_red()
+                );
+                println!("{}", dot::ERROR);
+                return;
+            }
+            log::error!(
+                "{}",
+                format!("compile failed: there are {} errors", errs_num).bright_red()
+            );
+            println!("{}", dot::TOOMANYERROR);
+        }
     }
 }

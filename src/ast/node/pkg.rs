@@ -27,6 +27,15 @@ pub struct UseNode {
     pub singlecolon: bool,
 }
 
+impl UseNode {
+    pub(crate) fn is_complete(&self) -> bool {
+        !self.ids.is_empty() && self.complete
+    }
+    pub(crate) fn get_last_id(&self) -> Option<String> {
+        self.ids.last().map(|x| x.as_ref().name.clone())
+    }
+}
+
 impl PrintTrait for UseNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -50,7 +59,7 @@ impl Node for UseNode {
         let head = self.ids[0].get_name(ctx);
         if !self.ids.is_empty() {
             // head is project name or deps name
-            let dep = ctx.config.deps.as_ref().unwrap().get(&head);
+            let dep = ctx.config.deps.as_ref().and_then(|x| x.get(&head));
             if head == ctx.config.project || dep.is_some() {
                 // change path
                 if let Some(dep) = dep {
@@ -67,6 +76,9 @@ impl Node for UseNode {
         if !path.with_extension("pi").exists() {
             let mut path = path.with_extension("");
             if !path.exists() {
+                if path.parent().is_none() {
+                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNRESOLVED_MODULE)));
+                }
                 path = path.parent().unwrap().to_path_buf();
             }
             if self.ids.len() > 1 {
