@@ -27,3 +27,10 @@ fn test_mismatch() void {
     return;
 }
 
+use std::io
+
+fn test_semi() void {
+    let a = 1
+    test_semi()
+    return;
+}

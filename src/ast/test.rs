@@ -82,7 +82,7 @@ mod test {
                 std::cmp::Ordering::Greater
             }
         });
-        assert_eq!(diag.len(), 6);
+        assert_eq!(diag.len(), 10);
         assert_eq!(
             new_diag_range(10, 14, 10, 15),
             diag[0].get_range().to_diag_range()
@@ -130,6 +130,38 @@ mod test {
         assert_eq!(
             diag[5].get_diag_code(),
             DiagCode::Err(crate::ast::diag::ErrorCode::INVALID_IS_EXPR)
+        );
+        assert_eq!(
+            new_diag_range(29, 11, 29, 11),
+            diag[6].get_range().to_diag_range()
+        );
+        assert_eq!(
+            diag[6].get_diag_code(),
+            DiagCode::Err(crate::ast::diag::ErrorCode::MISSING_SEMI)
+        );
+        assert_eq!(
+            new_diag_range(32, 8, 32, 9),
+            diag[7].get_range().to_diag_range()
+        );
+        assert_eq!(
+            diag[7].get_diag_code(),
+            DiagCode::Warn(crate::ast::diag::WarnCode::UNUSED_VARIABLE)
+        );
+        assert_eq!(
+            new_diag_range(32, 13, 32, 13),
+            diag[8].get_range().to_diag_range()
+        );
+        assert_eq!(
+            diag[8].get_diag_code(),
+            DiagCode::Err(crate::ast::diag::ErrorCode::MISSING_SEMI)
+        );
+        assert_eq!(
+            new_diag_range(33, 15, 33, 15),
+            diag[9].get_range().to_diag_range()
+        );
+        assert_eq!(
+            diag[9].get_diag_code(),
+            DiagCode::Err(crate::ast::diag::ErrorCode::MISSING_SEMI)
         );
     }
     #[test]

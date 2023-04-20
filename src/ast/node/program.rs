@@ -194,7 +194,7 @@ impl Program {
             let u = if let NodeEnum::UseNode(p) = *u.clone() {
                 p
             } else {
-                unreachable!()
+                continue;
             };
             if !u.is_complete() {
                 continue;

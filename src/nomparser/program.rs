@@ -1,9 +1,6 @@
 use nom::{
     branch::alt,
-    bytes::complete::tag,
-    combinator::{eof, map_res, recognize},
-    multi::many0,
-    sequence::{preceded, terminated, tuple},
+    combinator::{eof, map_res},
     IResult,
 };
 
@@ -14,11 +11,10 @@ use crate::{
         diag::ErrorCode,
         fmt::FmtBuilder,
         node::{
-            error::{ErrorNode, StErrorNode},
             types::PointerTypeNode,
         },
     },
-    ast::{node::types::TypedIdentifierNode, tokens::TokenType},
+    ast::{node::types::TypedIdentifierNode},
 };
 
 use super::{implement::impl_def, macro_parse::macro_parser, union::union_stmt, *};
@@ -139,7 +135,7 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
         del_newline_or_space!(impl_def),
         del_newline_or_space!(macro_parser),
         map_res(
-            del_newline_or_space!(semi_statement!(global_variable)),
+            del_newline_or_space!(semi_stmt(global_variable, global_variable)),
             |node| {
                 Ok::<_, ()>(Box::new(if let NodeEnum::Global(g) = *node {
                     TopLevel::GlobalDef(g)
@@ -148,9 +144,10 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
                 }))
             },
         ),
-        map_res(del_newline_or_space!(semi_statement!(use_statement)), |c| {
-            Ok::<_, ()>(Box::new(TopLevel::Use(c)))
-        }),
+        map_res(
+            del_newline_or_space!(semi_stmt(use_statement, use_statement)),
+            |c| Ok::<_, ()>(Box::new(TopLevel::Use(c))),
+        ),
         map_res(del_newline_or_space!(comment), |c| {
             Ok::<_, ()>(Box::new(TopLevel::Common(c)))
         }),

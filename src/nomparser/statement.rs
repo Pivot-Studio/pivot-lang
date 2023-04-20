@@ -1,9 +1,8 @@
 use nom::{
     branch::alt,
-    bytes::complete::tag,
-    combinator::{map_res, opt, recognize},
+    combinator::{map_res, opt},
     multi::many0,
-    sequence::{pair, preceded, terminated, tuple},
+    sequence::{pair, preceded, tuple},
     IResult,
 };
 
@@ -15,7 +14,6 @@ use crate::{
     ast::{
         diag::ErrorCode,
         node::{
-            error::{ErrorNode, StErrorNode},
             global::GlobalNode,
         },
     },
@@ -84,15 +82,15 @@ pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
 #[test_parser("test!(a);")]
 pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
-        semi_statement!(new_variable),
-        semi_statement!(assignment),
+        semi_stmt(new_variable, new_variable),
+        semi_stmt(assignment, assignment),
         if_statement,
         while_statement,
         for_statement,
         break_statement,
         continue_statement,
         return_statement,
-        semi_statement!(pointer_exp),
+        semi_stmt(pointer_exp, pointer_exp),
         empty_statement,
         comment,
         except(

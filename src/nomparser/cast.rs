@@ -32,18 +32,18 @@ use super::*;
 )]
 #[test_parser("(2.3+10-800*9).add(100)[0]")]
 pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    del_newline_or_space!(map_res(
+    map_res(
         tuple((
             complex_exp,
             many0(pair(tag_modifier(TokenType::AS), type_name)),
             opt(alt((
                 terminated(
                     tag_token_symbol_ex(TokenType::NOT),
-                    peek(not(tag_token(TokenType::ASSIGN)))
+                    peek(not(tag_token(TokenType::ASSIGN))),
                 ),
-                tag_token_symbol_ex(TokenType::QUESTION)
+                tag_token_symbol_ex(TokenType::QUESTION),
             ))),
-            opt(pair(tag_modifier(TokenType::IS), type_name))
+            opt(pair(tag_modifier(TokenType::IS), type_name)),
         )),
         |(exp, casts, tail, is)| {
             let mut exp = exp;
@@ -69,5 +69,5 @@ pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             }
             res_box(exp)
         },
-    ))(input)
+    )(input)
 }

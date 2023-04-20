@@ -188,7 +188,7 @@ impl MemDocs {
             position_to_offset(&txt, range.start)..position_to_offset(&txt, range.end),
             &text,
         );
-        log::error!("{} change text to: {}", &uri.as_str().to_string(), txt);
+        log::trace!("{} change text to: {}", &uri.as_str().to_string(), txt);
         doc.set_text(db).to(txt);
     }
     pub fn insert(&mut self, db: &dyn Db, key: String, value: String, path: String) {

@@ -131,7 +131,7 @@ pub fn send_signature_help(
 pub fn url_to_path(url: Url) -> String {
     #[cfg(any(unix, windows, target_os = "redox", target_os = "wasi"))]
     return crate::utils::canonicalize(url.to_file_path().unwrap().to_str().unwrap())
-        .expect("file not exists")
+        .expect(&(url.to_string() + " file not exists"))
         .to_str()
         .unwrap()
         .to_string();
