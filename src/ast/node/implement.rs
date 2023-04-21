@@ -26,7 +26,69 @@ impl PrintTrait for ImplNode {
         }
     }
 }
-
+fn check_fn<'a, 'b, 'ctx>(
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, 'ctx>,
+    method: &FuncDefNode,
+    trait_tp: Arc<RefCell<PLType>>,
+    traitfns: &mut FxHashSet<String>,
+    fntype: Arc<RefCell<PLType>>,
+) -> Result<(), PLDiag> {
+    if let Some((m, r)) = method.modifier {
+        r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)
+            .add_label(
+                r,
+                ctx.get_file(),
+                format_label!("modifier {} shall be removed", m.get_str()),
+            )
+            .add_help(
+                "trait methods share the same modifier with \
+                trait, so you shall not add modifier here",
+            )
+            .add_to_ctx(ctx);
+    }
+    if let PLType::Trait(st) = &*trait_tp.borrow() {
+        if !st.fields.iter().any(|(_, f)| {
+            let tp = f.typenode.get_type(ctx, builder).unwrap();
+            let re = match (&*tp.borrow(), &*fntype.borrow()) {
+                (PLType::Fn(f1), PLType::Fn(f2)) => {
+                    if f1.eq_except_receiver(f2, ctx, builder) {
+                        traitfns.remove(&f1.name);
+                        true
+                    } else {
+                        false
+                    }
+                }
+                _ => unreachable!(),
+            };
+            re
+        }) {
+            method
+                .range()
+                .new_err(ErrorCode::METHOD_NOT_IN_TRAIT)
+                .add_label(
+                    method.range(),
+                    ctx.get_file(),
+                    format_label!(
+                        "method {} not in trait {}",
+                        method.id.name.split("::").last().unwrap(),
+                        &st.name
+                    ),
+                )
+                .add_label(
+                    st.range,
+                    ctx.get_file(),
+                    format_label!("trait {} def here", &st.name),
+                )
+                .add_help(
+                    "move this method to another impl block or remove it from current impl block",
+                )
+                .add_to_ctx(ctx);
+        }
+        return Ok(());
+    }
+    unreachable!()
+}
 impl Node for ImplNode {
     fn emit<'a, 'ctx, 'b>(
         &mut self,
@@ -38,19 +100,27 @@ impl Node for ImplNode {
         }
         let mut traittpandrange = None;
         let mut traitfns = FxHashSet::default();
-        if let Some((t, (_, r))) = &self.impl_trait {
-            let tp = t.get_type(ctx, builder);
-            if let Ok(tp) = tp {
-                if let PLType::Trait(st) = &*tp.borrow() {
-                    traittpandrange = Some((tp.clone(), t.range()));
-                    for name in st.fields.keys() {
-                        traitfns.insert(name.clone());
-                    }
+        if let Some((typename, _)) = &self.impl_trait {
+            typename.emit_highlight(ctx);
+            let trait_tp = typename.get_type(ctx, builder)?;
+            if let PLType::Trait(st) = &*trait_tp.borrow() {
+                ctx.send_if_go_to_def(typename.range(), st.range, st.path.clone());
+                traittpandrange = Some((trait_tp.clone(), typename.range()));
+                for name in st.fields.keys() {
+                    traitfns.insert(name.clone());
                 }
-            }
-            t.emit_highlight(ctx);
-            ctx.push_semantic_token(*r, SemanticTokenType::KEYWORD, 0)
-        }
+            } else {
+                return Err(typename
+                    .range()
+                    .new_err(ErrorCode::EXPECT_TRAIT_TYPE)
+                    .add_label(
+                        typename.range(),
+                        ctx.get_file(),
+                        format_label!("type {}", trait_tp.borrow().get_kind_name()),
+                    )
+                    .add_to_ctx(ctx));
+            };
+        };
         self.target.emit_highlight(ctx);
         let mut method_docsymbols = vec![];
         if let TypeNodeEnum::Basic(bt) = &*self.target {
@@ -61,99 +131,38 @@ impl Node for ImplNode {
             let v = bt.id.as_ref().unwrap().get_type(ctx)?.get_value();
             let st_pltype = v.unwrap().get_ty();
             if let PLType::Struct(sttp) = &*st_pltype.borrow() {
+                if let Some((trait_tp, r)) = &traittpandrange {
+                    if let PLType::Trait(trait_tp) = &*trait_tp.borrow() {
+                        trait_tp.check_impl_derives(ctx, sttp, *r);
+                    } else {
+                        unreachable!()
+                    }
+                }
                 ctx.send_if_go_to_def(self.target.range(), sttp.range, sttp.path.clone());
             };
         }
-        if let Some((typename, _)) = &self.impl_trait {
-            let trait_tp = typename.get_type(ctx, builder)?;
-            if let PLType::Trait(st) = &*trait_tp.borrow_mut() {
-                ctx.send_if_go_to_def(typename.range(), st.range, st.path.clone());
-            } else {
-                typename
-                    .range()
-                    .new_err(ErrorCode::EXPECT_TRAIT_TYPE)
-                    .add_label(
-                        typename.range(),
-                        ctx.get_file(),
-                        format_label!("type {}", trait_tp.borrow().get_kind_name()),
-                    )
-                    .add_to_ctx(ctx);
-            };
-        }
         for method in &mut self.methods {
-            let res = method.emit(ctx, builder);
-            if res.is_err() {
-                continue;
-            }
-            let pltype = res.unwrap().get_value();
-            if pltype.is_none() {
-                continue;
-            }
-            let tmp = pltype.unwrap().get_ty();
-            if self.impl_trait.is_some() {
-                // 检查是否有modifier
-                if let Some((m, r)) = method.modifier {
-                    r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)
-                        .add_label(
-                            r,
-                            ctx.get_file(),
-                            format_label!("modifier {} shall be removed", m.get_str()),
-                        )
-                        .add_help(
-                            "trait methods share the same modifier with \
-                            trait, so you shall not add modifier here",
-                        )
-                        .add_to_ctx(ctx);
-                }
-
-                // 检查方法是否在trait中
-                let trait_tp = traittpandrange.clone().unwrap().0;
-                if let PLType::Trait(st) = &*trait_tp.borrow() {
-                    if !st.fields.iter().any(|(_, f)| {
-                        let tp = f.typenode.get_type(ctx, builder);
-                        if tp.is_err() {
-                            return false;
-                        }
-                        let tp = tp.unwrap();
-                        let re = match (&*tp.borrow(), &*tmp.borrow()) {
-                            (PLType::Fn(f1), PLType::Fn(f2)) => {
-                                if f1.eq_except_receiver(f2, ctx, builder) {
-                                    traitfns.remove(&f1.name);
-                                    true
-                                } else {
-                                    false
-                                }
-                            }
-                            _ => unreachable!(),
-                        };
-                        re
-                    }) {
-                        method
-                            .range()
-                            .new_err(ErrorCode::METHOD_NOT_IN_TRAIT)
-                            .add_label(
-                                method.range(),
-                                ctx.get_file(),
-                                format_label!("method {} not in trait {}",
-                                    method.id.name.split("::").last().unwrap(),
-                                    &st.name
-                                ),
-                            )
-                            .add_label(
-                                st.range,
-                                ctx.get_file(),
-                                format_label!("trait {} def here", &st.name),
-                            ).add_help("move this method to another impl block or remove it from current impl block")
-                            .add_to_ctx(ctx);
+            if let Ok(res) = method.emit(ctx, builder) {
+                if let Some(node_val) = res.get_value() {
+                    let fntype = node_val.get_ty();
+                    let f = if let PLType::Fn(f) = &*fntype.borrow() {
+                        f.get_doc_symbol()
+                    } else {
+                        unreachable!()
+                    };
+                    method_docsymbols.push(f);
+                    if let Some((trait_tp, _)) = &traittpandrange {
+                        check_fn(
+                            ctx,
+                            builder,
+                            method,
+                            trait_tp.clone(),
+                            &mut traitfns,
+                            fntype,
+                        )?;
                     }
-                };
+                }
             }
-            let f = if let PLType::Fn(f) = &*tmp.borrow() {
-                f.get_doc_symbol()
-            } else {
-                continue;
-            };
-            method_docsymbols.push(f);
         }
         for f in traitfns {
             let (tp, r) = traittpandrange.clone().unwrap();

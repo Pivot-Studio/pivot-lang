@@ -762,52 +762,118 @@ pub struct STType {
     pub body_range: Range,
     pub is_trait: bool,
 }
-
 impl STType {
+    pub fn check_impl_derives(&self, ctx: &Ctx, st: &STType, range: Range) {
+        let errnames = self
+            .derives
+            .iter()
+            .map(|derive| {
+                if let PLType::Trait(derive) = &*derive.borrow() {
+                    derive.clone()
+                } else {
+                    unreachable!()
+                }
+            })
+            .filter(|derive| !st.implements_trait(derive, &ctx.plmod))
+            .map(|derive| derive.name)
+            .collect::<Vec<_>>();
+        if !errnames.is_empty() {
+            range
+                .new_err(ErrorCode::DERIVE_TRAIT_NOT_IMPL)
+                .add_label(
+                    range,
+                    ctx.get_file(),
+                    format_label!("the derive trait {} not impl", errnames.join(",")),
+                )
+                .add_to_ctx(ctx);
+        }
+    }
+    pub fn get_trait_field(&self, k: &str) -> Option<Field> {
+        fn walk(st: &STType, k: &str) -> (Option<Field>, u32) {
+            if let Some(f) = st.fields.get(k) {
+                return (Some(f.clone()), f.index - 1);
+            }
+            let mut offset = st.fields.len() as u32;
+            for derive in st.derives.iter() {
+                if let PLType::Trait(t) = &*derive.borrow() {
+                    let (f, walk_offset) = walk(t, k);
+                    offset += walk_offset;
+                    if let Some(f) = f {
+                        return (Some(f), offset);
+                    }
+                }
+            }
+            (None, offset)
+        }
+        let (f, offset) = walk(self, k);
+        if let Some(mut f) = f {
+            f.index = offset + 1;
+            return Some(f);
+        }
+        None
+    }
+    fn merge_trait_field(&self) -> Vec<Field> {
+        self.fields
+            .values()
+            .map(Clone::clone)
+            .chain(self.derives.iter().flat_map(|pltype| {
+                if let PLType::Trait(t) = &*pltype.borrow() {
+                    return t.merge_trait_field();
+                }
+                unreachable!()
+            }))
+            .collect::<Vec<_>>()
+    }
+    pub fn list_trait_fields(&self) -> Vec<Field> {
+        self.merge_trait_field()
+            .iter()
+            .enumerate()
+            .map(|(i, f)| {
+                let mut f = f.clone();
+                f.index = i as u32 + 2;
+                f
+            })
+            .collect()
+    }
     // get all field include type_hash,ptr,vtable,this func only be used in llvmbuilder
-    pub fn get_all_field(&self) -> LinkedHashMap<String, Field> {
-        let mut fields = LinkedHashMap::new();
+    pub fn get_all_field(&self) -> Vec<Field> {
+        let mut fields = vec![];
         if self.is_trait {
-            fields.insert(
-                "__type_hash".to_string(),
-                Field {
-                    index: 0,
-                    typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
-                    name: "__type_hash".to_string(),
-                    range: Default::default(),
-                    modifier: None,
-                },
-            );
+            fields.push(Field {
+                index: 0,
+                typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
+                name: "__type_hash".to_string(),
+                range: Default::default(),
+                modifier: None,
+            });
             // pointer to real value
-            fields.insert(
-                "__ptr".to_string(),
-                Field {
-                    index: 1,
-                    typenode: Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
-                        elm: Box::new(TypeNameNode::new_from_str("i64").into()),
-                        range: Default::default(),
-                    })),
-                    name: "__ptr".to_string(),
+            fields.push(Field {
+                index: 1,
+                typenode: Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
+                    elm: Box::new(TypeNameNode::new_from_str("i64").into()),
                     range: Default::default(),
-                    modifier: None,
-                },
-            );
+                })),
+                name: "__ptr".to_string(),
+                range: Default::default(),
+                modifier: None,
+            });
         } else {
             // gcrtti fields
-            fields.insert(
-                "_vtable".to_string(),
-                Field {
-                    index: 0,
-                    typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
-                    name: "_vtable".to_string(),
-                    range: Default::default(),
-                    modifier: None,
-                },
-            );
+            fields.push(Field {
+                index: 0,
+                typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
+                name: "_vtable".to_string(),
+                range: Default::default(),
+                modifier: None,
+            });
         }
-        self.fields.iter().for_each(|(k, v)| {
-            fields.insert(k.clone(), v.clone());
+        self.merge_trait_field().iter().for_each(|f| {
+            fields.push(f.clone());
         });
+        fields
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, f)| f.index = i as u32);
         fields
     }
     fn implements(&self, tp: &PLType, plmod: &Mod) -> bool {

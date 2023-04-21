@@ -820,7 +820,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 ctx.run_in_type_mod(x, |ctx, x| {
                     m = x
                         .get_all_field()
-                        .values()
+                        .iter()
                         .map(|v| {
                             let offset = td.offset_of_element(&sttp, v.index).unwrap() * 8;
                             let (tp, _) = self.get_field_di_type(v, ctx, offset);
@@ -958,7 +958,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             st.set_body(
                 &pltp
                     .get_all_field()
-                    .values()
+                    .iter()
                     .map(|order_field| {
                         self.get_basic_type_op(
                             &order_field
@@ -1199,7 +1199,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         st.set_body(
             &sttype
                 .get_all_field()
-                .values()
+                .iter()
                 .map(|order_field| {
                     self.get_basic_type_op(
                         &order_field

@@ -1,0 +1,51 @@
+use core::panic;
+trait A {
+    fn a() bool;
+
+}
+
+trait B {
+    fn b() i64;
+
+}
+
+trait C:A + B {
+    fn c() void;
+
+}
+
+pub fn test_multi_trait() void {
+    let t = test_struct{};
+    let c: C;
+    c = t;
+    let x = c.a();
+    let y = c.b();
+    panic::assert(x);
+    panic::assert(y == 1000);
+    return;
+}
+
+struct test_struct {
+}
+
+impl C for test_struct {
+    fn c() void {
+        return;
+    }
+
+}
+
+impl A for test_struct {
+    fn a() bool {
+        return true;
+    }
+
+}
+
+impl B for test_struct {
+    fn b() i64 {
+        return 1000;
+    }
+
+}
+

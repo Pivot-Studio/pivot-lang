@@ -629,6 +629,18 @@ impl FmtBuilder {
         self.token("trait");
         self.space();
         self.token(node.id.name.as_str());
+        if !node.derives.is_empty() {
+            self.colon();
+            node.derives[0..node.derives.len() - 1]
+                .iter()
+                .for_each(|d| {
+                    d.format(self);
+                    self.space();
+                    self.token("+");
+                    self.space();
+                });
+            node.derives.last().unwrap().format(self);
+        }
         self.space();
         self.l_brace();
         self.enter();

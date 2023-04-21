@@ -290,12 +290,13 @@ impl Node for TakeOpNode {
         let (head_pltype, headptr) = ctx.auto_deref(head_pltype, nv.get_value(), builder);
         match &*head_pltype.clone().borrow() {
             PLType::Trait(s) => {
-                let field = s.fields.get(&id.name);
+                let field = s.get_trait_field(&id.name);
                 if let Some(field) = field {
-                    _ = s.expect_field_pub(ctx, field, id_range);
+                    _ = s.expect_field_pub(ctx, &field, id_range);
                     ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
-                    ctx.set_field_refs(head_pltype, field, id_range);
+                    ctx.set_field_refs(head_pltype, &field, id_range);
                     ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
+
                     let re = field.typenode.get_type(ctx, builder)?;
                     let fnv = builder
                         .build_struct_gep(headptr, field.index, "mthd_ptr")
