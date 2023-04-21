@@ -9,4 +9,4 @@ pub mod text;
 #[cfg(not(target_arch = "wasm32"))]
 pub use lspserver::*;
 #[cfg(target_arch = "wasm32")]
-mod wasm;
+pub mod wasm;

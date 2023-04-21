@@ -55,6 +55,9 @@ impl Node for UseNode {
         ctx: &'b mut Ctx<'a>,
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
+        #[cfg(target_arch = "wasm32")]
+        let mut path = PathBuf::from("");
+        #[cfg(not(target_arch = "wasm32"))]
         let mut path = PathBuf::from(&ctx.config.root);
         let head = self.ids[0].get_name(ctx);
         if !self.ids.is_empty() {
@@ -72,6 +75,13 @@ impl Node for UseNode {
         }
         for v in self.ids.iter() {
             ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
+        }
+        #[cfg(target_arch = "wasm32")]
+        if crate::lsp::wasm::PLLIB_DIR
+            .get_file(path.with_extension("pi"))
+            .is_some()
+        {
+            return Ok(Default::default());
         }
         if !path.with_extension("pi").exists() {
             let mut path = path.with_extension("");

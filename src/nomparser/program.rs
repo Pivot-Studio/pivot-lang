@@ -6,15 +6,9 @@ use nom::{
 
 use crate::nomparser::Span;
 use crate::{
+    ast::node::types::TypedIdentifierNode,
     ast::range::Range,
-    ast::{
-        diag::ErrorCode,
-        fmt::FmtBuilder,
-        node::{
-            types::PointerTypeNode,
-        },
-    },
-    ast::{node::types::TypedIdentifierNode},
+    ast::{diag::ErrorCode, fmt::FmtBuilder, node::types::PointerTypeNode},
 };
 
 use super::{implement::impl_def, macro_parse::macro_parser, union::union_stmt, *};

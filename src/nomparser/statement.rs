@@ -11,12 +11,7 @@ use crate::{
     ast::node::ret::RetNode,
     ast::range::Range,
     ast::tokens::TokenType,
-    ast::{
-        diag::ErrorCode,
-        node::{
-            global::GlobalNode,
-        },
-    },
+    ast::{diag::ErrorCode, node::global::GlobalNode},
 };
 use internal_macro::{test_parser, test_parser_error};
 

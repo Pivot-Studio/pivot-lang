@@ -1,4 +1,3 @@
-#[cfg(not(target_arch = "wasm32"))]
 pub mod plc_new;
 pub mod read_config;
 pub mod test_symbol;
