@@ -1,6 +1,6 @@
 use std::io;
 pub fn main() i64 {
-    io::printi64ln(666);
+    io::print_s("Hello, world!\n");
     return 0;
 }
 
