@@ -14,6 +14,7 @@ git-repository-icon = "fa-github"
 edit-url-template = "https://github.com/Pivot-Studio/pivot-lang/edit/master/book/{path}"
 additional-css = ["././mdbook-admonish.css"]
 additional-js = ["mermaid.min.js", "mermaid-init.js"]
+site-url = "/docs/"
 
 [preprocessor]
 

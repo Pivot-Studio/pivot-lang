@@ -40,9 +40,6 @@ jobs:
     - name: Build
       run: |
         mdbook build
-        cp Dockerfile book/Dockerfile
-        cp nginx.conf book/nginx.conf
-        cp book.yaml book/book.yaml
       working-directory: book
     - uses: actions/upload-artifact@v3
       with:
@@ -62,3 +59,25 @@ jobs:
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
         publish_dir: .
+    - uses: Pivot-Studio/action-qiniu-upload@master
+      with:
+        # Your qiniu access key, required.
+        access_key: ${{ secrets.QINIU_ACCESS_KEY }}
+
+        # Your qiniu secret key, required.
+        secret_key: ${{ secrets.QINIU_SECRET_KEY }}
+
+        # Bucket name, required.
+        bucket: ${{ secrets.QINIU_BUCKET }}
+
+        # The local directory (or file) you want to upload to bucket.
+        # Default: './'
+        source_dir: './'
+
+        # The directory inside of the bucket you want to upload to, namely key prefix prepended to dest file key.
+        # Default: '/'
+        dest_dir: '/docs'
+
+        # Whether to ignore source maps.
+        # Default: true
+        ignore_source_map: true
