@@ -188,13 +188,13 @@
 首先你需要添加我们的apt源的gpg key：</p>
 <pre><code class="language-bash">apt update
 apt install wget gnupg
-wget -O -  https://apt.lang.pivotstudio.cn/public.key | apt-key add -
+wget -O -  https://lang.pivotstudio.cn/apt/public.key | apt-key add -
 </code></pre>
 <p>然后添加我们的apt源：</p>
-<pre><code class="language-bash">echo &quot;deb [arch=amd64] https://apt.lang.pivotstudio.cn/repo focal main
-# deb-src [arch=amd64] https://apt.lang.pivotstudio.cn/repo focal main
-deb [arch=amd64] https://apt.lang.pivotstudio.cn/repo jammy main
-# deb-src [arch=amd64] https://apt.lang.pivotstudio.cn/repo jammy main&quot;&gt;/etc/apt/sources.list.d/pl.list
+<pre><code class="language-bash">echo &quot;deb [arch=amd64] https://lang.pivotstudio.cn/apt/repo focal main
+# deb-src [arch=amd64] https://lang.pivotstudio.cn/apt/repo focal main
+deb [arch=amd64] https://lang.pivotstudio.cn/apt/repo jammy main
+# deb-src [arch=amd64] https://lang.pivotstudio.cn/apt/repo jammy main&quot;&gt;/etc/apt/sources.list.d/pl.list
 apt update
 </code></pre>
 <p>最后安装pivot lang编译器：</p>
