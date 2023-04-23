@@ -7,14 +7,13 @@ on:
     branches:
     - master
     - release/*
-  pull_request:
     paths:
-    - 'book/**'
-    - '**.rs'
-    - '**/Cargo.*'
-    - '.github/workflows/**.yml'
-    - '**.pi'
-    - '**/Kagari.*'
+      - 'book/**'
+      - '**.rs'
+      - '**/Cargo.*'
+      - '.github/workflows/book.yml'
+      - '**.pi'
+      - '**/Kagari.*'
 
 jobs:
   book:
@@ -81,3 +80,5 @@ jobs:
         # Whether to ignore source maps.
         # Default: true
         ignore_source_map: true
+
+        refresh_dirs: '["https://lang.pivotstudio.cn/docs/"]'

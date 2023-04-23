@@ -4,6 +4,13 @@ on:
     branches:
       - master
       - release/*
+    paths:
+      - '**.rs'
+      - '**/Cargo.*'
+      - '.github/workflows/docker_dev.yml'
+      - '**.pi'
+      - '**/Kagari.*'
+      - 'codecov.yml'
 
 
 jobs:

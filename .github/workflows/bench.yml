@@ -4,7 +4,7 @@ on:
     paths:
     - '**.rs'
     - '**/Cargo.*'
-    - '.github/workflows/**.yml'
+    - '.github/workflows/bench.yml'
 
 env:
   CARGO_TERM_COLOR: always
