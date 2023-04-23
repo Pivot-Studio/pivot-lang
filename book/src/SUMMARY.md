@@ -1,6 +1,6 @@
 # Summary
 
-- [About](../../README.md)
+- [About](./About.md)
 
 # Tutorial
 

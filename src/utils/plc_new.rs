@@ -48,7 +48,7 @@ project = "{}"
         path.join("main.pi"),
         r#"use std::io;
 fn main() i64 {
-    io::printi64ln(666);
+    io::print_s("Hello World\n");
     return 0;
 }
 "#

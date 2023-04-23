@@ -3,11 +3,22 @@
 我们建议开发者使用Visual Studio Code作为开发工具，因为我们提供了丰富的插件支持。  
 
 
+```admonish note
+您可能也注意到了，我们的语言服务器可以被编译成webassembly并直接运行在浏览器中。如果你想只在在浏览器中体验
+pivot-lang，可以访问[https://lang.pivotstudio.cn](https://lang.pivotstudio.cn)。  
+
+```
+
 ## vsc插件安装
 在vsc插件市场搜索`pivot-lang support`，安装第一个即可
 ![](2022-10-23-00-17-08.png)  
 
-> 注意：pivot-lang support插件依赖于plc命令，你必须确保plc文件安装路径在环境变量`PATH`中
+
+```admonish note
+pivot-lang support插件依赖于plc命令，你必须确保plc文件安装路径在环境变量`PATH`中
+
+```
+
 
 ## 支持功能
 - [x] vsc debug
