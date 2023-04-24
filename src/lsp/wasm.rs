@@ -9,14 +9,16 @@ use include_dir::{include_dir, Dir};
 use lazy_static::lazy_static;
 use lsp_types::{
     notification::DidChangeTextDocument, CompletionParams, Diagnostic, DidChangeTextDocumentParams,
-    SemanticTokens, SemanticTokensDelta, Url,
+    GotoDefinitionParams, Position, SemanticTokens, SemanticTokensDelta, Url,
 };
 use rustc_hash::FxHashMap;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
     ast::{
-        accumulators::{Completions, Diagnostics, DocSymbols, Hints, PLSemanticTokens},
+        accumulators::{
+            Completions, Diagnostics, DocSymbols, GotoDef, Hints, PLReferences, PLSemanticTokens,
+        },
         compiler::{compile_dry, ActionType},
         range::Pos,
     },
@@ -304,4 +306,48 @@ pub fn get_doc_symbol() -> String {
     let doc_symbols = compile_dry::accumulated::<DocSymbols>(db, docin);
     let symbol = &doc_symbols[0];
     return serde_json::to_value(symbol).unwrap().to_string();
+}
+
+#[wasm_bindgen]
+pub fn go_to_def(req: &str) -> String {
+    let docin = *DOCIN;
+    let binding = &DB.inner;
+    let db = &mut *binding.borrow_mut();
+    let params: Position = serde_json::from_str(req).unwrap();
+    // let uri = url_to_path(params.text_document_position_params.text_document.uri);
+    let pos = Pos::from_diag_pos(&params);
+    // docin.set_file(db).to(uri);
+    docin.set_action(db).to(ActionType::GotoDef);
+    docin.set_params(db).to(Some((pos, None)));
+    compile_dry(db, docin);
+    let defs = compile_dry::accumulated::<GotoDef>(db, docin);
+    if defs.is_empty() {
+        return serde_json::to_value::<Vec<i32>>(vec![])
+            .unwrap()
+            .to_string();
+    }
+    let def = &defs[0];
+    return serde_json::to_value(def).unwrap().to_string();
+}
+
+#[wasm_bindgen]
+pub fn get_refs(req: &str) -> String {
+    let docin = *DOCIN;
+    let binding = &DB.inner;
+    let db = &mut *binding.borrow_mut();
+    let params: Position = serde_json::from_str(req).unwrap();
+    // let uri = url_to_path(params.text_document_position_params.text_document.uri);
+    let pos = Pos::from_diag_pos(&params);
+    // docin.set_file(db).to(uri);
+    docin.set_action(db).to(ActionType::FindReferences);
+    docin.set_params(db).to(Some((pos, None)));
+    compile_dry(db, docin);
+    let refs = compile_dry::accumulated::<PLReferences>(db, docin);
+    let mut rf = vec![];
+    for r in refs {
+        for r in r.clone().iter() {
+            rf.push(r.clone());
+        }
+    }
+    return serde_json::to_value(&rf).unwrap().to_string();
 }

@@ -616,7 +616,12 @@ impl<'a, 'ctx> Ctx<'a> {
         #[cfg(any(unix, windows, target_os = "redox", target_os = "wasi"))]
         return Url::from_file_path(self.plmod.path.clone()).unwrap();
         #[cfg(not(any(unix, windows, target_os = "redox", target_os = "wasi")))]
-        return Url::parse("https://example.net").unwrap();
+        {
+            if self.plmod.path.starts_with("http") {
+                return Url::parse(&self.plmod.path).unwrap();
+            }
+            return Url::parse("httss://example.com").unwrap();
+        }
     }
 
     pub fn get_file(&self) -> String {

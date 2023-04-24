@@ -2,7 +2,7 @@ name: Publish Package to npmjs
 on:
   push:
     tags:
-      - 'wasm/*'
+      - 'wasm*'
 jobs:
   build:
     runs-on: ubuntu-latest

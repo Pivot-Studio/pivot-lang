@@ -52,6 +52,9 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
     let input = input.unwrap();
     let re = compile_dry_file(db, input);
     // calculate find references results
+    if docs.action(db) != ActionType::FindReferences {
+        return re;
+    }
     if let Some(res) = db.get_ref_str() {
         if let Some(plmod) = re {
             plmod

@@ -25,7 +25,12 @@ pub fn url_from_path(file: &str) -> Url {
         #[cfg(any(unix, windows, target_os = "redox", target_os = "wasi"))]
         return Url::from_file_path(file).unwrap();
         #[cfg(not(any(unix, windows, target_os = "redox", target_os = "wasi")))]
-        return Url::parse("https://example.net").unwrap();
+        {
+            if file.starts_with("http") {
+                return Url::parse(file).unwrap();
+            }
+            return Url::parse("httss://example.com").unwrap();
+        }
     }
 }
 
