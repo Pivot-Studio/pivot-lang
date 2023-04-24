@@ -41,7 +41,7 @@ _______   __                        __            __
                                                                                |  \__| $$
                                                                                 \$$    $$
                                                                                  \$$$$$$ 
-"#, long_about = None)]
+"#, long_about = None, styles = get_styles())]
 struct Cli {
     /// Name of the source file
     #[arg(value_parser)]
@@ -199,4 +199,19 @@ fn main() {
         println!("No file provided");
         Cli::command().print_help().unwrap();
     }
+}
+
+pub fn get_styles() -> clap::builder::Styles {
+    clap::builder::Styles::styled()
+        .header(
+            anstyle::Style::new()
+                .bold()
+                .underline()
+                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::Green))),
+        )
+        .literal(
+            anstyle::Style::new()
+                .bold()
+                .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::BrightGreen))),
+        )
 }

@@ -47,9 +47,9 @@ struct CollectorStatus {
     collecting: bool,
 }
 
-pub type VisitFunc = unsafe fn(&Collector, *mut u8);
+pub type VisitFunc = unsafe extern "C" fn(&Collector, *mut u8);
 
-pub type VtableFunc = fn(*mut u8, &Collector, VisitFunc, VisitFunc, VisitFunc);
+pub type VtableFunc = extern "C" fn(*mut u8, &Collector, VisitFunc, VisitFunc, VisitFunc);
 
 impl Drop for Collector {
     fn drop(&mut self) {
@@ -234,7 +234,7 @@ impl Collector {
     }
 
     /// precise mark a pointer
-    unsafe fn mark_ptr(&self, ptr: *mut u8) {
+    unsafe extern "C" fn mark_ptr(&self, ptr: *mut u8) {
         let father = ptr;
         let mut ptr = *(ptr as *mut *mut u8);
         // println!("mark ptr {:p} -> {:p}", father, ptr);
@@ -330,7 +330,7 @@ impl Collector {
     ///
     /// it self does not mark the object, but mark the object's fields by calling
     /// mark_ptr
-    unsafe fn mark_complex(&self, ptr: *mut u8) {
+    unsafe extern "C" fn mark_complex(&self, ptr: *mut u8) {
         let vptr = *(ptr as *mut *mut u8);
         if vptr.is_null() {
             return;
@@ -345,7 +345,7 @@ impl Collector {
         );
     }
     /// precise mark a trait object
-    unsafe fn mark_trait(&self, ptr: *mut u8) {
+    unsafe extern "C" fn mark_trait(&self, ptr: *mut u8) {
         // if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr)
         //    &&!self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr) {
         //     return;
@@ -644,7 +644,7 @@ mod tests {
         d: *mut u64,
         e: *mut GCTestObj,
     }
-    fn gctest_vtable(
+    extern "C" fn gctest_vtable(
         ptr: *mut u8,
         gc: &Collector,
         mark_ptr: VisitFunc,
@@ -667,7 +667,7 @@ mod tests {
         d: *mut GCTestBigObj,
     }
     const BIGOBJ_ALLOC_SIZE: usize = round_n_up!(size_of::<GCTestBigObj>() + 16, 128);
-    fn gctest_vtable_big(
+    extern "C" fn gctest_vtable_big(
         ptr: *mut u8,
         gc: &Collector,
         mark_ptr: VisitFunc,

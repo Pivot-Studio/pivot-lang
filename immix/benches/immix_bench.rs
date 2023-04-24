@@ -98,7 +98,7 @@ struct GCTestObj {
     d: *mut u64,
     e: *mut GCTestObj,
 }
-fn gctest_vtable(
+extern "C" fn gctest_vtable(
     ptr: *mut u8,
     gc: &Collector,
     mark_ptr: VisitFunc,

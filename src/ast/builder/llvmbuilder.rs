@@ -310,9 +310,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let stack_ptr = self
             .builder
             .build_alloca(llvmtp.ptr_type(AddressSpace::default()), "stack_ptr");
+        self.gc_add_root(stack_ptr.as_basic_value_enum(), obj_type);
         self.builder.position_at_end(lb);
         self.builder.build_store(stack_ptr, casted_result);
-        self.gc_add_root(stack_ptr.as_basic_value_enum(), obj_type);
         (casted_result.into_pointer_value(), stack_ptr, llvmtp)
     }
 

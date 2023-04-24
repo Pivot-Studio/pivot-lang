@@ -21,7 +21,7 @@ rowan = "0.15"
 dissimilar = "1.0"
 stderrlog = "0.5"
 log = "0.4"
-clap = { version = "4.1", features = ["derive"] }
+clap = { version = "4.1", features = ["derive", "unstable-styles"] }
 colored = "2.0"
 serde = "1.0"
 lsp-types = { branch = "master", features = ["proposed"], git = "https://github.com/Pivot-Studio/lsp-types" }
@@ -42,6 +42,7 @@ indicatif = "0.17"
 parking_lot = "0.12"
 derivative = "2.2"
 console = "0.15"
+anstyle = "1.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
