@@ -216,6 +216,7 @@ fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 parantheses_exp,
                 struct_init,
                 array_init,
+                tuple_init,
                 macro_call_exp,
                 extern_identifier,
                 string_literal,
@@ -239,11 +240,15 @@ fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 /// ```ebnf
 /// take_exp_op = ("." identifier?) ;
 /// ```
+#[test_parser(".0")]
 fn take_exp_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
     delspace(map_res(
         preceded(
             tag_token_symbol(TokenType::DOT),
-            pair(opt(identifier), many0(comment)),
+            pair(
+                opt(alt((identifier, tuple_field_identifier))),
+                many0(comment),
+            ),
         ),
         |(idx, coms)| Ok::<_, ()>((ComplexOp::Field(idx), coms)),
     ))(input)

@@ -32,6 +32,7 @@ use self::primary::*;
 use self::ret::*;
 use self::statement::*;
 use self::string_literal::StringNode;
+use self::tuple::TupleInitNode;
 use self::types::*;
 use self::union::UnionDefNode;
 
@@ -60,6 +61,7 @@ pub mod program;
 pub mod ret;
 pub mod statement;
 pub mod string_literal;
+pub mod tuple;
 pub mod types;
 pub mod union;
 
@@ -134,6 +136,7 @@ pub enum NodeEnum {
     UnionDefNode(UnionDefNode),
     AsNode(AsNode),
     IsNode(IsNode),
+    TupleInitNode(TupleInitNode),
 }
 // ANCHOR: range
 #[enum_dispatch]

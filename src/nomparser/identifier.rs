@@ -1,9 +1,9 @@
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{alpha1, alphanumeric1},
+    character::complete::{alpha1, alphanumeric1, one_of},
     combinator::{map_res, opt, recognize},
-    multi::{many0_count, separated_list1},
+    multi::{many0_count, many1, separated_list1},
     sequence::{pair, tuple},
     IResult, InputTake,
 };
@@ -79,6 +79,18 @@ pub fn identifier(input: Span) -> IResult<Span, Box<VarNode>> {
                 return Err(());
             }
             Ok(Box::new(VarNode {
+                name: out.to_string(),
+                range: Range::new(out, out.take_split(out.len()).0),
+            }))
+        },
+    ))(input)
+}
+
+pub fn tuple_field_identifier(input: Span) -> IResult<Span, Box<VarNode>> {
+    delspace(map_res(
+        recognize(many1(one_of("0123456789"))),
+        |out: Span| {
+            Ok::<_, ()>(Box::new(VarNode {
                 name: out.to_string(),
                 range: Range::new(out, out.take_split(out.len()).0),
             }))
