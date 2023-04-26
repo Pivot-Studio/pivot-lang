@@ -32,6 +32,7 @@ use super::range::Range;
 use immix::ObjectType;
 use indexmap::IndexMap;
 
+use linked_hash_map::LinkedHashMap;
 use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
@@ -40,11 +41,9 @@ use lsp_types::InsertTextFormat;
 
 use lsp_types::Location;
 use lsp_types::SymbolKind;
-use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 
 use std::sync::Arc;
-
 /// # PLType
 /// Type for pivot-lang
 /// including primitive type, struct type, function type, void type
@@ -112,18 +111,11 @@ impl UnionType {
         let mut res = self.clone();
         res.name = name;
         ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Union(res.clone()))));
-
-        let (tps, errors): (Vec<_>, Vec<_>) = res
+        res.sum_types = self
             .sum_types
             .iter()
-            .map(|t| {
-                Ok::<Box<TypeNodeEnum>, PLDiag>(t.get_type(ctx, builder)?.borrow().get_typenode())
-            })
-            .partition(Result::is_ok);
-        if !errors.is_empty() {
-            return Err(errors[0].clone().unwrap_err());
-        }
-        res.sum_types = tps.into_iter().map(Result::unwrap).collect::<Vec<_>>();
+            .map(|t| t.get_type(ctx, builder).unwrap().borrow().get_typenode())
+            .collect();
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
         pltype.replace(PLType::Union(res.clone()));
@@ -761,17 +753,132 @@ impl ARRType {
 pub struct STType {
     pub name: String,
     pub path: String,
-    pub fields: FxHashMap<String, Field>,
-    pub ordered_fields: Vec<Field>,
+    pub fields: LinkedHashMap<String, Field>,
     pub range: Range,
     pub doc: Vec<Box<NodeEnum>>,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub derives: Vec<Arc<RefCell<PLType>>>,
     pub modifier: Option<(TokenType, Range)>,
     pub body_range: Range,
+    pub is_trait: bool,
 }
-
 impl STType {
+    pub fn check_impl_derives(&self, ctx: &Ctx, st: &STType, range: Range) {
+        debug_assert!(self.is_trait);
+        let errnames = self
+            .derives
+            .iter()
+            .map(|derive| {
+                if let PLType::Trait(derive) = &*derive.borrow() {
+                    derive.clone()
+                } else {
+                    unreachable!()
+                }
+            })
+            .filter(|derive| !st.implements_trait(derive, &ctx.plmod))
+            .map(|derive| derive.name)
+            .collect::<Vec<_>>();
+        if !errnames.is_empty() {
+            range
+                .new_err(ErrorCode::DERIVE_TRAIT_NOT_IMPL)
+                .add_label(
+                    range,
+                    ctx.get_file(),
+                    format_label!("the derive trait {} not impl", errnames.join(",")),
+                )
+                .add_to_ctx(ctx);
+        }
+    }
+    pub fn get_trait_field(&self, k: &str) -> Option<Field> {
+        debug_assert!(self.is_trait);
+        fn walk(st: &STType, k: &str) -> (Option<Field>, u32) {
+            if let Some(f) = st.fields.get(k) {
+                return (Some(f.clone()), f.index - 1);
+            }
+            let mut offset = st.fields.len() as u32;
+            for derive in st.derives.iter() {
+                if let PLType::Trait(t) = &*derive.borrow() {
+                    let (f, walk_offset) = walk(t, k);
+                    offset += walk_offset;
+                    if let Some(f) = f {
+                        return (Some(f), offset);
+                    }
+                }
+            }
+            (None, offset)
+        }
+        let (f, offset) = walk(self, k);
+        if let Some(mut f) = f {
+            f.index = offset + 1;
+            return Some(f);
+        }
+        None
+    }
+    fn merge_field(&self) -> Vec<Field> {
+        self.fields
+            .values()
+            .map(Clone::clone)
+            .chain(self.derives.iter().flat_map(|pltype| {
+                if let PLType::Trait(t) = &*pltype.borrow() {
+                    return t.merge_field();
+                }
+                unreachable!()
+            }))
+            .collect::<Vec<_>>()
+    }
+    pub fn list_trait_fields(&self) -> Vec<Field> {
+        debug_assert!(self.is_trait);
+        self.merge_field()
+            .iter()
+            .enumerate()
+            .map(|(i, f)| {
+                let mut f = f.clone();
+                f.index = i as u32 + 2;
+                f
+            })
+            .collect()
+    }
+    // get all field include type_hash,ptr,vtable,this func only be used in llvmbuilder
+    pub fn get_all_field(&self) -> Vec<Field> {
+        let mut fields = vec![];
+        if self.is_trait {
+            fields.push(Field {
+                index: 0,
+                typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
+                name: "__type_hash".to_string(),
+                range: Default::default(),
+                modifier: None,
+            });
+            // pointer to real value
+            fields.push(Field {
+                index: 1,
+                typenode: Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
+                    elm: Box::new(TypeNameNode::new_from_str("i64").into()),
+                    range: Default::default(),
+                })),
+                name: "__ptr".to_string(),
+                range: Default::default(),
+                modifier: None,
+            });
+        } else {
+            // gcrtti fields
+            fields.push(Field {
+                index: 0,
+                typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
+                name: "_vtable".to_string(),
+                range: Default::default(),
+                modifier: None,
+            });
+        }
+        self.merge_field().iter().for_each(|f| {
+            fields.push(f.clone());
+        });
+        fields
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, f)| f.index = i as u32);
+        fields
+    }
     fn implements(&self, tp: &PLType, plmod: &Mod) -> bool {
         plmod
             .impls
@@ -857,24 +964,25 @@ impl STType {
         let mut res = self.clone();
         res.name = name;
         ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Struct(res.clone()))));
-        let (tps, errors): (Vec<_>, Vec<_>) = self
-            .ordered_fields
-            .iter()
+        res.fields = self
+            .fields
+            .values()
             .map(|f| {
                 let mut nf = f.clone();
-                nf.typenode = f.typenode.get_type(ctx, builder)?.borrow().get_typenode();
-                Ok::<Field, PLDiag>(nf)
+                nf.typenode = f
+                    .typenode
+                    .get_type(ctx, builder)
+                    .unwrap()
+                    .borrow()
+                    .get_typenode();
+                (nf.name.clone(), nf)
             })
-            .partition(Result::is_ok);
-        if !errors.is_empty() {
-            return Err(errors.into_iter().map(Result::unwrap_err).next().unwrap());
-        }
-        res.ordered_fields = tps.into_iter().map(Result::unwrap).collect::<Vec<_>>();
-        let mut field_pltps = vec![];
-        res.ordered_fields.iter().for_each(|f| {
-            field_pltps.push(f.typenode.get_type(ctx, builder).unwrap());
-            res.fields.insert(f.name.clone(), f.clone());
-        });
+            .collect();
+        let field_pltps = res
+            .fields
+            .values()
+            .map(|f| f.typenode.get_type(ctx, builder).unwrap())
+            .collect::<Vec<_>>();
         builder.gen_st_visit_function(ctx, &res, &field_pltps);
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
@@ -883,10 +991,7 @@ impl STType {
     }
     pub fn get_field_completions(&self, must_pub: bool) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
-        for (name, f) in &self.fields {
-            if f.index == 0 {
-                continue;
-            }
+        for (name, f) in self.fields.iter() {
             if must_pub {
                 skip_if_not_modified_by!(f.modifier, TokenType::PUB);
             }
@@ -918,7 +1023,7 @@ impl STType {
     }
     pub fn get_trait_field_completions(&self) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
-        for (name, f) in &self.fields {
+        for (name, f) in self.fields.iter() {
             if let TypeNodeEnum::Func(func) = &*f.typenode {
                 completions.push(CompletionItem {
                     kind: Some(CompletionItemKind::METHOD),
@@ -950,8 +1055,8 @@ impl STType {
     }
     pub fn get_doc_symbol(&self) -> DocumentSymbol {
         let children: Vec<DocumentSymbol> = self
-            .ordered_fields
-            .iter()
+            .fields
+            .values()
             .map(|order_field| order_field.get_doc_symbol())
             .collect();
         #[allow(deprecated)]
@@ -995,7 +1100,8 @@ pub struct GenericType {
     pub name: String,
     pub range: Range,
     pub curpltype: Option<Arc<RefCell<PLType>>>,
-    pub trait_impl: Option<Arc<RefCell<PLType>>>,
+    pub trait_impl: Option<Vec<Arc<RefCell<PLType>>>>,
+    pub trait_place_holder: Option<Arc<RefCell<PLType>>>,
     pub refs: Arc<MutVec<Location>>,
 }
 impl GenericType {
@@ -1006,8 +1112,8 @@ impl GenericType {
         self.curpltype = None;
     }
     pub fn set_place_holder(&mut self, ctx: &mut Ctx) {
-        if let Some(trait_impl) = &self.trait_impl {
-            self.curpltype = Some(trait_impl.clone());
+        if let Some(trait_place_holder) = &self.trait_place_holder {
+            self.curpltype = Some(trait_place_holder.clone());
             return;
         }
         let range = self.range;

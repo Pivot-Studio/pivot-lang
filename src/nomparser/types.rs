@@ -1,3 +1,4 @@
+use crate::ast::node::interface::{MultiTraitNode, TraitBoundNode};
 use crate::nomparser::Span;
 use crate::{
     ast::node::types::{ArrayTypeNameNode, TypeNameNode},
@@ -171,7 +172,10 @@ pub fn trait_def(input: Span) -> IResult<Span, Box<TraitDefNode>> {
                     })
                     .collect(),
                 range,
-                derives: de,
+                derives: MultiTraitNode {
+                    traits: de,
+                    range: Default::default(),
+                },
                 modifier,
             }))
         },
@@ -193,4 +197,39 @@ fn type_add(input: Span) -> IResult<Span, Vec<Box<TypeNodeEnum>>> {
         del_newline_or_space!(tag_token_symbol(TokenType::PLUS)),
         type_name,
     )(input)
+}
+
+pub fn trait_bound(input: Span) -> IResult<Span, Box<TraitBoundNode>> {
+    map_res(
+        tuple((
+            identifier,
+            opt(preceded(tag_token_symbol(TokenType::COLON), multi_trait)),
+        )),
+        |(generic, impl_trait)| {
+            let range = if let Some(impl_trait) = &impl_trait {
+                generic.range.start.to(impl_trait.range().end)
+            } else {
+                generic.range
+            };
+            res_box(Box::new(TraitBoundNode {
+                generic,
+                impl_trait,
+                range,
+            }))
+        },
+    )(input)
+}
+
+pub fn multi_trait(input: Span) -> IResult<Span, Box<MultiTraitNode>> {
+    map_res(type_add, |traits| {
+        res_box(Box::new(MultiTraitNode {
+            range: traits
+                .first()
+                .unwrap()
+                .range()
+                .start
+                .to(traits.last().unwrap().range().end),
+            traits,
+        }))
+    })(input)
 }

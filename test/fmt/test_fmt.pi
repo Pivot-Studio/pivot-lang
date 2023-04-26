@@ -173,3 +173,15 @@ fn test_ret_union() Option<i64> {
     return 101;
 }
 
+trait TA {
+}
+
+trait TB {
+}
+
+trait TC: TA+TB {
+}
+
+trait TD: TA {
+}
+

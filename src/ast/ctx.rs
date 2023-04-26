@@ -274,8 +274,8 @@ impl<'a, 'ctx> Ctx<'a> {
                 ));
             }
             let trait_handle = builder.alloc("tmp_traitv", &trait_pltype.borrow(), self, None);
-            for (name, f) in &t.fields {
-                let mthd = st.find_method(self, name).unwrap();
+            for f in t.list_trait_fields().iter() {
+                let mthd = st.find_method(self, &f.name).unwrap();
                 let fnhandle = builder.get_or_insert_fn_handle(&mthd, self);
                 let targetftp = f.typenode.get_type(self, builder).unwrap();
                 let casted = builder.bitcast(self, fnhandle, &targetftp.borrow(), "fncast_tmp");
@@ -1012,9 +1012,12 @@ impl<'a, 'ctx> Ctx<'a> {
                                 need_up_cast: false,
                             };
                         }
-                    } else if !self
-                        .eq(lg.trait_impl.as_ref().unwrap().clone(), r.clone())
-                        .eq
+                    } else if lg
+                        .trait_impl
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .any(|lt| !self.eq(lt.clone(), r.clone()).eq)
                     {
                         return EqRes {
                             eq: false,
@@ -1031,6 +1034,12 @@ impl<'a, 'ctx> Ctx<'a> {
             unreachable!()
         }
         if l != r {
+            if matches!(&*l.borrow(), PLType::Union(_)) {
+                return EqRes {
+                    eq: true,
+                    need_up_cast: true,
+                };
+            }
             let trait_pltype = l;
             let st_pltype = self.auto_deref_tp(r);
             if let (PLType::Trait(t), PLType::Struct(st)) =
@@ -1038,11 +1047,6 @@ impl<'a, 'ctx> Ctx<'a> {
             {
                 return EqRes {
                     eq: st.implements_trait(t, &self.plmod),
-                    need_up_cast: true,
-                };
-            } else if let PLType::Union(_) = &*trait_pltype.borrow() {
-                return EqRes {
-                    eq: true,
                     need_up_cast: true,
                 };
             }

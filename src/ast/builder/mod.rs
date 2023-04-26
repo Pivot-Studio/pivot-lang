@@ -14,7 +14,7 @@ use super::{
     ctx::Ctx,
     diag::PLDiag,
     node::{types::TypedIdentifierNode, TypeNodeEnum},
-    pltype::{FNValue, Field, PLType, PriType, STType},
+    pltype::{FNValue, PLType, PriType, STType},
     range::{Pos, Range},
 };
 
@@ -119,7 +119,7 @@ pub trait IRBuilder<'a, 'ctx> {
     ) -> ValueHandle;
     fn build_unconditional_branch(&self, bb: BlockHandle);
     fn position_at_end_block(&self, block: BlockHandle);
-    fn add_body_to_struct_type(&self, name: &str, order_fields: &[Field], ctx: &mut Ctx<'a>);
+    fn add_body_to_struct_type(&self, name: &str, sttype: &STType, ctx: &mut Ctx<'a>);
     fn get_or_insert_fn_handle(&self, pltp: &FNValue, ctx: &mut Ctx<'a>) -> ValueHandle;
     fn get_or_add_global(
         &self,

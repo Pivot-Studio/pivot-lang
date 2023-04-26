@@ -118,7 +118,8 @@ define_error!(
     UNION_DOES_NOT_CONTAIN_TYPE = "union does not contain type",
     INVALID_IS_EXPR = "invalid `is` expression",
     INVALID_CAST = "invalid cast",
-    METHOD_NOT_FOUND = "method not found"
+    METHOD_NOT_FOUND = "method not found",
+    DERIVE_TRAIT_NOT_IMPL = "derive trait not impl"
 );
 macro_rules! define_warn {
     ($(

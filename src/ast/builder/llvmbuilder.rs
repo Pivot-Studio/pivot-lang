@@ -819,7 +819,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let mut m = vec![];
                 ctx.run_in_type_mod(x, |ctx, x| {
                     m = x
-                        .ordered_fields
+                        .get_all_field()
                         .iter()
                         .map(|v| {
                             let offset = td.offset_of_element(&sttp, v.index).unwrap() * 8;
@@ -957,9 +957,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         ctx.run_in_type_mod(pltp, |ctx, pltp| {
             st.set_body(
                 &pltp
-                    .ordered_fields
-                    .clone()
-                    .into_iter()
+                    .get_all_field()
+                    .iter()
                     .map(|order_field| {
                         self.get_basic_type_op(
                             &order_field
@@ -1195,10 +1194,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.context.opaque_struct_type(name);
     }
 
-    fn add_body_to_struct_type(&self, name: &str, order_fields: &[Field], ctx: &mut Ctx<'a>) {
+    fn add_body_to_struct_type(&self, name: &str, sttype: &STType, ctx: &mut Ctx<'a>) {
         let st = self.module.get_struct_type(name).unwrap();
         st.set_body(
-            &order_fields
+            &sttype
+                .get_all_field()
                 .iter()
                 .map(|order_field| {
                     self.get_basic_type_op(

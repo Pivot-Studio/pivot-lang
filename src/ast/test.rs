@@ -82,7 +82,7 @@ mod test {
                 std::cmp::Ordering::Greater
             }
         });
-        assert_eq!(diag.len(), 10);
+        assert_eq!(diag.len(), 11);
         assert_eq!(
             new_diag_range(10, 14, 10, 15),
             diag[0].get_range().to_diag_range()
@@ -92,7 +92,7 @@ mod test {
             DiagCode::Err(crate::ast::diag::ErrorCode::TYPE_MISMATCH)
         );
         assert_eq!(
-            new_diag_range(20, 16, 20, 19),
+            new_diag_range(19, 16, 19, 18),
             diag[1].get_range().to_diag_range()
         );
         assert_eq!(
@@ -100,7 +100,7 @@ mod test {
             DiagCode::Err(crate::ast::diag::ErrorCode::TYPE_MISMATCH)
         );
         assert_eq!(
-            new_diag_range(22, 12, 22, 21),
+            new_diag_range(21, 12, 21, 21),
             diag[2].get_range().to_diag_range()
         );
         assert_eq!(
@@ -108,7 +108,7 @@ mod test {
             DiagCode::Err(crate::ast::diag::ErrorCode::INVALID_DIRECT_UNION_CAST)
         );
         assert_eq!(
-            new_diag_range(23, 13, 23, 22),
+            new_diag_range(22, 13, 22, 22),
             diag[3].get_range().to_diag_range()
         );
         assert_eq!(
@@ -116,7 +116,7 @@ mod test {
             DiagCode::Err(crate::ast::diag::ErrorCode::INVALID_UNION_CAST)
         );
         assert_eq!(
-            new_diag_range(24, 18, 24, 21),
+            new_diag_range(23, 18, 23, 21),
             diag[4].get_range().to_diag_range()
         );
         assert_eq!(
@@ -124,7 +124,7 @@ mod test {
             DiagCode::Err(crate::ast::diag::ErrorCode::UNION_DOES_NOT_CONTAIN_TYPE)
         );
         assert_eq!(
-            new_diag_range(25, 13, 25, 21),
+            new_diag_range(24, 13, 24, 21),
             diag[5].get_range().to_diag_range()
         );
         assert_eq!(
@@ -132,7 +132,7 @@ mod test {
             DiagCode::Err(crate::ast::diag::ErrorCode::INVALID_IS_EXPR)
         );
         assert_eq!(
-            new_diag_range(29, 11, 29, 11),
+            new_diag_range(28, 11, 28, 11),
             diag[6].get_range().to_diag_range()
         );
         assert_eq!(
@@ -140,7 +140,7 @@ mod test {
             DiagCode::Err(crate::ast::diag::ErrorCode::MISSING_SEMI)
         );
         assert_eq!(
-            new_diag_range(32, 8, 32, 9),
+            new_diag_range(30, 8, 30, 9),
             diag[7].get_range().to_diag_range()
         );
         assert_eq!(
@@ -148,7 +148,7 @@ mod test {
             DiagCode::Warn(crate::ast::diag::WarnCode::UNUSED_VARIABLE)
         );
         assert_eq!(
-            new_diag_range(32, 13, 32, 13),
+            new_diag_range(30, 13, 30, 13),
             diag[8].get_range().to_diag_range()
         );
         assert_eq!(
@@ -156,12 +156,20 @@ mod test {
             DiagCode::Err(crate::ast::diag::ErrorCode::MISSING_SEMI)
         );
         assert_eq!(
-            new_diag_range(33, 15, 33, 15),
+            new_diag_range(31, 15, 31, 15),
             diag[9].get_range().to_diag_range()
         );
         assert_eq!(
             diag[9].get_diag_code(),
             DiagCode::Err(crate::ast::diag::ErrorCode::MISSING_SEMI)
+        );
+        assert_eq!(
+            new_diag_range(41, 5, 41, 7),
+            diag[10].get_range().to_diag_range()
+        );
+        assert_eq!(
+            diag[10].get_diag_code(),
+            DiagCode::Err(crate::ast::diag::ErrorCode::DERIVE_TRAIT_NOT_IMPL)
         );
     }
     #[test]
