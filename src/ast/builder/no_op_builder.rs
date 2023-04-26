@@ -201,7 +201,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     fn add_body_to_struct_type(
         &self,
         _name: &str,
-        _order_fields: &STType,
+        _sttype: &STType,
         _ctx: &mut crate::ast::ctx::Ctx<'a>,
     ) {
     }

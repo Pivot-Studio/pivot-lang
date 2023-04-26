@@ -15,10 +15,9 @@ struct BInner<T: TestTrait> {
     x: T;
 }
 
-type AA = A|i64;
-
+type AA = A | i64;
 fn test_mismatch() void {
-    let a: AA = 1.0;
+    let a: AA = 1.;
     let aa: AA = 1 as i64;
     let b = aa as f32;
     let bb = aa as f32!;
@@ -28,9 +27,18 @@ fn test_mismatch() void {
 }
 
 use std::io
-
 fn test_semi() void {
     let a = 1
     test_semi()
     return;
 }
+
+trait TA {
+}
+
+trait TB: TA {
+}
+
+impl TB for A {
+}
+

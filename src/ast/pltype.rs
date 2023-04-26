@@ -764,6 +764,7 @@ pub struct STType {
 }
 impl STType {
     pub fn check_impl_derives(&self, ctx: &Ctx, st: &STType, range: Range) {
+        debug_assert!(self.is_trait);
         let errnames = self
             .derives
             .iter()
@@ -789,6 +790,7 @@ impl STType {
         }
     }
     pub fn get_trait_field(&self, k: &str) -> Option<Field> {
+        debug_assert!(self.is_trait);
         fn walk(st: &STType, k: &str) -> (Option<Field>, u32) {
             if let Some(f) = st.fields.get(k) {
                 return (Some(f.clone()), f.index - 1);
@@ -812,20 +814,21 @@ impl STType {
         }
         None
     }
-    fn merge_trait_field(&self) -> Vec<Field> {
+    fn merge_field(&self) -> Vec<Field> {
         self.fields
             .values()
             .map(Clone::clone)
             .chain(self.derives.iter().flat_map(|pltype| {
                 if let PLType::Trait(t) = &*pltype.borrow() {
-                    return t.merge_trait_field();
+                    return t.merge_field();
                 }
                 unreachable!()
             }))
             .collect::<Vec<_>>()
     }
     pub fn list_trait_fields(&self) -> Vec<Field> {
-        self.merge_trait_field()
+        debug_assert!(self.is_trait);
+        self.merge_field()
             .iter()
             .enumerate()
             .map(|(i, f)| {
@@ -867,7 +870,7 @@ impl STType {
                 modifier: None,
             });
         }
-        self.merge_trait_field().iter().for_each(|f| {
+        self.merge_field().iter().for_each(|f| {
             fields.push(f.clone());
         });
         fields
@@ -1097,7 +1100,8 @@ pub struct GenericType {
     pub name: String,
     pub range: Range,
     pub curpltype: Option<Arc<RefCell<PLType>>>,
-    pub trait_impl: Option<Arc<RefCell<PLType>>>,
+    pub trait_impl: Option<Vec<Arc<RefCell<PLType>>>>,
+    pub trait_place_holder: Option<Arc<RefCell<PLType>>>,
     pub refs: Arc<MutVec<Location>>,
 }
 impl GenericType {
@@ -1108,8 +1112,8 @@ impl GenericType {
         self.curpltype = None;
     }
     pub fn set_place_holder(&mut self, ctx: &mut Ctx) {
-        if let Some(trait_impl) = &self.trait_impl {
-            self.curpltype = Some(trait_impl.clone());
+        if let Some(trait_place_holder) = &self.trait_place_holder {
+            self.curpltype = Some(trait_place_holder.clone());
             return;
         }
         let range = self.range;

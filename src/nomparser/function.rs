@@ -6,11 +6,8 @@ use nom::{
     IResult,
 };
 
-use crate::{
-    ast::node::function::FuncDefNode,
-    ast::{node::interface::MultiTraitNode, tokens::TokenType},
-};
-use crate::{ast::node::interface::TraitBoundNode, nomparser::Span};
+use crate::nomparser::Span;
+use crate::{ast::node::function::FuncDefNode, ast::tokens::TokenType};
 
 use internal_macro::{test_parser, test_parser_error};
 
@@ -147,34 +144,4 @@ pub fn call_function_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEn
             Ok::<_, ()>((ComplexOp::Call((paras, st.start.to(end.end), generic)), com))
         },
     ))(input)
-}
-
-pub fn trait_bound(input: Span) -> IResult<Span, Box<TraitBoundNode>> {
-    map_res(
-        tuple((
-            identifier,
-            opt(preceded(tag_token_symbol(TokenType::COLON), multi_trait)),
-        )),
-        |(generic, impl_trait)| {
-            let range = if let Some(impl_trait) = &impl_trait {
-                generic.range.start.to(impl_trait.range().end)
-            } else {
-                generic.range
-            };
-            res_box(Box::new(TraitBoundNode {
-                generic,
-                impl_trait,
-                range,
-            }))
-        },
-    )(input)
-}
-
-pub fn multi_trait(input: Span) -> IResult<Span, Box<MultiTraitNode>> {
-    map_res(type_name, |traits| {
-        res_box(Box::new(MultiTraitNode {
-            range: traits.range(),
-            traits,
-        }))
-    })(input)
 }

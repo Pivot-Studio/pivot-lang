@@ -835,6 +835,7 @@ impl GenericDefNode {
                 range,
                 curpltype: None,
                 trait_impl: None,
+                trait_place_holder: None,
                 refs: Arc::new(MutVec::new(vec![])),
             };
             let pltp = Arc::new(RefCell::new(PLType::Generic(gentype)));

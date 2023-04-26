@@ -629,18 +629,7 @@ impl FmtBuilder {
         self.token("trait");
         self.space();
         self.token(node.id.name.as_str());
-        if !node.derives.is_empty() {
-            self.colon();
-            node.derives[0..node.derives.len() - 1]
-                .iter()
-                .for_each(|d| {
-                    d.format(self);
-                    self.space();
-                    self.token("+");
-                    self.space();
-                });
-            node.derives.last().unwrap().format(self);
-        }
+        node.derives.format(self);
         self.space();
         self.l_brace();
         self.enter();
@@ -699,13 +688,19 @@ impl FmtBuilder {
     pub fn parse_trait_bound_node(&mut self, node: &TraitBoundNode) {
         node.generic.format(self);
         if let Some(impl_trait) = &node.impl_trait {
-            self.token(":");
-            self.space();
             impl_trait.format(self);
         }
     }
     pub fn parse_multi_trait_node(&mut self, node: &MultiTraitNode) {
-        node.traits.format(self)
+        if !node.traits.is_empty() {
+            self.colon();
+            self.space();
+            node.traits[0..node.traits.len() - 1].iter().for_each(|d| {
+                d.format(self);
+                self.token("+");
+            });
+            node.traits.last().unwrap().format(self);
+        }
     }
     pub fn parse_union_def_node(&mut self, node: &UnionDefNode) {
         self.prefix();

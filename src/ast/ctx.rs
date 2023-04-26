@@ -1012,9 +1012,12 @@ impl<'a, 'ctx> Ctx<'a> {
                                 need_up_cast: false,
                             };
                         }
-                    } else if !self
-                        .eq(lg.trait_impl.as_ref().unwrap().clone(), r.clone())
-                        .eq
+                    } else if lg
+                        .trait_impl
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .any(|lt| !self.eq(lt.clone(), r.clone()).eq)
                     {
                         return EqRes {
                             eq: false,
@@ -1031,6 +1034,12 @@ impl<'a, 'ctx> Ctx<'a> {
             unreachable!()
         }
         if l != r {
+            if matches!(&*l.borrow(), PLType::Union(_)) {
+                return EqRes {
+                    eq: true,
+                    need_up_cast: true,
+                };
+            }
             let trait_pltype = l;
             let st_pltype = self.auto_deref_tp(r);
             if let (PLType::Trait(t), PLType::Struct(st)) =
@@ -1038,11 +1047,6 @@ impl<'a, 'ctx> Ctx<'a> {
             {
                 return EqRes {
                     eq: st.implements_trait(t, &self.plmod),
-                    need_up_cast: true,
-                };
-            } else if let PLType::Union(_) = &*trait_pltype.borrow() {
-                return EqRes {
-                    eq: true,
                     need_up_cast: true,
                 };
             }

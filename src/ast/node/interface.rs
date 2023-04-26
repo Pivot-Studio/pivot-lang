@@ -13,19 +13,63 @@ use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
 #[node]
 pub struct MultiTraitNode {
-    pub traits: Box<TypeNodeEnum>,
+    pub traits: Vec<Box<TypeNodeEnum>>,
 }
 impl MultiTraitNode {
-    pub fn merge_traits<'a, 'ctx, 'b>(
+    fn merge_traits<'a, 'ctx, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
-        let trait_pltype = self.traits.get_type(ctx, builder)?;
-        if matches!(*trait_pltype.borrow(), PLType::Trait(_)) {
-            return Ok(trait_pltype);
+        let derives = self.get_types(ctx, builder)?;
+        if derives.len() == 1 {
+            return Ok(derives[0].clone());
         }
-        Err(ctx.add_diag(self.range().new_err(ErrorCode::EXPECT_TRAIT_TYPE)))
+        let name = derives
+            .iter()
+            .map(|t| t.borrow().get_name())
+            .collect::<Vec<_>>()
+            .join("+");
+        let st = STType {
+            generic_map: IndexMap::default(),
+            name: name.clone(),
+            path: ctx.plmod.path.clone(),
+            fields: LinkedHashMap::default(),
+            range: Default::default(),
+            doc: vec![],
+            derives,
+            modifier: None,
+            body_range: Default::default(),
+            is_trait: true,
+        };
+        builder.opaque_struct_type(&ctx.plmod.get_full_name(&name));
+        builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&name), &st, ctx);
+        let trait_tp = Arc::new(RefCell::new(PLType::Trait(st)));
+        _ = ctx.add_type(name, trait_tp.clone(), Default::default());
+        Ok(trait_tp)
+    }
+    pub fn emit_highlight(&self, ctx: &mut Ctx) {
+        for t in &self.traits {
+            t.emit_highlight(ctx);
+        }
+    }
+    pub fn get_types<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> Result<Vec<Arc<RefCell<PLType>>>, PLDiag> {
+        let mut traits = vec![];
+        for t in &self.traits {
+            let trait_tp = t.get_type(ctx, builder)?;
+            if !matches!(&*trait_tp.borrow(), PLType::Trait(_)) {
+                return Err(t
+                    .range()
+                    .new_err(ErrorCode::EXPECT_TRAIT_TYPE)
+                    .add_to_ctx(ctx));
+            }
+            traits.push(trait_tp);
+        }
+        Ok(traits)
     }
 }
 #[node]
@@ -44,7 +88,8 @@ impl TraitBoundNode {
             return Err(ctx.add_diag(self.generic.range().new_err(ErrorCode::GENERIC_NOT_FOUND)));
         }
         if let Some(impl_trait) = &self.impl_trait {
-            let trait_pltype = impl_trait.merge_traits(ctx, builder)?;
+            let trait_pltype = impl_trait.get_types(ctx, builder)?;
+            let trait_place_holder = impl_trait.merge_traits(ctx, builder)?;
             let generic_type = generic_map.get(&self.generic.name).unwrap();
             if let PLType::Generic(generic_type) = &mut *generic_type.borrow_mut() {
                 if generic_type.trait_impl.is_some() {
@@ -53,6 +98,7 @@ impl TraitBoundNode {
                     );
                 }
                 generic_type.trait_impl = Some(trait_pltype);
+                generic_type.trait_place_holder = Some(trait_place_holder);
                 return Ok(());
             }
             unreachable!()
@@ -70,7 +116,7 @@ impl TraitBoundNode {
 pub struct TraitDefNode {
     pub id: Box<VarNode>,
     pub methods: Vec<FuncDefNode>,
-    pub derives: Vec<Box<TypeNodeEnum>>,
+    pub derives: MultiTraitNode,
     pub modifier: Option<(TokenType, Range)>,
 }
 
@@ -93,9 +139,7 @@ impl Node for TraitDefNode {
         _builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.id.range, SemanticTokenType::INTERFACE, 0);
-        for de in &self.derives {
-            de.emit_highlight(ctx);
-        }
+        self.derives.emit_highlight(ctx);
         for method in &self.methods {
             method.emit_highlight(ctx);
         }
@@ -131,10 +175,7 @@ impl TraitDefNode {
     ) -> Result<(), PLDiag> {
         let mut fields = LinkedHashMap::new();
         // add generic type before field add type
-        let mut derives = vec![];
-        for de in &self.derives {
-            derives.push(de.get_type(ctx, builder)?);
-        }
+        let derives = self.derives.get_types(ctx, builder)?;
         let pltype = ctx.get_type(self.id.name.as_str(), self.id.range)?;
         for (i, field) in self.methods.iter().enumerate() {
             let mut tp = field.clone();
