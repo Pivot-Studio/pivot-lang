@@ -1,0 +1,13 @@
+use core::panic;
+
+pub fn test_tuple() void {
+    let d = ();
+    let a = (1,);// tuple
+    let g = (1);// i64
+    let b = (1, 2);
+    let c = (1, 2, 3,);
+    let e = a.0;
+    let f = c.2;
+    panic::assert(f == 3);
+    return;
+}

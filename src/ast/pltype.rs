@@ -761,6 +761,7 @@ pub struct STType {
     pub modifier: Option<(TokenType, Range)>,
     pub body_range: Range,
     pub is_trait: bool,
+    pub is_tuple: bool,
 }
 impl STType {
     pub fn check_impl_derives(&self, ctx: &Ctx, st: &STType, range: Range) {

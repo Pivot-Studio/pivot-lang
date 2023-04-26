@@ -7,7 +7,7 @@ use crate::{
     ast::{node::types::StructInitFieldNode, tokens::TokenType},
 };
 use internal_macro::{test_parser, test_parser_error};
-use nom::multi::{separated_list0, separated_list1};
+use nom::multi::separated_list1;
 use nom::{
     branch::alt,
     combinator::{map_res, opt},
@@ -193,15 +193,22 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
 }
 
 #[test_parser("(1,2,a)")]
+#[test_parser("()")]
+#[test_parser("(2,)")]
+#[test_parser_error("(,)")]
 pub fn tuple_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
             tag_token_symbol(TokenType::LPAREN),
-            separated_list0(tag_token_symbol_ex(TokenType::COMMA), general_exp),
+            opt(terminated(
+                separated_list1(tag_token_symbol_ex(TokenType::COMMA), general_exp),
+                opt(tag_token_symbol_ex(TokenType::COMMA)),
+            )),
             tag_token_symbol(TokenType::RPAREN),
         )),
         |((_, rs), exprs, (_, re))| {
             let range = rs.start.to(re.end);
+            let exprs = exprs.unwrap_or(vec![]);
             res_enum(TupleInitNode { exprs, range }.into())
         },
     )(input)

@@ -502,6 +502,7 @@ impl StructDefNode {
             modifier: self.modifier,
             body_range: self.range(),
             is_trait: false,
+            is_tuple: false,
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);

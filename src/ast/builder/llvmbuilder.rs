@@ -222,8 +222,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 size_val,
             )
             .unwrap();
-        if let PLType::Struct(_) = pltype {
-            let f = self.get_or_insert_st_visit_fn_handle(&p);
+        if let PLType::Struct(tp) = pltype {
+            let f = self.get_or_insert_st_visit_fn_handle(&p, tp);
             let i = self.builder.build_ptr_to_int(
                 f.as_global_value().as_pointer_value(),
                 self.context.i64_type(),
@@ -526,10 +526,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             PriType::BOOL => self.context.bool_type().as_basic_type_enum(),
         }
     }
-    fn get_or_insert_st_visit_fn_handle(&self, p: &PointerValue<'ctx>) -> FunctionValue<'ctx> {
+    fn get_or_insert_st_visit_fn_handle(
+        &self,
+        p: &PointerValue<'ctx>,
+        st: &STType,
+    ) -> FunctionValue<'ctx> {
         let ptrtp = p.get_type();
-        let ty = ptrtp.get_element_type().into_struct_type();
-        let llvmname = ty.get_name().unwrap().to_str().unwrap().to_string() + "@";
+        let llvmname = st.get_st_full_name() + "@";
         if let Some(v) = self.module.get_function(&llvmname) {
             return v;
         }
@@ -948,32 +951,37 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         self.module
             .add_function(&llvmname, fn_type, Some(Linkage::External))
     }
+    fn get_fields(&self, pltp: &STType, ctx: &mut Ctx<'a>) -> Vec<BasicTypeEnum> {
+        ctx.run_in_type_mod(pltp, |ctx, pltp| {
+            pltp.get_all_field()
+                .iter()
+                .map(|order_field| {
+                    self.get_basic_type_op(
+                        &order_field
+                            .typenode
+                            .get_type(ctx, &self.clone().into())
+                            .unwrap()
+                            .borrow(),
+                        ctx,
+                    )
+                    .unwrap()
+                })
+                .collect::<Vec<_>>()
+        })
+    }
+
     fn struct_type(&self, pltp: &STType, ctx: &mut Ctx<'a>) -> StructType<'ctx> {
         let st = self.module.get_struct_type(&pltp.get_st_full_name());
         if let Some(st) = st {
             return st;
         }
+
+        if pltp.is_tuple {
+            let fields = &self.get_fields(pltp, ctx);
+            return self.context.struct_type(&fields, false);
+        }
         let st = self.context.opaque_struct_type(&pltp.get_st_full_name());
-        ctx.run_in_type_mod(pltp, |ctx, pltp| {
-            st.set_body(
-                &pltp
-                    .get_all_field()
-                    .iter()
-                    .map(|order_field| {
-                        self.get_basic_type_op(
-                            &order_field
-                                .typenode
-                                .get_type(ctx, &self.clone().into())
-                                .unwrap()
-                                .borrow(),
-                            ctx,
-                        )
-                        .unwrap()
-                    })
-                    .collect::<Vec<_>>(),
-                false,
-            );
-        });
+        st.set_body(&self.get_fields(pltp, ctx), false);
         st
     }
 
@@ -1716,11 +1724,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let ptrtp = self.struct_type(v, ctx).ptr_type(AddressSpace::default());
         let ty = ptrtp.get_element_type().into_struct_type();
         let ftp = self.mark_fn_tp(ptrtp);
-        let f = self.module.add_function(
-            &(ty.get_name().unwrap().to_str().unwrap().to_string() + "@"),
-            ftp,
-            None,
-        );
+        let f = self
+            .module
+            .add_function(&(v.get_st_full_name() + "@"), ftp, None);
         let bb = self.context.append_basic_block(f, "entry");
         self.builder.position_at_end(bb);
         let fieldn = ty.count_fields();
