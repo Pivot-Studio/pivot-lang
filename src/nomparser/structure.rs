@@ -133,7 +133,7 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
             basic_type,
-            del_newline_or_space!(tag_token_symbol(TokenType::LBRACE)),
+            tag_token_symbol_ex(TokenType::LBRACE),
             alt((
                 map_res(
                     pair(
@@ -166,7 +166,7 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 }),
             )),
             many0(comment),
-            del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
+            tag_token_symbol(TokenType::RBRACE),
         )),
         |(typename, _, (fields, lcomment), rcomment, _)| {
             let range = if !fields.is_empty() {
@@ -193,6 +193,7 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
 }
 
 #[test_parser("(1,2,a)")]
+#[test_parser("(1,2,(a,b, (dd,)))")]
 #[test_parser("()")]
 #[test_parser("(2,)")]
 #[test_parser_error("(,)")]
@@ -208,7 +209,7 @@ pub fn tuple_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
         )),
         |((_, rs), exprs, (_, re))| {
             let range = rs.start.to(re.end);
-            let exprs = exprs.unwrap_or(vec![]);
+            let exprs = exprs.unwrap_or_default();
             res_enum(TupleInitNode { exprs, range }.into())
         },
     )(input)

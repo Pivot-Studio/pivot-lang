@@ -22,7 +22,7 @@ use super::{
         ret::RetNode,
         statement::{AssignNode, DefNode, EmptyNode, StatementsNode},
         string_literal::StringNode,
-        tuple::TupleInitNode,
+        tuple::{TupleInitNode, TupleTypeNode},
         types::{
             ArrayInitNode, ArrayTypeNameNode, GenericDefNode, GenericParamNode, PointerTypeNode,
             StructDefNode, StructInitFieldNode, StructInitNode, TypeNameNode, TypedIdentifierNode,
@@ -750,6 +750,13 @@ impl FmtBuilder {
         self.l_paren();
         for expr in &node.exprs {
             expr.format(self);
+        }
+        self.r_paren();
+    }
+    pub fn parse_tuple_type_node(&mut self, node: &TupleTypeNode) {
+        self.l_paren();
+        for ty in &node.tps {
+            ty.format(self);
         }
         self.r_paren();
     }

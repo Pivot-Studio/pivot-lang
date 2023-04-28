@@ -978,7 +978,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
 
         if pltp.is_tuple {
             let fields = &self.get_fields(pltp, ctx);
-            return self.context.struct_type(&fields, false);
+            return self.context.struct_type(fields, false);
         }
         let st = self.context.opaque_struct_type(&pltp.get_st_full_name());
         st.set_body(&self.get_fields(pltp, ctx), false);

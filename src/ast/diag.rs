@@ -7,6 +7,7 @@ use rustc_hash::FxHashMap;
 use std::{
     collections::HashMap,
     fmt::{Display, Formatter},
+    process::exit,
 };
 macro_rules! define_error {
     ($(
@@ -476,13 +477,14 @@ pub(crate) fn handle_errors(db: &dyn Db, docs: MemDocsInput) {
                     format!("compile failed: there is {} error", errs_num).bright_red()
                 );
                 println!("{}", dot::ERROR);
-                return;
+                exit(1);
             }
             log::error!(
                 "{}",
                 format!("compile failed: there are {} errors", errs_num).bright_red()
             );
             println!("{}", dot::TOOMANYERROR);
+            exit(1);
         }
     }
 }

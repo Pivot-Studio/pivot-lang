@@ -33,6 +33,7 @@ use self::ret::*;
 use self::statement::*;
 use self::string_literal::StringNode;
 use self::tuple::TupleInitNode;
+use self::tuple::TupleTypeNode;
 use self::types::*;
 use self::union::UnionDefNode;
 
@@ -72,6 +73,7 @@ pub enum TypeNodeEnum {
     Array(ArrayTypeNameNode),
     Pointer(PointerTypeNode),
     Func(FuncDefNode),
+    Tuple(TupleTypeNode),
 }
 #[enum_dispatch]
 pub trait TypeNode: RangeTrait + FmtTrait + PrintTrait {
