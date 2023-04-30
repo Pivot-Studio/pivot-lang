@@ -648,6 +648,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 ];
                 Some(self.context.struct_type(&fields, false).into())
             }
+            PLType::Closure(_) => todo!(), // TODO
         }
     }
     /// # get_ret_type
@@ -936,6 +937,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 );
                 Some(tp.as_type())
             }
+            PLType::Closure(_) => todo!(), // TODO
         }
     }
 

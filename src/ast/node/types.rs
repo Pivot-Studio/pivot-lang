@@ -906,3 +906,46 @@ impl GenericParamNode {
         }
     }
 }
+
+#[node]
+pub struct ClosureTypeNode {
+    pub arg_types: Vec<Box<TypeNodeEnum>>,
+    pub ret_type: Box<TypeNodeEnum>,
+}
+
+impl TypeNode for ClosureTypeNode {
+    fn get_type<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> TypeNodeResult {
+        todo!()
+    }
+
+    fn emit_highlight(&self, ctx: &mut Ctx) {
+        todo!()
+    }
+
+    fn eq_or_infer<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        pltype: Arc<RefCell<PLType>>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> Result<EqRes, PLDiag> {
+        todo!()
+    }
+}
+
+impl PrintTrait for ClosureTypeNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("ClosureTypeNode");
+        let mut i = self.arg_types.len();
+        for g in &self.arg_types {
+            i -= 1;
+            g.print(tabs + 1, i == 0, line.clone());
+        }
+        self.ret_type.print(tabs + 1, true, line.clone());
+    }
+}

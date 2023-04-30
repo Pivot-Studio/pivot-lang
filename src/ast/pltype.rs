@@ -59,7 +59,12 @@ pub enum PLType {
     PlaceHolder(PlaceHolderType),
     Trait(STType),
     Union(UnionType),
+    Closure(ClosureType),
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClosureType {}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnionType {
     pub name: String,
@@ -276,6 +281,7 @@ impl PLType {
             PLType::Generic(_) => "generic".to_string(),
             PLType::Trait(_) => "trait".to_string(),
             PLType::Union(_) => "union".to_string(),
+            PLType::Closure(_) => "closure".to_string(),
         }
     }
     pub fn get_typenode(&self) -> Box<TypeNodeEnum> {
@@ -300,6 +306,7 @@ impl PLType {
             PLType::Trait(t) => new_typename_node(&t.name, t.range),
             PLType::Fn(_) => unreachable!(),
             PLType::Union(u) => new_typename_node(&u.name, u.range),
+            PLType::Closure(_) => todo!(), // TODO
         }
     }
     pub fn is(&self, pri_type: &PriType) -> bool {
@@ -320,6 +327,7 @@ impl PLType {
             PLType::Pointer(_) => (),
             PLType::Generic(g) => f_local(g),
             PLType::PlaceHolder(_) => (),
+            PLType::Closure(_) => (),
         }
     }
 
@@ -343,6 +351,7 @@ impl PLType {
             PLType::PlaceHolder(p) => p.name.clone(),
             PLType::Trait(t) => t.name.clone(),
             PLType::Union(u) => u.name.clone(),
+            PLType::Closure(_) => todo!(), // TODO
         }
     }
     pub fn get_llvm_name(&self) -> String {
@@ -365,6 +374,7 @@ impl PLType {
             }
             PLType::PlaceHolder(p) => p.get_place_holder_name(),
             PLType::Union(u) => u.name.clone(),
+            PLType::Closure(_) => todo!(), // TODO
         }
     }
 
@@ -386,6 +396,7 @@ impl PLType {
             PLType::Pointer(p) => p.borrow().get_full_elm_name(),
             PLType::PlaceHolder(p) => p.name.clone(),
             PLType::Union(u) => u.get_full_name(),
+            PLType::Closure(_) => todo!(), // TODO
         }
     }
     pub fn get_full_elm_name_without_generic(&self) -> String {
@@ -406,6 +417,7 @@ impl PLType {
             PLType::Pointer(p) => p.borrow().get_full_elm_name(),
             PLType::PlaceHolder(p) => p.name.clone(),
             PLType::Union(u) => u.get_full_name_except_generic(),
+            PLType::Closure(_) => todo!(), //TODO
         }
     }
     pub fn get_ptr_depth(&self) -> usize {
@@ -484,6 +496,7 @@ impl PLType {
             PLType::PlaceHolder(p) => Some(p.range),
             PLType::Trait(t) => Some(t.range),
             PLType::Union(u) => Some(u.range),
+            PLType::Closure(_) => None,
         }
     }
 

@@ -807,6 +807,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 PLType::Pointer(_) => unreachable!(),
                 PLType::PlaceHolder(_) => CompletionItemKind::STRUCT,
                 PLType::Union(_) => CompletionItemKind::ENUM,
+                PLType::Closure(_) => unreachable!(),
             };
             if k.starts_with('|') {
                 // skip method

@@ -1,5 +1,6 @@
 use crate::ast::node::interface::{MultiTraitNode, TraitBoundNode};
 use crate::ast::node::tuple::TupleTypeNode;
+use crate::ast::node::types::ClosureTypeNode;
 use crate::nomparser::Span;
 use crate::{
     ast::node::types::{ArrayTypeNameNode, TypeNameNode},
@@ -256,6 +257,27 @@ fn tuple_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
             let tps = types.unwrap_or_default();
             let node = Box::new(TypeNodeEnum::Tuple(TupleTypeNode { tps, range }));
             res_box(node)
+        },
+    )(input)
+}
+
+#[test_parser("(i32,i64,(i32,i64)) => i32")]
+fn closure_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
+    map_res(
+        tuple((tuple_type, tag_token_symbol_ex(TokenType::ARROW), type_name)),
+        |(params, _, ret)| {
+            let range = params.range().start.to(ret.range().end);
+            match params.as_ref() {
+                TypeNodeEnum::Tuple(t) => {
+                    let node = Box::new(TypeNodeEnum::Closure(ClosureTypeNode {
+                        arg_types: t.tps.to_owned(),
+                        ret_type: ret,
+                        range,
+                    }));
+                    res_box(node)
+                }
+                _ => unreachable!(),
+            }
         },
     )(input)
 }
