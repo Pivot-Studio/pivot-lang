@@ -12,6 +12,7 @@ use project1::test::string;
 use project1::test::macros;
 use project1::test::union;
 use project1::test::multi_trait;
+use project1::test::tuple;
 use pl_test::main;
 
 pub fn main() i64 {
@@ -30,6 +31,7 @@ pub fn main() i64 {
     string::test_string();
     union::test_union();
     multi_trait::test_multi_trait();
+    tuple::test_tuple();
     return 0;
 }
 

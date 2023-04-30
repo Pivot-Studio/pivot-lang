@@ -1,3 +1,4 @@
+use crate::ast::node::tuple::TupleInitNode;
 use crate::ast::node::types::StructField;
 use crate::nomparser::Span;
 use crate::{
@@ -6,6 +7,7 @@ use crate::{
     ast::{node::types::StructInitFieldNode, tokens::TokenType},
 };
 use internal_macro::{test_parser, test_parser_error};
+use nom::multi::separated_list1;
 use nom::{
     branch::alt,
     combinator::{map_res, opt},
@@ -131,7 +133,7 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
             basic_type,
-            del_newline_or_space!(tag_token_symbol(TokenType::LBRACE)),
+            tag_token_symbol_ex(TokenType::LBRACE),
             alt((
                 map_res(
                     pair(
@@ -164,7 +166,7 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 }),
             )),
             many0(comment),
-            del_newline_or_space!(tag_token_symbol(TokenType::RBRACE)),
+            tag_token_symbol(TokenType::RBRACE),
         )),
         |(typename, _, (fields, lcomment), rcomment, _)| {
             let range = if !fields.is_empty() {
@@ -186,6 +188,29 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 }
                 .into(),
             )
+        },
+    )(input)
+}
+
+#[test_parser("(1,2,a)")]
+#[test_parser("(1,2,(a,b, (dd,)))")]
+#[test_parser("()")]
+#[test_parser("(2,)")]
+#[test_parser_error("(,)")]
+pub fn tuple_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    map_res(
+        tuple((
+            tag_token_symbol(TokenType::LPAREN),
+            opt(terminated(
+                separated_list1(tag_token_symbol_ex(TokenType::COMMA), general_exp),
+                opt(tag_token_symbol_ex(TokenType::COMMA)),
+            )),
+            tag_token_symbol(TokenType::RPAREN),
+        )),
+        |((_, rs), exprs, (_, re))| {
+            let range = rs.start.to(re.end);
+            let exprs = exprs.unwrap_or_default();
+            res_enum(TupleInitNode { exprs, range }.into())
         },
     )(input)
 }

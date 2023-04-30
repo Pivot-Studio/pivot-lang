@@ -749,7 +749,7 @@ impl ARRType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Eq)]
 pub struct STType {
     pub name: String,
     pub path: String,
@@ -761,7 +761,29 @@ pub struct STType {
     pub modifier: Option<(TokenType, Range)>,
     pub body_range: Range,
     pub is_trait: bool,
+    pub is_tuple: bool,
 }
+
+impl PartialEq for STType {
+    fn eq(&self, other: &Self) -> bool {
+        if self.is_tuple && other.is_tuple {
+            self.fields == other.fields
+        } else {
+            self.name == other.name
+                && self.path == other.path
+                && self.fields == other.fields
+                && self.range == other.range
+                && self.doc == other.doc
+                && self.generic_map == other.generic_map
+                && self.derives == other.derives
+                && self.modifier == other.modifier
+                && self.body_range == other.body_range
+                && self.is_trait == other.is_trait
+                && self.is_tuple == other.is_tuple
+        }
+    }
+}
+
 impl STType {
     pub fn check_impl_derives(&self, ctx: &Ctx, st: &STType, range: Range) {
         debug_assert!(self.is_trait);

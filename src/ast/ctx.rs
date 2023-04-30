@@ -633,6 +633,9 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn send_if_go_to_def(&self, range: Range, destrange: Range, file: String) {
+        if range == Default::default() {
+            return;
+        }
         self.plmod.defs.borrow_mut().insert(
             range,
             LSPDef::Scalar(Location {

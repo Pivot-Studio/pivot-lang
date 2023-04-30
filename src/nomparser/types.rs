@@ -1,4 +1,5 @@
 use crate::ast::node::interface::{MultiTraitNode, TraitBoundNode};
+use crate::ast::node::tuple::TupleTypeNode;
 use crate::nomparser::Span;
 use crate::{
     ast::node::types::{ArrayTypeNameNode, TypeNameNode},
@@ -11,7 +12,7 @@ use crate::{
     },
 };
 use internal_macro::{test_parser, test_parser_error};
-use nom::sequence::preceded;
+use nom::sequence::{preceded, terminated};
 use nom::{
     branch::alt,
     combinator::{map_res, opt},
@@ -26,7 +27,7 @@ pub fn type_name(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
     delspace(map_res(
         pair(
             many0(tag_token_symbol(TokenType::TAKE_VAL)),
-            alt((basic_type, array_type)),
+            alt((basic_type, array_type, tuple_type)),
         ),
         |(pts, n)| {
             let mut node = n;
@@ -232,4 +233,29 @@ pub fn multi_trait(input: Span) -> IResult<Span, Box<MultiTraitNode>> {
             traits,
         }))
     })(input)
+}
+
+#[test_parser("(i32,i64,(i32,i64))")]
+#[test_parser("()")]
+#[test_parser_error("(,)")]
+fn tuple_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
+    map_res(
+        tuple((
+            tag_token_symbol(TokenType::LPAREN),
+            opt(terminated(
+                separated_list1(
+                    tag_token_symbol_ex(TokenType::COMMA),
+                    alt((type_name, tuple_type)),
+                ),
+                opt(tag_token_symbol_ex(TokenType::COMMA)),
+            )),
+            tag_token_symbol(TokenType::RPAREN),
+        )),
+        |((_, rs), types, (_, re))| {
+            let range = rs.start.to(re.end);
+            let tps = types.unwrap_or_default();
+            let node = Box::new(TypeNodeEnum::Tuple(TupleTypeNode { tps, range }));
+            res_box(node)
+        },
+    )(input)
 }

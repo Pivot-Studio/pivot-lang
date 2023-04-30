@@ -185,3 +185,9 @@ trait TC: TA+TB {
 trait TD: TA {
 }
 
+fn test_tuple() void {
+    let a: (i64, i64) = (1, 2);
+    let b = (1, 2, (8, (9, 0, None{})));
+    return;
+}
+

@@ -41,6 +41,7 @@ impl MultiTraitNode {
             modifier: None,
             body_range: Default::default(),
             is_trait: true,
+            is_tuple: false,
         };
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&name));
         builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&name), &st, ctx);
@@ -164,6 +165,7 @@ impl TraitDefNode {
             modifier: self.modifier,
             body_range: self.range(),
             is_trait: true,
+            is_tuple: false,
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
