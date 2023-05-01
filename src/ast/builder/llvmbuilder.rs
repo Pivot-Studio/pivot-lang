@@ -31,7 +31,7 @@ use inkwell::{
 };
 use rustc_hash::FxHashMap;
 
-use crate::ast::{diag::PLDiag, pass::run_immix_pass};
+use crate::ast::{diag::PLDiag, pass::run_immix_pass, pltype::ClosureType};
 
 use super::{
     super::{
@@ -587,6 +587,22 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             fn_type
         })
     }
+
+    fn get_closure_fn_type(&self, closure: &ClosureType, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
+        let params = closure
+            .arg_types
+            .iter()
+            .map(|pltype| {
+                let tp = self.get_basic_type_op(&pltype.borrow(), ctx).unwrap();
+                let tp: BasicMetadataTypeEnum = tp.into();
+                tp
+            })
+            .collect::<Vec<_>>();
+        let fn_type = self
+            .get_ret_type(&closure.ret_type.borrow(), ctx)
+            .fn_type(&params, false);
+        fn_type
+    }
     /// # get_basic_type_op
     /// get the basic type of the type
     /// used in code generation
@@ -648,7 +664,19 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 ];
                 Some(self.context.struct_type(&fields, false).into())
             }
-            PLType::Closure(_) => todo!(), // TODO
+            PLType::Closure(c) => {
+                // all closures are represented as a struct with a function pointer and an i8ptr(point to closure data)
+                let fields = vec![
+                    self.get_closure_fn_type(c, ctx)
+                        .ptr_type(AddressSpace::default())
+                        .into(),
+                    self.context
+                        .i8_type()
+                        .ptr_type(AddressSpace::default())
+                        .into(),
+                ];
+                Some(self.context.struct_type(&fields, false).into())
+            }
         }
     }
     /// # get_ret_type
@@ -937,7 +965,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 );
                 Some(tp.as_type())
             }
-            PLType::Closure(_) => todo!(), // TODO
+            PLType::Closure(_) => self.get_ditype(&PLType::Primitive(PriType::I64), ctx), // TODO
         }
     }
 
@@ -1124,6 +1152,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 | AnyValueEnum::PointerValue(_)
                 | AnyValueEnum::StructValue(_)
                 | AnyValueEnum::VectorValue(_) => handle,
+                AnyValueEnum::FunctionValue(f) => {
+                    return Ok(self.get_llvm_value_handle(&f.as_global_value().as_any_value_enum()));
+                }
                 _ => return Err(ctx.add_diag(range.new_err(ErrorCode::EXPECT_VALUE))),
             })
         } else {
@@ -1253,8 +1284,15 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let value = self.get_llvm_value(value).unwrap();
         let ptr = self.get_llvm_value(ptr).unwrap();
         let ptr = ptr.into_pointer_value();
-        self.builder
-            .build_store::<BasicValueEnum>(ptr, value.try_into().unwrap());
+        let value = if value.is_function_value() {
+            value
+                .into_function_value()
+                .as_global_value()
+                .as_basic_value_enum()
+        } else {
+            value.try_into().unwrap()
+        };
+        self.builder.build_store(ptr, value);
     }
     fn build_const_in_bounds_gep(
         &self,

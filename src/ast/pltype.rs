@@ -1,5 +1,6 @@
 use super::ctx::Ctx;
 use super::diag::ErrorCode;
+use super::node::types::ClosureTypeNode;
 use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::tokens::TokenType;
@@ -62,8 +63,43 @@ pub enum PLType {
     Closure(ClosureType),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClosureType {}
+#[derive(Debug, Clone, Eq)]
+pub struct ClosureType {
+    pub arg_types: Vec<Arc<RefCell<PLType>>>,
+    pub ret_type: Arc<RefCell<PLType>>,
+    pub range: Range,
+}
+
+impl PartialEq for ClosureType {
+    fn eq(&self, other: &Self) -> bool {
+        self.arg_types == other.arg_types && self.ret_type == other.ret_type
+    }
+}
+
+impl ClosureType {
+    pub fn to_type_node(&self) -> TypeNodeEnum {
+        TypeNodeEnum::Closure(ClosureTypeNode {
+            arg_types: self
+                .arg_types
+                .iter()
+                .map(|t| t.borrow().get_typenode())
+                .collect(),
+            ret_type: self.ret_type.borrow().get_typenode(),
+            range: self.range,
+        })
+    }
+    pub fn get_name(&self) -> String {
+        format!(
+            "({}) => {}",
+            self.arg_types
+                .iter()
+                .map(|t| t.borrow().get_name())
+                .collect::<Vec<_>>()
+                .join(", "),
+            self.ret_type.borrow().get_name()
+        )
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnionType {
@@ -306,7 +342,7 @@ impl PLType {
             PLType::Trait(t) => new_typename_node(&t.name, t.range),
             PLType::Fn(_) => unreachable!(),
             PLType::Union(u) => new_typename_node(&u.name, u.range),
-            PLType::Closure(_) => todo!(), // TODO
+            PLType::Closure(c) => Box::new(c.to_type_node()),
         }
     }
     pub fn is(&self, pri_type: &PriType) -> bool {
@@ -351,7 +387,7 @@ impl PLType {
             PLType::PlaceHolder(p) => p.name.clone(),
             PLType::Trait(t) => t.name.clone(),
             PLType::Union(u) => u.name.clone(),
-            PLType::Closure(_) => todo!(), // TODO
+            PLType::Closure(c) => c.get_name(),
         }
     }
     pub fn get_llvm_name(&self) -> String {
@@ -374,7 +410,7 @@ impl PLType {
             }
             PLType::PlaceHolder(p) => p.get_place_holder_name(),
             PLType::Union(u) => u.name.clone(),
-            PLType::Closure(_) => todo!(), // TODO
+            PLType::Closure(c) => c.get_name(),
         }
     }
 
@@ -396,7 +432,7 @@ impl PLType {
             PLType::Pointer(p) => p.borrow().get_full_elm_name(),
             PLType::PlaceHolder(p) => p.name.clone(),
             PLType::Union(u) => u.get_full_name(),
-            PLType::Closure(_) => todo!(), // TODO
+            PLType::Closure(c) => c.get_name(),
         }
     }
     pub fn get_full_elm_name_without_generic(&self) -> String {
@@ -417,7 +453,7 @@ impl PLType {
             PLType::Pointer(p) => p.borrow().get_full_elm_name(),
             PLType::PlaceHolder(p) => p.name.clone(),
             PLType::Union(u) => u.get_full_name_except_generic(),
-            PLType::Closure(_) => todo!(), //TODO
+            PLType::Closure(c) => c.get_name(),
         }
     }
     pub fn get_ptr_depth(&self) -> usize {
@@ -496,7 +532,7 @@ impl PLType {
             PLType::PlaceHolder(p) => Some(p.range),
             PLType::Trait(t) => Some(t.range),
             PLType::Union(u) => Some(u.range),
-            PLType::Closure(_) => None,
+            PLType::Closure(c) => Some(c.range),
         }
     }
 

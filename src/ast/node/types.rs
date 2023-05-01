@@ -15,6 +15,7 @@ use crate::ast::diag::ErrorCode;
 
 use crate::ast::plmod::MutVec;
 use crate::ast::pltype::get_type_deep;
+use crate::ast::pltype::ClosureType;
 use crate::ast::pltype::{ARRType, Field, GenericType, PLType, STType};
 use crate::ast::tokens::TokenType;
 use indexmap::IndexMap;
@@ -919,11 +920,23 @@ impl TypeNode for ClosureTypeNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> TypeNodeResult {
-        todo!()
+        let mut arg_types = vec![];
+        for g in self.arg_types.iter() {
+            arg_types.push(g.get_type(ctx, builder)?);
+        }
+        let ret_type = self.ret_type.get_type(ctx, builder)?;
+        Ok(Arc::new(RefCell::new(PLType::Closure(ClosureType {
+            arg_types,
+            ret_type,
+            range: self.range,
+        }))))
     }
 
     fn emit_highlight(&self, ctx: &mut Ctx) {
-        todo!()
+        for g in self.arg_types.iter() {
+            g.emit_highlight(ctx);
+        }
+        self.ret_type.emit_highlight(ctx);
     }
 
     fn eq_or_infer<'a, 'ctx, 'b>(
@@ -932,7 +945,12 @@ impl TypeNode for ClosureTypeNode {
         pltype: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<EqRes, PLDiag> {
-        todo!()
+        let left = self.get_type(ctx, builder)?;
+        let eq = *left.borrow() == *pltype.borrow();
+        Ok(crate::ast::ctx::EqRes {
+            eq,
+            need_up_cast: false,
+        })
     }
 }
 

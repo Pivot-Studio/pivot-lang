@@ -191,3 +191,34 @@ fn test_tuple() void {
     return;
 }
 
+fn fn_as_param(f: (i64, i64) => i64) (i64, i64) => i64 {
+    panic::assert(f(1, 2) == 3);
+    return f;
+}
+
+fn add(i: i64, j: i64) i64 {
+    return i + j;
+}
+
+pub fn test_fntype() () => f {
+    let f = add;
+    let fc: (i64, i64) => i64 = f;
+    let re = fn_as_param(fc)(2, 2);
+    panic::assert(re == 4);
+    let ff: () => f = test_ret_f;
+    let f1 = test_ret_f().f(100, 2);
+    panic::assert(f1 == 102);
+    return ff;
+}
+
+fn test_ret_f() f {
+    let d: (i64, i64) => i64 = add;
+    return f{
+        f: d
+    };
+}
+
+pub struct f {
+    f: (i64, i64) => i64;
+}
+

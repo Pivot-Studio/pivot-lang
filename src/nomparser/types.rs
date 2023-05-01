@@ -28,7 +28,7 @@ pub fn type_name(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
     delspace(map_res(
         pair(
             many0(tag_token_symbol(TokenType::TAKE_VAL)),
-            alt((basic_type, array_type, tuple_type)),
+            alt((basic_type, array_type, closure_type, tuple_type)),
         ),
         |(pts, n)| {
             let mut node = n;

@@ -30,7 +30,7 @@ impl Node for RetNode {
     ) -> NodeResult {
         let ret_pltype = ctx.rettp.as_ref().unwrap().clone();
         if let Some(ret_node) = &mut self.value {
-            //            let (value, value_pltype, _) = ctx.emit_with_expectation(ret_node, Some(ret_pltype.clone()), ret_pltype.borrow().get_range().unwrap_or_default(), builder)?;
+            // TODO implicit cast && type infer
             let v = ret_node.emit(ctx, builder)?.get_value().unwrap();
             ctx.emit_comment_highlight(&self.comments[0]);
             let value_pltype = v.get_ty();

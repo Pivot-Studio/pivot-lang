@@ -780,7 +780,7 @@ impl FmtBuilder {
         }
         self.r_paren();
         self.space();
-        self.token("->");
+        self.token("=>");
         self.space();
         node.ret_type.format(self);
     }

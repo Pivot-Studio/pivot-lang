@@ -13,6 +13,7 @@ use project1::test::macros;
 use project1::test::union;
 use project1::test::multi_trait;
 use project1::test::tuple;
+use project1::test::fntype;
 use pl_test::main;
 
 pub fn main() i64 {
@@ -32,6 +33,7 @@ pub fn main() i64 {
     union::test_union();
     multi_trait::test_multi_trait();
     tuple::test_tuple();
+    fntype::test_fntype()();
     return 0;
 }
 
