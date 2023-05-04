@@ -1256,6 +1256,21 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             false,
         );
     }
+    fn add_body_to_struct_type_raw(
+        &self,
+        name: &str,
+        body: &[Arc<RefCell<PLType>>],
+        ctx: &mut Ctx<'a>,
+    ) {
+        let st = self.module.get_struct_type(name).unwrap();
+        st.set_body(
+            &body
+                .iter()
+                .map(|order_field| self.get_basic_type_op(&order_field.borrow(), ctx).unwrap())
+                .collect::<Vec<_>>(),
+            false,
+        );
+    }
     fn alloc(
         &self,
         name: &str,
@@ -1870,6 +1885,15 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     fn is_ptr(&self, v: ValueHandle) -> bool {
         let val = self.get_llvm_value(v).unwrap();
         val.get_type().is_pointer_type()
+    }
+    fn create_closure_fn(
+        &self,
+        ctx: &mut Ctx<'a>,
+        closure_name: &str,
+        params: &[Arc<RefCell<PLType>>],
+        ret: &PLType,
+    ) -> ValueHandle {
+        todo!()
     }
 }
 

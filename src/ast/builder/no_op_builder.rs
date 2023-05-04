@@ -423,4 +423,22 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     fn get_or_insert_helper_fn_handle(&self, _name: &str) -> ValueHandle {
         0
     }
+
+    fn add_body_to_struct_type_raw(
+        &self,
+        _name: &str,
+        _body: &[Arc<RefCell<PLType>>],
+        _ctx: &mut Ctx<'a>,
+    ) {
+    }
+
+    fn create_closure_fn(
+        &self,
+        ctx: &mut Ctx<'a>,
+        closure_name: &str,
+        params: &[Arc<RefCell<PLType>>],
+        ret: &PLType,
+    ) -> ValueHandle {
+        0
+    }
 }

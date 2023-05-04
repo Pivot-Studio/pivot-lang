@@ -12,8 +12,10 @@ use crate::ast::tokens::TokenType;
 use indexmap::IndexMap;
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::vec;
 #[node(comment)]
 pub struct FuncCallNode {
@@ -654,5 +656,92 @@ impl Node for FuncDefNode {
             self.gen_fntype(ctx, true, builder, fntype)?;
         }
         usize::MAX.new_output(pltype).to_result()
+    }
+}
+
+#[node]
+pub struct ClosureNode {
+    pub paralist: Vec<(Box<VarNode>, Option<Box<TypeNodeEnum>>)>,
+    pub body: StatementsNode,
+    pub ret: Option<Box<TypeNodeEnum>>,
+}
+
+static CLOSURE_COUNT: AtomicI32 = AtomicI32::new(0);
+
+impl Node for ClosureNode {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> NodeResult {
+        // 设计： https://github.com/Pivot-Studio/pivot-lang/issues/284
+        let closure_name = format!("closure_{}", CLOSURE_COUNT.fetch_add(1, Ordering::Relaxed));
+        builder.opaque_struct_type(&closure_name);
+        let ret_tp = if let Some(ret) = &self.ret {
+            ret.get_type(ctx, builder)?
+        } else {
+            todo!()
+        };
+        let mut paratps = vec![];
+        for (para, typenode) in self.paralist.iter_mut() {
+            let tp = if let Some(typenode) = typenode {
+                typenode.get_type(ctx, builder)?
+            } else {
+                todo!()
+            };
+            paratps.push(tp);
+        }
+        let f = builder.create_closure_fn(ctx, &closure_name, &paratps, &ret_tp.borrow());
+        let child = &mut ctx.new_child(self.range.start, builder);
+        child.function = Some(f.clone());
+        child.closure_table = Some(FxHashMap::default());
+        // add block
+        let allocab = builder.append_basic_block(f, "alloc");
+        let entry = builder.append_basic_block(f, "entry");
+        let return_block = builder.append_basic_block(f, "return");
+        child.position_at_end(entry, builder);
+        let ret_value_ptr = match &*ret_tp.borrow()
+        {
+            PLType::Void => None,
+            other => {
+                builder.rm_curr_debug_location();
+                let retv = builder.alloc("retvalue", other, child, None);
+                // 返回值不能在函数结束时从root表移除
+                child.roots.borrow_mut().pop();
+                Some(retv)
+            }
+        };
+        child.position_at_end(return_block, builder);
+        child.return_block = Some((return_block, ret_value_ptr));
+        if let Some(ptr) = ret_value_ptr {
+            let value = builder.build_load(ptr, "load_ret_tmp");
+            builder.build_return(Some(value));
+        } else {
+            builder.build_return(None);
+        };
+        child.position_at_end(entry, builder);
+        // emit body
+        let terminator = self.body.emit(child, builder)?.get_term();
+        if !terminator.is_return() {
+            return Err(
+                child.add_diag(self.range.new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN))
+            );
+        }
+        child.position_at_end(allocab, builder);
+        builder.build_unconditional_branch(entry);
+        let tps = child.closure_table.as_ref().unwrap().iter().map(|(_,v)|v.pltype.clone()).collect::<Vec<_>>();
+        builder.add_body_to_struct_type_raw(&closure_name, &tps, ctx);
+        ClosureType{
+            arg_types: todo!(),
+            ret_type: todo!(),
+            range: todo!(),
+        };
+        todo!()
+    }
+}
+
+impl PrintTrait for ClosureNode {
+    fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
+        todo!()
     }
 }

@@ -1,7 +1,7 @@
 use nom::{
     branch::alt,
     combinator::{map_res, opt},
-    multi::many0,
+    multi::{many0, separated_list0},
     sequence::{delimited, pair, preceded, tuple},
     IResult,
 };
@@ -9,7 +9,10 @@ use nom::{
 use crate::{
     ast::node::function::FuncCallNode,
     ast::{
-        node::pointer::{PointerOpEnum, PointerOpNode},
+        node::{
+            function::ClosureNode,
+            pointer::{PointerOpEnum, PointerOpNode},
+        },
         range::Pos,
         tokens::TokenType,
     },
@@ -271,6 +274,40 @@ fn parantheses_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 ParanthesesNode {
                     range: exp.range(),
                     node: exp,
+                }
+                .into(),
+            )
+        },
+    )(input)
+}
+
+#[test_parser("(a:i64):void=>{return a}")]
+fn closure(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    map_res(
+        tuple((
+            tuple((
+                tag_token_symbol_ex(TokenType::LPAREN),
+                separated_list0(
+                    tag_token_symbol_ex(TokenType::COMMA),
+                    pair(
+                        identifier,
+                        opt(preceded(tag_token_symbol_ex(TokenType::COLON), type_name)),
+                    ),
+                ),
+                tag_token_symbol_ex(TokenType::RPAREN),
+            )),
+            opt(preceded(tag_token_symbol_ex(TokenType::COLON), type_name)),
+            tag_token_symbol_ex(TokenType::ARROW),
+            statement_block,
+        )),
+        |(((_, sr), args, _), ret, _, body)| {
+            let range = sr.start.to(body.range().end);
+            res_enum(
+                ClosureNode {
+                    range,
+                    paralist: args,
+                    body,
+                    ret,
                 }
                 .into(),
             )

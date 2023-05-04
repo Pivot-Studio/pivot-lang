@@ -140,6 +140,7 @@ pub enum NodeEnum {
     AsNode(AsNode),
     IsNode(IsNode),
     TupleInitNode(TupleInitNode),
+    ClosureNode(ClosureNode),
 }
 // ANCHOR: range
 #[enum_dispatch]

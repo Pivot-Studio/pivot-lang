@@ -88,6 +88,7 @@ pub struct Ctx<'a> {
     pub macro_loop_len: usize,
     pub temp_source: Option<String>,
     pub in_macro: bool,
+    pub closure_table: Option< FxHashMap<String, PLSymbol>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -135,6 +136,7 @@ impl<'a, 'ctx> Ctx<'a> {
             macro_loop_len: 0,
             temp_source: None,
             in_macro: false,
+            closure_table: None,
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -164,6 +166,7 @@ impl<'a, 'ctx> Ctx<'a> {
             macro_loop_len: self.macro_loop_len,
             temp_source: self.temp_source.clone(),
             in_macro: self.in_macro,
+            closure_table: None,
         };
         add_primitive_types(&mut ctx);
         builder.new_subscope(start);
