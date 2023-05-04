@@ -600,6 +600,22 @@ impl TryFrom<PLType> for FNValue {
     }
 }
 impl FNValue {
+    pub fn to_closure_ty<'a, 'ctx, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> ClosureType {
+        return ClosureType {
+            range: Default::default(),
+            ret_type: self.fntype.ret_pltype.get_type(ctx, builder).unwrap(),
+            arg_types: self
+                .fntype
+                .param_pltypes
+                .iter()
+                .map(|x| x.get_type(ctx, builder).unwrap())
+                .collect(),
+        };
+    }
     pub fn is_modified_by(&self, modifier: TokenType) -> bool {
         if let Some((t, _)) = self.fntype.modifier {
             t == modifier

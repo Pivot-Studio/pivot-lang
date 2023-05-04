@@ -23,6 +23,7 @@ use super::traits::CustomType;
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
+use crate::format_label;
 use crate::lsp::semantic_tokens::type_index;
 
 use crate::mismatch_err;
@@ -221,7 +222,24 @@ impl<'a, 'ctx> Ctx<'a> {
         ori_value: usize,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<usize, PLDiag> {
-        if let PLType::Closure(_) = &*target_pltype.borrow() {
+        if let (PLType::Closure(c), PLType::Fn(f)) =
+            (&*target_pltype.borrow(), &*ori_pltype.borrow())
+        {
+            if f.to_closure_ty(self, builder) != *c {
+                return Err(ori_range
+                    .new_err(ErrorCode::FUNCTION_TYPE_NOT_MATCH)
+                    .add_label(
+                        target_range,
+                        self.get_file(),
+                        format_label!("expected type `{}`", c.get_name()),
+                    )
+                    .add_label(
+                        ori_range,
+                        self.get_file(),
+                        format_label!("found type `{}`", f.to_closure_ty(self, builder).get_name()),
+                    )
+                    .add_to_ctx(self));
+            }
             if ori_value == usize::MAX {
                 return Err(ori_range
                     .new_err(ErrorCode::CANNOT_ASSIGN_INCOMPLETE_GENERICS)

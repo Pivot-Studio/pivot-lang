@@ -64,12 +64,28 @@ impl Node for DefNode {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
             }
             let re = re.unwrap();
-            let tp = re.get_ty();
+            let mut tp = re.get_ty();
+            let v = if let PLType::Fn(f) = &*tp.clone().borrow() {
+                let oritp = tp;
+                let c = Arc::new(RefCell::new(PLType::Closure(f.to_closure_ty(ctx, builder))));
+                tp = c.clone();
+                ctx.up_cast(
+                    c,
+                    oritp,
+                    Default::default(),
+                    Default::default(),
+                    re.get_value(),
+                    builder,
+                )
+                .unwrap()
+            } else {
+                re.get_value()
+            };
             if pltype.is_none() {
                 ctx.push_type_hints(self.var.range, tp.clone());
                 pltype = Some(tp);
             }
-            expv = Some(re.get_value());
+            expv = Some(v);
         }
         let pltype = pltype.unwrap();
         let ptr2value = builder.alloc(
