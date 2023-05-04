@@ -120,7 +120,9 @@ define_error!(
     INVALID_IS_EXPR = "invalid `is` expression",
     INVALID_CAST = "invalid cast",
     METHOD_NOT_FOUND = "method not found",
-    DERIVE_TRAIT_NOT_IMPL = "derive trait not impl"
+    DERIVE_TRAIT_NOT_IMPL = "derive trait not impl",
+    CANNOT_ASSIGN_INCOMPLETE_GENERICS = "cannot assign incomplete generic function to variable",
+    FUNCTION_TYPE_NOT_MATCH = "function type not match",
 );
 macro_rules! define_warn {
     ($(
@@ -397,6 +399,9 @@ impl PLDiag {
         file: String,
         txt: Option<(String, Vec<String>)>,
     ) -> &mut Self {
+        if range == Default::default() {
+            return self;
+        }
         self.raw.labels.push(PLLabel { file, txt, range });
         self
     }

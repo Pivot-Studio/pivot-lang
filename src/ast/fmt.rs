@@ -24,8 +24,9 @@ use super::{
         string_literal::StringNode,
         tuple::{TupleInitNode, TupleTypeNode},
         types::{
-            ArrayInitNode, ArrayTypeNameNode, GenericDefNode, GenericParamNode, PointerTypeNode,
-            StructDefNode, StructInitFieldNode, StructInitNode, TypeNameNode, TypedIdentifierNode,
+            ArrayInitNode, ArrayTypeNameNode, ClosureTypeNode, GenericDefNode, GenericParamNode,
+            PointerTypeNode, StructDefNode, StructInitFieldNode, StructInitNode, TypeNameNode,
+            TypedIdentifierNode,
         },
         union::UnionDefNode,
         FmtTrait, NodeEnum, TypeNodeEnum,
@@ -767,5 +768,20 @@ impl FmtBuilder {
             ty.format(self);
         }
         self.r_paren();
+    }
+    pub fn parse_closure_type_node(&mut self, node: &ClosureTypeNode) {
+        self.l_paren();
+        for (i, ty) in node.arg_types.iter().enumerate() {
+            if i > 0 {
+                self.comma();
+                self.space();
+            }
+            ty.format(self);
+        }
+        self.r_paren();
+        self.space();
+        self.token("=>");
+        self.space();
+        node.ret_type.format(self);
     }
 }

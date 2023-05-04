@@ -23,6 +23,7 @@ use super::traits::CustomType;
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
+use crate::format_label;
 use crate::lsp::semantic_tokens::type_index;
 
 use crate::mismatch_err;
@@ -214,14 +215,46 @@ impl<'a, 'ctx> Ctx<'a> {
     }
     pub fn up_cast<'b>(
         &mut self,
-        trait_pltype: Arc<RefCell<PLType>>,
-        st_pltype: Arc<RefCell<PLType>>,
-        trait_range: Range,
-        st_range: Range,
-        st_value: usize,
+        target_pltype: Arc<RefCell<PLType>>,
+        ori_pltype: Arc<RefCell<PLType>>,
+        target_range: Range,
+        ori_range: Range,
+        ori_value: usize,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<usize, PLDiag> {
-        if let PLType::Union(u) = &*trait_pltype.borrow() {
+        if let (PLType::Closure(c), PLType::Fn(f)) =
+            (&*target_pltype.borrow(), &*ori_pltype.borrow())
+        {
+            if f.to_closure_ty(self, builder) != *c {
+                return Err(ori_range
+                    .new_err(ErrorCode::FUNCTION_TYPE_NOT_MATCH)
+                    .add_label(
+                        target_range,
+                        self.get_file(),
+                        format_label!("expected type `{}`", c.get_name()),
+                    )
+                    .add_label(
+                        ori_range,
+                        self.get_file(),
+                        format_label!("found type `{}`", f.to_closure_ty(self, builder).get_name()),
+                    )
+                    .add_to_ctx(self));
+            }
+            if ori_value == usize::MAX {
+                return Err(ori_range
+                    .new_err(ErrorCode::CANNOT_ASSIGN_INCOMPLETE_GENERICS)
+                    .add_help("try add generic type explicitly to fix this error.")
+                    .add_to_ctx(self));
+            }
+            let closure_v = builder.alloc("tmp", &target_pltype.borrow(), self, None);
+            let closure_f = builder.build_struct_gep(closure_v, 0, "closure_f").unwrap();
+            let ori_value = builder.try_load2var(ori_range, ori_value, self)?;
+            // TODO now, we only handle the case that the closure is a pure function.
+            // TODO the real closure case is leave to the future.
+            builder.build_store(closure_f, ori_value);
+            return Ok(closure_v);
+        }
+        if let PLType::Union(u) = &*target_pltype.borrow() {
             let union_members = self.run_in_type_mod(u, |ctx, u| {
                 let mut union_members = vec![];
                 for tp in &u.sum_types {
@@ -231,9 +264,9 @@ impl<'a, 'ctx> Ctx<'a> {
                 Ok(union_members)
             })?;
             for (i, tp) in union_members.iter().enumerate() {
-                if *tp.borrow() == *st_pltype.borrow() {
+                if *tp.borrow() == *ori_pltype.borrow() {
                     let union_handle =
-                        builder.alloc("tmp_unionv", &trait_pltype.borrow(), self, None);
+                        builder.alloc("tmp_unionv", &target_pltype.borrow(), self, None);
                     let union_value = builder
                         .build_struct_gep(union_handle, 1, "union_value")
                         .unwrap();
@@ -242,11 +275,11 @@ impl<'a, 'ctx> Ctx<'a> {
                         .unwrap();
                     let union_type = builder.int_value(&PriType::U64, i as u64, false);
                     builder.build_store(union_type_field, union_type);
-                    let mut ptr = st_value;
-                    if !builder.is_ptr(st_value) {
+                    let mut ptr = ori_value;
+                    if !builder.is_ptr(ori_value) {
                         // mv to heap
-                        ptr = builder.alloc("tmp", &st_pltype.borrow(), self, None);
-                        builder.build_store(ptr, st_value);
+                        ptr = builder.alloc("tmp", &ori_pltype.borrow(), self, None);
+                        builder.build_store(ptr, ori_value);
                     }
                     let st_value = builder.bitcast(
                         self,
@@ -260,20 +293,20 @@ impl<'a, 'ctx> Ctx<'a> {
                 }
             }
         }
-        let (st_pltype, st_value) = self.auto_deref(st_pltype, st_value, builder);
+        let (st_pltype, st_value) = self.auto_deref(ori_pltype, ori_value, builder);
         if let (PLType::Trait(t), PLType::Struct(st)) =
-            (&*trait_pltype.borrow(), &*st_pltype.borrow())
+            (&*target_pltype.borrow(), &*st_pltype.borrow())
         {
             if !st.implements_trait(t, &self.plmod) {
                 return Err(mismatch_err!(
                     self,
-                    st_range,
-                    trait_range,
-                    trait_pltype.borrow(),
+                    ori_range,
+                    target_range,
+                    target_pltype.borrow(),
                     st_pltype.borrow()
                 ));
             }
-            let trait_handle = builder.alloc("tmp_traitv", &trait_pltype.borrow(), self, None);
+            let trait_handle = builder.alloc("tmp_traitv", &target_pltype.borrow(), self, None);
             for f in t.list_trait_fields().iter() {
                 let mthd = st.find_method(self, &f.name).unwrap();
                 let fnhandle = builder.get_or_insert_fn_handle(&mthd, self);
@@ -303,9 +336,9 @@ impl<'a, 'ctx> Ctx<'a> {
         #[allow(clippy::needless_return)]
         return Err(mismatch_err!(
             self,
-            st_range,
-            trait_range,
-            trait_pltype.borrow(),
+            ori_range,
+            target_range,
+            target_pltype.borrow(),
             st_pltype.borrow()
         ));
     }
@@ -807,6 +840,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 PLType::Pointer(_) => unreachable!(),
                 PLType::PlaceHolder(_) => CompletionItemKind::STRUCT,
                 PLType::Union(_) => CompletionItemKind::ENUM,
+                PLType::Closure(_) => unreachable!(),
             };
             if k.starts_with('|') {
                 // skip method
