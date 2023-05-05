@@ -88,7 +88,7 @@ pub struct Ctx<'a> {
     pub macro_loop_len: usize,
     pub temp_source: Option<String>,
     pub in_macro: bool,
-    pub closure_table: Option< FxHashMap<String, PLSymbol>>,
+    pub closure_table: Option<FxHashMap<String, PLSymbol>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -254,7 +254,7 @@ impl<'a, 'ctx> Ctx<'a> {
             let ori_value = builder.try_load2var(ori_range, ori_value, self)?;
             // TODO now, we only handle the case that the closure is a pure function.
             // TODO the real closure case is leave to the future.
-            builder.build_store(closure_f, ori_value);
+            builder.build_store(closure_f, builder.get_closure_trampoline(ori_value));
             return Ok(closure_v);
         }
         if let PLType::Union(u) = &*target_pltype.borrow() {

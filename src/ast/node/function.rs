@@ -46,9 +46,9 @@ impl FuncCallNode {
         c: &ClosureType,
         v: ValueHandle,
     ) -> NodeResult {
-        // TODO we only handle the case that the closure is a pure function
-        // TODO the real closure case is leave to the future
-        let mut para_values = vec![];
+        let data = builder.build_struct_gep(v, 1, "closure_data").unwrap();
+        let data = builder.build_load(data, "loaded_closure_data");
+        let mut para_values = vec![data];
         let mut value_pltypes = vec![];
         if self.paralist.len() != c.arg_types.len() {
             return Err(self
@@ -700,8 +700,7 @@ impl Node for ClosureNode {
         let entry = builder.append_basic_block(f, "entry");
         let return_block = builder.append_basic_block(f, "return");
         child.position_at_end(entry, builder);
-        let ret_value_ptr = match &*ret_tp.borrow()
-        {
+        let ret_value_ptr = match &*ret_tp.borrow() {
             PLType::Void => None,
             other => {
                 builder.rm_curr_debug_location();
@@ -723,15 +722,19 @@ impl Node for ClosureNode {
         // emit body
         let terminator = self.body.emit(child, builder)?.get_term();
         if !terminator.is_return() {
-            return Err(
-                child.add_diag(self.range.new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN))
-            );
+            return Err(child.add_diag(self.range.new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN)));
         }
         child.position_at_end(allocab, builder);
         builder.build_unconditional_branch(entry);
-        let tps = child.closure_table.as_ref().unwrap().iter().map(|(_,v)|v.pltype.clone()).collect::<Vec<_>>();
+        let tps = child
+            .closure_table
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|(_, v)| v.pltype.clone())
+            .collect::<Vec<_>>();
         builder.add_body_to_struct_type_raw(&closure_name, &tps, ctx);
-        ClosureType{
+        ClosureType {
             arg_types: todo!(),
             ret_type: todo!(),
             range: todo!(),

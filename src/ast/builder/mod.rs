@@ -202,6 +202,8 @@ pub trait IRBuilder<'a, 'ctx> {
         params: &[Arc<RefCell<PLType>>],
         ret: &PLType,
     ) -> ValueHandle;
+    fn i8ptr_null(&self)->ValueHandle;
+    fn get_closure_trampoline(&self, f:ValueHandle) ->ValueHandle;
 }
 
 pub type ValueHandle = usize;

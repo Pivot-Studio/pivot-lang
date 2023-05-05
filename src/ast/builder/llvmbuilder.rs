@@ -589,14 +589,20 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn get_closure_fn_type(&self, closure: &ClosureType, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
-        let params = closure
-            .arg_types
+        let ptr: BasicMetadataTypeEnum = self
+            .context
+            .i8_type()
+            .ptr_type(AddressSpace::default())
+            .as_basic_type_enum()
+            .into();
+        let params = vec![ptr]
             .iter()
-            .map(|pltype| {
+            .map(|v| *v)
+            .chain(closure.arg_types.iter().map(|pltype| {
                 let tp = self.get_basic_type_op(&pltype.borrow(), ctx).unwrap();
                 let tp: BasicMetadataTypeEnum = tp.into();
                 tp
-            })
+            }))
             .collect::<Vec<_>>();
         let fn_type = self
             .get_ret_type(&closure.ret_type.borrow(), ctx)
@@ -1886,6 +1892,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let val = self.get_llvm_value(v).unwrap();
         val.get_type().is_pointer_type()
     }
+    fn i8ptr_null(&self)->ValueHandle {
+        self.get_llvm_value_handle( &self.context.i8_type().ptr_type(AddressSpace::default()).const_null().into())
+    }
     fn create_closure_fn(
         &self,
         ctx: &mut Ctx<'a>,
@@ -1894,6 +1903,43 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         ret: &PLType,
     ) -> ValueHandle {
         todo!()
+    }
+
+    fn get_closure_trampoline(&self, f:ValueHandle) ->ValueHandle {
+        let ori_f = self.get_llvm_value(f).unwrap().into_function_value();
+        let name = ori_f.get_name();
+        let trampoline_name = format!("{}__trampoline", name.to_str().unwrap());
+        let closure_f = self.module.get_function( &trampoline_name);
+        if let Some(closure_f) = closure_f {
+            return  self.get_llvm_value_handle(&closure_f.into());
+        }
+        let f_tp = ori_f.get_type();
+        let i8ptr = self.context.i8_type().ptr_type(AddressSpace::default());
+        let param_tps = f_tp.get_param_types();
+        let mut closure_param_tps = vec![i8ptr.as_basic_type_enum()];
+        closure_param_tps.extend(param_tps);
+        let closure_param_tps = closure_param_tps.iter().map(|v|v.to_owned().into()).collect::<Vec<_>>();
+        let closure_ftp = if let Some(ret_tp) = f_tp.get_return_type() {
+            ret_tp.fn_type(&closure_param_tps, false)
+        }else {
+            self.context.void_type().fn_type(&closure_param_tps, false)
+        };
+        let f = self.module.add_function(&trampoline_name, closure_ftp, None);
+        let bb = self.context.append_basic_block(f, "entry");
+        let old_bb = self.builder.get_insert_block();
+        self.builder.position_at_end(bb);
+        let args = f.get_params();
+        let re = self.builder.build_call(ori_f, &args.iter().skip(1).map(|a|a.to_owned().into()).collect::<Vec<_>>(), "re");
+        if let Some(ret) = re.try_as_basic_value().left() {
+            self.builder.build_return(Some(&ret));
+        }else {
+            self.builder.build_return(None);
+        }
+        if let Some(old_bb) = old_bb {
+            self.builder.position_at_end(old_bb);
+        }
+        return self.get_llvm_value_handle(&f.into());
+
     }
 }
 

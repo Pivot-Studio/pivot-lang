@@ -441,4 +441,12 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     ) -> ValueHandle {
         0
     }
+
+    fn i8ptr_null(&self) -> ValueHandle {
+        0
+    }
+
+    fn get_closure_trampoline(&self,f:ValueHandle) -> ValueHandle {
+        f
+    }
 }
