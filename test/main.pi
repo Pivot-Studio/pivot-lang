@@ -14,13 +14,10 @@ use project1::test::union;
 use project1::test::multi_trait;
 use project1::test::tuple;
 use project1::test::fntype;
+use project1::test::closure;
 use pl_test::main;
-use core::panic;
 
 pub fn main() i64 {
-    let a = (a:i64):i64=>{return a;};
-    let d = a(1);
-    panic::assert(d==1);
     macros::test_macros();
     ifel::test_if_else();
     generic::test_generic();
@@ -38,6 +35,7 @@ pub fn main() i64 {
     multi_trait::test_multi_trait();
     tuple::test_tuple();
     fntype::test_fntype()();
+    closure::test_closure();
     return 0;
 }
 

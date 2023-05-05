@@ -20,8 +20,8 @@ use inkwell::{
     module::{FlagBehavior, Linkage, Module},
     targets::{InitializationConfig, Target, TargetMachine},
     types::{
-        BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, PointerType, StructType,
-        VoidType,
+        AsTypeRef, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, PointerType,
+        StructType, VoidType,
     },
     values::{
         AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, CallableValue,
@@ -29,6 +29,7 @@ use inkwell::{
     },
     AddressSpace, FloatPredicate, IntPredicate, OptimizationLevel,
 };
+use llvm_sys::{core::LLVMStructSetBody, prelude::LLVMTypeRef};
 use rustc_hash::FxHashMap;
 
 use crate::ast::{diag::PLDiag, pass::run_immix_pass, pltype::ClosureType};
@@ -1922,7 +1923,12 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .add_function(&format!("{}__fn", closure_name), f_tp, None);
         self.get_llvm_value_handle(&f_v.into())
     }
-
+    /// # get_closure_trampoline
+    ///
+    /// 为指定函数创建一个用于构建闭包的跳板函数
+    ///
+    /// 闭包函数相比原函数多出一个参数（第一个），用于存放闭包的环境。在函数为纯函数的情况，
+    /// 该值不会被使用，因此可以直接传入null。
     fn get_closure_trampoline(&self, f: ValueHandle) -> ValueHandle {
         let ori_f = self.get_llvm_value(f).unwrap().into_function_value();
         let name = ori_f.get_name();
@@ -1970,6 +1976,41 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.builder.position_at_end(old_bb);
         }
         return self.get_llvm_value_handle(&f.into());
+    }
+
+    fn get_nth_param(&self, f: ValueHandle, i: u32) -> ValueHandle {
+        let funcvalue = self.get_llvm_value(f).unwrap().into_function_value();
+        self.get_llvm_value_handle(&funcvalue.get_nth_param(i as u32).unwrap().into())
+    }
+    fn add_closure_st_field(&self, st: ValueHandle, field: ValueHandle) {
+        let st_v = self.get_llvm_value(st).unwrap();
+        let st_tp = st_v
+            .get_type()
+            .into_pointer_type()
+            .get_element_type()
+            .into_struct_type();
+        let mut closure_data_tps = st_tp.get_field_types();
+        closure_data_tps.push(
+            self.get_llvm_value(field)
+                .unwrap()
+                .get_type()
+                .try_into()
+                .unwrap(),
+        );
+        set_body(&st_tp, &closure_data_tps, false);
+    }
+}
+
+fn set_body<'ctx>(s: &StructType<'ctx>, field_types: &[BasicTypeEnum<'ctx>], packed: bool) {
+    let mut field_types: Vec<LLVMTypeRef> =
+        field_types.iter().map(|val| val.as_type_ref()).collect();
+    unsafe {
+        LLVMStructSetBody(
+            s.as_type_ref(),
+            field_types.as_mut_ptr(),
+            field_types.len() as u32,
+            packed as i32,
+        );
     }
 }
 

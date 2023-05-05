@@ -443,4 +443,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     }
 
     fn create_closure_parameter_variable(&self, i: u32, f: ValueHandle, alloca: ValueHandle) {}
+
+    fn get_nth_param(&self, f: ValueHandle, i: u32) -> ValueHandle {
+        f
+    }
+
+    fn add_closure_st_field(&self, st: ValueHandle, field: ValueHandle) {}
 }

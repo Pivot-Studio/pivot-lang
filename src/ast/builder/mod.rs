@@ -199,6 +199,8 @@ pub trait IRBuilder<'a, 'ctx> {
     fn i8ptr_null(&self) -> ValueHandle;
     fn get_closure_trampoline(&self, f: ValueHandle) -> ValueHandle;
     fn create_closure_parameter_variable(&self, i: u32, f: ValueHandle, alloca: ValueHandle);
+    fn get_nth_param(&self, f: ValueHandle, i: u32) -> ValueHandle;
+    fn add_closure_st_field(&self, st: ValueHandle, field: ValueHandle);
 }
 
 pub type ValueHandle = usize;

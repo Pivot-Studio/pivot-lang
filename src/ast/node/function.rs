@@ -4,6 +4,7 @@ use super::statement::StatementsNode;
 use super::*;
 use super::{types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::builder::ValueHandle;
+use crate::ast::ctx::ClosureCtxData;
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 
@@ -676,6 +677,7 @@ impl Node for ClosureNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         // 设计： https://github.com/Pivot-Studio/pivot-lang/issues/284
+        let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap());
         let closure_name = format!("closure_{}", CLOSURE_COUNT.fetch_add(1, Ordering::Relaxed));
         let mut st_tp = STType {
             name: closure_name.clone(),
@@ -692,6 +694,7 @@ impl Node for ClosureNode {
         };
 
         builder.opaque_struct_type(&st_tp.get_st_full_name());
+        builder.add_body_to_struct_type(&st_tp.get_st_full_name(), &st_tp, ctx);
         let ret_tp = if let Some(ret) = &self.ret {
             ret.get_type(ctx, builder)?
         } else {
@@ -707,10 +710,10 @@ impl Node for ClosureNode {
             paratps.push(tp);
         }
         let cur = builder.get_cur_basic_block();
+        ctx.try_set_closure_curr_bb(cur);
         let f = builder.create_closure_fn(ctx, &closure_name, &paratps, &ret_tp.borrow());
         let child = &mut ctx.new_child(self.range.start, builder);
         child.function = Some(f.clone());
-        child.closure_table = Some(FxHashMap::default());
         // add block
         let allocab = builder.append_basic_block(f, "alloc");
         let entry = builder.append_basic_block(f, "entry");
@@ -735,6 +738,23 @@ impl Node for ClosureNode {
             builder.build_return(None);
         };
         child.position_at_end(entry, builder);
+        let stpltp = PLType::Struct(st_tp.clone());
+        let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)));
+        // let closure_data_alloca = builder.alloc("closure_data", &stpltp, child, None);
+        let data_raw = builder.get_nth_param(f, 0);
+        let casted_data = builder.bitcast(
+            child,
+            data_raw,
+            &ptr_tp,
+            "casted_data",
+        );
+        // let alloca = builder.alloc("closure_data",&ptr_tp, child, None);
+        // builder.build_store(alloca, casted_data);
+        child.closure_data = Some(RefCell::new(ClosureCtxData {
+            table: LinkedHashMap::default(),
+            data_handle: casted_data,
+            current_bb: None,
+        }));
         // alloc para
         for (i, tp) in paratps.iter().enumerate() {
             let b = tp.clone();
@@ -754,6 +774,7 @@ impl Node for ClosureNode {
                 )
                 .unwrap();
         }
+        child.rettp = Some(ret_tp.clone());
         // emit body
         let terminator = self.body.emit(child, builder)?.get_term();
         if !terminator.is_return() {
@@ -761,27 +782,27 @@ impl Node for ClosureNode {
         }
         child.position_at_end(allocab, builder);
         builder.build_unconditional_branch(entry);
-        let closure_table = child.closure_table.as_ref().unwrap();
+        let closure_table = child.closure_data.as_ref().unwrap();
         let mut i = 1;
         let mut tps = vec![];
-        for (k, v) in closure_table {
+        for (k, (v, _)) in &closure_table.borrow().table {
+            let pltp = PLType::Pointer(v.pltype.to_owned());
             st_tp.fields.insert(
                 k.to_owned(),
                 Field {
                     index: i,
-                    typenode: v.pltype.borrow().get_typenode(),
+                    typenode: pltp.get_typenode(),
                     name: k.to_owned(),
                     range: Default::default(),
                     modifier: None,
                 },
             );
-            tps.push(v.pltype.to_owned());
+            tps.push(Arc::new(RefCell::new(pltp)));
             i = i + 1;
         }
-        builder.position_at_end_block(cur);
-        builder.add_body_to_struct_type(&st_tp.get_st_full_name(), &st_tp, ctx);
+        ctx.position_at_end(cur, builder);
+        // builder.add_body_to_struct_type(&st_tp.get_st_full_name(), &st_tp, ctx);
         builder.gen_st_visit_function(ctx, &st_tp, &tps);
-        // builder.add_body_to_struct_type_raw(&closure_name, &tps, ctx);
         let closure_f_tp = ClosureType {
             arg_types: paratps,
             ret_type: ret_tp,
@@ -789,18 +810,27 @@ impl Node for ClosureNode {
         };
         let closure_f_tp = PLType::Closure(closure_f_tp);
         let closure_alloca = builder.alloc("closure", &closure_f_tp, ctx, None);
-        let closure_data_alloca = builder.alloc("closure_data", &PLType::Struct(st_tp.clone()), ctx, None);
-        for (k, v) in closure_table {
+        let closure_data_alloca =
+            builder.alloc("closure_data", &PLType::Struct(st_tp.clone()), ctx, None);
+        for (k, (_, ori_v)) in &closure_table.borrow().table {
             let field = st_tp.fields.get(k).unwrap();
-            let alloca = builder.build_struct_gep(closure_data_alloca, field.index,k).unwrap();
-            builder.build_store(alloca, v.value);
+            let alloca = builder
+                .build_struct_gep(closure_data_alloca, field.index, k)
+                .unwrap();
+            builder.build_store(alloca, *ori_v);
         }
-        let f_field = builder.build_struct_gep(closure_alloca, 0, "closure_f").unwrap();
+        let f_field = builder
+            .build_struct_gep(closure_alloca, 0, "closure_f")
+            .unwrap();
         builder.build_store(f_field, f);
-        let d_field = builder.build_struct_gep(closure_alloca, 1, "closure_d").unwrap();
-        let d_casted = builder.bitcast(ctx, closure_data_alloca, &PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap()), "casted_closure_d");
+        let d_field = builder
+            .build_struct_gep(closure_alloca, 1, "closure_d")
+            .unwrap();
+        let d_casted = builder.bitcast(ctx, closure_data_alloca, &i8ptr, "casted_closure_d");
         builder.build_store(d_field, d_casted);
-        closure_alloca.new_output(Arc::new(RefCell::new(closure_f_tp))).to_result()
+        closure_alloca
+            .new_output(Arc::new(RefCell::new(closure_f_tp)))
+            .to_result()
     }
 }
 
