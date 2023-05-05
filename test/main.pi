@@ -15,8 +15,12 @@ use project1::test::multi_trait;
 use project1::test::tuple;
 use project1::test::fntype;
 use pl_test::main;
+use core::panic;
 
 pub fn main() i64 {
+    let a = (a:i64):i64=>{return a;};
+    let d = a(1);
+    panic::assert(d==1);
     macros::test_macros();
     ifel::test_if_else();
     generic::test_generic();

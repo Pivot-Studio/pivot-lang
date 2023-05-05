@@ -7,10 +7,11 @@ use crate::ast::builder::ValueHandle;
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 
-use crate::ast::pltype::{get_type_deep, ClosureType, FNValue, FnType, PLType};
+use crate::ast::pltype::{get_type_deep, ClosureType, FNValue, Field, FnType, PLType, STType};
 use crate::ast::tokens::TokenType;
 use indexmap::IndexMap;
 use internal_macro::node;
+use linked_hash_map::LinkedHashMap;
 use lsp_types::SemanticTokenType;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
@@ -676,14 +677,28 @@ impl Node for ClosureNode {
     ) -> NodeResult {
         // 设计： https://github.com/Pivot-Studio/pivot-lang/issues/284
         let closure_name = format!("closure_{}", CLOSURE_COUNT.fetch_add(1, Ordering::Relaxed));
-        builder.opaque_struct_type(&closure_name);
+        let mut st_tp = STType {
+            name: closure_name.clone(),
+            path: ctx.plmod.path.clone(),
+            fields: LinkedHashMap::default(),
+            range: Default::default(),
+            doc: vec![],
+            generic_map: Default::default(),
+            derives: vec![],
+            modifier: Some((TokenType::PUB, Default::default())),
+            body_range: Default::default(),
+            is_trait: false,
+            is_tuple: true,
+        };
+
+        builder.opaque_struct_type(&st_tp.get_st_full_name());
         let ret_tp = if let Some(ret) = &self.ret {
             ret.get_type(ctx, builder)?
         } else {
             todo!()
         };
         let mut paratps = vec![];
-        for (para, typenode) in self.paralist.iter_mut() {
+        for (_, typenode) in self.paralist.iter_mut() {
             let tp = if let Some(typenode) = typenode {
                 typenode.get_type(ctx, builder)?
             } else {
@@ -691,6 +706,7 @@ impl Node for ClosureNode {
             };
             paratps.push(tp);
         }
+        let cur = builder.get_cur_basic_block();
         let f = builder.create_closure_fn(ctx, &closure_name, &paratps, &ret_tp.borrow());
         let child = &mut ctx.new_child(self.range.start, builder);
         child.function = Some(f.clone());
@@ -719,6 +735,25 @@ impl Node for ClosureNode {
             builder.build_return(None);
         };
         child.position_at_end(entry, builder);
+        // alloc para
+        for (i, tp) in paratps.iter().enumerate() {
+            let b = tp.clone();
+            let basetype = b.borrow();
+            let alloca = builder.alloc(&self.paralist[i].0.name, &basetype, child, None);
+            // TODO add alloc var debug info
+
+            let parapltype = tp;
+            builder.create_closure_parameter_variable(i as u32 + 1, f, alloca);
+            child
+                .add_symbol(
+                    self.paralist[i].0.name.clone(),
+                    alloca,
+                    parapltype.to_owned(),
+                    self.paralist[i].0.range,
+                    false,
+                )
+                .unwrap();
+        }
         // emit body
         let terminator = self.body.emit(child, builder)?.get_term();
         if !terminator.is_return() {
@@ -726,20 +761,46 @@ impl Node for ClosureNode {
         }
         child.position_at_end(allocab, builder);
         builder.build_unconditional_branch(entry);
-        let tps = child
-            .closure_table
-            .as_ref()
-            .unwrap()
-            .iter()
-            .map(|(_, v)| v.pltype.clone())
-            .collect::<Vec<_>>();
-        builder.add_body_to_struct_type_raw(&closure_name, &tps, ctx);
-        ClosureType {
-            arg_types: todo!(),
-            ret_type: todo!(),
-            range: todo!(),
+        let closure_table = child.closure_table.as_ref().unwrap();
+        let mut i = 1;
+        let mut tps = vec![];
+        for (k, v) in closure_table {
+            st_tp.fields.insert(
+                k.to_owned(),
+                Field {
+                    index: i,
+                    typenode: v.pltype.borrow().get_typenode(),
+                    name: k.to_owned(),
+                    range: Default::default(),
+                    modifier: None,
+                },
+            );
+            tps.push(v.pltype.to_owned());
+            i = i + 1;
+        }
+        builder.position_at_end_block(cur);
+        builder.add_body_to_struct_type(&st_tp.get_st_full_name(), &st_tp, ctx);
+        builder.gen_st_visit_function(ctx, &st_tp, &tps);
+        // builder.add_body_to_struct_type_raw(&closure_name, &tps, ctx);
+        let closure_f_tp = ClosureType {
+            arg_types: paratps,
+            ret_type: ret_tp,
+            range: self.range,
         };
-        todo!()
+        let closure_f_tp = PLType::Closure(closure_f_tp);
+        let closure_alloca = builder.alloc("closure", &closure_f_tp, ctx, None);
+        let closure_data_alloca = builder.alloc("closure_data", &PLType::Struct(st_tp.clone()), ctx, None);
+        for (k, v) in closure_table {
+            let field = st_tp.fields.get(k).unwrap();
+            let alloca = builder.build_struct_gep(closure_data_alloca, field.index,k).unwrap();
+            builder.build_store(alloca, v.value);
+        }
+        let f_field = builder.build_struct_gep(closure_alloca, 0, "closure_f").unwrap();
+        builder.build_store(f_field, f);
+        let d_field = builder.build_struct_gep(closure_alloca, 1, "closure_d").unwrap();
+        let d_casted = builder.bitcast(ctx, closure_data_alloca, &PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap()), "casted_closure_d");
+        builder.build_store(d_field, d_casted);
+        closure_alloca.new_output(Arc::new(RefCell::new(closure_f_tp))).to_result()
     }
 }
 

@@ -214,6 +214,7 @@ fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
         tuple((
             many0(comment),
             alt((
+                closure,
                 number,
                 bool_const,
                 parantheses_exp,

@@ -53,6 +53,9 @@ impl Node for RetNode {
                 )?;
                 value = ctx.try_load2var(self.range, value, builder)?;
             }
+            if ctx.return_block.unwrap().1.is_none() {
+                return Err(self.range().new_err(ErrorCode::NO_RETURN_VALUE_EXPECTED_IN_VOID_FUNCTION).add_to_ctx(ctx));
+            }
             builder.build_store(ctx.return_block.unwrap().1.unwrap(), value);
         } else if *ret_pltype.borrow() != PLType::Void {
             ctx.emit_comment_highlight(&self.comments[0]);

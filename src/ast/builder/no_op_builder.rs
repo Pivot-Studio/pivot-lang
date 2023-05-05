@@ -424,14 +424,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         0
     }
 
-    fn add_body_to_struct_type_raw(
-        &self,
-        _name: &str,
-        _body: &[Arc<RefCell<PLType>>],
-        _ctx: &mut Ctx<'a>,
-    ) {
-    }
-
     fn create_closure_fn(
         &self,
         ctx: &mut Ctx<'a>,
@@ -446,7 +438,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         0
     }
 
-    fn get_closure_trampoline(&self,f:ValueHandle) -> ValueHandle {
+    fn get_closure_trampoline(&self, f: ValueHandle) -> ValueHandle {
         f
     }
+
+    fn create_closure_parameter_variable(&self, i: u32, f: ValueHandle, alloca: ValueHandle) {}
 }

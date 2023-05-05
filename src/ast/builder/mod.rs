@@ -189,12 +189,6 @@ pub trait IRBuilder<'a, 'ctx> {
     fn cast_primitives(&self, handle: ValueHandle, tp: &PriType, target: &PriType) -> ValueHandle;
     fn is_ptr(&self, v: ValueHandle) -> bool;
     fn get_or_insert_helper_fn_handle(&self, name: &str) -> ValueHandle;
-    fn add_body_to_struct_type_raw(
-        &self,
-        name: &str,
-        body: &[Arc<RefCell<PLType>>],
-        ctx: &mut Ctx<'a>,
-    );
     fn create_closure_fn(
         &self,
         ctx: &mut Ctx<'a>,
@@ -202,8 +196,9 @@ pub trait IRBuilder<'a, 'ctx> {
         params: &[Arc<RefCell<PLType>>],
         ret: &PLType,
     ) -> ValueHandle;
-    fn i8ptr_null(&self)->ValueHandle;
-    fn get_closure_trampoline(&self, f:ValueHandle) ->ValueHandle;
+    fn i8ptr_null(&self) -> ValueHandle;
+    fn get_closure_trampoline(&self, f: ValueHandle) -> ValueHandle;
+    fn create_closure_parameter_variable(&self, i: u32, f: ValueHandle, alloca: ValueHandle);
 }
 
 pub type ValueHandle = usize;

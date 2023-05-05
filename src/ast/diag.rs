@@ -123,6 +123,7 @@ define_error!(
     DERIVE_TRAIT_NOT_IMPL = "derive trait not impl",
     CANNOT_ASSIGN_INCOMPLETE_GENERICS = "cannot assign incomplete generic function to variable",
     FUNCTION_TYPE_NOT_MATCH = "function type not match",
+    NO_RETURN_VALUE_EXPECTED_IN_VOID_FUNCTION = "no return value expected in a void function",
 );
 macro_rules! define_warn {
     ($(
