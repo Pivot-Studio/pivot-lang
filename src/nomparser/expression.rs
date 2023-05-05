@@ -282,7 +282,9 @@ fn parantheses_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     )(input)
 }
 
-#[test_parser("(a:i64):void=>{return a}")]
+#[test_parser("(a:i64):void=>{return a;}")]
+#[test_parser("(a):void=>{return a;}")]
+#[test_parser("(a)=>{return a;}")]
 fn closure(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
@@ -301,14 +303,16 @@ fn closure(input: Span) -> IResult<Span, Box<NodeEnum>> {
             tag_token_symbol_ex(TokenType::ARROW),
             statement_block,
         )),
-        |(((_, sr), args, _), ret, _, body)| {
+        |(((_, sr), args, (_, er)), ret, _, body)| {
             let range = sr.start.to(body.range().end);
+            let paralist_range = sr.start.to(er.end);
             res_enum(
                 ClosureNode {
                     range,
                     paralist: args,
                     body,
                     ret,
+                    paralist_range,
                 }
                 .into(),
             )

@@ -14,7 +14,6 @@ use indexmap::IndexMap;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
 use lsp_types::SemanticTokenType;
-use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -90,10 +89,25 @@ impl FuncCallNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
         para_values: &mut Vec<usize>,
         value_pltypes: &mut Vec<(Arc<RefCell<PLType>>, Range)>,
+        param_types: &[Box<TypeNodeEnum>],
+        is_generic: bool,
     ) -> Result<(), PLDiag> {
-        for para in self.paralist.iter_mut() {
+        for (para, expect_ty) in self.paralist.iter_mut().zip(param_types.iter()) {
             let pararange = para.range();
-            let v = para.emit(ctx, builder)?.get_value();
+            if !is_generic {
+                if let TypeNodeEnum::Closure(_) = &**expect_ty {
+                    _ = expect_ty
+                        .get_type(ctx, builder)
+                        .map(|t| ctx.expect_ty = Some(t));
+                }
+            }
+            let v = para
+                .emit(ctx, builder)
+                .map(|re| {
+                    ctx.expect_ty = None;
+                    re
+                })?
+                .get_value();
             if v.is_none() {
                 return Ok(());
             }
@@ -205,7 +219,14 @@ impl Node for FuncCallNode {
         }
         self.build_hint(ctx, &fnvalue, skip);
         let mut value_pltypes = vec![];
-        self.build_params(ctx, builder, &mut para_values, &mut value_pltypes)?;
+        self.build_params(
+            ctx,
+            builder,
+            &mut para_values,
+            &mut value_pltypes,
+            &fnvalue.fntype.param_pltypes,
+            fnvalue.fntype.generic,
+        )?;
         // value check and generic infer
         let res = ctx.protect_generic_context(&fnvalue.fntype.generic_map.clone(), |ctx| {
             ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
@@ -666,6 +687,7 @@ pub struct ClosureNode {
     pub paralist: Vec<(Box<VarNode>, Option<Box<TypeNodeEnum>>)>,
     pub body: StatementsNode,
     pub ret: Option<Box<TypeNodeEnum>>,
+    pub paralist_range: Range,
 }
 
 static CLOSURE_COUNT: AtomicI32 = AtomicI32::new(0);
@@ -695,25 +717,71 @@ impl Node for ClosureNode {
 
         builder.opaque_struct_type(&st_tp.get_st_full_name());
         builder.add_body_to_struct_type(&st_tp.get_st_full_name(), &st_tp, ctx);
-        let ret_tp = if let Some(ret) = &self.ret {
-            ret.get_type(ctx, builder)?
-        } else {
-            todo!()
-        };
         let mut paratps = vec![];
-        for (_, typenode) in self.paralist.iter_mut() {
+        for (i, (v, typenode)) in self.paralist.iter_mut().enumerate() {
+            ctx.push_semantic_token(v.range(), SemanticTokenType::PARAMETER, 0);
             let tp = if let Some(typenode) = typenode {
+                typenode.emit_highlight(ctx);
                 typenode.get_type(ctx, builder)?
+            } else if let Some(exp_ty) = &ctx.expect_ty {
+                match &*exp_ty.borrow() {
+                    PLType::Closure(c) => {
+                        if i >= c.arg_types.len() {
+                            return Err(v
+                                .range()
+                                .new_err(ErrorCode::CLOSURE_PARAM_TYPE_UNKNOWN)
+                                .add_help("try manually specify the parameter type of the closure")
+                                .add_to_ctx(ctx));
+                        }
+                        ctx.push_type_hints(v.range(), c.arg_types[i].clone());
+                        c.arg_types[i].clone()
+                    }
+                    _ => {
+                        return Err(v
+                            .range()
+                            .new_err(ErrorCode::CLOSURE_PARAM_TYPE_UNKNOWN)
+                            .add_help("try manually specify the parameter type of the closure")
+                            .add_to_ctx(ctx));
+                    }
+                }
             } else {
-                todo!()
+                return Err(v
+                    .range()
+                    .new_err(ErrorCode::CLOSURE_PARAM_TYPE_UNKNOWN)
+                    .add_help("try manually specify the parameter type of the closure")
+                    .add_to_ctx(ctx));
             };
             paratps.push(tp);
         }
+        let ret_tp = if let Some(ret) = &self.ret {
+            ret.emit_highlight(ctx);
+            ret.get_type(ctx, builder)?
+        } else if let Some(exp_ty) = &ctx.expect_ty {
+            match &*exp_ty.borrow() {
+                PLType::Closure(c) => {
+                    ctx.push_type_hints(self.paralist_range, c.ret_type.clone());
+                    c.ret_type.clone()
+                }
+                _ => {
+                    return Err(self
+                        .range
+                        .new_err(ErrorCode::CLOSURE_RET_TYPE_UNKNOWN)
+                        .add_help("try manually specify the return type of the closure")
+                        .add_to_ctx(ctx));
+                }
+            }
+        } else {
+            return Err(self
+                .range
+                .new_err(ErrorCode::CLOSURE_RET_TYPE_UNKNOWN)
+                .add_help("try manually specify the return type of the closure")
+                .add_to_ctx(ctx));
+        };
         let cur = builder.get_cur_basic_block();
         ctx.try_set_closure_curr_bb(cur);
         let f = builder.create_closure_fn(ctx, &closure_name, &paratps, &ret_tp.borrow());
         let child = &mut ctx.new_child(self.range.start, builder);
-        child.function = Some(f.clone());
+        child.function = Some(f);
         // add block
         let allocab = builder.append_basic_block(f, "alloc");
         let entry = builder.append_basic_block(f, "entry");
@@ -742,12 +810,7 @@ impl Node for ClosureNode {
         let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)));
         // let closure_data_alloca = builder.alloc("closure_data", &stpltp, child, None);
         let data_raw = builder.get_nth_param(f, 0);
-        let casted_data = builder.bitcast(
-            child,
-            data_raw,
-            &ptr_tp,
-            "casted_data",
-        );
+        let casted_data = builder.bitcast(child, data_raw, &ptr_tp, "casted_data");
         // let alloca = builder.alloc("closure_data",&ptr_tp, child, None);
         // builder.build_store(alloca, casted_data);
         child.closure_data = Some(RefCell::new(ClosureCtxData {
@@ -798,7 +861,7 @@ impl Node for ClosureNode {
                 },
             );
             tps.push(Arc::new(RefCell::new(pltp)));
-            i = i + 1;
+            i += 1;
         }
         ctx.position_at_end(cur, builder);
         // builder.add_body_to_struct_type(&st_tp.get_st_full_name(), &st_tp, ctx);
@@ -835,7 +898,14 @@ impl Node for ClosureNode {
 }
 
 impl PrintTrait for ClosureNode {
-    fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
-        todo!()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("ClosureNode");
+        tab(tabs + 1, line.clone(), false);
+        for p in self.paralist.iter() {
+            p.0.print(tabs + 1, false, line.clone());
+        }
+        self.body.print(tabs + 1, true, line.clone());
     }
 }

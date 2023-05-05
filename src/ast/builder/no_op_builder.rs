@@ -426,10 +426,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
 
     fn create_closure_fn(
         &self,
-        ctx: &mut Ctx<'a>,
-        closure_name: &str,
-        params: &[Arc<RefCell<PLType>>],
-        ret: &PLType,
+        _ctx: &mut Ctx<'a>,
+        _closure_name: &str,
+        _params: &[Arc<RefCell<PLType>>],
+        _ret: &PLType,
     ) -> ValueHandle {
         0
     }
@@ -442,11 +442,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         f
     }
 
-    fn create_closure_parameter_variable(&self, i: u32, f: ValueHandle, alloca: ValueHandle) {}
+    fn create_closure_parameter_variable(&self, _i: u32, _f: ValueHandle, _alloca: ValueHandle) {}
 
-    fn get_nth_param(&self, f: ValueHandle, i: u32) -> ValueHandle {
+    fn get_nth_param(&self, f: ValueHandle, _i: u32) -> ValueHandle {
         f
     }
 
-    fn add_closure_st_field(&self, st: ValueHandle, field: ValueHandle) {}
+    fn add_closure_st_field(&self, _st: ValueHandle, _field: ValueHandle) {}
 }

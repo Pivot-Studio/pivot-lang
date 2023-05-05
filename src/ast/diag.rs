@@ -124,6 +124,8 @@ define_error!(
     CANNOT_ASSIGN_INCOMPLETE_GENERICS = "cannot assign incomplete generic function to variable",
     FUNCTION_TYPE_NOT_MATCH = "function type not match",
     NO_RETURN_VALUE_EXPECTED_IN_VOID_FUNCTION = "no return value expected in a void function",
+    CLOSURE_RET_TYPE_UNKNOWN = "cannot infer closure return type",
+    CLOSURE_PARAM_TYPE_UNKNOWN = "cannot infer closure param type",
 );
 macro_rules! define_warn {
     ($(

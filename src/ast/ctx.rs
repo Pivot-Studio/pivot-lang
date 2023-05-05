@@ -90,6 +90,7 @@ pub struct Ctx<'a> {
     pub temp_source: Option<String>,
     pub in_macro: bool,
     pub closure_data: Option<RefCell<ClosureCtxData>>,
+    pub expect_ty: Option<Arc<RefCell<PLType>>>,
 }
 
 #[derive(Clone, Default)]
@@ -145,6 +146,7 @@ impl<'a, 'ctx> Ctx<'a> {
             temp_source: None,
             in_macro: false,
             closure_data: None,
+            expect_ty: None,
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -175,6 +177,7 @@ impl<'a, 'ctx> Ctx<'a> {
             temp_source: self.temp_source.clone(),
             in_macro: self.in_macro,
             closure_data: None,
+            expect_ty: None,
         };
         add_primitive_types(&mut ctx);
         builder.new_subscope(start);
@@ -403,40 +406,38 @@ impl<'a, 'ctx> Ctx<'a> {
             if let Some((symbol, _)) = data.table.get(name) {
                 let new_symbol = symbol.clone();
                 return Some((new_symbol, false));
-            } else {
-                if let Some(father) = self.father {
-                    let re = father.get_symbol(name, builder);
-                    if let Some((symbol, is_glob)) = &re {
-                        if !*is_glob {
-                            let cur = builder.get_cur_basic_block();
-                            if let Some(bb) = data.current_bb {
-                                builder.position_at_end_block(bb);
-                            }
-                            // captured by closure
-                            let new_symbol = symbol.clone();
-                            let len = data.table.len();
-                            builder.add_closure_st_field(data.data_handle, new_symbol.value);
-                            let new_symbol = PLSymbol {
-                                value: builder.build_load(
-                                    builder
-                                        .build_struct_gep(
-                                            data.data_handle,
-                                            len as u32 + 1,
-                                            "closure_tmp",
-                                        )
-                                        .unwrap(),
-                                    "closure_loaded",
-                                ),
-                                ..new_symbol
-                            };
-                            data.table
-                                .insert(name.to_string(), (new_symbol.clone(), symbol.value));
-                            builder.position_at_end_block(cur);
-                            return Some((new_symbol, false));
+            } else if let Some(father) = self.father {
+                let re = father.get_symbol(name, builder);
+                if let Some((symbol, is_glob)) = &re {
+                    if !*is_glob {
+                        let cur = builder.get_cur_basic_block();
+                        if let Some(bb) = data.current_bb {
+                            builder.position_at_end_block(bb);
                         }
+                        // captured by closure
+                        let new_symbol = symbol.clone();
+                        let len = data.table.len();
+                        builder.add_closure_st_field(data.data_handle, new_symbol.value);
+                        let new_symbol = PLSymbol {
+                            value: builder.build_load(
+                                builder
+                                    .build_struct_gep(
+                                        data.data_handle,
+                                        len as u32 + 1,
+                                        "closure_tmp",
+                                    )
+                                    .unwrap(),
+                                "closure_loaded",
+                            ),
+                            ..new_symbol
+                        };
+                        data.table
+                            .insert(name.to_string(), (new_symbol.clone(), symbol.value));
+                        builder.position_at_end_block(cur);
+                        return Some((new_symbol, false));
                     }
-                    return re;
                 }
+                return re;
             }
         }
         if let Some(father) = self.father {
@@ -1153,10 +1154,8 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn try_set_closure_curr_bb(&self, bb: BlockHandle) {
         if let Some(c) = &self.closure_data {
             c.borrow_mut().current_bb = Some(bb);
-        } else {
-            if let Some(father) = &self.father {
-                father.try_set_closure_curr_bb(bb);
-            }
+        } else if let Some(father) = &self.father {
+            father.try_set_closure_curr_bb(bb);
         }
     }
 }

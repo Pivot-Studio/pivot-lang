@@ -1,27 +1,40 @@
 use core::panic;
-use std::io;
-
 pub fn test_closure() i64 {
-    let f = test_ret_closure();
-    let d = f(2);
-    panic::assert(d==1);
-    return 0;
-}
-
-
-fn test_ret_closure() (i64)=>i64 {
     let b = 1;
     let bb = 100;
-    let a = (a:i64):i64=>{
+    test_type_infer((a) => {
         let c = b;
-        let aa = (a:i64):i64=>{
+        let aa = (a: i64): i64 => {
             let c = bb;
             return c;
         };
         let re = aa(2);
-        io::printi64ln(re);
-        panic::assert(re==100);
+        panic::assert(re == 100);
+        return c;
+    });
+    let f = test_ret_closure();
+    let d = f(2);
+    panic::assert(d == 1);
+    return 0;
+}
+
+fn test_type_infer(f: (i64) => i64) void {
+    return;
+}
+
+fn test_ret_closure() (i64) => i64 {
+    let b = 1;
+    let bb = 100;
+    let a = (a: i64): i64 => {
+        let c = b;
+        let aa = (a: i64): i64 => {
+            let c = bb;
+            return c;
+        };
+        let re = aa(2);
+        panic::assert(re == 100);
         return c;
     };
     return a;
 }
+

@@ -217,12 +217,14 @@ impl<'a, 'ctx> Ctx<'a> {
         expectrange: Range,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
+        self.expect_ty = Some(expect.clone());
         let range = node.range();
         let pri: Result<PrimaryNode, _> = (*node.clone()).try_into();
         // basic type implicit cast
         if let Ok(pri) = pri {
             let num: Result<NumNode, _> = (*pri.value.clone()).try_into();
             if let Ok(numnode) = num {
+                self.expect_ty = None;
                 self.emit_comment_highlight(&pri.comments[0]);
                 let num = numnode.value;
                 // TODO: check overflow
@@ -293,7 +295,13 @@ impl<'a, 'ctx> Ctx<'a> {
                 return Ok(NodeOutput::new_value(NodeValue::new_const(v, expect)));
             }
         }
-        let re = node.emit(self, builder)?;
+        let re = node.emit(self, builder);
+        if let Err(re) = re {
+            self.expect_ty = None;
+            return Err(re);
+        }
+        let re = re.unwrap();
+        self.expect_ty = None;
         if let Some(nv) = re.get_value() {
             let value = nv.get_value();
             let ty = nv.get_ty();

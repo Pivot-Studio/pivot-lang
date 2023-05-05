@@ -598,7 +598,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .into();
         let params = vec![ptr]
             .iter()
-            .map(|v| *v)
+            .copied()
             .chain(closure.arg_types.iter().map(|pltype| {
                 let tp = self.get_basic_type_op(&pltype.borrow(), ctx).unwrap();
                 let tp: BasicMetadataTypeEnum = tp.into();
@@ -1892,12 +1892,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let funcvalue = self.get_llvm_value(f).unwrap().into_function_value();
         self.build_store(
             alloca,
-            self.get_llvm_value_handle(
-                &funcvalue
-                    .get_nth_param(i as u32)
-                    .unwrap()
-                    .as_any_value_enum(),
-            ),
+            self.get_llvm_value_handle(&funcvalue.get_nth_param(i).unwrap().as_any_value_enum()),
         );
     }
     fn create_closure_fn(
@@ -1975,12 +1970,12 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         if let Some(old_bb) = old_bb {
             self.builder.position_at_end(old_bb);
         }
-        return self.get_llvm_value_handle(&f.into());
+        self.get_llvm_value_handle(&f.into())
     }
 
     fn get_nth_param(&self, f: ValueHandle, i: u32) -> ValueHandle {
         let funcvalue = self.get_llvm_value(f).unwrap().into_function_value();
-        self.get_llvm_value_handle(&funcvalue.get_nth_param(i as u32).unwrap().into())
+        self.get_llvm_value_handle(&funcvalue.get_nth_param(i).unwrap().into())
     }
     fn add_closure_st_field(&self, st: ValueHandle, field: ValueHandle) {
         let st_v = self.get_llvm_value(st).unwrap();
