@@ -409,6 +409,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn gen_or_get_arr_visit_function(&self, ctx: &mut Ctx<'a>, v: &ARRType) -> FunctionValue<'ctx> {
+        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::default());
         let currentbb = self.builder.get_insert_block();
         self.builder.unset_current_debug_location();
         let ptrtp = self.arr_type(v, ctx).ptr_type(AddressSpace::default());
@@ -461,9 +462,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let visit_trait_f = get_nth_mark_fn(f, 4);
         match &*v.element_type.borrow() {
             PLType::Arr(_) | PLType::Struct(_) => {
+                let casted = self.builder.build_bitcast(elm, i8ptrtp, "casted_arg");
                 // call the visit_complex function
                 self.builder
-                    .build_call(visit_complex_f, &[visitor.into(), elm.into()], "call");
+                    .build_call(visit_complex_f, &[visitor.into(), casted.into()], "call");
             }
             PLType::Pointer(_) => {
                 // call the visit_ptr function
@@ -1875,14 +1877,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                     .build_call(visit_ptr_f, &[visitor.into(), casted.into()], "call");
             }
             // 数组类型，递归调用visit函数
-            else if let PLType::Arr(_) = field_pltp {
-                let ptr = f;
-                let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
-                self.builder
-                    .build_call(visit_complex_f, &[visitor.into(), casted.into()], "call");
-            }
             // 结构体类型，递归调用visit函数
-            else if let PLType::Struct(_) = field_pltp {
+            else if let PLType::Struct(_) | PLType::Arr(_) = field_pltp {
                 let ptr = f;
                 let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
                 self.builder
@@ -1981,7 +1977,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         params: &[Arc<RefCell<PLType>>],
         ret: &PLType,
     ) -> ValueHandle {
-        let ret = self.get_basic_type_op(ret, ctx).unwrap();
         let i8ptr = self.context.i8_type().ptr_type(AddressSpace::default());
         let mut closure_param_tps: Vec<BasicMetadataTypeEnum> =
             vec![i8ptr.as_basic_type_enum().into()];
@@ -1991,7 +1986,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .map(|p| self.get_basic_type_op(&p.borrow(), ctx).unwrap().into())
                 .collect::<Vec<_>>(),
         );
-        let f_tp = ret.fn_type(&closure_param_tps, false);
+        let f_tp = self
+            .get_basic_type_op(ret, ctx)
+            .map(|ret| ret.fn_type(&closure_param_tps, false))
+            .unwrap_or(self.context.void_type().fn_type(&closure_param_tps, false));
         let f_v = self
             .module
             .add_function(&format!("{}__fn", closure_name), f_tp, None);
