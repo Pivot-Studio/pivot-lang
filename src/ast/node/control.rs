@@ -193,7 +193,7 @@ impl Node for ForNode {
         let body_block = builder.append_basic_block(ctx.function.unwrap(), "for.body");
         let after_block = builder.append_basic_block(ctx.function.unwrap(), "for.after");
         ctx.break_block = Some(after_block);
-        ctx.continue_block = Some(cond_block);
+        ctx.continue_block = Some(opt_block);
         builder.rm_curr_debug_location();
         builder.build_unconditional_branch(pre_block);
         ctx.position_at_end(pre_block, builder);

@@ -1989,7 +1989,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let f_tp = self
             .get_basic_type_op(ret, ctx)
             .map(|ret| ret.fn_type(&closure_param_tps, false))
-            .unwrap_or(self.context.void_type().fn_type(&closure_param_tps, false));
+            .unwrap_or_else(|| self.context.void_type().fn_type(&closure_param_tps, false));
         let f_v = self
             .module
             .add_function(&format!("{}__fn", closure_name), f_tp, None);

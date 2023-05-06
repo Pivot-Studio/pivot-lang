@@ -15,6 +15,7 @@ use project1::test::multi_trait;
 use project1::test::tuple;
 use project1::test::fntype;
 use project1::test::closure;
+use project1::test::map;
 use pl_test::main;
 
 pub fn main() i64 {
@@ -36,6 +37,7 @@ pub fn main() i64 {
     tuple::test_tuple();
     fntype::test_fntype()();
     closure::test_closure();
+    map::test_map();
     return 0;
 }
 
