@@ -80,6 +80,7 @@ impl FuncCallNode {
         let re = builder.build_struct_gep(v, 0, "real_fn").unwrap();
         let re = builder.build_load(re, "real_fn");
         let ret = builder.build_call(re, &para_values, &c.ret_type.borrow(), ctx);
+        builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
         handle_ret(ret, c.ret_type.clone())
     }
 
@@ -782,6 +783,18 @@ impl Node for ClosureNode {
         let f = builder.create_closure_fn(ctx, &closure_name, &paratps, &ret_tp.borrow());
         let child = &mut ctx.new_child(self.range.start, builder);
         child.function = Some(f);
+        let stpltp = PLType::Struct(st_tp.clone());
+        let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)));
+        let mut all_tps = vec![Arc::new(RefCell::new(i8ptr.clone()))];
+        all_tps.extend(paratps.clone());
+        builder.build_sub_program_by_pltp(
+            &all_tps,
+            ret_tp.clone(),
+            &closure_name,
+            self.range.start.line as _,
+            f,
+            child,
+        );
         // add block
         let allocab = builder.append_basic_block(f, "alloc");
         let entry = builder.append_basic_block(f, "entry");
@@ -805,14 +818,13 @@ impl Node for ClosureNode {
         } else {
             builder.build_return(None);
         };
-        child.position_at_end(entry, builder);
-        let stpltp = PLType::Struct(st_tp.clone());
-        let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)));
+        child.position_at_end(allocab, builder);
         // let closure_data_alloca = builder.alloc("closure_data", &stpltp, child, None);
         let data_raw = builder.get_nth_param(f, 0);
         let casted_data = builder.bitcast(child, data_raw, &ptr_tp, "casted_data");
         // let alloca = builder.alloc("closure_data",&ptr_tp, child, None);
         // builder.build_store(alloca, casted_data);
+        child.position_at_end(entry, builder);
         child.closure_data = Some(RefCell::new(ClosureCtxData {
             table: LinkedHashMap::default(),
             data_handle: casted_data,
@@ -822,8 +834,12 @@ impl Node for ClosureNode {
         for (i, tp) in paratps.iter().enumerate() {
             let b = tp.clone();
             let basetype = b.borrow();
-            let alloca = builder.alloc(&self.paralist[i].0.name, &basetype, child, None);
-            // TODO add alloc var debug info
+            let alloca = builder.alloc(
+                &self.paralist[i].0.name,
+                &basetype,
+                child,
+                Some(self.paralist[i].0.range.start),
+            );
 
             let parapltype = tp;
             builder.create_closure_parameter_variable(i as u32 + 1, f, alloca);
@@ -844,11 +860,9 @@ impl Node for ClosureNode {
             return Err(child.add_diag(self.range.new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN)));
         }
         child.position_at_end(allocab, builder);
-        builder.build_unconditional_branch(entry);
-        let closure_table = child.closure_data.as_ref().unwrap();
         let mut i = 1;
         let mut tps = vec![];
-        for (k, (v, _)) in &closure_table.borrow().table {
+        for (k, (v, _)) in &child.closure_data.as_ref().unwrap().borrow().table {
             let pltp = PLType::Pointer(v.pltype.to_owned());
             st_tp.fields.insert(
                 k.to_owned(),
@@ -863,8 +877,22 @@ impl Node for ClosureNode {
             tps.push(Arc::new(RefCell::new(pltp)));
             i += 1;
         }
+        let stpltp = PLType::Struct(st_tp.clone());
+        let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)));
+        builder.create_parameter_variable_dbg(
+            &ptr_tp,
+            self.range.start,
+            0,
+            child,
+            casted_data,
+            allocab,
+            "captured_closure_data",
+        );
+        // builder.insert_var_declare("captured_closure_data", self.range.start, &PLType::Struct(st_tp.clone()), casted_data, child);
+        builder.build_unconditional_branch(entry);
+        let closure_table = child.closure_data.as_ref().unwrap();
         ctx.position_at_end(cur, builder);
-        // builder.add_body_to_struct_type(&st_tp.get_st_full_name(), &st_tp, ctx);
+        builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
         builder.gen_st_visit_function(ctx, &st_tp, &tps);
         let closure_f_tp = ClosureType {
             arg_types: paratps,
@@ -877,7 +905,7 @@ impl Node for ClosureNode {
             builder.alloc("closure_data", &PLType::Struct(st_tp.clone()), ctx, None);
         for (k, (_, ori_v)) in &closure_table.borrow().table {
             let field = st_tp.fields.get(k).unwrap();
-            let alloca = builder
+            let alloca: usize = builder
                 .build_struct_gep(closure_data_alloca, field.index, k)
                 .unwrap();
             builder.build_store(alloca, *ori_v);

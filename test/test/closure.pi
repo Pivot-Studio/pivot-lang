@@ -33,8 +33,12 @@ fn test_ret_closure() (i64) => i64 {
         };
         let re = aa(2);
         panic::assert(re == 100);
+        b = 10001;
         return c;
     };
+    a(0);
+    panic::assert(b == 10001);
+    b = 1;
     return a;
 }
 

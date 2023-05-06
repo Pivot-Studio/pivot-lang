@@ -414,6 +414,7 @@ impl<'a, 'ctx> Ctx<'a> {
                         if let Some(bb) = data.current_bb {
                             builder.position_at_end_block(bb);
                         }
+                        builder.rm_curr_debug_location();
                         // captured by closure
                         let new_symbol = symbol.clone();
                         let len = data.table.len();

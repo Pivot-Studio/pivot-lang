@@ -449,4 +449,27 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     }
 
     fn add_closure_st_field(&self, _st: ValueHandle, _field: ValueHandle) {}
+
+    fn build_sub_program_by_pltp(
+        &self,
+        _paralist: &[Arc<RefCell<PLType>>],
+        _ret: Arc<RefCell<PLType>>,
+        _name: &str,
+        _start_line: u32,
+        _fnvalue: ValueHandle,
+        _child: &mut Ctx<'a>,
+    ) {
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn create_parameter_variable_dbg(
+        &self,
+        _pltp: &PLType,
+        _pos: crate::ast::range::Pos,
+        _i: usize,
+        _child: &mut Ctx<'a>,
+        _value_handle: ValueHandle,
+        _allocab: super::BlockHandle,
+        _name: &str,
+    ) {
+    }
 }

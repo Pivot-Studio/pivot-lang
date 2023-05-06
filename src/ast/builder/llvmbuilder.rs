@@ -1653,6 +1653,45 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.discope.set(subprogram.as_debug_info_scope());
         Ok(())
     }
+
+    fn build_sub_program_by_pltp(
+        &self,
+        paralist: &[Arc<RefCell<PLType>>],
+        ret: Arc<RefCell<PLType>>,
+        name: &str,
+        start_line: u32,
+        fnvalue: ValueHandle,
+        child: &mut Ctx<'a>,
+    ) {
+        let mut param_ditypes = vec![];
+        for pltype in paralist.iter() {
+            param_ditypes.push(self.get_ditype(&pltype.borrow(), child).unwrap());
+        }
+        // debug info
+        let subroutine_type = self.dibuilder.create_subroutine_type(
+            self.diunit.get_file(),
+            self.get_ditype(&ret.borrow(), child),
+            &param_ditypes,
+            DIFlags::PUBLIC,
+        );
+        let subprogram = self.dibuilder.create_function(
+            self.diunit.get_file().as_debug_info_scope(),
+            &format!("{}__fn", name),
+            None,
+            self.diunit.get_file(),
+            start_line,
+            subroutine_type,
+            false,
+            true,
+            start_line,
+            DIFlags::PUBLIC,
+            false,
+        );
+        let funcvalue = self.get_llvm_value(fnvalue).unwrap().into_function_value();
+        funcvalue.set_subprogram(subprogram);
+        // let discope = child.discope;
+        self.discope.set(subprogram.as_debug_info_scope());
+    }
     fn build_return(&self, v: Option<ValueHandle>) {
         if let Some(v) = v {
             let v = self.get_llvm_value(v).unwrap();
@@ -1661,6 +1700,46 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         } else {
             self.builder.build_return(None);
         }
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn create_parameter_variable_dbg(
+        &self,
+        pltp: &PLType,
+        pos: Pos,
+        i: usize,
+        child: &mut Ctx<'a>,
+        value_handle: ValueHandle,
+        allocab: BlockHandle,
+        name: &str,
+    ) {
+        let divar = self.dibuilder.create_parameter_variable(
+            self.discope.get(),
+            name,
+            i as u32,
+            self.diunit.get_file(),
+            pos.line as u32,
+            self.get_ditype(pltp, child).unwrap(),
+            false,
+            DIFlags::PUBLIC,
+        );
+        self.build_dbg_location(pos);
+        let allocab = self.get_llvm_block(allocab).unwrap();
+        let v: BasicValueEnum = self
+            .get_llvm_value(value_handle)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let raw_tp = v.get_type();
+        // self.builder.position_at_end(allocab);
+        let alloca = self.builder.build_alloca(raw_tp, "para");
+        self.builder.build_store(alloca, v);
+        self.dibuilder.insert_declare_at_end(
+            alloca,
+            Some(divar),
+            None,
+            self.builder.get_current_debug_location().unwrap(),
+            allocab,
+        );
     }
     #[allow(clippy::too_many_arguments)]
     fn create_parameter_variable(
@@ -1916,6 +1995,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let f_v = self
             .module
             .add_function(&format!("{}__fn", closure_name), f_tp, None);
+
         self.get_llvm_value_handle(&f_v.into())
     }
     /// # get_closure_trampoline

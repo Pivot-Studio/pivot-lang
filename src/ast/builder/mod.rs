@@ -201,6 +201,26 @@ pub trait IRBuilder<'a, 'ctx> {
     fn create_closure_parameter_variable(&self, i: u32, f: ValueHandle, alloca: ValueHandle);
     fn get_nth_param(&self, f: ValueHandle, i: u32) -> ValueHandle;
     fn add_closure_st_field(&self, st: ValueHandle, field: ValueHandle);
+    fn build_sub_program_by_pltp(
+        &self,
+        paralist: &[Arc<RefCell<PLType>>],
+        ret: Arc<RefCell<PLType>>,
+        name: &str,
+        start_line: u32,
+        fnvalue: ValueHandle,
+        child: &mut Ctx<'a>,
+    );
+    #[allow(clippy::too_many_arguments)]
+    fn create_parameter_variable_dbg(
+        &self,
+        pltp: &PLType,
+        pos: Pos,
+        i: usize,
+        child: &mut Ctx<'a>,
+        value_handle: ValueHandle,
+        allocab: BlockHandle,
+        name: &str,
+    );
 }
 
 pub type ValueHandle = usize;
