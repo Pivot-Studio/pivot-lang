@@ -97,7 +97,7 @@ pub struct Ctx<'a> {
 pub struct ClosureCtxData {
     pub table: LinkedHashMap<String, (PLSymbol, ValueHandle)>,
     pub data_handle: ValueHandle,
-    pub current_bb: Option<BlockHandle>,
+    pub alloca_bb: Option<BlockHandle>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -411,8 +411,14 @@ impl<'a, 'ctx> Ctx<'a> {
                 if let Some((symbol, is_glob)) = &re {
                     if !*is_glob {
                         let cur = builder.get_cur_basic_block();
-                        if let Some(bb) = data.current_bb {
+                        // just make sure we are in the alloca bb
+                        // so that the captured value is not used before it is initialized
+                        if let Some(bb) = data.alloca_bb {
                             builder.position_at_end_block(bb);
+                        } else {
+                            builder.position_at_end_block(
+                                builder.get_first_basic_block(self.function.unwrap()),
+                            );
                         }
                         builder.rm_curr_debug_location();
                         // captured by closure
@@ -1152,11 +1158,11 @@ impl<'a, 'ctx> Ctx<'a> {
             need_up_cast: false,
         }
     }
-    pub fn try_set_closure_curr_bb(&self, bb: BlockHandle) {
+    pub fn try_set_closure_alloca_bb(&self, bb: BlockHandle) {
         if let Some(c) = &self.closure_data {
-            c.borrow_mut().current_bb = Some(bb);
+            c.borrow_mut().alloca_bb = Some(bb);
         } else if let Some(father) = &self.father {
-            father.try_set_closure_curr_bb(bb);
+            father.try_set_closure_alloca_bb(bb);
         }
     }
 }

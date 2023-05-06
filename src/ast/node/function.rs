@@ -779,7 +779,7 @@ impl Node for ClosureNode {
                 .add_to_ctx(ctx));
         };
         let cur = builder.get_cur_basic_block();
-        ctx.try_set_closure_curr_bb(cur);
+        ctx.try_set_closure_alloca_bb(builder.get_first_basic_block(ctx.function.unwrap()));
         let f = builder.create_closure_fn(ctx, &closure_name, &paratps, &ret_tp.borrow());
         let child = &mut ctx.new_child(self.range.start, builder);
         child.function = Some(f);
@@ -799,6 +799,7 @@ impl Node for ClosureNode {
         let allocab = builder.append_basic_block(f, "alloc");
         let entry = builder.append_basic_block(f, "entry");
         let return_block = builder.append_basic_block(f, "return");
+        builder.rm_curr_debug_location();
         child.position_at_end(entry, builder);
         let ret_value_ptr = match &*ret_tp.borrow() {
             PLType::Void => None,
@@ -828,7 +829,7 @@ impl Node for ClosureNode {
         child.closure_data = Some(RefCell::new(ClosureCtxData {
             table: LinkedHashMap::default(),
             data_handle: casted_data,
-            current_bb: None,
+            alloca_bb: None,
         }));
         // alloc para
         for (i, tp) in paratps.iter().enumerate() {
