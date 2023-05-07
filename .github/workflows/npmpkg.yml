@@ -31,7 +31,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       - run: |
           cd pkg
-          npm version from-git || true
+          npm version prerelease -preid $(git rev-parse --short "$GITHUB_SHA")
           npm publish --access public || true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
