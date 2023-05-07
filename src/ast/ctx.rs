@@ -879,7 +879,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     fn get_pltp_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
-        for (k, f) in self.plmod.types.iter() {
+        for (k, f) in self.plmod.types.iter().chain(self.generic_types.iter()) {
             let mut insert_text = None;
             let mut command = None;
             let tp = match &*f.clone().borrow() {
@@ -894,12 +894,12 @@ impl<'a, 'ctx> Ctx<'a> {
                 }
                 PLType::Struct(_) => CompletionItemKind::STRUCT,
                 PLType::Trait(_) => CompletionItemKind::INTERFACE,
-                PLType::Arr(_) => CompletionItemKind::KEYWORD,
+                PLType::Arr(_) => unreachable!(),
                 PLType::Primitive(_) => CompletionItemKind::KEYWORD,
-                PLType::Generic(_) => CompletionItemKind::STRUCT,
+                PLType::Generic(_) => CompletionItemKind::TYPE_PARAMETER,
                 PLType::Void => CompletionItemKind::KEYWORD,
                 PLType::Pointer(_) => unreachable!(),
-                PLType::PlaceHolder(_) => CompletionItemKind::STRUCT,
+                PLType::PlaceHolder(_) => continue,
                 PLType::Union(_) => CompletionItemKind::ENUM,
                 PLType::Closure(_) => unreachable!(),
             };
