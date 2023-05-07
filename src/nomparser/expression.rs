@@ -210,7 +210,7 @@ fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
             many0(comment),
-            alt((
+            del_newline_or_space!(alt((
                 number,
                 bool_const,
                 parantheses_exp,
@@ -220,7 +220,7 @@ fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 macro_call_exp,
                 extern_identifier,
                 string_literal,
-            )),
+            ))),
             many0(comment),
         )),
         |(lcoms, node, rcoms)| {

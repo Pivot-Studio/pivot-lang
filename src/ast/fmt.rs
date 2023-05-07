@@ -343,14 +343,31 @@ impl FmtBuilder {
         }
     }
     pub fn parse_primary_node(&mut self, node: &PrimaryNode) {
+        for com in &node.comments[0] {
+            com.format(self);
+            self.prefix();
+        }
         node.value.format(self);
+        for com in &node.comments[1] {
+            self.prefix();
+            com.format(self);
+        }
     }
 
     pub fn parse_array_element_node(&mut self, node: &ArrayElementNode) {
+        // arr[1] // 123
+        //     // 456
+        //     .foo();
         node.arr.format(self);
         self.l_bracket();
         node.index.format(self);
         self.r_bracket();
+        for com in &node.comments[0] {
+            com.format(self);
+            self.add_tab();
+            self.prefix();
+            self.sub_tab();
+        }
     }
     pub fn parse_parantheses_node(&mut self, node: &ParanthesesNode) {
         self.l_paren();
@@ -377,10 +394,19 @@ impl FmtBuilder {
         node.right.format(self);
     }
     pub fn parse_take_op_node(&mut self, node: &TakeOpNode) {
+        // head.id //123
+        //     //456
+        //     .foo();
         node.head.format(self);
         for id in &node.field {
             self.dot();
             id.format(self);
+            for com in &node.comments[0] {
+                com.format(self);
+                self.add_tab();
+                self.prefix();
+                self.sub_tab();
+            }
         }
     }
     pub fn parse_impl_node(&mut self, node: &ImplNode) {
@@ -422,6 +448,9 @@ impl FmtBuilder {
         self.enter();
     }
     pub fn parse_func_call_node(&mut self, node: &FuncCallNode) {
+        // foo(1, 2, 3) // 456
+        //     // 123
+        //     .bar();
         node.callee.format(self);
         if let Some(generic_params) = &node.generic_params {
             generic_params.format(self);
@@ -439,6 +468,12 @@ impl FmtBuilder {
             }
         }
         self.r_paren();
+        for com in &node.comments[0] {
+            com.format(self);
+            self.add_tab();
+            self.prefix();
+            self.sub_tab();
+        }
     }
     pub fn parse_func_def_node(&mut self, node: &FuncDefNode) {
         let paralist = &node.paralist;
