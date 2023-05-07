@@ -4,16 +4,19 @@ use super::statement::StatementsNode;
 use super::*;
 use super::{types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::builder::ValueHandle;
+use crate::ast::ctx::ClosureCtxData;
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 
-use crate::ast::pltype::{get_type_deep, ClosureType, FNValue, FnType, PLType};
+use crate::ast::pltype::{get_type_deep, ClosureType, FNValue, Field, FnType, PLType, STType};
 use crate::ast::tokens::TokenType;
 use indexmap::IndexMap;
 use internal_macro::node;
+use linked_hash_map::LinkedHashMap;
 use lsp_types::SemanticTokenType;
 use std::cell::RefCell;
 
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::vec;
 #[node(comment)]
 pub struct FuncCallNode {
@@ -44,9 +47,9 @@ impl FuncCallNode {
         c: &ClosureType,
         v: ValueHandle,
     ) -> NodeResult {
-        // TODO we only handle the case that the closure is a pure function
-        // TODO the real closure case is leave to the future
-        let mut para_values = vec![];
+        let data = builder.build_struct_gep(v, 1, "closure_data").unwrap();
+        let data = builder.build_load(data, "loaded_closure_data");
+        let mut para_values = vec![data];
         let mut value_pltypes = vec![];
         if self.paralist.len() != c.arg_types.len() {
             return Err(self
@@ -77,6 +80,7 @@ impl FuncCallNode {
         let re = builder.build_struct_gep(v, 0, "real_fn").unwrap();
         let re = builder.build_load(re, "real_fn");
         let ret = builder.build_call(re, &para_values, &c.ret_type.borrow(), ctx);
+        builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
         handle_ret(ret, c.ret_type.clone())
     }
 
@@ -86,10 +90,25 @@ impl FuncCallNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
         para_values: &mut Vec<usize>,
         value_pltypes: &mut Vec<(Arc<RefCell<PLType>>, Range)>,
+        param_types: &[Box<TypeNodeEnum>],
+        is_generic: bool,
     ) -> Result<(), PLDiag> {
-        for para in self.paralist.iter_mut() {
+        for (para, expect_ty) in self.paralist.iter_mut().zip(param_types.iter()) {
             let pararange = para.range();
-            let v = para.emit(ctx, builder)?.get_value();
+            if !is_generic {
+                if let TypeNodeEnum::Closure(_) = &**expect_ty {
+                    _ = expect_ty
+                        .get_type(ctx, builder)
+                        .map(|t| ctx.expect_ty = Some(t));
+                }
+            }
+            let v = para
+                .emit(ctx, builder)
+                .map(|re| {
+                    ctx.expect_ty = None;
+                    re
+                })?
+                .get_value();
             if v.is_none() {
                 return Ok(());
             }
@@ -201,7 +220,14 @@ impl Node for FuncCallNode {
         }
         self.build_hint(ctx, &fnvalue, skip);
         let mut value_pltypes = vec![];
-        self.build_params(ctx, builder, &mut para_values, &mut value_pltypes)?;
+        self.build_params(
+            ctx,
+            builder,
+            &mut para_values,
+            &mut value_pltypes,
+            &fnvalue.fntype.param_pltypes,
+            fnvalue.fntype.generic,
+        )?;
         // value check and generic infer
         let res = ctx.protect_generic_context(&fnvalue.fntype.generic_map.clone(), |ctx| {
             ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
@@ -654,5 +680,261 @@ impl Node for FuncDefNode {
             self.gen_fntype(ctx, true, builder, fntype)?;
         }
         usize::MAX.new_output(pltype).to_result()
+    }
+}
+
+#[node]
+pub struct ClosureNode {
+    pub paralist: Vec<(Box<VarNode>, Option<Box<TypeNodeEnum>>)>,
+    pub body: StatementsNode,
+    pub ret: Option<Box<TypeNodeEnum>>,
+    pub paralist_range: Range,
+}
+
+static CLOSURE_COUNT: AtomicI32 = AtomicI32::new(0);
+
+impl Node for ClosureNode {
+    fn emit<'a, 'ctx, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+    ) -> NodeResult {
+        // 设计： https://github.com/Pivot-Studio/pivot-lang/issues/284
+        let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap());
+        let closure_name = format!("closure_{}", CLOSURE_COUNT.fetch_add(1, Ordering::Relaxed));
+        let mut st_tp = STType {
+            name: closure_name.clone(),
+            path: ctx.plmod.path.clone(),
+            fields: LinkedHashMap::default(),
+            range: Default::default(),
+            doc: vec![],
+            generic_map: Default::default(),
+            derives: vec![],
+            modifier: Some((TokenType::PUB, Default::default())),
+            body_range: Default::default(),
+            is_trait: false,
+            is_tuple: true,
+        };
+
+        builder.opaque_struct_type(&st_tp.get_st_full_name());
+        builder.add_body_to_struct_type(&st_tp.get_st_full_name(), &st_tp, ctx);
+        let mut paratps = vec![];
+        for (i, (v, typenode)) in self.paralist.iter_mut().enumerate() {
+            ctx.push_semantic_token(v.range(), SemanticTokenType::PARAMETER, 0);
+            let tp = if let Some(typenode) = typenode {
+                typenode.emit_highlight(ctx);
+                typenode.get_type(ctx, builder)?
+            } else if let Some(exp_ty) = &ctx.expect_ty {
+                match &*exp_ty.borrow() {
+                    PLType::Closure(c) => {
+                        if i >= c.arg_types.len() {
+                            return Err(v
+                                .range()
+                                .new_err(ErrorCode::CLOSURE_PARAM_TYPE_UNKNOWN)
+                                .add_help("try manually specify the parameter type of the closure")
+                                .add_to_ctx(ctx));
+                        }
+                        ctx.push_type_hints(v.range(), c.arg_types[i].clone());
+                        c.arg_types[i].clone()
+                    }
+                    _ => {
+                        return Err(v
+                            .range()
+                            .new_err(ErrorCode::CLOSURE_PARAM_TYPE_UNKNOWN)
+                            .add_help("try manually specify the parameter type of the closure")
+                            .add_to_ctx(ctx));
+                    }
+                }
+            } else {
+                return Err(v
+                    .range()
+                    .new_err(ErrorCode::CLOSURE_PARAM_TYPE_UNKNOWN)
+                    .add_help("try manually specify the parameter type of the closure")
+                    .add_to_ctx(ctx));
+            };
+            paratps.push(tp);
+        }
+        let ret_tp = if let Some(ret) = &self.ret {
+            ret.emit_highlight(ctx);
+            ret.get_type(ctx, builder)?
+        } else if let Some(exp_ty) = &ctx.expect_ty {
+            match &*exp_ty.borrow() {
+                PLType::Closure(c) => {
+                    ctx.push_type_hints(self.paralist_range, c.ret_type.clone());
+                    c.ret_type.clone()
+                }
+                _ => {
+                    return Err(self
+                        .range
+                        .new_err(ErrorCode::CLOSURE_RET_TYPE_UNKNOWN)
+                        .add_help("try manually specify the return type of the closure")
+                        .add_to_ctx(ctx));
+                }
+            }
+        } else {
+            return Err(self
+                .range
+                .new_err(ErrorCode::CLOSURE_RET_TYPE_UNKNOWN)
+                .add_help("try manually specify the return type of the closure")
+                .add_to_ctx(ctx));
+        };
+        let cur = builder.get_cur_basic_block();
+        ctx.try_set_closure_alloca_bb(builder.get_first_basic_block(ctx.function.unwrap()));
+        let f = builder.create_closure_fn(ctx, &closure_name, &paratps, &ret_tp.borrow());
+        let child = &mut ctx.new_child(self.range.start, builder);
+        child.function = Some(f);
+        let stpltp = PLType::Struct(st_tp.clone());
+        let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)));
+        let mut all_tps = vec![Arc::new(RefCell::new(i8ptr.clone()))];
+        all_tps.extend(paratps.clone());
+        builder.build_sub_program_by_pltp(
+            &all_tps,
+            ret_tp.clone(),
+            &closure_name,
+            self.range.start.line as _,
+            f,
+            child,
+        );
+        // add block
+        let allocab = builder.append_basic_block(f, "alloc");
+        let entry = builder.append_basic_block(f, "entry");
+        let return_block = builder.append_basic_block(f, "return");
+        builder.rm_curr_debug_location();
+        child.position_at_end(entry, builder);
+        let ret_value_ptr = match &*ret_tp.borrow() {
+            PLType::Void => None,
+            other => {
+                builder.rm_curr_debug_location();
+                let retv = builder.alloc("retvalue", other, child, None);
+                // 返回值不能在函数结束时从root表移除
+                child.roots.borrow_mut().pop();
+                Some(retv)
+            }
+        };
+        child.position_at_end(return_block, builder);
+        child.return_block = Some((return_block, ret_value_ptr));
+        if let Some(ptr) = ret_value_ptr {
+            let value = builder.build_load(ptr, "load_ret_tmp");
+            builder.build_return(Some(value));
+        } else {
+            builder.build_return(None);
+        };
+        child.position_at_end(allocab, builder);
+        // let closure_data_alloca = builder.alloc("closure_data", &stpltp, child, None);
+        let data_raw = builder.get_nth_param(f, 0);
+        let casted_data = builder.bitcast(child, data_raw, &ptr_tp, "casted_data");
+        // let alloca = builder.alloc("closure_data",&ptr_tp, child, None);
+        // builder.build_store(alloca, casted_data);
+        child.position_at_end(entry, builder);
+        child.closure_data = Some(RefCell::new(ClosureCtxData {
+            table: LinkedHashMap::default(),
+            data_handle: casted_data,
+            alloca_bb: None,
+        }));
+        // alloc para
+        for (i, tp) in paratps.iter().enumerate() {
+            let b = tp.clone();
+            let basetype = b.borrow();
+            let alloca = builder.alloc(
+                &self.paralist[i].0.name,
+                &basetype,
+                child,
+                Some(self.paralist[i].0.range.start),
+            );
+
+            let parapltype = tp;
+            builder.create_closure_parameter_variable(i as u32 + 1, f, alloca);
+            child
+                .add_symbol(
+                    self.paralist[i].0.name.clone(),
+                    alloca,
+                    parapltype.to_owned(),
+                    self.paralist[i].0.range,
+                    false,
+                )
+                .unwrap();
+        }
+        child.rettp = Some(ret_tp.clone());
+        // emit body
+        let terminator = self.body.emit(child, builder)?.get_term();
+        if !terminator.is_return() {
+            return Err(child.add_diag(self.range.new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN)));
+        }
+        child.position_at_end(allocab, builder);
+        let mut i = 1;
+        let mut tps = vec![];
+        for (k, (v, _)) in &child.closure_data.as_ref().unwrap().borrow().table {
+            let pltp = PLType::Pointer(v.pltype.to_owned());
+            st_tp.fields.insert(
+                k.to_owned(),
+                Field {
+                    index: i,
+                    typenode: pltp.get_typenode(),
+                    name: k.to_owned(),
+                    range: Default::default(),
+                    modifier: None,
+                },
+            );
+            tps.push(Arc::new(RefCell::new(pltp)));
+            i += 1;
+        }
+        let stpltp = PLType::Struct(st_tp.clone());
+        let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)));
+        builder.create_parameter_variable_dbg(
+            &ptr_tp,
+            self.range.start,
+            0,
+            child,
+            casted_data,
+            allocab,
+            "captured_closure_data",
+        );
+        // builder.insert_var_declare("captured_closure_data", self.range.start, &PLType::Struct(st_tp.clone()), casted_data, child);
+        builder.build_unconditional_branch(entry);
+        let closure_table = child.closure_data.as_ref().unwrap();
+        ctx.position_at_end(cur, builder);
+        builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
+        builder.gen_st_visit_function(ctx, &st_tp, &tps);
+        let closure_f_tp = ClosureType {
+            arg_types: paratps,
+            ret_type: ret_tp,
+            range: self.range,
+        };
+        let closure_f_tp = PLType::Closure(closure_f_tp);
+        let closure_alloca = builder.alloc("closure", &closure_f_tp, ctx, None);
+        let closure_data_alloca =
+            builder.alloc("closure_data", &PLType::Struct(st_tp.clone()), ctx, None);
+        for (k, (_, ori_v)) in &closure_table.borrow().table {
+            let field = st_tp.fields.get(k).unwrap();
+            let alloca: usize = builder
+                .build_struct_gep(closure_data_alloca, field.index, k)
+                .unwrap();
+            builder.build_store(alloca, *ori_v);
+        }
+        let f_field = builder
+            .build_struct_gep(closure_alloca, 0, "closure_f")
+            .unwrap();
+        builder.build_store(f_field, f);
+        let d_field = builder
+            .build_struct_gep(closure_alloca, 1, "closure_d")
+            .unwrap();
+        let d_casted = builder.bitcast(ctx, closure_data_alloca, &i8ptr, "casted_closure_d");
+        builder.build_store(d_field, d_casted);
+        closure_alloca
+            .new_output(Arc::new(RefCell::new(closure_f_tp)))
+            .to_result()
+    }
+}
+
+impl PrintTrait for ClosureNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("ClosureNode");
+        tab(tabs + 1, line.clone(), false);
+        for p in self.paralist.iter() {
+            p.0.print(tabs + 1, false, line.clone());
+        }
+        self.body.print(tabs + 1, true, line.clone());
     }
 }

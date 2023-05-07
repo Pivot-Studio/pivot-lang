@@ -6,7 +6,7 @@ use super::{
         comment::CommentNode,
         control::{BreakNode, ContinueNode, ForNode, IfNode, WhileNode},
         error::{ErrorNode, StErrorNode},
-        function::{FuncCallNode, FuncDefNode},
+        function::{ClosureNode, FuncCallNode, FuncDefNode},
         global::GlobalNode,
         implement::ImplNode,
         interface::{MultiTraitNode, TraitBoundNode, TraitDefNode},
@@ -783,5 +783,35 @@ impl FmtBuilder {
         self.token("=>");
         self.space();
         node.ret_type.format(self);
+    }
+    pub fn parse_closure_node(&mut self, node: &ClosureNode) {
+        self.l_paren();
+        for (i, (v, ty)) in node.paralist.iter().enumerate() {
+            if i > 0 {
+                self.comma();
+                self.space();
+            }
+            v.format(self);
+            if let Some(ty) = ty {
+                self.token(":");
+                self.space();
+                ty.format(self);
+            }
+        }
+        self.r_paren();
+        if let Some(ret) = &node.ret {
+            self.token(":");
+            self.space();
+            ret.format(self);
+        }
+        self.space();
+        self.token("=>");
+        self.space();
+        self.l_brace();
+        self.add_tab();
+        node.body.format(self);
+        self.sub_tab();
+        self.prefix();
+        self.r_brace();
     }
 }

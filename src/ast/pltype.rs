@@ -302,6 +302,7 @@ impl PLType {
             PLType::Pointer(_) => ObjectType::Pointer,
             PLType::Trait(_) => ObjectType::Trait,
             PLType::Union(_) => ObjectType::Trait, // share same layout as trait
+            PLType::Closure(_) => ObjectType::Trait, // share same layout as trait
             _ => ObjectType::Atomic,
         }
     }

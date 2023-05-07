@@ -423,4 +423,53 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     fn get_or_insert_helper_fn_handle(&self, _name: &str) -> ValueHandle {
         0
     }
+
+    fn create_closure_fn(
+        &self,
+        _ctx: &mut Ctx<'a>,
+        _closure_name: &str,
+        _params: &[Arc<RefCell<PLType>>],
+        _ret: &PLType,
+    ) -> ValueHandle {
+        0
+    }
+
+    fn i8ptr_null(&self) -> ValueHandle {
+        0
+    }
+
+    fn get_closure_trampoline(&self, f: ValueHandle) -> ValueHandle {
+        f
+    }
+
+    fn create_closure_parameter_variable(&self, _i: u32, _f: ValueHandle, _alloca: ValueHandle) {}
+
+    fn get_nth_param(&self, f: ValueHandle, _i: u32) -> ValueHandle {
+        f
+    }
+
+    fn add_closure_st_field(&self, _st: ValueHandle, _field: ValueHandle) {}
+
+    fn build_sub_program_by_pltp(
+        &self,
+        _paralist: &[Arc<RefCell<PLType>>],
+        _ret: Arc<RefCell<PLType>>,
+        _name: &str,
+        _start_line: u32,
+        _fnvalue: ValueHandle,
+        _child: &mut Ctx<'a>,
+    ) {
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn create_parameter_variable_dbg(
+        &self,
+        _pltp: &PLType,
+        _pos: crate::ast::range::Pos,
+        _i: usize,
+        _child: &mut Ctx<'a>,
+        _value_handle: ValueHandle,
+        _allocab: super::BlockHandle,
+        _name: &str,
+    ) {
+    }
 }

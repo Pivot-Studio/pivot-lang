@@ -33,6 +33,7 @@ use crate::utils::url_from_path;
 use crate::Db;
 
 use indexmap::IndexMap;
+use linked_hash_map::LinkedHashMap;
 use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
@@ -88,6 +89,15 @@ pub struct Ctx<'a> {
     pub macro_loop_len: usize,
     pub temp_source: Option<String>,
     pub in_macro: bool,
+    pub closure_data: Option<RefCell<ClosureCtxData>>,
+    pub expect_ty: Option<Arc<RefCell<PLType>>>,
+}
+
+#[derive(Clone, Default)]
+pub struct ClosureCtxData {
+    pub table: LinkedHashMap<String, (PLSymbol, ValueHandle)>,
+    pub data_handle: ValueHandle,
+    pub alloca_bb: Option<BlockHandle>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -135,6 +145,8 @@ impl<'a, 'ctx> Ctx<'a> {
             macro_loop_len: 0,
             temp_source: None,
             in_macro: false,
+            closure_data: None,
+            expect_ty: None,
         };
         add_primitive_types(&mut ctx);
         ctx
@@ -164,6 +176,8 @@ impl<'a, 'ctx> Ctx<'a> {
             macro_loop_len: self.macro_loop_len,
             temp_source: self.temp_source.clone(),
             in_macro: self.in_macro,
+            closure_data: None,
+            expect_ty: None,
         };
         add_primitive_types(&mut ctx);
         builder.new_subscope(start);
@@ -251,7 +265,7 @@ impl<'a, 'ctx> Ctx<'a> {
             let ori_value = builder.try_load2var(ori_range, ori_value, self)?;
             // TODO now, we only handle the case that the closure is a pure function.
             // TODO the real closure case is leave to the future.
-            builder.build_store(closure_f, ori_value);
+            builder.build_store(closure_f, builder.get_closure_trampoline(ori_value));
             return Ok(closure_v);
         }
         if let PLType::Union(u) = &*target_pltype.borrow() {
@@ -387,8 +401,55 @@ impl<'a, 'ctx> Ctx<'a> {
         if let Some(symbol) = v {
             return Some((symbol.clone(), false));
         }
+        if let Some(data) = &self.closure_data {
+            let mut data = data.borrow_mut();
+            if let Some((symbol, _)) = data.table.get(name) {
+                let new_symbol = symbol.clone();
+                return Some((new_symbol, false));
+            } else if let Some(father) = self.father {
+                let re = father.get_symbol(name, builder);
+                if let Some((symbol, is_glob)) = &re {
+                    if !*is_glob {
+                        let cur = builder.get_cur_basic_block();
+                        // just make sure we are in the alloca bb
+                        // so that the captured value is not used before it is initialized
+                        if let Some(bb) = data.alloca_bb {
+                            builder.position_at_end_block(bb);
+                        } else {
+                            builder.position_at_end_block(
+                                builder.get_first_basic_block(self.function.unwrap()),
+                            );
+                        }
+                        builder.rm_curr_debug_location();
+                        // captured by closure
+                        let new_symbol = symbol.clone();
+                        let len = data.table.len();
+                        builder.add_closure_st_field(data.data_handle, new_symbol.value);
+                        let new_symbol = PLSymbol {
+                            value: builder.build_load(
+                                builder
+                                    .build_struct_gep(
+                                        data.data_handle,
+                                        len as u32 + 1,
+                                        "closure_tmp",
+                                    )
+                                    .unwrap(),
+                                "closure_loaded",
+                            ),
+                            ..new_symbol
+                        };
+                        data.table
+                            .insert(name.to_string(), (new_symbol.clone(), symbol.value));
+                        builder.position_at_end_block(cur);
+                        return Some((new_symbol, false));
+                    }
+                }
+                return re;
+            }
+        }
         if let Some(father) = self.father {
-            return father.get_symbol(name, builder);
+            let re = father.get_symbol(name, builder);
+            return re;
         }
         if let Some(GlobalVar { tp: pltype, range }) = self.plmod.get_global_symbol(name) {
             return Some((
@@ -1095,6 +1156,13 @@ impl<'a, 'ctx> Ctx<'a> {
         EqRes {
             eq: true,
             need_up_cast: false,
+        }
+    }
+    pub fn try_set_closure_alloca_bb(&self, bb: BlockHandle) {
+        if let Some(c) = &self.closure_data {
+            c.borrow_mut().alloca_bb = Some(bb);
+        } else if let Some(father) = &self.father {
+            father.try_set_closure_alloca_bb(bb);
         }
     }
 }

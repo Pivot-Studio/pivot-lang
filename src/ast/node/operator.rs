@@ -142,7 +142,7 @@ impl Node for BinOpNode {
                         builder.build_conditional_branch(left, merge_bb, long_bb);
                     }
                     // long bb (emit right & goto merge)
-                    builder.position_at_end_block(long_bb);
+                    ctx.position_at_end(long_bb, builder);
                     let rv = ctx
                         .emit_with_expectation(&mut self.right, lpltype, lrange, builder)?
                         .get_value();
@@ -153,7 +153,7 @@ impl Node for BinOpNode {
                     let incoming_bb2 = builder.get_cur_basic_block(); // get incoming block 2
                     builder.build_unconditional_branch(merge_bb);
                     // merge bb
-                    builder.position_at_end_block(merge_bb);
+                    ctx.position_at_end(merge_bb, builder);
 
                     builder.build_phi(
                         &PLType::Primitive(PriType::BOOL),

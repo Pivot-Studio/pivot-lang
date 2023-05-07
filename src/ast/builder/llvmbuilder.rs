@@ -20,8 +20,8 @@ use inkwell::{
     module::{FlagBehavior, Linkage, Module},
     targets::{InitializationConfig, Target, TargetMachine},
     types::{
-        BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, PointerType, StructType,
-        VoidType,
+        AsTypeRef, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, PointerType,
+        StructType, VoidType,
     },
     values::{
         AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, CallableValue,
@@ -29,6 +29,7 @@ use inkwell::{
     },
     AddressSpace, FloatPredicate, IntPredicate, OptimizationLevel,
 };
+use llvm_sys::{core::LLVMStructSetBody, prelude::LLVMTypeRef};
 use rustc_hash::FxHashMap;
 
 use crate::ast::{diag::PLDiag, pass::run_immix_pass, pltype::ClosureType};
@@ -408,6 +409,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn gen_or_get_arr_visit_function(&self, ctx: &mut Ctx<'a>, v: &ARRType) -> FunctionValue<'ctx> {
+        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::default());
         let currentbb = self.builder.get_insert_block();
         self.builder.unset_current_debug_location();
         let ptrtp = self.arr_type(v, ctx).ptr_type(AddressSpace::default());
@@ -460,9 +462,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let visit_trait_f = get_nth_mark_fn(f, 4);
         match &*v.element_type.borrow() {
             PLType::Arr(_) | PLType::Struct(_) => {
+                let casted = self.builder.build_bitcast(elm, i8ptrtp, "casted_arg");
                 // call the visit_complex function
                 self.builder
-                    .build_call(visit_complex_f, &[visitor.into(), elm.into()], "call");
+                    .build_call(visit_complex_f, &[visitor.into(), casted.into()], "call");
             }
             PLType::Pointer(_) => {
                 // call the visit_ptr function
@@ -589,14 +592,20 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn get_closure_fn_type(&self, closure: &ClosureType, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
-        let params = closure
-            .arg_types
+        let ptr: BasicMetadataTypeEnum = self
+            .context
+            .i8_type()
+            .ptr_type(AddressSpace::default())
+            .as_basic_type_enum()
+            .into();
+        let params = vec![ptr]
             .iter()
-            .map(|pltype| {
+            .copied()
+            .chain(closure.arg_types.iter().map(|pltype| {
                 let tp = self.get_basic_type_op(&pltype.borrow(), ctx).unwrap();
                 let tp: BasicMetadataTypeEnum = tp.into();
                 tp
-            })
+            }))
             .collect::<Vec<_>>();
         let fn_type = self
             .get_ret_type(&closure.ret_type.borrow(), ctx)
@@ -1646,6 +1655,45 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.discope.set(subprogram.as_debug_info_scope());
         Ok(())
     }
+
+    fn build_sub_program_by_pltp(
+        &self,
+        paralist: &[Arc<RefCell<PLType>>],
+        ret: Arc<RefCell<PLType>>,
+        name: &str,
+        start_line: u32,
+        fnvalue: ValueHandle,
+        child: &mut Ctx<'a>,
+    ) {
+        let mut param_ditypes = vec![];
+        for pltype in paralist.iter() {
+            param_ditypes.push(self.get_ditype(&pltype.borrow(), child).unwrap());
+        }
+        // debug info
+        let subroutine_type = self.dibuilder.create_subroutine_type(
+            self.diunit.get_file(),
+            self.get_ditype(&ret.borrow(), child),
+            &param_ditypes,
+            DIFlags::PUBLIC,
+        );
+        let subprogram = self.dibuilder.create_function(
+            self.diunit.get_file().as_debug_info_scope(),
+            &format!("{}__fn", name),
+            None,
+            self.diunit.get_file(),
+            start_line,
+            subroutine_type,
+            false,
+            true,
+            start_line,
+            DIFlags::PUBLIC,
+            false,
+        );
+        let funcvalue = self.get_llvm_value(fnvalue).unwrap().into_function_value();
+        funcvalue.set_subprogram(subprogram);
+        // let discope = child.discope;
+        self.discope.set(subprogram.as_debug_info_scope());
+    }
     fn build_return(&self, v: Option<ValueHandle>) {
         if let Some(v) = v {
             let v = self.get_llvm_value(v).unwrap();
@@ -1654,6 +1702,46 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         } else {
             self.builder.build_return(None);
         }
+    }
+    #[allow(clippy::too_many_arguments)]
+    fn create_parameter_variable_dbg(
+        &self,
+        pltp: &PLType,
+        pos: Pos,
+        i: usize,
+        child: &mut Ctx<'a>,
+        value_handle: ValueHandle,
+        allocab: BlockHandle,
+        name: &str,
+    ) {
+        let divar = self.dibuilder.create_parameter_variable(
+            self.discope.get(),
+            name,
+            i as u32,
+            self.diunit.get_file(),
+            pos.line as u32,
+            self.get_ditype(pltp, child).unwrap(),
+            false,
+            DIFlags::PUBLIC,
+        );
+        self.build_dbg_location(pos);
+        let allocab = self.get_llvm_block(allocab).unwrap();
+        let v: BasicValueEnum = self
+            .get_llvm_value(value_handle)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let raw_tp = v.get_type();
+        // self.builder.position_at_end(allocab);
+        let alloca = self.builder.build_alloca(raw_tp, "para");
+        self.builder.build_store(alloca, v);
+        self.dibuilder.insert_declare_at_end(
+            alloca,
+            Some(divar),
+            None,
+            self.builder.get_current_debug_location().unwrap(),
+            allocab,
+        );
     }
     #[allow(clippy::too_many_arguments)]
     fn create_parameter_variable(
@@ -1789,14 +1877,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                     .build_call(visit_ptr_f, &[visitor.into(), casted.into()], "call");
             }
             // 数组类型，递归调用visit函数
-            else if let PLType::Arr(_) = field_pltp {
-                let ptr = f;
-                let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
-                self.builder
-                    .build_call(visit_complex_f, &[visitor.into(), casted.into()], "call");
-            }
             // 结构体类型，递归调用visit函数
-            else if let PLType::Struct(_) = field_pltp {
+            else if let PLType::Struct(_) | PLType::Arr(_) = field_pltp {
                 let ptr = f;
                 let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
                 self.builder
@@ -1870,6 +1952,138 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     fn is_ptr(&self, v: ValueHandle) -> bool {
         let val = self.get_llvm_value(v).unwrap();
         val.get_type().is_pointer_type()
+    }
+    fn i8ptr_null(&self) -> ValueHandle {
+        self.get_llvm_value_handle(
+            &self
+                .context
+                .i8_type()
+                .ptr_type(AddressSpace::default())
+                .const_null()
+                .into(),
+        )
+    }
+    fn create_closure_parameter_variable(&self, i: u32, f: ValueHandle, alloca: ValueHandle) {
+        let funcvalue = self.get_llvm_value(f).unwrap().into_function_value();
+        self.build_store(
+            alloca,
+            self.get_llvm_value_handle(&funcvalue.get_nth_param(i).unwrap().as_any_value_enum()),
+        );
+    }
+    fn create_closure_fn(
+        &self,
+        ctx: &mut Ctx<'a>,
+        closure_name: &str,
+        params: &[Arc<RefCell<PLType>>],
+        ret: &PLType,
+    ) -> ValueHandle {
+        let i8ptr = self.context.i8_type().ptr_type(AddressSpace::default());
+        let mut closure_param_tps: Vec<BasicMetadataTypeEnum> =
+            vec![i8ptr.as_basic_type_enum().into()];
+        closure_param_tps.extend(
+            &params
+                .iter()
+                .map(|p| self.get_basic_type_op(&p.borrow(), ctx).unwrap().into())
+                .collect::<Vec<_>>(),
+        );
+        let f_tp = self
+            .get_basic_type_op(ret, ctx)
+            .map(|ret| ret.fn_type(&closure_param_tps, false))
+            .unwrap_or_else(|| self.context.void_type().fn_type(&closure_param_tps, false));
+        let f_v = self
+            .module
+            .add_function(&format!("{}__fn", closure_name), f_tp, None);
+
+        self.get_llvm_value_handle(&f_v.into())
+    }
+    /// # get_closure_trampoline
+    ///
+    /// 为指定函数创建一个用于构建闭包的跳板函数
+    ///
+    /// 闭包函数相比原函数多出一个参数（第一个），用于存放闭包的环境。在函数为纯函数的情况，
+    /// 该值不会被使用，因此可以直接传入null。
+    fn get_closure_trampoline(&self, f: ValueHandle) -> ValueHandle {
+        let ori_f = self.get_llvm_value(f).unwrap().into_function_value();
+        let name = ori_f.get_name();
+        let trampoline_name = format!("{}__trampoline", name.to_str().unwrap());
+        let closure_f = self.module.get_function(&trampoline_name);
+        if let Some(closure_f) = closure_f {
+            return self.get_llvm_value_handle(&closure_f.into());
+        }
+        let f_tp = ori_f.get_type();
+        let i8ptr = self.context.i8_type().ptr_type(AddressSpace::default());
+        let param_tps = f_tp.get_param_types();
+        let mut closure_param_tps = vec![i8ptr.as_basic_type_enum()];
+        closure_param_tps.extend(param_tps);
+        let closure_param_tps = closure_param_tps
+            .iter()
+            .map(|v| v.to_owned().into())
+            .collect::<Vec<_>>();
+        let closure_ftp = if let Some(ret_tp) = f_tp.get_return_type() {
+            ret_tp.fn_type(&closure_param_tps, false)
+        } else {
+            self.context.void_type().fn_type(&closure_param_tps, false)
+        };
+        let f = self
+            .module
+            .add_function(&trampoline_name, closure_ftp, None);
+        let bb = self.context.append_basic_block(f, "entry");
+        let old_bb = self.builder.get_insert_block();
+        self.builder.position_at_end(bb);
+        let args = f.get_params();
+        let re = self.builder.build_call(
+            ori_f,
+            &args
+                .iter()
+                .skip(1)
+                .map(|a| a.to_owned().into())
+                .collect::<Vec<_>>(),
+            "re",
+        );
+        if let Some(ret) = re.try_as_basic_value().left() {
+            self.builder.build_return(Some(&ret));
+        } else {
+            self.builder.build_return(None);
+        }
+        if let Some(old_bb) = old_bb {
+            self.builder.position_at_end(old_bb);
+        }
+        self.get_llvm_value_handle(&f.into())
+    }
+
+    fn get_nth_param(&self, f: ValueHandle, i: u32) -> ValueHandle {
+        let funcvalue = self.get_llvm_value(f).unwrap().into_function_value();
+        self.get_llvm_value_handle(&funcvalue.get_nth_param(i).unwrap().into())
+    }
+    fn add_closure_st_field(&self, st: ValueHandle, field: ValueHandle) {
+        let st_v = self.get_llvm_value(st).unwrap();
+        let st_tp = st_v
+            .get_type()
+            .into_pointer_type()
+            .get_element_type()
+            .into_struct_type();
+        let mut closure_data_tps = st_tp.get_field_types();
+        closure_data_tps.push(
+            self.get_llvm_value(field)
+                .unwrap()
+                .get_type()
+                .try_into()
+                .unwrap(),
+        );
+        set_body(&st_tp, &closure_data_tps, false);
+    }
+}
+
+fn set_body<'ctx>(s: &StructType<'ctx>, field_types: &[BasicTypeEnum<'ctx>], packed: bool) {
+    let mut field_types: Vec<LLVMTypeRef> =
+        field_types.iter().map(|val| val.as_type_ref()).collect();
+    unsafe {
+        LLVMStructSetBody(
+            s.as_type_ref(),
+            field_types.as_mut_ptr(),
+            field_types.len() as u32,
+            packed as i32,
+        );
     }
 }
 

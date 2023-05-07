@@ -1,8 +1,14 @@
 name: Publish Package to npmjs
 on:
   push:
-    tags:
-      - 'wasm*'
+    branches:
+      - master
+      - release/*
+    paths:
+    - '**.rs'
+    - '**/Cargo.*'
+    - '.github/workflows/npmpkg.yml'
+    - 'codecov.yml'
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,6 +29,9 @@ jobs:
         with:
           node-version: '16.x'
           registry-url: 'https://registry.npmjs.org'
-      - run: cd pkg && npm publish --access public
+      - run: |
+          cd pkg
+          npm version from-git || true
+          npm publish --access public || true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

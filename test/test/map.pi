@@ -1,0 +1,41 @@
+use core::panic;
+pub fn test_map() void {
+    // count = 5
+    // 1, 0, 1, 1, 1
+    // 1, 1, 0, 1, 1
+    // 1, 0, 0, 1, 1
+    // 0, 1, 1, 0, 0
+    // 1, 0, 0, 1, 1
+    let mp = [[1, 0, 1, 1, 1], [1, 1, 0, 1, 1], [1, 0, 0, 1, 1], [0, 1, 1, 0, 0], [1, 0, 0, 1, 1]];
+    panic::assert(count(mp) == 5);
+    return;
+}
+
+pub fn count(mp: [[i64 * 5] * 5]) i64 {
+    let res = 0;
+    let w = 5;
+    let h = 5;
+    let dfs: (i64, i64) => void;
+    dfs = (i, j) => {
+        if i == -1 || i == h || j == -1 || j == w || mp[i][j] == 0 {
+            return;
+        }
+        mp[i][j] = 0;
+        dfs(i + 1, j);
+        dfs(i, j + 1);
+        dfs(i - 1, j);
+        dfs(i, j - 1);
+        return;
+    };
+    for let i = 0; i < h; i = i + 1 {
+        for let j = 0; j < w; j = j + 1 {
+            if mp[i][j] == 0 {
+                continue;
+            }
+            res = res + 1;
+            dfs(i, j);
+        }
+    }
+    return res;
+}
+
