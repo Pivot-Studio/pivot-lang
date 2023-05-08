@@ -263,8 +263,6 @@ impl<'a, 'ctx> Ctx<'a> {
             let closure_v = builder.alloc("tmp", &target_pltype.borrow(), self, None);
             let closure_f = builder.build_struct_gep(closure_v, 0, "closure_f").unwrap();
             let ori_value = builder.try_load2var(ori_range, ori_value, self)?;
-            // TODO now, we only handle the case that the closure is a pure function.
-            // TODO the real closure case is leave to the future.
             builder.build_store(closure_f, builder.get_closure_trampoline(ori_value));
             return Ok(closure_v);
         }
@@ -741,7 +739,7 @@ impl<'a, 'ctx> Ctx<'a> {
 
     pub fn get_completions(&self) -> Vec<CompletionItem> {
         let mut m = FxHashMap::default();
-        self.get_pltp_completions(&mut m);
+        self.get_pltp_completions(&mut m, |_| true);
         self.plmod.get_ns_completions_pri(&mut m);
         self.get_var_completions(&mut m);
         self.get_keyword_completions(&mut m);
@@ -826,33 +824,9 @@ impl<'a, 'ctx> Ctx<'a> {
 
     pub fn get_type_completions(&self) -> Vec<CompletionItem> {
         let mut m = FxHashMap::default();
-        self.get_tp_completions(&mut m);
+        self.get_pltp_completions(&mut m, |tp| !matches!(tp, PLType::Fn(_)));
         self.plmod.get_ns_completions_pri(&mut m);
         m.values().cloned().collect()
-    }
-
-    fn get_tp_completions(&self, m: &mut FxHashMap<String, CompletionItem>) {
-        for (k, f) in self.plmod.types.iter() {
-            let tp = match &*f.borrow() {
-                PLType::PlaceHolder(_) => CompletionItemKind::STRUCT,
-                PLType::Generic(_) => CompletionItemKind::TYPE_PARAMETER,
-                PLType::Struct(_) => CompletionItemKind::STRUCT,
-                PLType::Trait(_) => CompletionItemKind::INTERFACE,
-                PLType::Primitive(_) | PLType::Void => CompletionItemKind::KEYWORD,
-                _ => continue,
-            };
-            m.insert(
-                k.to_string(),
-                CompletionItem {
-                    label: k.to_string(),
-                    kind: Some(tp),
-                    ..Default::default()
-                },
-            );
-        }
-        if let Some(father) = self.father {
-            father.get_tp_completions(m);
-        }
     }
 
     fn get_var_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
@@ -878,10 +852,17 @@ impl<'a, 'ctx> Ctx<'a> {
         }
     }
 
-    fn get_pltp_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
+    fn get_pltp_completions(
+        &self,
+        vmap: &mut FxHashMap<String, CompletionItem>,
+        filter: impl Fn(&PLType) -> bool,
+    ) {
         for (k, f) in self.plmod.types.iter().chain(self.generic_types.iter()) {
             let mut insert_text = None;
             let mut command = None;
+            if !filter(&f.borrow()) {
+                continue;
+            }
             let tp = match &*f.clone().borrow() {
                 PLType::Fn(f) => {
                     insert_text = Some(f.gen_snippet());
@@ -920,7 +901,7 @@ impl<'a, 'ctx> Ctx<'a> {
             );
         }
         if let Some(father) = self.father {
-            father.get_pltp_completions(vmap);
+            father.get_pltp_completions(vmap, filter);
         }
     }
 
