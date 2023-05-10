@@ -276,7 +276,7 @@ impl Collector {
                 // 虽然这造成了一定程度的内存碎片化和潜在的重复操作，但是
                 // 这种情况理论上是很少见的，所以这么做问题不大
                 if (*atomic_ptr)
-                    .compare_exchange_weak(old_loaded, new_ptr, Ordering::SeqCst, Ordering::SeqCst)
+                    .compare_exchange(old_loaded, new_ptr, Ordering::SeqCst, Ordering::SeqCst)
                     .is_ok()
                 {
                     // 成功驱逐

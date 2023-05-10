@@ -155,8 +155,8 @@ impl UnionType {
         res.sum_types = self
             .sum_types
             .iter()
-            .map(|t| t.get_type(ctx, builder).unwrap().borrow().get_typenode())
-            .collect();
+            .map(|t| Ok(t.get_type(ctx, builder)?.borrow().get_typenode()))
+            .collect::<Result<Vec<_>, PLDiag>>()?;
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
         pltype.replace(PLType::Union(res.clone()));
