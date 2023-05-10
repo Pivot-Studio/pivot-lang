@@ -66,16 +66,6 @@ fn get_dw_ate_encoding(pritp: &PriType) -> u32 {
     }
 }
 
-pub struct MemberType<'ctx> {
-    pub ditype: DIDerivedType<'ctx>,
-    pub offset: u64,
-    pub scope: DIScope<'ctx>,
-    pub line: u32,
-    pub name: String,
-    pub di_file: DIFile<'ctx>,
-    pub ptr_depth: usize,
-}
-
 fn get_nth_mark_fn(f: FunctionValue, n: u32) -> CallableValue {
     f.get_nth_param(n)
         .unwrap()
@@ -145,7 +135,7 @@ pub struct LLVMBuilder<'a, 'ctx> {
     diunit: &'a DICompileUnit<'ctx>,       // debug info unit
     targetmachine: &'a TargetMachine,      // might be used in debug info
     discope: Cell<DIScope<'ctx>>,          // debug info scope
-    ditypes_placeholder: Arc<RefCell<FxHashMap<String, RefCell<Vec<MemberType<'ctx>>>>>>, // hold the generated debug info type place holder
+    ditypes_placeholder: Arc<RefCell<FxHashMap<String, RefCell<Vec<DIDerivedType<'ctx>>>>>>, // hold the generated debug info type place holder
     ditypes: Arc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
     heap_stack_map: Arc<RefCell<FxHashMap<ValueHandle, ValueHandle>>>,
 }
@@ -728,35 +718,18 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             Ok(field_pltype) => field_pltype,
             Err(_) => ctx.get_type("i64", Default::default()).unwrap(),
         };
-        let depth = RefCell::borrow(&field_pltype).get_ptr_depth();
-        if let Some(x) = self
-            .ditypes_placeholder
-            .borrow_mut()
-            .get(&*RefCell::borrow(&field_pltype).get_full_elm_name())
-        {
-            if !matches!(*RefCell::borrow(&field_pltype), PLType::Pointer(_)) {
-                // 出现循环引用，但是不是指针
-                // TODO 应该只需要一层是指针就行，目前的检查要求每一层都是指针
-                ctx.add_diag(field.range.new_err(ErrorCode::ILLEGAL_SELF_RECURSION));
-            }
-            let placeholder =
-                unsafe { self.dibuilder.create_placeholder_derived_type(self.context) };
-            let td = self.targetmachine.get_target_data();
-            let etp = self.context.i8_type().ptr_type(AddressSpace::default());
-            let size = td.get_bit_size(&etp);
-            x.borrow_mut().push(MemberType {
-                ditype: placeholder,
-                offset,
-                scope: self.diunit.get_file().as_debug_info_scope(),
-                line: field.range.start.line as u32,
-                name: field.name.clone(),
-                di_file: self.diunit.get_file(),
-                ptr_depth: depth,
-            });
-            return (placeholder.as_type(), offset + size);
-        }
         let di_type = self.get_ditype(&field_pltype.borrow(), ctx);
         let debug_type = di_type.unwrap();
+        let td = self.targetmachine.get_target_data();
+        let (size, align) = if matches!(*RefCell::borrow(&field_pltype), PLType::Pointer(_)) {
+            let ptr = self.context.i8_type().ptr_type(AddressSpace::default());
+            (td.get_bit_size(&ptr), td.get_abi_alignment(&ptr))
+        } else {
+            (
+                debug_type.get_size_in_bits(),
+                debug_type.get_align_in_bits(),
+            )
+        };
         (
             self.dibuilder
                 .create_member_type(
@@ -764,14 +737,14 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     &field.name,
                     self.diunit.get_file(),
                     field.range.start.line as u32,
-                    debug_type.get_size_in_bits(),
-                    debug_type.get_align_in_bits(),
+                    size,
+                    align,
                     offset + debug_type.get_offset_in_bits(),
                     DIFlags::PUBLIC,
                     debug_type,
                 )
                 .as_type(),
-            offset + debug_type.get_size_in_bits(),
+            offset + size,
         )
     }
 
@@ -897,39 +870,14 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .unwrap();
                 // 替换循环引用生成的占位符
                 for m in members.borrow().iter() {
-                    let mut elemdi = st;
-                    for _ in 0..m.ptr_depth {
-                        elemdi = self
-                            .dibuilder
-                            .create_pointer_type(
-                                "",
-                                elemdi,
-                                td.get_bit_size(
-                                    &sttp.ptr_type(AddressSpace::default()).as_basic_type_enum(),
-                                ),
-                                td.get_preferred_alignment(
-                                    &sttp.ptr_type(AddressSpace::default()).as_basic_type_enum(),
-                                ),
-                                AddressSpace::default(),
-                            )
-                            .as_type();
-                    }
-
-                    let realtp = self.dibuilder.create_member_type(
-                        m.scope,
-                        &m.name,
-                        m.di_file,
-                        m.line,
-                        elemdi.get_size_in_bits(),
-                        elemdi.get_align_in_bits(),
-                        m.offset,
-                        DIFlags::PUBLIC,
-                        elemdi,
+                    let realtp = self.dibuilder.create_pointer_type(
+                        "",
+                        st,
+                        st.get_size_in_bits(),
+                        st.get_align_in_bits(),
+                        AddressSpace::default(),
                     );
-                    unsafe {
-                        self.dibuilder
-                            .replace_placeholder_derived_type(m.ditype, realtp);
-                    }
+                    unsafe { self.dibuilder.replace_placeholder_derived_type(*m, realtp) };
                 }
                 self.ditypes.borrow_mut().insert(x.get_st_full_name(), st);
                 Some(st)
@@ -948,6 +896,20 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             }
             PLType::Void => None,
             PLType::Pointer(p) => {
+                if let Some(di) = self.ditypes.borrow().get(&p.borrow().get_llvm_name()) {
+                    return Some(*di);
+                }
+                if let Some(x) = self
+                    .ditypes_placeholder
+                    .borrow_mut()
+                    .get(&p.borrow().get_full_elm_name())
+                {
+                    // 循环引用
+                    let placeholder =
+                        unsafe { self.dibuilder.create_placeholder_derived_type(self.context) };
+                    x.borrow_mut().push(placeholder);
+                    return Some(placeholder.as_type());
+                }
                 let elemdi = self.get_ditype(&p.borrow(), ctx)?;
                 let etp = &self
                     .get_basic_type_op(&p.borrow(), ctx)
@@ -956,15 +918,97 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .as_basic_type_enum();
                 let size = td.get_bit_size(etp);
                 let align = td.get_preferred_alignment(etp);
-                Some(
-                    self.dibuilder
-                        .create_pointer_type("", elemdi, size, align, AddressSpace::default())
-                        .as_type(),
-                )
+                let di = self
+                    .dibuilder
+                    .create_pointer_type("", elemdi, size, align, AddressSpace::default())
+                    .as_type();
+                self.ditypes
+                    .borrow_mut()
+                    .insert(p.borrow().get_llvm_name(), di);
+                Some(di)
             }
             PLType::Union(u) => {
                 let utp = self.get_basic_type_op(pltp, ctx).unwrap();
+                // 若已经生成过，直接查表返回
+                if RefCell::borrow(&self.ditypes).contains_key(&u.get_full_name()) {
+                    return Some(
+                        *RefCell::borrow(&self.ditypes)
+                            .get(&u.get_full_name())
+                            .unwrap(),
+                    );
+                }
+                // 生成占位符，为循环引用做准备
+                self.ditypes_placeholder
+                    .borrow_mut()
+                    .insert(u.get_full_name(), RefCell::new(vec![]));
+                let ditps = u
+                    .sum_types
+                    .iter()
+                    .map(|v| {
+                        let tp = PLType::Pointer(v.get_type(ctx, &self.clone().into()).unwrap());
+                        let base_di = self.get_ditype(&tp, ctx).unwrap();
+                        self.dibuilder
+                            .create_member_type(
+                                self.diunit.get_file().as_debug_info_scope(),
+                                &tp.get_name(),
+                                self.diunit.get_file(),
+                                u.range.start.line as u32 + 1,
+                                td.get_bit_size(&self.context.i64_type()),
+                                td.get_abi_alignment(&self.context.i64_type()),
+                                0,
+                                DIFlags::PUBLIC,
+                                base_di,
+                            )
+                            .as_type()
+                    })
+                    .collect::<Vec<_>>();
+                let ptr = self.context.i8_type().ptr_type(AddressSpace::default());
                 let tp = self.dibuilder.create_union_type(
+                    self.diunit.get_file().as_debug_info_scope(),
+                    "data",
+                    self.diunit.get_file(),
+                    u.range.start.line as u32 + 1,
+                    td.get_bit_size(&ptr),
+                    td.get_abi_alignment(&ptr),
+                    DIFlags::PUBLIC,
+                    &ditps,
+                    0,
+                    &(u.name.clone() + "_data"),
+                );
+
+                let tag_di = self
+                    .dibuilder
+                    .create_basic_type(
+                        &(u.name.clone() + "_tag"),
+                        td.get_bit_size(&self.context.i64_type()),
+                        get_dw_ate_encoding(&PriType::I64),
+                        0,
+                    )
+                    .unwrap()
+                    .as_type();
+                let tag = self.dibuilder.create_member_type(
+                    self.diunit.get_file().as_debug_info_scope(),
+                    "tag",
+                    self.diunit.get_file(),
+                    u.range.start.line as u32 + 1,
+                    td.get_bit_size(&self.context.i64_type()),
+                    td.get_abi_alignment(&self.context.i64_type()),
+                    0,
+                    DIFlags::PUBLIC,
+                    tag_di,
+                );
+                let data = self.dibuilder.create_member_type(
+                    self.diunit.get_file().as_debug_info_scope(),
+                    "data",
+                    self.diunit.get_file(),
+                    u.range.start.line as u32 + 1,
+                    td.get_bit_size(&ptr),
+                    td.get_abi_alignment(&ptr),
+                    td.get_bit_size(&ptr),
+                    DIFlags::PUBLIC,
+                    tp.as_type(),
+                );
+                let st = self.dibuilder.create_struct_type(
                     self.diunit.get_file().as_debug_info_scope(),
                     &u.name,
                     self.diunit.get_file(),
@@ -972,11 +1016,37 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     td.get_bit_size(&utp),
                     td.get_abi_alignment(&utp),
                     DIFlags::PUBLIC,
-                    &[], // TODO real elements
+                    None,
+                    &[tag.as_type(), data.as_type()],
                     0,
-                    &u.name,
+                    None,
+                    "",
                 );
-                Some(tp.as_type())
+                // 填充占位符
+                for placeholder in RefCell::borrow_mut(&self.ditypes_placeholder)
+                    .remove(&u.get_full_name())
+                    .unwrap()
+                    .borrow()
+                    .iter()
+                {
+                    let size = td.get_bit_size(&utp);
+                    let align = td.get_preferred_alignment(&utp);
+                    let realtp = self.dibuilder.create_pointer_type(
+                        "",
+                        st.as_type(),
+                        size,
+                        align,
+                        AddressSpace::default(),
+                    );
+                    unsafe {
+                        self.dibuilder
+                            .replace_placeholder_derived_type(*placeholder, realtp)
+                    };
+                }
+                self.ditypes
+                    .borrow_mut()
+                    .insert(u.get_full_name(), st.as_type());
+                Some(st.as_type())
             }
             PLType::Closure(_) => self.get_ditype(&PLType::Primitive(PriType::I64), ctx), // TODO
         }
