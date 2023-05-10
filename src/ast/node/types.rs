@@ -945,10 +945,38 @@ impl TypeNode for ClosureTypeNode {
         pltype: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<EqRes, PLDiag> {
-        let left = self.get_type(ctx, builder)?;
-        let eq = *left.borrow() == *pltype.borrow();
-        Ok(crate::ast::ctx::EqRes {
-            eq,
+        if let PLType::Closure(closure) = &*pltype.borrow() {
+            if self.arg_types.len() != closure.arg_types.len() {
+                return Ok(EqRes {
+                    eq: false,
+                    need_up_cast: false,
+                });
+            }
+            for (i, arg) in closure.arg_types.iter().enumerate() {
+                if !self.arg_types[i].eq_or_infer(ctx, arg.clone(), builder)?.eq {
+                    return Ok(EqRes {
+                        eq: false,
+                        need_up_cast: false,
+                    });
+                }
+            }
+            if !self
+                .ret_type
+                .eq_or_infer(ctx, closure.ret_type.clone(), builder)?
+                .eq
+            {
+                return Ok(EqRes {
+                    eq: false,
+                    need_up_cast: false,
+                });
+            }
+            return Ok(EqRes {
+                eq: true,
+                need_up_cast: false,
+            });
+        }
+        Ok(EqRes {
+            eq: false,
             need_up_cast: false,
         })
     }

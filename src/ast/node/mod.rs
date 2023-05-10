@@ -41,6 +41,7 @@ use super::ctx::EqRes;
 use super::diag::ErrorCode;
 use super::diag::PLDiag;
 use super::fmt::FmtBuilder;
+use super::pltype::get_type_deep;
 use super::pltype::{PLType, PriType};
 use super::range::{Pos, Range};
 
@@ -305,6 +306,7 @@ impl<'a, 'ctx> Ctx<'a> {
         if let Some(nv) = re.get_value() {
             let value = nv.get_value();
             let ty = nv.get_ty();
+            let ty = get_type_deep(ty);
             if ty != expect {
                 let handle =
                     self.up_cast(expect.clone(), ty, expectrange, range, value, builder)?;
