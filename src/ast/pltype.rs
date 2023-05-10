@@ -90,7 +90,7 @@ impl ClosureType {
     }
     pub fn get_name(&self) -> String {
         format!(
-            "({}) => {}",
+            "|{}| => {}",
             self.arg_types
                 .iter()
                 .map(|t| t.borrow().get_name())

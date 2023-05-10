@@ -13,6 +13,7 @@ use crate::{
     },
 };
 use internal_macro::{test_parser, test_parser_error};
+use nom::multi::separated_list0;
 use nom::sequence::{preceded, terminated};
 use nom::{
     branch::alt,
@@ -244,10 +245,7 @@ fn tuple_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
         tuple((
             tag_token_symbol(TokenType::LPAREN),
             opt(terminated(
-                separated_list1(
-                    tag_token_symbol_ex(TokenType::COMMA),
-                    alt((type_name, tuple_type)),
-                ),
+                separated_list1(tag_token_symbol_ex(TokenType::COMMA), type_name),
                 opt(tag_token_symbol_ex(TokenType::COMMA)),
             )),
             tag_token_symbol(TokenType::RPAREN),
@@ -261,23 +259,24 @@ fn tuple_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
     )(input)
 }
 
-#[test_parser("(i32,i64,(i32,i64)) => i32")]
+#[test_parser("|i32,i64,(i32,i64)| => i32")]
 fn closure_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
     map_res(
-        tuple((tuple_type, tag_token_symbol_ex(TokenType::ARROW), type_name)),
-        |(params, _, ret)| {
-            let range = params.range().start.to(ret.range().end);
-            match params.as_ref() {
-                TypeNodeEnum::Tuple(t) => {
-                    let node = Box::new(TypeNodeEnum::Closure(ClosureTypeNode {
-                        arg_types: t.tps.to_owned(),
-                        ret_type: ret,
-                        range,
-                    }));
-                    res_box(node)
-                }
-                _ => unreachable!(),
-            }
+        tuple((
+            tag_token_symbol_ex(TokenType::GENERIC_SEP),
+            separated_list0(tag_token_symbol_ex(TokenType::COMMA), type_name),
+            tag_token_symbol_ex(TokenType::GENERIC_SEP),
+            tag_token_symbol_ex(TokenType::ARROW),
+            type_name,
+        )),
+        |((_, lrange), arg_types, _, _, ret)| {
+            let range = lrange.start.to(ret.range().end);
+            let node = Box::new(TypeNodeEnum::Closure(ClosureTypeNode {
+                arg_types,
+                ret_type: ret,
+                range,
+            }));
+            res_box(node)
         },
     )(input)
 }

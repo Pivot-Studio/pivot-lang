@@ -770,7 +770,7 @@ impl FmtBuilder {
         self.r_paren();
     }
     pub fn parse_closure_type_node(&mut self, node: &ClosureTypeNode) {
-        self.l_paren();
+        self.token("|");
         for (i, ty) in node.arg_types.iter().enumerate() {
             if i > 0 {
                 self.comma();
@@ -778,14 +778,14 @@ impl FmtBuilder {
             }
             ty.format(self);
         }
-        self.r_paren();
+        self.token("|");
         self.space();
         self.token("=>");
         self.space();
         node.ret_type.format(self);
     }
     pub fn parse_closure_node(&mut self, node: &ClosureNode) {
-        self.l_paren();
+        self.token("|");
         for (i, (v, ty)) in node.paralist.iter().enumerate() {
             if i > 0 {
                 self.comma();
@@ -798,15 +798,14 @@ impl FmtBuilder {
                 ty.format(self);
             }
         }
-        self.r_paren();
-        if let Some(ret) = &node.ret {
-            self.token(":");
-            self.space();
-            ret.format(self);
-        }
+        self.token("|");
         self.space();
         self.token("=>");
         self.space();
+        if let Some(ret) = &node.ret {
+            ret.format(self);
+            self.space();
+        }
         self.l_brace();
         self.add_tab();
         node.body.format(self);

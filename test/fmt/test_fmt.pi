@@ -191,7 +191,7 @@ fn test_tuple() void {
     return;
 }
 
-fn fn_as_param(f: (i64, i64) => i64) (i64, i64) => i64 {
+fn fn_as_param(f: |i64, i64| => i64) |i64, i64| => i64 {
     panic::assert(f(1, 2) == 3);
     return f;
 }
@@ -200,34 +200,34 @@ fn add(i: i64, j: i64) i64 {
     return i + j;
 }
 
-pub fn test_fntype() () => f {
+pub fn test_fntype() || => f {
     let f = add;
-    let fc: (i64, i64) => i64 = f;
+    let fc: |i64, i64| => i64 = f;
     let re = fn_as_param(fc)(2, 2);
     panic::assert(re == 4);
-    let ff: () => f = test_ret_f;
+    let ff: || => f = test_ret_f;
     let f1 = test_ret_f().f(100, 2);
     panic::assert(f1 == 102);
     return ff;
 }
 
 fn test_ret_f() f {
-    let d: (i64, i64) => i64 = add;
+    let d: |i64, i64| => i64 = add;
     return f{
         f: d
     };
 }
 
 pub struct f {
-    f: (i64, i64) => i64;
+    f: |i64, i64| => i64;
 }
 
 pub fn test_closure() i64 {
     let b = 1;
     let bb = 100;
-    test_type_infer((a) => {
+    test_type_infer(|a| => {
         let c = b;
-        let aa = (a: i64): i64 => {
+        let aa = |a: i64| => i64 {
             let c = bb;
             return c;
         };
@@ -241,16 +241,16 @@ pub fn test_closure() i64 {
     return 0;
 }
 
-fn test_type_infer(f: (i64) => i64) void {
+fn test_type_infer(f: |i64| => i64) void {
     return;
 }
 
-fn test_ret_closure() (i64) => i64 {
+fn test_ret_closure() |i64| => i64 {
     let b = 1;
     let bb = 100;
-    let a = (a: i64): i64 => {
+    let a = |a: i64| => i64 {
         let c = b;
-        let aa = (a: i64): i64 => {
+        let aa = |a: i64| => i64 {
             let c = bb;
             return c;
         };

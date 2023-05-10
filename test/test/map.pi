@@ -15,8 +15,8 @@ pub fn count(mp: [[i64 * 5] * 5]) i64 {
     let res = 0;
     let w = 5;
     let h = 5;
-    let dfs: (i64, i64) => void;
-    dfs = (i, j) => {
+    let dfs: |i64, i64| => void;
+    dfs = |i, j| => {
         if i == -1 || i == h || j == -1 || j == w || mp[i][j] == 0 {
             return;
         }

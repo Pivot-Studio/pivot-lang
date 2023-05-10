@@ -688,7 +688,6 @@ pub struct ClosureNode {
     pub paralist: Vec<(Box<VarNode>, Option<Box<TypeNodeEnum>>)>,
     pub body: StatementsNode,
     pub ret: Option<Box<TypeNodeEnum>>,
-    pub paralist_range: Range,
 }
 
 static CLOSURE_COUNT: AtomicI32 = AtomicI32::new(0);
@@ -759,10 +758,7 @@ impl Node for ClosureNode {
             ret.get_type(ctx, builder)?
         } else if let Some(exp_ty) = &ctx.expect_ty {
             match &*exp_ty.borrow() {
-                PLType::Closure(c) => {
-                    ctx.push_type_hints(self.paralist_range, c.ret_type.clone());
-                    c.ret_type.clone()
-                }
+                PLType::Closure(c) => c.ret_type.clone(),
                 _ => {
                     return Err(self
                         .range

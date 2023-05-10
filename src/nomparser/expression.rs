@@ -282,14 +282,14 @@ fn parantheses_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     )(input)
 }
 
-#[test_parser("(a:i64):void=>{return a;}")]
-#[test_parser("(a):void=>{return a;}")]
-#[test_parser("(a)=>{return a;}")]
+#[test_parser("|a:i64| =>void{return a;}")]
+#[test_parser("|a| =>void{return a;}")]
+#[test_parser("|a| =>{return a;}")]
 fn closure(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
             tuple((
-                tag_token_symbol_ex(TokenType::LPAREN),
+                tag_token_symbol_ex(TokenType::GENERIC_SEP),
                 separated_list0(
                     tag_token_symbol_ex(TokenType::COMMA),
                     pair(
@@ -297,22 +297,20 @@ fn closure(input: Span) -> IResult<Span, Box<NodeEnum>> {
                         opt(preceded(tag_token_symbol_ex(TokenType::COLON), type_name)),
                     ),
                 ),
-                tag_token_symbol_ex(TokenType::RPAREN),
+                tag_token_symbol_ex(TokenType::GENERIC_SEP),
             )),
-            opt(preceded(tag_token_symbol_ex(TokenType::COLON), type_name)),
             tag_token_symbol_ex(TokenType::ARROW),
+            opt(type_name),
             statement_block,
         )),
-        |(((_, sr), args, (_, er)), ret, _, body)| {
+        |(((_, sr), args, _), _, ret, body)| {
             let range = sr.start.to(body.range().end);
-            let paralist_range = sr.start.to(er.end);
             res_enum(
                 ClosureNode {
                     range,
                     paralist: args,
                     body,
                     ret,
-                    paralist_range,
                 }
                 .into(),
             )
