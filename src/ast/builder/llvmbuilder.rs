@@ -472,12 +472,16 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 self.builder
                     .build_call(visit_ptr_f, &[visitor.into(), elm.into()], "call");
             }
-            PLType::Trait(_) => {
+            PLType::Trait(_) | PLType::Union(_) | PLType::Closure(_) => {
                 // call the visit_trait function
                 self.builder
                     .build_call(visit_trait_f, &[visitor.into(), elm.into()], "call");
             }
-            _ => {}
+            PLType::Fn(_)
+            | PLType::Primitive(_)
+            | PLType::Void
+            | PLType::Generic(_)
+            | PLType::PlaceHolder(_) => (),
         }
         let i = self.builder.build_load(loop_var, "i").into_int_value();
         let i = self
@@ -1140,10 +1144,19 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     }
 
     fn build_load(&self, ptr: ValueHandle, name: &str) -> ValueHandle {
-        let ptr = self.get_llvm_value(ptr).unwrap();
-        let ptr = ptr.into_pointer_value();
-        let ptr = self.builder.build_load(ptr, name);
-        self.get_llvm_value_handle(&ptr.as_any_value_enum())
+        if let Some(root) = self.heap_stack_map.borrow().get(&ptr) {
+            let root = *root;
+            let ptr = self.get_llvm_value(root).unwrap();
+            let ptr = ptr.into_pointer_value();
+            let ptr = self.builder.build_load(ptr, name);
+            let ptr = self.builder.build_load(ptr.into_pointer_value(), name);
+            self.get_llvm_value_handle(&ptr.as_any_value_enum())
+        } else {
+            let ptr = self.get_llvm_value(ptr).unwrap();
+            let ptr = ptr.into_pointer_value();
+            let ptr = self.builder.build_load(ptr, name);
+            self.get_llvm_value_handle(&ptr.as_any_value_enum())
+        }
     }
     fn try_load2var(
         &self,
@@ -1290,9 +1303,17 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         }
     }
     fn build_store(&self, ptr: ValueHandle, value: ValueHandle) {
+        let ptr = if let Some(root) = self.heap_stack_map.borrow().get(&ptr) {
+            let root = *root;
+            let ptr = self.get_llvm_value(root).unwrap();
+            let ptr = ptr.into_pointer_value();
+            let ptr = self.builder.build_load(ptr, "store_load_tmp");
+            ptr.into_pointer_value()
+        } else {
+            let ptr = self.get_llvm_value(ptr).unwrap();
+            ptr.into_pointer_value()
+        };
         let value = self.get_llvm_value(value).unwrap();
-        let ptr = self.get_llvm_value(ptr).unwrap();
-        let ptr = ptr.into_pointer_value();
         let value = if value.is_function_value() {
             value
                 .into_function_value()
@@ -1870,26 +1891,36 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             let visit_trait_f = get_nth_mark_fn(f, 4);
             let f = self.builder.build_struct_gep(st, i, "gep").unwrap();
             // 指针类型，递归调用visit函数
-            if let PLType::Pointer(_) = field_pltp {
-                let ptr = f;
-                let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
-                self.builder
-                    .build_call(visit_ptr_f, &[visitor.into(), casted.into()], "call");
-            }
-            // 数组类型，递归调用visit函数
-            // 结构体类型，递归调用visit函数
-            else if let PLType::Struct(_) | PLType::Arr(_) = field_pltp {
-                let ptr = f;
-                let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
-                self.builder
-                    .build_call(visit_complex_f, &[visitor.into(), casted.into()], "call");
-            }
-            // trait类型，递归调用visit函数
-            else if let PLType::Trait(_) = field_pltp {
-                let ptr = f;
-                let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
-                self.builder
-                    .build_call(visit_trait_f, &[visitor.into(), casted.into()], "call");
+            match field_pltp {
+                PLType::Pointer(_) => {
+                    let ptr = f;
+                    let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
+                    self.builder
+                        .build_call(visit_ptr_f, &[visitor.into(), casted.into()], "call");
+                }
+                PLType::Struct(_) | PLType::Arr(_) => {
+                    let ptr = f;
+                    let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
+                    self.builder.build_call(
+                        visit_complex_f,
+                        &[visitor.into(), casted.into()],
+                        "call",
+                    );
+                }
+                PLType::Trait(_) | PLType::Union(_) | PLType::Closure(_) => {
+                    let ptr = f;
+                    let casted = self.builder.build_bitcast(ptr, i8ptrtp, "casted_arg");
+                    self.builder.build_call(
+                        visit_trait_f,
+                        &[visitor.into(), casted.into()],
+                        "call",
+                    );
+                }
+                PLType::Fn(_)
+                | PLType::Primitive(_)
+                | PLType::Void
+                | PLType::Generic(_)
+                | PLType::PlaceHolder(_) => (),
             }
             // 其他为原子类型，跳过
         }
