@@ -1010,7 +1010,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 );
                 let st = self.dibuilder.create_struct_type(
                     self.diunit.get_file().as_debug_info_scope(),
-                    &u.name,
+                    &format!("union::{}", u.name),
                     self.diunit.get_file(),
                     u.range.start.line as u32 + 1,
                     td.get_bit_size(&utp),
@@ -1020,7 +1020,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     &[tag.as_type(), data.as_type()],
                     0,
                     None,
-                    "",
+                    &format!("union::{}", u.name),
                 );
                 // 填充占位符
                 for placeholder in RefCell::borrow_mut(&self.ditypes_placeholder)
