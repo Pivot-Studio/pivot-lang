@@ -297,7 +297,7 @@ impl Node for TakeOpNode {
                     ctx.set_field_refs(head_pltype, &field, id_range);
                     ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
 
-                    let re = field.typenode.get_type(ctx, builder)?;
+                    let re = field.typenode.get_type(ctx, builder, true)?;
                     let fnv = builder
                         .build_struct_gep(headptr, field.index, "mthd_ptr")
                         .unwrap();
@@ -321,7 +321,7 @@ impl Node for TakeOpNode {
                         builder
                             .build_struct_gep(headptr, field.index, "structgep")
                             .unwrap(),
-                        field.typenode.get_type(ctx, builder)?,
+                        field.typenode.get_type(ctx, builder, true)?,
                     )));
                 }
                 if let Some(mthd) = s.find_method(ctx, &id.name) {

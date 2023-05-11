@@ -61,7 +61,7 @@ impl MultiTraitNode {
     ) -> Result<Vec<Arc<RefCell<PLType>>>, PLDiag> {
         let mut traits = vec![];
         for t in &self.traits {
-            let trait_tp = t.get_type(ctx, builder)?;
+            let trait_tp = t.get_type(ctx, builder, true)?;
             if !matches!(&*trait_tp.borrow(), PLType::Trait(_)) {
                 return Err(t
                     .range()
@@ -191,7 +191,7 @@ impl TraitDefNode {
                 range: field.range,
                 modifier: Some((TokenType::PUB, field.range)),
             };
-            _ = field.get_type(ctx, builder);
+            _ = field.get_type(ctx, builder, true);
 
             if let Some((m, r)) = field.modifier {
                 r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)

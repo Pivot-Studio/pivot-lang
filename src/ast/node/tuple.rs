@@ -1,6 +1,7 @@
 use std::{cell::RefCell, sync::Arc};
 
-use crate::ast::builder::IRBuilder;
+use crate::ast::builder::{BuilderEnum, IRBuilder};
+use crate::ast::ctx::Ctx;
 use crate::ast::node::node_result::NodeResultBuilder;
 use crate::ast::node::RangeTrait;
 use crate::ast::range::Range;
@@ -119,15 +120,16 @@ pub struct TupleTypeNode {
 impl TypeNode for TupleTypeNode {
     fn get_type<'a, 'ctx, 'b>(
         &self,
-        ctx: &'b mut crate::ast::ctx::Ctx<'a>,
-        builder: &'b crate::ast::builder::BuilderEnum<'a, 'ctx>,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+        gen_code: bool,
     ) -> super::TypeNodeResult {
         let mut fields = LinkedHashMap::new();
         let mut field_tps = vec![];
         let mut err = None;
         let mut name = String::new();
         for (i, tp) in self.tps.iter().enumerate() {
-            let tp = tp.get_type(ctx, builder);
+            let tp = tp.get_type(ctx, builder, gen_code);
             match tp {
                 Ok(tp) => {
                     let arctp = tp.clone();
@@ -174,7 +176,7 @@ impl TypeNode for TupleTypeNode {
         pltype: Arc<RefCell<PLType>>,
         builder: &'b crate::ast::builder::BuilderEnum<'a, 'ctx>,
     ) -> Result<crate::ast::ctx::EqRes, crate::ast::diag::PLDiag> {
-        let left = self.get_type(ctx, builder)?;
+        let left = self.get_type(ctx, builder, true)?;
         let eq = *left.borrow() == *pltype.borrow();
         Ok(crate::ast::ctx::EqRes {
             eq,

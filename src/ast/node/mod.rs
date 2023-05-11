@@ -84,6 +84,7 @@ pub trait TypeNode: RangeTrait + FmtTrait + PrintTrait {
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
+        gen_code: bool,
     ) -> TypeNodeResult;
     fn emit_highlight(&self, ctx: &mut Ctx);
     fn eq_or_infer<'a, 'ctx, 'b>(

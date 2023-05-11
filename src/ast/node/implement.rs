@@ -49,7 +49,7 @@ fn check_fn<'a, 'b, 'ctx>(
     }
     if let PLType::Trait(st) = &*trait_tp.borrow() {
         if !st.fields.iter().any(|(_, f)| {
-            let tp = f.typenode.get_type(ctx, builder).unwrap();
+            let tp = f.typenode.get_type(ctx, builder, true).unwrap();
             let re = match (&*tp.borrow(), &*fntype.borrow()) {
                 (PLType::Fn(f1), PLType::Fn(f2)) => {
                     if f1.eq_except_receiver(f2, ctx, builder) {
@@ -102,7 +102,7 @@ impl Node for ImplNode {
         let mut traitfns = FxHashSet::default();
         if let Some((typename, _)) = &self.impl_trait {
             typename.emit_highlight(ctx);
-            let trait_tp = typename.get_type(ctx, builder)?;
+            let trait_tp = typename.get_type(ctx, builder, true)?;
             if let PLType::Trait(st) = &*trait_tp.borrow() {
                 ctx.send_if_go_to_def(typename.range(), st.range, st.path.clone());
                 traittpandrange = Some((trait_tp.clone(), typename.range()));

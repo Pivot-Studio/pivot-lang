@@ -81,15 +81,6 @@ impl TypeNameNode {
                     if generic_types[i].is_none() {
                         continue;
                     }
-                    if st_generic_type == generic_types[i].as_ref().unwrap() {
-                        if let PLType::Generic(g) = &mut *st_generic_type.borrow_mut() {
-                            // self ref to avoid emit_struct_def check
-                            if g.curpltype.is_none() {
-                                g.curpltype = Some(generic_types[i].as_ref().unwrap().clone());
-                            }
-                        }
-                        continue;
-                    }
                     if !ctx
                         .eq(
                             st_generic_type.clone(),
@@ -177,9 +168,10 @@ impl TypeNode for TypeNameNode {
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
+        gen_code: bool,
     ) -> TypeNodeResult {
         let pltype = self.get_origin_type_with_infer(ctx, builder)?;
-        if self.generic_params.is_some() {
+        if self.generic_params.is_some() && gen_code {
             match &*pltype.borrow() {
                 PLType::Struct(sttype) => {
                     let mut sttype = sttype.clone();
@@ -242,7 +234,7 @@ impl TypeNode for TypeNameNode {
                             .get(k)
                             .unwrap()
                             .typenode
-                            .get_type(ctx, builder)
+                            .get_type(ctx, builder, true)
                             .unwrap();
                         if !leftfield
                             .typenode
@@ -265,7 +257,7 @@ impl TypeNode for TypeNameNode {
             {
                 return ctx.protect_generic_context(&left.generic_map, |ctx| {
                     for (l, r) in left.sum_types.iter().zip(right.sum_types.iter()) {
-                        let r_type = r.get_type(ctx, builder)?;
+                        let r_type = r.get_type(ctx, builder, true)?;
                         if !l.eq_or_infer(ctx, r_type, builder)?.eq {
                             return Ok(EqRes {
                                 eq: false,
@@ -306,10 +298,11 @@ impl TypeNode for ArrayTypeNameNode {
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
+        gen_code: bool,
     ) -> TypeNodeResult {
         if let NodeEnum::Num(num) = *self.size {
             if let Num::Int(sz) = num.value {
-                let pltype = self.id.get_type(ctx, builder)?;
+                let pltype = self.id.get_type(ctx, builder, gen_code)?;
                 let arrtype = ARRType {
                     element_type: pltype,
                     size: sz as u32,
@@ -373,8 +366,9 @@ impl TypeNode for PointerTypeNode {
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
+        gen_code: bool,
     ) -> TypeNodeResult {
-        let pltype = self.elm.get_type(ctx, builder)?;
+        let pltype = self.elm.get_type(ctx, builder, gen_code)?;
         let pltype = Arc::new(RefCell::new(PLType::Pointer(pltype)));
         Ok(pltype)
     }
@@ -505,7 +499,9 @@ impl StructDefNode {
             is_trait: false,
             is_tuple: false,
         })));
-        builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
+        if self.generics.is_none() {
+            builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
+        }
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
     }
 
@@ -536,19 +532,18 @@ impl StructDefNode {
                     range: field.id.id.range,
                     modifier: field.modifier,
                 };
-                let tpre = field.id.typenode.get_type(ctx, builder);
+                let tpre = field
+                    .id
+                    .typenode
+                    .get_type(ctx, builder, self.generics.is_none());
                 if tpre.is_err() {
                     continue;
                 }
                 let tp = tpre.unwrap();
                 field_pltps.push(tp.clone());
-                if let PLType::Struct(sttp) = &*tp.borrow() {
-                    ctx.send_if_go_to_def(field.id.typenode.range(), sttp.range, sttp.path.clone());
-                };
                 ctx.set_field_refs(pltype.clone(), &f, f.range);
                 ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
                 fields.insert(id.name.to_string(), f.clone());
-                ctx.set_if_refs_tp(tp.clone(), field.id.typenode.range());
             }
             ctx.plmod.types = clone_map;
             if let PLType::Struct(st) = &mut *pltype.borrow_mut() {
@@ -562,9 +557,9 @@ impl StructDefNode {
                         st,
                         ctx,
                     );
+                    // gen st vist function must be called after add_body_to_struct_type
+                    builder.gen_st_visit_function(ctx, st, &field_pltps);
                 }
-                // gen st vist function must be called after add_body_to_struct_type
-                builder.gen_st_visit_function(ctx, st, &field_pltps);
             }
             ctx.set_if_refs_tp(pltype.clone(), self.id.range);
             ctx.add_doc_symbols(pltype.clone());
@@ -894,7 +889,7 @@ impl GenericParamNode {
                 continue;
             }
             res.push(Some(get_type_deep(
-                g.as_ref().unwrap().get_type(ctx, builder)?,
+                g.as_ref().unwrap().get_type(ctx, builder, true)?,
             )));
         }
         Ok(res)
@@ -919,12 +914,13 @@ impl TypeNode for ClosureTypeNode {
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
+        gen_code: bool,
     ) -> TypeNodeResult {
         let mut arg_types = vec![];
         for g in self.arg_types.iter() {
-            arg_types.push(g.get_type(ctx, builder)?);
+            arg_types.push(g.get_type(ctx, builder, gen_code)?);
         }
-        let ret_type = self.ret_type.get_type(ctx, builder)?;
+        let ret_type = self.ret_type.get_type(ctx, builder, gen_code)?;
         Ok(Arc::new(RefCell::new(PLType::Closure(ClosureType {
             arg_types,
             ret_type,

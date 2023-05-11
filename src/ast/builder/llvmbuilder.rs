@@ -561,7 +561,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 param_types.push(
                     self.get_basic_type_op(
                         &param_pltype
-                            .get_type(ctx, &self.clone().into())
+                            .get_type(ctx, &self.clone().into(), true)
                             .unwrap()
                             .borrow(),
                         ctx,
@@ -575,7 +575,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     &fnvalue
                         .fntype
                         .ret_pltype
-                        .get_type(ctx, &self.clone().into())
+                        .get_type(ctx, &self.clone().into(), true)
                         .unwrap()
                         .borrow(),
                     ctx,
@@ -714,7 +714,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
         offset: u64,
     ) -> (DIType<'ctx>, u64) {
-        let field_pltype = match field.typenode.get_type(ctx, &self.clone().into()) {
+        let field_pltype = match field.typenode.get_type(ctx, &self.clone().into(), true) {
             Ok(field_pltype) => field_pltype,
             Err(_) => ctx.get_type("i64", Default::default()).unwrap(),
         };
@@ -945,7 +945,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .sum_types
                     .iter()
                     .map(|v| {
-                        let tp = PLType::Pointer(v.get_type(ctx, &self.clone().into()).unwrap());
+                        let tp =
+                            PLType::Pointer(v.get_type(ctx, &self.clone().into(), true).unwrap());
                         let base_di = self.get_ditype(&tp, ctx).unwrap();
                         self.dibuilder
                             .create_member_type(
@@ -1072,7 +1073,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     self.get_basic_type_op(
                         &order_field
                             .typenode
-                            .get_type(ctx, &self.clone().into())
+                            .get_type(ctx, &self.clone().into(), true)
                             .unwrap()
                             .borrow(),
                         ctx,
@@ -1337,7 +1338,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                     self.get_basic_type_op(
                         &order_field
                             .typenode
-                            .get_type(ctx, &self.clone().into())
+                            .get_type(ctx, &self.clone().into(), true)
                             .unwrap()
                             .borrow(),
                         ctx,
@@ -1709,7 +1710,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     ) -> Result<(), PLDiag> {
         let mut param_ditypes = vec![];
         for para in paralist.iter() {
-            let pltype = para.typenode.get_type(child, &self.clone().into())?;
+            let pltype = para.typenode.get_type(child, &self.clone().into(), true)?;
             match &*pltype.borrow() {
                 PLType::Void => {
                     return Err(child
@@ -1723,7 +1724,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         // debug info
         let subroutine_type = self.dibuilder.create_subroutine_type(
             self.diunit.get_file(),
-            self.get_ditype(&ret.get_type(child, &self.clone().into())?.borrow(), child),
+            self.get_ditype(
+                &ret.get_type(child, &self.clone().into(), true)?.borrow(),
+                child,
+            ),
             &param_ditypes,
             DIFlags::PUBLIC,
         );
@@ -1854,7 +1858,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.get_ditype(
                 &PLType::Pointer(
                     fnvalue.fntype.param_pltypes[i]
-                        .get_type(child, &self.clone().into())
+                        .get_type(child, &self.clone().into(), true)
                         .unwrap(),
                 ),
                 child,

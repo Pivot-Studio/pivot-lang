@@ -270,7 +270,7 @@ impl<'a, 'ctx> Ctx<'a> {
             let union_members = self.run_in_type_mod(u, |ctx, u| {
                 let mut union_members = vec![];
                 for tp in &u.sum_types {
-                    let tp = tp.get_type(ctx, builder)?;
+                    let tp = tp.get_type(ctx, builder, true)?;
                     union_members.push(tp);
                 }
                 Ok(union_members)
@@ -322,7 +322,7 @@ impl<'a, 'ctx> Ctx<'a> {
             for f in t.list_trait_fields().iter() {
                 let mthd = st.find_method(self, &f.name).unwrap();
                 let fnhandle = builder.get_or_insert_fn_handle(&mthd, self);
-                let targetftp = f.typenode.get_type(self, builder).unwrap();
+                let targetftp = f.typenode.get_type(self, builder, true).unwrap();
                 let casted = builder.bitcast(self, fnhandle, &targetftp.borrow(), "fncast_tmp");
                 let f_ptr = builder
                     .build_struct_gep(trait_handle, f.index, "field_tmp")

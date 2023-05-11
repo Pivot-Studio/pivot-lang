@@ -46,7 +46,7 @@ impl Node for UnionDefNode {
 
         _ = ctx.protect_generic_context(&generic_map, |ctx| {
             for tp in self.sum_types.iter_mut() {
-                _ = tp.get_type(ctx, builder);
+                _ = tp.get_type(ctx, builder, true);
             }
             Ok(())
         });
