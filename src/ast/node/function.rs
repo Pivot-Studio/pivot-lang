@@ -718,6 +718,7 @@ impl Node for ClosureNode {
             body_range: Default::default(),
             is_trait: false,
             is_tuple: true,
+            generic_infer_types: Default::default(),
         };
 
         builder.opaque_struct_type(&st_tp.get_st_full_name());

@@ -227,30 +227,15 @@ impl TypeNode for TypeNameNode {
             if let (PLType::Struct(left), PLType::Struct(right)) =
                 (&*left.borrow(), &*right.borrow())
             {
-                return ctx.protect_generic_context(&left.generic_map, |ctx| {
-                    for (k, leftfield) in left.fields.iter() {
-                        let rightpltype = right
-                            .fields
-                            .get(k)
-                            .unwrap()
-                            .typenode
-                            .get_type(ctx, builder, true)
-                            .unwrap();
-                        if !leftfield
-                            .typenode
-                            .eq_or_infer(ctx, rightpltype, builder)?
-                            .eq
-                        {
-                            return Ok(EqRes {
-                                eq: false,
-                                need_up_cast: false,
-                            });
-                        }
-                    }
-                    Ok(EqRes {
-                        eq: true,
-                        need_up_cast: false,
-                    })
+                return Ok(EqRes {
+                    eq: !left.generic_map.iter().any(|(k, l_type)| {
+                        !ctx.eq(
+                            l_type.clone(),
+                            right.generic_infer_types.get(k).unwrap().clone(),
+                        )
+                        .eq
+                    }),
+                    need_up_cast: false,
                 });
             } else if let (PLType::Union(left), PLType::Union(right)) =
                 (&*left.borrow(), &*right.borrow())
@@ -498,6 +483,7 @@ impl StructDefNode {
             body_range: self.range(),
             is_trait: false,
             is_tuple: false,
+            generic_infer_types: Default::default(),
         })));
         if self.generics.is_none() {
             builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));

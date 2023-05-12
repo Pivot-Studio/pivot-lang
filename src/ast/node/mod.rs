@@ -307,7 +307,9 @@ impl<'a, 'ctx> Ctx<'a> {
         if let Some(nv) = re.get_value() {
             let value = nv.get_value();
             let ty = nv.get_ty();
+            // TODO: better way to check pltype eq with generic
             let ty = get_type_deep(ty);
+            let expect = get_type_deep(expect);
             if ty != expect {
                 let handle =
                     self.up_cast(expect.clone(), ty, expectrange, range, value, builder)?;

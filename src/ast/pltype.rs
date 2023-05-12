@@ -275,7 +275,7 @@ pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
     match &*pltype.borrow() {
         PLType::Generic(g) => {
             if g.curpltype.is_some() {
-                g.curpltype.as_ref().unwrap().clone()
+                get_type_deep(g.curpltype.as_ref().unwrap().clone())
             } else {
                 pltype.clone()
             }
@@ -832,6 +832,7 @@ pub struct STType {
     pub body_range: Range,
     pub is_trait: bool,
     pub is_tuple: bool,
+    pub generic_infer_types: IndexMap<String, Arc<RefCell<PLType>>>,
 }
 
 impl PartialEq for STType {
@@ -1045,6 +1046,14 @@ impl STType {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<STType, PLDiag> {
         let name = self.append_name_with_generic();
+        let generic_infer_types = self
+            .generic_map
+            .iter()
+            .map(|(k, v)| match &*v.clone().borrow() {
+                PLType::Generic(g) => (k.clone(), g.curpltype.as_ref().unwrap().clone()),
+                _ => unreachable!(),
+            })
+            .collect();
         if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
             match &*pltype.borrow() {
                 PLType::Struct(st) => {
@@ -1077,6 +1086,7 @@ impl STType {
             .collect::<Vec<_>>();
         builder.gen_st_visit_function(ctx, &res, &field_pltps);
         res.generic_map.clear();
+        res.generic_infer_types = generic_infer_types;
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
         pltype.replace(PLType::Struct(res.clone()));
         Ok(res)

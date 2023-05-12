@@ -99,6 +99,7 @@ fn new_tuple_type(
         body_range: range,
         is_trait: false,
         is_tuple: true,
+        generic_infer_types: Default::default(),
     }
 }
 impl PrintTrait for TupleInitNode {
