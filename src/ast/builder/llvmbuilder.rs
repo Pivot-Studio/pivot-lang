@@ -307,6 +307,31 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         (casted_result.into_pointer_value(), stack_ptr, llvmtp)
     }
 
+    fn create_root_for(&self, heap_ptr: BasicValueEnum<'ctx>) -> BasicValueEnum<'ctx> {
+        let lb = self.builder.get_insert_block().unwrap();
+        let alloca = self
+            .builder
+            .get_insert_block()
+            .unwrap()
+            .get_parent()
+            .unwrap()
+            .get_first_basic_block()
+            .unwrap();
+        self.builder.position_at_end(alloca);
+        let stack_ptr = self.builder.build_alloca(heap_ptr.get_type(), "stack_ptr");
+        self.gc_add_root(
+            stack_ptr.as_basic_value_enum(),
+            ObjectType::Pointer.int_value(),
+        );
+        self.builder.position_at_end(lb);
+        self.builder.build_store(stack_ptr, heap_ptr);
+        self.heap_stack_map.borrow_mut().insert(
+            self.get_llvm_value_handle(&heap_ptr.as_any_value_enum()),
+            self.get_llvm_value_handle(&stack_ptr.as_any_value_enum()),
+        );
+        stack_ptr.as_basic_value_enum()
+    }
+
     /// 第一个参数必须是一个二重以上的指针，且不能是一重指针bitcast过来的二重指针
     /// 否则可能导致bus error
     fn gc_add_root(&self, stackptr: BasicValueEnum<'ctx>, obj_type: u8) {
@@ -488,7 +513,28 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn get_llvm_value(&self, handle: ValueHandle) -> Option<AnyValueEnum<'ctx>> {
-        self.handle_table.borrow().get(&handle).copied()
+        if let Some(root) = self.heap_stack_map.borrow().get(&handle) {
+            self.handle_table.borrow().get(root).map(|v| {
+                let handle = self.handle_table.borrow().get(&handle).copied().unwrap();
+                if v.into_pointer_value().get_type().get_element_type() != handle.get_type() {
+                    let bt: BasicTypeEnum = handle.get_type().try_into().unwrap();
+                    let v = self.builder.build_bitcast(
+                        v.into_pointer_value(),
+                        bt.ptr_type(AddressSpace::default()),
+                        "get_root_cast",
+                    );
+                    self.builder
+                        .build_load(v.into_pointer_value(), "load_stack")
+                        .as_any_value_enum()
+                } else {
+                    self.builder
+                        .build_load(v.into_pointer_value(), "load_stack")
+                        .as_any_value_enum()
+                }
+            })
+        } else {
+            self.handle_table.borrow().get(&handle).copied()
+        }
     }
     fn get_llvm_block_handle(&self, block: BasicBlock<'ctx>) -> BlockHandle {
         let len = self.block_table.borrow().len();
@@ -1147,7 +1193,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 name,
             )
         };
-        self.get_llvm_value_handle(&re.as_any_value_enum())
+        let new_handle = self.get_llvm_value_handle(&re.as_any_value_enum());
+        let root = self.heap_stack_map.borrow().get(&from).copied();
+        if let Some(v) = root { self.heap_stack_map.borrow_mut().insert(new_handle, v); }
+        new_handle
     }
     fn pointer_cast(
         &self,
@@ -1215,19 +1264,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     }
 
     fn build_load(&self, ptr: ValueHandle, name: &str) -> ValueHandle {
-        if let Some(root) = self.heap_stack_map.borrow().get(&ptr) {
-            let root = *root;
-            let ptr = self.get_llvm_value(root).unwrap();
-            let ptr = ptr.into_pointer_value();
-            let ptr = self.builder.build_load(ptr, name);
-            let ptr = self.builder.build_load(ptr.into_pointer_value(), name);
-            self.get_llvm_value_handle(&ptr.as_any_value_enum())
-        } else {
-            let ptr = self.get_llvm_value(ptr).unwrap();
-            let ptr = ptr.into_pointer_value();
-            let ptr = self.builder.build_load(ptr, name);
-            self.get_llvm_value_handle(&ptr.as_any_value_enum())
+        let ptr = self.get_llvm_value(ptr).unwrap();
+        let ptr = ptr.into_pointer_value();
+        let ptr = self.builder.build_load(ptr, name);
+        if ptr.is_pointer_value() {
+            self.create_root_for(ptr);
         }
+        self.get_llvm_value_handle(&ptr.as_any_value_enum())
     }
     fn try_load2var(
         &self,
@@ -1368,22 +1411,20 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let structv = structv.into_pointer_value();
         let gep = self.builder.build_struct_gep(structv, index, name);
         if let Ok(gep) = gep {
-            return Ok(self.get_llvm_value_handle(&gep.as_any_value_enum()));
+            if gep.get_type().get_element_type().is_pointer_type() {
+                let loadgep = self.builder.build_load(gep, "field_heap_ptr");
+                self.create_root_for(loadgep);
+                return Ok(self.get_llvm_value_handle(&gep.as_any_value_enum()));
+            } else {
+                return Ok(self.get_llvm_value_handle(&gep.as_any_value_enum()));
+            }
         } else {
             Err(())
         }
     }
     fn build_store(&self, ptr: ValueHandle, value: ValueHandle) {
-        let ptr = if let Some(root) = self.heap_stack_map.borrow().get(&ptr) {
-            let root = *root;
-            let ptr = self.get_llvm_value(root).unwrap();
-            let ptr = ptr.into_pointer_value();
-            let ptr = self.builder.build_load(ptr, "store_load_tmp");
-            ptr.into_pointer_value()
-        } else {
-            let ptr = self.get_llvm_value(ptr).unwrap();
-            ptr.into_pointer_value()
-        };
+        let ptr = self.get_llvm_value(ptr).unwrap();
+        let ptr = ptr.into_pointer_value();
         let value = self.get_llvm_value(value).unwrap();
         let value = if value.is_function_value() {
             value
@@ -2161,7 +2202,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.get_llvm_value_handle(&funcvalue.get_nth_param(i).unwrap().into())
     }
     fn add_closure_st_field(&self, st: ValueHandle, field: ValueHandle) {
-        let st_v = self.get_llvm_value(st).unwrap();
+        let st_v = self.handle_table.borrow().get(&st).copied().unwrap();
         let st_tp = st_v
             .get_type()
             .into_pointer_type()
@@ -2169,7 +2210,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .into_struct_type();
         let mut closure_data_tps = st_tp.get_field_types();
         closure_data_tps.push(
-            self.get_llvm_value(field)
+            self.handle_table
+                .borrow()
+                .get(&field)
+                .copied()
                 .unwrap()
                 .get_type()
                 .try_into()
