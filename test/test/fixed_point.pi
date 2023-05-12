@@ -1,0 +1,50 @@
+use core::panic;
+pub fn test_fixed_point() void {
+    let g = |f: |i64| => i64, x: i64| => i64 {
+        if x == 0 {
+            return 1;
+        }
+        return x * f(x - 1);
+    };
+    let fact = Y(g);
+    for let x = 0; x < 10; x = x + 1 {
+        panic::assert(fact(x) == fact_recursion(x));
+    }
+    return;
+}
+
+struct Func<A|F> {
+    f: |Func<A|F>, A| => F;
+}
+
+impl<A|F> Func<A|F> {
+    fn call(f: Func<A|F>, x: A) F {
+        return self.f(f, x);
+    }
+
+}
+
+fn Y<A|R>(g: ||A| => R, A| => R) |A| => R {
+    return |x: A| => R {
+        let in = |f: Func<A|R>, x: A| => R {
+            return f.call(f, x);
+        };
+        let field = |f: Func<A|R>, x: A| => R {
+            return g(|x: A| => R {
+                return f.call(f, x);
+            }, x);
+        };
+        let f = Func{
+            f: field
+        };
+        return in(f, x);
+    };
+}
+
+fn fact_recursion(x: i64) i64 {
+    if x == 0 {
+        return 1;
+    }
+    return x * fact_recursion(x - 1);
+}
+

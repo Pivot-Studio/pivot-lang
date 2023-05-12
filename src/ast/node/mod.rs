@@ -41,6 +41,7 @@ use super::ctx::EqRes;
 use super::diag::ErrorCode;
 use super::diag::PLDiag;
 use super::fmt::FmtBuilder;
+use super::pltype::get_type_deep;
 use super::pltype::{PLType, PriType};
 use super::range::{Pos, Range};
 
@@ -83,6 +84,7 @@ pub trait TypeNode: RangeTrait + FmtTrait + PrintTrait {
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
+        gen_code: bool,
     ) -> TypeNodeResult;
     fn emit_highlight(&self, ctx: &mut Ctx);
     fn eq_or_infer<'a, 'ctx, 'b>(
@@ -305,6 +307,9 @@ impl<'a, 'ctx> Ctx<'a> {
         if let Some(nv) = re.get_value() {
             let value = nv.get_value();
             let ty = nv.get_ty();
+            // TODO: better way to check pltype eq with generic
+            let ty = get_type_deep(ty);
+            let expect = get_type_deep(expect);
             if ty != expect {
                 let handle =
                     self.up_cast(expect.clone(), ty, expectrange, range, value, builder)?;

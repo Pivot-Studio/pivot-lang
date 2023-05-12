@@ -42,6 +42,7 @@ impl MultiTraitNode {
             body_range: Default::default(),
             is_trait: true,
             is_tuple: false,
+            generic_infer_types: Default::default(),
         };
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&name));
         builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&name), &st, ctx);
@@ -61,7 +62,7 @@ impl MultiTraitNode {
     ) -> Result<Vec<Arc<RefCell<PLType>>>, PLDiag> {
         let mut traits = vec![];
         for t in &self.traits {
-            let trait_tp = t.get_type(ctx, builder)?;
+            let trait_tp = t.get_type(ctx, builder, true)?;
             if !matches!(&*trait_tp.borrow(), PLType::Trait(_)) {
                 return Err(t
                     .range()
@@ -166,6 +167,7 @@ impl TraitDefNode {
             body_range: self.range(),
             is_trait: true,
             is_tuple: false,
+            generic_infer_types: Default::default(),
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
@@ -191,7 +193,7 @@ impl TraitDefNode {
                 range: field.range,
                 modifier: Some((TokenType::PUB, field.range)),
             };
-            _ = field.get_type(ctx, builder);
+            _ = field.get_type(ctx, builder, true);
 
             if let Some((m, r)) = field.modifier {
                 r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)

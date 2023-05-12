@@ -98,7 +98,7 @@ impl FuncCallNode {
             if !is_generic {
                 if let TypeNodeEnum::Closure(_) = &**expect_ty {
                     _ = expect_ty
-                        .get_type(ctx, builder)
+                        .get_type(ctx, builder, true)
                         .map(|t| ctx.expect_ty = Some(t));
                 }
             }
@@ -269,7 +269,7 @@ impl Node for FuncCallNode {
             };
             builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
             let rettp = ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
-                fnvalue.fntype.ret_pltype.get_type(ctx, builder)
+                fnvalue.fntype.ret_pltype.get_type(ctx, builder, true)
             })?;
             let ret = builder.build_call(function, &para_values, &rettp.borrow(), ctx);
             ctx.save_if_comment_doc_hover(id_range, Some(fnvalue.doc.clone()));
@@ -299,7 +299,7 @@ fn check_and_cast_params<'a, 'ctx, 'b>(
             let mut value = para_values[i + skip as usize];
             let ptr2v = builder.alloc("tmp_up_cast_ptr", &value_pltype.borrow(), ctx, None);
             builder.build_store(ptr2v, value);
-            let trait_pltype = param_types[i + skip as usize].get_type(ctx, builder)?;
+            let trait_pltype = param_types[i + skip as usize].get_type(ctx, builder, true)?;
             value = ctx.up_cast(
                 trait_pltype,
                 value_pltype.clone(),
@@ -348,6 +348,7 @@ impl TypeNode for FuncDefNode {
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
+        _: bool,
     ) -> TypeNodeResult {
         let child = &mut ctx.new_child(self.range.start, builder);
         let generic_map = if let Some(generics) = &self.generics {
@@ -376,7 +377,7 @@ impl TypeNode for FuncDefNode {
                     _ => unreachable!(),
                 });
             for para in self.paralist.iter() {
-                _ = para.typenode.get_type(child, builder)?;
+                _ = para.typenode.get_type(child, builder, true)?;
                 param_pltypes.push(para.typenode.clone());
                 param_name.push(para.id.name.clone());
             }
@@ -416,7 +417,7 @@ impl TypeNode for FuncDefNode {
                     .first()
                     .unwrap()
                     .typenode
-                    .get_type(child, builder)
+                    .get_type(child, builder, true)
                     .unwrap();
                 if let PLType::Pointer(s) = &*receiver_pltype.borrow() {
                     match &*s.borrow() {
@@ -499,7 +500,7 @@ impl FuncDefNode {
         if ctx.get_type(self.id.name.as_str(), self.id.range).is_ok() {
             return Err(ctx.add_diag(self.id.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
         }
-        let pltype = self.get_type(ctx, builder)?;
+        let pltype = self.get_type(ctx, builder, true)?;
         ctx.add_type(self.id.name.clone(), pltype, self.id.range)?;
         Ok(())
     }
@@ -548,7 +549,11 @@ impl FuncDefNode {
             let entry = builder.append_basic_block(funcvalue, "entry");
             let return_block = builder.append_basic_block(funcvalue, "return");
             child.position_at_end(entry, builder);
-            let ret_value_ptr = match &*fnvalue.fntype.ret_pltype.get_type(child, builder)?.borrow()
+            let ret_value_ptr = match &*fnvalue
+                .fntype
+                .ret_pltype
+                .get_type(child, builder, true)?
+                .borrow()
             {
                 PLType::Void => None,
                 other => {
@@ -570,7 +575,7 @@ impl FuncDefNode {
             child.position_at_end(entry, builder);
             // alloc para
             for (i, para) in fnvalue.fntype.param_pltypes.iter().enumerate() {
-                let tp = para.get_type(child, builder)?;
+                let tp = para.get_type(child, builder, true)?;
                 let b = tp.clone();
                 let basetype = b.borrow();
                 let alloca = builder.alloc(&fnvalue.param_names[i], &basetype, child, None);
@@ -606,7 +611,7 @@ impl FuncDefNode {
                 child.init_global(builder);
                 child.position_at_end(entry, builder);
             }
-            child.rettp = Some(fnvalue.fntype.ret_pltype.get_type(child, builder)?);
+            child.rettp = Some(fnvalue.fntype.ret_pltype.get_type(child, builder, true)?);
             let terminator = self.body.as_mut().unwrap().emit(child, builder)?.get_term();
             if !terminator.is_return() {
                 return Err(
@@ -688,7 +693,6 @@ pub struct ClosureNode {
     pub paralist: Vec<(Box<VarNode>, Option<Box<TypeNodeEnum>>)>,
     pub body: StatementsNode,
     pub ret: Option<Box<TypeNodeEnum>>,
-    pub paralist_range: Range,
 }
 
 static CLOSURE_COUNT: AtomicI32 = AtomicI32::new(0);
@@ -714,6 +718,7 @@ impl Node for ClosureNode {
             body_range: Default::default(),
             is_trait: false,
             is_tuple: true,
+            generic_infer_types: Default::default(),
         };
 
         builder.opaque_struct_type(&st_tp.get_st_full_name());
@@ -723,7 +728,7 @@ impl Node for ClosureNode {
             ctx.push_semantic_token(v.range(), SemanticTokenType::PARAMETER, 0);
             let tp = if let Some(typenode) = typenode {
                 typenode.emit_highlight(ctx);
-                typenode.get_type(ctx, builder)?
+                typenode.get_type(ctx, builder, true)?
             } else if let Some(exp_ty) = &ctx.expect_ty {
                 match &*exp_ty.borrow() {
                     PLType::Closure(c) => {
@@ -756,13 +761,10 @@ impl Node for ClosureNode {
         }
         let ret_tp = if let Some(ret) = &self.ret {
             ret.emit_highlight(ctx);
-            ret.get_type(ctx, builder)?
+            ret.get_type(ctx, builder, true)?
         } else if let Some(exp_ty) = &ctx.expect_ty {
             match &*exp_ty.borrow() {
-                PLType::Closure(c) => {
-                    ctx.push_type_hints(self.paralist_range, c.ret_type.clone());
-                    c.ret_type.clone()
-                }
+                PLType::Closure(c) => c.ret_type.clone(),
                 _ => {
                     return Err(self
                         .range

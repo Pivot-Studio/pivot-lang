@@ -90,7 +90,7 @@ impl ClosureType {
     }
     pub fn get_name(&self) -> String {
         format!(
-            "({}) => {}",
+            "|{}| => {}",
             self.arg_types
                 .iter()
                 .map(|t| t.borrow().get_name())
@@ -155,7 +155,7 @@ impl UnionType {
         res.sum_types = self
             .sum_types
             .iter()
-            .map(|t| Ok(t.get_type(ctx, builder)?.borrow().get_typenode()))
+            .map(|t| Ok(t.get_type(ctx, builder, true)?.borrow().get_typenode()))
             .collect::<Result<Vec<_>, PLDiag>>()?;
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
@@ -172,7 +172,7 @@ impl UnionType {
             u.sum_types
                 .iter()
                 .enumerate()
-                .find(|(_, t)| &*t.get_type(ctx, builder).unwrap().borrow() == pltype)
+                .find(|(_, t)| &*t.get_type(ctx, builder, true).unwrap().borrow() == pltype)
                 .map(|(i, _)| i)
         })
     }
@@ -275,7 +275,7 @@ pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
     match &*pltype.borrow() {
         PLType::Generic(g) => {
             if g.curpltype.is_some() {
-                g.curpltype.as_ref().unwrap().clone()
+                get_type_deep(g.curpltype.as_ref().unwrap().clone())
             } else {
                 pltype.clone()
             }
@@ -608,12 +608,12 @@ impl FNValue {
     ) -> ClosureType {
         return ClosureType {
             range: Default::default(),
-            ret_type: self.fntype.ret_pltype.get_type(ctx, builder).unwrap(),
+            ret_type: self.fntype.ret_pltype.get_type(ctx, builder, true).unwrap(),
             arg_types: self
                 .fntype
                 .param_pltypes
                 .iter()
-                .map(|x| x.get_type(ctx, builder).unwrap())
+                .map(|x| x.get_type(ctx, builder, true).unwrap())
                 .collect(),
         };
     }
@@ -658,14 +658,14 @@ impl FNValue {
             return false;
         }
         for i in 1..self.fntype.param_pltypes.len() {
-            if self.fntype.param_pltypes[i].get_type(ctx, builder)
-                != other.fntype.param_pltypes[i].get_type(ctx, builder)
+            if self.fntype.param_pltypes[i].get_type(ctx, builder, true)
+                != other.fntype.param_pltypes[i].get_type(ctx, builder, true)
             {
                 return false;
             }
         }
-        self.fntype.ret_pltype.get_type(ctx, builder)
-            == other.fntype.ret_pltype.get_type(ctx, builder)
+        self.fntype.ret_pltype.get_type(ctx, builder, true)
+            == other.fntype.ret_pltype.get_type(ctx, builder, true)
     }
     pub fn append_name_with_generic(&self, name: String) -> String {
         if self.fntype.need_gen_code() {
@@ -724,7 +724,7 @@ impl FNValue {
         res.fntype.ret_pltype = self
             .fntype
             .ret_pltype
-            .get_type(ctx, builder)
+            .get_type(ctx, builder, true)
             .unwrap()
             .borrow()
             .get_typenode();
@@ -733,7 +733,11 @@ impl FNValue {
             .param_pltypes
             .iter()
             .map(|p| {
-                let np = p.get_type(ctx, builder).unwrap().borrow().get_typenode();
+                let np = p
+                    .get_type(ctx, builder, true)
+                    .unwrap()
+                    .borrow()
+                    .get_typenode();
                 np
             })
             .collect::<Vec<Box<TypeNodeEnum>>>();
@@ -828,6 +832,7 @@ pub struct STType {
     pub body_range: Range,
     pub is_trait: bool,
     pub is_tuple: bool,
+    pub generic_infer_types: IndexMap<String, Arc<RefCell<PLType>>>,
 }
 
 impl PartialEq for STType {
@@ -1041,6 +1046,14 @@ impl STType {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Result<STType, PLDiag> {
         let name = self.append_name_with_generic();
+        let generic_infer_types = self
+            .generic_map
+            .iter()
+            .map(|(k, v)| match &*v.clone().borrow() {
+                PLType::Generic(g) => (k.clone(), g.curpltype.as_ref().unwrap().clone()),
+                _ => unreachable!(),
+            })
+            .collect();
         if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
             match &*pltype.borrow() {
                 PLType::Struct(st) => {
@@ -1059,7 +1072,7 @@ impl STType {
                 let mut nf = f.clone();
                 nf.typenode = f
                     .typenode
-                    .get_type(ctx, builder)
+                    .get_type(ctx, builder, true)
                     .unwrap()
                     .borrow()
                     .get_typenode();
@@ -1069,10 +1082,11 @@ impl STType {
         let field_pltps = res
             .fields
             .values()
-            .map(|f| f.typenode.get_type(ctx, builder).unwrap())
+            .map(|f| f.typenode.get_type(ctx, builder, true).unwrap())
             .collect::<Vec<_>>();
         builder.gen_st_visit_function(ctx, &res, &field_pltps);
         res.generic_map.clear();
+        res.generic_infer_types = generic_infer_types;
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
         pltype.replace(PLType::Struct(res.clone()));
         Ok(res)

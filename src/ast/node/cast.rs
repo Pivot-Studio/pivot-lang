@@ -39,7 +39,7 @@ impl Node for AsNode {
         self.ty.emit_highlight(ctx);
         let v = re?.get_value();
         let v = v.unwrap();
-        let target_tp = self.ty.get_type(ctx, builder)?;
+        let target_tp = self.ty.get_type(ctx, builder, true)?;
         let (val, target_tp) = ctx.force_cast_safe(
             v.get_value(),
             &v.get_ty().borrow(),
@@ -292,7 +292,7 @@ impl Node for IsNode {
         let re = self.expr.emit(ctx, builder);
         self.ty.emit_highlight(ctx);
         let v = re?.get_value().unwrap();
-        let target_tp = self.ty.get_type(ctx, builder)?;
+        let target_tp = self.ty.get_type(ctx, builder, true)?;
         let val = v.get_value();
         let binding = v.get_ty();
         let tp = &*binding.borrow();
