@@ -307,6 +307,16 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         (casted_result.into_pointer_value(), stack_ptr, llvmtp)
     }
 
+    /// # create_root_for
+    ///
+    /// 为一个堆上的对象创建gcroot
+    ///
+    /// ## safety
+    ///
+    /// 1. 如果传入的值不是堆上的对象，可能导致segment fault在内的一系列问题。
+    /// 2. 如果在应该调用这个函数的时候没有调用，可能导致pl程序在gc进行evacuation之后，无法正确的访问堆上的对象。导致
+    ///   segment fault、bus error在内的一系列问题。关于驱逐算法的详细信息，见[gc文档](https://lang.pivotstudio.cn/docs/systemlib/immix.html#evacuation)
+    /// 3. 如果禁用了evacuation，那么这个函数将不会有实际作用
     fn create_root_for(&self, heap_ptr: BasicValueEnum<'ctx>) -> BasicValueEnum<'ctx> {
         let lb = self.builder.get_insert_block().unwrap();
         let alloca = self
@@ -1195,7 +1205,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         };
         let new_handle = self.get_llvm_value_handle(&re.as_any_value_enum());
         let root = self.heap_stack_map.borrow().get(&from).copied();
-        if let Some(v) = root { self.heap_stack_map.borrow_mut().insert(new_handle, v); }
+        if let Some(v) = root {
+            self.heap_stack_map.borrow_mut().insert(new_handle, v);
+        }
         new_handle
     }
     fn pointer_cast(
@@ -1454,7 +1466,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 name,
             )
         };
-        self.get_llvm_value_handle(&gep.as_any_value_enum())
+        if gep.get_type().get_element_type().is_pointer_type() {
+            let loadgep = self.builder.build_load(gep, "field_heap_ptr");
+            self.create_root_for(loadgep);
+            return self.get_llvm_value_handle(&gep.as_any_value_enum());
+        } else {
+            return self.get_llvm_value_handle(&gep.as_any_value_enum());
+        }
     }
     fn build_in_bounds_gep(
         &self,
