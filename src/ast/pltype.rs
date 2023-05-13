@@ -1044,52 +1044,49 @@ impl STType {
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Result<STType, PLDiag> {
-        let name = self.append_name_with_generic();
-        let generic_infer_types = self
-            .generic_map
-            .iter()
-            .map(|(k, v)| match &*v.clone().borrow() {
-                PLType::Generic(g) => (k.clone(), g.curpltype.as_ref().unwrap().clone()),
-                _ => unreachable!(),
-            })
-            .collect();
-        if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
-            match &*pltype.borrow() {
-                PLType::Struct(st) => {
-                    return Ok(st.clone());
-                }
-                _ => unreachable!(),
+    ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
+        ctx.protect_generic_context(&self.generic_map, |ctx| {
+            let name = self.append_name_with_generic();
+            let generic_infer_types = self
+                .generic_map
+                .iter()
+                .map(|(k, v)| match &*v.clone().borrow() {
+                    PLType::Generic(g) => (k.clone(), g.curpltype.as_ref().unwrap().clone()),
+                    _ => unreachable!(),
+                })
+                .collect();
+            if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
+                return Ok(pltype);
             }
-        }
-        let mut res = self.clone();
-        res.name = name;
-        ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Struct(res.clone()))));
-        res.fields = self
-            .fields
-            .values()
-            .map(|f| {
-                let mut nf = f.clone();
-                nf.typenode = f
-                    .typenode
-                    .get_type(ctx, builder, true)
-                    .unwrap()
-                    .borrow()
-                    .get_typenode();
-                (nf.name.clone(), nf)
-            })
-            .collect();
-        let field_pltps = res
-            .fields
-            .values()
-            .map(|f| f.typenode.get_type(ctx, builder, true).unwrap())
-            .collect::<Vec<_>>();
-        builder.gen_st_visit_function(ctx, &res, &field_pltps);
-        res.generic_map.clear();
-        res.generic_infer_types = generic_infer_types;
-        let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
-        pltype.replace(PLType::Struct(res.clone()));
-        Ok(res)
+            let mut res = self.clone();
+            res.name = name;
+            ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Struct(res.clone()))));
+            res.fields = self
+                .fields
+                .values()
+                .map(|f| {
+                    let mut nf = f.clone();
+                    nf.typenode = f
+                        .typenode
+                        .get_type(ctx, builder, true)
+                        .unwrap()
+                        .borrow()
+                        .get_typenode();
+                    (nf.name.clone(), nf)
+                })
+                .collect();
+            let field_pltps = res
+                .fields
+                .values()
+                .map(|f| f.typenode.get_type(ctx, builder, true).unwrap())
+                .collect::<Vec<_>>();
+            builder.gen_st_visit_function(ctx, &res, &field_pltps);
+            res.generic_map.clear();
+            res.generic_infer_types = generic_infer_types;
+            let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
+            pltype.replace(PLType::Struct(res.clone()));
+            Ok(pltype)
+        })
     }
     pub fn get_field_completions(&self, must_pub: bool) -> Vec<CompletionItem> {
         let mut completions = Vec::new();

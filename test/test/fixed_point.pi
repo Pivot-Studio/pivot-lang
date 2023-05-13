@@ -26,18 +26,15 @@ impl<A|F> Func<A|F> {
 
 fn Y<A|R>(g: ||A| => R, A| => R) |A| => R {
     return |x: A| => R {
-        let in = |f: Func<A|R>, x: A| => R {
+        return |f: Func<A|R>, x: A| => R {
             return f.call(f, x);
-        };
-        let field = |f: Func<A|R>, x: A| => R {
-            return g(|x: A| => R {
-                return f.call(f, x);
-            }, x);
-        };
-        let f = Func{
-            f: field
-        };
-        return in(f, x);
+        }(Func{
+            f: |f: Func<A|R>, x: A| => R {
+                return g(|x: A| => R {
+                    return f.call(f, x);
+                }, x);
+            }
+        }, x);
     };
 }
 

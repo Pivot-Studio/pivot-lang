@@ -174,13 +174,11 @@ impl TypeNode for TypeNameNode {
         if self.generic_params.is_some() && gen_code {
             match &*pltype.borrow() {
                 PLType::Struct(sttype) => {
-                    let mut sttype = sttype.clone();
+                    let sttype = sttype.clone();
                     if sttype.need_gen_code() {
-                        sttype = ctx.protect_generic_context(&sttype.generic_map, |ctx| {
+                        return ctx.protect_generic_context(&sttype.generic_map, |ctx| {
                             sttype.gen_code(ctx, builder)
-                        })?;
-                        let pltype = Arc::new(RefCell::new(PLType::Struct(sttype)));
-                        return Ok(pltype);
+                        });
                     } else {
                         return Err(
                             ctx.add_diag(self.range.new_err(ErrorCode::GENERIC_CANNOT_BE_INFER))
@@ -625,71 +623,73 @@ impl Node for StructInitNode {
             }
         };
         ctx.send_if_go_to_def(self.typename.range(), sttype.range, sttype.path.clone());
-        ctx.protect_generic_context(&sttype.generic_map.clone(), |ctx| {
-            let mut field_init_values = vec![];
-            let mut idx = 0;
-            ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
-            ctx.run_in_type_mod_mut(&mut sttype, |ctx, sttype| {
-                for fieldinit in self.fields.iter_mut() {
-                    let field_id_range = fieldinit.id.range;
-                    let field_exp_range = fieldinit.exp.range();
-                    let field = sttype.fields.get(&fieldinit.id.name);
-                    if field.is_none() {
-                        ctx.if_completion(self.range, || sttype.get_completions(ctx));
-                        return Err(
-                            ctx.add_diag(field_id_range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND))
-                        );
-                    }
-                    let field = field.unwrap();
-                    let v = fieldinit.emit(ctx, builder)?.get_value();
-                    idx += 1;
-                    ctx.emit_comment_highlight(&self.comments[idx - 1]);
-                    if v.is_none() {
-                        return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
-                    }
-                    let v = v.unwrap();
-                    let value = ctx.try_load2var(field_exp_range, v.get_value(), builder)?;
-                    let value_pltype = v.get_ty();
-                    if !field.typenode.eq_or_infer(ctx, value_pltype, builder)?.eq {
+        let mut field_init_values = vec![];
+        let mut idx = 0;
+        ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
+        ctx.run_in_type_mod_mut(&mut sttype, |ctx, sttype| {
+            for fieldinit in self.fields.iter_mut() {
+                let field_id_range = fieldinit.id.range;
+                let field_exp_range = fieldinit.exp.range();
+                let field = sttype.fields.get(&fieldinit.id.name);
+                if field.is_none() {
+                    ctx.if_completion(self.range, || sttype.get_completions(ctx));
+                    return Err(
+                        ctx.add_diag(field_id_range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND))
+                    );
+                }
+                let field = field.unwrap();
+                let v = fieldinit.emit(ctx, builder)?.get_value();
+                idx += 1;
+                ctx.emit_comment_highlight(&self.comments[idx - 1]);
+                if v.is_none() {
+                    return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
+                }
+                let v = v.unwrap();
+                let value = ctx.try_load2var(field_exp_range, v.get_value(), builder)?;
+                let value_pltype = v.get_ty();
+                ctx.protect_generic_context(&sttype.generic_map, |ctx| {
+                    if !field
+                        .typenode
+                        .eq_or_infer(ctx, value_pltype.clone(), builder)?
+                        .eq
+                    {
                         return Err(ctx.add_diag(
                             fieldinit
                                 .range
                                 .new_err(ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH),
                         ));
                     }
-                    field_init_values.push((field.index, value));
-                    ctx.set_field_refs(pltype.clone(), field, field_id_range);
-                }
-                if !sttype.generic_map.is_empty() {
-                    if sttype.need_gen_code() {
-                        pltype = Arc::new(RefCell::new(PLType::Struct(
-                            ctx.run_in_type_mod_mut(sttype, |ctx, sttype| {
-                                sttype.gen_code(ctx, builder)
-                            })?,
-                        )));
-                    } else {
-                        return Err(ctx.add_diag(
-                            self.typename
-                                .range()
-                                .new_err(ErrorCode::GENERIC_CANNOT_BE_INFER),
-                        ));
-                    }
-                }
-                Ok(())
-            })?;
-
-            if self.fields.len() < self.comments.len() {
-                ctx.emit_comment_highlight(&self.comments[idx]);
+                    Ok(())
+                })?;
+                field_init_values.push((field.index, value));
+                ctx.set_field_refs(pltype.clone(), field, field_id_range);
             }
-            let struct_pointer = builder.alloc("initstruct", &pltype.borrow(), ctx, None); //alloc(ctx, tp, "initstruct");
-            field_init_values.iter().for_each(|(index, value)| {
-                let fieldptr = builder
-                    .build_struct_gep(struct_pointer, *index, "fieldptr")
-                    .unwrap();
-                builder.build_store(fieldptr, *value);
-            });
-            struct_pointer.new_output(pltype.clone()).to_result()
-        })
+            if !sttype.generic_map.is_empty() {
+                if sttype.need_gen_code() {
+                    pltype = ctx
+                        .run_in_type_mod_mut(sttype, |ctx, sttype| sttype.gen_code(ctx, builder))?;
+                } else {
+                    return Err(ctx.add_diag(
+                        self.typename
+                            .range()
+                            .new_err(ErrorCode::GENERIC_CANNOT_BE_INFER),
+                    ));
+                }
+            }
+            Ok(())
+        })?;
+
+        if self.fields.len() < self.comments.len() {
+            ctx.emit_comment_highlight(&self.comments[idx]);
+        }
+        let struct_pointer = builder.alloc("initstruct", &pltype.borrow(), ctx, None); //alloc(ctx, tp, "initstruct");
+        field_init_values.iter().for_each(|(index, value)| {
+            let fieldptr = builder
+                .build_struct_gep(struct_pointer, *index, "fieldptr")
+                .unwrap();
+            builder.build_store(fieldptr, *value);
+        });
+        struct_pointer.new_output(pltype.clone()).to_result()
     }
 }
 
