@@ -57,8 +57,6 @@ pub struct Mod {
     pub submods: FxHashMap<String, Mod>,
     /// global variable table
     pub global_table: FxHashMap<String, GlobalVar>,
-    /// structs methods
-    pub methods: FxHashMap<String, FxHashMap<String, FNValue>>,
     pub defs: LSPRangeMap<Range, LSPDef>,
     // pub refcache:LSPRangeMap<String, Arc<RwVec<Location>>>,
     pub local_refs: LSPRangeMap<Range, Arc<MutVec<Location>>>, // hold local vars
@@ -129,9 +127,6 @@ impl Mod {
                 _ => (),
             }
         }
-        for (k, v) in other.methods.iter() {
-            self.methods.insert(k.to_string(), v.clone());
-        }
     }
 
     pub fn new(name: String, path: String) -> Self {
@@ -141,7 +136,6 @@ impl Mod {
             types: FxHashMap::default(),
             submods: FxHashMap::default(),
             global_table: FxHashMap::default(),
-            methods: FxHashMap::default(),
             defs: Arc::new(RefCell::new(BTreeMap::new())),
             // refs: Arc::new(RefCell::new(BTreeMap::new())),
             sig_helps: Arc::new(RefCell::new(BTreeMap::new())),
@@ -168,7 +162,6 @@ impl Mod {
             types: FxHashMap::default(),
             submods: self.submods.clone(),
             global_table: FxHashMap::default(),
-            methods: self.methods.clone(),
             defs: self.defs.clone(),
             // refs: self.refs.clone(),
             sig_helps: self.sig_helps.clone(),
@@ -288,49 +281,44 @@ impl Mod {
                 ..Default::default()
             });
         };
-        for m in self.submods.values() {
-            if m.methods.get(full_name).is_none() {
-                continue;
-            }
-            for (name, v) in m.methods.get(full_name).unwrap() {
-                f(name, v);
-            }
-        }
-        if self.methods.get(full_name).is_none() {
-            return completions;
-        }
-        for (name, v) in self.methods.get(full_name).unwrap() {
-            f(name, v);
-        }
+        // for m in self.submods.values() {
+        //     if m.methods.get(full_name).is_none() {
+        //         continue;
+        //     }
+        //     for (name, v) in m.methods.get(full_name).unwrap() {
+        //         f(name, v);
+        //     }
+        // }
+        // if self.methods.get(full_name).is_none() {
+        //     return completions;
+        // }
+        // for (name, v) in self.methods.get(full_name).unwrap() {
+        //     f(name, v);
+        // }
         completions
     }
 
     pub fn find_method(&self, full_name: &str, mthd: &str) -> Option<FNValue> {
-        if let Some(m) = self.methods.get(full_name) {
-            if let Some(v) = m.get(mthd) {
-                return Some(v.clone());
-            }
-        }
-        for m in self.submods.values() {
-            if let Some(v) = m.find_method(full_name, mthd) {
-                return Some(v);
-            }
-        }
+        // if let Some(m) = self.methods.get(full_name) {
+        //     if let Some(v) = m.get(mthd) {
+        //         return Some(v.clone());
+        //     }
+        // }
         None
     }
 
     pub fn add_method(&mut self, full_name: &str, mthd: &str, fntp: FNValue) -> Result<(), ()> {
-        if let Some(m) = self.methods.get_mut(full_name) {
-            if m.get(mthd).is_some() {
-                // duplicate method
-                return Err(());
-            }
-            m.insert(mthd.to_string(), fntp);
-        } else {
-            let mut m = FxHashMap::default();
-            m.insert(mthd.to_string(), fntp);
-            self.methods.insert(full_name.to_string(), m);
-        }
+        // if let Some(m) = self.methods.get_mut(full_name) {
+        //     if m.get(mthd).is_some() {
+        //         // duplicate method
+        //         return Err(());
+        //     }
+        //     m.insert(mthd.to_string(), fntp);
+        // } else {
+        //     let mut m = FxHashMap::default();
+        //     m.insert(mthd.to_string(), fntp);
+        //     self.methods.insert(full_name.to_string(), m);
+        // }
         Ok(())
     }
 
