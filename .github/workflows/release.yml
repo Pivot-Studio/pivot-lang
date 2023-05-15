@@ -26,12 +26,12 @@ jobs:
         config:
           - os: "macOS-latest"
             dir: osx64
-            arch: darwin-arm64
+            arch: darwin-amd64
             artifacts: "plc"
             RUSTFLAGS: ""
-          - os: "macOS-latest"
+          - os: "self-hosted"
             dir: osx64
-            arch: darwin-amd64
+            arch: darwin-arm64
             artifacts: "plc"
             RUSTFLAGS: ""
           - os: "ubuntu-latest"
@@ -49,13 +49,15 @@ jobs:
         with:
           submodules: true
 
-      - name: Setup | Rust
-        uses: ATiltedTree/setup-rust@v1
+      - name: Install Rust (stable)
+        uses: actions-rs/toolchain@v1
         with:
-          rust-version: "1.62.1"
+          profile: minimal
+          override: true
 
       - uses: actions/cache@v3
         name: Cache Cargo
+        if: ${{ matrix.config.os != 'self-hosted' }}
         with:
           path: |
             ~/.cargo/bin/
