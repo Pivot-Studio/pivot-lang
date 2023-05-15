@@ -1,0 +1,321 @@
+<!DOCTYPE HTML>
+<html lang="en" class="sidebar-visible no-js light">
+    <head>
+        <!-- Book generated using mdBook -->
+        <meta charset="UTF-8">
+        <title>Evacuation - Pivot Lang</title>
+
+
+        <!-- Custom HTML head -->
+        
+        <meta name="description" content="">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="theme-color" content="#ffffff" />
+
+        <link rel="icon" href="../favicon.svg">
+        <link rel="shortcut icon" href="../favicon.png">
+        <link rel="stylesheet" href="../css/variables.css">
+        <link rel="stylesheet" href="../css/general.css">
+        <link rel="stylesheet" href="../css/chrome.css">
+        <link rel="stylesheet" href="../css/print.css" media="print">
+
+        <!-- Fonts -->
+        <link rel="stylesheet" href="../FontAwesome/css/font-awesome.css">
+        <link rel="stylesheet" href="../fonts/fonts.css">
+
+        <!-- Highlight.js Stylesheets -->
+        <link rel="stylesheet" href="../highlight.css">
+        <link rel="stylesheet" href="../tomorrow-night.css">
+        <link rel="stylesheet" href="../ayu-highlight.css">
+
+        <!-- Custom theme stylesheets -->
+        <link rel="stylesheet" href="../././mdbook-admonish.css">
+
+    </head>
+    <body>
+        <!-- Provide site root to javascript -->
+        <script>
+            var path_to_root = "../";
+            var default_theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "navy" : "light";
+        </script>
+
+        <!-- Work around some values being stored in localStorage wrapped in quotes -->
+        <script>
+            try {
+                var theme = localStorage.getItem('mdbook-theme');
+                var sidebar = localStorage.getItem('mdbook-sidebar');
+
+                if (theme.startsWith('"') && theme.endsWith('"')) {
+                    localStorage.setItem('mdbook-theme', theme.slice(1, theme.length - 1));
+                }
+
+                if (sidebar.startsWith('"') && sidebar.endsWith('"')) {
+                    localStorage.setItem('mdbook-sidebar', sidebar.slice(1, sidebar.length - 1));
+                }
+            } catch (e) { }
+        </script>
+
+        <!-- Set the theme before any content is loaded, prevents flash -->
+        <script>
+            var theme;
+            try { theme = localStorage.getItem('mdbook-theme'); } catch(e) { }
+            if (theme === null || theme === undefined) { theme = default_theme; }
+            var html = document.querySelector('html');
+            html.classList.remove('no-js')
+            html.classList.remove('light')
+            html.classList.add(theme);
+            html.classList.add('js');
+        </script>
+
+        <!-- Hide / unhide sidebar before it is displayed -->
+        <script>
+            var html = document.querySelector('html');
+            var sidebar = 'hidden';
+            if (document.body.clientWidth >= 1080) {
+                try { sidebar = localStorage.getItem('mdbook-sidebar'); } catch(e) { }
+                sidebar = sidebar || 'visible';
+            }
+            html.classList.remove('sidebar-visible');
+            html.classList.add("sidebar-" + sidebar);
+        </script>
+
+        <nav id="sidebar" class="sidebar" aria-label="Table of contents">
+            <div class="sidebar-scrollbox">
+                <ol class="chapter"><li class="chapter-item expanded "><a href="../About.html"><strong aria-hidden="true">1.</strong> About</a></li><li class="chapter-item expanded affix "><li class="part-title">Tutorial</li><li class="chapter-item expanded "><a href="../tutorial/index.html"><strong aria-hidden="true">2.</strong> Quick Start</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../tutorial/installation.html"><strong aria-hidden="true">2.1.</strong> Installation</a></li><li class="chapter-item expanded "><a href="../tutorial/basicproject.html"><strong aria-hidden="true">2.2.</strong> Basic Project</a></li><li class="chapter-item expanded "><a href="../tutorial/vscsupport.html"><strong aria-hidden="true">2.3.</strong> VSC Support</a></li></ol></li><li class="chapter-item expanded "><a href="../references/index.html"><strong aria-hidden="true">3.</strong> References</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../references/module.html"><strong aria-hidden="true">3.1.</strong> Module</a></li><li class="chapter-item expanded "><a href="../references/method.html"><strong aria-hidden="true">3.2.</strong> Method</a></li><li class="chapter-item expanded "><a href="../references/interface.html"><strong aria-hidden="true">3.3.</strong> Trait</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">How the project works internally</li><li class="chapter-item expanded "><a href="../dev-prepare.html"><strong aria-hidden="true">4.</strong> Dev Prepare</a></li><li class="chapter-item expanded "><a href="../compiler/index.html"><strong aria-hidden="true">5.</strong> Compiler</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../compiler/parser.html"><strong aria-hidden="true">5.1.</strong> Parser</a></li><li class="chapter-item expanded "><a href="../compiler/ast.html"><strong aria-hidden="true">5.2.</strong> AST</a></li><li class="chapter-item expanded "><a href="../compiler/flow.html"><strong aria-hidden="true">5.3.</strong> Flow Chart</a></li></ol></li><li class="chapter-item expanded "><a href="../lsp/index.html"><strong aria-hidden="true">6.</strong> Language Server</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../lsp/design.html"><strong aria-hidden="true">6.1.</strong> Design</a></li><li class="chapter-item expanded "><a href="../lsp/diagnostic.html"><strong aria-hidden="true">6.2.</strong> Diagnostic</a></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/index.html"><strong aria-hidden="true">7.</strong> System library</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/vm.html"><strong aria-hidden="true">7.1.</strong> vm</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/gc.html"><strong aria-hidden="true">7.1.1.</strong> gc</a></li><li><ol class="section"><li class="chapter-item expanded "><a href="../systemlib/immix.html"><strong aria-hidden="true">7.1.1.1.</strong> Immix Gc</a></li><li class="chapter-item expanded "><a href="../systemlib/stackmap.html"><strong aria-hidden="true">7.1.1.2.</strong> Stack Map</a></li><li class="chapter-item expanded "><a href="../systemlib/eva.html" class="active"><strong aria-hidden="true">7.1.1.3.</strong> Evacuation</a></li></ol></li></ol></li><li class="chapter-item expanded "><a href="../systemlib/planglib.html"><strong aria-hidden="true">7.2.</strong> planglib</a></li></ol></li><li class="chapter-item expanded "><li class="part-title">CONTRIBUTING</li><li class="chapter-item expanded "><a href="../CONTRIBUTING-CN.html"><strong aria-hidden="true">8.</strong> Contributing</a></li><li class="chapter-item expanded affix "><li class="part-title">Blogs</li><li class="chapter-item expanded "><a href="../blogs/aboutpl.html"><strong aria-hidden="true">9.</strong> About pivot lang</a></li><li class="chapter-item expanded "><a href="../blogs/lsp_and_salsa.html"><strong aria-hidden="true">10.</strong> lsp and salsa</a></li></ol>
+            </div>
+            <div id="sidebar-resize-handle" class="sidebar-resize-handle"></div>
+        </nav>
+
+        <div id="page-wrapper" class="page-wrapper">
+
+            <div class="page">
+                                <div id="menu-bar-hover-placeholder"></div>
+                <div id="menu-bar" class="menu-bar sticky bordered">
+                    <div class="left-buttons">
+                        <button id="sidebar-toggle" class="icon-button" type="button" title="Toggle Table of Contents" aria-label="Toggle Table of Contents" aria-controls="sidebar">
+                            <i class="fa fa-bars"></i>
+                        </button>
+                        <button id="theme-toggle" class="icon-button" type="button" title="Change theme" aria-label="Change theme" aria-haspopup="true" aria-expanded="false" aria-controls="theme-list">
+                            <i class="fa fa-paint-brush"></i>
+                        </button>
+                        <ul id="theme-list" class="theme-popup" aria-label="Themes" role="menu">
+                            <li role="none"><button role="menuitem" class="theme" id="light">Light</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="rust">Rust</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="coal">Coal</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="navy">Navy</button></li>
+                            <li role="none"><button role="menuitem" class="theme" id="ayu">Ayu</button></li>
+                        </ul>
+                        <button id="search-toggle" class="icon-button" type="button" title="Search. (Shortkey: s)" aria-label="Toggle Searchbar" aria-expanded="false" aria-keyshortcuts="S" aria-controls="searchbar">
+                            <i class="fa fa-search"></i>
+                        </button>
+                    </div>
+
+                    <h1 class="menu-title">Pivot Lang</h1>
+
+                    <div class="right-buttons">
+                        <a href="../print.html" title="Print this book" aria-label="Print this book">
+                            <i id="print-button" class="fa fa-print"></i>
+                        </a>
+                        <a href="https://github.com/Pivot-Studio/pivot-lang" title="Git repository" aria-label="Git repository">
+                            <i id="git-repository-button" class="fa fa-github"></i>
+                        </a>
+                        <a href="https://github.com/Pivot-Studio/pivot-lang/edit/master/book/src/systemlib/eva.md" title="Suggest an edit" aria-label="Suggest an edit">
+                            <i id="git-edit-button" class="fa fa-edit"></i>
+                        </a>
+
+                    </div>
+                </div>
+
+                <div id="search-wrapper" class="hidden">
+                    <form id="searchbar-outer" class="searchbar-outer">
+                        <input type="search" id="searchbar" name="searchbar" placeholder="Search this book ..." aria-controls="searchresults-outer" aria-describedby="searchresults-header">
+                    </form>
+                    <div id="searchresults-outer" class="searchresults-outer hidden">
+                        <div id="searchresults-header" class="searchresults-header"></div>
+                        <ul id="searchresults">
+                        </ul>
+                    </div>
+                </div>
+
+                <!-- Apply ARIA attributes after the sidebar and the sidebar toggle button are added to the DOM -->
+                <script>
+                    document.getElementById('sidebar-toggle').setAttribute('aria-expanded', sidebar === 'visible');
+                    document.getElementById('sidebar').setAttribute('aria-hidden', sidebar !== 'visible');
+                    Array.from(document.querySelectorAll('#sidebar a')).forEach(function(link) {
+                        link.setAttribute('tabIndex', sidebar === 'visible' ? 0 : -1);
+                    });
+                </script>
+
+                <div id="content" class="content">
+                    <main>
+                        <h1 id="evacuation-in-practice"><a class="header" href="#evacuation-in-practice">Evacuation in practice</a></h1>
+<p>驱逐算法在实践中很容易造成内存安全问题，本文将会探讨常见的一些内存安全情况，
+列举其他gc的一些解决方案以及他们的问题，以及PL所采取的解决方案。</p>
+<div id="admonition-note" class="admonition note">
+<div class="admonition-title">
+<p>Note</p>
+<p><a class="admonition-anchor-link" href="#admonition-note"></a></p>
+</div>
+<div>
+<p>这个页面只包含驱逐算法的一部分信息，如果你对gc感兴趣，可以查看<a href="./immix.html">immix</a>页面。</p>
+</div>
+</div>
+<h2 id="1-前言--驱逐算法的简单介绍"><a class="header" href="#1-前言--驱逐算法的简单介绍">1. 前言--驱逐算法的简单介绍</a></h2>
+<p>在垃圾回收算法中，经常会面临内存碎片化的问题，这种问题会导致内存的利用率降低，空间局部性降低，从而导致程序的性能下降。
+解决这个问题通常有两种思路：驱逐与压缩。</p>
+<p>简单来说，驱逐算法是将内存中的对象移动到另一块空的内存区域，然后回收原本的内存区域。而压缩算法则是将内存中的对象重新
+排列，使得内存中的对象最终连续排列。我们的Immix GC采用的是驱逐算法。</p>
+<pre class="mermaid">graph TD;
+    subgraph 驱逐之前
+        A
+        B
+    end
+    subgraph A[内存区域1]
+        Obj1
+        Empty1
+        Obj2
+        Empty2
+    end
+    subgraph B[内存区域2]
+        Empty3
+        Empty4
+    end
+    Obj1-.驱逐.-&gt;Empty3
+    Obj2-.驱逐.-&gt;Empty4
+    subgraph 驱逐之后
+        C
+        D
+    end
+    subgraph C[内存区域1]
+        Empty5
+        G[Empty1]
+        Empty6
+        H[Empty2]
+    end
+    subgraph D[内存区域2]
+        E[Obj1]
+        F[Obj2]
+    end
+    驱逐之前--&gt;驱逐之后
+</pre>
+<h2 id="2-驱逐算法的问题"><a class="header" href="#2-驱逐算法的问题">2. 驱逐算法的问题</a></h2>
+<p>驱逐算法虽然能够解决内存碎片化的问题，但是也存在一些缺点：</p>
+<ol>
+<li>性能损耗：驱逐算法需要将内存中的对象移动到另一块内存区域，这个过程会消耗一定的时间。</li>
+<li>内存安全：驱逐算法在移动对象的过程中，会导致原对象的引用失效，从而导致内存安全问题。</li>
+</ol>
+<p>在immix中，驱逐和标记过程一起完成，总体性能损耗是很小的。而对于第二点，业界的主流做法是采用<code>forward pointer</code>。</p>
+<p>即：在驱逐一个对象的时候，往这个对象原本的内存空间中写入一个指向新内存空间的指针，方便之后利用这个信息对
+原对象的引用进行修正。</p>
+<pre class="mermaid">graph LR;
+    subgraph 驱逐之前
+        S[stack_pointer]--&gt;A[Space1]
+        A-.驱逐.-&gt;B1[Space2]
+    end
+    subgraph 驱逐之后
+        S1[stack_pointer]--&gt;B[Space1]
+        B--&gt;A1[Space2]
+    end
+    驱逐之前--&gt;驱逐之后
+</pre>
+<p>而修正引用的方法有多种，其中一种是使用读写屏障，这种方法的缺点是需要在每次读写的时候都要进行判断，会导致mutator严重的性能损耗。</p>
+<pre class="mermaid">graph LR;
+    subgraph load指针
+        S1[stack_pointer]--load--&gt;B[Space1]
+        B-.发现B中是forward pointer,继续load.-&gt;A1[Space2]
+    end
+    subgraph 修正
+        S2[stack_pointer]--&gt;A2[Space2]
+        B2[Space1]--&gt;A2[Space2]
+    end
+    load指针--&gt;修正
+</pre>
+<p>这种做法称为自愈，他的一大优势是在一些情况下可以避免gc暂停。</p>
+<p>我们的做法是在gc暂停的时候，在第一次驱逐的时候安装forward pointer，之后的标记过程中遇到forward pointer就进行修正，这样避免了读写屏障。同时immix的修正与mark一起进行，不需要多次遍历，相对来说效率很高。</p>
+<p>但是这种做法需要编译器良好的配合来避免内存安全问题，稍有不慎就会segfault/bus error。</p>
+<h2 id="3-内存安全注意事项与解决方案"><a class="header" href="#3-内存安全注意事项与解决方案">3. 内存安全注意事项与解决方案</a></h2>
+<p>几乎所有的内存安全问题都是由于引用没有正确更新。也就是说在gc回收驱逐了一部分内存之后，一部分引用还指向了原本的内存空间。</p>
+<pre class="mermaid">graph LR;
+    subgraph 驱逐之前
+        S[stack_pointer1]--&gt;A[Space1]
+        S2[stack_pointer2]--&gt;A[Space1]
+        A-.驱逐.-&gt;B1[Space2]
+    end
+    subgraph 驱逐并且修正之后
+        S1[stack_pointer1]--&gt;A1[Space2]
+        S3[stack_pointer2]--&gt;B2[Space1]
+    end
+    驱逐之前--&gt;驱逐并且修正之后
+</pre>
+<p>上图中，stack_pointer2指向的引用没有被修正，之后访问它指向的内存空间就可能会出错。</p>
+<p>为了避免该问题，我们需要在编译时提供信息给gc，让gc能够知道所有指向堆变量的栈指针。这样gc就能够在驱逐的时候将这些指针进行修正。</p>
+<p>具体来说，我们需要进行两项工作：</p>
+<ol>
+<li>所有llvm ir中 <strong>独立存在的</strong> 堆变量都必须有个对应的stack alloca，并且该alloca要被注册为gcroot</li>
+<li>每次获取llvm值的时候，如果该变量为 <strong>独立存在的</strong> 堆变量，必须从它对应的stack alloca中load出来</li>
+</ol>
+<div id="admonition-note-1" class="admonition note">
+<div class="admonition-title">
+<p>Note</p>
+<p><a class="admonition-anchor-link" href="#admonition-note-1"></a></p>
+</div>
+<div>
+<p>所谓 <strong>独立存在的堆变量</strong> 指的是llvm ir中作为左值存在，并且在下一次<code>GC_malloc</code>之后可能被使用的堆变量。为了保险起见，
+目前在我们的代码中，所有<code>GC_malloc</code>的返回值，所有<code>bitcast</code>的结果，所有<code>load</code>的结果，以及所有<code>gep</code>结果都被认为是 <strong>独立存在的堆变量</strong> 。</p>
+</div>
+</div>
+<p>其中第二点已经在<code>get_llvm_value</code>中统一进行了处理，而第一点则需要在开发者在编写代码的时候自己进行注意。为了方便，llvmbuilder中增加了<code>create_root_for</code>函数
+帮助开发者注册stackroot。</p>
+
+                    </main>
+
+                    <nav class="nav-wrapper" aria-label="Page navigation">
+                        <!-- Mobile navigation buttons -->
+                            <a rel="prev" href="../systemlib/stackmap.html" class="mobile-nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                                <i class="fa fa-angle-left"></i>
+                            </a>
+
+                            <a rel="next" href="../systemlib/planglib.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                                <i class="fa fa-angle-right"></i>
+                            </a>
+
+                        <div style="clear: both"></div>
+                    </nav>
+                </div>
+            </div>
+
+            <nav class="nav-wide-wrapper" aria-label="Page navigation">
+                    <a rel="prev" href="../systemlib/stackmap.html" class="nav-chapters previous" title="Previous chapter" aria-label="Previous chapter" aria-keyshortcuts="Left">
+                        <i class="fa fa-angle-left"></i>
+                    </a>
+
+                    <a rel="next" href="../systemlib/planglib.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                        <i class="fa fa-angle-right"></i>
+                    </a>
+            </nav>
+
+        </div>
+
+
+
+
+        <script>
+            window.playground_copyable = true;
+        </script>
+
+
+        <script src="../elasticlunr.min.js"></script>
+        <script src="../mark.min.js"></script>
+        <script src="../searcher.js"></script>
+
+        <script src="../clipboard.min.js"></script>
+        <script src="../highlight.js"></script>
+        <script src="../book.js"></script>
+
+        <!-- Custom JS scripts -->
+        <script src="../mermaid.min.js"></script>
+        <script src="../mermaid-init.js"></script>
+
+
+    </body>
+</html>
