@@ -21,7 +21,6 @@ on:
       - '**.pi'
       - '**/Kagari.*'
       - 'codecov.yml'
-  merge_group:
 
 env:
   RUSTFLAGS: -Dwarnings
@@ -70,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-latest", "windows-latest", "macOS-latest"]
+        os: ["ubuntu-latest", "windows-latest", "macOS-latest", "self-hosted"]
         include:
           - RUSTFLAGS: "-Dwarnings"
             CARGO_INCREMENTAL: 1
