@@ -37,10 +37,10 @@ impl PrintTrait for UnaryOpNode {
 
 // 单目运算符
 impl Node for UnaryOpNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let exp_range = self.exp.range();
         let rv = self.exp.emit(ctx, builder)?.get_value();
@@ -104,10 +104,10 @@ impl PrintTrait for BinOpNode {
 }
 
 impl Node for BinOpNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let (lrange, rrange) = (self.left.range(), self.right.range());
         let lv = self.left.emit(ctx, builder)?.get_value();
@@ -253,10 +253,10 @@ impl PrintTrait for TakeOpNode {
 }
 
 impl Node for TakeOpNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let no = self.head.emit(ctx, builder)?;
         let nv = no.get_value();
@@ -330,7 +330,7 @@ impl Node for TakeOpNode {
                     .or_else(|| ctx.find_global_method(&s.get_full_name(), &id.name))
                     .or_else(|| ctx.find_global_method(&s.get_full_name_except_generic(), &id.name))
                 {
-                    let mthd = mthd.clone();
+                    let mthd = mthd;
                     let mth = mthd.borrow();
                     _ = mth.expect_pub(ctx, id_range);
                     ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
@@ -352,9 +352,11 @@ impl Node for TakeOpNode {
             PLType::Union(union) => {
                 if let Some(mthd) = union.find_method(&id.name).or_else(|| {
                     ctx.find_global_method(&union.get_full_name_except_generic(), &id.name)
-                    .or_else(|| ctx.find_global_method(&union.get_full_name_except_generic(), &id.name))
+                        .or_else(|| {
+                            ctx.find_global_method(&union.get_full_name_except_generic(), &id.name)
+                        })
                 }) {
-                    let mthd = mthd.clone();
+                    let mthd = mthd;
                     let mthd = mthd.borrow();
                     _ = mthd.expect_pub(ctx, id_range);
                     ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);

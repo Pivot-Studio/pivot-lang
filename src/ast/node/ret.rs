@@ -23,10 +23,10 @@ impl PrintTrait for RetNode {
 }
 
 impl Node for RetNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let ret_pltype = ctx.rettp.as_ref().unwrap().clone();
         if let Some(ret_node) = &mut self.value {

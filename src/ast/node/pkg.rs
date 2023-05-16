@@ -28,9 +28,6 @@ pub struct UseNode {
 }
 
 impl UseNode {
-    pub(crate) fn is_complete(&self) -> bool {
-        !self.ids.is_empty() && self.complete
-    }
     pub(crate) fn get_last_id(&self) -> Option<String> {
         self.ids.last().map(|x| x.as_ref().name.clone())
     }
@@ -50,10 +47,10 @@ impl PrintTrait for UseNode {
 }
 
 impl Node for UseNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        _builder: &'b BuilderEnum<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         #[cfg(target_arch = "wasm32")]
         let mut path = PathBuf::from("");
@@ -74,13 +71,13 @@ impl Node for UseNode {
             }
         }
         if self.ids.len() > 1 {
-            for (i,v) in self.ids.iter().enumerate() {
+            for (i, v) in self.ids.iter().enumerate() {
                 if i == self.ids.len() - 1 {
                     break;
                 }
                 ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
             }
-        }else {
+        } else {
             for v in self.ids.iter() {
                 ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
             }
@@ -107,15 +104,15 @@ impl Node for UseNode {
                     }
                     let mut comp = get_ns_path_completions(path.to_str().unwrap());
                     let mod_id = path.file_name().unwrap().to_str().unwrap();
-                    ctx.plmod.submods.get(mod_id).map(|m|{
-                       comp.extend(  m.get_pltp_completions_list())
-                    });
+                    if let Some(m) = ctx.plmod.submods.get(mod_id) {
+                        comp.extend(m.get_pltp_completions_list())
+                    }
                     comp
                 });
                 let mod_id = path.file_name().unwrap().to_str().unwrap();
                 if let Some(m) = ctx.plmod.submods.get(mod_id) {
                     let n = self.ids.last().unwrap();
-                     if let Some(t) = m.types.get(&n.name) {
+                    if let Some(t) = m.types.get(&n.name) {
                         let t = match &*t.borrow() {
                             PLType::Fn(_) => SemanticTokenType::FUNCTION,
                             PLType::Struct(_) => SemanticTokenType::STRUCT,
@@ -125,10 +122,12 @@ impl Node for UseNode {
                         };
                         ctx.push_semantic_token(n.range, t, 0);
                         if !self.complete {
-                            return Err(ctx.add_diag(self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION)));
+                            return Err(ctx.add_diag(
+                                self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION),
+                            ));
                         }
-                        return  Ok(Default::default());
-                    }else {
+                        return Ok(Default::default());
+                    } else {
                         ctx.push_semantic_token(n.range, SemanticTokenType::NAMESPACE, 0);
                     }
                 }
@@ -136,7 +135,11 @@ impl Node for UseNode {
             ctx.add_diag(self.range.new_err(ErrorCode::UNRESOLVED_MODULE));
         }
         if self.ids.len() > 1 {
-            ctx.push_semantic_token(self.ids.last().unwrap().range, SemanticTokenType::NAMESPACE, 0);
+            ctx.push_semantic_token(
+                self.ids.last().unwrap().range,
+                SemanticTokenType::NAMESPACE,
+                0,
+            );
         }
         ctx.if_completion(self.range, || {
             if self.singlecolon {
@@ -194,10 +197,10 @@ impl PrintTrait for ExternIdNode {
 }
 
 impl Node for ExternIdNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         if self.ns.is_empty() {
             if self.complete {

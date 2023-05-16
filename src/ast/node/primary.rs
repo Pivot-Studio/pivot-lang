@@ -24,10 +24,10 @@ impl PrintTrait for PrimaryNode {
 }
 
 impl Node for PrimaryNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.emit_comment_highlight(&self.comments[0]);
         let res = self.value.emit(ctx, builder);
@@ -51,10 +51,10 @@ impl PrintTrait for BoolConstNode {
 }
 
 impl Node for BoolConstNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::KEYWORD, 0);
         builder
@@ -76,10 +76,10 @@ impl PrintTrait for NumNode {
     }
 }
 impl Node for NumNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::NUMBER, 0);
         if let Num::Int(x) = self.value {
@@ -105,10 +105,10 @@ pub struct VarNode {
 }
 
 impl Node for VarNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         if self.is_macro_var() {
             let re = ctx
@@ -257,10 +257,10 @@ impl PrintTrait for ArrayElementNode {
 }
 
 impl Node for ArrayElementNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let v = self.arr.emit(ctx, builder)?.get_value().unwrap();
         let pltype = v.get_ty();
@@ -301,10 +301,10 @@ impl PrintTrait for ParanthesesNode {
 }
 
 impl Node for ParanthesesNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         self.node.emit(ctx, builder)
     }

@@ -25,10 +25,10 @@ pub struct UnionDefNode {
 }
 
 impl Node for UnionDefNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.name.range, SemanticTokenType::TYPE, 0);
         if let Some(generics) = &mut self.generics {
@@ -64,11 +64,7 @@ impl PrintTrait for UnionDefNode {
 }
 
 impl UnionDefNode {
-    pub fn add_to_symbols<'a, 'ctx, 'b>(
-        &self,
-        ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
-    ) {
+    pub fn add_to_symbols<'a, 'b>(&self, ctx: &'b mut Ctx<'a>, builder: &'b BuilderEnum<'a, '_>) {
         let generic_map = self
             .generics
             .as_ref()

@@ -30,10 +30,10 @@ pub struct AsNode {
 }
 
 impl Node for AsNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let re = self.expr.emit(ctx, builder);
         self.ty.emit_highlight(ctx);
@@ -254,9 +254,9 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 }
 
-fn get_option_type<'a, 'ctx, 'b>(
+fn get_option_type<'a, 'b>(
     ctx: &'b mut Ctx<'a>,
-    builder: &'b BuilderEnum<'a, 'ctx>,
+    builder: &'b BuilderEnum<'a, '_>,
     target_ty: Arc<RefCell<PLType>>,
 ) -> TypeNodeResult {
     let pltype = ctx.get_type("Option", Default::default()).unwrap();
@@ -284,10 +284,10 @@ pub struct IsNode {
 }
 
 impl Node for IsNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let re = self.expr.emit(ctx, builder);
         self.ty.emit_highlight(ctx);

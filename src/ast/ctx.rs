@@ -7,7 +7,6 @@ use super::node::macro_nodes::MacroNode;
 use super::node::node_result::NodeResult;
 use super::node::NodeEnum;
 use super::node::TypeNode;
-use super::node::TypeNodeEnum;
 use super::plmod::CompletionItemWrapper;
 use super::plmod::GlobalVar;
 use super::plmod::LSPDef;
@@ -18,6 +17,7 @@ use super::pltype::FNValue;
 use super::pltype::ImplAble;
 use super::pltype::PLType;
 use super::pltype::PriType;
+use super::pltype::TraitMthdImpl;
 use super::range::Pos;
 use super::range::Range;
 use super::tokens::TokenType;
@@ -94,7 +94,7 @@ pub struct Ctx<'a> {
     pub in_macro: bool,
     pub closure_data: Option<RefCell<ClosureCtxData>>,
     pub expect_ty: Option<Arc<RefCell<PLType>>>,
-    pub trait_mthd_table: Arc<RefCell<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>>,
+    pub trait_mthd_table: TraitMthdImpl,
 }
 
 #[derive(Clone, Default)]
@@ -332,9 +332,20 @@ impl<'a, 'ctx> Ctx<'a> {
             }
             let trait_handle = builder.alloc("tmp_traitv", &target_pltype.borrow(), self, None);
             for f in t.list_trait_fields().iter() {
-                let mthd = st.find_method(&f.name).unwrap_or_else(||{
-                    t.trait_methods_impl.borrow().get(&st.get_full_name()).or(t.trait_methods_impl.borrow().get(&st.get_full_name_except_generic())).unwrap().get(&f.name).unwrap().clone()
+                let mthd = st.find_method(&f.name).unwrap_or_else(|| {
+                    t.trait_methods_impl
+                        .borrow()
+                        .get(&st.get_full_name())
+                        .or(t
+                            .trait_methods_impl
+                            .borrow()
+                            .get(&st.get_full_name_except_generic()))
+                        .unwrap()
+                        .get(&f.name)
+                        .unwrap()
+                        .clone()
                 });
+                // TODO: let a:trait = B<i64>{} panic
                 let fnhandle = builder.get_or_insert_fn_handle(&mthd.borrow(), self);
                 let targetftp = f.typenode.get_type(self, builder, true).unwrap();
                 let casted = builder.bitcast(self, fnhandle, &targetftp.borrow(), "fncast_tmp");
@@ -405,7 +416,7 @@ impl<'a, 'ctx> Ctx<'a> {
     ) {
         let mut m = self.get_root_ctx().trait_mthd_table.borrow_mut();
         m.entry(st_name.to_string())
-            .or_insert_with(|| Default::default())
+            .or_insert_with(Default::default)
             .insert(mthd_name.to_owned(), fntp);
     }
     pub fn get_root_ctx(&self) -> &Ctx {
@@ -433,11 +444,11 @@ impl<'a, 'ctx> Ctx<'a> {
         mthd: &str,
         fntp: Arc<RefCell<FNValue>>,
         impl_trait: Option<Arc<RefCell<PLType>>>,
-        generic:bool
+        generic: bool,
     ) -> Result<(), PLDiag> {
         if t.get_path() != self.get_file() {
             if let Some(tt) = impl_trait {
-                if let PLType::Trait(st) = &*tt.clone().borrow() {
+                if let PLType::Trait(st) = &*tt.borrow() {
                     if st.get_path() != self.get_file() {
                         return Err(fntp
                             .borrow()
@@ -445,7 +456,7 @@ impl<'a, 'ctx> Ctx<'a> {
                             .new_err(ErrorCode::CANNOT_IMPL_TYPE_OUT_OF_DEFINE_MOD)
                             .add_to_ctx(self));
                     }
-                    let mut m: std::cell::RefMut<std::collections::HashMap<String, std::collections::HashMap<String, Arc<RefCell<FNValue>>, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>> = st.trait_methods_impl.borrow_mut();
+                    let mut m = st.trait_methods_impl.borrow_mut();
                     let st_name = if generic {
                         t.get_full_name_except_generic()
                     } else {
@@ -463,6 +474,7 @@ impl<'a, 'ctx> Ctx<'a> {
                         self.add_to_global_mthd_table(&st_name, mthd, fntp);
                         return Ok(());
                     } else {
+                        #[allow(clippy::drop_non_drop)]
                         drop(table);
                         m.insert(st_name.clone(), FxHashMap::default());
                         let table = m.get_mut(&st_name).unwrap();
@@ -487,12 +499,12 @@ impl<'a, 'ctx> Ctx<'a> {
         mthd: &str,
         fntp: FNValue,
         impl_trait: Option<Arc<RefCell<PLType>>>,
-        generic:bool
+        generic: bool,
     ) -> Result<(), PLDiag> {
         let fntp = Arc::new(RefCell::new(fntp));
         match tp {
-            PLType::Struct(s) => self.add_method_to_tp(s, mthd, fntp, impl_trait,generic),
-            PLType::Union(u) => self.add_method_to_tp(u, mthd, fntp, impl_trait,generic),
+            PLType::Struct(s) => self.add_method_to_tp(s, mthd, fntp, impl_trait, generic),
+            PLType::Union(u) => self.add_method_to_tp(u, mthd, fntp, impl_trait, generic),
             _ => todo!(),
         }
     }
@@ -965,7 +977,8 @@ impl<'a, 'ctx> Ctx<'a> {
         vmap: &mut FxHashMap<String, CompletionItem>,
         filter: impl Fn(&PLType) -> bool,
     ) {
-        self.plmod.get_pltp_completions(vmap, &filter, &self.generic_types);
+        self.plmod
+            .get_pltp_completions(vmap, &filter, &self.generic_types);
         if let Some(father) = self.father {
             father.get_pltp_completions(vmap, filter);
         }

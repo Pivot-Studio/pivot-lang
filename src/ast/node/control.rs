@@ -32,10 +32,10 @@ impl PrintTrait for IfNode {
 
 impl Node for IfNode {
     // ANCHOR: emit
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let cond_block = builder.append_basic_block(ctx.function.unwrap(), "if.cond");
         let then_block = builder.append_basic_block(ctx.function.unwrap(), "if.then");
@@ -118,10 +118,10 @@ impl PrintTrait for WhileNode {
 }
 
 impl Node for WhileNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let ctx = &mut ctx.new_child(self.range.start, builder);
         let cond_block = builder.append_basic_block(ctx.function.unwrap(), "while.cond");
@@ -181,10 +181,10 @@ impl PrintTrait for ForNode {
 }
 
 impl Node for ForNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let ctx = &mut ctx.new_child(self.range.start, builder);
         let pre_block = builder.append_basic_block(ctx.function.unwrap(), "for.pre");
@@ -246,10 +246,10 @@ impl PrintTrait for BreakNode {
 }
 
 impl Node for BreakNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.emit_comment_highlight(&self.comments[0]);
         if let Some(b) = ctx.break_block {
@@ -277,10 +277,10 @@ impl PrintTrait for ContinueNode {
 }
 
 impl Node for ContinueNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         if let Some(b) = ctx.continue_block {
             builder.build_unconditional_branch(b);

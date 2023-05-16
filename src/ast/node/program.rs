@@ -64,10 +64,10 @@ impl PrintTrait for ProgramNode {
 }
 
 impl Node for ProgramNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         // emit structs
         for def in self.traits.iter() {
@@ -205,15 +205,22 @@ impl Program {
             let mut f = self.docs(db).get_file_params(db, f, false);
             let mut symbol_opt = None;
             if f.is_none() {
-                if let Some(p) =path.parent()  {
+                if let Some(p) = path.parent() {
                     mod_id = Some(p.file_name().unwrap().to_str().unwrap().to_string());
                     let file = p.with_extension("pi").to_str().unwrap().to_string();
-                    f =self.docs(db).get_file_params(db, file, false);
-                    symbol_opt = Some(path.with_extension("").file_name().unwrap().to_str().unwrap().to_string());
+                    f = self.docs(db).get_file_params(db, file, false);
+                    symbol_opt = Some(
+                        path.with_extension("")
+                            .file_name()
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string(),
+                    );
                     if f.is_none() {
                         continue;
                     }
-                }else {
+                } else {
                     continue;
                 }
             }
@@ -227,12 +234,12 @@ impl Program {
             let module = m.plmod(db);
             if let Some(s) = symbol_opt {
                 let symbol = module.types.get(&s);
-                symbol.map(|x| {
+                if let Some(x) = symbol {
                     if let PLType::Trait(t) = &*x.borrow() {
                         global_mthd_map.extend(t.trait_methods_impl.borrow().clone());
                     }
                     global_tp_map.insert(s, x.to_owned());
-                });
+                }
             }
             modmap.insert(mod_id.unwrap(), module);
         }
@@ -516,13 +523,12 @@ unsafe impl Send for Mod {}
 
 unsafe impl Sync for Mod {}
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnsafeWrapper<T>(T);
 
 unsafe impl<T> Send for UnsafeWrapper<T> {}
 unsafe impl<T> Sync for UnsafeWrapper<T> {}
-impl <T> UnsafeWrapper<T> {
+impl<T> UnsafeWrapper<T> {
     fn new(t: T) -> Self {
         Self(t)
     }

@@ -23,10 +23,10 @@ pub struct TupleInitNode {
 }
 
 impl Node for TupleInitNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut crate::ast::ctx::Ctx<'a>,
-        builder: &'b crate::ast::builder::BuilderEnum<'a, 'ctx>,
+        builder: &'b crate::ast::builder::BuilderEnum<'a, '_>,
     ) -> super::node_result::NodeResult {
         let mut expr_values = vec![];
         let mut fields = LinkedHashMap::new();
@@ -121,10 +121,10 @@ pub struct TupleTypeNode {
 }
 
 impl TypeNode for TupleTypeNode {
-    fn get_type<'a, 'ctx, 'b>(
+    fn get_type<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
         gen_code: bool,
     ) -> super::TypeNodeResult {
         let mut fields = LinkedHashMap::new();
@@ -173,11 +173,11 @@ impl TypeNode for TupleTypeNode {
         }
     }
 
-    fn eq_or_infer<'a, 'ctx, 'b>(
+    fn eq_or_infer<'a, 'b>(
         &self,
         ctx: &'b mut crate::ast::ctx::Ctx<'a>,
         pltype: Arc<RefCell<PLType>>,
-        builder: &'b crate::ast::builder::BuilderEnum<'a, 'ctx>,
+        builder: &'b crate::ast::builder::BuilderEnum<'a, '_>,
     ) -> Result<crate::ast::ctx::EqRes, crate::ast::diag::PLDiag> {
         let left = self.get_type(ctx, builder, true)?;
         let eq = *left.borrow() == *pltype.borrow();

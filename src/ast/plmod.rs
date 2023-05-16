@@ -5,10 +5,8 @@ use super::diag::{ErrorCode, PLDiag};
 use super::node::macro_nodes::MacroNode;
 use super::pltype::PLType;
 use super::pltype::PriType;
-use super::pltype::{FNValue, ImplAble};
 
 use super::range::Range;
-use super::tokens::TokenType;
 
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::Db;
@@ -263,12 +261,8 @@ impl Mod {
     }
     pub fn get_pltp_completions_list(&self) -> Vec<CompletionItem> {
         let mut m = FxHashMap::<String, CompletionItem>::default();
-        self.get_pltp_completions(
-            &mut m,
-            &|_| true,
-            &FxHashMap::default(),
-        );
-        m.into_iter().map(|(_, v)| v).collect()
+        self.get_pltp_completions(&mut m, &|_| true, &FxHashMap::default());
+        m.into_values().collect()
     }
     pub fn get_pltp_completions(
         &self,
@@ -320,7 +314,6 @@ impl Mod {
             );
         }
     }
-
 
     pub fn get_ns_completions_pri(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         for (k, _) in self.submods.iter() {

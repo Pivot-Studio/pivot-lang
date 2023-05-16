@@ -164,10 +164,10 @@ impl UnionType {
             .join(", ");
         format!("{}<{}>", self.name, typeinfer)
     }
-    pub fn gen_code<'a, 'ctx, 'b>(
+    pub fn gen_code<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<UnionType, PLDiag> {
         let name = self.append_name_with_generic();
         if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
@@ -191,11 +191,11 @@ impl UnionType {
         pltype.replace(PLType::Union(res.clone()));
         Ok(res)
     }
-    pub fn has_type<'a, 'ctx, 'b>(
+    pub fn has_type<'a, 'b>(
         &self,
         pltype: &PLType,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Option<usize> {
         ctx.run_in_type_mod(self, |ctx, u| {
             u.sum_types
@@ -631,10 +631,10 @@ impl TryFrom<PLType> for FNValue {
     }
 }
 impl FNValue {
-    pub fn to_closure_ty<'a, 'ctx, 'b>(
+    pub fn to_closure_ty<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> ClosureType {
         return ClosureType {
             range: Default::default(),
@@ -675,11 +675,11 @@ impl FNValue {
     /// 忽略第一个参数比较（receiver
     ///
     /// 因为接口函数的第一个参数是*i64，而实现函数的第一个参数是实现类型
-    pub fn eq_except_receiver<'a, 'ctx, 'b>(
+    pub fn eq_except_receiver<'a, 'b>(
         &self,
         other: &FNValue,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> bool {
         if self.name.split("::").last().unwrap() != other.name.split("::").last().unwrap() {
             return false;
@@ -714,10 +714,10 @@ impl FNValue {
             name
         }
     }
-    pub fn generic_infer_pltype<'a, 'ctx, 'b>(
+    pub fn generic_infer_pltype<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<FNValue, PLDiag> {
         let name = self.append_name_with_generic(self.name.clone());
         if let Some(pltype) = self.generic_infer.borrow().get(&name) {
@@ -864,9 +864,10 @@ pub struct STType {
     pub is_tuple: bool,
     pub generic_infer_types: IndexMap<String, Arc<RefCell<PLType>>>,
     pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
-    pub trait_methods_impl:
-        Arc<RefCell<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>>,
+    pub trait_methods_impl: TraitMthdImpl,
 }
+
+pub type TraitMthdImpl = Arc<RefCell<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>>;
 
 impl PartialEq for STType {
     fn eq(&self, other: &Self) -> bool {
@@ -1043,9 +1044,8 @@ impl STType {
     fn implements_trait_curr_mod(&self, tp: &STType, plmod: &Mod) -> bool {
         let re = plmod
             .impls
-            .get(&self.get_full_name()).or(plmod
-                .impls
-                .get(&self.get_full_name_except_generic()))
+            .get(&self.get_full_name())
+            .or(plmod.impls.get(&self.get_full_name_except_generic()))
             .and_then(|v| v.get(&tp.get_full_name()))
             .is_some();
         if !re {
@@ -1075,10 +1075,10 @@ impl STType {
             .join(", ");
         format!("{}<{}>", self.name, typeinfer)
     }
-    pub fn gen_code<'a, 'ctx, 'b>(
+    pub fn gen_code<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
         ctx.protect_generic_context(&self.generic_map, |ctx| {
             let name = self.append_name_with_generic();

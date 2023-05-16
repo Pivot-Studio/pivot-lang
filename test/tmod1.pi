@@ -1,0 +1,10 @@
+use project1::tmod;
+pub trait namet {
+    fn namet() void;
+}
+
+impl <T>  namet for tmod::name<T>  {
+    fn namet() void {
+        return;
+    }
+}

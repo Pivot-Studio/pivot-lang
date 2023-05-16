@@ -18,6 +18,7 @@ use project1::test::closure;
 use project1::test::map;
 use project1::test::tree;
 use project1::test::fixed_point;
+use project1::tmod2::test_mod_impl;
 use pl_test::main;
 
 pub fn main() i64 {
@@ -42,6 +43,7 @@ pub fn main() i64 {
     tree::test_eva();
     map::test_map();
     fixed_point::test_fixed_point();
+    test_mod_impl();
     return 0;
 }
 

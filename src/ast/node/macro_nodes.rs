@@ -31,10 +31,10 @@ impl PrintTrait for MacroNode {
 }
 
 impl Node for MacroNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        _builder: &'b BuilderEnum<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.send_if_go_to_def(self.range, self.range, ctx.get_file());
         ctx.set_glob_refs(&ctx.plmod.get_full_name(&self.id.name), self.id.range);
@@ -204,10 +204,10 @@ impl PrintTrait for MacroLoopStatementNode {
 }
 
 impl Node for MacroLoopStatementNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.with_macro_loop(|ctx| self.statements.emit(ctx, builder), self.range)
     }
@@ -230,10 +230,10 @@ impl PrintTrait for MacroCallNode {
 }
 
 impl Node for MacroCallNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         match &*self.callee {
             NodeEnum::ExternIdNode(ex_node) => {

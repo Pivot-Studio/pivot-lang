@@ -30,10 +30,10 @@ impl PrintTrait for PointerOpNode {
 }
 
 impl Node for PointerOpNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let v = self.value.emit(ctx, builder)?.get_value();
         let v = v.unwrap();
