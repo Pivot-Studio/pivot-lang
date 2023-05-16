@@ -15,6 +15,7 @@ use crate::ast::compiler::{compile_dry_file, ActionType};
 use crate::ast::ctx::{self, Ctx};
 use crate::ast::plmod::LSPDef;
 use crate::ast::plmod::Mod;
+use crate::ast::pltype::add_primitive_types;
 use crate::flow::display::Dot;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
@@ -451,6 +452,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     );
     ctx.trait_mthd_table = Arc::new(RefCell::new(params.mth_table(db).get().clone()));
     ctx.plmod.types = params.types(db).get().clone();
+    add_primitive_types(&mut ctx);
     ctx.plmod.submods = params.submods(db);
     // imports all builtin symbols
     // #[cfg(not(target_arch = "wasm32"))] // TODO support std on wasm

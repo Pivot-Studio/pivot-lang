@@ -125,7 +125,7 @@ impl<'a, 'ctx> Ctx<'a> {
             .to_str()
             .unwrap()
             .to_string();
-        let mut ctx = Ctx {
+        Ctx {
             need_highlight: 0,
             generic_types: FxHashMap::default(),
             plmod: Mod::new(f, src_file_path.to_string()),
@@ -153,9 +153,7 @@ impl<'a, 'ctx> Ctx<'a> {
             expect_ty: None,
             trait_mthd_table: Default::default(),
             root: None,
-        };
-        add_primitive_types(&mut ctx);
-        ctx
+        }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
         let mut root = self.root;
