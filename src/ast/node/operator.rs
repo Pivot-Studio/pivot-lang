@@ -327,6 +327,7 @@ impl Node for TakeOpNode {
                 }
                 if let Some(mthd) = s
                     .find_method(&id.name)
+                    .or_else(|| ctx.find_global_method(&s.get_full_name(), &id.name))
                     .or_else(|| ctx.find_global_method(&s.get_full_name_except_generic(), &id.name))
                 {
                     let mthd = mthd.clone();
@@ -351,6 +352,7 @@ impl Node for TakeOpNode {
             PLType::Union(union) => {
                 if let Some(mthd) = union.find_method(&id.name).or_else(|| {
                     ctx.find_global_method(&union.get_full_name_except_generic(), &id.name)
+                    .or_else(|| ctx.find_global_method(&union.get_full_name_except_generic(), &id.name))
                 }) {
                     let mthd = mthd.clone();
                     let mthd = mthd.borrow();

@@ -47,7 +47,7 @@ pub struct ProgramNode {
     pub globaldefs: Vec<GlobalNode>,
     pub uses: Vec<Box<NodeEnum>>,
     pub traits: Vec<TraitDefNode>,
-    pub trait_impls: Vec<(String, String)>,
+    pub trait_impls: Vec<ImplNode>,
     pub unions: Vec<UnionDefNode>,
 }
 
@@ -89,12 +89,12 @@ impl Node for ProgramNode {
             _ = def.emit_trait_def(ctx, builder);
         }
         self.trait_impls.iter().for_each(|x| {
-            let (struct_name, trait_name) = x;
-            ctx.plmod.add_impl(struct_name, trait_name)
+            _ = x.add_impl_to_ctx(ctx, builder);
         });
         self.fntypes.iter_mut().for_each(|x| {
             _ = x.emit_func_def(ctx, builder);
         });
+        // ctx.errs.borrow_mut().clear();
         // init global
         ctx.set_init_fn(builder);
         self.globaldefs.iter_mut().for_each(|x| {
@@ -170,7 +170,7 @@ impl Program {
         let binding = PathBuf::from(self.params(db).file(db)).with_extension("");
         let pkgname = binding.file_name().unwrap().to_str().unwrap();
         // 默认加入gc和builtin module
-        // #[cfg(not(target_arch = "wasm32"))] // TODO support std on wasm
+        // #[cfg(not(target_arch = "wasm32"))]
         if pkgname != "gc" && pkgname != "builtin" {
             prog.uses.extend_from_slice(&DEFAULT_USE_NODES);
         }
@@ -180,6 +180,8 @@ impl Program {
         } else {
             pb.inc_length(1 + prog.uses.len() as u64);
         }
+        let mut global_mthd_map = FxHashMap::default();
+        let mut global_tp_map = FxHashMap::default();
         // load dependencies
         for (i, u) in prog.uses.iter().enumerate() {
             #[cfg(not(target_arch = "wasm32"))]
@@ -196,15 +198,24 @@ impl Program {
             } else {
                 continue;
             };
-            if !u.is_complete() {
-                continue;
-            }
             let wrapper = ConfigWrapper::new(db, self.config(db), u);
+            let mut mod_id = wrapper.use_node(db).get_last_id();
             let path = wrapper.resolve_dep_path(db);
             let f = path.to_str().unwrap().to_string();
-            let f = self.docs(db).get_file_params(db, f, false);
+            let mut f = self.docs(db).get_file_params(db, f, false);
+            let mut symbol_opt = None;
             if f.is_none() {
-                continue;
+                if let Some(p) =path.parent()  {
+                    mod_id = Some(p.file_name().unwrap().to_str().unwrap().to_string());
+                    let file = p.with_extension("pi").to_str().unwrap().to_string();
+                    f =self.docs(db).get_file_params(db, file, false);
+                    symbol_opt = Some(path.with_extension("").file_name().unwrap().to_str().unwrap().to_string());
+                    if f.is_none() {
+                        continue;
+                    }
+                }else {
+                    continue;
+                }
             }
             let f = f.unwrap();
             // compile depency module first
@@ -213,7 +224,17 @@ impl Program {
                 continue;
             }
             let m = m.unwrap();
-            modmap.insert(wrapper.use_node(db).get_last_id().unwrap(), m.plmod(db));
+            let module = m.plmod(db);
+            if let Some(s) = symbol_opt {
+                let symbol = module.types.get(&s);
+                symbol.map(|x| {
+                    if let PLType::Trait(t) = &*x.borrow() {
+                        global_mthd_map.extend(t.trait_methods_impl.borrow().clone());
+                    }
+                    global_tp_map.insert(s, x.to_owned());
+                });
+            }
+            modmap.insert(mod_id.unwrap(), module);
         }
         let filepath = Path::new(self.params(db).file(db));
         let abs = crate::utils::canonicalize(filepath).unwrap();
@@ -248,6 +269,8 @@ impl Program {
                 .unwrap()
                 .text(db)
                 .clone(),
+            UnsafeWrapper::new(global_tp_map),
+            UnsafeWrapper::new(global_mthd_map),
         );
 
         let nn = p.node(db).node(db);
@@ -419,6 +442,8 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         params.params(db).config(db),
         db,
     );
+    ctx.trait_mthd_table = Arc::new(RefCell::new(params.mth_table(db).get().clone()));
+    ctx.plmod.types = params.types(db).get().clone();
     ctx.plmod.submods = params.submods(db);
     // imports all builtin symbols
     // #[cfg(not(target_arch = "wasm32"))] // TODO support std on wasm
@@ -490,3 +515,18 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
 unsafe impl Send for Mod {}
 
 unsafe impl Sync for Mod {}
+
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UnsafeWrapper<T>(T);
+
+unsafe impl<T> Send for UnsafeWrapper<T> {}
+unsafe impl<T> Sync for UnsafeWrapper<T> {}
+impl <T> UnsafeWrapper<T> {
+    fn new(t: T) -> Self {
+        Self(t)
+    }
+    fn get(&self) -> &T {
+        &self.0
+    }
+}

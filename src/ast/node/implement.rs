@@ -15,6 +15,29 @@ pub struct ImplNode {
     pub impl_trait: Option<(Box<TypeNodeEnum>, (TokenType, Range))>,
 }
 
+
+impl ImplNode {
+    pub fn add_impl_to_ctx<'a, 'b, 'ctx>(&self,ctx: &'b mut Ctx<'a>,builder: &'b BuilderEnum<'a, 'ctx>)->Result<(),PLDiag> {
+        if self.generics.is_some() {
+            let gm = self.generics.as_ref().unwrap().gen_generic_type(ctx);
+            _ = ctx.protect_generic_context(&gm, |ctx|{
+                let sttp = self.target.get_type(ctx, builder,true)?;
+                let trait_tp =self.impl_trait.as_ref().unwrap().0.get_type(ctx, builder,false)?;
+                ctx.plmod.add_impl(&sttp.borrow().get_full_elm_name_without_generic(), 
+                &trait_tp.borrow().get_full_elm_name());
+                Ok(())
+            });
+        }else {
+            let sttp = self.target.get_type(ctx, builder,true)?;
+            let trait_tp =self.impl_trait.as_ref().unwrap().0.get_type(ctx, builder,false)?;
+            let st_name = sttp.borrow().get_full_elm_name();
+            let trait_name = trait_tp.borrow().get_full_elm_name();
+            ctx.plmod.add_impl(&st_name, &trait_name);
+        }
+        Ok(())
+    }
+}
+
 impl PrintTrait for ImplNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);

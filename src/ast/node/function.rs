@@ -339,7 +339,7 @@ pub struct FuncDefNode {
     pub modifier: Option<(TokenType, Range)>,
     pub generics_size: usize, // the size of generics except the generics from impl node
     pub trait_bounds: Option<Vec<Box<TraitBoundNode>>>,
-    pub impl_trait: Option<(Box<TypeNodeEnum>, (TokenType, Range))>,
+    pub impl_trait: Option<(Box<TypeNodeEnum>, (TokenType, Range), bool)>,// bool是是否impl有generic
     pub is_method: bool,
 }
 
@@ -370,6 +370,11 @@ impl TypeNode for FuncDefNode {
             let mut param_pltypes = Vec::new();
             let mut param_name = Vec::new();
             let method = self.is_method;
+            let (trait_tp, generic )= if let Some((v, _, generic)) = &self.impl_trait {
+                (Some(v.clone().get_type(child, builder, false)?),*generic)
+            } else {
+                (None,false)
+            };
             generic_map
                 .iter()
                 .for_each(|(_, pltype)| match &mut *pltype.borrow_mut() {
@@ -400,7 +405,14 @@ impl TypeNode for FuncDefNode {
                     method,
                     generic_map: generic_map.clone(),
                     generic: self.generics.is_some(),
-                    modifier: self.modifier,
+                    modifier: self.modifier.or_else(||{
+                        trait_tp.clone().and_then(|t| {
+                            match &*t.borrow() {
+                                PLType::Trait(t) => t.modifier,
+                                _ => unreachable!(),
+                            }
+                        })
+                    }),
                     generics_size: self.generics_size,
                 },
                 generic_infer: Arc::new(RefCell::new(IndexMap::default())),
@@ -423,17 +435,13 @@ impl TypeNode for FuncDefNode {
                     .unwrap();
                 if let PLType::Pointer(s) = &*receiver_pltype.borrow() {
                     let s = s.clone();
-                    let trait_tp = if let Some((v, _)) = &self.impl_trait {
-                        Some(v.clone().get_type(child, builder, false)?)
-                    } else {
-                        None
-                    };
                     flater = Some(Box::new(move |ctx: &mut Ctx| {
                         ctx.add_method(
                             &s.borrow(),
                             self.id.name.split("::").last().unwrap(),
                             fnvalue,
                             trait_tp,
+                            generic,
                         )
                     }));
                 };

@@ -5,14 +5,14 @@ use rustc_hash::FxHashMap;
 use crate::{
     ast::{
         diag::{ErrorCode, PLDiag},
-        node::RangeTrait,
+        node::RangeTrait, traits::CustomType,
     },
     format_label,
 };
 
 use super::FNValue;
 
-pub trait ImplAble: RangeTrait {
+pub trait ImplAble: RangeTrait+CustomType {
     fn get_method_table<'a>(&self) -> Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>;
     fn get_method(&self, name: &str) -> Option<Arc<RefCell<FNValue>>> {
         let binding = self.get_method_table();
@@ -36,6 +36,6 @@ pub trait ImplAble: RangeTrait {
         table.insert(name.to_owned(), value);
         Ok(())
     }
-    fn get_path(&self) -> String;
     fn get_full_name_except_generic(&self) -> String;
+    fn get_full_name(&self) -> String;
 }

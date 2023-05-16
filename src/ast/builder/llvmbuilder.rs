@@ -32,7 +32,7 @@ use inkwell::{
 use llvm_sys::{core::LLVMStructSetBody, prelude::LLVMTypeRef};
 use rustc_hash::FxHashMap;
 
-use crate::ast::{diag::PLDiag, pass::run_immix_pass, pltype::ClosureType};
+use crate::ast::{diag::PLDiag, pass::run_immix_pass, pltype::{ClosureType, ImplAble}};
 
 use super::{
     super::{
@@ -445,7 +445,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if let Some(f) = self.module.get_function(fname) {
             return f;
         }
-        let f = self.module.add_function(fname, ftp, None);
+        let f = self.module.add_function(fname, ftp, Some(Linkage::LinkOnceAny));
         // the array is a struct, the first field is the visit function, the second field is the real array
         // array struct it self is the first parameter
         // the other three parameters are the visit function for different type
@@ -2008,7 +2008,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let ftp = self.mark_fn_tp(ptrtp);
         let f = self
             .module
-            .add_function(&(v.get_full_name() + "@"), ftp, None);
+            .add_function(&(v.get_full_name() + "@"), ftp, Some(Linkage::LinkOnceAny));
         let bb = self.context.append_basic_block(f, "entry");
         self.builder.position_at_end(bb);
         let fieldn = ty.count_fields();

@@ -332,7 +332,9 @@ impl<'a, 'ctx> Ctx<'a> {
             }
             let trait_handle = builder.alloc("tmp_traitv", &target_pltype.borrow(), self, None);
             for f in t.list_trait_fields().iter() {
-                let mthd = st.find_method(&f.name).unwrap();
+                let mthd = st.find_method(&f.name).unwrap_or_else(||{
+                    t.trait_methods_impl.borrow().get(&st.get_full_name()).or(t.trait_methods_impl.borrow().get(&st.get_full_name_except_generic())).unwrap().get(&f.name).unwrap().clone()
+                });
                 let fnhandle = builder.get_or_insert_fn_handle(&mthd.borrow(), self);
                 let targetftp = f.typenode.get_type(self, builder, true).unwrap();
                 let casted = builder.bitcast(self, fnhandle, &targetftp.borrow(), "fncast_tmp");
@@ -431,12 +433,24 @@ impl<'a, 'ctx> Ctx<'a> {
         mthd: &str,
         fntp: Arc<RefCell<FNValue>>,
         impl_trait: Option<Arc<RefCell<PLType>>>,
+        generic:bool
     ) -> Result<(), PLDiag> {
         if t.get_path() != self.get_file() {
             if let Some(tt) = impl_trait {
                 if let PLType::Trait(st) = &*tt.clone().borrow() {
-                    let mut m = st.trait_methods_impl.borrow_mut();
-                    let st_name = t.get_full_name_except_generic();
+                    if st.get_path() != self.get_file() {
+                        return Err(fntp
+                            .borrow()
+                            .range
+                            .new_err(ErrorCode::CANNOT_IMPL_TYPE_OUT_OF_DEFINE_MOD)
+                            .add_to_ctx(self));
+                    }
+                    let mut m: std::cell::RefMut<std::collections::HashMap<String, std::collections::HashMap<String, Arc<RefCell<FNValue>>, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>, std::hash::BuildHasherDefault<rustc_hash::FxHasher>>> = st.trait_methods_impl.borrow_mut();
+                    let st_name = if generic {
+                        t.get_full_name_except_generic()
+                    } else {
+                        t.get_full_name()
+                    };
                     let table = m.get_mut(&st_name);
                     if let Some(table) = table {
                         if table.insert(mthd.to_string(), fntp.clone()).is_some() {
@@ -450,8 +464,8 @@ impl<'a, 'ctx> Ctx<'a> {
                         return Ok(());
                     } else {
                         drop(table);
-                        m.insert(t.get_full_name_except_generic(), FxHashMap::default());
-                        let table = m.get_mut(&t.get_full_name_except_generic()).unwrap();
+                        m.insert(st_name.clone(), FxHashMap::default());
+                        let table = m.get_mut(&st_name).unwrap();
                         table.insert(mthd.to_string(), fntp.clone());
                         self.add_to_global_mthd_table(&st_name, mthd, fntp);
                         return Ok(());
@@ -473,11 +487,12 @@ impl<'a, 'ctx> Ctx<'a> {
         mthd: &str,
         fntp: FNValue,
         impl_trait: Option<Arc<RefCell<PLType>>>,
+        generic:bool
     ) -> Result<(), PLDiag> {
         let fntp = Arc::new(RefCell::new(fntp));
         match tp {
-            PLType::Struct(s) => self.add_method_to_tp(s, mthd, fntp, impl_trait),
-            PLType::Union(u) => self.add_method_to_tp(u, mthd, fntp, impl_trait),
+            PLType::Struct(s) => self.add_method_to_tp(s, mthd, fntp, impl_trait,generic),
+            PLType::Union(u) => self.add_method_to_tp(u, mthd, fntp, impl_trait,generic),
             _ => todo!(),
         }
     }
@@ -950,49 +965,7 @@ impl<'a, 'ctx> Ctx<'a> {
         vmap: &mut FxHashMap<String, CompletionItem>,
         filter: impl Fn(&PLType) -> bool,
     ) {
-        for (k, f) in self.plmod.types.iter().chain(self.generic_types.iter()) {
-            let mut insert_text = None;
-            let mut command = None;
-            if !filter(&f.borrow()) {
-                continue;
-            }
-            let tp = match &*f.clone().borrow() {
-                PLType::Fn(f) => {
-                    insert_text = Some(f.gen_snippet());
-                    command = Some(Command::new(
-                        "trigger help".to_string(),
-                        "editor.action.triggerParameterHints".to_string(),
-                        None,
-                    ));
-                    CompletionItemKind::FUNCTION
-                }
-                PLType::Struct(_) => CompletionItemKind::STRUCT,
-                PLType::Trait(_) => CompletionItemKind::INTERFACE,
-                PLType::Arr(_) => unreachable!(),
-                PLType::Primitive(_) => CompletionItemKind::KEYWORD,
-                PLType::Generic(_) => CompletionItemKind::TYPE_PARAMETER,
-                PLType::Void => CompletionItemKind::KEYWORD,
-                PLType::Pointer(_) => unreachable!(),
-                PLType::PlaceHolder(_) => continue,
-                PLType::Union(_) => CompletionItemKind::ENUM,
-                PLType::Closure(_) => unreachable!(),
-            };
-            if k.starts_with('|') {
-                // skip method
-                continue;
-            }
-            vmap.insert(
-                k.to_string(),
-                CompletionItem {
-                    label: k.to_string(),
-                    kind: Some(tp),
-                    insert_text,
-                    insert_text_format: Some(InsertTextFormat::SNIPPET),
-                    command,
-                    ..Default::default()
-                },
-            );
-        }
+        self.plmod.get_pltp_completions(vmap, &filter, &self.generic_types);
         if let Some(father) = self.father {
             father.get_pltp_completions(vmap, filter);
         }

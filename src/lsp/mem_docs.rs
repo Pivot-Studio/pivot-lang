@@ -141,13 +141,13 @@ impl MemDocsInput {
     pub fn get_file_params(self, db: &dyn Db, f: String, entry: bool) -> Option<FileCompileInput> {
         let f = crate::utils::canonicalize(f);
         if f.is_err() {
-            log::error!("lsp error: {}", f.err().unwrap());
+            log::debug!("lsp error: {}", f.err().unwrap());
             return None;
         }
         let mut file = f.unwrap().to_string_lossy().to_string();
         let path = get_config_path(file.clone());
         if path.is_err() {
-            log::error!("lsp error: {}", path.err().unwrap());
+            log::debug!("lsp error: {}", path.err().unwrap());
             return None;
         }
         let path = path.unwrap();
@@ -163,7 +163,7 @@ impl MemDocsInput {
                 .unwrap(),
         );
         if re.is_err() {
-            log::error!("lsp error: {}", re.err().unwrap());
+            log::debug!("lsp error: {}", re.err().unwrap());
             return None;
         }
         let config = re.unwrap();

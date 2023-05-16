@@ -73,8 +73,17 @@ impl Node for UseNode {
                 }
             }
         }
-        for v in self.ids.iter() {
-            ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
+        if self.ids.len() > 1 {
+            for (i,v) in self.ids.iter().enumerate() {
+                if i == self.ids.len() - 1 {
+                    break;
+                }
+                ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
+            }
+        }else {
+            for v in self.ids.iter() {
+                ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
+            }
         }
         #[cfg(target_arch = "wasm32")]
         if crate::lsp::wasm::PLLIB_DIR
@@ -96,10 +105,38 @@ impl Node for UseNode {
                     if self.singlecolon {
                         return vec![];
                     }
-                    get_ns_path_completions(path.to_str().unwrap())
+                    let mut comp = get_ns_path_completions(path.to_str().unwrap());
+                    let mod_id = path.file_name().unwrap().to_str().unwrap();
+                    ctx.plmod.submods.get(mod_id).map(|m|{
+                       comp.extend(  m.get_pltp_completions_list())
+                    });
+                    comp
                 });
+                let mod_id = path.file_name().unwrap().to_str().unwrap();
+                if let Some(m) = ctx.plmod.submods.get(mod_id) {
+                    let n = self.ids.last().unwrap();
+                     if let Some(t) = m.types.get(&n.name) {
+                        let t = match &*t.borrow() {
+                            PLType::Fn(_) => SemanticTokenType::FUNCTION,
+                            PLType::Struct(_) => SemanticTokenType::STRUCT,
+                            PLType::Trait(_) => SemanticTokenType::INTERFACE,
+                            PLType::Union(_) => SemanticTokenType::ENUM,
+                            _ => SemanticTokenType::NAMESPACE,
+                        };
+                        ctx.push_semantic_token(n.range, t, 0);
+                        if !self.complete {
+                            return Err(ctx.add_diag(self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION)));
+                        }
+                        return  Ok(Default::default());
+                    }else {
+                        ctx.push_semantic_token(n.range, SemanticTokenType::NAMESPACE, 0);
+                    }
+                }
             }
             ctx.add_diag(self.range.new_err(ErrorCode::UNRESOLVED_MODULE));
+        }
+        if self.ids.len() > 1 {
+            ctx.push_semantic_token(self.ids.last().unwrap().range, SemanticTokenType::NAMESPACE, 0);
         }
         ctx.if_completion(self.range, || {
             if self.singlecolon {

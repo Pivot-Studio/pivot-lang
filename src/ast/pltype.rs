@@ -113,8 +113,8 @@ macro_rules! impl_mthd {
             fn get_method_table(&self) -> Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>{
                 return self.methods.clone();
             }
-            fn get_path(&self) -> String {
-                return self.path.clone();
+            fn get_full_name(&self) -> String {
+                format!("{}..{}", self.path, self.name)
             }
             fn get_full_name_except_generic(&self) -> String {
                 let full_name = self.get_full_name();
@@ -151,9 +151,6 @@ impl_mthd!(UnionType, STType);
 impl UnionType {
     pub fn find_method(&self, method: &str) -> Option<Arc<RefCell<FNValue>>> {
         self.methods.borrow().get(method).cloned()
-    }
-    pub fn get_full_name(&self) -> String {
-        format!("{}..{}", self.path, self.name)
     }
     pub fn append_name_with_generic(&self) -> String {
         let typeinfer = self
@@ -1046,7 +1043,9 @@ impl STType {
     fn implements_trait_curr_mod(&self, tp: &STType, plmod: &Mod) -> bool {
         let re = plmod
             .impls
-            .get(&self.get_full_name())
+            .get(&self.get_full_name()).or(plmod
+                .impls
+                .get(&self.get_full_name_except_generic()))
             .and_then(|v| v.get(&tp.get_full_name()))
             .is_some();
         if !re {
