@@ -43,6 +43,8 @@ impl MultiTraitNode {
             is_trait: true,
             is_tuple: false,
             generic_infer_types: Default::default(),
+            methods: Default::default(),
+            trait_methods_impl: Default::default(),
         };
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&name));
         builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&name), &st, ctx);
@@ -168,6 +170,8 @@ impl TraitDefNode {
             is_trait: true,
             is_tuple: false,
             generic_infer_types: Default::default(),
+            methods: Default::default(),
+            trait_methods_impl: Default::default(),
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);

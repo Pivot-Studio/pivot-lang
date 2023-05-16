@@ -482,6 +482,8 @@ impl StructDefNode {
             is_trait: false,
             is_tuple: false,
             generic_infer_types: Default::default(),
+            methods: Default::default(),
+            trait_methods_impl: Default::default(),
         })));
         if self.generics.is_none() {
             builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));

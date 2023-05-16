@@ -10,6 +10,7 @@ use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::get_type_deep;
+use crate::ast::pltype::ImplAble;
 use crate::ast::pltype::PLType;
 use crate::ast::pltype::PriType;
 use crate::ast::tokens::TokenType;
@@ -309,7 +310,7 @@ impl Node for TakeOpNode {
                         fnv, re, headptr, None,
                     )));
                 }
-                Err(ctx.add_diag(id.range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND)))
+                Err(ctx.add_diag(id.range.new_err(ErrorCode::TRAIT_METHOD_NOT_FOUND)))
             }
             PLType::Struct(s) => {
                 if let Some(field) = s.fields.get(&id.name) {
@@ -324,16 +325,21 @@ impl Node for TakeOpNode {
                         field.typenode.get_type(ctx, builder, true)?,
                     )));
                 }
-                if let Some(mthd) = s.find_method(ctx, &id.name) {
-                    _ = mthd.expect_pub(ctx, id_range);
+                if let Some(mthd) = s
+                    .find_method(&id.name)
+                    .or_else(|| ctx.find_global_method(&s.get_full_name_except_generic(), &id.name))
+                {
+                    let mthd = mthd.clone();
+                    let mth = mthd.borrow();
+                    _ = mth.expect_pub(ctx, id_range);
                     ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
                     ctx.send_if_go_to_def(
                         id_range,
-                        mthd.range,
-                        mthd.llvmname.split("..").next().unwrap().to_string(),
+                        mth.range,
+                        mth.llvmname.split("..").next().unwrap().to_string(),
                     );
                     return usize::MAX
-                        .new_output(Arc::new(RefCell::new(PLType::Fn(mthd))))
+                        .new_output(Arc::new(RefCell::new(PLType::Fn(mth.clone()))))
                         .with_receiver(
                             headptr,
                             Some(Arc::new(RefCell::new(PLType::Pointer(head_pltype)))),
@@ -343,7 +349,11 @@ impl Node for TakeOpNode {
                 Err(ctx.add_diag(id.range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND)))
             }
             PLType::Union(union) => {
-                if let Some(mthd) = union.find_method(ctx, &id.name) {
+                if let Some(mthd) = union.find_method(&id.name).or_else(|| {
+                    ctx.find_global_method(&union.get_full_name_except_generic(), &id.name)
+                }) {
+                    let mthd = mthd.clone();
+                    let mthd = mthd.borrow();
                     _ = mthd.expect_pub(ctx, id_range);
                     ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
                     ctx.send_if_go_to_def(
@@ -352,7 +362,7 @@ impl Node for TakeOpNode {
                         mthd.llvmname.split("..").next().unwrap().to_string(),
                     );
                     return usize::MAX
-                        .new_output(Arc::new(RefCell::new(PLType::Fn(mthd))))
+                        .new_output(Arc::new(RefCell::new(PLType::Fn(mthd.clone()))))
                         .with_receiver(
                             headptr,
                             Some(Arc::new(RefCell::new(PLType::Pointer(head_pltype)))),

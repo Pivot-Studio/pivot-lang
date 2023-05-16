@@ -3,9 +3,9 @@ use super::ctx::Ctx;
 use super::diag::{ErrorCode, PLDiag};
 
 use super::node::macro_nodes::MacroNode;
-use super::pltype::FNValue;
 use super::pltype::PLType;
 use super::pltype::PriType;
+use super::pltype::{FNValue, ImplAble};
 
 use super::range::Range;
 use super::tokens::TokenType;
@@ -261,66 +261,51 @@ impl Mod {
         }
         name.to_string()
     }
-    pub fn get_methods_completions(&self, full_name: &str, pub_only: bool) -> Vec<CompletionItem> {
-        let mut completions = Vec::new();
-        let mut f = |name: &String, v: &FNValue| {
-            if pub_only && !v.is_modified_by(TokenType::PUB) {
-                return;
-            }
-            completions.push(CompletionItem {
-                kind: Some(CompletionItemKind::METHOD),
-                label: name.clone(),
-                detail: Some("method".to_string()),
-                insert_text: Some(v.gen_snippet()),
-                insert_text_format: Some(InsertTextFormat::SNIPPET),
-                command: Some(Command::new(
-                    "trigger help".to_string(),
-                    "editor.action.triggerParameterHints".to_string(),
-                    None,
-                )),
-                ..Default::default()
-            });
-        };
-        // for m in self.submods.values() {
-        //     if m.methods.get(full_name).is_none() {
-        //         continue;
-        //     }
-        //     for (name, v) in m.methods.get(full_name).unwrap() {
-        //         f(name, v);
-        //     }
-        // }
-        // if self.methods.get(full_name).is_none() {
-        //     return completions;
-        // }
-        // for (name, v) in self.methods.get(full_name).unwrap() {
-        //     f(name, v);
-        // }
-        completions
-    }
+    // pub fn get_methods_completions(&self, full_name: &str, pub_only: bool) -> Vec<CompletionItem> {
+    //     let mut completions = Vec::new();
+    //     let mut f = |name: &String, v: &FNValue| {
+    //         if pub_only && !v.is_modified_by(TokenType::PUB) {
+    //             return;
+    //         }
+    //         completions.push(CompletionItem {
+    //             kind: Some(CompletionItemKind::METHOD),
+    //             label: name.clone(),
+    //             detail: Some("method".to_string()),
+    //             insert_text: Some(v.gen_snippet()),
+    //             insert_text_format: Some(InsertTextFormat::SNIPPET),
+    //             command: Some(Command::new(
+    //                 "trigger help".to_string(),
+    //                 "editor.action.triggerParameterHints".to_string(),
+    //                 None,
+    //             )),
+    //             ..Default::default()
+    //         });
+    //     };
+    //     // for m in self.submods.values() {
+    //     //     if m.methods.get(full_name).is_none() {
+    //     //         continue;
+    //     //     }
+    //     //     for (name, v) in m.methods.get(full_name).unwrap() {
+    //     //         f(name, v);
+    //     //     }
+    //     // }
+    //     // if self.methods.get(full_name).is_none() {
+    //     //     return completions;
+    //     // }
+    //     // for (name, v) in self.methods.get(full_name).unwrap() {
+    //     //     f(name, v);
+    //     // }
+    //     completions
+    // }
 
-    pub fn find_method(&self, full_name: &str, mthd: &str) -> Option<FNValue> {
-        // if let Some(m) = self.methods.get(full_name) {
-        //     if let Some(v) = m.get(mthd) {
-        //         return Some(v.clone());
-        //     }
-        // }
-        None
-    }
-
-    pub fn add_method(&mut self, full_name: &str, mthd: &str, fntp: FNValue) -> Result<(), ()> {
-        // if let Some(m) = self.methods.get_mut(full_name) {
-        //     if m.get(mthd).is_some() {
-        //         // duplicate method
-        //         return Err(());
-        //     }
-        //     m.insert(mthd.to_string(), fntp);
-        // } else {
-        //     let mut m = FxHashMap::default();
-        //     m.insert(mthd.to_string(), fntp);
-        //     self.methods.insert(full_name.to_string(), m);
-        // }
-        Ok(())
-    }
+    // pub fn find_method(&self, full_name: &str, mthd: &str) -> Option<FNValue> {
+    //     // if let Some(m) = self.methods.get(full_name) {
+    //     //     if let Some(v) = m.get(mthd) {
+    //     //         return Some(v.clone());
+    //     //     }
+    //     // }
+    //     None
+    // }
 
     pub fn get_ns_completions_pri(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         for (k, _) in self.submods.iter() {

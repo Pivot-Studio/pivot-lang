@@ -66,6 +66,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                             }
                         }
                         mth.id.name = format!("|{}::{}", imname, mth.id.name);
+                        mth.is_method = true;
                         mth.paralist.insert(
                             0,
                             Box::new(TypedIdentifierNode {
@@ -81,6 +82,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                                 range: Default::default(),
                             }),
                         );
+                        mth.impl_trait = im.impl_trait.clone();
                         fntypes.push(*mth.clone());
                     }
                     nodes.push(Box::new(im.into()));

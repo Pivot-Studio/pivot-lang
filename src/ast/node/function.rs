@@ -339,9 +339,11 @@ pub struct FuncDefNode {
     pub modifier: Option<(TokenType, Range)>,
     pub generics_size: usize, // the size of generics except the generics from impl node
     pub trait_bounds: Option<Vec<Box<TraitBoundNode>>>,
+    pub impl_trait: Option<(Box<TypeNodeEnum>, (TokenType, Range))>,
+    pub is_method: bool,
 }
 
-type OptFOnce<'a> = Option<Box<dyn FnOnce(&mut Ctx) + 'a>>; // Thank u, Rust!
+type OptFOnce<'a> = Option<Box<dyn FnOnce(&mut Ctx) -> Result<(), PLDiag> + 'a>>; // Thank u, Rust!
 
 impl TypeNode for FuncDefNode {
     fn get_type<'a, 'ctx, 'b>(
@@ -367,7 +369,7 @@ impl TypeNode for FuncDefNode {
             let mut flater: OptFOnce = None;
             let mut param_pltypes = Vec::new();
             let mut param_name = Vec::new();
-            let method = !self.paralist.is_empty() && self.paralist[0].id.name == "self";
+            let method = self.is_method;
             generic_map
                 .iter()
                 .for_each(|(_, pltype)| match &mut *pltype.borrow_mut() {
@@ -420,37 +422,26 @@ impl TypeNode for FuncDefNode {
                     .get_type(child, builder, true)
                     .unwrap();
                 if let PLType::Pointer(s) = &*receiver_pltype.borrow() {
-                    match &*s.borrow() {
-                        PLType::Struct(s) => {
-                            let fullname = s.get_st_full_name_except_generic();
-                            flater = Some(Box::new(move |ctx: &mut Ctx| {
-                                ctx.add_method(
-                                    &fullname,
-                                    self.id.name.split("::").last().unwrap(),
-                                    fnvalue.clone(),
-                                    self.id.range,
-                                );
-                            }));
-                        }
-                        PLType::Union(u) => {
-                            let fullname = u.get_full_name_except_generic();
-                            flater = Some(Box::new(move |ctx: &mut Ctx| {
-                                ctx.add_method(
-                                    &fullname,
-                                    self.id.name.split("::").last().unwrap(),
-                                    fnvalue.clone(),
-                                    self.id.range,
-                                );
-                            }));
-                        }
-                        _ => (), // 在impl的emit里会检查类型报错，这里不处理
-                    }
+                    let s = s.clone();
+                    let trait_tp = if let Some((v, _)) = &self.impl_trait {
+                        Some(v.clone().get_type(child, builder, false)?)
+                    } else {
+                        None
+                    };
+                    flater = Some(Box::new(move |ctx: &mut Ctx| {
+                        ctx.add_method(
+                            &s.borrow(),
+                            self.id.name.split("::").last().unwrap(),
+                            fnvalue,
+                            trait_tp,
+                        )
+                    }));
                 };
             }
             Ok((pltype, flater))
         })?;
         if let Some(flater) = flater {
-            flater(ctx);
+            flater(ctx)?;
         }
         Ok(pltype)
     }
@@ -719,10 +710,12 @@ impl Node for ClosureNode {
             is_trait: false,
             is_tuple: true,
             generic_infer_types: Default::default(),
+            methods: Default::default(),
+            trait_methods_impl: Default::default(),
         };
 
-        builder.opaque_struct_type(&st_tp.get_st_full_name());
-        builder.add_body_to_struct_type(&st_tp.get_st_full_name(), &st_tp, ctx);
+        builder.opaque_struct_type(&st_tp.get_full_name());
+        builder.add_body_to_struct_type(&st_tp.get_full_name(), &st_tp, ctx);
         let mut paratps = vec![];
         for (i, (v, typenode)) in self.paralist.iter_mut().enumerate() {
             ctx.push_semantic_token(v.range(), SemanticTokenType::PARAMETER, 0);

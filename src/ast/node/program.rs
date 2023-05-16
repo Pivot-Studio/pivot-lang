@@ -88,12 +88,12 @@ impl Node for ProgramNode {
         for def in self.traits.iter_mut() {
             _ = def.emit_trait_def(ctx, builder);
         }
-        self.fntypes.iter_mut().for_each(|x| {
-            _ = x.emit_func_def(ctx, builder);
-        });
         self.trait_impls.iter().for_each(|x| {
             let (struct_name, trait_name) = x;
             ctx.plmod.add_impl(struct_name, trait_name)
+        });
+        self.fntypes.iter_mut().for_each(|x| {
+            _ = x.emit_func_def(ctx, builder);
         });
         // init global
         ctx.set_init_fn(builder);

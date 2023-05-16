@@ -33,6 +33,7 @@ use super::range::Range;
 use immix::ObjectType;
 use indexmap::IndexMap;
 
+use internal_macro::range;
 use linked_hash_map::LinkedHashMap;
 use lsp_types::Command;
 use lsp_types::CompletionItem;
@@ -42,6 +43,7 @@ use lsp_types::InsertTextFormat;
 
 use lsp_types::Location;
 use lsp_types::SymbolKind;
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 
 use std::sync::Arc;
@@ -101,6 +103,39 @@ impl ClosureType {
     }
 }
 
+mod method;
+
+pub use method::*;
+
+macro_rules! impl_mthd {
+    ($n:ident) => {
+        impl ImplAble for $n {
+            fn get_method_table(&self) -> Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>{
+                return self.methods.clone();
+            }
+            fn get_path(&self) -> String {
+                return self.path.clone();
+            }
+            fn get_full_name_except_generic(&self) -> String {
+                let full_name = self.get_full_name();
+                full_name.split('<').collect::<Vec<_>>()[0].to_string()
+            }
+        }
+    };
+    ($($n:ident),*) => (
+        $(
+            impl_mthd!($n);
+        )*
+    );
+    ($($n:ident),*,) => (
+        $(
+            impl_mthd!($n);
+        )*
+    );
+
+}
+
+#[range]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnionType {
     pub name: String,
@@ -108,17 +143,14 @@ pub struct UnionType {
     pub sum_types: Vec<Box<TypeNodeEnum>>,
     pub path: String,
     pub modifier: Option<(TokenType, Range)>,
-    pub range: Range,
+    pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
 }
 
+impl_mthd!(UnionType, STType);
+
 impl UnionType {
-    pub fn find_method(&self, ctx: &Ctx, method: &str) -> Option<FNValue> {
-        ctx.plmod
-            .find_method(&self.get_full_name_except_generic(), method)
-    }
-    pub fn get_full_name_except_generic(&self) -> String {
-        let full_name = self.get_full_name();
-        full_name.split('<').collect::<Vec<_>>()[0].to_string()
+    pub fn find_method(&self, method: &str) -> Option<Arc<RefCell<FNValue>>> {
+        self.methods.borrow().get(method).cloned()
     }
     pub fn get_full_name(&self) -> String {
         format!("{}..{}", self.path, self.name)
@@ -419,8 +451,8 @@ impl PLType {
         match self {
             PLType::Generic(g) => g.name.clone(),
             PLType::Fn(fu) => fu.llvmname.clone(),
-            PLType::Struct(st) => st.get_st_full_name(),
-            PLType::Trait(st) => st.get_st_full_name(),
+            PLType::Struct(st) => st.get_full_name(),
+            PLType::Trait(st) => st.get_full_name(),
             PLType::Primitive(pri) => pri.get_name(),
             PLType::Arr(arr) => {
                 format!(
@@ -440,8 +472,8 @@ impl PLType {
         match self {
             PLType::Generic(g) => g.name.clone(),
             PLType::Fn(fu) => fu.llvmname.clone(),
-            PLType::Struct(st) => st.get_st_full_name_except_generic(),
-            PLType::Trait(st) => st.get_st_full_name_except_generic(),
+            PLType::Struct(st) => st.get_full_name_except_generic(),
+            PLType::Trait(st) => st.get_full_name_except_generic(),
             PLType::Primitive(pri) => pri.get_name(),
             PLType::Arr(arr) => {
                 format!(
@@ -577,13 +609,14 @@ pub struct FnType {
     pub generics_size: usize, // the size of generics except the generics from impl node
 }
 impl FnType {}
+
+#[range]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FNValue {
     pub name: String,     // name for lsp
     pub llvmname: String, // name in llvm ir
     pub path: String,
     pub param_names: Vec<String>,
-    pub range: Range,
     pub doc: Vec<Box<NodeEnum>>,
     pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
     pub node: Option<Box<FuncDefNode>>,
@@ -819,12 +852,12 @@ impl ARRType {
     }
 }
 
+#[range]
 #[derive(Debug, Clone, Eq)]
 pub struct STType {
     pub name: String,
     pub path: String,
     pub fields: LinkedHashMap<String, Field>,
-    pub range: Range,
     pub doc: Vec<Box<NodeEnum>>,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub derives: Vec<Arc<RefCell<PLType>>>,
@@ -833,6 +866,9 @@ pub struct STType {
     pub is_trait: bool,
     pub is_tuple: bool,
     pub generic_infer_types: IndexMap<String, Arc<RefCell<PLType>>>,
+    pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
+    pub trait_methods_impl:
+        Arc<RefCell<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>>,
 }
 
 impl PartialEq for STType {
@@ -975,7 +1011,7 @@ impl STType {
     fn implements(&self, tp: &PLType, plmod: &Mod) -> bool {
         plmod
             .impls
-            .get(&self.get_st_full_name())
+            .get(&self.get_full_name())
             .and_then(|v| v.get(&tp.get_full_elm_name()))
             .is_some()
     }
@@ -1010,8 +1046,8 @@ impl STType {
     fn implements_trait_curr_mod(&self, tp: &STType, plmod: &Mod) -> bool {
         let re = plmod
             .impls
-            .get(&self.get_st_full_name())
-            .and_then(|v| v.get(&tp.get_st_full_name()))
+            .get(&self.get_full_name())
+            .and_then(|v| v.get(&tp.get_full_name()))
             .is_some();
         if !re {
             return re;
@@ -1025,7 +1061,7 @@ impl STType {
         true
     }
     pub fn get_type_code(&self) -> u64 {
-        let full_name = self.get_st_full_name();
+        let full_name = self.get_full_name();
         get_hash_code(full_name)
     }
     pub fn append_name_with_generic(&self) -> String {
@@ -1106,8 +1142,30 @@ impl STType {
         completions
     }
     pub fn get_mthd_completions(&self, ctx: &Ctx) -> Vec<CompletionItem> {
-        ctx.plmod
-            .get_methods_completions(&self.get_st_full_name(), self.path != ctx.plmod.path)
+        let pub_only = self.path != ctx.plmod.path;
+        let mut completions = Vec::new();
+        let mut f = |name: &String, v: &FNValue| {
+            if pub_only && !v.is_modified_by(TokenType::PUB) {
+                return;
+            }
+            completions.push(CompletionItem {
+                kind: Some(CompletionItemKind::METHOD),
+                label: name.clone(),
+                detail: Some("method".to_string()),
+                insert_text: Some(v.gen_snippet()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                command: Some(Command::new(
+                    "trigger help".to_string(),
+                    "editor.action.triggerParameterHints".to_string(),
+                    None,
+                )),
+                ..Default::default()
+            });
+        };
+        for (name, v) in self.methods.borrow().iter() {
+            f(name, &v.clone().borrow());
+        }
+        completions
     }
 
     pub fn get_completions(&self, ctx: &Ctx) -> Vec<CompletionItem> {
@@ -1141,16 +1199,11 @@ impl STType {
         }
         completions
     }
-    pub fn find_method(&self, ctx: &Ctx, method: &str) -> Option<FNValue> {
-        ctx.plmod
-            .find_method(&self.get_st_full_name_except_generic(), method)
+    pub fn find_method(&self, method: &str) -> Option<Arc<RefCell<FNValue>>> {
+        self.methods.borrow().get(method).cloned()
     }
-    pub fn get_st_full_name(&self) -> String {
+    pub fn get_full_name(&self) -> String {
         format!("{}..{}", self.path, self.name)
-    }
-    pub fn get_st_full_name_except_generic(&self) -> String {
-        let full_name = self.get_st_full_name();
-        full_name.split('<').collect::<Vec<_>>()[0].to_string()
     }
     pub fn get_doc_symbol(&self) -> DocumentSymbol {
         let children: Vec<DocumentSymbol> = self

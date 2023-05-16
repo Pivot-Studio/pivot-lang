@@ -52,7 +52,7 @@ define_error!(
     UNRECOGNIZED_BIN_OPERATOR = "unrecognized binary operator",
     UNRECOGNIZED_UNARY_OPERATOR = "unrecognized unary operator",
     INVALID_UNARY_EXPRESSION = "invalid unary expression",
-    STRUCT_FIELD_NOT_FOUND = "struct field not found",
+    STRUCT_FIELD_NOT_FOUND = "struct field or method not found",
     INVALID_GET_FIELD = "cannot get field from non struct type",
     VAR_NOT_FOUND = "variable not found",
     REDECLARATION = "redeclaration of variable",
@@ -126,6 +126,8 @@ define_error!(
     NO_RETURN_VALUE_EXPECTED_IN_VOID_FUNCTION = "no return value expected in a void function",
     CLOSURE_RET_TYPE_UNKNOWN = "cannot infer closure return type",
     CLOSURE_PARAM_TYPE_UNKNOWN = "cannot infer closure param type",
+    CANNOT_IMPL_TYPE_OUT_OF_DEFINE_MOD = "cannot impl a type out of the define mod",
+    TRAIT_METHOD_NOT_FOUND = "trait method not found",
 );
 macro_rules! define_warn {
     ($(

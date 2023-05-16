@@ -117,6 +117,8 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 generics,
                 body,
                 modifier,
+                impl_trait: None,
+                is_method: false,
             };
             Ok::<_, ()>(Box::new(TopLevel::FuncType(node)))
         },

@@ -585,7 +585,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         st: &STType,
     ) -> FunctionValue<'ctx> {
         let ptrtp = p.get_type();
-        let llvmname = st.get_st_full_name() + "@";
+        let llvmname = st.get_full_name() + "@";
         if let Some(v) = self.module.get_function(&llvmname) {
             return v;
         }
@@ -879,17 +879,17 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             PLType::Struct(x) | PLType::Trait(x) => {
                 let sttp = self.struct_type(x, ctx);
                 // 若已经生成过，直接查表返回
-                if RefCell::borrow(&self.ditypes).contains_key(&x.get_st_full_name()) {
+                if RefCell::borrow(&self.ditypes).contains_key(&x.get_full_name()) {
                     return Some(
                         *RefCell::borrow(&self.ditypes)
-                            .get(&x.get_st_full_name())
+                            .get(&x.get_full_name())
                             .unwrap(),
                     );
                 }
                 // 生成占位符，为循环引用做准备
                 self.ditypes_placeholder
                     .borrow_mut()
-                    .insert(x.get_st_full_name(), RefCell::new(vec![]));
+                    .insert(x.get_full_name(), RefCell::new(vec![]));
                 let mut m = vec![];
                 ctx.run_in_type_mod(x, |ctx, x| {
                     m = x
@@ -922,7 +922,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let members = self
                     .ditypes_placeholder
                     .borrow_mut()
-                    .remove(&x.get_st_full_name())
+                    .remove(&x.get_full_name())
                     .unwrap();
                 // 替换循环引用生成的占位符
                 for m in members.borrow().iter() {
@@ -935,7 +935,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     );
                     unsafe { self.dibuilder.replace_placeholder_derived_type(*m, realtp) };
                 }
-                self.ditypes.borrow_mut().insert(x.get_st_full_name(), st);
+                self.ditypes.borrow_mut().insert(x.get_full_name(), st);
                 Some(st)
             }
             PLType::Primitive(pt) => {
@@ -1141,7 +1141,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn struct_type(&self, pltp: &STType, ctx: &mut Ctx<'a>) -> StructType<'ctx> {
-        let st = self.module.get_struct_type(&pltp.get_st_full_name());
+        let st = self.module.get_struct_type(&pltp.get_full_name());
         if let Some(st) = st {
             return st;
         }
@@ -1150,7 +1150,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             let fields = &self.get_fields(pltp, ctx);
             return self.context.struct_type(fields, false);
         }
-        let st = self.context.opaque_struct_type(&pltp.get_st_full_name());
+        let st = self.context.opaque_struct_type(&pltp.get_full_name());
         st.set_body(&self.get_fields(pltp, ctx), false);
         st
     }
@@ -2008,7 +2008,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let ftp = self.mark_fn_tp(ptrtp);
         let f = self
             .module
-            .add_function(&(v.get_st_full_name() + "@"), ftp, None);
+            .add_function(&(v.get_full_name() + "@"), ftp, None);
         let bb = self.context.append_basic_block(f, "entry");
         self.builder.position_at_end(bb);
         let fieldn = ty.count_fields();

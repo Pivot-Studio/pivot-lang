@@ -100,6 +100,8 @@ fn new_tuple_type(
         is_trait: false,
         is_tuple: true,
         generic_infer_types: Default::default(),
+        methods: Default::default(),
+        trait_methods_impl: Default::default(),
     }
 }
 impl PrintTrait for TupleInitNode {

@@ -7,6 +7,7 @@ use super::node::macro_nodes::MacroNode;
 use super::node::node_result::NodeResult;
 use super::node::NodeEnum;
 use super::node::TypeNode;
+use super::node::TypeNodeEnum;
 use super::plmod::CompletionItemWrapper;
 use super::plmod::GlobalVar;
 use super::plmod::LSPDef;
@@ -14,6 +15,7 @@ use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::pltype::add_primitive_types;
 use super::pltype::FNValue;
+use super::pltype::ImplAble;
 use super::pltype::PLType;
 use super::pltype::PriType;
 use super::range::Pos;
@@ -70,6 +72,7 @@ pub struct Ctx<'a> {
     pub need_highlight: usize,
     pub plmod: Mod,
     pub father: Option<&'a Ctx<'a>>, // father context, for symbol lookup
+    pub root: Option<&'a Ctx<'a>>,   // root context, for symbol lookup
     pub function: Option<ValueHandle>, // current function
     pub init_func: Option<ValueHandle>, //init function,call first in main
     pub roots: RefCell<Vec<ValueHandle>>,
@@ -91,6 +94,7 @@ pub struct Ctx<'a> {
     pub in_macro: bool,
     pub closure_data: Option<RefCell<ClosureCtxData>>,
     pub expect_ty: Option<Arc<RefCell<PLType>>>,
+    pub trait_mthd_table: Arc<RefCell<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>>,
 }
 
 #[derive(Clone, Default)]
@@ -147,11 +151,17 @@ impl<'a, 'ctx> Ctx<'a> {
             in_macro: false,
             closure_data: None,
             expect_ty: None,
+            trait_mthd_table: Default::default(),
+            root: None,
         };
         add_primitive_types(&mut ctx);
         ctx
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
+        let mut root = self.root;
+        if self.father.is_none() {
+            root = Some(self);
+        }
         let mut ctx = Ctx {
             need_highlight: self.need_highlight,
             generic_types: FxHashMap::default(),
@@ -178,6 +188,8 @@ impl<'a, 'ctx> Ctx<'a> {
             in_macro: self.in_macro,
             closure_data: None,
             expect_ty: None,
+            trait_mthd_table: Default::default(),
+            root,
         };
         add_primitive_types(&mut ctx);
         builder.new_subscope(start);
@@ -320,8 +332,8 @@ impl<'a, 'ctx> Ctx<'a> {
             }
             let trait_handle = builder.alloc("tmp_traitv", &target_pltype.borrow(), self, None);
             for f in t.list_trait_fields().iter() {
-                let mthd = st.find_method(self, &f.name).unwrap();
-                let fnhandle = builder.get_or_insert_fn_handle(&mthd, self);
+                let mthd = st.find_method(&f.name).unwrap();
+                let fnhandle = builder.get_or_insert_fn_handle(&mthd.borrow(), self);
                 let targetftp = f.typenode.get_type(self, builder, true).unwrap();
                 let casted = builder.bitcast(self, fnhandle, &targetftp.borrow(), "fncast_tmp");
                 let f_ptr = builder
@@ -383,9 +395,90 @@ impl<'a, 'ctx> Ctx<'a> {
         self.position_at_end(entry, builder);
         builder.build_return(None);
     }
-    pub fn add_method(&mut self, tp: &str, mthd: &str, fntp: FNValue, range: Range) {
-        if self.plmod.add_method(tp, mthd, fntp).is_err() {
-            self.add_diag(range.new_err(ErrorCode::DUPLICATE_METHOD));
+    fn add_to_global_mthd_table(
+        &self,
+        st_name: &str,
+        mthd_name: &str,
+        fntp: Arc<RefCell<FNValue>>,
+    ) {
+        let mut m = self.get_root_ctx().trait_mthd_table.borrow_mut();
+        m.entry(st_name.to_string())
+            .or_insert_with(|| Default::default())
+            .insert(mthd_name.to_owned(), fntp);
+    }
+    pub fn get_root_ctx(&self) -> &Ctx {
+        let mut ctx = self;
+        while let Some(p) = ctx.root {
+            ctx = p;
+        }
+        ctx
+    }
+
+    pub fn find_global_method(&self, name: &str, mthd: &str) -> Option<Arc<RefCell<FNValue>>> {
+        let mut m = self.get_root_ctx().trait_mthd_table.borrow_mut();
+        let table = m.get_mut(name);
+        if let Some(table) = table {
+            if let Some(fntp) = table.get(mthd) {
+                return Some(fntp.clone());
+            }
+        }
+        None
+    }
+
+    fn add_method_to_tp<T: ImplAble>(
+        &mut self,
+        t: &T,
+        mthd: &str,
+        fntp: Arc<RefCell<FNValue>>,
+        impl_trait: Option<Arc<RefCell<PLType>>>,
+    ) -> Result<(), PLDiag> {
+        if t.get_path() != self.get_file() {
+            if let Some(tt) = impl_trait {
+                if let PLType::Trait(st) = &*tt.clone().borrow() {
+                    let mut m = st.trait_methods_impl.borrow_mut();
+                    let st_name = t.get_full_name_except_generic();
+                    let table = m.get_mut(&st_name);
+                    if let Some(table) = table {
+                        if table.insert(mthd.to_string(), fntp.clone()).is_some() {
+                            return Err(fntp
+                                .borrow()
+                                .range
+                                .new_err(ErrorCode::DUPLICATE_METHOD)
+                                .add_to_ctx(self));
+                        }
+                        self.add_to_global_mthd_table(&st_name, mthd, fntp);
+                        return Ok(());
+                    } else {
+                        drop(table);
+                        m.insert(t.get_full_name_except_generic(), FxHashMap::default());
+                        let table = m.get_mut(&t.get_full_name_except_generic()).unwrap();
+                        table.insert(mthd.to_string(), fntp.clone());
+                        self.add_to_global_mthd_table(&st_name, mthd, fntp);
+                        return Ok(());
+                    }
+                }
+            }
+            return Err(fntp
+                .borrow()
+                .range
+                .new_err(ErrorCode::CANNOT_IMPL_TYPE_OUT_OF_DEFINE_MOD)
+                .add_to_ctx(self));
+        }
+        t.add_method(mthd, fntp).map_err(|e| e.add_to_ctx(self))
+    }
+
+    pub fn add_method(
+        &mut self,
+        tp: &PLType,
+        mthd: &str,
+        fntp: FNValue,
+        impl_trait: Option<Arc<RefCell<PLType>>>,
+    ) -> Result<(), PLDiag> {
+        let fntp = Arc::new(RefCell::new(fntp));
+        match tp {
+            PLType::Struct(s) => self.add_method_to_tp(s, mthd, fntp, impl_trait),
+            PLType::Union(u) => self.add_method_to_tp(u, mthd, fntp, impl_trait),
+            _ => todo!(),
         }
     }
     /// # get_symbol
