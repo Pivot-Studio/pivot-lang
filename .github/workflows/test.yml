@@ -21,7 +21,6 @@ on:
       - '**.pi'
       - '**/Kagari.*'
       - 'codecov.yml'
-  merge_group:
 
 env:
   RUSTFLAGS: -Dwarnings
@@ -70,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-latest", "windows-latest", "macOS-latest"]
+        os: ["ubuntu-latest", "windows-latest", "macOS-latest", "self-hosted"]
         include:
           - RUSTFLAGS: "-Dwarnings"
             CARGO_INCREMENTAL: 1
@@ -114,6 +113,7 @@ jobs:
 
 
       - uses: Swatinem/rust-cache@v2
+        if: ${{ matrix.os != 'self-hosted' }}
 
       - name: Install latest llvm-cov release
         uses: taiki-e/install-action@cargo-llvm-cov

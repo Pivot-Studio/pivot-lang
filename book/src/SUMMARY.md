@@ -28,6 +28,7 @@
     - [gc](./systemlib/gc.md)
       - [Immix Gc](./systemlib/immix.md)
       - [Stack Map](./systemlib/stackmap.md)
+      - [Evacuation](./systemlib/eva.md)
   - [planglib](./systemlib/planglib.md)
 
 # CONTRIBUTING
