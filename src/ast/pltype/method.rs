@@ -13,7 +13,7 @@ use crate::{
 
 use super::FNValue;
 
-pub trait ImplAble: RangeTrait + CustomType {
+pub trait ImplAble: RangeTrait + CustomType + TraitImplAble {
     fn get_method_table(&self) -> Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>;
     fn get_method(&self, name: &str) -> Option<Arc<RefCell<FNValue>>> {
         let binding = self.get_method_table();
@@ -37,6 +37,9 @@ pub trait ImplAble: RangeTrait + CustomType {
         table.insert(name.to_owned(), value);
         Ok(())
     }
+}
+
+pub trait TraitImplAble {
     fn get_full_name_except_generic(&self) -> String;
     fn get_full_name(&self) -> String;
 }

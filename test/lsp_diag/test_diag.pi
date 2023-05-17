@@ -17,7 +17,7 @@ struct BInner<T: TestTrait> {
 
 type AA = A | i64;
 fn test_mismatch() void {
-    let a: AA = 1.;
+    let a: AA = 1.0;
     let aa: AA = 1 as i64;
     let b = aa as f32;
     let bb = aa as f32!;

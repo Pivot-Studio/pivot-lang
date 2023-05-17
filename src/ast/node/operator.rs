@@ -7,12 +7,14 @@ use super::*;
 use super::super::builder::IntPredicate;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
+use crate::ast::builder::ValueHandle;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::get_type_deep;
 use crate::ast::pltype::ImplAble;
 use crate::ast::pltype::PLType;
 use crate::ast::pltype::PriType;
+use crate::ast::pltype::TraitImplAble;
 use crate::ast::tokens::TokenType;
 use crate::format_label;
 use crate::handle_calc;
@@ -267,7 +269,12 @@ impl Node for TakeOpNode {
         let head_pltype = get_type_deep(nv.get_ty());
         if !matches!(
             &*head_pltype.borrow(),
-            PLType::Struct(_) | PLType::Pointer(_) | PLType::Trait(_) | PLType::Union(_)
+            PLType::Struct(_)
+                | PLType::Pointer(_)
+                | PLType::Trait(_)
+                | PLType::Union(_)
+                | PLType::Primitive(_)
+                | PLType::Closure(_)
         ) {
             return Err(ctx.add_diag(
                 self.head
@@ -276,11 +283,36 @@ impl Node for TakeOpNode {
             ));
         }
         ctx.if_completion(self.range, || {
-            match &*ctx.auto_deref_tp(head_pltype.clone()).borrow() {
+            let mut comps = match &*ctx.auto_deref_tp(head_pltype.clone()).borrow() {
                 PLType::Struct(s) => s.get_completions(ctx),
                 PLType::Trait(s) => s.get_trait_completions(ctx),
                 _ => vec![],
+            };
+            let mut map = Default::default();
+            match &*ctx.auto_deref_tp(head_pltype.clone()).borrow() {
+                PLType::Struct(s) => {
+                    ctx.get_global_mthd_completions(&s.get_full_name(), &mut map);
+                    ctx.get_global_mthd_completions(&s.get_full_name_except_generic(), &mut map);
+                }
+                PLType::Trait(s) => {
+                    ctx.get_global_mthd_completions(&s.get_full_name(), &mut map);
+                    ctx.get_global_mthd_completions(&s.get_full_name_except_generic(), &mut map);
+                }
+                PLType::Primitive(s) => {
+                    ctx.get_global_mthd_completions(&s.get_full_name(), &mut map);
+                    ctx.get_global_mthd_completions(&s.get_full_name_except_generic(), &mut map);
+                }
+                PLType::Closure(s) => {
+                    ctx.get_global_mthd_completions(&s.get_full_name(), &mut map);
+                    ctx.get_global_mthd_completions(&s.get_full_name_except_generic(), &mut map);
+                }
+                _ => (),
+            };
+            for (_, v) in map {
+                comps.push(v);
             }
+
+            comps
         });
         if self.field.is_none() {
             // end with ".", gen completions
@@ -288,7 +320,10 @@ impl Node for TakeOpNode {
         }
         let id = self.field.as_ref().unwrap();
         let id_range = id.range();
-        let (head_pltype, headptr) = ctx.auto_deref(head_pltype, nv.get_value(), builder);
+        let (head_pltype, mut headptr) = ctx.auto_deref(head_pltype, nv.get_value(), builder);
+        if !builder.is_ptr(headptr) {
+            headptr = builder.alloc("temp", &head_pltype.borrow(), ctx, None);
+        }
         match &*head_pltype.clone().borrow() {
             PLType::Trait(s) => {
                 let field = s.get_trait_field(&id.name);
@@ -306,11 +341,12 @@ impl Node for TakeOpNode {
                     let headptr = builder.build_struct_gep(headptr, 1, "traitptr").unwrap();
                     let headptr = builder.build_load(headptr, "traitptr_load");
                     ctx.emit_comment_highlight(&self.comments[0]);
-                    return Ok(NodeOutput::new_value(NodeValue::new_receiver(
+                    Ok(NodeOutput::new_value(NodeValue::new_receiver(
                         fnv, re, headptr, None,
-                    )));
+                    )))
+                } else {
+                    handle_glob_mthd(s, ctx, id, headptr, head_pltype, id_range)
                 }
-                Err(ctx.add_diag(id.range.new_err(ErrorCode::TRAIT_METHOD_NOT_FOUND)))
             }
             PLType::Struct(s) => {
                 if let Some(field) = s.fields.get(&id.name) {
@@ -325,56 +361,11 @@ impl Node for TakeOpNode {
                         field.typenode.get_type(ctx, builder, true)?,
                     )));
                 }
-                if let Some(mthd) = s
-                    .find_method(&id.name)
-                    .or_else(|| ctx.find_global_method(&s.get_full_name(), &id.name))
-                    .or_else(|| ctx.find_global_method(&s.get_full_name_except_generic(), &id.name))
-                {
-                    let mthd = mthd;
-                    let mth = mthd.borrow();
-                    _ = mth.expect_pub(ctx, id_range);
-                    ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
-                    ctx.send_if_go_to_def(
-                        id_range,
-                        mth.range,
-                        mth.llvmname.split("..").next().unwrap().to_string(),
-                    );
-                    return usize::MAX
-                        .new_output(Arc::new(RefCell::new(PLType::Fn(mth.clone()))))
-                        .with_receiver(
-                            headptr,
-                            Some(Arc::new(RefCell::new(PLType::Pointer(head_pltype)))),
-                        )
-                        .to_result();
-                };
-                Err(ctx.add_diag(id.range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND)))
+                handle_mthd(s, ctx, id, headptr, head_pltype, id_range)
             }
-            PLType::Union(union) => {
-                if let Some(mthd) = union.find_method(&id.name).or_else(|| {
-                    ctx.find_global_method(&union.get_full_name_except_generic(), &id.name)
-                        .or_else(|| {
-                            ctx.find_global_method(&union.get_full_name_except_generic(), &id.name)
-                        })
-                }) {
-                    let mthd = mthd;
-                    let mthd = mthd.borrow();
-                    _ = mthd.expect_pub(ctx, id_range);
-                    ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
-                    ctx.send_if_go_to_def(
-                        id_range,
-                        mthd.range,
-                        mthd.llvmname.split("..").next().unwrap().to_string(),
-                    );
-                    return usize::MAX
-                        .new_output(Arc::new(RefCell::new(PLType::Fn(mthd.clone()))))
-                        .with_receiver(
-                            headptr,
-                            Some(Arc::new(RefCell::new(PLType::Pointer(head_pltype)))),
-                        )
-                        .to_result();
-                };
-                Err(ctx.add_diag(id.range.new_err(ErrorCode::METHOD_NOT_FOUND)))
-            }
+            PLType::Union(union) => handle_mthd(union, ctx, id, headptr, head_pltype, id_range),
+            PLType::Primitive(p) => handle_glob_mthd(p, ctx, id, headptr, head_pltype, id_range),
+            PLType::Closure(p) => handle_glob_mthd(p, ctx, id, headptr, head_pltype, id_range),
             _ => Err(ctx.add_diag(
                 self.head
                     .range()
@@ -382,4 +373,60 @@ impl Node for TakeOpNode {
             )),
         }
     }
+}
+
+fn handle_mthd<T: ImplAble>(
+    t: &T,
+    ctx: &mut Ctx<'_>,
+    id: &VarNode,
+    headptr: ValueHandle,
+    head_pltype: Arc<RefCell<PLType>>,
+    id_range: Range,
+) -> NodeResult {
+    if let Some(mthd) = t.get_method(&id.name) {
+        pack_mthd(ctx, mthd, headptr, head_pltype, id_range)
+    } else {
+        handle_glob_mthd(t, ctx, id, headptr, head_pltype, id_range)
+    }
+}
+
+fn handle_glob_mthd<T: TraitImplAble>(
+    t: &T,
+    ctx: &mut Ctx<'_>,
+    id: &VarNode,
+    headptr: ValueHandle,
+    head_pltype: Arc<RefCell<PLType>>,
+    id_range: Range,
+) -> NodeResult {
+    if let Some(mthd) = ctx
+        .find_global_method(&t.get_full_name(), &id.name)
+        .or(ctx.find_global_method(&t.get_full_name_except_generic(), &id.name))
+    {
+        return pack_mthd(ctx, mthd, headptr, head_pltype, id_range);
+    };
+    Err(ctx.add_diag(id.range.new_err(ErrorCode::METHOD_NOT_FOUND)))
+}
+
+fn pack_mthd(
+    ctx: &mut Ctx<'_>,
+    mthd: Arc<RefCell<crate::ast::pltype::FNValue>>,
+    headptr: ValueHandle,
+    head_pltype: Arc<RefCell<PLType>>,
+    id_range: Range,
+) -> NodeResult {
+    let mthd = mthd.borrow();
+    _ = mthd.expect_pub(ctx, id_range);
+    ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
+    ctx.send_if_go_to_def(
+        id_range,
+        mthd.range,
+        mthd.llvmname.split("..").next().unwrap().to_string(),
+    );
+    usize::MAX
+        .new_output(Arc::new(RefCell::new(PLType::Fn(mthd.clone()))))
+        .with_receiver(
+            headptr,
+            Some(Arc::new(RefCell::new(PLType::Pointer(head_pltype)))),
+        )
+        .to_result()
 }

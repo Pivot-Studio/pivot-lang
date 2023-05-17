@@ -236,10 +236,12 @@ impl Program {
             if let Some(s) = symbol_opt {
                 let symbol = module.types.get(&s);
                 if let Some(x) = symbol {
+                    if x.borrow().is_pub() {
+                        global_tp_map.insert(s, x.to_owned());
+                    }
                     if let PLType::Trait(t) = &*x.borrow() {
                         global_mthd_map.extend(t.trait_methods_impl.borrow().clone());
                     }
-                    global_tp_map.insert(s, x.to_owned());
                 }
             }
             modmap.insert(mod_id.unwrap(), module);

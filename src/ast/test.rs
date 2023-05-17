@@ -91,7 +91,7 @@ fn test_diag() {
         DiagCode::Err(crate::ast::diag::ErrorCode::TYPE_MISMATCH)
     );
     assert_eq!(
-        new_diag_range(19, 16, 19, 18),
+        new_diag_range(19, 16, 19, 19),
         diag[1].get_range().to_diag_range()
     );
     assert_eq!(

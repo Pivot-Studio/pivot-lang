@@ -112,8 +112,8 @@ impl Node for UseNode {
                 let mod_id = path.file_name().unwrap().to_str().unwrap();
                 if let Some(m) = ctx.plmod.submods.get(mod_id) {
                     let n = self.ids.last().unwrap();
-                    if let Some(t) = m.get_type(&n.name, n.range, ctx) {
-                        let t = match &*t.borrow() {
+                    if let Some(tp) = m.get_type(&n.name, n.range, ctx) {
+                        let t = match &*tp.borrow() {
                             PLType::Fn(_) => SemanticTokenType::FUNCTION,
                             PLType::Struct(_) => SemanticTokenType::STRUCT,
                             PLType::Trait(_) => SemanticTokenType::INTERFACE,
@@ -124,6 +124,12 @@ impl Node for UseNode {
                         if !self.complete {
                             return Err(ctx.add_diag(
                                 self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION),
+                            ));
+                        }
+                        if !tp.borrow().is_pub() {
+                            return Err(ctx.add_diag(
+                                n.range
+                                    .new_err(crate::ast::diag::ErrorCode::EXPECT_PUBLIC_SYMBOL),
                             ));
                         }
                         return Ok(Default::default());

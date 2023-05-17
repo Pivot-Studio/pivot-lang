@@ -603,7 +603,7 @@ impl FmtBuilder {
             if s.contains('.') {
                 self.token(s.as_str());
             } else {
-                self.token(&format!("{}.", s));
+                self.token(&format!("{}.0", s));
             }
         }
     }

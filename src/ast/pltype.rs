@@ -65,6 +65,15 @@ pub enum PLType {
     Closure(ClosureType),
 }
 
+impl TraitImplAble for PriType {
+    fn get_full_name(&self) -> String {
+        self.get_name()
+    }
+    fn get_full_name_except_generic(&self) -> String {
+        self.get_name()
+    }
+}
+
 #[derive(Debug, Clone, Eq)]
 pub struct ClosureType {
     pub arg_types: Vec<Arc<RefCell<PLType>>>,
@@ -102,6 +111,14 @@ impl ClosureType {
         )
     }
 }
+impl TraitImplAble for ClosureType {
+    fn get_full_name(&self) -> String {
+        self.get_name()
+    }
+    fn get_full_name_except_generic(&self) -> String {
+        self.get_name()
+    }
+}
 
 mod method;
 
@@ -113,6 +130,9 @@ macro_rules! impl_mthd {
             fn get_method_table(&self) -> Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>{
                 return self.methods.clone();
             }
+
+        }
+        impl TraitImplAble for $n {
             fn get_full_name(&self) -> String {
                 format!("{}..{}", self.path, self.name)
             }
@@ -490,6 +510,25 @@ impl PLType {
         match self {
             PLType::Pointer(p) => p.borrow().get_ptr_depth() + 1,
             _ => 0,
+        }
+    }
+
+    pub fn is_pub(&self) -> bool {
+        match self {
+            PLType::Fn(f) => f.is_modified_by(TokenType::PUB),
+            PLType::Struct(s) => {
+                if_not_modified_by!(s.modifier, TokenType::PUB, return false);
+                true
+            }
+            PLType::Trait(st) => {
+                if_not_modified_by!(st.modifier, TokenType::PUB, return false);
+                true
+            }
+            PLType::Union(st) => {
+                if_not_modified_by!(st.modifier, TokenType::PUB, return false);
+                true
+            }
+            _ => true,
         }
     }
 

@@ -35,7 +35,7 @@ use rustc_hash::FxHashMap;
 use crate::ast::{
     diag::PLDiag,
     pass::run_immix_pass,
-    pltype::{ClosureType, ImplAble},
+    pltype::{ClosureType, TraitImplAble},
 };
 
 use super::{

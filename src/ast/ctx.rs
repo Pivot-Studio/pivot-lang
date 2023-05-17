@@ -17,6 +17,7 @@ use super::pltype::FNValue;
 use super::pltype::ImplAble;
 use super::pltype::PLType;
 use super::pltype::PriType;
+use super::pltype::TraitImplAble;
 use super::pltype::TraitMthdImpl;
 use super::range::Pos;
 use super::range::Range;
@@ -436,6 +437,94 @@ impl<'a, 'ctx> Ctx<'a> {
         None
     }
 
+    pub fn get_global_mthd_completions(
+        &self,
+        name: &str,
+        set: &mut FxHashMap<String, CompletionItem>,
+    ) {
+        let mut m = self.get_root_ctx().trait_mthd_table.borrow_mut();
+        let table = m.get_mut(name);
+        if let Some(table) = table {
+            table.iter().for_each(|(k, v)| {
+                set.insert(
+                    k.clone(),
+                    CompletionItem {
+                        kind: Some(CompletionItemKind::METHOD),
+                        label: k.clone(),
+                        detail: Some("method".to_string()),
+                        insert_text: Some(v.borrow().gen_snippet()),
+                        insert_text_format: Some(InsertTextFormat::SNIPPET),
+                        command: Some(Command::new(
+                            "trigger help".to_string(),
+                            "editor.action.triggerParameterHints".to_string(),
+                            None,
+                        )),
+                        ..Default::default()
+                    },
+                );
+            });
+        }
+    }
+
+    fn add_trait_impl_method<T: TraitImplAble>(
+        &mut self,
+        t: &T,
+        mthd: &str,
+        fntp: Arc<RefCell<FNValue>>,
+        impl_trait: Option<Arc<RefCell<PLType>>>,
+        generic: bool,
+    ) -> Result<(), PLDiag> {
+        if let Some(tt) = impl_trait {
+            if let PLType::Trait(st) = &*tt.borrow() {
+                if st.get_path() != self.get_file() {
+                    return Err(fntp
+                        .borrow()
+                        .range
+                        .new_err(ErrorCode::CANNOT_IMPL_TYPE_OUT_OF_DEFINE_MOD)
+                        .add_to_ctx(self));
+                }
+                let mut m = st.trait_methods_impl.borrow_mut();
+                let st_name = if generic {
+                    t.get_full_name_except_generic()
+                } else {
+                    t.get_full_name()
+                };
+                let table = m.get_mut(&st_name);
+                if let Some(table) = table {
+                    if table.insert(mthd.to_string(), fntp.clone()).is_some() {
+                        return Err(fntp
+                            .borrow()
+                            .range
+                            .new_err(ErrorCode::DUPLICATE_METHOD)
+                            .add_to_ctx(self));
+                    }
+                    self.add_to_global_mthd_table(&st_name, mthd, fntp);
+                    Ok(())
+                } else {
+                    #[allow(clippy::drop_non_drop)]
+                    drop(table);
+                    m.insert(st_name.clone(), FxHashMap::default());
+                    let table = m.get_mut(&st_name).unwrap();
+                    table.insert(mthd.to_string(), fntp.clone());
+                    self.add_to_global_mthd_table(&st_name, mthd, fntp);
+                    Ok(())
+                }
+            } else {
+                return Err(fntp
+                    .borrow()
+                    .range
+                    .new_err(ErrorCode::ONLY_TRAIT_CAN_BE_IMPL)
+                    .add_to_ctx(self));
+            }
+        } else {
+            return Err(fntp
+                .borrow()
+                .range
+                .new_err(ErrorCode::EXPECT_TO_BE_A_TRAIT_IMPL)
+                .add_to_ctx(self));
+        }
+    }
+
     fn add_method_to_tp<T: ImplAble>(
         &mut self,
         t: &T,
@@ -445,50 +534,10 @@ impl<'a, 'ctx> Ctx<'a> {
         generic: bool,
     ) -> Result<(), PLDiag> {
         if t.get_path() != self.get_file() {
-            if let Some(tt) = impl_trait {
-                if let PLType::Trait(st) = &*tt.borrow() {
-                    if st.get_path() != self.get_file() {
-                        return Err(fntp
-                            .borrow()
-                            .range
-                            .new_err(ErrorCode::CANNOT_IMPL_TYPE_OUT_OF_DEFINE_MOD)
-                            .add_to_ctx(self));
-                    }
-                    let mut m = st.trait_methods_impl.borrow_mut();
-                    let st_name = if generic {
-                        t.get_full_name_except_generic()
-                    } else {
-                        t.get_full_name()
-                    };
-                    let table = m.get_mut(&st_name);
-                    if let Some(table) = table {
-                        if table.insert(mthd.to_string(), fntp.clone()).is_some() {
-                            return Err(fntp
-                                .borrow()
-                                .range
-                                .new_err(ErrorCode::DUPLICATE_METHOD)
-                                .add_to_ctx(self));
-                        }
-                        self.add_to_global_mthd_table(&st_name, mthd, fntp);
-                        return Ok(());
-                    } else {
-                        #[allow(clippy::drop_non_drop)]
-                        drop(table);
-                        m.insert(st_name.clone(), FxHashMap::default());
-                        let table = m.get_mut(&st_name).unwrap();
-                        table.insert(mthd.to_string(), fntp.clone());
-                        self.add_to_global_mthd_table(&st_name, mthd, fntp);
-                        return Ok(());
-                    }
-                }
-            }
-            return Err(fntp
-                .borrow()
-                .range
-                .new_err(ErrorCode::CANNOT_IMPL_TYPE_OUT_OF_DEFINE_MOD)
-                .add_to_ctx(self));
+            self.add_trait_impl_method(t, mthd, fntp, impl_trait, generic)
+        } else {
+            t.add_method(mthd, fntp).map_err(|e| e.add_to_ctx(self))
         }
-        t.add_method(mthd, fntp).map_err(|e| e.add_to_ctx(self))
     }
 
     pub fn add_method(
@@ -501,9 +550,17 @@ impl<'a, 'ctx> Ctx<'a> {
     ) -> Result<(), PLDiag> {
         let fntp = Arc::new(RefCell::new(fntp));
         match tp {
-            PLType::Struct(s) => self.add_method_to_tp(s, mthd, fntp, impl_trait, generic),
+            PLType::Struct(s) | PLType::Trait(s) => {
+                self.add_method_to_tp(s, mthd, fntp, impl_trait, generic)
+            }
             PLType::Union(u) => self.add_method_to_tp(u, mthd, fntp, impl_trait, generic),
-            _ => todo!(),
+            PLType::Closure(p) => self.add_trait_impl_method(p, mthd, fntp, impl_trait, generic),
+            PLType::Primitive(p) => self.add_trait_impl_method(p, mthd, fntp, impl_trait, generic),
+            _ => Err(fntp
+                .borrow()
+                .range
+                .new_err(ErrorCode::TARGET_TYPE_NOT_IMPL_ABLE)
+                .add_to_ctx(self)),
         }
     }
     /// # get_symbol

@@ -8,3 +8,14 @@ impl <T>  namet for tmod::name<T>  {
         return;
     }
 }
+
+// TODO
+impl tmod::name<T> {
+    
+}
+
+impl namet for i64 {
+    fn namet() void {
+        return;
+    }
+}

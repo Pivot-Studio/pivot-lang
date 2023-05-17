@@ -145,6 +145,7 @@ fn macro_call_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("a{}.d")]
 #[test_parser("ad")]
 #[test_parser("a<i64>{}")]
+#[test_parser("1.xxx()")]
 pub fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         pair(
