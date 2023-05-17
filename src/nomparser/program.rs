@@ -81,6 +81,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                                 range: Default::default(),
                             }),
                         );
+                        mth.target_range = im.target.range();
                         mth.impl_trait = im
                             .impl_trait
                             .clone()

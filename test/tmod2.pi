@@ -4,6 +4,7 @@ use project1::tmod1::namet;
 pub fn test_mod_impl() i64 {
     let a = 1;
     1.namet();
+    a.namet();
     let n = tmod::name<i64>{};
     n.namet();
     return 0;

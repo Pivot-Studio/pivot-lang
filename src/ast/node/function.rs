@@ -341,6 +341,7 @@ pub struct FuncDefNode {
     pub trait_bounds: Option<Vec<Box<TraitBoundNode>>>,
     pub impl_trait: Option<(Box<TypeNodeEnum>, (TokenType, Range), bool)>, // bool是是否impl有generic
     pub is_method: bool,
+    pub target_range: Range,
 }
 
 type OptFOnce<'a> = Option<Box<dyn FnOnce(&mut Ctx) -> Result<(), PLDiag> + 'a>>; // Thank u, Rust!
@@ -370,8 +371,11 @@ impl TypeNode for FuncDefNode {
             let mut param_pltypes = Vec::new();
             let mut param_name = Vec::new();
             let method = self.is_method;
-            let (trait_tp, generic) = if let Some((v, _, generic)) = &self.impl_trait {
-                (Some(v.clone().get_type(child, builder, false)?), *generic)
+            let (trait_tp, generic) = if let Some((v, (_, r), generic)) = &self.impl_trait {
+                (
+                    Some((v.clone().get_type(child, builder, false)?, *r)),
+                    *generic,
+                )
             } else {
                 (None, false)
             };
@@ -406,7 +410,7 @@ impl TypeNode for FuncDefNode {
                     generic_map: generic_map.clone(),
                     generic: self.generics.is_some(),
                     modifier: self.modifier.or_else(|| {
-                        trait_tp.clone().and_then(|t| match &*t.borrow() {
+                        trait_tp.clone().and_then(|(t, _)| match &*t.borrow() {
                             PLType::Trait(t) => t.modifier,
                             _ => unreachable!(),
                         })
@@ -440,6 +444,7 @@ impl TypeNode for FuncDefNode {
                             fnvalue,
                             trait_tp,
                             generic,
+                            self.target_range,
                         )
                     }));
                 };

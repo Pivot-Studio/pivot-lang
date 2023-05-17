@@ -1,9 +1,6 @@
 use core::panic;
-trait A {
-    fn a() bool;
-
-}
-
+use project1::test::multi_trait_st::test_struct;
+use project1::test::multi_trait_A::A;
 trait B {
     fn b() i64;
 
@@ -26,8 +23,6 @@ pub fn test_multi_trait() void {
     return;
 }
 
-struct test_struct {
-}
 
 impl C for test_struct {
     fn c() void {
@@ -36,12 +31,6 @@ impl C for test_struct {
 
 }
 
-impl A for test_struct {
-    fn a() bool {
-        return true;
-    }
-
-}
 
 impl B for test_struct {
     fn b() i64 {

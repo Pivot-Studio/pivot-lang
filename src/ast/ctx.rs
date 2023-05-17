@@ -331,19 +331,20 @@ impl<'a, 'ctx> Ctx<'a> {
             }
             let trait_handle = builder.alloc("tmp_traitv", &target_pltype.borrow(), self, None);
             for f in t.list_trait_fields().iter() {
-                let mthd = st.find_method(&f.name).unwrap_or_else(|| {
-                    t.trait_methods_impl
-                        .borrow()
-                        .get(&st.get_full_name())
-                        .or(t
-                            .trait_methods_impl
-                            .borrow()
-                            .get(&st.get_full_name_except_generic()))
-                        .unwrap()
-                        .get(&f.name)
-                        .unwrap()
-                        .clone()
+                let mthd = find_mthd(st, f, t).unwrap_or_else(|| {
+                    for t in &t.derives {
+                        match &*t.borrow() {
+                            PLType::Trait(t) => {
+                                if let Some(mthd) = find_mthd(st, f, t) {
+                                    return mthd;
+                                }
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                    unreachable!()
                 });
+
                 // TODO: let a:trait = B<i64>{} panic
                 let fnhandle = builder.get_or_insert_fn_handle(&mthd.borrow(), self);
                 let targetftp = f.typenode.get_type(self, builder, true).unwrap();
@@ -471,15 +472,14 @@ impl<'a, 'ctx> Ctx<'a> {
         t: &T,
         mthd: &str,
         fntp: Arc<RefCell<FNValue>>,
-        impl_trait: Option<Arc<RefCell<PLType>>>,
+        impl_trait: Option<(Arc<RefCell<PLType>>, Range)>,
         generic: bool,
+        target: Range,
     ) -> Result<(), PLDiag> {
-        if let Some(tt) = impl_trait {
+        if let Some((tt, trait_range)) = impl_trait {
             if let PLType::Trait(st) = &*tt.borrow() {
                 if st.get_path() != self.get_file() {
-                    return Err(fntp
-                        .borrow()
-                        .range
+                    return Err(trait_range
                         .new_err(ErrorCode::CANNOT_IMPL_TYPE_OUT_OF_DEFINE_MOD)
                         .add_to_ctx(self));
                 }
@@ -510,18 +510,14 @@ impl<'a, 'ctx> Ctx<'a> {
                     Ok(())
                 }
             } else {
-                return Err(fntp
-                    .borrow()
-                    .range
+                Err(trait_range
                     .new_err(ErrorCode::ONLY_TRAIT_CAN_BE_IMPL)
-                    .add_to_ctx(self));
+                    .add_to_ctx(self))
             }
         } else {
-            return Err(fntp
-                .borrow()
-                .range
+            Err(target
                 .new_err(ErrorCode::EXPECT_TO_BE_A_TRAIT_IMPL)
-                .add_to_ctx(self));
+                .add_to_ctx(self))
         }
     }
 
@@ -530,11 +526,12 @@ impl<'a, 'ctx> Ctx<'a> {
         t: &T,
         mthd: &str,
         fntp: Arc<RefCell<FNValue>>,
-        impl_trait: Option<Arc<RefCell<PLType>>>,
+        impl_trait: Option<(Arc<RefCell<PLType>>, Range)>,
         generic: bool,
+        target: Range,
     ) -> Result<(), PLDiag> {
         if t.get_path() != self.get_file() {
-            self.add_trait_impl_method(t, mthd, fntp, impl_trait, generic)
+            self.add_trait_impl_method(t, mthd, fntp, impl_trait, generic, target)
         } else {
             t.add_method(mthd, fntp).map_err(|e| e.add_to_ctx(self))
         }
@@ -545,20 +542,23 @@ impl<'a, 'ctx> Ctx<'a> {
         tp: &PLType,
         mthd: &str,
         fntp: FNValue,
-        impl_trait: Option<Arc<RefCell<PLType>>>,
+        impl_trait: Option<(Arc<RefCell<PLType>>, Range)>,
         generic: bool,
+        target: Range,
     ) -> Result<(), PLDiag> {
         let fntp = Arc::new(RefCell::new(fntp));
         match tp {
             PLType::Struct(s) | PLType::Trait(s) => {
-                self.add_method_to_tp(s, mthd, fntp, impl_trait, generic)
+                self.add_method_to_tp(s, mthd, fntp, impl_trait, generic, target)
             }
-            PLType::Union(u) => self.add_method_to_tp(u, mthd, fntp, impl_trait, generic),
-            PLType::Closure(p) => self.add_trait_impl_method(p, mthd, fntp, impl_trait, generic),
-            PLType::Primitive(p) => self.add_trait_impl_method(p, mthd, fntp, impl_trait, generic),
-            _ => Err(fntp
-                .borrow()
-                .range
+            PLType::Union(u) => self.add_method_to_tp(u, mthd, fntp, impl_trait, generic, target),
+            PLType::Closure(p) => {
+                self.add_trait_impl_method(p, mthd, fntp, impl_trait, generic, target)
+            }
+            PLType::Primitive(p) => {
+                self.add_trait_impl_method(p, mthd, fntp, impl_trait, generic, target)
+            }
+            _ => Err(target
                 .new_err(ErrorCode::TARGET_TYPE_NOT_IMPL_ABLE)
                 .add_to_ctx(self)),
         }
@@ -1280,6 +1280,23 @@ impl<'a, 'ctx> Ctx<'a> {
             father.try_set_closure_alloca_bb(bb);
         }
     }
+}
+
+fn find_mthd(
+    st: &super::pltype::STType,
+    f: &super::pltype::Field,
+    t: &super::pltype::STType,
+) -> Option<Arc<RefCell<FNValue>>> {
+    st.find_method(&f.name).or(t
+        .trait_methods_impl
+        .borrow()
+        .get(&st.get_full_name())
+        .or(t
+            .trait_methods_impl
+            .borrow()
+            .get(&st.get_full_name_except_generic()))
+        .and_then(|v| v.get(&f.name))
+        .cloned())
 }
 pub struct EqRes {
     pub eq: bool,

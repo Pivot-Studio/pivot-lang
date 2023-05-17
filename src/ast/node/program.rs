@@ -16,6 +16,7 @@ use crate::ast::ctx::{self, Ctx};
 use crate::ast::plmod::LSPDef;
 use crate::ast::plmod::Mod;
 use crate::ast::pltype::add_primitive_types;
+use crate::ast::pltype::FNValue;
 use crate::flow::display::Dot;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
@@ -29,6 +30,7 @@ use internal_macro::node;
 use lsp_types::GotoDefinitionResponse;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
+use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
@@ -181,7 +183,8 @@ impl Program {
         } else {
             pb.inc_length(1 + prog.uses.len() as u64);
         }
-        let mut global_mthd_map = FxHashMap::default();
+        let mut global_mthd_map: FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>> =
+            FxHashMap::default();
         let mut global_tp_map = FxHashMap::default();
         // load dependencies
         for (i, u) in prog.uses.iter().enumerate() {
@@ -240,7 +243,15 @@ impl Program {
                         global_tp_map.insert(s, x.to_owned());
                     }
                     if let PLType::Trait(t) = &*x.borrow() {
-                        global_mthd_map.extend(t.trait_methods_impl.borrow().clone());
+                        for (k, v) in t.trait_methods_impl.borrow().clone() {
+                            for (k2, v) in v {
+                                global_mthd_map
+                                    .entry(k.clone())
+                                    .or_insert(Default::default())
+                                    .borrow_mut()
+                                    .insert(k2, v);
+                            }
+                        }
                     }
                 }
             }
@@ -456,6 +467,16 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     ctx.plmod.types = params.types(db).get().clone();
     add_primitive_types(&mut ctx);
     ctx.plmod.submods = params.submods(db);
+    let mut map: FxHashMap<String, FxHashSet<String>> = FxHashMap::default();
+    #[allow(clippy::for_kv_map)]
+    for (_, m) in &ctx.plmod.submods {
+        for (k, v) in &m.impls {
+            map.entry(k.to_string())
+                .or_insert(Default::default())
+                .extend(v.clone());
+        }
+    }
+    ctx.plmod.impls = map;
     // imports all builtin symbols
     // #[cfg(not(target_arch = "wasm32"))] // TODO support std on wasm
     if ctx.plmod.name != "builtin" && ctx.plmod.name != "gc" {
