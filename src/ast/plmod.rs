@@ -173,7 +173,7 @@ impl Mod {
             local_refs: self.local_refs.clone(),
             glob_refs: self.glob_refs.clone(),
             refs_map: self.refs_map.clone(),
-            impls: self.impls.clone(),
+            impls: FxHashMap::default(),
             macros: FxHashMap::default(),
         }
     }
@@ -261,7 +261,7 @@ impl Mod {
     }
     pub fn get_pltp_completions_list(&self) -> Vec<CompletionItem> {
         let mut m = FxHashMap::<String, CompletionItem>::default();
-        self.get_pltp_completions(&mut m, &|_| true, &FxHashMap::default());
+        self.get_pltp_completions(&mut m, &|_| true, &FxHashMap::default(), false);
         m.into_values().collect()
     }
     pub fn get_pltp_completions(
@@ -269,6 +269,7 @@ impl Mod {
         vmap: &mut FxHashMap<String, CompletionItem>,
         filter: &impl Fn(&PLType) -> bool,
         generic_tps: &FxHashMap<String, Arc<RefCell<PLType>>>,
+        need_snippet: bool,
     ) {
         for (k, f) in self.types.iter().chain(generic_tps.iter()) {
             let mut insert_text = None;
@@ -278,12 +279,14 @@ impl Mod {
             }
             let tp = match &*f.clone().borrow() {
                 PLType::Fn(f) => {
-                    insert_text = Some(f.gen_snippet());
-                    command = Some(Command::new(
-                        "trigger help".to_string(),
-                        "editor.action.triggerParameterHints".to_string(),
-                        None,
-                    ));
+                    if need_snippet {
+                        insert_text = Some(f.gen_snippet());
+                        command = Some(Command::new(
+                            "trigger help".to_string(),
+                            "editor.action.triggerParameterHints".to_string(),
+                            None,
+                        ));
+                    }
                     CompletionItemKind::FUNCTION
                 }
                 PLType::Struct(_) => CompletionItemKind::STRUCT,

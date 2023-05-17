@@ -319,7 +319,7 @@ impl<'a, 'ctx> Ctx<'a> {
         if let (PLType::Trait(t), PLType::Struct(st)) =
             (&*target_pltype.borrow(), &*st_pltype.borrow())
         {
-            if !st.implements_trait(t, &self.plmod) {
+            if !st.implements_trait(t, &self.get_root_ctx().plmod) {
                 return Err(mismatch_err!(
                     self,
                     ori_range,
@@ -976,7 +976,7 @@ impl<'a, 'ctx> Ctx<'a> {
         filter: impl Fn(&PLType) -> bool,
     ) {
         self.plmod
-            .get_pltp_completions(vmap, &filter, &self.generic_types);
+            .get_pltp_completions(vmap, &filter, &self.generic_types, true);
         if let Some(father) = self.father {
             father.get_pltp_completions(vmap, filter);
         }
@@ -1202,7 +1202,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 (&*trait_pltype.borrow(), &*st_pltype.borrow())
             {
                 return EqRes {
-                    eq: st.implements_trait(t, &self.plmod),
+                    eq: st.implements_trait(t, &self.get_root_ctx().plmod),
                     need_up_cast: true,
                 };
             }

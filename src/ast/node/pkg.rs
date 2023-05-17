@@ -112,7 +112,7 @@ impl Node for UseNode {
                 let mod_id = path.file_name().unwrap().to_str().unwrap();
                 if let Some(m) = ctx.plmod.submods.get(mod_id) {
                     let n = self.ids.last().unwrap();
-                    if let Some(t) = m.types.get(&n.name) {
+                    if let Some(t) = m.get_type(&n.name, n.range, ctx) {
                         let t = match &*t.borrow() {
                             PLType::Fn(_) => SemanticTokenType::FUNCTION,
                             PLType::Struct(_) => SemanticTokenType::STRUCT,
@@ -135,11 +135,11 @@ impl Node for UseNode {
             ctx.add_diag(self.range.new_err(ErrorCode::UNRESOLVED_MODULE));
         }
         if self.ids.len() > 1 {
-            ctx.push_semantic_token(
-                self.ids.last().unwrap().range,
-                SemanticTokenType::NAMESPACE,
-                0,
-            );
+            let last = self.ids.last().unwrap();
+            ctx.push_semantic_token(last.range, SemanticTokenType::NAMESPACE, 0);
+            if let Some(m) = ctx.plmod.submods.get(&last.name) {
+                ctx.send_if_go_to_def(last.range, Default::default(), m.path.to_owned());
+            }
         }
         ctx.if_completion(self.range, || {
             if self.singlecolon {
