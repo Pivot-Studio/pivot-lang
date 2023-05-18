@@ -467,16 +467,6 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     ctx.plmod.types = params.types(db).get().clone();
     add_primitive_types(&mut ctx);
     ctx.plmod.submods = params.submods(db);
-    let mut map: FxHashMap<String, FxHashSet<String>> = FxHashMap::default();
-    #[allow(clippy::for_kv_map)]
-    for (_, m) in &ctx.plmod.submods {
-        for (k, v) in &m.impls {
-            map.entry(k.to_string())
-                .or_insert(Default::default())
-                .extend(v.clone());
-        }
-    }
-    ctx.plmod.impls = map;
     // imports all builtin symbols
     // #[cfg(not(target_arch = "wasm32"))] // TODO support std on wasm
     if ctx.plmod.name != "builtin" && ctx.plmod.name != "gc" {

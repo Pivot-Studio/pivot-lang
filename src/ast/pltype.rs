@@ -1045,12 +1045,26 @@ impl STType {
             .for_each(|(i, f)| f.index = i as u32);
         fields
     }
-    fn implements(&self, tp: &PLType, plmod: &Mod) -> bool {
-        plmod
+    fn implements(&self, tp: &STType, plmod: &Mod) -> bool {
+        if plmod
             .impls
             .get(&self.get_full_name())
-            .and_then(|v| v.get(&tp.get_full_elm_name()))
+            .and_then(|v| v.get(&tp.get_full_name()))
             .is_some()
+        {
+            return true;
+        }
+        for plmod in plmod.submods.values() {
+            if plmod
+                .impls
+                .get(&self.get_full_name())
+                .and_then(|v| v.get(&tp.get_full_name()))
+                .is_some()
+            {
+                return true;
+            }
+        }
+        false
     }
     pub fn implements_trait(&self, tp: &STType, plmod: &Mod) -> bool {
         if self.implements_trait_curr_mod(tp, plmod) {
@@ -1091,9 +1105,14 @@ impl STType {
             return re;
         }
         for de in &tp.derives {
-            let re = self.implements(&de.borrow(), plmod);
-            if !re {
-                return re;
+            match &*de.borrow() {
+                PLType::Trait(t) => {
+                    let re = self.implements(t, plmod);
+                    if !re {
+                        return re;
+                    }
+                }
+                _ => unreachable!(),
             }
         }
         true
