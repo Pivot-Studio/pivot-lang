@@ -50,5 +50,4 @@ impl<T> A<T> {
 
 }
 
-
 type Name = i32 | i64;

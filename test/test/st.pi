@@ -36,7 +36,7 @@ pub fn ret_struct() struct_child {
 }
 
 pub fn dangling() *pointer_struct {
-    let a:pointer_struct = pointer_struct{
+    let a: pointer_struct = pointer_struct{
         ptr: &struct_child{
             a: 10
         }

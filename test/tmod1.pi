@@ -1,21 +1,24 @@
 use project1::tmod;
 pub trait namet {
     fn namet() void;
+
 }
 
-impl <T>  namet for tmod::name<T>  {
+impl<T> namet for tmod::name<T> {
     fn namet() void {
         return;
     }
+
 }
 
 // TODO
 impl tmod::name<T> {
-    
 }
 
 impl namet for i64 {
     fn namet() void {
         return;
     }
+
 }
+

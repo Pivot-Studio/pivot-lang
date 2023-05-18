@@ -3,14 +3,13 @@ struct Node {
     right: Option<*Node>;
 }
 
-
 fn build_tree() Node {
     let n = &Node{};
     let orin = n;
     for let i = 0; i < 10; i = i + 1 {
         n.left = &Node{};
         n.right = &Node{};
-        if i - i/2*2 == 1 {
+        if i - i / 2 * 2 == 1 {
             n.left = &Node{};
             n = n.left as *Node!;
         } else {
@@ -20,7 +19,7 @@ fn build_tree() Node {
     }
     n = orin;
     for let i = 0; i < 10; i = i + 1 {
-        if i - i/2*2 == 1 {
+        if i - i / 2 * 2 == 1 {
             n = n.left as *Node!;
         } else {
             n = n.right as *Node!;
@@ -37,7 +36,7 @@ fn build_tree() Node {
 pub fn test_eva() void {
     let n = build_tree();
     for let i = 0; i < 10; i = i + 1 {
-        if i - i/2*2 == 1 {
+        if i - i / 2 * 2 == 1 {
             n = *n.left as *Node!;
         } else {
             n = *n.right as *Node!;
@@ -45,3 +44,4 @@ pub fn test_eva() void {
     }
     return;
 }
+
