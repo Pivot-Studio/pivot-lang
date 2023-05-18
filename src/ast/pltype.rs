@@ -658,6 +658,7 @@ pub struct FNValue {
     pub node: Option<Box<FuncDefNode>>,
     pub fntype: FnType,
     pub body_range: Range,
+    pub in_trait: bool,
 }
 impl TryFrom<PLType> for FNValue {
     type Error = ();

@@ -120,6 +120,7 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 impl_trait: None,
                 is_method: false,
                 target_range: Default::default(),
+                in_trait_def: false,
             };
             Ok::<_, ()>(Box::new(TopLevel::FuncType(node)))
         },

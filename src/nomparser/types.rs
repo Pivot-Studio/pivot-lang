@@ -170,7 +170,10 @@ pub fn trait_def(input: Span) -> IResult<Span, Box<TraitDefNode>> {
                 methods: defs
                     .into_iter()
                     .map(|x| match *x {
-                        TopLevel::FuncType(f) => f,
+                        TopLevel::FuncType(mut f) => {
+                            f.in_trait_def = true;
+                            f
+                        }
                         _ => unreachable!(),
                     })
                     .collect(),

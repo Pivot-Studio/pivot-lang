@@ -341,6 +341,7 @@ pub struct FuncDefNode {
     pub trait_bounds: Option<Vec<Box<TraitBoundNode>>>,
     pub impl_trait: Option<(Box<TypeNodeEnum>, (TokenType, Range), bool)>, // bool是是否impl有generic
     pub is_method: bool,
+    pub in_trait_def: bool,
     pub target_range: Range,
 }
 
@@ -420,6 +421,7 @@ impl TypeNode for FuncDefNode {
                 generic_infer: Arc::new(RefCell::new(IndexMap::default())),
                 node: Some(Box::new(self.clone())),
                 body_range: self.range,
+                in_trait: self.in_trait_def,
             };
             if self.generics.is_none() {
                 builder.get_or_insert_fn_handle(&fnvalue, child);

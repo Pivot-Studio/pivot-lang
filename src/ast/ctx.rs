@@ -764,18 +764,25 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn add_doc_symbols(&mut self, pltype: Arc<RefCell<PLType>>) {
         match &*RefCell::borrow(&pltype) {
             PLType::Fn(fnvalue) => {
-                if !fnvalue.fntype.method {
+                if self.get_file() != fnvalue.get_path() {
+                    return;
+                }
+                if !fnvalue.fntype.method && !fnvalue.in_trait {
                     self.plmod
                         .doc_symbols
                         .borrow_mut()
                         .push(fnvalue.get_doc_symbol())
                 }
             }
-            PLType::Struct(st) => self
-                .plmod
-                .doc_symbols
-                .borrow_mut()
-                .push(st.get_doc_symbol()),
+            PLType::Struct(st) => {
+                if self.get_file() != st.get_path() {
+                    return;
+                }
+                self.plmod
+                    .doc_symbols
+                    .borrow_mut()
+                    .push(st.get_doc_symbol())
+            }
             _ => {}
         }
     }
