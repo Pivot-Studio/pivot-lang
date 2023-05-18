@@ -10,3 +10,4 @@ impl A for test_struct {
     }
 
 }
+

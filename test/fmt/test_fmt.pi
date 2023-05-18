@@ -55,7 +55,7 @@ impl TestTrait for A {
 
 }
 
-trait TestTrait {
+pub trait TestTrait {
     fn name() void;
 
     fn set(i: i64) i64;
@@ -185,12 +185,6 @@ trait TC: TA+TB {
 trait TD: TA {
 }
 
-fn test_tuple() void {
-    let a: (i64, i64) = (1, 2);
-    let b = (1, 2, (8, (9, 0, None{})));
-    return;
-}
-
 fn fn_as_param(f: |i64, i64| => i64) |i64, i64| => i64 {
     panic::assert(f(1, 2) == 3);
     return f;
@@ -259,5 +253,19 @@ fn test_ret_closure() |i64| => i64 {
         return c;
     };
     return a;
+}
+
+pub fn test_tuple() void {
+    let d: () = ();
+    let a = (1,);
+    // tuple
+    let g = (1);
+    // i64
+    let b = (1, 2);
+    let c: (i64, i64, (i64)) = (1, 2, (3,));
+    let e = a.0;
+    let f = c.2;
+    panic::assert(f.0 == 3);
+    return;
 }
 

@@ -353,7 +353,10 @@ impl Node for TakeOpNode {
                     _ = s.expect_field_pub(ctx, field, id_range);
                     ctx.push_semantic_token(id_range, SemanticTokenType::PROPERTY, 0);
                     ctx.set_field_refs(head_pltype, field, id_range);
-                    ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
+                    if field.range != Default::default() {
+                        // walkaround for tuple types
+                        ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
+                    }
                     return Ok(NodeOutput::new_value(NodeValue::new(
                         builder
                             .build_struct_gep(headptr, field.index, "structgep")
