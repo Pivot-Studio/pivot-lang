@@ -603,7 +603,7 @@ impl FmtBuilder {
             if s.contains('.') {
                 self.token(s.as_str());
             } else {
-                self.token(&format!("{}.", s));
+                self.token(&format!("{}.0", s));
             }
         }
     }
@@ -624,9 +624,10 @@ impl FmtBuilder {
         self.token(&format!("{:?}", node.content));
     }
     pub fn parse_trait_def_node(&mut self, node: &TraitDefNode) {
-        // for c in node.precom.iter() {
-        //     c.format(self);
-        // }
+        if let Some((m, _)) = node.modifier {
+            self.token(m.get_str());
+            self.space();
+        }
         self.prefix();
         self.token("trait");
         self.space();
@@ -755,6 +756,9 @@ impl FmtBuilder {
                 self.space();
             }
             expr.format(self);
+        }
+        if node.exprs.len() == 1 {
+            self.comma();
         }
         self.r_paren();
     }

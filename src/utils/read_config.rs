@@ -65,7 +65,7 @@ pub struct ConfigWrapper {
 
 #[salsa::tracked]
 impl ConfigWrapper {
-    #[salsa::tracked(lru = 32)]
+    #[salsa::tracked]
     pub(crate) fn resolve_dep_path(self, db: &dyn Db) -> PathBuf {
         let u = self.use_node(db);
         let mut path = PathBuf::from(self.config(db).root.clone());

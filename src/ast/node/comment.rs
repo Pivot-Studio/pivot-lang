@@ -18,10 +18,10 @@ impl PrintTrait for CommentNode {
 }
 
 impl Node for CommentNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        _builder: &'b BuilderEnum<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::COMMENT, 0);
         Ok(Default::default())

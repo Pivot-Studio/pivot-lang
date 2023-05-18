@@ -80,18 +80,18 @@ pub enum TypeNodeEnum {
 #[enum_dispatch]
 pub trait TypeNode: RangeTrait + FmtTrait + PrintTrait {
     /// 重要：这个函数不要干lsp相关操作，只用来获取type
-    fn get_type<'a, 'ctx, 'b>(
+    fn get_type<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
         gen_code: bool,
     ) -> TypeNodeResult;
     fn emit_highlight(&self, ctx: &mut Ctx);
-    fn eq_or_infer<'a, 'ctx, 'b>(
+    fn eq_or_infer<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
         pltype: Arc<RefCell<PLType>>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<EqRes, PLDiag>;
 }
 type TypeNodeResult = Result<Arc<RefCell<PLType>>, PLDiag>;
@@ -161,10 +161,10 @@ pub trait FmtTrait {
 // ANCHOR: node
 #[enum_dispatch]
 pub trait Node: RangeTrait + FmtTrait + PrintTrait {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult;
 }
 

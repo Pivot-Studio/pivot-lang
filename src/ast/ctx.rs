@@ -14,8 +14,11 @@ use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::pltype::add_primitive_types;
 use super::pltype::FNValue;
+use super::pltype::ImplAble;
 use super::pltype::PLType;
 use super::pltype::PriType;
+use super::pltype::TraitImplAble;
+use super::pltype::TraitMthdImpl;
 use super::range::Pos;
 use super::range::Range;
 use super::tokens::TokenType;
@@ -70,6 +73,7 @@ pub struct Ctx<'a> {
     pub need_highlight: usize,
     pub plmod: Mod,
     pub father: Option<&'a Ctx<'a>>, // father context, for symbol lookup
+    pub root: Option<&'a Ctx<'a>>,   // root context, for symbol lookup
     pub function: Option<ValueHandle>, // current function
     pub init_func: Option<ValueHandle>, //init function,call first in main
     pub roots: RefCell<Vec<ValueHandle>>,
@@ -91,6 +95,7 @@ pub struct Ctx<'a> {
     pub in_macro: bool,
     pub closure_data: Option<RefCell<ClosureCtxData>>,
     pub expect_ty: Option<Arc<RefCell<PLType>>>,
+    pub trait_mthd_table: TraitMthdImpl,
 }
 
 #[derive(Clone, Default)]
@@ -121,7 +126,7 @@ impl<'a, 'ctx> Ctx<'a> {
             .to_str()
             .unwrap()
             .to_string();
-        let mut ctx = Ctx {
+        Ctx {
             need_highlight: 0,
             generic_types: FxHashMap::default(),
             plmod: Mod::new(f, src_file_path.to_string()),
@@ -147,11 +152,15 @@ impl<'a, 'ctx> Ctx<'a> {
             in_macro: false,
             closure_data: None,
             expect_ty: None,
-        };
-        add_primitive_types(&mut ctx);
-        ctx
+            trait_mthd_table: Default::default(),
+            root: None,
+        }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
+        let mut root = self.root;
+        if self.father.is_none() {
+            root = Some(self);
+        }
         let mut ctx = Ctx {
             need_highlight: self.need_highlight,
             generic_types: FxHashMap::default(),
@@ -178,6 +187,8 @@ impl<'a, 'ctx> Ctx<'a> {
             in_macro: self.in_macro,
             closure_data: None,
             expect_ty: None,
+            trait_mthd_table: Default::default(),
+            root,
         };
         add_primitive_types(&mut ctx);
         builder.new_subscope(start);
@@ -309,7 +320,7 @@ impl<'a, 'ctx> Ctx<'a> {
         if let (PLType::Trait(t), PLType::Struct(st)) =
             (&*target_pltype.borrow(), &*st_pltype.borrow())
         {
-            if !st.implements_trait(t, &self.plmod) {
+            if !st.implements_trait(t, &self.get_root_ctx().plmod) {
                 return Err(mismatch_err!(
                     self,
                     ori_range,
@@ -320,8 +331,22 @@ impl<'a, 'ctx> Ctx<'a> {
             }
             let trait_handle = builder.alloc("tmp_traitv", &target_pltype.borrow(), self, None);
             for f in t.list_trait_fields().iter() {
-                let mthd = st.find_method(self, &f.name).unwrap();
-                let fnhandle = builder.get_or_insert_fn_handle(&mthd, self);
+                let mthd = find_mthd(st, f, t).unwrap_or_else(|| {
+                    for t in &t.derives {
+                        match &*t.borrow() {
+                            PLType::Trait(t) => {
+                                if let Some(mthd) = find_mthd(st, f, t) {
+                                    return mthd;
+                                }
+                            }
+                            _ => unreachable!(),
+                        }
+                    }
+                    unreachable!()
+                });
+
+                // TODO: let a:trait = B<i64>{} panic
+                let fnhandle = builder.get_or_insert_fn_handle(&mthd.borrow(), self);
                 let targetftp = f.typenode.get_type(self, builder, true).unwrap();
                 let casted = builder.bitcast(self, fnhandle, &targetftp.borrow(), "fncast_tmp");
                 let f_ptr = builder
@@ -383,9 +408,159 @@ impl<'a, 'ctx> Ctx<'a> {
         self.position_at_end(entry, builder);
         builder.build_return(None);
     }
-    pub fn add_method(&mut self, tp: &str, mthd: &str, fntp: FNValue, range: Range) {
-        if self.plmod.add_method(tp, mthd, fntp).is_err() {
-            self.add_diag(range.new_err(ErrorCode::DUPLICATE_METHOD));
+    fn add_to_global_mthd_table(
+        &self,
+        st_name: &str,
+        mthd_name: &str,
+        fntp: Arc<RefCell<FNValue>>,
+    ) {
+        let mut m = self.get_root_ctx().trait_mthd_table.borrow_mut();
+        m.entry(st_name.to_string())
+            .or_insert_with(Default::default)
+            .insert(mthd_name.to_owned(), fntp);
+    }
+    pub fn get_root_ctx(&self) -> &Ctx {
+        let mut ctx = self;
+        while let Some(p) = ctx.root {
+            ctx = p;
+        }
+        ctx
+    }
+
+    pub fn find_global_method(&self, name: &str, mthd: &str) -> Option<Arc<RefCell<FNValue>>> {
+        let mut m = self.get_root_ctx().trait_mthd_table.borrow_mut();
+        let table = m.get_mut(name);
+        if let Some(table) = table {
+            if let Some(fntp) = table.get(mthd) {
+                return Some(fntp.clone());
+            }
+        }
+        None
+    }
+
+    pub fn get_global_mthd_completions(
+        &self,
+        name: &str,
+        set: &mut FxHashMap<String, CompletionItem>,
+    ) {
+        let mut m = self.get_root_ctx().trait_mthd_table.borrow_mut();
+        let table = m.get_mut(name);
+        if let Some(table) = table {
+            table.iter().for_each(|(k, v)| {
+                set.insert(
+                    k.clone(),
+                    CompletionItem {
+                        kind: Some(CompletionItemKind::METHOD),
+                        label: k.clone(),
+                        detail: Some("method".to_string()),
+                        insert_text: Some(v.borrow().gen_snippet()),
+                        insert_text_format: Some(InsertTextFormat::SNIPPET),
+                        command: Some(Command::new(
+                            "trigger help".to_string(),
+                            "editor.action.triggerParameterHints".to_string(),
+                            None,
+                        )),
+                        ..Default::default()
+                    },
+                );
+            });
+        }
+    }
+
+    fn add_trait_impl_method<T: TraitImplAble>(
+        &mut self,
+        t: &T,
+        mthd: &str,
+        fntp: Arc<RefCell<FNValue>>,
+        impl_trait: Option<(Arc<RefCell<PLType>>, Range)>,
+        generic: bool,
+        target: Range,
+    ) -> Result<(), PLDiag> {
+        if let Some((tt, trait_range)) = impl_trait {
+            if let PLType::Trait(st) = &*tt.borrow() {
+                if st.get_path() != self.get_file() {
+                    return Err(trait_range
+                        .new_err(ErrorCode::CANNOT_IMPL_TYPE_OUT_OF_DEFINE_MOD)
+                        .add_to_ctx(self));
+                }
+                let mut m = st.trait_methods_impl.borrow_mut();
+                let st_name = if generic {
+                    t.get_full_name_except_generic()
+                } else {
+                    t.get_full_name()
+                };
+                let table = m.get_mut(&st_name);
+                if let Some(table) = table {
+                    if table.insert(mthd.to_string(), fntp.clone()).is_some() {
+                        return Err(fntp
+                            .borrow()
+                            .range
+                            .new_err(ErrorCode::DUPLICATE_METHOD)
+                            .add_to_ctx(self));
+                    }
+                    self.add_to_global_mthd_table(&st_name, mthd, fntp);
+                    Ok(())
+                } else {
+                    #[allow(clippy::drop_non_drop)]
+                    drop(table);
+                    m.insert(st_name.clone(), FxHashMap::default());
+                    let table = m.get_mut(&st_name).unwrap();
+                    table.insert(mthd.to_string(), fntp.clone());
+                    self.add_to_global_mthd_table(&st_name, mthd, fntp);
+                    Ok(())
+                }
+            } else {
+                Err(trait_range
+                    .new_err(ErrorCode::ONLY_TRAIT_CAN_BE_IMPL)
+                    .add_to_ctx(self))
+            }
+        } else {
+            Err(target
+                .new_err(ErrorCode::EXPECT_TO_BE_A_TRAIT_IMPL)
+                .add_to_ctx(self))
+        }
+    }
+
+    fn add_method_to_tp<T: ImplAble>(
+        &mut self,
+        t: &T,
+        mthd: &str,
+        fntp: Arc<RefCell<FNValue>>,
+        impl_trait: Option<(Arc<RefCell<PLType>>, Range)>,
+        generic: bool,
+        target: Range,
+    ) -> Result<(), PLDiag> {
+        if t.get_path() != self.get_file() {
+            self.add_trait_impl_method(t, mthd, fntp, impl_trait, generic, target)
+        } else {
+            t.add_method(mthd, fntp).map_err(|e| e.add_to_ctx(self))
+        }
+    }
+
+    pub fn add_method(
+        &mut self,
+        tp: &PLType,
+        mthd: &str,
+        fntp: FNValue,
+        impl_trait: Option<(Arc<RefCell<PLType>>, Range)>,
+        generic: bool,
+        target: Range,
+    ) -> Result<(), PLDiag> {
+        let fntp = Arc::new(RefCell::new(fntp));
+        match tp {
+            PLType::Struct(s) | PLType::Trait(s) => {
+                self.add_method_to_tp(s, mthd, fntp, impl_trait, generic, target)
+            }
+            PLType::Union(u) => self.add_method_to_tp(u, mthd, fntp, impl_trait, generic, target),
+            PLType::Closure(p) => {
+                self.add_trait_impl_method(p, mthd, fntp, impl_trait, generic, target)
+            }
+            PLType::Primitive(p) => {
+                self.add_trait_impl_method(p, mthd, fntp, impl_trait, generic, target)
+            }
+            _ => Err(target
+                .new_err(ErrorCode::TARGET_TYPE_NOT_IMPL_ABLE)
+                .add_to_ctx(self)),
         }
     }
     /// # get_symbol
@@ -589,18 +764,25 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn add_doc_symbols(&mut self, pltype: Arc<RefCell<PLType>>) {
         match &*RefCell::borrow(&pltype) {
             PLType::Fn(fnvalue) => {
-                if !fnvalue.fntype.method {
+                if self.get_file() != fnvalue.get_path() {
+                    return;
+                }
+                if !fnvalue.fntype.method && !fnvalue.in_trait {
                     self.plmod
                         .doc_symbols
                         .borrow_mut()
                         .push(fnvalue.get_doc_symbol())
                 }
             }
-            PLType::Struct(st) => self
-                .plmod
-                .doc_symbols
-                .borrow_mut()
-                .push(st.get_doc_symbol()),
+            PLType::Struct(st) => {
+                if self.get_file() != st.get_path() {
+                    return;
+                }
+                self.plmod
+                    .doc_symbols
+                    .borrow_mut()
+                    .push(st.get_doc_symbol())
+            }
             _ => {}
         }
     }
@@ -857,49 +1039,8 @@ impl<'a, 'ctx> Ctx<'a> {
         vmap: &mut FxHashMap<String, CompletionItem>,
         filter: impl Fn(&PLType) -> bool,
     ) {
-        for (k, f) in self.plmod.types.iter().chain(self.generic_types.iter()) {
-            let mut insert_text = None;
-            let mut command = None;
-            if !filter(&f.borrow()) {
-                continue;
-            }
-            let tp = match &*f.clone().borrow() {
-                PLType::Fn(f) => {
-                    insert_text = Some(f.gen_snippet());
-                    command = Some(Command::new(
-                        "trigger help".to_string(),
-                        "editor.action.triggerParameterHints".to_string(),
-                        None,
-                    ));
-                    CompletionItemKind::FUNCTION
-                }
-                PLType::Struct(_) => CompletionItemKind::STRUCT,
-                PLType::Trait(_) => CompletionItemKind::INTERFACE,
-                PLType::Arr(_) => unreachable!(),
-                PLType::Primitive(_) => CompletionItemKind::KEYWORD,
-                PLType::Generic(_) => CompletionItemKind::TYPE_PARAMETER,
-                PLType::Void => CompletionItemKind::KEYWORD,
-                PLType::Pointer(_) => unreachable!(),
-                PLType::PlaceHolder(_) => continue,
-                PLType::Union(_) => CompletionItemKind::ENUM,
-                PLType::Closure(_) => unreachable!(),
-            };
-            if k.starts_with('|') {
-                // skip method
-                continue;
-            }
-            vmap.insert(
-                k.to_string(),
-                CompletionItem {
-                    label: k.to_string(),
-                    kind: Some(tp),
-                    insert_text,
-                    insert_text_format: Some(InsertTextFormat::SNIPPET),
-                    command,
-                    ..Default::default()
-                },
-            );
-        }
+        self.plmod
+            .get_pltp_completions(vmap, &filter, &self.generic_types, true);
         if let Some(father) = self.father {
             father.get_pltp_completions(vmap, filter);
         }
@@ -1125,7 +1266,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 (&*trait_pltype.borrow(), &*st_pltype.borrow())
             {
                 return EqRes {
-                    eq: st.implements_trait(t, &self.plmod),
+                    eq: st.implements_trait(t, &self.get_root_ctx().plmod),
                     need_up_cast: true,
                 };
             }
@@ -1146,6 +1287,23 @@ impl<'a, 'ctx> Ctx<'a> {
             father.try_set_closure_alloca_bb(bb);
         }
     }
+}
+
+fn find_mthd(
+    st: &super::pltype::STType,
+    f: &super::pltype::Field,
+    t: &super::pltype::STType,
+) -> Option<Arc<RefCell<FNValue>>> {
+    st.find_method(&f.name).or(t
+        .trait_methods_impl
+        .borrow()
+        .get(&st.get_full_name())
+        .or(t
+            .trait_methods_impl
+            .borrow()
+            .get(&st.get_full_name_except_generic()))
+        .and_then(|v| v.get(&f.name))
+        .cloned())
 }
 pub struct EqRes {
     pub eq: bool,

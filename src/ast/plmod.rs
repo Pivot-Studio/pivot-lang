@@ -3,12 +3,10 @@ use super::ctx::Ctx;
 use super::diag::{ErrorCode, PLDiag};
 
 use super::node::macro_nodes::MacroNode;
-use super::pltype::FNValue;
 use super::pltype::PLType;
 use super::pltype::PriType;
 
 use super::range::Range;
-use super::tokens::TokenType;
 
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::Db;
@@ -57,8 +55,6 @@ pub struct Mod {
     pub submods: FxHashMap<String, Mod>,
     /// global variable table
     pub global_table: FxHashMap<String, GlobalVar>,
-    /// structs methods
-    pub methods: FxHashMap<String, FxHashMap<String, FNValue>>,
     pub defs: LSPRangeMap<Range, LSPDef>,
     // pub refcache:LSPRangeMap<String, Arc<RwVec<Location>>>,
     pub local_refs: LSPRangeMap<Range, Arc<MutVec<Location>>>, // hold local vars
@@ -129,9 +125,6 @@ impl Mod {
                 _ => (),
             }
         }
-        for (k, v) in other.methods.iter() {
-            self.methods.insert(k.to_string(), v.clone());
-        }
     }
 
     pub fn new(name: String, path: String) -> Self {
@@ -141,7 +134,6 @@ impl Mod {
             types: FxHashMap::default(),
             submods: FxHashMap::default(),
             global_table: FxHashMap::default(),
-            methods: FxHashMap::default(),
             defs: Arc::new(RefCell::new(BTreeMap::new())),
             // refs: Arc::new(RefCell::new(BTreeMap::new())),
             sig_helps: Arc::new(RefCell::new(BTreeMap::new())),
@@ -168,7 +160,6 @@ impl Mod {
             types: FxHashMap::default(),
             submods: self.submods.clone(),
             global_table: FxHashMap::default(),
-            methods: self.methods.clone(),
             defs: self.defs.clone(),
             // refs: self.refs.clone(),
             sig_helps: self.sig_helps.clone(),
@@ -182,7 +173,7 @@ impl Mod {
             local_refs: self.local_refs.clone(),
             glob_refs: self.glob_refs.clone(),
             refs_map: self.refs_map.clone(),
-            impls: self.impls.clone(),
+            impls: FxHashMap::default(),
             macros: FxHashMap::default(),
         }
     }
@@ -268,70 +259,63 @@ impl Mod {
         }
         name.to_string()
     }
-    pub fn get_methods_completions(&self, full_name: &str, pub_only: bool) -> Vec<CompletionItem> {
-        let mut completions = Vec::new();
-        let mut f = |name: &String, v: &FNValue| {
-            if pub_only && !v.is_modified_by(TokenType::PUB) {
-                return;
-            }
-            completions.push(CompletionItem {
-                kind: Some(CompletionItemKind::METHOD),
-                label: name.clone(),
-                detail: Some("method".to_string()),
-                insert_text: Some(v.gen_snippet()),
-                insert_text_format: Some(InsertTextFormat::SNIPPET),
-                command: Some(Command::new(
-                    "trigger help".to_string(),
-                    "editor.action.triggerParameterHints".to_string(),
-                    None,
-                )),
-                ..Default::default()
-            });
-        };
-        for m in self.submods.values() {
-            if m.methods.get(full_name).is_none() {
+    pub fn get_pltp_completions_list(&self) -> Vec<CompletionItem> {
+        let mut m = FxHashMap::<String, CompletionItem>::default();
+        self.get_pltp_completions(&mut m, &|_| true, &FxHashMap::default(), false);
+        m.into_values().collect()
+    }
+    pub fn get_pltp_completions(
+        &self,
+        vmap: &mut FxHashMap<String, CompletionItem>,
+        filter: &impl Fn(&PLType) -> bool,
+        generic_tps: &FxHashMap<String, Arc<RefCell<PLType>>>,
+        need_snippet: bool,
+    ) {
+        for (k, f) in self.types.iter().chain(generic_tps.iter()) {
+            let mut insert_text = None;
+            let mut command = None;
+            if !filter(&f.borrow()) {
                 continue;
             }
-            for (name, v) in m.methods.get(full_name).unwrap() {
-                f(name, v);
+            let tp = match &*f.clone().borrow() {
+                PLType::Fn(f) => {
+                    if need_snippet {
+                        insert_text = Some(f.gen_snippet());
+                        command = Some(Command::new(
+                            "trigger help".to_string(),
+                            "editor.action.triggerParameterHints".to_string(),
+                            None,
+                        ));
+                    }
+                    CompletionItemKind::FUNCTION
+                }
+                PLType::Struct(_) => CompletionItemKind::STRUCT,
+                PLType::Trait(_) => CompletionItemKind::INTERFACE,
+                PLType::Arr(_) => unreachable!(),
+                PLType::Primitive(_) => CompletionItemKind::KEYWORD,
+                PLType::Generic(_) => CompletionItemKind::TYPE_PARAMETER,
+                PLType::Void => CompletionItemKind::KEYWORD,
+                PLType::Pointer(_) => unreachable!(),
+                PLType::PlaceHolder(_) => continue,
+                PLType::Union(_) => CompletionItemKind::ENUM,
+                PLType::Closure(_) => unreachable!(),
+            };
+            if k.starts_with('|') {
+                // skip method
+                continue;
             }
+            vmap.insert(
+                k.to_string(),
+                CompletionItem {
+                    label: k.to_string(),
+                    kind: Some(tp),
+                    insert_text,
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                    command,
+                    ..Default::default()
+                },
+            );
         }
-        if self.methods.get(full_name).is_none() {
-            return completions;
-        }
-        for (name, v) in self.methods.get(full_name).unwrap() {
-            f(name, v);
-        }
-        completions
-    }
-
-    pub fn find_method(&self, full_name: &str, mthd: &str) -> Option<FNValue> {
-        if let Some(m) = self.methods.get(full_name) {
-            if let Some(v) = m.get(mthd) {
-                return Some(v.clone());
-            }
-        }
-        for m in self.submods.values() {
-            if let Some(v) = m.find_method(full_name, mthd) {
-                return Some(v);
-            }
-        }
-        None
-    }
-
-    pub fn add_method(&mut self, full_name: &str, mthd: &str, fntp: FNValue) -> Result<(), ()> {
-        if let Some(m) = self.methods.get_mut(full_name) {
-            if m.get(mthd).is_some() {
-                // duplicate method
-                return Err(());
-            }
-            m.insert(mthd.to_string(), fntp);
-        } else {
-            let mut m = FxHashMap::default();
-            m.insert(mthd.to_string(), fntp);
-            self.methods.insert(full_name.to_string(), m);
-        }
-        Ok(())
     }
 
     pub fn get_ns_completions_pri(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
@@ -354,14 +338,10 @@ impl Mod {
     }
 
     pub fn add_impl(&mut self, stname: &str, trait_tp_name: &str) {
-        let full_name = format!("{}..{}", self.path, stname);
-        if let Some(m) = self.impls.get_mut(&full_name) {
-            m.insert(format!("{}..{}", self.path, trait_tp_name));
-        } else {
-            let mut m = FxHashSet::default();
-            m.insert(format!("{}..{}", self.path, trait_tp_name));
-            self.impls.insert(full_name, m);
-        }
+        self.impls
+            .entry(stname.to_string())
+            .or_insert_with(Default::default)
+            .insert(trait_tp_name.to_string());
     }
 }
 

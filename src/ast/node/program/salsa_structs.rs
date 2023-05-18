@@ -1,4 +1,5 @@
 use crate::ast::node::NodeEnum;
+use crate::ast::pltype::{FNValue, PLType};
 use crate::ast::range::Pos;
 use crate::utils::read_config::Config;
 
@@ -6,6 +7,10 @@ use crate::ast::plmod::Mod;
 
 use crate::lsp::mem_docs::{EmitParams, MemDocsInput};
 use rustc_hash::FxHashMap;
+use std::cell::RefCell;
+use std::sync::Arc;
+
+use super::UnsafeWrapper;
 
 #[salsa::tracked]
 pub struct ProgramEmitParam {
@@ -21,7 +26,14 @@ pub struct ProgramEmitParam {
     pub submods: FxHashMap<String, Mod>,
     #[return_ref]
     pub file_content: String,
+    #[return_ref]
+    pub types: UnsafeWrapper<FxHashMap<String, Arc<RefCell<PLType>>>>,
+    #[return_ref]
+    pub mth_table: MthdTableWrapper,
 }
+
+pub type MthdTableWrapper =
+    UnsafeWrapper<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>;
 
 #[salsa::tracked]
 pub struct LspParams {

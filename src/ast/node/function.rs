@@ -40,10 +40,10 @@ impl PrintTrait for FuncCallNode {
 }
 
 impl FuncCallNode {
-    fn handle_closure_call<'a, 'ctx, 'b>(
+    fn handle_closure_call<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
         c: &ClosureType,
         v: ValueHandle,
     ) -> NodeResult {
@@ -84,10 +84,10 @@ impl FuncCallNode {
         handle_ret(ret, c.ret_type.clone())
     }
 
-    fn build_params<'a, 'ctx, 'b>(
+    fn build_params<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
         para_values: &mut Vec<usize>,
         value_pltypes: &mut Vec<(Arc<RefCell<PLType>>, Range)>,
         param_types: &[Box<TypeNodeEnum>],
@@ -152,10 +152,10 @@ impl FuncCallNode {
 }
 
 impl Node for FuncCallNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let id_range = self.callee.range();
         let v = self.callee.emit(ctx, builder)?.get_value();
@@ -281,12 +281,12 @@ impl Node for FuncCallNode {
     }
 }
 
-fn check_and_cast_params<'a, 'ctx, 'b>(
+fn check_and_cast_params<'a, 'b>(
     value_pltypes: &[(Arc<RefCell<PLType>>, Range)],
     param_types: &[Box<TypeNodeEnum>],
     skip: u32,
     ctx: &'b mut Ctx<'a>,
-    builder: &'b BuilderEnum<'a, 'ctx>,
+    builder: &'b BuilderEnum<'a, '_>,
     para_values: &mut [usize],
 ) -> Result<(), PLDiag> {
     for (i, (value_pltype, pararange)) in value_pltypes.iter().enumerate() {
@@ -339,15 +339,19 @@ pub struct FuncDefNode {
     pub modifier: Option<(TokenType, Range)>,
     pub generics_size: usize, // the size of generics except the generics from impl node
     pub trait_bounds: Option<Vec<Box<TraitBoundNode>>>,
+    pub impl_trait: Option<(Box<TypeNodeEnum>, (TokenType, Range), bool)>, // bool是是否impl有generic
+    pub is_method: bool,
+    pub in_trait_def: bool,
+    pub target_range: Range,
 }
 
-type OptFOnce<'a> = Option<Box<dyn FnOnce(&mut Ctx) + 'a>>; // Thank u, Rust!
+type OptFOnce<'a> = Option<Box<dyn FnOnce(&mut Ctx) -> Result<(), PLDiag> + 'a>>; // Thank u, Rust!
 
 impl TypeNode for FuncDefNode {
-    fn get_type<'a, 'ctx, 'b>(
+    fn get_type<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
         _: bool,
     ) -> TypeNodeResult {
         let child = &mut ctx.new_child(self.range.start, builder);
@@ -367,7 +371,15 @@ impl TypeNode for FuncDefNode {
             let mut flater: OptFOnce = None;
             let mut param_pltypes = Vec::new();
             let mut param_name = Vec::new();
-            let method = !self.paralist.is_empty() && self.paralist[0].id.name == "self";
+            let method = self.is_method;
+            let (trait_tp, generic) = if let Some((v, (_, r), generic)) = &self.impl_trait {
+                (
+                    Some((v.clone().get_type(child, builder, false)?, *r)),
+                    *generic,
+                )
+            } else {
+                (None, false)
+            };
             generic_map
                 .iter()
                 .for_each(|(_, pltype)| match &mut *pltype.borrow_mut() {
@@ -398,12 +410,18 @@ impl TypeNode for FuncDefNode {
                     method,
                     generic_map: generic_map.clone(),
                     generic: self.generics.is_some(),
-                    modifier: self.modifier,
+                    modifier: self.modifier.or_else(|| {
+                        trait_tp.clone().and_then(|(t, _)| match &*t.borrow() {
+                            PLType::Trait(t) => t.modifier,
+                            _ => unreachable!(),
+                        })
+                    }),
                     generics_size: self.generics_size,
                 },
                 generic_infer: Arc::new(RefCell::new(IndexMap::default())),
                 node: Some(Box::new(self.clone())),
                 body_range: self.range,
+                in_trait: self.in_trait_def,
             };
             if self.generics.is_none() {
                 builder.get_or_insert_fn_handle(&fnvalue, child);
@@ -420,37 +438,23 @@ impl TypeNode for FuncDefNode {
                     .get_type(child, builder, true)
                     .unwrap();
                 if let PLType::Pointer(s) = &*receiver_pltype.borrow() {
-                    match &*s.borrow() {
-                        PLType::Struct(s) => {
-                            let fullname = s.get_st_full_name_except_generic();
-                            flater = Some(Box::new(move |ctx: &mut Ctx| {
-                                ctx.add_method(
-                                    &fullname,
-                                    self.id.name.split("::").last().unwrap(),
-                                    fnvalue.clone(),
-                                    self.id.range,
-                                );
-                            }));
-                        }
-                        PLType::Union(u) => {
-                            let fullname = u.get_full_name_except_generic();
-                            flater = Some(Box::new(move |ctx: &mut Ctx| {
-                                ctx.add_method(
-                                    &fullname,
-                                    self.id.name.split("::").last().unwrap(),
-                                    fnvalue.clone(),
-                                    self.id.range,
-                                );
-                            }));
-                        }
-                        _ => (), // 在impl的emit里会检查类型报错，这里不处理
-                    }
+                    let s = s.clone();
+                    flater = Some(Box::new(move |ctx: &mut Ctx| {
+                        ctx.add_method(
+                            &s.borrow(),
+                            self.id.name.split("::").last().unwrap(),
+                            fnvalue,
+                            trait_tp,
+                            generic,
+                            self.target_range,
+                        )
+                    }));
                 };
             }
             Ok((pltype, flater))
         })?;
         if let Some(flater) = flater {
-            flater(ctx);
+            flater(ctx)?;
         }
         Ok(pltype)
     }
@@ -468,11 +472,11 @@ impl TypeNode for FuncDefNode {
         ctx.push_semantic_token(self.ret.range(), SemanticTokenType::TYPE, 0);
     }
 
-    fn eq_or_infer<'a, 'ctx, 'b>(
+    fn eq_or_infer<'a, 'b>(
         &self,
         _ctx: &'b mut Ctx<'a>,
         _pltype: Arc<RefCell<PLType>>,
-        _builder: &'b BuilderEnum<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<EqRes, PLDiag> {
         todo!()
     }
@@ -492,10 +496,10 @@ impl FuncDefNode {
                 .join(", ")
             + ")$0"
     }
-    pub fn emit_func_def<'a, 'ctx, 'b>(
+    pub fn emit_func_def<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<(), PLDiag> {
         if ctx.get_type(self.id.name.as_str(), self.id.range).is_ok() {
             return Err(ctx.add_diag(self.id.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
@@ -504,11 +508,11 @@ impl FuncDefNode {
         ctx.add_type(self.id.name.clone(), pltype, self.id.range)?;
         Ok(())
     }
-    pub fn gen_fntype<'a, 'ctx, 'b>(
+    pub fn gen_fntype<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
         first: bool,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
         fnvalue: FNValue,
     ) -> Result<(), PLDiag> {
         let child = &mut ctx.new_child(self.range.start, builder);
@@ -647,10 +651,10 @@ impl PrintTrait for FuncDefNode {
 }
 
 impl Node for FuncDefNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         // hightlight
         ctx.save_if_comment_doc_hover(self.id.range, Some(self.doc.clone()));
@@ -698,10 +702,10 @@ pub struct ClosureNode {
 static CLOSURE_COUNT: AtomicI32 = AtomicI32::new(0);
 
 impl Node for ClosureNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         // 设计： https://github.com/Pivot-Studio/pivot-lang/issues/284
         let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap());
@@ -719,10 +723,12 @@ impl Node for ClosureNode {
             is_trait: false,
             is_tuple: true,
             generic_infer_types: Default::default(),
+            methods: Default::default(),
+            trait_methods_impl: Default::default(),
         };
 
-        builder.opaque_struct_type(&st_tp.get_st_full_name());
-        builder.add_body_to_struct_type(&st_tp.get_st_full_name(), &st_tp, ctx);
+        builder.opaque_struct_type(&st_tp.get_full_name());
+        builder.add_body_to_struct_type(&st_tp.get_full_name(), &st_tp, ctx);
         let mut paratps = vec![];
         for (i, (v, typenode)) in self.paralist.iter_mut().enumerate() {
             ctx.push_semantic_token(v.range(), SemanticTokenType::PARAMETER, 0);

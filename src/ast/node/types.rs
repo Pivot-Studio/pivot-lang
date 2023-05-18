@@ -47,10 +47,10 @@ impl TypeNameNode {
             range: Default::default(),
         }
     }
-    pub fn get_origin_type_with_infer<'a, 'b, 'ctx>(
+    pub fn get_origin_type_with_infer<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> TypeNodeResult {
         if self.id.is_none() {
             ctx.if_completion(self.range, || ctx.get_type_completions());
@@ -164,10 +164,10 @@ impl TypeNode for TypeNameNode {
             generic_params.emit_highlight(ctx);
         }
     }
-    fn get_type<'a, 'ctx, 'b>(
+    fn get_type<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
         gen_code: bool,
     ) -> TypeNodeResult {
         let pltype = self.get_origin_type_with_infer(ctx, builder)?;
@@ -205,11 +205,11 @@ impl TypeNode for TypeNameNode {
         Ok(pltype)
     }
 
-    fn eq_or_infer<'a, 'ctx, 'b>(
+    fn eq_or_infer<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
         right: Arc<RefCell<PLType>>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<EqRes, PLDiag> {
         let left = self.get_origin_type_with_infer(ctx, builder)?;
         if self.generic_params.is_some() {
@@ -277,10 +277,10 @@ impl PrintTrait for ArrayTypeNameNode {
 }
 
 impl TypeNode for ArrayTypeNameNode {
-    fn get_type<'a, 'ctx, 'b>(
+    fn get_type<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
         gen_code: bool,
     ) -> TypeNodeResult {
         if let NodeEnum::Num(num) = *self.size {
@@ -297,15 +297,15 @@ impl TypeNode for ArrayTypeNameNode {
         Err(ctx.add_diag(self.range.new_err(ErrorCode::SIZE_MUST_BE_INT)))
     }
 
-    fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) {
+    fn emit_highlight<'ctx>(&self, ctx: &mut Ctx<'_>) {
         self.id.emit_highlight(ctx);
     }
 
-    fn eq_or_infer<'a, 'ctx, 'b>(
+    fn eq_or_infer<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
         pltype: Arc<RefCell<PLType>>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<EqRes, PLDiag> {
         match &*pltype.borrow() {
             PLType::Arr(a) => {
@@ -345,10 +345,10 @@ impl PrintTrait for PointerTypeNode {
 }
 
 impl TypeNode for PointerTypeNode {
-    fn get_type<'a, 'ctx, 'b>(
+    fn get_type<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
         gen_code: bool,
     ) -> TypeNodeResult {
         let pltype = self.elm.get_type(ctx, builder, gen_code)?;
@@ -356,15 +356,15 @@ impl TypeNode for PointerTypeNode {
         Ok(pltype)
     }
 
-    fn emit_highlight<'a, 'ctx>(&self, ctx: &mut Ctx<'a>) {
+    fn emit_highlight<'ctx>(&self, ctx: &mut Ctx<'_>) {
         self.elm.emit_highlight(ctx);
     }
 
-    fn eq_or_infer<'a, 'ctx, 'b>(
+    fn eq_or_infer<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
         pltype: Arc<RefCell<PLType>>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<EqRes, PLDiag> {
         match &*pltype.borrow() {
             PLType::Pointer(p) => self.elm.eq_or_infer(ctx, p.clone(), builder),
@@ -432,10 +432,10 @@ impl PrintTrait for StructDefNode {
 }
 
 impl Node for StructDefNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        _builder: &'b BuilderEnum<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.emit_comment_highlight(&self.pre_comments);
         ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
@@ -457,11 +457,7 @@ impl Node for StructDefNode {
 }
 
 impl StructDefNode {
-    pub fn add_to_symbols<'a, 'ctx, 'b>(
-        &self,
-        ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
-    ) {
+    pub fn add_to_symbols<'a, 'b>(&self, ctx: &'b mut Ctx<'a>, builder: &'b BuilderEnum<'a, '_>) {
         let generic_map = if let Some(generics) = &self.generics {
             let mp = generics.gen_generic_type(ctx);
             _ = generics.set_traits(ctx, builder, &mp);
@@ -482,6 +478,8 @@ impl StructDefNode {
             is_trait: false,
             is_tuple: false,
             generic_infer_types: Default::default(),
+            methods: Default::default(),
+            trait_methods_impl: Default::default(),
         })));
         if self.generics.is_none() {
             builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
@@ -489,10 +487,10 @@ impl StructDefNode {
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
     }
 
-    pub fn emit_struct_def<'a, 'ctx, 'b>(
+    pub fn emit_struct_def<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<(), PLDiag> {
         let pltype = ctx.get_type(self.id.name.as_str(), self.id.range)?;
         let generic_map = if let PLType::Struct(st) = &mut *pltype.borrow_mut() {
@@ -571,10 +569,10 @@ impl PrintTrait for StructInitFieldNode {
 }
 
 impl Node for StructInitFieldNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         self.exp.emit(ctx, builder)
     }
@@ -602,10 +600,10 @@ impl PrintTrait for StructInitNode {
 }
 
 impl Node for StructInitNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         self.typename.emit_highlight(ctx);
         let mut pltype = match &*self.typename {
@@ -714,10 +712,10 @@ impl PrintTrait for ArrayInitNode {
 }
 
 impl Node for ArrayInitNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let mut exps = Vec::new();
         let mut tp0 = None;
@@ -783,10 +781,10 @@ impl PrintTrait for GenericDefNode {
 }
 
 impl Node for GenericDefNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         _ctx: &'b mut Ctx<'a>,
-        _builder: &'b BuilderEnum<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         Ok(Default::default())
     }
@@ -797,10 +795,10 @@ impl GenericDefNode {
             g.emit_highlight(ctx);
         }
     }
-    pub fn set_traits<'a, 'ctx, 'b>(
+    pub fn set_traits<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
         generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
     ) -> Result<(), PLDiag> {
         for g in self.generics.iter() {
@@ -854,19 +852,15 @@ impl PrintTrait for GenericParamNode {
 }
 
 impl Node for GenericParamNode {
-    fn emit<'a, 'ctx, 'b>(
-        &mut self,
-        _: &'b mut Ctx<'a>,
-        _: &'b BuilderEnum<'a, 'ctx>,
-    ) -> NodeResult {
+    fn emit<'a, 'b>(&mut self, _: &'b mut Ctx<'a>, _: &'b BuilderEnum<'a, '_>) -> NodeResult {
         Ok(Default::default())
     }
 }
 impl GenericParamNode {
-    pub fn get_generic_types<'a, 'ctx, 'b>(
+    pub fn get_generic_types<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<Vec<Option<Arc<RefCell<PLType>>>>, PLDiag> {
         let mut res = vec![];
         for g in self.generics.iter() {
@@ -896,10 +890,10 @@ pub struct ClosureTypeNode {
 }
 
 impl TypeNode for ClosureTypeNode {
-    fn get_type<'a, 'ctx, 'b>(
+    fn get_type<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
         gen_code: bool,
     ) -> TypeNodeResult {
         let mut arg_types = vec![];
@@ -921,11 +915,11 @@ impl TypeNode for ClosureTypeNode {
         self.ret_type.emit_highlight(ctx);
     }
 
-    fn eq_or_infer<'a, 'ctx, 'b>(
+    fn eq_or_infer<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
         pltype: Arc<RefCell<PLType>>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<EqRes, PLDiag> {
         if let PLType::Closure(closure) = &*pltype.borrow() {
             if self.arg_types.len() != closure.arg_types.len() {

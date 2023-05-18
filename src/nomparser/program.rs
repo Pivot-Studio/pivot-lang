@@ -52,9 +52,8 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                         &mut im.generics.as_mut().map_or(vec![], |g| g.generics.clone());
                     let imname = FmtBuilder::generate_node(&im.target);
                     let target = *im.target.clone();
-                    if let Some((t, _)) = &im.impl_trait {
-                        let trait_name = FmtBuilder::generate_node(t);
-                        trait_impls.push((imname.clone(), trait_name));
+                    if im.impl_trait.is_some() {
+                        trait_impls.push(im.clone());
                     }
                     for mth in im.methods.iter_mut() {
                         if let Some(g) = &mut mth.generics {
@@ -66,6 +65,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                             }
                         }
                         mth.id.name = format!("|{}::{}", imname, mth.id.name);
+                        mth.is_method = true;
                         mth.paralist.insert(
                             0,
                             Box::new(TypedIdentifierNode {
@@ -81,6 +81,11 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                                 range: Default::default(),
                             }),
                         );
+                        mth.target_range = im.target.range();
+                        mth.impl_trait = im
+                            .impl_trait
+                            .clone()
+                            .map(|(a, b)| (a, b, im.generics.is_some()));
                         fntypes.push(*mth.clone());
                     }
                     nodes.push(Box::new(im.into()));

@@ -25,10 +25,10 @@ impl PrintTrait for StringNode {
 }
 
 impl Node for StringNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::STRING, 0);
         let v = builder.const_string(&self.content);

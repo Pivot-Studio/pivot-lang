@@ -15,7 +15,7 @@ use nom::character::complete::char;
 use super::*;
 
 #[test_parser(".10")]
-#[test_parser("10.")]
+// #[test_parser("10.")]
 #[test_parser("10.10")]
 #[test_parser("10")]
 #[test_parser("10_00_3")]
@@ -91,6 +91,6 @@ fn float(input: Span) -> IResult<Span, Span> {
             ))),
             decimal,
         ))), // Case three: 42. and 42.42
-        recognize(tuple((decimal, char('.'), opt(decimal)))),
+        recognize(tuple((decimal, char('.'), decimal))),
     ))(input)
 }

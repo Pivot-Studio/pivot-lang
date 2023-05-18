@@ -22,10 +22,10 @@ impl PrintTrait for ErrorNode {
 }
 
 impl Node for ErrorNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        _builder: &'b BuilderEnum<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let err = ctx.add_diag(self.range.new_err(self.code));
         ctx.if_completion(self.range, || ctx.get_completions());
@@ -53,10 +53,10 @@ impl PrintTrait for StErrorNode {
 }
 
 impl Node for StErrorNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         _ = self.st.emit(ctx, builder);
         self.err.emit(ctx, builder)

@@ -52,7 +52,7 @@ define_error!(
     UNRECOGNIZED_BIN_OPERATOR = "unrecognized binary operator",
     UNRECOGNIZED_UNARY_OPERATOR = "unrecognized unary operator",
     INVALID_UNARY_EXPRESSION = "invalid unary expression",
-    STRUCT_FIELD_NOT_FOUND = "struct field not found",
+    STRUCT_FIELD_NOT_FOUND = "struct field or method not found",
     INVALID_GET_FIELD = "cannot get field from non struct type",
     VAR_NOT_FOUND = "variable not found",
     REDECLARATION = "redeclaration of variable",
@@ -98,6 +98,7 @@ define_error!(
     EXPECT_STRUCT_TYPE = "expect struct type",
     METHOD_NOT_IN_TRAIT = "method not in trait def",
     METHOD_NOT_IN_IMPL = "method required in trait not found in impl block",
+    EXPECT_PUBLIC_SYMBOL = "expect public symbol",
     EXPECT_PUBLIC_FUNCTION = "expect public function",
     EXPECT_PUBLIC_STRUCT = "expect public struct",
     EXPECT_PUBLIC_TRAIT = "expect public trait",
@@ -126,6 +127,11 @@ define_error!(
     NO_RETURN_VALUE_EXPECTED_IN_VOID_FUNCTION = "no return value expected in a void function",
     CLOSURE_RET_TYPE_UNKNOWN = "cannot infer closure return type",
     CLOSURE_PARAM_TYPE_UNKNOWN = "cannot infer closure param type",
+    CANNOT_IMPL_TYPE_OUT_OF_DEFINE_MOD = "cannot impl a type out of the define mod",
+    TRAIT_METHOD_NOT_FOUND = "trait method not found",
+    ONLY_TRAIT_CAN_BE_IMPL = "only trait can be impl",
+    EXPECT_TO_BE_A_TRAIT_IMPL = "expect to be a trait impl block",
+    TARGET_TYPE_NOT_IMPL_ABLE = "target type not impl able",
 );
 macro_rules! define_warn {
     ($(

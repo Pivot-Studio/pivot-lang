@@ -59,7 +59,7 @@ pub struct FileCompileInput {
 }
 #[salsa::tracked]
 impl FileCompileInput {
-    #[salsa::tracked(lru = 32)]
+    #[salsa::tracked]
     pub fn get_file_content(self, db: &dyn Db) -> Option<SourceProgram> {
         // let f = self.file(db);
         // eprintln!("get_file_content {}", f);
@@ -76,7 +76,7 @@ impl FileCompileInput {
         }
         re
     }
-    #[salsa::tracked(lru = 32)]
+    #[salsa::tracked]
     pub fn get_emit_params(self, db: &dyn Db) -> EmitParams {
         let file = self.file(db);
         if crate::utils::canonicalize(self.docs(db).file(db)).unwrap()
@@ -114,7 +114,7 @@ impl FileCompileInput {
 
 #[salsa::tracked]
 impl MemDocsInput {
-    #[salsa::tracked(lru = 32)]
+    #[salsa::tracked]
     pub fn get_current_file_content(self, db: &dyn Db) -> Option<SourceProgram> {
         let f = self.file(db);
         debug!("memdocinput get_current_file_content {}", f);
@@ -126,7 +126,7 @@ impl MemDocsInput {
             .get_file_content(db, self.file(db));
         re
     }
-    #[salsa::tracked(lru = 32)]
+    #[salsa::tracked]
     pub fn get_file_content(self, db: &dyn Db, f: String) -> Option<SourceProgram> {
         debug!("memdocinput get_file_content {}", f);
         let re = self
@@ -137,17 +137,17 @@ impl MemDocsInput {
             .get_file_content(db, &f);
         re
     }
-    #[salsa::tracked(lru = 32)]
+    #[salsa::tracked]
     pub fn get_file_params(self, db: &dyn Db, f: String, entry: bool) -> Option<FileCompileInput> {
         let f = crate::utils::canonicalize(f);
         if f.is_err() {
-            log::error!("lsp error: {}", f.err().unwrap());
+            log::debug!("lsp error: {}", f.err().unwrap());
             return None;
         }
         let mut file = f.unwrap().to_string_lossy().to_string();
         let path = get_config_path(file.clone());
         if path.is_err() {
-            log::error!("lsp error: {}", path.err().unwrap());
+            log::debug!("lsp error: {}", path.err().unwrap());
             return None;
         }
         let path = path.unwrap();
@@ -163,7 +163,7 @@ impl MemDocsInput {
                 .unwrap(),
         );
         if re.is_err() {
-            log::error!("lsp error: {}", re.err().unwrap());
+            log::debug!("lsp error: {}", re.err().unwrap());
             return None;
         }
         let config = re.unwrap();

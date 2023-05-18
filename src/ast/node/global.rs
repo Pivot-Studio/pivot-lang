@@ -23,10 +23,10 @@ impl PrintTrait for GlobalNode {
 }
 
 impl Node for GlobalNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let entry = builder.get_last_basic_block(ctx.init_func.unwrap());
 
@@ -49,10 +49,10 @@ impl Node for GlobalNode {
     }
 }
 impl GlobalNode {
-    pub fn emit_global<'a, 'ctx, 'b>(
+    pub fn emit_global<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<(), PLDiag> {
         let exp_range = self.exp.range();
         if ctx.get_symbol(&self.var.name, builder).is_some() {

@@ -16,10 +16,10 @@ pub struct MultiTraitNode {
     pub traits: Vec<Box<TypeNodeEnum>>,
 }
 impl MultiTraitNode {
-    fn merge_traits<'a, 'ctx, 'b>(
+    fn merge_traits<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
         let derives = self.get_types(ctx, builder)?;
         if derives.len() == 1 {
@@ -43,6 +43,8 @@ impl MultiTraitNode {
             is_trait: true,
             is_tuple: false,
             generic_infer_types: Default::default(),
+            methods: Default::default(),
+            trait_methods_impl: Default::default(),
         };
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&name));
         builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&name), &st, ctx);
@@ -55,10 +57,10 @@ impl MultiTraitNode {
             t.emit_highlight(ctx);
         }
     }
-    pub fn get_types<'a, 'ctx, 'b>(
+    pub fn get_types<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<Vec<Arc<RefCell<PLType>>>, PLDiag> {
         let mut traits = vec![];
         for t in &self.traits {
@@ -80,10 +82,10 @@ pub struct TraitBoundNode {
     pub impl_trait: Option<Box<MultiTraitNode>>,
 }
 impl TraitBoundNode {
-    pub fn set_traits<'a, 'ctx, 'b>(
+    pub fn set_traits<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
         generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
     ) -> Result<(), PLDiag> {
         if !generic_map.contains_key(&self.generic.name) {
@@ -135,10 +137,10 @@ impl PrintTrait for TraitDefNode {
 }
 
 impl Node for TraitDefNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        _builder: &'b BuilderEnum<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.id.range, SemanticTokenType::INTERFACE, 0);
         self.derives.emit_highlight(ctx);
@@ -150,11 +152,7 @@ impl Node for TraitDefNode {
 }
 
 impl TraitDefNode {
-    pub fn add_to_symbols<'a, 'ctx, 'b>(
-        &self,
-        ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
-    ) {
+    pub fn add_to_symbols<'a, 'b>(&self, ctx: &'b mut Ctx<'a>, builder: &'b BuilderEnum<'a, '_>) {
         let stu = Arc::new(RefCell::new(PLType::Trait(STType {
             generic_map: IndexMap::default(),
             name: self.id.name.clone(),
@@ -168,14 +166,16 @@ impl TraitDefNode {
             is_trait: true,
             is_tuple: false,
             generic_infer_types: Default::default(),
+            methods: Default::default(),
+            trait_methods_impl: Default::default(),
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
         _ = ctx.add_type(self.id.name.clone(), stu, self.id.range);
     }
-    pub fn emit_trait_def<'a, 'ctx, 'b>(
+    pub fn emit_trait_def<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<(), PLDiag> {
         let mut fields = LinkedHashMap::new();
         // add generic type before field add type

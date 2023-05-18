@@ -28,9 +28,6 @@ pub struct UseNode {
 }
 
 impl UseNode {
-    pub(crate) fn is_complete(&self) -> bool {
-        !self.ids.is_empty() && self.complete
-    }
     pub(crate) fn get_last_id(&self) -> Option<String> {
         self.ids.last().map(|x| x.as_ref().name.clone())
     }
@@ -50,10 +47,10 @@ impl PrintTrait for UseNode {
 }
 
 impl Node for UseNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        _builder: &'b BuilderEnum<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         #[cfg(target_arch = "wasm32")]
         let mut path = PathBuf::from("");
@@ -73,8 +70,17 @@ impl Node for UseNode {
                 }
             }
         }
-        for v in self.ids.iter() {
-            ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
+        if self.ids.len() > 1 {
+            for (i, v) in self.ids.iter().enumerate() {
+                if i == self.ids.len() - 1 {
+                    break;
+                }
+                ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
+            }
+        } else {
+            for v in self.ids.iter() {
+                ctx.push_semantic_token(v.range, SemanticTokenType::NAMESPACE, 0);
+            }
         }
         #[cfg(target_arch = "wasm32")]
         if crate::lsp::wasm::PLLIB_DIR
@@ -96,10 +102,50 @@ impl Node for UseNode {
                     if self.singlecolon {
                         return vec![];
                     }
-                    get_ns_path_completions(path.to_str().unwrap())
+                    let mut comp = get_ns_path_completions(path.to_str().unwrap());
+                    let mod_id = path.file_name().unwrap().to_str().unwrap();
+                    if let Some(m) = ctx.plmod.submods.get(mod_id) {
+                        comp.extend(m.get_pltp_completions_list())
+                    }
+                    comp
                 });
+                let mod_id = path.file_name().unwrap().to_str().unwrap();
+                if let Some(m) = ctx.plmod.submods.get(mod_id) {
+                    let n = self.ids.last().unwrap();
+                    if let Some(tp) = m.get_type(&n.name, n.range, ctx) {
+                        let t = match &*tp.borrow() {
+                            PLType::Fn(_) => SemanticTokenType::FUNCTION,
+                            PLType::Struct(_) => SemanticTokenType::STRUCT,
+                            PLType::Trait(_) => SemanticTokenType::INTERFACE,
+                            PLType::Union(_) => SemanticTokenType::ENUM,
+                            _ => SemanticTokenType::NAMESPACE,
+                        };
+                        ctx.push_semantic_token(n.range, t, 0);
+                        if !self.complete {
+                            return Err(ctx.add_diag(
+                                self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION),
+                            ));
+                        }
+                        if !tp.borrow().is_pub() {
+                            return Err(ctx.add_diag(
+                                n.range
+                                    .new_err(crate::ast::diag::ErrorCode::EXPECT_PUBLIC_SYMBOL),
+                            ));
+                        }
+                        return Ok(Default::default());
+                    } else {
+                        ctx.push_semantic_token(n.range, SemanticTokenType::NAMESPACE, 0);
+                    }
+                }
             }
             ctx.add_diag(self.range.new_err(ErrorCode::UNRESOLVED_MODULE));
+        }
+        if self.ids.len() > 1 {
+            let last = self.ids.last().unwrap();
+            ctx.push_semantic_token(last.range, SemanticTokenType::NAMESPACE, 0);
+            if let Some(m) = ctx.plmod.submods.get(&last.name) {
+                ctx.send_if_go_to_def(last.range, Default::default(), m.path.to_owned());
+            }
         }
         ctx.if_completion(self.range, || {
             if self.singlecolon {
@@ -157,10 +203,10 @@ impl PrintTrait for ExternIdNode {
 }
 
 impl Node for ExternIdNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         if self.ns.is_empty() {
             if self.complete {

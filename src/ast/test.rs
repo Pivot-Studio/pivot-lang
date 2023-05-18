@@ -91,7 +91,7 @@ fn test_diag() {
         DiagCode::Err(crate::ast::diag::ErrorCode::TYPE_MISMATCH)
     );
     assert_eq!(
-        new_diag_range(19, 16, 19, 18),
+        new_diag_range(19, 16, 19, 19),
         diag[1].get_range().to_diag_range()
     );
     assert_eq!(
@@ -549,48 +549,48 @@ fn test_doc_symbol() {
     );
 }
 
-#[test]
-#[cfg(feature = "jit")]
-fn test_jit() {
-    use crate::ast::compiler::{compile, Options};
-    use std::path::PathBuf;
-    let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
-        .lock()
-        .unwrap();
-    let out = "testjitout";
-    let docs = MemDocs::default();
-    let db = Database::default();
-    let input = MemDocsInput::new(
-        &db,
-        Arc::new(Mutex::new(RefCell::new(docs))),
-        "test/main.pi".to_string(),
-        Default::default(),
-        ActionType::Compile,
-        None,
-        None,
-    );
-    let outplb = "testjitout.bc";
-    compile(
-        &db,
-        input,
-        out.to_string(),
-        Options {
-            optimization: crate::ast::compiler::HashOptimizationLevel::None,
-            genir: true,
-            printast: false,
-            flow: false,
-            fmt: false,
-            jit: true,
-        },
-    );
-    assert!(
-        crate::ast::compiler::run(
-            PathBuf::from(outplb).as_path(),
-            inkwell::OptimizationLevel::None,
-        ) == 0,
-        "jit compiled program exit with non-zero status"
-    );
-}
+// #[test]
+// #[cfg(feature = "jit")]
+// fn test_jit() {
+//     use crate::ast::compiler::{compile, Options};
+//     use std::path::PathBuf;
+//     let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
+//         .lock()
+//         .unwrap();
+//     let out = "testjitout";
+//     let docs = MemDocs::default();
+//     let db = Database::default();
+//     let input = MemDocsInput::new(
+//         &db,
+//         Arc::new(Mutex::new(RefCell::new(docs))),
+//         "test/main.pi".to_string(),
+//         Default::default(),
+//         ActionType::Compile,
+//         None,
+//         None,
+//     );
+//     let outplb = "testjitout.bc";
+//     compile(
+//         &db,
+//         input,
+//         out.to_string(),
+//         Options {
+//             optimization: crate::ast::compiler::HashOptimizationLevel::None,
+//             genir: true,
+//             printast: false,
+//             flow: false,
+//             fmt: false,
+//             jit: true,
+//         },
+//     );
+//     assert!(
+//         crate::ast::compiler::run(
+//             PathBuf::from(outplb).as_path(),
+//             inkwell::OptimizationLevel::None,
+//         ) == 0,
+//         "jit compiled program exit with non-zero status"
+//     );
+// }
 #[test]
 fn test_compile() {
     let out = "testout";

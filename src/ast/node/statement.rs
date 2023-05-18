@@ -34,10 +34,10 @@ impl PrintTrait for DefNode {
 }
 
 impl Node for DefNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let range = self.range();
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
@@ -125,10 +125,10 @@ impl PrintTrait for AssignNode {
 }
 
 impl Node for AssignNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let exp_range = self.exp.range();
         let rel = self.var.emit(ctx, builder)?.get_value();
@@ -164,10 +164,10 @@ impl PrintTrait for EmptyNode {
 }
 
 impl Node for EmptyNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        _builder: &'b BuilderEnum<'a, 'ctx>,
+        _builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.emit_comment_highlight(&self.comments[0]);
         Ok(Default::default())
@@ -193,10 +193,10 @@ impl PrintTrait for StatementsNode {
 }
 
 impl Node for StatementsNode {
-    fn emit<'a, 'ctx, 'b>(
+    fn emit<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let mut terminator = TerminatorEnum::None;
         for m in self.statements.iter_mut() {
@@ -247,10 +247,10 @@ impl Node for StatementsNode {
 }
 
 impl StatementsNode {
-    pub fn emit_child<'a, 'ctx, 'b>(
+    pub fn emit_child<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, 'ctx>,
+        builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let child = &mut ctx.new_child(self.range.start, builder);
         self.emit(child, builder)
