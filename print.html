@@ -620,10 +620,10 @@ pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNode
 <p>所有的节点都必须实现<code>Node</code> trait，这个trait定义了节点的基本行为。</p>
 <pre><code class="language-rust no_run noplayground">#[enum_dispatch]
 pub trait Node: RangeTrait + FmtTrait + PrintTrait {
-    fn emit&lt;'a, 'ctx, 'b&gt;(
+    fn emit&lt;'a, 'b&gt;(
         &amp;mut self,
         ctx: &amp;'b mut Ctx&lt;'a&gt;,
-        builder: &amp;'b BuilderEnum&lt;'a, 'ctx&gt;,
+        builder: &amp;'b BuilderEnum&lt;'a, '_&gt;,
     ) -&gt; NodeResult;
 }
 
@@ -665,10 +665,10 @@ pub trait RangeTrait {
 <p><code>emit</code>函数是生成llvm代码的核心，它会调用llvm api构造自己对应的llvm ir。在编译的时候，最上层节点的<code>emit</code>会被调用，
 该函数会递归的调用自己的子节点的<code>emit</code>函数，最终生成整个程序的llvm ir。<br />
 下方是<code>ifnode</code>的<code>emit</code>函数：</p>
-<pre><code class="language-rust no_run noplayground">    fn emit&lt;'a, 'ctx, 'b&gt;(
+<pre><code class="language-rust no_run noplayground">    fn emit&lt;'a, 'b&gt;(
         &amp;mut self,
         ctx: &amp;'b mut Ctx&lt;'a&gt;,
-        builder: &amp;'b BuilderEnum&lt;'a, 'ctx&gt;,
+        builder: &amp;'b BuilderEnum&lt;'a, '_&gt;,
     ) -&gt; NodeResult {
         let cond_block = builder.append_basic_block(ctx.function.unwrap(), &quot;if.cond&quot;);
         let then_block = builder.append_basic_block(ctx.function.unwrap(), &quot;if.then&quot;);
