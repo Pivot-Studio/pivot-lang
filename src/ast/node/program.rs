@@ -150,7 +150,7 @@ lazy_static::lazy_static! {
 
 #[salsa::tracked]
 impl Program {
-    #[salsa::tracked(lru = 32)]
+    #[salsa::tracked]
     pub(crate) fn is_active_file(self, db: &dyn Db) -> bool {
         let params = self.params(db);
         let f1 = self.docs(db).file(db);
@@ -158,7 +158,7 @@ impl Program {
         crate::utils::canonicalize(f1).unwrap() == crate::utils::canonicalize(f2).unwrap()
     }
 
-    #[salsa::tracked(lru = 32)]
+    #[salsa::tracked]
     pub fn emit(self, db: &dyn Db) -> ModWrapper {
         #[cfg(not(target_arch = "wasm32"))]
         let pb = &COMPILE_PROGRESS;
@@ -452,7 +452,7 @@ mod salsa_structs;
 /// # emit_file
 ///
 /// compile a pi file to llvm ir, or do some lsp analysis
-#[salsa::tracked(lru = 32)]
+#[salsa::tracked]
 pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     log::info!("emit_file: {}", params.fullpath(db),);
     let v = RefCell::new(FxHashSet::default());

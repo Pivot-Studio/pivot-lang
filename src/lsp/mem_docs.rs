@@ -59,7 +59,7 @@ pub struct FileCompileInput {
 }
 #[salsa::tracked]
 impl FileCompileInput {
-    #[salsa::tracked(lru = 32)]
+    #[salsa::tracked]
     pub fn get_file_content(self, db: &dyn Db) -> Option<SourceProgram> {
         // let f = self.file(db);
         // eprintln!("get_file_content {}", f);
@@ -76,7 +76,7 @@ impl FileCompileInput {
         }
         re
     }
-    #[salsa::tracked(lru = 32)]
+    #[salsa::tracked]
     pub fn get_emit_params(self, db: &dyn Db) -> EmitParams {
         let file = self.file(db);
         if crate::utils::canonicalize(self.docs(db).file(db)).unwrap()
@@ -114,7 +114,7 @@ impl FileCompileInput {
 
 #[salsa::tracked]
 impl MemDocsInput {
-    #[salsa::tracked(lru = 32)]
+    #[salsa::tracked]
     pub fn get_current_file_content(self, db: &dyn Db) -> Option<SourceProgram> {
         let f = self.file(db);
         debug!("memdocinput get_current_file_content {}", f);
@@ -126,7 +126,7 @@ impl MemDocsInput {
             .get_file_content(db, self.file(db));
         re
     }
-    #[salsa::tracked(lru = 32)]
+    #[salsa::tracked]
     pub fn get_file_content(self, db: &dyn Db, f: String) -> Option<SourceProgram> {
         debug!("memdocinput get_file_content {}", f);
         let re = self
@@ -137,7 +137,7 @@ impl MemDocsInput {
             .get_file_content(db, &f);
         re
     }
-    #[salsa::tracked(lru = 32)]
+    #[salsa::tracked]
     pub fn get_file_params(self, db: &dyn Db, f: String, entry: bool) -> Option<FileCompileInput> {
         let f = crate::utils::canonicalize(f);
         if f.is_err() {
