@@ -57,3 +57,25 @@ impl Db for Database {
         self.ref_str.lock().unwrap().get_mut().clone()
     }
 }
+
+impl Database {
+    /// Enable logging of each salsa event.
+    #[cfg(test)]
+    pub fn enable_logging(self) -> Self {
+        assert!(self.logs.is_none());
+        Self {
+            storage: self.storage,
+            logs: Some(Default::default()),
+            ref_str: self.ref_str,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn take_logs(&self) -> Vec<String> {
+        if let Some(logs) = &self.logs {
+            std::mem::take(&mut *logs.lock().unwrap())
+        } else {
+            panic!("logs not enabled");
+        }
+    }
+}

@@ -6,7 +6,7 @@
 //! - goto definition
 //! - find references
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     error::Error,
     sync::{Arc, Mutex},
     thread::available_parallelism,
@@ -137,7 +137,7 @@ fn main_loop(
         None,
         None,
     );
-    let mut tokens = FxHashMap::default();
+    let last_tokens = Cell::new(Default::default());
     let mut completions: Vec<Vec<lsp_types::CompletionItem>> = vec![];
 
     log::info!("starting main loop");
@@ -231,7 +231,7 @@ fn main_loop(
             if newtokens.is_empty() {
                 newtokens.push(SemanticTokens::default());
             }
-            _ = tokens.insert(uri, newtokens[0].clone());
+            last_tokens.replace(newtokens[0].clone());
             let sender = connection.sender.clone();
             pool.execute(move || {
                 send_semantic_tokens(&sender, id, newtokens[0].clone());
@@ -249,8 +249,9 @@ fn main_loop(
             if newtokens.is_empty() {
                 newtokens.push(SemanticTokens::default());
             }
-            let old = tokens.insert(uri, newtokens[0].clone());
-            let delta = diff_tokens(&old.unwrap().data, &newtokens[0].data);
+
+            let old = last_tokens.replace(newtokens[0].clone());
+            let delta = diff_tokens(&old.data, &newtokens[0].data);
             let sender = connection.sender.clone();
             pool.execute(move || {
                 send_semantic_tokens_edit(

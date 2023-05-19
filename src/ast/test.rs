@@ -676,3 +676,25 @@ fn test_fmt() {
     let text_edit = test_lsp::<PLFormat>(&Database::default(), None, ActionType::LspFmt, testfile);
     debug_assert!(text_edit[0].is_empty());
 }
+
+#[test]
+fn test_lsp_incremental() {
+    let raw_db = Database::default().enable_logging();
+    let db = &raw_db;
+    let docs = MemDocs::default();
+    let input = MemDocsInput::new(
+        db,
+        Arc::new(Mutex::new(RefCell::new(docs))),
+        "test/lsp_incremental/main.pi".to_string(),
+        Default::default(),
+        ActionType::Diagnostic,
+        None,
+        None,
+    );
+    compile_dry(db, input).unwrap();
+    let l = raw_db.take_logs();
+    assert_eq!(l.len(), 64);
+    compile_dry(db, input).unwrap();
+    let ll = raw_db.take_logs();
+    assert_eq!(ll.len(), 0);
+}
