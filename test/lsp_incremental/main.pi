@@ -1,0 +1,6 @@
+use std::io;
+use lsp_incremental::module1;
+fn main() i64 {
+    io::print_s("Hello World\n");
+    return 0;
+}
