@@ -74,10 +74,6 @@ jobs:
 
       - name: Install LLVM
         uses: Pivot-Studio/setup-llvm@main
-      
-      # - name: set up win scoop
-      #   if: ${{ matrix.config.os == 'windows-latest' }}
-      #   uses: MinoruSekine/setup-scoop@main
   
 
       - name: Cargo build
@@ -224,3 +220,21 @@ jobs:
           replacesArtifacts: false
           commit: master
           tag: v0.1.${{ github.run_number }}
+      - name: generate scoop manifest
+        if: ${{ matrix.config.os == 'windows-latest' }}
+        run: |
+          mkdir scoop
+          $template=(cat .\plc.scoop)
+          $version="v0.1.${{ github.run_number }}"
+          $file="pivot-lang-0.1.${{ github.run_number }}-${{ matrix.config.arch }}.tar.gz"
+          $sha256=($(certutil -hashfile $file SHA256)[1])
+          cd scoop
+          $template -f $version,$file,$sha256>plc.json
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        if: ${{ matrix.config.os == 'windows-latest' }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./scoop
+          publish_branch: scoop
+        
