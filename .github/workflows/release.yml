@@ -29,21 +29,25 @@ jobs:
             arch: darwin-amd64
             artifacts: "plc"
             RUSTFLAGS: ""
+            libvm: "libvm.a"
           - os: "self-hosted"
             dir: osx64
             arch: darwin-arm64
             artifacts: "plc"
             RUSTFLAGS: ""
+            libvm: "libvm.a"
           - os: "ubuntu-latest"
             dir: linux64
             debdir: pivot-lang_0.1.0-1_amd64
             artifacts: "plc"
             arch: linux-amd64
             RUSTFLAGS: ""
-          # - os: "windows-latest"
-          #   dir: win64
-          #   artifacts: "plc.exe"
-          #   RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"
+            libvm: "libvm.a"
+          - os: "windows-latest"
+            dir: win64
+            artifacts: "plc.exe"
+            RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"
+            libvm: "vm.lib"
     steps:
       - uses: actions/checkout@v3
         with:
@@ -70,43 +74,17 @@ jobs:
       - name: Install LLVM
         uses: Pivot-Studio/setup-llvm@main
       
-      - name: set up win scoop
-        if: ${{ matrix.config.os == 'windows-latest' }}
-        uses: MinoruSekine/setup-scoop@main
-
-      - name: Install LLVM and Clang win
-        if: ${{ matrix.config.os == 'windows-latest' }}
-        run: |
-          scoop install 7zip
-          scoop install wget
-          wget https://github.com/Pivot-Studio/pivot-lang/releases/download/llvm-windows-latest/llvm-14.0.6-windows-x64-msvc17.7z
-          7z x .\llvm-14.0.6-windows-x64-msvc17.7z -y -o${{ runner.temp }}\llvm
-          [Environment]::SetEnvironmentVariable(
-            "Path",
-            [Environment]::GetEnvironmentVariable("Path", "User") + ";${{ runner.temp }}\llvm\bin",
-            "User"
-          )
-          [Environment]::SetEnvironmentVariable('LLVM_SYS_140_PREFIX', '${{ runner.temp }}\llvm', 'User')
+      # - name: set up win scoop
+      #   if: ${{ matrix.config.os == 'windows-latest' }}
+      #   uses: MinoruSekine/setup-scoop@main
   
-      - uses: ilammy/msvc-dev-cmd@v1
-        if: ${{ matrix.config.os == 'windows-latest' }}
-        with:
-          arch: x64
-          vs_version: 2022
-      - name: Cargo build win
-        if: ${{ matrix.config.os == 'windows-latest' }}
-        env:
-          RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
-        run: cargo build --release --verbose
 
       - name: Cargo build
-        if: ${{ matrix.config.os != 'windows-latest' }}
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
         run: cargo build --release
 
       - name: Cargo build vm
-        if: ${{ matrix.config.os != 'windows-latest' }}
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
         run: cd vm && cargo build --release
@@ -130,7 +108,7 @@ jobs:
 
       - name: Move libvm
         env:
-          ARTIFACTS: libvm.a
+          ARTIFACTS: ${{ matrix.config.libvm }}
           OUT_DIR: ${{ matrix.config.dir }}
           OS: ${{ matrix.config.os }}
         run: |
@@ -225,7 +203,6 @@ jobs:
           github_repository: Pivot-Studio/apt-repo
 
       - name: tar artifacts
-        if: ${{ matrix.config.os != 'windows-latest' }}
         env:
           OUT_DIR: ${{ matrix.config.dir }}
           OS: ${{ matrix.config.os }}
