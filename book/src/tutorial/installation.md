@@ -3,9 +3,21 @@
 
 
 ## Windows
-TODO
+
+windows用户可以使用[scoop](https://scoop.sh/)来安装pivot lang编译器。
+
+**请注意，windows环境下的pivot lang编译器目前只支持x64架构，而且依赖MSVC环境。
+你需要安装[Visual Studio](https://visualstudio.microsoft.com/zh-hans/)，并在
+安装时勾选C++开发环境**。
+
+```powershell
+scoop bucket add pivot https://github.com/Pivot-Studio/scoop
+scoop install plc
+```
+
 
 ## Linux
+
 目前我们对架构为amd64的Ubuntu 20.04 LTS 和 Ubuntu 22.04 LTS提供了apt包。  
 首先你需要添加我们的apt源的gpg key：
 ```bash
