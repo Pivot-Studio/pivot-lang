@@ -276,7 +276,6 @@ impl Node for MacroCallNode {
                             Err(e) => {
                                 last_err = Some(e);
                                 next = true;
-                                continue;
                             }
                         }
                     }
@@ -284,7 +283,8 @@ impl Node for MacroCallNode {
                         continue;
                     }
                     let mut b = rule.clone().body;
-                    let re = ctx
+                    let mut child = ctx.new_child(self.range.start, builder);
+                    let re = child
                         .with_diag_src(&src, |ctx| ctx.with_macro_emit(|ctx| b.emit(ctx, builder)));
                     match re {
                         Ok(_) => {

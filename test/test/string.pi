@@ -1,10 +1,10 @@
 use std::io;
 use core::panic;
-use project1::test::macros;
+use project1::test::macros::test;
 pub fn test_string() void {
     let s = "hello world!\n";
-    macros::test!(s = 1+2*(3+4), s = 5*2,);
-    macros::test!(s);
+    test!(s = 1+2*(3+4), s = 5*2,);
+    test!(s);
     panic::assert(s.len == 13);
     panic::assert(s.byte_len == 13);
     let ss = "你好啊！\n";

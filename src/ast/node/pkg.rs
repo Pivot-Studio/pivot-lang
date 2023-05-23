@@ -133,6 +133,16 @@ impl Node for UseNode {
                             ));
                         }
                         return Ok(Default::default());
+                    } else if let Some(mac) = m.macros.get(&n.name) {
+                        ctx.push_semantic_token(n.range, SemanticTokenType::MACRO, 0);
+                        ctx.send_if_go_to_def(n.range, mac.range, mac.file.clone());
+                        ctx.set_glob_refs(&format!("{}..{}", &mac.file, &mac.id.name), n.range);
+                        if !self.complete {
+                            return Err(ctx.add_diag(
+                                self.range.new_err(crate::ast::diag::ErrorCode::COMPLETION),
+                            ));
+                        }
+                        return Ok(Default::default());
                     } else {
                         ctx.push_semantic_token(n.range, SemanticTokenType::NAMESPACE, 0);
                     }

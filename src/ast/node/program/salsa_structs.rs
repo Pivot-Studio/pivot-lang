@@ -1,3 +1,4 @@
+use crate::ast::node::macro_nodes::MacroNode;
 use crate::ast::node::NodeEnum;
 use crate::ast::pltype::{FNValue, PLType};
 use crate::ast::range::Pos;
@@ -30,6 +31,8 @@ pub struct ProgramEmitParam {
     pub types: UnsafeWrapper<FxHashMap<String, Arc<RefCell<PLType>>>>,
     #[return_ref]
     pub mth_table: MthdTableWrapper,
+    #[return_ref]
+    pub macro_table: UnsafeWrapper<FxHashMap<String, Arc<MacroNode>>>,
 }
 
 pub type MthdTableWrapper =

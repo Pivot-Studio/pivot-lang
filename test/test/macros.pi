@@ -2,12 +2,12 @@ macro test {
     ($($a:@id = $b:@expr,)*) => {
         $(
             io::print_s($a);
-            io::printi64ln($b);
+            io::printi64ln($b);  
         )*
 
     };
     ($a:@id) => {
-        io::print_s($a);
+        test!($a = 1,);
     };
 }
 
