@@ -186,6 +186,7 @@ impl Program {
         let mut global_mthd_map: FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>> =
             FxHashMap::default();
         let mut global_tp_map = FxHashMap::default();
+        let mut global_macro_map = FxHashMap::default();
         // load dependencies
         for (i, u) in prog.uses.iter().enumerate() {
             #[cfg(not(target_arch = "wasm32"))]
@@ -240,7 +241,7 @@ impl Program {
                 let symbol = module.types.get(&s);
                 if let Some(x) = symbol {
                     if x.borrow().is_pub() {
-                        global_tp_map.insert(s, x.to_owned());
+                        global_tp_map.insert(s.clone(), x.to_owned());
                     }
                     if let PLType::Trait(t) = &*x.borrow() {
                         for (k, v) in t.trait_methods_impl.borrow().clone() {
@@ -253,6 +254,10 @@ impl Program {
                             }
                         }
                     }
+                }
+                let mac = module.macros.get(&s);
+                if let Some(x) = mac {
+                    global_macro_map.insert(s, x.clone());
                 }
             }
             modmap.insert(mod_id.unwrap(), module);
@@ -292,6 +297,7 @@ impl Program {
                 .clone(),
             UnsafeWrapper::new(global_tp_map),
             UnsafeWrapper::new(global_mthd_map),
+            UnsafeWrapper::new(global_macro_map),
         );
 
         let nn = p.node(db).node(db);
@@ -465,6 +471,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     );
     ctx.trait_mthd_table = Arc::new(RefCell::new(params.mth_table(db).get().clone()));
     ctx.plmod.types = params.types(db).get().clone();
+    ctx.plmod.macros = params.macro_table(db).get().clone();
     add_primitive_types(&mut ctx);
     ctx.plmod.submods = params.submods(db);
     // imports all builtin symbols

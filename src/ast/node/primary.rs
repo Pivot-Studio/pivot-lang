@@ -112,8 +112,7 @@ impl Node for VarNode {
     ) -> NodeResult {
         if self.is_macro_var() {
             let re = ctx
-                .macro_vars
-                .get(&self.name[1..])
+                .find_macro_symbol(&self.name[1..])
                 .ok_or_else(|| {
                     self.range
                         .new_err(ErrorCode::MACRO_VAR_NOT_FOUND)
@@ -126,7 +125,10 @@ impl Node for VarNode {
                 .clone();
             match re {
                 MacroReplaceNode::NodeEnum(mut n) => {
-                    return n.emit(ctx, builder);
+                    ctx.macro_skip_level += 1;
+                    let re = n.emit(ctx, builder);
+                    ctx.macro_skip_level -= 1;
+                    return re;
                 }
                 MacroReplaceNode::LoopNodeEnum(mut loop_var) => {
                     if !ctx.macro_loop {
@@ -136,7 +138,9 @@ impl Node for VarNode {
                             .add_help("add a `macro loop` surrounding the macro body like $($var)*")
                             .add_to_ctx(ctx));
                     }
+                    ctx.macro_skip_level += 1;
                     let re = loop_var[ctx.macro_loop_idx].emit(ctx, builder);
+                    ctx.macro_skip_level -= 1;
                     ctx.macro_loop_len = loop_var.len();
                     return re;
                 }

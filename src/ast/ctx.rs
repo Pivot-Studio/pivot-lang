@@ -88,6 +88,7 @@ pub struct Ctx<'a> {
     pub db: &'a dyn Db,
     pub rettp: Option<Arc<RefCell<PLType>>>,
     pub macro_vars: FxHashMap<String, MacroReplaceNode>,
+    pub macro_skip_level: usize,
     pub macro_loop: bool,
     pub macro_loop_idx: usize,
     pub macro_loop_len: usize,
@@ -112,6 +113,22 @@ pub enum MacroReplaceNode {
 }
 
 impl<'a, 'ctx> Ctx<'a> {
+    pub fn find_macro_symbol(&self, name: &str) -> Option<&MacroReplaceNode> {
+        let mut ctx = Some(self);
+        let mut i = 0;
+        while let Some(p) = ctx {
+            i += 1;
+            if i <= self.macro_skip_level {
+                ctx = p.father;
+                continue;
+            }
+            if let Some(v) = p.macro_vars.get(name) {
+                return Some(v);
+            }
+            ctx = p.father;
+        }
+        None
+    }
     pub fn new(
         src_file_path: &'a str,
         errs: &'a RefCell<FxHashSet<PLDiag>>,
@@ -154,6 +171,7 @@ impl<'a, 'ctx> Ctx<'a> {
             expect_ty: None,
             trait_mthd_table: Default::default(),
             root: None,
+            macro_skip_level: 0,
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -180,7 +198,7 @@ impl<'a, 'ctx> Ctx<'a> {
             init_func: self.init_func,
             function: self.function,
             macro_vars: FxHashMap::default(),
-            macro_loop: false,
+            macro_loop: self.macro_loop,
             macro_loop_idx: self.macro_loop_idx,
             macro_loop_len: self.macro_loop_len,
             temp_source: self.temp_source.clone(),
@@ -189,9 +207,12 @@ impl<'a, 'ctx> Ctx<'a> {
             expect_ty: None,
             trait_mthd_table: Default::default(),
             root,
+            macro_skip_level: self.macro_skip_level,
         };
         add_primitive_types(&mut ctx);
-        builder.new_subscope(start);
+        if start != Default::default() {
+            builder.new_subscope(start);
+        }
         ctx
     }
 
