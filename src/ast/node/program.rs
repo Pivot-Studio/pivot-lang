@@ -534,6 +534,9 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
             },
         );
     }
+    for (k,_) in params.types(db).get() {
+        ctx.plmod.types.remove(k);
+    }
     ModWrapper::new(db, ctx.plmod)
 }
 

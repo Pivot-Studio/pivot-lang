@@ -9,3 +9,7 @@ pub fn test_mod_impl() i64 {
     return 0;
 }
 
+
+pub struct mod1_name {
+    
+}

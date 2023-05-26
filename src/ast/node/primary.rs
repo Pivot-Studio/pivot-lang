@@ -5,6 +5,7 @@ use super::*;
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
+use crate::ast::ctx::BUILTIN_FN_NAME_MAP;
 use crate::ast::ctx::Ctx;
 use crate::ast::ctx::MacroReplaceNode;
 use crate::ast::diag::ErrorCode;
@@ -166,6 +167,10 @@ impl Node for VarNode {
                 });
             return o;
         }
+        if let Some(builtin) = BUILTIN_FN_NAME_MAP.get(&self.name as & str) {
+            ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
+            return builtin.new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL)))).to_result();
+        }
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match &*tp.borrow() {
                 PLType::Fn(f) => {
@@ -183,6 +188,7 @@ impl Node for VarNode {
         Err(ctx.add_diag(self.range.new_err(ErrorCode::VAR_NOT_FOUND)))
     }
 }
+
 
 impl PrintTrait for VarNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {

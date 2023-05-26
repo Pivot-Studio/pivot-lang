@@ -498,7 +498,13 @@ impl PLType {
 
     pub fn get_full_elm_name(&self) -> String {
         match self {
-            PLType::Generic(g) => g.name.clone(),
+            PLType::Generic(g) => {
+                if g.curpltype.is_some() {
+                    g.curpltype.as_ref().unwrap().borrow().get_full_elm_name()
+                } else {
+                    g.name.clone()
+                }
+            }
             PLType::Fn(fu) => fu.llvmname.clone(),
             PLType::Struct(st) => st.get_full_name(),
             PLType::Trait(st) => st.get_full_name(),
