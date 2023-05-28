@@ -711,7 +711,7 @@ impl Node for StructInitNode {
     }
 }
 
-#[node]
+#[node(comment)]
 pub struct ArrayInitNode {
     // pub tp: Box<TypeNameNode>,
     pub exps: Vec<Box<NodeEnum>>,
@@ -737,6 +737,7 @@ impl Node for ArrayInitNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
+        ctx.emit_comment_highlight(&self.comments[0]);
         let mut exps = Vec::new();
         let mut tp0 = None;
 

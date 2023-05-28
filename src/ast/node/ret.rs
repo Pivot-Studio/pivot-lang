@@ -29,10 +29,11 @@ impl Node for RetNode {
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
         let ret_pltype = ctx.rettp.as_ref().unwrap().clone();
+        ctx.emit_comment_highlight(&self.comments[0]);
         if let Some(ret_node) = &mut self.value {
             //            let (value, value_pltype, _) = ctx.emit_with_expectation(ret_node, Some(ret_pltype.clone()), ret_pltype.borrow().get_range().unwrap_or_default(), builder)?;
             let v = ret_node.emit(ctx, builder)?.get_value().unwrap();
-            ctx.emit_comment_highlight(&self.comments[0]);
+            ctx.emit_comment_highlight(&self.comments[1]);
             let value_pltype = v.get_ty();
             let mut value = ctx.try_load2var(self.range, v.get_value(), builder)?;
             let eqres = ctx.eq(ret_pltype.clone(), value_pltype.clone());

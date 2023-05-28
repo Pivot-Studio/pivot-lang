@@ -39,6 +39,7 @@ impl Node for DefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> NodeResult {
+        ctx.emit_comment_highlight(&self.comments[0]);
         let range = self.range();
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
         if self.exp.is_none() && self.tp.is_none() {

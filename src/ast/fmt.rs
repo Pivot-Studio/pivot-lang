@@ -190,6 +190,7 @@ impl FmtBuilder {
     pub fn parse_struct_def_node(&mut self, node: &StructDefNode) {
         for c in node.pre_comments.iter() {
             c.format(self);
+            self.enter();
         }
         self.prefix();
         if let Some((modi, _)) = node.modifier {
@@ -263,6 +264,11 @@ impl FmtBuilder {
     }
     pub fn parse_array_init_node(&mut self, node: &ArrayInitNode) {
         self.l_bracket();
+        for  com in &node.comments[0] {
+            com.format(self);
+            self.enter();
+            self.prefix();
+        }
         for (i, exp) in node.exps.iter().enumerate() {
             exp.format(self);
             if i != node.exps.len() - 1 {
@@ -274,7 +280,6 @@ impl FmtBuilder {
     }
     pub fn parse_generic_param_node(&mut self, node: &GenericParamNode) {
         self.l_angle_bracket();
-
         for (i, generic) in node.generics.iter().enumerate() {
             match generic {
                 Some(n) => n.format(self),
@@ -289,6 +294,7 @@ impl FmtBuilder {
     pub fn parse_def_node(&mut self, node: &DefNode) {
         self.token("let");
         self.space();
+        self.parse_comments_with_tab(&node.comments[0]);
         node.var.format(self);
         if let Some(tp) = &node.tp {
             self.colon();
@@ -320,37 +326,53 @@ impl FmtBuilder {
             self.prefix();
             statement.format(self);
             match &**statement {
-                NodeEnum::For(_) | NodeEnum::While(_) | NodeEnum::If(_) | NodeEnum::Comment(_) => {}
+                NodeEnum::For(_)
+                | NodeEnum::While(_)
+                | NodeEnum::If(_)
+                | NodeEnum::Comment(_)
+                | NodeEnum::Ret(_) => {}
                 _ => {
                     self.semicolon();
                 }
             }
-            match &**statement {
-                NodeEnum::Comment(_) => {}
-                _ => {
-                    self.enter();
-                }
-            }
+            self.enter();
+        }
+    }
+    fn parse_comments_with_tab(&mut self, comments: &Vec<Box<NodeEnum>>) {
+        for com in comments {
+            com.format(self);
+            self.enter();
+            self.add_tab();
+            self.prefix();
+            self.sub_tab();
         }
     }
     pub fn parse_ret_node(&mut self, node: &RetNode) {
         if let Some(value) = &node.value {
             self.token("return");
             self.space();
+            self.parse_comments_with_tab(&node.comments[0]);
             value.format(self);
         } else {
             self.token("return");
+            self.parse_comments_with_tab(&node.comments[0]);
+        }
+        self.semicolon();
+        for com in &node.comments[1] {
+            com.format(self);
         }
     }
     pub fn parse_primary_node(&mut self, node: &PrimaryNode) {
         for com in &node.comments[0] {
             com.format(self);
+            self.enter();
             self.prefix();
         }
         node.value.format(self);
         for com in &node.comments[1] {
             self.prefix();
             com.format(self);
+            self.enter();
         }
     }
 
@@ -362,12 +384,7 @@ impl FmtBuilder {
         self.l_bracket();
         node.index.format(self);
         self.r_bracket();
-        for com in &node.comments[0] {
-            com.format(self);
-            self.add_tab();
-            self.prefix();
-            self.sub_tab();
-        }
+        self.parse_comments_with_tab(&node.comments[0]);
     }
     pub fn parse_parantheses_node(&mut self, node: &ParanthesesNode) {
         self.l_paren();
@@ -401,12 +418,7 @@ impl FmtBuilder {
         for id in &node.field {
             self.dot();
             id.format(self);
-            for com in &node.comments[0] {
-                com.format(self);
-                self.add_tab();
-                self.prefix();
-                self.sub_tab();
-            }
+            self.parse_comments_with_tab(&node.comments[0]);
         }
     }
     pub fn parse_impl_node(&mut self, node: &ImplNode) {
@@ -468,12 +480,7 @@ impl FmtBuilder {
             }
         }
         self.r_paren();
-        for com in &node.comments[0] {
-            com.format(self);
-            self.add_tab();
-            self.prefix();
-            self.sub_tab();
-        }
+        self.parse_comments_with_tab(&node.comments[0]);
     }
     pub fn parse_func_def_node(&mut self, node: &FuncDefNode) {
         let paralist = &node.paralist;
@@ -481,6 +488,7 @@ impl FmtBuilder {
         for c in node.pre_comments.iter() {
             self.prefix();
             c.format(self);
+            self.enter();
         }
         self.prefix();
         if let Some((modi, _)) = node.modifier {
@@ -618,7 +626,6 @@ impl FmtBuilder {
             self.token("//");
         }
         self.token(&node.get_comment());
-        self.enter();
     }
     pub fn parse_continue_node(&mut self, _node: &ContinueNode) {
         self.token("continue");

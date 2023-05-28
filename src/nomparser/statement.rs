@@ -102,11 +102,12 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
             tag_token_word(TokenType::LET),
+            many0(del_newline_or_space!(comment)),
             identifier,
             opt(pair(tag_token_symbol(TokenType::COLON), type_name)),
             opt(pair(tag_token_symbol(TokenType::ASSIGN), general_exp)),
         )),
-        |((_, start), a, tp, v)| {
+        |((_, start), coms0, a, tp, v)| {
             let mut end = a.range.end;
             if tp.is_some() {
                 end = tp.as_ref().unwrap().1.range().end;
@@ -123,7 +124,7 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     tp,
                     exp,
                     range,
-                    comments: vec![],
+                    comments: vec![coms0],
                 }
                 .into(),
             )
@@ -169,15 +170,16 @@ fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
             tag_token_word(TokenType::RETURN),
+            many0(del_newline_or_space!(comment)),
             opt(general_exp),
             tag_token_symbol(TokenType::SEMI),
             opt(delspace(comment)),
         )),
-        |((_, range), val, _, optcomment)| {
+        |((_, range), coms, val, _, optcomment)| {
             let comments = if let Some(com) = optcomment {
-                vec![vec![com]]
+                vec![coms, vec![com]]
             } else {
-                vec![vec![]]
+                vec![coms, vec![]]
             };
             if let Some(val) = val {
                 let range = val.range();

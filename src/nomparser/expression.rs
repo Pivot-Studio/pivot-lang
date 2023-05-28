@@ -209,7 +209,7 @@ pub fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
-            many0(comment),
+            many0(del_newline_or_space!(comment)),
             del_newline_or_space!(alt((
                 number,
                 bool_const,
@@ -221,7 +221,7 @@ fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 extern_identifier,
                 string_literal,
             ))),
-            many0(comment),
+            many0(del_newline_or_space!(comment)),
         )),
         |(lcoms, node, rcoms)| {
             let range = node.range();
@@ -247,7 +247,7 @@ fn take_exp_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
             tag_token_symbol(TokenType::DOT),
             pair(
                 opt(alt((identifier, tuple_field_identifier))),
-                many0(comment),
+                many0(del_newline_or_space!(comment)),
             ),
         ),
         |(idx, coms)| Ok::<_, ()>((ComplexOp::Field(idx), coms)),
