@@ -1,3 +1,4 @@
+use crate::ast::node::comment::RODEO;
 use crate::nomparser::Span;
 use crate::{ast::node::comment::CommentNode, ast::range::Range};
 use internal_macro::{test_parser, test_parser_error};
@@ -22,14 +23,12 @@ pub fn comment(input: Span) -> IResult<Span, Box<NodeEnum>> {
             alt((terminated(take_until("\n"), tag("\n")), rest)),
         ),
         |(a, c): (LocatedSpan<&str, bool>, LocatedSpan<&str, bool>)| {
-            res_enum(
-                CommentNode {
-                    comment: c.trim_end_matches('\r').to_string(),
-                    range: Range::new(input, c.take_split(c.len()).0),
-                    is_doc: a.contains("///"),
-                }
-                .into(),
-            )
+            let comment_node = CommentNode {
+                comment_key: RODEO.get_or_intern(c.trim_end_matches('\r').to_string()),
+                range: Range::new(input, c.take_split(c.len()).0),
+                is_doc: a.contains("///"),
+            };
+            res_enum(comment_node.into())
         },
     )(input)
 }

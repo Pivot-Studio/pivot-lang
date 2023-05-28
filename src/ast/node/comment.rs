@@ -2,18 +2,27 @@ use super::*;
 use crate::ast::ctx::Ctx;
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
+lazy_static::lazy_static! {
+    pub static ref RODEO: lasso::ThreadedRodeo = lasso::ThreadedRodeo::default();
+}
 
 #[node]
 pub struct CommentNode {
-    pub comment: String,
+    pub comment_key: lasso::Spur,
     pub is_doc: bool, // use "///" (is_doc:true)
+}
+
+impl CommentNode {
+    pub fn get_comment(&self) -> String {
+        RODEO.resolve(&self.comment_key).to_string()
+    }
 }
 
 impl PrintTrait for CommentNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
-        println!("CommentNode: {}", self.comment);
+        println!("CommentNode: {}", self.get_comment());
     }
 }
 

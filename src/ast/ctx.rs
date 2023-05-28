@@ -935,7 +935,7 @@ impl<'a, 'ctx> Ctx<'a> {
         if let Some(docs) = docs {
             for doc in docs {
                 if let NodeEnum::Comment(c) = *doc {
-                    string.push_str(&c.comment);
+                    string.push_str(&c.get_comment());
                     string.push('\n');
                 }
             }

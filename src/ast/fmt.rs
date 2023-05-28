@@ -617,7 +617,7 @@ impl FmtBuilder {
         } else {
             self.token("//");
         }
-        self.token(&node.comment);
+        self.token(&node.get_comment());
         self.enter();
     }
     pub fn parse_continue_node(&mut self, _node: &ContinueNode) {
