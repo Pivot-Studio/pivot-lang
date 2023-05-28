@@ -53,6 +53,10 @@ fn name<T>() void {
     let s = fullnameof<T>();
     io::print_s(s);
     io::print_s("\n");
+    // forfields<T>(TP,||=>void{ 
+    //     io::print_s(field);
+    //     return;
+    // }());
     return;
 }
 
