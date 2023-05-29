@@ -47,6 +47,7 @@ use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 
 use std::sync::Arc;
+use std::sync::Weak;
 /// # PLType
 /// Type for pivot-lang
 /// including primitive type, struct type, function type, void type
@@ -57,13 +58,17 @@ pub enum PLType {
     Arr(ARRType),
     Primitive(PriType),
     Void,
-    Pointer(Arc<RefCell<PLType>>),
+    Pointer(RcType),
     Generic(GenericType),
     PlaceHolder(PlaceHolderType),
     Trait(STType),
     Union(UnionType),
     Closure(ClosureType),
 }
+
+
+
+
 
 impl TraitImplAble for PriType {
     fn get_full_name(&self) -> String {
@@ -156,14 +161,23 @@ macro_rules! impl_mthd {
 }
 
 #[range]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct UnionType {
     pub name: String,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
-    pub sum_types: Vec<Box<TypeNodeEnum>>,
+    pub sum_types: Vec<RcType>,
     pub path: String,
     pub modifier: Option<(TokenType, Range)>,
     pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
+}
+
+impl PartialEq for UnionType {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.generic_map == other.generic_map && self.path == other.path && self.modifier == other.modifier && self.methods == other.methods && self.range == other.range
+    }
+}
+impl Eq for UnionType {
+    
 }
 
 impl_mthd!(UnionType, STType);
@@ -202,10 +216,7 @@ impl UnionType {
         res.name = name;
         ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Union(res.clone()))));
         res.sum_types = self
-            .sum_types
-            .iter()
-            .map(|t| Ok(t.get_type(ctx, builder, true)?.borrow().get_typenode()))
-            .collect::<Result<Vec<_>, PLDiag>>()?;
+            .sum_types.clone();
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
         pltype.replace(PLType::Union(res.clone()));
@@ -221,7 +232,7 @@ impl UnionType {
             u.sum_types
                 .iter()
                 .enumerate()
-                .find(|(_, t)| &*t.get_type(ctx, builder, true).unwrap().borrow() == pltype)
+                .find(|(_, t)| &*t.get_type().borrow() == pltype)
                 .map(|(i, _)| i)
         })
     }
@@ -378,7 +389,7 @@ impl PLType {
             }
             PLType::Primitive(p) => new_typename_node(&p.get_name(), Default::default()),
             PLType::Void => new_typename_node("void", Default::default()),
-            PLType::Pointer(p) => new_ptrtype_node(p.borrow().get_typenode()),
+            PLType::Pointer(p) => new_ptrtype_node(p.get_type().borrow().get_typenode()),
             PLType::Generic(g) => {
                 if g.curpltype.is_some() {
                     g.curpltype.as_ref().unwrap().borrow().get_typenode()
@@ -426,7 +437,7 @@ impl PLType {
                 format!("[{} * {}]", arr.element_type.borrow().get_name(), arr.size)
             }
             PLType::Void => "void".to_string(),
-            PLType::Pointer(p) => "*".to_string() + &p.borrow().get_name(),
+            PLType::Pointer(p) => "*".to_string() + &p.get_type().borrow().get_name(),
             PLType::Generic(g) => {
                 if g.curpltype.is_some() {
                     g.curpltype.as_ref().unwrap().borrow().get_name()
@@ -450,7 +461,7 @@ impl PLType {
                 format!("[{} * {}]", arr.element_type.borrow().get_name(), arr.size)
             }
             PLType::Void => "void".to_string(),
-            PLType::Pointer(p) => "*".to_string() + &p.borrow().get_name(),
+            PLType::Pointer(p) => "*".to_string() + &p.get_type().borrow().get_name(),
             PLType::Generic(g) => {
                 if g.curpltype.is_some() {
                     g.curpltype.as_ref().unwrap().borrow().get_name()
@@ -479,7 +490,7 @@ impl PLType {
                 )
             }
             PLType::Void => "void".to_string(),
-            PLType::Pointer(p) => p.borrow().get_full_elm_name(),
+            PLType::Pointer(p) => p.get_type().borrow().get_full_elm_name(),
             PLType::PlaceHolder(p) => p.name.clone(),
             PLType::Union(u) => u.get_full_name(),
             PLType::Closure(c) => c.get_name(),
@@ -500,7 +511,7 @@ impl PLType {
                 )
             }
             PLType::Void => "void".to_string(),
-            PLType::Pointer(p) => p.borrow().get_full_elm_name(),
+            PLType::Pointer(p) => p.get_type().borrow().get_full_elm_name(),
             PLType::PlaceHolder(p) => p.name.clone(),
             PLType::Union(u) => u.get_full_name_except_generic(),
             PLType::Closure(c) => c.get_name(),
@@ -508,7 +519,7 @@ impl PLType {
     }
     pub fn get_ptr_depth(&self) -> usize {
         match self {
-            PLType::Pointer(p) => p.borrow().get_ptr_depth() + 1,
+            PLType::Pointer(p) => p.get_type().borrow().get_ptr_depth() + 1,
             _ => 0,
         }
     }
@@ -610,13 +621,67 @@ impl PLType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Field {
     pub index: u32,
-    pub typenode: Box<TypeNodeEnum>,
+    pub typenode:RcType,
     pub name: String,
     pub range: Range,
     pub modifier: Option<(TokenType, Range)>,
+}
+
+
+#[derive(Debug, Clone)]
+pub enum RcType {
+    Indirect(Weak<RefCell<PLType>>),
+    Direct(Arc<RefCell<PLType>>),
+}
+
+impl PartialEq for RcType {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (RcType::Indirect(a), RcType::Indirect(b)) => a.upgrade().unwrap() == b.upgrade().unwrap(),
+            (RcType::Direct(a), RcType::Direct(b)) => a == b,
+            (RcType::Indirect(a), RcType::Direct(b)) => &a.upgrade().unwrap() == b,
+            (RcType::Direct(a), RcType::Indirect(b)) => a == &b.upgrade().unwrap(),
+        }
+    }
+}
+impl Eq for RcType {}
+
+
+
+
+impl RcType {
+    pub fn get_type(&self) -> Arc<RefCell<PLType>> {
+        match self {
+            RcType::Indirect(t) => t.upgrade().unwrap(),
+            RcType::Direct(t) => t.clone(),
+        }
+    }
+}
+
+impl From<Arc<RefCell<PLType>>> for RcType {
+    fn from(t: Arc<RefCell<PLType>>) -> Self {
+        match &*t.borrow() {
+            // PLType::Struct(_) | PLType::Union(_) => {
+            //     // eprintln!("indirect type: {:#?}", t.borrow().get_name());
+            //     let weak = Arc::downgrade(&t);
+            //     if weak.strong_count() <2 {
+            //         RcType::Direct(t.clone())
+            //     }else {
+            //         RcType::Indirect(weak)
+            //     }
+                
+            // },
+            _ => RcType::Direct(t.clone()),
+        }
+    }
+}
+
+
+impl Eq for Field {
+
 }
 
 impl Field {
@@ -624,7 +689,7 @@ impl Field {
         #[allow(deprecated)]
         DocumentSymbol {
             name: self.name.clone(),
-            detail: Some(FmtBuilder::generate_node(&self.typenode)),
+            detail: None,
             kind: SymbolKind::FIELD,
             tags: None,
             deprecated: None,
@@ -929,6 +994,13 @@ impl PartialEq for STType {
     }
 }
 
+
+impl PartialEq for Field {
+    fn eq(&self, other: &Self) -> bool {
+        self.index == other.index && self.name == other.name && self.range == other.range && self.modifier == other.modifier
+    }
+}
+
 impl STType {
     pub fn check_impl_derives(&self, ctx: &Ctx, st: &STType, range: Range) {
         debug_assert!(self.is_trait);
@@ -1011,7 +1083,9 @@ impl STType {
         if self.is_trait {
             fields.push(Field {
                 index: 0,
-                typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
+                typenode: RcType::from(Arc::new(RefCell::new(PLType::Primitive(
+                    PriType::U64,
+                )))),
                 name: "__type_hash".to_string(),
                 range: Default::default(),
                 modifier: None,
@@ -1019,10 +1093,9 @@ impl STType {
             // pointer to real value
             fields.push(Field {
                 index: 1,
-                typenode: Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
-                    elm: Box::new(TypeNameNode::new_from_str("i64").into()),
-                    range: Default::default(),
-                })),
+                typenode: RcType::from(Arc::new(RefCell::new(PLType::Pointer(Arc::new(RefCell::new(  PLType::Primitive(
+                    PriType::I64,
+                ))).into())))),
                 name: "__ptr".to_string(),
                 range: Default::default(),
                 modifier: None,
@@ -1031,7 +1104,9 @@ impl STType {
             // gcrtti fields
             fields.push(Field {
                 index: 0,
-                typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
+                typenode: Arc::new(RefCell::new(PLType::Primitive(
+                    PriType::U64,
+                ))).into(),
                 name: "_vtable".to_string(),
                 range: Default::default(),
                 modifier: None,
@@ -1162,17 +1237,14 @@ impl STType {
                     let mut nf = f.clone();
                     nf.typenode = f
                         .typenode
-                        .get_type(ctx, builder, true)
-                        .unwrap()
-                        .borrow()
-                        .get_typenode();
+                        .clone();
                     (nf.name.clone(), nf)
                 })
                 .collect();
             let field_pltps = res
                 .fields
                 .values()
-                .map(|f| f.typenode.get_type(ctx, builder, true).unwrap())
+                .map(|f| f.typenode.get_type())
                 .collect::<Vec<_>>();
             builder.gen_st_visit_function(ctx, &res, &field_pltps);
             res.generic_map.clear();
@@ -1239,7 +1311,7 @@ impl STType {
     pub fn get_trait_field_completions(&self) -> Vec<CompletionItem> {
         let mut completions = Vec::new();
         for (name, f) in self.fields.iter() {
-            if let TypeNodeEnum::Func(func) = &*f.typenode {
+            if let PLType::Fn(func) = &*f.typenode.get_type().borrow() {
                 completions.push(CompletionItem {
                     kind: Some(CompletionItemKind::METHOD),
                     label: name.clone(),

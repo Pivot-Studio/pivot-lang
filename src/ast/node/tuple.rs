@@ -47,7 +47,7 @@ impl Node for TupleInitNode {
                     expr_values.push(value);
                     let f = Field {
                         index: i as u32 + 1,
-                        typenode: tp.get_typenode(),
+                        typenode: ty.clone().into(),
                         name: i.to_string(),
                         range: Default::default(),
                         modifier: Some((TokenType::PUB, Default::default())),
@@ -144,7 +144,7 @@ impl TypeNode for TupleTypeNode {
                     field_tps.push(arctp.clone());
                     let f = Field {
                         index: i as u32 + 1,
-                        typenode: tp.get_typenode(),
+                        typenode: arctp.into(),
                         name: i.to_string(),
                         range: Default::default(),
                         modifier: Some((TokenType::PUB, Default::default())),

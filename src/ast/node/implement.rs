@@ -87,7 +87,7 @@ fn check_fn<'a, 'b>(
     }
     if let PLType::Trait(st) = &*trait_tp.borrow() {
         if !st.fields.iter().any(|(_, f)| {
-            let tp = f.typenode.get_type(ctx, builder, true).unwrap();
+            let tp = f.typenode.get_type();
             let re = match (&*tp.borrow(), &*fntype.borrow()) {
                 (PLType::Fn(f1), PLType::Fn(f2)) => {
                     if f1.eq_except_receiver(f2, ctx, builder) {

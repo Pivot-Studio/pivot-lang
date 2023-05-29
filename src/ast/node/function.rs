@@ -441,7 +441,7 @@ impl TypeNode for FuncDefNode {
                     let s = s.clone();
                     flater = Some(Box::new(move |ctx: &mut Ctx| {
                         ctx.add_method(
-                            &s.borrow(),
+                            &s.get_type().borrow(),
                             self.id.name.split("::").last().unwrap(),
                             fnvalue,
                             trait_tp,
@@ -708,7 +708,7 @@ impl Node for ClosureNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         // 设计： https://github.com/Pivot-Studio/pivot-lang/issues/284
-        let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap());
+        let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap().into());
         let closure_name = format!("closure_{}", CLOSURE_COUNT.fetch_add(1, Ordering::Relaxed));
         let mut st_tp = STType {
             name: closure_name.clone(),
@@ -792,7 +792,7 @@ impl Node for ClosureNode {
         let child = &mut ctx.new_child(self.range.start, builder);
         child.function = Some(f);
         let stpltp = PLType::Struct(st_tp.clone());
-        let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)));
+        let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)).into());
         let mut all_tps = vec![Arc::new(RefCell::new(i8ptr.clone()))];
         all_tps.extend(paratps.clone());
         builder.build_sub_program_by_pltp(
@@ -872,12 +872,12 @@ impl Node for ClosureNode {
         let mut i = 1;
         let mut tps = vec![];
         for (k, (v, _)) in &child.closure_data.as_ref().unwrap().borrow().table {
-            let pltp = PLType::Pointer(v.pltype.to_owned());
+            let pltp = PLType::Pointer(v.pltype.to_owned().into());
             st_tp.fields.insert(
                 k.to_owned(),
                 Field {
                     index: i,
-                    typenode: pltp.get_typenode(),
+                    typenode: Arc::new(RefCell::new(pltp.clone())).into(),
                     name: k.to_owned(),
                     range: Default::default(),
                     modifier: None,
@@ -887,7 +887,7 @@ impl Node for ClosureNode {
             i += 1;
         }
         let stpltp = PLType::Struct(st_tp.clone());
-        let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)));
+        let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)).into());
         builder.create_parameter_variable_dbg(
             &ptr_tp,
             self.range.start,

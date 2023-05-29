@@ -237,7 +237,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.position_at_end(then_block, builder);
         let data = builder.build_struct_gep(val, 1, "data").unwrap();
         let data = builder.build_load(data, "data");
-        let data = builder.bitcast(self, data, &PLType::Pointer(target_ty), "bitcasttemp");
+        let data = builder.bitcast(self, data, &PLType::Pointer(target_ty.into()), "bitcasttemp");
         let data = builder.build_load(data, "data");
         builder.build_store(result, data);
         builder.build_unconditional_branch(after_block);

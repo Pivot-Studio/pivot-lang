@@ -333,7 +333,7 @@ impl Node for TakeOpNode {
                     ctx.set_field_refs(head_pltype, &field, id_range);
                     ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
 
-                    let re = field.typenode.get_type(ctx, builder, true)?;
+                    let re = field.typenode.get_type();
                     let fnv = builder
                         .build_struct_gep(headptr, field.index, "mthd_ptr")
                         .unwrap();
@@ -361,7 +361,7 @@ impl Node for TakeOpNode {
                         builder
                             .build_struct_gep(headptr, field.index, "structgep")
                             .unwrap(),
-                        field.typenode.get_type(ctx, builder, true)?,
+                        field.typenode.get_type(),
                     )));
                 }
                 handle_mthd(s, ctx, id, headptr, head_pltype, id_range)
@@ -429,7 +429,7 @@ fn pack_mthd(
         .new_output(Arc::new(RefCell::new(PLType::Fn(mthd.clone()))))
         .with_receiver(
             headptr,
-            Some(Arc::new(RefCell::new(PLType::Pointer(head_pltype)))),
+            Some(Arc::new(RefCell::new(PLType::Pointer(head_pltype.into())))),
         )
         .to_result()
 }

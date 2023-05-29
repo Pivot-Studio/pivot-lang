@@ -14,6 +14,7 @@ use crate::ast::ctx::EqRes;
 use crate::ast::diag::ErrorCode;
 
 use crate::ast::plmod::MutVec;
+use crate::ast::pltype::RcType;
 use crate::ast::pltype::get_type_deep;
 use crate::ast::pltype::ClosureType;
 use crate::ast::pltype::{ARRType, Field, GenericType, PLType, STType};
@@ -240,8 +241,9 @@ impl TypeNode for TypeNameNode {
             {
                 return ctx.protect_generic_context(&left.generic_map, |ctx| {
                     for (l, r) in left.sum_types.iter().zip(right.sum_types.iter()) {
-                        let r_type = r.get_type(ctx, builder, true)?;
-                        if !l.eq_or_infer(ctx, r_type, builder)?.eq {
+                        let r_type = r.get_type();
+                        
+                        if !ctx.eq(l.get_type(), r_type).eq {
                             return Ok(EqRes {
                                 eq: false,
                                 need_up_cast: false,
@@ -352,7 +354,7 @@ impl TypeNode for PointerTypeNode {
         gen_code: bool,
     ) -> TypeNodeResult {
         let pltype = self.elm.get_type(ctx, builder, gen_code)?;
-        let pltype = Arc::new(RefCell::new(PLType::Pointer(pltype)));
+        let pltype = Arc::new(RefCell::new(PLType::Pointer(pltype.into())));
         Ok(pltype)
     }
 
@@ -367,7 +369,7 @@ impl TypeNode for PointerTypeNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<EqRes, PLDiag> {
         match &*pltype.borrow() {
-            PLType::Pointer(p) => self.elm.eq_or_infer(ctx, p.clone(), builder),
+            PLType::Pointer(p) => self.elm.eq_or_infer(ctx, p.get_type(), builder),
             _ => Ok(EqRes {
                 eq: false,
                 need_up_cast: false,
@@ -507,13 +509,6 @@ impl StructDefNode {
                     ctx.add_diag(field.id.range.new_err(ErrorCode::COMPLETION));
                 }
                 let id = field.id.id.clone();
-                let f = Field {
-                    index: i as u32 + 1,
-                    typenode: field.id.typenode.clone(),
-                    name: id.name.clone(),
-                    range: field.id.id.range,
-                    modifier: field.modifier,
-                };
                 let tpre = field
                     .id
                     .typenode
@@ -521,6 +516,13 @@ impl StructDefNode {
                 if tpre.is_err() {
                     continue;
                 }
+                let f = Field {
+                    index: i as u32 + 1,
+                    typenode: RcType::from(tpre.clone().unwrap()),
+                    name: id.name.clone(),
+                    range: field.id.id.range,
+                    modifier: field.modifier,
+                };
                 let tp = tpre.unwrap();
                 field_pltps.push(tp.clone());
                 ctx.set_field_refs(pltype.clone(), &f, f.range);
@@ -646,9 +648,8 @@ impl Node for StructInitNode {
                 let value = ctx.try_load2var(field_exp_range, v.get_value(), builder)?;
                 let value_pltype = v.get_ty();
                 ctx.protect_generic_context(&sttype.generic_map, |ctx| {
-                    if !field
-                        .typenode
-                        .eq_or_infer(ctx, value_pltype.clone(), builder)?
+                    
+                    if !ctx.eq(field.typenode.get_type(), value_pltype.clone())
                         .eq
                     {
                         return Err(ctx.add_diag(

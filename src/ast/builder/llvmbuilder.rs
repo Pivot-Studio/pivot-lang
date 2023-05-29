@@ -241,7 +241,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             self.insert_var_declare(
                 name,
                 p,
-                &PLType::Pointer(Arc::new(RefCell::new(pltype.clone()))),
+                &PLType::Pointer(Arc::new(RefCell::new(pltype.clone())).into()),
                 self.get_llvm_value_handle(&stack_root.as_any_value_enum()),
                 ctx,
             );
@@ -700,7 +700,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             PLType::Primitive(t) => Some(self.get_pri_basic_type(t)),
             PLType::Void => None,
             PLType::Pointer(p) => Some(
-                self.get_basic_type_op(&p.borrow(), ctx)
+                self.get_basic_type_op(&p.get_type().borrow(), ctx)
                     .unwrap()
                     .ptr_type(AddressSpace::default())
                     .as_basic_type_enum(),
@@ -776,10 +776,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
         offset: u64,
     ) -> (DIType<'ctx>, u64) {
-        let field_pltype = match field.typenode.get_type(ctx, &self.clone().into(), true) {
-            Ok(field_pltype) => field_pltype,
-            Err(_) => ctx.get_type("i64", Default::default()).unwrap(),
-        };
+        let field_pltype = field.typenode.get_type();
         let di_type = self.get_ditype(&field_pltype.borrow(), ctx);
         let debug_type = di_type.unwrap();
         let td = self.targetmachine.get_target_data();
@@ -958,6 +955,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             }
             PLType::Void => None,
             PLType::Pointer(p) => {
+                let p = p.get_type();
                 if let Some(di) = self.ditypes.borrow().get(&p.borrow().get_llvm_name()) {
                     return Some(*di);
                 }
@@ -1008,7 +1006,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .iter()
                     .map(|v| {
                         let tp =
-                            PLType::Pointer(v.get_type(ctx, &self.clone().into(), true).unwrap());
+                            PLType::Pointer(v.clone());
                         let base_di = self.get_ditype(&tp, ctx).unwrap();
                         self.dibuilder
                             .create_member_type(
@@ -1135,8 +1133,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     self.get_basic_type_op(
                         &order_field
                             .typenode
-                            .get_type(ctx, &self.clone().into(), true)
-                            .unwrap()
+                            .get_type()
                             .borrow(),
                         ctx,
                     )
@@ -1399,8 +1396,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                     self.get_basic_type_op(
                         &order_field
                             .typenode
-                            .get_type(ctx, &self.clone().into(), true)
-                            .unwrap()
+                            .get_type()
                             .borrow(),
                         ctx,
                     )
@@ -1924,7 +1920,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 &PLType::Pointer(
                     fnvalue.fntype.param_pltypes[i]
                         .get_type(child, &self.clone().into(), true)
-                        .unwrap(),
+                        .unwrap().into(),
                 ),
                 child,
             )

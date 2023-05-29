@@ -43,7 +43,7 @@ impl Node for PointerOpNode {
         let value = match self.op {
             PointerOpEnum::Deref => {
                 if let PLType::Pointer(tp1) = &*btp.borrow() {
-                    tp = tp1.clone();
+                    tp = tp1.get_type();
                     builder.build_load(value, "deref")
                 } else {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::NOT_A_POINTER)));
@@ -51,7 +51,7 @@ impl Node for PointerOpNode {
             }
             PointerOpEnum::Addr => {
                 // let old_tp = tp.clone().unwrap();
-                tp = Arc::new(RefCell::new(PLType::Pointer(tp)));
+                tp = Arc::new(RefCell::new(PLType::Pointer(tp.into())));
                 if v.is_const() {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::CAN_NOT_REF_CONSTANT)));
                 }

@@ -6,7 +6,6 @@ use super::diag::PLDiag;
 use super::node::macro_nodes::MacroNode;
 use super::node::node_result::NodeResult;
 use super::node::NodeEnum;
-use super::node::TypeNode;
 use super::plmod::CompletionItemWrapper;
 use super::plmod::GlobalVar;
 use super::plmod::LSPDef;
@@ -19,6 +18,7 @@ use super::pltype::PLType;
 use super::pltype::PriType;
 use super::pltype::TraitImplAble;
 use super::pltype::TraitMthdImpl;
+use super::pltype::get_type_deep;
 use super::range::Pos;
 use super::range::Range;
 use super::tokens::TokenType;
@@ -299,10 +299,13 @@ impl<'a, 'ctx> Ctx<'a> {
             return Ok(closure_v);
         }
         if let PLType::Union(u) = &*target_pltype.borrow() {
+           
+            let ori_pltype = get_type_deep(ori_pltype.clone());
             let union_members = self.run_in_type_mod(u, |ctx, u| {
                 let mut union_members = vec![];
                 for tp in &u.sum_types {
-                    let tp = tp.get_type(ctx, builder, true)?;
+                    let tp = tp.get_type();
+                    let tp = get_type_deep(tp);
                     union_members.push(tp);
                 }
                 Ok(union_members)
@@ -328,7 +331,7 @@ impl<'a, 'ctx> Ctx<'a> {
                     let st_value = builder.bitcast(
                         self,
                         ptr,
-                        &PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::I8)))),
+                        &PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::I8))).into()),
                         "traitcast_tmp",
                     );
                     builder.build_store(union_value, st_value);
@@ -368,7 +371,7 @@ impl<'a, 'ctx> Ctx<'a> {
 
                 // TODO: let a:trait = B<i64>{} panic
                 let fnhandle = builder.get_or_insert_fn_handle(&mthd.borrow(), self);
-                let targetftp = f.typenode.get_type(self, builder, true).unwrap();
+                let targetftp = f.typenode.get_type();
                 let casted = builder.bitcast(self, fnhandle, &targetftp.borrow(), "fncast_tmp");
                 let f_ptr = builder
                     .build_struct_gep(trait_handle, f.index, "field_tmp")
@@ -378,7 +381,7 @@ impl<'a, 'ctx> Ctx<'a> {
             let st_value = builder.bitcast(
                 self,
                 st_value,
-                &PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::I64)))),
+                &PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::I64))).into()),
                 "traitcast_tmp",
             );
             let v_ptr = builder.build_struct_gep(trait_handle, 1, "v_tmp").unwrap();
@@ -1205,7 +1208,7 @@ impl<'a, 'ctx> Ctx<'a> {
         let mut tp = tp;
         let mut value = value;
         while let PLType::Pointer(p) = &*tp.clone().borrow() {
-            tp = p.clone();
+            tp = p.get_type();
             value = builder.build_load(value, "load");
         }
         (tp, value)
@@ -1216,7 +1219,7 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn auto_deref_tp(&self, tp: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
         let mut tp = tp;
         while let PLType::Pointer(p) = &*tp.clone().borrow() {
-            tp = p.clone()
+            tp = p.get_type()
         }
         tp
     }

@@ -186,14 +186,19 @@ impl TraitDefNode {
             tp.paralist
                 .insert(0, Box::new(new_i64ptr_tf_with_name("self")));
             let id = field.id.clone();
+            _ = field.get_type(ctx, builder, true);
+            let re = tp.get_type(ctx, builder, true);
+            if re.is_err() {
+                continue;
+            }
             let f = Field {
                 index: i as u32 + 2,
-                typenode: Box::new(tp.into()),
+                typenode: re.unwrap().into(),
                 name: field.id.name.clone(),
                 range: field.range,
                 modifier: Some((TokenType::PUB, field.range)),
             };
-            _ = field.get_type(ctx, builder, true);
+
 
             if let Some((m, r)) = field.modifier {
                 r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)

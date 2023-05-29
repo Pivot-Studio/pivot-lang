@@ -94,6 +94,7 @@ impl Node for DefNode {
             ctx,
             Some(self.var.range.start),
         );
+        eprintln!("tp: {:?}", pltype);
         ctx.add_symbol(
             self.var.name.clone(),
             ptr2value,
