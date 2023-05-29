@@ -877,7 +877,7 @@ impl Node for ClosureNode {
                 k.to_owned(),
                 Field {
                     index: i,
-                    typenode: pltp.get_typenode(),
+                    typenode: pltp.get_typenode(&child.plmod.path),
                     name: k.to_owned(),
                     range: Default::default(),
                     modifier: None,

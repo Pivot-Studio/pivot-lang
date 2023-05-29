@@ -4,6 +4,6 @@ pub fn test_mod(args: i64) void {
 }
 
 pub struct Mod2 {
-    y: bool;
+    pub y: bool;
 }
 
