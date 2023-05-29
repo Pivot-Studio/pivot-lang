@@ -623,9 +623,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 param_types.push(
                     self.get_basic_type_op(
                         &param_pltype
-                            .get_type(ctx, &self.clone().into(), true)
-                            .unwrap()
-                            .borrow(),
+                            .borrow().gen_type(ctx),
                         ctx,
                     )
                     .unwrap()
@@ -637,9 +635,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     &fnvalue
                         .fntype
                         .ret_pltype
-                        .get_type(ctx, &self.clone().into(), true)
-                        .unwrap()
-                        .borrow(),
+                        .borrow().gen_type(ctx),
                     ctx,
                 )
                 .fn_type(&param_types, false);
@@ -1005,8 +1001,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .sum_types
                     .iter()
                     .map(|v| {
-                        let tp =
-                            PLType::Pointer(v.clone());
+                        let tp = PLType::Pointer(v.clone());
                         let base_di = self.get_ditype(&tp, ctx).unwrap();
                         self.dibuilder
                             .create_member_type(
@@ -1130,14 +1125,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             pltp.get_all_field()
                 .iter()
                 .map(|order_field| {
-                    self.get_basic_type_op(
-                        &order_field
-                            .typenode
-                            .get_type()
-                            .borrow(),
-                        ctx,
-                    )
-                    .unwrap()
+                    self.get_basic_type_op(&order_field.typenode.get_type().borrow(), ctx)
+                        .unwrap()
                 })
                 .collect::<Vec<_>>()
         })
@@ -1393,14 +1382,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .get_all_field()
                 .iter()
                 .map(|order_field| {
-                    self.get_basic_type_op(
-                        &order_field
-                            .typenode
-                            .get_type()
-                            .borrow(),
-                        ctx,
-                    )
-                    .unwrap()
+                    self.get_basic_type_op(&order_field.typenode.get_type().borrow(), ctx)
+                        .unwrap()
                 })
                 .collect::<Vec<_>>(),
             false,
@@ -1919,8 +1902,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.get_ditype(
                 &PLType::Pointer(
                     fnvalue.fntype.param_pltypes[i]
-                        .get_type(child, &self.clone().into(), true)
-                        .unwrap().into(),
+                        .borrow().gen_type_arc(&child)
+                        .into(),
                 ),
                 child,
             )

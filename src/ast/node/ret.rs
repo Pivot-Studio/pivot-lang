@@ -35,8 +35,11 @@ impl Node for RetNode {
             ctx.emit_comment_highlight(&self.comments[0]);
             let value_pltype = v.get_ty();
             let mut value = ctx.try_load2var(self.range, v.get_value(), builder)?;
-            let eqres = ctx.eq(ret_pltype.clone(), value_pltype.clone());
+            let eqres = ctx.eq(ret_pltype.borrow().gen_type_arc(ctx), value_pltype.borrow().gen_type_arc(ctx));
             if !eqres.eq {
+                eprintln!("ret_pltype: {:?}", ret_pltype.borrow().gen_type_arc(ctx));
+                eprintln!("value_pltype: {:?}", value_pltype.borrow().gen_type_arc(ctx));
+                eprintln!("genericmap: {:?}", ctx.generic_types);
                 let err = ctx.add_diag(self.range.new_err(ErrorCode::RETURN_TYPE_MISMATCH));
                 return Err(err);
             }

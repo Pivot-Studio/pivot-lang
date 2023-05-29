@@ -14,9 +14,9 @@ use crate::ast::ctx::EqRes;
 use crate::ast::diag::ErrorCode;
 
 use crate::ast::plmod::MutVec;
-use crate::ast::pltype::RcType;
 use crate::ast::pltype::get_type_deep;
 use crate::ast::pltype::ClosureType;
+use crate::ast::pltype::RcType;
 use crate::ast::pltype::{ARRType, Field, GenericType, PLType, STType};
 use crate::ast::tokens::TokenType;
 use indexmap::IndexMap;
@@ -242,7 +242,7 @@ impl TypeNode for TypeNameNode {
                 return ctx.protect_generic_context(&left.generic_map, |ctx| {
                     for (l, r) in left.sum_types.iter().zip(right.sum_types.iter()) {
                         let r_type = r.get_type();
-                        
+
                         if !ctx.eq(l.get_type(), r_type).eq {
                             return Ok(EqRes {
                                 eq: false,
@@ -467,6 +467,9 @@ impl StructDefNode {
         } else {
             IndexMap::default()
         };
+        if self.id.name == "name" {
+            eprintln!("map: {:?}", generic_map);
+        }
         let stu = Arc::new(RefCell::new(PLType::Struct(STType {
             name: self.id.name.clone(),
             path: ctx.plmod.path.clone(),
@@ -648,10 +651,7 @@ impl Node for StructInitNode {
                 let value = ctx.try_load2var(field_exp_range, v.get_value(), builder)?;
                 let value_pltype = v.get_ty();
                 ctx.protect_generic_context(&sttype.generic_map, |ctx| {
-                    
-                    if !ctx.eq(field.typenode.get_type(), value_pltype.clone())
-                        .eq
-                    {
+                    if !ctx.eq(field.typenode.get_type(), value_pltype.clone()).eq {
                         return Err(ctx.add_diag(
                             fieldinit
                                 .range

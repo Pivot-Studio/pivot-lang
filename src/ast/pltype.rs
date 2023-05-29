@@ -66,10 +66,6 @@ pub enum PLType {
     Closure(ClosureType),
 }
 
-
-
-
-
 impl TraitImplAble for PriType {
     fn get_full_name(&self) -> String {
         self.get_name()
@@ -173,12 +169,15 @@ pub struct UnionType {
 
 impl PartialEq for UnionType {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name && self.generic_map == other.generic_map && self.path == other.path && self.modifier == other.modifier && self.methods == other.methods && self.range == other.range
+        self.name == other.name
+            && self.generic_map == other.generic_map
+            && self.path == other.path
+            && self.modifier == other.modifier
+            && self.methods == other.methods
+            && self.range == other.range
     }
 }
-impl Eq for UnionType {
-    
-}
+impl Eq for UnionType {}
 
 impl_mthd!(UnionType, STType);
 
@@ -216,7 +215,10 @@ impl UnionType {
         res.name = name;
         ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Union(res.clone()))));
         res.sum_types = self
-            .sum_types.clone();
+            .sum_types
+            .iter()
+            .map(|t| Ok(Arc::new(RefCell::new(t.get_type().borrow().gen_type(&ctx))).into()))
+            .collect::<Result<Vec<_>, PLDiag>>()?;
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
         pltype.replace(PLType::Union(res.clone()));
@@ -598,6 +600,99 @@ impl PLType {
         }
     }
 
+    pub fn gen_type_arc(&self, ctx: &Ctx) -> Arc<RefCell<PLType>> {
+        Arc::new(RefCell::new(self.gen_type(ctx)))
+    }
+    /// 实例化泛型类型
+    pub fn gen_type(&self, ctx: &Ctx) -> Self {
+        match self {
+            PLType::Fn(f) => {
+                let mut new_f = f.clone();
+                new_f.fntype.param_pltypes = f.fntype
+                    .param_pltypes
+                    .iter()
+                    .map(|t| Arc::new(RefCell::new(t.borrow().gen_type(ctx))).into())
+                    .collect();
+                new_f.fntype.ret_pltype = Arc::new(RefCell::new(f.fntype.ret_pltype.borrow().gen_type(ctx))).into();
+                return PLType::Fn(new_f);
+            },
+            PLType::Struct(s) => {
+                let mut new_s = s.clone();
+                for (k, f) in s.fields.iter() {
+                    new_s.fields[k].typenode =
+                        Arc::new(RefCell::new(f.typenode.get_type().borrow().gen_type(ctx))).into();
+                }
+                return PLType::Struct(new_s);
+            }
+            PLType::Arr(arr) => {
+                return PLType::Arr(ARRType {
+                    element_type: Arc::new(RefCell::new(arr.element_type.borrow().gen_type(ctx))),
+                    size: arr.size,
+                });
+            }
+            PLType::Primitive(_)|PLType::Void| PLType::PlaceHolder(_) => self.clone(),
+            PLType::Pointer(ptr) => {
+                return PLType::Pointer(
+                    Arc::new(RefCell::new(ptr.get_type().borrow().gen_type(ctx))).into(),
+                );
+            }
+            PLType::Generic(g) => {
+                let gg = ctx.generic_types.get(&g.name);
+                if let Some(gg) = gg {
+                    match &*gg.borrow() {
+                        PLType::Generic(gg) => {
+                            if gg.curpltype.is_some() {
+                                return gg.curpltype.as_ref().unwrap().borrow().gen_type(ctx);
+                            }
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                if g.curpltype.is_some() {
+                    return g.curpltype.as_ref().unwrap().borrow().gen_type(ctx);
+                }
+                return PLType::Generic(g.clone());
+            }
+            PLType::Trait(t) => {
+                t.methods.borrow_mut().iter_mut().for_each(|(_, f)| {
+                    let mut new_f = f.borrow().clone();
+                    new_f.fntype.param_pltypes = f.borrow().fntype
+                        .param_pltypes
+                        .iter()
+                        .map(|t| Arc::new(RefCell::new(t.borrow().gen_type(ctx))).into())
+                        .collect();
+                    new_f.fntype.ret_pltype = Arc::new(RefCell::new(f.borrow().fntype.ret_pltype.borrow().gen_type(ctx))).into();
+                    f.replace(new_f);
+                });
+                let mut new_t = t.clone();
+                for (k, f) in t.fields.iter() {
+                    new_t.fields[k].typenode =
+                        Arc::new(RefCell::new(f.typenode.get_type().borrow().gen_type(ctx))).into();
+                }
+                return PLType::Trait(new_t);
+            },
+            PLType::Union(u) => {
+                let mut new_u = u.clone();
+                new_u.sum_types = u
+                    .sum_types
+                    .iter()
+                    .map(|t| Arc::new(RefCell::new(t.get_type().borrow().gen_type(ctx))).into())
+                    .collect();
+                return PLType::Union(new_u);
+            }
+            PLType::Closure(c) => {
+                let mut new_c = c.clone();
+                new_c.arg_types = c
+                    .arg_types
+                    .iter()
+                    .map(|t| Arc::new(RefCell::new(t.borrow().gen_type(ctx))).into())
+                    .collect();
+                new_c.ret_type = Arc::new(RefCell::new(c.ret_type.borrow().gen_type(ctx))).into();
+                return PLType::Closure(new_c);
+            },
+        }
+    }
+
     /// # get_range
     /// get the defination range of the type
     pub fn get_range(&self) -> Option<Range> {
@@ -624,12 +719,11 @@ impl PLType {
 #[derive(Debug, Clone)]
 pub struct Field {
     pub index: u32,
-    pub typenode:RcType,
+    pub typenode: RcType,
     pub name: String,
     pub range: Range,
     pub modifier: Option<(TokenType, Range)>,
 }
-
 
 #[derive(Debug, Clone)]
 pub enum RcType {
@@ -640,7 +734,9 @@ pub enum RcType {
 impl PartialEq for RcType {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (RcType::Indirect(a), RcType::Indirect(b)) => a.upgrade().unwrap() == b.upgrade().unwrap(),
+            (RcType::Indirect(a), RcType::Indirect(b)) => {
+                a.upgrade().unwrap() == b.upgrade().unwrap()
+            }
             (RcType::Direct(a), RcType::Direct(b)) => a == b,
             (RcType::Indirect(a), RcType::Direct(b)) => &a.upgrade().unwrap() == b,
             (RcType::Direct(a), RcType::Indirect(b)) => a == &b.upgrade().unwrap(),
@@ -648,9 +744,6 @@ impl PartialEq for RcType {
     }
 }
 impl Eq for RcType {}
-
-
-
 
 impl RcType {
     pub fn get_type(&self) -> Arc<RefCell<PLType>> {
@@ -672,17 +765,14 @@ impl From<Arc<RefCell<PLType>>> for RcType {
             //     }else {
             //         RcType::Indirect(weak)
             //     }
-                
+
             // },
             _ => RcType::Direct(t.clone()),
         }
     }
 }
 
-
-impl Eq for Field {
-
-}
+impl Eq for Field {}
 
 impl Field {
     pub fn get_doc_symbol(&self) -> DocumentSymbol {
@@ -701,8 +791,8 @@ impl Field {
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FnType {
-    pub param_pltypes: Vec<Box<TypeNodeEnum>>,
-    pub ret_pltype: Box<TypeNodeEnum>,
+    pub param_pltypes: Vec<Arc<RefCell<PLType>>>,
+    pub ret_pltype: Arc<RefCell<PLType>>,
     pub generic: bool,
     pub modifier: Option<(TokenType, Range)>,
     pub method: bool,
@@ -743,13 +833,11 @@ impl FNValue {
     ) -> ClosureType {
         return ClosureType {
             range: Default::default(),
-            ret_type: self.fntype.ret_pltype.get_type(ctx, builder, true).unwrap(),
+            ret_type: self.fntype.ret_pltype.clone(),
             arg_types: self
                 .fntype
                 .param_pltypes
-                .iter()
-                .map(|x| x.get_type(ctx, builder, true).unwrap())
-                .collect(),
+                .clone(),
         };
     }
     pub fn is_modified_by(&self, modifier: TokenType) -> bool {
@@ -793,14 +881,14 @@ impl FNValue {
             return false;
         }
         for i in 1..self.fntype.param_pltypes.len() {
-            if self.fntype.param_pltypes[i].get_type(ctx, builder, true)
-                != other.fntype.param_pltypes[i].get_type(ctx, builder, true)
+            if self.fntype.param_pltypes[i].borrow().gen_type(ctx)
+                != other.fntype.param_pltypes[i].borrow().gen_type(ctx)
             {
                 return false;
             }
         }
-        self.fntype.ret_pltype.get_type(ctx, builder, true)
-            == other.fntype.ret_pltype.get_type(ctx, builder, true)
+        self.fntype.ret_pltype.borrow().gen_type(ctx)
+            == other.fntype.ret_pltype.borrow().gen_type(ctx)
     }
     pub fn append_name_with_generic(&self, name: String) -> String {
         if self.fntype.need_gen_code() {
@@ -859,23 +947,17 @@ impl FNValue {
         res.fntype.ret_pltype = self
             .fntype
             .ret_pltype
-            .get_type(ctx, builder, true)
-            .unwrap()
-            .borrow()
-            .get_typenode();
+            .borrow().gen_type_arc(ctx);
         res.fntype.param_pltypes = self
             .fntype
             .param_pltypes
             .iter()
             .map(|p| {
                 let np = p
-                    .get_type(ctx, builder, true)
-                    .unwrap()
-                    .borrow()
-                    .get_typenode();
+                .borrow().gen_type_arc(ctx);
                 np
             })
-            .collect::<Vec<Box<TypeNodeEnum>>>();
+            .collect::<Vec<_>>();
         let pltype = self.generic_infer.borrow().get(&res.name).unwrap().clone();
         pltype.replace(PLType::Fn(res.clone()));
         Ok(res.clone())
@@ -923,21 +1005,21 @@ impl FNValue {
                 params += &format!(
                     "{}: {}",
                     self.param_names[0],
-                    FmtBuilder::generate_node(&self.fntype.param_pltypes[0])
+                    FmtBuilder::generate_node(&self.fntype.param_pltypes[0].borrow().get_typenode())
                 );
             }
             for i in 1..self.param_names.len() {
                 params += &format!(
                     ", {}: {}",
                     self.param_names[i],
-                    FmtBuilder::generate_node(&self.fntype.param_pltypes[i])
+                    FmtBuilder::generate_node(&self.fntype.param_pltypes[i].borrow().get_typenode())
                 );
             }
         }
         format!(
             "fn ({}) {}",
             params,
-            FmtBuilder::generate_node(&self.fntype.ret_pltype)
+            FmtBuilder::generate_node(&self.fntype.ret_pltype.borrow().get_typenode())
         )
     }
 }
@@ -994,10 +1076,12 @@ impl PartialEq for STType {
     }
 }
 
-
 impl PartialEq for Field {
     fn eq(&self, other: &Self) -> bool {
-        self.index == other.index && self.name == other.name && self.range == other.range && self.modifier == other.modifier
+        self.index == other.index
+            && self.name == other.name
+            && self.range == other.range
+            && self.modifier == other.modifier
     }
 }
 
@@ -1083,9 +1167,7 @@ impl STType {
         if self.is_trait {
             fields.push(Field {
                 index: 0,
-                typenode: RcType::from(Arc::new(RefCell::new(PLType::Primitive(
-                    PriType::U64,
-                )))),
+                typenode: RcType::from(Arc::new(RefCell::new(PLType::Primitive(PriType::U64)))),
                 name: "__type_hash".to_string(),
                 range: Default::default(),
                 modifier: None,
@@ -1093,9 +1175,9 @@ impl STType {
             // pointer to real value
             fields.push(Field {
                 index: 1,
-                typenode: RcType::from(Arc::new(RefCell::new(PLType::Pointer(Arc::new(RefCell::new(  PLType::Primitive(
-                    PriType::I64,
-                ))).into())))),
+                typenode: RcType::from(Arc::new(RefCell::new(PLType::Pointer(
+                    Arc::new(RefCell::new(PLType::Primitive(PriType::I64))).into(),
+                )))),
                 name: "__ptr".to_string(),
                 range: Default::default(),
                 modifier: None,
@@ -1104,9 +1186,7 @@ impl STType {
             // gcrtti fields
             fields.push(Field {
                 index: 0,
-                typenode: Arc::new(RefCell::new(PLType::Primitive(
-                    PriType::U64,
-                ))).into(),
+                typenode: Arc::new(RefCell::new(PLType::Primitive(PriType::U64))).into(),
                 name: "_vtable".to_string(),
                 range: Default::default(),
                 modifier: None,
@@ -1198,11 +1278,12 @@ impl STType {
         get_hash_code(full_name)
     }
     pub fn append_name_with_generic(&self) -> String {
+        
         let typeinfer = self
             .generic_map
             .iter()
             .map(|(_, v)| match &*v.clone().borrow() {
-                PLType::Generic(g) => g.curpltype.as_ref().unwrap().borrow().get_name(),
+                PLType::Generic(g) => g.curpltype.as_ref().map(|t|t.borrow().get_name()).unwrap_or(g.name.clone()),
                 _ => unreachable!(),
             })
             .collect::<Vec<_>>()
@@ -1228,16 +1309,16 @@ impl STType {
                 return Ok(pltype);
             }
             let mut res = self.clone();
-            res.name = name;
+            // res.name = name;
             ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Struct(res.clone()))));
             res.fields = self
                 .fields
                 .values()
                 .map(|f| {
                     let mut nf = f.clone();
-                    nf.typenode = f
-                        .typenode
-                        .clone();
+                    nf.typenode =
+                        Arc::new(RefCell::new(f.typenode.get_type().borrow().gen_type(&ctx)))
+                            .into();
                     (nf.name.clone(), nf)
                 })
                 .collect();
@@ -1247,7 +1328,7 @@ impl STType {
                 .map(|f| f.typenode.get_type())
                 .collect::<Vec<_>>();
             builder.gen_st_visit_function(ctx, &res, &field_pltps);
-            res.generic_map.clear();
+            // res.generic_map.clear();
             res.generic_infer_types = generic_infer_types;
             let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
             pltype.replace(PLType::Struct(res.clone()));
@@ -1333,7 +1414,7 @@ impl STType {
         self.methods.borrow().get(method).cloned()
     }
     pub fn get_full_name(&self) -> String {
-        format!("{}..{}", self.path, self.name)
+        format!("{}..{}", self.path, self.append_name_with_generic())
     }
     pub fn get_doc_symbol(&self) -> DocumentSymbol {
         let children: Vec<DocumentSymbol> = self

@@ -199,7 +199,6 @@ impl TraitDefNode {
                 modifier: Some((TokenType::PUB, field.range)),
             };
 
-
             if let Some((m, r)) = field.modifier {
                 r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)
                     .add_label(

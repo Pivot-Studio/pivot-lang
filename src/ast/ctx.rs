@@ -12,13 +12,13 @@ use super::plmod::LSPDef;
 use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::pltype::add_primitive_types;
+use super::pltype::get_type_deep;
 use super::pltype::FNValue;
 use super::pltype::ImplAble;
 use super::pltype::PLType;
 use super::pltype::PriType;
 use super::pltype::TraitImplAble;
 use super::pltype::TraitMthdImpl;
-use super::pltype::get_type_deep;
 use super::range::Pos;
 use super::range::Range;
 use super::tokens::TokenType;
@@ -299,7 +299,6 @@ impl<'a, 'ctx> Ctx<'a> {
             return Ok(closure_v);
         }
         if let PLType::Union(u) = &*target_pltype.borrow() {
-           
             let ori_pltype = get_type_deep(ori_pltype.clone());
             let union_members = self.run_in_type_mod(u, |ctx, u| {
                 let mut union_members = vec![];
@@ -331,7 +330,9 @@ impl<'a, 'ctx> Ctx<'a> {
                     let st_value = builder.bitcast(
                         self,
                         ptr,
-                        &PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::I8))).into()),
+                        &PLType::Pointer(
+                            Arc::new(RefCell::new(PLType::Primitive(PriType::I8))).into(),
+                        ),
                         "traitcast_tmp",
                     );
                     builder.build_store(union_value, st_value);

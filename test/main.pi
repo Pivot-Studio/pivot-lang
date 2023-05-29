@@ -22,14 +22,28 @@
 // use pl_test::main;
 
 
-struct name<T> {
-    a:T;
+fn geneic<T>(t:T) name<T> {
+    let n = name<T>{};
+    return name<T>{};
+}
+
+struct name<S> {
+    a:S;
+    d:name1<S>;
+}
+
+struct name1<A> {
+    d:A;
 }
 
 pub fn main() i64 {
     let a = name<i64>{};
     let b = 1;
     a.a = b;
+    let aa = None{};
+    let bb:Option<i64> = None{};
+    bb = 1 as i64;
+    geneic<i64>(b);
     // macros::test_macros();
     // ifel::test_if_else();
     // generic::test_generic();

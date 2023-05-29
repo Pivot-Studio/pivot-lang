@@ -1,4 +1,7 @@
-use crate::ast::{node::{deal_line, tab, RangeTrait}, pltype::RcType};
+use crate::ast::{
+    node::{deal_line, tab, RangeTrait},
+    pltype::RcType,
+};
 use indexmap::IndexMap;
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
@@ -71,16 +74,18 @@ impl UnionDefNode {
             .map_or(IndexMap::default(), |generics| {
                 generics.gen_generic_type(ctx)
             });
-        let  tps =ctx.protect_generic_context(&generic_map, |ctx|{
-            let mut tps = vec![];
-            for tp in self.sum_types.iter() {
-                let re = tp.get_type(ctx, builder, true);
-                if let Ok(re) = re {
-                    tps.push(RcType::from( re));
+        let tps = ctx
+            .protect_generic_context(&generic_map, |ctx| {
+                let mut tps = vec![];
+                for tp in self.sum_types.iter() {
+                    let re = tp.get_type(ctx, builder, true);
+                    if let Ok(re) = re {
+                        tps.push(RcType::from(re));
+                    }
                 }
-            }
-            Ok(tps)
-        }).unwrap();
+                Ok(tps)
+            })
+            .unwrap();
         let stu = Arc::new(RefCell::new(PLType::Union(UnionType {
             name: self.name.name.clone(),
             path: ctx.plmod.path.clone(),
