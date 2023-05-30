@@ -21,6 +21,7 @@ use project1::test::fixed_point;
 use project1::tmod2::test_mod_impl;
 use pl_test::main;
 use std::io;
+use core::panic::assert;
 pub fn main() i64 {
     macros::test_macros();
     ifel::test_if_else();
@@ -44,19 +45,29 @@ pub fn main() i64 {
     map::test_map();
     fixed_point::test_fixed_point();
     test_mod_impl();
-    name<tmod2::mod1_name>();
+    let n = tmod2::mod1_name{};
+    assert(!n.f);
+    assert(!n.dd);
+    name(&n);
+    assert(n.f);
+    assert(n.dd);
 
     return 0;
 }
 
-fn name<T>() void {
-    let s = fullnameof<T>();
+
+fn name<T>(t:*T) void {
+    let s = fullnameof<tmod2::mod1_name>();
     io::print_s(s);
     io::print_s("\n");
-    // forfields<T>(TP,||=>void{ 
-    //     io::print_s(field);
-    //     return;
-    // }());
+    let b = true;
+    forfields(t, {
+        field_ptr = true;
+        b = true;
+        let d = field;
+        io::print_s(field);
+        io::print_s("\n");
+    });
     return;
 }
 

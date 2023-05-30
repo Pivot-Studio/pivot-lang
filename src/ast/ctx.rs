@@ -675,24 +675,32 @@ impl<'a, 'ctx> Ctx<'a> {
         if self.table.contains_key(&name) {
             return Err(self.add_diag(range.new_err(ErrorCode::REDECLARATION)));
         }
-        if is_const {
-            self.set_glob_refs(&self.plmod.get_full_name(&name), range);
-            self.plmod.add_global_symbol(name, pltype, range)?;
-        } else {
-            let refs = Arc::new(RefCell::new(vec![]));
-            self.table.insert(
-                name,
-                PLSymbol {
-                    value: pv,
-                    pltype,
-                    range,
-                    refs: Some(refs.clone()),
-                },
-            );
-            self.set_local_refs(refs, range);
-        }
-        self.send_if_go_to_def(range, range, self.plmod.path.clone());
-        Ok(())
+        self.add_symbol_without_check(name, pv, pltype, range, is_const)
+    }
+    pub fn add_symbol_without_check(        &mut self,
+        name: String,
+        pv: ValueHandle,
+        pltype: Arc<RefCell<PLType>>,
+        range: Range,
+        is_const: bool,)-> Result<(), PLDiag> {
+            if is_const {
+                self.set_glob_refs(&self.plmod.get_full_name(&name), range);
+                self.plmod.add_global_symbol(name, pltype, range)?;
+            } else {
+                let refs = Arc::new(RefCell::new(vec![]));
+                self.table.insert(
+                    name,
+                    PLSymbol {
+                        value: pv,
+                        pltype,
+                        range,
+                        refs: Some(refs.clone()),
+                    },
+                );
+                self.set_local_refs(refs, range);
+            }
+            self.send_if_go_to_def(range, range, self.plmod.path.clone());
+            Ok(())
     }
 
     pub fn get_type(&self, name: &str, range: Range) -> Result<Arc<RefCell<PLType>>, PLDiag> {
@@ -824,7 +832,9 @@ impl<'a, 'ctx> Ctx<'a> {
             dia.set_source(src);
         }
         let dia2 = dia.clone();
-        self.errs.borrow_mut().insert(dia);
+        if dia.get_range() != Default::default() {
+            self.errs.borrow_mut().insert(dia);   
+        }
         dia2
     }
     // load type* to type

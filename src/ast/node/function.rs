@@ -890,15 +890,15 @@ impl Node for ClosureNode {
         }
         let stpltp = PLType::Struct(st_tp.clone());
         let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)));
-        // builder.create_parameter_variable_dbg(
-        //     &ptr_tp,
-        //     self.range.start,
-        //     0,
-        //     child,
-        //     casted_data,
-        //     allocab,
-        //     "captured_closure_data",
-        // );
+        builder.create_parameter_variable_dbg(
+            &ptr_tp,
+            self.range.start,
+            0,
+            child,
+            casted_data,
+            allocab,
+            "captured_closure_data",
+        );
         // builder.insert_var_declare("captured_closure_data", self.range.start, &PLType::Struct(st_tp.clone()), casted_data, child);
         builder.build_unconditional_branch(entry);
         let closure_table = child.closure_data.as_ref().unwrap();
