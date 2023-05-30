@@ -4,6 +4,7 @@ use super::node::types::ClosureTypeNode;
 use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::tokens::TokenType;
+use super::traits::CustomType;
 use crate::add_basic_types;
 use crate::ast::builder::IRBuilder;
 
@@ -46,6 +47,7 @@ use lsp_types::SymbolKind;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 /// # PLType
 /// Type for pivot-lang
@@ -88,14 +90,14 @@ impl PartialEq for ClosureType {
 }
 
 impl ClosureType {
-    pub fn to_type_node(&self) -> TypeNodeEnum {
+    pub fn to_type_node(&self, path: &str) -> TypeNodeEnum {
         TypeNodeEnum::Closure(ClosureTypeNode {
             arg_types: self
                 .arg_types
                 .iter()
-                .map(|t| t.borrow().get_typenode())
+                .map(|t| t.borrow().get_typenode(path))
                 .collect(),
-            ret_type: self.ret_type.borrow().get_typenode(),
+            ret_type: self.ret_type.borrow().get_typenode(path),
             range: self.range,
         })
     }
@@ -204,7 +206,11 @@ impl UnionType {
         res.sum_types = self
             .sum_types
             .iter()
-            .map(|t| Ok(t.get_type(ctx, builder, true)?.borrow().get_typenode()))
+            .map(|t| {
+                Ok(t.get_type(ctx, builder, true)?
+                    .borrow()
+                    .get_typenode(&ctx.get_file()))
+            })
             .collect::<Result<Vec<_>, PLDiag>>()?;
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
@@ -288,10 +294,18 @@ impl PriType {
         }
     }
 }
-fn new_typename_node(name: &str, range: Range) -> Box<TypeNodeEnum> {
+fn new_typename_node(name: &str, range: Range, ns: &[String]) -> Box<TypeNodeEnum> {
     Box::new(TypeNodeEnum::Basic(TypeNameNode {
         id: Some(ExternIdNode {
-            ns: vec![],
+            ns: ns
+                .iter()
+                .map(|s| {
+                    Box::new(VarNode {
+                        name: s.clone(),
+                        range: Default::default(),
+                    })
+                })
+                .collect(),
             id: Box::new(VarNode {
                 name: name.to_string(),
                 range,
@@ -370,29 +384,47 @@ impl PLType {
             PLType::Closure(_) => "closure".to_string(),
         }
     }
-    pub fn get_typenode(&self) -> Box<TypeNodeEnum> {
+
+    fn get_ns<T: CustomType>(tp: &T, path: &str) -> Vec<String> {
+        let p = tp.get_path();
+        if p != path && !p.ends_with("builtin.pi") {
+            let p: PathBuf = p.into();
+            vec![p
+                .with_extension("")
+                .file_name()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .to_string()]
+        } else {
+            vec![]
+        }
+    }
+
+    pub fn get_typenode(&self, path: &str) -> Box<TypeNodeEnum> {
         match self {
-            PLType::Struct(st) => new_typename_node(&st.name, st.range),
-            PLType::Arr(arr) => {
-                new_arrtype_node(arr.get_elem_type().borrow().get_typenode(), arr.size as u64)
-            }
-            PLType::Primitive(p) => new_typename_node(&p.get_name(), Default::default()),
-            PLType::Void => new_typename_node("void", Default::default()),
-            PLType::Pointer(p) => new_ptrtype_node(p.borrow().get_typenode()),
+            PLType::Struct(st) => new_typename_node(&st.name, st.range, &Self::get_ns(st, path)),
+            PLType::Arr(arr) => new_arrtype_node(
+                arr.get_elem_type().borrow().get_typenode(path),
+                arr.size as u64,
+            ),
+            PLType::Primitive(p) => new_typename_node(&p.get_name(), Default::default(), &[]),
+            PLType::Void => new_typename_node("void", Default::default(), &[]),
+            PLType::Pointer(p) => new_ptrtype_node(p.borrow().get_typenode(path)),
             PLType::Generic(g) => {
                 if g.curpltype.is_some() {
-                    g.curpltype.as_ref().unwrap().borrow().get_typenode()
+                    g.curpltype.as_ref().unwrap().borrow().get_typenode(path)
                 } else {
-                    new_typename_node(&g.name, Default::default())
+                    new_typename_node(&g.name, Default::default(), &[])
                 }
             }
             PLType::PlaceHolder(p) => {
-                new_typename_node(&p.get_place_holder_name(), Default::default())
+                new_typename_node(&p.get_place_holder_name(), Default::default(), &[])
             }
-            PLType::Trait(t) => new_typename_node(&t.name, t.range),
+            PLType::Trait(t) => new_typename_node(&t.name, t.range, &Self::get_ns(t, path)),
             PLType::Fn(_) => unreachable!(),
-            PLType::Union(u) => new_typename_node(&u.name, u.range),
-            PLType::Closure(c) => Box::new(c.to_type_node()),
+            PLType::Union(u) => new_typename_node(&u.name, u.range, &Self::get_ns(u, path)),
+            PLType::Closure(c) => Box::new(c.to_type_node(path)),
         }
     }
     pub fn is(&self, pri_type: &PriType) -> bool {
@@ -797,7 +829,7 @@ impl FNValue {
             .get_type(ctx, builder, true)
             .unwrap()
             .borrow()
-            .get_typenode();
+            .get_typenode(&ctx.get_file());
         res.fntype.param_pltypes = self
             .fntype
             .param_pltypes
@@ -807,7 +839,7 @@ impl FNValue {
                     .get_type(ctx, builder, true)
                     .unwrap()
                     .borrow()
-                    .get_typenode();
+                    .get_typenode(&ctx.get_file());
                 np
             })
             .collect::<Vec<Box<TypeNodeEnum>>>();
@@ -1165,7 +1197,7 @@ impl STType {
                         .get_type(ctx, builder, true)
                         .unwrap()
                         .borrow()
-                        .get_typenode();
+                        .get_typenode(&ctx.get_file());
                     (nf.name.clone(), nf)
                 })
                 .collect();

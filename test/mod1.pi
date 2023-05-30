@@ -1,6 +1,10 @@
 use project1::mod2;
+use core::panic::assert;
 pub fn test_mod(args: i64) void {
     let d: mod2::Mod2 = mod2::Mod2{};
+    let dd = Mod1<mod2::Mod2>{};
+    dd.y.y = true;
+    assert(dd.y.y);
     printi64ln(999999);
     return;
 }
@@ -8,8 +12,8 @@ pub fn test_mod(args: i64) void {
 pub fn printi64ln(i: i64) void;
 
 //415642154
-pub struct Mod1 {
+pub struct Mod1<T> {
     x: i64;
-    y: mod2::Mod2;
+    y: T;
 }
 
