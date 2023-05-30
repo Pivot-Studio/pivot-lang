@@ -95,7 +95,9 @@ fn emit_for_fields<'a, 'b>(
                         v = builder.alloc("temp", &s.borrow(), ctx, None);
                     }
                     let gep = builder.build_struct_gep(v, field.index, "tmp_gep").unwrap();
-                    let field_tp = field.typenode.get_type(ctx, builder, true)?;
+                    let field_tp =ctx.run_in_type_mod(sttp, |ctx,_|{
+                        field.typenode.get_type(ctx, builder, true)
+                    })?;
                     // let tp  = Arc::new(RefCell::new(PLType::Pointer(field_tp)));
                     // let field_v = builder.alloc("field_alloca", &tp.borrow(), ctx, None);
                     // builder.build_store(field_v, gep);

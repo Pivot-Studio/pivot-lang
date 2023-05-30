@@ -62,11 +62,15 @@ fn name<T>(t:*T) void {
     io::print_s("\n");
     let b = true;
     forfields(t, {
-        field_ptr = true;
+        // field_ptr = true;
         b = true;
         let d = field;
         io::print_s(field);
         io::print_s("\n");
+        forfields(field_ptr, {
+            io::print_s(field);
+            io::print_s("\n");
+        });
     });
     return;
 }

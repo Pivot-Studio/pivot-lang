@@ -833,6 +833,9 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         let dia2 = dia.clone();
         if dia.get_range() != Default::default() {
+            if dia.is_err() {
+                eprintln!("{:?}", dia);
+            }
             self.errs.borrow_mut().insert(dia);   
         }
         dia2

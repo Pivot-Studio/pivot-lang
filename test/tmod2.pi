@@ -13,4 +13,9 @@ pub fn test_mod_impl() i64 {
 pub struct mod1_name {
     pub f:bool;
     pub dd:bool;
+    pub ddd:tname;
+}
+
+pub struct tname {
+    fjdkslfjsl:bool;
 }
