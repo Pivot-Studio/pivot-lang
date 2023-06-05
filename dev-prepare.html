@@ -160,6 +160,8 @@
 <pre><code class="language-bash">brew install llvm@14
 </code></pre>
 <p>如果你使用的是ubuntu，可以使用<a href="https://github.com/Pivot-Studio/setup-llvm/blob/main/scripts/install_llvm.sh">这里</a>的脚本进行安装</p>
+<h1 id="cmake"><a class="header" href="#cmake">CMake</a></h1>
+<p>我们的垃圾回收模块使用了LLVM中的StackMap功能，需要使用CMake进行编译。</p>
 <h2 id="环境变量"><a class="header" href="#环境变量">环境变量</a></h2>
 <p>开发项目需要正确配置一些环境变量才能让你保证开发时正确跑通测试。</p>
 <p>运行下方命令将会把项目需要的一些环境变量加入到你的初始化脚本中</p>
