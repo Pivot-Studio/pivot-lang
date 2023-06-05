@@ -74,17 +74,18 @@ jobs:
 
       - name: Install LLVM
         uses: Pivot-Studio/setup-llvm@main
-  
-
-      - name: Cargo build
-        env:
-          RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
-        run: cargo build --release
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: ${{ matrix.config.os == 'windows-latest' }}
 
       - name: Cargo build vm
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
         run: cd vm && cargo build --release
+
+      - name: Cargo build
+        env:
+          RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
+        run: cargo build --release
 
       - run: mkdir -p ${{ matrix.config.dir }}
 
