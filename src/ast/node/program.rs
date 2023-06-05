@@ -122,19 +122,17 @@ lazy_static::lazy_static! {
             name: "core".to_string(),
             range: Default::default(),
         });
-        let gc = Box::new(VarNode {
-            name: "gc".to_string(),
+        let std = Box::new(VarNode {
+            name: "std".to_string(),
             range: Default::default(),
         });
         let mut uses = vec![];
-        uses.push(Box::new(NodeEnum::UseNode(UseNode {
-            ids: vec![core.clone(), gc],
-            range: Default::default(),
-            complete: true,
-            singlecolon: false,
-        })));
         let builtin = Box::new(VarNode {
             name: "builtin".to_string(),
+            range: Default::default(),
+        });
+        let stdbuiltin = Box::new(VarNode {
+            name: "stdbuiltin".to_string(),
             range: Default::default(),
         });
 
@@ -144,7 +142,31 @@ lazy_static::lazy_static! {
             complete: true,
             singlecolon: false,
         })));
+        uses.push(Box::new(NodeEnum::UseNode(UseNode {
+            ids: vec![std, stdbuiltin],
+            range: Default::default(),
+            complete: true,
+            singlecolon: false,
+        })));
         uses
+    };
+
+    static ref GC_USE_NODES: Vec<Box<NodeEnum>> = {
+        let core = Box::new(VarNode {
+            name: "core".to_string(),
+            range: Default::default(),
+        });
+
+        let gc = Box::new(VarNode {
+            name: "gc".to_string(),
+            range: Default::default(),
+        });
+        vec![Box::new(NodeEnum::UseNode(UseNode {
+            ids: vec![core, gc],
+            range: Default::default(),
+            complete: true,
+            singlecolon: false,
+        }))]
     };
 }
 
@@ -174,7 +196,14 @@ impl Program {
         let pkgname = binding.file_name().unwrap().to_str().unwrap();
         // 默认加入gc和builtin module
         // #[cfg(not(target_arch = "wasm32"))]
-        if pkgname != "gc" && pkgname != "builtin" {
+        if pkgname != "gc" {
+            prog.uses.extend_from_slice(&GC_USE_NODES);
+        }
+        if pkgname != "gc"
+            && pkgname != "builtin"
+            && self.config(db).project != "core"
+            && self.config(db).project != "std"
+        {
             prog.uses.extend_from_slice(&DEFAULT_USE_NODES);
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -475,9 +504,10 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     add_primitive_types(&mut ctx);
     ctx.plmod.submods = params.submods(db);
     // imports all builtin symbols
-    // #[cfg(not(target_arch = "wasm32"))] // TODO support std on wasm
-    if ctx.plmod.name != "builtin" && ctx.plmod.name != "gc" {
-        let builtin_mod = ctx.plmod.submods.get("builtin").unwrap().clone();
+    if let Some(builtin_mod) = ctx.plmod.submods.get("builtin").cloned() {
+        ctx.plmod.import_all_public_symbols_from(&builtin_mod);
+    }
+    if let Some(builtin_mod) = ctx.plmod.submods.get("stdbuiltin").cloned() {
         ctx.plmod.import_all_public_symbols_from(&builtin_mod);
     }
     let m = &mut ctx;
@@ -533,6 +563,9 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
                 is_main: builder.get_function("main").is_some(),
             },
         );
+    }
+    for k in params.types(db).get().keys() {
+        ctx.plmod.types.remove(k);
     }
     ModWrapper::new(db, ctx.plmod)
 }

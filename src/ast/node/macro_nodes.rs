@@ -90,7 +90,11 @@ impl MacroMatchExp {
                 let mut new = args;
                 loop {
                     for t in ts {
-                        (new, _) = ctx.with_macro_loop_parse(|ctx| t.parse(ctx, new))?;
+                        let re = ctx.with_macro_loop_parse(|ctx| t.parse(ctx, new));
+                        if re.is_err() {
+                            return Ok((new, ()));
+                        }
+                        (new, _) = re?;
                     }
                     if new.len() == 0 {
                         break;
@@ -167,14 +171,11 @@ impl MacroMatchParameter {
                 .macro_vars
                 .get_mut(&self.id.name)
                 .unwrap_or(&mut default);
-            match n {
-                MacroReplaceNode::LoopNodeEnum(v) => {
-                    v.push(node);
-                    if v.len() == 1 {
-                        ctx.macro_vars.insert(self.id.name.clone(), default);
-                    }
+            if let MacroReplaceNode::LoopNodeEnum(v) = n {
+                v.push(node);
+                if v.len() == 1 {
+                    ctx.macro_vars.insert(self.id.name.clone(), default);
                 }
-                _ => unreachable!(),
             }
             return;
         }
@@ -245,7 +246,7 @@ impl Node for MacroCallNode {
                 ctx.send_if_go_to_def(self.range, m.range, m.file.clone());
                 ctx.set_glob_refs(&format!("{}..{}", &m.file, &m.id.name), self.range);
                 let src = m.file.clone();
-                let mut span = unsafe {
+                let span = unsafe {
                     Span::new_from_raw_offset(
                         self.inner_start.offset,
                         self.inner_start.line as u32,
@@ -255,6 +256,7 @@ impl Node for MacroCallNode {
                 };
                 let mut last_err: Option<PLDiag> = None;
                 for rule in &m.rules {
+                    let mut span = span;
                     let mut next = false;
                     for e in rule.match_exp.iter() {
                         let re = e.parse(ctx, span).map_err(|e| {
@@ -276,8 +278,18 @@ impl Node for MacroCallNode {
                             Err(e) => {
                                 last_err = Some(e);
                                 next = true;
+                                break;
                             }
                         }
+                    }
+                    if span.len() != 0 {
+                        last_err = Some(
+                            self.range
+                                .new_err(ErrorCode::UNEXPECTED_TOKEN)
+                                .set_source(&ctx.get_file())
+                                .clone(),
+                        );
+                        continue;
                     }
                     if next {
                         continue;

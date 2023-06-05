@@ -41,6 +41,7 @@ mod _immix {
             trace!("malloc: {} {}", size, obj_type);
             #[cfg(any(test, debug_assertions))] // enable eager gc in test mode
             immix::gc_collect();
+            // immix::gc_disable_auto_collect();
             gc_malloc(size as usize, obj_type)
         }
 

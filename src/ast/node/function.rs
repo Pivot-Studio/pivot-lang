@@ -4,7 +4,7 @@ use super::statement::StatementsNode;
 use super::*;
 use super::{types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::builder::ValueHandle;
-use crate::ast::ctx::ClosureCtxData;
+use crate::ast::ctx::{ClosureCtxData, BUILTIN_FN_MAP};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 
@@ -163,7 +163,9 @@ impl Node for FuncCallNode {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND)));
         }
         let v = v.unwrap();
-
+        if let Some(builtin) = BUILTIN_FN_MAP.get(&v.get_value()) {
+            return builtin(self, ctx, builder);
+        }
         let pltype = v.get_ty();
         let mut fnvalue = match &*pltype.borrow() {
             PLType::Fn(f) => {

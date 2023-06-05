@@ -693,7 +693,7 @@ fn test_lsp_incremental() {
     );
     compile_dry(db, input).unwrap();
     let l = raw_db.take_logs();
-    assert_eq!(l.len(), 64);
+    assert_eq!(l.len(), 78);
     compile_dry(db, input).unwrap();
     let ll = raw_db.take_logs();
     assert_eq!(ll.len(), 0);

@@ -7,6 +7,7 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::ctx::MacroReplaceNode;
+use crate::ast::ctx::BUILTIN_FN_NAME_MAP;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{PLType, PriType};
 use internal_macro::node;
@@ -113,6 +114,14 @@ impl Node for VarNode {
         if self.is_macro_var() {
             let re = ctx
                 .find_macro_symbol(&self.name[1..])
+                .cloned()
+                .or_else(|| {
+                    if ctx.macro_loop {
+                        Some(MacroReplaceNode::LoopNodeEnum(vec![]))
+                    } else {
+                        None
+                    }
+                })
                 .ok_or_else(|| {
                     self.range
                         .new_err(ErrorCode::MACRO_VAR_NOT_FOUND)
@@ -121,8 +130,7 @@ impl Node for VarNode {
                             self.name
                         ))
                         .add_to_ctx(ctx)
-                })?
-                .clone();
+                })?;
             match re {
                 MacroReplaceNode::NodeEnum(mut n) => {
                     ctx.macro_skip_level += 1;
@@ -165,6 +173,12 @@ impl Node for VarNode {
                     Some(())
                 });
             return o;
+        }
+        if let Some(builtin) = BUILTIN_FN_NAME_MAP.get(&self.name as &str) {
+            ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
+            return builtin
+                .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
+                .to_result();
         }
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match &*tp.borrow() {

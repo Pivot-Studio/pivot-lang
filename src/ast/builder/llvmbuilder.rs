@@ -451,7 +451,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
         let f = self
             .module
-            .add_function(fname, ftp, Some(Linkage::LinkOnceAny));
+            .add_function(fname, ftp, Some(Linkage::External));
         // the array is a struct, the first field is the visit function, the second field is the real array
         // array struct it self is the first parameter
         // the other three parameters are the visit function for different type
@@ -2012,9 +2012,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let ptrtp = self.struct_type(v, ctx).ptr_type(AddressSpace::default());
         let ty = ptrtp.get_element_type().into_struct_type();
         let ftp = self.mark_fn_tp(ptrtp);
-        let f =
-            self.module
-                .add_function(&(v.get_full_name() + "@"), ftp, Some(Linkage::LinkOnceAny));
+        let f = self
+            .module
+            .add_function(&(v.get_full_name() + "@"), ftp, Some(Linkage::External));
         let bb = self.context.append_basic_block(f, "entry");
         self.builder.position_at_end(bb);
         let fieldn = ty.count_fields();

@@ -9,3 +9,14 @@ pub fn test_mod_impl() i64 {
     return 0;
 }
 
+
+pub struct mod1_name {
+    pub f:bool;
+    pub dd:bool;
+    pub ddd:tname;
+    pub s:gc::string;
+}
+
+pub struct tname {
+    fjdkslfjsl:bool;
+}

@@ -61,6 +61,10 @@ pub fn statement_block(input: Span) -> IResult<Span, StatementsNode> {
     ))(input)
 }
 
+pub fn statement_block_node(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    map_res(statement_block, |s| res_enum(s.into()))(input)
+}
+
 /// ```ebnf
 /// statement =
 /// | new_variable newline

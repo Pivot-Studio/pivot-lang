@@ -1,0 +1,57 @@
+use core::gc;
+use std::io;
+
+fn print_i64(i:i64) void;
+
+pub fn print_any<T>(t:T) void {
+    let s = nameof<T>();
+    io::print_s(s);
+    io::print_s("( ");
+    let b = false;
+    match_type<bool>(t,{
+        if _value {
+            io::print_s("true");
+        }else {
+            io::print_s("false");
+        }
+        b = true;
+    });
+    match_type<i64>(t,{
+        print_i64(_value);
+        b = true;
+    });
+    match_type<gc::string>(t,{
+        io::print_s("\"");
+        io::print_s(_value);
+        io::print_s("\"");
+        b = true;
+    });
+    if b {
+        io::print_s(" )");
+        return;
+    }
+    forfields(t, {
+        io::print_s(_field_name);
+        io::print_s(": ");
+        print_any(_field);
+        io::print_s(" ");
+    });
+    io::print_s(")");
+    return;
+}
+
+macro println {
+    ($start:@expr) => {
+        stdbuiltin::print_any($start);
+        io::print_s("\n");
+    };
+    ($start:@expr$(,$expr:@expr)*) => {
+        stdbuiltin::print_any($start);
+        io::print_s(" ");
+        $(
+            stdbuiltin::print_any($expr);
+            io::print_s(" ");
+        )*
+        io::print_s("\n");
+    };
+}

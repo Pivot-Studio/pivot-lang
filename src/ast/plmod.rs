@@ -125,6 +125,9 @@ impl Mod {
                 _ => (),
             }
         }
+        for (k, v) in other.macros.iter() {
+            self.macros.insert(k.to_string(), v.clone());
+        }
     }
 
     pub fn new(name: String, path: String) -> Self {

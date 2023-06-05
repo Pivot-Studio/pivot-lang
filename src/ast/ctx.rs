@@ -13,6 +13,7 @@ use super::plmod::LSPDef;
 use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::pltype::add_primitive_types;
+use super::pltype::get_type_deep;
 use super::pltype::FNValue;
 use super::pltype::ImplAble;
 use super::pltype::PLType;
@@ -58,7 +59,10 @@ use std::path::Path;
 
 use std::path::PathBuf;
 use std::sync::Arc;
+mod builtins;
 mod references;
+
+pub use builtins::*;
 #[derive(Clone)]
 pub struct PLSymbol {
     pub value: ValueHandle,
@@ -672,6 +676,16 @@ impl<'a, 'ctx> Ctx<'a> {
         if self.table.contains_key(&name) {
             return Err(self.add_diag(range.new_err(ErrorCode::REDECLARATION)));
         }
+        self.add_symbol_without_check(name, pv, pltype, range, is_const)
+    }
+    pub fn add_symbol_without_check(
+        &mut self,
+        name: String,
+        pv: ValueHandle,
+        pltype: Arc<RefCell<PLType>>,
+        range: Range,
+        is_const: bool,
+    ) -> Result<(), PLDiag> {
         if is_const {
             self.set_glob_refs(&self.plmod.get_full_name(&name), range);
             self.plmod.add_global_symbol(name, pltype, range)?;
@@ -690,6 +704,32 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
         Ok(())
+    }
+
+    /// # add_symbol_raw
+    ///
+    /// add symbol without checking if it is already declared
+    ///
+    /// doesn't handle any lsp stuffs like go to def
+    ///
+    /// mostly used in builtin functions
+    pub fn add_symbol_raw(
+        &mut self,
+        name: String,
+        pv: ValueHandle,
+        pltype: Arc<RefCell<PLType>>,
+        range: Range,
+    ) {
+        let refs = Arc::new(RefCell::new(vec![]));
+        self.table.insert(
+            name,
+            PLSymbol {
+                value: pv,
+                pltype,
+                range,
+                refs: Some(refs),
+            },
+        );
     }
 
     pub fn get_type(&self, name: &str, range: Range) -> Result<Arc<RefCell<PLType>>, PLDiag> {
@@ -887,6 +927,15 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         res
     }
+
+    pub fn run_in_origin_mod<'b, R, F: FnMut(&mut Ctx<'a>) -> R>(&'b mut self, mut f: F) -> R {
+        let oldm = self.plmod.clone();
+        let ctx = self.get_root_ctx();
+        self.set_mod(ctx.plmod.clone());
+        let res = f(self);
+        self.set_mod(oldm);
+        res
+    }
     pub fn run_in_type_mod_mut<'b, TP: CustomType, R, F: FnMut(&mut Ctx<'a>, &mut TP) -> R>(
         &'b mut self,
         u: &mut TP,
@@ -1055,6 +1104,21 @@ impl<'a, 'ctx> Ctx<'a> {
         }
     }
 
+    fn get_builtin_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
+        for (name, handle) in BUILTIN_FN_NAME_MAP.iter() {
+            vmap.insert(
+                name.to_string(),
+                CompletionItem {
+                    label: name.to_string(),
+                    kind: Some(CompletionItemKind::FUNCTION),
+                    insert_text: Some(BUILTIN_FN_SNIPPET_MAP.get(handle).unwrap().to_string()),
+                    insert_text_format: Some(InsertTextFormat::SNIPPET),
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
     fn get_pltp_completions(
         &self,
         vmap: &mut FxHashMap<String, CompletionItem>,
@@ -1062,6 +1126,7 @@ impl<'a, 'ctx> Ctx<'a> {
     ) {
         self.plmod
             .get_pltp_completions(vmap, &filter, &self.generic_types, true);
+        self.get_builtin_completions(vmap);
         if let Some(father) = self.father {
             father.get_pltp_completions(vmap, filter);
         }
@@ -1204,7 +1269,7 @@ impl<'a, 'ctx> Ctx<'a> {
     ) -> (Arc<RefCell<PLType>>, ValueHandle) {
         let mut tp = tp;
         let mut value = value;
-        while let PLType::Pointer(p) = &*tp.clone().borrow() {
+        while let PLType::Pointer(p) = &*get_type_deep(tp.clone()).borrow() {
             tp = p.clone();
             value = builder.build_load(value, "load");
         }

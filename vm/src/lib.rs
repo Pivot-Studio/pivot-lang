@@ -54,3 +54,8 @@ fn print_raw(bs: *const u8, len: i64) {
     let s = std::str::from_utf8(unsafe { std::slice::from_raw_parts(bs, len as usize) }).unwrap();
     print!("{}", s);
 }
+
+#[is_runtime]
+fn print_i64(i: i64) {
+    print!("{}", i);
+}
