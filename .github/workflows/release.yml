@@ -43,7 +43,7 @@ jobs:
             arch: linux-amd64
             RUSTFLAGS: ""
             libvm: "libvm.a"
-          - os: "windows-latest"
+          - os: "windows-2022"
             dir: win64
             artifacts: "plc.exe"
             RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"

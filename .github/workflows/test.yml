@@ -69,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-latest", "windows-latest", "macOS-latest", "self-hosted"]
+        os: ["ubuntu-latest", "windows-2022", "macOS-latest", "self-hosted"]
         include:
           - RUSTFLAGS: "-Dwarnings"
             CARGO_INCREMENTAL: 1
