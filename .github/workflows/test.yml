@@ -121,6 +121,12 @@ jobs:
       - name: Install latest nextest release
         uses: taiki-e/install-action@nextest
 
+      - name: Set up Visual Studio shell
+        uses: egor-tensin/vs-shell@v2
+        if: ${{ matrix.os == 'windows-latest' }}
+        with:
+          arch: x64
+
       - name: build vm
         uses: actions-rs/cargo@v1
         with:
