@@ -142,6 +142,9 @@ impl Collector {
     /// ## Return
     /// * `ptr` - object pointer
     pub fn alloc(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
+        if size == 0 {
+            return std::ptr::null_mut();
+        }
         if gc_is_auto_collect_enabled() {
             if GC_RUNNING.load(Ordering::Acquire) {
                 self.collect();

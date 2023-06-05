@@ -113,6 +113,7 @@ define_error!(
     EXPECT_STATEMENTS = "expect statements",
     NO_MACRO_LOOP_VAR = "no macro loop var used in macro loop block",
     MACRO_LOOP_VAR_USED_OUT_OF_LOOP = "macro loop var used out of loop",
+    EMPTY_MACRO_LOOP = "empty macro loop",
     MACRO_VAR_NOT_FOUND = "macro var not found",
     EXPECT_PUBLIC_UNION = "expect public union",
     INVALID_UNION_CAST = "invalid union cast",

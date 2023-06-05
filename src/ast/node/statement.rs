@@ -229,7 +229,7 @@ impl Node for StatementsNode {
         }
         for (v, symbol) in &ctx.table {
             if let Some(refs) = &symbol.refs {
-                if refs.borrow().len() <= 1 && v != "self" {
+                if refs.borrow().len() <= 1 && v != "self" && !v.starts_with('_') {
                     symbol
                         .range
                         .new_warn(WarnCode::UNUSED_VARIABLE)

@@ -20,8 +20,7 @@ use project1::test::tree;
 use project1::test::fixed_point;
 use project1::tmod2::test_mod_impl;
 use pl_test::main;
-use std::io;
-use core::panic::assert;
+use project1::test::compiletime_reflection::test_compile_time_reflection;
 pub fn main() i64 {
     macros::test_macros();
     ifel::test_if_else();
@@ -45,34 +44,9 @@ pub fn main() i64 {
     map::test_map();
     fixed_point::test_fixed_point();
     test_mod_impl();
-    let n = tmod2::mod1_name{};
-    assert(!n.f);
-    assert(!n.dd);
-    name(&n);
-    assert(n.f);
-    assert(n.dd);
-
+    test_compile_time_reflection();
     return 0;
 }
 
-
-fn name<T>(t:*T) void {
-    let s = fullnameof<tmod2::mod1_name>();
-    io::print_s(s);
-    io::print_s("\n");
-    let b = true;
-    forfields(t, {
-        // field_ptr = true;
-        b = true;
-        let d = field;
-        io::print_s(field);
-        io::print_s("\n");
-        forfields(field_ptr, {
-            io::print_s(field);
-            io::print_s("\n");
-        });
-    });
-    return;
-}
 
 

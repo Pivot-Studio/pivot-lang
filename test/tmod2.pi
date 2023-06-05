@@ -14,6 +14,7 @@ pub struct mod1_name {
     pub f:bool;
     pub dd:bool;
     pub ddd:tname;
+    pub s:gc::string;
 }
 
 pub struct tname {

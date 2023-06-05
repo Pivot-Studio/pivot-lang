@@ -1,0 +1,37 @@
+use std::io;
+use core::panic::assert;
+use project1::tmod2;
+
+pub fn test_compile_time_reflection() void {
+    let n = tmod2::mod1_name{};
+    assert(!n.f);
+    assert(!n.dd);
+    name(&n);
+    io::print_s("\n");
+    assert(n.f);
+    assert(n.dd);
+    println!(n, "你好", true, 10);
+    io::print_s("\n");
+    return;
+}
+
+fn name<T>(t:*T) void {
+    let s = fullnameof<tmod2::mod1_name>();
+    io::print_s(s);
+    io::print_s("\n");
+    let b = true;
+    forfields(t, {
+        match_type<bool>(_field,{
+            _value = true;
+        });
+        b = true;
+        let d = _field_name;
+        io::print_s(_field_name);
+        io::print_s("\n");
+        forfields(_field, {
+            io::print_s(_field_name);
+            io::print_s("\n");
+        });
+    });
+    return;
+}

@@ -1,13 +1,13 @@
 macro test {
+    ($a:@id) => {
+        io::print_s($a);
+    };
     ($($a:@id = $b:@expr,)*) => {
         $(
             io::print_s($a);
             io::printi64ln($b);  
         )*
 
-    };
-    ($a:@id) => {
-        test!($a = 1,);
     };
 }
 

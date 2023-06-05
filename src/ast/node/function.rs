@@ -163,8 +163,8 @@ impl Node for FuncCallNode {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND)));
         }
         let v = v.unwrap();
-        if let Some(builtin) = BUILTIN_FN_MAP.get(& v.get_value()) {
-            return  builtin(self, ctx, builder);
+        if let Some(builtin) = BUILTIN_FN_MAP.get(&v.get_value()) {
+            return builtin(self, ctx, builder);
         }
         let pltype = v.get_ty();
         let mut fnvalue = match &*pltype.borrow() {
