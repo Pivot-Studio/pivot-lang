@@ -59,6 +59,7 @@ jobs:
         with:
           profile: minimal
           override: true
+          components: llvm-tools-preview
 
       - uses: actions/cache@v3
         name: Cache Cargo
@@ -74,17 +75,16 @@ jobs:
 
       - name: Install LLVM
         uses: Pivot-Studio/setup-llvm@main
-  
-
-      - name: Cargo build
-        env:
-          RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
-        run: cargo build --release
 
       - name: Cargo build vm
         env:
           RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
         run: cd vm && cargo build --release
+
+      - name: Cargo build
+        env:
+          RUSTFLAGS: ${{ matrix.config.RUSTFLAGS }}
+        run: cargo build --release
 
       - run: mkdir -p ${{ matrix.config.dir }}
 
