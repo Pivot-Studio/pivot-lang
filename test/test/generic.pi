@@ -124,7 +124,7 @@ pub fn test_generic_same_name() void {
     return;
 }
 
-pub fn test_ret_generic() void {
+pub fn test_ret_generic<T>() void {
     let x = ret_generic1<i64>();
     let y = ret_generic2(true);
     let z = ret_generic2([1, 2, 3]);
@@ -152,7 +152,7 @@ pub fn test_generic_fn() void {
 pub fn test_generic() void {
     test_generic_simple();
     test_generic_same_name();
-    test_ret_generic();
+    test_ret_generic<i64>();
     test_self_ref_generic();
     test_generic_fn();
     return;
