@@ -498,7 +498,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         params.params(db).config(db),
         db,
     );
-    ctx.trait_mthd_table = Arc::new(RefCell::new(params.mth_table(db).get().clone()));
+    ctx.plmod.trait_mthd_table = Arc::new(RefCell::new(params.mth_table(db).get().clone()));
     ctx.plmod.types = params.types(db).get().clone();
     ctx.plmod.macros = params.macro_table(db).get().clone();
     add_primitive_types(&mut ctx);

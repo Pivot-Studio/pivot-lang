@@ -3,7 +3,7 @@ use super::ctx::Ctx;
 use super::diag::{ErrorCode, PLDiag};
 
 use super::node::macro_nodes::MacroNode;
-use super::pltype::PLType;
+use super::pltype::{PLType, FNValue};
 use super::pltype::PriType;
 
 use super::range::Range;
@@ -33,6 +33,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use std::sync::Arc;
+
+use super::pltype::TraitMthdImpl;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlobalVar {
@@ -69,6 +71,7 @@ pub struct Mod {
     pub doc_symbols: Arc<RefCell<Vec<DocumentSymbol>>>,
     pub impls: FxHashMap<String, FxHashSet<String>>,
     pub macros: FxHashMap<String, Arc<MacroNode>>,
+    pub trait_mthd_table: TraitMthdImpl,
 }
 
 pub type MutVec<T> = RefCell<Vec<T>>;
@@ -154,6 +157,7 @@ impl Mod {
             refs_map: Arc::new(RefCell::new(BTreeMap::new())),
             impls: FxHashMap::default(),
             macros: FxHashMap::default(),
+            trait_mthd_table: Default::default(),
         }
     }
     pub fn new_child(&self) -> Self {
@@ -178,6 +182,7 @@ impl Mod {
             refs_map: self.refs_map.clone(),
             impls: FxHashMap::default(),
             macros: FxHashMap::default(),
+            trait_mthd_table: self.trait_mthd_table.clone(),
         }
     }
     pub fn get_refs(&self, name: &str, db: &dyn Db, set: &mut FxHashSet<String>) {
@@ -188,6 +193,57 @@ impl Mod {
         self.push_refs(name, db);
         for m in self.submods.values() {
             m.get_refs(name, db, set);
+        }
+    }
+    pub fn add_to_global_mthd_table(
+        &self,
+        st_name: &str,
+        mthd_name: &str,
+        fntp: Arc<RefCell<FNValue>>,
+    ) {
+        let mut m = self.trait_mthd_table.borrow_mut();
+        m.entry(st_name.to_string())
+            .or_insert_with(Default::default)
+            .insert(mthd_name.to_owned(), fntp);
+    }
+
+    pub fn find_global_method(&self, name: &str, mthd: &str) -> Option<Arc<RefCell<FNValue>>> {
+        let mut m = self.trait_mthd_table.borrow_mut();
+        let table = m.get_mut(name);
+        if let Some(table) = table {
+            if let Some(fntp) = table.get(mthd) {
+                return Some(fntp.clone());
+            }
+        }
+        None
+    }
+
+    pub fn get_global_mthd_completions(
+        &self,
+        name: &str,
+        set: &mut FxHashMap<String, CompletionItem>,
+    ) {
+        let mut m = self.trait_mthd_table.borrow_mut();
+        let table = m.get_mut(name);
+        if let Some(table) = table {
+            table.iter().for_each(|(k, v)| {
+                set.insert(
+                    k.clone(),
+                    CompletionItem {
+                        kind: Some(CompletionItemKind::METHOD),
+                        label: k.clone(),
+                        detail: Some("method".to_string()),
+                        insert_text: Some(v.borrow().gen_snippet()),
+                        insert_text_format: Some(InsertTextFormat::SNIPPET),
+                        command: Some(Command::new(
+                            "trigger help".to_string(),
+                            "editor.action.triggerParameterHints".to_string(),
+                            None,
+                        )),
+                        ..Default::default()
+                    },
+                );
+            });
         }
     }
     pub fn push_refs(&self, name: &str, db: &dyn Db) {

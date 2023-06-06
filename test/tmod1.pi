@@ -11,6 +11,11 @@ impl<T> namet for tmod::name<T> {
 
 }
 
+pub fn name<T>(a:tmod::name<T>) void {
+    
+    return;
+}
+
 // TODO
 impl tmod::name<T> {
 }

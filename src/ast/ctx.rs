@@ -19,7 +19,6 @@ use super::pltype::ImplAble;
 use super::pltype::PLType;
 use super::pltype::PriType;
 use super::pltype::TraitImplAble;
-use super::pltype::TraitMthdImpl;
 use super::range::Pos;
 use super::range::Range;
 use super::tokens::TokenType;
@@ -100,7 +99,7 @@ pub struct Ctx<'a> {
     pub in_macro: bool,
     pub closure_data: Option<RefCell<ClosureCtxData>>,
     pub expect_ty: Option<Arc<RefCell<PLType>>>,
-    pub trait_mthd_table: TraitMthdImpl,
+    // pub trait_mthd_table: TraitMthdImpl,
 }
 
 #[derive(Clone, Default)]
@@ -173,7 +172,6 @@ impl<'a, 'ctx> Ctx<'a> {
             in_macro: false,
             closure_data: None,
             expect_ty: None,
-            trait_mthd_table: Default::default(),
             root: None,
             macro_skip_level: 0,
         }
@@ -209,7 +207,6 @@ impl<'a, 'ctx> Ctx<'a> {
             in_macro: self.in_macro,
             closure_data: None,
             expect_ty: None,
-            trait_mthd_table: Default::default(),
             root,
             macro_skip_level: self.macro_skip_level,
         };
@@ -439,10 +436,7 @@ impl<'a, 'ctx> Ctx<'a> {
         mthd_name: &str,
         fntp: Arc<RefCell<FNValue>>,
     ) {
-        let mut m = self.get_root_ctx().trait_mthd_table.borrow_mut();
-        m.entry(st_name.to_string())
-            .or_insert_with(Default::default)
-            .insert(mthd_name.to_owned(), fntp);
+        self.plmod.add_to_global_mthd_table(st_name, mthd_name, fntp);
     }
     pub fn get_root_ctx(&self) -> &Ctx {
         let mut ctx = self;
@@ -453,14 +447,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn find_global_method(&self, name: &str, mthd: &str) -> Option<Arc<RefCell<FNValue>>> {
-        let mut m = self.get_root_ctx().trait_mthd_table.borrow_mut();
-        let table = m.get_mut(name);
-        if let Some(table) = table {
-            if let Some(fntp) = table.get(mthd) {
-                return Some(fntp.clone());
-            }
-        }
-        None
+        self.plmod.find_global_method(name, mthd)
     }
 
     pub fn get_global_mthd_completions(
@@ -468,28 +455,7 @@ impl<'a, 'ctx> Ctx<'a> {
         name: &str,
         set: &mut FxHashMap<String, CompletionItem>,
     ) {
-        let mut m = self.get_root_ctx().trait_mthd_table.borrow_mut();
-        let table = m.get_mut(name);
-        if let Some(table) = table {
-            table.iter().for_each(|(k, v)| {
-                set.insert(
-                    k.clone(),
-                    CompletionItem {
-                        kind: Some(CompletionItemKind::METHOD),
-                        label: k.clone(),
-                        detail: Some("method".to_string()),
-                        insert_text: Some(v.borrow().gen_snippet()),
-                        insert_text_format: Some(InsertTextFormat::SNIPPET),
-                        command: Some(Command::new(
-                            "trigger help".to_string(),
-                            "editor.action.triggerParameterHints".to_string(),
-                            None,
-                        )),
-                        ..Default::default()
-                    },
-                );
-            });
-        }
+        self.plmod.get_global_mthd_completions(name, set);
     }
 
     fn add_trait_impl_method<T: TraitImplAble>(

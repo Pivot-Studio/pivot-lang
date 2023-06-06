@@ -5,7 +5,8 @@ pub fn test_mod_impl<T>() tmod::name<i64> {
     1.namet();
     a.namet();
     let n = tmod::name<i64>{};
-    n.namet();
+    tmod1::name(n);
+    // n.namet();
     return n;
 }
 
