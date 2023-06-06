@@ -407,7 +407,7 @@ fn handle_glob_mthd<T: TraitImplAble>(
     {
         return pack_mthd(ctx, mthd, headptr, head_pltype, id_range);
     };
-    Err(ctx.add_diag(id.range.new_err(ErrorCode::METHOD_NOT_FOUND)))
+    Err(id.range.new_err(ErrorCode::METHOD_NOT_FOUND).set_source(&ctx.get_file()).add_to_ctx(ctx))
 }
 
 fn pack_mthd(

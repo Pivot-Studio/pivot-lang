@@ -1,13 +1,14 @@
-use project1::tmod::name;
+use project1::tmod::mod_struct;
 use project1::tmod1::namet;
-pub fn test_mod_impl<T>() tmod::name<i64> {
+pub fn test_mod_impl<T>() void{
     let a = 1;
-    1.namet();
-    a.namet();
-    let n = tmod::name<i64>{};
+    // 1.nametf();
+    
+    // a.nametf();
+    let n = tmod::mod_struct<i64>{};
     tmod1::name(n);
-    // n.namet();
-    return n;
+    // n.nametf();
+    return ;
 }
 
 
