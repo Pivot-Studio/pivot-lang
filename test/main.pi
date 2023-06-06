@@ -43,7 +43,7 @@ pub fn main() i64 {
     tree::test_eva();
     map::test_map();
     fixed_point::test_fixed_point();
-    test_mod_impl();
+    test_mod_impl<i64>();
     test_compile_time_reflection();
     return 0;
 }

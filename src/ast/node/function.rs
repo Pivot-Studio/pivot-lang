@@ -232,7 +232,7 @@ impl Node for FuncCallNode {
         )?;
         // value check and generic infer
         let res = ctx.protect_generic_context(&fnvalue.fntype.generic_map.clone(), |ctx| {
-            ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
+            let rettp = ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
                 if let Some(receiver_pltype) = &receiver_type {
                     if !fnvalue.fntype.param_pltypes[0]
                         .eq_or_infer(ctx, receiver_pltype.clone(), builder)?
@@ -251,11 +251,12 @@ impl Node for FuncCallNode {
                     builder,
                     &mut para_values,
                 )?;
-                Ok(())
+                fnvalue.fntype.ret_pltype.get_type(ctx, builder, true)
             })?;
             if !fnvalue.fntype.generic_map.is_empty() {
                 if fnvalue.fntype.need_gen_code() {
                     fnvalue = ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
+                        // actual code gen happens here
                         fnvalue.generic_infer_pltype(ctx, builder)
                     })?;
                 } else {
@@ -270,9 +271,9 @@ impl Node for FuncCallNode {
                 builder.get_or_insert_fn_handle(&fnvalue, ctx)
             };
             builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
-            let rettp = ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
-                fnvalue.fntype.ret_pltype.get_type(ctx, builder, true)
-            })?;
+            // let rettp = ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
+            //     fnvalue.fntype.ret_pltype.get_type(ctx, builder, true)
+            // })?;
             let ret = builder.build_call(function, &para_values, &rettp.borrow(), ctx);
             ctx.save_if_comment_doc_hover(id_range, Some(fnvalue.doc.clone()));
             handle_ret(ret, rettp)
