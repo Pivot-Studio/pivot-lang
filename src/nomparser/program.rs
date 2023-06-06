@@ -49,7 +49,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 }
                 TopLevel::ImplDef(mut im) => {
                     let generics_from_impl =
-                        &mut im.generics.as_mut().map_or(vec![], |g| g.generics.clone());
+                        im.generics.as_mut().map_or(vec![], |g| g.generics.clone());
                     let imname = FmtBuilder::generate_node(&im.target);
                     let target = *im.target.clone();
                     if im.impl_trait.is_some() {
@@ -57,7 +57,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     }
                     for mth in im.methods.iter_mut() {
                         if let Some(g) = &mut mth.generics {
-                            g.generics.append(generics_from_impl)
+                            g.generics.append(&mut generics_from_impl.clone())
                         } else {
                             mth.generics = im.generics.clone();
                             if let Some(g) = &mut mth.generics {
