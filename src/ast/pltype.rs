@@ -944,6 +944,8 @@ pub struct STType {
     pub generic_infer_types: IndexMap<String, Arc<RefCell<PLType>>>,
     pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
     pub trait_methods_impl: TraitMthdImpl,
+    // key name<i64>/name<f64> ...
+    pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
 }
 
 pub type TraitMthdImpl = Arc<RefCell<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>>;
@@ -1218,6 +1220,9 @@ impl STType {
             res.generic_infer_types = generic_infer_types;
             let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
             pltype.replace(PLType::Struct(res.clone()));
+            self.generic_infer
+                .borrow_mut()
+                .insert(res.name, pltype.clone());
             Ok(pltype)
         })
     }

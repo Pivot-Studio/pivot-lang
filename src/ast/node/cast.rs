@@ -9,7 +9,7 @@ use crate::{
         ctx::Ctx,
         diag::{ErrorCode, PLDiag},
         node::{deal_line, tab, TypeNode},
-        pltype::{PLType, PriType, get_type_deep},
+        pltype::{get_type_deep, PLType, PriType},
         range::{Pos, Range},
         tokens::TokenType,
     },

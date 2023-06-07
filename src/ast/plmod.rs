@@ -3,8 +3,8 @@ use super::ctx::Ctx;
 use super::diag::{ErrorCode, PLDiag};
 
 use super::node::macro_nodes::MacroNode;
-use super::pltype::{PLType, FNValue};
 use super::pltype::PriType;
+use super::pltype::{FNValue, PLType};
 
 use super::range::Range;
 
