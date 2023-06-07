@@ -62,7 +62,7 @@ jobs:
 
       - uses: actions/cache@v3
         name: Cache Cargo
-        if: ${{ matrix.config.os != 'self-hosted' }}
+        if: ${{ matrix.config.os != 'self-hosted' && matrix.config.os != 'windows-latest' }}
         with:
           path: |
             ~/.cargo/bin/
