@@ -113,7 +113,7 @@ jobs:
 
 
       - uses: Swatinem/rust-cache@v2
-        if: ${{ matrix.os != 'self-hosted' }}
+        if: ${{ matrix.os != 'self-hosted' && matrix.os != 'windows-latest' }}
 
       - name: Install latest llvm-cov release
         uses: taiki-e/install-action@cargo-llvm-cov
