@@ -9,7 +9,7 @@ use crate::{
         ctx::Ctx,
         diag::{ErrorCode, PLDiag},
         node::{deal_line, tab, TypeNode},
-        pltype::{PLType, PriType},
+        pltype::{PLType, PriType, get_type_deep},
         range::{Pos, Range},
         tokens::TokenType,
     },
@@ -43,7 +43,7 @@ impl Node for AsNode {
         let (val, target_tp) = ctx.force_cast_safe(
             v.get_value(),
             &v.get_ty().borrow(),
-            target_tp,
+            get_type_deep(target_tp),
             builder,
             self,
         )?;
