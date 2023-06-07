@@ -1,5 +1,13 @@
-struct None {
+pub struct None {
 }
-type Option<T> = T|None;
+pub type Option<T> = T|None;
 
-
+impl <T> Option<T> {
+    pub fn map<R>(f:|T|=>R) Option<R> {
+        if (*self) is None {
+            return None{};
+        }
+        let v = (*self) as T!;
+        return f(v);
+    }
+}
