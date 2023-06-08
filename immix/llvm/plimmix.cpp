@@ -28,6 +28,15 @@ extern "C" void LLVMLinkPLImmixGC()
 {
     linkAllBuiltinGCs();
 }
+#include "llvm-c/Transforms/PassManagerBuilder.h"
+
+extern "C" void * create_pass_manager() {
+    
+  return LLVMCreatePassManager();
+}
+extern "C" void add_module_pass(llvm::legacy::PassManagerBase & PB) {
+    PB.add(new Immix());
+}
 
 extern "C"
 {

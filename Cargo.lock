@@ -1002,18 +1002,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "36eb31c1778188ae1e64398743890d0877fef36d11521ac60406b42016e8c2cf"
 
 [[package]]
-name = "lld_rs"
-version = "140.0.0"
-source = "git+https://github.com/Pivot-Studio/lld-rs.git?branch=main#d60b0d447fe06923a83f2938b016ea3b443f6c5f"
-dependencies = [
- "cc",
- "lazy_static",
- "libc",
- "regex",
- "semver",
-]
-
-[[package]]
 name = "llvm-sys"
 version = "140.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1295,7 +1283,6 @@ dependencies = [
 name = "pl_linker"
 version = "0.1.0"
 dependencies = [
- "lld_rs",
  "mun_target",
  "once_cell",
  "parking_lot",
