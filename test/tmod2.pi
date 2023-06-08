@@ -2,20 +2,14 @@ use project1::tmod::mod_struct;
 use project1::tmod1::namet;
 pub fn test_mod_impl<T>() void{
     let a = 1;
-    // 1.nametf();
-    
-    // a.nametf();
+    1.nametf();
+    a.nametf();
     let n = tmod::mod_struct<i64>{};
     tmod1::name(n);
-    // n.nametf();
+    n.nametf();
     return ;
 }
 
-
-// pub fn test() void {
-//     test_mod_impl<i64>(tmod::name<i64>{});
-//     return;
-// }
 
 pub struct mod1_name {
     pub f:bool;

@@ -721,10 +721,10 @@ impl<'a, 'ctx> Ctx<'a> {
         if let Ok(re) = self.get_type_walker(name, range) {
             return Ok(re);
         }
-        if name.contains("<") {
+        if name.contains('<') {
             // generic
             // name<i64> ctx --name-> name --name<i64>--> name<i64>
-            let st_name = name.split("<").collect::<Vec<_>>()[0];
+            let st_name = name.split('<').collect::<Vec<_>>()[0];
             let st_with_generic = self.get_type_walker(st_name, range)?;
             if let PLType::Struct(st) = &*st_with_generic.borrow() {
                 if let Some(res) = st.generic_infer.borrow().get(name) {

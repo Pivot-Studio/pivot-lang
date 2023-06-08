@@ -1243,32 +1243,6 @@ impl STType {
         }
         completions
     }
-    pub fn get_mthd_completions(&self, ctx: &Ctx) -> Vec<CompletionItem> {
-        let pub_only = self.path != ctx.plmod.path;
-        let mut completions = Vec::new();
-        let mut f = |name: &String, v: &FNValue| {
-            if pub_only && !v.is_modified_by(TokenType::PUB) {
-                return;
-            }
-            completions.push(CompletionItem {
-                kind: Some(CompletionItemKind::METHOD),
-                label: name.clone(),
-                detail: Some("method".to_string()),
-                insert_text: Some(v.gen_snippet()),
-                insert_text_format: Some(InsertTextFormat::SNIPPET),
-                command: Some(Command::new(
-                    "trigger help".to_string(),
-                    "editor.action.triggerParameterHints".to_string(),
-                    None,
-                )),
-                ..Default::default()
-            });
-        };
-        for (name, v) in self.methods.borrow().iter() {
-            f(name, &v.clone().borrow());
-        }
-        completions
-    }
 
     pub fn get_completions(&self, ctx: &Ctx) -> Vec<CompletionItem> {
         let mut coms = self.get_field_completions(self.path != ctx.plmod.path);
