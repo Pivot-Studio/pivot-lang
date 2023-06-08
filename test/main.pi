@@ -43,7 +43,7 @@ pub fn main() i64 {
     tree::test_eva();
     map::test_map();
     fixed_point::test_fixed_point();
-    // test_mod_impl1<i64>();
+    test_mod_impl1<i64>();
     // test_mod_impl1<f32>();
     generic::ret_generic1<i64>();// change this to f32
     test_compile_time_reflection();
@@ -57,8 +57,8 @@ pub fn test_mod_impl1<T>() void{
     // 1.nametf();
     
     // a.nametf();
-    // let n = tmod::mod_struct<i64>{};
-    // tmod1::name(n);
+    let n = tmod::mod_struct<i64>{};
+    tmod1::name(n);// FIXME 炸
     // n.nametf();
     return ;
 }

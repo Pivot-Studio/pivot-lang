@@ -11,8 +11,19 @@ impl<T> namet for tmod::mod_struct<T> {
 
 }
 
+
+pub struct tptp<T> {
+    
+}
+
 pub fn name<T>(a:tmod::mod_struct<T>) void {
     
+    return;
+}
+
+
+fn test1() void {
+    name(tmod::mod_struct::<i64>{});
     return;
 }
 
