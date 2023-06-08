@@ -279,7 +279,7 @@ impl Mod {
         );
         Ok(())
     }
-    pub fn get_type(&self, name: &str, range: Range, ctx: &Ctx) -> Option<Arc<RefCell<PLType>>> {
+    fn get_type_inner(&self, name: &str, range: Range, ctx: &Ctx) -> Option<Arc<RefCell<PLType>>> {
         let v = self.types.get(name);
         if let Some(pv) = v {
             ctx.set_if_refs_tp(pv.clone(), range);
@@ -297,6 +297,49 @@ impl Mod {
             return Some(Arc::new(RefCell::new(PLType::Void)));
         }
         None
+    }
+
+    fn get_type_walker(
+        &self,
+        name: &str,
+        range: Range,
+        ctx: &Ctx,
+    ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
+        if let Some(pv) = ctx.generic_types.get(name) {
+            ctx.set_if_refs_tp(pv.clone(), range);
+            ctx.send_if_go_to_def(
+                range,
+                pv.borrow().get_range().unwrap_or(range),
+                self.path.clone(),
+            );
+            return Ok(pv.clone());
+        }
+        if let Some(pv) = self.get_type_inner(name, range, ctx) {
+            return Ok(pv);
+        }
+        Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
+    }
+    pub fn get_type(
+        &self,
+        name: &str,
+        range: Range,
+        ctx: &Ctx,
+    ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
+        if let Ok(re) = self.get_type_walker(name, range, ctx) {
+            return Ok(re);
+        }
+        if name.contains('<') {
+            // generic
+            // name<i64> ctx --name-> name --name<i64>--> name<i64>
+            let st_name = name.split('<').collect::<Vec<_>>()[0];
+            let st_with_generic = self.get_type_walker(st_name, range, ctx)?;
+            if let PLType::Struct(st) = &*st_with_generic.borrow() {
+                if let Some(res) = st.generic_infer.borrow().get(name) {
+                    return Ok(res.clone());
+                }
+            };
+        }
+        Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
     }
 
     /// 获取llvm名称

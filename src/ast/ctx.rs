@@ -698,7 +698,7 @@ impl<'a, 'ctx> Ctx<'a> {
             },
         );
     }
-    fn get_type_walker(&self, name: &str, range: Range) -> Result<Arc<RefCell<PLType>>, PLDiag> {
+    pub fn get_type(&self, name: &str, range: Range) -> Result<Arc<RefCell<PLType>>, PLDiag> {
         if let Some(pv) = self.generic_types.get(name) {
             self.set_if_refs_tp(pv.clone(), range);
             self.send_if_go_to_def(
@@ -708,29 +708,12 @@ impl<'a, 'ctx> Ctx<'a> {
             );
             return Ok(pv.clone());
         }
-        if let Some(pv) = self.plmod.get_type(name, range, self) {
+        if let Ok(pv) = self.plmod.get_type(name, range, self) {
             return Ok(pv);
         }
         if let Some(father) = self.father {
-            let re = father.get_type_walker(name, range);
+            let re = father.get_type(name, range);
             return re;
-        }
-        Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
-    }
-    pub fn get_type(&self, name: &str, range: Range) -> Result<Arc<RefCell<PLType>>, PLDiag> {
-        if let Ok(re) = self.get_type_walker(name, range) {
-            return Ok(re);
-        }
-        if name.contains('<') {
-            // generic
-            // name<i64> ctx --name-> name --name<i64>--> name<i64>
-            let st_name = name.split('<').collect::<Vec<_>>()[0];
-            let st_with_generic = self.get_type_walker(st_name, range)?;
-            if let PLType::Struct(st) = &*st_with_generic.borrow() {
-                if let Some(res) = st.generic_infer.borrow().get(name) {
-                    return Ok(res.clone());
-                }
-            };
         }
         Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
     }

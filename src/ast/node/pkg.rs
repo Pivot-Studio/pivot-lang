@@ -112,7 +112,7 @@ impl Node for UseNode {
                 let mod_id = path.file_name().unwrap().to_str().unwrap();
                 if let Some(m) = ctx.plmod.submods.get(mod_id) {
                     let n = self.ids.last().unwrap();
-                    if let Some(tp) = m.get_type(&n.name, n.range, ctx) {
+                    if let Ok(tp) = m.get_type(&n.name, n.range, ctx) {
                         let t = match &*tp.borrow() {
                             PLType::Fn(_) => SemanticTokenType::FUNCTION,
                             PLType::Struct(_) => SemanticTokenType::STRUCT,
@@ -265,7 +265,7 @@ impl Node for ExternIdNode {
             );
             return g.new_output(pltype).set_const().to_result();
         }
-        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {
+        if let Ok(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {
             let mtp = tp.clone();
             let re = match &*mtp.borrow() {
                 PLType::Fn(_) => {
@@ -314,7 +314,8 @@ impl ExternIdNode {
                 return Err(ctx.add_diag(ns.range.new_err(ErrorCode::UNRESOLVED_MODULE)));
             }
         }
-        if let Some(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {
+
+        if let Ok(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {
             // 必须是public的
             _ = tp.borrow().expect_pub(ctx, self.range);
             let re = match *tp.clone().borrow() {
