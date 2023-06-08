@@ -285,12 +285,17 @@ impl Node for TakeOpNode {
         ctx.if_completion(self.range, || {
             let mut comps = match &*ctx.auto_deref_tp(head_pltype.clone()).borrow() {
                 PLType::Struct(s) => s.get_completions(ctx),
+                PLType::Union(s) => s.get_mthd_completions(ctx),
                 PLType::Trait(s) => s.get_trait_completions(ctx),
                 _ => vec![],
             };
             let mut map = Default::default();
             match &*ctx.auto_deref_tp(head_pltype.clone()).borrow() {
                 PLType::Struct(s) => {
+                    ctx.get_global_mthd_completions(&s.get_full_name(), &mut map);
+                    ctx.get_global_mthd_completions(&s.get_full_name_except_generic(), &mut map);
+                }
+                PLType::Union(s) => {
                     ctx.get_global_mthd_completions(&s.get_full_name(), &mut map);
                     ctx.get_global_mthd_completions(&s.get_full_name_except_generic(), &mut map);
                 }
@@ -407,7 +412,11 @@ fn handle_glob_mthd<T: TraitImplAble>(
     {
         return pack_mthd(ctx, mthd, headptr, head_pltype, id_range);
     };
-    Err(ctx.add_diag(id.range.new_err(ErrorCode::METHOD_NOT_FOUND)))
+    Err(id
+        .range
+        .new_err(ErrorCode::METHOD_NOT_FOUND)
+        .set_source(&ctx.get_file())
+        .add_to_ctx(ctx))
 }
 
 fn pack_mthd(

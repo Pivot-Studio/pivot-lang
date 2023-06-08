@@ -1,22 +1,27 @@
 use project1::tmod;
 pub trait namet {
-    fn namet() void;
+    fn nametf() void;
 
 }
 
-impl<T> namet for tmod::name<T> {
-    fn namet() void {
+impl<T> namet for tmod::mod_struct<T> {
+    fn nametf() void {
         return;
     }
 
 }
 
+pub fn name<T>(a:tmod::mod_struct<T>) void {
+    
+    return;
+}
+
 // TODO
-impl tmod::name<T> {
+impl tmod::mod_struct<T> {
 }
 
 impl namet for i64 {
-    fn namet() void {
+    fn nametf() void {
         return;
     }
 

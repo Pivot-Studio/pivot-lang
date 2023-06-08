@@ -1,11 +1,14 @@
 use std::{cell::RefCell, sync::Arc};
 
+use lsp_types::{Command, CompletionItem, CompletionItemKind, InsertTextFormat};
 use rustc_hash::FxHashMap;
 
 use crate::{
     ast::{
+        ctx::Ctx,
         diag::{ErrorCode, PLDiag},
         node::RangeTrait,
+        tokens::TokenType,
         traits::CustomType,
     },
     format_label,
@@ -36,6 +39,32 @@ pub trait ImplAble: RangeTrait + CustomType + TraitImplAble {
         }
         table.insert(name.to_owned(), value);
         Ok(())
+    }
+    fn get_mthd_completions(&self, ctx: &Ctx) -> Vec<CompletionItem> {
+        let pub_only = self.get_path() != ctx.plmod.path;
+        let mut completions = Vec::new();
+        let mut f = |name: &String, v: &FNValue| {
+            if pub_only && !v.is_modified_by(TokenType::PUB) {
+                return;
+            }
+            completions.push(CompletionItem {
+                kind: Some(CompletionItemKind::METHOD),
+                label: name.clone(),
+                detail: Some("method".to_string()),
+                insert_text: Some(v.gen_snippet()),
+                insert_text_format: Some(InsertTextFormat::SNIPPET),
+                command: Some(Command::new(
+                    "trigger help".to_string(),
+                    "editor.action.triggerParameterHints".to_string(),
+                    None,
+                )),
+                ..Default::default()
+            });
+        };
+        for (name, v) in self.get_method_table().borrow().iter() {
+            f(name, &v.clone().borrow());
+        }
+        completions
     }
 }
 

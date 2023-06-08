@@ -479,6 +479,7 @@ impl StructDefNode {
             is_tuple: false,
             generic_infer_types: Default::default(),
             methods: Default::default(),
+            generic_infer: Default::default(),
             trait_methods_impl: Default::default(),
         })));
         if self.generics.is_none() {

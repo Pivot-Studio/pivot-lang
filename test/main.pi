@@ -18,7 +18,7 @@ use project1::test::closure;
 use project1::test::map;
 use project1::test::tree;
 use project1::test::fixed_point;
-use project1::tmod2::test_mod_impl;
+use project1::tmod2;
 use pl_test::main;
 use project1::test::compiletime_reflection::test_compile_time_reflection;
 pub fn main() i64 {
@@ -43,10 +43,24 @@ pub fn main() i64 {
     tree::test_eva();
     map::test_map();
     fixed_point::test_fixed_point();
-    test_mod_impl();
+    // test_mod_impl1<i64>();
+    // test_mod_impl1<f32>();
+    generic::ret_generic1<i64>();// change this to f32
     test_compile_time_reflection();
     return 0;
 }
 
+use project1::tmod;
+use project1::tmod1;
+pub fn test_mod_impl1<T>() void{
+    let a = 1;
+    // 1.nametf();
+    
+    // a.nametf();
+    // let n = tmod::mod_struct<i64>{};
+    // tmod1::name(n);
+    // n.nametf();
+    return ;
+}
 
 

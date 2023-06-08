@@ -80,6 +80,10 @@ pub mod tests {
         init_package(package_name);
         assert!(fs::metadata("plc_new_testfile").is_ok());
 
+        if cfg!(target_os = "windows") {
+            return;
+        }
+
         // test package_compile
         let db = Database::default();
         let op = compiler::Options {

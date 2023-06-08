@@ -822,6 +822,7 @@ impl FNValue {
         let f = self.clone();
         if let Some(n) = &mut self.node {
             builder.rm_curr_debug_location();
+            // gencode
             n.gen_fntype(ctx, false, builder, f)?;
         } else {
             unreachable!()
@@ -943,6 +944,8 @@ pub struct STType {
     pub generic_infer_types: IndexMap<String, Arc<RefCell<PLType>>>,
     pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
     pub trait_methods_impl: TraitMthdImpl,
+    // key name<i64>/name<f64> ...
+    pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
 }
 
 pub type TraitMthdImpl = Arc<RefCell<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>>;
@@ -1217,6 +1220,9 @@ impl STType {
             res.generic_infer_types = generic_infer_types;
             let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
             pltype.replace(PLType::Struct(res.clone()));
+            self.generic_infer
+                .borrow_mut()
+                .insert(res.name, pltype.clone());
             Ok(pltype)
         })
     }
@@ -1234,32 +1240,6 @@ impl STType {
                 insert_text_format: Some(InsertTextFormat::PLAIN_TEXT),
                 ..Default::default()
             });
-        }
-        completions
-    }
-    pub fn get_mthd_completions(&self, ctx: &Ctx) -> Vec<CompletionItem> {
-        let pub_only = self.path != ctx.plmod.path;
-        let mut completions = Vec::new();
-        let mut f = |name: &String, v: &FNValue| {
-            if pub_only && !v.is_modified_by(TokenType::PUB) {
-                return;
-            }
-            completions.push(CompletionItem {
-                kind: Some(CompletionItemKind::METHOD),
-                label: name.clone(),
-                detail: Some("method".to_string()),
-                insert_text: Some(v.gen_snippet()),
-                insert_text_format: Some(InsertTextFormat::SNIPPET),
-                command: Some(Command::new(
-                    "trigger help".to_string(),
-                    "editor.action.triggerParameterHints".to_string(),
-                    None,
-                )),
-                ..Default::default()
-            });
-        };
-        for (name, v) in self.methods.borrow().iter() {
-            f(name, &v.clone().borrow());
         }
         completions
     }

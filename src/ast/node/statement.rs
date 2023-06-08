@@ -233,6 +233,7 @@ impl Node for StatementsNode {
                     symbol
                         .range
                         .new_warn(WarnCode::UNUSED_VARIABLE)
+                        .set_source(&ctx.get_file())
                         .add_label(
                             symbol.range,
                             ctx.get_file(),

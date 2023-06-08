@@ -19,7 +19,6 @@ use super::pltype::ImplAble;
 use super::pltype::PLType;
 use super::pltype::PriType;
 use super::pltype::TraitImplAble;
-use super::pltype::TraitMthdImpl;
 use super::range::Pos;
 use super::range::Range;
 use super::tokens::TokenType;
@@ -100,7 +99,7 @@ pub struct Ctx<'a> {
     pub in_macro: bool,
     pub closure_data: Option<RefCell<ClosureCtxData>>,
     pub expect_ty: Option<Arc<RefCell<PLType>>>,
-    pub trait_mthd_table: TraitMthdImpl,
+    // pub trait_mthd_table: TraitMthdImpl,
 }
 
 #[derive(Clone, Default)]
@@ -173,7 +172,6 @@ impl<'a, 'ctx> Ctx<'a> {
             in_macro: false,
             closure_data: None,
             expect_ty: None,
-            trait_mthd_table: Default::default(),
             root: None,
             macro_skip_level: 0,
         }
@@ -209,7 +207,6 @@ impl<'a, 'ctx> Ctx<'a> {
             in_macro: self.in_macro,
             closure_data: None,
             expect_ty: None,
-            trait_mthd_table: Default::default(),
             root,
             macro_skip_level: self.macro_skip_level,
         };
@@ -439,10 +436,8 @@ impl<'a, 'ctx> Ctx<'a> {
         mthd_name: &str,
         fntp: Arc<RefCell<FNValue>>,
     ) {
-        let mut m = self.get_root_ctx().trait_mthd_table.borrow_mut();
-        m.entry(st_name.to_string())
-            .or_insert_with(Default::default)
-            .insert(mthd_name.to_owned(), fntp);
+        self.plmod
+            .add_to_global_mthd_table(st_name, mthd_name, fntp);
     }
     pub fn get_root_ctx(&self) -> &Ctx {
         let mut ctx = self;
@@ -453,14 +448,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn find_global_method(&self, name: &str, mthd: &str) -> Option<Arc<RefCell<FNValue>>> {
-        let mut m = self.get_root_ctx().trait_mthd_table.borrow_mut();
-        let table = m.get_mut(name);
-        if let Some(table) = table {
-            if let Some(fntp) = table.get(mthd) {
-                return Some(fntp.clone());
-            }
-        }
-        None
+        self.plmod.find_global_method(name, mthd)
     }
 
     pub fn get_global_mthd_completions(
@@ -468,28 +456,7 @@ impl<'a, 'ctx> Ctx<'a> {
         name: &str,
         set: &mut FxHashMap<String, CompletionItem>,
     ) {
-        let mut m = self.get_root_ctx().trait_mthd_table.borrow_mut();
-        let table = m.get_mut(name);
-        if let Some(table) = table {
-            table.iter().for_each(|(k, v)| {
-                set.insert(
-                    k.clone(),
-                    CompletionItem {
-                        kind: Some(CompletionItemKind::METHOD),
-                        label: k.clone(),
-                        detail: Some("method".to_string()),
-                        insert_text: Some(v.borrow().gen_snippet()),
-                        insert_text_format: Some(InsertTextFormat::SNIPPET),
-                        command: Some(Command::new(
-                            "trigger help".to_string(),
-                            "editor.action.triggerParameterHints".to_string(),
-                            None,
-                        )),
-                        ..Default::default()
-                    },
-                );
-            });
-        }
+        self.plmod.get_global_mthd_completions(name, set);
     }
 
     fn add_trait_impl_method<T: TraitImplAble>(
@@ -731,8 +698,7 @@ impl<'a, 'ctx> Ctx<'a> {
             },
         );
     }
-
-    pub fn get_type(&self, name: &str, range: Range) -> Result<Arc<RefCell<PLType>>, PLDiag> {
+    fn get_type_walker(&self, name: &str, range: Range) -> Result<Arc<RefCell<PLType>>, PLDiag> {
         if let Some(pv) = self.generic_types.get(name) {
             self.set_if_refs_tp(pv.clone(), range);
             self.send_if_go_to_def(
@@ -746,8 +712,25 @@ impl<'a, 'ctx> Ctx<'a> {
             return Ok(pv);
         }
         if let Some(father) = self.father {
-            let re = father.get_type(name, range);
+            let re = father.get_type_walker(name, range);
             return re;
+        }
+        Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
+    }
+    pub fn get_type(&self, name: &str, range: Range) -> Result<Arc<RefCell<PLType>>, PLDiag> {
+        if let Ok(re) = self.get_type_walker(name, range) {
+            return Ok(re);
+        }
+        if name.contains('<') {
+            // generic
+            // name<i64> ctx --name-> name --name<i64>--> name<i64>
+            let st_name = name.split('<').collect::<Vec<_>>()[0];
+            let st_with_generic = self.get_type_walker(st_name, range)?;
+            if let PLType::Struct(st) = &*st_with_generic.borrow() {
+                if let Some(res) = st.generic_infer.borrow().get(name) {
+                    return Ok(res.clone());
+                }
+            };
         }
         Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
     }
