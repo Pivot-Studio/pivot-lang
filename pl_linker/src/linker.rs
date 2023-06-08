@@ -138,27 +138,31 @@ impl Linker for LdLinker {
         .for_each(|arg| {
             self.push_args(arg);
         });
-        // lld is so buggy that we have to use ld.
-        // lld gives error: `undefined symbol: "llvm.global_ctors"` while ld works fine.
-        let re = Command::new("ld").args(&self.args).output();
-        if let Ok(re) = re {
-            if !re.status.success() {
-                eprintln!(
-                    "link failed\nargs: {:?}\nld stdout: {}, stderr: {}",
-                    self.args,
-                    String::from_utf8_lossy(&re.stdout),
-                    String::from_utf8_lossy(&re.stderr)
-                );
-                Err(LinkerError::LinkError("link failed".to_string()))
-            } else {
-                Ok(())
-            }
-        } else {
-            Err(LinkerError::LinkError(format!(
-                "link failed: {:?}",
-                re.err()
-            )))
-        }
+        lld_rs::link(lld_rs::LldFlavor::Elf, &self.args)
+        .ok()
+        .map_err(LinkerError::LinkError)
+
+        // // lld is so buggy that we have to use ld.
+        // // lld gives error: `undefined symbol: "llvm.global_ctors"` while ld works fine.
+        // let re = Command::new("ld").args(&self.args).output();
+        // if let Ok(re) = re {
+        //     if !re.status.success() {
+        //         eprintln!(
+        //             "link failed\nargs: {:?}\nld stdout: {}, stderr: {}",
+        //             self.args,
+        //             String::from_utf8_lossy(&re.stdout),
+        //             String::from_utf8_lossy(&re.stderr)
+        //         );
+        //         Err(LinkerError::LinkError("link failed".to_string()))
+        //     } else {
+        //         Ok(())
+        //     }
+        // } else {
+        //     Err(LinkerError::LinkError(format!(
+        //         "link failed: {:?}",
+        //         re.err()
+        //     )))
+        // }
     }
 
     fn push_args(&mut self, arg: &str) {

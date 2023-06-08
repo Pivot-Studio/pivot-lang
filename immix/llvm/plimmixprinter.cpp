@@ -138,7 +138,7 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
     }
   }
   AP.OutStreamer.get()->AddComment("global numbers");
-  auto g = M.global_size();
+  auto g = M.global_size() - 2;// skip magic variables e.g. @llvm.global_ctors
   AP.emitInt32(g);
   // Align to address width.
   AP.emitAlignment(llvm::Align(8));
@@ -146,6 +146,11 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
   {
     AP.OutStreamer.get()->AddComment("global address");
     const GlobalValue *GV = &*GI;
+    if (GV->getName().contains("llvm."))
+    {
+      continue;
+    }
+    
     AP.emitLabelPlusOffset(AP.getSymbol(GV) /*Hi*/, 0 /*Offset*/, IntPtrSize /*Size*/);
   }
 }
@@ -174,6 +179,8 @@ struct Immix : public ModulePass {
     }
     auto gc_init_c = M.getOrInsertFunction("__gc_init_stackmap",Type::getVoidTy(M.getContext()));
     auto immix_init_c = M.getOrInsertFunction("immix_gc_init",Type::getVoidTy(M.getContext()), PointerType::get(IntegerType::get(M.getContext(),8),0));
+    auto immix_init_f = cast<Function>(immix_init_c.getCallee());
+    immix_init_f->setLinkage(GlobalValue::LinkageTypes::ExternalWeakLinkage);
     Function* gc_init_f = cast<Function>(gc_init_c.getCallee());
     gc_init_f->setLinkage(GlobalValue::LinkageTypes::InternalLinkage);
     BasicBlock* block = BasicBlock::Create(M.getContext(), "entry", gc_init_f);
@@ -182,16 +189,19 @@ struct Immix : public ModulePass {
     symbol += "_GC_MAP_";
     symbol += M.getSourceFileName();
     auto g = M.getOrInsertGlobal(symbol, Type::getInt8Ty(M.getContext()));
+    GlobalVariable* g_c = cast<GlobalVariable>(g);
+    g_c->setLinkage(GlobalValue::LinkageTypes::ExternalWeakLinkage);
+    // auto g = M.getNamedGlobal(symbol);
     SmallVector<Value *, 1> assertArgs;
     assertArgs.push_back(g);
     builder.CreateCall(immix_init_c, assertArgs);
     builder.CreateRetVoid();
     // ctor_c->setInitializer(ConstantArray::get(ArrayType::get(stp,1),{ConstantStruct::get(stp,{ConstantInt::get(IntegerType::get(M.getContext(), 32), 65535),gc_init_f, ConstantExpr::getNullValue(Type::getInt8PtrTy(M.getContext()))})}));
-    
-    appendToGlobalCtors(M, gc_init_f, 1000);
-    errs() << "Hello: ";
-    errs().write_escaped(M.getName()) << '\n';
-    return false;
+    appendToCompilerUsed(M, gc_init_f);
+    appendToGlobalCtors(M, gc_init_f, -1);
+    // errs() << "Hello: ";
+    // errs().write_escaped(M.getName()) << '\n';
+    return true;
   }
 }; // end of struct Hello
 }  // end of anonymous namespace
