@@ -1,10 +1,9 @@
-// lib/MyGC/MyGC.cpp - Example LLVM GC plugin
-
 // #include "llvm/CodeGen/GCStrategy.h"
 #include "llvm/IR/GCStrategy.h"
 #include "llvm/IR/BuiltinGCs.h"
 #include "llvm/Support/Compiler.h"
 #include "plimmixprinter.cpp"
+#include "plimmix_pass.cpp"
 
 using namespace llvm;
 
@@ -27,6 +26,11 @@ namespace
 extern "C" void LLVMLinkPLImmixGC()
 {
     linkAllBuiltinGCs();
+}
+#include "llvm-c/Transforms/PassManagerBuilder.h"
+
+extern "C" void add_module_pass(llvm::legacy::PassManagerBase * PB) {
+    PB->add(new Immix());
 }
 
 extern "C"

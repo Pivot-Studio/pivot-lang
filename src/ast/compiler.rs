@@ -1,6 +1,6 @@
 use super::node::program::ModWrapper;
 #[cfg(feature = "llvm")]
-use crate::ast::pass::{IS_JIT, MAP_NAMES};
+use crate::ast::jit_config::IS_JIT;
 use crate::{
     ast::{accumulators::ModBuffer, diag::handle_errors, node::program::Program},
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
@@ -97,13 +97,13 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
 #[cfg(feature = "llvm")]
 pub fn run_pass(llvmmod: &Module, op: OptimizationLevel) {
     let pass_manager_builder = PassManagerBuilder::create();
+    // unsafe { llvmaddPass(pass_manager_builder.as_mut_ptr() as _) };
     pass_manager_builder.set_optimization_level(op);
     // Create FPM MPM
     let fpm = PassManager::create(llvmmod);
-
     let mpm: PassManager<Module> = PassManager::create(());
     if op != OptimizationLevel::None {
-        pass_manager_builder.set_size_level(2);
+        pass_manager_builder.set_size_level(0);
         pass_manager_builder.populate_function_pass_manager(&fpm);
         pass_manager_builder.populate_module_pass_manager(&mpm);
         pass_manager_builder.populate_lto_pass_manager(&mpm, false, true);
@@ -131,7 +131,6 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let total_steps = if op.jit { 2 } else { 3 };
     IS_JIT.store(op.jit, Ordering::Relaxed);
-    MAP_NAMES.inner.lock().borrow_mut().clear();
     let pb = &COMPILE_PROGRESS;
     pb.enable_steady_tick(Duration::from_millis(50));
     pb.set_style(PROGRESS_STYLE.clone());

@@ -1,6 +1,5 @@
 #include "llvm/CodeGen/GCMetadataPrinter.h"
 #include "llvm/Support/Compiler.h"
-
 using namespace llvm;
 
 namespace
@@ -40,8 +39,8 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
   AP.emitAlignment(llvm::Align(8));
   // Put this in the data section.
   AP.OutStreamer.get()->SwitchSection(AP.getObjFileLowering().getDataSection());
-  std::string symbol;
-  symbol += "_GC_MAP_";
+  std::string symbol ;
+  symbol += "_IMMIX_GC_MAP_";
   symbol += M.getSourceFileName();
   // printf("symbol: %s \n", symbol.c_str());
 
@@ -137,7 +136,17 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
     }
   }
   AP.OutStreamer.get()->AddComment("global numbers");
-  auto g = M.global_size();
+  int ii = 0;
+  for (auto GI = M.global_begin(), GE = M.global_end(); GI != GE; ++GI)
+  {
+    const GlobalValue *GV = &*GI;
+    if (GV->getName().contains("llvm."))
+    {
+      continue;
+    }
+    ii++;
+  }
+  auto g = ii; // skip magic variables e.g. @llvm.global_ctors
   AP.emitInt32(g);
   // Align to address width.
   AP.emitAlignment(llvm::Align(8));
@@ -145,6 +154,11 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
   {
     AP.OutStreamer.get()->AddComment("global address");
     const GlobalValue *GV = &*GI;
+    if (GV->getName().contains("llvm."))
+    {
+      continue;
+    }
+
     AP.emitLabelPlusOffset(AP.getSymbol(GV) /*Hi*/, 0 /*Offset*/, IntPtrSize /*Size*/);
   }
 }

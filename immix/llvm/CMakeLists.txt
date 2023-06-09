@@ -14,7 +14,8 @@ include_directories(${LLVM_INCLUDE_DIRS})
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
 
 set(SOURCES
-        memory_manager.cpp
+  memory_manager.cpp
+  plimmix_pass.cpp
   plimmix.cpp
   plimmixprinter.cpp
 )

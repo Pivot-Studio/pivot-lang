@@ -8,6 +8,7 @@ fn main() {
         println!("cargo:rerun-if-changed=build.rs");
         println!("cargo:rerun-if-changed=llvm/plimmixprinter.cpp");
         println!("cargo:rerun-if-changed=llvm/plimmix.cpp");
+        println!("cargo:rerun-if-changed=llvm/plimmix_pass.cpp");
         println!("cargo:rerun-if-changed=llvm/memory_manager.cpp");
         println!("cargo:rerun-if-changed=llvm/CMakeLists.txt");
         let dst = cmake::Config::new("llvm").static_crt(true).build();

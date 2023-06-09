@@ -34,7 +34,6 @@ use rustc_hash::FxHashMap;
 
 use crate::ast::{
     diag::PLDiag,
-    pass::run_immix_pass,
     pltype::{ClosureType, TraitImplAble},
 };
 
@@ -142,6 +141,7 @@ pub struct LLVMBuilder<'a, 'ctx> {
     ditypes_placeholder: Arc<RefCell<FxHashMap<String, RefCell<Vec<DIDerivedType<'ctx>>>>>>, // hold the generated debug info type place holder
     ditypes: Arc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
     heap_stack_map: Arc<RefCell<FxHashMap<ValueHandle, ValueHandle>>>,
+    optimized: Arc<RefCell<bool>>,
 }
 
 pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
@@ -189,6 +189,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             block_table: Arc::new(RefCell::new(FxHashMap::default())),
             block_reverse_table: Arc::new(RefCell::new(FxHashMap::default())),
             heap_stack_map: Arc::new(RefCell::new(FxHashMap::default())),
+            optimized: Arc::new(RefCell::new(false)),
         }
     }
     fn alloc_raw(
@@ -1184,6 +1185,30 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .unwrap()
             .into_pointer_value()
     }
+    fn optimize(&self) {
+        if *self.optimized.borrow() {
+            return;
+        }
+        if crate::ast::jit_config::IS_JIT.load(std::sync::atomic::Ordering::Relaxed) {
+            // jit is using shadow stack, skip immix pass
+            self.module.get_functions().for_each(|f| {
+                f.set_gc("shadow-stack");
+            });
+        } else {
+            extern "C" {
+                fn add_module_pass(ptr: *mut u8);
+            }
+            let ptr = unsafe { llvm_sys::core::LLVMCreatePassManager() };
+            let mpm: inkwell::passes::PassManager<Module> =
+                unsafe { inkwell::passes::PassManager::new(ptr) };
+
+            unsafe {
+                add_module_pass(ptr as _);
+            };
+            mpm.run_on(self.module);
+        }
+        *self.optimized.borrow_mut() = true;
+    }
 }
 impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     fn bitcast(
@@ -1605,13 +1630,15 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.dibuilder.finalize();
     }
     fn print_to_file(&self, file: &Path) -> Result<(), String> {
+        self.optimize();
         if let Err(s) = self.module.print_to_file(file) {
             return Err(s.to_string());
         }
         Ok(())
     }
     fn write_bitcode_to_path(&self, path: &Path) -> bool {
-        run_immix_pass(self.module);
+        self.optimize();
+        // run_immix_pass(self.module);
         self.module.write_bitcode_to_path(path)
     }
     fn int_value(&self, ty: &PriType, v: u64, sign_ext: bool) -> ValueHandle {

@@ -69,12 +69,13 @@ struct LdLinker {
 impl LdLinker {
     fn new(target: &spec::Target) -> Self {
         let mut args = vec![];
-        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-        {
-            // https://github.com/flamegraph-rs/flamegraph
-            // https://crbug.com/919499#c16
-            args.push("--no-rosegment".to_owned());
-        }
+        // this is lld flag, not ld flag.
+        // #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+        // {
+        //     // https://github.com/flamegraph-rs/flamegraph
+        //     // https://crbug.com/919499#c16
+        //     args.push("--no-rosegment".to_owned());
+        // }
         args.extend(target.options.pre_link_args.iter().map(|x| x.to_string()));
         LdLinker { args }
     }
@@ -138,9 +139,31 @@ impl Linker for LdLinker {
         .for_each(|arg| {
             self.push_args(arg);
         });
-        lld_rs::link(lld_rs::LldFlavor::Elf, &self.args)
-            .ok()
-            .map_err(LinkerError::LinkError)
+        // lld_rs::link(lld_rs::LldFlavor::Elf, &self.args)
+        //     .ok()
+        //     .map_err(LinkerError::LinkError)
+
+        // lld is so buggy that we have to use ld.
+        // lld linked exeutable doesn't seems to respect `llvm.global_ctors` while ld works fine.
+        let re = Command::new("ld").args(&self.args).output();
+        if let Ok(re) = re {
+            if !re.status.success() {
+                eprintln!(
+                    "link failed\nargs: {:?}\nld stdout: {}, stderr: {}",
+                    self.args,
+                    String::from_utf8_lossy(&re.stdout),
+                    String::from_utf8_lossy(&re.stderr)
+                );
+                Err(LinkerError::LinkError("link failed".to_string()))
+            } else {
+                Ok(())
+            }
+        } else {
+            Err(LinkerError::LinkError(format!(
+                "link failed: {:?}",
+                re.err()
+            )))
+        }
     }
 
     fn push_args(&mut self, arg: &str) {
