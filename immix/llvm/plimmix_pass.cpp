@@ -43,7 +43,7 @@ namespace
       builder.CreateRetVoid();
       // ctor_c->setInitializer(ConstantArray::get(ArrayType::get(stp,1),{ConstantStruct::get(stp,{ConstantInt::get(IntegerType::get(M.getContext(), 32), 65535),gc_init_f, ConstantExpr::getNullValue(Type::getInt8PtrTy(M.getContext()))})}));
       appendToCompilerUsed(M, gc_init_f);
-      appendToGlobalCtors(M, gc_init_f, -1);
+      appendToGlobalCtors(M, gc_init_f, 1000);
       // errs() << "Hello: ";
       // errs().write_escaped(M.getName()) << '\n';
       return true;
