@@ -26,8 +26,8 @@ namespace
       auto immix_init_f = cast<Function>(immix_init_c.getCallee());
       immix_init_f->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
       SmallVector<Type *, 1> argTypes;
-      argTypes.push_back( PointerType::get(IntegerType::get(M.getContext(), 8), 0));
-      std::string symbol ;
+      argTypes.push_back(PointerType::get(IntegerType::get(M.getContext(), 8), 0));
+      std::string symbol;
       symbol += "_IMMIX_GC_MAP_";
       symbol += M.getSourceFileName();
       auto g = M.getOrInsertGlobal(symbol, Type::getInt8Ty(M.getContext()));
@@ -36,21 +36,11 @@ namespace
       // auto g = M.getNamedGlobal(symbol);
       SmallVector<Value *, 1> assertArgs;
       assertArgs.push_back(g);
-      Function * gc_init_f;
-      std::tie(gc_init_f,std::ignore )= createSanitizerCtorAndInitFunctions(M,"__gc_init_stackmap","immix_gc_init", argTypes,  assertArgs);
-      // gc_init_f->setLinkage(GlobalValue::LinkageTypes::InternalLinkage);
-      // BasicBlock *block = BasicBlock::Create(M.getContext(), "entry", gc_init_f);
-      // IRBuilder<> builder(block);
+      Function *gc_init_f;
+      std::tie(gc_init_f, std::ignore) = createSanitizerCtorAndInitFunctions(M, "__gc_init_stackmap", "immix_gc_init", argTypes, assertArgs);
 
-
-
-      // builder.CreateCall(immix_init_c, assertArgs);
-      // builder.CreateRetVoid();
-      // ctor_c->setInitializer(ConstantArray::get(ArrayType::get(stp,1),{ConstantStruct::get(stp,{ConstantInt::get(IntegerType::get(M.getContext(), 32), 65535),gc_init_f, ConstantExpr::getNullValue(Type::getInt8PtrTy(M.getContext()))})}));
-      // appendToCompilerUsed(M, gc_init_f);
       appendToGlobalCtors(M, gc_init_f, 1000);
-      errs() << "Hello: ";
-      errs().write_escaped(M.getName()) << '\n';
+
       return true;
     }
   };

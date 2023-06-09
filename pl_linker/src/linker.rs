@@ -69,6 +69,7 @@ struct LdLinker {
 impl LdLinker {
     fn new(target: &spec::Target) -> Self {
         let mut args = vec![];
+        // this is lld flag, not ld flag.
         // #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
         // {
         //     // https://github.com/flamegraph-rs/flamegraph
@@ -143,7 +144,7 @@ impl Linker for LdLinker {
         //     .map_err(LinkerError::LinkError)
 
         // lld is so buggy that we have to use ld.
-        // lld gives error: `undefined symbol: "llvm.global_ctors"` while ld works fine.
+        // lld linked exeutable doesn't seems to respect `llvm.global_ctors` while ld works fine.
         let re = Command::new("ld").args(&self.args).output();
         if let Ok(re) = re {
             if !re.status.success() {
