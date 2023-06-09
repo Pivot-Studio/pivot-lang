@@ -38,7 +38,8 @@ namespace
       assertArgs.push_back(g);
       Function *gc_init_f;
       std::tie(gc_init_f, std::ignore) = createSanitizerCtorAndInitFunctions(M, "__gc_init_stackmap", "immix_gc_init", argTypes, assertArgs);
-
+      gc_init_f->setLinkage(GlobalValue::LinkageTypes::InternalLinkage);
+      // appendToCompilerUsed(M, gc_init_f);
       appendToGlobalCtors(M, gc_init_f, 1000);
 
       return true;

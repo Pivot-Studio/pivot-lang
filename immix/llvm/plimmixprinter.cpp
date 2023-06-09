@@ -146,7 +146,7 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
     }
     ii++;
   }
-  auto g = M.global_size() - ii; // skip magic variables e.g. @llvm.global_ctors
+  auto g = ii; // skip magic variables e.g. @llvm.global_ctors
   AP.emitInt32(g);
   // Align to address width.
   AP.emitAlignment(llvm::Align(8));
