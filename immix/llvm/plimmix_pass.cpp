@@ -21,15 +21,12 @@ namespace
         Function *FV = &*FB;
         FV->setGC("plimmix");
       }
-      auto gc_init_c = M.getOrInsertFunction("__gc_init_stackmap", Type::getVoidTy(M.getContext()));
+      // auto gc_init_c = M.getOrInsertFunction("__gc_init_stackmap", Type::getVoidTy(M.getContext()));
       auto immix_init_c = M.getOrInsertFunction("immix_gc_init", Type::getVoidTy(M.getContext()), PointerType::get(IntegerType::get(M.getContext(), 8), 0));
       auto immix_init_f = cast<Function>(immix_init_c.getCallee());
       immix_init_f->setLinkage(GlobalValue::LinkageTypes::ExternalLinkage);
-      Function *gc_init_f = cast<Function>(gc_init_c.getCallee());
-      gc_init_f->setLinkage(GlobalValue::LinkageTypes::InternalLinkage);
-      BasicBlock *block = BasicBlock::Create(M.getContext(), "entry", gc_init_f);
-      IRBuilder<> builder(block);
-
+      SmallVector<Type *, 1> argTypes;
+      argTypes.push_back( PointerType::get(IntegerType::get(M.getContext(), 8), 0));
       std::string symbol ;
       symbol += "_IMMIX_GC_MAP_";
       symbol += M.getSourceFileName();
@@ -39,13 +36,21 @@ namespace
       // auto g = M.getNamedGlobal(symbol);
       SmallVector<Value *, 1> assertArgs;
       assertArgs.push_back(g);
-      builder.CreateCall(immix_init_c, assertArgs);
-      builder.CreateRetVoid();
+      Function * gc_init_f;
+      std::tie(gc_init_f,std::ignore )= createSanitizerCtorAndInitFunctions(M,"__gc_init_stackmap","immix_gc_init", argTypes,  assertArgs);
+      // gc_init_f->setLinkage(GlobalValue::LinkageTypes::InternalLinkage);
+      // BasicBlock *block = BasicBlock::Create(M.getContext(), "entry", gc_init_f);
+      // IRBuilder<> builder(block);
+
+
+
+      // builder.CreateCall(immix_init_c, assertArgs);
+      // builder.CreateRetVoid();
       // ctor_c->setInitializer(ConstantArray::get(ArrayType::get(stp,1),{ConstantStruct::get(stp,{ConstantInt::get(IntegerType::get(M.getContext(), 32), 65535),gc_init_f, ConstantExpr::getNullValue(Type::getInt8PtrTy(M.getContext()))})}));
-      appendToCompilerUsed(M, gc_init_f);
+      // appendToCompilerUsed(M, gc_init_f);
       appendToGlobalCtors(M, gc_init_f, 1000);
-      // errs() << "Hello: ";
-      // errs().write_escaped(M.getName()) << '\n';
+      errs() << "Hello: ";
+      errs().write_escaped(M.getName()) << '\n';
       return true;
     }
   };

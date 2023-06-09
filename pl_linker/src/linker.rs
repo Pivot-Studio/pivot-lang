@@ -267,7 +267,6 @@ impl Linker for Ld64Linker {
                     .map_err(LinkerError::LinkError)
             }
         } else {
-            println!("ld not found, try to link with lld, this may break gc(https://github.com/rust-lang/backtrace-rs/issues/150)");
             lld_rs::link(lld_rs::LldFlavor::MachO, &self.args)
                 .ok()
                 .map_err(LinkerError::LinkError)

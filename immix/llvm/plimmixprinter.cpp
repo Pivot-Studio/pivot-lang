@@ -136,7 +136,17 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
     }
   }
   AP.OutStreamer.get()->AddComment("global numbers");
-  auto g = M.global_size() - 2; // skip magic variables e.g. @llvm.global_ctors
+  int ii = 0;
+  for (auto GI = M.global_begin(), GE = M.global_end(); GI != GE; ++GI)
+  {
+    const GlobalValue *GV = &*GI;
+    if (GV->getName().contains("llvm."))
+    {
+      continue;
+    }
+    ii++;
+  }
+  auto g = M.global_size() - ii; // skip magic variables e.g. @llvm.global_ctors
   AP.emitInt32(g);
   // Align to address width.
   AP.emitAlignment(llvm::Align(8));
