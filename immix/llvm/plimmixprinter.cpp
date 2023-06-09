@@ -39,12 +39,14 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
   AP.emitAlignment(llvm::Align(8));
   // Put this in the data section.
   AP.OutStreamer.get()->SwitchSection(AP.getObjFileLowering().getDataSection());
-  // symbol += M.getSourceFileName();
+  std::string symbol ;
+  symbol += "_IMMIX_GC_MAP_";
+  symbol += M.getSourceFileName();
   // printf("symbol: %s \n", symbol.c_str());
 
   // *AP.OutStreamer.get()<< AP.MAI->getGlobalDirective();
-  AP.emitGlobalConstant(M.getDataLayout(), M.getOrInsertGlobal("_IMMIX_GC_MAP_", Type::getVoidTy(M.getContext())));
-  AP.OutStreamer.get()->emitLabel(AP.GetExternalSymbolSymbol("_IMMIX_GC_MAP_"));
+  AP.emitGlobalConstant(M.getDataLayout(), M.getOrInsertGlobal(symbol, Type::getVoidTy(M.getContext())));
+  AP.OutStreamer.get()->emitLabel(AP.GetExternalSymbolSymbol(symbol));
   AP.OutStreamer.get()->AddComment("plimmix stackmap format version");
   AP.emitInt32(1);
   AP.emitAlignment(llvm::Align(8));

@@ -139,8 +139,8 @@ impl Linker for LdLinker {
             self.push_args(arg);
         });
         lld_rs::link(lld_rs::LldFlavor::Elf, &self.args)
-        .ok()
-        .map_err(LinkerError::LinkError)
+            .ok()
+            .map_err(LinkerError::LinkError)
 
         // // lld is so buggy that we have to use ld.
         // // lld gives error: `undefined symbol: "llvm.global_ctors"` while ld works fine.

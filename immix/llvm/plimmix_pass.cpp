@@ -29,8 +29,11 @@ namespace
       gc_init_f->setLinkage(GlobalValue::LinkageTypes::InternalLinkage);
       BasicBlock *block = BasicBlock::Create(M.getContext(), "entry", gc_init_f);
       IRBuilder<> builder(block);
-      // symbol += M.getSourceFileName();
-      auto g = M.getOrInsertGlobal("_IMMIX_GC_MAP_", Type::getInt8Ty(M.getContext()));
+
+      std::string symbol ;
+      symbol += "_IMMIX_GC_MAP_";
+      symbol += M.getSourceFileName();
+      auto g = M.getOrInsertGlobal(symbol, Type::getInt8Ty(M.getContext()));
       GlobalVariable *g_c = cast<GlobalVariable>(g);
       g_c->setLinkage(GlobalValue::LinkageTypes::ExternalWeakLinkage);
       // auto g = M.getNamedGlobal(symbol);
@@ -52,8 +55,8 @@ static RegisterPass<Immix> X("plimmix", "plimmix gc Pass",
                              false /* Only looks at CFG */,
                              false /* Analysis Pass */);
 
-static llvm::RegisterStandardPasses Y(
-    llvm::PassManagerBuilder::EP_EarlyAsPossible,
-    [](const llvm::PassManagerBuilder &Builder,
-       llvm::legacy::PassManagerBase &PM)
-    { PM.add(new Immix()); });
+// static llvm::RegisterStandardPasses Y(
+//     llvm::PassManagerBuilder::EP_EarlyAsPossible,
+//     [](const llvm::PassManagerBuilder &Builder,
+//        llvm::legacy::PassManagerBase &PM)
+//     { PM.add(new Immix()); });
