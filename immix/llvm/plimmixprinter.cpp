@@ -1,7 +1,5 @@
 #include "llvm/CodeGen/GCMetadataPrinter.h"
 #include "llvm/Support/Compiler.h"
-#ifndef IMMIX_PRINTER
-#define IMMIX_PRINTER
 using namespace llvm;
 
 namespace
@@ -41,14 +39,12 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
   AP.emitAlignment(llvm::Align(8));
   // Put this in the data section.
   AP.OutStreamer.get()->SwitchSection(AP.getObjFileLowering().getDataSection());
-  std::string symbol;
-  symbol += "_GC_MAP_";
-  symbol += M.getSourceFileName();
+  // symbol += M.getSourceFileName();
   // printf("symbol: %s \n", symbol.c_str());
 
   // *AP.OutStreamer.get()<< AP.MAI->getGlobalDirective();
-  AP.emitGlobalConstant(M.getDataLayout(), M.getOrInsertGlobal(symbol, Type::getVoidTy(M.getContext())));
-  AP.OutStreamer.get()->emitLabel(AP.GetExternalSymbolSymbol(symbol));
+  AP.emitGlobalConstant(M.getDataLayout(), M.getOrInsertGlobal("_IMMIX_GC_MAP_", Type::getVoidTy(M.getContext())));
+  AP.OutStreamer.get()->emitLabel(AP.GetExternalSymbolSymbol("_IMMIX_GC_MAP_"));
   AP.OutStreamer.get()->AddComment("plimmix stackmap format version");
   AP.emitInt32(1);
   AP.emitAlignment(llvm::Align(8));
@@ -138,7 +134,7 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
     }
   }
   AP.OutStreamer.get()->AddComment("global numbers");
-  auto g = M.global_size() - 2;// skip magic variables e.g. @llvm.global_ctors
+  auto g = M.global_size() - 2; // skip magic variables e.g. @llvm.global_ctors
   AP.emitInt32(g);
   // Align to address width.
   AP.emitAlignment(llvm::Align(8));
@@ -150,72 +146,7 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
     {
       continue;
     }
-    
+
     AP.emitLabelPlusOffset(AP.getSymbol(GV) /*Hi*/, 0 /*Offset*/, IntPtrSize /*Size*/);
   }
 }
-
-
-
-#include "llvm/IR/PassManager.h"
-
-
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/Transforms/Utils/ModuleUtils.h"
-namespace {
-struct Immix : public ModulePass {
-  static char ID;
-  Immix() : ModulePass(ID) {}
-
-  bool runOnModule(Module &M) override {
-    // auto ftp = FunctionType::get(Type::getVoidTy(M.getContext()), false);
-    // auto stp = StructType::get(IntegerType::get(M.getContext(), 32),PointerType::get(ftp,0),Type::getInt8PtrTy(M.getContext()));
-    // auto ctor = M.getOrInsertGlobal("llvm.global_ctors", ArrayType::get(stp,1));
-    // auto ctor_c = cast<GlobalVariable>(ctor);
-    // ctor_c->setLinkage(GlobalValue::LinkageTypes::AppendingLinkage);
-    for (auto FB = M.functions().begin(), FE = M.functions().end(); FB != FE; ++FB){
-      Function *FV = &*FB;
-      FV->setGC("plimmix");
-    }
-    auto gc_init_c = M.getOrInsertFunction("__gc_init_stackmap",Type::getVoidTy(M.getContext()));
-    auto immix_init_c = M.getOrInsertFunction("immix_gc_init",Type::getVoidTy(M.getContext()), PointerType::get(IntegerType::get(M.getContext(),8),0));
-    auto immix_init_f = cast<Function>(immix_init_c.getCallee());
-    immix_init_f->setLinkage(GlobalValue::LinkageTypes::ExternalWeakLinkage);
-    Function* gc_init_f = cast<Function>(gc_init_c.getCallee());
-    gc_init_f->setLinkage(GlobalValue::LinkageTypes::InternalLinkage);
-    BasicBlock* block = BasicBlock::Create(M.getContext(), "entry", gc_init_f);
-    IRBuilder<> builder(block);
-    std::string symbol;
-    symbol += "_GC_MAP_";
-    symbol += M.getSourceFileName();
-    auto g = M.getOrInsertGlobal(symbol, Type::getInt8Ty(M.getContext()));
-    GlobalVariable* g_c = cast<GlobalVariable>(g);
-    g_c->setLinkage(GlobalValue::LinkageTypes::ExternalWeakLinkage);
-    // auto g = M.getNamedGlobal(symbol);
-    SmallVector<Value *, 1> assertArgs;
-    assertArgs.push_back(g);
-    builder.CreateCall(immix_init_c, assertArgs);
-    builder.CreateRetVoid();
-    // ctor_c->setInitializer(ConstantArray::get(ArrayType::get(stp,1),{ConstantStruct::get(stp,{ConstantInt::get(IntegerType::get(M.getContext(), 32), 65535),gc_init_f, ConstantExpr::getNullValue(Type::getInt8PtrTy(M.getContext()))})}));
-    appendToCompilerUsed(M, gc_init_f);
-    appendToGlobalCtors(M, gc_init_f, -1);
-    // errs() << "Hello: ";
-    // errs().write_escaped(M.getName()) << '\n';
-    return true;
-  }
-}; // end of struct Hello
-}  // end of anonymous namespace
-#include "llvm-c/Core.h"
-char Immix::ID = 0;
-static RegisterPass<Immix> X("immix", "immix gc Pass",
-                             false /* Only looks at CFG */,
-                             false /* Analysis Pass */);
-
-#include "llvm/IR/LegacyPassManager.h"
-#include "llvm/Transforms/IPO/PassManagerBuilder.h"
-static llvm::RegisterStandardPasses Y(
-    llvm::PassManagerBuilder::EP_EarlyAsPossible,
-    [](const llvm::PassManagerBuilder &Builder,
-       llvm::legacy::PassManagerBase &PM) { PM.add(new Immix()); });
-
-#endif

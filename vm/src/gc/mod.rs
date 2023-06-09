@@ -14,8 +14,7 @@ mod _immix {
 
     #[is_runtime]
     fn immix_gc_init(ptr: *mut u8) {
-        
-        println!("immix gc init, stackmap: {:p}", ptr);
+        trace!("immix gc init, stackmap: {:p}", ptr);
         SimpleLogger::init_from_env_default("GC_LOG", log::LevelFilter::Error);
         #[cfg(not(feature = "jit"))]
         immix::gc_init(ptr)

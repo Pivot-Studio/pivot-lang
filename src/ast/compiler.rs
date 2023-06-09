@@ -97,7 +97,6 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
 #[cfg(feature = "llvm")]
 pub fn run_pass(llvmmod: &Module, op: OptimizationLevel) {
     extern "C" {
-        fn create_pass_manager() -> *mut u8;
         fn add_module_pass(ptr: *mut u8);
     }
     let pass_manager_builder = PassManagerBuilder::create();
@@ -105,11 +104,11 @@ pub fn run_pass(llvmmod: &Module, op: OptimizationLevel) {
     pass_manager_builder.set_optimization_level(op);
     // Create FPM MPM
     let fpm = PassManager::create(llvmmod);
-    let ptr = unsafe { create_pass_manager() };
+    let ptr = unsafe { llvm_sys::core::LLVMCreatePassManager() };
 
-    let mpm: PassManager<Module> = unsafe { PassManager::new(ptr as _) };
+    let mpm: PassManager<Module> = unsafe { PassManager::new(ptr) };
     unsafe {
-        add_module_pass(ptr);
+        add_module_pass(ptr as _);
     };
     // let mpm: PassManager<Module> = PassManager::create(());
     if op != OptimizationLevel::None {
