@@ -1,8 +1,8 @@
 use nom::{
     branch::alt,
-    combinator::{map_res, opt},
-    multi::many0,
-    sequence::{pair, preceded, tuple},
+    combinator::{map, map_res, opt},
+    multi::{many0, separated_list1},
+    sequence::{delimited, pair, preceded, tuple},
     IResult,
 };
 
@@ -102,16 +102,18 @@ pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 
 #[test_parser("let a = 1")]
 #[test_parser_error("leta = 1")]
+#[test_parser("let (a, b) = 1")]
+#[test_parser("let (a, (d,e)) = 1")]
 pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
             tag_token_word(TokenType::LET),
-            identifier,
+            deconstruct,
             opt(pair(tag_token_symbol(TokenType::COLON), type_name)),
             opt(pair(tag_token_symbol(TokenType::ASSIGN), general_exp)),
         )),
-        |((_, start), a, tp, v)| {
-            let mut end = a.range.end;
+        |((_, start), var, tp, v)| {
+            let mut end = var.range().end;
             if tp.is_some() {
                 end = tp.as_ref().unwrap().1.range().end;
             }
@@ -123,7 +125,7 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
             let exp = v.map(|(_, exp)| exp);
             res_enum(
                 DefNode {
-                    var:  Box::new(DefVar::Identifier(*a)),
+                    var,
                     tp,
                     exp,
                     range,
@@ -133,6 +135,30 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
             )
         },
     ))(input)
+}
+
+fn deconstruct(input: Span) -> IResult<Span, Box<DefVar>> {
+    alt((
+        map(identifier, |i| Box::new(DefVar::Identifier(*i))),
+        tuple_deconstruct,
+    ))(input)
+}
+
+fn tuple_deconstruct(input: Span) -> IResult<Span, Box<DefVar>> {
+    map(
+        delimited(
+            tag_token_symbol_ex(TokenType::LPAREN),
+            separated_list1(tag_token_symbol_ex(TokenType::COMMA), deconstruct),
+            tag_token_symbol_ex(TokenType::RPAREN),
+        ),
+        |ids| {
+            let range = ids[0].range().start.to(ids[ids.len() - 1].range().end);
+            Box::new(DefVar::TupleDeconstruct(TupleDeconstructNode {
+                var: ids,
+                range,
+            }))
+        },
+    )(input)
 }
 
 #[test_parser("a = 1")]

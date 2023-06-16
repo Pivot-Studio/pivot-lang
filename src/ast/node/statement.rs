@@ -24,7 +24,7 @@ pub struct TupleDeconstructNode {
 }
 
 impl PrintTrait for TupleDeconstructNode {
-    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+    fn print(&self, tabs: usize, _end: bool, line: Vec<bool>) {
         for (i, v) in self.var.iter().enumerate() {
             v.print(tabs, i == self.var.len() - 1, line.clone());
         }
@@ -37,21 +37,18 @@ pub struct StructDeconstructNode {
     pub var: Vec<StructFieldDeconstructEnum>,
 }
 
-
 impl PrintTrait for StructDeconstructNode {
-    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+    fn print(&self, tabs: usize, _end: bool, line: Vec<bool>) {
         for (i, v) in self.var.iter().enumerate() {
             v.print(tabs, i == self.var.len() - 1, line.clone());
         }
     }
 }
 
-
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StructFieldDeconstructEnum {
-    Var(VarNode),// normal field deconstruct like: let {a} = s;
-    Taged(VarNode, Box<DefVar>),// taged field deconstruct like: let {a: b} = s;
+    Var(VarNode),                // normal field deconstruct like: let {a} = s;
+    Taged(VarNode, Box<DefVar>), // taged field deconstruct like: let {a: b} = s;
 }
 
 impl RangeTrait for StructFieldDeconstructEnum {
@@ -64,7 +61,7 @@ impl RangeTrait for StructFieldDeconstructEnum {
 }
 
 impl PrintTrait for StructFieldDeconstructEnum {
-    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+    fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
         match self {
             StructFieldDeconstructEnum::Var(v) => v.print(tabs, end, line),
             StructFieldDeconstructEnum::Taged(v, d) => {
@@ -100,8 +97,38 @@ pub enum DefVar {
 }
 
 impl DefVar {
-    pub fn format(&self, builder:&mut FmtBuilder) {
-        todo!()
+    pub fn format(&self, builder: &mut FmtBuilder) {
+        match self {
+            DefVar::Identifier(v) => v.format(builder),
+            DefVar::TupleDeconstruct(node) => {
+                builder.l_paren();
+                for (i, v) in node.var.iter().enumerate() {
+                    v.format(builder);
+                    if i != node.var.len() - 1 {
+                        builder.comma();
+                    }
+                }
+                builder.r_paren();
+            }
+            DefVar::StructDeconstruct(node) => {
+                builder.l_brace();
+                for (i, v) in node.var.iter().enumerate() {
+                    match v {
+                        StructFieldDeconstructEnum::Var(v) => v.format(builder),
+                        StructFieldDeconstructEnum::Taged(v, d) => {
+                            v.format(builder);
+                            builder.colon();
+                            builder.space();
+                            d.format(builder);
+                        }
+                    }
+                    if i != node.var.len() - 1 {
+                        builder.comma();
+                    }
+                }
+                builder.r_brace();
+            }
+        }
     }
 }
 
@@ -116,7 +143,7 @@ impl RangeTrait for DefVar {
 }
 
 impl PrintTrait for DefVar {
-    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+    fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
         match self {
             DefVar::Identifier(v) => v.print(tabs, end, line),
             DefVar::TupleDeconstruct(v) => v.print(tabs, end, line),
@@ -181,26 +208,20 @@ impl Node for DefNode {
         }
         let pltype = pltype.unwrap();
         match &*self.var {
-            DefVar::Identifier(var) =>{
+            DefVar::Identifier(var) => {
                 let ptr2value = builder.alloc(
                     &var.name,
                     &pltype.borrow(),
                     ctx,
                     Some(self.var.range().start),
                 );
-                ctx.add_symbol(
-                    var.name.clone(),
-                    ptr2value,
-                    pltype,
-                    self.var.range(),
-                    false,
-                )?;
+                ctx.add_symbol(var.name.clone(), ptr2value, pltype, self.var.range(), false)?;
                 if let Some(exp) = expv {
                     builder.build_dbg_location(self.var.range().start);
                     builder.build_store(ptr2value, ctx.try_load2var(range, exp, builder)?);
                 }
-            },
-            _ => todo!()
+            }
+            _ => todo!(),
         };
         Ok(Default::default())
     }
