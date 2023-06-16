@@ -8,12 +8,71 @@ use crate::ast::diag::{ErrorCode, WarnCode};
 use crate::format_label;
 
 use internal_macro::node;
+use internal_macro::range;
 use lsp_types::SemanticTokenType;
 #[node(comment)]
 pub struct DefNode {
-    pub var: VarNode,
+    pub var: Box<DefVar>,
     pub tp: Option<Box<TypeNodeEnum>>,
     pub exp: Option<Box<NodeEnum>>,
+}
+
+#[range]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TupleDeconstructNode {
+    pub var: Vec<Box<DefVar>>,
+}
+
+impl PrintTrait for TupleDeconstructNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        for (i, v) in self.var.iter().enumerate() {
+            v.print(tabs, i == self.var.len() - 1, line.clone());
+        }
+    }
+}
+
+#[range]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StructDeconstructNode {
+    pub var: Vec<StructFieldDeconstructEnum>,
+}
+
+
+impl PrintTrait for StructDeconstructNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        for (i, v) in self.var.iter().enumerate() {
+            v.print(tabs, i == self.var.len() - 1, line.clone());
+        }
+    }
+}
+
+
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StructFieldDeconstructEnum {
+    Var(VarNode),// normal field deconstruct like: let {a} = s;
+    Taged(VarNode, Box<DefVar>),// taged field deconstruct like: let {a: b} = s;
+}
+
+impl RangeTrait for StructFieldDeconstructEnum {
+    fn range(&self) -> Range {
+        match self {
+            StructFieldDeconstructEnum::Var(v) => v.range(),
+            StructFieldDeconstructEnum::Taged(v, _) => v.range(),
+        }
+    }
+}
+
+impl PrintTrait for StructFieldDeconstructEnum {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        match self {
+            StructFieldDeconstructEnum::Var(v) => v.print(tabs, end, line),
+            StructFieldDeconstructEnum::Taged(v, d) => {
+                v.print(tabs, false, line.clone());
+                d.print(tabs + 1, true, line);
+            }
+        }
+    }
 }
 
 impl PrintTrait for DefNode {
@@ -33,6 +92,39 @@ impl PrintTrait for DefNode {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DefVar {
+    Identifier(VarNode),
+    TupleDeconstruct(TupleDeconstructNode),
+    StructDeconstruct(StructDeconstructNode),
+}
+
+impl DefVar {
+    pub fn format(&self, builder:&mut FmtBuilder) {
+        todo!()
+    }
+}
+
+impl RangeTrait for DefVar {
+    fn range(&self) -> Range {
+        match self {
+            DefVar::Identifier(v) => v.range(),
+            DefVar::TupleDeconstruct(v) => v.range(),
+            DefVar::StructDeconstruct(v) => v.range(),
+        }
+    }
+}
+
+impl PrintTrait for DefVar {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        match self {
+            DefVar::Identifier(v) => v.print(tabs, end, line),
+            DefVar::TupleDeconstruct(v) => v.print(tabs, end, line),
+            DefVar::StructDeconstruct(v) => v.print(tabs, end, line),
+        }
+    }
+}
+
 impl Node for DefNode {
     fn emit<'a, 'b>(
         &mut self,
@@ -40,7 +132,7 @@ impl Node for DefNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let range = self.range();
-        ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
+        ctx.push_semantic_token(self.var.range(), SemanticTokenType::VARIABLE, 0);
         if self.exp.is_none() && self.tp.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
         }
@@ -82,29 +174,34 @@ impl Node for DefNode {
                 re.get_value()
             };
             if pltype.is_none() {
-                ctx.push_type_hints(self.var.range, tp.clone());
+                ctx.push_type_hints(self.var.range(), tp.clone());
                 pltype = Some(tp);
             }
             expv = Some(v);
         }
         let pltype = pltype.unwrap();
-        let ptr2value = builder.alloc(
-            &self.var.name,
-            &pltype.borrow(),
-            ctx,
-            Some(self.var.range.start),
-        );
-        ctx.add_symbol(
-            self.var.name.clone(),
-            ptr2value,
-            pltype,
-            self.var.range,
-            false,
-        )?;
-        if let Some(exp) = expv {
-            builder.build_dbg_location(self.var.range.start);
-            builder.build_store(ptr2value, ctx.try_load2var(range, exp, builder)?);
-        }
+        match &*self.var {
+            DefVar::Identifier(var) =>{
+                let ptr2value = builder.alloc(
+                    &var.name,
+                    &pltype.borrow(),
+                    ctx,
+                    Some(self.var.range().start),
+                );
+                ctx.add_symbol(
+                    var.name.clone(),
+                    ptr2value,
+                    pltype,
+                    self.var.range(),
+                    false,
+                )?;
+                if let Some(exp) = expv {
+                    builder.build_dbg_location(self.var.range().start);
+                    builder.build_store(ptr2value, ctx.try_load2var(range, exp, builder)?);
+                }
+            },
+            _ => todo!()
+        };
         Ok(Default::default())
     }
 }

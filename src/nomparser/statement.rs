@@ -123,7 +123,7 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
             let exp = v.map(|(_, exp)| exp);
             res_enum(
                 DefNode {
-                    var: *a,
+                    var:  Box::new(DefVar::Identifier(*a)),
                     tp,
                     exp,
                     range,
