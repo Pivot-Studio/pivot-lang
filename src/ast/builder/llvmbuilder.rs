@@ -1568,6 +1568,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             DIFlags::PUBLIC,
             ditype.unwrap().get_align_in_bits(),
         );
+        // this line is necessary at least in llvm 14.
+        // otherwise, the debug info may be changed by `create_auto_variable` in some cases.
+        // for example: a structure with a field of type tuple.
+        self.build_dbg_location(pos);
         self.dibuilder.insert_declare_at_end(
             self.get_llvm_value(v).unwrap().into_pointer_value(),
             Some(debug_var_info),

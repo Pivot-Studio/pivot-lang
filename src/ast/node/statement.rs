@@ -106,6 +106,7 @@ impl DefVar {
                     v.format(builder);
                     if i != node.var.len() - 1 {
                         builder.comma();
+                        builder.space();
                     }
                 }
                 builder.r_paren();
@@ -124,6 +125,7 @@ impl DefVar {
                     }
                     if i != node.var.len() - 1 {
                         builder.comma();
+                        builder.space();
                     }
                 }
                 builder.r_brace();
