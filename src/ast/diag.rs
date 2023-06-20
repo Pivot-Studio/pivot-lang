@@ -135,6 +135,7 @@ define_error!(
     TARGET_TYPE_NOT_IMPL_ABLE = "target type not impl able",
     TUPLE_WRONG_DECONSTRUCT_PARAM_LEN = "tuple wrong deconstruct param len",
     DEF_DECONSTRUCT_MUST_HAVE_VALUE = "def deconstruct must have value",
+    STRUCT_FIELD_NOT_EXISTS = "struct field not exists",
 );
 macro_rules! define_warn {
     ($(

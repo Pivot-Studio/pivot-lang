@@ -311,7 +311,83 @@ fn handle_deconstruct<'a, 'b>(
                     .add_to_ctx(ctx),
             ));
         }
-        DefVar::StructDeconstruct(_) => todo!(),
+        DefVar::StructDeconstruct(StructDeconstructNode {
+            var,
+            range: dec_range,
+        }) => {
+            if expv.is_none() {
+                return Err(ctx.add_diag(
+                    range
+                        .new_err(ErrorCode::DEF_DECONSTRUCT_MUST_HAVE_VALUE)
+                        .add_to_ctx(ctx),
+                ));
+            }
+            let expv = expv.unwrap();
+            if let PLType::Struct(st) = &*pltype.borrow() {
+                if !st.is_tuple {
+                    for (_, deconstruct_field) in var.iter().enumerate() {
+                        let (expv, ftp) = match deconstruct_field {
+                            StructFieldDeconstructEnum::Var(v)
+                            | StructFieldDeconstructEnum::Taged(v, _) => {
+                                // check if field exists
+                                if st.fields.get(&v.name).is_none() {
+                                    return Err(dec_range
+                                        .new_err(ErrorCode::STRUCT_FIELD_NOT_EXISTS)
+                                        .add_label(
+                                            v.range(),
+                                            ctx.get_file(),
+                                            format_label!("expect field {}", &v.name),
+                                        )
+                                        .add_to_ctx(ctx));
+                                }
+                                let f = st.fields.get(&v.name).unwrap();
+                                let expv = builder
+                                    .build_struct_gep(expv, f.index, "_deconstruct")
+                                    .unwrap();
+                                let ftp = f.typenode.get_type(ctx, builder, false)?;
+                                (expv, ftp)
+                            }
+                        };
+                        match deconstruct_field {
+                            StructFieldDeconstructEnum::Var(v) => handle_deconstruct(
+                                range,
+                                exp_range,
+                                builder,
+                                ftp,
+                                ctx,
+                                Some(expv),
+                                &DefVar::Identifier(v.clone()),
+                            )?,
+                            StructFieldDeconstructEnum::Taged(_, dec) => handle_deconstruct(
+                                range,
+                                exp_range,
+                                builder,
+                                ftp,
+                                ctx,
+                                Some(expv),
+                                &**dec,
+                            )?,
+                        }
+                    }
+                    return Ok(());
+                }
+            }
+            return Err(ctx.add_diag(
+                range
+                    .new_err(ErrorCode::TYPE_MISMATCH)
+                    .add_label(
+                        *dec_range,
+                        ctx.get_file(),
+                        format_label!("expected type {}", "struct"),
+                    )
+                    .add_label(
+                        exp_range.unwrap(),
+                        ctx.get_file(),
+                        format_label!("real type {}", pltype.borrow().get_name()),
+                    )
+                    .add_to_ctx(ctx),
+            ));
+        }
     };
     Ok(())
 }
