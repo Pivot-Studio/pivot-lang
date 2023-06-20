@@ -158,7 +158,6 @@ impl Node for DefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
-        let range = self.range();
         ctx.push_semantic_token(self.var.range(), SemanticTokenType::VARIABLE, 0);
         if self.exp.is_none() && self.tp.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
@@ -207,24 +206,114 @@ impl Node for DefNode {
             expv = Some(v);
         }
         let pltype = pltype.unwrap();
-        match &*self.var {
-            DefVar::Identifier(var) => {
-                let ptr2value = builder.alloc(
-                    &var.name,
-                    &pltype.borrow(),
-                    ctx,
-                    Some(self.var.range().start),
-                );
-                ctx.add_symbol(var.name.clone(), ptr2value, pltype, self.var.range(), false)?;
-                if let Some(exp) = expv {
-                    builder.build_dbg_location(self.var.range().start);
-                    builder.build_store(ptr2value, ctx.try_load2var(range, exp, builder)?);
-                }
-            }
-            _ => todo!(),
-        };
+        handle_deconstruct(
+            self.range(),
+            self.exp.as_ref().map(|e| e.range()),
+            builder,
+            pltype,
+            ctx,
+            expv,
+            &*self.var,
+        )?;
         Ok(Default::default())
     }
+}
+
+fn handle_deconstruct<'a, 'b>(
+    range: Range,
+    exp_range: Option<Range>,
+    builder: &'b BuilderEnum<'a, '_>,
+    pltype: Arc<RefCell<PLType>>,
+    ctx: &'b mut Ctx<'a>,
+    expv: Option<usize>,
+    def_var: &DefVar,
+) -> Result<(), PLDiag> {
+    match &*def_var {
+        DefVar::Identifier(var) => {
+            let ptr2value = builder.alloc(
+                &var.name,
+                &pltype.borrow(),
+                ctx,
+                Some(def_var.range().start),
+            );
+            ctx.add_symbol(var.name.clone(), ptr2value, pltype, def_var.range(), false)?;
+            if let Some(exp) = expv {
+                builder.build_dbg_location(def_var.range().start);
+                builder.build_store(ptr2value, ctx.try_load2var(range, exp, builder)?);
+            }
+        }
+        DefVar::TupleDeconstruct(TupleDeconstructNode {
+            var,
+            range: dec_range,
+        }) => {
+            if expv.is_none() {
+                return Err(ctx.add_diag(
+                    range
+                        .new_err(ErrorCode::DEF_DECONSTRUCT_MUST_HAVE_VALUE)
+                        .add_to_ctx(ctx),
+                ));
+            }
+            let expv = expv.unwrap();
+            if let PLType::Struct(st) = &*pltype.borrow() {
+                if st.is_tuple {
+                    if var.len() != st.fields.len() {
+                        return Err(ctx.add_diag(
+                            range
+                                .new_err(ErrorCode::TUPLE_WRONG_DECONSTRUCT_PARAM_LEN)
+                                .add_label(
+                                    *dec_range,
+                                    ctx.get_file(),
+                                    format_label!(
+                                        "expected length {}",
+                                        st.fields.len().to_string()
+                                    ),
+                                )
+                                .add_label(
+                                    def_var.range(),
+                                    ctx.get_file(),
+                                    format_label!("actual length {}", var.len().to_string()),
+                                )
+                                .add_to_ctx(ctx),
+                        ));
+                    }
+                    for (i, (_, f)) in st.fields.iter().enumerate() {
+                        let ftp = f.typenode.get_type(ctx, builder, false)?;
+                        let expv = builder
+                            .build_struct_gep(expv, f.index, "_deconstruct")
+                            .unwrap();
+                        let deconstruct_v = var[i].as_ref();
+                        handle_deconstruct(
+                            range,
+                            exp_range,
+                            builder,
+                            ftp,
+                            ctx,
+                            Some(expv),
+                            deconstruct_v,
+                        )?
+                    }
+                    return Ok(());
+                }
+            }
+            return Err(ctx.add_diag(
+                range
+                    .new_err(ErrorCode::TYPE_MISMATCH)
+                    .add_label(
+                        *dec_range,
+                        ctx.get_file(),
+                        format_label!("expected type {}", "tuple"),
+                    )
+                    .add_label(
+                        exp_range.unwrap(),
+                        ctx.get_file(),
+                        format_label!("real type {}", pltype.borrow().get_name()),
+                    )
+                    .add_to_ctx(ctx),
+            ));
+        }
+        DefVar::StructDeconstruct(_) => todo!(),
+    };
+    Ok(())
 }
 #[node]
 pub struct AssignNode {

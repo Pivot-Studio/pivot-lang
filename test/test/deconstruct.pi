@@ -1,0 +1,7 @@
+use core::panic;
+pub fn test_deconstruct() void {
+    let (a, (b,c)) = (1, (2, 3));
+    let d = a + b + c;
+    panic::assert(d == 1+ 2 + 3);
+    return;
+}

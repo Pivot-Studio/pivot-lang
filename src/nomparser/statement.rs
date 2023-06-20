@@ -2,7 +2,7 @@ use nom::{
     branch::alt,
     combinator::{map, map_res, opt},
     multi::{many0, separated_list1},
-    sequence::{delimited, pair, preceded, tuple},
+    sequence::{pair, preceded, tuple},
     IResult,
 };
 
@@ -148,13 +148,13 @@ fn deconstruct(input: Span) -> IResult<Span, Box<DefVar>> {
 
 fn tuple_deconstruct(input: Span) -> IResult<Span, Box<DefVar>> {
     map(
-        delimited(
+        tuple((
             tag_token_symbol_ex(TokenType::LPAREN),
             separated_list1(tag_token_symbol_ex(TokenType::COMMA), deconstruct),
             tag_token_symbol_ex(TokenType::RPAREN),
-        ),
-        |ids| {
-            let range = ids[0].range().start.to(ids[ids.len() - 1].range().end);
+        )),
+        |((_, sr), ids, (_, er))| {
+            let range = sr.start.to(er.end);
             Box::new(DefVar::TupleDeconstruct(TupleDeconstructNode {
                 var: ids,
                 range,
@@ -165,16 +165,16 @@ fn tuple_deconstruct(input: Span) -> IResult<Span, Box<DefVar>> {
 
 fn struct_deconstruct(input: Span) -> IResult<Span, Box<DefVar>> {
     map(
-        delimited(
+        tuple((
             tag_token_symbol_ex(TokenType::LBRACE),
             separated_list1(
                 tag_token_symbol_ex(TokenType::COMMA),
                 struct_deconstruct_field,
             ),
             tag_token_symbol_ex(TokenType::RBRACE),
-        ),
-        |ids| {
-            let range = ids[0].range().start.to(ids[ids.len() - 1].range().end);
+        )),
+        |((_, sr), ids, (_, er))| {
+            let range = sr.start.to(er.end);
             Box::new(DefVar::StructDeconstruct(StructDeconstructNode {
                 var: ids,
                 range,
