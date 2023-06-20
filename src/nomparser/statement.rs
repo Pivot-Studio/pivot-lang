@@ -104,6 +104,7 @@ pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser_error("leta = 1")]
 #[test_parser("let (a, b) = 1")]
 #[test_parser("let (a, (d,e)) = 1")]
+#[test_parser("let (a, {d,e:(a,{d:f,g})}) = 1")]
 pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
@@ -141,6 +142,7 @@ fn deconstruct(input: Span) -> IResult<Span, Box<DefVar>> {
     alt((
         map(identifier, |i| Box::new(DefVar::Identifier(*i))),
         tuple_deconstruct,
+        struct_deconstruct,
     ))(input)
 }
 
@@ -159,6 +161,40 @@ fn tuple_deconstruct(input: Span) -> IResult<Span, Box<DefVar>> {
             }))
         },
     )(input)
+}
+
+fn struct_deconstruct(input: Span) -> IResult<Span, Box<DefVar>> {
+    map(
+        delimited(
+            tag_token_symbol_ex(TokenType::LBRACE),
+            separated_list1(
+                tag_token_symbol_ex(TokenType::COMMA),
+                struct_deconstruct_field,
+            ),
+            tag_token_symbol_ex(TokenType::RBRACE),
+        ),
+        |ids| {
+            let range = ids[0].range().start.to(ids[ids.len() - 1].range().end);
+            Box::new(DefVar::StructDeconstruct(StructDeconstructNode {
+                var: ids,
+                range,
+            }))
+        },
+    )(input)
+}
+
+fn struct_deconstruct_field(input: Span) -> IResult<Span, StructFieldDeconstructEnum> {
+    alt((
+        map(
+            tuple((
+                identifier,
+                tag_token_symbol_ex(TokenType::COLON),
+                deconstruct,
+            )),
+            |(name, _, var)| StructFieldDeconstructEnum::Taged(*name, var),
+        ),
+        map(identifier, |var| StructFieldDeconstructEnum::Var(*var)),
+    ))(input)
 }
 
 #[test_parser("a = 1")]
