@@ -24,9 +24,12 @@ pub struct TupleDeconstructNode {
 }
 
 impl PrintTrait for TupleDeconstructNode {
-    fn print(&self, tabs: usize, _end: bool, line: Vec<bool>) {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("TupleDeconstructNode");
         for (i, v) in self.var.iter().enumerate() {
-            v.print(tabs, i == self.var.len() - 1, line.clone());
+            v.print(tabs + 1, i == self.var.len() - 1, line.clone());
         }
     }
 }
@@ -38,9 +41,13 @@ pub struct StructDeconstructNode {
 }
 
 impl PrintTrait for StructDeconstructNode {
-    fn print(&self, tabs: usize, _end: bool, line: Vec<bool>) {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("StructDeconstructNode");
         for (i, v) in self.var.iter().enumerate() {
-            v.print(tabs, i == self.var.len() - 1, line.clone());
+            deal_line(tabs + 1, &mut line, i == self.var.len() - 1);
+            v.print(tabs + 1, i == self.var.len() - 1, line.clone());
         }
     }
 }

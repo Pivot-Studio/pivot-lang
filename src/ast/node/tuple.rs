@@ -110,8 +110,8 @@ impl PrintTrait for TupleInitNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("TupleInitNode");
-        for exp in self.exprs.iter() {
-            exp.print(tabs + 1, false, line.clone());
+        for (i, exp) in self.exprs.iter().enumerate() {
+            exp.print(tabs + 1, i == self.exprs.len() - 1, line.clone());
         }
     }
 }
