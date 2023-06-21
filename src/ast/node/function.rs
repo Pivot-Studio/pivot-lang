@@ -31,7 +31,8 @@ impl PrintTrait for FuncCallNode {
         tab(tabs, line.clone(), end);
         println!("FuncCallNode");
         let mut i = self.paralist.len();
-        self.callee.print(tabs + 1, false, line.clone());
+        self.callee
+            .print(tabs + 1, self.paralist.is_empty(), line.clone());
         for para in &self.paralist {
             i -= 1;
             para.print(tabs + 1, i == 0, line.clone());
@@ -943,9 +944,16 @@ impl PrintTrait for ClosureNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("ClosureNode");
+        deal_line(tabs + 1, &mut line, false);
         tab(tabs + 1, line.clone(), false);
-        for p in self.paralist.iter() {
-            p.0.print(tabs + 1, false, line.clone());
+        println!("paralist:");
+        for (i, p) in self.paralist.iter().enumerate() {
+            deal_line(tabs + 2, &mut line, i == self.paralist.len() - 1);
+            p.0.print(tabs + 2, i == self.paralist.len() - 1, line.clone());
+            if let Some(x) = &p.1 {
+                deal_line(tabs + 3, &mut line, true);
+                x.print(tabs + 3, true, line.clone())
+            }
         }
         self.body.print(tabs + 1, true, line.clone());
     }

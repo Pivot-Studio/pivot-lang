@@ -32,7 +32,7 @@ impl PrintTrait for UnaryOpNode {
         tab(tabs, line.clone(), end);
         println!("UnaryOpNode");
         tab(tabs + 1, line.clone(), end);
-        println!("{:?}", self.op);
+        println!("{:?}", self.op.0);
         self.exp.print(tabs + 1, true, line.clone());
     }
 }
@@ -100,7 +100,7 @@ impl PrintTrait for BinOpNode {
         println!("BinOpNode");
         self.left.print(tabs + 1, false, line.clone());
         tab(tabs + 1, line.clone(), false);
-        println!("{:?}", self.op);
+        println!("{:?}", self.op.0);
         self.right.print(tabs + 1, true, line.clone());
     }
 }

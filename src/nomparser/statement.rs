@@ -1,7 +1,7 @@
 use nom::{
     branch::alt,
-    combinator::{map_res, opt},
-    multi::many0,
+    combinator::{map, map_res, opt},
+    multi::{many0, separated_list1},
     sequence::{pair, preceded, tuple},
     IResult,
 };
@@ -102,16 +102,19 @@ pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 
 #[test_parser("let a = 1")]
 #[test_parser_error("leta = 1")]
+#[test_parser("let (a, b) = 1")]
+#[test_parser("let (a, (d,e)) = 1")]
+#[test_parser("let (a, {d,e:(a,{d:f,g})}) = 1")]
 pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
             tag_token_word(TokenType::LET),
-            identifier,
+            deconstruct,
             opt(pair(tag_token_symbol(TokenType::COLON), type_name)),
             opt(pair(tag_token_symbol(TokenType::ASSIGN), general_exp)),
         )),
-        |((_, start), a, tp, v)| {
-            let mut end = a.range.end;
+        |((_, start), var, tp, v)| {
+            let mut end = var.range().end;
             if tp.is_some() {
                 end = tp.as_ref().unwrap().1.range().end;
             }
@@ -123,7 +126,7 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
             let exp = v.map(|(_, exp)| exp);
             res_enum(
                 DefNode {
-                    var: *a,
+                    var,
                     tp,
                     exp,
                     range,
@@ -132,6 +135,65 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 .into(),
             )
         },
+    ))(input)
+}
+
+fn deconstruct(input: Span) -> IResult<Span, Box<DefVar>> {
+    alt((
+        map(identifier, |i| Box::new(DefVar::Identifier(*i))),
+        tuple_deconstruct,
+        struct_deconstruct,
+    ))(input)
+}
+
+fn tuple_deconstruct(input: Span) -> IResult<Span, Box<DefVar>> {
+    map(
+        tuple((
+            tag_token_symbol_ex(TokenType::LPAREN),
+            separated_list1(tag_token_symbol_ex(TokenType::COMMA), deconstruct),
+            tag_token_symbol_ex(TokenType::RPAREN),
+        )),
+        |((_, sr), ids, (_, er))| {
+            let range = sr.start.to(er.end);
+            Box::new(DefVar::TupleDeconstruct(TupleDeconstructNode {
+                var: ids,
+                range,
+            }))
+        },
+    )(input)
+}
+
+fn struct_deconstruct(input: Span) -> IResult<Span, Box<DefVar>> {
+    map(
+        tuple((
+            tag_token_symbol_ex(TokenType::LBRACE),
+            separated_list1(
+                tag_token_symbol_ex(TokenType::COMMA),
+                struct_deconstruct_field,
+            ),
+            tag_token_symbol_ex(TokenType::RBRACE),
+        )),
+        |((_, sr), ids, (_, er))| {
+            let range = sr.start.to(er.end);
+            Box::new(DefVar::StructDeconstruct(StructDeconstructNode {
+                var: ids,
+                range,
+            }))
+        },
+    )(input)
+}
+
+fn struct_deconstruct_field(input: Span) -> IResult<Span, StructFieldDeconstructEnum> {
+    alt((
+        map(
+            tuple((
+                identifier,
+                tag_token_symbol_ex(TokenType::COLON),
+                deconstruct,
+            )),
+            |(name, _, var)| StructFieldDeconstructEnum::Taged(*name, var),
+        ),
+        map(identifier, |var| StructFieldDeconstructEnum::Var(*var)),
     ))(input)
 }
 

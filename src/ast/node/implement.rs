@@ -58,9 +58,10 @@ impl PrintTrait for ImplNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("ImplNode");
-        self.target.print(tabs + 1, false, line.clone());
-        for method in &self.methods {
-            method.print(tabs + 1, false, line.clone());
+        self.target
+            .print(tabs + 1, self.methods.is_empty(), line.clone());
+        for (i, method) in self.methods.iter().enumerate() {
+            method.print(tabs + 1, i == self.methods.len() - 1, line.clone());
         }
     }
 }

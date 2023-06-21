@@ -368,7 +368,7 @@ impl Program {
                 nn.print(0, true, vec![]);
             }
             ActionType::Fmt => {
-                let mut builder = FmtBuilder::new();
+                let mut builder = FmtBuilder::default();
                 nn.format(&mut builder);
                 let code = builder.generate();
                 let mut f = OpenOptions::new()
@@ -380,7 +380,7 @@ impl Program {
             }
             ActionType::LspFmt => {
                 let oldcode = p.file_content(db);
-                let mut builder = FmtBuilder::new();
+                let mut builder = FmtBuilder::default();
                 nn.format(&mut builder);
                 let newcode = builder.generate();
                 let diff = text::diff(oldcode, &newcode);

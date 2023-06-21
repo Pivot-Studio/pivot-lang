@@ -439,13 +439,9 @@ fn test_sig_help() {
     );
     assert!(!hovers.is_empty());
     assert!(
-        hovers[0]
-            .signatures
-            .iter()
-            .find(|s| {
-                s.label == "test_sig_help(i: i64, ii: bool)" && s.active_parameter == Some(0)
-            })
-            .is_some(),
+        hovers[0].signatures.iter().any(|s| {
+            s.label == "test_sig_help(i: i64, ii: bool)" && s.active_parameter == Some(0)
+        }),
         "expect to find test_sig_help(i: i64, ii: bool) with active parameter 0, found {:?}",
         hovers[0]
     );

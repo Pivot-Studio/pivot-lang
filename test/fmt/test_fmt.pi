@@ -269,3 +269,29 @@ pub fn test_tuple() void {
     return;
 }
 
+struct DecTest {
+    aa: bool;
+    bb: i128;
+    cc: (i64, i64);
+    dd: *DecTest;
+}
+
+pub fn test_deconstruct() void {
+    let (a, (b, c)) = (1, (2, 3));
+    let d = a + b + c;
+    panic::assert(d == 1 + 2 + 3);
+    let complex = DecTest{
+        aa: true,
+        bb: 123 as i128,
+        cc: (1, 2),
+        dd: &DecTest{
+            aa: true,
+            bb: 123 as i128,
+            cc: (1, 2)
+        }
+    };
+    let ({aa, bb, cc: (cc1, cc2), dd}, e) = (complex, 100);
+    panic::assert(cc1 + cc2 + e == 1 + 2 + 100);
+    return;
+}
+

@@ -134,7 +134,11 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let pb = &COMPILE_PROGRESS;
     pb.enable_steady_tick(Duration::from_millis(50));
     pb.set_style(PROGRESS_STYLE.clone());
-    pb.set_draw_target(ProgressDrawTarget::stderr());
+    if op.printast {
+        pb.set_draw_target(ProgressDrawTarget::hidden());
+    } else {
+        pb.set_draw_target(ProgressDrawTarget::stderr());
+    }
     pb.set_prefix(format!("{}[{:2}/{:2}]", LOOKING_GLASS, 1, total_steps));
     #[cfg(feature = "jit")]
     inkwell::execution_engine::ExecutionEngine::link_in_mc_jit();
@@ -144,6 +148,9 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         fs::create_dir(&targetdir).unwrap();
     }
     compile_dry(db, docs).unwrap();
+    if op.printast {
+        return;
+    }
     pb.finish_with_message("中间代码编译完成");
     let mods = compile_dry::accumulated::<ModBuffer>(db, docs);
     handle_errors(db, docs);
