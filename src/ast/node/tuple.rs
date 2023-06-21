@@ -194,8 +194,8 @@ impl PrintTrait for TupleTypeNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("TupleTypeNode");
-        for tp in self.tps.iter() {
-            tp.print(tabs + 1, false, line.clone());
+        for (i, tp) in self.tps.iter().enumerate() {
+            tp.print(tabs + 1, i == self.tps.len() - 1, line.clone());
         }
     }
 }

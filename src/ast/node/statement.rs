@@ -222,7 +222,7 @@ impl Node for DefNode {
             pltype,
             ctx,
             expv,
-            &*self.var,
+            &self.var,
         )?;
         Ok(Default::default())
     }
@@ -237,7 +237,7 @@ fn handle_deconstruct<'a, 'b>(
     expv: Option<usize>,
     def_var: &DefVar,
 ) -> Result<(), PLDiag> {
-    match &*def_var {
+    match def_var {
         DefVar::Identifier(var) => {
             let ptr2value = builder.alloc(
                 &var.name,
@@ -374,7 +374,7 @@ fn handle_deconstruct<'a, 'b>(
                                 ftp,
                                 ctx,
                                 Some(expv),
-                                &**dec,
+                                dec,
                             )?,
                         }
                     }

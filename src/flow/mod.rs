@@ -85,7 +85,7 @@ impl ProgramNode {
 
 fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
     // local_source -> [...current parsing...] -> local_sink
-    let mut builder = FmtBuilder::new();
+    let mut builder = FmtBuilder::default();
     let local_source = context.local_source;
     let local_sink = context.local_sink;
     let break_target = context.break_target;
@@ -241,14 +241,14 @@ fn build_graph(ast: Box<NodeEnum>, context: &mut GraphContext) {
             s.cond.format(&mut builder);
             let cond_label = builder.generate();
             let pre_label = if let Some(pre) = s.pre {
-                let mut builder1 = FmtBuilder::new();
+                let mut builder1 = FmtBuilder::default();
                 pre.format(&mut builder1);
                 builder1.generate()
             } else {
                 String::from("")
             };
             let opt_label = if let Some(opt) = s.opt {
-                let mut builder2 = FmtBuilder::new();
+                let mut builder2 = FmtBuilder::default();
                 opt.format(&mut builder2);
                 builder2.generate()
             } else {

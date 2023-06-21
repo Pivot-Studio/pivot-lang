@@ -964,11 +964,15 @@ impl PrintTrait for ClosureTypeNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("ClosureTypeNode");
-        let mut i = self.arg_types.len();
+        tab(tabs, line.clone(), false);
+        println!("arg_types:");
+        deal_line(tabs + 1, &mut line, false);
         for g in &self.arg_types {
-            i -= 1;
-            g.print(tabs + 1, i == 0, line.clone());
+            g.print(tabs + 1, false, line.clone());
         }
+        tab(tabs, line.clone(), false);
+        println!("ret_type:");
+        deal_line(tabs + 1, &mut line, false);
         self.ret_type.print(tabs + 1, true, line.clone());
     }
 }

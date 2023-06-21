@@ -131,8 +131,8 @@ impl PrintTrait for TraitDefNode {
         tab(tabs, line.clone(), end);
         println!("TraitNode");
         self.id.print(tabs + 1, false, line.clone());
-        for method in &self.methods {
-            method.print(tabs + 1, false, line.clone());
+        for (i, method) in self.methods.iter().enumerate() {
+            method.print(tabs + 1, i == self.methods.len() - 1, line.clone());
         }
     }
 }

@@ -41,16 +41,19 @@ pub struct FmtBuilder {
     prefix: &'static str,
 }
 
-impl FmtBuilder {
-    pub fn new() -> Self {
+impl Default for FmtBuilder {
+    fn default() -> Self {
         FmtBuilder {
             buf: String::new(),
             tabs: 0,
             prefix: "    ",
         }
     }
+}
+
+impl FmtBuilder {
     pub fn generate_node(node: &TypeNodeEnum) -> String {
-        let mut b = FmtBuilder::new();
+        let mut b = FmtBuilder::default();
         node.format(&mut b);
         b.generate()
     }
