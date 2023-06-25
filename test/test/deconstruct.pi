@@ -22,6 +22,12 @@ pub fn test_deconstruct() void {
     };
     let ({aa, bb, cc: (cc1, cc2), dd}, e) = (complex, 100);
     panic::assert(cc1 + cc2 + e == 1 + 2 + 100);
+    {aa, cc: (cc1, cc2)} = DecTest{
+        aa: false,
+        cc: (3, 4)
+    };
+    panic::assert(!aa);
+    panic::assert(cc1 + cc2 == 3 + 4);
     return;
 }
 
