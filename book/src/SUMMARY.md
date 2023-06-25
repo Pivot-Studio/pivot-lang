@@ -12,6 +12,7 @@
   - [Module](./references/module.md)
   - [Method](./references/method.md)
   - [Trait](./references/interface.md)
+  - [Deconstruct](./references/deconstruct.md)
 
 # How the project works internally
 

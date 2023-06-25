@@ -307,7 +307,10 @@ impl FmtBuilder {
         }
     }
     pub fn parse_assign_node(&mut self, node: &AssignNode) {
-        node.var.format(self);
+        match &node.var {
+            super::node::statement::AssignVar::Pointer(p) => p.format(self),
+            super::node::statement::AssignVar::Raw(r) => r.format(self),
+        }
         self.space();
         self.equal();
         self.space();

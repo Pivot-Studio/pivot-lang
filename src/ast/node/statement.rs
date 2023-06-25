@@ -223,11 +223,13 @@ impl Node for DefNode {
             ctx,
             expv,
             &self.var,
+            true,
         )?;
         Ok(Default::default())
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn handle_deconstruct<'a, 'b>(
     range: Range,
     exp_range: Option<Range>,
@@ -236,16 +238,29 @@ fn handle_deconstruct<'a, 'b>(
     ctx: &'b mut Ctx<'a>,
     expv: Option<usize>,
     def_var: &DefVar,
+    is_def: bool,
 ) -> Result<(), PLDiag> {
     match def_var {
         DefVar::Identifier(var) => {
-            let ptr2value = builder.alloc(
-                &var.name,
-                &pltype.borrow(),
-                ctx,
-                Some(def_var.range().start),
-            );
-            ctx.add_symbol(var.name.clone(), ptr2value, pltype, def_var.range(), false)?;
+            let ptr2value = if is_def {
+                let ptr2value = builder.alloc(
+                    &var.name,
+                    &pltype.borrow(),
+                    ctx,
+                    Some(def_var.range().start),
+                );
+                ctx.add_symbol(var.name.clone(), ptr2value, pltype, def_var.range(), false)?;
+                ptr2value
+            } else {
+                let v = var.clone().emit(ctx, builder)?.get_value();
+                if v.is_none() {
+                    return Err(var
+                        .range()
+                        .new_err(ErrorCode::NOT_ASSIGNABLE)
+                        .add_to_ctx(ctx));
+                }
+                v.unwrap().get_value()
+            };
             if let Some(exp) = expv {
                 builder.build_dbg_location(def_var.range().start);
                 builder.build_store(ptr2value, ctx.try_load2var(range, exp, builder)?);
@@ -299,6 +314,7 @@ fn handle_deconstruct<'a, 'b>(
                             ctx,
                             Some(expv),
                             deconstruct_v,
+                            is_def,
                         )?
                     }
                     return Ok(());
@@ -366,6 +382,7 @@ fn handle_deconstruct<'a, 'b>(
                                 ctx,
                                 Some(expv),
                                 &DefVar::Identifier(v.clone()),
+                                is_def,
                             )?,
                             StructFieldDeconstructEnum::Taged(_, dec) => handle_deconstruct(
                                 range,
@@ -375,6 +392,7 @@ fn handle_deconstruct<'a, 'b>(
                                 ctx,
                                 Some(expv),
                                 dec,
+                                is_def,
                             )?,
                         }
                     }
@@ -402,10 +420,37 @@ fn handle_deconstruct<'a, 'b>(
 }
 #[node]
 pub struct AssignNode {
-    pub var: Box<NodeEnum>,
+    pub var: AssignVar,
     pub exp: Box<NodeEnum>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AssignVar {
+    Pointer(Box<NodeEnum>),
+    Raw(Box<DefVar>),
+}
+
+impl PrintTrait for AssignVar {
+    fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
+        match self {
+            AssignVar::Pointer(p) => {
+                p.print(tabs, end, line);
+            }
+            AssignVar::Raw(r) => {
+                r.print(tabs, end, line);
+            }
+        }
+    }
+}
+
+impl RangeTrait for AssignVar {
+    fn range(&self) -> Range {
+        match self {
+            AssignVar::Pointer(p) => p.range(),
+            AssignVar::Raw(r) => r.range(),
+        }
+    }
+}
 impl PrintTrait for AssignNode {
     fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
         deal_line(tabs, &mut line, end);
@@ -423,24 +468,46 @@ impl Node for AssignNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let exp_range = self.exp.range();
-        let rel = self.var.emit(ctx, builder)?.get_value();
-        if rel.is_none() {
-            return Err(ctx.add_diag(self.var.range().new_err(ErrorCode::NOT_ASSIGNABLE)));
+        ctx.push_semantic_token(self.var.range(), SemanticTokenType::VARIABLE, 0);
+        match &mut self.var {
+            AssignVar::Pointer(var) => {
+                let rel = var.emit(ctx, builder)?.get_value();
+                if rel.is_none() {
+                    return Err(ctx.add_diag(self.var.range().new_err(ErrorCode::NOT_ASSIGNABLE)));
+                }
+                let rel = rel.unwrap();
+                let ptr = rel.get_value();
+                let lpltype = rel.get_ty();
+                // 要走转换逻辑，所以不和下方分支统一
+                let value = ctx
+                    .emit_with_expectation(&mut self.exp, lpltype, self.var.range(), builder)?
+                    .get_value()
+                    .unwrap()
+                    .get_value();
+                if rel.is_const() {
+                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::ASSIGN_CONST)));
+                }
+                let load = ctx.try_load2var(exp_range, value, builder)?;
+                builder.build_store(ptr, load);
+                Ok(Default::default())
+            }
+            AssignVar::Raw(def) => {
+                let v = self.exp.emit(ctx, builder)?.get_value().unwrap();
+                let expv = v.get_value();
+                let pltype = v.get_ty();
+                handle_deconstruct(
+                    self.range,
+                    Some(self.exp.range()),
+                    builder,
+                    pltype,
+                    ctx,
+                    Some(expv),
+                    def,
+                    false,
+                )?;
+                Ok(Default::default())
+            }
         }
-        let rel = rel.unwrap();
-        let ptr = rel.get_value();
-        let lpltype = rel.get_ty();
-        let value = ctx
-            .emit_with_expectation(&mut self.exp, lpltype, self.var.range(), builder)?
-            .get_value()
-            .unwrap()
-            .get_value();
-        if rel.is_const() {
-            return Err(ctx.add_diag(self.range.new_err(ErrorCode::ASSIGN_CONST)));
-        }
-        let load = ctx.try_load2var(exp_range, value, builder)?;
-        builder.build_store(ptr, load);
-        Ok(Default::default())
     }
 }
 

@@ -197,11 +197,15 @@ fn struct_deconstruct_field(input: Span) -> IResult<Span, StructFieldDeconstruct
     ))(input)
 }
 
+#[test_parser("(a,d) = 1")]
 #[test_parser("a = 1")]
 pub fn assignment(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
-            pointer_exp,
+            alt((
+                map(pointer_exp, AssignVar::Pointer),
+                map(deconstruct, AssignVar::Raw),
+            )),
             tag_token_symbol(TokenType::ASSIGN),
             general_exp,
         )),
