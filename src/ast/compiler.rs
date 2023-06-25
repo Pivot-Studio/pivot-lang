@@ -134,7 +134,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     let pb = &COMPILE_PROGRESS;
     pb.enable_steady_tick(Duration::from_millis(50));
     pb.set_style(PROGRESS_STYLE.clone());
-    if op.printast {
+    if op.printast|| op.flow {
         pb.set_draw_target(ProgressDrawTarget::hidden());
     } else {
         pb.set_draw_target(ProgressDrawTarget::stderr());
@@ -148,7 +148,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         fs::create_dir(&targetdir).unwrap();
     }
     compile_dry(db, docs).unwrap();
-    if op.printast {
+    if op.printast|| op.flow {
         return;
     }
     pb.finish_with_message("中间代码编译完成");

@@ -88,7 +88,7 @@ struct AttrInput {
     input: AcceptAttrInput,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 enum AcceptAttrInput {
     Literal(syn::LitStr),
     None,
