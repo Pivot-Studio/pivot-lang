@@ -17,7 +17,7 @@ use inkwell::{
     passes::{PassManager, PassManagerBuilder},
     OptimizationLevel,
 };
-use log::{debug, trace, warn};
+use log::{trace, warn};
 #[cfg(feature = "llvm")]
 use pl_linker::{linker::create_with_target, mun_target::spec::Target};
 use rustc_hash::FxHashSet;
@@ -50,6 +50,7 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
     let input = docs.get_file_params(db, docs.file(db).clone(), true);
     input?;
     let input = input.unwrap();
+    log::trace!("entering compile_dry_file");
     let re = compile_dry_file(db, input);
     // calculate find references results
     if docs.action(db) != ActionType::FindReferences {
@@ -77,7 +78,7 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
     let re = docs.get_file_content(db);
     re?;
     let src = re.unwrap();
-    debug!("src {:#?} id {:?}", src.text(db), src);
+    log::trace!("src {:#?} id {:?}", src.text(db), src.path(db));
     let parse_result = parse(db, src);
     if let Err(e) = parse_result {
         log::error!("source code parse failed {}", e);
@@ -91,6 +92,7 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
         docs.docs(db),
         docs.config(db),
     );
+    log::trace!("entering emit");
     Some(program.emit(db))
 }
 

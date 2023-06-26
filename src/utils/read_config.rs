@@ -11,8 +11,18 @@ use crate::{
 };
 
 pub fn get_config_path(current: String) -> Result<String, &'static str> {
+    log::trace!("get_config_path: {:?}", current);
     #[cfg(target_arch = "wasm32")] // TODO support std on wasm
-    return Ok("http://www.test.com/Kagari.toml".to_string());
+    {
+        if current.starts_with("http") {
+            return Ok("http://www.test.com/Kagari.toml".to_string());
+        }
+        if current.starts_with("core") {
+            return Ok("core/Kagari.toml".to_string());
+        } else if current.starts_with("std") {
+            return Ok("std/Kagari.toml".to_string());
+        }
+    }
 
     let mut cur_path = PathBuf::from(current);
     if cur_path.is_file() && !cur_path.pop() {

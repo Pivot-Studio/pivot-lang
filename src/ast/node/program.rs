@@ -235,6 +235,8 @@ impl Program {
             let wrapper = ConfigWrapper::new(db, self.config(db), u);
             let mut mod_id = wrapper.use_node(db).get_last_id();
             let path = wrapper.resolve_dep_path(db);
+            let p = self.config(db).project;
+            log::trace!("load dep {:?} for {:?} (project {:?})", path, pkgname, p);
             let f = path.to_str().unwrap().to_string();
             let mut f = self.docs(db).get_file_params(db, f, false);
             let mut symbol_opt = None;
@@ -291,6 +293,7 @@ impl Program {
             }
             modmap.insert(mod_id.unwrap(), module);
         }
+        log::trace!("done deps compile");
         let filepath = Path::new(self.params(db).file(db));
         let abs = crate::utils::canonicalize(filepath).unwrap();
         let dir = abs.parent().unwrap().to_str().unwrap();
@@ -489,7 +492,7 @@ mod salsa_structs;
 /// compile a pi file to llvm ir, or do some lsp analysis
 #[salsa::tracked]
 pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
-    log::info!("emit_file: {}", params.fullpath(db),);
+    log::trace!("emit_file: {}", params.fullpath(db),);
     let v = RefCell::new(FxHashSet::default());
     let mut ctx = ctx::Ctx::new(
         params.fullpath(db),

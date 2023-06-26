@@ -174,7 +174,7 @@ fn add_pl_libs(db: &mut Database, docs: Arc<Mutex<RefCell<MemDocs>>>) {
 #[wasm_bindgen]
 pub fn set_init_content(content: &str) -> String {
     console_error_panic_hook::set_once();
-    wasm_logger::init(wasm_logger::Config::new(log::Level::Error));
+    wasm_logger::init(wasm_logger::Config::new(log::Level::Warn));
     let docin = *DOCIN;
     let binding = &DB.inner;
     let db = &mut *binding.borrow_mut();
