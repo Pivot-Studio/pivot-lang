@@ -187,9 +187,9 @@ impl Node for VarNode {
                     ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
                     if !f.fntype.generic {
                         let handle = builder.get_or_insert_fn_handle(f, ctx);
-                        return handle.new_output(tp.clone()).to_result();
+                        return handle.new_output(tp.tp.clone()).to_result();
                     }
-                    return usize::MAX.new_output(tp.clone()).to_result();
+                    return usize::MAX.new_output(tp.tp.clone()).to_result();
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::VAR_NOT_FOUND))),
             }
@@ -249,7 +249,7 @@ impl VarNode {
                     } else if let PLType::Union(u) = &*tp.clone().borrow() {
                         ctx.send_if_go_to_def(self.range, u.range, u.path.clone());
                     }
-                    return usize::MAX.new_output(tp.clone()).to_result();
+                    return usize::MAX.new_output(tp.tp.clone()).to_result();
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE))),
             }

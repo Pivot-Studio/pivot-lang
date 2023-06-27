@@ -28,7 +28,7 @@ macro_rules! add_basic_types {
             paste::paste! {
                 let [<pltype_$ident>] = PLType::Primitive(PriType::[<$ident:upper>]);
                 $map
-                .insert(stringify!($ident).to_string(), Arc::new(RefCell::new( [<pltype_$ident>])));
+                .insert(stringify!($ident).to_string(),$crate::ast::plmod::GlobType::new([<pltype_$ident>]));
             }
         )*
     };

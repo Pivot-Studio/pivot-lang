@@ -309,7 +309,7 @@ impl Node for IsNode {
                     );
                     let cond = builder.try_load2var(Default::default(), cond, ctx).unwrap();
                     let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
-                    cond.new_output(ctx.get_type("bool", Default::default()).unwrap())
+                    cond.new_output(ctx.get_type("bool", Default::default()).unwrap().tp)
                         .set_const()
                         .to_result()
                 } else {

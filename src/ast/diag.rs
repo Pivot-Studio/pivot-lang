@@ -136,6 +136,7 @@ define_error!(
     TUPLE_WRONG_DECONSTRUCT_PARAM_LEN = "tuple wrong deconstruct param len",
     DEF_DECONSTRUCT_MUST_HAVE_VALUE = "def deconstruct must have value",
     STRUCT_FIELD_NOT_EXISTS = "struct field not exists",
+    TRY_TO_EXPORT_NON_REEXPORT_SYMBOL = "try to export non reexport symbol",
 );
 macro_rules! define_warn {
     ($(

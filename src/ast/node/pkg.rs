@@ -270,9 +270,9 @@ impl Node for ExternIdNode {
             let re = match &*mtp.borrow() {
                 PLType::Fn(_) => {
                     // 必须是public的
-                    _ = tp.borrow().expect_pub(ctx, self.range);
+                    _ = tp.expect_pub(ctx, self.range);
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
-                    usize::MAX.new_output(tp).to_result()
+                    usize::MAX.new_output(tp.tp).to_result()
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION))),
             };
@@ -317,9 +317,9 @@ impl ExternIdNode {
 
         if let Ok(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {
             // 必须是public的
-            _ = tp.borrow().expect_pub(ctx, self.range);
+            _ = tp.expect_pub(ctx, self.range);
             let re = match *tp.clone().borrow() {
-                PLType::Struct(_) | PLType::Trait(_) => usize::MAX.new_output(tp).to_result(),
+                PLType::Struct(_) | PLType::Trait(_) => usize::MAX.new_output(tp.tp).to_result(),
                 _ => unreachable!(),
             };
             return re;

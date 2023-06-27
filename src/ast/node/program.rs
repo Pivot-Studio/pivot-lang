@@ -13,6 +13,7 @@ use crate::ast::builder::IRBuilder;
 use crate::ast::compiler::COMPILE_PROGRESS;
 use crate::ast::compiler::{compile_dry_file, ActionType};
 use crate::ast::ctx::{self, Ctx};
+use crate::ast::plmod::GlobType;
 use crate::ast::plmod::LSPDef;
 use crate::ast::plmod::Mod;
 use crate::ast::pltype::add_primitive_types;
@@ -271,8 +272,15 @@ impl Program {
             if let Some(s) = symbol_opt {
                 let symbol = module.types.get(&s);
                 if let Some(x) = symbol {
-                    if x.borrow().is_pub() {
-                        global_tp_map.insert(s.clone(), x.to_owned());
+                    if x.visibal_outside() {
+                        global_tp_map.insert(
+                            s.clone(),
+                            GlobType {
+                                is_extern: true,
+                                re_export: false,
+                                tp: x.tp.to_owned(),
+                            },
+                        );
                     }
                     if let PLType::Trait(t) = &*x.borrow() {
                         for (k, v) in t.trait_methods_impl.borrow().clone() {
@@ -508,10 +516,10 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     ctx.plmod.submods = params.submods(db);
     // imports all builtin symbols
     if let Some(builtin_mod) = ctx.plmod.submods.get("builtin").cloned() {
-        ctx.plmod.import_all_public_symbols_from(&builtin_mod);
+        ctx.plmod.import_all_symbols_from(&builtin_mod);
     }
     if let Some(builtin_mod) = ctx.plmod.submods.get("stdbuiltin").cloned() {
-        ctx.plmod.import_all_public_symbols_from(&builtin_mod);
+        ctx.plmod.import_all_symbols_from(&builtin_mod);
     }
     let m = &mut ctx;
     #[cfg(feature = "llvm")]
@@ -567,9 +575,9 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
             },
         );
     }
-    for k in params.types(db).get().keys() {
-        ctx.plmod.types.remove(k);
-    }
+    // for k in params.types(db).get().keys() {
+    //     ctx.plmod.types.remove(k);
+    // }
     ModWrapper::new(db, ctx.plmod)
 }
 

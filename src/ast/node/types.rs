@@ -524,7 +524,7 @@ impl StructDefNode {
                 }
                 let tp = tpre.unwrap();
                 field_pltps.push(tp.clone());
-                ctx.set_field_refs(pltype.clone(), &f, f.range);
+                ctx.set_field_refs(pltype.tp.clone(), &f, f.range);
                 ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
                 fields.insert(id.name.to_string(), f.clone());
             }
@@ -544,8 +544,8 @@ impl StructDefNode {
                     builder.gen_st_visit_function(ctx, st, &field_pltps);
                 }
             }
-            ctx.set_if_refs_tp(pltype.clone(), self.id.range);
-            ctx.add_doc_symbols(pltype.clone());
+            ctx.set_if_refs_tp(pltype.tp.clone(), self.id.range);
+            ctx.add_doc_symbols(pltype.tp.clone());
             ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
             Ok(())
         })

@@ -779,7 +779,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     ) -> (DIType<'ctx>, u64) {
         let field_pltype = match field.typenode.get_type(ctx, &self.clone().into(), true) {
             Ok(field_pltype) => field_pltype,
-            Err(_) => ctx.get_type("i64", Default::default()).unwrap(),
+            Err(_) => ctx.get_type("i64", Default::default()).unwrap().tp,
         };
         let di_type = self.get_ditype(&field_pltype.borrow(), ctx);
         let debug_type = di_type.unwrap();

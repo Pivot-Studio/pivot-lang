@@ -219,7 +219,7 @@ impl TraitDefNode {
             st.derives = derives;
             builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&self.id.name), st, ctx);
         }
-        ctx.add_doc_symbols(pltype);
+        ctx.add_doc_symbols(pltype.tp);
         // ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
         Ok(())
     }

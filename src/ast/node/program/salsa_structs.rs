@@ -1,10 +1,10 @@
 use crate::ast::node::macro_nodes::MacroNode;
 use crate::ast::node::NodeEnum;
-use crate::ast::pltype::{FNValue, PLType};
+use crate::ast::pltype::FNValue;
 use crate::ast::range::Pos;
 use crate::utils::read_config::Config;
 
-use crate::ast::plmod::Mod;
+use crate::ast::plmod::{GlobType, Mod};
 
 use crate::lsp::mem_docs::{EmitParams, MemDocsInput};
 use rustc_hash::FxHashMap;
@@ -28,7 +28,7 @@ pub struct ProgramEmitParam {
     #[return_ref]
     pub file_content: String,
     #[return_ref]
-    pub types: UnsafeWrapper<FxHashMap<String, Arc<RefCell<PLType>>>>,
+    pub types: UnsafeWrapper<FxHashMap<String, GlobType>>,
     #[return_ref]
     pub mth_table: MthdTableWrapper,
     #[return_ref]

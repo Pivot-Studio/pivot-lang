@@ -470,36 +470,27 @@ fn test_find_refs() {
         }
     }
     // assert_eq!(locs.len(), 3);
-    assert!(locs
-        .iter()
-        .find(|l| {
-            let ok = l.uri.to_string().contains("test/lsp/mod.pi");
-            if ok {
-                assert!(l.range == new_diag_range(1, 7, 1, 11))
-            }
-            ok
-        })
-        .is_some());
-    assert!(locs
-        .iter()
-        .find(|l| {
-            let ok = l.uri.to_string().contains("test/lsp/test_completion.pi");
-            if ok {
-                assert!(l.range == new_diag_range(38, 11, 38, 15))
-            }
-            ok
-        })
-        .is_some());
-    assert!(locs
-        .iter()
-        .find(|l| {
-            let ok = l.uri.to_string().contains("test/lsp/mod2.pi");
-            if ok {
-                assert!(l.range == new_diag_range(3, 17, 3, 21))
-            }
-            ok
-        })
-        .is_some());
+    assert!(locs.iter().any(|l| {
+        let ok = l.uri.to_string().contains("test/lsp/mod.pi");
+        if ok {
+            assert!(l.range == new_diag_range(1, 7, 1, 11))
+        }
+        ok
+    }));
+    assert!(locs.iter().any(|l| {
+        let ok = l.uri.to_string().contains("test/lsp/test_completion.pi");
+        if ok {
+            assert!(l.range == new_diag_range(38, 11, 38, 15))
+        }
+        ok
+    }));
+    assert!(locs.iter().any(|l| {
+        let ok = l.uri.to_string().contains("test/lsp/mod2.pi");
+        if ok {
+            assert!(l.range == new_diag_range(3, 17, 3, 21))
+        }
+        ok
+    }));
 }
 
 #[test]
