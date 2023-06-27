@@ -1545,7 +1545,7 @@ checksum = "f91339c0467de62360649f8d3e185ca8de4224ff281f66000de5eb2a77a79041"
 [[package]]
 name = "salsa-2022"
 version = "0.1.0"
-source = "git+https://github.com/salsa-rs/salsa?branch=master#67d290dc26f0026d93982f2611b1dc2f6058ebd4"
+source = "git+https://github.com/salsa-rs/salsa?branch=master#d4a94fbf07bb837f3d9d0a4caa5db4d5db29243f"
 dependencies = [
  "arc-swap",
  "crossbeam",
@@ -1563,7 +1563,7 @@ dependencies = [
 [[package]]
 name = "salsa-2022-macros"
 version = "0.1.0"
-source = "git+https://github.com/salsa-rs/salsa?branch=master#67d290dc26f0026d93982f2611b1dc2f6058ebd4"
+source = "git+https://github.com/salsa-rs/salsa?branch=master#d4a94fbf07bb837f3d9d0a4caa5db4d5db29243f"
 dependencies = [
  "eyre",
  "heck",

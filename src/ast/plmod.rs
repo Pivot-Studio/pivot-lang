@@ -30,7 +30,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::cell::{Ref, RefCell, RefMut};
 use std::collections::BTreeMap;
 
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 
 use std::sync::Arc;
 
@@ -190,7 +190,14 @@ impl Mod {
         }
     }
 
-    pub fn new(name: String, path: String) -> Self {
+    pub fn new( path: String) -> Self {
+        let name = Path::new(Path::new(&path).file_stem().unwrap())
+        .file_name()
+        .take()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
         Self {
             name,
             path,

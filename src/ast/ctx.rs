@@ -55,8 +55,6 @@ use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use std::cell::RefCell;
 
-use std::path::Path;
-
 use std::path::PathBuf;
 use std::sync::Arc;
 mod builtins;
@@ -140,17 +138,10 @@ impl<'a, 'ctx> Ctx<'a> {
         config: Config,
         db: &'a dyn Db,
     ) -> Ctx<'a> {
-        let f = Path::new(Path::new(src_file_path).file_stem().unwrap())
-            .file_name()
-            .take()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
         Ctx {
             need_highlight: 0,
             generic_types: FxHashMap::default(),
-            plmod: Mod::new(f, src_file_path.to_string()),
+            plmod: Mod::new( src_file_path.to_string()),
             father: None,
             init_func: None,
             function: None,

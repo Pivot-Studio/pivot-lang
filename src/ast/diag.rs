@@ -137,6 +137,7 @@ define_error!(
     DEF_DECONSTRUCT_MUST_HAVE_VALUE = "def deconstruct must have value",
     STRUCT_FIELD_NOT_EXISTS = "struct field not exists",
     TRY_TO_EXPORT_NON_REEXPORT_SYMBOL = "try to export non reexport symbol",
+    CYCLE_DEPENDENCY = "cycle dependency not allowed",
 );
 macro_rules! define_warn {
     ($(
@@ -264,8 +265,8 @@ impl PLDiag {
             if let Some((tpl, args)) = &label.txt {
                 lab = Label::new((
                     label.file.as_str(),
-                    label.range.start.utf8_offset(&f(db, path))
-                        ..label.range.end.utf8_offset(&f(db, path)),
+                    label.range.start.utf8_offset(&f(db, label.file.as_str()))
+                        ..label.range.end.utf8_offset(&f(db, label.file.as_str())),
                 ));
                 let mut msg = tpl.clone();
                 msg = msg.format(
@@ -277,9 +278,9 @@ impl PLDiag {
                 lab = lab.with_message(msg);
             } else {
                 lab = Label::new((
-                    path,
-                    label.range.start.utf8_offset(&f(db, path))
-                        ..label.range.end.utf8_offset(&f(db, path)),
+                    label.file.as_str(),
+                    label.range.start.utf8_offset(&f(db, label.file.as_str()))
+                        ..label.range.end.utf8_offset(&f(db, label.file.as_str())),
                 ));
             }
             rb = rb.with_label(lab.with_color(color));
