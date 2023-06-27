@@ -47,7 +47,7 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
         return None;
     }
 
-    let input = docs.get_file_params(db, docs.file(db).clone(), true);
+    let input = docs.get_file_params(db, docs.file(db).clone(), true, vec![]);
     input?;
     let input = input.unwrap();
     log::trace!("entering compile_dry_file");
@@ -91,6 +91,7 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
         docs.get_emit_params(db),
         docs.docs(db),
         docs.config(db),
+        docs.deps_link(db),
     );
     log::trace!("entering emit");
     Some(program.emit(db))

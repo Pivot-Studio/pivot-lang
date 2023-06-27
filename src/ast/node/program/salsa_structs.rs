@@ -1,7 +1,7 @@
 use crate::ast::node::macro_nodes::MacroNode;
 use crate::ast::node::NodeEnum;
 use crate::ast::pltype::FNValue;
-use crate::ast::range::Pos;
+use crate::ast::range::{Pos, Range};
 use crate::utils::read_config::Config;
 
 use crate::ast::plmod::{GlobType, Mod};
@@ -63,4 +63,5 @@ pub struct Program {
     pub params: EmitParams,
     pub docs: MemDocsInput,
     pub config: Config,
+    pub deps_link: Vec<(String, Range)>,
 }

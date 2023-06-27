@@ -11,7 +11,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     ast::{
         compiler::{ActionType, Options},
-        range::Pos,
+        range::{Pos, Range},
     },
     nomparser::SourceProgram,
     utils::read_config::{get_config, get_config_path, Config},
@@ -56,6 +56,7 @@ pub struct FileCompileInput {
     pub modpath: String,
     pub docs: MemDocsInput,
     pub config: Config,
+    pub deps_link: Vec<(String, Range)>,
 }
 #[salsa::tracked]
 impl FileCompileInput {
@@ -138,7 +139,13 @@ impl MemDocsInput {
         re
     }
     #[salsa::tracked]
-    pub fn get_file_params(self, db: &dyn Db, f: String, entry: bool) -> Option<FileCompileInput> {
+    pub fn get_file_params(
+        self,
+        db: &dyn Db,
+        f: String,
+        entry: bool,
+        deps_link: Vec<(String, Range)>,
+    ) -> Option<FileCompileInput> {
         let f = crate::utils::canonicalize(f);
         if f.is_err() {
             log::debug!("lsp error: {}", f.err().unwrap());
@@ -176,6 +183,7 @@ impl MemDocsInput {
             parant.to_str().unwrap().to_string(),
             self,
             config,
+            deps_link,
         ))
     }
 }

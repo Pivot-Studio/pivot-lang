@@ -173,22 +173,36 @@ lazy_static::lazy_static! {
     };
 }
 
-fn cycle_deps_recover(
-    db: &dyn Db,
-    cycle: &salsa::Cycle,
-    params: Program
-) -> ModWrapper {
+/// # cycle_deps_recover
+///
+/// 处理循环依赖
+///
+/// 这个函数实际上现在不会使用，我们在salsa之外解决了循环引用。
+///
+/// 原因是现在salsa有bug，使用cycle recovery会导致salsa中一个assert失败
+/// https://github.com/salsa-rs/salsa/issues/455
+///
+/// 此函数保留是因为以后别的地方可能会用到recover功能，这里的代码留着做个例子
+fn cycle_deps_recover(db: &dyn Db, cycle: &salsa::Cycle, params: Program) -> ModWrapper {
     let mut files = FxHashMap::default();
     let src_file_path = params.params(db).file(db);
     let key = cycle.all_participants(db);
     let mut prev_file = src_file_path;
-    
-    let mut prev_use_map= FxHashMap::default();
+
+    let mut prev_use_map = FxHashMap::default();
     build_init_params(params, db, &mut prev_use_map);
-    let filtered = cycle.participant_keys().enumerate().filter(|(i,_)|key[*i].starts_with("Program_emit"));
+    let filtered = cycle
+        .participant_keys()
+        .enumerate()
+        .filter(|(i, _)| key[*i].starts_with("Program_emit"));
     let len = filtered.count();
     while files.len() < len {
-        for (_,p) in  cycle.participant_keys().enumerate().filter(|(i,_)|key[*i].starts_with("Program_emit")).map(|(u,k)|(u,Program::from_id(k.key_index()))) {
+        for (_, p) in cycle
+            .participant_keys()
+            .enumerate()
+            .filter(|(i, _)| key[*i].starts_with("Program_emit"))
+            .map(|(u, k)| (u, Program::from_id(k.key_index())))
+        {
             let prog = match_node(p, db);
             if let Some(r) = prev_use_map.get(p.params(db).file(db)) {
                 files.insert(prev_file, *r);
@@ -196,28 +210,22 @@ fn cycle_deps_recover(
                 prev_use_map.clear();
                 build_use_map(prog, db, p, &mut prev_use_map);
             }
-        }   
+        }
     }
 
     let first_range = *files.get(&src_file_path).unwrap();
     let mut diag = first_range.new_err(ErrorCode::CYCLE_DEPENDENCY);
-    diag.set_source(&src_file_path);
-    for (idx,(f,r)) in files.iter().enumerate() {
-        let msg = if idx==0 {
+    diag.set_source(src_file_path);
+    for (idx, (f, r)) in files.iter().enumerate() {
+        let msg = if idx == 0 {
             "first import in cycle"
         } else {
             "next import in cycle"
         };
         diag.add_label(*r, f.to_string(), format_label!(msg));
     }
-    Diagnostics::push(
-        db,
-        (
-            src_file_path.to_string(),
-            vec![diag]
-        ),
-    );
-    ModWrapper::new(db,Mod::new( src_file_path.to_string()))
+    Diagnostics::push(db, (src_file_path.to_string(), vec![diag]));
+    ModWrapper::new(db, Mod::new(src_file_path.to_string()))
 }
 
 fn build_init_params(params: Program, db: &dyn Db, prev_use_map: &mut FxHashMap<String, Range>) {
@@ -226,14 +234,18 @@ fn build_init_params(params: Program, db: &dyn Db, prev_use_map: &mut FxHashMap<
 }
 
 fn match_node(params: Program, db: &dyn Db) -> ProgramNode {
-    let prog = match *params.node(db).node(db) {
+    match *params.node(db).node(db) {
         NodeEnum::Program(p) => p,
         _ => panic!("not a program"),
-    };
-    prog
+    }
 }
 
-fn build_use_map(prog: ProgramNode, db: &dyn Db, params: Program, prev_use_map: &mut FxHashMap<String, Range>) {
+fn build_use_map(
+    prog: ProgramNode,
+    db: &dyn Db,
+    params: Program,
+    prev_use_map: &mut FxHashMap<String, Range>,
+) {
     for u in prog.uses.iter() {
         let u = if let NodeEnum::UseNode(p) = *u.clone() {
             p
@@ -295,6 +307,8 @@ impl Program {
         let mut global_macro_map = FxHashMap::default();
         // load dependencies
         for (i, u) in prog.uses.iter().enumerate() {
+            let mut deps_link = self.deps_link(db);
+            let range = u.range();
             #[cfg(not(target_arch = "wasm32"))]
             pb.set_message(format!(
                 "正在编译包{}的依赖项{}/{}",
@@ -315,13 +329,38 @@ impl Program {
             let p = self.config(db).project;
             log::trace!("load dep {:?} for {:?} (project {:?})", path, pkgname, p);
             let f = path.to_str().unwrap().to_string();
-            let mut f = self.docs(db).get_file_params(db, f, false);
+            let mut cycle = vec![];
+            for (dep, range) in &deps_link {
+                if dep == &f || !cycle.is_empty() {
+                    cycle.push((dep.clone(), *range));
+                }
+            }
+            if !cycle.is_empty() {
+                cycle.push((self.params(db).file(db).clone(), range));
+                let (first, first_r) = cycle.first().unwrap();
+                let mut diag = first_r.new_err(ErrorCode::CYCLE_DEPENDENCY);
+                diag.set_source(first);
+                for (i, (dep, range)) in cycle.iter().enumerate() {
+                    let msg = if i == 0 {
+                        "first import in cycle"
+                    } else {
+                        "next import in cycle"
+                    };
+                    diag.add_label(*range, dep.to_string(), format_label!(msg));
+                }
+                Diagnostics::push(db, (first.to_string(), vec![diag]));
+                continue;
+            }
+            deps_link.push((self.params(db).file(db).to_string(), range));
+            let mut f = self
+                .docs(db)
+                .get_file_params(db, f, false, deps_link.clone());
             let mut symbol_opt = None;
             if f.is_none() {
                 if let Some(p) = path.parent() {
                     mod_id = Some(p.file_name().unwrap().to_str().unwrap().to_string());
                     let file = p.with_extension("pi").to_str().unwrap().to_string();
-                    f = self.docs(db).get_file_params(db, file, false);
+                    f = self.docs(db).get_file_params(db, file, false, deps_link);
                     symbol_opt = Some(
                         path.with_extension("")
                             .file_name()
@@ -338,6 +377,7 @@ impl Program {
                 }
             }
             let f = f.unwrap();
+
             // compile depency module first
             let m = compile_dry_file(db, f);
             if m.is_none() {
