@@ -28,12 +28,12 @@ pub struct ProgramEmitParam {
     pub submods: FxHashMap<String, Mod>,
     #[return_ref]
     pub file_content: String,
-    #[return_ref]
-    pub types: UnsafeWrapper<FxHashMap<String, GlobType>>,
-    #[return_ref]
-    pub mth_table: MthdTableWrapper,
-    #[return_ref]
-    pub macro_table: UnsafeWrapper<FxHashMap<String, Arc<MacroNode>>>,
+    // #[return_ref]
+    // pub types: UnsafeWrapper<FxHashMap<String, GlobType>>,
+    // #[return_ref]
+    // pub mth_table: MthdTableWrapper,
+    // #[return_ref]
+    // pub macro_table: UnsafeWrapper<FxHashMap<String, Arc<MacroNode>>>,
 }
 
 pub type MthdTableWrapper =
@@ -64,5 +64,11 @@ pub struct Program {
     pub params: EmitParams,
     pub docs: MemDocsInput,
     pub config: Config,
-    pub deps_link: LinkedHashMap<String,(String, Range)>,
+    pub deps_link: LinkedHashMap<InternedString,(InternedString, Range)>,
+}
+
+#[salsa::interned]
+pub struct InternedString {
+    #[return_ref]
+    pub string: String,
 }

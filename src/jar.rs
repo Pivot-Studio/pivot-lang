@@ -32,6 +32,7 @@ pub struct Jar(
     crate::ast::node::program::emit_file,
     crate::ast::node::program::LspParams,
     crate::ast::node::program::Program_is_active_file,
+    crate::ast::node::program::InternedString,
     crate::utils::read_config::get_config,
     crate::utils::read_config::ConfigWrapper,
     crate::utils::read_config::ConfigWrapper_resolve_dep_path,

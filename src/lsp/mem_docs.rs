@@ -12,7 +12,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     ast::{
         compiler::{ActionType, Options},
-        range::{Pos, Range},
+        range::{Pos, Range}, node::program::InternedString,
     },
     nomparser::SourceProgram,
     utils::read_config::{get_config, get_config_path, Config},
@@ -57,7 +57,7 @@ pub struct FileCompileInput {
     pub modpath: String,
     pub docs: MemDocsInput,
     pub config: Config,
-    pub deps_link: LinkedHashMap<String,(String, Range)>,
+    pub deps_link: LinkedHashMap<InternedString,(InternedString, Range)>,
 }
 #[salsa::tracked]
 impl FileCompileInput {
@@ -145,7 +145,7 @@ impl MemDocsInput {
         db: &dyn Db,
         f: String,
         entry: bool,
-        deps_link: LinkedHashMap<String,(String, Range)>,
+        deps_link: LinkedHashMap<InternedString,(InternedString, Range)>,
     ) -> Option<FileCompileInput> {
         let f = crate::utils::canonicalize(f);
         if f.is_err() {

@@ -333,10 +333,7 @@ impl Program {
         } else {
             pb.inc_length(1 + prog.uses.len() as u64);
         }
-        let mut global_mthd_map: FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>> =
-            FxHashMap::default();
-        let mut global_tp_map = FxHashMap::default();
-        let mut global_macro_map = FxHashMap::default();
+
         // load dependencies
         for (i, u) in prog.uses.iter().enumerate() {
             let mut deps_link = self.deps_link(db);
@@ -355,59 +352,48 @@ impl Program {
             } else {
                 continue;
             };
-            let all_import = u.all_import;
-            let re_export = u
-                .modifier
-                .map(|(t, _)| t == TokenType::PUB)
-                .unwrap_or_default();
             let wrapper = ConfigWrapper::new(db, self.config(db), u);
             let mut mod_id = wrapper.use_node(db).get_last_id();
             let path = wrapper.resolve_dep_path(db);
             let p = self.config(db).project;
             log::trace!("load dep {:?} for {:?} (project {:?})", path, pkgname, p);
             let f = path.to_str().unwrap().to_string();
-            if deps_link.contains_key(&f) {
+            let intered_f = InternedString::new(db,f.clone());
+            let intered_file = InternedString::new(db,self.params(db).file(db).clone());
+            if deps_link.contains_key(&intered_f) {
                 let mut cycle = vec![];
                 for (dep, (_,range)) in &deps_link {
-                    if dep == &f || !cycle.is_empty() {
+                    if dep == &intered_f || !cycle.is_empty() {
                         cycle.push((dep.clone(), *range));
                     }
                 }
                 if !cycle.is_empty() {
-                    cycle.push((self.params(db).file(db).clone(), range));
+                    cycle.push((intered_file, range));
                     let (first, first_r) = cycle.first().unwrap();
                     let mut diag = first_r.new_err(ErrorCode::CYCLE_DEPENDENCY);
-                    diag.set_source(first);
+                    diag.set_source(first.string(db));
                     for (i, (dep, range)) in cycle.iter().enumerate() {
                         let msg = if i == 0 {
                             "first import in cycle"
                         } else {
                             "next import in cycle"
                         };
-                        diag.add_label(*range, dep.to_string(), format_label!(msg));
+                        diag.add_label(*range, dep.string(db).to_string(), format_label!(msg));
                     }
-                    Diagnostics::push(db, (first.to_string(), vec![diag]));
+                    Diagnostics::push(db, (first.string(db).to_string(), vec![diag]));
                     continue;
                 }   
             }
-            deps_link.insert(self.params(db).file(db).to_string(),(self.params(db).file(db).to_string(), range));
+            deps_link.insert(intered_file,(intered_file, range));
+            // eprintln!("deps_link: {:?}", deps_link);
             let mut f = self
                 .docs(db)
                 .get_file_params(db, f, false, deps_link.clone());
-            let mut symbol_opt = None;
             if f.is_none() {
                 if let Some(p) = path.parent() {
                     mod_id = Some(p.file_name().unwrap().to_str().unwrap().to_string());
                     let file = p.with_extension("pi").to_str().unwrap().to_string();
                     f = self.docs(db).get_file_params(db, file, false, deps_link);
-                    symbol_opt = Some(
-                        path.with_extension("")
-                            .file_name()
-                            .unwrap()
-                            .to_str()
-                            .unwrap()
-                            .to_string(),
-                    );
                     if f.is_none() {
                         continue;
                     }
@@ -424,21 +410,7 @@ impl Program {
             }
             let m = m.unwrap();
             let module = m.plmod(db);
-            if let Some(s) = symbol_opt {
-                let symbol = module.types.get(&s);
-                if let Some(x) = symbol {
-                    import_symbol(&s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
-                }
-                let mac = module.macros.get(&s);
-                if let Some(x) = mac {
-                    global_macro_map.insert(s, x.clone());
-                }
-            }
-            if all_import {
-                for (s,x) in module.types.iter() {
-                    import_symbol(s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
-                }
-            }
+
             modmap.insert(mod_id.unwrap(), module);
         }
         log::trace!("done deps compile");
@@ -475,9 +447,9 @@ impl Program {
                 .unwrap()
                 .text(db)
                 .clone(),
-            UnsafeWrapper::new(global_tp_map),
-            UnsafeWrapper::new(global_mthd_map),
-            UnsafeWrapper::new(global_macro_map),
+            // UnsafeWrapper::new(global_tp_map),
+            // UnsafeWrapper::new(global_mthd_map),
+            // UnsafeWrapper::new(global_macro_map),
         );
 
         let nn = p.node(db).node(db);
@@ -640,7 +612,58 @@ mod salsa_structs;
 /// compile a pi file to llvm ir, or do some lsp analysis
 #[salsa::tracked]
 pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
-    log::trace!("emit_file: {}", params.fullpath(db),);
+    log::info!("emit_file: {}", params.fullpath(db),);
+    let n = params.node(db);
+    let prog = match *n.node(db) {
+        NodeEnum::Program(p) => p,
+        _ => panic!("not a program"),
+    };
+    let mut global_mthd_map: FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>> =
+    FxHashMap::default();
+    let mut global_tp_map = FxHashMap::default();
+    let mut global_macro_map = FxHashMap::default();
+    let submods = params.submods(db);
+    // load dependencies
+    for (i, u) in prog.uses.iter().enumerate() {
+        let u = if let NodeEnum::UseNode(p) = *u.clone() {
+            p
+        } else {
+            continue;
+        };
+        let all_import = u.all_import;
+        let re_export = u
+            .modifier
+            .map(|(t, _)| t == TokenType::PUB)
+            .unwrap_or_default();
+        let wrapper = ConfigWrapper::new(db, params.params(db).config(db), u);
+        let mut mod_id = wrapper.use_node(db).get_last_id();
+        let path = wrapper.resolve_dep_path(db);
+        let mod_path = path.clone();
+        // let p = params.params(db).config(db).project;
+
+        let p = crate::utils::canonicalize(path);
+        if p.is_err() {
+            let bp = mod_path.with_extension("");
+            let parant = mod_path.as_path().parent().unwrap().to_path_buf();
+            mod_id =Some( parant.file_name().unwrap().to_str().unwrap().to_string());
+            let module = submods.get(&mod_id.clone().unwrap()).unwrap();
+            let s = bp.file_name().unwrap().to_str().unwrap().to_string();
+            let symbol = module.types.get(&s);
+            if let Some(x) = symbol {
+                import_symbol(&s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
+            }
+            let mac = module.macros.get(&s);
+            if let Some(x) = mac {
+                global_macro_map.insert(s, x.clone());
+            }
+        }
+        let module = submods.get(&mod_id.clone().unwrap()).unwrap();
+        if all_import {
+            for (s,x) in module.types.iter() {
+                import_symbol(s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
+            }
+        }
+    }
     let v = RefCell::new(FxHashSet::default());
     let mut ctx = ctx::Ctx::new(
         params.fullpath(db),
@@ -649,11 +672,11 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         params.params(db).config(db),
         db,
     );
-    ctx.plmod.trait_mthd_table = Arc::new(RefCell::new(params.mth_table(db).get().clone()));
-    ctx.plmod.types = params.types(db).get().clone();
-    ctx.plmod.macros = params.macro_table(db).get().clone();
+    ctx.plmod.trait_mthd_table = Arc::new(RefCell::new(global_mthd_map));
+    ctx.plmod.types = global_tp_map;
+    ctx.plmod.macros = global_macro_map;
     add_primitive_types(&mut ctx);
-    ctx.plmod.submods = params.submods(db);
+    ctx.plmod.submods = submods;
     // imports all builtin symbols
     if let Some(builtin_mod) = ctx.plmod.submods.get("builtin").cloned() {
         ctx.plmod.import_all_symbols_from(&builtin_mod);
