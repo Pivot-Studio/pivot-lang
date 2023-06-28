@@ -7,6 +7,7 @@ use crate::utils::read_config::Config;
 use crate::ast::plmod::{GlobType, Mod};
 
 use crate::lsp::mem_docs::{EmitParams, MemDocsInput};
+use linked_hash_map::LinkedHashMap;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 use std::sync::Arc;
@@ -63,5 +64,5 @@ pub struct Program {
     pub params: EmitParams,
     pub docs: MemDocsInput,
     pub config: Config,
-    pub deps_link: Vec<(String, Range)>,
+    pub deps_link: LinkedHashMap<String,(String, Range)>,
 }

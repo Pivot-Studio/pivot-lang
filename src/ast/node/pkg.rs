@@ -4,6 +4,8 @@ use std::sync::Arc;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::diag::PLDiag;
 use crate::ast::plmod::get_ns_path_completions;
+use crate::ast::range::Range;
+use crate::ast::tokens::TokenType;
 use crate::ast::{
     ctx::Ctx,
     diag::ErrorCode,
@@ -25,6 +27,8 @@ pub struct UseNode {
     /// use a::b:: 不完整
     pub complete: bool,
     pub singlecolon: bool,
+    pub modifier: Option<(TokenType, Range)>,
+    pub all_import: bool,
 }
 
 impl UseNode {

@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use linked_hash_map::LinkedHashMap;
 use log::debug;
 use rustc_hash::FxHashMap;
 
@@ -56,7 +57,7 @@ pub struct FileCompileInput {
     pub modpath: String,
     pub docs: MemDocsInput,
     pub config: Config,
-    pub deps_link: Vec<(String, Range)>,
+    pub deps_link: LinkedHashMap<String,(String, Range)>,
 }
 #[salsa::tracked]
 impl FileCompileInput {
@@ -144,7 +145,7 @@ impl MemDocsInput {
         db: &dyn Db,
         f: String,
         entry: bool,
-        deps_link: Vec<(String, Range)>,
+        deps_link: LinkedHashMap<String,(String, Range)>,
     ) -> Option<FileCompileInput> {
         let f = crate::utils::canonicalize(f);
         if f.is_err() {

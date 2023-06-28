@@ -18,6 +18,7 @@ use crate::ast::plmod::LSPDef;
 use crate::ast::plmod::Mod;
 use crate::ast::pltype::add_primitive_types;
 use crate::ast::pltype::FNValue;
+use crate::ast::tokens::TokenType;
 use crate::flow::display::Dot;
 use crate::format_label;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
@@ -144,12 +145,16 @@ lazy_static::lazy_static! {
             range: Default::default(),
             complete: true,
             singlecolon: false,
+            modifier:None,
+            all_import:false,
         })));
         uses.push(Box::new(NodeEnum::UseNode(UseNode {
             ids: vec![std, stdbuiltin],
             range: Default::default(),
             complete: true,
             singlecolon: false,
+            modifier:None,
+            all_import:false,
         })));
         uses
     };
@@ -169,6 +174,8 @@ lazy_static::lazy_static! {
             range: Default::default(),
             complete: true,
             singlecolon: false,
+            modifier:None,
+            all_import:false,
         }))]
     };
 }
@@ -259,6 +266,31 @@ fn build_use_map(
     }
 }
 
+
+fn import_symbol(s:&String,x:&GlobType,re_export:bool, global_tp_map:&mut FxHashMap<String,GlobType>,global_mthd_map:&mut FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>> ) {
+    if x.visibal_outside() {
+        global_tp_map.insert(
+            s.clone(),
+            GlobType {
+                is_extern: true,
+                re_export,
+                tp: x.tp.to_owned(),
+            },
+        );
+    }
+    if let PLType::Trait(t) = &*x.borrow() {
+        for (k, v) in t.trait_methods_impl.borrow().clone() {
+            for (k2, v) in v {
+                global_mthd_map
+                    .entry(k.clone())
+                    .or_insert(Default::default())
+                    .borrow_mut()
+                    .insert(k2, v);
+            }
+        }
+    }
+}
+
 #[salsa::tracked]
 impl Program {
     #[salsa::tracked]
@@ -269,7 +301,7 @@ impl Program {
         crate::utils::canonicalize(f1).unwrap() == crate::utils::canonicalize(f2).unwrap()
     }
 
-    #[salsa::tracked(recovery_fn=cycle_deps_recover)]
+    #[salsa::tracked]
     pub fn emit(self, db: &dyn Db) -> ModWrapper {
         #[cfg(not(target_arch = "wasm32"))]
         let pb = &COMPILE_PROGRESS;
@@ -323,35 +355,42 @@ impl Program {
             } else {
                 continue;
             };
+            let all_import = u.all_import;
+            let re_export = u
+                .modifier
+                .map(|(t, _)| t == TokenType::PUB)
+                .unwrap_or_default();
             let wrapper = ConfigWrapper::new(db, self.config(db), u);
             let mut mod_id = wrapper.use_node(db).get_last_id();
             let path = wrapper.resolve_dep_path(db);
             let p = self.config(db).project;
             log::trace!("load dep {:?} for {:?} (project {:?})", path, pkgname, p);
             let f = path.to_str().unwrap().to_string();
-            let mut cycle = vec![];
-            for (dep, range) in &deps_link {
-                if dep == &f || !cycle.is_empty() {
-                    cycle.push((dep.clone(), *range));
+            if deps_link.contains_key(&f) {
+                let mut cycle = vec![];
+                for (dep, (_,range)) in &deps_link {
+                    if dep == &f || !cycle.is_empty() {
+                        cycle.push((dep.clone(), *range));
+                    }
                 }
+                if !cycle.is_empty() {
+                    cycle.push((self.params(db).file(db).clone(), range));
+                    let (first, first_r) = cycle.first().unwrap();
+                    let mut diag = first_r.new_err(ErrorCode::CYCLE_DEPENDENCY);
+                    diag.set_source(first);
+                    for (i, (dep, range)) in cycle.iter().enumerate() {
+                        let msg = if i == 0 {
+                            "first import in cycle"
+                        } else {
+                            "next import in cycle"
+                        };
+                        diag.add_label(*range, dep.to_string(), format_label!(msg));
+                    }
+                    Diagnostics::push(db, (first.to_string(), vec![diag]));
+                    continue;
+                }   
             }
-            if !cycle.is_empty() {
-                cycle.push((self.params(db).file(db).clone(), range));
-                let (first, first_r) = cycle.first().unwrap();
-                let mut diag = first_r.new_err(ErrorCode::CYCLE_DEPENDENCY);
-                diag.set_source(first);
-                for (i, (dep, range)) in cycle.iter().enumerate() {
-                    let msg = if i == 0 {
-                        "first import in cycle"
-                    } else {
-                        "next import in cycle"
-                    };
-                    diag.add_label(*range, dep.to_string(), format_label!(msg));
-                }
-                Diagnostics::push(db, (first.to_string(), vec![diag]));
-                continue;
-            }
-            deps_link.push((self.params(db).file(db).to_string(), range));
+            deps_link.insert(self.params(db).file(db).to_string(),(self.params(db).file(db).to_string(), range));
             let mut f = self
                 .docs(db)
                 .get_file_params(db, f, false, deps_link.clone());
@@ -388,31 +427,16 @@ impl Program {
             if let Some(s) = symbol_opt {
                 let symbol = module.types.get(&s);
                 if let Some(x) = symbol {
-                    if x.visibal_outside() {
-                        global_tp_map.insert(
-                            s.clone(),
-                            GlobType {
-                                is_extern: true,
-                                re_export: false,
-                                tp: x.tp.to_owned(),
-                            },
-                        );
-                    }
-                    if let PLType::Trait(t) = &*x.borrow() {
-                        for (k, v) in t.trait_methods_impl.borrow().clone() {
-                            for (k2, v) in v {
-                                global_mthd_map
-                                    .entry(k.clone())
-                                    .or_insert(Default::default())
-                                    .borrow_mut()
-                                    .insert(k2, v);
-                            }
-                        }
-                    }
+                    import_symbol(&s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
                 }
                 let mac = module.macros.get(&s);
                 if let Some(x) = mac {
                     global_macro_map.insert(s, x.clone());
+                }
+            }
+            if all_import {
+                for (s,x) in module.types.iter() {
+                    import_symbol(s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
                 }
             }
             modmap.insert(mod_id.unwrap(), module);

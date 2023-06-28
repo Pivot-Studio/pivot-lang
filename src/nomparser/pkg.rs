@@ -22,15 +22,22 @@ use super::*;
 #[test_parser_error("usea:")]
 pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
-        preceded(
-            tag_token_word(TokenType::USE),
-            delspace(tuple((
-                separated_list1(tag_token_symbol(TokenType::DOUBLE_COLON), identifier),
-                opt(tag_token_symbol(TokenType::DOUBLE_COLON)),
-                opt(tag_token_symbol(TokenType::COLON)),
-            ))),
+        modifiable(
+            preceded(
+                tag_token_word(TokenType::USE),
+                delspace(tuple((
+                    separated_list1(tag_token_symbol(TokenType::DOUBLE_COLON), identifier),
+                    opt(preceded(
+                        tag_token_symbol(TokenType::DOUBLE_COLON),
+                        tag_token_symbol(TokenType::MUL),
+                    )),
+                    opt(tag_token_symbol(TokenType::DOUBLE_COLON)),
+                    opt(tag_token_symbol(TokenType::COLON)),
+                ))),
+            ),
+            TokenType::PUB,
         ),
-        |(ns, opt, opt2)| {
+        |(modifier, (ns, all, opt, opt2))| {
             let mut range = ns
                 .first()
                 .unwrap()
@@ -48,6 +55,8 @@ pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 range,
                 complete: opt.is_none() && opt2.is_none(),
                 singlecolon: opt2.is_some(),
+                modifier,
+                all_import: all.is_some(),
             }))
         },
     )(input)
