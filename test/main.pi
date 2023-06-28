@@ -22,12 +22,13 @@ use project1::tmod2;
 use pl_test::main;
 use project1::test::compiletime_reflection::test_compile_time_reflection;
 use project1::test::deconstruct;
+use project1::test::st::*;
 pub fn main() i64 {
     macros::test_macros();
     ifel::test_if_else();
     generic::test_generic();
     method::test_impl();
-    st::test_struct();
+    test_struct();
     constant::test_const();
     traits::test_trait();
     simple::test_simple();

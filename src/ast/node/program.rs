@@ -18,6 +18,7 @@ use crate::ast::plmod::LSPDef;
 use crate::ast::plmod::Mod;
 use crate::ast::pltype::add_primitive_types;
 use crate::ast::pltype::FNValue;
+use crate::ast::tokens::TokenType;
 use crate::flow::display::Dot;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
@@ -142,12 +143,16 @@ lazy_static::lazy_static! {
             range: Default::default(),
             complete: true,
             singlecolon: false,
+            modifier:None,
+            all_import:false,
         })));
         uses.push(Box::new(NodeEnum::UseNode(UseNode {
             ids: vec![std, stdbuiltin],
             range: Default::default(),
             complete: true,
             singlecolon: false,
+            modifier:None,
+            all_import:false,
         })));
         uses
     };
@@ -167,12 +172,44 @@ lazy_static::lazy_static! {
             range: Default::default(),
             complete: true,
             singlecolon: false,
+            modifier:None,
+            all_import:false,
         }))]
     };
 }
 
 mod cycle;
 pub use cycle::*;
+
+fn import_symbol(
+    s: &str,
+    x: &GlobType,
+    re_export: bool,
+    global_tp_map: &mut FxHashMap<String, GlobType>,
+    global_mthd_map: &mut FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>,
+) {
+    if x.visibal_outside() {
+        global_tp_map.insert(
+            s.to_owned(),
+            GlobType {
+                is_extern: true,
+                re_export,
+                tp: x.tp.to_owned(),
+            },
+        );
+    }
+    if let PLType::Trait(t) = &*x.borrow() {
+        for (k, v) in t.trait_methods_impl.borrow().clone() {
+            for (k2, v) in v {
+                global_mthd_map
+                    .entry(k.clone())
+                    .or_insert(Default::default())
+                    .borrow_mut()
+                    .insert(k2, v);
+            }
+        }
+    }
+}
 
 #[salsa::tracked]
 impl Program {
@@ -236,6 +273,11 @@ impl Program {
             } else {
                 continue;
             };
+            let all_import = u.all_import;
+            let re_export = u
+                .modifier
+                .map(|(t, _)| t == TokenType::PUB)
+                .unwrap_or_default();
             let wrapper = ConfigWrapper::new(db, self.config(db), u);
             let mut mod_id = wrapper.use_node(db).get_last_id();
             let path = wrapper.resolve_dep_path(db);
@@ -275,31 +317,16 @@ impl Program {
             if let Some(s) = symbol_opt {
                 let symbol = module.types.get(&s);
                 if let Some(x) = symbol {
-                    if x.visibal_outside() {
-                        global_tp_map.insert(
-                            s.clone(),
-                            GlobType {
-                                is_extern: true,
-                                re_export: false,
-                                tp: x.tp.to_owned(),
-                            },
-                        );
-                    }
-                    if let PLType::Trait(t) = &*x.borrow() {
-                        for (k, v) in t.trait_methods_impl.borrow().clone() {
-                            for (k2, v) in v {
-                                global_mthd_map
-                                    .entry(k.clone())
-                                    .or_insert(Default::default())
-                                    .borrow_mut()
-                                    .insert(k2, v);
-                            }
-                        }
-                    }
+                    import_symbol(&s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
                 }
                 let mac = module.macros.get(&s);
                 if let Some(x) = mac {
                     global_macro_map.insert(s, x.clone());
+                }
+            }
+            if all_import {
+                for (s, x) in module.types.iter() {
+                    import_symbol(s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
                 }
             }
             modmap.insert(mod_id.unwrap(), module);
