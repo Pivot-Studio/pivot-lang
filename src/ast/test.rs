@@ -5,6 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use expect_test::expect_file;
 use lsp_types::{
     CompletionItemKind, GotoDefinitionResponse, HoverContents, InlayHintLabel, MarkedString,
 };
@@ -17,7 +18,6 @@ use crate::{
             PLSignatureHelp,
         },
         compiler::{compile_dry, ActionType},
-        diag::DiagCode,
         range::Pos,
     },
     db::Database,
@@ -66,7 +66,14 @@ fn test_diag() {
     assert!(!comps.is_empty());
     let (file, diag) = &comps[0];
     assert!(file.contains("test_diag.pi"));
-    let mut diag = diag.clone();
+    let mut diag = diag
+        .iter()
+        .map(|d| {
+            let mut d = d.clone();
+            d.rm_file();
+            d
+        })
+        .collect::<Vec<_>>();
     diag.sort_by(|a, b| {
         if a.raw.range.start.line < b.raw.range.start.line
             || (a.raw.range.start.line == b.raw.range.start.line
@@ -81,95 +88,8 @@ fn test_diag() {
             std::cmp::Ordering::Greater
         }
     });
-    assert_eq!(diag.len(), 11);
-    assert_eq!(
-        new_diag_range(10, 14, 10, 15),
-        diag[0].get_range().to_diag_range()
-    );
-    assert_eq!(
-        diag[0].get_diag_code(),
-        DiagCode::Err(crate::ast::diag::ErrorCode::TYPE_MISMATCH)
-    );
-    assert_eq!(
-        new_diag_range(19, 16, 19, 19),
-        diag[1].get_range().to_diag_range()
-    );
-    assert_eq!(
-        diag[1].get_diag_code(),
-        DiagCode::Err(crate::ast::diag::ErrorCode::TYPE_MISMATCH)
-    );
-    assert_eq!(
-        new_diag_range(21, 12, 21, 21),
-        diag[2].get_range().to_diag_range()
-    );
-    assert_eq!(
-        diag[2].get_diag_code(),
-        DiagCode::Err(crate::ast::diag::ErrorCode::INVALID_DIRECT_UNION_CAST)
-    );
-    assert_eq!(
-        new_diag_range(22, 13, 22, 22),
-        diag[3].get_range().to_diag_range()
-    );
-    assert_eq!(
-        diag[3].get_diag_code(),
-        DiagCode::Err(crate::ast::diag::ErrorCode::INVALID_UNION_CAST)
-    );
-    assert_eq!(
-        new_diag_range(23, 18, 23, 21),
-        diag[4].get_range().to_diag_range()
-    );
-    assert_eq!(
-        diag[4].get_diag_code(),
-        DiagCode::Err(crate::ast::diag::ErrorCode::UNION_DOES_NOT_CONTAIN_TYPE)
-    );
-    assert_eq!(
-        new_diag_range(24, 13, 24, 21),
-        diag[5].get_range().to_diag_range()
-    );
-    assert_eq!(
-        diag[5].get_diag_code(),
-        DiagCode::Err(crate::ast::diag::ErrorCode::INVALID_IS_EXPR)
-    );
-    assert_eq!(
-        new_diag_range(28, 11, 28, 11),
-        diag[6].get_range().to_diag_range()
-    );
-    assert_eq!(
-        diag[6].get_diag_code(),
-        DiagCode::Err(crate::ast::diag::ErrorCode::MISSING_SEMI)
-    );
-    assert_eq!(
-        new_diag_range(30, 8, 30, 9),
-        diag[7].get_range().to_diag_range()
-    );
-    assert_eq!(
-        diag[7].get_diag_code(),
-        DiagCode::Warn(crate::ast::diag::WarnCode::UNUSED_VARIABLE)
-    );
-    assert_eq!(
-        new_diag_range(30, 13, 30, 13),
-        diag[8].get_range().to_diag_range()
-    );
-    assert_eq!(
-        diag[8].get_diag_code(),
-        DiagCode::Err(crate::ast::diag::ErrorCode::MISSING_SEMI)
-    );
-    assert_eq!(
-        new_diag_range(31, 15, 31, 15),
-        diag[9].get_range().to_diag_range()
-    );
-    assert_eq!(
-        diag[9].get_diag_code(),
-        DiagCode::Err(crate::ast::diag::ErrorCode::MISSING_SEMI)
-    );
-    assert_eq!(
-        new_diag_range(41, 5, 41, 7),
-        diag[10].get_range().to_diag_range()
-    );
-    assert_eq!(
-        diag[10].get_diag_code(),
-        DiagCode::Err(crate::ast::diag::ErrorCode::DERIVE_TRAIT_NOT_IMPL)
-    );
+    let expected = expect_file!["test_diag.expect"];
+    expected.assert_eq(&format!("{:#?}", diag));
 }
 #[test]
 fn test_memory_leak() {

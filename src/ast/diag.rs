@@ -232,6 +232,13 @@ impl Pos {
 }
 use std::fmt::Debug;
 impl PLDiag {
+    #[cfg(test)]
+    pub fn rm_file(&mut self) {
+        self.raw.source = None;
+        self.raw.labels.iter_mut().for_each(|label| {
+            label.file = String::new();
+        })
+    }
     pub fn print(&self, path: &str, f: impl Fn(&dyn Db, &str) -> Source + 'static, db: &dyn Db) {
         let mut colors = ColorGenerator::new();
         let mut rb = Report::build(

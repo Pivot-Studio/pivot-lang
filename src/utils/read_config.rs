@@ -311,21 +311,7 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
         .to_string();
     Ok(config)
 }
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "wasi"))]
-pub fn enter() -> &'static str {
-    "\n"
-}
-#[cfg(target_os = "windows")]
-pub fn enter() -> &'static str {
-    "\r\n"
-}
 
-#[cfg(not(any(
-    target_os = "macos",
-    target_os = "linux",
-    target_os = "wasi",
-    target_os = "windows"
-)))]
 pub fn enter() -> &'static str {
     "\n"
 }
