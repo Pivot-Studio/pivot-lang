@@ -19,7 +19,6 @@ use crate::ast::plmod::Mod;
 use crate::ast::pltype::add_primitive_types;
 use crate::ast::pltype::FNValue;
 use crate::flow::display::Dot;
-use crate::format_label;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
 use crate::utils::read_config::ConfigWrapper;
@@ -32,7 +31,6 @@ use internal_macro::node;
 use lsp_types::GotoDefinitionResponse;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
-use salsa::AsId;
 use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
@@ -173,79 +171,8 @@ lazy_static::lazy_static! {
     };
 }
 
-fn cycle_deps_recover(
-    db: &dyn Db,
-    cycle: &salsa::Cycle,
-    params: Program
-) -> ModWrapper {
-    let mut files = FxHashMap::default();
-    let src_file_path = params.params(db).file(db);
-    let key = cycle.all_participants(db);
-    let mut prev_file = src_file_path;
-    
-    let mut prev_use_map= FxHashMap::default();
-    build_init_params(params, db, &mut prev_use_map);
-    let filtered = cycle.participant_keys().enumerate().filter(|(i,_)|key[*i].starts_with("Program_emit"));
-    let len = filtered.count();
-    while files.len() < len {
-        for (_,p) in  cycle.participant_keys().enumerate().filter(|(i,_)|key[*i].starts_with("Program_emit")).map(|(u,k)|(u,Program::from_id(k.key_index()))) {
-            let prog = match_node(p, db);
-            if let Some(r) = prev_use_map.get(p.params(db).file(db)) {
-                files.insert(prev_file, *r);
-                prev_file = p.params(db).file(db);
-                prev_use_map.clear();
-                build_use_map(prog, db, p, &mut prev_use_map);
-            }
-        }   
-    }
-
-    let first_range = *files.get(&src_file_path).unwrap();
-    let mut diag = first_range.new_err(ErrorCode::CYCLE_DEPENDENCY);
-    diag.set_source(&src_file_path);
-    for (idx,(f,r)) in files.iter().enumerate() {
-        let msg = if idx==0 {
-            "first import in cycle"
-        } else {
-            "next import in cycle"
-        };
-        diag.add_label(*r, f.to_string(), format_label!(msg));
-    }
-    Diagnostics::push(
-        db,
-        (
-            src_file_path.to_string(),
-            vec![diag]
-        ),
-    );
-    ModWrapper::new(db,Mod::new( src_file_path.to_string()))
-}
-
-fn build_init_params(params: Program, db: &dyn Db, prev_use_map: &mut FxHashMap<String, Range>) {
-    let prog = match_node(params, db);
-    build_use_map(prog, db, params, prev_use_map);
-}
-
-fn match_node(params: Program, db: &dyn Db) -> ProgramNode {
-    let prog = match *params.node(db).node(db) {
-        NodeEnum::Program(p) => p,
-        _ => panic!("not a program"),
-    };
-    prog
-}
-
-fn build_use_map(prog: ProgramNode, db: &dyn Db, params: Program, prev_use_map: &mut FxHashMap<String, Range>) {
-    for u in prog.uses.iter() {
-        let u = if let NodeEnum::UseNode(p) = *u.clone() {
-            p
-        } else {
-            continue;
-        };
-        let range = u.range;
-        let wrapper = ConfigWrapper::new(db, params.config(db), u);
-        let path = wrapper.resolve_dep_path(db);
-        prev_use_map.insert(path.to_str().unwrap().to_string(), range);
-    }
-}
+mod cycle;
+pub use cycle::*;
 
 #[salsa::tracked]
 impl Program {
@@ -257,7 +184,7 @@ impl Program {
         crate::utils::canonicalize(f1).unwrap() == crate::utils::canonicalize(f2).unwrap()
     }
 
-    #[salsa::tracked(recovery_fn=cycle_deps_recover)]
+    #[salsa::tracked]
     pub fn emit(self, db: &dyn Db) -> ModWrapper {
         #[cfg(not(target_arch = "wasm32"))]
         let pb = &COMPILE_PROGRESS;

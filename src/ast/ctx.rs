@@ -141,7 +141,7 @@ impl<'a, 'ctx> Ctx<'a> {
         Ctx {
             need_highlight: 0,
             generic_types: FxHashMap::default(),
-            plmod: Mod::new( src_file_path.to_string()),
+            plmod: Mod::new(src_file_path.to_string()),
             father: None,
             init_func: None,
             function: None,

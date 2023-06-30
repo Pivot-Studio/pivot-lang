@@ -1,6 +1,6 @@
 use std::{
     cell::Cell,
-    sync::{Arc, Mutex}, panic::UnwindSafe,
+    sync::{Arc, Mutex},
 };
 
 use salsa::DebugWithDb;
