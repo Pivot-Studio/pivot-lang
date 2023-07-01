@@ -8,6 +8,7 @@ use super::node::node_result::NodeResult;
 use super::node::NodeEnum;
 use super::node::TypeNode;
 use super::plmod::CompletionItemWrapper;
+use super::plmod::GlobType;
 use super::plmod::GlobalVar;
 use super::plmod::LSPDef;
 use super::plmod::Mod;
@@ -53,8 +54,6 @@ use lsp_types::Url;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
 use std::cell::RefCell;
-
-use std::path::Path;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -139,17 +138,10 @@ impl<'a, 'ctx> Ctx<'a> {
         config: Config,
         db: &'a dyn Db,
     ) -> Ctx<'a> {
-        let f = Path::new(Path::new(src_file_path).file_stem().unwrap())
-            .file_name()
-            .take()
-            .unwrap()
-            .to_str()
-            .unwrap()
-            .to_string();
         Ctx {
             need_highlight: 0,
             generic_types: FxHashMap::default(),
-            plmod: Mod::new(f, src_file_path.to_string()),
+            plmod: Mod::new(src_file_path.to_string()),
             father: None,
             init_func: None,
             function: None,
@@ -698,7 +690,7 @@ impl<'a, 'ctx> Ctx<'a> {
             },
         );
     }
-    pub fn get_type(&self, name: &str, range: Range) -> Result<Arc<RefCell<PLType>>, PLDiag> {
+    pub fn get_type(&self, name: &str, range: Range) -> Result<GlobType, PLDiag> {
         if let Some(pv) = self.generic_types.get(name) {
             self.set_if_refs_tp(pv.clone(), range);
             self.send_if_go_to_def(
@@ -706,7 +698,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 pv.borrow().get_range().unwrap_or(range),
                 self.plmod.path.clone(),
             );
-            return Ok(pv.clone());
+            return Ok(pv.clone().into());
         }
         if let Ok(pv) = self.plmod.get_type(name, range, self) {
             return Ok(pv);
@@ -774,7 +766,7 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         self.set_if_refs_tp(pltype.clone(), range);
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
-        self.plmod.types.insert(name, pltype);
+        self.plmod.types.insert(name, pltype.into());
         Ok(())
     }
     pub fn add_type_without_check(&mut self, pltype: Arc<RefCell<PLType>>) {
@@ -782,7 +774,7 @@ impl<'a, 'ctx> Ctx<'a> {
             unreachable!()
         }
         let name = pltype.borrow().get_name();
-        self.plmod.types.insert(name, pltype);
+        self.plmod.types.insert(name, pltype.into());
     }
     #[inline]
     fn add_generic_type(&mut self, name: String, pltype: Arc<RefCell<PLType>>) {
@@ -1001,6 +993,9 @@ impl<'a, 'ctx> Ctx<'a> {
     fn get_type_completions_in_ns(&self, ns: &str, m: &mut FxHashMap<String, CompletionItem>) {
         self.with_ns(ns, |ns| {
             for (k, v) in ns.types.iter() {
+                if !v.visibal_outside() {
+                    continue;
+                }
                 let mut insert_text = None;
                 let mut command = None;
                 let tp = match &*v.clone().borrow() {
@@ -1020,6 +1015,10 @@ impl<'a, 'ctx> Ctx<'a> {
                     }
                     _ => continue, // skip completion for primary types
                 };
+                if k.starts_with('|') {
+                    // skip method
+                    continue;
+                }
                 let mut item = CompletionItem {
                     label: k.to_string(),
                     kind: Some(tp),
@@ -1042,7 +1041,7 @@ impl<'a, 'ctx> Ctx<'a> {
 
     pub fn get_type_completions(&self) -> Vec<CompletionItem> {
         let mut m = FxHashMap::default();
-        self.get_pltp_completions(&mut m, |tp| !matches!(tp, PLType::Fn(_)));
+        self.get_pltp_completions(&mut m, |tp| !matches!(&*tp.borrow(), PLType::Fn(_)));
         self.plmod.get_ns_completions_pri(&mut m);
         m.values().cloned().collect()
     }
@@ -1088,7 +1087,7 @@ impl<'a, 'ctx> Ctx<'a> {
     fn get_pltp_completions(
         &self,
         vmap: &mut FxHashMap<String, CompletionItem>,
-        filter: impl Fn(&PLType) -> bool,
+        filter: impl Fn(&GlobType) -> bool,
     ) {
         self.plmod
             .get_pltp_completions(vmap, &filter, &self.generic_types, true);

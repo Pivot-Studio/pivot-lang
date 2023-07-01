@@ -214,7 +214,7 @@ impl UnionType {
             .collect::<Result<Vec<_>, PLDiag>>()?;
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
-        pltype.replace(PLType::Union(res.clone()));
+        pltype.tp.replace(PLType::Union(res.clone()));
         Ok(res)
     }
     pub fn has_type<'a, 'b>(
@@ -1191,7 +1191,7 @@ impl STType {
                 })
                 .collect();
             if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
-                return Ok(pltype);
+                return Ok(pltype.tp);
             }
             let mut res = self.clone();
             res.name = name;
@@ -1219,11 +1219,11 @@ impl STType {
             res.generic_map.clear();
             res.generic_infer_types = generic_infer_types;
             let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
-            pltype.replace(PLType::Struct(res.clone()));
+            pltype.tp.replace(PLType::Struct(res.clone()));
             self.generic_infer
                 .borrow_mut()
-                .insert(res.name, pltype.clone());
-            Ok(pltype)
+                .insert(res.name, pltype.tp.clone());
+            Ok(pltype.tp)
         })
     }
     pub fn get_field_completions(&self, must_pub: bool) -> Vec<CompletionItem> {
@@ -1321,7 +1321,7 @@ pub fn add_primitive_types(ctx: &mut Ctx) {
     let pltype_void = PLType::Void;
     ctx.plmod
         .types
-        .insert("void".to_string(), Arc::new(RefCell::new(pltype_void)));
+        .insert("void".to_string(), pltype_void.into());
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GenericType {

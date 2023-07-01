@@ -48,6 +48,6 @@ impl Node for StringNode {
             byte_len,
             builder.int_value(&PriType::I64, self.content.len() as u64, true),
         );
-        alloca.new_output(tp).set_const().to_result()
+        alloca.new_output(tp.tp).set_const().to_result()
     }
 }

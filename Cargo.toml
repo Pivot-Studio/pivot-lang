@@ -98,3 +98,8 @@ lto = "fat"
 incremental = true
 codegen-units = 1
 # rpath = true
+
+
+[dev-dependencies]
+expect-test = "1.4.1"
+

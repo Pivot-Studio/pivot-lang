@@ -632,6 +632,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "expect-test"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30d9eafeadd538e68fb28016364c9732d78e420b9ff8853fa5e4058861e9f8d3"
+dependencies = [
+ "dissimilar",
+ "once_cell",
+]
+
+[[package]]
 name = "eyre"
 version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1259,6 +1269,7 @@ dependencies = [
  "dunce",
  "dyn-fmt",
  "enum_dispatch",
+ "expect-test",
  "immix",
  "include_dir",
  "indexmap",
@@ -1545,7 +1556,7 @@ checksum = "f91339c0467de62360649f8d3e185ca8de4224ff281f66000de5eb2a77a79041"
 [[package]]
 name = "salsa-2022"
 version = "0.1.0"
-source = "git+https://github.com/salsa-rs/salsa?branch=master#67d290dc26f0026d93982f2611b1dc2f6058ebd4"
+source = "git+https://github.com/salsa-rs/salsa?branch=master#d4a94fbf07bb837f3d9d0a4caa5db4d5db29243f"
 dependencies = [
  "arc-swap",
  "crossbeam",
@@ -1563,7 +1574,7 @@ dependencies = [
 [[package]]
 name = "salsa-2022-macros"
 version = "0.1.0"
-source = "git+https://github.com/salsa-rs/salsa?branch=master#67d290dc26f0026d93982f2611b1dc2f6058ebd4"
+source = "git+https://github.com/salsa-rs/salsa?branch=master#d4a94fbf07bb837f3d9d0a4caa5db4d5db29243f"
 dependencies = [
  "eyre",
  "heck",

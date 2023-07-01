@@ -27,10 +27,10 @@ use lsp_types::SignatureHelp;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell, RefMut};
 use std::collections::BTreeMap;
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use std::sync::Arc;
 
@@ -52,7 +52,7 @@ pub struct Mod {
     /// file path of the module
     pub path: String,
     /// func and types
-    pub types: FxHashMap<String, Arc<RefCell<PLType>>>,
+    pub types: FxHashMap<String, GlobType>,
     /// sub mods
     pub submods: FxHashMap<String, Mod>,
     /// global variable table
@@ -72,6 +72,56 @@ pub struct Mod {
     pub impls: FxHashMap<String, FxHashSet<String>>,
     pub macros: FxHashMap<String, Arc<MacroNode>>,
     pub trait_mthd_table: TraitMthdImpl,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GlobType {
+    pub is_extern: bool,
+    pub re_export: bool,
+    pub tp: Arc<RefCell<PLType>>,
+}
+
+impl GlobType {
+    pub fn borrow(&self) -> Ref<'_, PLType> {
+        self.tp.borrow()
+    }
+    pub fn borrow_mut(&self) -> RefMut<'_, PLType> {
+        self.tp.borrow_mut()
+    }
+    pub fn new(tp: PLType) -> Self {
+        Self {
+            is_extern: false,
+            re_export: false,
+            tp: Arc::new(RefCell::new(tp)),
+        }
+    }
+    pub fn visibal_outside(&self) -> bool {
+        (self.borrow().is_pub() && !self.is_extern) || (self.is_extern && self.re_export)
+    }
+    pub fn expect_pub(&self, ctx: &Ctx, range: Range) -> Result<(), PLDiag> {
+        if self.is_extern && !self.re_export {
+            return Err(range
+                .new_err(ErrorCode::TRY_TO_EXPORT_NON_REEXPORT_SYMBOL)
+                .add_to_ctx(ctx));
+        }
+        self.borrow().expect_pub(ctx, range)
+    }
+}
+
+impl From<PLType> for GlobType {
+    fn from(tp: PLType) -> Self {
+        Self::new(tp)
+    }
+}
+
+impl From<Arc<RefCell<PLType>>> for GlobType {
+    fn from(tp: Arc<RefCell<PLType>>) -> Self {
+        Self {
+            is_extern: false,
+            re_export: false,
+            tp,
+        }
+    }
 }
 
 pub type MutVec<T> = RefCell<Vec<T>>;
@@ -116,14 +166,21 @@ impl Mod {
         }
     }
 
-    /// import all public symbols from another module
+    /// import all symbols from another module
     ///
-    /// used to implements `use xxx::*;`
-    pub fn import_all_public_symbols_from(&mut self, other: &Self) {
+    /// used to implements builtin module
+    pub fn import_all_symbols_from(&mut self, other: &Self) {
         for (k, v) in other.types.iter() {
             match &*v.borrow() {
                 PLType::Fn(_) | PLType::Struct(_) | PLType::Trait(_) | PLType::Union(_) => {
-                    self.types.insert(k.to_string(), v.clone());
+                    self.types.insert(
+                        k.to_string(),
+                        GlobType {
+                            tp: v.tp.clone(),
+                            is_extern: true,
+                            re_export: false,
+                        },
+                    );
                 }
                 _ => (),
             }
@@ -133,7 +190,14 @@ impl Mod {
         }
     }
 
-    pub fn new(name: String, path: String) -> Self {
+    pub fn new(path: String) -> Self {
+        let name = Path::new(Path::new(&path).file_stem().unwrap())
+            .file_name()
+            .take()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
         Self {
             name,
             path,
@@ -279,10 +343,10 @@ impl Mod {
         );
         Ok(())
     }
-    fn get_type_inner(&self, name: &str, range: Range, ctx: &Ctx) -> Option<Arc<RefCell<PLType>>> {
+    fn get_type_inner(&self, name: &str, range: Range, ctx: &Ctx) -> Option<GlobType> {
         let v = self.types.get(name);
         if let Some(pv) = v {
-            ctx.set_if_refs_tp(pv.clone(), range);
+            ctx.set_if_refs_tp(pv.tp.clone(), range);
             ctx.send_if_go_to_def(
                 range,
                 pv.borrow().get_range().unwrap_or(range),
@@ -291,20 +355,15 @@ impl Mod {
             return Some(pv.clone());
         }
         if let Some(x) = PriType::try_from_str(name) {
-            return Some(Arc::new(RefCell::new(PLType::Primitive(x))));
+            return Some(PLType::Primitive(x).into());
         }
         if name == "void" {
-            return Some(Arc::new(RefCell::new(PLType::Void)));
+            return Some(PLType::Void.into());
         }
         None
     }
 
-    fn get_type_walker(
-        &self,
-        name: &str,
-        range: Range,
-        ctx: &Ctx,
-    ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
+    fn get_type_walker(&self, name: &str, range: Range, ctx: &Ctx) -> Result<GlobType, PLDiag> {
         if let Some(pv) = ctx.generic_types.get(name) {
             ctx.set_if_refs_tp(pv.clone(), range);
             ctx.send_if_go_to_def(
@@ -312,19 +371,14 @@ impl Mod {
                 pv.borrow().get_range().unwrap_or(range),
                 self.path.clone(),
             );
-            return Ok(pv.clone());
+            return Ok(pv.clone().into());
         }
         if let Some(pv) = self.get_type_inner(name, range, ctx) {
             return Ok(pv);
         }
         Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
     }
-    pub fn get_type(
-        &self,
-        name: &str,
-        range: Range,
-        ctx: &Ctx,
-    ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
+    pub fn get_type(&self, name: &str, range: Range, ctx: &Ctx) -> Result<GlobType, PLDiag> {
         if let Ok(re) = self.get_type_walker(name, range, ctx) {
             return Ok(re);
         }
@@ -335,7 +389,7 @@ impl Mod {
             let st_with_generic = self.get_type_walker(st_name, range, ctx)?;
             if let PLType::Struct(st) = &*st_with_generic.borrow() {
                 if let Some(res) = st.generic_infer.borrow().get(name) {
-                    return Ok(res.clone());
+                    return Ok(res.clone().into());
                 }
             };
         }
@@ -369,14 +423,19 @@ impl Mod {
     pub fn get_pltp_completions(
         &self,
         vmap: &mut FxHashMap<String, CompletionItem>,
-        filter: &impl Fn(&PLType) -> bool,
+        filter: &impl Fn(&GlobType) -> bool,
         generic_tps: &FxHashMap<String, Arc<RefCell<PLType>>>,
         need_snippet: bool,
     ) {
-        for (k, f) in self.types.iter().chain(generic_tps.iter()) {
+        for (k, f) in self
+            .types
+            .iter()
+            .map(|(k, v)| (k, v.clone()))
+            .chain(generic_tps.iter().map(|(k, v)| (k, v.clone().into())))
+        {
             let mut insert_text = None;
             let mut command = None;
-            if !filter(&f.borrow()) {
+            if !filter(&f) {
                 continue;
             }
             let tp = match &*f.clone().borrow() {

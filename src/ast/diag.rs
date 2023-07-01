@@ -136,6 +136,8 @@ define_error!(
     TUPLE_WRONG_DECONSTRUCT_PARAM_LEN = "tuple wrong deconstruct param len",
     DEF_DECONSTRUCT_MUST_HAVE_VALUE = "def deconstruct must have value",
     STRUCT_FIELD_NOT_EXISTS = "struct field not exists",
+    TRY_TO_EXPORT_NON_REEXPORT_SYMBOL = "try to export non reexport symbol",
+    CYCLE_DEPENDENCY = "cycle dependency not allowed",
 );
 macro_rules! define_warn {
     ($(
@@ -230,6 +232,13 @@ impl Pos {
 }
 use std::fmt::Debug;
 impl PLDiag {
+    #[cfg(test)]
+    pub fn rm_file(&mut self) {
+        self.raw.source = None;
+        self.raw.labels.iter_mut().for_each(|label| {
+            label.file = String::new();
+        })
+    }
     pub fn print(&self, path: &str, f: impl Fn(&dyn Db, &str) -> Source + 'static, db: &dyn Db) {
         let mut colors = ColorGenerator::new();
         let mut rb = Report::build(
@@ -263,8 +272,8 @@ impl PLDiag {
             if let Some((tpl, args)) = &label.txt {
                 lab = Label::new((
                     label.file.as_str(),
-                    label.range.start.utf8_offset(&f(db, path))
-                        ..label.range.end.utf8_offset(&f(db, path)),
+                    label.range.start.utf8_offset(&f(db, label.file.as_str()))
+                        ..label.range.end.utf8_offset(&f(db, label.file.as_str())),
                 ));
                 let mut msg = tpl.clone();
                 msg = msg.format(
@@ -276,9 +285,9 @@ impl PLDiag {
                 lab = lab.with_message(msg);
             } else {
                 lab = Label::new((
-                    path,
-                    label.range.start.utf8_offset(&f(db, path))
-                        ..label.range.end.utf8_offset(&f(db, path)),
+                    label.file.as_str(),
+                    label.range.start.utf8_offset(&f(db, label.file.as_str()))
+                        ..label.range.end.utf8_offset(&f(db, label.file.as_str())),
                 ));
             }
             rb = rb.with_label(lab.with_color(color));

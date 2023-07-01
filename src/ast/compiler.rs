@@ -1,3 +1,4 @@
+use super::node::program::cycle_deps_recover;
 use super::node::program::ModWrapper;
 #[cfg(feature = "llvm")]
 use crate::ast::jit_config::IS_JIT;
@@ -67,7 +68,7 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
     re
 }
 
-#[salsa::tracked]
+#[salsa::tracked(recovery_fn=cycle_deps_recover)]
 pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrapper> {
     if docs.file(db).ends_with(".toml") {
         log::error!("lsp error: toml file {}", docs.file(db));
