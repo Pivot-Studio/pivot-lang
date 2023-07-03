@@ -98,7 +98,7 @@ pub struct Ctx<'a> {
     pub in_macro: bool,
     pub closure_data: Option<RefCell<ClosureCtxData>>,
     pub expect_ty: Option<Arc<RefCell<PLType>>>,
-    // pub trait_mthd_table: TraitMthdImpl,
+    pub self_ref_map: FxHashMap<String, FxHashSet<(String, Range)>>, // used to recognize self reference
 }
 
 #[derive(Clone, Default)]
@@ -115,6 +115,42 @@ pub enum MacroReplaceNode {
 }
 
 impl<'a, 'ctx> Ctx<'a> {
+    pub fn check_self_ref(&self, name: &str, range: Range) -> Result<(), PLDiag> {
+        if let Some(root) = self.root {
+            root.check_self_ref_inner(name, name, range)
+                .map_err(|e| e.add_to_ctx(self))
+        } else {
+            self.check_self_ref_inner(name, name, range)
+                .map_err(|e| e.add_to_ctx(self))
+        }
+    }
+
+    fn check_self_ref_inner(
+        &self,
+        name: &str,
+        root_name: &str,
+        range: Range,
+    ) -> Result<(), PLDiag> {
+        // self ref map's key is field type name, value is a set of (host type name, host type range)
+        if let Some(host_tp) = self.self_ref_map.get(name) {
+            if let Some((host_name, r)) = host_tp.iter().next() {
+                if host_name == root_name {
+                    return Err(range
+                        .new_err(ErrorCode::ILLEGAL_SELF_RECURSION)
+                        .add_label(*r, self.get_file(), format_label!("in type {}", name))
+                        .clone());
+                } else {
+                    return self
+                        .check_self_ref_inner(host_name, root_name, range)
+                        .map_err(|mut e| {
+                            e.add_label(*r, self.get_file(), format_label!("in type {}", name))
+                                .clone()
+                        });
+                }
+            }
+        }
+        Ok(())
+    }
     pub fn find_macro_symbol(&self, name: &str) -> Option<&MacroReplaceNode> {
         let mut ctx = Some(self);
         let mut i = 0;
@@ -166,6 +202,7 @@ impl<'a, 'ctx> Ctx<'a> {
             expect_ty: None,
             root: None,
             macro_skip_level: 0,
+            self_ref_map: FxHashMap::default(),
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -201,6 +238,7 @@ impl<'a, 'ctx> Ctx<'a> {
             expect_ty: None,
             root,
             macro_skip_level: self.macro_skip_level,
+            self_ref_map: FxHashMap::default(),
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {

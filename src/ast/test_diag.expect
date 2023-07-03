@@ -460,4 +460,73 @@
             },
         },
     },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                ILLEGAL_SELF_RECURSION,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "in type {}",
+                            [
+                                "selfref2",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 47,
+                            column: 8,
+                            offset: 493,
+                        },
+                        end: Pos {
+                            line: 47,
+                            column: 15,
+                            offset: 500,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "in type {}",
+                            [
+                                "selfref",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 51,
+                            column: 8,
+                            offset: 529,
+                        },
+                        end: Pos {
+                            line: 51,
+                            column: 16,
+                            offset: 537,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 52,
+                    column: 7,
+                    offset: 546,
+                },
+                end: Pos {
+                    line: 52,
+                    column: 14,
+                    offset: 553,
+                },
+            },
+        },
+    },
 ]

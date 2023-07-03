@@ -23,6 +23,7 @@ use indexmap::IndexMap;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
 use lsp_types::SemanticTokenType;
+use rustc_hash::FxHashSet;
 #[node]
 pub struct TypeNameNode {
     pub id: Option<ExternIdNode>,
@@ -494,6 +495,23 @@ impl StructDefNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<(), PLDiag> {
         let pltype = ctx.get_type(self.id.name.as_str(), self.id.range)?;
+        for f in self.fields.iter() {
+            let id = &f.id;
+            // 自引用检查
+            if let TypeNodeEnum::Basic(b) = &*id.typenode {
+                if let Some(id) = &b.id {
+                    if id.ns.is_empty() {
+                        // 只有本包内类型可能自引用
+                        let v = ctx
+                            .self_ref_map
+                            .entry(id.id.name.clone())
+                            .or_insert(FxHashSet::default());
+                        v.insert((self.id.name.clone(), self.id.range()));
+                        ctx.check_self_ref(&id.id.name, id.range)?;
+                    }
+                }
+            }
+        }
         let generic_map = if let PLType::Struct(st) = &mut *pltype.borrow_mut() {
             st.generic_map.clone()
         } else {

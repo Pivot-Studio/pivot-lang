@@ -44,3 +44,10 @@ trait TB: TA {
 impl TB for A {
 }
 
+struct selfref {
+    a:selfref2;
+}
+
+struct selfref2 {
+    b:selfref;
+}
