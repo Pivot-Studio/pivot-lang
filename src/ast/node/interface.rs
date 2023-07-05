@@ -123,6 +123,7 @@ pub struct TraitDefNode {
     pub methods: Vec<FuncDefNode>,
     pub derives: MultiTraitNode,
     pub modifier: Option<(TokenType, Range)>,
+    pub generics: Option<Box<GenericDefNode>>,
 }
 
 impl PrintTrait for TraitDefNode {
@@ -154,8 +155,15 @@ impl Node for TraitDefNode {
 
 impl TraitDefNode {
     pub fn add_to_symbols<'a, 'b>(&self, ctx: &'b mut Ctx<'a>, builder: &'b BuilderEnum<'a, '_>) {
+        let generic_map = if let Some(generics) = &self.generics {
+            let mp = generics.gen_generic_type(ctx);
+            _ = generics.set_traits(ctx, builder, &mp);
+            mp
+        } else {
+            IndexMap::default()
+        };
         let stu = Arc::new(RefCell::new(PLType::Trait(STType {
-            generic_map: IndexMap::default(),
+            generic_map,
             name: self.id.name.clone(),
             path: ctx.plmod.path.clone(),
             fields: LinkedHashMap::default(),
@@ -179,49 +187,56 @@ impl TraitDefNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<(), PLDiag> {
-        let mut fields = LinkedHashMap::new();
-        // add generic type before field add type
-        let derives = self.derives.get_types(ctx, builder)?;
         let pltype = ctx.get_type(self.id.name.as_str(), self.id.range)?;
-        for (i, field) in self.methods.iter().enumerate() {
-            let mut tp = field.clone();
-            tp.paralist
-                .insert(0, Box::new(new_i64ptr_tf_with_name("self")));
-            let id = field.id.clone();
-            let f = Field {
-                index: i as u32 + 2,
-                typenode: Box::new(tp.into()),
-                name: field.id.name.clone(),
-                range: field.range,
-                modifier: Some((TokenType::PUB, field.range)),
-            };
-            _ = field.get_type(ctx, builder, true);
+        let generic_map = if let PLType::Trait(st) = &mut *pltype.borrow_mut() {
+            st.generic_map.clone()
+        } else {
+            IndexMap::default()
+        };
+        ctx.protect_generic_context(&generic_map, |ctx| {
+            let mut fields = LinkedHashMap::new();
+            // add generic type before field add type
+            let derives = self.derives.get_types(ctx, builder)?;
+            for (i, field) in self.methods.iter().enumerate() {
+                let mut tp = field.clone();
+                tp.paralist
+                    .insert(0, Box::new(new_i64ptr_tf_with_name("self")));
+                let id = field.id.clone();
+                let f = Field {
+                    index: i as u32 + 2,
+                    typenode: Box::new(tp.into()),
+                    name: field.id.name.clone(),
+                    range: field.range,
+                    modifier: Some((TokenType::PUB, field.range)),
+                };
+                _ = field.get_type(ctx, builder, true);
 
-            if let Some((m, r)) = field.modifier {
-                r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)
-                    .add_label(
-                        r,
-                        ctx.get_file(),
-                        format_label!("modifier {} shall be removed", m.get_str()),
-                    )
-                    .add_help(
-                        "trait methods share the same modifier with trait, \
-                            so you shall not add modifier here",
-                    )
-                    .add_to_ctx(ctx);
+                if let Some((m, r)) = field.modifier {
+                    r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)
+                        .add_label(
+                            r,
+                            ctx.get_file(),
+                            format_label!("modifier {} shall be removed", m.get_str()),
+                        )
+                        .add_help(
+                            "trait methods share the same modifier with trait, \
+                                so you shall not add modifier here",
+                        )
+                        .add_to_ctx(ctx);
+                }
+
+                // ctx.set_if_refs(f.refs.clone(), field.id.range);
+                fields.insert(id.name.to_string(), f.clone());
             }
-
-            // ctx.set_if_refs(f.refs.clone(), field.id.range);
-            fields.insert(id.name.to_string(), f.clone());
-        }
-        if let PLType::Trait(st) = &mut *pltype.borrow_mut() {
-            st.fields = fields;
-            st.derives = derives;
-            builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&self.id.name), st, ctx);
-        }
-        ctx.add_doc_symbols(pltype.tp);
-        // ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
-        Ok(())
+            if let PLType::Trait(st) = &mut *pltype.borrow_mut() {
+                st.fields = fields;
+                st.derives = derives;
+                builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&self.id.name), st, ctx);
+            }
+            ctx.add_doc_symbols(pltype.clone().tp);
+            // ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
+            Ok(())
+        })
     }
 }
 

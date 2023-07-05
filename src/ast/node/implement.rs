@@ -191,14 +191,19 @@ impl Node for ImplNode {
                     };
                     method_docsymbols.push(f);
                     if let Some((trait_tp, _)) = &traittpandrange {
-                        check_fn(
-                            ctx,
-                            builder,
-                            method,
-                            trait_tp.clone(),
-                            &mut traitfns,
-                            fntype,
-                        )?;
+                        if let PLType::Trait(t) = &*trait_tp.clone().borrow()  {
+                            ctx.protect_generic_context(&t.generic_map,  |ctx| {
+                                check_fn(
+                                    ctx,
+                                    builder,
+                                    method,
+                                    trait_tp.clone(),
+                                    &mut traitfns,
+                                    fntype.clone(),
+                                )?;
+                                Ok(())
+                            })?;
+                        }
                     }
                 }
             }

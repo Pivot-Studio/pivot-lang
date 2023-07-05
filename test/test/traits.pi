@@ -7,8 +7,18 @@ trait TestTrait {
 
 }
 
+trait name<T> {
+    fn name1(t:T) void;
+}
+
 pub struct A {
     x: i64;
+}
+
+impl <T> name<T> for A {
+    fn name1(t: T) void {
+        return;
+    }
 }
 
 impl TestTrait for A {
@@ -27,6 +37,8 @@ pub fn test_trait() void {
     let x = &A{};
     let y = A{};
     let z = &&A{};
+    y.name1(100);
+    y.name1(1.0);
     let dd: TestTrait;
     dd = x;
     dd = y;

@@ -174,8 +174,12 @@ impl TypeNode for TypeNameNode {
         let pltype = self.get_origin_type_with_infer(ctx, builder)?;
         if self.generic_params.is_some() && gen_code {
             match &*pltype.borrow() {
-                PLType::Struct(sttype) => {
+                PLType::Struct(sttype)|PLType::Trait(sttype) => {
                     let sttype = sttype.clone();
+                    if sttype.is_trait {
+                        let pltype = Arc::new(RefCell::new(PLType::Trait(sttype)));
+                        return Ok(pltype);
+                    }
                     if sttype.need_gen_code() {
                         return ctx.protect_generic_context(&sttype.generic_map, |ctx| {
                             sttype.gen_code(ctx, builder)
