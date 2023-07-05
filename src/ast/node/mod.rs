@@ -186,18 +186,18 @@ impl Eq for Num {
 }
 #[macro_export]
 macro_rules! mismatch_err {
-    ($self:ident, $range:expr,$exprange:expr, $expect:expr,$got:expr) => {
-        $self.add_diag(
+    ($ctx:ident, $range:expr,$exprange:expr, $expect:expr,$got:expr) => {
+        $ctx.add_diag(
             $range
                 .new_err(ErrorCode::TYPE_MISMATCH)
                 .add_label(
                     $range,
-                    $self.get_file(),
+                    $ctx.get_file(),
                     $crate::format_label!("type `{}`", $got.get_name()),
                 )
                 .add_label(
                     $exprange,
-                    $self.get_file(),
+                    $ctx.get_file(),
                     $crate::format_label!("type `{}`", $expect.get_name()),
                 )
                 .clone(),

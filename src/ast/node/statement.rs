@@ -7,6 +7,7 @@ use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
 use crate::format_label;
 
+use indexmap::IndexMap;
 use internal_macro::node;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
@@ -215,16 +216,22 @@ impl Node for DefNode {
             expv = Some(v);
         }
         let pltype = pltype.unwrap();
-        handle_deconstruct(
-            self.range(),
-            self.exp.as_ref().map(|e| e.range()),
-            builder,
-            pltype,
-            ctx,
-            expv,
-            &self.var,
-            true,
-        )?;
+        let mut gm = IndexMap::new();
+        if let PLType::Trait(t) = &*pltype.borrow() {
+            gm = t.generic_map.clone();
+        }
+        ctx.protect_generic_context(&gm, |ctx| {
+            handle_deconstruct(
+                self.range(),
+                self.exp.as_ref().map(|e| e.range()),
+                builder,
+                pltype.clone(),
+                ctx,
+                expv,
+                &self.var,
+                true,
+            )
+        })?;
         Ok(Default::default())
     }
 }

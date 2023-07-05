@@ -1,0 +1,88 @@
+[
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                CYCLE_DEPENDENCY,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "first import in cycle",
+                            [],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 1,
+                            column: 5,
+                            offset: 4,
+                        },
+                        end: Pos {
+                            line: 1,
+                            column: 13,
+                            offset: 12,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "next import in cycle",
+                            [],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 1,
+                            column: 5,
+                            offset: 4,
+                        },
+                        end: Pos {
+                            line: 1,
+                            column: 13,
+                            offset: 12,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "next import in cycle",
+                            [],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 1,
+                            column: 5,
+                            offset: 4,
+                        },
+                        end: Pos {
+                            line: 1,
+                            column: 20,
+                            offset: 19,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 1,
+                    column: 5,
+                    offset: 4,
+                },
+                end: Pos {
+                    line: 1,
+                    column: 13,
+                    offset: 12,
+                },
+            },
+        },
+    },
+]

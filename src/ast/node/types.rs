@@ -67,74 +67,79 @@ impl TypeNameNode {
             .get_ty();
         ctx.if_completion(self.range, || ctx.get_type_completions());
 
-        if let PLType::Struct(sttype) = &*pltype.clone().borrow() {
-            let sttype = sttype.new_pltype();
-            if let Some(generic_params) = &self.generic_params {
-                let generic_types = generic_params.get_generic_types(ctx, builder)?;
-                if generic_params.generics.len() != sttype.generic_map.len() {
-                    return Err(ctx.add_diag(
-                        generic_params
-                            .range
-                            .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
-                    ));
-                }
-                for (i, st_generic_type) in sttype.generic_map.values().enumerate() {
-                    if generic_types[i].is_none() {
-                        continue;
-                    }
-                    if !ctx
-                        .eq(
-                            st_generic_type.clone(),
-                            generic_types[i].as_ref().unwrap().clone(),
-                        )
-                        .eq
-                    {
+        match &*pltype.clone().borrow() {
+            PLType::Struct(sttype) | PLType::Trait(sttype) => {
+                let sttype = sttype.new_pltype();
+                if let Some(generic_params) = &self.generic_params {
+                    let generic_types = generic_params.get_generic_types(ctx, builder)?;
+                    if generic_params.generics.len() != sttype.generic_map.len() {
                         return Err(ctx.add_diag(
-                            generic_params.generics[i]
-                                .as_ref()
-                                .unwrap()
-                                .range()
-                                .new_err(ErrorCode::TYPE_MISMATCH),
+                            generic_params
+                                .range
+                                .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
                         ));
                     }
-                }
-            }
-            Ok(Arc::new(RefCell::new(PLType::Struct(sttype))))
-        } else if let PLType::Union(untype) = &*pltype.clone().borrow() {
-            let untype = untype.new_pltype();
-            if let Some(generic_params) = &self.generic_params {
-                let generic_types = generic_params.get_generic_types(ctx, builder)?;
-                if generic_params.generics.len() != untype.generic_map.len() {
-                    return Err(ctx.add_diag(
-                        generic_params
-                            .range
-                            .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
-                    ));
-                }
-                for (i, un_generic_type) in untype.generic_map.values().enumerate() {
-                    if generic_types[i].is_none() {
-                        continue;
+                    for (i, st_generic_type) in sttype.generic_map.values().enumerate() {
+                        if generic_types[i].is_none() {
+                            continue;
+                        }
+                        if !ctx
+                            .eq(
+                                st_generic_type.clone(),
+                                generic_types[i].as_ref().unwrap().clone(),
+                            )
+                            .eq
+                        {
+                            return Err(ctx.add_diag(
+                                generic_params.generics[i]
+                                    .as_ref()
+                                    .unwrap()
+                                    .range()
+                                    .new_err(ErrorCode::TYPE_MISMATCH),
+                            ));
+                        }
                     }
-                    if !ctx
-                        .eq(
-                            un_generic_type.clone(),
-                            generic_types[i].as_ref().unwrap().clone(),
-                        )
-                        .eq
-                    {
+                }
+                if sttype.is_trait {
+                    return Ok(Arc::new(RefCell::new(PLType::Trait(sttype))));
+                }
+                Ok(Arc::new(RefCell::new(PLType::Struct(sttype))))
+            }
+            PLType::Union(untype) => {
+                let untype = untype.new_pltype();
+                if let Some(generic_params) = &self.generic_params {
+                    let generic_types = generic_params.get_generic_types(ctx, builder)?;
+                    if generic_params.generics.len() != untype.generic_map.len() {
                         return Err(ctx.add_diag(
-                            generic_params.generics[i]
-                                .as_ref()
-                                .unwrap()
-                                .range()
-                                .new_err(ErrorCode::TYPE_MISMATCH),
+                            generic_params
+                                .range
+                                .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
                         ));
                     }
+                    for (i, un_generic_type) in untype.generic_map.values().enumerate() {
+                        if generic_types[i].is_none() {
+                            continue;
+                        }
+                        if !ctx
+                            .eq(
+                                un_generic_type.clone(),
+                                generic_types[i].as_ref().unwrap().clone(),
+                            )
+                            .eq
+                        {
+                            return Err(ctx.add_diag(
+                                generic_params.generics[i]
+                                    .as_ref()
+                                    .unwrap()
+                                    .range()
+                                    .new_err(ErrorCode::TYPE_MISMATCH),
+                            ));
+                        }
+                    }
                 }
+                Ok(Arc::new(RefCell::new(PLType::Union(untype))))
             }
-            Ok(Arc::new(RefCell::new(PLType::Union(untype))))
-        } else {
-            Ok(pltype)
+            _ => Ok(pltype),
         }
     }
 }
@@ -174,12 +179,8 @@ impl TypeNode for TypeNameNode {
         let pltype = self.get_origin_type_with_infer(ctx, builder)?;
         if self.generic_params.is_some() && gen_code {
             match &*pltype.borrow() {
-                PLType::Struct(sttype)|PLType::Trait(sttype) => {
+                PLType::Struct(sttype) | PLType::Trait(sttype) => {
                     let sttype = sttype.clone();
-                    if sttype.is_trait {
-                        let pltype = Arc::new(RefCell::new(PLType::Trait(sttype)));
-                        return Ok(pltype);
-                    }
                     if sttype.need_gen_code() {
                         return ctx.protect_generic_context(&sttype.generic_map, |ctx| {
                             sttype.gen_code(ctx, builder)

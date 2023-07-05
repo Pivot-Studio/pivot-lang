@@ -11,6 +11,7 @@ use super::range::Range;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::Db;
 
+use indexmap::IndexMap;
 use lsp_types::Command;
 use lsp_types::CompletionItem;
 use lsp_types::CompletionItemKind;
@@ -43,6 +44,8 @@ pub struct GlobalVar {
     // pub loc: Arc<RwVec<Location>>,
 }
 
+type ImplMap = FxHashMap<String, FxHashMap<String, IndexMap<String, Arc<RefCell<PLType>>>>>;
+
 /// # Mod
 /// Represent a module
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,7 +72,7 @@ pub struct Mod {
     pub semantic_tokens_builder: Arc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
     pub hints: Arc<RefCell<Vec<InlayHint>>>,
     pub doc_symbols: Arc<RefCell<Vec<DocumentSymbol>>>,
-    pub impls: FxHashMap<String, FxHashSet<String>>,
+    pub impls: ImplMap,
     pub macros: FxHashMap<String, Arc<MacroNode>>,
     pub trait_mthd_table: TraitMthdImpl,
 }
@@ -498,11 +501,16 @@ impl Mod {
         cm
     }
 
-    pub fn add_impl(&mut self, stname: &str, trait_tp_name: &str) {
+    pub fn add_impl(
+        &mut self,
+        stname: &str,
+        trait_tp_name: &str,
+        generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
+    ) {
         self.impls
             .entry(stname.to_string())
             .or_insert_with(Default::default)
-            .insert(trait_tp_name.to_string());
+            .insert(trait_tp_name.to_string(), generic_map);
     }
 }
 

@@ -2,6 +2,7 @@
 use std::{
     cell::RefCell,
     fs::remove_file,
+    path::PathBuf,
     sync::{Arc, Mutex},
 };
 
@@ -64,8 +65,21 @@ fn test_diag() {
         "test/lsp_diag/test_diag.pi",
     );
     assert!(!comps.is_empty());
-    let (file, diag) = &comps[0];
-    assert!(file.contains("test_diag.pi"));
+    for comp in &comps {
+        test_diag_expect(comp);
+    }
+}
+
+fn test_diag_expect(comp: &(String, Vec<super::diag::PLDiag>)) {
+    let (f, diag) = &comp;
+    let f: PathBuf = f.into();
+    let f = "expects/".to_string() + f.file_name().unwrap().to_str().unwrap() + ".expect";
+    let diag = sanitize_diag(diag);
+    let expected = expect_file![f];
+    expected.assert_eq(&format!("{:#?}", diag));
+}
+
+fn sanitize_diag(diag: &Vec<super::diag::PLDiag>) -> Vec<super::diag::PLDiag> {
     let mut diag = diag
         .iter()
         .map(|d| {
@@ -74,7 +88,12 @@ fn test_diag() {
             d
         })
         .collect::<Vec<_>>();
-    diag.sort_by(|a, b| {
+    diag.sort_by(sort());
+    diag
+}
+
+fn sort() -> impl Fn(&super::diag::PLDiag, &super::diag::PLDiag) -> std::cmp::Ordering {
+    |a, b| {
         if a.raw.range.start.line < b.raw.range.start.line
             || (a.raw.range.start.line == b.raw.range.start.line
                 && a.raw.range.start.column < b.raw.range.start.column)
@@ -87,9 +106,7 @@ fn test_diag() {
         } else {
             std::cmp::Ordering::Greater
         }
-    });
-    let expected = expect_file!["test_diag.expect"];
-    expected.assert_eq(&format!("{:#?}", diag));
+    }
 }
 #[test]
 fn test_memory_leak() {

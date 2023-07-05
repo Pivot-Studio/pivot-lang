@@ -330,29 +330,35 @@ impl Node for TakeOpNode {
             headptr = builder.alloc("temp", &head_pltype.borrow(), ctx, None);
         }
         match &*head_pltype.clone().borrow() {
-            PLType::Trait(s) => {
-                let field = s.get_trait_field(&id.name);
-                if let Some(field) = field {
-                    _ = s.expect_field_pub(ctx, &field, id_range);
-                    ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
-                    ctx.set_field_refs(head_pltype, &field, id_range);
-                    ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
+            PLType::Trait(s) => ctx.run_in_type_mod(s, |ctx, s| {
+                ctx.protect_generic_context(&s.generic_map, |ctx| {
+                    let head_pltype = head_pltype.clone();
+                    let field = s.get_trait_field(&id.name);
+                    if let Some(field) = field {
+                        _ = s.expect_field_pub(ctx, &field, id_range);
+                        ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
+                        ctx.set_field_refs(head_pltype, &field, id_range);
+                        ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
 
-                    let re = field.typenode.get_type(ctx, builder, true)?;
-                    let fnv = builder
-                        .build_struct_gep(headptr, field.index, "mthd_ptr")
-                        .unwrap();
-                    let fnv = builder.build_load(fnv, "mthd_ptr_load");
-                    let headptr = builder.build_struct_gep(headptr, 1, "traitptr").unwrap();
-                    let headptr = builder.build_load(headptr, "traitptr_load");
-                    ctx.emit_comment_highlight(&self.comments[0]);
-                    Ok(NodeOutput::new_value(NodeValue::new_receiver(
-                        fnv, re, headptr, None,
-                    )))
-                } else {
-                    handle_glob_mthd(s, ctx, id, headptr, head_pltype, id_range)
-                }
-            }
+                        let re = field.typenode.get_type(ctx, builder, true)?;
+                        let fnv = builder
+                            .build_struct_gep(headptr, field.index, "mthd_ptr")
+                            .unwrap();
+                        let fnv = builder.build_load(fnv, "mthd_ptr_load");
+                        let headptr = builder.build_struct_gep(headptr, 1, "traitptr").unwrap();
+                        let headptr = builder.build_load(headptr, "traitptr_load");
+                        ctx.emit_comment_highlight(&self.comments[0]);
+                        Ok(NodeOutput::new_value(NodeValue::new_receiver(
+                            fnv,
+                            re,
+                            headptr,
+                            None,
+                        )))
+                    } else {
+                        handle_glob_mthd(s, ctx, id, headptr, head_pltype, id_range)
+                    }
+                })
+            }),
             PLType::Struct(s) => {
                 if let Some(field) = s.fields.get(&id.name) {
                     _ = s.expect_field_pub(ctx, field, id_range);
