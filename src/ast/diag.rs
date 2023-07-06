@@ -213,7 +213,7 @@ pub struct PLLabel {
 pub struct PLDiagRaw {
     code: DiagCode,
     help: Option<String>,
-    labels: Vec<PLLabel>,
+    pub labels: Vec<PLLabel>,
     pub source: Option<String>,
 }
 /// # PLDiag

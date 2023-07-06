@@ -150,6 +150,29 @@
                     file: "",
                     txt: Some(
                         (
+                            "trait {} def here",
+                            [
+                                "generic_trait1<T>",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 9,
+                            column: 7,
+                            offset: 90,
+                        },
+                        end: Pos {
+                            line: 9,
+                            column: 21,
+                            offset: 104,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
                             "method {} not in impl block, whitch is required in trait {}",
                             [
                                 "name1",
@@ -167,29 +190,6 @@
                             line: 56,
                             column: 24,
                             offset: 622,
-                        },
-                    },
-                },
-                PLLabel {
-                    file: "",
-                    txt: Some(
-                        (
-                            "trait {} def here",
-                            [
-                                "generic_trait1<T>",
-                            ],
-                        ),
-                    ),
-                    range: Range {
-                        start: Pos {
-                            line: 9,
-                            column: 7,
-                            offset: 90,
-                        },
-                        end: Pos {
-                            line: 9,
-                            column: 21,
-                            offset: 104,
                         },
                     },
                 },
@@ -360,29 +360,6 @@
                         (
                             "type `{}`",
                             [
-                                "A",
-                            ],
-                        ),
-                    ),
-                    range: Range {
-                        start: Pos {
-                            line: 96,
-                            column: 34,
-                            offset: 1163,
-                        },
-                        end: Pos {
-                            line: 96,
-                            column: 35,
-                            offset: 1164,
-                        },
-                    },
-                },
-                PLLabel {
-                    file: "",
-                    txt: Some(
-                        (
-                            "type `{}`",
-                            [
                                 "generic_trait3<f32>",
                             ],
                         ),
@@ -397,6 +374,29 @@
                             line: 96,
                             column: 11,
                             offset: 1140,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "type `{}`",
+                            [
+                                "A",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 96,
+                            column: 34,
+                            offset: 1163,
+                        },
+                        end: Pos {
+                            line: 96,
+                            column: 35,
+                            offset: 1164,
                         },
                     },
                 },
@@ -429,29 +429,6 @@
                         (
                             "type `{}`",
                             [
-                                "B<i64>",
-                            ],
-                        ),
-                    ),
-                    range: Range {
-                        start: Pos {
-                            line: 99,
-                            column: 33,
-                            offset: 1236,
-                        },
-                        end: Pos {
-                            line: 99,
-                            column: 34,
-                            offset: 1237,
-                        },
-                    },
-                },
-                PLLabel {
-                    file: "",
-                    txt: Some(
-                        (
-                            "type `{}`",
-                            [
                                 "generic_trait1<f32>",
                             ],
                         ),
@@ -466,6 +443,29 @@
                             line: 99,
                             column: 10,
                             offset: 1213,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "type `{}`",
+                            [
+                                "B<i64>",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 99,
+                            column: 33,
+                            offset: 1236,
+                        },
+                        end: Pos {
+                            line: 99,
+                            column: 34,
+                            offset: 1237,
                         },
                     },
                 },

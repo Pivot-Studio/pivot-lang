@@ -10,6 +10,7 @@ use expect_test::expect_file;
 use lsp_types::{
     CompletionItemKind, GotoDefinitionResponse, HoverContents, InlayHintLabel, MarkedString,
 };
+use rustc_hash::FxHashMap;
 use salsa::{accumulator::Accumulator, storage::HasJar};
 
 use crate::{
@@ -19,6 +20,7 @@ use crate::{
             PLSignatureHelp,
         },
         compiler::{compile_dry, ActionType},
+        diag::PLDiag,
         range::Pos,
     },
     db::Database,
@@ -65,12 +67,21 @@ fn test_diag() {
         "test/lsp_diag/test_diag.pi",
     );
     assert!(!comps.is_empty());
-    for comp in &comps {
+    let mut new_comps = FxHashMap::<String, Vec<PLDiag>>::default();
+    for (k, comp) in &comps {
+        new_comps
+            .entry(k.to_string())
+            .and_modify(|v| {
+                v.extend(comp.clone());
+            })
+            .or_insert(comp.clone());
+    }
+    for comp in &new_comps {
         test_diag_expect(comp);
     }
 }
 
-fn test_diag_expect(comp: &(String, Vec<super::diag::PLDiag>)) {
+fn test_diag_expect(comp: (&String, &Vec<super::diag::PLDiag>)) {
     let (f, diag) = &comp;
     let f: PathBuf = f.into();
     let f = "expects/".to_string() + f.file_name().unwrap().to_str().unwrap() + ".expect";
@@ -89,6 +100,8 @@ fn sanitize_diag(diag: &Vec<super::diag::PLDiag>) -> Vec<super::diag::PLDiag> {
         })
         .collect::<Vec<_>>();
     diag.sort_by(sort());
+    diag.iter_mut()
+        .for_each(|d| d.raw.labels.sort_by(sort_lable()));
     diag
 }
 
@@ -101,6 +114,23 @@ fn sort() -> impl Fn(&super::diag::PLDiag, &super::diag::PLDiag) -> std::cmp::Or
             std::cmp::Ordering::Less
         } else if a.raw.range.start.line == b.raw.range.start.line
             && a.raw.range.start.column == b.raw.range.start.column
+        {
+            std::cmp::Ordering::Equal
+        } else {
+            std::cmp::Ordering::Greater
+        }
+    }
+}
+
+fn sort_lable() -> impl Fn(&super::diag::PLLabel, &super::diag::PLLabel) -> std::cmp::Ordering {
+    |a, b| {
+        if a.range.start.line < b.range.start.line
+            || (a.range.start.line == b.range.start.line
+                && a.range.start.column < b.range.start.column)
+        {
+            std::cmp::Ordering::Less
+        } else if a.range.start.line == b.range.start.line
+            && a.range.start.column == b.range.start.column
         {
             std::cmp::Ordering::Equal
         } else {

@@ -349,10 +349,7 @@ impl Node for TakeOpNode {
                         let headptr = builder.build_load(headptr, "traitptr_load");
                         ctx.emit_comment_highlight(&self.comments[0]);
                         Ok(NodeOutput::new_value(NodeValue::new_receiver(
-                            fnv,
-                            re,
-                            headptr,
-                            None,
+                            fnv, re, headptr, None,
                         )))
                     } else {
                         handle_glob_mthd(s, ctx, id, headptr, head_pltype, id_range)
