@@ -28,6 +28,8 @@ use crate::{
     Db,
 };
 
+use super::range::Range;
+
 fn test_lsp<'db, A>(
     db: &'db dyn Db,
     params: Option<(Pos, Option<String>)>,
@@ -106,37 +108,31 @@ fn sanitize_diag(diag: &Vec<super::diag::PLDiag>) -> Vec<super::diag::PLDiag> {
 }
 
 fn sort() -> impl Fn(&super::diag::PLDiag, &super::diag::PLDiag) -> std::cmp::Ordering {
-    |a, b| {
-        if a.raw.range.start.line < b.raw.range.start.line
-            || (a.raw.range.start.line == b.raw.range.start.line
-                && a.raw.range.start.column < b.raw.range.start.column)
-        {
-            std::cmp::Ordering::Less
-        } else if a.raw.range.start.line == b.raw.range.start.line
-            && a.raw.range.start.column == b.raw.range.start.column
-        {
-            std::cmp::Ordering::Equal
-        } else {
-            std::cmp::Ordering::Greater
-        }
+    |a, b| compare_range(a.raw.range, b.raw.range)
+}
+
+fn compare_range(l: Range, r: Range) -> std::cmp::Ordering {
+    if compare_pos(l.start, r.start) == std::cmp::Ordering::Less {
+        std::cmp::Ordering::Less
+    } else if compare_pos(l.start, r.start) == std::cmp::Ordering::Equal {
+        compare_pos(l.end, r.end)
+    } else {
+        std::cmp::Ordering::Greater
+    }
+}
+
+fn compare_pos(l: Pos, r: Pos) -> std::cmp::Ordering {
+    if l.line < r.line || (l.line == r.line && l.column < r.column) {
+        std::cmp::Ordering::Less
+    } else if l.line == r.line && l.column == r.column {
+        std::cmp::Ordering::Equal
+    } else {
+        std::cmp::Ordering::Greater
     }
 }
 
 fn sort_lable() -> impl Fn(&super::diag::PLLabel, &super::diag::PLLabel) -> std::cmp::Ordering {
-    |a, b| {
-        if a.range.start.line < b.range.start.line
-            || (a.range.start.line == b.range.start.line
-                && a.range.start.column < b.range.start.column)
-        {
-            std::cmp::Ordering::Less
-        } else if a.range.start.line == b.range.start.line
-            && a.range.start.column == b.range.start.column
-        {
-            std::cmp::Ordering::Equal
-        } else {
-            std::cmp::Ordering::Greater
-        }
-    }
+    |a, b| compare_range(a.range, b.range)
 }
 #[test]
 fn test_memory_leak() {

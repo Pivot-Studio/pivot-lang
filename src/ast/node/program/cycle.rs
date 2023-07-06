@@ -60,12 +60,8 @@ pub fn cycle_deps_recover(
     let first_range = *files.get(&src_file_path).unwrap();
     let mut diag = first_range.new_err(ErrorCode::CYCLE_DEPENDENCY);
     diag.set_source(src_file_path);
-    for (idx, (f, r)) in files.iter().enumerate() {
-        let msg = if idx == 0 {
-            "first import in cycle"
-        } else {
-            "next import in cycle"
-        };
+    for (f, r) in files.iter() {
+        let msg = "import in cycle here";
         diag.add_label(*r, f.to_string(), format_label!(msg));
     }
     Diagnostics::push(db, (src_file_path.to_string(), vec![diag]));

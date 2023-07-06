@@ -10,7 +10,7 @@
                     file: "",
                     txt: Some(
                         (
-                            "first import in cycle",
+                            "import in cycle here",
                             [],
                         ),
                     ),
@@ -31,7 +31,7 @@
                     file: "",
                     txt: Some(
                         (
-                            "next import in cycle",
+                            "import in cycle here",
                             [],
                         ),
                     ),
@@ -52,7 +52,7 @@
                     file: "",
                     txt: Some(
                         (
-                            "next import in cycle",
+                            "import in cycle here",
                             [],
                         ),
                     ),

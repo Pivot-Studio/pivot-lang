@@ -142,12 +142,12 @@ jobs:
           args: nextest --workspace --all-features --lcov --output-path lcov.info --profile ci -vv
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v3.1.4
         with:
           token: ${{ secrets.CODE_COV }}
           files: lcov.info
           name: ${{ matrix.os }}
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           verbose: true
   style:
     name: Check Style
