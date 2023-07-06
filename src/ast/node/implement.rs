@@ -31,10 +31,13 @@ impl ImplNode {
                     .unwrap()
                     .0
                     .get_type(ctx, builder, false)?;
-                ctx.plmod.add_impl(
-                    &sttp.borrow().get_full_elm_name_without_generic(),
-                    &trait_tp.borrow().get_full_elm_name(),
-                );
+                if let PLType::Trait(t) = &*trait_tp.borrow() {
+                    ctx.plmod.add_impl(
+                        &sttp.borrow().get_full_elm_name_without_generic(),
+                        &trait_tp.borrow().get_full_elm_name(),
+                        t.generic_map.clone(),
+                    );
+                }
                 Ok(())
             });
         } else {
@@ -45,9 +48,13 @@ impl ImplNode {
                 .unwrap()
                 .0
                 .get_type(ctx, builder, false)?;
-            let st_name = sttp.borrow().get_full_elm_name();
-            let trait_name = trait_tp.borrow().get_full_elm_name();
-            ctx.plmod.add_impl(&st_name, &trait_name);
+            if let PLType::Trait(t) = &*trait_tp.borrow() {
+                ctx.plmod.add_impl(
+                    &sttp.borrow().get_full_elm_name_without_generic(),
+                    &trait_tp.borrow().get_full_elm_name(),
+                    t.generic_map.clone(),
+                );
+            };
         }
         Ok(())
     }
@@ -137,105 +144,117 @@ impl Node for ImplNode {
         if let Some(generics) = &self.generics {
             generics.emit_highlight(ctx);
         }
-        let mut traittpandrange = None;
-        let mut traitfns = FxHashSet::default();
-        if let Some((typename, _)) = &self.impl_trait {
-            typename.emit_highlight(ctx);
-            let trait_tp = typename.get_type(ctx, builder, true)?;
-            if let PLType::Trait(st) = &*trait_tp.borrow() {
-                ctx.send_if_go_to_def(typename.range(), st.range, st.path.clone());
-                traittpandrange = Some((trait_tp.clone(), typename.range()));
-                for name in st.fields.keys() {
-                    traitfns.insert(name.clone());
+        let gm = self
+            .generics
+            .as_ref()
+            .map(|e| e.gen_generic_type(ctx))
+            .unwrap_or_default();
+        ctx.protect_generic_context(&gm, |ctx| {
+            let mut traittpandrange = None;
+            let mut traitfns = FxHashSet::default();
+            if let Some((typename, _)) = &self.impl_trait {
+                typename.emit_highlight(ctx);
+                let trait_tp = typename.get_type(ctx, builder, true)?;
+                if let PLType::Trait(st) = &*trait_tp.borrow() {
+                    ctx.send_if_go_to_def(typename.range(), st.range, st.path.clone());
+                    traittpandrange = Some((trait_tp.clone(), typename.range()));
+                    for name in st.fields.keys() {
+                        traitfns.insert(name.clone());
+                    }
+                } else {
+                    return Err(typename
+                        .range()
+                        .new_err(ErrorCode::EXPECT_TRAIT_TYPE)
+                        .add_label(
+                            typename.range(),
+                            ctx.get_file(),
+                            format_label!("type {}", trait_tp.borrow().get_kind_name()),
+                        )
+                        .add_to_ctx(ctx));
+                };
+            };
+            self.target.emit_highlight(ctx);
+            let mut method_docsymbols = vec![];
+            if let TypeNodeEnum::Basic(bt) = &*self.target {
+                if bt.id.is_none() {
+                    ctx.if_completion(bt.range, || ctx.get_type_completions());
+                    return Err(ctx.add_diag(bt.range.new_err(ErrorCode::EXPECT_TYPE)));
                 }
-            } else {
-                return Err(typename
-                    .range()
-                    .new_err(ErrorCode::EXPECT_TRAIT_TYPE)
+                let v = bt.id.as_ref().unwrap().get_type(ctx)?.get_value();
+                let st_pltype = v.unwrap().get_ty();
+                if let PLType::Struct(sttp) = &*st_pltype.borrow() {
+                    if let Some((trait_tp, r)) = &traittpandrange {
+                        if let PLType::Trait(trait_tp) = &*trait_tp.borrow() {
+                            trait_tp.check_impl_derives(ctx, sttp, *r);
+                        } else {
+                            unreachable!()
+                        }
+                    }
+                    ctx.send_if_go_to_def(self.target.range(), sttp.range, sttp.path.clone());
+                };
+            }
+            for method in &mut self.methods {
+                if let Ok(res) = method.emit(ctx, builder) {
+                    if let Some(node_val) = res.get_value() {
+                        let fntype = node_val.get_ty();
+                        let f = if let PLType::Fn(f) = &*fntype.borrow() {
+                            f.get_doc_symbol()
+                        } else {
+                            unreachable!()
+                        };
+                        method_docsymbols.push(f);
+                        if let Some((trait_tp, _)) = &traittpandrange {
+                            if let PLType::Trait(t) = &*trait_tp.clone().borrow() {
+                                ctx.protect_generic_context(&t.generic_map, |ctx| {
+                                    check_fn(
+                                        ctx,
+                                        builder,
+                                        method,
+                                        trait_tp.clone(),
+                                        &mut traitfns,
+                                        fntype.clone(),
+                                    )?;
+                                    Ok(())
+                                })?;
+                            }
+                        }
+                    }
+                }
+            }
+            for f in traitfns {
+                let (tp, r) = traittpandrange.clone().unwrap();
+                r.new_err(ErrorCode::METHOD_NOT_IN_IMPL)
                     .add_label(
-                        typename.range(),
+                        r,
                         ctx.get_file(),
-                        format_label!("type {}", trait_tp.borrow().get_kind_name()),
+                        format_label!(
+                            "method {} not in impl block, whitch is required in trait {}",
+                            f,
+                            tp.borrow().get_name()
+                        ),
                     )
-                    .add_to_ctx(ctx));
-            };
-        };
-        self.target.emit_highlight(ctx);
-        let mut method_docsymbols = vec![];
-        if let TypeNodeEnum::Basic(bt) = &*self.target {
-            if bt.id.is_none() {
-                ctx.if_completion(bt.range, || ctx.get_type_completions());
-                return Err(ctx.add_diag(bt.range.new_err(ErrorCode::EXPECT_TYPE)));
+                    .add_label(
+                        tp.borrow().get_range().unwrap(),
+                        ctx.get_file(),
+                        format_label!("trait {} def here", tp.borrow().get_name()),
+                    )
+                    .add_help("add the method to current impl block")
+                    .add_to_ctx(ctx);
             }
-            let v = bt.id.as_ref().unwrap().get_type(ctx)?.get_value();
-            let st_pltype = v.unwrap().get_ty();
-            if let PLType::Struct(sttp) = &*st_pltype.borrow() {
-                if let Some((trait_tp, r)) = &traittpandrange {
-                    if let PLType::Trait(trait_tp) = &*trait_tp.borrow() {
-                        trait_tp.check_impl_derives(ctx, sttp, *r);
-                    } else {
-                        unreachable!()
-                    }
-                }
-                ctx.send_if_go_to_def(self.target.range(), sttp.range, sttp.path.clone());
+            ctx.emit_comment_highlight(&self.comments[0]);
+            #[allow(deprecated)]
+            let docsymbol = DocumentSymbol {
+                name: format!("impl {}", FmtBuilder::generate_node(&self.target)),
+                detail: None,
+                kind: SymbolKind::OBJECT,
+                tags: None,
+                deprecated: None,
+                range: self.range.to_diag_range(),
+                selection_range: self.range.to_diag_range(),
+                children: Some(method_docsymbols),
             };
-        }
-        for method in &mut self.methods {
-            if let Ok(res) = method.emit(ctx, builder) {
-                if let Some(node_val) = res.get_value() {
-                    let fntype = node_val.get_ty();
-                    let f = if let PLType::Fn(f) = &*fntype.borrow() {
-                        f.get_doc_symbol()
-                    } else {
-                        unreachable!()
-                    };
-                    method_docsymbols.push(f);
-                    if let Some((trait_tp, _)) = &traittpandrange {
-                        check_fn(
-                            ctx,
-                            builder,
-                            method,
-                            trait_tp.clone(),
-                            &mut traitfns,
-                            fntype,
-                        )?;
-                    }
-                }
-            }
-        }
-        for f in traitfns {
-            let (tp, r) = traittpandrange.clone().unwrap();
-            r.new_err(ErrorCode::METHOD_NOT_IN_IMPL)
-                .add_label(
-                    r,
-                    ctx.get_file(),
-                    format_label!(
-                        "method {} not in impl block, whitch is required in trait {}",
-                        f,
-                        tp.borrow().get_name()
-                    ),
-                )
-                .add_label(
-                    tp.borrow().get_range().unwrap(),
-                    ctx.get_file(),
-                    format_label!("trait {} def here", tp.borrow().get_name()),
-                )
-                .add_help("add the method to current impl block")
-                .add_to_ctx(ctx);
-        }
-        ctx.emit_comment_highlight(&self.comments[0]);
-        #[allow(deprecated)]
-        let docsymbol = DocumentSymbol {
-            name: format!("impl {}", FmtBuilder::generate_node(&self.target)),
-            detail: None,
-            kind: SymbolKind::OBJECT,
-            tags: None,
-            deprecated: None,
-            range: self.range.to_diag_range(),
-            selection_range: self.range.to_diag_range(),
-            children: Some(method_docsymbols),
-        };
-        ctx.plmod.doc_symbols.borrow_mut().push(docsymbol);
-        Ok(Default::default())
+            ctx.plmod.doc_symbols.borrow_mut().push(docsymbol);
+            Ok(Default::default())
+        })
     }
 }

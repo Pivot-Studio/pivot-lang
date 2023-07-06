@@ -766,14 +766,26 @@ impl FNValue {
             return false;
         }
         for i in 1..self.fntype.param_pltypes.len() {
-            if self.fntype.param_pltypes[i].get_type(ctx, builder, true)
-                != other.fntype.param_pltypes[i].get_type(ctx, builder, true)
-            {
+            if get_type_deep(
+                self.fntype.param_pltypes[i]
+                    .get_type(ctx, builder, true)
+                    .unwrap(),
+            ) != get_type_deep(
+                other.fntype.param_pltypes[i]
+                    .get_type(ctx, builder, true)
+                    .unwrap(),
+            ) {
                 return false;
             }
         }
-        self.fntype.ret_pltype.get_type(ctx, builder, true)
-            == other.fntype.ret_pltype.get_type(ctx, builder, true)
+        get_type_deep(self.fntype.ret_pltype.get_type(ctx, builder, true).unwrap())
+            == get_type_deep(
+                other
+                    .fntype
+                    .ret_pltype
+                    .get_type(ctx, builder, true)
+                    .unwrap(),
+            )
     }
     pub fn append_name_with_generic(&self, name: String) -> String {
         if self.fntype.need_gen_code() {
@@ -950,10 +962,35 @@ pub struct STType {
 
 pub type TraitMthdImpl = Arc<RefCell<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>>;
 
+pub fn append_name_with_generic(gm: &IndexMap<String, Arc<RefCell<PLType>>>, name: &str) -> String {
+    let typeinfer = gm
+        .iter()
+        .map(|(_, v)| match &*v.clone().borrow() {
+            PLType::Generic(g) => g.curpltype.as_ref().unwrap().borrow().get_name(),
+            a => a.get_name(),
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    if typeinfer.is_empty() {
+        return name.to_string();
+    }
+    format!("{}<{}>", name, typeinfer)
+}
+
 impl PartialEq for STType {
     fn eq(&self, other: &Self) -> bool {
         if self.is_tuple && other.is_tuple {
             self.fields == other.fields
+        } else if self.is_trait && other.is_trait {
+            self.name == other.name
+                && self.path == other.path
+                && self.range == other.range
+                && self.derives == other.derives
+                && self.modifier == other.modifier
+                && self.body_range == other.body_range
+                && self.is_trait == other.is_trait
+                && self.is_tuple == other.is_tuple
+                && self.generic_map == other.generic_map
         } else {
             self.name == other.name
                 && self.path == other.path
@@ -1137,12 +1174,29 @@ impl STType {
         Ok(())
     }
     fn implements_trait_curr_mod(&self, tp: &STType, plmod: &Mod) -> bool {
+        // FIXME: check generic
         let re = plmod
             .impls
             .get(&self.get_full_name())
             .or(plmod.impls.get(&self.get_full_name_except_generic()))
-            .and_then(|v| v.get(&tp.get_full_name()))
-            .is_some();
+            .map(|v| {
+                v.get(&tp.get_full_name_except_generic())
+                    .map(|gm| {
+                        let mut gm = gm.clone();
+                        for (k, _) in &gm.clone() {
+                            if let Some(vv) = self.generic_map.get(k) {
+                                gm.insert(k.clone(), vv.clone());
+                            }
+                            if let Some(vv) = self.generic_infer_types.get(k) {
+                                gm.insert(k.clone(), vv.clone());
+                            }
+                        }
+                        tp.get_full_name()
+                            == append_name_with_generic(&gm, &tp.get_full_name_except_generic())
+                    })
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
         if !re {
             return re;
         }
@@ -1164,17 +1218,9 @@ impl STType {
         get_hash_code(full_name)
     }
     pub fn append_name_with_generic(&self) -> String {
-        let typeinfer = self
-            .generic_map
-            .iter()
-            .map(|(_, v)| match &*v.clone().borrow() {
-                PLType::Generic(g) => g.curpltype.as_ref().unwrap().borrow().get_name(),
-                _ => unreachable!(),
-            })
-            .collect::<Vec<_>>()
-            .join(", ");
-        format!("{}<{}>", self.name, typeinfer)
+        append_name_with_generic(&self.generic_map, &self.name)
     }
+
     pub fn gen_code<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
@@ -1201,12 +1247,31 @@ impl STType {
                 .values()
                 .map(|f| {
                     let mut nf = f.clone();
-                    nf.typenode = f
-                        .typenode
-                        .get_type(ctx, builder, true)
-                        .unwrap()
-                        .borrow()
-                        .get_typenode(&ctx.get_file());
+                    if let TypeNodeEnum::Func(fd) = &*f.typenode {
+                        let mut new_f = fd.clone();
+                        for f in new_f.paralist.iter_mut() {
+                            f.typenode = f
+                                .typenode
+                                .get_type(ctx, builder, true)
+                                .unwrap()
+                                .borrow()
+                                .get_typenode(&ctx.get_file());
+                        }
+                        new_f.ret = new_f
+                            .ret
+                            .get_type(ctx, builder, true)
+                            .unwrap()
+                            .borrow()
+                            .get_typenode(&ctx.get_file());
+                        nf.typenode = Box::new(TypeNodeEnum::Func(new_f));
+                    } else {
+                        nf.typenode = f
+                            .typenode
+                            .get_type(ctx, builder, true)
+                            .unwrap()
+                            .borrow()
+                            .get_typenode(&ctx.get_file());
+                    }
                     (nf.name.clone(), nf)
                 })
                 .collect();
@@ -1215,11 +1280,17 @@ impl STType {
                 .values()
                 .map(|f| f.typenode.get_type(ctx, builder, true).unwrap())
                 .collect::<Vec<_>>();
-            builder.gen_st_visit_function(ctx, &res, &field_pltps);
+            if !res.is_trait {
+                builder.gen_st_visit_function(ctx, &res, &field_pltps);
+            }
             res.generic_map.clear();
             res.generic_infer_types = generic_infer_types;
             let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
-            pltype.tp.replace(PLType::Struct(res.clone()));
+            if res.is_trait {
+                pltype.tp.replace(PLType::Trait(res.clone()));
+            } else {
+                pltype.tp.replace(PLType::Struct(res.clone()));
+            }
             self.generic_infer
                 .borrow_mut()
                 .insert(res.name, pltype.tp.clone());

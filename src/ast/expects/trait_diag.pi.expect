@@ -1,0 +1,578 @@
+[
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Warn(
+                UNUSED_VARIABLE,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "Unused variable `{}`",
+                            [
+                                "t",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 28,
+                            column: 14,
+                            offset: 340,
+                        },
+                        end: Pos {
+                            line: 28,
+                            column: 15,
+                            offset: 341,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 28,
+                    column: 14,
+                    offset: 340,
+                },
+                end: Pos {
+                    line: 28,
+                    column: 15,
+                    offset: 341,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Warn(
+                UNUSED_VARIABLE,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "Unused variable `{}`",
+                            [
+                                "t",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 36,
+                            column: 14,
+                            offset: 430,
+                        },
+                        end: Pos {
+                            line: 36,
+                            column: 15,
+                            offset: 431,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 36,
+                    column: 14,
+                    offset: 430,
+                },
+                end: Pos {
+                    line: 36,
+                    column: 15,
+                    offset: 431,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Warn(
+                UNUSED_VARIABLE,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "Unused variable `{}`",
+                            [
+                                "t",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 43,
+                            column: 14,
+                            offset: 517,
+                        },
+                        end: Pos {
+                            line: 43,
+                            column: 15,
+                            offset: 518,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 43,
+                    column: 14,
+                    offset: 517,
+                },
+                end: Pos {
+                    line: 43,
+                    column: 15,
+                    offset: 518,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                METHOD_NOT_IN_IMPL,
+            ),
+            help: Some(
+                "add the method to current impl block",
+            ),
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "trait {} def here",
+                            [
+                                "generic_trait1<T>",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 9,
+                            column: 7,
+                            offset: 90,
+                        },
+                        end: Pos {
+                            line: 9,
+                            column: 21,
+                            offset: 104,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "method {} not in impl block, whitch is required in trait {}",
+                            [
+                                "name1",
+                                "generic_trait1<T>",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 56,
+                            column: 10,
+                            offset: 608,
+                        },
+                        end: Pos {
+                            line: 56,
+                            column: 24,
+                            offset: 622,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 56,
+                    column: 10,
+                    offset: 608,
+                },
+                end: Pos {
+                    line: 56,
+                    column: 24,
+                    offset: 622,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                DERIVE_TRAIT_NOT_IMPL,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "the derive trait {} not impl",
+                            [
+                                "generic_trait1<T>",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 64,
+                            column: 10,
+                            offset: 672,
+                        },
+                        end: Pos {
+                            line: 64,
+                            column: 24,
+                            offset: 686,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 64,
+                    column: 10,
+                    offset: 672,
+                },
+                end: Pos {
+                    line: 64,
+                    column: 24,
+                    offset: 686,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Warn(
+                UNUSED_VARIABLE,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "Unused variable `{}`",
+                            [
+                                "t",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 65,
+                            column: 14,
+                            offset: 714,
+                        },
+                        end: Pos {
+                            line: 65,
+                            column: 15,
+                            offset: 715,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 65,
+                    column: 14,
+                    offset: 714,
+                },
+                end: Pos {
+                    line: 65,
+                    column: 15,
+                    offset: 715,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Warn(
+                UNUSED_VARIABLE,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "Unused variable `{}`",
+                            [
+                                "t",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 71,
+                            column: 14,
+                            offset: 803,
+                        },
+                        end: Pos {
+                            line: 71,
+                            column: 15,
+                            offset: 804,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 71,
+                    column: 14,
+                    offset: 803,
+                },
+                end: Pos {
+                    line: 71,
+                    column: 15,
+                    offset: 804,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                TYPE_MISMATCH,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "type `{}`",
+                            [
+                                "generic_trait3<f32>",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 96,
+                            column: 9,
+                            offset: 1138,
+                        },
+                        end: Pos {
+                            line: 96,
+                            column: 11,
+                            offset: 1140,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "type `{}`",
+                            [
+                                "A",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 96,
+                            column: 34,
+                            offset: 1163,
+                        },
+                        end: Pos {
+                            line: 96,
+                            column: 35,
+                            offset: 1164,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 96,
+                    column: 34,
+                    offset: 1163,
+                },
+                end: Pos {
+                    line: 96,
+                    column: 35,
+                    offset: 1164,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                TYPE_MISMATCH,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "type `{}`",
+                            [
+                                "generic_trait1<f32>",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 99,
+                            column: 9,
+                            offset: 1212,
+                        },
+                        end: Pos {
+                            line: 99,
+                            column: 10,
+                            offset: 1213,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "type `{}`",
+                            [
+                                "B<i64>",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 99,
+                            column: 33,
+                            offset: 1236,
+                        },
+                        end: Pos {
+                            line: 99,
+                            column: 34,
+                            offset: 1237,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 99,
+                    column: 33,
+                    offset: 1236,
+                },
+                end: Pos {
+                    line: 99,
+                    column: 34,
+                    offset: 1237,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                VAR_NOT_FOUND,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 100,
+                    column: 5,
+                    offset: 1243,
+                },
+                end: Pos {
+                    line: 100,
+                    column: 6,
+                    offset: 1244,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                UNDEFINED_TYPE,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 169,
+                    column: 15,
+                    offset: 2365,
+                },
+                end: Pos {
+                    line: 169,
+                    column: 17,
+                    offset: 2367,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                EXPECT_TRAIT_TYPE,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "type {}",
+                            [
+                                "struct",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 173,
+                            column: 6,
+                            offset: 2378,
+                        },
+                        end: Pos {
+                            line: 173,
+                            column: 7,
+                            offset: 2379,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 173,
+                    column: 6,
+                    offset: 2378,
+                },
+                end: Pos {
+                    line: 173,
+                    column: 7,
+                    offset: 2379,
+                },
+            },
+        },
+    },
+]

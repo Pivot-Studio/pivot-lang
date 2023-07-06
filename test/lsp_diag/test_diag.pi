@@ -51,3 +51,5 @@ struct selfref {
 struct selfref2 {
     b:selfref;
 }
+
+use test::trait_diag;

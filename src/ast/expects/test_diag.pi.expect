@@ -2,6 +2,92 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
+                CYCLE_DEPENDENCY,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "import in cycle here",
+                            [],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 1,
+                            column: 5,
+                            offset: 4,
+                        },
+                        end: Pos {
+                            line: 1,
+                            column: 13,
+                            offset: 12,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "import in cycle here",
+                            [],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 1,
+                            column: 5,
+                            offset: 4,
+                        },
+                        end: Pos {
+                            line: 1,
+                            column: 13,
+                            offset: 12,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "import in cycle here",
+                            [],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 1,
+                            column: 5,
+                            offset: 4,
+                        },
+                        end: Pos {
+                            line: 1,
+                            column: 20,
+                            offset: 19,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 1,
+                    column: 5,
+                    offset: 4,
+                },
+                end: Pos {
+                    line: 1,
+                    column: 13,
+                    offset: 12,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
                 TYPE_MISMATCH,
             ),
             help: None,
@@ -34,29 +120,6 @@
                         (
                             "type `{}`",
                             [
-                                "f64",
-                            ],
-                        ),
-                    ),
-                    range: Range {
-                        start: Pos {
-                            line: 22,
-                            column: 17,
-                            offset: 215,
-                        },
-                        end: Pos {
-                            line: 22,
-                            column: 20,
-                            offset: 218,
-                        },
-                    },
-                },
-                PLLabel {
-                    file: "",
-                    txt: Some(
-                        (
-                            "type `{}`",
-                            [
                                 "AA",
                             ],
                         ),
@@ -71,6 +134,29 @@
                             line: 22,
                             column: 10,
                             offset: 208,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "type `{}`",
+                            [
+                                "f64",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 22,
+                            column: 17,
+                            offset: 215,
+                        },
+                        end: Pos {
+                            line: 22,
+                            column: 20,
+                            offset: 218,
                         },
                     },
                 },
