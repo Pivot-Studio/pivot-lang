@@ -507,4 +507,72 @@
             },
         },
     },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                UNDEFINED_TYPE,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 169,
+                    column: 15,
+                    offset: 2365,
+                },
+                end: Pos {
+                    line: 169,
+                    column: 17,
+                    offset: 2367,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                EXPECT_TRAIT_TYPE,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "type {}",
+                            [
+                                "struct",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 173,
+                            column: 6,
+                            offset: 2378,
+                        },
+                        end: Pos {
+                            line: 173,
+                            column: 7,
+                            offset: 2379,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 173,
+                    column: 6,
+                    offset: 2378,
+                },
+                end: Pos {
+                    line: 173,
+                    column: 7,
+                    offset: 2379,
+                },
+            },
+        },
+    },
 ]

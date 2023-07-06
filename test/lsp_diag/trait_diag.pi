@@ -165,3 +165,11 @@ struct Inner<T: TestTrait> {
     y: T;
 }
 
+pub trait test<T> {
+    fn next() AA;
+}
+
+
+impl A for B {
+
+}

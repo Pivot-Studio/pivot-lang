@@ -397,6 +397,7 @@ impl TypeNode for FuncDefNode {
                 param_pltypes.push(para.typenode.clone());
                 param_name.push(para.id.name.clone());
             }
+            self.ret.get_type(child, builder, true)?;
             let fnvalue = FNValue {
                 name: self.id.name.clone(),
                 param_names: param_name,
@@ -474,6 +475,11 @@ impl TypeNode for FuncDefNode {
             ctx.push_semantic_token(para.typenode.range(), SemanticTokenType::TYPE, 0);
         }
         ctx.push_semantic_token(self.ret.range(), SemanticTokenType::TYPE, 0);
+        if let TypeNodeEnum::Basic(n) = &*self.ret {
+            if let Some(v) = n.generic_params.as_ref() {
+                ctx.push_semantic_token(v.range, SemanticTokenType::TYPE_PARAMETER, 0);
+            }
+        }
     }
 
     fn eq_or_infer<'a, 'b>(

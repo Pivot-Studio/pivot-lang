@@ -145,6 +145,9 @@ impl Node for TraitDefNode {
         _builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.id.range, SemanticTokenType::INTERFACE, 0);
+        if let Some(g) = &self.generics {
+            g.emit_highlight(ctx);
+        }
         self.derives.emit_highlight(ctx);
         for method in &self.methods {
             method.emit_highlight(ctx);
@@ -209,7 +212,9 @@ impl TraitDefNode {
                     range: field.range,
                     modifier: Some((TokenType::PUB, field.range)),
                 };
-                _ = field.get_type(ctx, builder, true);
+                if field.get_type(ctx, builder, true).is_err() {
+                    continue;
+                }
 
                 if let Some((m, r)) = field.modifier {
                     r.new_err(ErrorCode::TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER)

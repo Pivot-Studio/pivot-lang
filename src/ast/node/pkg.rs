@@ -323,7 +323,9 @@ impl ExternIdNode {
             // 必须是public的
             _ = tp.expect_pub(ctx, self.range);
             let re = match *tp.clone().borrow() {
-                PLType::Struct(_) | PLType::Trait(_) => usize::MAX.new_output(tp.tp).to_result(),
+                PLType::Struct(_) | PLType::Trait(_) | PLType::Union(_) => {
+                    usize::MAX.new_output(tp.tp).to_result()
+                }
                 _ => unreachable!(),
             };
             return re;
