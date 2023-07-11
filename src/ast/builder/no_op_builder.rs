@@ -472,4 +472,15 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         _name: &str,
     ) {
     }
+
+    fn add_generator_yield_fn(&self,ctx: &mut Ctx<'a>,ctx_name:&str,ret_tp:&PLType) -> ValueHandle {
+        0
+    }
+
+    fn get_block_address(&self,block:super::BlockHandle) -> ValueHandle {
+        0
+    }
+
+    fn build_indirect_br(&self,block:ValueHandle,ctx: &Ctx<'a>,) {
+    }
 }

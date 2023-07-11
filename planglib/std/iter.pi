@@ -1,7 +1,7 @@
-use core::builtin::*;
+use core::builtin;
 
 pub trait Iterator<T> {
-    fn next() Option<T>;
+    fn next() builtin::Option<T>;
 }
 
 struct name<T> {
