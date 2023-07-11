@@ -79,6 +79,7 @@ impl UnionDefNode {
             modifier: self.modifier,
             sum_types: self.sum_types.clone(),
             methods: Default::default(),
+            // generic_infer: Default::default(),
         })));
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.name.name));
         _ = ctx.add_type(self.name.name.clone(), stu, self.name.range);

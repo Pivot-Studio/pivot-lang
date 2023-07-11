@@ -1,7 +1,7 @@
 use core::builtin;
 
 pub trait Iterator<T> {
-    fn next() builtin::Option<T>;
+    fn next() Option<T>;
 }
 
 struct name<T> {
@@ -10,7 +10,24 @@ struct name<T> {
 
 impl <T> Iterator<T> for name<T> {
     fn next() Option<T> {
-        return self.t;
+        let a: Option<T> = self.t;
+        return a;
     }
 }
 
+
+
+pub fn ret_opt() name<Option<i64>> {
+    let b = 1;
+    let a:Option<i64> = b;
+    let aa:name<Option<i64>> = name{t:a};
+    return aa;
+}
+
+
+// pub fn ret_opt() name<builtin::testG<i64>> {
+//     let b = 1;
+//     let a:builtin::testG<i64>;
+//     let aa:name<builtin::testG<i64>> = name{t:a};
+//     return aa;
+// }

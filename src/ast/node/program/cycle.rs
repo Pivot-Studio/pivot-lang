@@ -66,7 +66,7 @@ pub fn cycle_deps_recover(
     }
     Diagnostics::push(db, (src_file_path.to_string(), vec![diag]));
     db.report_untracked_read();
-    Some(ModWrapper::new(db, Mod::new(src_file_path.to_string())))
+    Some(ModWrapper::new(db, Mod::new(src_file_path.to_string(),Default::default())))
 }
 
 pub(crate) fn build_init_params(
