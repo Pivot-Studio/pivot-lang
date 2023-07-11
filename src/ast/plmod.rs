@@ -3,7 +3,7 @@ use super::ctx::Ctx;
 use super::diag::{ErrorCode, PLDiag};
 
 use super::node::macro_nodes::MacroNode;
-use super::pltype::PriType;
+use super::pltype::{PriType, TraitImplAble};
 use super::pltype::{FNValue, PLType};
 
 use super::range::Range;
@@ -75,6 +75,7 @@ pub struct Mod {
     pub impls: ImplMap,
     pub macros: FxHashMap<String, Arc<MacroNode>>,
     pub trait_mthd_table: TraitMthdImpl,
+    pub generic_infer:  Arc<RefCell<IndexMap<String, Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -193,7 +194,7 @@ impl Mod {
         }
     }
 
-    pub fn new(path: String) -> Self {
+    pub fn new(path: String, generic_infer:Arc<RefCell<IndexMap<String, Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>>>>) -> Self {
         let name = Path::new(Path::new(&path).file_stem().unwrap())
             .file_name()
             .take()
@@ -225,6 +226,7 @@ impl Mod {
             impls: FxHashMap::default(),
             macros: FxHashMap::default(),
             trait_mthd_table: Default::default(),
+            generic_infer
         }
     }
     pub fn new_child(&self) -> Self {
@@ -250,6 +252,7 @@ impl Mod {
             impls: FxHashMap::default(),
             macros: FxHashMap::default(),
             trait_mthd_table: self.trait_mthd_table.clone(),
+            generic_infer:self.generic_infer.clone()
         }
     }
     pub fn get_refs(&self, name: &str, db: &dyn Db, set: &mut FxHashSet<String>) {
@@ -390,10 +393,18 @@ impl Mod {
             // name<i64> ctx --name-> name --name<i64>--> name<i64>
             let st_name = name.split('<').collect::<Vec<_>>()[0];
             let st_with_generic = self.get_type_walker(st_name, range, ctx)?;
-            if let PLType::Struct(st) = &*st_with_generic.borrow() {
-                if let Some(res) = st.generic_infer.borrow().get(name) {
-                    return Ok(res.clone().into());
+            match &*st_with_generic.borrow() {
+                PLType::Struct(st)|PLType::Trait(st) => {
+                    if let Some(res) = ctx.get_infer_result(st, name) {
+                        return Ok(res.clone().into());
+                    }
                 }
+                PLType::Union(st) => {
+                    if let Some(res) = ctx.get_infer_result(st, name) {
+                        return Ok(res.clone().into());
+                    }
+                },
+                _ => (),
             };
         }
         Err(range.new_err(ErrorCode::UNDEFINED_TYPE))

@@ -551,6 +551,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     if let Some(builtin_mod) = ctx.plmod.submods.get("stdbuiltin").cloned() {
         ctx.plmod.import_all_symbols_from(&builtin_mod);
     }
+    ctx.import_all_infer_maps_from_sub_mods();
     let m = &mut ctx;
     #[cfg(feature = "llvm")]
     let context = &Context::create();

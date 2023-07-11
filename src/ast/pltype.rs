@@ -49,6 +49,7 @@ use std::cell::RefCell;
 
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Weak;
 /// # PLType
 /// Type for pivot-lang
 /// including primitive type, struct type, function type, void type
@@ -215,6 +216,11 @@ impl UnionType {
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
         pltype.tp.replace(PLType::Union(res.clone()));
+        // ctx.generic_infer
+        // .borrow_mut().entry(self.get_full_name_except_generic()).or_insert(Default::default())
+        // .borrow_mut()
+        // .insert(res.name.clone(), pltype.tp.clone());
+        ctx.add_infer_result(self, &res.name, pltype.tp.clone());
         Ok(res)
     }
     pub fn has_type<'a, 'b>(
@@ -959,8 +965,8 @@ pub struct STType {
     pub generic_infer_types: IndexMap<String, Arc<RefCell<PLType>>>,
     pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
     pub trait_methods_impl: TraitMthdImpl,
-    // key name<i64>/name<f64> ...
-    pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
+    // // key name<i64>/name<f64> ...
+    // pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
 }
 
 pub type TraitMthdImpl = Arc<RefCell<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>>;
@@ -1294,9 +1300,7 @@ impl STType {
             } else {
                 pltype.tp.replace(PLType::Struct(res.clone()));
             }
-            self.generic_infer
-                .borrow_mut()
-                .insert(res.name, pltype.tp.clone());
+            ctx.add_infer_result(self, &res.name, pltype.tp.clone());
             Ok(pltype.tp)
         })
     }

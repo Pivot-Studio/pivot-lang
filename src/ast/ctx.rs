@@ -101,6 +101,7 @@ pub struct Ctx<'a> {
     pub self_ref_map: FxHashMap<String, FxHashSet<(String, Range)>>, // used to recognize self reference
     pub ctx_flag:CtxFlag,
     pub generator_data: Option<Arc< RefCell<GeneratorCtxData>>>,
+    pub generic_infer:  Arc<RefCell<IndexMap<String, Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>>>>,
 }
 
 
@@ -134,6 +135,39 @@ pub enum MacroReplaceNode {
 }
 
 impl<'a, 'ctx> Ctx<'a> {
+
+    pub fn add_infer_result(&self, tp:&impl TraitImplAble, name:&str, pltp:Arc<RefCell<PLType>>) {
+        self.generic_infer
+        .borrow_mut().entry(tp.get_full_name_except_generic()).or_insert(Default::default())
+        .borrow_mut()
+        .insert(name.to_string(), pltp);
+    }
+
+    pub fn get_infer_result(&self, tp:&impl TraitImplAble, name:&str) -> Option<Arc<RefCell<PLType>>> {
+        let infer_map = self.generic_infer.borrow();
+        let infer_map = infer_map.get(&tp.get_full_name_except_generic())?;
+        let x = infer_map.borrow().get(name).cloned();
+        x
+    }
+
+    fn import_all_infer_maps_from(&self, other: &IndexMap<String, Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>>) {
+        for (k, v) in other.iter() {
+            if !self.generic_infer.borrow().contains_key(k) {
+                let map: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>> = Default::default();
+                self.generic_infer.borrow_mut().insert(k.clone(), map.clone());
+                map.borrow_mut().extend(v.borrow().clone());
+            }else {
+                let infer_map = self.generic_infer.borrow();
+                let infer_map = infer_map.get(k).unwrap();
+                infer_map.borrow_mut().extend(v.borrow().clone());
+            }
+        }
+    }
+    pub fn import_all_infer_maps_from_sub_mods(&self) {
+        for (_,sub_mod) in self.plmod.submods.iter() {
+            self.import_all_infer_maps_from(&sub_mod.generic_infer.borrow());
+        }
+    }
     pub fn check_self_ref(&self, name: &str, range: Range) -> Result<(), PLDiag> {
         if let Some(root) = self.root {
             root.check_self_ref_inner(name, name, range)
@@ -193,10 +227,11 @@ impl<'a, 'ctx> Ctx<'a> {
         config: Config,
         db: &'a dyn Db,
     ) -> Ctx<'a> {
+        let generic_infer:Arc<RefCell<IndexMap<String, Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>>>> = Default::default();
         Ctx {
             need_highlight: 0,
             generic_types: FxHashMap::default(),
-            plmod: Mod::new(src_file_path.to_string()),
+            plmod: Mod::new(src_file_path.to_string(), generic_infer.clone()),
             father: None,
             init_func: None,
             function: None,
@@ -223,6 +258,7 @@ impl<'a, 'ctx> Ctx<'a> {
             self_ref_map: FxHashMap::default(),
             ctx_flag:CtxFlag::Normal,
             generator_data: None,
+            generic_infer,
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -260,6 +296,7 @@ impl<'a, 'ctx> Ctx<'a> {
             self_ref_map: FxHashMap::default(),
             ctx_flag:self.ctx_flag,
             generator_data: self.generator_data.clone(),
+            generic_infer:self.generic_infer.clone(),
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
@@ -351,14 +388,19 @@ impl<'a, 'ctx> Ctx<'a> {
             return Ok(closure_v);
         }
         if let PLType::Union(u) = &*target_pltype.borrow() {
-            let union_members = self.run_in_type_mod(u, |ctx, u| {
-                let mut union_members = vec![];
-                for tp in &u.sum_types {
-                    let tp = tp.get_type(ctx, builder, true)?;
-                    union_members.push(tp);
-                }
-                Ok(union_members)
-            })?;
+            let mut union_members = vec![];
+            for tp in &u.sum_types {
+                let tp = tp.get_type(self, builder, true)?;
+                union_members.push(tp);
+            }
+            // let union_members = self.run_in_type_mod(u, |ctx, u| {
+            //     let mut union_members = vec![];
+            //     for tp in &u.sum_types {
+            //         let tp = tp.get_type(ctx, builder, true)?;
+            //         union_members.push(tp);
+            //     }
+            //     Ok(union_members)
+            // })?;
             for (i, tp) in union_members.iter().enumerate() {
                 if *tp.borrow() == *ori_pltype.borrow() {
                     let union_handle =
@@ -881,14 +923,6 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn add_diag(&self, mut dia: PLDiag) -> PLDiag {
         if let Some(src) = &self.temp_source {
             dia.set_source(src);
-        }
-        if DiagCode::Err( ErrorCode::UNDEFINED_TYPE) == dia.get_diag_code() {
-            let mut ctx = self;
-            while let Some(father) = ctx.father {
-                ctx = father;
-                eprintln!("father: {:?}", ctx.plmod.types.keys());
-            }
-            eprintln!("error: {:?}", dia);
         }
         let dia2 = dia.clone();
         self.errs.borrow_mut().insert(dia);

@@ -43,7 +43,7 @@ impl MultiTraitNode {
             is_trait: true,
             is_tuple: false,
             generic_infer_types: Default::default(),
-            generic_infer: Default::default(),
+            // generic_infer: Default::default(),
             methods: Default::default(),
             trait_methods_impl: Default::default(),
         };
@@ -178,7 +178,7 @@ impl TraitDefNode {
             is_trait: true,
             is_tuple: false,
             generic_infer_types: Default::default(),
-            generic_infer: Default::default(),
+            // generic_infer: Default::default(),
             methods: Default::default(),
             trait_methods_impl: Default::default(),
         })));
