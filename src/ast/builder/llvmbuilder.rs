@@ -21,7 +21,7 @@ use inkwell::{
     targets::{InitializationConfig, Target, TargetMachine},
     types::{
         AsTypeRef, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, PointerType,
-        StructType, VoidType,
+        StructType, VoidType, AnyType,
     },
     values::{
         AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, CallableValue,
@@ -34,7 +34,7 @@ use rustc_hash::FxHashMap;
 
 use crate::ast::{
     diag::PLDiag,
-    pltype::{ClosureType, TraitImplAble},
+    pltype::{ClosureType, TraitImplAble}, ctx::{CtxFlag, PLSymbol},
 };
 
 use super::{
@@ -1442,6 +1442,35 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
         declare: Option<Pos>,
     ) -> ValueHandle {
+        if ctx.ctx_flag == CtxFlag::InGeneratorYield {
+            let data = ctx.generator_data.as_ref().unwrap().clone();
+
+
+            let lb = self.builder.get_insert_block().unwrap();
+            let alloca = self
+                .builder
+                .get_insert_block()
+                .unwrap()
+                .get_parent()
+                .unwrap()
+                .get_first_basic_block()
+                .unwrap();
+            self.builder.position_at_end(alloca);
+
+            let f_v = ctx.function.unwrap();
+            let f = self.get_llvm_value(f_v).unwrap().into_function_value();
+            let yield_ctx = f.get_nth_param(0).unwrap();
+            let bt = self.get_basic_type_op(pltype, ctx).unwrap();
+            let count = add_field(yield_ctx.as_any_value_enum(), bt.as_any_type_enum());
+            let i = count - 1;
+            let data_ptr = self.build_struct_gep(self.get_nth_param(f_v, 0), i, name).unwrap();
+
+            self.builder.position_at_end(lb);
+
+            data.borrow_mut().table.insert(name.to_string(), PLSymbol{ value: data_ptr, pltype: Arc::new(RefCell::new(pltype.clone())), range: Default::default(), refs: None });
+            // let data_ptr = self.build_struct_gep(ctx_v, (i +2) as u32, "para").unwrap();
+            return data_ptr;
+        }
         self.alloc_raw(name, pltype, ctx, declare, "DioGC__malloc")
     }
     fn build_struct_gep(
@@ -1972,6 +2001,28 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.builder.get_current_debug_location().unwrap(),
             self.get_llvm_block(allocab).unwrap(),
         );
+        if child.ctx_flag == CtxFlag::InGeneratorYield {
+            let data = child.generator_data.as_ref().unwrap().clone();
+            let bb_v = data.borrow().alloca_bb;
+            let bb = self.get_llvm_block(bb_v).unwrap();
+            let funcvalue = bb.get_parent().unwrap();
+            let origin_bb = child.block.unwrap();
+            self.position_at_end_block(bb_v);
+            let ctx_v = data.borrow().ctx_handle;
+            let para_ptr = self.build_struct_gep(ctx_v, (i +2) as u32, "para").unwrap();
+            self.build_store(
+                para_ptr,
+                self.get_llvm_value_handle(
+                    &funcvalue
+                        .get_nth_param(i as u32)
+                        .unwrap()
+                        .as_any_value_enum(),
+                ),
+            );
+            self.position_at_end_block(origin_bb);
+
+            return;
+        }
         let funcvalue = self
             .get_llvm_value(value_handle)
             .unwrap()
@@ -2258,24 +2309,47 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     }
     fn add_closure_st_field(&self, st: ValueHandle, field: ValueHandle) {
         let st_v = self.handle_table.borrow().get(&st).copied().unwrap();
-        let st_tp = st_v
-            .get_type()
-            .into_pointer_type()
-            .get_element_type()
-            .into_struct_type();
-        let mut closure_data_tps = st_tp.get_field_types();
-        closure_data_tps.push(
+        let field_tp = 
             self.handle_table
                 .borrow()
                 .get(&field)
                 .copied()
                 .unwrap()
-                .get_type()
-                .try_into()
-                .unwrap(),
-        );
-        set_body(&st_tp, &closure_data_tps, false);
+                .get_type();
+        add_field(st_v, field_tp);
     }
+
+    fn add_generator_yield_fn(&self,ctx: &mut Ctx<'a>, ctx_name:&str, ret_tp:&PLType) ->ValueHandle {
+        let tp = self.context.get_struct_type(ctx_name).unwrap().ptr_type(Default::default()).into();
+        let ftp = self.get_basic_type_op(ret_tp, ctx).unwrap().fn_type(&[tp], false);
+        let f = self.module.add_function(&format!("{}__yield", ctx_name), ftp, None);
+        self.get_llvm_value_handle(&f.into())
+    }
+
+    fn get_block_address(&self, block:BlockHandle) -> ValueHandle {
+        self.get_llvm_value_handle(unsafe { &  self.get_llvm_block(block).unwrap().get_address().unwrap().into() })
+    }
+    fn build_indirect_br(&self, block:ValueHandle,ctx: & Ctx<'a>,) {
+        let block = self.get_llvm_value(block).unwrap();
+        let bv = self.get_llvm_block(ctx.block.unwrap()).unwrap();
+        self.builder.build_indirect_branch::<BasicValueEnum>(block.try_into().unwrap(), &bv.get_parent().unwrap().get_basic_blocks());
+    }
+}
+
+fn add_field(st_v: AnyValueEnum<'_>, field_tp: inkwell::types::AnyTypeEnum<'_>) -> u32 {
+    let st_tp = st_v
+        .get_type()
+        .into_pointer_type()
+        .get_element_type()
+        .into_struct_type();
+    let mut closure_data_tps = st_tp.get_field_types();
+    closure_data_tps.push(
+        field_tp
+            .try_into()
+            .unwrap(),
+    );
+    set_body(&st_tp, &closure_data_tps, false);
+    return st_tp.count_fields();
 }
 
 fn set_body<'ctx>(s: &StructType<'ctx>, field_types: &[BasicTypeEnum<'ctx>], packed: bool) {

@@ -3,12 +3,14 @@ use super::*;
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
+use crate::ast::tokens::TokenType;
 use crate::ast::{ctx::Ctx, diag::ErrorCode};
 use internal_macro::node;
 
 #[node(comment)]
 pub struct RetNode {
     pub value: Option<Box<NodeEnum>>,
+    pub yiel:Option<(TokenType,Range)>
 }
 
 impl PrintTrait for RetNode {

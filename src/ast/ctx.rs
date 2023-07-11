@@ -1,5 +1,6 @@
 use super::builder::BlockHandle;
 use super::builder::ValueHandle;
+use super::diag::DiagCode;
 use super::diag::ErrorCode;
 use super::diag::PLDiag;
 
@@ -78,7 +79,6 @@ pub struct Ctx<'a> {
     pub root: Option<&'a Ctx<'a>>,   // root context, for symbol lookup
     pub function: Option<ValueHandle>, // current function
     pub init_func: Option<ValueHandle>, //init function,call first in main
-    pub roots: RefCell<Vec<ValueHandle>>,
     pub block: Option<BlockHandle>,          // current block
     pub continue_block: Option<BlockHandle>, // the block to jump when continue
     pub break_block: Option<BlockHandle>,    // the block to jump to when break
@@ -99,6 +99,25 @@ pub struct Ctx<'a> {
     pub closure_data: Option<RefCell<ClosureCtxData>>,
     pub expect_ty: Option<Arc<RefCell<PLType>>>,
     pub self_ref_map: FxHashMap<String, FxHashSet<(String, Range)>>, // used to recognize self reference
+    pub ctx_flag:CtxFlag,
+    pub generator_data: Option<Arc< RefCell<GeneratorCtxData>>>,
+}
+
+
+#[derive(Clone, Default)]
+pub struct GeneratorCtxData{
+    pub table: LinkedHashMap<String, PLSymbol>,
+    pub alloca_bb: BlockHandle,
+    pub ctx_handle: ValueHandle, //handle in setup function
+}
+
+/// # CtxFlag
+/// 
+/// flags that might change the behavior of the builder
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CtxFlag {
+    Normal,
+    InGeneratorYield,
 }
 
 #[derive(Clone, Default)]
@@ -190,7 +209,6 @@ impl<'a, 'ctx> Ctx<'a> {
             continue_block: None,
             break_block: None,
             return_block: None,
-            roots: RefCell::new(Vec::new()),
             rettp: None,
             macro_vars: FxHashMap::default(),
             macro_loop: false,
@@ -203,6 +221,8 @@ impl<'a, 'ctx> Ctx<'a> {
             root: None,
             macro_skip_level: 0,
             self_ref_map: FxHashMap::default(),
+            ctx_flag:CtxFlag::Normal,
+            generator_data: None,
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -224,7 +244,6 @@ impl<'a, 'ctx> Ctx<'a> {
             continue_block: self.continue_block,
             break_block: self.break_block,
             return_block: self.return_block,
-            roots: RefCell::new(Vec::new()),
             rettp: self.rettp.clone(),
             init_func: self.init_func,
             function: self.function,
@@ -239,6 +258,8 @@ impl<'a, 'ctx> Ctx<'a> {
             root,
             macro_skip_level: self.macro_skip_level,
             self_ref_map: FxHashMap::default(),
+            ctx_flag:self.ctx_flag,
+            generator_data: self.generator_data.clone(),
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
@@ -860,6 +881,14 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn add_diag(&self, mut dia: PLDiag) -> PLDiag {
         if let Some(src) = &self.temp_source {
             dia.set_source(src);
+        }
+        if DiagCode::Err( ErrorCode::UNDEFINED_TYPE) == dia.get_diag_code() {
+            let mut ctx = self;
+            while let Some(father) = ctx.father {
+                ctx = father;
+                eprintln!("father: {:?}", ctx.plmod.types.keys());
+            }
+            eprintln!("error: {:?}", dia);
         }
         let dia2 = dia.clone();
         self.errs.borrow_mut().insert(dia);

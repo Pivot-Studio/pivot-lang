@@ -221,6 +221,9 @@ pub trait IRBuilder<'a, 'ctx> {
         allocab: BlockHandle,
         name: &str,
     );
+    fn add_generator_yield_fn(&self,ctx: &mut Ctx<'a>, ctx_name:&str, ret_tp:&PLType) ->ValueHandle ;
+    fn get_block_address(&self, block:BlockHandle) -> ValueHandle;
+    fn build_indirect_br(&self, block:ValueHandle,ctx: & Ctx<'a>,) ;
 }
 
 pub type ValueHandle = usize;

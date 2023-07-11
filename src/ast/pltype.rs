@@ -709,6 +709,9 @@ impl TryFrom<PLType> for FNValue {
     }
 }
 impl FNValue {
+    pub fn get_generator_ctx_name(&self) ->String {
+        self.name.clone() + "__generator_ctx"
+    }
     pub fn to_closure_ty<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,

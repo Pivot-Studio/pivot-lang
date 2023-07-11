@@ -4,7 +4,7 @@ use super::statement::StatementsNode;
 use super::*;
 use super::{types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::builder::ValueHandle;
-use crate::ast::ctx::{ClosureCtxData, BUILTIN_FN_MAP};
+use crate::ast::ctx::{ClosureCtxData, BUILTIN_FN_MAP, CtxFlag, GeneratorCtxData};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 
@@ -347,6 +347,7 @@ pub struct FuncDefNode {
     pub is_method: bool,
     pub in_trait_def: bool,
     pub target_range: Range,
+    pub generator: bool,
 }
 
 type OptFOnce<'a> = Option<Box<dyn FnOnce(&mut Ctx) -> Result<(), PLDiag> + 'a>>; // Thank u, Rust!
@@ -525,6 +526,7 @@ impl FuncDefNode {
         builder: &'b BuilderEnum<'a, '_>,
         fnvalue: FNValue,
     ) -> Result<(), PLDiag> {
+        let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap().tp);
         let child = &mut ctx.new_child(self.range.start, builder);
         child.protect_generic_context(&fnvalue.fntype.generic_map, |child| {
             if first && fnvalue.fntype.generic {
@@ -549,8 +551,60 @@ impl FuncDefNode {
                     Arc::new(RefCell::new(PLType::Fn(place_holder_fn.clone()))),
                 );
             }
-            let funcvalue = builder.get_or_insert_fn_handle(&fnvalue, child);
+            let mut funcvalue = builder.get_or_insert_fn_handle(&fnvalue, child);
             child.function = Some(funcvalue);
+            let mut sttp_opt = None;
+            if self.generator {
+                let mut m = LinkedHashMap::default();
+                m.insert("address".to_owned(), Field{ 
+                    index: 1,
+                    typenode: i8ptr.clone().get_typenode(&child.plmod.path),
+                    name: "address".to_owned(),
+                    range: Default::default(),
+                    modifier: None,
+                 });
+                let st_tp = STType {
+                    name: fnvalue.get_generator_ctx_name(),
+                    path: ctx.plmod.path.clone(),
+                    fields: m,
+                    range: Default::default(),
+                    doc: vec![],
+                    generic_map: Default::default(),
+                    derives: vec![],
+                    modifier: Some((TokenType::PUB, Default::default())),
+                    body_range: Default::default(),
+                    is_trait: false,
+                    is_tuple: true,
+                    generic_infer_types: Default::default(),
+                    generic_infer: Default::default(),
+                    methods: Default::default(),
+                    trait_methods_impl: Default::default(),
+                };
+                builder.opaque_struct_type(&st_tp.get_full_name());
+                builder.add_body_to_struct_type(&st_tp.get_full_name(), &st_tp, child);
+                
+                let rettp= child.run_in_type_mod(&fnvalue, |child,fnvalue| {
+                    let tp = fnvalue.fntype.ret_pltype.get_type(child, builder, false)?;
+                    match &*tp.borrow() {
+                        PLType::Trait(t) => {
+                            return Ok(t.generic_map.first().unwrap().1.clone());
+                        }
+                        _ =>todo!()
+                        
+                    };
+                })?;
+                child.rettp = Some(rettp.clone());
+                let f = builder.add_generator_yield_fn(child, &st_tp.get_full_name(), &rettp.borrow());
+                child.function = Some(f);
+                let allocab = builder.append_basic_block(funcvalue, "entry");// this is alloca for setup fn
+                funcvalue = f;
+                builder.position_at_end_block(allocab);
+                let ctx_handle = builder.alloc("ctx",&PLType::Struct(st_tp.clone()) , child, None);
+                child.generator_data = Some(Arc::new( RefCell::new( GeneratorCtxData{alloca_bb:allocab,ctx_handle,..Default::default()})));
+                child.ctx_flag = CtxFlag::InGeneratorYield;
+                sttp_opt = Some(st_tp);
+            }
+            
             builder.build_sub_program(
                 self.paralist.clone(),
                 fnvalue.fntype.ret_pltype.clone(),
@@ -560,6 +614,12 @@ impl FuncDefNode {
             )?;
             // add block
             let allocab = builder.append_basic_block(funcvalue, "alloc");
+            if self.generator {
+                let address = builder.get_block_address(allocab);
+                let data = child.generator_data.as_ref().unwrap().clone();
+                let address_ptr = builder.build_struct_gep(data.borrow().ctx_handle, 1, "block_address").unwrap();
+                builder.build_store(address_ptr, address);
+            }
             let entry = builder.append_basic_block(funcvalue, "entry");
             let return_block = builder.append_basic_block(funcvalue, "return");
             child.position_at_end(entry, builder);
@@ -573,8 +633,6 @@ impl FuncDefNode {
                 other => {
                     builder.rm_curr_debug_location();
                     let retv = builder.alloc("retvalue", other, child, None);
-                    // 返回值不能在函数结束时从root表移除
-                    child.roots.borrow_mut().pop();
                     Some(retv)
                 }
             };
@@ -625,12 +683,45 @@ impl FuncDefNode {
                 child.init_global(builder);
                 child.position_at_end(entry, builder);
             }
-            child.rettp = Some(fnvalue.fntype.ret_pltype.get_type(child, builder, true)?);
+            if !self.generator{
+                child.rettp = Some(fnvalue.fntype.ret_pltype.get_type(child, builder, true)?);   
+            }
+            // body generation
             let terminator = self.body.as_mut().unwrap().emit(child, builder)?.get_term();
             if !terminator.is_return() {
                 return Err(
                     child.add_diag(self.range.new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN))
                 );
+            }
+            if self.generator {
+
+                let mut i = 1;
+                let mut tps = vec![];
+                let st_tp = sttp_opt.as_mut().unwrap();
+                for (k, v) in &child.generator_data.as_ref().unwrap().borrow().table {
+                    let pltp = PLType::Pointer(v.pltype.to_owned());
+                    st_tp.fields.insert(
+                        k.to_owned(),
+                        Field {
+                            index: i,
+                            typenode: pltp.get_typenode(&child.plmod.path),
+                            name: k.to_owned(),
+                            range: Default::default(),
+                            modifier: None,
+                        },
+                    );
+                    tps.push(Arc::new(RefCell::new(pltp)));
+                    i += 1;
+                }
+                let data = child.generator_data.as_ref().unwrap();
+
+                builder.position_at_end_block(data.borrow().alloca_bb);
+                builder.gen_st_visit_function(child, &st_tp, &tps);
+                builder.position_at_end_block(allocab);
+                let ctx_v = builder.get_nth_param(child.function.unwrap(), 0);
+                let address = builder.build_struct_gep(ctx_v, 1, "block_address").unwrap();
+                builder.build_indirect_br(address, &child);
+                return Ok(());
             }
             child.position_at_end(allocab, builder);
             builder.build_unconditional_branch(entry);
@@ -801,6 +892,8 @@ impl Node for ClosureNode {
         ctx.try_set_closure_alloca_bb(builder.get_first_basic_block(ctx.function.unwrap()));
         let f = builder.create_closure_fn(ctx, &closure_name, &paratps, &ret_tp.borrow());
         let child = &mut ctx.new_child(self.range.start, builder);
+        child.generator_data = None;
+        child.ctx_flag = CtxFlag::Normal;
         child.function = Some(f);
         let stpltp = PLType::Struct(st_tp.clone());
         let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)));
@@ -825,8 +918,6 @@ impl Node for ClosureNode {
             other => {
                 builder.rm_curr_debug_location();
                 let retv = builder.alloc("retvalue", other, child, None);
-                // 返回值不能在函数结束时从root表移除
-                child.roots.borrow_mut().pop();
                 Some(retv)
             }
         };
