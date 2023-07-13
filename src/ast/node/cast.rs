@@ -254,7 +254,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 }
 
-fn get_option_type<'a, 'b>(
+pub fn get_option_type<'a, 'b>(
     ctx: &'b mut Ctx<'a>,
     builder: &'b BuilderEnum<'a, '_>,
     target_ty: Arc<RefCell<PLType>>,

@@ -49,7 +49,6 @@ use std::cell::RefCell;
 
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::Weak;
 /// # PLType
 /// Type for pivot-lang
 /// including primitive type, struct type, function type, void type
@@ -220,7 +219,7 @@ impl UnionType {
         // .borrow_mut().entry(self.get_full_name_except_generic()).or_insert(Default::default())
         // .borrow_mut()
         // .insert(res.name.clone(), pltype.tp.clone());
-        ctx.add_infer_result(self, &res.name, pltype.tp.clone());
+        ctx.add_infer_result(self, &res.name, pltype.tp);
         Ok(res)
     }
     pub fn has_type<'a, 'b>(
@@ -715,7 +714,7 @@ impl TryFrom<PLType> for FNValue {
     }
 }
 impl FNValue {
-    pub fn get_generator_ctx_name(&self) ->String {
+    pub fn get_generator_ctx_name(&self) -> String {
         self.name.clone() + "__generator_ctx"
     }
     pub fn to_closure_ty<'a, 'b>(

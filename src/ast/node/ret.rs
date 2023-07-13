@@ -10,7 +10,7 @@ use internal_macro::node;
 #[node(comment)]
 pub struct RetNode {
     pub value: Option<Box<NodeEnum>>,
-    pub yiel:Option<(TokenType,Range)>
+    pub yiel: Option<(TokenType, Range)>,
 }
 
 impl PrintTrait for RetNode {
@@ -31,7 +31,40 @@ impl Node for RetNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let ret_pltype = ctx.rettp.as_ref().unwrap().clone();
-        if let Some(ret_node) = &mut self.value {
+        if self.yiel.is_some() {
+            let ret_node = self.value.as_mut().unwrap();
+            let v = ret_node.emit(ctx, builder)?.get_value().unwrap();
+            ctx.emit_comment_highlight(&self.comments[0]);
+            let value_pltype = v.get_ty();
+            let v_tp = if let PLType::Union(u) = &*ret_pltype.borrow() {
+                u.sum_types[0].get_type(ctx, builder, false)?
+            } else {
+                unreachable!()
+            };
+            if v_tp != value_pltype {
+                let err = ctx.add_diag(self.range.new_err(ErrorCode::RETURN_TYPE_MISMATCH));
+                return Err(err);
+            }
+            // let value = ctx.try_load2var(self.range, v.get_value(), builder)?;
+            let value = ctx.up_cast(
+                ret_pltype,
+                value_pltype,
+                ret_node.range(),
+                ret_node.range(),
+                v.get_value(),
+                builder,
+            )?;
+            let value = ctx.try_load2var(self.range, value, builder)?;
+            builder.build_store(ctx.return_block.unwrap().1.unwrap(), value);
+            let curbb = builder.get_cur_basic_block();
+            let data = ctx.add_term_to_previous_yield(builder, curbb);
+
+            let yield_bb = builder.append_basic_block(ctx.function.unwrap(), "yield");
+            ctx.position_at_end(yield_bb, builder);
+
+            data.borrow_mut().prev_yield_bb = Some(curbb);
+            return NodeOutput::new_term(TerminatorEnum::YieldReturn).to_result();
+        } else if let Some(ret_node) = &mut self.value {
             // TODO implicit cast && type infer
             let v = ret_node.emit(ctx, builder)?.get_value().unwrap();
             ctx.emit_comment_highlight(&self.comments[0]);

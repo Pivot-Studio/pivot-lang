@@ -20,8 +20,8 @@ use inkwell::{
     module::{FlagBehavior, Linkage, Module},
     targets::{InitializationConfig, Target, TargetMachine},
     types::{
-        AsTypeRef, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType, PointerType,
-        StructType, VoidType, AnyType,
+        AnyType, AsTypeRef, BasicMetadataTypeEnum, BasicType, BasicTypeEnum, FunctionType,
+        PointerType, StructType, VoidType,
     },
     values::{
         AnyValue, AnyValueEnum, BasicMetadataValueEnum, BasicValue, BasicValueEnum, CallableValue,
@@ -33,8 +33,9 @@ use llvm_sys::{core::LLVMStructSetBody, prelude::LLVMTypeRef};
 use rustc_hash::FxHashMap;
 
 use crate::ast::{
+    ctx::{CtxFlag, PLSymbol},
     diag::PLDiag,
-    pltype::{ClosureType, TraitImplAble}, ctx::{CtxFlag, PLSymbol},
+    pltype::{ClosureType, TraitImplAble},
 };
 
 use super::{
@@ -260,20 +261,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         malloc_fn: &str,
     ) -> (PointerValue<'ctx>, PointerValue<'ctx>, BasicTypeEnum<'ctx>) {
         let obj_type = tp.get_immix_type().int_value();
-        let mut root_ctx = &*ctx;
-        while let Some(f) = root_ctx.father {
-            root_ctx = f
-        }
-        let gcmod = root_ctx.plmod.submods.get("gc").unwrap_or(&root_ctx.plmod);
-        let f: FNValue = gcmod
-            .types
-            .get(malloc_fn)
-            .unwrap()
-            .borrow()
-            .clone()
-            .try_into()
-            .unwrap();
-        let f = self.get_or_insert_fn(&f, ctx);
+        let f = self.get_malloc_f(ctx, malloc_fn);
         let llvmtp = self.get_basic_type_op(tp, ctx).unwrap();
         let tp = self
             .context
@@ -310,6 +298,24 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         self.builder.position_at_end(lb);
         self.builder.build_store(stack_ptr, casted_result);
         (casted_result.into_pointer_value(), stack_ptr, llvmtp)
+    }
+
+    fn get_malloc_f(&self, ctx: &mut Ctx<'a>, malloc_fn: &str) -> FunctionValue<'ctx> {
+        let mut root_ctx = &*ctx;
+        while let Some(f) = root_ctx.root {
+            root_ctx = f
+        }
+        let gcmod = root_ctx.plmod.submods.get("gc").unwrap_or(&root_ctx.plmod);
+        let f: FNValue = gcmod
+            .types
+            .get(malloc_fn)
+            .unwrap()
+            .borrow()
+            .clone()
+            .try_into()
+            .unwrap();
+        let f = self.get_or_insert_fn(&f, ctx);
+        f
     }
 
     /// # create_root_for
@@ -1445,7 +1451,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         if ctx.ctx_flag == CtxFlag::InGeneratorYield {
             let data = ctx.generator_data.as_ref().unwrap().clone();
 
-
             let lb = self.builder.get_insert_block().unwrap();
             let alloca = self
                 .builder
@@ -1463,11 +1468,22 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             let bt = self.get_basic_type_op(pltype, ctx).unwrap();
             let count = add_field(yield_ctx.as_any_value_enum(), bt.as_any_type_enum());
             let i = count - 1;
-            let data_ptr = self.build_struct_gep(self.get_nth_param(f_v, 0), i, name).unwrap();
+            let data_ptr = self
+                .build_struct_gep(self.get_nth_param(f_v, 0), i, name)
+                .unwrap();
 
             self.builder.position_at_end(lb);
 
-            data.borrow_mut().table.insert(name.to_string(), PLSymbol{ value: data_ptr, pltype: Arc::new(RefCell::new(pltype.clone())), range: Default::default(), refs: None });
+            let id = data.borrow().table.len().to_string();
+            data.borrow_mut().table.insert(
+                name.to_string() + &id,
+                PLSymbol {
+                    value: data_ptr,
+                    pltype: Arc::new(RefCell::new(pltype.clone())),
+                    range: Default::default(),
+                    refs: None,
+                },
+            );
             // let data_ptr = self.build_struct_gep(ctx_v, (i +2) as u32, "para").unwrap();
             return data_ptr;
         }
@@ -2003,13 +2019,15 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         );
         if child.ctx_flag == CtxFlag::InGeneratorYield {
             let data = child.generator_data.as_ref().unwrap().clone();
-            let bb_v = data.borrow().alloca_bb;
+            let bb_v = data.borrow().entry_bb;
             let bb = self.get_llvm_block(bb_v).unwrap();
             let funcvalue = bb.get_parent().unwrap();
             let origin_bb = child.block.unwrap();
             self.position_at_end_block(bb_v);
             let ctx_v = data.borrow().ctx_handle;
-            let para_ptr = self.build_struct_gep(ctx_v, (i +2) as u32, "para").unwrap();
+            let para_ptr = self
+                .build_struct_gep(ctx_v, (i + 2) as u32, "para")
+                .unwrap();
             self.build_store(
                 para_ptr,
                 self.get_llvm_value_handle(
@@ -2094,9 +2112,16 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let ptrtp = self.struct_type(v, ctx).ptr_type(AddressSpace::default());
         let ty = ptrtp.get_element_type().into_struct_type();
         let ftp = self.mark_fn_tp(ptrtp);
-        let f = self
-            .module
-            .add_function(&(v.get_full_name() + "@"), ftp, Some(Linkage::External));
+        let name = v.get_full_name() + "@";
+        let f = match self.module.get_function(&name) {
+            Some(f) => f,
+            None => self
+                .module
+                .add_function(&name, ftp, Some(Linkage::External)),
+        };
+        f.get_basic_blocks().iter().for_each(|bb| {
+            unsafe { bb.delete().unwrap() };
+        });
         let bb = self.context.append_basic_block(f, "entry");
         self.builder.position_at_end(bb);
         let fieldn = ty.count_fields();
@@ -2309,30 +2334,122 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     }
     fn add_closure_st_field(&self, st: ValueHandle, field: ValueHandle) {
         let st_v = self.handle_table.borrow().get(&st).copied().unwrap();
-        let field_tp = 
-            self.handle_table
-                .borrow()
-                .get(&field)
-                .copied()
-                .unwrap()
-                .get_type();
+        let field_tp = self
+            .handle_table
+            .borrow()
+            .get(&field)
+            .copied()
+            .unwrap()
+            .get_type();
         add_field(st_v, field_tp);
     }
 
-    fn add_generator_yield_fn(&self,ctx: &mut Ctx<'a>, ctx_name:&str, ret_tp:&PLType) ->ValueHandle {
-        let tp = self.context.get_struct_type(ctx_name).unwrap().ptr_type(Default::default()).into();
-        let ftp = self.get_basic_type_op(ret_tp, ctx).unwrap().fn_type(&[tp], false);
-        let f = self.module.add_function(&format!("{}__yield", ctx_name), ftp, None);
+    fn add_generator_yield_fn(
+        &self,
+        ctx: &mut Ctx<'a>,
+        ctx_name: &str,
+        ret_tp: &PLType,
+    ) -> ValueHandle {
+        let tp = self
+            .context
+            .get_struct_type(ctx_name)
+            .unwrap()
+            .ptr_type(Default::default())
+            .into();
+        let ftp = self
+            .get_basic_type_op(ret_tp, ctx)
+            .unwrap()
+            .fn_type(&[tp], false);
+        let f = self
+            .module
+            .add_function(&format!("{}__yield", ctx_name), ftp, None);
         self.get_llvm_value_handle(&f.into())
     }
 
-    fn get_block_address(&self, block:BlockHandle) -> ValueHandle {
-        self.get_llvm_value_handle(unsafe { &  self.get_llvm_block(block).unwrap().get_address().unwrap().into() })
+    fn get_block_address(&self, block: BlockHandle) -> ValueHandle {
+        self.get_llvm_value_handle(unsafe {
+            &self
+                .get_llvm_block(block)
+                .unwrap()
+                .get_address()
+                .unwrap()
+                .into()
+        })
     }
-    fn build_indirect_br(&self, block:ValueHandle,ctx: & Ctx<'a>,) {
+    fn build_indirect_br(&self, block: ValueHandle, ctx: &Ctx<'a>) {
         let block = self.get_llvm_value(block).unwrap();
         let bv = self.get_llvm_block(ctx.block.unwrap()).unwrap();
-        self.builder.build_indirect_branch::<BasicValueEnum>(block.try_into().unwrap(), &bv.get_parent().unwrap().get_basic_blocks());
+        self.builder.build_indirect_branch::<BasicValueEnum>(
+            block.try_into().unwrap(),
+            &bv.get_parent()
+                .unwrap()
+                .get_basic_blocks()
+                .iter()
+                .skip(1)
+                .copied()
+                .collect::<Vec<_>>(),
+        );
+    }
+    unsafe fn store_with_aoto_cast(&self, ptr: ValueHandle, value: ValueHandle) {
+        let v_ptr = self.get_llvm_value(ptr).unwrap();
+        let v = self.get_llvm_value(value).unwrap();
+        let v = if v.is_function_value() {
+            v.into_function_value()
+                .as_global_value()
+                .as_basic_value_enum()
+        } else {
+            v.try_into().unwrap()
+        };
+        let ptr_tp = v_ptr.get_type().into_pointer_type();
+        let value_tp = v.get_type();
+        if ptr_tp.get_element_type() != value_tp.as_any_type_enum() {
+            let casted = self.builder.build_bitcast::<_, BasicValueEnum>(
+                v_ptr.try_into().unwrap(),
+                value_tp.ptr_type(Default::default()),
+                "cast",
+            );
+            self.builder.build_store(casted.into_pointer_value(), v);
+        } else {
+            self.build_store(ptr, value);
+        }
+    }
+    fn stack_alloc(&self, name: &str, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle {
+        let lb = self.builder.get_insert_block().unwrap();
+        let llvmtp = self.get_basic_type_op(tp, ctx).unwrap();
+        let alloca = self
+            .builder
+            .get_insert_block()
+            .unwrap()
+            .get_parent()
+            .unwrap()
+            .get_first_basic_block()
+            .unwrap();
+        self.builder.position_at_end(alloca);
+        let stack_ptr = self.builder.build_alloca(llvmtp, name);
+        self.builder.position_at_end(lb);
+        self.get_llvm_value_handle(&stack_ptr.as_any_value_enum())
+    }
+    fn correct_generator_ctx_malloc_inst(&self, ctx: &mut Ctx<'a>, name: &str) {
+        let data = ctx.generator_data.as_ref().unwrap();
+        let bb = data.borrow().entry_bb;
+        let bb = self.get_llvm_block(bb).unwrap();
+        let first_inst = bb.get_first_instruction().unwrap();
+        let st = self.module.get_struct_type(name).unwrap();
+        let size = self.targetmachine.get_target_data().get_store_size(&st);
+        let f = self.get_malloc_f(ctx, "DioGC__malloc");
+        let cur_bb = self.builder.get_insert_block().unwrap();
+        let next_inst = first_inst.get_next_instruction().unwrap();
+        first_inst.erase_from_basic_block();
+        self.builder.position_before(&next_inst);
+        let size = self.context.i64_type().const_int(size, false);
+        let tp = self
+            .context
+            .i8_type()
+            .const_int(immix::ObjectType::Complex.int_value() as _, false);
+        self.builder
+            .build_call(f, &[size.into(), tp.into()], "heapptr_ctx");
+
+        self.builder.position_at_end(cur_bb);
     }
 }
 
@@ -2343,13 +2460,9 @@ fn add_field(st_v: AnyValueEnum<'_>, field_tp: inkwell::types::AnyTypeEnum<'_>) 
         .get_element_type()
         .into_struct_type();
     let mut closure_data_tps = st_tp.get_field_types();
-    closure_data_tps.push(
-        field_tp
-            .try_into()
-            .unwrap(),
-    );
+    closure_data_tps.push(field_tp.try_into().unwrap());
     set_body(&st_tp, &closure_data_tps, false);
-    return st_tp.count_fields();
+    st_tp.count_fields()
 }
 
 fn set_body<'ctx>(s: &StructType<'ctx>, field_types: &[BasicTypeEnum<'ctx>], packed: bool) {

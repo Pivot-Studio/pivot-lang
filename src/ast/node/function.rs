@@ -1,10 +1,11 @@
+use super::cast::get_option_type;
 use super::interface::TraitBoundNode;
 use super::node_result::NodeResultBuilder;
 use super::statement::StatementsNode;
 use super::*;
 use super::{types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::builder::ValueHandle;
-use crate::ast::ctx::{ClosureCtxData, BUILTIN_FN_MAP, CtxFlag, GeneratorCtxData};
+use crate::ast::ctx::{ClosureCtxData, CtxFlag, GeneratorCtxData, BUILTIN_FN_MAP};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 
@@ -554,15 +555,19 @@ impl FuncDefNode {
             let mut funcvalue = builder.get_or_insert_fn_handle(&fnvalue, child);
             child.function = Some(funcvalue);
             let mut sttp_opt = None;
+            let mut generator_alloca_b = 0;
             if self.generator {
                 let mut m = LinkedHashMap::default();
-                m.insert("address".to_owned(), Field{ 
-                    index: 1,
-                    typenode: i8ptr.clone().get_typenode(&child.plmod.path),
-                    name: "address".to_owned(),
-                    range: Default::default(),
-                    modifier: None,
-                 });
+                m.insert(
+                    "address".to_owned(),
+                    Field {
+                        index: 1,
+                        typenode: i8ptr.clone().get_typenode(&child.plmod.path),
+                        name: "address".to_owned(),
+                        range: Default::default(),
+                        modifier: None,
+                    },
+                );
                 let st_tp = STType {
                     name: fnvalue.get_generator_ctx_name(),
                     path: ctx.plmod.path.clone(),
@@ -582,29 +587,39 @@ impl FuncDefNode {
                 };
                 builder.opaque_struct_type(&st_tp.get_full_name());
                 builder.add_body_to_struct_type(&st_tp.get_full_name(), &st_tp, child);
-                
-                let rettp= child.run_in_type_mod(&fnvalue, |child,fnvalue| {
+
+                let rettp = child.run_in_type_mod(&fnvalue, |child, fnvalue| {
                     let tp = fnvalue.fntype.ret_pltype.get_type(child, builder, false)?;
                     match &*tp.borrow() {
                         PLType::Trait(t) => {
                             return Ok(t.generic_map.first().unwrap().1.clone());
                         }
-                        _ =>todo!()
-                        
+                        _ => todo!(),
                     };
                 })?;
+                let rettp = get_option_type(child, builder, rettp)?;
                 child.rettp = Some(rettp.clone());
-                let f = builder.add_generator_yield_fn(child, &st_tp.get_full_name(), &rettp.borrow());
+                let f =
+                    builder.add_generator_yield_fn(child, &st_tp.get_full_name(), &rettp.borrow());
                 child.function = Some(f);
-                let allocab = builder.append_basic_block(funcvalue, "entry");// this is alloca for setup fn
-                funcvalue = f;
+                let allocab = builder.append_basic_block(funcvalue, "alloc"); // this is alloca for setup fn
+                let entry = builder.append_basic_block(funcvalue, "set_up_entry"); // this is enrty for setup fn
                 builder.position_at_end_block(allocab);
-                let ctx_handle = builder.alloc("ctx",&PLType::Struct(st_tp.clone()) , child, None);
-                child.generator_data = Some(Arc::new( RefCell::new( GeneratorCtxData{alloca_bb:allocab,ctx_handle,..Default::default()})));
-                child.ctx_flag = CtxFlag::InGeneratorYield;
+
+                // builder.build_unconditional_branch(entry);
+                generator_alloca_b = allocab;
+
+                funcvalue = f;
+                builder.position_at_end_block(entry);
+                let ctx_handle = builder.alloc("ctx", &PLType::Struct(st_tp.clone()), child, None);
+                child.generator_data = Some(Arc::new(RefCell::new(GeneratorCtxData {
+                    entry_bb: entry,
+                    ctx_handle,
+                    ..Default::default()
+                })));
                 sttp_opt = Some(st_tp);
             }
-            
+
             builder.build_sub_program(
                 self.paralist.clone(),
                 fnvalue.fntype.ret_pltype.clone(),
@@ -614,26 +629,53 @@ impl FuncDefNode {
             )?;
             // add block
             let allocab = builder.append_basic_block(funcvalue, "alloc");
+            let entry = builder.append_basic_block(funcvalue, "entry");
             if self.generator {
-                let address = builder.get_block_address(allocab);
+                let address = builder.get_block_address(entry);
                 let data = child.generator_data.as_ref().unwrap().clone();
-                let address_ptr = builder.build_struct_gep(data.borrow().ctx_handle, 1, "block_address").unwrap();
+                let address_ptr = builder
+                    .build_struct_gep(data.borrow().ctx_handle, 1, "block_address")
+                    .unwrap();
                 builder.build_store(address_ptr, address);
             }
-            let entry = builder.append_basic_block(funcvalue, "entry");
             let return_block = builder.append_basic_block(funcvalue, "return");
             child.position_at_end(entry, builder);
-            let ret_value_ptr = match &*fnvalue
-                .fntype
-                .ret_pltype
-                .get_type(child, builder, true)?
-                .borrow()
-            {
-                PLType::Void => None,
-                other => {
-                    builder.rm_curr_debug_location();
-                    let retv = builder.alloc("retvalue", other, child, None);
-                    Some(retv)
+            let ret_value_ptr = if self.generator {
+                builder.rm_curr_debug_location();
+                let data = child.generator_data.as_ref().unwrap().clone();
+                child.position_at_end(data.borrow().entry_bb, builder);
+                let tp = child.rettp.clone().unwrap();
+
+                match &*fnvalue
+                    .fntype
+                    .ret_pltype
+                    .get_type(child, builder, true)?
+                    .borrow()
+                {
+                    PLType::Void => unreachable!(),
+                    other => {
+                        builder.rm_curr_debug_location();
+                        data.borrow_mut().ret_handle =
+                            builder.alloc("retvalue", other, child, None);
+                    }
+                }
+                child.position_at_end(entry, builder);
+
+                let retv = builder.stack_alloc("retvalue", child, &tp.borrow());
+                Some(retv)
+            } else {
+                match &*fnvalue
+                    .fntype
+                    .ret_pltype
+                    .get_type(child, builder, true)?
+                    .borrow()
+                {
+                    PLType::Void => None,
+                    other => {
+                        builder.rm_curr_debug_location();
+                        let retv = builder.alloc("retvalue", other, child, None);
+                        Some(retv)
+                    }
                 }
             };
             child.position_at_end(return_block, builder);
@@ -683,8 +725,11 @@ impl FuncDefNode {
                 child.init_global(builder);
                 child.position_at_end(entry, builder);
             }
-            if !self.generator{
-                child.rettp = Some(fnvalue.fntype.ret_pltype.get_type(child, builder, true)?);   
+            if !self.generator {
+                child.rettp = Some(fnvalue.fntype.ret_pltype.get_type(child, builder, true)?);
+            }
+            if self.generator {
+                child.ctx_flag = CtxFlag::InGeneratorYield;
             }
             // body generation
             let terminator = self.body.as_mut().unwrap().emit(child, builder)?.get_term();
@@ -694,9 +739,12 @@ impl FuncDefNode {
                 );
             }
             if self.generator {
+                child.ctx_flag = CtxFlag::Normal;
+
+                let done = builder.get_cur_basic_block();
 
                 let mut i = 1;
-                let mut tps = vec![];
+                let mut tps = vec![Arc::new(RefCell::new(i8ptr.clone()))];
                 let st_tp = sttp_opt.as_mut().unwrap();
                 for (k, v) in &child.generator_data.as_ref().unwrap().borrow().table {
                     let pltp = PLType::Pointer(v.pltype.to_owned());
@@ -713,14 +761,48 @@ impl FuncDefNode {
                     tps.push(Arc::new(RefCell::new(pltp)));
                     i += 1;
                 }
-                let data = child.generator_data.as_ref().unwrap();
+                let data = child.generator_data.as_ref().unwrap().clone();
 
-                builder.position_at_end_block(data.borrow().alloca_bb);
-                builder.gen_st_visit_function(child, &st_tp, &tps);
+                builder.gen_st_visit_function(child, st_tp, &tps);
+                builder.position_at_end_block(data.borrow().entry_bb);
+                let ptr = builder
+                    .build_struct_gep(data.borrow().ret_handle, 1, "ctx_handle_gep")
+                    .unwrap();
+                let ptr = builder.bitcast(
+                    child,
+                    ptr,
+                    &PLType::Pointer(Arc::new(RefCell::new(PLType::Pointer(Arc::new(
+                        RefCell::new(PLType::Struct(st_tp.clone())),
+                    ))))),
+                    "casted_ptr",
+                );
+                builder.build_store(ptr, data.borrow().ctx_handle);
+                let ptr = builder
+                    .build_struct_gep(data.borrow().ret_handle, 2, "ctx_handle_gep")
+                    .unwrap();
+                unsafe { builder.store_with_aoto_cast(ptr, funcvalue) };
+                let ret_load = builder.build_load(data.borrow().ret_handle, "ret_load");
+                builder.build_return(Some(ret_load));
+
+                builder.position_at_end_block(generator_alloca_b);
+                builder.build_unconditional_branch(data.borrow().entry_bb);
+
+                builder.position_at_end_block(done);
+                let flag = builder
+                    .build_struct_gep(child.return_block.unwrap().1.unwrap(), 0, "flag")
+                    .unwrap();
+                builder.build_store(flag, builder.int_value(&PriType::U64, 1, false));
+                builder.build_unconditional_branch(child.return_block.unwrap().0);
+                child.add_term_to_previous_yield(builder, done);
+
                 builder.position_at_end_block(allocab);
                 let ctx_v = builder.get_nth_param(child.function.unwrap(), 0);
                 let address = builder.build_struct_gep(ctx_v, 1, "block_address").unwrap();
-                builder.build_indirect_br(address, &child);
+                let address = builder.build_load(address, "block_address");
+                builder.build_indirect_br(address, child);
+
+                builder.correct_generator_ctx_malloc_inst(child, &st_tp.get_full_name());
+
                 return Ok(());
             }
             child.position_at_end(allocab, builder);

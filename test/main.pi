@@ -1,61 +1,105 @@
-// use project1::test::ifel;
-// use project1::test::generic;
-// use project1::test::st;
-// use project1::test::method;
-// use project1::test::constant;
-// use project1::test::traits;
-// use project1::test::simple;
-// use project1::test::flow;
-// use project1::test::list;
-// use project1::test::module;
-// use project1::test::string;
-// use project1::test::macros;
-// use project1::test::union;
-// use project1::test::multi_trait;
-// use project1::test::tuple;
-// use project1::test::fntype;
-// use project1::test::closure;
-// use project1::test::map;
-// use project1::test::tree;
-// use project1::test::fixed_point;
-// use project1::tmod2;
-// use pl_test::main;
-// use project1::test::compiletime_reflection::test_compile_time_reflection;
-// use project1::test::deconstruct;
-// use project1::test::st::*;
-use std::iter;
+use project1::test::ifel;
+use project1::test::generic;
+use project1::test::st;
+use project1::test::method;
+use project1::test::constant;
+use project1::test::traits;
+use project1::test::simple;
+use project1::test::flow;
+use project1::test::list;
+use project1::test::module;
+use project1::test::string;
+use project1::test::macros;
+use project1::test::union;
+use project1::test::multi_trait;
+use project1::test::tuple;
+use project1::test::fntype;
+use project1::test::closure;
+use project1::test::map;
+use project1::test::tree;
+use project1::test::fixed_point;
+use project1::tmod2;
+use pl_test::main;
+use project1::test::compiletime_reflection::test_compile_time_reflection;
+use project1::test::deconstruct;
+use project1::test::st::*;
+use std::io;
+use std::iter::*;
 pub fn main() i64 {
-    // macros::test_macros();
-    // ifel::test_if_else();
-    // generic::test_generic();
-    // method::test_impl();
-    // test_struct();
-    // constant::test_const();
-    // traits::test_trait();
-    // simple::test_simple();
-    // flow::test_flow();
-    // list::test_list();
-    // main::simple_test();
-    // module::test_module();
-    // string::test_string();
-    // union::test_union();
-    // multi_trait::test_multi_trait();
-    // deconstruct::test_deconstruct();
-    // tuple::test_tuple();
-    // fntype::test_fntype()();
-    // closure::test_closure();
-    // tree::test_eva();
-    // map::test_map();
-    // fixed_point::test_fixed_point();
-    // generic::ret_generic1<i64>();
-    // test_compile_time_reflection();
+    macros::test_macros();
+    ifel::test_if_else();
+    generic::test_generic();
+    method::test_impl();
+    test_struct();
+    constant::test_const();
+    traits::test_trait();
+    simple::test_simple();
+    flow::test_flow();
+    list::test_list();
+    main::simple_test();
+    module::test_module();
+    string::test_string();
+    union::test_union();
+    multi_trait::test_multi_trait();
+    deconstruct::test_deconstruct();
+    tuple::test_tuple();
+    fntype::test_fntype()();
+    closure::test_closure();
+    tree::test_eva();
+    map::test_map();
+    fixed_point::test_fixed_point();
+    generic::ret_generic1<i64>();
+    test_compile_time_reflection();
     // let a:Iterator<i64>;
     let re = iter::ret_opt();
+    let iterator = name();
+    let next = iterator.next();
+    if next is i64 {
+        let i = next as i64!;
+        println!(i);
+    }else {
+        println!("none");
+    }
+    next = iterator.next();
+    if next is i64 {
+        let i = next as i64!;
+        println!(i);
+    }else {
+        println!("none");
+    }
+    next = iterator.next();
+    if next is i64 {
+        let i = next as i64!;
+        println!(i);
+    }else {
+        println!("none");
+    }
+    next = iterator.next();
+    if next is i64 {
+        let i = next as i64!;
+        println!(i);
+    }else {
+        println!("none");
+    }
+    next = iterator.next();
+    if next is i64 {
+        let i = next as i64!;
+        println!(i);
+    }else {
+        println!("none");
+    }
     return 0;
 }
 
 
-// gen fn name() Iterator<i64> {
-    
-//     return 1;
-// }
+gen fn name() Iterator<i64> {
+    let a = 1;
+    println!("yield 1");
+    yield return a;
+    a = a + 1;
+    println!("yield 2");
+    yield return a;
+    a = a + 1;
+    println!("yield 3");
+    yield return a;
+}

@@ -239,13 +239,13 @@ pub fn assignment(input: Span) -> IResult<Span, Box<NodeEnum>> {
 fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
-            opt( tag_token_word(TokenType::YIELD)),
+            opt(tag_token_word(TokenType::YIELD)),
             tag_token_word(TokenType::RETURN),
             opt(general_exp),
             tag_token_symbol(TokenType::SEMI),
             opt(delspace(comment)),
         )),
-        |(y,(_, range), value, (_,r2), optcomment)| {
+        |(y, (_, range), value, (_, r2), optcomment)| {
             let comments = if let Some(com) = optcomment {
                 vec![vec![com]]
             } else {
@@ -257,7 +257,7 @@ fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     value,
                     range,
                     comments,
-                    yiel:y
+                    yiel: y,
                 }
                 .into(),
             )

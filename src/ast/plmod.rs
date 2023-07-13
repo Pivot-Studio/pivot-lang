@@ -1,9 +1,9 @@
 use super::accumulators::PLReferences;
-use super::ctx::Ctx;
+use super::ctx::{Ctx, GenericCache};
 use super::diag::{ErrorCode, PLDiag};
 
 use super::node::macro_nodes::MacroNode;
-use super::pltype::{PriType, TraitImplAble};
+use super::pltype::PriType;
 use super::pltype::{FNValue, PLType};
 
 use super::range::Range;
@@ -75,7 +75,7 @@ pub struct Mod {
     pub impls: ImplMap,
     pub macros: FxHashMap<String, Arc<MacroNode>>,
     pub trait_mthd_table: TraitMthdImpl,
-    pub generic_infer:  Arc<RefCell<IndexMap<String, Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>>>>,
+    pub generic_infer: GenericCache,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -194,7 +194,7 @@ impl Mod {
         }
     }
 
-    pub fn new(path: String, generic_infer:Arc<RefCell<IndexMap<String, Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>>>>) -> Self {
+    pub fn new(path: String, generic_infer: GenericCache) -> Self {
         let name = Path::new(Path::new(&path).file_stem().unwrap())
             .file_name()
             .take()
@@ -226,7 +226,7 @@ impl Mod {
             impls: FxHashMap::default(),
             macros: FxHashMap::default(),
             trait_mthd_table: Default::default(),
-            generic_infer
+            generic_infer,
         }
     }
     pub fn new_child(&self) -> Self {
@@ -252,7 +252,7 @@ impl Mod {
             impls: FxHashMap::default(),
             macros: FxHashMap::default(),
             trait_mthd_table: self.trait_mthd_table.clone(),
-            generic_infer:self.generic_infer.clone()
+            generic_infer: self.generic_infer.clone(),
         }
     }
     pub fn get_refs(&self, name: &str, db: &dyn Db, set: &mut FxHashSet<String>) {
@@ -394,16 +394,16 @@ impl Mod {
             let st_name = name.split('<').collect::<Vec<_>>()[0];
             let st_with_generic = self.get_type_walker(st_name, range, ctx)?;
             match &*st_with_generic.borrow() {
-                PLType::Struct(st)|PLType::Trait(st) => {
+                PLType::Struct(st) | PLType::Trait(st) => {
                     if let Some(res) = ctx.get_infer_result(st, name) {
-                        return Ok(res.clone().into());
+                        return Ok(res.into());
                     }
                 }
                 PLType::Union(st) => {
                     if let Some(res) = ctx.get_infer_result(st, name) {
-                        return Ok(res.clone().into());
+                        return Ok(res.into());
                     }
-                },
+                }
                 _ => (),
             };
         }

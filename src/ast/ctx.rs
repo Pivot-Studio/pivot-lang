@@ -69,6 +69,10 @@ pub struct PLSymbol {
     pub range: Range,
     pub refs: Option<Arc<MutVec<Location>>>,
 }
+type GenericCacheMap = IndexMap<String, Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>>;
+
+pub type GenericCache = Arc<RefCell<GenericCacheMap>>;
+
 /// # Ctx
 /// Context for code generation
 pub struct Ctx<'a> {
@@ -79,9 +83,9 @@ pub struct Ctx<'a> {
     pub root: Option<&'a Ctx<'a>>,   // root context, for symbol lookup
     pub function: Option<ValueHandle>, // current function
     pub init_func: Option<ValueHandle>, //init function,call first in main
-    pub block: Option<BlockHandle>,          // current block
+    pub block: Option<BlockHandle>,  // current block
     pub continue_block: Option<BlockHandle>, // the block to jump when continue
-    pub break_block: Option<BlockHandle>,    // the block to jump to when break
+    pub break_block: Option<BlockHandle>, // the block to jump to when break
     pub return_block: Option<(BlockHandle, Option<ValueHandle>)>, // the block to jump to when return and value
     pub errs: &'a RefCell<FxHashSet<PLDiag>>,                     // diagnostic list
     pub edit_pos: Option<Pos>,                                    // lsp params
@@ -99,21 +103,22 @@ pub struct Ctx<'a> {
     pub closure_data: Option<RefCell<ClosureCtxData>>,
     pub expect_ty: Option<Arc<RefCell<PLType>>>,
     pub self_ref_map: FxHashMap<String, FxHashSet<(String, Range)>>, // used to recognize self reference
-    pub ctx_flag:CtxFlag,
-    pub generator_data: Option<Arc< RefCell<GeneratorCtxData>>>,
-    pub generic_infer:  Arc<RefCell<IndexMap<String, Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>>>>,
+    pub ctx_flag: CtxFlag,
+    pub generator_data: Option<Arc<RefCell<GeneratorCtxData>>>,
+    pub generic_cache: GenericCache,
 }
 
-
 #[derive(Clone, Default)]
-pub struct GeneratorCtxData{
+pub struct GeneratorCtxData {
     pub table: LinkedHashMap<String, PLSymbol>,
-    pub alloca_bb: BlockHandle,
+    pub entry_bb: BlockHandle,
     pub ctx_handle: ValueHandle, //handle in setup function
+    pub ret_handle: ValueHandle, //handle in setup function
+    pub prev_yield_bb: Option<BlockHandle>,
 }
 
 /// # CtxFlag
-/// 
+///
 /// flags that might change the behavior of the builder
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum CtxFlag {
@@ -135,36 +140,69 @@ pub enum MacroReplaceNode {
 }
 
 impl<'a, 'ctx> Ctx<'a> {
+    pub fn add_term_to_previous_yield(
+        &self,
+        builder: &'a BuilderEnum<'a, 'ctx>,
+        curbb: usize,
+    ) -> Arc<RefCell<crate::ast::ctx::GeneratorCtxData>> {
+        let ctx = self;
+        let data = ctx.generator_data.as_ref().unwrap();
+        if let Some(prev_bb) = data.borrow().prev_yield_bb {
+            builder.position_at_end_block(prev_bb);
+            let ctx_handle = builder.get_nth_param(ctx.function.unwrap(), 0);
+            let ptr = builder
+                .build_struct_gep(ctx_handle, 1, "block_ptr")
+                .unwrap();
 
-    pub fn add_infer_result(&self, tp:&impl TraitImplAble, name:&str, pltp:Arc<RefCell<PLType>>) {
-        self.generic_infer
-        .borrow_mut().entry(tp.get_full_name_except_generic()).or_insert(Default::default())
-        .borrow_mut()
-        .insert(name.to_string(), pltp);
+            let addr = builder.get_block_address(curbb);
+            builder.build_store(ptr, addr);
+
+            builder.build_unconditional_branch(ctx.return_block.unwrap().0);
+        }
+        data.clone()
+    }
+    pub fn add_infer_result(
+        &self,
+        tp: &impl TraitImplAble,
+        name: &str,
+        pltp: Arc<RefCell<PLType>>,
+    ) {
+        self.generic_cache
+            .borrow_mut()
+            .entry(tp.get_full_name_except_generic())
+            .or_insert(Default::default())
+            .borrow_mut()
+            .insert(name.to_string(), pltp);
     }
 
-    pub fn get_infer_result(&self, tp:&impl TraitImplAble, name:&str) -> Option<Arc<RefCell<PLType>>> {
-        let infer_map = self.generic_infer.borrow();
+    pub fn get_infer_result(
+        &self,
+        tp: &impl TraitImplAble,
+        name: &str,
+    ) -> Option<Arc<RefCell<PLType>>> {
+        let infer_map = self.generic_cache.borrow();
         let infer_map = infer_map.get(&tp.get_full_name_except_generic())?;
         let x = infer_map.borrow().get(name).cloned();
         x
     }
 
-    fn import_all_infer_maps_from(&self, other: &IndexMap<String, Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>>) {
+    fn import_all_infer_maps_from(&self, other: &GenericCacheMap) {
         for (k, v) in other.iter() {
-            if !self.generic_infer.borrow().contains_key(k) {
+            if !self.generic_cache.borrow().contains_key(k) {
                 let map: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>> = Default::default();
-                self.generic_infer.borrow_mut().insert(k.clone(), map.clone());
+                self.generic_cache
+                    .borrow_mut()
+                    .insert(k.clone(), map.clone());
                 map.borrow_mut().extend(v.borrow().clone());
-            }else {
-                let infer_map = self.generic_infer.borrow();
+            } else {
+                let infer_map = self.generic_cache.borrow();
                 let infer_map = infer_map.get(k).unwrap();
                 infer_map.borrow_mut().extend(v.borrow().clone());
             }
         }
     }
     pub fn import_all_infer_maps_from_sub_mods(&self) {
-        for (_,sub_mod) in self.plmod.submods.iter() {
+        for (_, sub_mod) in self.plmod.submods.iter() {
             self.import_all_infer_maps_from(&sub_mod.generic_infer.borrow());
         }
     }
@@ -227,7 +265,7 @@ impl<'a, 'ctx> Ctx<'a> {
         config: Config,
         db: &'a dyn Db,
     ) -> Ctx<'a> {
-        let generic_infer:Arc<RefCell<IndexMap<String, Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>>>> = Default::default();
+        let generic_infer: GenericCache = Default::default();
         Ctx {
             need_highlight: 0,
             generic_types: FxHashMap::default(),
@@ -256,9 +294,9 @@ impl<'a, 'ctx> Ctx<'a> {
             root: None,
             macro_skip_level: 0,
             self_ref_map: FxHashMap::default(),
-            ctx_flag:CtxFlag::Normal,
+            ctx_flag: CtxFlag::Normal,
             generator_data: None,
-            generic_infer,
+            generic_cache: generic_infer,
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -294,9 +332,9 @@ impl<'a, 'ctx> Ctx<'a> {
             root,
             macro_skip_level: self.macro_skip_level,
             self_ref_map: FxHashMap::default(),
-            ctx_flag:self.ctx_flag,
+            ctx_flag: self.ctx_flag,
             generator_data: self.generator_data.clone(),
-            generic_infer:self.generic_infer.clone(),
+            generic_cache: self.generic_cache.clone(),
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
@@ -924,6 +962,9 @@ impl<'a, 'ctx> Ctx<'a> {
         if let Some(src) = &self.temp_source {
             dia.set_source(src);
         }
+        if dia.get_diag_code() == DiagCode::Err(ErrorCode::UNDEFINED_TYPE) {
+            eprintln!("add diag: {}", dia.get_msg());
+        }
         let dia2 = dia.clone();
         self.errs.borrow_mut().insert(dia);
         dia2
@@ -1044,7 +1085,7 @@ impl<'a, 'ctx> Ctx<'a> {
         if range == Default::default() {
             return;
         }
-        self.plmod.defs.borrow_mut().insert(
+        self.get_root_ctx().plmod.defs.borrow_mut().insert(
             range,
             LSPDef::Scalar(Location {
                 uri: url_from_path(&file),
@@ -1207,11 +1248,11 @@ impl<'a, 'ctx> Ctx<'a> {
         if self.need_highlight != 0 || self.in_macro {
             return;
         }
-        self.plmod.semantic_tokens_builder.borrow_mut().push(
-            range.to_diag_range(),
-            type_index(tp),
-            modifiers,
-        )
+        self.get_root_ctx()
+            .plmod
+            .semantic_tokens_builder
+            .borrow_mut()
+            .push(range.to_diag_range(), type_index(tp), modifiers)
     }
     pub fn push_type_hints(&self, range: Range, pltype: Arc<RefCell<PLType>>) {
         if self.need_highlight != 0 || self.in_macro {

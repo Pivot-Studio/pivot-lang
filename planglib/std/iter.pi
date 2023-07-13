@@ -25,6 +25,41 @@ pub fn ret_opt() name<Option<i64>> {
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 // pub fn ret_opt() name<builtin::testG<i64>> {
 //     let b = 1;
 //     let a:builtin::testG<i64>;
