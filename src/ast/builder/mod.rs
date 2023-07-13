@@ -221,9 +221,18 @@ pub trait IRBuilder<'a, 'ctx> {
         allocab: BlockHandle,
         name: &str,
     );
-    fn add_generator_yield_fn(&self,ctx: &mut Ctx<'a>, ctx_name:&str, ret_tp:&PLType) ->ValueHandle ;
-    fn get_block_address(&self, block:BlockHandle) -> ValueHandle;
-    fn build_indirect_br(&self, block:ValueHandle,ctx: & Ctx<'a>,) ;
+    fn add_generator_yield_fn(
+        &self,
+        ctx: &mut Ctx<'a>,
+        ctx_name: &str,
+        ret_tp: &PLType,
+    ) -> ValueHandle;
+    fn get_block_address(&self, block: BlockHandle) -> ValueHandle;
+    fn build_indirect_br(&self, block: ValueHandle, ctx: &Ctx<'a>);
+    // only used in special case, as it does not add gc root
+    unsafe fn store_with_aoto_cast(&self, ptr: ValueHandle, value: ValueHandle);
+    fn stack_alloc(&self, name: &str, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle;
+    fn correct_generator_ctx_malloc_inst(&self, ctx: &mut Ctx<'a>, name: &str);
 }
 
 pub type ValueHandle = usize;

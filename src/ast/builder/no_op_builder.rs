@@ -473,14 +473,26 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     ) {
     }
 
-    fn add_generator_yield_fn(&self,ctx: &mut Ctx<'a>,ctx_name:&str,ret_tp:&PLType) -> ValueHandle {
+    fn add_generator_yield_fn(
+        &self,
+        _ctx: &mut Ctx<'a>,
+        _ctx_name: &str,
+        _ret_tp: &PLType,
+    ) -> ValueHandle {
         0
     }
 
-    fn get_block_address(&self,block:super::BlockHandle) -> ValueHandle {
+    fn get_block_address(&self, _block: super::BlockHandle) -> ValueHandle {
         0
     }
 
-    fn build_indirect_br(&self,block:ValueHandle,ctx: &Ctx<'a>,) {
+    fn build_indirect_br(&self, _block: ValueHandle, _ctx: &Ctx<'a>) {}
+
+    unsafe fn store_with_aoto_cast(&self, _ptr: ValueHandle, _value: ValueHandle) {}
+
+    fn stack_alloc(&self, _name: &str, _ctx: &mut Ctx<'a>, _tp: &PLType) -> ValueHandle {
+        0
     }
+
+    fn correct_generator_ctx_malloc_inst(&self, _ctx: &mut Ctx<'a>, _name: &str) {}
 }
