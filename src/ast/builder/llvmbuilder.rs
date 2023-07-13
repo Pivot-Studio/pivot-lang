@@ -250,8 +250,12 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
         let v_stack = self.get_llvm_value_handle(&stack_root.as_any_value_enum());
         let v_heap = self.get_llvm_value_handle(&p.as_any_value_enum());
-        self.heap_stack_map.borrow_mut().insert(v_heap, v_stack);
+        self.set_root(v_heap, v_stack);
         v_heap
+    }
+
+    fn set_root(&self, v_heap: usize, v_stack: usize) {
+        self.heap_stack_map.borrow_mut().insert(v_heap, v_stack);
     }
     fn gc_malloc(
         &self,
@@ -1467,6 +1471,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
         declare: Option<Pos>,
     ) -> ValueHandle {
+        let mut ret_handle = self.alloc_raw(name, pltype, ctx, declare, "DioGC__malloc");
         if ctx.ctx_flag == CtxFlag::InGeneratorYield {
             let data = ctx.generator_data.as_ref().unwrap().clone();
 
@@ -1485,28 +1490,39 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             let f = self.get_llvm_value(f_v).unwrap().into_function_value();
             let yield_ctx = f.get_nth_param(0).unwrap();
             let bt = self.get_basic_type_op(pltype, ctx).unwrap();
-            let count = add_field(yield_ctx.as_any_value_enum(), bt.as_any_type_enum());
+            let count = add_field(
+                yield_ctx.as_any_value_enum(),
+                bt.ptr_type(Default::default()).into(),
+            );
             let i = count - 1;
             let data_ptr = self
                 .build_struct_gep(self.get_nth_param(f_v, 0), i, name)
                 .unwrap();
 
+            let load = self.build_load(data_ptr, "data_load");
+            let stack_root = self.get_stack_root(ret_handle);
+            self.build_store(stack_root, load);
+
             self.builder.position_at_end(lb);
+            self.build_store(data_ptr, ret_handle);
+            self.set_root(load, stack_root);
+            ret_handle = load;
 
             let id = data.borrow().table.len().to_string();
             data.borrow_mut().table.insert(
                 name.to_string() + &id,
                 PLSymbol {
-                    value: data_ptr,
+                    value: load,
                     pltype: Arc::new(RefCell::new(pltype.clone())),
                     range: Default::default(),
                     refs: None,
                 },
             );
             // let data_ptr = self.build_struct_gep(ctx_v, (i +2) as u32, "para").unwrap();
-            return data_ptr;
+            // return data_ptr;
         }
-        self.alloc_raw(name, pltype, ctx, declare, "DioGC__malloc")
+
+        ret_handle
     }
     fn build_struct_gep(
         &self,
@@ -1707,7 +1723,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     fn write_bitcode_to_path(&self, path: &Path) -> bool {
         self.optimize();
         // run_immix_pass(self.module);
-        self.module.strip_debug_info();
         self.module.write_bitcode_to_path(path)
     }
     fn int_value(&self, ty: &PriType, v: u64, sign_ext: bool) -> ValueHandle {
