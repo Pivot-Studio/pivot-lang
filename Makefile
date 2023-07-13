@@ -42,3 +42,6 @@ cmake-clean:
 
 lsp-wasm:
 	@wasm-pack build --target bundler --no-default-features --scope pivot-lang
+
+renew-expect:
+	@UPDATE_EXPECT=1 cargo test --all

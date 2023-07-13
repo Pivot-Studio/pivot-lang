@@ -53,3 +53,32 @@ struct selfref2 {
 }
 
 use test::trait_diag;
+use std::iter::Iterator;
+
+gen fn iter_test() Iterator<i64> {
+    
+    return 1;
+}
+
+
+
+fn iter_test1() Iterator<i64> {
+    
+    yield return 1;
+}
+
+
+gen fn iter_test3() i64 {
+    
+    yield return 1;
+}
+
+gen fn iter_test4() Iterator<i64>  {
+    
+    yield return 1.0;
+}
+
+
+gen fn iter_test5() Iterator<i64>  {
+}
+

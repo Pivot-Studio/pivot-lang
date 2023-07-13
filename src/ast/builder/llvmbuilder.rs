@@ -260,6 +260,15 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         tp: &PLType,
         malloc_fn: &str,
     ) -> (PointerValue<'ctx>, PointerValue<'ctx>, BasicTypeEnum<'ctx>) {
+        let lb = self.builder.get_insert_block().unwrap();
+        let alloca = self
+            .builder
+            .get_insert_block()
+            .unwrap()
+            .get_parent()
+            .unwrap()
+            .get_first_basic_block()
+            .unwrap();
         let obj_type = tp.get_immix_type().int_value();
         let f = self.get_malloc_f(ctx, malloc_fn);
         let llvmtp = self.get_basic_type_op(tp, ctx).unwrap();
@@ -269,7 +278,26 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .const_int(tp.get_immix_type().int_value() as u64, false);
         let td = self.targetmachine.get_target_data();
         let size = td.get_store_size(&llvmtp);
-        let size = self.context.i64_type().const_int(size, false);
+        let mut size = self.context.i64_type().const_int(size, false);
+        if name == "___ctx" {
+            // generator ctx, use stack variable as type
+            self.builder.position_at_end(alloca);
+            let stack_ptr = self
+                .builder
+                .build_alloca(self.context.i64_type(), "ctx_tp_ptr");
+            ctx.generator_data
+                .as_ref()
+                .unwrap()
+                .borrow_mut()
+                .ctx_size_handle = self.get_llvm_value_handle(&stack_ptr.as_any_value_enum());
+
+            self.builder.position_at_end(lb);
+
+            size = self
+                .builder
+                .build_load(stack_ptr, "ctx_tp")
+                .into_int_value();
+        }
         let heapptr = self
             .builder
             .build_call(f, &[size.into(), tp.into()], &format!("heapptr_{}", name))
@@ -281,15 +309,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             llvmtp.ptr_type(AddressSpace::default()),
             name,
         );
-        let lb = self.builder.get_insert_block().unwrap();
-        let alloca = self
-            .builder
-            .get_insert_block()
-            .unwrap()
-            .get_parent()
-            .unwrap()
-            .get_first_basic_block()
-            .unwrap();
         self.builder.position_at_end(alloca);
         let stack_ptr = self
             .builder
@@ -1688,6 +1707,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     fn write_bitcode_to_path(&self, path: &Path) -> bool {
         self.optimize();
         // run_immix_pass(self.module);
+        self.module.strip_debug_info();
         self.module.write_bitcode_to_path(path)
     }
     fn int_value(&self, ty: &PriType, v: u64, sign_ext: bool) -> ValueHandle {
@@ -2436,18 +2456,16 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let first_inst = bb.get_first_instruction().unwrap();
         let st = self.module.get_struct_type(name).unwrap();
         let size = self.targetmachine.get_target_data().get_store_size(&st);
-        let f = self.get_malloc_f(ctx, "DioGC__malloc");
         let cur_bb = self.builder.get_insert_block().unwrap();
-        let next_inst = first_inst.get_next_instruction().unwrap();
-        first_inst.erase_from_basic_block();
-        self.builder.position_before(&next_inst);
-        let size = self.context.i64_type().const_int(size, false);
-        let tp = self
-            .context
-            .i8_type()
-            .const_int(immix::ObjectType::Complex.int_value() as _, false);
+
         self.builder
-            .build_call(f, &[size.into(), tp.into()], "heapptr_ctx");
+            .position_at(first_inst.get_parent().unwrap(), &first_inst);
+        let size = self.context.i64_type().const_int(size, false);
+        let v = self
+            .get_llvm_value(data.borrow().ctx_size_handle)
+            .unwrap()
+            .into_pointer_value();
+        self.builder.build_store(v, size);
 
         self.builder.position_at_end(cur_bb);
     }

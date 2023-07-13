@@ -138,6 +138,9 @@ define_error!(
     STRUCT_FIELD_NOT_EXISTS = "struct field not exists",
     TRY_TO_EXPORT_NON_REEXPORT_SYMBOL = "try to export non reexport symbol",
     CYCLE_DEPENDENCY = "cycle dependency not allowed",
+    YIELD_RETURN_MUST_BE_IN_GENERATOR = "yield return must be in generator function",
+    GENERATOR_FN_MUST_RET_ITER = "generator function must return an iterator",
+    INVALID_RET_IN_GENERATOR_FUNCTION = "invalid `return` in generator function",
 );
 macro_rules! define_warn {
     ($(
