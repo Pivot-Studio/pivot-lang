@@ -98,6 +98,18 @@ fn test_pos_in() {
 /// # Range
 /// source code range in file
 impl Range {
+    pub fn start_point(&self) -> Range {
+        Range {
+            start: self.start,
+            end: self.start,
+        }
+    }
+    pub fn end_point(&self) -> Range {
+        Range {
+            start: self.end,
+            end: self.end,
+        }
+    }
     pub fn new(start: Span, end: Span) -> Range {
         Range {
             start: Pos {

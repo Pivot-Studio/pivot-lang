@@ -251,7 +251,10 @@ fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
             } else {
                 vec![vec![]]
             };
-            let range = range.start.to(r2.end);
+            let mut range = range.start.to(r2.end);
+            if let Some((_, r)) = y {
+                range = r.start.to(range.end);
+            }
             res_enum(
                 RetNode {
                     value,

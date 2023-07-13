@@ -115,6 +115,7 @@ pub struct GeneratorCtxData {
     pub ctx_handle: ValueHandle, //handle in setup function
     pub ret_handle: ValueHandle, //handle in setup function
     pub prev_yield_bb: Option<BlockHandle>,
+    pub ctx_size_handle: ValueHandle,
 }
 
 /// # CtxFlag
