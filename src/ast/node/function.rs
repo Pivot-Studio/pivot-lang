@@ -1,4 +1,3 @@
-use super::cast::get_option_type;
 use super::interface::TraitBoundNode;
 use super::node_result::NodeResultBuilder;
 use super::statement::StatementsNode;
@@ -19,6 +18,8 @@ use std::cell::RefCell;
 
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::vec;
+
+mod generator;
 #[node(comment)]
 pub struct FuncCallNode {
     pub generic_params: Option<Box<GenericParamNode>>,
@@ -557,79 +558,15 @@ impl FuncDefNode {
             let mut sttp_opt = None;
             let mut generator_alloca_b = 0;
             if self.generator {
-                child.generator_data = Some(Default::default());
-                let mut m = LinkedHashMap::default();
-                m.insert(
-                    "address".to_owned(),
-                    Field {
-                        index: 1,
-                        typenode: i8ptr.clone().get_typenode(&child.plmod.path),
-                        name: "address".to_owned(),
-                        range: Default::default(),
-                        modifier: None,
-                    },
-                );
-                let st_tp = STType {
-                    name: fnvalue.get_generator_ctx_name(),
-                    path: ctx.plmod.path.clone(),
-                    fields: m,
-                    range: Default::default(),
-                    doc: vec![],
-                    generic_map: Default::default(),
-                    derives: vec![],
-                    modifier: Some((TokenType::PUB, Default::default())),
-                    body_range: Default::default(),
-                    is_trait: false,
-                    is_tuple: true,
-                    generic_infer_types: Default::default(),
-                    // generic_infer: Default::default(),
-                    methods: Default::default(),
-                    trait_methods_impl: Default::default(),
-                };
-                builder.opaque_struct_type(&st_tp.get_full_name());
-                builder.add_body_to_struct_type(&st_tp.get_full_name(), &st_tp, child);
-
-                let rettp = child.run_in_type_mod(&fnvalue, |child, fnvalue| {
-                    let tp = fnvalue.fntype.ret_pltype.get_type(child, builder, false)?;
-                    let r = fnvalue.fntype.ret_pltype.range();
-                    let f = |ctx| {
-                        r.new_err(ErrorCode::GENERATOR_FN_MUST_RET_ITER)
-                            .add_to_ctx(ctx)
-                    };
-                    return match &*tp.borrow() {
-                        PLType::Trait(t) => {
-                            if t.name != "Iterator" {
-                                return Err(f(child));
-                            }
-                            Ok(t.generic_map.first().unwrap().1.clone())
-                        }
-                        _ => Err(f(child)),
-                    };
-                })?;
-                let rettp = get_option_type(child, builder, rettp)?;
-                child.rettp = Some(rettp.clone());
-                let f =
-                    builder.add_generator_yield_fn(child, &st_tp.get_full_name(), &rettp.borrow());
-                child.function = Some(f);
-                let allocab = builder.append_basic_block(funcvalue, "alloc"); // this is alloca for setup fn
-                let entry = builder.append_basic_block(funcvalue, "set_up_entry"); // this is enrty for setup fn
-                builder.position_at_end_block(allocab);
-
-                // builder.build_unconditional_branch(entry);
-                generator_alloca_b = allocab;
-
-                funcvalue = f;
-                builder.position_at_end_block(entry);
-                let ctx_handle =
-                    builder.alloc("___ctx", &PLType::Struct(st_tp.clone()), child, None);
-                child.generator_data.as_ref().unwrap().borrow_mut().entry_bb = entry;
-                child
-                    .generator_data
-                    .as_ref()
-                    .unwrap()
-                    .borrow_mut()
-                    .ctx_handle = ctx_handle;
-                sttp_opt = Some(st_tp);
+                generator::init_generator(
+                    child,
+                    &i8ptr,
+                    &fnvalue,
+                    builder,
+                    &mut funcvalue,
+                    &mut generator_alloca_b,
+                    &mut sttp_opt,
+                )?;
             }
 
             builder.build_sub_program(
@@ -643,38 +580,12 @@ impl FuncDefNode {
             let allocab = builder.append_basic_block(funcvalue, "alloc");
             let entry = builder.append_basic_block(funcvalue, "entry");
             if self.generator {
-                let address = builder.get_block_address(entry);
-                let data = child.generator_data.as_ref().unwrap().clone();
-                let address_ptr = builder
-                    .build_struct_gep(data.borrow().ctx_handle, 1, "block_address")
-                    .unwrap();
-                builder.build_store(address_ptr, address);
+                generator::save_generator_init_block(builder, child, entry);
             }
             let return_block = builder.append_basic_block(funcvalue, "return");
             child.position_at_end(entry, builder);
             let ret_value_ptr = if self.generator {
-                builder.rm_curr_debug_location();
-                let data = child.generator_data.as_ref().unwrap().clone();
-                child.position_at_end(data.borrow().entry_bb, builder);
-                let tp = child.rettp.clone().unwrap();
-
-                match &*fnvalue
-                    .fntype
-                    .ret_pltype
-                    .get_type(child, builder, true)?
-                    .borrow()
-                {
-                    PLType::Void => unreachable!(),
-                    other => {
-                        builder.rm_curr_debug_location();
-                        data.borrow_mut().ret_handle =
-                            builder.alloc("retvalue", other, child, None);
-                    }
-                }
-                child.position_at_end(entry, builder);
-
-                let retv = builder.stack_alloc("retvalue", child, &tp.borrow());
-                Some(retv)
+                generator::build_generator_ret(builder, child, &fnvalue, entry)?
             } else {
                 match &*fnvalue
                     .fntype
@@ -700,6 +611,7 @@ impl FuncDefNode {
             };
             child.position_at_end(entry, builder);
             if self.generator {
+                // 设置flag，该flag影响alloc逻辑
                 child.ctx_flag = CtxFlag::InGeneratorYield;
             }
             // alloc para
@@ -752,72 +664,15 @@ impl FuncDefNode {
                 );
             }
             if self.generator {
-                child.ctx_flag = CtxFlag::Normal;
-
-                let done = builder.get_cur_basic_block();
-
-                let mut i = 1;
-                let mut tps = vec![Arc::new(RefCell::new(i8ptr.clone()))];
-                let st_tp = sttp_opt.as_mut().unwrap();
-                for (k, v) in &child.generator_data.as_ref().unwrap().borrow().table {
-                    let pltp = PLType::Pointer(v.pltype.to_owned());
-                    st_tp.fields.insert(
-                        k.to_owned(),
-                        Field {
-                            index: i,
-                            typenode: pltp.get_typenode(&child.plmod.path),
-                            name: k.to_owned(),
-                            range: Default::default(),
-                            modifier: None,
-                        },
-                    );
-                    tps.push(Arc::new(RefCell::new(pltp)));
-                    i += 1;
-                }
-                let data = child.generator_data.as_ref().unwrap().clone();
-
-                builder.gen_st_visit_function(child, st_tp, &tps);
-                builder.position_at_end_block(data.borrow().entry_bb);
-                let ptr = builder
-                    .build_struct_gep(data.borrow().ret_handle, 1, "ctx_handle_gep")
-                    .unwrap();
-                let ptr = builder.bitcast(
+                return generator::end_generator(
                     child,
-                    ptr,
-                    &PLType::Pointer(Arc::new(RefCell::new(PLType::Pointer(Arc::new(
-                        RefCell::new(PLType::Struct(st_tp.clone())),
-                    ))))),
-                    "casted_ptr",
+                    builder,
+                    i8ptr.clone(),
+                    sttp_opt,
+                    funcvalue,
+                    generator_alloca_b,
+                    allocab,
                 );
-                builder.build_store(ptr, data.borrow().ctx_handle);
-                let ptr = builder
-                    .build_struct_gep(data.borrow().ret_handle, 2, "ctx_handle_gep")
-                    .unwrap();
-                unsafe { builder.store_with_aoto_cast(ptr, funcvalue) };
-                let ret_load = builder.build_load(data.borrow().ret_handle, "ret_load");
-                builder.build_return(Some(ret_load));
-
-                builder.position_at_end_block(generator_alloca_b);
-                builder.build_unconditional_branch(data.borrow().entry_bb);
-
-                builder.position_at_end_block(done);
-                let flag = builder
-                    .build_struct_gep(child.return_block.unwrap().1.unwrap(), 0, "flag")
-                    .unwrap();
-                builder.build_store(flag, builder.int_value(&PriType::U64, 1, false));
-                builder.build_unconditional_branch(child.return_block.unwrap().0);
-                // child.add_term_to_previous_yield(builder, done);
-
-                builder.position_at_end_block(allocab);
-                let ctx_v = builder.get_nth_param(child.function.unwrap(), 0);
-                let address = builder.build_struct_gep(ctx_v, 1, "block_address").unwrap();
-                let address = builder.build_load(address, "block_address");
-                builder.build_indirect_br(address, child);
-
-                // FIXME: llvm crash
-                builder.correct_generator_ctx_malloc_inst(child, &st_tp.get_full_name());
-
-                return Ok(());
             }
             child.position_at_end(allocab, builder);
             builder.build_unconditional_branch(entry);
