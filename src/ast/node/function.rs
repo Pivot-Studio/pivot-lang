@@ -717,6 +717,7 @@ impl FuncDefNode {
                     funcvalue,
                     alloca,
                     allocab,
+                    &basetype,
                 );
                 let parapltype = tp;
                 child

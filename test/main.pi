@@ -53,7 +53,7 @@ pub fn main() i64 {
     let a:Iterator<i64>;
     let re = iter::ret_opt();
     // let iterator:Iterator<i64> = namet{status:0};
-    let iterator:Iterator<i64> =name();
+    let iterator:Iterator<i64> = name(100, 20);
     let next:Option<i64> = iterator.next();
     println!("first next");
     if next is i64 {
@@ -110,16 +110,13 @@ impl Iterator<i64> for namet {
 }
 
 
-gen fn name() Iterator<i64> {
+gen fn name(b:i64, c:i64) Iterator<i64> {
     for let i = 0; i < 2; i = i + 1 {
         yield return i;
     }
-    let a = 1;
+    let a = b;
     yield return a;
     a = a + 1;
-    println!("yield 2");
     yield return a;
-    a = a + 1;
-    println!("yield 3");
-    yield return a;
+    yield return c;
 }

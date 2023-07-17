@@ -1504,6 +1504,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.build_store(stack_root, load);
 
             self.builder.position_at_end(lb);
+
+            let load_again = self.build_load(load, "data_load");
+            data.borrow_mut().param_tmp = load_again;
+            // self.build_store(ret_handle, load_again);
             self.build_store(data_ptr, ret_handle);
             self.set_root(load, stack_root);
             ret_handle = load;
@@ -2024,6 +2028,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         value_handle: ValueHandle,
         alloca: ValueHandle,
         allocab: BlockHandle,
+        tp: &PLType,
     ) {
         let divar = self.dibuilder.create_parameter_variable(
             self.discope.get(),
@@ -2063,8 +2068,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             let para_ptr = self
                 .build_struct_gep(ctx_v, (i + 2) as u32, "para")
                 .unwrap();
+            child.ctx_flag = CtxFlag::Normal;
+            let ptr = self.alloc("param_ptr", tp, child, None);
+            child.ctx_flag = CtxFlag::InGeneratorYield;
             self.build_store(
-                para_ptr,
+                ptr,
                 self.get_llvm_value_handle(
                     &funcvalue
                         .get_nth_param(i as u32)
@@ -2072,8 +2080,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                         .as_any_value_enum(),
                 ),
             );
+            self.build_store(para_ptr, ptr);
             self.position_at_end_block(origin_bb);
 
+            self.build_store(alloca, data.borrow().param_tmp);
             return;
         }
         let funcvalue = self

@@ -129,6 +129,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         _fnvalue: super::ValueHandle,
         _alloca: super::ValueHandle,
         _allocab: super::BlockHandle,
+        _tp: &PLType,
     ) {
     }
 

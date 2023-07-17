@@ -89,6 +89,7 @@ pub trait IRBuilder<'a, 'ctx> {
         fnvalue: ValueHandle,
         alloca: ValueHandle,
         allocab: BlockHandle,
+        tp: &PLType,
     );
     fn delete_block(&self, b: BlockHandle);
     fn finalize_debug(&self);
