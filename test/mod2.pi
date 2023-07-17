@@ -7,3 +7,16 @@ pub struct Mod2 {
     pub y: bool;
 }
 
+
+struct name<T> {
+    t:T;
+}
+
+
+
+pub fn ret_opt() name<Option<i64>> {
+    let b = 1;
+    let a:Option<i64> = b;
+    let aa:name<Option<i64>> = name{t:a};
+    return aa;
+}

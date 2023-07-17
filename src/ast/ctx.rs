@@ -1301,10 +1301,11 @@ impl<'a, 'ctx> Ctx<'a> {
     fn get_keyword_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         let keywords = vec![
             "if", "else", "while", "for", "return", "struct", "let", "true", "false", "as", "is",
+            "gen", "yield",
         ];
         let loopkeys = vec!["break", "continue"];
         let toplevel = vec![
-            "fn", "struct", "const", "use", "impl", "trait", "pub", "type",
+            "fn", "struct", "const", "use", "impl", "trait", "pub", "type", "gen",
         ];
         if self.father.is_none() {
             for k in toplevel {

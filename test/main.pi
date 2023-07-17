@@ -23,8 +23,9 @@ use pl_test::main;
 use project1::test::compiletime_reflection::test_compile_time_reflection;
 use project1::test::deconstruct;
 use project1::test::st::*;
-use std::io;
-use std::iter::*;
+use project1::test::iter;
+
+
 pub fn main() i64 {
     macros::test_macros();
     ifel::test_if_else();
@@ -50,73 +51,7 @@ pub fn main() i64 {
     fixed_point::test_fixed_point();
     generic::ret_generic1<i64>();
     test_compile_time_reflection();
-    let a:Iterator<i64>;
-    let re = iter::ret_opt();
-    // let iterator:Iterator<i64> = namet{status:0};
-    let iterator:Iterator<i64> = name(100, 20);
-    let next:Option<i64> = iterator.next();
-    println!("first next");
-    if next is i64 {
-        // next = 1 as i64;
-        println!("enter is");
-        let i = next as i64!;
-        println!(i);
-    }else {
-        println!("none");
-    }
-    next = iterator.next();
-    println!("second next");
-    if next is i64 {
-        let i = next as i64!;
-        println!(i);
-    }else {
-        println!("none");
-    }
-    next = iterator.next();
-    println!("third next");
-    if next is i64 {
-        let i = next as i64!;
-        println!(i);
-    }else {
-        println!("none");
-    }
-    next = iterator.next();
-    if next is i64 {
-        let i = next as i64!;
-        println!(i);
-    }else {
-        println!("none");
-    }
-    next = iterator.next();
-    if next is i64 {
-        let i = next as i64!;
-        println!(i);
-    }else {
-        println!("none");
-    }
+    iter::test_generator();
     return 0;
 }
 
-
-struct namet {
-    status: i64;
-}
-
-impl Iterator<i64> for namet {
-    fn next() Option<i64> {
-        self.status = self.status + 1;
-        return self.status;
-    }
-}
-
-
-gen fn name(b:i64, c:i64) Iterator<i64> {
-    for let i = 0; i < 2; i = i + 1 {
-        yield return i;
-    }
-    let a = b;
-    yield return a;
-    a = a + 1;
-    yield return a;
-    yield return c;
-}

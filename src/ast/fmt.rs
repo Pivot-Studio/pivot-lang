@@ -150,6 +150,10 @@ impl FmtBuilder {
                 self.dbcolon();
             }
         }
+        if node.all_import {
+            self.dbcolon();
+            self.asterisk();
+        }
         self.semicolon();
         self.enter();
     }
@@ -341,6 +345,10 @@ impl FmtBuilder {
         }
     }
     pub fn parse_ret_node(&mut self, node: &RetNode) {
+        if let Some((t, _)) = node.yiel {
+            self.token(t.get_str());
+            self.space();
+        }
         if let Some(value) = &node.value {
             self.token("return");
             self.space();
@@ -455,6 +463,10 @@ impl FmtBuilder {
             c.format(self);
         }
         self.prefix();
+        if node.generator {
+            self.token(TokenType::GENERATOR_MARKER.get_str());
+            self.space();
+        }
         if let Some((modi, _)) = node.modifier {
             self.token(modi.get_str());
             self.space();
