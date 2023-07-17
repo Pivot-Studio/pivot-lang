@@ -56,7 +56,11 @@ impl<'a> Ctx<'a> {
     /// For details, see the module documentation.
     pub fn set_field_refs(&self, pltype: Arc<RefCell<PLType>>, f: &Field, range: Range) {
         self.set_glob_refs(
-            &format!("{}..{}", &pltype.borrow().get_full_elm_name(), f.name),
+            &format!(
+                "{}..{}",
+                &pltype.borrow().get_full_elm_name_without_generic(),
+                f.name
+            ),
             range,
         );
     }

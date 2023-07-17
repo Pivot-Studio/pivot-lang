@@ -57,6 +57,25 @@ pub fn send_references(
         .unwrap();
 }
 
+pub fn send_rename(
+    sender: &Sender<Message>,
+    id: RequestId,
+    texts: std::collections::HashMap<Url, Vec<lsp_types::TextEdit>>,
+) {
+    sender
+        .send(Message::Response(lsp_server::Response::new_ok(
+            id,
+            Some(
+                serde_json::to_value(lsp_types::WorkspaceEdit {
+                    changes: Some(texts),
+                    ..Default::default()
+                })
+                .unwrap(),
+            ),
+        )))
+        .unwrap();
+}
+
 pub fn send_format(sender: &Sender<Message>, id: RequestId, texts: Vec<lsp_types::TextEdit>) {
     sender
         .send(Message::Response(lsp_server::Response::new_ok(

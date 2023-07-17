@@ -1,12 +1,6 @@
-//! # lsp
-//! pivot-lang language server entry
-//! current features:
-//! - diagnostics
-//! - completion
-//! - goto definition
-//! - find references
 use std::{
     cell::{Cell, RefCell},
+    collections::HashMap,
     error::Error,
     sync::{Arc, Mutex},
     thread::available_parallelism,
@@ -18,8 +12,8 @@ use lsp_types::{
     notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
     request::{
         Completion, DocumentSymbolRequest, Formatting, GotoDefinition, HoverRequest,
-        InlayHintRequest, References, SemanticTokensFullDeltaRequest, SemanticTokensFullRequest,
-        SignatureHelpRequest,
+        InlayHintRequest, References, Rename, SemanticTokensFullDeltaRequest,
+        SemanticTokensFullRequest, SignatureHelpRequest,
     },
     Diagnostic, Hover, HoverContents, InitializeParams, MarkedString, OneOf, SemanticTokens,
     SemanticTokensDelta, SemanticTokensOptions, ServerCapabilities, SignatureHelp,
@@ -29,7 +23,7 @@ use lsp_types::{
 use lsp_server::{Connection, Message};
 
 use mem_docs::MemDocs;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 #[cfg(not(target_arch = "wasm32"))]
 use threadpool::ThreadPool;
 
@@ -50,7 +44,7 @@ use crate::{
         dispatcher::Dispatcher,
         helpers::{
             send_completions, send_diagnostics, send_doc_symbols, send_format, send_goto_def,
-            send_hints, send_hover, send_references, send_semantic_tokens,
+            send_hints, send_hover, send_references, send_rename, send_semantic_tokens,
             send_semantic_tokens_edit, send_signature_help, url_to_path,
         },
         mem_docs::MemDocsInput,
@@ -107,6 +101,7 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
                 },
             ),
         ),
+        rename_provider: Some(OneOf::Left(true)),
         ..Default::default()
     })
     .unwrap();
@@ -279,6 +274,35 @@ fn main_loop(
                     send_format(&sender, id, fmt[0].clone());
                 });
             }
+        })
+        .on::<Rename, _>(|id, params| {
+            let uri = url_to_path(params.text_document_position.text_document.uri);
+            let pos = Pos::from_diag_pos(&params.text_document_position.position);
+            docin.set_file(&mut db).to(uri);
+            docin.set_action(&mut db).to(ActionType::FindReferences);
+            docin.set_params(&mut db).to(Some((pos, None)));
+            compile_dry(&db, docin);
+            let refs = compile_dry::accumulated::<PLReferences>(&db, docin);
+            let sender = connection.sender.clone();
+            let mut rf: HashMap<lsp_types::Url, Vec<lsp_types::TextEdit>> = Default::default();
+            let mut set: FxHashMap<lsp_types::Url, FxHashSet<lsp_types::Range>> =
+                Default::default();
+            for r in refs {
+                for r in r.clone().iter() {
+                    let url = r.uri.clone();
+                    let edit = lsp_types::TextEdit::new(r.range, params.new_name.clone());
+                    if set.get(&url).is_some() && set.get(&url).unwrap().contains(&r.range) {
+                        continue;
+                    }
+                    set.entry(url.clone())
+                        .or_insert(FxHashSet::default())
+                        .insert(r.range);
+                    rf.entry(url).or_insert(vec![]).push(edit);
+                }
+            }
+            pool.execute(move || {
+                send_rename(&sender, id, rf);
+            });
         })
         .on::<SignatureHelpRequest, _>(|id, params| {
             let doc = params.text_document_position_params;
