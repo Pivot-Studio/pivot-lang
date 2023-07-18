@@ -1464,6 +1464,12 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             false,
         );
     }
+    fn sizeof(&self,
+        pltype: &PLType,
+        ctx: &mut Ctx<'a>,
+    ) -> u64 {
+        self.targetmachine.get_target_data().get_store_size(&self.get_basic_type_op(pltype, ctx).unwrap())
+    }
     fn alloc(
         &self,
         name: &str,

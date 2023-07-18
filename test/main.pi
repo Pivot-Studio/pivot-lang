@@ -55,3 +55,14 @@ pub fn main() i64 {
     return 0;
 }
 
+
+fn push3<T>(ss:name2<T>, t:T, tt:*T) void {
+    ss.t = &t;
+    tt=&t;
+    return;
+}
+
+struct name2<T> {
+    t:*T;
+}
+

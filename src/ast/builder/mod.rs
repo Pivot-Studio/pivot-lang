@@ -234,6 +234,9 @@ pub trait IRBuilder<'a, 'ctx> {
     unsafe fn store_with_aoto_cast(&self, ptr: ValueHandle, value: ValueHandle);
     fn stack_alloc(&self, name: &str, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle;
     fn correct_generator_ctx_malloc_inst(&self, ctx: &mut Ctx<'a>, name: &str);
+    fn sizeof(&self,
+        pltype: &PLType,
+        ctx: &mut Ctx<'a>,)->u64;
 }
 
 pub type ValueHandle = usize;

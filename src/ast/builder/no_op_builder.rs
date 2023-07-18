@@ -496,4 +496,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     }
 
     fn correct_generator_ctx_malloc_inst(&self, _ctx: &mut Ctx<'a>, _name: &str) {}
+
+    fn sizeof(&self,_pltype: &PLType,_ctx: &mut Ctx<'a>,) -> u64 {
+        0
+    }
 }

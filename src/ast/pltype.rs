@@ -348,6 +348,9 @@ pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
                 pltype.clone()
             }
         }
+        PLType::Pointer(p) =>{
+            Arc::new(RefCell::new(PLType::Pointer( get_type_deep(p.clone()))))
+        }
         _ => pltype.clone(),
     }
 }

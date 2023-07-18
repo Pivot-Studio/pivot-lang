@@ -1,6 +1,5 @@
 use super::builder::BlockHandle;
 use super::builder::ValueHandle;
-use super::diag::DiagCode;
 use super::diag::ErrorCode;
 use super::diag::PLDiag;
 
@@ -963,9 +962,6 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn add_diag(&self, mut dia: PLDiag) -> PLDiag {
         if let Some(src) = &self.temp_source {
             dia.set_source(src);
-        }
-        if dia.get_diag_code() == DiagCode::Err(ErrorCode::UNDEFINED_TYPE) {
-            eprintln!("add diag: {}", dia.get_msg());
         }
         let dia2 = dia.clone();
         self.errs.borrow_mut().insert(dia);

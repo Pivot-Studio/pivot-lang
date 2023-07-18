@@ -1,8 +1,13 @@
-pub fn DioGC__malloc(size: i64, obj_type: u8) *u8;
+fn DioGC__malloc(size: i64, obj_type: u8) *u8;
 
 pub fn DioGC__collect() void;
 
 pub fn DioGC__malloc_no_collect(size: i64, obj_type: u8) *u8;
+
+
+pub fn malloc<T>() *u8 {
+    return DioGC__malloc(sizeof<T>(), gc_type<T>());
+}
 
 pub struct string {
     pub len: i64;

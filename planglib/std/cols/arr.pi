@@ -1,0 +1,51 @@
+use std::iter::*;
+
+pub struct Array<T> {
+    data:*T;
+    size:u32;
+    len:u32;
+}
+
+pub fn new<T>() Array<T> {
+    return Array<T> {
+        size:0 as u32,
+        len:0 as u32
+    };
+}
+
+impl <T> Array<T> {
+    pub fn push(t:T) void {
+        if self.size == 0 {
+            let data  = unsafe_cast<T>(gc::malloc<T>());
+            self.data = data;
+            // self.data = 
+        }
+        return;
+    }
+}
+
+fn push<T>(ss:T, t:T) void {
+    ss = t;
+    return;
+}
+
+fn push2<T>(ss:name<T>, t:T) void {
+    ss.t = t;
+    return;
+}
+
+struct name<T> {
+    t:T;
+}
+
+
+
+
+
+
+// macro new_arr {
+//     ($name:@id) => {
+        
+//     };
+// }
+
