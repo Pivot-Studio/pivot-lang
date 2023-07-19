@@ -7,6 +7,7 @@ use super::pltype::PriType;
 use super::pltype::{FNValue, PLType};
 
 use super::range::Range;
+use super::traits::CustomType;
 
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::Db;
@@ -522,6 +523,25 @@ impl Mod {
             .entry(stname.to_string())
             .or_insert_with(Default::default)
             .insert(trait_tp_name.to_string(), generic_map);
+    }
+    pub fn search_mod<TP: CustomType>(&self, u: &TP, m: &str) -> Option<Self> {
+        self.submods
+            .get(m)
+            .and_then(|x| {
+                if x.path != u.get_path() {
+                    return None;
+                }
+                Some(x.clone())
+            })
+            .or_else(|| {
+                for (_, v) in self.submods.iter() {
+                    let re = v.search_mod(u, m);
+                    if re.is_some() {
+                        return re;
+                    }
+                }
+                None
+            })
     }
 }
 

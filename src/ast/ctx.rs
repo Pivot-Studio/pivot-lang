@@ -502,7 +502,7 @@ impl<'a, 'ctx> Ctx<'a> {
                             unreachable!()
                         });
 
-                        let fnhandle = builder.get_or_insert_fn_handle(&mthd.borrow(), ctx);
+                        let fnhandle = builder.get_or_insert_fn_handle(&mthd.borrow(), ctx).0;
                         let targetftp = f.typenode.get_type(ctx, builder, true).unwrap();
                         let casted =
                             builder.bitcast(ctx, fnhandle, &targetftp.borrow(), "fncast_tmp");
@@ -1031,6 +1031,27 @@ impl<'a, 'ctx> Ctx<'a> {
         res
     }
 
+    // FIXME: performance
+    pub fn run_in_type_mod_deep<'b, TP: CustomType, R, F: FnMut(&mut Ctx<'a>, &TP) -> R>(
+        &'b mut self,
+        u: &TP,
+        mut f: F,
+    ) -> R {
+        let p = PathBuf::from(&u.get_path());
+        let mut oldm = None;
+        if u.get_path() != self.plmod.path {
+            let s = p.file_name().unwrap().to_str().unwrap();
+            let m = s.split('.').next().unwrap();
+            let m = self.plmod.search_mod(u, m).unwrap();
+            oldm = Some(self.set_mod(m));
+        }
+        let res = f(self, u);
+        if let Some(m) = oldm {
+            self.set_mod(m);
+        }
+        res
+    }
+
     pub fn run_in_origin_mod<'b, R, F: FnMut(&mut Ctx<'a>) -> R>(&'b mut self, mut f: F) -> R {
         let oldm = self.plmod.clone();
         let ctx = self.get_root_ctx();
@@ -1051,6 +1072,26 @@ impl<'a, 'ctx> Ctx<'a> {
             let m = s.split('.').next().unwrap();
             let m = self.plmod.submods.get(m).unwrap();
             oldm = Some(self.set_mod(m.clone()));
+        }
+        let res = f(self, u);
+        if let Some(m) = oldm {
+            self.set_mod(m);
+        }
+        res
+    }
+
+    pub fn run_in_type_mod_mut_deep<'b, TP: CustomType, R, F: FnMut(&mut Ctx<'a>, &mut TP) -> R>(
+        &'b mut self,
+        u: &mut TP,
+        mut f: F,
+    ) -> R {
+        let p = PathBuf::from(&u.get_path());
+        let mut oldm = None;
+        if u.get_path() != self.plmod.path {
+            let s = p.file_name().unwrap().to_str().unwrap();
+            let m = s.split('.').next().unwrap();
+            let m = self.plmod.search_mod(u, m).unwrap();
+            oldm = Some(self.set_mod(m));
         }
         let res = f(self, u);
         if let Some(m) = oldm {

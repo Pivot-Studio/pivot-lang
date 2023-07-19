@@ -211,8 +211,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         &self,
         _pltp: &crate::ast::pltype::FNValue,
         _ctx: &mut crate::ast::ctx::Ctx<'a>,
-    ) -> super::ValueHandle {
-        0
+    ) -> (super::ValueHandle, bool) {
+        (0, false)
     }
 
     fn get_or_add_global(
@@ -497,8 +497,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
 
     fn correct_generator_ctx_malloc_inst(&self, _ctx: &mut Ctx<'a>, _name: &str) {}
 
-    fn sizeof(&self,_pltype: &PLType,_ctx: &mut Ctx<'a>,) -> u64 {
+    fn sizeof(&self, _pltype: &PLType, _ctx: &mut Ctx<'a>) -> u64 {
         0
     }
-    fn build_memcpy(&self, _from:ValueHandle,_to:ValueHandle, _len:ValueHandle) {}
+    fn build_memcpy(&self, _from: ValueHandle, _to: ValueHandle, _len: ValueHandle) {}
 }

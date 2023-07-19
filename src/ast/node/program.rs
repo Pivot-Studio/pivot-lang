@@ -176,6 +176,26 @@ lazy_static::lazy_static! {
             all_import:false,
         }))]
     };
+
+    static ref STD_USE_NODES: Vec<Box<NodeEnum>> = {
+        let core = Box::new(VarNode {
+            name: "core".to_string(),
+            range: Default::default(),
+        });
+
+        let builtin = Box::new(VarNode {
+            name: "builtin".to_string(),
+            range: Default::default(),
+        });
+        vec![Box::new(NodeEnum::UseNode(UseNode {
+            ids: vec![core, builtin],
+            range: Default::default(),
+            complete: true,
+            singlecolon: false,
+            modifier:None,
+            all_import:false,
+        }))]
+    };
 }
 
 mod cycle;
@@ -240,11 +260,10 @@ impl Program {
         if pkgname != "gc" {
             prog.uses.extend_from_slice(&GC_USE_NODES);
         }
-        if pkgname != "gc"
-            && pkgname != "builtin"
-            && self.config(db).project != "core"
-            && self.config(db).project != "std"
-        {
+        if self.config(db).project == "std" {
+            prog.uses.extend_from_slice(&STD_USE_NODES);
+        }
+        if self.config(db).project != "core" && self.config(db).project != "std" {
             prog.uses.extend_from_slice(&DEFAULT_USE_NODES);
         }
         #[cfg(not(target_arch = "wasm32"))]

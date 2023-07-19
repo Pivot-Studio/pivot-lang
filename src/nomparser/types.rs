@@ -62,7 +62,6 @@ pub fn basic_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
     ))(input)
 }
 
-
 #[test_parser("[i64]")]
 #[test_parser("[[[i64]]]")]
 fn array_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {

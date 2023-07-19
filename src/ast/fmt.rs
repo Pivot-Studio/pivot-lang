@@ -267,7 +267,7 @@ impl FmtBuilder {
     }
     pub fn parse_array_init_node(&mut self, node: &ArrayInitNode) {
         self.l_bracket();
-        if let Some((tp,len)) = &node.tp {
+        if let Some((tp, len)) = &node.tp {
             tp.format(self);
             self.space();
             self.asterisk();

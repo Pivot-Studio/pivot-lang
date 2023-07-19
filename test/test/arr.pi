@@ -1,0 +1,32 @@
+use std::cols::arr;
+use core::panic::*;
+
+
+pub fn test_arr() void {
+    let array = arr::from_slice([1,2,3]);
+    array.set(2, 100);
+    let a2 = array.get(2);
+    assert(a2 == 100);
+    array.push(4);
+    array.push(5);
+    let a4 = array.get(4);
+    assert(a4 == 5);
+    let a5 = array.pop();
+    assert(a5 == 5);
+    let iter = array.iter();
+    let count = 0;
+    for let i = iter.next(); i is i64; i = iter.next() {
+        let tmp = i as i64!;
+        if count == 0 {
+            assert(tmp == 1);
+        } else if count == 1 {
+            assert(tmp == 2);
+        } else if count == 2 {
+            assert(tmp == 100);
+        } else if count == 3 {
+            assert(tmp == 4);
+        }
+        count = count + 1;
+    }
+    return;
+}

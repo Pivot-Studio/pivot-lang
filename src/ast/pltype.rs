@@ -47,6 +47,8 @@ use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 
 use std::path::PathBuf;
+use std::sync::atomic::AtomicI64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 /// # PLType
 /// Type for pivot-lang
@@ -343,15 +345,13 @@ pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
                 pltype.clone()
             }
         }
-        PLType::Pointer(p) =>{
-            Arc::new(RefCell::new(PLType::Pointer( get_type_deep(p.clone()))))
-        }
-        PLType::Arr(p) =>{
-            let a = ARRType{
+        PLType::Pointer(p) => Arc::new(RefCell::new(PLType::Pointer(get_type_deep(p.clone())))),
+        PLType::Arr(p) => {
+            let a = ARRType {
                 element_type: get_type_deep(p.element_type.clone()),
                 size_handle: p.size_handle,
             };
-            Arc::new(RefCell::new(PLType::Arr( a)))
+            Arc::new(RefCell::new(PLType::Arr(a)))
         }
         _ => pltype.clone(),
     }
@@ -414,9 +414,7 @@ impl PLType {
     pub fn get_typenode(&self, path: &str) -> Box<TypeNodeEnum> {
         match self {
             PLType::Struct(st) => new_typename_node(&st.name, st.range, &Self::get_ns(st, path)),
-            PLType::Arr(arr) => new_arrtype_node(
-                arr.get_elem_type().borrow().get_typenode(path),
-            ),
+            PLType::Arr(arr) => new_arrtype_node(arr.get_elem_type().borrow().get_typenode(path)),
             PLType::Primitive(p) => new_typename_node(&p.get_name(), Default::default(), &[]),
             PLType::Void => new_typename_node("void", Default::default(), &[]),
             PLType::Pointer(p) => new_ptrtype_node(p.borrow().get_typenode(path)),
@@ -519,10 +517,7 @@ impl PLType {
             PLType::Trait(st) => st.get_full_name(),
             PLType::Primitive(pri) => pri.get_name(),
             PLType::Arr(arr) => {
-                format!(
-                    "[{}]",
-                    arr.element_type.borrow().get_full_elm_name(),
-                )
+                format!("[{}]", arr.element_type.borrow().get_full_elm_name(),)
             }
             PLType::Void => "void".to_string(),
             PLType::Pointer(p) => p.borrow().get_full_elm_name(),
@@ -539,10 +534,7 @@ impl PLType {
             PLType::Trait(st) => st.get_full_name_except_generic(),
             PLType::Primitive(pri) => pri.get_name(),
             PLType::Arr(arr) => {
-                format!(
-                    "[{}]",
-                    arr.element_type.borrow().get_full_elm_name()
-                )
+                format!("[{}]", arr.element_type.borrow().get_full_elm_name())
             }
             PLType::Void => "void".to_string(),
             PLType::Pointer(p) => p.borrow().get_full_elm_name(),
@@ -715,9 +707,14 @@ impl TryFrom<PLType> for FNValue {
         }
     }
 }
+
+static GLOB_COUNTER: AtomicI64 = AtomicI64::new(0);
+
 impl FNValue {
     pub fn get_generator_ctx_name(&self) -> String {
-        self.name.clone() + "__generator_ctx"
+        self.name.clone()
+            + "__generator_ctx"
+            + &GLOB_COUNTER.fetch_add(1, Ordering::SeqCst).to_string()
     }
     pub fn to_closure_ty<'a, 'b>(
         &self,
@@ -1275,6 +1272,7 @@ impl STType {
                                 .borrow()
                                 .get_typenode(&ctx.get_file());
                         }
+                        // eprintln!("{:?}", new_f.ret);
                         new_f.ret = new_f
                             .ret
                             .get_type(ctx, builder, true)

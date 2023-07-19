@@ -53,8 +53,13 @@ impl <T> Array<T> {
         self.data[i] = t;
         return;
     }
-}
 
+    gen pub fn iter() Iterator<T> {
+        for let i = 0; i < self.len as i64; i = i + 1 {
+            yield return self.data[i];
+        }
+    }
+}
 
 
 pub fn from_slice<T>(slice:[T]) Array<T> {
@@ -65,7 +70,3 @@ pub fn from_slice<T>(slice:[T]) Array<T> {
     return arr;
 }
 
-
-// impl <T> Iterator<T> for Array<T> {
-
-// }

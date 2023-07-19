@@ -183,7 +183,9 @@ impl TypeNode for TypeNameNode {
                     let sttype = sttype.clone();
                     if sttype.need_gen_code() {
                         return ctx.protect_generic_context(&sttype.generic_map, |ctx| {
-                            sttype.gen_code(ctx, builder)
+                            ctx.run_in_type_mod(&sttype, |ctx, sttype| {
+                                sttype.gen_code(ctx, builder)
+                            })
                         });
                     } else {
                         return Err(
@@ -276,7 +278,7 @@ impl PrintTrait for ArrayTypeNameNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("ArrayTypeNameNode");
-        self.id.print(tabs + 1, true , line.clone());
+        self.id.print(tabs + 1, true, line.clone());
     }
 }
 
@@ -293,7 +295,7 @@ impl TypeNode for ArrayTypeNameNode {
             size_handle: 0,
         };
         let arrtype = Arc::new(RefCell::new(PLType::Arr(arrtype)));
-        return Ok(arrtype);
+        Ok(arrtype)
     }
 
     fn emit_highlight<'ctx>(&self, ctx: &mut Ctx<'_>) {
@@ -307,9 +309,7 @@ impl TypeNode for ArrayTypeNameNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<EqRes, PLDiag> {
         match &*pltype.borrow() {
-            PLType::Arr(a) => {
-                return self.id.eq_or_infer(ctx, a.element_type.clone(), builder);
-            }
+            PLType::Arr(a) => self.id.eq_or_infer(ctx, a.element_type.clone(), builder),
             _ => Ok(EqRes {
                 eq: false,
                 need_up_cast: false,
@@ -699,7 +699,7 @@ impl Node for StructInitNode {
 
 #[node]
 pub struct ArrayInitNode {
-    pub tp: Option< (Box<TypeNodeEnum>,Box<NodeEnum>)>,
+    pub tp: Option<(Box<TypeNodeEnum>, Box<NodeEnum>)>,
     pub exps: Vec<Box<NodeEnum>>,
 }
 
@@ -708,7 +708,7 @@ impl PrintTrait for ArrayInitNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("ArrayInitNode");
-        if let Some((tp,len)) = &self.tp {
+        if let Some((tp, len)) = &self.tp {
             tp.print(tabs + 1, false, line.clone());
             len.print(tabs + 1, false, line.clone());
         }
@@ -743,11 +743,11 @@ impl Node for ArrayInitNode {
             exps.push((ctx.try_load2var(range, v.get_value(), builder)?, tp));
         }
         let sz = exps.len() as u64;
-        let (tp,size_handle) = if let Some((tp,len_v)) = &mut self.tp {
+        let (tp, size_handle) = if let Some((tp, len_v)) = &mut self.tp {
             tp.emit_highlight(ctx);
             let tp = tp.get_type(ctx, builder, true)?;
             let len = len_v.emit(ctx, builder)?.get_value().unwrap();
-            if !matches!( &*len.get_ty().borrow(),PLType::Primitive(PriType::I64) ) {
+            if !matches!(&*len.get_ty().borrow(), PLType::Primitive(PriType::I64)) {
                 return Err(ctx.add_diag(len_v.range().new_err(ErrorCode::ARRAY_LEN_MUST_BE_I64)));
             }
             let len = ctx.try_load2var(len_v.range(), len.get_value(), builder)?;
@@ -756,8 +756,8 @@ impl Node for ArrayInitNode {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_TYPE_NOT_MATCH)));
                 }
             }
-            (tp,len)
-        }else {
+            (tp, len)
+        } else {
             if tp0.is_none() {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_INIT_EMPTY)));
             }
@@ -768,12 +768,7 @@ impl Node for ArrayInitNode {
             element_type: tp,
             size_handle,
         })));
-        let arr = builder.alloc(
-            "array_alloca",
-            &arr_tp.borrow(),
-            ctx,
-            None,
-        );
+        let arr = builder.alloc("array_alloca", &arr_tp.borrow(), ctx, None);
         let real_arr = builder.build_struct_gep(arr, 1, "real_arr").unwrap();
 
         let real_arr = builder.build_load(real_arr, "load_arr");
@@ -781,8 +776,7 @@ impl Node for ArrayInitNode {
             let ptr = builder.build_const_in_bounds_gep(real_arr, &[i as u64], "elem_ptr");
             builder.build_store(ptr, v);
         }
-        arr.new_output(arr_tp)
-        .to_result()
+        arr.new_output(arr_tp).to_result()
     }
 }
 

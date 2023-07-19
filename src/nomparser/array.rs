@@ -1,11 +1,11 @@
 use internal_macro::test_parser;
+use nom::sequence::pair;
 use nom::{
     combinator::{map_res, opt},
     multi::{many0, separated_list0},
-    sequence::{tuple, delimited},
+    sequence::{delimited, tuple},
     IResult,
 };
-use nom::sequence::pair;
 
 use crate::nomparser::Span;
 use crate::{
@@ -30,15 +30,21 @@ pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
             tag_token_symbol(TokenType::LBRACKET),
-            opt( pair(type_name,
-             delimited(tag_token_symbol(TokenType::MUL), general_exp, tag_token_symbol(TokenType::SEMI)))),
+            opt(pair(
+                type_name,
+                delimited(
+                    tag_token_symbol(TokenType::MUL),
+                    general_exp,
+                    tag_token_symbol(TokenType::SEMI),
+                ),
+            )),
             separated_list0(
                 tag_token_symbol(TokenType::COMMA),
                 del_newline_or_space!(general_exp),
             ),
             tag_token_symbol(TokenType::RBRACKET),
         )),
-        |((_, lb),tp, exps, (_, rb))| {
+        |((_, lb), tp, exps, (_, rb))| {
             let range = lb.start.to(rb.end);
             res_enum(ArrayInitNode { exps, range, tp }.into())
         },
