@@ -293,8 +293,9 @@ impl Node for ArrayElementNode {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_INDEX_MUST_BE_INT)));
             }
             let elemptr = {
-                let index = &[builder.int_value(&PriType::I64, 0, false), index];
+                let index = &[ index];
                 let real_arr = builder.build_struct_gep(arr, 1, "real_arr").unwrap();
+                let real_arr = builder.build_load(real_arr, "load_arr");
                 builder.build_in_bounds_gep(real_arr, index, "element_ptr")
             };
             ctx.emit_comment_highlight(&self.comments[0]);

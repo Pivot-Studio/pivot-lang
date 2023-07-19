@@ -269,7 +269,6 @@ impl TypeNode for TypeNameNode {
 #[node]
 pub struct ArrayTypeNameNode {
     pub id: Box<TypeNodeEnum>,
-    pub size: Box<NodeEnum>,
 }
 
 impl PrintTrait for ArrayTypeNameNode {
@@ -277,8 +276,7 @@ impl PrintTrait for ArrayTypeNameNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("ArrayTypeNameNode");
-        self.id.print(tabs + 1, false, line.clone());
-        self.size.print(tabs + 1, true, line.clone());
+        self.id.print(tabs + 1, true , line.clone());
     }
 }
 
@@ -289,18 +287,13 @@ impl TypeNode for ArrayTypeNameNode {
         builder: &'b BuilderEnum<'a, '_>,
         gen_code: bool,
     ) -> TypeNodeResult {
-        if let NodeEnum::Num(num) = *self.size {
-            if let Num::Int(sz) = num.value {
-                let pltype = self.id.get_type(ctx, builder, gen_code)?;
-                let arrtype = ARRType {
-                    element_type: pltype,
-                    size: sz as u32,
-                };
-                let arrtype = Arc::new(RefCell::new(PLType::Arr(arrtype)));
-                return Ok(arrtype);
-            }
-        }
-        Err(ctx.add_diag(self.range.new_err(ErrorCode::SIZE_MUST_BE_INT)))
+        let pltype = self.id.get_type(ctx, builder, gen_code)?;
+        let arrtype = ARRType {
+            element_type: pltype,
+            size_handle: 0,
+        };
+        let arrtype = Arc::new(RefCell::new(PLType::Arr(arrtype)));
+        return Ok(arrtype);
     }
 
     fn emit_highlight<'ctx>(&self, ctx: &mut Ctx<'_>) {
@@ -315,18 +308,7 @@ impl TypeNode for ArrayTypeNameNode {
     ) -> Result<EqRes, PLDiag> {
         match &*pltype.borrow() {
             PLType::Arr(a) => {
-                if let NodeEnum::Num(num) = *self.size {
-                    if let Num::Int(size) = num.value {
-                        if a.size as u64 != size {
-                            return Ok(EqRes {
-                                eq: false,
-                                need_up_cast: false,
-                            });
-                        }
-                        return self.id.eq_or_infer(ctx, a.element_type.clone(), builder);
-                    }
-                }
-                Err(ctx.add_diag(self.range.new_err(ErrorCode::SIZE_MUST_BE_INT)))
+                return self.id.eq_or_infer(ctx, a.element_type.clone(), builder);
             }
             _ => Ok(EqRes {
                 eq: false,
@@ -717,7 +699,7 @@ impl Node for StructInitNode {
 
 #[node]
 pub struct ArrayInitNode {
-    // pub tp: Box<TypeNameNode>,
+    pub tp: Option< (Box<TypeNodeEnum>,Box<NodeEnum>)>,
     pub exps: Vec<Box<NodeEnum>>,
 }
 
@@ -726,7 +708,10 @@ impl PrintTrait for ArrayInitNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("ArrayInitNode");
-        // self.tp.print(tabs + 1, self.exps.len() == 0, line.clone());
+        if let Some((tp,len)) = &self.tp {
+            tp.print(tabs + 1, false, line.clone());
+            len.print(tabs + 1, false, line.clone());
+        }
         let mut i = self.exps.len();
         for exp in &self.exps {
             i -= 1;
@@ -757,30 +742,46 @@ impl Node for ArrayInitNode {
             let tp = v.get_ty();
             exps.push((ctx.try_load2var(range, v.get_value(), builder)?, tp));
         }
-        if tp0.is_none() {
-            return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_INIT_EMPTY)));
-        }
-        let tp = exps[0].clone().1;
-        let sz = exps.len() as u32;
+        let sz = exps.len() as u64;
+        let (tp,size_handle) = if let Some((tp,len_v)) = &mut self.tp {
+            tp.emit_highlight(ctx);
+            let tp = tp.get_type(ctx, builder, true)?;
+            let len = len_v.emit(ctx, builder)?.get_value().unwrap();
+            if !matches!( &*len.get_ty().borrow(),PLType::Primitive(PriType::I64) ) {
+                return Err(ctx.add_diag(len_v.range().new_err(ErrorCode::ARRAY_LEN_MUST_BE_I64)));
+            }
+            let len = ctx.try_load2var(len_v.range(), len.get_value(), builder)?;
+            if let Some(tp0) = &tp0 {
+                if !ctx.eq(tp.clone(), tp0.clone()).total_eq() {
+                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_TYPE_NOT_MATCH)));
+                }
+            }
+            (tp,len)
+        }else {
+            if tp0.is_none() {
+                return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_INIT_EMPTY)));
+            }
+            let tp = exps[0].clone().1;
+            (tp, builder.int_value(&PriType::I64, sz, true))
+        };
+        let arr_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
+            element_type: tp,
+            size_handle,
+        })));
         let arr = builder.alloc(
             "array_alloca",
-            &PLType::Arr(ARRType {
-                element_type: tp,
-                size: exps.len() as u32,
-            }),
+            &arr_tp.borrow(),
             ctx,
             None,
         );
         let real_arr = builder.build_struct_gep(arr, 1, "real_arr").unwrap();
 
+        let real_arr = builder.build_load(real_arr, "load_arr");
         for (i, (v, _)) in exps.into_iter().enumerate() {
-            let ptr = builder.build_const_in_bounds_gep(real_arr, &[0, i as u64], "elem_ptr");
+            let ptr = builder.build_const_in_bounds_gep(real_arr, &[i as u64], "elem_ptr");
             builder.build_store(ptr, v);
         }
-        arr.new_output(Arc::new(RefCell::new(PLType::Arr(ARRType {
-            element_type: tp0.unwrap(),
-            size: sz,
-        }))))
+        arr.new_output(arr_tp)
         .to_result()
     }
 }

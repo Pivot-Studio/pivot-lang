@@ -1506,3 +1506,9 @@ pub struct EqRes {
     pub eq: bool,
     pub need_up_cast: bool,
 }
+
+impl EqRes {
+    pub fn total_eq(&self) -> bool {
+        self.eq && !self.need_up_cast
+    }
+}

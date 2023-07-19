@@ -500,4 +500,5 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     fn sizeof(&self,_pltype: &PLType,_ctx: &mut Ctx<'a>,) -> u64 {
         0
     }
+    fn build_memcpy(&self, _from:ValueHandle,_to:ValueHandle, _len:ValueHandle) {}
 }

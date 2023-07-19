@@ -8,7 +8,7 @@ pub fn true_with_pnanic() bool {
 pub struct complex_struct {
     x: i64;
     pub y: *bool;
-    pub z: [base * 2];
+    pub z: [base];
 }
 
 /// struct coment
@@ -25,6 +25,14 @@ fn struct_init() void {
         z: [base{}, base{}]
     };
     t.z[1];
+    return;
+}
+
+fn test_arr() void {
+    let a = [1, 2, 3];
+    a[1] = 100;
+    a = [i64 * a[1]; ];
+    a[99] = 10;
     return;
 }
 

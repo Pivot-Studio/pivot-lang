@@ -237,6 +237,7 @@ pub trait IRBuilder<'a, 'ctx> {
     fn sizeof(&self,
         pltype: &PLType,
         ctx: &mut Ctx<'a>,)->u64;
+        fn build_memcpy(&self, from:ValueHandle,to:ValueHandle, len:ValueHandle);
 }
 
 pub type ValueHandle = usize;

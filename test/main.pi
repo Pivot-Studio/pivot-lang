@@ -24,9 +24,19 @@ use project1::test::compiletime_reflection::test_compile_time_reflection;
 use project1::test::deconstruct;
 use project1::test::st::*;
 use project1::test::iter;
-
-
+use std::cols::arr;
+use std::io;
 pub fn main() i64 {
+    let array = arr::from_slice([1,2,3]);
+    array.set(2, 100);
+    let a2 = array.get(2);
+    println!(a2);
+    array.push(4);
+    array.push(5);
+    let a4 = array.get(4);
+    println!(a4);
+    let a5 = array.pop();
+    println!(a5);
     macros::test_macros();
     ifel::test_if_else();
     generic::test_generic();
@@ -55,14 +65,4 @@ pub fn main() i64 {
     return 0;
 }
 
-
-fn push3<T>(ss:name2<T>, t:T, tt:*T) void {
-    ss.t = &t;
-    tt=&t;
-    return;
-}
-
-struct name2<T> {
-    t:*T;
-}
 

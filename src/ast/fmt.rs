@@ -169,10 +169,6 @@ impl FmtBuilder {
     pub fn parse_array_type_name_node(&mut self, node: &ArrayTypeNameNode) {
         self.l_bracket();
         node.id.format(self);
-        self.space();
-        self.asterisk();
-        self.space();
-        node.size.format(self);
         self.r_bracket();
     }
     pub fn parse_type_name_node(&mut self, node: &TypeNameNode) {
@@ -271,6 +267,15 @@ impl FmtBuilder {
     }
     pub fn parse_array_init_node(&mut self, node: &ArrayInitNode) {
         self.l_bracket();
+        if let Some((tp,len)) = &node.tp {
+            tp.format(self);
+            self.space();
+            self.asterisk();
+            self.space();
+            len.format(self);
+            self.semicolon();
+            self.space();
+        }
         for (i, exp) in node.exps.iter().enumerate() {
             exp.format(self);
             if i != node.exps.len() - 1 {

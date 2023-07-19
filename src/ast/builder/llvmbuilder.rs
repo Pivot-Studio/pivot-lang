@@ -35,7 +35,7 @@ use rustc_hash::FxHashMap;
 use crate::ast::{
     ctx::{CtxFlag, PLSymbol},
     diag::PLDiag,
-    pltype::{ClosureType, TraitImplAble},
+    pltype::{ClosureType, TraitImplAble, get_type_deep},
 };
 
 use super::{
@@ -201,24 +201,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         declare: Option<Pos>,
         malloc_fn: &str,
     ) -> ValueHandle {
-        let td = self.targetmachine.get_target_data();
         let builder = self.builder;
         builder.unset_current_debug_location();
-        let bt = self.get_basic_type_op(pltype, ctx).unwrap();
         let (p, stack_root, _) = self.gc_malloc(name, ctx, pltype, malloc_fn);
-        // TODO: force user to manually init all structs, so we can remove this memset
-        let size_val = self
-            .context
-            .i64_type()
-            .const_int(td.get_store_size(&bt), false);
-        self.builder
-            .build_memset(
-                p,
-                td.get_abi_alignment(&bt),
-                self.context.i8_type().const_zero(),
-                size_val,
-            )
-            .unwrap();
         if let PLType::Struct(tp) = pltype {
             let f = self.get_or_insert_st_visit_fn_handle(&p, tp);
             let i = self.builder.build_ptr_to_int(
@@ -276,7 +261,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let obj_type = tp.get_immix_type().int_value();
         let f = self.get_malloc_f(ctx, malloc_fn);
         let llvmtp = self.get_basic_type_op(tp, ctx).unwrap();
-        let tp = self
+        let immix_tp = self
             .context
             .i8_type()
             .const_int(tp.get_immix_type().int_value() as u64, false);
@@ -304,15 +289,52 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
         let heapptr = self
             .builder
-            .build_call(f, &[size.into(), tp.into()], &format!("heapptr_{}", name))
+            .build_call(f, &[size.into(), immix_tp.into()], &format!("heapptr_{}", name))
             .try_as_basic_value()
             .left()
             .unwrap();
+
         let casted_result = self.builder.build_bitcast(
             heapptr.into_pointer_value(),
             llvmtp.ptr_type(AddressSpace::default()),
             name,
         );
+
+                // TODO: force user to manually init all structs, so we can remove this memset
+                let size_val = self
+                .context
+                .i64_type()
+                .const_int(td.get_store_size(&llvmtp), false);
+            self.builder
+                .build_memset(
+                    casted_result.into_pointer_value(),
+                    td.get_abi_alignment(&llvmtp),
+                    self.context.i8_type().const_zero(),
+                    size_val,
+                )
+                .unwrap();
+
+        if let PLType::Arr(arr) = tp {
+            if arr.size_handle != 0 {
+                let f = self.get_malloc_f(ctx, "DioGC__malloc_no_collect");
+                let etp= self.get_basic_type_op(&arr.element_type.borrow(), ctx).unwrap();
+                let size = td.get_store_size(&etp);
+                let size = self.context.i64_type().const_int(size, false);
+                let arr_len = self.get_llvm_value(arr.size_handle).unwrap().into_int_value();
+                let arr_size = self.builder.build_int_mul(arr_len, size, "arr_size");
+                let arr_size = self.builder.build_int_z_extend_or_bit_cast(arr_size, self.context.i64_type(), "arr_size");
+                let len_ptr = self.builder.build_struct_gep(casted_result.into_pointer_value(), 2, "arr_len").unwrap();
+                self.builder.build_store(len_ptr, arr_len);
+                let arr_ptr = self.builder.build_struct_gep(casted_result.into_pointer_value(), 1, "arr_ptr").unwrap();
+                let arr_space = self.builder.build_call(f, &[arr_size.into(), self
+                .context
+                .i8_type()
+                .const_int(immix::ObjectType::Atomic.int_value() as u64, false).into()], "arr_space").try_as_basic_value().left().unwrap();
+                let arr_space = self.builder.build_bitcast(arr_space.into_pointer_value(), etp.ptr_type(AddressSpace::default()), "arr_space");
+                self.builder.build_store(arr_ptr, arr_space);
+            }
+        }
+
         self.builder.position_at_end(alloca);
         let stack_ptr = self
             .builder
@@ -435,9 +457,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let len = self.handle_table.borrow().len();
         let nh = match self.handle_reverse_table.borrow().get(value) {
             Some(handle) => *handle,
-            None => len,
+            None => len + 1,
         };
-        if nh == len {
+        if nh == len + 1 {
             self.handle_table.borrow_mut().insert(nh, *value);
             self.handle_reverse_table.borrow_mut().insert(*value, nh);
         }
@@ -474,7 +496,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let ptrtp = self.arr_type(v, ctx).ptr_type(AddressSpace::default());
         let ty = ptrtp.get_element_type().into_struct_type();
         let ftp = self.mark_fn_tp(ptrtp);
-        let arr_tp = ty.get_field_type_at_index(1).unwrap().into_array_type();
+        let arr_tp = ty.get_field_type_at_index(1).unwrap();
         let fname = &(arr_tp.to_string() + "@" + &ctx.plmod.path);
         if let Some(f) = self.module.get_function(fname) {
             return f;
@@ -482,19 +504,19 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let f = self
             .module
             .add_function(fname, ftp, Some(Linkage::External));
-        // the array is a struct, the first field is the visit function, the second field is the real array
+        // the array is a struct, the first field is the visit function,
+        // the second field is the real array, the third field is it's length
         // array struct it self is the first parameter
         // the other three parameters are the visit function for different type
         let bb = self.context.append_basic_block(f, "entry");
         self.builder.position_at_end(bb);
         let arr = f.get_nth_param(0).unwrap().into_pointer_value();
-        let arr = self.builder.build_struct_gep(arr, 1, "arr").unwrap();
-        let loop_var = self.builder.build_alloca(self.context.i32_type(), "i");
+        let real_arr_raw = self.builder.build_struct_gep(arr, 1, "arr").unwrap();
+        let real_arr = self.builder.build_load(real_arr_raw, "loaded_arr").into_pointer_value();
+        let loop_var = self.builder.build_alloca(self.context.i64_type(), "i");
         // arr is the real array
-        let arr_len = self
-            .context
-            .i32_type()
-            .const_int(arr_tp.len() as u64, false);
+        let arr_len =self.builder.build_struct_gep(arr, 2, "arr_len").unwrap();
+        let arr_len = self.builder.build_load(arr_len, "arr_len").into_int_value();
         // generate a loop, iterate the real array, and do nothing
         let condbb = self.context.append_basic_block(f, "cond");
         self.builder.build_unconditional_branch(condbb);
@@ -510,8 +532,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let i = self.builder.build_load(loop_var, "i").into_int_value();
         let elm = unsafe {
             self.builder.build_in_bounds_gep(
-                arr,
-                &[self.context.i64_type().const_int(0, false), i],
+                real_arr,
+                &[i],
                 "elm",
             )
         };
@@ -521,7 +543,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         // which is stored in the first field of the struct
         let visit_complex_f = get_nth_mark_fn(f, 3);
         let visit_trait_f = get_nth_mark_fn(f, 4);
-        match &*v.element_type.borrow() {
+        match &*get_type_deep( v.element_type.clone()).borrow() {
             PLType::Arr(_) | PLType::Struct(_) => {
                 let casted = self.builder.build_bitcast(elm, i8ptrtp, "casted_arg");
                 // call the visit_complex function
@@ -547,10 +569,15 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let i = self.builder.build_load(loop_var, "i").into_int_value();
         let i = self
             .builder
-            .build_int_add(i, self.context.i32_type().const_int(1, false), "i");
+            .build_int_add(i, self.context.i64_type().const_int(1, false), "i");
         self.builder.build_store(loop_var, i);
         self.builder.build_unconditional_branch(condbb);
         self.builder.position_at_end(endbb);
+
+        // call the visit_ptr function
+        let casted = self.builder.build_bitcast(real_arr_raw, i8ptrtp, "casted_arg");
+        self.builder
+        .build_call(get_nth_mark_fn(f, 2), &[visitor.into(), casted.into()], "call");
         self.builder.build_return(None);
         if let Some(currentbb) = currentbb {
             self.builder.position_at_end(currentbb);
@@ -792,8 +819,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     self.context.i64_type().as_basic_type_enum(),
                     self.get_basic_type_op(&arrtp.element_type.borrow(), ctx)
                         .unwrap()
-                        .array_type(arrtp.size)
+                        .ptr_type(Default::default())
                         .as_basic_type_enum(),
+                    self.context.i64_type().as_basic_type_enum(),
                 ],
                 false,
             )
@@ -861,7 +889,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .get_basic_type_op(&arr.element_type.borrow(), ctx)
                     .unwrap();
                 let arr_st_tp = self.arr_type(arr, ctx).into_struct_type();
-                let size = td.get_bit_size(etp) * arr.size as u64;
+                let size = td.get_bit_size(etp) * 0;
                 let align = td.get_preferred_alignment(etp);
                 let st_size = td.get_bit_size(&arr_st_tp);
                 let vtabledi = self.get_ditype(&PLType::Primitive(PriType::U64), ctx)?;
@@ -879,7 +907,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 );
                 let arrdi = self
                     .dibuilder
-                    .create_array_type(elemdi, size, align, &[(0..arr.size as i64)])
+                    .create_array_type(elemdi, size, align, &[(0..0)])
                     .as_type();
                 let offset = td.offset_of_element(&arr_st_tp, 1).unwrap();
                 let arrtp = self.dibuilder.create_member_type(
@@ -1238,6 +1266,30 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
         *self.optimized.borrow_mut() = true;
     }
+
+    fn try_load2var_inner(&self, v: usize) -> Result<usize, ()> {
+        let handle = v;
+        let v = self.get_llvm_value(handle).unwrap();
+        if !v.is_pointer_value() {
+            Ok(match v {
+                AnyValueEnum::ArrayValue(_)
+                | AnyValueEnum::IntValue(_)
+                | AnyValueEnum::FloatValue(_)
+                | AnyValueEnum::PointerValue(_)
+                | AnyValueEnum::StructValue(_)
+                | AnyValueEnum::VectorValue(_) => handle,
+                AnyValueEnum::FunctionValue(f) => {
+                    return Ok(self.get_llvm_value_handle(&f.as_global_value().as_any_value_enum()));
+                }
+                _ => return Err(()),
+            })
+        } else {
+            Ok(self.build_load(
+                self.get_llvm_value_handle(&v.into_pointer_value().as_any_value_enum()),
+                "loadtmp",
+            ))
+        }
+    }
 }
 impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     fn bitcast(
@@ -1350,26 +1402,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         v: ValueHandle,
         ctx: &mut Ctx<'a>,
     ) -> Result<ValueHandle, PLDiag> {
-        let handle = v;
-        let v = self.get_llvm_value(handle).unwrap();
-        if !v.is_pointer_value() {
-            Ok(match v {
-                AnyValueEnum::ArrayValue(_)
-                | AnyValueEnum::IntValue(_)
-                | AnyValueEnum::FloatValue(_)
-                | AnyValueEnum::PointerValue(_)
-                | AnyValueEnum::StructValue(_)
-                | AnyValueEnum::VectorValue(_) => handle,
-                AnyValueEnum::FunctionValue(f) => {
-                    return Ok(self.get_llvm_value_handle(&f.as_global_value().as_any_value_enum()));
-                }
-                _ => return Err(ctx.add_diag(range.new_err(ErrorCode::EXPECT_VALUE))),
-            })
-        } else {
-            Ok(self.build_load(
-                self.get_llvm_value_handle(&v.into_pointer_value().as_any_value_enum()),
-                "loadtmp",
-            ))
+        match self.try_load2var_inner(v) {
+            Ok(value) => Ok(value),
+            Err(_) => return Err(range.new_err(ErrorCode::EXPECT_VALUE).add_to_ctx(ctx)),
         }
     }
 
@@ -2179,7 +2214,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let st = f.get_nth_param(0).unwrap().into_pointer_value();
         // iterate all fields but the first
         for i in 1..fieldn {
-            let field_pltp = &*field_tps[i as usize - 1].borrow();
+            let bind = get_type_deep(field_tps[i as usize - 1].clone());
+            let field_pltp = &* bind.borrow();
             let visitor = f.get_nth_param(1).unwrap().into_pointer_value();
             let visit_ptr_f = get_nth_mark_fn(f, 2);
             // complex type needs to provide a visit function by itself
@@ -2499,6 +2535,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.builder.build_store(v, size);
 
         self.builder.position_at_end(cur_bb);
+    }
+    fn build_memcpy(&self, from:ValueHandle,to:ValueHandle, len:ValueHandle) {
+
+        let from =  self.get_llvm_value(self.try_load2var_inner(from).unwrap()).unwrap().into_pointer_value();
+        let to = self.get_llvm_value(self.try_load2var_inner(to).unwrap()).unwrap().into_pointer_value();
+
+        let len = self.get_llvm_value(self.try_load2var_inner(len).unwrap()).unwrap().into_int_value();
+        self.builder.build_memcpy(to, 8, from, 8, len).unwrap();
     }
 }
 

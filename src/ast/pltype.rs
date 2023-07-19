@@ -1,3 +1,4 @@
+use super::builder::ValueHandle;
 use super::ctx::Ctx;
 use super::diag::ErrorCode;
 use super::node::types::ClosureTypeNode;
@@ -20,13 +21,11 @@ use super::diag::PLDiag;
 use super::fmt::FmtBuilder;
 use super::node::function::FuncDefNode;
 use super::node::pkg::ExternIdNode;
-use super::node::primary::NumNode;
 use super::node::primary::VarNode;
 use super::node::types::ArrayTypeNameNode;
 use super::node::types::PointerTypeNode;
 use super::node::types::TypeNameNode;
 use super::node::NodeEnum;
-use super::node::Num;
 use super::node::TypeNode;
 use super::node::TypeNodeEnum;
 use super::range::Range;
@@ -323,13 +322,9 @@ fn new_typename_node(name: &str, range: Range, ns: &[String]) -> Box<TypeNodeEnu
         range,
     }))
 }
-fn new_arrtype_node(typenode: Box<TypeNodeEnum>, size: u64) -> Box<TypeNodeEnum> {
+fn new_arrtype_node(typenode: Box<TypeNodeEnum>) -> Box<TypeNodeEnum> {
     Box::new(TypeNodeEnum::Array(ArrayTypeNameNode {
         id: typenode,
-        size: Box::new(NodeEnum::Num(NumNode {
-            value: Num::Int(size),
-            range: Default::default(),
-        })),
         range: Default::default(),
     }))
 }
@@ -350,6 +345,13 @@ pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
         }
         PLType::Pointer(p) =>{
             Arc::new(RefCell::new(PLType::Pointer( get_type_deep(p.clone()))))
+        }
+        PLType::Arr(p) =>{
+            let a = ARRType{
+                element_type: get_type_deep(p.element_type.clone()),
+                size_handle: p.size_handle,
+            };
+            Arc::new(RefCell::new(PLType::Arr( a)))
         }
         _ => pltype.clone(),
     }
@@ -414,7 +416,6 @@ impl PLType {
             PLType::Struct(st) => new_typename_node(&st.name, st.range, &Self::get_ns(st, path)),
             PLType::Arr(arr) => new_arrtype_node(
                 arr.get_elem_type().borrow().get_typenode(path),
-                arr.size as u64,
             ),
             PLType::Primitive(p) => new_typename_node(&p.get_name(), Default::default(), &[]),
             PLType::Void => new_typename_node("void", Default::default(), &[]),
@@ -463,7 +464,7 @@ impl PLType {
             PLType::Struct(st) => st.name.clone(),
             PLType::Primitive(pri) => pri.get_name(),
             PLType::Arr(arr) => {
-                format!("[{} * {}]", arr.element_type.borrow().get_name(), arr.size)
+                format!("[{}]", arr.element_type.borrow().get_name())
             }
             PLType::Void => "void".to_string(),
             PLType::Pointer(p) => "*".to_string() + &p.borrow().get_name(),
@@ -487,7 +488,7 @@ impl PLType {
             PLType::Trait(t) => t.name.clone(),
             PLType::Primitive(pri) => pri.get_name(),
             PLType::Arr(arr) => {
-                format!("[{} * {}]", arr.element_type.borrow().get_name(), arr.size)
+                format!("[{}]", arr.element_type.borrow().get_name())
             }
             PLType::Void => "void".to_string(),
             PLType::Pointer(p) => "*".to_string() + &p.borrow().get_name(),
@@ -519,9 +520,8 @@ impl PLType {
             PLType::Primitive(pri) => pri.get_name(),
             PLType::Arr(arr) => {
                 format!(
-                    "[{} * {}]",
+                    "[{}]",
                     arr.element_type.borrow().get_full_elm_name(),
-                    arr.size
                 )
             }
             PLType::Void => "void".to_string(),
@@ -540,9 +540,8 @@ impl PLType {
             PLType::Primitive(pri) => pri.get_name(),
             PLType::Arr(arr) => {
                 format!(
-                    "[{} * {}]",
-                    arr.element_type.borrow().get_full_elm_name(),
-                    arr.size
+                    "[{}]",
+                    arr.element_type.borrow().get_full_elm_name()
                 )
             }
             PLType::Void => "void".to_string(),
@@ -939,10 +938,10 @@ impl FNValue {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct ARRType {
     pub element_type: Arc<RefCell<PLType>>,
-    pub size: u32,
+    pub size_handle: ValueHandle,
 }
 
 impl ARRType {
@@ -950,6 +949,14 @@ impl ARRType {
         self.element_type.clone()
     }
 }
+
+impl PartialEq for ARRType {
+    fn eq(&self, other: &Self) -> bool {
+        self.element_type == other.element_type
+    }
+}
+
+impl Eq for ARRType {}
 
 #[range]
 #[derive(Debug, Clone, Eq)]
