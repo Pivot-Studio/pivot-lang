@@ -31,6 +31,9 @@
       - [Stack Map](./systemlib/stackmap.md)
       - [Evacuation](./systemlib/eva.md)
   - [planglib](./systemlib/planglib.md)
+- [compiler theory](./compiler_theory/README.md)
+  - [top-down parsing](./compiler_theory/top-down_parsing.md)
+
 
 # CONTRIBUTING
 
