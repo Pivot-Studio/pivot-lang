@@ -1,7 +1,7 @@
 #![allow(improper_ctypes_definitions)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::process::exit;
+use std::{process::exit, thread};
 
 use backtrace::Backtrace;
 use internal_macro::is_runtime;
@@ -58,4 +58,15 @@ fn print_raw(bs: *const u8, len: i64) {
 #[is_runtime]
 fn print_i64(i: i64) {
     print!("{}", i);
+}
+
+#[is_runtime]
+fn new_thread(f: extern "C" fn(i64), d: i64) {
+    // f's first 8 byte is fn pointer, next 8 byte is data pointer
+    thread::spawn(move || {f(d)});
+}
+
+#[is_runtime]
+fn sleep(secs: i64) {
+    thread::sleep(std::time::Duration::from_secs(secs as u64));
 }

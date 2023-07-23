@@ -1024,7 +1024,12 @@ impl<'a, 'ctx> Ctx<'a> {
         if u.get_path() != self.plmod.path {
             let s = p.file_name().unwrap().to_str().unwrap();
             let m = s.split('.').next().unwrap();
-            let m = self.plmod.submods.get(m).unwrap();
+            eprintln!("{}",m);
+            let m = self.plmod.submods.get(m);
+            if m.is_none(){
+                eprintln!("err");
+            }
+            let m = m.unwrap();
             oldm = Some(self.set_mod(m.clone()));
         }
         let res = f(self, u);

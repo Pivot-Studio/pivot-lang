@@ -1,125 +1,106 @@
-use project1::test::ifel;
-use project1::test::generic;
-use project1::test::st;
-use project1::test::method;
-use project1::test::constant;
-use project1::test::traits;
-use project1::test::simple;
-use project1::test::flow;
-use project1::test::list;
-use project1::test::module;
-use project1::test::string;
-use project1::test::macros;
-use project1::test::union;
-use project1::test::multi_trait;
-use project1::test::tuple;
-use project1::test::fntype;
-use project1::test::closure;
-use project1::test::map;
-use project1::test::tree;
-use project1::test::fixed_point;
-use project1::tmod2;
-use pl_test::main;
-use project1::test::compiletime_reflection::test_compile_time_reflection;
-use project1::test::deconstruct;
-use project1::test::st::*;
-use std::io;
-use std::iter::*;
-pub fn main() i64 {
-    macros::test_macros();
-    ifel::test_if_else();
-    generic::test_generic();
-    method::test_impl();
-    test_struct();
-    constant::test_const();
-    traits::test_trait();
-    simple::test_simple();
-    flow::test_flow();
-    list::test_list();
-    main::simple_test();
-    module::test_module();
-    string::test_string();
-    union::test_union();
-    multi_trait::test_multi_trait();
-    deconstruct::test_deconstruct();
-    tuple::test_tuple();
-    fntype::test_fntype()();
-    closure::test_closure();
-    tree::test_eva();
-    map::test_map();
-    fixed_point::test_fixed_point();
-    generic::ret_generic1<i64>();
-    test_compile_time_reflection();
-    let a:Iterator<i64>;
-    let re = iter::ret_opt();
-    // let iterator:Iterator<i64> = namet{status:0};
-    let iterator:Iterator<i64> =name();
-    let next:Option<i64> = iterator.next();
-    println!("first next");
-    if next is i64 {
-        // next = 1 as i64;
-        println!("enter is");
-        let i = next as i64!;
-        println!(i);
-    }else {
-        println!("none");
+use std::future::*;
+fn new_thread(f: ||=>i64) void;
+fn sleep(secs: i64) void;
+pub struct SharedState {
+    completed: bool;
+    waker: Waker;
+}
+
+pub struct TimerFuture {
+    shared_state: SharedState;
+}
+
+impl Future<()> for TimerFuture {
+    fn poll(wk: Waker) Poll<()> {
+        let shared_state = self.shared_state;
+        if shared_state.completed{
+            return Ready<()>{v: ()};
+        }else{
+            shared_state.waker = wk;
+            return Pending{};
+        }
     }
-    next = iterator.next();
-    println!("second next");
-    if next is i64 {
-        let i = next as i64!;
-        println!(i);
-    }else {
-        println!("none");
+}
+
+pub struct TimeWaker {
+    task: *Task;
+}
+
+impl Waker for TimeWaker {
+    fn wake() void {
+        let task = self.task;
+        task.sender = task;
+        return;
     }
-    next = iterator.next();
-    println!("third next");
-    if next is i64 {
-        let i = next as i64!;
-        println!(i);
-    }else {
-        println!("none");
+}
+
+
+pub fn new_tf(secs: i64)*TimerFuture{
+    let shared_state = SharedState{
+        completed: false,
+        waker: TimeWaker{}
+    };
+    let shared_state_1 = shared_state;
+    new_thread(||=>i64{
+        sleep(secs);
+        shared_state_1.completed =true;
+        shared_state_1.waker.wake();
+        return 0;
+    });
+    let ret = TimerFuture {shared_state: shared_state};
+    return &ret;
+}
+
+
+pub struct Task {
+    time_future: *TimerFuture;
+    sender: *Task;
+}
+
+pub struct Spawner {
+    sender: *Task;
+}
+
+struct Executor {
+    ready_queue: *Task;
+}
+
+fn new_executor_and_spawner() (Executor, Spawner) {
+    let task = Task{};
+    let executor = Executor{ready_queue: &task};
+    let spawner = Spawner{sender: &task};
+    return (executor, spawner);
+}
+
+impl Spawner {
+    fn spawn(future: *TimerFuture)void{
+        let task = Task {
+            time_future: future,
+            sender: self.sender
+        };
+        future.shared_state.waker = TimeWaker{task: &task};
+        self.sender = &task;
+        return;
     }
-    next = iterator.next();
-    if next is i64 {
-        let i = next as i64!;
-        println!(i);
-    }else {
-        println!("none");
+}
+
+impl Executor {
+    fn run()void{
+        let task = *(self.ready_queue);
+        while true {
+            let wk = task.time_future.shared_state.waker;
+            let poll = task.time_future.poll(wk);
+            match_type<Ready<()>>(poll, { return; });
+            match_type<Pending>(poll, {  });
+        }
+        return;
     }
-    next = iterator.next();
-    if next is i64 {
-        let i = next as i64!;
-        println!(i);
-    }else {
-        println!("none");
-    }
+}
+
+fn main() i64 {
+    let tf = new_tf(3);
+    let (executor, spawner) = new_executor_and_spawner();
+    spawner.spawn(tf);
+    executor.run();
     return 0;
-}
-
-
-struct namet {
-    status: i64;
-}
-
-impl Iterator<i64> for namet {
-    fn next() Option<i64> {
-        self.status = self.status + 1;
-        return self.status;
-    }
-}
-
-
-gen fn name() Iterator<i64> {
-    for let i = 0; i < 2; i = i + 1 {
-        yield return i;
-    }
-    let a = 1;
-    yield return a;
-    a = a + 1;
-    println!("yield 2");
-    yield return a;
-    a = a + 1;
-    println!("yield 3");
-    yield return a;
 }
