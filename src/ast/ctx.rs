@@ -1021,7 +1021,7 @@ impl<'a, 'ctx> Ctx<'a> {
     ) -> R {
         let p = PathBuf::from(&u.get_path());
         let mut oldm = None;
-        if u.get_path() != self.plmod.path {
+        if u.get_path() != self.plmod.path && !u.is_tuple() {
             let s = p.file_name().unwrap().to_str().unwrap();
             let m = s.split('.').next().unwrap();
             eprintln!("{}",m);
@@ -1029,6 +1029,7 @@ impl<'a, 'ctx> Ctx<'a> {
             if m.is_none(){
                 eprintln!("err");
             }
+            
             let m = m.unwrap();
             oldm = Some(self.set_mod(m.clone()));
         }

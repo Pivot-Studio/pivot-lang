@@ -2,6 +2,9 @@ use super::pltype::{FNValue, STType, UnionType};
 
 pub trait CustomType {
     fn get_path(&self) -> String;
+    fn is_tuple(&self) -> bool {
+        false
+    }
 }
 
 macro_rules! impl_custom_type {
@@ -23,4 +26,15 @@ macro_rules! impl_custom_type {
     };
 }
 
-impl_custom_type!(UnionType, STType, FNValue);
+impl_custom_type!(UnionType, FNValue);
+
+
+impl CustomType for STType {
+    fn is_tuple(&self) -> bool {
+        self.is_tuple
+    }
+
+    fn get_path(&self) -> String {
+        self.path.clone()
+    }
+}

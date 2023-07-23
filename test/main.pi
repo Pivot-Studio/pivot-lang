@@ -36,9 +36,10 @@ impl Waker for TimeWaker {
 
 
 pub fn new_tf(secs: i64)*TimerFuture{
+    let a:Waker = TimeWaker{};
     let shared_state = SharedState{
         completed: false,
-        waker: TimeWaker{}
+        waker: a
     };
     let shared_state_1 = shared_state;
     new_thread(||=>i64{
