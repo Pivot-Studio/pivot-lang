@@ -2,6 +2,7 @@ use super::builder::ValueHandle;
 use super::ctx::Ctx;
 use super::diag::ErrorCode;
 use super::node::types::ClosureTypeNode;
+use super::node::types::CustomTypeNode;
 use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::tokens::TokenType;
@@ -46,7 +47,7 @@ use lsp_types::SymbolKind;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 
-use std::path::PathBuf;
+
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -395,25 +396,17 @@ impl PLType {
         }
     }
 
-    fn get_ns<T: CustomType>(tp: &T, path: &str) -> Vec<String> {
-        let p = tp.get_path();
-        if p != path && !p.ends_with("builtin.pi") {
-            let p: PathBuf = p.into();
-            vec![p
-                .with_extension("")
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string()]
-        } else {
-            vec![]
-        }
+    fn new_custom_tp_node<T: CustomType>(tp: &T, _path: &str) -> Box<TypeNodeEnum> {
+        Box::new(TypeNodeEnum::Custom(CustomTypeNode {
+            name: tp.get_name(),
+            range: tp.get_range(),
+            path: tp.get_path(),
+        }))
     }
 
     pub fn get_typenode(&self, path: &str) -> Box<TypeNodeEnum> {
         match self {
-            PLType::Struct(st) => new_typename_node(&st.name, st.range, &Self::get_ns(st, path)),
+            PLType::Struct(st) => Self::new_custom_tp_node(st, path),
             PLType::Arr(arr) => new_arrtype_node(arr.get_elem_type().borrow().get_typenode(path)),
             PLType::Primitive(p) => new_typename_node(&p.get_name(), Default::default(), &[]),
             PLType::Void => new_typename_node("void", Default::default(), &[]),
@@ -428,9 +421,9 @@ impl PLType {
             PLType::PlaceHolder(p) => {
                 new_typename_node(&p.get_place_holder_name(), Default::default(), &[])
             }
-            PLType::Trait(t) => new_typename_node(&t.name, t.range, &Self::get_ns(t, path)),
+            PLType::Trait(t) => Self::new_custom_tp_node(t, path),
             PLType::Fn(_) => unreachable!(),
-            PLType::Union(u) => new_typename_node(&u.name, u.range, &Self::get_ns(u, path)),
+            PLType::Union(u) => Self::new_custom_tp_node(u, path),
             PLType::Closure(c) => Box::new(c.to_type_node(path)),
         }
     }
@@ -453,6 +446,15 @@ impl PLType {
             PLType::Generic(g) => f_local(g),
             PLType::PlaceHolder(_) => (),
             PLType::Closure(_) => (),
+        }
+    }
+
+    pub fn get_path(&self) -> Option<String> {
+        match self {
+            PLType::Fn(f) => Some(f.get_path()),
+            PLType::Struct(f) | PLType::Trait(f) => Some(f.get_path()),
+            PLType::Union(f) => Some(f.get_path()),
+            _ => None,
         }
     }
 

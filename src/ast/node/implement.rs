@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    ast::{ctx::Ctx, tokens::TokenType},
+    ast::{ctx::Ctx, tokens::TokenType, traits::CustomType},
     format_label,
 };
 use internal_macro::node;
@@ -123,7 +123,7 @@ fn check_fn<'a, 'b>(
                 )
                 .add_label(
                     st.range,
-                    ctx.get_file(),
+                    st.get_path(),
                     format_label!("trait {} def here", &st.name),
                 )
                 .add_help(
@@ -235,7 +235,7 @@ impl Node for ImplNode {
                     )
                     .add_label(
                         tp.borrow().get_range().unwrap(),
-                        ctx.get_file(),
+                        tp.borrow().get_path().unwrap_or(ctx.get_file()),
                         format_label!("trait {} def here", tp.borrow().get_name()),
                     )
                     .add_help("add the method to current impl block")

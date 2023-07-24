@@ -235,7 +235,7 @@ impl Node for FuncCallNode {
         )?;
         // value check and generic infer
         let res = ctx.protect_generic_context(&fnvalue.fntype.generic_map.clone(), |ctx| {
-            let rettp = ctx.run_in_type_mod_mut_deep(&mut fnvalue, |ctx, fnvalue| {
+            let rettp = ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
                 if let Some(receiver_pltype) = &receiver_type {
                     if !fnvalue.fntype.param_pltypes[0]
                         .eq_or_infer(ctx, receiver_pltype.clone(), builder)?

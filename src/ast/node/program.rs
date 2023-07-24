@@ -570,6 +570,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     if let Some(builtin_mod) = ctx.plmod.submods.get("stdbuiltin").cloned() {
         ctx.plmod.import_all_symbols_from(&builtin_mod);
     }
+    ctx.origin_mod = &ctx.plmod as _;
     ctx.import_all_infer_maps_from_sub_mods();
     let m = &mut ctx;
     #[cfg(feature = "llvm")]
@@ -625,6 +626,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
             },
         );
     }
+    db.add_module(ctx.get_file(), ctx.plmod.clone());
     ModWrapper::new(db, ctx.plmod)
 }
 

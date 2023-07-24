@@ -53,9 +53,10 @@ use lsp_types::SemanticTokenType;
 use lsp_types::Url;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
+
 use std::cell::RefCell;
 
-use std::path::PathBuf;
+
 use std::sync::Arc;
 mod builtins;
 mod references;
@@ -105,6 +106,7 @@ pub struct Ctx<'a> {
     pub ctx_flag: CtxFlag,
     pub generator_data: Option<Arc<RefCell<GeneratorCtxData>>>,
     pub generic_cache: GenericCache,
+    pub origin_mod: *const Mod,
 }
 
 #[derive(Clone, Default)]
@@ -298,6 +300,7 @@ impl<'a, 'ctx> Ctx<'a> {
             ctx_flag: CtxFlag::Normal,
             generator_data: None,
             generic_cache: generic_infer,
+            origin_mod: std::ptr::null(),
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -336,6 +339,7 @@ impl<'a, 'ctx> Ctx<'a> {
             ctx_flag: self.ctx_flag,
             generator_data: self.generator_data.clone(),
             generic_cache: self.generic_cache.clone(),
+            origin_mod: self.origin_mod,
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
@@ -854,6 +858,30 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
     }
+
+    pub fn get_type_in_mod(&self, m: &Mod, name: &str, range: Range) -> Result<GlobType, PLDiag> {
+        if let Some(pv) = self.generic_types.get(name) {
+            self.set_if_refs_tp(pv.clone(), range);
+            self.send_if_go_to_def(
+                range,
+                pv.borrow().get_range().unwrap_or(range),
+                self.plmod.path.clone(),
+            );
+            return Ok(pv.clone().into());
+        }
+        if m.path == self.plmod.path {
+            if let Ok(pv) = self.plmod.get_type(name, range, self) {
+                return Ok(pv);
+            }
+        } else if let Ok(pv) = m.get_type(name, range, self) {
+            return Ok(pv);
+        }
+        if let Some(father) = self.father {
+            let re = father.get_type_in_mod(m, name, range);
+            return re;
+        }
+        Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
+    }
     /// 用来获取外部模块的全局变量
     /// 如果没在当前module的全局变量表中找到，将会生成一个
     /// 该全局变量的声明
@@ -911,6 +939,8 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         self.set_if_refs_tp(pltype.clone(), range);
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
+        self.db
+            .add_tp_to_mod(&self.plmod.path, &name, pltype.clone());
         self.plmod.types.insert(name, pltype.into());
         Ok(())
     }
@@ -919,6 +949,8 @@ impl<'a, 'ctx> Ctx<'a> {
             unreachable!()
         }
         let name = pltype.borrow().get_name();
+        self.db
+            .add_tp_to_mod(&self.plmod.path, &name, pltype.clone());
         self.plmod.types.insert(name, pltype.into());
     }
     #[inline]
@@ -1016,33 +1048,14 @@ impl<'a, 'ctx> Ctx<'a> {
         u: &TP,
         mut f: F,
     ) -> R {
-        let p = PathBuf::from(&u.get_path());
         let mut oldm = None;
         if u.get_path() != self.plmod.path {
-            let s = p.file_name().unwrap().to_str().unwrap();
-            let m = s.split('.').next().unwrap();
-            let m = self.plmod.submods.get(m).unwrap();
-            oldm = Some(self.set_mod(m.clone()));
-        }
-        let res = f(self, u);
-        if let Some(m) = oldm {
-            self.set_mod(m);
-        }
-        res
-    }
-
-    // FIXME: performance
-    pub fn run_in_type_mod_deep<'b, TP: CustomType, R, F: FnMut(&mut Ctx<'a>, &TP) -> R>(
-        &'b mut self,
-        u: &TP,
-        mut f: F,
-    ) -> R {
-        let p = PathBuf::from(&u.get_path());
-        let mut oldm = None;
-        if u.get_path() != self.plmod.path {
-            let s = p.file_name().unwrap().to_str().unwrap();
-            let m = s.split('.').next().unwrap();
-            let m = self.plmod.search_mod(u, m).unwrap();
+            let ori_mod = unsafe { &*self.origin_mod as &Mod };
+            let m = if u.get_path() == ori_mod.path {
+                ori_mod.clone()
+            } else {
+                self.db.get_module(&u.get_path()).unwrap()
+            };
             oldm = Some(self.set_mod(m));
         }
         let res = f(self, u);
@@ -1065,13 +1078,15 @@ impl<'a, 'ctx> Ctx<'a> {
         u: &mut TP,
         mut f: F,
     ) -> R {
-        let p = PathBuf::from(&u.get_path());
         let mut oldm = None;
         if u.get_path() != self.plmod.path {
-            let s = p.file_name().unwrap().to_str().unwrap();
-            let m = s.split('.').next().unwrap();
-            let m = self.plmod.submods.get(m).unwrap();
-            oldm = Some(self.set_mod(m.clone()));
+            let ori_mod = unsafe { &*self.origin_mod as &Mod };
+            let m = if u.get_path() == ori_mod.path {
+                ori_mod.clone()
+            } else {
+                self.db.get_module(&u.get_path()).unwrap()
+            };
+            oldm = Some(self.set_mod(m));
         }
         let res = f(self, u);
         if let Some(m) = oldm {
@@ -1080,24 +1095,16 @@ impl<'a, 'ctx> Ctx<'a> {
         res
     }
 
-    pub fn run_in_type_mod_mut_deep<'b, TP: CustomType, R, F: FnMut(&mut Ctx<'a>, &mut TP) -> R>(
-        &'b mut self,
-        u: &mut TP,
-        mut f: F,
-    ) -> R {
-        let p = PathBuf::from(&u.get_path());
-        let mut oldm = None;
-        if u.get_path() != self.plmod.path {
-            let s = p.file_name().unwrap().to_str().unwrap();
-            let m = s.split('.').next().unwrap();
-            let m = self.plmod.search_mod(u, m).unwrap();
-            oldm = Some(self.set_mod(m));
+    pub fn get_mod(&self, path: &str) -> Mod {
+        let ori_mod = unsafe { &*self.origin_mod as &Mod };
+        
+        if path == self.plmod.path {
+            self.plmod.clone()
+        } else if path == ori_mod.path {
+            ori_mod.clone()
+        } else {
+            self.db.get_module(path).unwrap()
         }
-        let res = f(self, u);
-        if let Some(m) = oldm {
-            self.set_mod(m);
-        }
-        res
     }
 
     pub fn get_file_url(&self) -> Url {

@@ -76,6 +76,7 @@ pub enum TypeNodeEnum {
     Func(FuncDefNode),
     Tuple(TupleTypeNode),
     Closure(ClosureTypeNode),
+    Custom(CustomTypeNode),
 }
 #[enum_dispatch]
 pub trait TypeNode: RangeTrait + FmtTrait + PrintTrait {

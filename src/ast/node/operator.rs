@@ -330,7 +330,7 @@ impl Node for TakeOpNode {
             headptr = builder.alloc("temp", &head_pltype.borrow(), ctx, None);
         }
         match &*head_pltype.clone().borrow() {
-            PLType::Trait(s) => ctx.run_in_type_mod_deep(s, |ctx, s| {
+            PLType::Trait(s) => ctx.run_in_type_mod(s, |ctx, s| {
                 ctx.protect_generic_context(&s.generic_map, |ctx| {
                     let head_pltype = head_pltype.clone();
                     let field = s.get_trait_field(&id.name);

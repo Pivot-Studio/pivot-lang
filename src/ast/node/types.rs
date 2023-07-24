@@ -994,3 +994,54 @@ impl PrintTrait for ClosureTypeNode {
         self.ret_type.print(tabs + 1, true, line.clone());
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomTypeNode {
+    pub name: String,
+    pub range: Range,
+    pub path: String,
+}
+
+impl TypeNode for CustomTypeNode {
+    fn get_type<'a, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        _builder: &'b BuilderEnum<'a, '_>,
+        _gen_code: bool,
+    ) -> TypeNodeResult {
+        let m = ctx.get_mod(&self.path);
+        let tp = ctx.get_type_in_mod(&m, &self.name, self.range)?;
+        Ok(tp.tp)
+    }
+
+    fn emit_highlight(&self, _ctx: &mut Ctx) {
+        todo!()
+    }
+
+    fn eq_or_infer<'a, 'b>(
+        &self,
+        _ctx: &'b mut Ctx<'a>,
+        _pltype: Arc<RefCell<PLType>>,
+        _builder: &'b BuilderEnum<'a, '_>,
+    ) -> Result<EqRes, PLDiag> {
+        todo!()
+    }
+}
+
+impl RangeTrait for CustomTypeNode {
+    fn range(&self) -> Range {
+        self.range
+    }
+}
+
+impl PrintTrait for CustomTypeNode {
+    fn print(&self, _tabs: usize, _end: bool, _line: Vec<bool>) {
+        todo!()
+    }
+}
+
+impl FmtTrait for CustomTypeNode {
+    fn format(&self, _builder: &mut FmtBuilder) {
+        todo!()
+    }
+}
