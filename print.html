@@ -192,19 +192,21 @@ scoop install plc
 <h2 id="linux"><a class="header" href="#linux">Linux</a></h2>
 <p>目前我们对架构为amd64的Ubuntu 20.04 LTS 和 Ubuntu 22.04 LTS提供了apt包。<br />
 首先你需要添加我们的apt源的gpg key：</p>
-<pre><code class="language-bash">apt update
-apt install wget gnupg
-wget -O -  https://lang.pivotstudio.cn/apt/public.key | apt-key add -
+<pre><code class="language-bash">sudo apt update
+sudo apt install wget gnupg
+wget -O -  https://lang.pivotstudio.cn/apt/public.key | sudo apt-key add -
 </code></pre>
 <p>然后添加我们的apt源：</p>
-<pre><code class="language-bash">echo &quot;deb [arch=amd64] https://lang.pivotstudio.cn/apt/repo focal main
+<pre><code class="language-bash">sudo touch chmod +777 /etc/apt/sources.list.d/pl.list
+sudo chmod +777 /etc/apt/sources.list.d/pl.list
+sudo echo &quot;deb [arch=amd64] https://lang.pivotstudio.cn/apt/repo focal main
 # deb-src [arch=amd64] https://lang.pivotstudio.cn/apt/repo focal main
 deb [arch=amd64] https://lang.pivotstudio.cn/apt/repo jammy main
 # deb-src [arch=amd64] https://lang.pivotstudio.cn/apt/repo jammy main&quot;&gt;/etc/apt/sources.list.d/pl.list
-apt update
+sudo apt update
 </code></pre>
 <p>最后安装pivot lang编译器：</p>
-<pre><code class="language-bash">apt install pivot-lang
+<pre><code class="language-bash">sudo apt install pivot-lang
 </code></pre>
 <p>你可以运行<code>plc</code>来检查是否安装成功。</p>
 <p>安装完成后请按照提示设置环境变量</p>
