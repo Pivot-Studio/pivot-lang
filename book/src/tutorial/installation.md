@@ -21,21 +21,23 @@ scoop install plc
 目前我们对架构为amd64的Ubuntu 20.04 LTS 和 Ubuntu 22.04 LTS提供了apt包。  
 首先你需要添加我们的apt源的gpg key：
 ```bash
-apt update
-apt install wget gnupg
-wget -O -  https://lang.pivotstudio.cn/apt/public.key | apt-key add -
+sudo apt update
+sudo apt install wget gnupg
+wget -O -  https://lang.pivotstudio.cn/apt/public.key | sudo apt-key add -
 ```
 然后添加我们的apt源：
 ```bash
-echo "deb [arch=amd64] https://lang.pivotstudio.cn/apt/repo focal main
+sudo touch chmod +777 /etc/apt/sources.list.d/pl.list
+sudo chmod +777 /etc/apt/sources.list.d/pl.list
+sudo echo "deb [arch=amd64] https://lang.pivotstudio.cn/apt/repo focal main
 # deb-src [arch=amd64] https://lang.pivotstudio.cn/apt/repo focal main
 deb [arch=amd64] https://lang.pivotstudio.cn/apt/repo jammy main
 # deb-src [arch=amd64] https://lang.pivotstudio.cn/apt/repo jammy main">/etc/apt/sources.list.d/pl.list
-apt update
+sudo apt update
 ```
 最后安装pivot lang编译器：
 ```bash
-apt install pivot-lang
+sudo apt install pivot-lang
 ```
 你可以运行`plc`来检查是否安装成功。  
 
