@@ -47,7 +47,6 @@ use lsp_types::SymbolKind;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 
-
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;

@@ -1,5 +1,5 @@
 #![allow(clippy::vec_box)]
-#![allow(clippy::clone_double_ref)]
+#![allow(suspicious_double_ref_op)]
 #![allow(clippy::derive_ord_xor_partial_ord)]
 #![allow(clippy::missing_safety_doc)]
 

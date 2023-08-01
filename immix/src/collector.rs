@@ -239,6 +239,11 @@ impl Collector {
     /// precise mark a pointer
     unsafe extern "C" fn mark_ptr(&self, ptr: *mut u8) {
         let father = ptr;
+        // check pointer is valid (divided by 8)
+        if (ptr as usize) % 8 != 0 {
+            return;
+        }
+
         let mut ptr = *(ptr as *mut *mut u8);
         // println!("mark ptr {:p} -> {:p}", father, ptr);
         // mark it if it is in heap

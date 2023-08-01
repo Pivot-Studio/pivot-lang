@@ -126,9 +126,9 @@ pub fn build_root_maps(
     for _ in 0..num_functions {
         let (function, next_ptr) = Function::new(ptr);
         function.safe_points.iter().for_each(|&safe_point| {
-            roots
-                .insert(safe_point, function.clone())
-                .and_then(|_| -> Option<()> { panic!("duplicate safe point: {:p}", safe_point) });
+            if roots.insert(safe_point, function.clone()).is_some() {
+                panic!("duplicate safe point: {:p}", safe_point)
+            }
         });
         // roots.insert(function.addr, function);
         ptr = next_ptr;

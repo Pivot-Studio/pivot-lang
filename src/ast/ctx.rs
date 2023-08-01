@@ -56,7 +56,6 @@ use rustc_hash::FxHashSet;
 
 use std::cell::RefCell;
 
-
 use std::sync::Arc;
 mod builtins;
 mod references;
@@ -1097,7 +1096,7 @@ impl<'a, 'ctx> Ctx<'a> {
 
     pub fn get_mod(&self, path: &str) -> Mod {
         let ori_mod = unsafe { &*self.origin_mod as &Mod };
-        
+
         if path == self.plmod.path {
             self.plmod.clone()
         } else if path == ori_mod.path {

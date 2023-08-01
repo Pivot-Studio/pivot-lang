@@ -332,6 +332,7 @@ impl Linker for MsvcLinker {
         self.push_args("bcrypt.lib");
         self.push_args("userenv.lib");
         self.push_args("advapi32.lib");
+        self.push_args("ntdll.lib");
 
         // use linker directly, since lld may report
         // lld-link: error: The CodeView record is corrupted.
