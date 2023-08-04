@@ -225,8 +225,8 @@ impl Node for ForNode {
         ctx.position_at_end(after_block, builder);
         ctx.emit_comment_highlight(&self.comments[0]);
         NodeOutput::default()
-            .with_term(if terminator.is_return() {
-                TerminatorEnum::Return
+            .with_term(if terminator == TerminatorEnum::Return {
+                terminator
             } else {
                 TerminatorEnum::None
             })

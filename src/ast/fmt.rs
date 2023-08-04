@@ -150,6 +150,10 @@ impl FmtBuilder {
                 self.dbcolon();
             }
         }
+        if node.all_import {
+            self.dbcolon();
+            self.asterisk();
+        }
         self.semicolon();
         self.enter();
     }
@@ -165,10 +169,6 @@ impl FmtBuilder {
     pub fn parse_array_type_name_node(&mut self, node: &ArrayTypeNameNode) {
         self.l_bracket();
         node.id.format(self);
-        self.space();
-        self.asterisk();
-        self.space();
-        node.size.format(self);
         self.r_bracket();
     }
     pub fn parse_type_name_node(&mut self, node: &TypeNameNode) {
@@ -267,6 +267,15 @@ impl FmtBuilder {
     }
     pub fn parse_array_init_node(&mut self, node: &ArrayInitNode) {
         self.l_bracket();
+        if let Some((tp, len)) = &node.tp {
+            tp.format(self);
+            self.space();
+            self.asterisk();
+            self.space();
+            len.format(self);
+            self.semicolon();
+            self.space();
+        }
         for (i, exp) in node.exps.iter().enumerate() {
             exp.format(self);
             if i != node.exps.len() - 1 {
@@ -341,6 +350,10 @@ impl FmtBuilder {
         }
     }
     pub fn parse_ret_node(&mut self, node: &RetNode) {
+        if let Some((t, _)) = node.yiel {
+            self.token(t.get_str());
+            self.space();
+        }
         if let Some(value) = &node.value {
             self.token("return");
             self.space();
@@ -455,6 +468,10 @@ impl FmtBuilder {
             c.format(self);
         }
         self.prefix();
+        if node.generator {
+            self.token(TokenType::GENERATOR_MARKER.get_str());
+            self.space();
+        }
         if let Some((modi, _)) = node.modifier {
             self.token(modi.get_str());
             self.space();

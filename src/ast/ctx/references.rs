@@ -56,7 +56,11 @@ impl<'a> Ctx<'a> {
     /// For details, see the module documentation.
     pub fn set_field_refs(&self, pltype: Arc<RefCell<PLType>>, f: &Field, range: Range) {
         self.set_glob_refs(
-            &format!("{}..{}", &pltype.borrow().get_full_elm_name(), f.name),
+            &format!(
+                "{}..{}",
+                &pltype.borrow().get_full_elm_name_without_generic(),
+                f.name
+            ),
             range,
         );
     }
@@ -67,16 +71,17 @@ impl<'a> Ctx<'a> {
     ///
     /// For details, see the module documentation.
     pub fn set_glob_refs(&self, name: &str, range: Range) {
-        self.plmod
+        let root = self.get_root_ctx();
+        root.plmod
             .glob_refs
             .borrow_mut()
             .insert(range, name.to_string());
-        let mut rm = self.plmod.refs_map.borrow_mut();
+        let mut rm = root.plmod.refs_map.borrow_mut();
         if let Some(refsmap) = rm.get(name) {
-            refsmap.borrow_mut().push(self.get_location(range));
+            refsmap.borrow_mut().push(root.get_location(range));
         } else {
             let v = RefCell::new(vec![]);
-            v.borrow_mut().push(self.get_location(range));
+            v.borrow_mut().push(root.get_location(range));
             rm.insert(name.to_string(), Arc::new(v));
         }
     }

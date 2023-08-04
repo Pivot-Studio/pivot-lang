@@ -53,9 +53,9 @@ use lsp_types::SemanticTokenType;
 use lsp_types::Url;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
+
 use std::cell::RefCell;
 
-use std::path::PathBuf;
 use std::sync::Arc;
 mod builtins;
 mod references;
@@ -68,6 +68,10 @@ pub struct PLSymbol {
     pub range: Range,
     pub refs: Option<Arc<MutVec<Location>>>,
 }
+type GenericCacheMap = IndexMap<String, Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>>;
+
+pub type GenericCache = Arc<RefCell<GenericCacheMap>>;
+
 /// # Ctx
 /// Context for code generation
 pub struct Ctx<'a> {
@@ -78,10 +82,9 @@ pub struct Ctx<'a> {
     pub root: Option<&'a Ctx<'a>>,   // root context, for symbol lookup
     pub function: Option<ValueHandle>, // current function
     pub init_func: Option<ValueHandle>, //init function,call first in main
-    pub roots: RefCell<Vec<ValueHandle>>,
-    pub block: Option<BlockHandle>,          // current block
+    pub block: Option<BlockHandle>,  // current block
     pub continue_block: Option<BlockHandle>, // the block to jump when continue
-    pub break_block: Option<BlockHandle>,    // the block to jump to when break
+    pub break_block: Option<BlockHandle>, // the block to jump to when break
     pub return_block: Option<(BlockHandle, Option<ValueHandle>)>, // the block to jump to when return and value
     pub errs: &'a RefCell<FxHashSet<PLDiag>>,                     // diagnostic list
     pub edit_pos: Option<Pos>,                                    // lsp params
@@ -99,6 +102,30 @@ pub struct Ctx<'a> {
     pub closure_data: Option<RefCell<ClosureCtxData>>,
     pub expect_ty: Option<Arc<RefCell<PLType>>>,
     pub self_ref_map: FxHashMap<String, FxHashSet<(String, Range)>>, // used to recognize self reference
+    pub ctx_flag: CtxFlag,
+    pub generator_data: Option<Arc<RefCell<GeneratorCtxData>>>,
+    pub generic_cache: GenericCache,
+    pub origin_mod: *const Mod,
+}
+
+#[derive(Clone, Default)]
+pub struct GeneratorCtxData {
+    pub table: LinkedHashMap<String, PLSymbol>,
+    pub entry_bb: BlockHandle,
+    pub ctx_handle: ValueHandle, //handle in setup function
+    pub ret_handle: ValueHandle, //handle in setup function
+    pub prev_yield_bb: Option<BlockHandle>,
+    pub ctx_size_handle: ValueHandle,
+    pub param_tmp: ValueHandle,
+}
+
+/// # CtxFlag
+///
+/// flags that might change the behavior of the builder
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CtxFlag {
+    Normal,
+    InGeneratorYield,
 }
 
 #[derive(Clone, Default)]
@@ -115,6 +142,72 @@ pub enum MacroReplaceNode {
 }
 
 impl<'a, 'ctx> Ctx<'a> {
+    pub fn add_term_to_previous_yield(
+        &self,
+        builder: &'a BuilderEnum<'a, 'ctx>,
+        curbb: usize,
+    ) -> Arc<RefCell<crate::ast::ctx::GeneratorCtxData>> {
+        let ctx = self;
+        let data = ctx.generator_data.as_ref().unwrap();
+        if let Some(prev_bb) = data.borrow().prev_yield_bb {
+            builder.position_at_end_block(prev_bb);
+            let ctx_handle = builder.get_nth_param(ctx.function.unwrap(), 0);
+            let ptr = builder
+                .build_struct_gep(ctx_handle, 1, "block_ptr")
+                .unwrap();
+
+            let addr = builder.get_block_address(curbb);
+            builder.build_store(ptr, addr);
+
+            builder.build_unconditional_branch(ctx.return_block.unwrap().0);
+        }
+        data.clone()
+    }
+    pub fn add_infer_result(
+        &self,
+        tp: &impl TraitImplAble,
+        name: &str,
+        pltp: Arc<RefCell<PLType>>,
+    ) {
+        self.generic_cache
+            .borrow_mut()
+            .entry(tp.get_full_name_except_generic())
+            .or_insert(Default::default())
+            .borrow_mut()
+            .insert(name.to_string(), pltp);
+    }
+
+    pub fn get_infer_result(
+        &self,
+        tp: &impl TraitImplAble,
+        name: &str,
+    ) -> Option<Arc<RefCell<PLType>>> {
+        let infer_map = self.generic_cache.borrow();
+        let infer_map = infer_map.get(&tp.get_full_name_except_generic())?;
+        let x = infer_map.borrow().get(name).cloned();
+        x
+    }
+
+    fn import_all_infer_maps_from(&self, other: &GenericCacheMap) {
+        for (k, v) in other.iter() {
+            if !self.generic_cache.borrow().contains_key(k) {
+                let map: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>> = Default::default();
+                self.generic_cache
+                    .borrow_mut()
+                    .insert(k.clone(), map.clone());
+                map.borrow_mut().extend(v.borrow().clone());
+            } else {
+                let infer_map = self.generic_cache.borrow();
+                let infer_map = infer_map.get(k).unwrap();
+                infer_map.borrow_mut().extend(v.borrow().clone());
+            }
+        }
+    }
+    pub fn import_all_infer_maps_from_sub_mods(&self) {
+        for (_, sub_mod) in self.plmod.submods.iter() {
+            self.import_all_infer_maps_from(&sub_mod.generic_infer.borrow());
+        }
+    }
     pub fn check_self_ref(&self, name: &str, range: Range) -> Result<(), PLDiag> {
         if let Some(root) = self.root {
             root.check_self_ref_inner(name, name, range)
@@ -174,10 +267,11 @@ impl<'a, 'ctx> Ctx<'a> {
         config: Config,
         db: &'a dyn Db,
     ) -> Ctx<'a> {
+        let generic_infer: GenericCache = Default::default();
         Ctx {
             need_highlight: 0,
             generic_types: FxHashMap::default(),
-            plmod: Mod::new(src_file_path.to_string()),
+            plmod: Mod::new(src_file_path.to_string(), generic_infer.clone()),
             father: None,
             init_func: None,
             function: None,
@@ -190,7 +284,6 @@ impl<'a, 'ctx> Ctx<'a> {
             continue_block: None,
             break_block: None,
             return_block: None,
-            roots: RefCell::new(Vec::new()),
             rettp: None,
             macro_vars: FxHashMap::default(),
             macro_loop: false,
@@ -203,6 +296,10 @@ impl<'a, 'ctx> Ctx<'a> {
             root: None,
             macro_skip_level: 0,
             self_ref_map: FxHashMap::default(),
+            ctx_flag: CtxFlag::Normal,
+            generator_data: None,
+            generic_cache: generic_infer,
+            origin_mod: std::ptr::null(),
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -224,7 +321,6 @@ impl<'a, 'ctx> Ctx<'a> {
             continue_block: self.continue_block,
             break_block: self.break_block,
             return_block: self.return_block,
-            roots: RefCell::new(Vec::new()),
             rettp: self.rettp.clone(),
             init_func: self.init_func,
             function: self.function,
@@ -239,6 +335,10 @@ impl<'a, 'ctx> Ctx<'a> {
             root,
             macro_skip_level: self.macro_skip_level,
             self_ref_map: FxHashMap::default(),
+            ctx_flag: self.ctx_flag,
+            generator_data: self.generator_data.clone(),
+            generic_cache: self.generic_cache.clone(),
+            origin_mod: self.origin_mod,
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
@@ -330,14 +430,19 @@ impl<'a, 'ctx> Ctx<'a> {
             return Ok(closure_v);
         }
         if let PLType::Union(u) = &*target_pltype.borrow() {
-            let union_members = self.run_in_type_mod(u, |ctx, u| {
-                let mut union_members = vec![];
-                for tp in &u.sum_types {
-                    let tp = tp.get_type(ctx, builder, true)?;
-                    union_members.push(tp);
-                }
-                Ok(union_members)
-            })?;
+            let mut union_members = vec![];
+            for tp in &u.sum_types {
+                let tp = tp.get_type(self, builder, true)?;
+                union_members.push(tp);
+            }
+            // let union_members = self.run_in_type_mod(u, |ctx, u| {
+            //     let mut union_members = vec![];
+            //     for tp in &u.sum_types {
+            //         let tp = tp.get_type(ctx, builder, true)?;
+            //         union_members.push(tp);
+            //     }
+            //     Ok(union_members)
+            // })?;
             for (i, tp) in union_members.iter().enumerate() {
                 if *tp.borrow() == *ori_pltype.borrow() {
                     let union_handle =
@@ -400,7 +505,7 @@ impl<'a, 'ctx> Ctx<'a> {
                             unreachable!()
                         });
 
-                        let fnhandle = builder.get_or_insert_fn_handle(&mthd.borrow(), ctx);
+                        let fnhandle = builder.get_or_insert_fn_handle(&mthd.borrow(), ctx).0;
                         let targetftp = f.typenode.get_type(ctx, builder, true).unwrap();
                         let casted =
                             builder.bitcast(ctx, fnhandle, &targetftp.borrow(), "fncast_tmp");
@@ -752,6 +857,30 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
     }
+
+    pub fn get_type_in_mod(&self, m: &Mod, name: &str, range: Range) -> Result<GlobType, PLDiag> {
+        if let Some(pv) = self.generic_types.get(name) {
+            self.set_if_refs_tp(pv.clone(), range);
+            self.send_if_go_to_def(
+                range,
+                pv.borrow().get_range().unwrap_or(range),
+                self.plmod.path.clone(),
+            );
+            return Ok(pv.clone().into());
+        }
+        if m.path == self.plmod.path {
+            if let Ok(pv) = self.plmod.get_type(name, range, self) {
+                return Ok(pv);
+            }
+        } else if let Ok(pv) = m.get_type(name, range, self) {
+            return Ok(pv);
+        }
+        if let Some(father) = self.father {
+            let re = father.get_type_in_mod(m, name, range);
+            return re;
+        }
+        Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
+    }
     /// 用来获取外部模块的全局变量
     /// 如果没在当前module的全局变量表中找到，将会生成一个
     /// 该全局变量的声明
@@ -809,6 +938,8 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         self.set_if_refs_tp(pltype.clone(), range);
         self.send_if_go_to_def(range, range, self.plmod.path.clone());
+        self.db
+            .add_tp_to_mod(&self.plmod.path, &name, pltype.clone());
         self.plmod.types.insert(name, pltype.into());
         Ok(())
     }
@@ -817,6 +948,8 @@ impl<'a, 'ctx> Ctx<'a> {
             unreachable!()
         }
         let name = pltype.borrow().get_name();
+        self.db
+            .add_tp_to_mod(&self.plmod.path, &name, pltype.clone());
         self.plmod.types.insert(name, pltype.into());
     }
     #[inline]
@@ -914,13 +1047,15 @@ impl<'a, 'ctx> Ctx<'a> {
         u: &TP,
         mut f: F,
     ) -> R {
-        let p = PathBuf::from(&u.get_path());
         let mut oldm = None;
         if u.get_path() != self.plmod.path {
-            let s = p.file_name().unwrap().to_str().unwrap();
-            let m = s.split('.').next().unwrap();
-            let m = self.plmod.submods.get(m).unwrap();
-            oldm = Some(self.set_mod(m.clone()));
+            let ori_mod = unsafe { &*self.origin_mod as &Mod };
+            let m = if u.get_path() == ori_mod.path {
+                ori_mod.clone()
+            } else {
+                self.db.get_module(&u.get_path()).unwrap()
+            };
+            oldm = Some(self.set_mod(m));
         }
         let res = f(self, u);
         if let Some(m) = oldm {
@@ -942,19 +1077,33 @@ impl<'a, 'ctx> Ctx<'a> {
         u: &mut TP,
         mut f: F,
     ) -> R {
-        let p = PathBuf::from(&u.get_path());
         let mut oldm = None;
         if u.get_path() != self.plmod.path {
-            let s = p.file_name().unwrap().to_str().unwrap();
-            let m = s.split('.').next().unwrap();
-            let m = self.plmod.submods.get(m).unwrap();
-            oldm = Some(self.set_mod(m.clone()));
+            let ori_mod = unsafe { &*self.origin_mod as &Mod };
+            let m = if u.get_path() == ori_mod.path {
+                ori_mod.clone()
+            } else {
+                self.db.get_module(&u.get_path()).unwrap()
+            };
+            oldm = Some(self.set_mod(m));
         }
         let res = f(self, u);
         if let Some(m) = oldm {
             self.set_mod(m);
         }
         res
+    }
+
+    pub fn get_mod(&self, path: &str) -> Mod {
+        let ori_mod = unsafe { &*self.origin_mod as &Mod };
+
+        if path == self.plmod.path {
+            self.plmod.clone()
+        } else if path == ori_mod.path {
+            ori_mod.clone()
+        } else {
+            self.db.get_module(path).unwrap()
+        }
     }
 
     pub fn get_file_url(&self) -> Url {
@@ -981,7 +1130,7 @@ impl<'a, 'ctx> Ctx<'a> {
         if range == Default::default() {
             return;
         }
-        self.plmod.defs.borrow_mut().insert(
+        self.get_root_ctx().plmod.defs.borrow_mut().insert(
             range,
             LSPDef::Scalar(Location {
                 uri: url_from_path(&file),
@@ -1144,11 +1293,11 @@ impl<'a, 'ctx> Ctx<'a> {
         if self.need_highlight != 0 || self.in_macro {
             return;
         }
-        self.plmod.semantic_tokens_builder.borrow_mut().push(
-            range.to_diag_range(),
-            type_index(tp),
-            modifiers,
-        )
+        self.get_root_ctx()
+            .plmod
+            .semantic_tokens_builder
+            .borrow_mut()
+            .push(range.to_diag_range(), type_index(tp), modifiers)
     }
     pub fn push_type_hints(&self, range: Range, pltype: Arc<RefCell<PLType>>) {
         if self.need_highlight != 0 || self.in_macro {
@@ -1195,10 +1344,11 @@ impl<'a, 'ctx> Ctx<'a> {
     fn get_keyword_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         let keywords = vec![
             "if", "else", "while", "for", "return", "struct", "let", "true", "false", "as", "is",
+            "gen", "yield",
         ];
         let loopkeys = vec!["break", "continue"];
         let toplevel = vec![
-            "fn", "struct", "const", "use", "impl", "trait", "pub", "type",
+            "fn", "struct", "const", "use", "impl", "trait", "pub", "type", "gen",
         ];
         if self.father.is_none() {
             for k in toplevel {
@@ -1402,4 +1552,10 @@ fn find_mthd(
 pub struct EqRes {
     pub eq: bool,
     pub need_up_cast: bool,
+}
+
+impl EqRes {
+    pub fn total_eq(&self) -> bool {
+        self.eq && !self.need_up_cast
+    }
 }

@@ -76,6 +76,7 @@ pub enum TypeNodeEnum {
     Func(FuncDefNode),
     Tuple(TupleTypeNode),
     Closure(ClosureTypeNode),
+    Custom(CustomTypeNode),
 }
 #[enum_dispatch]
 pub trait TypeNode: RangeTrait + FmtTrait + PrintTrait {
@@ -311,6 +312,7 @@ impl<'a, 'ctx> Ctx<'a> {
             let ty = get_type_deep(ty);
             let expect = get_type_deep(expect);
             if ty != expect {
+                // eprintln!("{:?}\n-------------\n{:?}", ty, expect);
                 let handle =
                     self.up_cast(expect.clone(), ty, expectrange, range, value, builder)?;
                 return Ok(NodeOutput::new_value(NodeValue::new_const(handle, expect)));

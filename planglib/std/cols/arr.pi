@@ -1,0 +1,72 @@
+use std::iter::*;
+use core::panic::*;
+use std::io;
+
+pub struct Array<T> {
+    data:[T];
+    len:u32;
+}
+
+pub fn new<T>() Array<T> {
+    let arr_raw = [T*4;];
+    let arr = Array<T> {
+        len:0 as u32
+    };
+    arr.data = arr_raw;
+    return arr;
+}
+
+impl <T> Array<T> {
+    pub fn push(t:T) void {
+        if self.len as i64 + 1 > arr_len(self.data) {
+            let new_data = [T*(arr_len(self.data) * 2);];
+            arr_copy(self.data, new_data, arr_len(self.data));
+            self.data = new_data;
+            self.data[self.len as i64] = t;
+            self.len = self.len + 1;
+        }else {
+            self.data[self.len as i64] = t;
+            self.len = self.len + 1;
+        }
+        return;
+    }
+    pub fn pop() T {
+        self.len = self.len - 1;
+        return self.data[self.len as i64];
+    }
+    pub fn len() u32 {
+        return self.len;
+    }
+    pub fn get(i:i64) T {
+        self.check_idx(i);
+        return self.data[i];
+    }
+    fn check_idx(i:i64) void {
+        if i >= arr_len(self.data) {
+            io::print_s("Array index out of bounds");
+            pl_panic();
+        }
+        return;
+    }
+    pub fn set(i:i64, t:T) void {
+        self.check_idx(i);
+        self.data[i] = t;
+        return;
+    }
+
+    gen pub fn iter() Iterator<T> {
+        for let i = 0; i < self.len as i64; i = i + 1 {
+            yield return self.data[i];
+        }
+    }
+}
+
+
+pub fn from_slice<T>(slice:[T]) Array<T> {
+    let arr = Array<T> {
+        len:arr_len(slice) as u32
+    };
+    arr.data = slice;
+    return arr;
+}
+

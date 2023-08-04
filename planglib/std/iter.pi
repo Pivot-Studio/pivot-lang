@@ -1,16 +1,4 @@
-use core::builtin::*;
-
 pub trait Iterator<T> {
     fn next() Option<T>;
-}
-
-struct name<T> {
-    t:T;
-}
-
-impl <T> Iterator<T> for name<T> {
-    fn next() Option<T> {
-        return self.t;
-    }
 }
 

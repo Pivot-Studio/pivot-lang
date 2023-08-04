@@ -19,3 +19,5 @@ impl <T> Option<T> {
         return f(v);
     }
 }
+
+pub use core::gc::string;

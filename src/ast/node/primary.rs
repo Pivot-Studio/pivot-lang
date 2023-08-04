@@ -186,7 +186,7 @@ impl Node for VarNode {
                     ctx.send_if_go_to_def(self.range, f.range, f.path.clone());
                     ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
                     if !f.fntype.generic {
-                        let handle = builder.get_or_insert_fn_handle(f, ctx);
+                        let handle = builder.get_or_insert_fn_handle(f, ctx).0;
                         return handle.new_output(tp.tp.clone()).to_result();
                     }
                     return usize::MAX.new_output(tp.tp.clone()).to_result();
@@ -293,8 +293,9 @@ impl Node for ArrayElementNode {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_INDEX_MUST_BE_INT)));
             }
             let elemptr = {
-                let index = &[builder.int_value(&PriType::I64, 0, false), index];
+                let index = &[index];
                 let real_arr = builder.build_struct_gep(arr, 1, "real_arr").unwrap();
+                let real_arr = builder.build_load(real_arr, "load_arr");
                 builder.build_in_bounds_gep(real_arr, index, "element_ptr")
             };
             ctx.emit_comment_highlight(&self.comments[0]);

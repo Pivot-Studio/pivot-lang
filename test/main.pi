@@ -23,6 +23,8 @@ use pl_test::main;
 use project1::test::compiletime_reflection::test_compile_time_reflection;
 use project1::test::deconstruct;
 use project1::test::st::*;
+use project1::test::arr;
+
 pub fn main() i64 {
     macros::test_macros();
     ifel::test_if_else();
@@ -48,6 +50,8 @@ pub fn main() i64 {
     fixed_point::test_fixed_point();
     generic::ret_generic1<i64>();
     test_compile_time_reflection();
+    arr::test_arr();
     return 0;
 }
+
 

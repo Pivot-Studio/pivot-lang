@@ -4,7 +4,7 @@ use super::statement::StatementsNode;
 use super::*;
 use super::{types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::builder::ValueHandle;
-use crate::ast::ctx::{ClosureCtxData, BUILTIN_FN_MAP};
+use crate::ast::ctx::{ClosureCtxData, CtxFlag, BUILTIN_FN_MAP};
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 
@@ -18,6 +18,8 @@ use std::cell::RefCell;
 
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::vec;
+
+mod generator;
 #[node(comment)]
 pub struct FuncCallNode {
     pub generic_params: Option<Box<GenericParamNode>>,
@@ -269,7 +271,7 @@ impl Node for FuncCallNode {
             let function = if fn_handle != usize::MAX {
                 fn_handle
             } else {
-                builder.get_or_insert_fn_handle(&fnvalue, ctx)
+                builder.get_or_insert_fn_handle(&fnvalue, ctx).0
             };
             builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
             // let rettp = ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
@@ -347,6 +349,7 @@ pub struct FuncDefNode {
     pub is_method: bool,
     pub in_trait_def: bool,
     pub target_range: Range,
+    pub generator: bool,
 }
 
 type OptFOnce<'a> = Option<Box<dyn FnOnce(&mut Ctx) -> Result<(), PLDiag> + 'a>>; // Thank u, Rust!
@@ -525,6 +528,7 @@ impl FuncDefNode {
         builder: &'b BuilderEnum<'a, '_>,
         fnvalue: FNValue,
     ) -> Result<(), PLDiag> {
+        let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap().tp);
         let child = &mut ctx.new_child(self.range.start, builder);
         child.protect_generic_context(&fnvalue.fntype.generic_map, |child| {
             if first && fnvalue.fntype.generic {
@@ -549,8 +553,25 @@ impl FuncDefNode {
                     Arc::new(RefCell::new(PLType::Fn(place_holder_fn.clone()))),
                 );
             }
-            let funcvalue = builder.get_or_insert_fn_handle(&fnvalue, child);
+            let (mut funcvalue, exists) = builder.get_or_insert_fn_handle(&fnvalue, child);
+            if exists {
+                return Ok(());
+            }
             child.function = Some(funcvalue);
+            let mut sttp_opt = None;
+            let mut generator_alloca_b = 0;
+            if self.generator {
+                generator::init_generator(
+                    child,
+                    &i8ptr,
+                    &fnvalue,
+                    builder,
+                    &mut funcvalue,
+                    &mut generator_alloca_b,
+                    &mut sttp_opt,
+                )?;
+            }
+
             builder.build_sub_program(
                 self.paralist.clone(),
                 fnvalue.fntype.ret_pltype.clone(),
@@ -561,21 +582,26 @@ impl FuncDefNode {
             // add block
             let allocab = builder.append_basic_block(funcvalue, "alloc");
             let entry = builder.append_basic_block(funcvalue, "entry");
+            if self.generator {
+                generator::save_generator_init_block(builder, child, entry);
+            }
             let return_block = builder.append_basic_block(funcvalue, "return");
             child.position_at_end(entry, builder);
-            let ret_value_ptr = match &*fnvalue
-                .fntype
-                .ret_pltype
-                .get_type(child, builder, true)?
-                .borrow()
-            {
-                PLType::Void => None,
-                other => {
-                    builder.rm_curr_debug_location();
-                    let retv = builder.alloc("retvalue", other, child, None);
-                    // 返回值不能在函数结束时从root表移除
-                    child.roots.borrow_mut().pop();
-                    Some(retv)
+            let ret_value_ptr = if self.generator {
+                generator::build_generator_ret(builder, child, &fnvalue, entry)?
+            } else {
+                match &*fnvalue
+                    .fntype
+                    .ret_pltype
+                    .get_type(child, builder, true)?
+                    .borrow()
+                {
+                    PLType::Void => None,
+                    other => {
+                        builder.rm_curr_debug_location();
+                        let retv = builder.alloc("retvalue", other, child, None);
+                        Some(retv)
+                    }
                 }
             };
             child.position_at_end(return_block, builder);
@@ -587,6 +613,10 @@ impl FuncDefNode {
                 builder.build_return(None);
             };
             child.position_at_end(entry, builder);
+            if self.generator {
+                // 设置flag，该flag影响alloc逻辑
+                child.ctx_flag = CtxFlag::InGeneratorYield;
+            }
             // alloc para
             for (i, para) in fnvalue.fntype.param_pltypes.iter().enumerate() {
                 let tp = para.get_type(child, builder, true)?;
@@ -602,6 +632,7 @@ impl FuncDefNode {
                     funcvalue,
                     alloca,
                     allocab,
+                    &basetype,
                 );
                 let parapltype = tp;
                 child
@@ -625,11 +656,25 @@ impl FuncDefNode {
                 child.init_global(builder);
                 child.position_at_end(entry, builder);
             }
-            child.rettp = Some(fnvalue.fntype.ret_pltype.get_type(child, builder, true)?);
+            if !self.generator {
+                child.rettp = Some(fnvalue.fntype.ret_pltype.get_type(child, builder, true)?);
+            }
+            // body generation
             let terminator = self.body.as_mut().unwrap().emit(child, builder)?.get_term();
-            if !terminator.is_return() {
+            if !terminator.is_return() && !self.generator {
                 return Err(
                     child.add_diag(self.range.new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN))
+                );
+            }
+            if self.generator {
+                return generator::end_generator(
+                    child,
+                    builder,
+                    i8ptr.clone(),
+                    sttp_opt,
+                    funcvalue,
+                    generator_alloca_b,
+                    allocab,
                 );
             }
             child.position_at_end(allocab, builder);
@@ -733,7 +778,7 @@ impl Node for ClosureNode {
             is_trait: false,
             is_tuple: true,
             generic_infer_types: Default::default(),
-            generic_infer: Default::default(),
+            // generic_infer: Default::default(),
             methods: Default::default(),
             trait_methods_impl: Default::default(),
         };
@@ -801,6 +846,8 @@ impl Node for ClosureNode {
         ctx.try_set_closure_alloca_bb(builder.get_first_basic_block(ctx.function.unwrap()));
         let f = builder.create_closure_fn(ctx, &closure_name, &paratps, &ret_tp.borrow());
         let child = &mut ctx.new_child(self.range.start, builder);
+        child.generator_data = None;
+        child.ctx_flag = CtxFlag::Normal;
         child.function = Some(f);
         let stpltp = PLType::Struct(st_tp.clone());
         let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)));
@@ -825,8 +872,6 @@ impl Node for ClosureNode {
             other => {
                 builder.rm_curr_debug_location();
                 let retv = builder.alloc("retvalue", other, child, None);
-                // 返回值不能在函数结束时从root表移除
-                child.roots.borrow_mut().pop();
                 Some(retv)
             }
         };

@@ -1,9 +1,14 @@
 //! # builtins
 //!
 //! compiler builtin methods, mostly used for static reflection
-use crate::ast::{builder::no_op_builder::NoOpBuilder, node::RangeTrait, pltype::PlaceHolderType};
+use crate::ast::{
+    builder::no_op_builder::NoOpBuilder,
+    node::{node_result::NodeResultBuilder, RangeTrait},
+    pltype::{PlaceHolderType, PriType},
+};
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
+use immix::IntEnum;
 use lazy_static::lazy_static;
 
 use crate::ast::{
@@ -28,6 +33,11 @@ lazy_static! {
         mp.insert(usize::MAX - 2, emit_for_fields);
         mp.insert(usize::MAX - 3, emit_match_type);
         mp.insert(usize::MAX - 4, emit_name_of);
+        mp.insert(usize::MAX - 5, emit_unsafe_cast);
+        mp.insert(usize::MAX - 6, emit_sizeof);
+        mp.insert(usize::MAX - 7, emit_gc_type);
+        mp.insert(usize::MAX - 8, emit_arr_len);
+        mp.insert(usize::MAX - 9, emit_arr_copy);
         mp
     };
     pub static ref BUILTIN_FN_SNIPPET_MAP: HashMap<ValueHandle, String> = {
@@ -42,6 +52,17 @@ lazy_static! {
             r#"match_type<${1:T}>(${2:t}, { ${3:_value} })$0"#.to_owned(),
         );
         mp.insert(usize::MAX - 4, r#"fullnameof(${1:t})$0"#.to_owned());
+        mp.insert(
+            usize::MAX - 5,
+            r#"unsafe_cast<${1:T}>(${2:t})$0"#.to_owned(),
+        );
+        mp.insert(usize::MAX - 6, r#"sizeof<${1:T}>()$0"#.to_owned());
+        mp.insert(usize::MAX - 7, r#"gc_type<${1:T}>()$0"#.to_owned());
+        mp.insert(usize::MAX - 8, r#"arr_len(${1:t})$0"#.to_owned());
+        mp.insert(
+            usize::MAX - 9,
+            r#"arr_copy(${1:from}, ${2:to}, ${3:len})$0"#.to_owned(),
+        );
         mp
     };
     pub static ref BUILTIN_FN_NAME_MAP: HashMap<&'static str, ValueHandle> = {
@@ -50,8 +71,240 @@ lazy_static! {
         mp.insert("forfields", usize::MAX - 2);
         mp.insert("match_type", usize::MAX - 3);
         mp.insert("nameof", usize::MAX - 4);
+        mp.insert("unsafe_cast", usize::MAX - 5);
+        mp.insert("sizeof", usize::MAX - 6);
+        mp.insert("gc_type", usize::MAX - 7);
+        mp.insert("arr_len", usize::MAX - 8);
+        mp.insert("arr_copy", usize::MAX - 9);
         mp
     };
+}
+
+fn emit_sizeof<'a, 'b>(
+    f: &mut FuncCallNode,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> NodeResult {
+    if !f.paralist.is_empty() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::PARAMETER_LENGTH_NOT_MATCH)
+            .add_to_ctx(ctx));
+    }
+    if f.generic_params.is_none() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_NOT_FOUND)
+            .add_to_ctx(ctx));
+    }
+    let generic = f.generic_params.as_ref().unwrap();
+    generic.emit_highlight(ctx);
+    if generic.generics.len() != 1 {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_NOT_FOUND)
+            .add_to_ctx(ctx));
+    }
+    if generic.generics[0].is_none() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_NOT_FOUND)
+            .add_to_ctx(ctx));
+    }
+    let generic = generic.generics[0]
+        .as_ref()
+        .unwrap()
+        .get_type(ctx, builder, true)?;
+    let size = builder.sizeof(&generic.borrow(), ctx);
+    let b = builder.int_value(&PriType::I64, size, true);
+    return b
+        .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::I64))))
+        .set_const()
+        .to_result();
+}
+
+fn emit_gc_type<'a, 'b>(
+    f: &mut FuncCallNode,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> NodeResult {
+    if !f.paralist.is_empty() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::PARAMETER_LENGTH_NOT_MATCH)
+            .add_to_ctx(ctx));
+    }
+    if f.generic_params.is_none() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_NOT_FOUND)
+            .add_to_ctx(ctx));
+    }
+    let generic = f.generic_params.as_ref().unwrap();
+    generic.emit_highlight(ctx);
+    if generic.generics.len() != 1 {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_NOT_FOUND)
+            .add_to_ctx(ctx));
+    }
+    if generic.generics[0].is_none() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_NOT_FOUND)
+            .add_to_ctx(ctx));
+    }
+    let generic = generic.generics[0]
+        .as_ref()
+        .unwrap()
+        .get_type(ctx, builder, true)?;
+    let size = generic.borrow().get_immix_type();
+    let b = builder.int_value(&PriType::U8, size.int_value() as _, true);
+    return b
+        .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::U8))))
+        .set_const()
+        .to_result();
+}
+
+fn emit_unsafe_cast<'a, 'b>(
+    f: &mut FuncCallNode,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> NodeResult {
+    if f.paralist.len() != 1 {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::PARAMETER_LENGTH_NOT_MATCH)
+            .add_to_ctx(ctx));
+    }
+    if f.generic_params.is_none() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_NOT_FOUND)
+            .add_to_ctx(ctx));
+    }
+    let generic = f.generic_params.as_ref().unwrap();
+    generic.emit_highlight(ctx);
+    if generic.generics.len() != 1 {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_NOT_FOUND)
+            .add_to_ctx(ctx));
+    }
+    let st = f.paralist[0].emit(ctx, builder)?;
+    let v = st.get_value().unwrap();
+    if generic.generics[0].is_none() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_NOT_FOUND)
+            .add_to_ctx(ctx));
+    }
+    let generic = generic.generics[0]
+        .as_ref()
+        .unwrap()
+        .get_type(ctx, builder, true)?;
+    if !matches!(&*v.get_ty().borrow(), PLType::Pointer(_)) {
+        return Err(f.paralist[0]
+            .range()
+            .new_err(crate::ast::diag::ErrorCode::NOT_A_POINTER)
+            .add_to_ctx(ctx));
+    }
+    let ty = PLType::Pointer(generic);
+    let re = builder.bitcast(ctx, v.get_value(), &ty, "unsafe_casted");
+    re.new_output(Arc::new(RefCell::new(ty))).to_result()
+}
+
+fn emit_arr_len<'a, 'b>(
+    f: &mut FuncCallNode,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> NodeResult {
+    if f.paralist.len() != 1 {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::PARAMETER_LENGTH_NOT_MATCH)
+            .add_to_ctx(ctx));
+    }
+    if f.generic_params.is_some() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_PARAM_LEN_MISMATCH)
+            .add_to_ctx(ctx));
+    }
+
+    let st = f.paralist[0].emit(ctx, builder)?;
+    let v = st.get_value().unwrap();
+
+    if !matches!(&*v.get_ty().borrow(), PLType::Arr(_)) {
+        return Err(f.paralist[0]
+            .range()
+            .new_err(crate::ast::diag::ErrorCode::EXPECT_ARRAY_TYPE)
+            .add_to_ctx(ctx));
+    }
+    let len = builder
+        .build_struct_gep(v.get_value(), 2, "arr_len")
+        .unwrap();
+    len.new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::I64))))
+        .to_result()
+}
+
+fn emit_arr_copy<'a, 'b>(
+    f: &mut FuncCallNode,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> NodeResult {
+    if f.paralist.len() != 3 {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::PARAMETER_LENGTH_NOT_MATCH)
+            .add_to_ctx(ctx));
+    }
+    if f.generic_params.is_some() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_PARAM_LEN_MISMATCH)
+            .add_to_ctx(ctx));
+    }
+
+    let st = f.paralist[0].emit(ctx, builder)?;
+    let v = st.get_value().unwrap();
+
+    if !matches!(&*v.get_ty().borrow(), PLType::Arr(_)) {
+        return Err(f.paralist[0]
+            .range()
+            .new_err(crate::ast::diag::ErrorCode::EXPECT_ARRAY_TYPE)
+            .add_to_ctx(ctx));
+    }
+
+    let st = f.paralist[1].emit(ctx, builder)?;
+    let to = st.get_value().unwrap();
+
+    if !matches!(&*to.get_ty().borrow(), PLType::Arr(_)) {
+        return Err(f.paralist[1]
+            .range()
+            .new_err(crate::ast::diag::ErrorCode::EXPECT_ARRAY_TYPE)
+            .add_to_ctx(ctx));
+    }
+
+    let st = f.paralist[2].emit(ctx, builder)?;
+    let len = st.get_value().unwrap();
+
+    if !matches!(&*len.get_ty().borrow(), PLType::Primitive(PriType::I64)) {
+        return Err(f.paralist[2]
+            .range()
+            .new_err(crate::ast::diag::ErrorCode::TYPE_MISMATCH)
+            .add_to_ctx(ctx));
+    }
+
+    let from_raw = builder
+        .build_struct_gep(v.get_value(), 1, "arr_raw")
+        .unwrap();
+    let to_raw = builder
+        .build_struct_gep(to.get_value(), 1, "arr_raw")
+        .unwrap();
+    let len_raw = len.get_value();
+    builder.build_memcpy(from_raw, to_raw, len_raw);
+    Ok(Default::default())
 }
 
 fn emit_name_of<'a, 'b>(

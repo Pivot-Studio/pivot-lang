@@ -1,3 +1,7 @@
+use std::{cell::RefCell, sync::Arc};
+
+use crate::ast::{plmod::Mod, pltype::PLType};
+
 #[salsa::jar(db = crate::Db)]
 pub struct Jar(
     crate::nomparser::SourceProgram,
@@ -40,4 +44,7 @@ pub struct Jar(
 pub trait Db: salsa::DbWithJar<Jar> {
     fn set_ref_str(&self, ref_str: Option<String>);
     fn get_ref_str(&self) -> Option<String>;
+    fn add_module(&self, name: String, plmod: Mod);
+    fn get_module(&self, name: &str) -> Option<Mod>;
+    fn add_tp_to_mod(&self, name: &str, tpname: &str, pltype: Arc<RefCell<PLType>>);
 }

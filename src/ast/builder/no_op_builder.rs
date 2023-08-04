@@ -129,6 +129,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         _fnvalue: super::ValueHandle,
         _alloca: super::ValueHandle,
         _allocab: super::BlockHandle,
+        _tp: &PLType,
     ) {
     }
 
@@ -210,8 +211,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         &self,
         _pltp: &crate::ast::pltype::FNValue,
         _ctx: &mut crate::ast::ctx::Ctx<'a>,
-    ) -> super::ValueHandle {
-        0
+    ) -> (super::ValueHandle, bool) {
+        (0, false)
     }
 
     fn get_or_add_global(
@@ -472,4 +473,32 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         _name: &str,
     ) {
     }
+
+    fn add_generator_yield_fn(
+        &self,
+        _ctx: &mut Ctx<'a>,
+        _ctx_name: &str,
+        _ret_tp: &PLType,
+    ) -> ValueHandle {
+        0
+    }
+
+    fn get_block_address(&self, _block: super::BlockHandle) -> ValueHandle {
+        0
+    }
+
+    fn build_indirect_br(&self, _block: ValueHandle, _ctx: &Ctx<'a>) {}
+
+    unsafe fn store_with_aoto_cast(&self, _ptr: ValueHandle, _value: ValueHandle) {}
+
+    fn stack_alloc(&self, _name: &str, _ctx: &mut Ctx<'a>, _tp: &PLType) -> ValueHandle {
+        0
+    }
+
+    fn correct_generator_ctx_malloc_inst(&self, _ctx: &mut Ctx<'a>, _name: &str) {}
+
+    fn sizeof(&self, _pltype: &PLType, _ctx: &mut Ctx<'a>) -> u64 {
+        0
+    }
+    fn build_memcpy(&self, _from: ValueHandle, _to: ValueHandle, _len: ValueHandle) {}
 }

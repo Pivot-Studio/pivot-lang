@@ -94,6 +94,8 @@ define_tokens!(
     AS = "as",
     QUESTION = "?",
     IS = "is",
+    YIELD = "yield",
+    GENERATOR_MARKER = "gen",
 );
 
 impl TokenType {

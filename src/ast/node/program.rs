@@ -176,6 +176,26 @@ lazy_static::lazy_static! {
             all_import:false,
         }))]
     };
+
+    static ref STD_USE_NODES: Vec<Box<NodeEnum>> = {
+        let core = Box::new(VarNode {
+            name: "core".to_string(),
+            range: Default::default(),
+        });
+
+        let builtin = Box::new(VarNode {
+            name: "builtin".to_string(),
+            range: Default::default(),
+        });
+        vec![Box::new(NodeEnum::UseNode(UseNode {
+            ids: vec![core, builtin],
+            range: Default::default(),
+            complete: true,
+            singlecolon: false,
+            modifier:None,
+            all_import:false,
+        }))]
+    };
 }
 
 mod cycle;
@@ -240,11 +260,10 @@ impl Program {
         if pkgname != "gc" {
             prog.uses.extend_from_slice(&GC_USE_NODES);
         }
-        if pkgname != "gc"
-            && pkgname != "builtin"
-            && self.config(db).project != "core"
-            && self.config(db).project != "std"
-        {
+        if self.config(db).project == "std" {
+            prog.uses.extend_from_slice(&STD_USE_NODES);
+        }
+        if self.config(db).project != "core" && self.config(db).project != "std" {
             prog.uses.extend_from_slice(&DEFAULT_USE_NODES);
         }
         #[cfg(not(target_arch = "wasm32"))]
@@ -551,6 +570,8 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     if let Some(builtin_mod) = ctx.plmod.submods.get("stdbuiltin").cloned() {
         ctx.plmod.import_all_symbols_from(&builtin_mod);
     }
+    ctx.origin_mod = &ctx.plmod as _;
+    ctx.import_all_infer_maps_from_sub_mods();
     let m = &mut ctx;
     #[cfg(feature = "llvm")]
     let context = &Context::create();
@@ -595,8 +616,8 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let pp = Path::new(&hashed).with_extension("bc");
         let ll = Path::new(&hashed).with_extension("ll");
         let p = pp.as_path();
-        builder.write_bitcode_to_path(p);
         builder.print_to_file(&ll).unwrap();
+        builder.write_bitcode_to_path(p);
         ModBuffer::push(
             db,
             PLModBuffer {
@@ -605,6 +626,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
             },
         );
     }
+    db.add_module(ctx.get_file(), ctx.plmod.clone());
     ModWrapper::new(db, ctx.plmod)
 }
 

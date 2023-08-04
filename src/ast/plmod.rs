@@ -1,5 +1,5 @@
 use super::accumulators::PLReferences;
-use super::ctx::Ctx;
+use super::ctx::{Ctx, GenericCache};
 use super::diag::{ErrorCode, PLDiag};
 
 use super::node::macro_nodes::MacroNode;
@@ -7,6 +7,7 @@ use super::pltype::PriType;
 use super::pltype::{FNValue, PLType};
 
 use super::range::Range;
+use super::traits::CustomType;
 
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::Db;
@@ -75,6 +76,7 @@ pub struct Mod {
     pub impls: ImplMap,
     pub macros: FxHashMap<String, Arc<MacroNode>>,
     pub trait_mthd_table: TraitMthdImpl,
+    pub generic_infer: GenericCache,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -193,7 +195,7 @@ impl Mod {
         }
     }
 
-    pub fn new(path: String) -> Self {
+    pub fn new(path: String, generic_infer: GenericCache) -> Self {
         let name = Path::new(Path::new(&path).file_stem().unwrap())
             .file_name()
             .take()
@@ -225,6 +227,7 @@ impl Mod {
             impls: FxHashMap::default(),
             macros: FxHashMap::default(),
             trait_mthd_table: Default::default(),
+            generic_infer,
         }
     }
     pub fn new_child(&self) -> Self {
@@ -250,6 +253,7 @@ impl Mod {
             impls: FxHashMap::default(),
             macros: FxHashMap::default(),
             trait_mthd_table: self.trait_mthd_table.clone(),
+            generic_infer: self.generic_infer.clone(),
         }
     }
     pub fn get_refs(&self, name: &str, db: &dyn Db, set: &mut FxHashSet<String>) {
@@ -390,10 +394,18 @@ impl Mod {
             // name<i64> ctx --name-> name --name<i64>--> name<i64>
             let st_name = name.split('<').collect::<Vec<_>>()[0];
             let st_with_generic = self.get_type_walker(st_name, range, ctx)?;
-            if let PLType::Struct(st) = &*st_with_generic.borrow() {
-                if let Some(res) = st.generic_infer.borrow().get(name) {
-                    return Ok(res.clone().into());
+            match &*st_with_generic.borrow() {
+                PLType::Struct(st) | PLType::Trait(st) => {
+                    if let Some(res) = ctx.get_infer_result(st, name) {
+                        return Ok(res.into());
+                    }
                 }
+                PLType::Union(st) => {
+                    if let Some(res) = ctx.get_infer_result(st, name) {
+                        return Ok(res.into());
+                    }
+                }
+                _ => (),
             };
         }
         Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
@@ -511,6 +523,25 @@ impl Mod {
             .entry(stname.to_string())
             .or_insert_with(Default::default)
             .insert(trait_tp_name.to_string(), generic_map);
+    }
+    pub fn search_mod<TP: CustomType>(&self, u: &TP, m: &str) -> Option<Self> {
+        self.submods
+            .get(m)
+            .and_then(|x| {
+                if x.path != u.get_path() {
+                    return None;
+                }
+                Some(x.clone())
+            })
+            .or_else(|| {
+                for (_, v) in self.submods.iter() {
+                    let re = v.search_mod(u, m);
+                    if re.is_some() {
+                        return re;
+                    }
+                }
+                None
+            })
     }
 }
 

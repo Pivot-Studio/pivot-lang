@@ -8,7 +8,7 @@ pub fn true_with_pnanic() bool {
 pub struct complex_struct {
     x: i64;
     pub y: *bool;
-    pub z: [base * 2];
+    pub z: [base];
 }
 
 /// struct coment
@@ -25,6 +25,14 @@ fn struct_init() void {
         z: [base{}, base{}]
     };
     t.z[1];
+    return;
+}
+
+fn test_arr() void {
+    let a = [1, 2, 3];
+    a[1] = 100;
+    a = [i64 * a[1]; ];
+    a[99] = 10;
     return;
 }
 
@@ -293,5 +301,47 @@ pub fn test_deconstruct() void {
     let ({aa, bb, cc: (cc1, cc2), dd}, e) = (complex, 100);
     panic::assert(cc1 + cc2 + e == 1 + 2 + 100);
     return;
+}
+
+use std::iter::*;
+use core::panic::assert;
+pub fn test_generator() void {
+    let iterator: Iterator<i64> = generator(100, 20);
+    let next = iterator.next();
+    assert(next is i64);
+    let i = next as i64!;
+    assert(i == 0);
+    next = iterator.next();
+    assert(next is i64);
+    i = next as i64!;
+    assert(i == 1);
+    next = iterator.next();
+    assert(next is i64);
+    i = next as i64!;
+    assert(i == 100);
+    next = iterator.next();
+    assert(next is i64);
+    i = next as i64!;
+    assert(i == 101);
+    next = iterator.next();
+    assert(next is i64);
+    i = next as i64!;
+    assert(i == 20);
+    next = iterator.next();
+    assert(next is None);
+    next = iterator.next();
+    assert(next is None);
+    return;
+}
+
+gen fn generator(b: i64, c: i64) Iterator<i64> {
+    for let i = 0; i < 2; i = i + 1 {
+        yield return i;
+    }
+    let a = b;
+    yield return a;
+    a = a + 1;
+    yield return a;
+    yield return c;
 }
 

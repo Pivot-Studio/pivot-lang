@@ -229,6 +229,7 @@ pub fn assignment(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("return;")]
 #[test_parser("return a;")]
 #[test_parser("return 1 + 2;")]
+#[test_parser("yield return 1 + 2;")]
 #[test_parser_error("returntrue;")]
 #[test_parser_error("return1 + 2;")]
 #[test_parser_error("return a = 2;")]
@@ -238,37 +239,31 @@ pub fn assignment(input: Span) -> IResult<Span, Box<NodeEnum>> {
 fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
+            opt(tag_token_word(TokenType::YIELD)),
             tag_token_word(TokenType::RETURN),
             opt(general_exp),
             tag_token_symbol(TokenType::SEMI),
             opt(delspace(comment)),
         )),
-        |((_, range), val, _, optcomment)| {
+        |(y, (_, range), value, (_, r2), optcomment)| {
             let comments = if let Some(com) = optcomment {
                 vec![vec![com]]
             } else {
                 vec![vec![]]
             };
-            if let Some(val) = val {
-                let range = val.range();
-                res_enum(
-                    RetNode {
-                        value: Some(val),
-                        range,
-                        comments,
-                    }
-                    .into(),
-                )
-            } else {
-                res_enum(
-                    RetNode {
-                        value: None,
-                        range,
-                        comments,
-                    }
-                    .into(),
-                )
+            let mut range = range.start.to(r2.end);
+            if let Some((_, r)) = y {
+                range = r.start.to(range.end);
             }
+            res_enum(
+                RetNode {
+                    value,
+                    range,
+                    comments,
+                    yiel: y,
+                }
+                .into(),
+            )
         },
     ))(input)
 }

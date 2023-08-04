@@ -62,21 +62,19 @@ pub fn basic_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
     ))(input)
 }
 
+#[test_parser("[i64]")]
+#[test_parser("[[[i64]]]")]
 fn array_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
     map_res(
         tuple((
             tag_token_symbol(TokenType::LBRACKET),
             type_name,
-            tag_token_symbol(TokenType::MUL),
-            number,
             tag_token_symbol(TokenType::RBRACKET),
         )),
-        |(_, tp, _, size, _)| {
-            let range = size.range().start.to(tp.range().end);
-
+        |(_, tp, _)| {
+            let range = tp.range();
             Ok::<_, ()>(Box::new(TypeNodeEnum::Array(ArrayTypeNameNode {
                 id: tp,
-                size,
                 range,
             })))
         },

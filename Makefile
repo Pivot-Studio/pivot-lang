@@ -42,3 +42,14 @@ cmake-clean:
 
 lsp-wasm:
 	@wasm-pack build --target bundler --no-default-features --scope pivot-lang
+
+renew-expect:
+	@UPDATE_EXPECT=1 cargo test --all
+
+mdbook-install:
+	@cargo install mdbook
+	@cargo install mdbook-mermaid
+	@cargo install mdbook-admonish
+	@cargo install mdbook-linkcheck
+	@cargo install mdbook-toc
+

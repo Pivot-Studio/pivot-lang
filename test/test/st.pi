@@ -1,4 +1,4 @@
-use core::panic;
+use core::panic::*;
 pub struct A {
     x: i64;
 }
@@ -11,7 +11,7 @@ pub struct struct_father {
 
 pub struct struct_child {
     a: i64;
-    b: [i64 * 1];
+    b: [i64];
 }
 
 pub struct pointer_struct {
@@ -25,7 +25,7 @@ pub fn ret_astruct() A {
     };
 }
 
-pub fn ret_arr() [i64 * 3] {
+pub fn ret_arr() [i64] {
     return [1, 10000, 3];
 }
 
@@ -48,6 +48,7 @@ pub fn test_ret_struct() void {
     panic::assert(ret_struct().a == 10);
     return;
 }
+
 
 pub fn test_struct_father() void {
     let s = struct_father{
@@ -98,6 +99,22 @@ pub fn test_struct() void {
     test_self_ref();
     test_struct_father();
     test_ret_struct_arr();
+    test_arr();
+    return;
+}
+
+
+fn test_arr() void {
+    let a = [1, 2, 3];
+    a[1] = 100;
+    let len = arr_len(a);
+    assert(len == 3);
+    assert(a[1] == 100);
+    a = [i64 * a[1]; ];
+    a[99] = 10;
+    assert(a[99] == 10);
+    len = arr_len(a);
+    assert(len == 100);
     return;
 }
 

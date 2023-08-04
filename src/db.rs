@@ -1,11 +1,15 @@
 use std::{
-    cell::Cell,
+    cell::{Cell, RefCell},
     sync::{Arc, Mutex},
 };
 
+use rustc_hash::FxHashMap;
 use salsa::DebugWithDb;
 
-use crate::Db;
+use crate::{
+    ast::{plmod::Mod, pltype::PLType},
+    Db,
+};
 
 // ANCHOR: db_struct
 #[derive(Default)]
@@ -17,6 +21,7 @@ pub struct Database {
     //
     logs: Option<Arc<Mutex<Vec<String>>>>,
     ref_str: Arc<Mutex<Cell<Option<String>>>>,
+    module_map: Arc<Mutex<RefCell<FxHashMap<String, Mod>>>>,
 }
 // ANCHOR_END: db_struct
 
@@ -43,6 +48,7 @@ impl salsa::ParallelDatabase for Database {
             storage: self.storage.snapshot(),
             logs: self.logs.clone(),
             ref_str: self.ref_str.clone(),
+            module_map: self.module_map.clone(),
         })
     }
 }
@@ -56,6 +62,27 @@ impl Db for Database {
     fn get_ref_str(&self) -> Option<String> {
         self.ref_str.lock().unwrap().get_mut().clone()
     }
+
+    fn add_module(&self, name: String, plmod: Mod) {
+        self.module_map
+            .lock()
+            .unwrap()
+            .borrow_mut()
+            .insert(name, plmod);
+    }
+
+    fn get_module(&self, name: &str) -> Option<Mod> {
+        self.module_map.lock().unwrap().borrow().get(name).cloned()
+    }
+
+    fn add_tp_to_mod(&self, name: &str, tpname: &str, pltype: Arc<RefCell<PLType>>) {
+        self.module_map
+            .lock()
+            .unwrap()
+            .borrow_mut()
+            .get_mut(name)
+            .and_then(|m| m.types.insert(tpname.to_string(), pltype.into()));
+    }
 }
 
 impl Database {
@@ -67,6 +94,7 @@ impl Database {
             storage: self.storage,
             logs: Some(Default::default()),
             ref_str: self.ref_str,
+            module_map: self.module_map,
         }
     }
 

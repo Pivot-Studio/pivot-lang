@@ -17,7 +17,14 @@ use super::*;
 /// function_def = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name (statement_block | newline) ;
 /// ```
 #[test_parser(
-    "fn f(  x: int, y  : int  ) int {
+    "gen pub fn f(  x: int, y  : int  ) int {
+        x = x+1;
+        return 0;
+    }
+    "
+)]
+#[test_parser(
+    "gen fn f(  x: int, y  : int  ) int {
         x = x+1;
         return 0;
     }
@@ -57,6 +64,7 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     map_res(
         tuple((
             many0(del_newline_or_space!(comment)),
+            opt(tag_token_word(TokenType::GENERATOR_MARKER)),
             modifiable(tag_token_word(TokenType::FN), TokenType::PUB),
             identifier,
             opt(generic_type_def),
@@ -83,6 +91,7 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
         )),
         |(
             doc,
+            g,
             (modifier, (_, start)),
             id,
             generics,
@@ -121,6 +130,7 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 is_method: false,
                 target_range: Default::default(),
                 in_trait_def: false,
+                generator: g.is_some(),
             };
             Ok::<_, ()>(Box::new(TopLevel::FuncType(node)))
         },

@@ -11,7 +11,7 @@ pub fn test_map() void {
     return;
 }
 
-pub fn count(mp: [[i64 * 5] * 5]) i64 {
+pub fn count(mp: [[i64]]) i64 {
     let res = 0;
     let w = 5;
     let h = 5;

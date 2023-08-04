@@ -89,6 +89,7 @@ pub trait IRBuilder<'a, 'ctx> {
         fnvalue: ValueHandle,
         alloca: ValueHandle,
         allocab: BlockHandle,
+        tp: &PLType,
     );
     fn delete_block(&self, b: BlockHandle);
     fn finalize_debug(&self);
@@ -120,7 +121,7 @@ pub trait IRBuilder<'a, 'ctx> {
     fn build_unconditional_branch(&self, bb: BlockHandle);
     fn position_at_end_block(&self, block: BlockHandle);
     fn add_body_to_struct_type(&self, name: &str, sttype: &STType, ctx: &mut Ctx<'a>);
-    fn get_or_insert_fn_handle(&self, pltp: &FNValue, ctx: &mut Ctx<'a>) -> ValueHandle;
+    fn get_or_insert_fn_handle(&self, pltp: &FNValue, ctx: &mut Ctx<'a>) -> (ValueHandle, bool);
     fn get_or_add_global(
         &self,
         name: &str,
@@ -221,6 +222,20 @@ pub trait IRBuilder<'a, 'ctx> {
         allocab: BlockHandle,
         name: &str,
     );
+    fn add_generator_yield_fn(
+        &self,
+        ctx: &mut Ctx<'a>,
+        ctx_name: &str,
+        ret_tp: &PLType,
+    ) -> ValueHandle;
+    fn get_block_address(&self, block: BlockHandle) -> ValueHandle;
+    fn build_indirect_br(&self, block: ValueHandle, ctx: &Ctx<'a>);
+    // only used in special case, as it does not add gc root
+    unsafe fn store_with_aoto_cast(&self, ptr: ValueHandle, value: ValueHandle);
+    fn stack_alloc(&self, name: &str, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle;
+    fn correct_generator_ctx_malloc_inst(&self, ctx: &mut Ctx<'a>, name: &str);
+    fn sizeof(&self, pltype: &PLType, ctx: &mut Ctx<'a>) -> u64;
+    fn build_memcpy(&self, from: ValueHandle, to: ValueHandle, len: ValueHandle);
 }
 
 pub type ValueHandle = usize;

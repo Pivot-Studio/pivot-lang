@@ -1,6 +1,8 @@
+use super::builder::ValueHandle;
 use super::ctx::Ctx;
 use super::diag::ErrorCode;
 use super::node::types::ClosureTypeNode;
+use super::node::types::CustomTypeNode;
 use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::tokens::TokenType;
@@ -20,13 +22,11 @@ use super::diag::PLDiag;
 use super::fmt::FmtBuilder;
 use super::node::function::FuncDefNode;
 use super::node::pkg::ExternIdNode;
-use super::node::primary::NumNode;
 use super::node::primary::VarNode;
 use super::node::types::ArrayTypeNameNode;
 use super::node::types::PointerTypeNode;
 use super::node::types::TypeNameNode;
 use super::node::NodeEnum;
-use super::node::Num;
 use super::node::TypeNode;
 use super::node::TypeNodeEnum;
 use super::range::Range;
@@ -47,7 +47,8 @@ use lsp_types::SymbolKind;
 use rustc_hash::FxHashMap;
 use std::cell::RefCell;
 
-use std::path::PathBuf;
+use std::sync::atomic::AtomicI64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 /// # PLType
 /// Type for pivot-lang
@@ -215,6 +216,11 @@ impl UnionType {
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
         pltype.tp.replace(PLType::Union(res.clone()));
+        // ctx.generic_infer
+        // .borrow_mut().entry(self.get_full_name_except_generic()).or_insert(Default::default())
+        // .borrow_mut()
+        // .insert(res.name.clone(), pltype.tp.clone());
+        ctx.add_infer_result(self, &res.name, pltype.tp);
         Ok(res)
     }
     pub fn has_type<'a, 'b>(
@@ -318,13 +324,9 @@ fn new_typename_node(name: &str, range: Range, ns: &[String]) -> Box<TypeNodeEnu
         range,
     }))
 }
-fn new_arrtype_node(typenode: Box<TypeNodeEnum>, size: u64) -> Box<TypeNodeEnum> {
+fn new_arrtype_node(typenode: Box<TypeNodeEnum>) -> Box<TypeNodeEnum> {
     Box::new(TypeNodeEnum::Array(ArrayTypeNameNode {
         id: typenode,
-        size: Box::new(NodeEnum::Num(NumNode {
-            value: Num::Int(size),
-            range: Default::default(),
-        })),
         range: Default::default(),
     }))
 }
@@ -342,6 +344,14 @@ pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
             } else {
                 pltype.clone()
             }
+        }
+        PLType::Pointer(p) => Arc::new(RefCell::new(PLType::Pointer(get_type_deep(p.clone())))),
+        PLType::Arr(p) => {
+            let a = ARRType {
+                element_type: get_type_deep(p.element_type.clone()),
+                size_handle: p.size_handle,
+            };
+            Arc::new(RefCell::new(PLType::Arr(a)))
         }
         _ => pltype.clone(),
     }
@@ -385,29 +395,18 @@ impl PLType {
         }
     }
 
-    fn get_ns<T: CustomType>(tp: &T, path: &str) -> Vec<String> {
-        let p = tp.get_path();
-        if p != path && !p.ends_with("builtin.pi") {
-            let p: PathBuf = p.into();
-            vec![p
-                .with_extension("")
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string()]
-        } else {
-            vec![]
-        }
+    fn new_custom_tp_node<T: CustomType>(tp: &T, _path: &str) -> Box<TypeNodeEnum> {
+        Box::new(TypeNodeEnum::Custom(CustomTypeNode {
+            name: tp.get_name(),
+            range: tp.get_range(),
+            path: tp.get_path(),
+        }))
     }
 
     pub fn get_typenode(&self, path: &str) -> Box<TypeNodeEnum> {
         match self {
-            PLType::Struct(st) => new_typename_node(&st.name, st.range, &Self::get_ns(st, path)),
-            PLType::Arr(arr) => new_arrtype_node(
-                arr.get_elem_type().borrow().get_typenode(path),
-                arr.size as u64,
-            ),
+            PLType::Struct(st) => Self::new_custom_tp_node(st, path),
+            PLType::Arr(arr) => new_arrtype_node(arr.get_elem_type().borrow().get_typenode(path)),
             PLType::Primitive(p) => new_typename_node(&p.get_name(), Default::default(), &[]),
             PLType::Void => new_typename_node("void", Default::default(), &[]),
             PLType::Pointer(p) => new_ptrtype_node(p.borrow().get_typenode(path)),
@@ -421,9 +420,9 @@ impl PLType {
             PLType::PlaceHolder(p) => {
                 new_typename_node(&p.get_place_holder_name(), Default::default(), &[])
             }
-            PLType::Trait(t) => new_typename_node(&t.name, t.range, &Self::get_ns(t, path)),
+            PLType::Trait(t) => Self::new_custom_tp_node(t, path),
             PLType::Fn(_) => unreachable!(),
-            PLType::Union(u) => new_typename_node(&u.name, u.range, &Self::get_ns(u, path)),
+            PLType::Union(u) => Self::new_custom_tp_node(u, path),
             PLType::Closure(c) => Box::new(c.to_type_node(path)),
         }
     }
@@ -449,13 +448,22 @@ impl PLType {
         }
     }
 
+    pub fn get_path(&self) -> Option<String> {
+        match self {
+            PLType::Fn(f) => Some(f.get_path()),
+            PLType::Struct(f) | PLType::Trait(f) => Some(f.get_path()),
+            PLType::Union(f) => Some(f.get_path()),
+            _ => None,
+        }
+    }
+
     pub fn get_name(&self) -> String {
         match self {
             PLType::Fn(fu) => fu.name.clone(),
             PLType::Struct(st) => st.name.clone(),
             PLType::Primitive(pri) => pri.get_name(),
             PLType::Arr(arr) => {
-                format!("[{} * {}]", arr.element_type.borrow().get_name(), arr.size)
+                format!("[{}]", arr.element_type.borrow().get_name())
             }
             PLType::Void => "void".to_string(),
             PLType::Pointer(p) => "*".to_string() + &p.borrow().get_name(),
@@ -479,7 +487,7 @@ impl PLType {
             PLType::Trait(t) => t.name.clone(),
             PLType::Primitive(pri) => pri.get_name(),
             PLType::Arr(arr) => {
-                format!("[{} * {}]", arr.element_type.borrow().get_name(), arr.size)
+                format!("[{}]", arr.element_type.borrow().get_name())
             }
             PLType::Void => "void".to_string(),
             PLType::Pointer(p) => "*".to_string() + &p.borrow().get_name(),
@@ -510,11 +518,7 @@ impl PLType {
             PLType::Trait(st) => st.get_full_name(),
             PLType::Primitive(pri) => pri.get_name(),
             PLType::Arr(arr) => {
-                format!(
-                    "[{} * {}]",
-                    arr.element_type.borrow().get_full_elm_name(),
-                    arr.size
-                )
+                format!("[{}]", arr.element_type.borrow().get_full_elm_name(),)
             }
             PLType::Void => "void".to_string(),
             PLType::Pointer(p) => p.borrow().get_full_elm_name(),
@@ -531,11 +535,7 @@ impl PLType {
             PLType::Trait(st) => st.get_full_name_except_generic(),
             PLType::Primitive(pri) => pri.get_name(),
             PLType::Arr(arr) => {
-                format!(
-                    "[{} * {}]",
-                    arr.element_type.borrow().get_full_elm_name(),
-                    arr.size
-                )
+                format!("[{}]", arr.element_type.borrow().get_full_elm_name())
             }
             PLType::Void => "void".to_string(),
             PLType::Pointer(p) => p.borrow().get_full_elm_name(),
@@ -708,7 +708,15 @@ impl TryFrom<PLType> for FNValue {
         }
     }
 }
+
+static GLOB_COUNTER: AtomicI64 = AtomicI64::new(0);
+
 impl FNValue {
+    pub fn get_generator_ctx_name(&self) -> String {
+        self.name.clone()
+            + "__generator_ctx"
+            + &GLOB_COUNTER.fetch_add(1, Ordering::SeqCst).to_string()
+    }
     pub fn to_closure_ty<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
@@ -928,10 +936,10 @@ impl FNValue {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct ARRType {
     pub element_type: Arc<RefCell<PLType>>,
-    pub size: u32,
+    pub size_handle: ValueHandle,
 }
 
 impl ARRType {
@@ -939,6 +947,14 @@ impl ARRType {
         self.element_type.clone()
     }
 }
+
+impl PartialEq for ARRType {
+    fn eq(&self, other: &Self) -> bool {
+        self.element_type == other.element_type
+    }
+}
+
+impl Eq for ARRType {}
 
 #[range]
 #[derive(Debug, Clone, Eq)]
@@ -956,8 +972,8 @@ pub struct STType {
     pub generic_infer_types: IndexMap<String, Arc<RefCell<PLType>>>,
     pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
     pub trait_methods_impl: TraitMthdImpl,
-    // key name<i64>/name<f64> ...
-    pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
+    // // key name<i64>/name<f64> ...
+    // pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
 }
 
 pub type TraitMthdImpl = Arc<RefCell<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>>;
@@ -1257,6 +1273,7 @@ impl STType {
                                 .borrow()
                                 .get_typenode(&ctx.get_file());
                         }
+                        // eprintln!("{:?}", new_f.ret);
                         new_f.ret = new_f
                             .ret
                             .get_type(ctx, builder, true)
@@ -1291,9 +1308,7 @@ impl STType {
             } else {
                 pltype.tp.replace(PLType::Struct(res.clone()));
             }
-            self.generic_infer
-                .borrow_mut()
-                .insert(res.name, pltype.tp.clone());
+            ctx.add_infer_result(self, &res.name, pltype.tp.clone());
             Ok(pltype.tp)
         })
     }

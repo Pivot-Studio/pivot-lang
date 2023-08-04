@@ -1,0 +1,42 @@
+use std::iter::*;
+use core::panic::assert;
+pub fn test_generator() void {
+    let iterator: Iterator<i64> = generator(100, 20);
+    let next = iterator.next();
+    assert(next is i64);
+    let i = next as i64!;
+    assert(i == 0);
+    next = iterator.next();
+    assert(next is i64);
+    i = next as i64!;
+    assert(i == 1);
+    next = iterator.next();
+    assert(next is i64);
+    i = next as i64!;
+    assert(i == 100);
+    next = iterator.next();
+    assert(next is i64);
+    i = next as i64!;
+    assert(i == 101);
+    next = iterator.next();
+    assert(next is i64);
+    i = next as i64!;
+    assert(i == 20);
+    next = iterator.next();
+    assert(next is None);
+    next = iterator.next();
+    assert(next is None);
+    return;
+}
+
+gen fn generator(b: i64, c: i64) Iterator<i64> {
+    for let i = 0; i < 2; i = i + 1 {
+        yield return i;
+    }
+    let a = b;
+    yield return a;
+    a = a + 1;
+    yield return a;
+    yield return c;
+}
+
