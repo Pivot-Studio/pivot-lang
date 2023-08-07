@@ -281,6 +281,22 @@ impl PriType {
             PriType::I8 | PriType::I16 | PriType::I32 | PriType::I64 | PriType::I128
         )
     }
+    pub fn is_int(&self) -> bool {
+        matches!(
+            self,
+            PriType::I8
+                | PriType::I16
+                | PriType::I32
+                | PriType::I64
+                | PriType::I128
+                | PriType::U8
+                | PriType::U16
+                | PriType::U32
+                | PriType::U64
+                | PriType::U128
+                | PriType::BOOL
+        )
+    }
     pub fn try_from_str(str: &str) -> Option<Self> {
         match str {
             "i8" => Some(PriType::I8),
@@ -377,6 +393,13 @@ impl PLType {
             PLType::Union(_) => ObjectType::Trait, // share same layout as trait
             PLType::Closure(_) => ObjectType::Trait, // share same layout as trait
             _ => ObjectType::Atomic,
+        }
+    }
+
+    pub fn is_int(&self) -> bool {
+        match self {
+            PLType::Primitive(p) => p.is_int(),
+            _ => false,
         }
     }
 

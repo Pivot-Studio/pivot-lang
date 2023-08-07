@@ -501,4 +501,36 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         0
     }
     fn build_memcpy(&self, _from: ValueHandle, _to: ValueHandle, _len: ValueHandle) {}
+
+    fn build_bit_not(&self, _v: ValueHandle) -> ValueHandle {
+        0
+    }
+
+    fn build_bit_and(&self, _lhs: ValueHandle, _rhs: ValueHandle) -> ValueHandle {
+        0
+    }
+
+    fn build_bit_or(&self, _lhs: ValueHandle, _rhs: ValueHandle) -> ValueHandle {
+        0
+    }
+
+    fn build_bit_xor(&self, _lhs: ValueHandle, _rhs: ValueHandle) -> ValueHandle {
+        0
+    }
+
+    fn build_bit_left_shift(&self, _lhs: ValueHandle, _rhs: ValueHandle) -> ValueHandle {
+        0
+    }
+
+    fn build_bit_right_shift(&self, _lhs: ValueHandle, _rhs: ValueHandle) -> ValueHandle {
+        0
+    }
+
+    fn build_bit_right_shift_arithmetic(
+        &self,
+        _lhs: ValueHandle,
+        _rhs: ValueHandle,
+    ) -> ValueHandle {
+        0
+    }
 }

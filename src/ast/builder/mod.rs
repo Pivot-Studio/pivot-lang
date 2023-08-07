@@ -236,6 +236,13 @@ pub trait IRBuilder<'a, 'ctx> {
     fn correct_generator_ctx_malloc_inst(&self, ctx: &mut Ctx<'a>, name: &str);
     fn sizeof(&self, pltype: &PLType, ctx: &mut Ctx<'a>) -> u64;
     fn build_memcpy(&self, from: ValueHandle, to: ValueHandle, len: ValueHandle);
+    fn build_bit_not(&self, v: ValueHandle) -> ValueHandle;
+    fn build_bit_and(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
+    fn build_bit_or(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
+    fn build_bit_xor(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
+    fn build_bit_left_shift(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
+    fn build_bit_right_shift(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
+    fn build_bit_right_shift_arithmetic(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
 }
 
 pub type ValueHandle = usize;
