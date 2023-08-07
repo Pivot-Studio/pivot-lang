@@ -143,6 +143,7 @@ define_error!(
     INVALID_RET_IN_GENERATOR_FUNCTION = "invalid `return` in generator function",
     ARRAY_LEN_MUST_BE_I64 = "array len must be i64",
     EXPECT_ARRAY_TYPE = "expect array type",
+    EXPECT_INT_VALUE = "expect int value",
 );
 macro_rules! define_warn {
     ($(
