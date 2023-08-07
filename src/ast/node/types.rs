@@ -1010,6 +1010,10 @@ impl TypeNode for CustomTypeNode {
         _gen_code: bool,
     ) -> TypeNodeResult {
         let m = ctx.get_mod(&self.path);
+        let re = ctx.get_type(&self.name, self.range);
+        if let Ok(tp) = re {
+            return Ok(tp.tp);
+        }
         let tp = ctx.get_type_in_mod(&m, &self.name, self.range)?;
         Ok(tp.tp)
     }
