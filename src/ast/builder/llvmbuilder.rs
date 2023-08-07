@@ -2601,6 +2601,66 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let arg_len = self.builder.build_int_mul(len, i64_size, "arg_len");
         self.builder.build_memcpy(to, 8, from, 8, arg_len).unwrap();
     }
+    fn build_bit_not(&self, v: ValueHandle) -> ValueHandle {
+        let v = self.get_llvm_value(v).unwrap();
+        let v = v.into_int_value();
+        let v = self
+            .builder
+            .build_xor(v, v.get_type().const_all_ones(), "not");
+        self.get_llvm_value_handle(&v.into())
+    }
+    fn build_bit_and(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle {
+        let lhs = self.get_llvm_value(lhs).unwrap();
+        let rhs = self.get_llvm_value(rhs).unwrap();
+        let lhs = lhs.into_int_value();
+        let rhs = rhs.into_int_value();
+        let v = self.builder.build_and(lhs, rhs, "and");
+        self.get_llvm_value_handle(&v.into())
+    }
+    fn build_bit_or(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle {
+        let lhs = self.get_llvm_value(lhs).unwrap();
+        let rhs = self.get_llvm_value(rhs).unwrap();
+        let lhs = lhs.into_int_value();
+        let rhs = rhs.into_int_value();
+        let v = self.builder.build_or(lhs, rhs, "or");
+        self.get_llvm_value_handle(&v.into())
+    }
+    fn build_bit_xor(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle {
+        let lhs = self.get_llvm_value(lhs).unwrap();
+        let rhs = self.get_llvm_value(rhs).unwrap();
+        let lhs = lhs.into_int_value();
+        let rhs = rhs.into_int_value();
+        let v = self.builder.build_xor(lhs, rhs, "xor");
+        self.get_llvm_value_handle(&v.into())
+    }
+    fn build_bit_left_shift(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle {
+        let lhs = self.get_llvm_value(lhs).unwrap();
+        let rhs = self.get_llvm_value(rhs).unwrap();
+        let lhs = lhs.into_int_value();
+        let rhs = rhs.into_int_value();
+        let v = self.builder.build_left_shift(lhs, rhs, "left_shift");
+        self.get_llvm_value_handle(&v.into())
+    }
+    fn build_bit_right_shift(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle {
+        let lhs = self.get_llvm_value(lhs).unwrap();
+        let rhs = self.get_llvm_value(rhs).unwrap();
+        let lhs = lhs.into_int_value();
+        let rhs = rhs.into_int_value();
+        let v = self
+            .builder
+            .build_right_shift(lhs, rhs, false, "right_shift");
+        self.get_llvm_value_handle(&v.into())
+    }
+    fn build_bit_right_shift_arithmetic(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle {
+        let lhs = self.get_llvm_value(lhs).unwrap();
+        let rhs = self.get_llvm_value(rhs).unwrap();
+        let lhs = lhs.into_int_value();
+        let rhs = rhs.into_int_value();
+        let v = self
+            .builder
+            .build_right_shift(lhs, rhs, true, "right_shift");
+        self.get_llvm_value_handle(&v.into())
+    }
 }
 
 fn add_field(st_v: AnyValueEnum<'_>, field_tp: inkwell::types::AnyTypeEnum<'_>) -> u32 {

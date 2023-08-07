@@ -8,7 +8,6 @@ use crate::ast::{
 };
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
-use immix::IntEnum;
 use lazy_static::lazy_static;
 
 use crate::ast::{
@@ -158,8 +157,12 @@ fn emit_gc_type<'a, 'b>(
         .as_ref()
         .unwrap()
         .get_type(ctx, builder, true)?;
+    #[cfg(feature = "llvm")]
     let size = generic.borrow().get_immix_type();
-    let b = builder.int_value(&PriType::U8, size.int_value() as _, true);
+    #[cfg(feature = "llvm")]
+    let b = builder.int_value(&PriType::U8, size as _, true);
+    #[cfg(not(feature = "llvm"))]
+    let b = 0;
     return b
         .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::U8))))
         .set_const()

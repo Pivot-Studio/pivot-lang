@@ -1,8 +1,8 @@
 use nom::{
     branch::alt,
-    combinator::{map_res, opt},
+    combinator::{map_res, not, opt, peek},
     multi::{many0, separated_list0},
-    sequence::{delimited, pair, preceded, tuple},
+    sequence::{delimited, pair, preceded, terminated, tuple},
     IResult,
 };
 
@@ -29,17 +29,61 @@ pub fn general_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("a&&b")]
 #[test_parser("a||b")]
 pub fn logic_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    parse_bin_ops!(compare_exp, AND, OR)(input)
+    parse_bin_ops!(compare_exp_eq, AND, OR)(input)
+}
+
+#[test_parser("a==b")]
+#[test_parser("a!=b")]
+fn compare_exp_eq(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    parse_bin_ops!(compare_exp, NE, EQ)(input)
 }
 
 #[test_parser("a>b")]
 #[test_parser("a>=b")]
 #[test_parser("a<b")]
 #[test_parser("a<=b")]
-#[test_parser("a==b")]
-#[test_parser("a!=b")]
 fn compare_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    parse_bin_ops!(add_exp, GEQ, LEQ, NE, EQ, LESS, GREATER)(input)
+    parse_bin_ops!(bit_or, GEQ, LEQ, LESS, GREATER)(input)
+}
+
+#[test_parser("a|b")]
+fn bit_or(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    parse_bin_ops!(bit_xor, BIT_OR)(input)
+}
+
+#[test_parser("a^b")]
+fn bit_xor(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    parse_bin_ops!(bit_and, BIT_XOR)(input)
+}
+
+#[test_parser("a&b")]
+#[test_parser_error("a&&b")]
+fn bit_and(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    delspace(map_res(
+        tuple((
+            bit_move,
+            many0(tuple((
+                alt((terminated(
+                    tag_token_symbol(TokenType::BIT_AND),
+                    not(peek(tag_token_symbol(TokenType::BIT_AND))),
+                ),)),
+                bit_move,
+            ))),
+        )),
+        create_bin,
+    ))(input)
+}
+
+#[test_parser("a>>>b")]
+#[test_parser("a<<b")]
+#[test_parser("a>>b")]
+fn bit_move(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    parse_bin_ops!(
+        add_exp,
+        BIT_LEFT_SHIFT,
+        BIT_RIGHT_SHIFT_NO_SIGN,
+        BIT_RIGHT_SHIFT
+    )(input)
 }
 
 #[test_parser("a + 1")]
@@ -56,6 +100,7 @@ fn mul_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 
 #[test_parser("-1")]
 #[test_parser("!a")]
+#[test_parser("~a")]
 #[test_parser_error("+a")]
 fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
@@ -65,6 +110,7 @@ fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 alt((
                     tag_token_symbol(TokenType::MINUS),
                     tag_token_symbol(TokenType::NOT),
+                    tag_token_symbol(TokenType::BIT_NOT),
                 )),
                 pointer_exp,
             )),

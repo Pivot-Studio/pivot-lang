@@ -96,6 +96,13 @@ define_tokens!(
     IS = "is",
     YIELD = "yield",
     GENERATOR_MARKER = "gen",
+    BIT_AND = "&",
+    BIT_OR = "|",
+    BIT_XOR = "^",
+    BIT_LEFT_SHIFT = "<<",
+    BIT_RIGHT_SHIFT = ">>",
+    BIT_NOT = "~",
+    BIT_RIGHT_SHIFT_NO_SIGN = ">>>",
 );
 
 impl TokenType {
