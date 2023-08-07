@@ -58,16 +58,9 @@ impl Node for UnaryOpNode {
                     PriType::I128 | PriType::I64 | PriType::I32 | PriType::I16 | PriType::I8,
                 ),
                 TokenType::MINUS,
-            ) => {
-                //     (
-                //     Some(plv!(builder.build_int_neg(exp, "negtmp"))),
-                //     Some(pltype.clone()),
-                //     TerminatorEnum::None,
-                // )
-                builder
-                    .build_int_neg(exp, "negtmp")
-                    .new_output(pltype.clone())
-            }
+            ) => builder
+                .build_int_neg(exp, "negtmp")
+                .new_output(pltype.clone()),
             (PLType::Primitive(PriType::F64 | PriType::F32), TokenType::MINUS) => builder
                 .build_float_neg(exp, "negtmp")
                 .new_output(pltype.clone()),
@@ -79,6 +72,7 @@ impl Node for UnaryOpNode {
                     "nottmp",
                 )
                 .new_output(pltype.clone()),
+            (_, TokenType::BIT_NOT) => builder.build_bit_not(exp).new_output(pltype.clone()),
             (_exp, _op) => {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::INVALID_UNARY_EXPRESSION)));
             }
@@ -185,6 +179,54 @@ impl Node for BinOpNode {
         }
         let right = ctx.try_load2var(rrange, re.unwrap().get_value(), builder)?;
         Ok(match self.op.0 {
+            TokenType::BIT_AND => {
+                if !lpltype.borrow().is_int() || !lpltype.borrow().is_int() {
+                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_INT_VALUE)));
+                }
+                builder
+                    .build_bit_and(left, right)
+                    .new_output(lpltype.clone())
+            }
+            TokenType::BIT_OR => {
+                if !lpltype.borrow().is_int() || !lpltype.borrow().is_int() {
+                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_INT_VALUE)));
+                }
+                builder
+                    .build_bit_or(left, right)
+                    .new_output(lpltype.clone())
+            }
+            TokenType::BIT_XOR => {
+                if !lpltype.borrow().is_int() || !lpltype.borrow().is_int() {
+                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_INT_VALUE)));
+                }
+                builder
+                    .build_bit_xor(left, right)
+                    .new_output(lpltype.clone())
+            }
+            TokenType::BIT_LEFT_SHIFT => {
+                if !lpltype.borrow().is_int() || !lpltype.borrow().is_int() {
+                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_INT_VALUE)));
+                }
+                builder
+                    .build_bit_left_shift(left, right)
+                    .new_output(lpltype.clone())
+            }
+            TokenType::BIT_RIGHT_SHIFT => {
+                if !lpltype.borrow().is_int() || !lpltype.borrow().is_int() {
+                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_INT_VALUE)));
+                }
+                builder
+                    .build_bit_right_shift_arithmetic(left, right)
+                    .new_output(lpltype.clone())
+            }
+            TokenType::BIT_RIGHT_SHIFT_NO_SIGN => {
+                if !lpltype.borrow().is_int() || !lpltype.borrow().is_int() {
+                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_INT_VALUE)));
+                }
+                builder
+                    .build_bit_right_shift(left, right)
+                    .new_output(lpltype.clone())
+            }
             TokenType::PLUS => {
                 handle_calc!(ctx, add, float_add, lpltype, left, right, self.range, builder)
             }
@@ -214,7 +256,8 @@ impl Node for BinOpNode {
                     | PriType::U64
                     | PriType::U32
                     | PriType::U16
-                    | PriType::U8,
+                    | PriType::U8
+                    | PriType::BOOL,
                 ) => { builder.build_int_compare(self.op.0.get_op(), left, right, "cmptmp") }
                     .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL)))),
                 PLType::Primitive(PriType::F64 | PriType::F32) => {
