@@ -1,4 +1,4 @@
-use core::gc;
+use core::gc::string;
 use std::io;
 
 fn print_i64(i:i64) void;

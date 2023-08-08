@@ -8,7 +8,7 @@ use project1::test::simple;
 use project1::test::flow;
 use project1::test::list;
 use project1::test::module;
-use project1::test::string;
+use project1::test::str;
 use project1::test::macros;
 use project1::test::union;
 use project1::test::multi_trait;
@@ -38,7 +38,7 @@ pub fn main() i64 {
     list::test_list();
     main::simple_test();
     module::test_module();
-    string::test_string();
+    str::test_string();
     union::test_union();
     multi_trait::test_multi_trait();
     deconstruct::test_deconstruct();
@@ -50,6 +50,7 @@ pub fn main() i64 {
     fixed_point::test_fixed_point();
     generic::ret_generic1<i64>();
     test_compile_time_reflection();
+    
     arr::test_arr();
     return 0;
 }
