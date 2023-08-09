@@ -510,6 +510,101 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
+                INVALID_DIRECT_TRAIT_CAST,
+            ),
+            help: Some(
+                "cast a trait to specific type directly is not allowed, use `?` or `!` after the cast expression",
+            ),
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "type of the expression is `{}`",
+                            [
+                                "TestTrait",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 105,
+                            column: 14,
+                            offset: 1327,
+                        },
+                        end: Pos {
+                            line: 105,
+                            column: 16,
+                            offset: 1329,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "target type is `{}`",
+                            [
+                                "A",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 105,
+                            column: 20,
+                            offset: 1333,
+                        },
+                        end: Pos {
+                            line: 105,
+                            column: 21,
+                            offset: 1334,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "add `{}` or `{}` to make it legal",
+                            [
+                                "?",
+                                "!",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 105,
+                            column: 21,
+                            offset: 1334,
+                        },
+                        end: Pos {
+                            line: 105,
+                            column: 21,
+                            offset: 1334,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 105,
+                    column: 14,
+                    offset: 1327,
+                },
+                end: Pos {
+                    line: 105,
+                    column: 21,
+                    offset: 1334,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
                 UNDEFINED_TYPE,
             ),
             help: None,
@@ -517,14 +612,14 @@
             source: None,
             range: Range {
                 start: Pos {
-                    line: 169,
+                    line: 172,
                     column: 15,
-                    offset: 2365,
+                    offset: 2446,
                 },
                 end: Pos {
-                    line: 169,
+                    line: 172,
                     column: 17,
-                    offset: 2367,
+                    offset: 2448,
                 },
             },
         },
@@ -548,14 +643,14 @@
                     ),
                     range: Range {
                         start: Pos {
-                            line: 173,
+                            line: 176,
                             column: 6,
-                            offset: 2378,
+                            offset: 2459,
                         },
                         end: Pos {
-                            line: 173,
+                            line: 176,
                             column: 7,
-                            offset: 2379,
+                            offset: 2460,
                         },
                     },
                 },
@@ -563,14 +658,14 @@
             source: None,
             range: Range {
                 start: Pos {
-                    line: 173,
+                    line: 176,
                     column: 6,
-                    offset: 2378,
+                    offset: 2459,
                 },
                 end: Pos {
-                    line: 173,
+                    line: 176,
                     column: 7,
-                    offset: 2379,
+                    offset: 2460,
                 },
             },
         },

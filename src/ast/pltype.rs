@@ -1253,7 +1253,7 @@ impl STType {
         true
     }
     pub fn get_type_code(&self) -> u64 {
-        let full_name = self.get_full_name();
+        let full_name = format!("{}..{}", self.path, self.append_name_with_generic());
         get_hash_code(full_name)
     }
     pub fn append_name_with_generic(&self) -> String {
