@@ -250,6 +250,7 @@ impl<'a, 'ctx> Ctx<'a> {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn build_ret_opt<'b>(
         &mut self,
         builder: &'b BuilderEnum<'a, 'ctx>,
@@ -355,6 +356,7 @@ impl<'a, 'ctx> Ctx<'a> {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn build_cast_ret<'b>(
         &mut self,
         target_ty: Arc<RefCell<PLType>>,
