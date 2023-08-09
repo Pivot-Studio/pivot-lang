@@ -102,6 +102,9 @@ pub fn test_trait() void {
     dd = x;
     dd = y;
     dd = z;
+    let _c = dd as A;
+    let _cc = dd as B<i64>?;
+    let _ccc = dd as C<i64>!;
     let re = dd.set(100);
     panic::assert(re == 100);
     let re1 = trait_ret().set(1);

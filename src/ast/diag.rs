@@ -118,6 +118,7 @@ define_error!(
     EXPECT_PUBLIC_UNION = "expect public union",
     INVALID_UNION_CAST = "invalid union cast",
     INVALID_DIRECT_UNION_CAST = "invalid direct union cast",
+    INVALID_DIRECT_TRAIT_CAST = "invalid direct trait cast",
     UNION_DOES_NOT_CONTAIN_TYPE = "union does not contain type",
     INVALID_IS_EXPR = "invalid `is` expression",
     INVALID_CAST = "invalid cast",
