@@ -60,5 +60,32 @@ make test
 
 创建完毕后，建议使用本地vscode打开codespace中的项目进行开发
 
+## 常见问题
+
+### No suitable version of LLVM was found system-wide or pointed 
+
+需要设置llvm环境变量，如果你使用的是ubuntu，可以在`~/.bashrc`中加入如下代码：
+
+```bash
+export LLVM_SYS_140_PREFIX=/usr/lib/llvm-14
+
+```
+
+然后执行
+
+```bash
+source ~/.bashrc
+```
+
+
+### Could NOT find ZLIB (missing: ZLIB_LIBRARY ZLIB_INCLUDE_DIR)
+
+缺少zlibdev造成的，如果你是ubuntu机器，使用下方命令进行安装：
+
+```bash
+sudo apt install zlib1g-dev
+```
+
+
 
 
