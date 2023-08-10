@@ -45,8 +45,11 @@ pub fn new_tf(secs: u64)*TimerFuture{
     };
     // let shared_state_1 = shared_state;
     let f = ||=>void{
+        gc::DioGC__enable_auto_collect();
         println!("begin sleep");
+        gc::DioGC__disable_auto_collect();
         sleep(s);
+        gc::DioGC__enable_auto_collect();
         println!("end sleep");
         shared_state.completed =true;
         println!("wake");
@@ -54,6 +57,7 @@ pub fn new_tf(secs: u64)*TimerFuture{
         return;
     };
     println!("start a thread");
+    gc::DioGC__disable_auto_collect();
     new_thread(f);
     let ret = TimerFuture {shared_state: shared_state};
     return &ret;

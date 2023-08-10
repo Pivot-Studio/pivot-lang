@@ -16,7 +16,7 @@ mod _immix {
     fn immix_gc_init(ptr: *mut u8) {
         trace!("immix gc init, stackmap: {:p}", ptr);
         SimpleLogger::init_from_env_default("GC_LOG", log::LevelFilter::Error);
-        immix::gc_disable_auto_collect();
+        // immix::gc_disable_auto_collect();
         #[cfg(not(feature = "jit"))]
         immix::gc_init(ptr)
     }
@@ -42,7 +42,24 @@ mod _immix {
             trace!("malloc: {} {}", size, obj_type);
             #[cfg(any(test, debug_assertions))] // enable eager gc in test mode
             immix::gc_collect();
-            gc_malloc(size as usize, obj_type)
+            let re = gc_malloc(size as usize, obj_type);
+            re
+        }
+
+        pub unsafe fn disable_auto_collect() {
+            immix::gc_disable_auto_collect();
+        }
+
+        pub unsafe fn enable_auto_collect() {
+            immix::gc_enable_auto_collect();
+        }
+
+
+        pub unsafe fn stuck_begin() {
+            immix::thread_stuck_start();
+        }
+        pub unsafe fn stuck_end() {
+            immix::thread_stuck_end();
         }
 
         pub unsafe fn malloc_no_collect(size: u64, obj_type: u8) -> *mut u8 {
