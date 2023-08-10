@@ -44,17 +44,16 @@ thread_local! {
 #[cfg(feature = "llvm_stackmap")]
 lazy_static! {
     static ref STACK_MAP: StackMapWrapper = {
-        StackMapWrapper {
-            map: RefCell::new(FxHashMap::default()),
-            global_roots: RefCell::new(vec![]),
-        }
+        let map = Box::into_raw(Box::new(FxHashMap::default()));
+        let global_roots = Box::into_raw(Box::new(vec![]));
+        StackMapWrapper { map, global_roots }
     };
 }
 
 #[cfg(feature = "llvm_stackmap")]
 pub struct StackMapWrapper {
-    pub map: RefCell<FxHashMap<*const u8, Function>>,
-    pub global_roots: RefCell<Vec<*const u8>>,
+    pub map: *mut FxHashMap<*const u8, Function>,
+    pub global_roots: *mut Vec<*const u8>,
 }
 #[cfg(feature = "llvm_stackmap")]
 unsafe impl Sync for StackMapWrapper {}
@@ -154,13 +153,14 @@ pub fn no_gc_thread() {
     })
 }
 
+
 #[cfg(feature = "llvm_stackmap")]
 pub fn gc_init(ptr: *mut u8) {
     // println!("stackmap: {:?}", &STACK_MAP.map.borrow());
     build_root_maps(
         ptr,
-        &mut STACK_MAP.map.borrow_mut(),
-        &mut STACK_MAP.global_roots.borrow_mut(),
+        unsafe { &mut STACK_MAP.map.as_mut().unwrap() },
+        unsafe { &mut STACK_MAP.global_roots.as_mut().unwrap() },
     );
 }
 

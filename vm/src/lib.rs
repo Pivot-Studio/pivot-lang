@@ -61,7 +61,6 @@ fn print_i64(i: i64) {
     print!("{}", i);
 }
 
-
 #[is_runtime]
 fn new_thread(f: i128) -> i128 {
     // f's first 8 byte is fn pointer, next 8 byte is data pointer
@@ -69,7 +68,7 @@ fn new_thread(f: i128) -> i128 {
     let f_ptr = ptr as *const extern "C" fn(i64);
     let data_ptr = unsafe { *ptr.offset(1) };
     let func = unsafe { *f_ptr };
-    let c = move ||{
+    let c = move || {
         func(data_ptr);
     };
     thread::spawn(c);

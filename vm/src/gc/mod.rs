@@ -54,7 +54,6 @@ mod _immix {
             immix::gc_enable_auto_collect();
         }
 
-
         pub unsafe fn stuck_begin() {
             immix::thread_stuck_start();
         }

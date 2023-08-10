@@ -444,36 +444,41 @@ impl Collector {
             } else {
                 // println!("{:?}", &STACK_MAP.map.borrow());
                 let mut depth = 0;
-                backtrace::trace(|frame| {
-                    let addr = frame.ip() as *mut u8;
-                    let const_addr = addr as *const u8;
-                    let map = STACK_MAP.map.borrow();
-                    let f = map.get(&const_addr);
-                    // backtrace::resolve_frame(frame,
-                    //     |s|
-                    //     {
-                    //         println!("{}: {:?} ip: {:p}, address: {:p}, sp: {:?}", depth, s.name(), frame.ip(), const_addr, frame.sp());
-                    //     }
-                    // );
-                    if let Some(f) = f {
-                        // println!("found fn in stackmap, f: {:?} sp: {:p}", f,frame.sp());
-                        f.iter_roots().for_each(|(offset, _obj_type)| unsafe {
-                            // println!("offset: {}", offset);
-                            let sp = frame.sp() as *mut u8;
-                            let root = sp.offset(offset as isize);
-                            self.mark_ptr(root);
-                        });
-                    }
-                    depth += 1;
-                    true
-                });
-                STACK_MAP
-                    .global_roots
-                    .borrow()
-                    .iter()
-                    .for_each(|root| unsafe {
-                        self.mark_ptr((*root) as usize as *mut u8);
-                    });
+                unsafe {
+                    backtrace::trace_unsynchronized(|frame| {
+                        let addr = frame.ip() as *mut u8;
+                        let const_addr = addr as *const u8;
+                        let map = STACK_MAP.map.as_ref().unwrap();
+                        let f = map.get(&const_addr);
+                        // backtrace::resolve_frame(frame,
+                        //     |s|
+                        //     {
+                        //         println!("{}: {:?} ip: {:p}, address: {:p}, sp: {:?}", depth, s.name(), frame.ip(), const_addr, frame.sp());
+                        //     }
+                        // );
+                        if let Some(f) = f {
+                            // println!("found fn in stackmap, f: {:?} sp: {:p}", f,frame.sp());
+                            f.iter_roots().for_each(|(offset, _obj_type)| {
+                                // println!("offset: {}", offset);
+                                let sp = frame.sp() as *mut u8;
+                                let root = sp.offset(offset as isize);
+                                self.mark_ptr(root);
+                            });
+                        }
+                        depth += 1;
+                        true
+                    })
+                };
+                unsafe {
+                    STACK_MAP
+                        .global_roots
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .for_each(|root| {
+                            self.mark_ptr((*root) as usize as *mut u8);
+                        })
+                };
             }
         }
 
