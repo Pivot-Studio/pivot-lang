@@ -1,58 +1,151 @@
-use project1::test::ifel;
-use project1::test::generic;
-use project1::test::st;
-use project1::test::method;
-use project1::test::constant;
-use project1::test::traits;
-use project1::test::simple;
-use project1::test::flow;
-use project1::test::list;
-use project1::test::module;
-use project1::test::str;
-use project1::test::macros;
-use project1::test::union;
-use project1::test::multi_trait;
-use project1::test::tuple;
-use project1::test::fntype;
-use project1::test::closure;
-use project1::test::map;
-use project1::test::tree;
-use project1::test::fixed_point;
-use project1::tmod2;
-use pl_test::main;
-use project1::test::compiletime_reflection::test_compile_time_reflection;
-use project1::test::deconstruct;
-use project1::test::st::*;
-use project1::test::arr;
-
-pub fn main() i64 {
-    macros::test_macros();
-    ifel::test_if_else();
-    generic::test_generic();
-    method::test_impl();
-    test_struct();
-    constant::test_const();
-    traits::test_trait();
-    simple::test_simple();
-    flow::test_flow();
-    list::test_list();
-    main::simple_test();
-    module::test_module();
-    str::test_string();
-    union::test_union();
-    multi_trait::test_multi_trait();
-    deconstruct::test_deconstruct();
-    tuple::test_tuple();
-    fntype::test_fntype()();
-    closure::test_closure();
-    tree::test_eva();
-    map::test_map();
-    fixed_point::test_fixed_point();
-    generic::ret_generic1<i64>();
-    test_compile_time_reflection();
-    
-    arr::test_arr();
-    return 0;
+use std::future::*;
+use std::io;
+fn new_thread(f: ||=>void) i128;
+fn sleep(secs: u64) void;
+pub struct SharedState {
+    completed: bool;
+    waker: Waker;
 }
 
+pub struct TimerFuture {
+    shared_state: *SharedState;
+}
 
+impl Future<()> for TimerFuture {
+    fn poll(wk: Waker) Poll<()> {
+        let shared_state = self.shared_state;
+        println!("polling");
+        if shared_state.completed{
+            return Ready<()>{v: ()};
+        }else{
+            shared_state.waker = wk;
+            return Pending{};
+        }
+    }
+}
+
+pub struct TimeWaker {
+    task: *Task;
+}
+
+impl Waker for TimeWaker {
+    fn wake() void {
+        self.task.sender.send(self.task);
+        return;
+    }
+}
+fn print_u64(u: u64) void;
+
+pub fn new_tf(secs: u64)*TimerFuture{
+    let s = secs;
+    let a:Waker = TimeWaker{};
+    let shared_state = &SharedState {
+        completed: false,
+        waker: a
+    };
+    // let shared_state_1 = shared_state;
+    let f = ||=>void{
+        println!("begin sleep");
+        sleep(s);
+        println!("end sleep");
+        shared_state.completed =true;
+        println!("wake");
+        shared_state.waker.wake();
+        return;
+    };
+    println!("start a thread");
+    new_thread(f);
+    let ret = TimerFuture {shared_state: shared_state};
+    return &ret;
+}
+pub struct Chan{
+    chan: *Task;
+    is_none: bool;
+}
+
+impl Chan {
+    fn send(t: *Task) void {
+        while !self.is_none {
+        }
+        self.is_none = false;
+        println!("send");
+        self.chan = t;
+        return;
+    }
+    fn recv() *Task{
+        while self.is_none{
+        }
+        println!("recv");
+        self.is_none = true;
+        return self.chan;
+        
+    }
+}
+
+pub struct Task {
+    time_future: *TimerFuture;
+    sender: *Chan;
+}
+
+pub struct Spawner {
+    sender: *Chan;
+}
+
+struct Executor {
+    ready_queue: *Chan;
+}
+
+fn new_executor_and_spawner() (Executor, Spawner) {
+    let task = Task{};
+    let chan = Chan {
+        chan: &task,
+        is_none: true
+    };
+    let executor = Executor{ready_queue: &chan};
+    let spawner = Spawner{sender: &chan};
+    return (executor, spawner);
+}
+
+impl Spawner {
+    fn spawn(future: *TimerFuture)void{
+        let task = Task {
+            time_future: future,
+            sender: self.sender
+        };
+        let waker: Waker = TimeWaker {task: &task};
+        future.shared_state.waker = waker;
+        // self.sender.send(&task);
+        return;
+    }
+}
+
+impl Executor {
+    fn run()void{
+        let is_pending = true;
+        while is_pending {
+            let task = *(self.ready_queue.recv());
+            let wk = task.time_future.shared_state.waker;
+            let poll = task.time_future.poll(wk);
+            println!("polled");
+            if poll is Pending{
+                continue;
+            }
+            println!("[run]ready");
+            is_pending = false;
+        }
+        return;
+    }
+}
+
+fn main() i64 {
+    println!("new_timerfuture");
+    let tf = new_tf(3 as u64);
+    println!("new_executor & spawner");
+    let (executor, spawner) = new_executor_and_spawner();
+    println!("spawn");
+    spawner.spawn(tf);
+    println!("run");
+    executor.run();
+    println!("end");
+    return 0;
+}
