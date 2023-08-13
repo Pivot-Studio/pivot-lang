@@ -618,6 +618,19 @@ make devmac # mac
 <p>点击以下链接即可创建一个包含pl开发环境的codespace</p>
 <p><a href="https://github.com/codespaces/new?machine=standardLinux32gb&amp;repo=535925143&amp;ref=master&amp;devcontainer_path=.devcontainer%2Fdevcontainer.json&amp;location=SouthEastAsia">create codespace</a></p>
 <p>创建完毕后，建议使用本地vscode打开codespace中的项目进行开发</p>
+<h2 id="常见问题"><a class="header" href="#常见问题">常见问题</a></h2>
+<h3 id="no-suitable-version-of-llvm-was-found-system-wide-or-pointed"><a class="header" href="#no-suitable-version-of-llvm-was-found-system-wide-or-pointed">No suitable version of LLVM was found system-wide or pointed</a></h3>
+<p>需要设置llvm环境变量，如果你使用的是ubuntu，可以在<code>~/.bashrc</code>中加入如下代码：</p>
+<pre><code class="language-bash">export LLVM_SYS_140_PREFIX=/usr/lib/llvm-14
+
+</code></pre>
+<p>然后执行</p>
+<pre><code class="language-bash">source ~/.bashrc
+</code></pre>
+<h3 id="could-not-find-zlib-missing-zlib_library-zlib_include_dir"><a class="header" href="#could-not-find-zlib-missing-zlib_library-zlib_include_dir">Could NOT find ZLIB (missing: ZLIB_LIBRARY ZLIB_INCLUDE_DIR)</a></h3>
+<p>缺少zlibdev造成的，如果你是ubuntu机器，使用下方命令进行安装：</p>
+<pre><code class="language-bash">sudo apt install zlib1g-dev
+</code></pre>
 <div style="break-before: page; page-break-before: always;"></div><h1 id="compiler"><a class="header" href="#compiler">Compiler</a></h1>
 <p>本文档会总体介绍一遍Pivot-Lang编译器的整体工作流程，帮助开发人员快速上手开发。</p>
 <h2 id="编译器基本工作流程"><a class="header" href="#编译器基本工作流程">编译器基本工作流程</a></h2>
