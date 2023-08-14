@@ -1,0 +1,59 @@
+use std::mutex::*;
+pub struct Chan<T> {
+    buffer: Queue<T>;
+    count: u64;
+    capacity: u64;
+    mtx: *Mutex;
+}
+struct Node<T> {
+    data: T;
+    next: *Node<T>;
+    prev: *Node<T>;
+}
+
+
+struct Queue<T> {
+    head: *Node<T>;
+    tail: *Node<T>;
+}
+
+impl <T>Queue<T>{
+    pub fn push(t: T) void {
+        let node = Node<T>{};
+        node.data = t;
+        node.prev = self.tail;
+        self.tail = &node;
+        return;
+    }
+
+    pub fn pop() T {
+        let node = *self.head;
+        self.head = node.next;
+        return node.data;
+    }
+
+}
+pub fn channel<T>(sz: u64) Chan<T> {
+    let ch = Chan<T> {};
+    ch.buffer = Queue<T>{};
+    ch.count = 0;
+    ch.capacity = sz;
+    create_mutex(&ch.mtx);
+    return ch;
+}
+impl <T>Chan<T> {
+    pub fn send(t: T) void {
+        while self.capacity <= self.count {}
+        lock_mutex(self.mtx);
+        self.buffer.push(t);
+        unlock_mutex(self.mtx);
+        return;
+    }
+    pub fn recv() T {
+        while self.count==0 {}
+        lock_mutex(self.mtx);
+        let t = self.buffer.pop();
+        unlock_mutex(self.mtx);
+        return t;
+    }
+}

@@ -1,0 +1,9 @@
+pub struct Mutex{}
+
+pub fn create_mutex(mutex: **Mutex) u64;
+
+pub fn lock_mutex(mutex: *Mutex) u64;
+
+pub fn unlock_mutex(mutex: *Mutex) u64;
+
+pub fn drop_mutex(mutex: *Mutex) u64;
