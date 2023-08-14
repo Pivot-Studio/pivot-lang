@@ -1047,7 +1047,6 @@ impl<'a, 'ctx> Ctx<'a> {
         u: &TP,
         mut f: F,
     ) -> R {
-        let mut oldm = None;
         if u.get_path() != self.plmod.path {
             let ori_mod = unsafe { &*self.origin_mod as &Mod };
             let m = if u.get_path() == ori_mod.path {
@@ -1055,14 +1054,20 @@ impl<'a, 'ctx> Ctx<'a> {
             } else {
                 self.db.get_module(&u.get_path()).unwrap()
             };
-            oldm = Some(self.set_mod(m));
+            let oldm = self.set_mod(m);
+            if self.origin_mod as isize == &self.plmod as *const Mod as isize {
+                self.origin_mod = &oldm as *const Mod;
+            }
+            let res = f(self, u);
+            self.set_mod(oldm);
+            self.origin_mod = &self.plmod as *const Mod;
+            res
+        }else {
+            let res = f(self, u);
+            res
         }
-        let res = f(self, u);
-        if let Some(m) = oldm {
-            self.set_mod(m);
-        }
-        res
     }
+
 
     pub fn run_in_origin_mod<'b, R, F: FnMut(&mut Ctx<'a>) -> R>(&'b mut self, mut f: F) -> R {
         let oldm = self.plmod.clone();
