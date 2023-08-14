@@ -370,7 +370,7 @@
                 INVALID_IS_EXPR,
             ),
             help: Some(
-                "`is` can only be used on union types",
+                "`is` can only be used on union or trait types",
             ),
             labels: [],
             source: None,

@@ -50,6 +50,7 @@ impl MultiTraitNode {
         builder.opaque_struct_type(&ctx.plmod.get_full_name(&name));
         builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&name), &st, ctx);
         let trait_tp = Arc::new(RefCell::new(PLType::Trait(st)));
+
         _ = ctx.add_type(name, trait_tp.clone(), Default::default());
         Ok(trait_tp)
     }

@@ -14,6 +14,7 @@ use crate::{
         tokens::TokenType,
     },
     format_label,
+    utils::get_hash_code,
 };
 
 use super::{
@@ -135,6 +136,27 @@ impl<'a, 'ctx> Ctx<'a> {
                         .add_to_ctx(self))
                 }
             }
+            (PLType::Trait(t), target_ty) => {
+                if node.tail.is_none() {
+                    let pos = node.ty.range().end;
+                    let end_range = Range {
+                        start: pos,
+                        end: pos,
+                    };
+                    return Err(node.range.new_err(ErrorCode::INVALID_DIRECT_TRAIT_CAST)
+                        .add_label(node.expr.range(), self.get_file(), format_label!("type of the expression is `{}`", &t.name))
+                        .add_label(node.ty.range(), self.get_file(), format_label!("target type is `{}`", target_ty.get_name()))
+                        .add_label(end_range, self.get_file(), format_label!("add `{}` or `{}` to make it legal", "?", "!"))
+                        .add_help("cast a trait to specific type directly is not allowed, use `?` or `!` after the cast expression")
+                        .add_to_ctx(self));
+                }
+                let (token, _) = node.tail.unwrap();
+                if token == TokenType::QUESTION {
+                    Ok(self.cast_trait_to(builder, val, target_rc))
+                } else {
+                    Ok(self.force_cast_trait_to(builder, val, target_rc, node.range.start))
+                }
+            }
             _ => Err(node
                 .range()
                 .new_err(ErrorCode::INVALID_CAST)
@@ -150,12 +172,45 @@ impl<'a, 'ctx> Ctx<'a> {
                 )
                 .add_help(
                     "`as` cast can only be performed between primitives \
-                or from union types.",
+                or from union/trait types.",
                 )
                 .add_to_ctx(self)),
         }
     }
-    /// Option<i128>
+    fn cast_trait_to<'b>(
+        &mut self,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+        val: ValueHandle,
+        target_ty: Arc<RefCell<PLType>>,
+    ) -> (ValueHandle, Arc<RefCell<PLType>>) {
+        let hash = builder.build_struct_gep(val, 0, "tp_hash").unwrap();
+        let hash = builder.build_load(hash, "tp_hash");
+        let hasn_code = get_hash_code(target_ty.borrow().get_full_elm_name());
+        let hash_code = builder.int_value(&PriType::U64, hasn_code, false);
+        let cond_block = builder.append_basic_block(self.function.unwrap(), "if.cond");
+        let then_block = builder.append_basic_block(self.function.unwrap(), "if.then");
+        let else_block = builder.append_basic_block(self.function.unwrap(), "if.else");
+        let after_block = builder.append_basic_block(self.function.unwrap(), "if.after");
+
+        builder.build_unconditional_branch(cond_block);
+        self.position_at_end(cond_block, builder);
+        let cond = builder.build_int_compare(IntPredicate::EQ, hash, hash_code, "hash.eq");
+        let cond = builder
+            .try_load2var(Default::default(), cond, self)
+            .unwrap();
+        let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
+
+        self.build_ret_opt(
+            builder,
+            target_ty,
+            then_block,
+            val,
+            cond,
+            after_block,
+            else_block,
+        )
+    }
+    /// -> Option<_>
     fn cast_union_to<'b>(
         &mut self,
         builder: &'b BuilderEnum<'a, 'ctx>,
@@ -164,10 +219,7 @@ impl<'a, 'ctx> Ctx<'a> {
         target_ty: Arc<RefCell<PLType>>,
     ) -> (ValueHandle, Arc<RefCell<PLType>>) {
         let tag = builder.build_struct_gep(val, 0, "tag").unwrap();
-        let result_tp = get_option_type(self, builder, target_ty).unwrap();
-        let result = builder.alloc("cast_result", &result_tp.borrow(), self, None);
-        let result_tag_field = builder.build_struct_gep(result, 0, "tag").unwrap();
-        let result_data_field = builder.build_struct_gep(result, 1, "data").unwrap();
+
         // check if the tag is the same
         let tag = builder.build_load(tag, "tag");
         let cond_block = builder.append_basic_block(self.function.unwrap(), "if.cond");
@@ -186,6 +238,33 @@ impl<'a, 'ctx> Ctx<'a> {
             .try_load2var(Default::default(), cond, self)
             .unwrap();
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
+
+        self.build_ret_opt(
+            builder,
+            target_ty,
+            then_block,
+            val,
+            cond,
+            after_block,
+            else_block,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build_ret_opt<'b>(
+        &mut self,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+        target_ty: Arc<RefCell<PLType>>,
+        then_block: usize,
+        val: usize,
+        cond: usize,
+        after_block: usize,
+        else_block: usize,
+    ) -> (usize, Arc<RefCell<PLType>>) {
+        let result_tp = get_option_type(self, builder, target_ty).unwrap();
+        let result = builder.alloc("cast_result", &result_tp.borrow(), self, None);
+        let result_tag_field = builder.build_struct_gep(result, 0, "tag").unwrap();
+        let result_data_field = builder.build_struct_gep(result, 1, "data").unwrap();
         builder.build_conditional_branch(cond, then_block, else_block);
         // then block
         self.position_at_end(then_block, builder);
@@ -203,6 +282,41 @@ impl<'a, 'ctx> Ctx<'a> {
         self.position_at_end(after_block, builder);
         (result, result_tp)
     }
+
+    fn force_cast_trait_to<'b>(
+        &mut self,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+        val: ValueHandle,
+        target_ty: Arc<RefCell<PLType>>,
+        pos: Pos,
+    ) -> (ValueHandle, Arc<RefCell<PLType>>) {
+        let hash = builder.build_struct_gep(val, 0, "tp_hash").unwrap();
+        let hash = builder.build_load(hash, "tp_hash");
+        let hasn_code = get_hash_code(target_ty.borrow().get_full_elm_name());
+        let hash_code = builder.int_value(&PriType::U64, hasn_code, false);
+        let cond_block = builder.append_basic_block(self.function.unwrap(), "if.cond");
+        let then_block = builder.append_basic_block(self.function.unwrap(), "if.then");
+        let else_block = builder.append_basic_block(self.function.unwrap(), "if.else");
+        let after_block = builder.append_basic_block(self.function.unwrap(), "if.after");
+
+        builder.build_unconditional_branch(cond_block);
+        self.position_at_end(cond_block, builder);
+        let cond = builder.build_int_compare(IntPredicate::EQ, hash, hash_code, "hash.eq");
+        let cond = builder
+            .try_load2var(Default::default(), cond, self)
+            .unwrap();
+        let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
+        builder.build_conditional_branch(cond, then_block, else_block);
+        self.build_cast_ret(
+            target_ty,
+            builder,
+            then_block,
+            val,
+            after_block,
+            else_block,
+            pos,
+        )
+    }
     fn force_cast_union_to<'b>(
         &mut self,
         builder: &'b BuilderEnum<'a, 'ctx>,
@@ -212,8 +326,6 @@ impl<'a, 'ctx> Ctx<'a> {
         pos: Pos,
     ) -> (ValueHandle, Arc<RefCell<PLType>>) {
         let tag = builder.build_struct_gep(val, 0, "tag").unwrap();
-        let result_tp = target_ty.clone();
-        let result = builder.alloc("cast_result", &result_tp.borrow(), self, None);
         // check if the tag is the same
         let tag = builder.build_load(tag, "tag");
         let cond_block = builder.append_basic_block(self.function.unwrap(), "if.cond");
@@ -233,7 +345,31 @@ impl<'a, 'ctx> Ctx<'a> {
             .unwrap();
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
         builder.build_conditional_branch(cond, then_block, else_block);
+        self.build_cast_ret(
+            target_ty,
+            builder,
+            then_block,
+            val,
+            after_block,
+            else_block,
+            pos,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build_cast_ret<'b>(
+        &mut self,
+        target_ty: Arc<RefCell<PLType>>,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+        then_block: usize,
+        val: usize,
+        after_block: usize,
+        else_block: usize,
+        pos: Pos,
+    ) -> (usize, Arc<RefCell<PLType>>) {
         // then block
+        let result_tp = target_ty.clone();
+        let result = builder.alloc("cast_result", &result_tp.borrow(), self, None);
         self.position_at_end(then_block, builder);
         let data = builder.build_struct_gep(val, 1, "data").unwrap();
         let data = builder.build_load(data, "data");
@@ -320,10 +456,23 @@ impl Node for IsNode {
                         .add_to_ctx(ctx))
                 }
             }
+            PLType::Trait(_) => {
+                let name = target_tp.borrow().get_full_elm_name();
+                let hash_code = get_hash_code(name);
+                let hash_code = builder.int_value(&PriType::U64, hash_code, false);
+                let hash = builder.build_struct_gep(val, 0, "tp_hash").unwrap();
+                let hash = builder.build_load(hash, "tp_hash");
+                let cond = builder.build_int_compare(IntPredicate::EQ, hash, hash_code, "hash.eq");
+                let cond = builder.try_load2var(Default::default(), cond, ctx).unwrap();
+                let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
+                cond.new_output(ctx.get_type("bool", Default::default()).unwrap().tp)
+                    .set_const()
+                    .to_result()
+            }
             _ => Err(self
                 .range()
                 .new_err(ErrorCode::INVALID_IS_EXPR)
-                .add_help("`is` can only be used on union types")
+                .add_help("`is` can only be used on union or trait types")
                 .add_to_ctx(ctx)),
         }
     }

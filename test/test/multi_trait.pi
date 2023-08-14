@@ -15,6 +15,15 @@ pub fn test_multi_trait() void {
     let t = test_struct{};
     let c: C;
     c = t;
+    let d = c is test_struct;
+    panic::assert(d);
+    let _casted_0 = c as test_struct!;
+    let tt = test_generic_struct<i64>{};
+    let cc: B;
+    cc = tt;
+    let dd = cc is test_generic_struct<i64>;
+    panic::assert(dd);
+    let _casted_1 = cc as test_generic_struct<i64>!;
     let x = c.a();
     let y = c.b();
     panic::assert(x);
@@ -43,3 +52,14 @@ fn trait_with_generic<T: A+B>(x: T) i64 {
     return i;
 }
 
+
+impl B for test_generic_struct<i64> {
+    fn b() i64 {
+        return 1000;
+    }
+}
+
+
+struct test_generic_struct<T> {
+    
+}
