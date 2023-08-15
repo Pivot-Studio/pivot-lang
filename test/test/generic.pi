@@ -28,6 +28,16 @@ pub struct GenericSelfRef<T|S> {
     x: *GenericSelfRef<T|S>;
 }
 
+fn placeholder_inner1<T>(b: T, a: One<T>) void {
+    return;
+}
+
+fn placeholder_test1<T>(a: One<T>, b: T) void {
+    placeholder_inner1(b, a);
+    placeholder_inner1<T>(b, a);
+    return;
+}
+
 pub fn ret_generic1<T>() Three<T> {
     return Three<T>{};
 }
@@ -155,6 +165,7 @@ pub fn test_generic() void {
     test_ret_generic<i64>();
     test_self_ref_generic();
     test_generic_fn();
+    placeholder_test1(One<i64>{}, 1);
     return;
 }
 
