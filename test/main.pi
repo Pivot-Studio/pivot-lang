@@ -29,12 +29,14 @@ pub struct TimeWaker {
     task: *Task;
 }
 
-// impl Waker for TimeWaker {
-//     fn wake() void {
-//         self.task.sender.send(self.task);
-//         return;
-//     }
-// }
+impl Waker for TimeWaker {
+    fn wake() void {
+        let task = self.task;
+        let sender = self.task.sender;
+        sender.send(task);
+        return;
+    }
+}
 // fn print_u64(u: u64) void;
 
 // pub fn new_tf(secs: u64)*TimerFuture{
@@ -73,29 +75,32 @@ pub struct Spawner {
     sender: *Chan<*Task>;
 }
 
-struct Executor {
+pub struct Executor {
     ready_queue: *Chan<*Task>;
 }
 
-// fn new_executor_and_spawner() (Executor, Spawner) {
-//     let ch = channel<*Task>(10);
-//     let executor = Executor{ready_queue: &ch};
-//     let spawner = Spawner{sender: &ch};
-//     return (executor, spawner);
-// }
+fn new_executor_and_spawner() (Executor, Spawner) {
+    let ch = &channel<*Task>(10 as u64);
+    let executor = Executor{};
+    executor.ready_queue = ch;
+    let spawner = Spawner{};
+    spawner.sender = ch;
+    return (executor, spawner);
+}
 
-// impl Spawner {
-//     fn spawn(future: *TimerFuture)void{
-//         let task = Task {
-//             time_future: future,
-//             sender: self.sender
-//         };
-//         let waker: Waker = TimeWaker {task: &task};
-//         future.shared_state.waker = waker;
-//         // self.sender.send(&task);
-//         return;
-//     }
-// }
+impl Spawner {
+    fn spawn(future: *TimerFuture)void{
+        let task = Task {};
+        task.sender = self.sender;
+        task.time_future = future;
+        
+        let waker = TimeWaker{};
+        waker.task = &task;
+        future.shared_state.waker = waker;
+        // self.sender.send(&task);
+        return;
+    }
+}
 
 // impl Executor {
 //     fn run()void{
