@@ -1031,17 +1031,16 @@ impl PartialEq for STType {
                 && self.is_tuple == other.is_tuple
                 && self.generic_map == other.generic_map
         } else {
-            self.name == other.name
-                && self.path == other.path
-                && self.fields == other.fields
-                && self.range == other.range
-                && self.doc == other.doc
-                && self.generic_map == other.generic_map
-                && self.derives == other.derives
-                && self.modifier == other.modifier
-                && self.body_range == other.body_range
-                && self.is_trait == other.is_trait
-                && self.is_tuple == other.is_tuple
+            self.name == other.name && self.path == other.path
+            // && self.fields == other.fields
+            // && self.range == other.range
+            // && self.doc == other.doc
+            // && self.generic_map == other.generic_map
+            // && self.derives == other.derives
+            // && self.modifier == other.modifier
+            // && self.body_range == other.body_range
+            // && self.is_trait == other.is_trait
+            // && self.is_tuple == other.is_tuple
         }
     }
 }

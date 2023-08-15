@@ -1055,12 +1055,15 @@ impl<'a, 'ctx> Ctx<'a> {
                 self.db.get_module(&u.get_path()).unwrap()
             };
             let oldm = self.set_mod(m);
-            if self.origin_mod as isize == &self.plmod as *const Mod as isize {
+            let origin = self.origin_mod as isize == &self.plmod as *const Mod as isize;
+            if origin {
                 self.origin_mod = &oldm as *const Mod;
             }
             let res = f(self, u);
             self.set_mod(oldm);
-            self.origin_mod = &self.plmod as *const Mod;
+            if origin {
+                self.origin_mod = &self.plmod as *const Mod;
+            }
             res
         } else {
             f(self, u)
@@ -1069,8 +1072,8 @@ impl<'a, 'ctx> Ctx<'a> {
 
     pub fn run_in_origin_mod<'b, R, F: FnMut(&mut Ctx<'a>) -> R>(&'b mut self, mut f: F) -> R {
         let oldm = self.plmod.clone();
-        let ctx = self.get_root_ctx();
-        self.set_mod(ctx.plmod.clone());
+        let ori_mod = unsafe { &*self.origin_mod as &Mod };
+        self.set_mod(ori_mod.clone());
         let res = f(self);
         self.set_mod(oldm);
         res
@@ -1080,7 +1083,6 @@ impl<'a, 'ctx> Ctx<'a> {
         u: &mut TP,
         mut f: F,
     ) -> R {
-        let mut oldm = None;
         if u.get_path() != self.plmod.path {
             let ori_mod = unsafe { &*self.origin_mod as &Mod };
             let m = if u.get_path() == ori_mod.path {
@@ -1088,13 +1090,20 @@ impl<'a, 'ctx> Ctx<'a> {
             } else {
                 self.db.get_module(&u.get_path()).unwrap()
             };
-            oldm = Some(self.set_mod(m));
+            let oldm = self.set_mod(m);
+            let origin = self.origin_mod as isize == &self.plmod as *const Mod as isize;
+            if origin {
+                self.origin_mod = &oldm as *const Mod;
+            }
+            let res = f(self, u);
+            self.set_mod(oldm);
+            if origin {
+                self.origin_mod = &self.plmod as *const Mod;
+            }
+            res
+        } else {
+            f(self, u)
         }
-        let res = f(self, u);
-        if let Some(m) = oldm {
-            self.set_mod(m);
-        }
-        res
     }
 
     pub fn get_mod(&self, path: &str) -> Mod {
@@ -1517,6 +1526,7 @@ impl<'a, 'ctx> Ctx<'a> {
                     need_up_cast: true,
                 };
             }
+            eprintln!("l:{:?}\nr:{:?}", trait_pltype, st_pltype);
             return EqRes {
                 eq: false,
                 need_up_cast: false,
