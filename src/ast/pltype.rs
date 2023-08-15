@@ -1332,7 +1332,11 @@ impl STType {
                 pltype.tp.replace(PLType::Struct(res.clone()));
             }
             // TODO union & nested placeholder
-            if !res.generic_infer_types.values().any(|v| matches!(&*v.borrow(), PLType::PlaceHolder(_))) {
+            if !res
+                .generic_infer_types
+                .values()
+                .any(|v| matches!(&*v.borrow(), PLType::PlaceHolder(_)))
+            {
                 ctx.add_infer_result(self, &res.name, pltype.tp.clone());
             }
             Ok(pltype.tp)

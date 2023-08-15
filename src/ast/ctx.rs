@@ -1062,12 +1062,10 @@ impl<'a, 'ctx> Ctx<'a> {
             self.set_mod(oldm);
             self.origin_mod = &self.plmod as *const Mod;
             res
-        }else {
-            let res = f(self, u);
-            res
+        } else {
+            f(self, u)
         }
     }
-
 
     pub fn run_in_origin_mod<'b, R, F: FnMut(&mut Ctx<'a>) -> R>(&'b mut self, mut f: F) -> R {
         let oldm = self.plmod.clone();
