@@ -233,6 +233,7 @@ impl Node for FuncCallNode {
             &fnvalue.fntype.param_pltypes,
             fnvalue.fntype.generic,
         )?;
+        let bb = builder.get_cur_basic_block();
         // value check and generic infer
         let res = ctx.protect_generic_context(&fnvalue.fntype.generic_map.clone(), |ctx| {
             let rettp = ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
@@ -277,6 +278,7 @@ impl Node for FuncCallNode {
             // let rettp = ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
             //     fnvalue.fntype.ret_pltype.get_type(ctx, builder, true)
             // })?;
+            builder.position_at_end_block(bb);
             let ret = builder.build_call(function, &para_values, &rettp.borrow(), ctx);
             ctx.save_if_comment_doc_hover(id_range, Some(fnvalue.doc.clone()));
             handle_ret(ret, rettp)
