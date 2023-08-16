@@ -10,9 +10,9 @@ pub fn test_union() i64 {
     let b: f32 = 1.0;
     let c: A<i128> = a;
     let h = c as i128?;
-    let re = h.map(|a:i128|=>i64{
+    let re = h.map(|a: i128| => i64 {
         let b = a as i64;
-        return b+100;
+        return b + 100;
     });
     let re1 = re as i64!;
     panic::assert(re1 == 101);
@@ -57,3 +57,9 @@ impl<T> A<T> {
 }
 
 type Name = i32 | i64;
+fn generic<R>(a: Option<R>) void {
+    let c = a as R!;
+    a = c;
+    return;
+}
+

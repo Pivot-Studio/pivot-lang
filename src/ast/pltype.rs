@@ -233,7 +233,9 @@ impl UnionType {
             u.sum_types
                 .iter()
                 .enumerate()
-                .find(|(_, t)| &*t.get_type(ctx, builder, true).unwrap().borrow() == pltype)
+                .find(|(_, t)| {
+                    &*get_type_deep(t.get_type(ctx, builder, true).unwrap()).borrow() == pltype
+                })
                 .map(|(i, _)| i)
         })
     }
@@ -440,9 +442,7 @@ impl PLType {
                     new_typename_node(&g.name, Default::default(), &[])
                 }
             }
-            PLType::PlaceHolder(p) => {
-                new_typename_node(&p.get_place_holder_name(), Default::default(), &[])
-            }
+            PLType::PlaceHolder(p) => new_typename_node(&p.name, Default::default(), &[]),
             PLType::Trait(t) => Self::new_custom_tp_node(t, path),
             PLType::Fn(_) => unreachable!(),
             PLType::Union(u) => Self::new_custom_tp_node(u, path),

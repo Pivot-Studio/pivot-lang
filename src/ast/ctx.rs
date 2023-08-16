@@ -447,7 +447,9 @@ impl<'a, 'ctx> Ctx<'a> {
             //     Ok(union_members)
             // })?;
             for (i, tp) in union_members.iter().enumerate() {
-                if *tp.borrow() == *ori_pltype.borrow() {
+                if *get_type_deep(tp.to_owned()).borrow()
+                    == *get_type_deep(ori_pltype.clone()).borrow()
+                {
                     let union_handle =
                         builder.alloc("tmp_unionv", &target_pltype.borrow(), self, None);
                     let union_value = builder
@@ -1527,6 +1529,12 @@ impl<'a, 'ctx> Ctx<'a> {
                 return EqRes {
                     eq: st.implements_trait(t, &self.get_root_ctx().plmod),
                     need_up_cast: true,
+                };
+            }
+            if get_type_deep(trait_pltype) == get_type_deep(st_pltype) {
+                return EqRes {
+                    eq: true,
+                    need_up_cast: false,
                 };
             }
             return EqRes {
