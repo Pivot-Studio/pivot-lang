@@ -8,7 +8,6 @@ pub struct Chan<T> {
 struct Node<T> {
     data: T;
     next: *Node<T>;
-    prev: *Node<T>;
 }
 
 
@@ -21,21 +20,24 @@ impl <T>Queue<T>{
     pub fn push(t: T) void {
         let node = Node<T>{};
         node.data = t;
-        node.prev = self.tail;
+        self.tail.next = &node;
         self.tail = &node;
         return;
     }
 
     pub fn pop() T {
-        let node = *self.head;
-        self.head = node.next;
+        let node = self.head.next;
+        self.head = node;
         return node.data;
     }
 
 }
 pub fn channel<T>(sz: u64) Chan<T> {
+    let node = Node<T>{};
     let ch = Chan<T> {};
     ch.buffer = Queue<T>{};
+    ch.buffer.head = &node;
+    ch.buffer.tail = &node;
     ch.count = 0;
     ch.capacity = sz;
     create_mutex(&ch.mtx);
@@ -46,6 +48,7 @@ impl <S>Chan<S> {
         while self.capacity <= self.count {}
         lock_mutex(self.mtx);
         self.buffer.push(s);
+        self.count = self.count + 1;
         unlock_mutex(self.mtx);
         return;
     }
@@ -53,6 +56,7 @@ impl <S>Chan<S> {
         while self.count==0 {}
         lock_mutex(self.mtx);
         let s = self.buffer.pop();
+        self.count = self.count - 1;
         unlock_mutex(self.mtx);
         return s;
     }

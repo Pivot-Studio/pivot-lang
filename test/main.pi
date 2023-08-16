@@ -5,7 +5,7 @@ fn new_thread(f: ||=>void) i128;
 fn sleep(secs: u64) void;
 pub struct SharedState {
     completed: bool;
-    waker: Waker;
+    waker: Option<Waker>;
 }
 
 pub struct TimerFuture {
@@ -38,27 +38,25 @@ impl Waker for TimeWaker {
 fn print_u64(u: u64) void;
 
 pub fn new_tf(secs: u64)*TimerFuture{
-    let s = secs;
-    let a:Waker = TimeWaker{};
-    let shared_state = &SharedState {
-        completed: false,
-        waker: a
-    };
-    // let shared_state_1 = shared_state;
+    let shared_state = &SharedState {};
+    shared_state.completed = false;
+    shared_state.waker = None{};
     let f = ||=>void{
-        gc::DioGC__enable_auto_collect();
+        // gc::DioGC__enable_auto_collect();
         println!("begin sleep");
-        gc::DioGC__disable_auto_collect();
-        sleep(s);
-        gc::DioGC__enable_auto_collect();
+        // gc::DioGC__disable_auto_collect();
+        sleep(secs);
+        // gc::DioGC__enable_auto_collect();
         println!("end sleep");
         shared_state.completed =true;
         println!("wake");
-        shared_state.waker.wake();
+        if !(shared_state.waker is None){
+            (shared_state.waker as Waker!).wake();
+        }
         return;
     };
     println!("start a thread");
-    gc::DioGC__disable_auto_collect();
+    // gc::DioGC__disable_auto_collect();
     new_thread(f);
     let ret = TimerFuture {shared_state: shared_state};
     return &ret;
@@ -91,9 +89,9 @@ impl Spawner {
         let task = Task {};
         task.sender = self.sender;
         task.time_future = future;
-        
-        let waker = TimeWaker{};
-        waker.task = &task;
+        let tw = TimeWaker{};
+        tw.task = &task;
+        let waker: Waker = tw;
         future.shared_state.waker = waker;
         // self.sender.send(&task);
         return;
@@ -104,9 +102,9 @@ impl Executor {
     fn run()void{
         let is_pending = true;
         while is_pending {
-            let t = *self.ready_queue.recv();
-            let wk = t.time_future.shared_state.waker;
-            let poll = t.time_future.poll(wk);
+            let task: Task = *self.ready_queue.recv();
+            let wk = task.time_future.shared_state.waker;
+            let poll = task.time_future.poll(wk as Waker!);
             println!("polled");
             if poll is Pending{
                 continue;
@@ -116,6 +114,40 @@ impl Executor {
         }
         return;
     }
+}
+
+// async fn foo() void {
+//     println!("start");
+//     new_tf(3 as u64).await;
+//     println!("stop");
+//     return;
+// }
+use std::iter::*;
+
+gen fn generator() Iterator<i64> {
+    for let i = 0; i < 2; i = i + 1 {
+        yield return i;
+    }
+}
+struct GenFuture<T> {
+    it: Iterator<Option<T>>;
+}
+impl <T>Future<T> for GenFuture<T> {
+    fn poll(wk: Waker) Poll<T>{
+        let t: Option<Option<T>> = self.it.next();
+        let t1: Option<T> = t as Option<T>!;
+        if t1 is None {
+            return Pending{};
+        }
+        return Pending{};
+    }
+}
+
+fn foo() Future {
+    let t: Future;
+
+    let a = generator;
+    return t;
 }
 
 fn main() i64 {
