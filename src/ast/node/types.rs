@@ -100,10 +100,16 @@ impl TypeNameNode {
                         }
                     }
                 }
-                if sttype.is_trait {
-                    return Ok(Arc::new(RefCell::new(PLType::Trait(sttype))));
-                }
-                Ok(Arc::new(RefCell::new(PLType::Struct(sttype))))
+                let ret = if sttype.is_trait {
+                    Arc::new(RefCell::new(PLType::Trait(sttype)))
+                } else {
+                    Arc::new(RefCell::new(PLType::Struct(sttype)))
+                };
+                ctx.linked_tp_tbl
+                    .entry(pltype.as_ptr())
+                    .or_insert(vec![])
+                    .push(ret.clone());
+                Ok(ret)
             }
             PLType::Union(untype) => {
                 let untype = untype.new_pltype();
@@ -137,7 +143,12 @@ impl TypeNameNode {
                         }
                     }
                 }
-                Ok(Arc::new(RefCell::new(PLType::Union(untype))))
+                let ret = Arc::new(RefCell::new(PLType::Union(untype)));
+                ctx.linked_tp_tbl
+                    .entry(pltype.as_ptr())
+                    .or_insert(vec![])
+                    .push(ret.clone());
+                Ok(ret)
             }
             _ => Ok(pltype),
         }
@@ -535,8 +546,16 @@ impl StructDefNode {
             }
             ctx.plmod.types = clone_map;
             if let PLType::Struct(st) = &mut *pltype.borrow_mut() {
-                st.fields = fields;
+                st.fields = fields.clone();
                 st.doc = self.doc.clone();
+                if let Some(stpltype) = ctx.linked_tp_tbl.remove(&pltype.tp.as_ptr()) {
+                    for st in stpltype {
+                        if let PLType::Struct(st) = &mut *st.borrow_mut() {
+                            st.fields = fields.clone();
+                            st.doc = self.doc.clone();
+                        }
+                    }
+                }
             }
             if let PLType::Struct(st) = &*pltype.borrow() {
                 if self.generics.is_none() {

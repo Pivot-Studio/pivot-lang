@@ -106,6 +106,7 @@ pub struct Ctx<'a> {
     pub generator_data: Option<Arc<RefCell<GeneratorCtxData>>>,
     pub generic_cache: GenericCache,
     pub origin_mod: *const Mod,
+    pub linked_tp_tbl: FxHashMap<*mut PLType, Vec<Arc<RefCell<PLType>>>>,
 }
 
 #[derive(Clone, Default)]
@@ -300,6 +301,7 @@ impl<'a, 'ctx> Ctx<'a> {
             generator_data: None,
             generic_cache: generic_infer,
             origin_mod: std::ptr::null(),
+            linked_tp_tbl: FxHashMap::default(),
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -339,6 +341,7 @@ impl<'a, 'ctx> Ctx<'a> {
             generator_data: self.generator_data.clone(),
             generic_cache: self.generic_cache.clone(),
             origin_mod: self.origin_mod,
+            linked_tp_tbl: FxHashMap::default(),
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
@@ -444,7 +447,9 @@ impl<'a, 'ctx> Ctx<'a> {
             //     Ok(union_members)
             // })?;
             for (i, tp) in union_members.iter().enumerate() {
-                if *tp.borrow() == *ori_pltype.borrow() {
+                if *get_type_deep(tp.to_owned()).borrow()
+                    == *get_type_deep(ori_pltype.clone()).borrow()
+                {
                     let union_handle =
                         builder.alloc("tmp_unionv", &target_pltype.borrow(), self, None);
                     let union_value = builder
@@ -1526,7 +1531,12 @@ impl<'a, 'ctx> Ctx<'a> {
                     need_up_cast: true,
                 };
             }
-            eprintln!("l:{:?}\nr:{:?}", trait_pltype, st_pltype);
+            if get_type_deep(trait_pltype) == get_type_deep(st_pltype) {
+                return EqRes {
+                    eq: true,
+                    need_up_cast: false,
+                };
+            }
             return EqRes {
                 eq: false,
                 need_up_cast: false,
