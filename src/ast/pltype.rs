@@ -965,6 +965,16 @@ pub struct ARRType {
     pub size_handle: ValueHandle,
 }
 
+impl TraitImplAble for ARRType {
+    fn get_full_name_except_generic(&self) -> String {
+        "[]".to_owned()
+    }
+
+    fn get_full_name(&self) -> String {
+        format!("[{}]", self.element_type.borrow().get_full_elm_name())
+    }
+}
+
 impl ARRType {
     pub fn get_elem_type(&self) -> Arc<RefCell<PLType>> {
         self.element_type.clone()

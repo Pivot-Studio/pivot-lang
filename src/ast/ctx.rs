@@ -695,6 +695,9 @@ impl<'a, 'ctx> Ctx<'a> {
             PLType::Primitive(p) => {
                 self.add_trait_impl_method(p, mthd, fntp, impl_trait, generic, target)
             }
+            PLType::Arr(p) => {
+                self.add_trait_impl_method(p, mthd, fntp, impl_trait, generic, target)
+            }
             _ => Err(target
                 .new_err(ErrorCode::TARGET_TYPE_NOT_IMPL_ABLE)
                 .add_to_ctx(self)),

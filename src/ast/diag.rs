@@ -133,7 +133,7 @@ define_error!(
     TRAIT_METHOD_NOT_FOUND = "trait method not found",
     ONLY_TRAIT_CAN_BE_IMPL = "only trait can be impl",
     EXPECT_TO_BE_A_TRAIT_IMPL = "expect to be a trait impl block",
-    TARGET_TYPE_NOT_IMPL_ABLE = "target type not impl able",
+    TARGET_TYPE_NOT_IMPL_ABLE = "target type not implable",
     TUPLE_WRONG_DECONSTRUCT_PARAM_LEN = "tuple wrong deconstruct param len",
     DEF_DECONSTRUCT_MUST_HAVE_VALUE = "def deconstruct must have value",
     STRUCT_FIELD_NOT_EXISTS = "struct field not exists",
