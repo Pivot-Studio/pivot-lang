@@ -549,13 +549,14 @@ impl FmtBuilder {
             self.space();
             self.token("else");
             self.space();
+            if matches!(**el, NodeEnum::If(_)) {
+                el.format(self);
+                return;
+            }
             self.l_brace();
             self.add_tab();
             el.format(self);
             self.sub_tab();
-            // if el_str.bytes().len() > 0 {
-            //     self.prefix();
-            // }
             self.prefix();
             self.r_brace();
         } else {

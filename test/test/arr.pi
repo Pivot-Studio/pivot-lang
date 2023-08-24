@@ -1,10 +1,8 @@
 use std::cols::arr;
 use core::panic::*;
 use std::iter::IntoIter;
-
-
 pub fn test_arr() void {
-    let array = arr::from_slice([1,2,3]);
+    let array = arr::from_slice([1, 2, 3]);
     array.set(2, 100);
     let a2 = array.get(2);
     assert(a2 == 100);
@@ -29,7 +27,7 @@ pub fn test_arr() void {
         }
         count = count + 1;
     }
-    iter = [1,2,3].into_iter();
+    iter = [1, 2, 3].into_iter();
     count = 0;
     for let i = iter.next(); i is i64; i = iter.next() {
         let tmp = i as i64!;
@@ -39,10 +37,11 @@ pub fn test_arr() void {
             assert(tmp == 2);
         } else if count == 2 {
             assert(tmp == 3);
-        } else  {
+        } else {
             panic::pl_panic();
         }
         count = count + 1;
     }
     return;
 }
+
