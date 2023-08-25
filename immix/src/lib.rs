@@ -240,7 +240,7 @@ static GC_STW_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 pub(crate) static USE_SHADOW_STACK: AtomicBool = AtomicBool::new(false);
 
-pub static ENABLE_EVA: AtomicBool = AtomicBool::new(false);
+pub static ENABLE_EVA: AtomicBool = AtomicBool::new(true);
 
 #[cfg(feature = "auto_gc")]
 static GC_AUTOCOLLECT_ENABLE: AtomicBool = AtomicBool::new(true);
