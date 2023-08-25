@@ -43,3 +43,4 @@
 
 - [About pivot lang](blogs/aboutpl.md)
 - [lsp and salsa](blogs/lsp_and_salsa.md)
+- [coroutines](blogs/coroutines.md)

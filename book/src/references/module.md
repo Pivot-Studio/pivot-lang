@@ -44,9 +44,30 @@ fn main() void {
 
 ```
 
-> ！！！目前，pl的模块**不支持**循环引用，循环引用可能导致lsp崩溃。
 
-> ！！！目前pl引入的所有模块必须对应到相对的pi文件（不能对应目录，也不能单独引入函数），而且不能引入同名的模块。
+你也可以单独引入其他mod的一个符号：  
+
+```pivot-lang
+use mod1::func;
+
+fn main() void {
+    func();
+    return;
+}
+
+```
+
+或者直接将所有符号引入
+```pivot-lang
+use mod1::*;
+
+fn main() void {
+    func();
+    return;
+}
+
+```
+
 
 ## 引用另一个pl项目
 目前只支持引用本地的pl项目，引用的方式是在`Kagari.toml`中添加`[deps]` 

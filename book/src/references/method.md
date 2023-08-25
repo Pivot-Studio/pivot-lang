@@ -4,10 +4,6 @@ method就是隶属于某个结构体的函数，它们与普通函数**没有**�
 所有的method都必须在impl块里声明，且method都会隐式的有个`self`参数，该参数是`impl`类型的指针 
 
 
-> 为什么pivot-lang的receiver是隐式的？因为我们有gc，所以没必要像rust那样显示的声明receiver类型，统一指针就可以解决几乎所有情况。
-
-> 可能存在的问题：不方便约束receiver不可变的情况
-
 ## Method Example
 
 最简单的添加method的例子：  
@@ -23,4 +19,27 @@ method就是隶属于某个结构体的函数，它们与普通函数**没有**�
 let a = A{};
 a.method();
 ```
+
+类似的，我们可以为一个结构体实现接口
+
+```pivot-lang
+impl A for B {
+    fn method() void {
+        return;
+    }
+}
+
+...
+
+B{}.method();
+
+```
+
+## Scope
+
+impl的位置是有限制的。如果是单纯的impl一个结构体，
+那么impl块必须在结构体所在的包中。如果是为一个外部引入的结构体impl，
+则只能采用impl for的方式，且impl块必须和被impl的接口在同一个包中。  
+
+
 
