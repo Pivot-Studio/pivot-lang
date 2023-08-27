@@ -124,29 +124,34 @@ impl Executor {
 // }
 use std::iter::*;
 
-gen fn generator() Iterator<i64> {
+gen fn generator() Iterator<Option<i64>> {
     for let i = 0; i < 2; i = i + 1 {
-        yield return i;
+        let o: Option<i64> = i;
+        yield return o;
     }
 }
-struct GenFuture<T> {
-    it: Iterator<Option<T>>;
-}
+struct GenFuture<T>{ }
+impl <T>Iterator<T> for GenFuture<T>{
+    fn next() Option<T>;
+} 
 impl <T>Future<T> for GenFuture<T> {
     fn poll(wk: Waker) Poll<T>{
-        let t: Option<Option<T>> = self.it.next();
-        let t1: Option<T> = t as Option<T>!;
-        if t1 is None {
+        let t = self.next();// as Option<T>!;
+        if t is None {
             return Pending{};
         }
-        return Pending{};
+        let v = t as T!;
+        
+        return Ready<T>{v: v};
     }
 }
 
-fn foo() Future {
-    let t: Future;
+fn foo() Future<()> {
+    let t: Future<()>;
 
-    let a = generator;
+    let a: Iterator<Option<i64>> = generator();
+    let f = GenFuture<i64> {it: a};
+    
     return t;
 }
 
