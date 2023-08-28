@@ -409,6 +409,12 @@ impl TypeNode for FuncDefNode {
                 range: self.id.range(),
                 doc: self.doc.clone(),
                 llvmname: if self.declare {
+                    if self.id.name.starts_with('|') {
+                        return Err(self
+                            .range
+                            .new_err(ErrorCode::METHODS_MUST_HAVE_BODY)
+                            .add_to_ctx(ctx));
+                    }
                     self.id.name.clone()
                 } else {
                     child.plmod.get_full_name(&self.id.name)
@@ -664,9 +670,12 @@ impl FuncDefNode {
             // body generation
             let terminator = self.body.as_mut().unwrap().emit(child, builder)?.get_term();
             if !terminator.is_return() && !self.generator {
-                return Err(
-                    child.add_diag(self.range.new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN))
-                );
+                return Err(child.add_diag(
+                    self.range
+                        .end
+                        .to(self.range.end)
+                        .new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN),
+                ));
             }
             if self.generator {
                 return generator::end_generator(
@@ -924,7 +933,12 @@ impl Node for ClosureNode {
         // emit body
         let terminator = self.body.emit(child, builder)?.get_term();
         if !terminator.is_return() {
-            return Err(child.add_diag(self.range.new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN)));
+            return Err(child.add_diag(
+                self.range
+                    .end
+                    .to(self.range.end)
+                    .new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN),
+            ));
         }
         child.position_at_end(allocab, builder);
         let mut i = 1;

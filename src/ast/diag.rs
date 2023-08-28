@@ -145,6 +145,7 @@ define_error!(
     ARRAY_LEN_MUST_BE_I64 = "array len must be i64",
     EXPECT_ARRAY_TYPE = "expect array type",
     EXPECT_INT_VALUE = "expect int value",
+    METHODS_MUST_HAVE_BODY = "methods must have body",
 );
 macro_rules! define_warn {
     ($(

@@ -664,28 +664,6 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
-                FUNCTION_MUST_HAVE_RETURN,
-            ),
-            help: None,
-            labels: [],
-            source: None,
-            range: Range {
-                start: Pos {
-                    line: 65,
-                    column: 1,
-                    offset: 665,
-                },
-                end: Pos {
-                    line: 68,
-                    column: 2,
-                    offset: 723,
-                },
-            },
-        },
-    },
-    PLDiag {
-        raw: PLDiagRaw {
-            code: Err(
                 YIELD_RETURN_MUST_BE_IN_GENERATOR,
             ),
             help: None,
@@ -701,6 +679,28 @@
                     line: 67,
                     column: 20,
                     offset: 721,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                FUNCTION_MUST_HAVE_RETURN,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 68,
+                    column: 2,
+                    offset: 723,
+                },
+                end: Pos {
+                    line: 68,
+                    column: 2,
+                    offset: 723,
                 },
             },
         },
