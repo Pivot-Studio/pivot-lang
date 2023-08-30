@@ -1,10 +1,13 @@
 //! # builtins
 //!
 //! compiler builtin methods, mostly used for static reflection
-use crate::ast::{
-    builder::no_op_builder::NoOpBuilder,
-    node::{node_result::NodeResultBuilder, RangeTrait},
-    pltype::{PlaceHolderType, PriType},
+use crate::{
+    ast::{
+        builder::no_op_builder::NoOpBuilder,
+        node::{node_result::NodeResultBuilder, RangeTrait},
+        pltype::{PlaceHolderType, PriType},
+    },
+    format_label,
 };
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
@@ -296,6 +299,11 @@ fn emit_arr_copy<'a, 'b>(
         return Err(f.paralist[2]
             .range()
             .new_err(crate::ast::diag::ErrorCode::TYPE_MISMATCH)
+            .add_label(
+                f.paralist[2].range(),
+                ctx.get_file(),
+                format_label!("expect i64, found {}", len.get_ty().borrow().get_name()),
+            )
             .add_to_ctx(ctx));
     }
 

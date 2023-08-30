@@ -238,6 +238,7 @@ impl Pos {
         doc.line(self.line - 1).unwrap().offset() + self.column - 1
     }
 }
+use regex::Regex;
 use std::fmt::Debug;
 impl PLDiag {
     #[cfg(test)]
@@ -301,7 +302,12 @@ impl PLDiag {
             rb = rb.with_label(lab.with_color(color));
         }
         if let Some(help) = &self.raw.help {
-            rb = rb.with_help(help);
+            let re = Regex::new(r"`[a-zA-Z_$][a-zA-Z_$0-9]*`").unwrap();
+            let h = re.replace_all(help, |cap: &regex::Captures<'_>| {
+                let s = cap[0].to_string();
+                s.fg(colors.next()).to_string()
+            });
+            rb = rb.with_help(h);
         }
         let r = rb.finish();
         r.eprint(PLFileCache::new(db, Box::new(f))).unwrap();

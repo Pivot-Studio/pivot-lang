@@ -200,13 +200,8 @@ impl Node for FuncCallNode {
                         .eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
                         .eq
                 {
-                    return Err(ctx.add_diag(
-                        generic_params.generics[i]
-                            .as_ref()
-                            .unwrap()
-                            .range()
-                            .new_err(ErrorCode::TYPE_MISMATCH),
-                    ));
+                    let r = generic_params.generics[i].as_ref().unwrap().range();
+                    return Err(r.new_err(ErrorCode::TYPE_MISMATCH).add_to_ctx(ctx));
                 }
             }
         }

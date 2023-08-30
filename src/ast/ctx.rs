@@ -16,6 +16,7 @@ use super::plmod::MutVec;
 use super::pltype::add_primitive_types;
 use super::pltype::get_type_deep;
 use super::pltype::FNValue;
+use super::pltype::GenericType;
 use super::pltype::ImplAble;
 use super::pltype::PLType;
 use super::pltype::PriType;
@@ -1473,13 +1474,38 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         None
     }
-    // when need eq trait and sttype,the left mut be trait
+
+    fn diff_trait_impl(&self, l: &GenericType, r: &GenericType) -> Option<String> {
+        let binding = l.trait_impl.clone().unwrap_or(vec![]);
+        let miss = binding
+            .iter()
+            .filter(|lf| {
+                !r.trait_impl
+                    .clone()
+                    .unwrap_or(vec![])
+                    .iter()
+                    .any(|rf| self.eq(lf.clone().to_owned(), rf.clone()).eq)
+            })
+            .collect::<Vec<_>>();
+        if miss.is_empty() {
+            return None;
+        }
+        let mut s = String::new();
+        s.push_str("missing impl for trait(s):");
+        for m in miss {
+            s.push_str(&format!(" `{}`", m.borrow().get_name()));
+        }
+        Some(s)
+    }
+    /// 左是目标类型，右是实际类型
+    /// when need eq trait and sttype,the left must be trait
     pub fn eq(&self, l: Arc<RefCell<PLType>>, r: Arc<RefCell<PLType>>) -> EqRes {
         if let (PLType::Generic(l), PLType::Generic(r)) = (&*l.borrow(), &*r.borrow()) {
             if l == r {
                 return EqRes {
                     eq: true,
                     need_up_cast: false,
+                    reason: None,
                 };
             }
         }
@@ -1490,10 +1516,11 @@ impl<'a, 'ctx> Ctx<'a> {
                 }
                 if lg.trait_impl.is_some() {
                     if let PLType::Generic(r) = &*r.borrow() {
-                        if r.trait_impl != lg.trait_impl {
+                        if let Some(reason) = self.diff_trait_impl(lg, r) {
                             return EqRes {
                                 eq: false,
                                 need_up_cast: false,
+                                reason: Some(reason),
                             };
                         }
                     } else if lg
@@ -1506,6 +1533,9 @@ impl<'a, 'ctx> Ctx<'a> {
                         return EqRes {
                             eq: false,
                             need_up_cast: false,
+                            reason: Some(
+                                "cannot cast a type to a trait it never implements".to_string(),
+                            ),
                         };
                     }
                 }
@@ -1513,6 +1543,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 return EqRes {
                     eq: true,
                     need_up_cast: false,
+                    reason: None,
                 };
             }
             unreachable!()
@@ -1522,6 +1553,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 return EqRes {
                     eq: true,
                     need_up_cast: true,
+                    reason: None,
                 };
             }
             let trait_pltype = l;
@@ -1532,22 +1564,30 @@ impl<'a, 'ctx> Ctx<'a> {
                 return EqRes {
                     eq: st.implements_trait(t, &self.get_root_ctx().plmod),
                     need_up_cast: true,
+                    reason: Some(format!(
+                        "trait `{}` is not implemented for `{}`",
+                        t.get_name(),
+                        st.get_name()
+                    )),
                 };
             }
             if get_type_deep(trait_pltype) == get_type_deep(st_pltype) {
                 return EqRes {
                     eq: true,
                     need_up_cast: false,
+                    reason: None,
                 };
             }
             return EqRes {
                 eq: false,
                 need_up_cast: false,
+                reason: None,
             };
         }
         EqRes {
             eq: true,
             need_up_cast: false,
+            reason: None,
         }
     }
     pub fn try_set_closure_alloca_bb(&self, bb: BlockHandle) {
@@ -1578,6 +1618,7 @@ fn find_mthd(
 pub struct EqRes {
     pub eq: bool,
     pub need_up_cast: bool,
+    pub reason: Option<String>,
 }
 
 impl EqRes {

@@ -1070,17 +1070,19 @@ impl STType {
                 }
             })
             .filter(|derive| !st.implements_trait(derive, &ctx.plmod))
-            .map(|derive| derive.name)
             .collect::<Vec<_>>();
         if !errnames.is_empty() {
-            range
-                .new_err(ErrorCode::DERIVE_TRAIT_NOT_IMPL)
-                .add_label(
-                    range,
-                    ctx.get_file(),
-                    format_label!("the derive trait {} not impl", errnames.join(",")),
-                )
-                .add_to_ctx(ctx);
+            let mut err = range.new_err(ErrorCode::DERIVE_TRAIT_NOT_IMPL);
+
+            for e in errnames {
+                err.add_label(
+                    e.range,
+                    e.get_path(),
+                    format_label!("the derive trait {} not impl", e.name),
+                );
+            }
+
+            err.add_to_ctx(ctx);
         }
     }
     pub fn get_trait_field(&self, k: &str) -> Option<Field> {

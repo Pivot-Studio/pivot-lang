@@ -83,20 +83,20 @@ impl TypeNameNode {
                         if generic_types[i].is_none() {
                             continue;
                         }
-                        if !ctx
-                            .eq(
-                                st_generic_type.clone(),
-                                generic_types[i].as_ref().unwrap().clone(),
-                            )
-                            .eq
-                        {
-                            return Err(ctx.add_diag(
-                                generic_params.generics[i]
-                                    .as_ref()
-                                    .unwrap()
-                                    .range()
-                                    .new_err(ErrorCode::TYPE_MISMATCH),
-                            ));
+                        let res = ctx.eq(
+                            st_generic_type.clone(),
+                            generic_types[i].as_ref().unwrap().clone(),
+                        );
+                        if !res.eq {
+                            let mut diag = generic_params.generics[i]
+                                .as_ref()
+                                .unwrap()
+                                .range()
+                                .new_err(ErrorCode::TYPE_MISMATCH);
+                            if let Some(reason) = res.reason {
+                                diag.add_help(&reason);
+                            }
+                            return Err(diag.add_to_ctx(ctx));
                         }
                     }
                 }
@@ -126,20 +126,21 @@ impl TypeNameNode {
                         if generic_types[i].is_none() {
                             continue;
                         }
-                        if !ctx
-                            .eq(
-                                un_generic_type.clone(),
-                                generic_types[i].as_ref().unwrap().clone(),
-                            )
-                            .eq
-                        {
-                            return Err(ctx.add_diag(
-                                generic_params.generics[i]
-                                    .as_ref()
-                                    .unwrap()
-                                    .range()
-                                    .new_err(ErrorCode::TYPE_MISMATCH),
-                            ));
+                        let res = ctx.eq(
+                            un_generic_type.clone(),
+                            generic_types[i].as_ref().unwrap().clone(),
+                        );
+                        if !res.eq {
+                            let mut diag = generic_params.generics[i]
+                                .as_ref()
+                                .unwrap()
+                                .range()
+                                .new_err(ErrorCode::TYPE_MISMATCH);
+                            if let Some(reason) = res.reason {
+                                diag.add_help(&reason);
+                            }
+
+                            return Err(diag.add_to_ctx(ctx));
                         }
                     }
                 }
@@ -239,6 +240,7 @@ impl TypeNode for TypeNameNode {
                 return Ok(EqRes {
                     eq: false,
                     need_up_cast: false,
+                    reason: None,
                 });
             }
             if let (PLType::Struct(left), PLType::Struct(right)) =
@@ -253,6 +255,7 @@ impl TypeNode for TypeNameNode {
                         .eq
                     }),
                     need_up_cast: false,
+                    reason: None,
                 });
             } else if let (PLType::Union(left), PLType::Union(right)) =
                 (&*left.borrow(), &*right.borrow())
@@ -264,12 +267,14 @@ impl TypeNode for TypeNameNode {
                             return Ok(EqRes {
                                 eq: false,
                                 need_up_cast: false,
+                                reason: None,
                             });
                         }
                     }
                     Ok(EqRes {
                         eq: true,
                         need_up_cast: false,
+                        reason: None,
                     })
                 });
             }
@@ -324,6 +329,7 @@ impl TypeNode for ArrayTypeNameNode {
             _ => Ok(EqRes {
                 eq: false,
                 need_up_cast: false,
+                reason: None,
             }),
         }
     }
@@ -370,6 +376,7 @@ impl TypeNode for PointerTypeNode {
             _ => Ok(EqRes {
                 eq: false,
                 need_up_cast: false,
+                reason: None,
             }),
         }
     }
@@ -964,6 +971,7 @@ impl TypeNode for ClosureTypeNode {
                 return Ok(EqRes {
                     eq: false,
                     need_up_cast: false,
+                    reason: Some("closure arg len not match".to_string()),
                 });
             }
             for (i, arg) in closure.arg_types.iter().enumerate() {
@@ -971,6 +979,7 @@ impl TypeNode for ClosureTypeNode {
                     return Ok(EqRes {
                         eq: false,
                         need_up_cast: false,
+                        reason: Some("closure arg type not match".to_string()),
                     });
                 }
             }
@@ -982,16 +991,19 @@ impl TypeNode for ClosureTypeNode {
                 return Ok(EqRes {
                     eq: false,
                     need_up_cast: false,
+                    reason: Some("closure ret type not match".to_string()),
                 });
             }
             return Ok(EqRes {
                 eq: true,
                 need_up_cast: false,
+                reason: None,
             });
         }
         Ok(EqRes {
             eq: false,
             need_up_cast: false,
+            reason: None,
         })
     }
 }

@@ -90,7 +90,9 @@
             code: Err(
                 TYPE_MISMATCH,
             ),
-            help: None,
+            help: Some(
+                "missing impl for trait(s): `TestTrait`",
+            ),
             labels: [],
             source: None,
             range: Range {
@@ -519,14 +521,14 @@
                     ),
                     range: Range {
                         start: Pos {
-                            line: 44,
-                            column: 6,
-                            offset: 472,
+                            line: 38,
+                            column: 7,
+                            offset: 441,
                         },
                         end: Pos {
-                            line: 44,
-                            column: 8,
-                            offset: 474,
+                            line: 38,
+                            column: 9,
+                            offset: 443,
                         },
                     },
                 },
