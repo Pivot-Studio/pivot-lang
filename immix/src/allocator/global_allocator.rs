@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 use parking_lot::ReentrantMutex;
 
 use crate::{bigobj::BigObj, block::Block, consts::BLOCK_SIZE, mmap::Mmap};
@@ -11,7 +13,7 @@ pub struct GlobalAllocator {
     /// mmap region
     mmap: Mmap,
     /// current heap pointer
-    current: *mut u8,
+    current: Cell<*mut u8>,
     /// heap start
     heap_start: *mut u8,
     /// heap end
@@ -49,7 +51,7 @@ impl GlobalAllocator {
         // mmap.commit(mmap.aligned(), BLOCK_SIZE);
 
         Self {
-            current: mmap.aligned(BLOCK_SIZE),
+            current: Cell::new(mmap.aligned(BLOCK_SIZE)),
             heap_start: mmap.aligned(BLOCK_SIZE),
             heap_end: mmap.end(),
             mmap,
@@ -90,9 +92,10 @@ impl GlobalAllocator {
     ///
     /// 每次分配block会让current增加一个block的大小
     fn alloc_block(&self) -> Option<*mut Block> {
-        let current = self.current;
+        let current = self.current.get();
         let heap_end = self.heap_end;
-
+        self.current
+            .set(unsafe { self.current.get().add(BLOCK_SIZE) });
         if current >= heap_end {
             return None;
         }
@@ -131,9 +134,7 @@ impl GlobalAllocator {
             }
             block
         } else {
-            let b = self.alloc_block().unwrap_or(std::ptr::null_mut());
-            self.current = unsafe { self.current.add(BLOCK_SIZE) };
-            b
+            self.alloc_block().unwrap_or(std::ptr::null_mut())
         };
         if block.is_null() {
             return block;

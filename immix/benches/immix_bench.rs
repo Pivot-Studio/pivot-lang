@@ -19,10 +19,7 @@ fn bench_n_threads(n: usize) -> impl Fn(&mut Criterion) {
                 n, OBJ_NUM
             ),
             |b| {
-                b.iter_custom(|t| {
-                    let total = test_complecated_multiple_thread_gc(t as usize, n);
-                    total.0 + total.1
-                });
+                b.iter_custom(|t| test_complecated_multiple_thread_gc(t as usize, n));
             },
         );
     }
@@ -34,40 +31,37 @@ fn immix_benchmark_single_thread(c: &mut Criterion) {
     c.bench_function(
         &format!("singlethread gc benchmark--{} small objects", OBJ_NUM),
         |b| {
-            b.iter_custom(|t| {
-                let total = test_complecated_single_thread_gc(t as usize);
-                total.0 + total.1
-            });
+            b.iter_custom(|t| test_complecated_single_thread_gc(t as usize));
         },
     );
 }
 
-fn immix_benchmark_single_thread_mark(c: &mut Criterion) {
-    gc_disable_auto_collect();
-    set_evacuation(false);
-    c.bench_function(
-        &format!("singlethread gc mark benchmark--{} small objects", OBJ_NUM),
-        |b| {
-            b.iter_custom(|t| {
-                let total = test_complecated_single_thread_gc(t as usize);
-                total.0
-            });
-        },
-    );
-}
-fn immix_benchmark_single_thread_sweep(c: &mut Criterion) {
-    gc_disable_auto_collect();
-    set_evacuation(false);
-    c.bench_function(
-        &format!("singlethread gc sweep benchmark--{} small objects", OBJ_NUM),
-        |b| {
-            b.iter_custom(|t| {
-                let total = test_complecated_single_thread_gc(t as usize);
-                total.1
-            });
-        },
-    );
-}
+// fn immix_benchmark_single_thread_mark(c: &mut Criterion) {
+//     gc_disable_auto_collect();
+//     set_evacuation(false);
+//     c.bench_function(
+//         &format!("singlethread gc mark benchmark--{} small objects", OBJ_NUM),
+//         |b| {
+//             b.iter_custom(|t| {
+//                 let total = test_complecated_single_thread_gc(t as usize);
+//                 total.0
+//             });
+//         },
+//     );
+// }
+// fn immix_benchmark_single_thread_sweep(c: &mut Criterion) {
+//     gc_disable_auto_collect();
+//     set_evacuation(false);
+//     c.bench_function(
+//         &format!("singlethread gc sweep benchmark--{} small objects", OBJ_NUM),
+//         |b| {
+//             b.iter_custom(|t| {
+//                 let total = test_complecated_single_thread_gc(t as usize);
+//                 total.1
+//             });
+//         },
+//     );
+// }
 
 fn immix_benchmark_single_thread_alloc(c: &mut Criterion) {
     gc_disable_auto_collect();
@@ -124,13 +118,12 @@ unsafe fn alloc_test_obj(gc: &mut Collector) -> *mut GCTestObj {
     a
 }
 
-fn test_complecated_single_thread_gc(num_iter: usize) -> (Duration, Duration) {
+fn test_complecated_single_thread_gc(num_iter: usize) -> Duration {
     #[cfg(feature = "shadow_stack")]
     return {
         SPACE.with(|gc| unsafe {
             let mut gc = gc.borrow_mut();
-            let mut total_mark = Duration::new(0, 0);
-            let mut total_sweep = Duration::new(0, 0);
+            let mut total = Duration::new(0, 0);
             for _ in 0..num_iter {
                 let mut first_obj = alloc_test_obj(&mut gc);
                 let rustptr = (&mut first_obj) as *mut *mut GCTestObj as *mut u8;
@@ -149,7 +142,9 @@ fn test_complecated_single_thread_gc(num_iter: usize) -> (Duration, Duration) {
                 gc.add_root(rustptr, ObjectType::Pointer);
                 let size1 = gc.get_size();
                 assert_eq!(size1, OBJ_NUM + 1);
-                let ctime = gc.collect();
+                let now = std::time::Instant::now();
+                gc.collect();
+                total += now.elapsed();
                 // println!("gc{} gc time = {:?}", gc.get_id(), ctime);
                 let size2 = gc.get_size();
                 assert_eq!(live_obj, size2);
@@ -158,10 +153,8 @@ fn test_complecated_single_thread_gc(num_iter: usize) -> (Duration, Duration) {
                 gc.collect();
                 let size3 = gc.get_size();
                 assert_eq!(size3, 0);
-                total_mark += ctime.0;
-                total_sweep += ctime.1;
             }
-            (total_mark, total_sweep)
+            total
         })
     };
     #[cfg(not(feature = "shadow_stack"))]
@@ -170,7 +163,7 @@ fn test_complecated_single_thread_gc(num_iter: usize) -> (Duration, Duration) {
     (Duration::new(0, 100), Duration::new(0, 100))
 }
 
-fn test_complecated_multiple_thread_gc(num_iter: usize, threads: usize) -> (Duration, Duration) {
+fn test_complecated_multiple_thread_gc(num_iter: usize, threads: usize) -> Duration {
     let mut handles = vec![];
     for _ in 0..threads {
         let t = std::thread::spawn(move || test_complecated_single_thread_gc(num_iter));
@@ -180,7 +173,7 @@ fn test_complecated_multiple_thread_gc(num_iter: usize, threads: usize) -> (Dura
     for h in handles {
         times.push(h.join().unwrap());
     }
-    times.sort_by(|k1, k2| (k1.0 + k1.1).cmp(&(k2.0 + k2.1)));
+    times.sort_by(|k1, k2| (k1).cmp(k2));
     times.pop().unwrap()
 }
 
@@ -200,8 +193,8 @@ criterion_group!(
     benches,
     immix_benchmark_multi_thread,
     immix_benchmark_single_thread,
-    immix_benchmark_single_thread_mark,
-    immix_benchmark_single_thread_sweep,
+    // immix_benchmark_single_thread_mark,
+    // immix_benchmark_single_thread_sweep,
     immix_benchmark_single_thread_alloc,
 );
 criterion_main!(benches);

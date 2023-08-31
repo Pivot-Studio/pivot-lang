@@ -86,6 +86,13 @@ lazy_static! {
 /// let obj = gc_malloc(size, obj_type);
 /// ```
 /// where obj is a pointer to the newly allocated object.
+///
+/// ## Behaviour
+///
+/// If auto gc is enabled, this function may trigger a gc if some conditions are met.
+///
+/// If the heap is full, this function will trigger an emergency gc and try again.
+/// If the heap is still full after the emergency gc, this function will return null.
 pub fn gc_malloc(size: usize, obj_type: u8) -> *mut u8 {
     SPACE.with(|gc| {
         // println!("start malloc");
@@ -95,8 +102,15 @@ pub fn gc_malloc(size: usize, obj_type: u8) -> *mut u8 {
     })
 }
 
-/// This function is used to allocate a new object on the heap without logic
-/// triggering a garbage collection.
+/// This function is used to allocate a new object on the heap
+/// without the possibility of triggering a gc even
+/// the auto gc is enabled.
+///
+/// ## Warning
+///
+/// This function shall not be used in normal situation.
+/// When the heap is full, this function will always return null
+/// instead of triggering a gc and try again.
 pub fn gc_malloc_no_collect(size: usize, obj_type: u8) -> *mut u8 {
     SPACE.with(|gc| {
         // println!("start malloc_no_collect");

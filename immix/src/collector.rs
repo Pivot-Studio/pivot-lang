@@ -167,7 +167,11 @@ impl Collector {
                 .alloc(size, obj_type);
             if ptr.is_null() {
                 self.collect();
-                return self.alloc(size, obj_type);
+                return self
+                    .thread_local_allocator
+                    .as_mut()
+                    .unwrap()
+                    .alloc(size, obj_type);
             }
             ptr
         }
@@ -270,35 +274,37 @@ impl Collector {
                 let old_loaded = (*atomic_ptr).load(Ordering::SeqCst);
                 let obj_line_size = line_header.get_obj_line_size(idx, Block::from_obj_ptr(ptr));
                 let new_ptr = self.alloc(obj_line_size * LINE_SIZE, line_header.get_obj_type());
-                let new_block = Block::from_obj_ptr(new_ptr);
-                let (new_line_header, _) = new_block.get_line_header_from_addr(new_ptr);
-                // 将数据复制到新的地址
-                core::ptr::copy_nonoverlapping(ptr, new_ptr, obj_line_size * LINE_SIZE);
-                // core::ptr::copy_nonoverlapping(line_header as * const u8, new_line_header as * mut u8, line_size);
+                if !new_ptr.is_null() {
+                    let new_block = Block::from_obj_ptr(new_ptr);
+                    let (new_line_header, _) = new_block.get_line_header_from_addr(new_ptr);
+                    // 将数据复制到新的地址
+                    core::ptr::copy_nonoverlapping(ptr, new_ptr, obj_line_size * LINE_SIZE);
+                    // core::ptr::copy_nonoverlapping(line_header as * const u8, new_line_header as * mut u8, line_size);
 
-                // 线程安全性说明
-                // 如果cas操作成功，代表没有别的线程与我们同时尝试驱逐这个模块
-                // 如果cas操作失败，代表别的线程已经驱逐了这个模块
-                // 此时虽然我们已经分配了驱逐空间并且将内容写入，但是我们还没有设置line_header的
-                // 标记位，所以这块地址很快会在sweep阶段被识别并且回收利用。
-                // 虽然这造成了一定程度的内存碎片化和潜在的重复操作，但是
-                // 这种情况理论上是很少见的，所以这么做问题不大
-                if (*atomic_ptr)
-                    .compare_exchange(old_loaded, new_ptr, Ordering::SeqCst, Ordering::SeqCst)
-                    .is_ok()
-                {
-                    // 成功驱逐
-                    log::trace!("gc {}: eva {:p} to {:p}", self.id, ptr, new_ptr);
-                    new_line_header.set_marked(true);
-                    line_header.set_forwarded(true);
-                    new_block.marked = true;
-                    ptr = new_ptr;
-                    self.correct_ptr(father);
-                } else {
-                    // 期间别的线程驱逐了它
-                    spin_until!(line_header.get_forwarded());
-                    self.correct_ptr(father);
-                    return;
+                    // 线程安全性说明
+                    // 如果cas操作成功，代表没有别的线程与我们同时尝试驱逐这个模块
+                    // 如果cas操作失败，代表别的线程已经驱逐了这个模块
+                    // 此时虽然我们已经分配了驱逐空间并且将内容写入，但是我们还没有设置line_header的
+                    // 标记位，所以这块地址很快会在sweep阶段被识别并且回收利用。
+                    // 虽然这造成了一定程度的内存碎片化和潜在的重复操作，但是
+                    // 这种情况理论上是很少见的，所以这么做问题不大
+                    if (*atomic_ptr)
+                        .compare_exchange(old_loaded, new_ptr, Ordering::SeqCst, Ordering::SeqCst)
+                        .is_ok()
+                    {
+                        // 成功驱逐
+                        log::trace!("gc {}: eva {:p} to {:p}", self.id, ptr, new_ptr);
+                        new_line_header.set_marked(true);
+                        line_header.set_forwarded(true);
+                        new_block.marked = true;
+                        ptr = new_ptr;
+                        self.correct_ptr(father);
+                    } else {
+                        // 期间别的线程驱逐了它
+                        spin_until!(line_header.get_forwarded());
+                        self.correct_ptr(father);
+                        return;
+                    }
                 }
             }
             line_header.set_marked(true);
@@ -533,8 +539,8 @@ impl Collector {
 
     /// # collect
     /// Collect garbage.
-    pub fn collect(&self) -> (std::time::Duration, std::time::Duration) {
-        let start_time = std::time::Instant::now();
+    pub fn collect(&self) {
+        // let start_time = std::time::Instant::now();
         log::info!("gc {} collecting...", self.id);
         // self.print_stats();
         let mut status = self.status.borrow_mut();
@@ -585,7 +591,7 @@ impl Collector {
             }
             (*self.mark_histogram).clear();
         }
-        let time = std::time::Instant::now();
+        // let time = std::time::Instant::now();
         unsafe {
             self.thread_local_allocator
                 .as_mut()
@@ -593,9 +599,9 @@ impl Collector {
                 .set_collect_mode(true);
         }
         self.mark();
-        let mark_time = time.elapsed();
+        // let mark_time = time.elapsed();
         let _used = self.sweep();
-        let sweep_time = time.elapsed() - mark_time;
+        // let sweep_time = time.elapsed() - mark_time;
         unsafe {
             self.thread_local_allocator
                 .as_mut()
@@ -603,16 +609,13 @@ impl Collector {
                 .set_collect_mode(false);
         }
         log::info!(
-            "gc {} collect done, mark: {:?}, sweep: {:?}, used heap size: {} byte, total: {:?}",
+            "gc {} collect done, used heap size: {} byte",
             self.id,
-            mark_time,
-            sweep_time,
             _used,
-            start_time.elapsed()
+            // start_time.elapsed()
         );
         let mut status = self.status.borrow_mut();
         status.collecting = false;
-        (mark_time, sweep_time)
         // (Default::default(), Default::default())
     }
 
