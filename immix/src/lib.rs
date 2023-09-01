@@ -60,11 +60,19 @@ pub struct StackMapWrapper {
 unsafe impl Sync for StackMapWrapper {}
 #[cfg(feature = "llvm_stackmap")]
 unsafe impl Send for StackMapWrapper {}
-const DEFAULT_HEAP_SIZE: usize = 1024 * 1024 * 1024 * 16;
+const DEFAULT_HEAP_SIZE: usize = 1024 * 1024 * 1024;
 
 lazy_static! {
     pub static ref GLOBAL_ALLOCATOR: GAWrapper = unsafe {
         let mut heap_size = DEFAULT_HEAP_SIZE;
+        if let Some(usage) = memory_stats::memory_stats() {
+            heap_size = usage.virtual_mem;
+        } else {
+            log::warn!(
+                "Failed to get virtual memory size, use default heap size {} byte",
+                heap_size
+            );
+        }
         if let Some(size) = option_env!("PL_IMMIX_HEAP_SIZE") {
             heap_size = size.parse().unwrap();
         }
