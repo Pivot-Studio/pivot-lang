@@ -46,9 +46,9 @@ mod _win {
             }
         }
 
-        pub fn commit(&self, page: *mut u8, size: usize) {
+        pub fn commit(&self, page: *mut u8, size: usize) -> bool {
             unsafe {
-                VirtualAlloc(page.cast(), size, MEM_COMMIT, PAGE_READWRITE);
+                VirtualAlloc(page.cast(), size, MEM_COMMIT, PAGE_READWRITE) == std::ptr::null_mut()
             }
         }
     }
@@ -116,13 +116,13 @@ mod _unix {
             }
         }
 
-        pub fn commit(&self, page: *mut u8, size: usize) {
+        pub fn commit(&self, page: *mut u8, size: usize) -> bool {
             unsafe {
                 libc::madvise(
                     page as *mut _,
                     size as _,
                     libc::MADV_WILLNEED | libc::MADV_SEQUENTIAL,
-                );
+                ) == 0
             }
         }
     }

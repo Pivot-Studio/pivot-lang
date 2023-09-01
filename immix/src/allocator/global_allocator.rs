@@ -99,7 +99,11 @@ impl GlobalAllocator {
         if current >= heap_end {
             return None;
         }
-        self.mmap.commit(current, BLOCK_SIZE);
+        if !self.mmap.commit(current, BLOCK_SIZE) {
+            self.current
+                .set(unsafe { self.current.get().sub(BLOCK_SIZE) });
+            return None;
+        }
         // if unsafe { current.add(BLOCK_SIZE * 32) } >= heap_end {
         //     return None;
         // }
@@ -129,10 +133,11 @@ impl GlobalAllocator {
         let _lock = self.lock.lock();
         self.mem_usage_flag += 1;
         let block = if let Some((block, freed)) = self.free_blocks.pop() {
-            if freed {
-                self.mmap.commit(block as *mut u8, BLOCK_SIZE);
+            if freed && !self.mmap.commit(block as *mut u8, BLOCK_SIZE) {
+                std::ptr::null_mut()
+            } else {
+                block
             }
-            block
         } else {
             self.alloc_block().unwrap_or(std::ptr::null_mut())
         };
