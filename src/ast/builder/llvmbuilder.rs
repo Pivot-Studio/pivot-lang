@@ -461,7 +461,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 );
                 let tp = ObjectType::from_int(obj_type).expect("invalid object type");
                 let tp_const_name = format!(
-                    "@{}_IMMIX_OBJTYPE_{}",
+                    "@{}_@IMMIX_OBJTYPE_{}",
                     self.module.get_source_file_name().to_str().unwrap(),
                     match tp {
                         ObjectType::Atomic => "ATOMIC",
@@ -1494,13 +1494,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let alloca = if ret_type == &PLType::Void {
             0
         } else {
-            self.alloc_raw(
-                "ret_alloca",
-                ret_type,
-                ctx,
-                None,
-                "DioGC__malloc_no_collect",
-            )
+            self.alloc_raw("ret_alloca", ret_type, ctx, None, "DioGC__malloc")
         };
         if let Some(dbg) = dbg {
             self.build_dbg_location(Pos {
@@ -1720,12 +1714,12 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     fn const_string(&self, s: &str) -> ValueHandle {
         let s = self.builder.build_global_string_ptr(
             s,
-            format!("str_{}", ID.fetch_add(1, Ordering::Relaxed)).as_str(),
+            format!(".str_{}", ID.fetch_add(1, Ordering::Relaxed)).as_str(),
         );
         let s = self.builder.build_bitcast(
             s,
             self.context.i8_type().ptr_type(Default::default()),
-            "str",
+            ".str",
         );
         self.get_llvm_value_handle(&s.as_any_value_enum())
     }

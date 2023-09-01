@@ -19,6 +19,7 @@ mod _immix {
     fn immix_gc_init(ptr: *mut u8) {
         trace!("immix gc init, stackmap: {:p}", ptr);
         SimpleLogger::init_from_env_default("GC_LOG", log::LevelFilter::Error);
+        // immix::gc_disable_auto_collect();
         #[cfg(not(feature = "jit"))]
         immix::gc_init(ptr)
     }

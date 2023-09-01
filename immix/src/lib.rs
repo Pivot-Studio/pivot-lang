@@ -60,7 +60,7 @@ pub struct StackMapWrapper {
 unsafe impl Sync for StackMapWrapper {}
 #[cfg(feature = "llvm_stackmap")]
 unsafe impl Send for StackMapWrapper {}
-const DEFAULT_HEAP_SIZE: usize = 1024 * 1024 * 1024;
+const DEFAULT_HEAP_SIZE: usize = 1024 * 1024 * 1024 * 16;
 
 lazy_static! {
     pub static ref GLOBAL_ALLOCATOR: GAWrapper = unsafe {
