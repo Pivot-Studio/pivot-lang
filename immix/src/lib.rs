@@ -60,7 +60,7 @@ pub struct StackMapWrapper {
 unsafe impl Sync for StackMapWrapper {}
 #[cfg(feature = "llvm_stackmap")]
 unsafe impl Send for StackMapWrapper {}
-const DEFAULT_HEAP_SIZE: usize = 1024 * 1024 * 1024;
+const DEFAULT_HEAP_SIZE: usize = 1024 * 1024 * 1024 * 16;
 
 lazy_static! {
     pub static ref GLOBAL_ALLOCATOR: GAWrapper = unsafe {
@@ -76,6 +76,7 @@ lazy_static! {
         if let Some(size) = option_env!("PL_IMMIX_HEAP_SIZE") {
             heap_size = size.parse().unwrap();
         }
+        heap_size = round_n_up!(heap_size, BLOCK_SIZE);
         let ga = GlobalAllocator::new(heap_size);
         let mem = malloc(core::mem::size_of::<GlobalAllocator>()).cast::<GlobalAllocator>();
         mem.write(ga);

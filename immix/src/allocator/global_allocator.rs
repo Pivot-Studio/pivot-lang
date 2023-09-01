@@ -96,7 +96,7 @@ impl GlobalAllocator {
         let heap_end = self.heap_end;
         self.current
             .set(unsafe { self.current.get().add(BLOCK_SIZE) });
-        if current >= heap_end {
+        if unsafe { current.add(BLOCK_SIZE) } >= heap_end {
             return None;
         }
         if !self.mmap.commit(current, BLOCK_SIZE) {

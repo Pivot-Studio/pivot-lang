@@ -8,6 +8,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  RUST_TEST_NOCAPTURE: 1
+  PL_IMMIX_HEAP_SIZE: 1073741824
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

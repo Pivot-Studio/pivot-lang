@@ -15,8 +15,10 @@ vector-map = "1.0"
 backtrace = "0.3"
 log = "0.4"
 memory-stats = "1.1"
+
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser","memoryapi"] }
+
 
 [dev-dependencies]
 rand = "0.8"
