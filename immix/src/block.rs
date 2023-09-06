@@ -37,6 +37,7 @@ pub trait HeaderExt {
 }
 
 pub trait LineHeaderExt {
+    fn get_is_head(&self) -> bool;
     fn set_is_head(&mut self, is_head: bool);
     fn get_is_used_follow(&self) -> bool;
     fn get_obj_line_size(&self, idx: usize, block: &mut Block) -> usize;
@@ -135,6 +136,10 @@ impl LineHeaderExt for LineHeader {
             line_size += 1;
         }
         line_size
+    }
+
+    fn get_is_head(&self) -> bool {
+        self & 0b10000000 == 0b10000000
     }
 
     fn set_is_head(&mut self, is_head: bool) {
@@ -374,6 +379,41 @@ impl Block {
         let ptr = ptr as usize;
         let block_start = ptr - (ptr % BLOCK_SIZE);
         &mut *(block_start as *mut Self)
+    }
+
+    /// # get_head_ptr
+    ///
+    /// A pointer in the graph may not point to the start position of the
+    /// space we allocated for it. Consider the following example:
+    ///
+    /// ```pl
+    ///
+    /// struct A {
+    ///     a: u8;
+    ///     b: u8;
+    /// }
+    ///
+    /// let a = A { a: 1, b: 2 };
+    /// let ptr = &a.b; // where ptr is a pointer to the field b, what we want is a pointer to the struct A
+    /// ```
+    ///
+    /// This function is used to get the pointer to the start position of the space we allocated for the object,
+    /// from a pointer in the graph. e.g. in the above example, we want to get a pointer to the struct A, by
+    /// passing the pointer to the field b.
+    pub unsafe fn get_head_ptr(&mut self, ptr: *mut u8) -> *mut u8 {
+        let mut idx = self.get_line_idx_from_addr(ptr);
+        let mut header = self.get_nth_line_header(idx);
+        // 如果是head，直接返回
+        if header.get_is_head() {
+            return self.get_nth_line(idx);
+        }
+        // 否则往前找到head
+        while !header.get_is_head() {
+            header = self.get_nth_line_header(idx - 1);
+            idx -= 1;
+        }
+        // 返回head的地址
+        self.get_nth_line(idx)
     }
 
     pub unsafe fn get_line_header_from_addr(&mut self, addr: *mut u8) -> (&mut LineHeader, usize) {

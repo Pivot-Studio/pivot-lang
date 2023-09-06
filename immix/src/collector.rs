@@ -43,7 +43,6 @@ struct CollectorStatus {
     collect_threshold: usize,
     /// in bytes
     bytes_allocated_since_last_gc: usize,
-    last_gc_time: std::time::SystemTime,
     collecting: bool,
 }
 
@@ -104,7 +103,6 @@ impl Collector {
                 status: RefCell::new(CollectorStatus {
                     collect_threshold: 1024,
                     bytes_allocated_since_last_gc: 0,
-                    last_gc_time: std::time::SystemTime::now(),
                     collecting: false,
                 }),
             }
@@ -222,13 +220,13 @@ impl Collector {
     /// 现在纠正为
     ///
     /// ptr -> new_ptr(forwarded) -> value
-    unsafe fn correct_ptr(&self, ptr: *mut u8) {
+    unsafe fn correct_ptr(&self, ptr: *mut u8, offset: isize) {
         let ptr = ptr as *mut AtomicPtr<*mut u8>;
         let new_ptr = *(*ptr).load(Ordering::SeqCst);
         let ptr = ptr as *mut *mut u8;
         debug_assert!(!new_ptr.is_null());
         log::trace!("gc {} correct ptr {:p} to {:p}", self.id, ptr, new_ptr);
-        *ptr = new_ptr;
+        *ptr = new_ptr.offset(offset);
     }
 
     #[cfg(feature = "llvm_gc_plugin")]
@@ -248,37 +246,39 @@ impl Collector {
             return;
         }
 
-        let mut ptr = *(ptr as *mut *mut u8);
+        let ptr = *(ptr as *mut *mut u8);
         // println!("mark ptr {:p} -> {:p}", father, ptr);
         // mark it if it is in heap
         if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
             // println!("mark ptr succ {:p} -> {:p}", father, ptr);
             let block = Block::from_obj_ptr(ptr);
             let is_candidate = block.is_eva_candidate();
+            let mut head = block.get_head_ptr(ptr);
+            let offset_from_head = ptr.offset_from(head);
             if !is_candidate {
                 block.marked = true;
             } else {
-                let (line_header, _) = block.get_line_header_from_addr(ptr);
+                let (line_header, _) = block.get_line_header_from_addr(head);
                 if line_header.get_forwarded() {
-                    self.correct_ptr(father);
+                    self.correct_ptr(father, offset_from_head);
                     return;
                 }
             }
-            let (line_header, idx) = block.get_line_header_from_addr(ptr);
+            let (line_header, idx) = block.get_line_header_from_addr(head);
             if line_header.get_marked() {
                 return;
             }
             // 若此block是待驱逐对象
             if is_candidate {
-                let atomic_ptr = ptr as *mut AtomicPtr<u8>;
+                let atomic_ptr = head as *mut AtomicPtr<u8>;
                 let old_loaded = (*atomic_ptr).load(Ordering::SeqCst);
-                let obj_line_size = line_header.get_obj_line_size(idx, Block::from_obj_ptr(ptr));
+                let obj_line_size = line_header.get_obj_line_size(idx, Block::from_obj_ptr(head));
                 let new_ptr = self.alloc(obj_line_size * LINE_SIZE, line_header.get_obj_type());
                 if !new_ptr.is_null() {
                     let new_block = Block::from_obj_ptr(new_ptr);
                     let (new_line_header, _) = new_block.get_line_header_from_addr(new_ptr);
                     // 将数据复制到新的地址
-                    core::ptr::copy_nonoverlapping(ptr, new_ptr, obj_line_size * LINE_SIZE);
+                    core::ptr::copy_nonoverlapping(head, new_ptr, obj_line_size * LINE_SIZE);
                     // core::ptr::copy_nonoverlapping(line_header as * const u8, new_line_header as * mut u8, line_size);
 
                     // 线程安全性说明
@@ -293,16 +293,16 @@ impl Collector {
                         .is_ok()
                     {
                         // 成功驱逐
-                        log::trace!("gc {}: eva {:p} to {:p}", self.id, ptr, new_ptr);
+                        log::trace!("gc {}: eva {:p} to {:p}", self.id, head, new_ptr);
                         new_line_header.set_marked(true);
                         line_header.set_forwarded(true);
                         new_block.marked = true;
-                        ptr = new_ptr;
-                        self.correct_ptr(father);
+                        head = new_ptr;
+                        self.correct_ptr(father, offset_from_head);
                     } else {
                         // 期间别的线程驱逐了它
                         spin_until!(line_header.get_forwarded());
-                        self.correct_ptr(father);
+                        self.correct_ptr(father, offset_from_head);
                         return;
                     }
                 }
@@ -311,7 +311,7 @@ impl Collector {
             let obj_type = line_header.get_obj_type();
             match obj_type {
                 ObjectType::Atomic => {}
-                _ => (*self.queue).push((ptr, obj_type)),
+                _ => (*self.queue).push((head, obj_type)),
             }
             return;
         }
@@ -550,7 +550,6 @@ impl Collector {
         }
         status.collecting = true;
         status.bytes_allocated_since_last_gc = 0;
-        status.last_gc_time = std::time::SystemTime::now();
         drop(status);
         // evacuation pre process
         // 这个过程要在完成safepoint同步之前完成，因为在驱逐的情况下

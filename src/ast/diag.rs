@@ -146,6 +146,8 @@ define_error!(
     EXPECT_ARRAY_TYPE = "expect array type",
     EXPECT_INT_VALUE = "expect int value",
     METHODS_MUST_HAVE_BODY = "methods must have body",
+    INVALID_STRUCT_INIT = "invalid struct initialization",
+    REDUNDANT_COMMA = "REDUNDANT comma",
 );
 macro_rules! define_warn {
     ($(

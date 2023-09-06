@@ -72,6 +72,11 @@ mod _immix {
             trace!("manual collect");
             immix::gc_collect()
         }
+
+        pub fn get_stw_num() -> i64 {
+            immix::get_gc_stw_num() as _
+        }
+
         pub fn about() {
             let dio = "
         ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢹⡀⠀⠀⠀⠀⠀⠘⠀⣷⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⡀⠀⠀⠀⠙⢦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀

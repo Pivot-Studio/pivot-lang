@@ -18,6 +18,7 @@ use crate::ast::pltype::get_type_deep;
 use crate::ast::pltype::ClosureType;
 use crate::ast::pltype::{ARRType, Field, GenericType, PLType, STType};
 use crate::ast::tokens::TokenType;
+use crate::ast::traits::CustomType;
 use indexmap::IndexMap;
 
 use internal_macro::node;
@@ -606,14 +607,15 @@ impl Node for StructInitFieldNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
+        ctx.push_semantic_token(self.id.range(), SemanticTokenType::PROPERTY, 0);
         self.exp.emit(ctx, builder)
     }
 }
 
-#[node(comment)]
+#[node]
 pub struct StructInitNode {
     pub typename: Box<TypeNodeEnum>,
-    pub fields: Vec<Box<StructInitFieldNode>>, // TODO: comment db and salsa comment struct
+    pub fields: Vec<Box<NodeEnum>>, // TODO: comment db and salsa comment struct
 }
 
 impl PrintTrait for StructInitNode {
@@ -658,41 +660,50 @@ impl Node for StructInitNode {
         ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
         ctx.run_in_type_mod_mut(&mut sttype, |ctx, sttype| {
             for fieldinit in self.fields.iter_mut() {
-                let field_id_range = fieldinit.id.range;
-                let field_exp_range = fieldinit.exp.range();
-                let field = sttype.fields.get(&fieldinit.id.name);
-                if field.is_none() {
-                    ctx.if_completion(self.range, || sttype.get_completions(ctx));
-                    return Err(
-                        ctx.add_diag(field_id_range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND))
-                    );
-                }
-                let field = field.unwrap();
-                let v = fieldinit.emit(ctx, builder)?.get_value();
-                idx += 1;
-                ctx.emit_comment_highlight(&self.comments[idx - 1]);
-                if v.is_none() {
-                    return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
-                }
-                let v = v.unwrap();
-                let value = ctx.try_load2var(field_exp_range, v.get_value(), builder)?;
-                let value_pltype = v.get_ty();
-                ctx.protect_generic_context(&sttype.generic_map, |ctx| {
-                    if !field
-                        .typenode
-                        .eq_or_infer(ctx, value_pltype.clone(), builder)?
-                        .eq
-                    {
-                        return Err(ctx.add_diag(
-                            fieldinit
-                                .range
-                                .new_err(ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH),
-                        ));
+                if let NodeEnum::STInitField(fieldinit) = &mut **fieldinit {
+                    let field_id_range = fieldinit.id.range;
+                    let field_exp_range = fieldinit.exp.range();
+                    let field = sttype.fields.get(&fieldinit.id.name);
+                    if field.is_none() {
+                        ctx.if_completion(self.range, || sttype.get_completions(ctx));
+                        return Err(
+                            ctx.add_diag(field_id_range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND))
+                        );
                     }
-                    Ok(())
-                })?;
-                field_init_values.push((field.index, value));
-                ctx.set_field_refs(pltype.clone(), field, field_id_range);
+                    let field = field.unwrap();
+                    let v = fieldinit.emit(ctx, builder)?.get_value();
+                    idx += 1;
+                    if v.is_none() {
+                        return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
+                    }
+                    let v = v.unwrap();
+                    let value = ctx.try_load2var(field_exp_range, v.get_value(), builder)?;
+                    let value_pltype = v.get_ty();
+                    ctx.protect_generic_context(&sttype.generic_map, |ctx| {
+                        if !field
+                            .typenode
+                            .eq_or_infer(ctx, value_pltype.clone(), builder)?
+                            .eq
+                        {
+                            return Err(ctx.add_diag(
+                                fieldinit
+                                    .range()
+                                    .new_err(ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH),
+                            ));
+                        }
+                        Ok(())
+                    })?;
+                    field_init_values.push((field.index, value));
+                    ctx.send_if_go_to_def(field_id_range, field.range, sttype.get_path());
+                    ctx.set_field_refs(pltype.clone(), field, field_id_range);
+                } else if let NodeEnum::Err(fieldinit) = &mut **fieldinit {
+                    if !fieldinit.src.contains(':') {
+                        ctx.if_completion(fieldinit.range(), || sttype.get_completions(ctx));
+                    }
+                    let _ = fieldinit.emit(ctx, builder);
+                } else {
+                    unreachable!()
+                }
             }
             if !sttype.generic_map.is_empty() {
                 if sttype.need_gen_code() {
@@ -709,9 +720,6 @@ impl Node for StructInitNode {
             Ok(())
         })?;
 
-        if self.fields.len() < self.comments.len() {
-            ctx.emit_comment_highlight(&self.comments[idx]);
-        }
         let struct_pointer = builder.alloc("initstruct", &pltype.borrow(), ctx, None); //alloc(ctx, tp, "initstruct");
         field_init_values.iter().for_each(|(index, value)| {
             let fieldptr = builder
