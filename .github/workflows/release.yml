@@ -50,7 +50,7 @@ jobs:
             libvm: "vm.lib"
             arch: windows-amd64
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
 
