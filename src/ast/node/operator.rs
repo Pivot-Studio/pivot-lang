@@ -318,6 +318,7 @@ impl Node for TakeOpNode {
                 | PLType::Union(_)
                 | PLType::Primitive(_)
                 | PLType::Closure(_)
+                | PLType::Arr(_)
         ) {
             return Err(ctx.add_diag(
                 self.head
@@ -351,6 +352,10 @@ impl Node for TakeOpNode {
                     ctx.get_global_mthd_completions(&s.get_full_name_except_generic(), &mut map);
                 }
                 PLType::Closure(s) => {
+                    ctx.get_global_mthd_completions(&s.get_full_name(), &mut map);
+                    ctx.get_global_mthd_completions(&s.get_full_name_except_generic(), &mut map);
+                }
+                PLType::Arr(s) => {
                     ctx.get_global_mthd_completions(&s.get_full_name(), &mut map);
                     ctx.get_global_mthd_completions(&s.get_full_name_except_generic(), &mut map);
                 }
@@ -420,6 +425,7 @@ impl Node for TakeOpNode {
             PLType::Union(union) => handle_mthd(union, ctx, id, headptr, head_pltype, id_range),
             PLType::Primitive(p) => handle_glob_mthd(p, ctx, id, headptr, head_pltype, id_range),
             PLType::Closure(p) => handle_glob_mthd(p, ctx, id, headptr, head_pltype, id_range),
+            PLType::Arr(p) => handle_glob_mthd(p, ctx, id, headptr, head_pltype, id_range),
             _ => Err(ctx.add_diag(
                 self.head
                     .range()

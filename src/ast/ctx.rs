@@ -16,6 +16,7 @@ use super::plmod::MutVec;
 use super::pltype::add_primitive_types;
 use super::pltype::get_type_deep;
 use super::pltype::FNValue;
+use super::pltype::GenericType;
 use super::pltype::ImplAble;
 use super::pltype::PLType;
 use super::pltype::PriType;
@@ -106,6 +107,7 @@ pub struct Ctx<'a> {
     pub generator_data: Option<Arc<RefCell<GeneratorCtxData>>>,
     pub generic_cache: GenericCache,
     pub origin_mod: *const Mod,
+    pub linked_tp_tbl: FxHashMap<*mut PLType, Vec<Arc<RefCell<PLType>>>>,
 }
 
 #[derive(Clone, Default)]
@@ -300,6 +302,7 @@ impl<'a, 'ctx> Ctx<'a> {
             generator_data: None,
             generic_cache: generic_infer,
             origin_mod: std::ptr::null(),
+            linked_tp_tbl: FxHashMap::default(),
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -339,6 +342,7 @@ impl<'a, 'ctx> Ctx<'a> {
             generator_data: self.generator_data.clone(),
             generic_cache: self.generic_cache.clone(),
             origin_mod: self.origin_mod,
+            linked_tp_tbl: FxHashMap::default(),
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
@@ -444,7 +448,9 @@ impl<'a, 'ctx> Ctx<'a> {
             //     Ok(union_members)
             // })?;
             for (i, tp) in union_members.iter().enumerate() {
-                if *tp.borrow() == *ori_pltype.borrow() {
+                if *get_type_deep(tp.to_owned()).borrow()
+                    == *get_type_deep(ori_pltype.clone()).borrow()
+                {
                     let union_handle =
                         builder.alloc("tmp_unionv", &target_pltype.borrow(), self, None);
                     let union_value = builder
@@ -688,6 +694,9 @@ impl<'a, 'ctx> Ctx<'a> {
                 self.add_trait_impl_method(p, mthd, fntp, impl_trait, generic, target)
             }
             PLType::Primitive(p) => {
+                self.add_trait_impl_method(p, mthd, fntp, impl_trait, generic, target)
+            }
+            PLType::Arr(p) => {
                 self.add_trait_impl_method(p, mthd, fntp, impl_trait, generic, target)
             }
             _ => Err(target
@@ -1047,7 +1056,6 @@ impl<'a, 'ctx> Ctx<'a> {
         u: &TP,
         mut f: F,
     ) -> R {
-        let mut oldm = None;
         if u.get_path() != self.plmod.path {
             let ori_mod = unsafe { &*self.origin_mod as &Mod };
             let m = if u.get_path() == ori_mod.path {
@@ -1055,19 +1063,26 @@ impl<'a, 'ctx> Ctx<'a> {
             } else {
                 self.db.get_module(&u.get_path()).unwrap()
             };
-            oldm = Some(self.set_mod(m));
+            let oldm = self.set_mod(m);
+            let origin = self.origin_mod as isize == &self.plmod as *const Mod as isize;
+            if origin {
+                self.origin_mod = &oldm as *const Mod;
+            }
+            let res = f(self, u);
+            self.set_mod(oldm);
+            if origin {
+                self.origin_mod = &self.plmod as *const Mod;
+            }
+            res
+        } else {
+            f(self, u)
         }
-        let res = f(self, u);
-        if let Some(m) = oldm {
-            self.set_mod(m);
-        }
-        res
     }
 
     pub fn run_in_origin_mod<'b, R, F: FnMut(&mut Ctx<'a>) -> R>(&'b mut self, mut f: F) -> R {
         let oldm = self.plmod.clone();
-        let ctx = self.get_root_ctx();
-        self.set_mod(ctx.plmod.clone());
+        let ori_mod = unsafe { &*self.origin_mod as &Mod };
+        self.set_mod(ori_mod.clone());
         let res = f(self);
         self.set_mod(oldm);
         res
@@ -1077,7 +1092,6 @@ impl<'a, 'ctx> Ctx<'a> {
         u: &mut TP,
         mut f: F,
     ) -> R {
-        let mut oldm = None;
         if u.get_path() != self.plmod.path {
             let ori_mod = unsafe { &*self.origin_mod as &Mod };
             let m = if u.get_path() == ori_mod.path {
@@ -1085,13 +1099,20 @@ impl<'a, 'ctx> Ctx<'a> {
             } else {
                 self.db.get_module(&u.get_path()).unwrap()
             };
-            oldm = Some(self.set_mod(m));
+            let oldm = self.set_mod(m);
+            let origin = self.origin_mod as isize == &self.plmod as *const Mod as isize;
+            if origin {
+                self.origin_mod = &oldm as *const Mod;
+            }
+            let res = f(self, u);
+            self.set_mod(oldm);
+            if origin {
+                self.origin_mod = &self.plmod as *const Mod;
+            }
+            res
+        } else {
+            f(self, u)
         }
-        let res = f(self, u);
-        if let Some(m) = oldm {
-            self.set_mod(m);
-        }
-        res
     }
 
     pub fn get_mod(&self, path: &str) -> Mod {
@@ -1453,13 +1474,38 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         None
     }
-    // when need eq trait and sttype,the left mut be trait
+
+    fn diff_trait_impl(&self, l: &GenericType, r: &GenericType) -> Option<String> {
+        let binding = l.trait_impl.clone().unwrap_or(vec![]);
+        let miss = binding
+            .iter()
+            .filter(|lf| {
+                !r.trait_impl
+                    .clone()
+                    .unwrap_or(vec![])
+                    .iter()
+                    .any(|rf| self.eq(lf.clone().to_owned(), rf.clone()).eq)
+            })
+            .collect::<Vec<_>>();
+        if miss.is_empty() {
+            return None;
+        }
+        let mut s = String::new();
+        s.push_str("missing impl for trait(s):");
+        for m in miss {
+            s.push_str(&format!(" `{}`", m.borrow().get_name()));
+        }
+        Some(s)
+    }
+    /// 左是目标类型，右是实际类型
+    /// when need eq trait and sttype,the left must be trait
     pub fn eq(&self, l: Arc<RefCell<PLType>>, r: Arc<RefCell<PLType>>) -> EqRes {
         if let (PLType::Generic(l), PLType::Generic(r)) = (&*l.borrow(), &*r.borrow()) {
             if l == r {
                 return EqRes {
                     eq: true,
                     need_up_cast: false,
+                    reason: None,
                 };
             }
         }
@@ -1470,10 +1516,11 @@ impl<'a, 'ctx> Ctx<'a> {
                 }
                 if lg.trait_impl.is_some() {
                     if let PLType::Generic(r) = &*r.borrow() {
-                        if r.trait_impl != lg.trait_impl {
+                        if let Some(reason) = self.diff_trait_impl(lg, r) {
                             return EqRes {
                                 eq: false,
                                 need_up_cast: false,
+                                reason: Some(reason),
                             };
                         }
                     } else if lg
@@ -1486,6 +1533,9 @@ impl<'a, 'ctx> Ctx<'a> {
                         return EqRes {
                             eq: false,
                             need_up_cast: false,
+                            reason: Some(
+                                "cannot cast a type to a trait it never implements".to_string(),
+                            ),
                         };
                     }
                 }
@@ -1493,6 +1543,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 return EqRes {
                     eq: true,
                     need_up_cast: false,
+                    reason: None,
                 };
             }
             unreachable!()
@@ -1502,6 +1553,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 return EqRes {
                     eq: true,
                     need_up_cast: true,
+                    reason: None,
                 };
             }
             let trait_pltype = l;
@@ -1512,16 +1564,30 @@ impl<'a, 'ctx> Ctx<'a> {
                 return EqRes {
                     eq: st.implements_trait(t, &self.get_root_ctx().plmod),
                     need_up_cast: true,
+                    reason: Some(format!(
+                        "trait `{}` is not implemented for `{}`",
+                        t.get_name(),
+                        st.get_name()
+                    )),
+                };
+            }
+            if get_type_deep(trait_pltype) == get_type_deep(st_pltype) {
+                return EqRes {
+                    eq: true,
+                    need_up_cast: false,
+                    reason: None,
                 };
             }
             return EqRes {
                 eq: false,
                 need_up_cast: false,
+                reason: None,
             };
         }
         EqRes {
             eq: true,
             need_up_cast: false,
+            reason: None,
         }
     }
     pub fn try_set_closure_alloca_bb(&self, bb: BlockHandle) {
@@ -1552,6 +1618,7 @@ fn find_mthd(
 pub struct EqRes {
     pub eq: bool,
     pub need_up_cast: bool,
+    pub reason: Option<String>,
 }
 
 impl EqRes {

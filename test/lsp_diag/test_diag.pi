@@ -82,3 +82,15 @@ gen fn iter_test4() Iterator<i64>  {
 gen fn iter_test5() Iterator<i64>  {
 }
 
+
+struct BB<T:TestTrait> {
+    x: BInner<T>;
+}
+
+trait TestTrait2 {
+}
+
+
+struct BBB<T:TestTrait+TestTrait2> {
+    x: BInner<T>;
+}

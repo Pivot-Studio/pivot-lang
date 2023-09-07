@@ -269,7 +269,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let size = td.get_store_size(&llvmtp);
         let mut size = self.context.i64_type().const_int(size, false);
         if name == "___ctx" {
-            // generator ctx, use stack variable as type
+            // generator ctx, use stack variable as size
             self.builder.position_at_end(alloca);
             let stack_ptr = self
                 .builder
@@ -305,22 +305,34 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         );
 
         // TODO: force user to manually init all structs, so we can remove this memset
-        let size_val = self
-            .context
-            .i64_type()
-            .const_int(td.get_store_size(&llvmtp), false);
         self.builder
             .build_memset(
                 casted_result.into_pointer_value(),
                 td.get_abi_alignment(&llvmtp),
                 self.context.i8_type().const_zero(),
-                size_val,
+                size,
             )
             .unwrap();
 
+        let cb = self.builder.get_insert_block().unwrap();
+
+        self.builder.position_at_end(alloca);
+        if alloca.get_terminator().is_some() {
+            panic!("alloca block should not have terminator yet")
+        }
+        let stack_ptr = self
+            .builder
+            .build_alloca(llvmtp.ptr_type(AddressSpace::default()), "stack_ptr");
+        self.gc_add_root(stack_ptr.as_basic_value_enum(), obj_type);
+        self.builder.position_at_end(lb);
+        self.builder.build_store(stack_ptr, casted_result);
+
+        self.builder.position_at_end(cb);
+
         if let PLType::Arr(arr) = tp {
             if arr.size_handle != 0 {
-                let f = self.get_malloc_f(ctx, "DioGC__malloc_no_collect");
+                let f = self.get_malloc_f(ctx, "DioGC__malloc");
+                // let f = self.get_malloc_f(ctx, "DioGC__malloc_no_collect");
                 let etp = self
                     .get_basic_type_op(&arr.element_type.borrow(), ctx)
                     .unwrap();
@@ -370,16 +382,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             }
         }
 
-        self.builder.position_at_end(alloca);
-        if alloca.get_terminator().is_some() {
-            panic!("alloca block should not have terminator yet")
-        }
-        let stack_ptr = self
-            .builder
-            .build_alloca(llvmtp.ptr_type(AddressSpace::default()), "stack_ptr");
-        self.gc_add_root(stack_ptr.as_basic_value_enum(), obj_type);
         self.builder.position_at_end(lb);
-        self.builder.build_store(stack_ptr, casted_result);
         (casted_result.into_pointer_value(), stack_ptr, llvmtp)
     }
 
@@ -458,7 +461,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 );
                 let tp = ObjectType::from_int(obj_type).expect("invalid object type");
                 let tp_const_name = format!(
-                    "@{}_IMMIX_OBJTYPE_{}",
+                    "@{}_@IMMIX_OBJTYPE_{}",
                     self.module.get_source_file_name().to_str().unwrap(),
                     match tp {
                         ObjectType::Atomic => "ATOMIC",
@@ -849,9 +852,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             _ => RetTypeEnum::Basic(self.get_basic_type_op(pltp, ctx).unwrap()),
         }
     }
-    /// array type in fact is a struct with two fields,
+    /// array type in fact is a struct with three fields,
     /// the first is a function pointer to the visit function(used in gc)
     /// the second is the array itself
+    /// the third is the length of the array
     fn arr_type(&self, arrtp: &ARRType, ctx: &mut Ctx<'a>) -> BasicTypeEnum<'ctx> {
         self.context
             .struct_type(
@@ -1484,19 +1488,30 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 bme
             })
             .collect::<Vec<_>>();
+        let dbg = builder.get_current_debug_location();
+        let bb = builder.get_insert_block().unwrap();
+        // malloc ret after call is not safe, as malloc may trigger collection
+        let alloca = if ret_type == &PLType::Void {
+            0
+        } else {
+            self.alloc_raw("ret_alloca", ret_type, ctx, None, "DioGC__malloc")
+        };
+        if let Some(dbg) = dbg {
+            self.build_dbg_location(Pos {
+                line: dbg.get_line() as _,
+                column: dbg.get_column() as _,
+                offset: 0,
+            })
+        }
+        builder.position_at_end(bb);
+
         let v = builder.build_call(f, &args, "calltmp").try_as_basic_value();
         if v.right().is_some() {
             return None;
         }
         let ret = v.left().unwrap();
 
-        let alloca = self.alloc_raw(
-            "ret_alloca",
-            ret_type,
-            ctx,
-            None,
-            "DioGC__malloc_no_collect",
-        );
+        builder.unset_current_debug_location();
 
         self.builder.build_store(
             self.get_llvm_value(alloca).unwrap().into_pointer_value(),
@@ -1699,12 +1714,12 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     fn const_string(&self, s: &str) -> ValueHandle {
         let s = self.builder.build_global_string_ptr(
             s,
-            format!("str_{}", ID.fetch_add(1, Ordering::Relaxed)).as_str(),
+            format!(".str_{}", ID.fetch_add(1, Ordering::Relaxed)).as_str(),
         );
         let s = self.builder.build_bitcast(
             s,
             self.context.i8_type().ptr_type(Default::default()),
-            "str",
+            ".str",
         );
         self.get_llvm_value_handle(&s.as_any_value_enum())
     }

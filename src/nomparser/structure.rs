@@ -1,3 +1,5 @@
+use crate::ast::diag::ErrorCode;
+use crate::ast::node::error::ErrorNode;
 use crate::ast::node::tuple::TupleInitNode;
 use crate::ast::node::types::StructField;
 use crate::nomparser::Span;
@@ -7,12 +9,13 @@ use crate::{
     ast::{node::types::StructInitFieldNode, tokens::TokenType},
 };
 use internal_macro::{test_parser, test_parser_error};
+use nom::branch::alt;
+use nom::combinator::map;
 use nom::multi::separated_list1;
 use nom::{
-    branch::alt,
     combinator::{map_res, opt},
     multi::many0,
-    sequence::{pair, terminated, tuple},
+    sequence::{terminated, tuple},
     IResult,
 };
 use nom_locate::LocatedSpan;
@@ -102,24 +105,47 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
 /// struct_init_field = identifier ":" logic_exp "," ;
 /// ```
 /// special: del newline or space
-fn struct_init_field(input: Span) -> IResult<Span, Box<StructInitFieldNode>> {
+fn struct_init_field(input: Span) -> IResult<Span, Box<NodeEnum>> {
     del_newline_or_space!(map_res(
         tuple((identifier, tag_token_symbol(TokenType::COLON), general_exp,)),
         |(id, _, exp)| {
             let range = id.range.start.to(exp.range().end);
-            Ok::<_, ()>(Box::new(StructInitFieldNode {
-                id: *id,
-                exp,
-                range,
-            }))
+            Ok::<_, ()>(Box::new(
+                StructInitFieldNode {
+                    id: *id,
+                    exp,
+                    range,
+                }
+                .into(),
+            ))
         },
     ))(input)
 }
 
 #[test_parser("a{a : 1}")]
 #[test_parser("a{a : 1,b:2}")]
+#[test_parser("a{a : 1,b:2,}")]
 #[test_parser("a{}")]
 #[test_parser("a<i64|B>{}")]
+#[test_parser(
+    "a{a : 1,b:2,dsadasd   
+}"
+)] // fault tolerant
+#[test_parser(
+    "a{a : 1,b:2,dsadasd   
+
+    }"
+)] // fault tolerant
+#[test_parser(
+    "a{a : 1,dsadasd  
+    
+    ,b:2 
+}"
+)] // fault tolerant
+#[test_parser(
+    "a{a : 1,dsadasd  ,,,
+}"
+)] // fault tolerant
 /// ```enbf
 /// struct_init = type_name "{" (struct_init_field ("," struct_init_field)* )? "}" ;
 /// ```
@@ -134,57 +160,40 @@ pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
         tuple((
             basic_type,
             tag_token_symbol_ex(TokenType::LBRACE),
-            alt((
-                map_res(
-                    pair(
-                        many0(tuple((
-                            terminated(
-                                del_newline_or_space!(struct_init_field),
-                                tag_token_symbol(TokenType::COMMA),
-                            ),
-                            many0(comment),
-                        ))),
-                        del_newline_or_space!(struct_init_field),
-                    ),
-                    |(lfields, rfield)| {
-                        let mut fields = vec![];
-                        let mut coms = vec![];
-                        for f in lfields {
-                            fields.push(f.0);
-                            coms.push(f.1);
-                        }
-                        fields.push(rfield);
-                        Ok::<_, ()>((fields, coms))
-                    },
+            opt(terminated(
+                separated_list1(
+                    tag_token_symbol_ex(TokenType::COMMA),
+                    alt((
+                        del_newline_or_space!(alt_except(
+                            struct_init_field,
+                            "},",
+                            "unexpected token",
+                            ErrorCode::INVALID_STRUCT_INIT
+                        )),
+                        map(tag_token_symbol_ex(TokenType::COMMA), |(_, r)| {
+                            Box::new(
+                                ErrorNode {
+                                    msg: "duplicate comma".to_string(),
+                                    src: ",".to_string(),
+                                    range: r,
+                                    code: ErrorCode::REDUNDANT_COMMA,
+                                }
+                                .into(),
+                            )
+                        }),
+                    )),
                 ),
-                map_res(opt(del_newline_or_space!(struct_init_field)), |field| {
-                    if field.is_some() {
-                        Ok::<_, ()>((vec![field.unwrap()], vec![]))
-                    } else {
-                        Ok::<_, ()>((vec![], vec![]))
-                    }
-                }),
+                opt(tag_token_symbol_ex(TokenType::COMMA)),
             )),
-            many0(comment),
             tag_token_symbol(TokenType::RBRACE),
         )),
-        |(typename, _, (fields, lcomment), rcomment, _)| {
-            let range = if !fields.is_empty() {
-                typename
-                    .range()
-                    .start
-                    .to(fields.last().unwrap().range().end)
-            } else {
-                typename.range()
-            };
-            let mut comments = lcomment;
-            comments.push(rcomment);
+        |(typename, _, body, (_, e))| {
+            let range = typename.range().start.to(e.end);
             res_enum(
                 StructInitNode {
                     typename,
-                    fields,
+                    fields: body.unwrap_or_default(),
                     range,
-                    comments,
                 }
                 .into(),
             )

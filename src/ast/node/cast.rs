@@ -299,6 +299,9 @@ impl<'a, 'ctx> Ctx<'a> {
         let else_block = builder.append_basic_block(self.function.unwrap(), "if.else");
         let after_block = builder.append_basic_block(self.function.unwrap(), "if.after");
 
+        let result_tp = target_ty.clone();
+        let result = builder.alloc("cast_result", &result_tp.borrow(), self, None);
+
         builder.build_unconditional_branch(cond_block);
         self.position_at_end(cond_block, builder);
         let cond = builder.build_int_compare(IntPredicate::EQ, hash, hash_code, "hash.eq");
@@ -315,7 +318,9 @@ impl<'a, 'ctx> Ctx<'a> {
             after_block,
             else_block,
             pos,
-        )
+            result,
+        );
+        (result, result_tp)
     }
     fn force_cast_union_to<'b>(
         &mut self,
@@ -332,6 +337,10 @@ impl<'a, 'ctx> Ctx<'a> {
         let then_block = builder.append_basic_block(self.function.unwrap(), "if.then");
         let else_block = builder.append_basic_block(self.function.unwrap(), "if.else");
         let after_block = builder.append_basic_block(self.function.unwrap(), "if.after");
+
+        let result_tp = target_ty.clone();
+        let result = builder.alloc("cast_result", &result_tp.borrow(), self, None);
+
         builder.build_unconditional_branch(cond_block);
         self.position_at_end(cond_block, builder);
         let cond = builder.build_int_compare(
@@ -353,7 +362,9 @@ impl<'a, 'ctx> Ctx<'a> {
             after_block,
             else_block,
             pos,
-        )
+            result,
+        );
+        (result, result_tp)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -366,10 +377,10 @@ impl<'a, 'ctx> Ctx<'a> {
         after_block: usize,
         else_block: usize,
         pos: Pos,
-    ) -> (usize, Arc<RefCell<PLType>>) {
+        result: usize,
+    ) {
         // then block
-        let result_tp = target_ty.clone();
-        let result = builder.alloc("cast_result", &result_tp.borrow(), self, None);
+
         self.position_at_end(then_block, builder);
         let data = builder.build_struct_gep(val, 1, "data").unwrap();
         let data = builder.build_load(data, "data");
@@ -386,7 +397,6 @@ impl<'a, 'ctx> Ctx<'a> {
         builder.build_unconditional_branch(after_block);
         // after block
         self.position_at_end(after_block, builder);
-        (result, result_tp)
     }
 }
 

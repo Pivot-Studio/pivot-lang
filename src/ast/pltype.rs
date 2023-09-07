@@ -233,7 +233,9 @@ impl UnionType {
             u.sum_types
                 .iter()
                 .enumerate()
-                .find(|(_, t)| &*t.get_type(ctx, builder, true).unwrap().borrow() == pltype)
+                .find(|(_, t)| {
+                    &*get_type_deep(t.get_type(ctx, builder, true).unwrap()).borrow() == pltype
+                })
                 .map(|(i, _)| i)
         })
     }
@@ -440,9 +442,7 @@ impl PLType {
                     new_typename_node(&g.name, Default::default(), &[])
                 }
             }
-            PLType::PlaceHolder(p) => {
-                new_typename_node(&p.get_place_holder_name(), Default::default(), &[])
-            }
+            PLType::PlaceHolder(p) => new_typename_node(&p.name, Default::default(), &[]),
             PLType::Trait(t) => Self::new_custom_tp_node(t, path),
             PLType::Fn(_) => unreachable!(),
             PLType::Union(u) => Self::new_custom_tp_node(u, path),
@@ -965,6 +965,16 @@ pub struct ARRType {
     pub size_handle: ValueHandle,
 }
 
+impl TraitImplAble for ARRType {
+    fn get_full_name_except_generic(&self) -> String {
+        "[]".to_owned()
+    }
+
+    fn get_full_name(&self) -> String {
+        format!("[{}]", self.element_type.borrow().get_full_elm_name())
+    }
+}
+
 impl ARRType {
     pub fn get_elem_type(&self) -> Arc<RefCell<PLType>> {
         self.element_type.clone()
@@ -1060,17 +1070,19 @@ impl STType {
                 }
             })
             .filter(|derive| !st.implements_trait(derive, &ctx.plmod))
-            .map(|derive| derive.name)
             .collect::<Vec<_>>();
         if !errnames.is_empty() {
-            range
-                .new_err(ErrorCode::DERIVE_TRAIT_NOT_IMPL)
-                .add_label(
-                    range,
-                    ctx.get_file(),
-                    format_label!("the derive trait {} not impl", errnames.join(",")),
-                )
-                .add_to_ctx(ctx);
+            let mut err = range.new_err(ErrorCode::DERIVE_TRAIT_NOT_IMPL);
+
+            for e in errnames {
+                err.add_label(
+                    e.range,
+                    e.get_path(),
+                    format_label!("the derive trait {} not impl", e.name),
+                );
+            }
+
+            err.add_to_ctx(ctx);
         }
     }
     pub fn get_trait_field(&self, k: &str) -> Option<Field> {
@@ -1331,7 +1343,14 @@ impl STType {
             } else {
                 pltype.tp.replace(PLType::Struct(res.clone()));
             }
-            ctx.add_infer_result(self, &res.name, pltype.tp.clone());
+            // TODO union & nested placeholder
+            if !res
+                .generic_infer_types
+                .values()
+                .any(|v| matches!(&*v.borrow(), PLType::PlaceHolder(_)))
+            {
+                ctx.add_infer_result(self, &res.name, pltype.tp.clone());
+            }
             Ok(pltype.tp)
         })
     }

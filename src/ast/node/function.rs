@@ -200,13 +200,8 @@ impl Node for FuncCallNode {
                         .eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
                         .eq
                 {
-                    return Err(ctx.add_diag(
-                        generic_params.generics[i]
-                            .as_ref()
-                            .unwrap()
-                            .range()
-                            .new_err(ErrorCode::TYPE_MISMATCH),
-                    ));
+                    let r = generic_params.generics[i].as_ref().unwrap().range();
+                    return Err(r.new_err(ErrorCode::TYPE_MISMATCH).add_to_ctx(ctx));
                 }
             }
         }
@@ -233,6 +228,7 @@ impl Node for FuncCallNode {
             &fnvalue.fntype.param_pltypes,
             fnvalue.fntype.generic,
         )?;
+        let bb = builder.get_cur_basic_block();
         // value check and generic infer
         let res = ctx.protect_generic_context(&fnvalue.fntype.generic_map.clone(), |ctx| {
             let rettp = ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
@@ -277,6 +273,7 @@ impl Node for FuncCallNode {
             // let rettp = ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
             //     fnvalue.fntype.ret_pltype.get_type(ctx, builder, true)
             // })?;
+            builder.position_at_end_block(bb);
             let ret = builder.build_call(function, &para_values, &rettp.borrow(), ctx);
             ctx.save_if_comment_doc_hover(id_range, Some(fnvalue.doc.clone()));
             handle_ret(ret, rettp)
@@ -407,6 +404,12 @@ impl TypeNode for FuncDefNode {
                 range: self.id.range(),
                 doc: self.doc.clone(),
                 llvmname: if self.declare {
+                    if self.id.name.starts_with('|') {
+                        return Err(self
+                            .range
+                            .new_err(ErrorCode::METHODS_MUST_HAVE_BODY)
+                            .add_to_ctx(ctx));
+                    }
                     self.id.name.clone()
                 } else {
                     child.plmod.get_full_name(&self.id.name)
@@ -662,9 +665,12 @@ impl FuncDefNode {
             // body generation
             let terminator = self.body.as_mut().unwrap().emit(child, builder)?.get_term();
             if !terminator.is_return() && !self.generator {
-                return Err(
-                    child.add_diag(self.range.new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN))
-                );
+                return Err(child.add_diag(
+                    self.range
+                        .end
+                        .to(self.range.end)
+                        .new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN),
+                ));
             }
             if self.generator {
                 return generator::end_generator(
@@ -922,7 +928,12 @@ impl Node for ClosureNode {
         // emit body
         let terminator = self.body.emit(child, builder)?.get_term();
         if !terminator.is_return() {
-            return Err(child.add_diag(self.range.new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN)));
+            return Err(child.add_diag(
+                self.range
+                    .end
+                    .to(self.range.end)
+                    .new_err(ErrorCode::FUNCTION_MUST_HAVE_RETURN),
+            ));
         }
         child.position_at_end(allocab, builder);
         let mut i = 1;

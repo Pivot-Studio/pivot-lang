@@ -18,6 +18,10 @@ mod _win {
                 let mem = VirtualAlloc(null_mut(), size, MEM_RESERVE, PAGE_READWRITE);
                 let mem = mem as *mut u8;
 
+                if mem.is_null() {
+                    panic!("mmap failed");
+                }
+
                 let end = mem.add(size);
 
                 Self {
@@ -46,9 +50,9 @@ mod _win {
             }
         }
 
-        pub fn commit(&self, page: *mut u8, size: usize) {
+        pub fn commit(&self, page: *mut u8, size: usize) -> bool {
             unsafe {
-                VirtualAlloc(page.cast(), size, MEM_COMMIT, PAGE_READWRITE);
+                VirtualAlloc(page.cast(), size, MEM_COMMIT, PAGE_READWRITE) != std::ptr::null_mut()
             }
         }
     }
@@ -82,6 +86,9 @@ mod _unix {
                     -1,
                     0,
                 );
+                if map.is_null() {
+                    panic!("mmap failed");
+                }
                 let code = libc::madvise(map, size, libc::MADV_SEQUENTIAL);
                 if map == libc::MAP_FAILED {
                     panic!("mmap failed, code: {}", code);
@@ -95,6 +102,9 @@ mod _unix {
         }
         /// Return a `align` aligned pointer to the mmap'ed region.
         pub fn aligned(&self, align: usize) -> *mut u8 {
+            if self.start.is_null() {
+                return core::ptr::null_mut();
+            }
             round_n_up!(self.start as usize, align) as *mut u8
         }
 
@@ -106,6 +116,9 @@ mod _unix {
         }
 
         pub fn dontneed(&self, page: *mut u8, size: usize) {
+            if page.is_null() {
+                return;
+            }
             unsafe {
                 #[cfg(all(target_os = "linux", feature = "madv_free"))]
                 libc::madvise(page as *mut _, size as _, libc::MADV_FREE);
@@ -116,19 +129,22 @@ mod _unix {
             }
         }
 
-        pub fn commit(&self, page: *mut u8, size: usize) {
+        pub fn commit(&self, page: *mut u8, size: usize) -> bool {
             unsafe {
                 libc::madvise(
                     page as *mut _,
                     size as _,
                     libc::MADV_WILLNEED | libc::MADV_SEQUENTIAL,
-                );
+                ) == 0
             }
         }
     }
 
     impl Drop for Mmap {
         fn drop(&mut self) {
+            if self.start.is_null() {
+                return;
+            }
             unsafe {
                 libc::munmap(self.start() as *mut _, self.size as _);
             }

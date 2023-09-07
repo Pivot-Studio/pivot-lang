@@ -48,7 +48,7 @@ impl Node for RetNode {
             } else {
                 unreachable!()
             };
-            if v_tp != value_pltype {
+            if get_type_deep(v_tp) != get_type_deep(value_pltype.clone()) {
                 let err = ctx.add_diag(self.range.new_err(ErrorCode::RETURN_TYPE_MISMATCH));
                 return Err(err);
             }

@@ -76,6 +76,9 @@ extern "C" fn gctest_vtable(
 
 unsafe fn alloc_test_obj(gc: &mut Collector) -> *mut GCTestObj {
     let a = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
+    if a.is_null() {
+        panic!("oom")
+    }
     a.write(GCTestObj {
         _vtable: gctest_vtable,
         b: std::ptr::null_mut(),

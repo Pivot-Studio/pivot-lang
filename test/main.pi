@@ -24,6 +24,7 @@ use project1::test::compiletime_reflection::test_compile_time_reflection;
 use project1::test::deconstruct;
 use project1::test::st::*;
 use project1::test::arr;
+use project1::test::iter;
 
 pub fn main() i64 {
     macros::test_macros();
@@ -50,6 +51,7 @@ pub fn main() i64 {
     fixed_point::test_fixed_point();
     generic::ret_generic1<i64>();
     test_compile_time_reflection();
+    iter::test_generator();
     
     arr::test_arr();
     return 0;

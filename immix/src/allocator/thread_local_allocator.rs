@@ -303,6 +303,7 @@ impl ThreadLocalAllocator {
 
     pub fn big_obj_from_ptr(&mut self, ptr: *mut u8) -> Option<*mut BigObj> {
         for obj in self.big_objs.iter() {
+            // FIXME: O(n); should use a tree
             let start = unsafe { (*obj as *mut u8).add(16) };
             let end = unsafe { (*obj as *mut u8).add((*(*obj)).size) };
             if start <= ptr && end >= ptr {

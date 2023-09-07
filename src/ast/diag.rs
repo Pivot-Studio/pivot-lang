@@ -133,7 +133,7 @@ define_error!(
     TRAIT_METHOD_NOT_FOUND = "trait method not found",
     ONLY_TRAIT_CAN_BE_IMPL = "only trait can be impl",
     EXPECT_TO_BE_A_TRAIT_IMPL = "expect to be a trait impl block",
-    TARGET_TYPE_NOT_IMPL_ABLE = "target type not impl able",
+    TARGET_TYPE_NOT_IMPL_ABLE = "target type not implable",
     TUPLE_WRONG_DECONSTRUCT_PARAM_LEN = "tuple wrong deconstruct param len",
     DEF_DECONSTRUCT_MUST_HAVE_VALUE = "def deconstruct must have value",
     STRUCT_FIELD_NOT_EXISTS = "struct field not exists",
@@ -145,6 +145,9 @@ define_error!(
     ARRAY_LEN_MUST_BE_I64 = "array len must be i64",
     EXPECT_ARRAY_TYPE = "expect array type",
     EXPECT_INT_VALUE = "expect int value",
+    METHODS_MUST_HAVE_BODY = "methods must have body",
+    INVALID_STRUCT_INIT = "invalid struct initialization",
+    REDUNDANT_COMMA = "REDUNDANT comma",
 );
 macro_rules! define_warn {
     ($(
@@ -237,6 +240,7 @@ impl Pos {
         doc.line(self.line - 1).unwrap().offset() + self.column - 1
     }
 }
+use regex::Regex;
 use std::fmt::Debug;
 impl PLDiag {
     #[cfg(test)]
@@ -300,7 +304,12 @@ impl PLDiag {
             rb = rb.with_label(lab.with_color(color));
         }
         if let Some(help) = &self.raw.help {
-            rb = rb.with_help(help);
+            let re = Regex::new(r"`[a-zA-Z_$][a-zA-Z_$0-9]*`").unwrap();
+            let h = re.replace_all(help, |cap: &regex::Captures<'_>| {
+                let s = cap[0].to_string();
+                s.fg(colors.next()).to_string()
+            });
+            rb = rb.with_help(h);
         }
         let r = rb.finish();
         r.eprint(PLFileCache::new(db, Box::new(f))).unwrap();

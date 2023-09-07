@@ -90,7 +90,9 @@
             code: Err(
                 TYPE_MISMATCH,
             ),
-            help: None,
+            help: Some(
+                "missing impl for trait(s): `TestTrait`",
+            ),
             labels: [],
             source: None,
             range: Range {
@@ -519,14 +521,14 @@
                     ),
                     range: Range {
                         start: Pos {
-                            line: 44,
-                            column: 6,
-                            offset: 472,
+                            line: 38,
+                            column: 7,
+                            offset: 441,
                         },
                         end: Pos {
-                            line: 44,
-                            column: 8,
-                            offset: 474,
+                            line: 38,
+                            column: 9,
+                            offset: 443,
                         },
                     },
                 },
@@ -664,28 +666,6 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
-                FUNCTION_MUST_HAVE_RETURN,
-            ),
-            help: None,
-            labels: [],
-            source: None,
-            range: Range {
-                start: Pos {
-                    line: 65,
-                    column: 1,
-                    offset: 665,
-                },
-                end: Pos {
-                    line: 68,
-                    column: 2,
-                    offset: 723,
-                },
-            },
-        },
-    },
-    PLDiag {
-        raw: PLDiagRaw {
-            code: Err(
                 YIELD_RETURN_MUST_BE_IN_GENERATOR,
             ),
             help: None,
@@ -701,6 +681,28 @@
                     line: 67,
                     column: 20,
                     offset: 721,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                FUNCTION_MUST_HAVE_RETURN,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 68,
+                    column: 2,
+                    offset: 723,
+                },
+                end: Pos {
+                    line: 68,
+                    column: 2,
+                    offset: 723,
                 },
             },
         },

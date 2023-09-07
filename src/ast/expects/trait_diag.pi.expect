@@ -228,14 +228,14 @@
                     ),
                     range: Range {
                         start: Pos {
-                            line: 64,
-                            column: 10,
-                            offset: 672,
+                            line: 9,
+                            column: 7,
+                            offset: 90,
                         },
                         end: Pos {
-                            line: 64,
-                            column: 24,
-                            offset: 686,
+                            line: 9,
+                            column: 21,
+                            offset: 104,
                         },
                     },
                 },
