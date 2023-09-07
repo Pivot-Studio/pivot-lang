@@ -9,33 +9,47 @@ use std::{
     fmt::{Display, Formatter},
     process::exit,
 };
-macro_rules! define_error {
-    ($(
-        $ident:ident = $string_keyword:expr
-    ),*) => {
-        #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, Default)]
-        #[allow(non_camel_case_types, dead_code)]
-        #[allow(clippy::upper_case_acronyms)]
-        pub enum ErrorCode {
-            #[default] UNKNOWN = 114513,
-            $($ident),*
-        }
-        $(pub const $ident: &'static str = $string_keyword;)*
-        lazy_static! {
-            pub static ref ERR_MSG: HashMap<ErrorCode, &'static str> = {
-                let mut mp = HashMap::new();
-                $(mp.insert(ErrorCode::$ident, $ident);)*
-                mp
-            };
+
+macro_rules! define_diag {
+    (
+        $code:expr,
+        $level:ident,
+        $(
+            $ident:ident = $string_keyword:expr
+        ),*
+    ) => {
+        paste::paste! {
+            #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, Default)]
+            #[allow(non_camel_case_types, dead_code)]
+            #[allow(clippy::upper_case_acronyms)]
+            pub enum [<$level:camel Code>] {
+                #[default] UNKNOWN = $code,
+                $($ident),*
+            }
+            $(pub const $ident: &'static str = $string_keyword;)*
+            lazy_static! {
+                pub static ref [<$level:upper _MSG>]: HashMap<[<$level:camel Code>], &'static str> = {
+                    let mut mp = HashMap::new();
+                    $(mp.insert([<$level:camel Code>]::$ident, $ident);)*
+                    mp
+                };
+            }
         }
     };
-    ($(
-        $ident:ident = $string_keyword:expr
-    ),*,) => {
-        define_error!($($ident = $string_keyword),*);
+    (
+        $code:expr,
+        $level:ident,
+        $(
+            $ident:ident = $string_keyword:expr
+        ),*,
+    ) => {
+        define_diag!($code, $level, $($ident = $string_keyword),*);
     };
 }
-define_error!(
+
+define_diag!(
+    114513,
+    Error,
     SYNTAX_ERROR_STATEMENT = "failed to parse statement",
     SYNTAX_ERROR_TOP_STATEMENT = "failed to parse top level statement",
     WHILE_CONDITION_MUST_BE_BOOL = "while condition must be bool",
@@ -149,33 +163,10 @@ define_error!(
     INVALID_STRUCT_INIT = "invalid struct initialization",
     REDUNDANT_COMMA = "REDUNDANT comma",
 );
-macro_rules! define_warn {
-    ($(
-        $ident:ident = $string_keyword:expr
-    ),*) => {
-        #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, Default)]
-        #[allow(non_camel_case_types)]
-        #[allow(clippy::upper_case_acronyms)]
-        pub enum WarnCode {
-            #[default] UNKNOWN = 1919809,
-            $($ident),*
-        }
-        $(pub const $ident: &'static str = $string_keyword;)*
-        lazy_static! {
-            pub static ref WARN_MSG: HashMap<WarnCode, &'static str> = {
-                let mut mp = HashMap::new();
-                $(mp.insert(WarnCode::$ident, $ident);)*
-                mp
-            };
-        }
-    };
-    ($(
-        $ident:ident = $string_keyword:expr
-    ),*,) => {
-        define_warn!($($ident = $string_keyword),*);
-    };
-}
-define_warn! {
+
+define_diag! {
+    1919809,
+    Warn,
     UNREACHABLE_STATEMENT= "unreachable statement",
     UNUSED_VARIABLE = "unused variable",
     UNUSED_FUNCTION = "unused function",
@@ -328,7 +319,7 @@ impl PLDiag {
     }
     pub fn get_msg(&self) -> String {
         match self.raw.code {
-            DiagCode::Err(code) => ERR_MSG[&code].to_string(),
+            DiagCode::Err(code) => ERROR_MSG[&code].to_string(),
             DiagCode::Warn(code) => WARN_MSG[&code].to_string(),
         }
     }
@@ -341,7 +332,7 @@ impl PLDiag {
                 Some(PL_DIAG_SOURCE.to_string()),
                 format!(
                     "{} {}",
-                    ERR_MSG[&code],
+                    ERROR_MSG[&code],
                     &self
                         .raw
                         .help

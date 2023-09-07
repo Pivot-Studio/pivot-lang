@@ -3,6 +3,7 @@ use super::node_result::NodeResultBuilder;
 use super::statement::StatementsNode;
 use super::*;
 use super::{types::TypedIdentifierNode, Node, TypeNode};
+use crate::ast::accumulators::PLCodeLens;
 use crate::ast::builder::ValueHandle;
 use crate::ast::ctx::{ClosureCtxData, CtxFlag, BUILTIN_FN_MAP};
 use crate::ast::diag::ErrorCode;
@@ -13,7 +14,7 @@ use crate::ast::tokens::TokenType;
 use indexmap::IndexMap;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
-use lsp_types::SemanticTokenType;
+use lsp_types::{CodeLens, Command, SemanticTokenType};
 use std::cell::RefCell;
 
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -651,6 +652,30 @@ impl FuncDefNode {
             // emit body
             builder.rm_curr_debug_location();
             if self.id.name == "main" {
+                PLCodeLens::push(
+                    ctx.db,
+                    CodeLens {
+                        range: self.id.range.to_diag_range(),
+                        command: Some(Command::new(
+                            "run".to_owned(),
+                            "pivot-lang.run_current".to_owned(),
+                            None,
+                        )),
+                        data: None,
+                    },
+                );
+                PLCodeLens::push(
+                    ctx.db,
+                    CodeLens {
+                        range: self.id.range.to_diag_range(),
+                        command: Some(Command::new(
+                            "debug".to_owned(),
+                            "pivot-lang.debug_current".to_owned(),
+                            None,
+                        )),
+                        data: None,
+                    },
+                );
                 if let Some(inst) = builder.get_first_instruction(allocab) {
                     builder.position_at(inst);
                 } else {

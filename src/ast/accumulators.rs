@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use lsp_types::{
-    CompletionItem, DocumentSymbol, GotoDefinitionResponse, Hover, InlayHint, Location,
+    CodeLens, CompletionItem, DocumentSymbol, GotoDefinitionResponse, Hover, InlayHint, Location,
     SemanticTokens, SignatureHelp, TextEdit,
 };
 
@@ -21,6 +21,9 @@ pub struct Completions(Vec<CompletionItem>);
 
 #[salsa::accumulator]
 pub struct PLSemanticTokens(SemanticTokens);
+
+#[salsa::accumulator]
+pub struct PLCodeLens(CodeLens);
 
 #[salsa::accumulator]
 pub struct PLHover(Hover);
