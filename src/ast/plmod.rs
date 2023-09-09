@@ -42,6 +42,7 @@ use super::pltype::TraitMthdImpl;
 pub struct GlobalVar {
     pub tp: Arc<RefCell<PLType>>,
     pub range: Range,
+    pub is_extern:bool
     // pub loc: Arc<RwVec<Location>>,
 }
 
@@ -335,6 +336,7 @@ impl Mod {
         name: String,
         tp: Arc<RefCell<PLType>>,
         range: Range,
+        is_extern: bool,
         // refs: Arc<RwVec<Location>>,
     ) -> Result<(), PLDiag> {
         if self.global_table.contains_key(&name) {
@@ -345,6 +347,7 @@ impl Mod {
             GlobalVar {
                 tp,
                 range,
+                is_extern
                 // loc: refs,
             },
         );

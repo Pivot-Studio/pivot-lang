@@ -1,11 +1,11 @@
 use core::panic;
-const a = 100;
+var a = 100;
 pub struct name {
     a: i64;
     b: i64;
 }
 
-const b = &name{
+var b = &name{
     a: 1
 };
 pub fn change_global() void {

@@ -66,6 +66,7 @@ define_tokens!(
     DOT = ".",
     SEMI = ";",
     CONST = "const",
+    GLOBAL = "var",
     USE = "use",
     DOUBLE_COLON = "::",
     LBRACKET = "[",

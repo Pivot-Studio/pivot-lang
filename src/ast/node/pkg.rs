@@ -262,8 +262,13 @@ impl Node for ExternIdNode {
             let pltype = symbol.tp.clone();
             ctx.set_glob_refs(&plmod.get_full_name(&self.id.get_name(ctx)), self.id.range);
             ctx.send_if_go_to_def(self.range, symbol.range, plmod.path.clone());
+            let name = if symbol.is_extern {
+                self.id.get_name(ctx)
+            }else {
+                plmod.get_full_name(&self.id.get_name(ctx))
+            };
             let g = ctx.get_or_add_global(
-                &plmod.get_full_name(&self.id.get_name(ctx)),
+                &name,
                 symbol.tp.clone(),
                 builder,
             );

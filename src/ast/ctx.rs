@@ -765,12 +765,13 @@ impl<'a, 'ctx> Ctx<'a> {
             let re = father.get_symbol(name, builder);
             return re;
         }
-        if let Some(GlobalVar { tp: pltype, range }) = self.plmod.get_global_symbol(name) {
+        if let Some(GlobalVar { tp: pltype, range,..  }) = self.plmod.get_global_symbol(name) {
             return Some((
                 PLSymbol {
                     value: builder
                         .get_global_var_handle(&self.plmod.get_full_name(name))
-                        .unwrap(),
+                        .unwrap_or(builder
+                            .get_global_var_handle(&name).unwrap()),
                     pltype: pltype.clone(),
                     range: *range,
                     refs: None,
@@ -788,11 +789,12 @@ impl<'a, 'ctx> Ctx<'a> {
         pltype: Arc<RefCell<PLType>>,
         range: Range,
         is_const: bool,
+        is_extern:bool
     ) -> Result<(), PLDiag> {
         if self.table.contains_key(&name) {
             return Err(self.add_diag(range.new_err(ErrorCode::REDECLARATION)));
         }
-        self.add_symbol_without_check(name, pv, pltype, range, is_const)
+        self.add_symbol_without_check(name, pv, pltype, range, is_const,is_extern)
     }
     pub fn add_symbol_without_check(
         &mut self,
@@ -801,10 +803,11 @@ impl<'a, 'ctx> Ctx<'a> {
         pltype: Arc<RefCell<PLType>>,
         range: Range,
         is_const: bool,
+        is_extern:bool
     ) -> Result<(), PLDiag> {
         if is_const {
             self.set_glob_refs(&self.plmod.get_full_name(&name), range);
-            self.plmod.add_global_symbol(name, pltype, range)?;
+            self.plmod.add_global_symbol(name, pltype, range,is_extern)?;
         } else {
             let refs = Arc::new(RefCell::new(vec![]));
             self.table.insert(
@@ -1369,7 +1372,7 @@ impl<'a, 'ctx> Ctx<'a> {
         ];
         let loopkeys = vec!["break", "continue"];
         let toplevel = vec![
-            "fn", "struct", "const", "use", "impl", "trait", "pub", "type", "gen",
+            "fn", "struct", "const", "var", "use", "impl", "trait", "pub", "type", "gen",
         ];
         if self.father.is_none() {
             for k in toplevel {

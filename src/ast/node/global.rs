@@ -6,6 +6,43 @@ use crate::ast::diag::ErrorCode;
 
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
+
+#[node]
+pub struct GlobalConstNode {
+    pub var: Box<TypedIdentifierNode>,
+}
+
+impl PrintTrait for GlobalConstNode {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("GlobalConstNode");
+        self.var.print(tabs + 1, true, line.clone());
+    }
+}
+
+impl Node for GlobalConstNode {
+    fn emit<'a, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) -> NodeResult {
+        ctx.push_semantic_token(self.var.id.range, SemanticTokenType::VARIABLE, 0);
+        ctx.push_semantic_token(self.var.typenode.range(), SemanticTokenType::TYPE, 0);
+        let pltype = self.var.typenode.get_type(ctx, builder, true)?;
+        let globalptr = builder.global_const(&self.var.id.name, &pltype.borrow(), ctx);
+        ctx.add_symbol(
+            self.var.id.name.clone(),
+            globalptr,
+            pltype,
+            self.var.range,
+            true,
+            true
+        )?;
+        Ok(Default::default())
+    }
+}
+
 #[node]
 pub struct GlobalNode {
     pub var: VarNode,
@@ -77,7 +114,8 @@ impl GlobalNode {
             globalptr,
             pltype,
             self.var.range,
-            true,
+            false,
+            false
         )?;
         Ok(())
     }

@@ -144,6 +144,7 @@ pub enum NodeEnum {
     IsNode(IsNode),
     TupleInitNode(TupleInitNode),
     ClosureNode(ClosureNode),
+    GlobalConstNode(GlobalConstNode),
 }
 // ANCHOR: range
 #[enum_dispatch]

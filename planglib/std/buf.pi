@@ -1,0 +1,79 @@
+use std::libc::*;
+
+
+
+/// A buffer of bytes.
+struct Buffer {
+    data:[u8];
+    len:u64;
+}
+
+impl Buffer {
+    /// # cap
+    /// Return the capacity of the buffer.
+    pub fn cap() u64 {
+        let cap = arr_len(self.data);
+        return cap as u64;
+    }
+    /// Grow the buffer to the given size.
+    pub fn grow(size:u64) void {
+        // if the buffer is already big enough, do nothing
+        if self.cap() >= size {
+            return;
+        }
+        // otehrwise malloc a new buffer
+        let new_data = [u8*size as i64;];
+        // copy the old data into the new buffer
+        arr_copy(self.data, new_data, self.len as i64);
+        // change the buffer to point to the new data
+        self.data = new_data;
+        return;
+    }
+
+    /// write the given data to the buffer.
+    pub fn write(data:*u8, len:u64) void {
+        if len == 0 {
+            return;
+        }
+        // grow the buffer to fit the new data
+        self.grow(self.len + len);
+        // copy the new data into the buffer
+        let ptr = &self.data[self.len as i64 - 1];
+        let offset_len = arr_len(self.data) - self.len as i64;
+        let offset_arr = arr_from_raw(ptr, offset_len);
+        let src_arr = arr_from_raw(data, len as i64);
+        arr_copy(src_arr, offset_arr, len as i64);
+        // update the length of the buffer
+        self.len = self.len + len;
+        return;
+    }
+
+    /// read the given number of bytes from the buffer.
+    pub fn read(len:u64) Result<[u8]| ()> {
+        if len == 0 {
+            return [u8*0;];
+        }
+        // if the buffer is too small, return nothing
+        if self.len < len {
+            return ();
+        }
+        // otherwise, copy the data out of the buffer
+
+        let dst_arr = [u8*len as i64;];
+        arr_copy(self.data, dst_arr, len as i64);
+        // return the data
+        return dst_arr;
+    }
+    pub fn raw_ptr() *u8 {
+        return &self.data[0];
+    }
+    pub fn set_len(len:u64) void {
+        self.len = len;
+        return;
+    }
+}
+
+
+pub fn new_buffer(size:i64) Buffer {
+    return Buffer{data:[u8*size;]};
+}

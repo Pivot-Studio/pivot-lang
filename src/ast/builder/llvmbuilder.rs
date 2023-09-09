@@ -329,7 +329,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
 
         self.builder.position_at_end(cb);
 
-        if let PLType::Arr(arr) = tp {
+        if let PLType::Arr(arr) = tp {// init the array size
             if arr.size_handle != 0 {
                 let f = self.get_malloc_f(ctx, "DioGC__malloc");
                 // let f = self.get_malloc_f(ctx, "DioGC__malloc_no_collect");
@@ -1723,6 +1723,22 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         );
         self.get_llvm_value_handle(&s.as_any_value_enum())
     }
+
+    fn global_const(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle {
+
+        let global = self.get_global_var_handle(name);
+        if global.is_none() {
+            let global = self.module.add_global(
+                self.get_basic_type_op(pltype, ctx).unwrap(),
+                None,
+                name,
+            );
+            global.set_linkage(Linkage::External);
+            global.set_constant(true);
+            return self.get_llvm_value_handle(&global.as_any_value_enum());
+        }
+        global.unwrap()
+    }
     fn build_dbg_location(&self, pos: Pos) {
         let loc = self.dibuilder.create_debug_location(
             self.context,
@@ -2260,11 +2276,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let ty = ptrtp.get_element_type().into_struct_type();
         let ftp = self.mark_fn_tp(ptrtp);
         let name = v.get_full_name() + "@";
+        // if !name.starts_with(&ctx.get_root_ctx().get_file()) {
+        //     return;
+        // }
         let f = match self.module.get_function(&name) {
             Some(f) => f,
             None => self
                 .module
-                .add_function(&name, ftp, Some(Linkage::External)),
+                .add_function(&name, ftp, Some(Linkage::LinkOnceAny)),
         };
         f.get_basic_blocks().iter().for_each(|bb| {
             unsafe { bb.delete().unwrap() };

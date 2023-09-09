@@ -25,6 +25,9 @@ use project1::test::deconstruct;
 use project1::test::st::*;
 use project1::test::arr;
 use project1::test::iter;
+use std::libc;
+use std::io;
+
 
 pub fn main() i64 {
     macros::test_macros();
@@ -52,6 +55,12 @@ pub fn main() i64 {
     generic::ret_generic1<i64>();
     test_compile_time_reflection();
     iter::test_generator();
+
+
+    let fd = io::open_read("/Users/bobli/src/pivot-lang/Cargo.toml");
+    let s = io::read_all(fd);
+
+    println!(s);
     
     arr::test_arr();
     return 0;

@@ -21,3 +21,7 @@ impl <T> Option<T> {
 }
 
 pub use core::gc::string;
+pub use core::gc::string_from_bytes;
+
+pub type Result<T|E> = T|E;
+

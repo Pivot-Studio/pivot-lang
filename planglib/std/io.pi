@@ -1,9 +1,50 @@
+use std::libc::*;
+use std::buf::*;
 pub fn printi64ln(i: i64) void;
 
 pub fn print_raw(bs: *u8, len: i64) void;
 
 pub fn print_s(s: gc::string) void {
-    print_raw(s.data, s.byte_len);
+    print_raw(s.raw(), s.byte_len());
     return;
 }
+
+
+pub fn open_read(s:string) i32 {
+    return open(s, libc::O_RDONLY);
+}
+
+
+pub fn open_write(s:string) i32 {
+    return open(s, libc::O_WRONLY);
+}
+
+pub fn open(s:string, flag:i32) i32 {
+    
+    return LibC__open(s.raw(), s.byte_len(), flag);
+}
+
+
+pub fn read_all(fd:i32) string {
+    let buf = new_buffer(1024);
+    let len = 0;
+    let ret = LibC__read(fd, buf.raw_ptr(), buf.cap());
+    buf.set_len(ret as u64);
+    let bytes = buf.read(ret as u64) as [u8]!;
+    let s = string_from_bytes(bytes);
+    while ret > 0 {
+        len = len +  ret;
+        ret = LibC__read(fd, buf.raw_ptr(), buf.cap());
+        if ret <= 0 {
+            break;
+        }
+        buf.set_len(ret as u64);
+        let bytes = buf.read(ret as u64) as [u8]!;
+        let ss = string_from_bytes(bytes);
+        s.append(ss);
+    }
+    return s;
+}
+
+
 

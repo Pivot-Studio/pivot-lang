@@ -1,5 +1,5 @@
 use core::panic;
-const a = 100;
+var a = 100;
 pub fn true_with_pnanic() bool {
     panic::pl_panic();
     return true;
