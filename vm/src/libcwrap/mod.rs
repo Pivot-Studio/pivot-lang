@@ -1,15 +1,33 @@
+#![allow(clippy::useless_conversion)]
 use std::ffi::CString;
 
 use internal_macro::is_runtime;
 
 struct LibC {}
 
+#[cfg(not(target_os = "windows"))]
 #[no_mangle]
 pub static STDIN_FILENO: libc::c_int = libc::STDIN_FILENO;
+
+#[cfg(target_os = "windows")]
+#[no_mangle]
+pub static STDIN_FILENO: libc::c_int = 0;
+
+#[cfg(not(target_os = "windows"))]
 #[no_mangle]
 pub static STDOUT_FILENO: libc::c_int = libc::STDOUT_FILENO;
+
+#[cfg(target_os = "windows")]
+#[no_mangle]
+pub static STDOUT_FILENO: libc::c_int = 1;
+
+#[cfg(not(target_os = "windows"))]
 #[no_mangle]
 pub static STDERR_FILENO: libc::c_int = libc::STDERR_FILENO;
+
+#[cfg(target_os = "windows")]
+#[no_mangle]
+pub static STDERR_FILENO: libc::c_int = 2;
 
 #[no_mangle]
 pub static O_RDONLY: libc::c_int = libc::O_RDONLY;
@@ -23,10 +41,18 @@ pub static O_CREAT: libc::c_int = libc::O_CREAT;
 #[is_runtime]
 impl LibC {
     fn read(fd: libc::c_int, buf: *mut libc::c_void, count: libc::size_t) -> libc::ssize_t {
-        unsafe { libc::read(fd, buf, count) }
+        unsafe {
+            libc::read(fd, buf, count.try_into().unwrap())
+                .try_into()
+                .unwrap()
+        }
     }
     fn write(fd: libc::c_int, buf: *const libc::c_void, count: libc::size_t) -> libc::ssize_t {
-        unsafe { libc::write(fd, buf, count) }
+        unsafe {
+            libc::write(fd, buf, count.try_into().unwrap())
+                .try_into()
+                .unwrap()
+        }
     }
     fn open(path: *const u8, byte_len: i64, flags: libc::c_int) -> libc::c_int {
         // create cstr from ptr and len
