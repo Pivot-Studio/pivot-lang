@@ -329,7 +329,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
 
         self.builder.position_at_end(cb);
 
-        if let PLType::Arr(arr) = tp {// init the array size
+        if let PLType::Arr(arr) = tp {
+            // init the array size
             if arr.size_handle != 0 {
                 let f = self.get_malloc_f(ctx, "DioGC__malloc");
                 // let f = self.get_malloc_f(ctx, "DioGC__malloc_no_collect");
@@ -1725,14 +1726,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     }
 
     fn global_const(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle {
-
         let global = self.get_global_var_handle(name);
         if global.is_none() {
-            let global = self.module.add_global(
-                self.get_basic_type_op(pltype, ctx).unwrap(),
-                None,
-                name,
-            );
+            let global =
+                self.module
+                    .add_global(self.get_basic_type_op(pltype, ctx).unwrap(), None, name);
             global.set_linkage(Linkage::External);
             global.set_constant(true);
             return self.get_llvm_value_handle(&global.as_any_value_enum());

@@ -7,7 +7,7 @@ use super::{
         control::{BreakNode, ContinueNode, ForNode, IfNode, WhileNode},
         error::{ErrorNode, StErrorNode},
         function::{ClosureNode, FuncCallNode, FuncDefNode},
-        global::{GlobalNode, GlobalConstNode},
+        global::{GlobalConstNode, GlobalNode},
         implement::ImplNode,
         interface::{MultiTraitNode, TraitBoundNode, TraitDefNode},
         macro_nodes::{MacroCallNode, MacroLoopStatementNode, MacroNode, MacroRuleNode},

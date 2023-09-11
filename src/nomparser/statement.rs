@@ -6,7 +6,7 @@ use nom::{
     IResult,
 };
 
-use crate::{nomparser::Span, ast::node::global::GlobalConstNode};
+use crate::{ast::node::global::GlobalConstNode, nomparser::Span};
 use crate::{
     ast::node::ret::RetNode,
     ast::range::Range,
@@ -292,20 +292,15 @@ pub fn global_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
     ))(input)
 }
 
-
-
 #[test_parser("const a: i32")]
 #[test_parser_error("consta")]
 pub fn global_const(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
-        tuple((
-            tag_token_word(TokenType::CONST),
-            typed_identifier,
-        )),
+        tuple((tag_token_word(TokenType::CONST), typed_identifier)),
         |(_, var)| {
             res_enum(
                 GlobalConstNode {
-                    range:var.range(),
+                    range: var.range(),
                     var,
                 }
                 .into(),
@@ -313,5 +308,3 @@ pub fn global_const(input: Span) -> IResult<Span, Box<NodeEnum>> {
         },
     ))(input)
 }
-
-

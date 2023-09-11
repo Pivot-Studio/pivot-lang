@@ -264,14 +264,10 @@ impl Node for ExternIdNode {
             ctx.send_if_go_to_def(self.range, symbol.range, plmod.path.clone());
             let name = if symbol.is_extern {
                 self.id.get_name(ctx)
-            }else {
+            } else {
                 plmod.get_full_name(&self.id.get_name(ctx))
             };
-            let g = ctx.get_or_add_global(
-                &name,
-                symbol.tp.clone(),
-                builder,
-            );
+            let g = ctx.get_or_add_global(&name, symbol.tp.clone(), builder);
             return g.new_output(pltype).set_const().to_result();
         }
         if let Ok(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {

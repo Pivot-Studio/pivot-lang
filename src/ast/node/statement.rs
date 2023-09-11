@@ -256,7 +256,14 @@ fn handle_deconstruct<'a, 'b>(
                     ctx,
                     Some(def_var.range().start),
                 );
-                ctx.add_symbol(var.name.clone(), ptr2value, pltype, def_var.range(), false,false)?;
+                ctx.add_symbol(
+                    var.name.clone(),
+                    ptr2value,
+                    pltype,
+                    def_var.range(),
+                    false,
+                    false,
+                )?;
                 ptr2value
             } else {
                 let v = var.clone().emit(ctx, builder)?.get_value();

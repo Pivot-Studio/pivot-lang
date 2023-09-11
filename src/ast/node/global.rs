@@ -37,7 +37,7 @@ impl Node for GlobalConstNode {
             pltype,
             self.var.range,
             true,
-            true
+            true,
         )?;
         Ok(Default::default())
     }
@@ -115,7 +115,7 @@ impl GlobalNode {
             pltype,
             self.var.range,
             false,
-            false
+            false,
         )?;
         Ok(())
     }

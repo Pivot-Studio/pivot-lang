@@ -646,7 +646,7 @@ impl FuncDefNode {
                         parapltype,
                         self.paralist[i].id.range,
                         false,
-                        false
+                        false,
                     )
                     .unwrap();
             }
@@ -947,7 +947,7 @@ impl Node for ClosureNode {
                     parapltype.to_owned(),
                     self.paralist[i].0.range,
                     false,
-                    false
+                    false,
                 )
                 .unwrap();
         }

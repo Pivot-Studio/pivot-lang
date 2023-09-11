@@ -10,41 +10,48 @@ pub fn print_s(s: gc::string) void {
 }
 
 
-pub fn open_read(s:string) i32 {
+pub fn open_read(s:string) File {
     return open(s, libc::O_RDONLY);
 }
 
 
-pub fn open_write(s:string) i32 {
+pub fn open_write(s:string) File {
     return open(s, libc::O_WRONLY);
 }
 
-pub fn open(s:string, flag:i32) i32 {
+pub fn open(s:string, flag:i32) File {
     
-    return LibC__open(s.raw(), s.byte_len(), flag);
+    return File{fd:LibC__open(s.raw(), s.byte_len(), flag)};
+}
+
+pub struct File {
+    fd:i32;
 }
 
 
-pub fn read_all(fd:i32) string {
-    let buf = new_buffer(1024);
-    let len = 0;
-    let ret = LibC__read(fd, buf.raw_ptr(), buf.cap());
-    buf.set_len(ret as u64);
-    let bytes = buf.read(ret as u64) as [u8]!;
-    let s = string_from_bytes(bytes);
-    while ret > 0 {
-        len = len +  ret;
-        ret = LibC__read(fd, buf.raw_ptr(), buf.cap());
-        if ret <= 0 {
-            break;
-        }
+
+
+impl File {
+    pub fn read_all() string {
+        let fd = self.fd;
+        let buf = new_buffer(1024);
+        let len = 0;
+        let ret = LibC__read(fd, buf.raw_ptr(), buf.cap());
         buf.set_len(ret as u64);
         let bytes = buf.read(ret as u64) as [u8]!;
-        let ss = string_from_bytes(bytes);
-        s.append(ss);
+        let s = string_from_bytes(bytes);
+        while ret > 0 {
+            len = len +  ret;
+            ret = LibC__read(fd, buf.raw_ptr(), buf.cap());
+            if ret <= 0 {
+                break;
+            }
+            buf.set_len(ret as u64);
+            let bytes = buf.read(ret as u64) as [u8]!;
+            let ss = string_from_bytes(bytes);
+            s.append(ss);
+        }
+        return s;
     }
-    return s;
 }
-
-
 

@@ -57,8 +57,8 @@ pub fn main() i64 {
     iter::test_generator();
 
 
-    let fd = io::open_read("/Users/bobli/src/pivot-lang/Cargo.toml");
-    let s = io::read_all(fd);
+    let fd = io::open_read("./Cargo.toml");
+    let s = fd.read_all();
 
     println!(s);
     

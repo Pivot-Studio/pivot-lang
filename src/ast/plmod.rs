@@ -42,8 +42,7 @@ use super::pltype::TraitMthdImpl;
 pub struct GlobalVar {
     pub tp: Arc<RefCell<PLType>>,
     pub range: Range,
-    pub is_extern:bool
-    // pub loc: Arc<RwVec<Location>>,
+    pub is_extern: bool, // pub loc: Arc<RwVec<Location>>,
 }
 
 type ImplMap = FxHashMap<String, FxHashMap<String, IndexMap<String, Arc<RefCell<PLType>>>>>;
@@ -347,8 +346,7 @@ impl Mod {
             GlobalVar {
                 tp,
                 range,
-                is_extern
-                // loc: refs,
+                is_extern, // loc: refs,
             },
         );
         Ok(())

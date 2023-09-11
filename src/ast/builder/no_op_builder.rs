@@ -534,7 +534,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         0
     }
 
-    fn global_const(&self,_name: &str,_pltype: &PLType,_ctx: &mut Ctx<'a>) -> ValueHandle {
+    fn global_const(&self, _name: &str, _pltype: &PLType, _ctx: &mut Ctx<'a>) -> ValueHandle {
         0
     }
 }

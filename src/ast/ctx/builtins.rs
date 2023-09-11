@@ -5,7 +5,7 @@ use crate::{
     ast::{
         builder::no_op_builder::NoOpBuilder,
         node::{node_result::NodeResultBuilder, RangeTrait},
-        pltype::{PlaceHolderType, PriType, ARRType},
+        pltype::{ARRType, PlaceHolderType, PriType},
     },
     format_label,
 };
@@ -67,7 +67,8 @@ lazy_static! {
             r#"arr_copy(${1:from}, ${2:to}, ${3:len})$0"#.to_owned(),
         );
         mp.insert(
-            usize::MAX - 10, r"arr_from_raw(${1:ptr}, ${2:len})$0".to_owned(),
+            usize::MAX - 10,
+            r"arr_from_raw(${1:ptr}, ${2:len})$0".to_owned(),
         );
         mp
     };
@@ -225,7 +226,6 @@ fn emit_unsafe_cast<'a, 'b>(
     re.new_output(Arc::new(RefCell::new(ty))).to_result()
 }
 
-
 fn emit_arr_from_raw<'a, 'b>(
     f: &mut FuncCallNode,
     ctx: &'b mut Ctx<'a>,
@@ -249,7 +249,7 @@ fn emit_arr_from_raw<'a, 'b>(
 
     let elm = if let PLType::Pointer(p) = &*v.get_ty().borrow() {
         p.clone()
-    }else {
+    } else {
         return Err(f.paralist[0]
             .range()
             .new_err(crate::ast::diag::ErrorCode::NOT_A_POINTER)
@@ -267,17 +267,13 @@ fn emit_arr_from_raw<'a, 'b>(
 
     let arr_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
         element_type: elm,
-        size_handle:0,
+        size_handle: 0,
     })));
     let arr = builder.alloc("array_alloca", &arr_tp.borrow(), ctx, None);
-    let arr_raw = builder
-        .build_struct_gep(arr, 1, "arr_raw")
-        .unwrap();
+    let arr_raw = builder.build_struct_gep(arr, 1, "arr_raw").unwrap();
     let loaded = ctx.try_load2var(f.paralist[0].range(), v.get_value(), builder)?;
     builder.build_store(arr_raw, loaded);
-    let arr_len = builder
-        .build_struct_gep(arr, 2, "arr_len")
-        .unwrap();
+    let arr_len = builder.build_struct_gep(arr, 2, "arr_len").unwrap();
     let loaded = ctx.try_load2var(f.paralist[1].range(), v2.get_value(), builder)?;
     builder.build_store(arr_len, loaded);
 
