@@ -1,5 +1,7 @@
 use std::libc::*;
 use std::buf::*;
+use std::cols::arr;
+
 pub fn printi64ln(i: i64) void;
 
 pub fn print_raw(bs: *u8, len: i64) void;
@@ -30,28 +32,43 @@ pub struct File {
 
 
 
+// TODO use last os error from lib c to resolve error code
+pub struct IoError {
+    
+}
+
 
 impl File {
-    pub fn read_all() string {
+    pub fn read_all() Result<[u8]|IoError> {
         let fd = self.fd;
         let buf = new_buffer(1024);
         let len = 0;
         let ret = LibC__read(fd, buf.raw_ptr(), buf.cap());
         buf.set_len(ret as u64);
-        let bytes = buf.read(ret as u64) as [u8]!;
-        let s = string_from_bytes(bytes);
+        let bytes = buf.read(ret as u64) as [u8]!;// 这个场景下不可能异常
+        let ar = arr::from_slice(bytes);
         while ret > 0 {
             len = len +  ret;
             ret = LibC__read(fd, buf.raw_ptr(), buf.cap());
-            if ret <= 0 {
+            if ret == 0 {
                 break;
             }
+            if ret < 0 {
+                return IoError{};
+            }
             buf.set_len(ret as u64);
-            let bytes = buf.read(ret as u64) as [u8]!;
-            let ss = string_from_bytes(bytes);
-            s.append(ss);
+            let bytes = buf.read(ret as u64) as [u8]!;// 这个场景下不可能异常
+            ar.append(arr::from_slice(bytes));
         }
-        return s;
+        return ar.get_slice();
+    }
+
+    pub fn read_all_as_string() Result<string|IoError> {
+        let slice = self.read_all();
+        
+        return slice.map(|s:[u8]| => string{
+            return string_from_bytes(s);
+        });
     }
 }
 

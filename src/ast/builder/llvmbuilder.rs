@@ -143,6 +143,7 @@ pub struct LLVMBuilder<'a, 'ctx> {
     ditypes: Arc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
     heap_stack_map: Arc<RefCell<FxHashMap<ValueHandle, ValueHandle>>>,
     optimized: Arc<RefCell<bool>>,
+    used: Arc<RefCell<Vec<FunctionValue<'ctx>>>>,
 }
 
 pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
@@ -191,6 +192,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             block_reverse_table: Arc::new(RefCell::new(FxHashMap::default())),
             heap_stack_map: Arc::new(RefCell::new(FxHashMap::default())),
             optimized: Arc::new(RefCell::new(false)),
+            used: Default::default(),
         }
     }
     fn alloc_raw(
@@ -853,6 +855,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             _ => RetTypeEnum::Basic(self.get_basic_type_op(pltp, ctx).unwrap()),
         }
     }
+    fn i8ptr(&self) -> PointerType<'ctx> {
+        self.context.i8_type().ptr_type(AddressSpace::default())
+    }
     /// array type in fact is a struct with three fields,
     /// the first is a function pointer to the visit function(used in gc)
     /// the second is the array itself
@@ -1296,6 +1301,24 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if *self.optimized.borrow() {
             return;
         }
+        let used = self.used.borrow();
+        let used_arr = self.i8ptr().const_array(
+            &used
+                .iter()
+                .map(|v| {
+                    self.builder
+                        .build_bitcast(v.as_global_value().as_pointer_value(), self.i8ptr(), "")
+                        .into_pointer_value()
+                })
+                .collect::<Vec<_>>(),
+        );
+        // see https://llvm.org/docs/LangRef.html#the-llvm-used-global-variable
+        let used_global = self
+            .module
+            .add_global(used_arr.get_type(), None, "llvm.used");
+        used_global.set_linkage(Linkage::Appending);
+        used_global.set_initializer(&used_arr);
+
         if crate::ast::jit_config::IS_JIT.load(std::sync::atomic::Ordering::Relaxed) {
             // jit is using shadow stack, skip immix pass
             self.module.get_functions().for_each(|f| {
@@ -2283,6 +2306,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .module
                 .add_function(&name, ftp, Some(Linkage::LinkOnceAny)),
         };
+        self.used.borrow_mut().push(f);
+
         f.get_basic_blocks().iter().for_each(|bb| {
             unsafe { bb.delete().unwrap() };
         });
@@ -2405,6 +2430,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .into(),
         )
     }
+
     fn create_closure_parameter_variable(&self, i: u32, f: ValueHandle, alloca: ValueHandle) {
         let funcvalue = self.get_llvm_value(f).unwrap().into_function_value();
         self.build_store(

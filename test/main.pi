@@ -58,7 +58,8 @@ pub fn main() i64 {
 
 
     let fd = io::open_read("./Cargo.toml");
-    let s = fd.read_all();
+    let s = fd.read_all_as_string() as string!;
+    
 
     println!(s);
     

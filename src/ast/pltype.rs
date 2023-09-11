@@ -234,7 +234,8 @@ impl UnionType {
                 .iter()
                 .enumerate()
                 .find(|(_, t)| {
-                    &*get_type_deep(t.get_type(ctx, builder, true).unwrap()).borrow() == pltype
+                    get_type_deep(t.get_type(ctx, builder, true).unwrap())
+                        == get_type_deep(Arc::new(RefCell::new(pltype.clone())))
                 })
                 .map(|(i, _)| i)
         })

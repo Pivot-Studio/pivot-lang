@@ -49,13 +49,13 @@ impl Buffer {
     }
 
     /// read the given number of bytes from the buffer.
-    pub fn read(len:u64) Result<[u8]| ()> {
+    pub fn read(len:u64) Result<[u8]| InvalidReadRangeErr> {
         if len == 0 {
             return [u8*0;];
         }
         // if the buffer is too small, return nothing
         if self.len < len {
-            return ();
+            return InvalidReadRangeErr{};
         }
         // otherwise, copy the data out of the buffer
 
@@ -72,6 +72,20 @@ impl Buffer {
         return;
     }
 }
+
+use std::err::Error;
+
+pub struct InvalidReadRangeErr {
+}
+
+
+
+impl Error for InvalidReadRangeErr {
+    fn msg() string {
+        return "Invalid read range";
+    }
+}
+
 
 
 pub fn new_buffer(size:i64) Buffer {

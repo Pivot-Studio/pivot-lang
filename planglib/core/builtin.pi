@@ -25,3 +25,38 @@ pub use core::gc::string_from_bytes;
 
 pub type Result<T|E> = T|E;
 
+
+impl <T|E> Result<T|E> {
+    pub fn map<R>(f:|T|=>R) Result<R|E> {
+        if (*self) is E {
+            return (*self) as E!;
+        }
+        let v = (*self) as T!;
+        return f(v);
+    }
+
+    pub fn flatmap<R>(f:|T|=>Result<R|E>) Result<R|E> {
+        if (*self) is E {
+            return (*self) as E!;
+        }
+        let v = (*self) as T!;
+        return f(v);
+    }
+
+    pub fn map_err<R>(f:|E|=>R) Result<T|R> {
+        if (*self) is T {
+            return (*self) as T!;
+        }
+        let v = (*self) as E!;
+        return f(v);
+    }
+
+    pub fn flatmap_err<R>(f:|E|=>Result<T|R>) Result<T|R> {
+        if (*self) is T {
+            return (*self) as T!;
+        }
+        let v = (*self) as E!;
+        return f(v);
+    }
+}
+
