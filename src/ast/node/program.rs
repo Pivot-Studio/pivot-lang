@@ -252,7 +252,7 @@ impl Program {
         };
         let params = self.params(db);
 
-        let mut modmap = FxHashMap::<String, Mod>::default();
+        let mut modmap = FxHashMap::<String, Arc<Mod>>::default();
         let binding = PathBuf::from(self.params(db).file(db)).with_extension("");
         let pkgname = binding.file_name().unwrap().to_str().unwrap();
         // 默认加入gc和builtin module
@@ -348,7 +348,7 @@ impl Program {
                     import_symbol(s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
                 }
             }
-            modmap.insert(mod_id.unwrap(), module);
+            modmap.insert(mod_id.unwrap(), Arc::new(module));
         }
         log::trace!("done deps compile");
         let filepath = Path::new(self.params(db).file(db));

@@ -394,7 +394,12 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         while let Some(f) = root_ctx.root {
             root_ctx = f
         }
-        let gcmod = root_ctx.plmod.submods.get("gc").unwrap_or(&root_ctx.plmod);
+        let gcmod = root_ctx
+            .plmod
+            .submods
+            .get("gc")
+            .map(|rc| rc.as_ref())
+            .unwrap_or(&root_ctx.plmod);
         let f: FNValue = gcmod
             .types
             .get(malloc_fn)

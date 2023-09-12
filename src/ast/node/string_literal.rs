@@ -32,8 +32,12 @@ impl Node for StringNode {
     ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::STRING, 0);
         let v = builder.const_string(&self.content);
-        let gcmod = ctx.plmod.submods.get("gc").unwrap_or(&ctx.plmod);
-        let tp = gcmod.types.get("string").unwrap().clone();
+        let tp = ctx
+            .plmod
+            .submods
+            .get("gc")
+            .map(|m| m.types.get("string").unwrap().clone())
+            .unwrap_or_else(|| ctx.plmod.types.get("string").unwrap().clone());
         let alloca = builder.alloc("string", &tp.borrow(), ctx, None);
         let len = builder.build_struct_gep(alloca, 1, "len").unwrap();
         let byte_len = builder.build_struct_gep(alloca, 2, "byte_len").unwrap();

@@ -59,7 +59,7 @@ pub struct Mod {
     /// func and types
     pub types: FxHashMap<String, GlobType>,
     /// sub mods
-    pub submods: FxHashMap<String, Mod>,
+    pub submods: FxHashMap<String, Arc<Mod>>,
     /// global variable table
     pub global_table: FxHashMap<String, GlobalVar>,
     pub defs: LSPRangeMap<Range, LSPDef>,
@@ -527,7 +527,7 @@ impl Mod {
             .or_insert_with(Default::default)
             .insert(trait_tp_name.to_string(), generic_map);
     }
-    pub fn search_mod<TP: CustomType>(&self, u: &TP, m: &str) -> Option<Self> {
+    pub fn search_mod<TP: CustomType>(&self, u: &TP, m: &str) -> Option<Arc<Self>> {
         self.submods
             .get(m)
             .and_then(|x| {

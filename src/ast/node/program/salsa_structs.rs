@@ -24,7 +24,7 @@ pub struct ProgramEmitParam {
     pub fullpath: String,
     #[return_ref]
     pub params: LspParams,
-    pub submods: FxHashMap<String, Mod>,
+    pub submods: FxHashMap<String, Arc<Mod>>,
     #[return_ref]
     pub file_content: String,
     #[return_ref]
