@@ -43,6 +43,7 @@ pub struct GlobalVar {
     pub tp: Arc<RefCell<PLType>>,
     pub range: Range,
     pub is_extern: bool, // pub loc: Arc<RwVec<Location>>,
+    pub constant: bool,
 }
 
 type ImplMap = FxHashMap<String, FxHashMap<String, IndexMap<String, Arc<RefCell<PLType>>>>>;
@@ -336,7 +337,7 @@ impl Mod {
         tp: Arc<RefCell<PLType>>,
         range: Range,
         is_extern: bool,
-        // refs: Arc<RwVec<Location>>,
+        constant: bool,
     ) -> Result<(), PLDiag> {
         if self.global_table.contains_key(&name) {
             return Err(range.new_err(ErrorCode::UNDEFINED_TYPE));
@@ -347,6 +348,7 @@ impl Mod {
                 tp,
                 range,
                 is_extern, // loc: refs,
+                constant,
             },
         );
         Ok(())

@@ -810,7 +810,7 @@ impl<'a, 'ctx> Ctx<'a> {
         if is_const {
             self.set_glob_refs(&self.plmod.get_full_name(&name), range);
             self.plmod
-                .add_global_symbol(name, pltype, range, is_extern)?;
+                .add_global_symbol(name, pltype, range, is_extern, is_const)?;
         } else {
             let refs = Arc::new(RefCell::new(vec![]));
             self.table.insert(
@@ -904,8 +904,9 @@ impl<'a, 'ctx> Ctx<'a> {
         name: &str,
         pltype: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
+        constant: bool,
     ) -> ValueHandle {
-        builder.get_or_add_global(name, pltype, self)
+        builder.get_or_add_global(name, pltype, self, constant)
     }
     pub fn init_global<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
         let mut set: FxHashSet<String> = FxHashSet::default();

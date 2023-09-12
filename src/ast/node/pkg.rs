@@ -267,7 +267,7 @@ impl Node for ExternIdNode {
             } else {
                 plmod.get_full_name(&self.id.get_name(ctx))
             };
-            let g = ctx.get_or_add_global(&name, symbol.tp.clone(), builder);
+            let g = ctx.get_or_add_global(&name, symbol.tp.clone(), builder, symbol.constant);
             return g.new_output(pltype).set_const().to_result();
         }
         if let Ok(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {

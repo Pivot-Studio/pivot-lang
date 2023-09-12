@@ -145,8 +145,9 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
       continue;
     }
 
-    if (GV->isManifestConstant()) // skip constants
+    if (isa<GlobalVariable>(GV) && cast<GlobalVariable>(GV)->isConstant()) // skip constants
     {
+      // printf("skip %s\n", GV->getName().bytes());
       continue;
     }
 
@@ -156,6 +157,7 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
     {
       continue;
     }
+    // printf("%s\n", GV->getName().bytes());
 
     ii++;
   }

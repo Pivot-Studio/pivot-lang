@@ -1282,6 +1282,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         name: &str,
         pltype: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
+        constant: bool,
     ) -> PointerValue<'ctx> {
         let global = self.get_global_var_handle(name);
         if global.is_none() {
@@ -1291,6 +1292,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 name,
             );
             global.set_linkage(Linkage::External);
+            global.set_constant(constant);
             return global.as_pointer_value();
         }
         self.get_llvm_value(global.unwrap())
@@ -1454,10 +1456,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         name: &str,
         pltype: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
+        constant: bool,
     ) -> ValueHandle {
         self.get_llvm_value_handle(
             &self
-                .get_or_add_global_value(name, pltype, ctx)
+                .get_or_add_global_value(name, pltype, ctx, constant)
                 .as_any_value_enum(),
         )
     }

@@ -220,6 +220,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         _name: &str,
         _pltype: Arc<std::cell::RefCell<crate::ast::pltype::PLType>>,
         _ctx: &mut crate::ast::ctx::Ctx<'a>,
+        _constant: bool,
     ) -> super::ValueHandle {
         0
     }

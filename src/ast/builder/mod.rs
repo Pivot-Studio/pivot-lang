@@ -127,6 +127,7 @@ pub trait IRBuilder<'a, 'ctx> {
         name: &str,
         pltype: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
+        constant: bool,
     ) -> ValueHandle;
     fn build_load(&self, ptr: ValueHandle, name: &str) -> ValueHandle;
     fn try_load2var(
