@@ -63,6 +63,7 @@ impl log::Log for SimpleLogger {
 
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
+            // 颜色 is_terminal去做
             let date = DateTime::get_now_date();
             eprintln!(
                 "[{:0>4}-{:0>2}-{:0>2} {:0>2}:{:0>2}:{:0>2}] {} - {}",
