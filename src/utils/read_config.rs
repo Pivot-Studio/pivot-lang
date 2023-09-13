@@ -164,7 +164,8 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
         return Err("未设置环境变量KAGARI_LIB_ROOT，无法找到系统库".to_string());
     }
     let mut deps = BTreeMap::<String, Dependency>::default();
-    let libroot = crate::utils::canonicalize(PathBuf::from(libroot.unwrap())).unwrap();
+    let libroot = crate::utils::canonicalize(PathBuf::from(libroot.unwrap())).expect(
+        "failed to open KAGARI_LIB_ROOT, please check whether your $KAGARI_LIB_ROOT environment variable is valid");
     let lib_path = libroot.clone();
     let libroot = libroot.read_dir();
     if libroot.is_err() {
