@@ -1086,6 +1086,37 @@ impl STType {
             err.add_to_ctx(ctx);
         }
     }
+
+    /// Test if current trait can cast to another trait (implicit cast)
+    ///
+    /// # Example
+    ///
+    /// ```pl
+    /// trait A {}
+    /// trait B:A {}
+    /// ```
+    /// trait B can cast to trait A
+    ///
+    /// # Note
+    ///
+    /// if source trait and target trait is the same, return **false**
+    pub fn trait_can_cast_to(&self, to_trait: &STType) -> bool {
+        debug_assert!(self.is_trait && to_trait.is_trait);
+
+        for derives in self.derives.iter() {
+            if let PLType::Trait(derive) = &*derives.borrow() {
+                if derive == to_trait {
+                    return true;
+                }
+                if derive.trait_can_cast_to(to_trait) {
+                    return true;
+                }
+            } else {
+                unreachable!()
+            }
+        }
+        false
+    }
     pub fn get_trait_field(&self, k: &str) -> Option<Field> {
         debug_assert!(self.is_trait);
         fn walk(st: &STType, k: &str) -> (Option<Field>, u32) {

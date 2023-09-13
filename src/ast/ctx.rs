@@ -16,6 +16,7 @@ use super::plmod::MutVec;
 use super::pltype::add_primitive_types;
 use super::pltype::get_type_deep;
 use super::pltype::FNValue;
+use super::pltype::Field;
 use super::pltype::GenericType;
 use super::pltype::ImplAble;
 use super::pltype::PLType;
@@ -488,63 +489,116 @@ impl<'a, 'ctx> Ctx<'a> {
             }
         }
         let (st_pltype, st_value) = self.auto_deref(ori_pltype, ori_value, builder);
-        if let (PLType::Trait(t), PLType::Struct(st)) =
-            (&*target_pltype.borrow(), &*st_pltype.borrow())
-        {
-            return self.run_in_type_mod(t, |ctx, t| {
-                ctx.protect_generic_context(&t.generic_map, |ctx| {
-                    if !st.implements_trait(t, &ctx.get_root_ctx().plmod) {
-                        return Err(mismatch_err!(
-                            ctx,
-                            ori_range,
-                            target_range,
-                            target_pltype.borrow(),
-                            st_pltype.borrow()
-                        ));
-                    }
-                    let trait_handle =
-                        builder.alloc("tmp_traitv", &target_pltype.borrow(), ctx, None);
-                    for f in t.list_trait_fields().iter() {
-                        let mthd = find_mthd(st, f, t).unwrap_or_else(|| {
-                            for t in &t.derives {
-                                match &*t.borrow() {
-                                    PLType::Trait(t) => {
-                                        if let Some(mthd) = find_mthd(st, f, t) {
-                                            return mthd;
+        match (&*target_pltype.borrow(), &*st_pltype.borrow()) {
+            (PLType::Trait(t), PLType::Struct(st)) => {
+                return self.run_in_type_mod(t, |ctx, t| {
+                    ctx.protect_generic_context(&t.generic_map, |ctx| {
+                        if !st.implements_trait(t, &ctx.get_root_ctx().plmod) {
+                            return Err(mismatch_err!(
+                                ctx,
+                                ori_range,
+                                target_range,
+                                target_pltype.borrow(),
+                                st_pltype.borrow()
+                            ));
+                        }
+                        let trait_handle =
+                            builder.alloc("tmp_traitv", &target_pltype.borrow(), ctx, None);
+                        for f in t.list_trait_fields().iter() {
+                            let mthd = find_mthd(st, f, t).unwrap_or_else(|| {
+                                for t in &t.derives {
+                                    match &*t.borrow() {
+                                        PLType::Trait(t) => {
+                                            if let Some(mthd) = find_mthd(st, f, t) {
+                                                return mthd;
+                                            }
                                         }
+                                        _ => unreachable!(),
                                     }
-                                    _ => unreachable!(),
                                 }
-                            }
-                            unreachable!()
-                        });
+                                unreachable!()
+                            });
 
-                        let fnhandle = builder.get_or_insert_fn_handle(&mthd.borrow(), ctx).0;
-                        let targetftp = f.typenode.get_type(ctx, builder, true).unwrap();
-                        let casted =
-                            builder.bitcast(ctx, fnhandle, &targetftp.borrow(), "fncast_tmp");
-                        let f_ptr = builder
-                            .build_struct_gep(trait_handle, f.index, "field_tmp")
+                            let fnhandle = builder.get_or_insert_fn_handle(&mthd.borrow(), ctx).0;
+                            let targetftp = f.typenode.get_type(ctx, builder, true).unwrap();
+                            let casted =
+                                builder.bitcast(ctx, fnhandle, &targetftp.borrow(), "fncast_tmp");
+                            let f_ptr = builder
+                                .build_struct_gep(trait_handle, f.index, "field_tmp")
+                                .unwrap();
+                            builder.build_store(f_ptr, casted);
+                        }
+                        let st_value = builder.bitcast(
+                            ctx,
+                            st_value,
+                            &PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(
+                                PriType::I64,
+                            )))),
+                            "traitcast_tmp",
+                        );
+                        let v_ptr = builder.build_struct_gep(trait_handle, 1, "v_tmp").unwrap();
+                        builder.build_store(v_ptr, st_value);
+                        let type_hash = builder
+                            .build_struct_gep(trait_handle, 0, "tp_hash")
                             .unwrap();
-                        builder.build_store(f_ptr, casted);
-                    }
-                    let st_value = builder.bitcast(
-                        ctx,
-                        st_value,
-                        &PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::I64)))),
-                        "traitcast_tmp",
-                    );
-                    let v_ptr = builder.build_struct_gep(trait_handle, 1, "v_tmp").unwrap();
-                    builder.build_store(v_ptr, st_value);
-                    let type_hash = builder
-                        .build_struct_gep(trait_handle, 0, "tp_hash")
-                        .unwrap();
-                    let hash = st.get_type_code();
-                    let hash = builder.int_value(&PriType::U64, hash, false);
-                    builder.build_store(type_hash, hash);
-                    Ok(trait_handle)
-                })
-            });
+                        let hash = st.get_type_code();
+                        let hash = builder.int_value(&PriType::U64, hash, false);
+                        builder.build_store(type_hash, hash);
+                        Ok(trait_handle)
+                    })
+                });
+            }
+            (PLType::Trait(t), PLType::Trait(t2)) => {
+                return self.run_in_type_mod(t, |ctx, t| {
+                    ctx.protect_generic_context(&t.generic_map, |ctx| {
+                        if !t2.trait_can_cast_to(t) {
+                            return Err(mismatch_err!(
+                                ctx,
+                                ori_range,
+                                target_range,
+                                target_pltype.borrow(),
+                                st_pltype.borrow()
+                            ));
+                        }
+                        let trait_handle =
+                            builder.alloc("tmp_traitv", &target_pltype.borrow(), ctx, None);
+                        for f in t.list_trait_fields().iter() {
+                            let fs = t2.get_all_field();
+                            // convert to hash table
+                            let fs: FxHashMap<String, Field> =
+                                fs.into_iter().map(|f| (f.name.clone(), f)).collect();
+
+                            let field = fs.get(&f.name).unwrap();
+
+                            let fnhandle = builder
+                                .build_struct_gep(st_value, field.index, "trait_mthd")
+                                .unwrap();
+                            let fnhandle = builder.build_load(fnhandle, "trait_mthd");
+                            let targetftp = f.typenode.get_type(ctx, builder, true).unwrap();
+                            let casted =
+                                builder.bitcast(ctx, fnhandle, &targetftp.borrow(), "fncast_tmp");
+                            let f_ptr = builder
+                                .build_struct_gep(trait_handle, f.index, "field_tmp")
+                                .unwrap();
+                            builder.build_store(f_ptr, casted);
+                        }
+                        let st = builder.build_struct_gep(st_value, 1, "src_v_tmp").unwrap();
+                        let st = builder.build_load(st, "src_v");
+                        let v_ptr = builder.build_struct_gep(trait_handle, 1, "v_tmp").unwrap();
+                        builder.build_store(v_ptr, st);
+                        let type_hash = builder
+                            .build_struct_gep(trait_handle, 0, "tp_hash")
+                            .unwrap();
+                        let hash = builder
+                            .build_struct_gep(st_value, 0, "src_tp_hash")
+                            .unwrap();
+                        let hash = builder.build_load(hash, "src_tp_hash");
+                        builder.build_store(type_hash, hash);
+                        Ok(trait_handle)
+                    })
+                });
+            }
+            _ => (),
         }
         #[allow(clippy::needless_return)]
         return Err(mismatch_err!(
