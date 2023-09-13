@@ -108,6 +108,7 @@ pub struct Ctx<'a> {
     pub generic_cache: GenericCache,
     pub origin_mod: *const Mod,
     pub linked_tp_tbl: FxHashMap<*mut PLType, Vec<Arc<RefCell<PLType>>>>,
+    is_active_file: bool,
 }
 
 #[derive(Clone, Default)]
@@ -144,6 +145,10 @@ pub enum MacroReplaceNode {
 }
 
 impl<'a, 'ctx> Ctx<'a> {
+    /// lsp fn
+    pub fn is_active_file(&self) -> bool {
+        self.is_active_file
+    }
     pub fn add_term_to_previous_yield(
         &self,
         builder: &'a BuilderEnum<'a, 'ctx>,
@@ -268,6 +273,7 @@ impl<'a, 'ctx> Ctx<'a> {
         edit_pos: Option<Pos>,
         config: Config,
         db: &'a dyn Db,
+        is_active_file: bool,
     ) -> Ctx<'a> {
         let generic_infer: GenericCache = Default::default();
         Ctx {
@@ -303,6 +309,7 @@ impl<'a, 'ctx> Ctx<'a> {
             generic_cache: generic_infer,
             origin_mod: std::ptr::null(),
             linked_tp_tbl: FxHashMap::default(),
+            is_active_file,
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -343,6 +350,7 @@ impl<'a, 'ctx> Ctx<'a> {
             generic_cache: self.generic_cache.clone(),
             origin_mod: self.origin_mod,
             linked_tp_tbl: FxHashMap::default(),
+            is_active_file: self.is_active_file,
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {

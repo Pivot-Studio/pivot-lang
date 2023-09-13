@@ -387,6 +387,7 @@ impl Program {
             UnsafeWrapper::new(global_tp_map),
             UnsafeWrapper::new(global_mthd_map),
             UnsafeWrapper::new(global_macro_map),
+            self.is_active_file(db),
         );
 
         let nn = p.node(db).node(db);
@@ -557,6 +558,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         params.params(db).params(db),
         params.params(db).config(db),
         db,
+        params.is_active_file(db),
     );
     ctx.plmod.trait_mthd_table = Arc::new(RefCell::new(params.mth_table(db).get().clone()));
     ctx.plmod.types = params.types(db).get().clone();

@@ -652,7 +652,7 @@ impl FuncDefNode {
             }
             // emit body
             builder.rm_curr_debug_location();
-            if self.id.name == "main" {
+            if self.id.name == "main" && ctx.is_active_file() {
                 PLCodeLens::push(
                     ctx.db,
                     CodeLens {

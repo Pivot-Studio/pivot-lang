@@ -33,6 +33,7 @@ pub struct ProgramEmitParam {
     pub mth_table: MthdTableWrapper,
     #[return_ref]
     pub macro_table: UnsafeWrapper<FxHashMap<String, Arc<MacroNode>>>,
+    pub is_active_file: bool,
 }
 
 pub type MthdTableWrapper =
