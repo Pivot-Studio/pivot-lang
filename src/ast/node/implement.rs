@@ -3,6 +3,7 @@ use crate::{
     ast::{ctx::Ctx, tokens::TokenType, traits::CustomType},
     format_label,
 };
+use indexmap::IndexMap;
 use internal_macro::node;
 use lsp_types::{DocumentSymbol, SymbolKind};
 use rustc_hash::FxHashSet;
@@ -23,6 +24,7 @@ impl ImplNode {
     ) -> Result<(), PLDiag> {
         if self.generics.is_some() {
             let gm = self.generics.as_ref().unwrap().gen_generic_type(ctx);
+            self.generics.as_ref().unwrap().set_traits(ctx, builder, &gm).unwrap();
             _ = ctx.protect_generic_context(&gm, |ctx| {
                 let sttp = self.target.get_type(ctx, builder, true)?;
                 let trait_tp = self
@@ -147,8 +149,13 @@ impl Node for ImplNode {
         let gm = self
             .generics
             .as_ref()
-            .map(|e| e.gen_generic_type(ctx))
+            .map(|e| {
+                let gm = e.gen_generic_type(ctx);
+                e.set_traits(ctx,builder,&gm).unwrap();
+                gm
+            })
             .unwrap_or_default();
+        // self.generics.as_ref().unwrap().set_traits(ctx, builder, &gm)?;
         ctx.protect_generic_context(&gm, |ctx| {
             let mut traittpandrange = None;
             let mut traitfns = FxHashSet::default();
@@ -206,15 +213,24 @@ impl Node for ImplNode {
                         if let Some((trait_tp, _)) = &traittpandrange {
                             if let PLType::Trait(t) = &*trait_tp.clone().borrow() {
                                 ctx.protect_generic_context(&t.generic_map, |ctx| {
-                                    check_fn(
-                                        ctx,
-                                        builder,
-                                        method,
-                                        trait_tp.clone(),
-                                        &mut traitfns,
-                                        fntype.clone(),
-                                    )?;
-                                    Ok(())
+                                    let generic_map = if let Some(generics) = &method.generics {
+                                        let mp = generics.gen_generic_type(ctx);
+                                        generics.set_traits(ctx, builder, &mp)?;
+                                        mp
+                                    } else {
+                                        IndexMap::default()
+                                    };
+                                    ctx.protect_generic_context(&generic_map, |ctx| {
+                                        check_fn(
+                                            ctx,
+                                            builder,
+                                            method,
+                                            trait_tp.clone(),
+                                            &mut traitfns,
+                                            fntype.clone(),
+                                        )?;
+                                        Ok(())
+                                    })
                                 })?;
                             }
                         }

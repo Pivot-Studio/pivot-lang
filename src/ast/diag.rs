@@ -162,6 +162,7 @@ define_diag!(
     METHODS_MUST_HAVE_BODY = "methods must have body",
     INVALID_STRUCT_INIT = "invalid struct initialization",
     REDUNDANT_COMMA = "REDUNDANT comma",
+    GENERIC_NOT_ALLOWED_IN_TRAIT_METHOD = "generic not allowed in trait method",
 );
 
 define_diag! {

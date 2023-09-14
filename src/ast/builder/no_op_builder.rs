@@ -538,4 +538,16 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     fn global_const(&self, _name: &str, _pltype: &PLType, _ctx: &mut Ctx<'a>) -> ValueHandle {
         0
     }
+
+    fn build_int_signed_srem(&self,_lhs:ValueHandle,_rhs:ValueHandle,_name: &str) -> ValueHandle {
+        0
+    }
+
+    fn build_int_unsigned_div(&self,_lhs:ValueHandle,_rhs:ValueHandle,_name: &str) -> ValueHandle {
+        0
+    }
+
+    fn build_int_unsigned_srem(&self,_lhs:ValueHandle,_rhs:ValueHandle,_name: &str) -> ValueHandle {
+        0
+    }
 }

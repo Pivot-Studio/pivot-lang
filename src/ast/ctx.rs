@@ -751,6 +751,9 @@ impl<'a, 'ctx> Ctx<'a> {
             PLType::Struct(s) | PLType::Trait(s) => {
                 self.add_method_to_tp(s, mthd, fntp, impl_trait, generic, target)
             }
+            PLType::PlaceHolder(s) => {
+                self.add_method_to_tp(s, mthd, fntp, impl_trait, generic, target)
+            }
             PLType::Union(u) => self.add_method_to_tp(u, mthd, fntp, impl_trait, generic, target),
             PLType::Closure(p) => {
                 self.add_trait_impl_method(p, mthd, fntp, impl_trait, generic, target)
@@ -1569,6 +1572,18 @@ impl<'a, 'ctx> Ctx<'a> {
     /// 左是目标类型，右是实际类型
     /// when need eq trait and sttype,the left must be trait
     pub fn eq(&self, l: Arc<RefCell<PLType>>, r: Arc<RefCell<PLType>>) -> EqRes {
+        if l == r  {
+            if matches!(&*l.borrow(), PLType::Generic(_))  {
+                if let PLType::Generic(l) = &mut *l.borrow_mut() {
+                    l.set_type(Arc::new(RefCell::new(PLType::Generic(l.clone()))));
+                    return EqRes {
+                        eq: true,
+                        need_up_cast: false,
+                        reason: None,
+                    };
+                }
+            }
+        }
         if let (PLType::Generic(l), PLType::Generic(r)) = (&*l.borrow(), &*r.borrow()) {
             if l == r {
                 return EqRes {

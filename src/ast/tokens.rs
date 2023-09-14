@@ -37,6 +37,7 @@ define_tokens!(
     MINUS = "-",
     MUL = "*",
     DIV = "/",
+    MOD = "%",
     LPAREN = "(",
     RPAREN = ")",
     ASSIGN = "=",

@@ -1053,7 +1053,11 @@ impl TypeNode for CustomTypeNode {
         if let Ok(tp) = re {
             return Ok(tp.tp);
         }
-        let tp = ctx.get_type_in_mod(&m, &self.name, self.range)?;
+        let tp = ctx.get_type_in_mod(&m, &self.name, self.range);
+        if tp.is_err() {
+            return Err(tp.unwrap_err());
+        }
+        let tp = tp.unwrap();
         Ok(tp.tp)
     }
 
@@ -1067,7 +1071,12 @@ impl TypeNode for CustomTypeNode {
         _pltype: Arc<RefCell<PLType>>,
         _builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<EqRes, PLDiag> {
-        todo!()
+        let eq = get_type_deep( _pltype).borrow().get_full_elm_name() == format!("{}..{}", self.path,self.name);
+        Ok(EqRes {
+            eq,
+            need_up_cast: false,
+            reason: None,
+        })
     }
 }
 
@@ -1085,6 +1094,6 @@ impl PrintTrait for CustomTypeNode {
 
 impl FmtTrait for CustomTypeNode {
     fn format(&self, _builder: &mut FmtBuilder) {
-        todo!()
+        _builder.token(&self.name)
     }
 }

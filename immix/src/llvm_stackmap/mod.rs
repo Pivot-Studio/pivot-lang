@@ -127,7 +127,7 @@ pub fn build_root_maps(
         let (function, next_ptr) = Function::new(ptr);
         function.safe_points.iter().for_each(|&safe_point| {
             if roots.insert(safe_point, function.clone()).is_some() {
-                panic!("duplicate safe point: {:p}", safe_point)
+                log::warn!("duplicate safe point: {:p}", safe_point)
             }
         });
         // roots.insert(function.addr, function);

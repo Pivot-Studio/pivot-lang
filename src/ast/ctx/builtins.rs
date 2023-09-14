@@ -504,6 +504,8 @@ fn emit_for_fields<'a, 'b>(
                 let field_tp = Arc::new(RefCell::new(PLType::PlaceHolder(PlaceHolderType {
                     name: "T".to_owned(),
                     range: Default::default(),
+                    path: "".to_owned(),
+                    methods: Default::default(),
                 })));
                 let gep = builder.alloc("placeholder", &field_tp.borrow(), ctx, None);
                 ctx.add_symbol_raw("_field".to_string(), gep, field_tp, f.range);

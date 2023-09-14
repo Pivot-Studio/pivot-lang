@@ -233,7 +233,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 let num = numnode.value;
                 // TODO: check overflow
                 let v = match num {
-                    Num::Int(i) => match &*expect.borrow() {
+                    Num::Int(i) => match &*get_type_deep( expect.clone()).borrow() {
                         PLType::Primitive(tp) => {
                             let sign_ext = match tp {
                                 PriType::I8

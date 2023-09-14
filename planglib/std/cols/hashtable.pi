@@ -1,0 +1,72 @@
+use core::hash::*;
+use core::hash::hasher::*;
+use core::hash::pl_hash::*;
+
+pub struct HashTable<K:Hash<PaulLarsonHasher>|V> {
+    total_buckets:u64;
+    buckets:[Option<TableNode<K|V>>];
+    salt:u64;
+}
+
+
+struct TableNode<K:Hash<PaulLarsonHasher>|V> {
+    key:K;
+    value:V;
+    next:Option<TableNode<K|V>>;
+}
+
+impl <K:Hash<PaulLarsonHasher>|V> HashTable<K|V>  {
+    pub fn insert(k:K,v:V) void {
+        let hasher = new_paul_larson_hasher(self.salt);
+        k.hash(&hasher);
+        let hash = hasher.finish();
+        let bucket = hash % self.total_buckets;
+        let next:Option<TableNode<K|V>> = None{};
+        let node = TableNode<K|V> {
+            key:k,
+            value:v,
+            next:next,
+        };
+        let current = self.buckets[bucket as i64];
+
+        return;
+    }
+    
+}
+
+    pub fn insert<K:Hash<PaulLarsonHasher>|V>(a:HashTable<K|V>, k:K,v:V) void {
+        let hasher = new_paul_larson_hasher(a.salt);
+        k.hash(&hasher);
+        let hash = hasher.finish();
+        let bucket = hash % a.total_buckets;
+        let next:Option<TableNode<K|V>> = None{};
+        let node = TableNode<K|V> {
+            key:k,
+            value:v,
+            next:next,
+        };
+        let current = a.buckets[bucket as i64];
+
+        return;
+    }
+
+
+
+
+pub fn new_hash_table<K:Hash<PaulLarsonHasher>|V>(bucket_size:u64,salt:u64) HashTable<K|V> {
+    let  total_buckets = bucket_size;
+    let  table = HashTable<K|V> {
+        total_buckets:total_buckets,
+        buckets:[Option<TableNode<K|V>>*bucket_size as i64;],
+        salt:salt,
+    };
+    // init to None
+    for let i = 0; i < arr_len( table.buckets); i = i + 1 {
+        table.buckets[i] = None{};
+    }
+    return table;
+}
+
+
+
+

@@ -1,0 +1,15 @@
+use core::hash::hasher::Hasher64;
+
+pub trait Hash<H:Hasher64> {
+    fn hash(hasher:*H) void;
+}
+
+impl <H:Hasher64> Hash<H> for gc::string {
+    fn hash(hasher:*H) void {
+        hasher.append(self.bytes());
+        return;
+    }
+}
+
+
+

@@ -213,6 +213,14 @@ impl TraitDefNode {
                     range: field.range,
                     modifier: Some((TokenType::PUB, field.range)),
                 };
+                field.emit_highlight(ctx);
+                if field.generics.is_some() {
+                    // TODO allow it
+                    // if there's generic in trait method, the vtable cannot be generated
+                    return Err(ctx.add_diag(
+                        field.range().new_err(ErrorCode::GENERIC_NOT_ALLOWED_IN_TRAIT_METHOD),
+                    ));
+                }
                 if field.get_type(ctx, builder, true).is_err() {
                     continue;
                 }

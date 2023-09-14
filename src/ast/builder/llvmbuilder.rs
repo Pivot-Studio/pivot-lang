@@ -552,7 +552,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
         let f = self
             .module
-            .add_function(fname, ftp, Some(Linkage::External));
+            .add_function(fname, ftp, Some(Linkage::LinkOnceAny));
+        self.used.borrow_mut().push(f);
         // the array is a struct, the first field is the visit function,
         // the second field is the real array, the third field is it's length
         // array struct it self is the first parameter
@@ -725,34 +726,38 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn get_fn_type(&self, fnvalue: &FNValue, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
-        ctx.run_in_type_mod(fnvalue, |ctx, fnvalue| {
-            let mut param_types = vec![];
-            for param_pltype in fnvalue.fntype.param_pltypes.iter() {
-                param_types.push(
-                    self.get_basic_type_op(
-                        &param_pltype
+        ctx.protect_generic_context(&fnvalue.fntype.generic_map, |ctx| {
+            ctx.run_in_type_mod(fnvalue, |ctx, fnvalue| {
+                let mut param_types = vec![];
+                for param_pltype in fnvalue.fntype.param_pltypes.iter() {
+                    // eprintln!("param_pltype: {:?}", param_pltype);
+                    param_types.push(
+                        self.get_basic_type_op(
+                            &param_pltype
+                                .get_type(ctx, &self.clone().into(), true)
+                                .unwrap()
+                                .borrow(),
+                            ctx,
+                        )
+                        .unwrap()
+                        .into(),
+                    );
+                }
+                let fn_type = self
+                    .get_ret_type(
+                        &fnvalue
+                            .fntype
+                            .ret_pltype
                             .get_type(ctx, &self.clone().into(), true)
                             .unwrap()
                             .borrow(),
                         ctx,
                     )
-                    .unwrap()
-                    .into(),
-                );
-            }
-            let fn_type = self
-                .get_ret_type(
-                    &fnvalue
-                        .fntype
-                        .ret_pltype
-                        .get_type(ctx, &self.clone().into(), true)
-                        .unwrap()
-                        .borrow(),
-                    ctx,
-                )
-                .fn_type(&param_types, false);
-            fn_type
-        })
+                    .fn_type(&param_types, false);
+                Ok(fn_type)
+            })
+        }).unwrap()
+
     }
 
     fn get_closure_fn_type(&self, closure: &ClosureType, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
@@ -1201,7 +1206,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 // 填充占位符
                 for placeholder in RefCell::borrow_mut(&self.ditypes_placeholder)
                     .remove(&u.get_full_name())
-                    .unwrap()
+                    .unwrap_or_default()
                     .borrow()
                     .iter()
                 {
@@ -1958,6 +1963,28 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let v = self.builder.build_int_signed_div(lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
+
+    fn build_int_unsigned_div(&self,lhs:ValueHandle,rhs:ValueHandle,name: &str) -> ValueHandle {
+        let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
+        let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
+        let v = self.builder.build_int_unsigned_div(lhs, rhs, name);
+        self.get_llvm_value_handle(&v.as_any_value_enum())
+    }
+
+    fn build_int_signed_srem(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
+        let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
+        let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
+        let v = self.builder.build_int_signed_rem(lhs, rhs, name);
+        self.get_llvm_value_handle(&v.as_any_value_enum())
+    }
+
+    fn build_int_unsigned_srem(&self,lhs:ValueHandle,rhs:ValueHandle,name: &str) -> ValueHandle {
+        let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
+        let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
+        let v = self.builder.build_int_unsigned_rem(lhs, rhs, name);
+        self.get_llvm_value_handle(&v.as_any_value_enum())
+    }
+
     fn build_float_neg(&self, v: ValueHandle, name: &str) -> ValueHandle {
         let v = self.get_llvm_value(v).unwrap().into_float_value();
         let v = self.builder.build_float_neg(v, name);

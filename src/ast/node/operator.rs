@@ -178,6 +178,7 @@ impl Node for BinOpNode {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
         }
         let right = ctx.try_load2var(rrange, re.unwrap().get_value(), builder)?;
+        let lpltype = get_type_deep(lpltype);
         Ok(match self.op.0 {
             TokenType::BIT_AND => {
                 if !lpltype.borrow().is_int() || !lpltype.borrow().is_int() {
@@ -237,8 +238,76 @@ impl Node for BinOpNode {
                 handle_calc!(ctx, mul, float_mul, lpltype, left, right, self.range, builder)
             }
             TokenType::DIV => {
-                // TODO: 无符号触发
-                handle_calc!(ctx, signed_div, float_div, lpltype, left, right, self.range, builder)
+                match *lpltype.clone().borrow() {
+                    PLType::Primitive(
+                        PriType::I128
+                        | PriType::I64
+                        | PriType::I32
+                        | PriType::I16
+                        | PriType::I8,
+                    ) => {
+                        return Ok(NodeOutput::new_value(NodeValue::new(
+                            builder.build_int_signed_div(left, right, "addtmp"),
+                            lpltype,
+                        )));
+                    }
+                    PLType::Primitive(
+                        | PriType::U128
+                        | PriType::U64
+                        | PriType::U32
+                        | PriType::U16
+                        | PriType::U8,
+                    ) => {
+                        return Ok(NodeOutput::new_value(NodeValue::new(
+                            builder.build_int_unsigned_div(left, right, "addtmp"),
+                            lpltype,
+                        )));
+                    }
+                    PLType::Primitive(PriType::F64 | PriType::F32) => {
+                        return Ok(NodeOutput::new_value(NodeValue::new(
+                            builder.build_float_div(left, right, "addtmp"),
+                            lpltype,
+                        )));
+                    }
+                    _ => {
+                        return Err(ctx.add_diag(
+                            (self.range).new_err(crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR),
+                        ))
+                    }
+                }
+            }
+            TokenType::MOD => {
+                match *lpltype.clone().borrow() {
+                    PLType::Primitive(
+                        PriType::I128
+                        | PriType::I64
+                        | PriType::I32
+                        | PriType::I16
+                        | PriType::I8,
+                    ) => {
+                        return Ok(NodeOutput::new_value(NodeValue::new(
+                            builder.build_int_signed_srem(left, right, "addtmp"),
+                            lpltype,
+                        )));
+                    }
+                    PLType::Primitive(
+                        | PriType::U128
+                        | PriType::U64
+                        | PriType::U32
+                        | PriType::U16
+                        | PriType::U8,
+                    ) => {
+                        return Ok(NodeOutput::new_value(NodeValue::new(
+                            builder.build_int_unsigned_srem(left, right, "addtmp"),
+                            lpltype,
+                        )));
+                    }
+                    _ => {
+                        return Err(ctx.add_diag(
+                            (self.range).new_err(crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR),
+                        ))
+                    }
+                }
             }
             TokenType::EQ
             | TokenType::NE

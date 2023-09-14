@@ -60,6 +60,10 @@ impl string {
     pub fn byte_len() i64 {
         return self._byte_len;
     }
+
+    pub fn bytes() [u8] {
+        return arr_from_raw(self.data, self._byte_len);
+    }
     
 
 }
