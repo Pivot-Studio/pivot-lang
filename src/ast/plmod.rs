@@ -74,7 +74,7 @@ pub struct Mod {
     pub semantic_tokens_builder: Arc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
     pub hints: Arc<RefCell<Vec<InlayHint>>>,
     pub doc_symbols: Arc<RefCell<Vec<DocumentSymbol>>>,
-    pub impls: ImplMap,
+    pub impls: Arc<RefCell<ImplMap>>,
     pub macros: FxHashMap<String, Arc<MacroNode>>,
     pub trait_mthd_table: TraitMthdImpl,
     pub generic_infer: GenericCache,
@@ -225,7 +225,7 @@ impl Mod {
             local_refs: Arc::new(RefCell::new(BTreeMap::new())),
             glob_refs: Arc::new(RefCell::new(BTreeMap::new())),
             refs_map: Arc::new(RefCell::new(BTreeMap::new())),
-            impls: FxHashMap::default(),
+            impls: Arc::new(RefCell::new(FxHashMap::default())),
             macros: FxHashMap::default(),
             trait_mthd_table: Default::default(),
             generic_infer,
@@ -251,7 +251,7 @@ impl Mod {
             local_refs: self.local_refs.clone(),
             glob_refs: self.glob_refs.clone(),
             refs_map: self.refs_map.clone(),
-            impls: FxHashMap::default(),
+            impls: self.impls.clone(),
             macros: FxHashMap::default(),
             trait_mthd_table: self.trait_mthd_table.clone(),
             generic_infer: self.generic_infer.clone(),
@@ -400,7 +400,11 @@ impl Mod {
             match &*st_with_generic.borrow() {
                 PLType::Struct(st) | PLType::Trait(st) => {
                     if let Some(res) = ctx.get_infer_result(st, name) {
-                        return Ok(res.into());
+                        if let PLType::Struct(s) = &*res.clone().borrow() {
+                            if s.fields.len() == st.fields.len() {
+                                return Ok(res.into());
+                            }
+                        }
                     }
                 }
                 PLType::Union(st) => {
@@ -517,12 +521,13 @@ impl Mod {
     }
 
     pub fn add_impl(
-        &mut self,
+        &self,
         stname: &str,
         trait_tp_name: &str,
         generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     ) {
         self.impls
+            .borrow_mut()
             .entry(stname.to_string())
             .or_insert_with(Default::default)
             .insert(trait_tp_name.to_string(), generic_map);

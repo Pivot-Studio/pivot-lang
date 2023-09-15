@@ -237,78 +237,60 @@ impl Node for BinOpNode {
             TokenType::MUL => {
                 handle_calc!(ctx, mul, float_mul, lpltype, left, right, self.range, builder)
             }
-            TokenType::DIV => {
-                match *lpltype.clone().borrow() {
-                    PLType::Primitive(
-                        PriType::I128
-                        | PriType::I64
-                        | PriType::I32
-                        | PriType::I16
-                        | PriType::I8,
-                    ) => {
-                        return Ok(NodeOutput::new_value(NodeValue::new(
-                            builder.build_int_signed_div(left, right, "addtmp"),
-                            lpltype,
-                        )));
-                    }
-                    PLType::Primitive(
-                        | PriType::U128
-                        | PriType::U64
-                        | PriType::U32
-                        | PriType::U16
-                        | PriType::U8,
-                    ) => {
-                        return Ok(NodeOutput::new_value(NodeValue::new(
-                            builder.build_int_unsigned_div(left, right, "addtmp"),
-                            lpltype,
-                        )));
-                    }
-                    PLType::Primitive(PriType::F64 | PriType::F32) => {
-                        return Ok(NodeOutput::new_value(NodeValue::new(
-                            builder.build_float_div(left, right, "addtmp"),
-                            lpltype,
-                        )));
-                    }
-                    _ => {
-                        return Err(ctx.add_diag(
-                            (self.range).new_err(crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR),
-                        ))
-                    }
+            TokenType::DIV => match *lpltype.clone().borrow() {
+                PLType::Primitive(
+                    PriType::I128 | PriType::I64 | PriType::I32 | PriType::I16 | PriType::I8,
+                ) => {
+                    return Ok(NodeOutput::new_value(NodeValue::new(
+                        builder.build_int_signed_div(left, right, "addtmp"),
+                        lpltype,
+                    )));
                 }
-            }
-            TokenType::MOD => {
-                match *lpltype.clone().borrow() {
-                    PLType::Primitive(
-                        PriType::I128
-                        | PriType::I64
-                        | PriType::I32
-                        | PriType::I16
-                        | PriType::I8,
-                    ) => {
-                        return Ok(NodeOutput::new_value(NodeValue::new(
-                            builder.build_int_signed_srem(left, right, "addtmp"),
-                            lpltype,
-                        )));
-                    }
-                    PLType::Primitive(
-                        | PriType::U128
-                        | PriType::U64
-                        | PriType::U32
-                        | PriType::U16
-                        | PriType::U8,
-                    ) => {
-                        return Ok(NodeOutput::new_value(NodeValue::new(
-                            builder.build_int_unsigned_srem(left, right, "addtmp"),
-                            lpltype,
-                        )));
-                    }
-                    _ => {
-                        return Err(ctx.add_diag(
-                            (self.range).new_err(crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR),
-                        ))
-                    }
+                PLType::Primitive(
+                    PriType::U128 | PriType::U64 | PriType::U32 | PriType::U16 | PriType::U8,
+                ) => {
+                    return Ok(NodeOutput::new_value(NodeValue::new(
+                        builder.build_int_unsigned_div(left, right, "addtmp"),
+                        lpltype,
+                    )));
                 }
-            }
+                PLType::Primitive(PriType::F64 | PriType::F32) => {
+                    return Ok(NodeOutput::new_value(NodeValue::new(
+                        builder.build_float_div(left, right, "addtmp"),
+                        lpltype,
+                    )));
+                }
+                _ => {
+                    return Err(ctx.add_diag(
+                        (self.range)
+                            .new_err(crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR),
+                    ))
+                }
+            },
+            TokenType::MOD => match *lpltype.clone().borrow() {
+                PLType::Primitive(
+                    PriType::I128 | PriType::I64 | PriType::I32 | PriType::I16 | PriType::I8,
+                ) => {
+                    return Ok(NodeOutput::new_value(NodeValue::new(
+                        builder.build_int_signed_srem(left, right, "addtmp"),
+                        lpltype,
+                    )));
+                }
+                PLType::Primitive(
+                    PriType::U128 | PriType::U64 | PriType::U32 | PriType::U16 | PriType::U8,
+                ) => {
+                    return Ok(NodeOutput::new_value(NodeValue::new(
+                        builder.build_int_unsigned_srem(left, right, "addtmp"),
+                        lpltype,
+                    )));
+                }
+                _ => {
+                    return Err(ctx.add_diag(
+                        (self.range)
+                            .new_err(crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR),
+                    ))
+                }
+            },
             TokenType::EQ
             | TokenType::NE
             | TokenType::LEQ
@@ -550,11 +532,7 @@ fn pack_mthd(
     let mthd = mthd.borrow();
     _ = mthd.expect_pub(ctx, id_range);
     ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
-    ctx.send_if_go_to_def(
-        id_range,
-        mthd.range,
-        mthd.llvmname.split("..").next().unwrap().to_string(),
-    );
+    ctx.send_if_go_to_def(id_range, mthd.range, mthd.path.clone());
     usize::MAX
         .new_output(Arc::new(RefCell::new(PLType::Fn(mthd.clone()))))
         .with_receiver(

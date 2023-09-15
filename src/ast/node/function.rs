@@ -4,6 +4,7 @@ use super::statement::StatementsNode;
 use super::*;
 use super::{types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::accumulators::PLCodeLens;
+use crate::ast::builder::no_op_builder::NoOpBuilder;
 use crate::ast::builder::ValueHandle;
 use crate::ast::ctx::{ClosureCtxData, CtxFlag, BUILTIN_FN_MAP};
 use crate::ast::diag::ErrorCode;
@@ -389,7 +390,7 @@ impl TypeNode for FuncDefNode {
                 .iter()
                 .for_each(|(_, pltype)| match &mut *pltype.borrow_mut() {
                     PLType::Generic(g) => {
-                        g.set_place_holder(child);
+                        g.set_place_holder(child, builder);
                     }
                     _ => unreachable!(),
                 });
@@ -529,17 +530,25 @@ impl FuncDefNode {
         &mut self,
         ctx: &'b mut Ctx<'a>,
         first: bool,
-        builder: &'b BuilderEnum<'a, '_>,
+        mut builder: &'b BuilderEnum<'a, '_>,
         fnvalue: FNValue,
     ) -> Result<(), PLDiag> {
+        let noop = BuilderEnum::NoOp(NoOpBuilder::default());
+        // get it's pointer
+        let noop_ptr = &noop as *const BuilderEnum<'a, '_>;
         let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap().tp);
         let child = &mut ctx.new_child(self.range.start, builder);
         child.protect_generic_context(&fnvalue.fntype.generic_map, |child| {
             if first && fnvalue.fntype.generic {
+                match builder {
+                    BuilderEnum::NoOp(_) => (),
+                    _ => return Ok(()),
+                }
+                builder = unsafe { &*(noop_ptr as *const BuilderEnum<'a, '_>) };
                 fnvalue.fntype.generic_map.iter().for_each(|(_, pltype)| {
                     match &mut *pltype.borrow_mut() {
                         PLType::Generic(g) => {
-                            g.set_place_holder(child);
+                            g.set_place_holder(child, builder);
                         }
                         _ => unreachable!(),
                     }

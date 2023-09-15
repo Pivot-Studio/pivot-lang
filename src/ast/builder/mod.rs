@@ -174,8 +174,14 @@ pub trait IRBuilder<'a, 'ctx> {
     fn build_int_mul(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle;
     fn build_int_signed_div(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle;
     fn build_int_signed_srem(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle;
-    fn build_int_unsigned_div(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle;
-    fn build_int_unsigned_srem(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle;
+    fn build_int_unsigned_div(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str)
+        -> ValueHandle;
+    fn build_int_unsigned_srem(
+        &self,
+        lhs: ValueHandle,
+        rhs: ValueHandle,
+        name: &str,
+    ) -> ValueHandle;
     fn build_float_neg(&self, v: ValueHandle, name: &str) -> ValueHandle;
     fn build_float_add(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle;
     fn build_float_sub(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle;

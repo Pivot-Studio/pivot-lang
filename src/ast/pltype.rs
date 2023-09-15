@@ -829,7 +829,7 @@ impl FNValue {
                     PLType::Generic(g) => {
                         let name = g.curpltype.as_ref().unwrap().borrow().get_llvm_name();
                         name
-                    },
+                    }
                     _ => unreachable!(),
                 })
                 .collect::<Vec<_>>()
@@ -1213,6 +1213,7 @@ impl STType {
     fn implements(&self, tp: &STType, plmod: &Mod) -> bool {
         if plmod
             .impls
+            .borrow()
             .get(&self.get_full_name())
             .and_then(|v| v.get(&tp.get_full_name()))
             .is_some()
@@ -1222,6 +1223,7 @@ impl STType {
         for plmod in plmod.submods.values() {
             if plmod
                 .impls
+                .borrow()
                 .get(&self.get_full_name())
                 .and_then(|v| v.get(&tp.get_full_name()))
                 .is_some()
@@ -1260,11 +1262,15 @@ impl STType {
         Ok(())
     }
     fn implements_trait_curr_mod(&self, tp: &STType, plmod: &Mod) -> bool {
-        // FIXME: check generic
+        // FIXME: strange logic
         let re = plmod
             .impls
+            .borrow()
             .get(&self.get_full_name())
-            .or(plmod.impls.get(&self.get_full_name_except_generic()))
+            .or(plmod
+                .impls
+                .borrow()
+                .get(&self.get_full_name_except_generic()))
             .map(|v| {
                 v.get(&tp.get_full_name_except_generic())
                     .map(|gm| {
@@ -1283,7 +1289,18 @@ impl STType {
                     .unwrap_or_default()
             })
             .unwrap_or_default();
-        if !re {
+
+        let re2 = plmod
+            .impls
+            .borrow()
+            .get(&self.get_full_name())
+            .or(plmod
+                .impls
+                .borrow()
+                .get(&self.get_full_name_except_generic()))
+            .map(|v| v.get(&tp.get_full_name()).is_some())
+            .unwrap_or_default();
+        if !re && !re2 {
             return re;
         }
         for de in &tp.derives {
@@ -1378,14 +1395,16 @@ impl STType {
             } else {
                 pltype.tp.replace(PLType::Struct(res.clone()));
             }
-            // TODO union & nested placeholder
-            if !res
-                .generic_infer_types
-                .values()
-                .any(|v| matches!(&*v.borrow(), PLType::PlaceHolder(_)))
-            {
-                ctx.add_infer_result(self, &res.name, pltype.tp.clone());
-            }
+            // // TODO union & nested placeholder
+            // if !res
+            //     .generic_infer_types
+            //     .values()
+            //     .any(|v| matches!(&*v.borrow(), PLType::PlaceHolder(_)))
+            // {
+            //     ctx.add_infer_result(self, &res.name, pltype.tp.clone());
+            // }
+
+            ctx.add_infer_result(self, &res.name, pltype.tp.clone());
             Ok(pltype.tp)
         })
     }
@@ -1502,39 +1521,87 @@ impl GenericType {
     pub fn clear_type(&mut self) {
         self.curpltype = None;
     }
-    pub fn set_place_holder(&mut self, ctx: &mut Ctx) {
-        if let Some(impls) = &self.trait_place_holder {
-            // let tph = self.trait_place_holder.as_ref().unwrap();
-            // let ph = Arc::new(RefCell::new(PLType::PlaceHolder(PlaceHolderType {
-            //     name: self.name.clone(),
-            //     range: self.range,
-            //     path: tph.borrow().get_path().unwrap_or_default(),
-            //     methods: Arc::new(RefCell::new(FxHashMap::default())),
-            // })));
+    pub fn set_place_holder<'a, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) {
+        let range = self.range;
+        if let Some(impls) = &self.trait_impl {
+            let place_holder = STType {
+                name: self.name.clone(),
+                path: ctx.get_file(),
+                fields: Default::default(),
+                doc: Default::default(),
+                generic_map: Default::default(),
+                derives: Default::default(),
+                modifier: Default::default(),
+                body_range: range,
+                is_trait: false,
+                is_tuple: false,
+                generic_infer_types: Default::default(),
+                methods: Default::default(),
+                trait_methods_impl: Default::default(),
+                range,
+            };
+            let ph = Arc::new(RefCell::new(PLType::Struct(place_holder)));
             // ctx.run_in_origin_mod(|ctx| {
             //     for it in impls {
-            //         ctx.plmod.add_impl(
-            //             &ph.borrow().get_full_elm_name_without_generic(),
-            //             &it.clone().borrow().get_full_elm_name(),
-            //             Default::default(),
-            //         );
-            //         // if let PLType::Trait(t) = &*it.clone().borrow() {
-            //         //     let table = t.get_method();
+            //         if let PLType::Trait(t) = &*it.clone().borrow() {
+            //             ctx.get_root_ctx().plmod.add_impl(
+            //                 &ph.borrow().get_full_elm_name_without_generic(),
+            //                 &it.clone().borrow().get_full_elm_name(),
+            //                 t.generic_map.clone(),
+            //             );
+            //             let fields = t.list_trait_fields();
+            //             for field in fields {
+            //                 let tp = field.typenode.get_type(ctx, builder, true).unwrap();
+            //                 if let PLType::Fn(f) = &*tp.clone().borrow() {
+            //                     let mut f = f.clone();
+            //                     f.fntype.param_pltypes[0] = ph.borrow().get_typenode(&ctx.get_file());
+            //                     let generic = f.fntype.generic;
+            //                     ctx.add_method(&*ph.borrow(), &field.name, f, Some((it.clone(), Default::default())),generic , Default::default()).unwrap();
+            //                 }
+            //             }
 
-                        
-            //         // }
+            //         }
             //     }
 
-
-                
             // });
 
-            // self.curpltype = Some(ph);
+            for it in impls {
+                if let PLType::Trait(t) = &*it.clone().borrow() {
+                    ctx.get_root_ctx().plmod.add_impl(
+                        &ph.borrow().get_full_elm_name_without_generic(),
+                        &it.clone().borrow().get_full_elm_name(),
+                        t.generic_map.clone(),
+                    );
+                    let fields = t.list_trait_fields();
+                    for field in fields {
+                        let tp = field.typenode.get_type(ctx, builder, true).unwrap();
+                        if let PLType::Fn(f) = &*tp.clone().borrow() {
+                            let mut f = f.clone();
+                            f.fntype.param_pltypes[0] = ph.borrow().get_typenode(&ctx.get_file());
+                            let generic = f.fntype.generic;
+                            ctx.add_method(
+                                &ph.borrow(),
+                                &field.name,
+                                f,
+                                Some((it.clone(), Default::default())),
+                                generic,
+                                Default::default(),
+                            )
+                            .unwrap();
+                        }
+                    }
+                }
+            }
 
-            self.curpltype = Some(impls.clone());
+            // ctx.add_type(name, ph.clone(), range).unwrap();
+
+            self.curpltype = Some(ph);
             return;
         }
-        let range = self.range;
         let p = PlaceHolderType {
             name: self.name.clone(),
             range,
@@ -1549,7 +1616,7 @@ impl GenericType {
 }
 generic_impl!(FnType, STType, UnionType);
 #[range]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct PlaceHolderType {
     pub name: String,
     pub path: String,
@@ -1560,3 +1627,11 @@ impl PlaceHolderType {
         format!("placeholder_::{}", self.name)
     }
 }
+
+impl PartialEq for PlaceHolderType {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.path == other.path && self.methods == other.methods
+    }
+}
+
+impl Eq for PlaceHolderType {}

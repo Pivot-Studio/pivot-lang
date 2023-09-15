@@ -32,7 +32,6 @@ use internal_macro::node;
 use lsp_types::GotoDefinitionResponse;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
-use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
@@ -224,7 +223,6 @@ fn import_symbol(
                 global_mthd_map
                     .entry(k.clone())
                     .or_insert(Default::default())
-                    .borrow_mut()
                     .insert(k2, v);
             }
         }

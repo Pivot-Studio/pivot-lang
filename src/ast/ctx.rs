@@ -519,28 +519,32 @@ impl<'a, 'ctx> Ctx<'a> {
                                 unreachable!()
                             });
                             let bind = mthd.clone();
-                            let  m = bind.borrow();
+                            let m = bind.borrow();
                             let mut m = m.clone();
                             m.fntype = m.fntype.new_pltype();
                             let mthd = if m.fntype.generic {
-                                ctx.protect_generic_context(&m.fntype.generic_map.clone(), |ctx|{
-                                    ctx.run_in_type_mod_mut(&mut m, |ctx,m| {
-                                        m.fntype.param_pltypes[0]
-                                        .eq_or_infer(ctx, Arc::new(RefCell::new(PLType::Pointer(st_pltype.clone()))) , builder)
+                                ctx.protect_generic_context(&m.fntype.generic_map.clone(), |ctx| {
+                                    ctx.run_in_type_mod_mut(&mut m, |ctx, m| {
+                                        m.fntype.param_pltypes[0].eq_or_infer(
+                                            ctx,
+                                            Arc::new(RefCell::new(PLType::Pointer(
+                                                st_pltype.clone(),
+                                            ))),
+                                            builder,
+                                        )
                                     })?;
                                     if m.fntype.need_gen_code() {
-                                        let re = ctx.run_in_type_mod_mut(&mut m, |ctx, fnvalue| {
-                                            // actual code gen happens here
-                                            fnvalue.generic_infer_pltype(ctx, builder)
-                                        })?;
+                                        let re =
+                                            ctx.run_in_type_mod_mut(&mut m, |ctx, fnvalue| {
+                                                // actual code gen happens here
+                                                fnvalue.generic_infer_pltype(ctx, builder)
+                                            })?;
                                         Ok(Arc::new(RefCell::new(re)))
-                                    }else {
+                                    } else {
                                         unreachable!()
                                     }
                                 })?
-                                
-
-                            }else {
+                            } else {
                                 mthd
                             };
 
@@ -553,7 +557,7 @@ impl<'a, 'ctx> Ctx<'a> {
                                 .unwrap();
                             builder.build_store(f_ptr, casted);
                         }
-                        
+
                         let st_value = builder.bitcast(
                             ctx,
                             st_value,
@@ -704,7 +708,7 @@ impl<'a, 'ctx> Ctx<'a> {
     ) -> Result<(), PLDiag> {
         if let Some((tt, trait_range)) = impl_trait {
             if let PLType::Trait(st) = &*tt.borrow() {
-                if st.get_path() != self.get_file() {
+                if st.get_path() != self.get_file() && target != Default::default() {
                     return Err(trait_range
                         .new_err(ErrorCode::CANNOT_IMPL_TYPE_OUT_OF_DEFINE_MOD)
                         .add_to_ctx(self));
@@ -717,7 +721,9 @@ impl<'a, 'ctx> Ctx<'a> {
                 };
                 let table = m.get_mut(&st_name);
                 if let Some(table) = table {
-                    if table.insert(mthd.to_string(), fntp.clone()).is_some() {
+                    if table.insert(mthd.to_string(), fntp.clone()).is_some()
+                        && target != Default::default()
+                    {
                         return Err(fntp
                             .borrow()
                             .range
@@ -1598,19 +1604,20 @@ impl<'a, 'ctx> Ctx<'a> {
     /// 左是目标类型，右是实际类型
     /// when need eq trait and sttype,the left must be trait
     pub fn eq(&self, l: Arc<RefCell<PLType>>, r: Arc<RefCell<PLType>>) -> EqRes {
-        if l == r  {
-            if matches!(&*l.borrow(), PLType::Generic(_))  {
-                if let PLType::Generic(l) = &mut *l.borrow_mut() {
-                    if l.curpltype.is_some() {
-                        return self.eq(l.curpltype.as_ref().unwrap().clone(), l.curpltype.as_ref().unwrap().clone());
-                    }
-                    l.set_type(Arc::new(RefCell::new(PLType::Generic(l.clone()))));
-                    return EqRes {
-                        eq: true,
-                        need_up_cast: false,
-                        reason: None,
-                    };
+        if l == r && matches!(&*l.borrow(), PLType::Generic(_)) {
+            if let PLType::Generic(l) = &mut *l.borrow_mut() {
+                if l.curpltype.is_some() {
+                    return self.eq(
+                        l.curpltype.as_ref().unwrap().clone(),
+                        l.curpltype.as_ref().unwrap().clone(),
+                    );
                 }
+                l.set_type(Arc::new(RefCell::new(PLType::Generic(l.clone()))));
+                return EqRes {
+                    eq: true,
+                    need_up_cast: false,
+                    reason: None,
+                };
             }
         }
         if let (PLType::Generic(l), PLType::Generic(r)) = (&*l.borrow(), &*r.borrow()) {
@@ -1674,8 +1681,9 @@ impl<'a, 'ctx> Ctx<'a> {
             if let (PLType::Trait(t), PLType::Struct(st)) =
                 (&*trait_pltype.borrow(), &*st_pltype.borrow())
             {
+                let eq = st.implements_trait(t, &self.get_root_ctx().plmod);
                 return EqRes {
-                    eq: st.implements_trait(t, &self.get_root_ctx().plmod),
+                    eq,
                     need_up_cast: true,
                     reason: Some(format!(
                         "trait `{}` is not implemented for `{}`",

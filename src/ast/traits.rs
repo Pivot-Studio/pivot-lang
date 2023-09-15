@@ -1,4 +1,4 @@
-use super::pltype::{FNValue, STType, UnionType, PlaceHolderType};
+use super::pltype::{FNValue, PlaceHolderType, STType, UnionType};
 
 pub trait CustomType {
     fn get_path(&self) -> String;

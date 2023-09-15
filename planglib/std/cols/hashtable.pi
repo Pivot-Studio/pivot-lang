@@ -41,6 +41,7 @@ impl <K:Hash<PaulLarsonHasher>|V> HashTable<K|V>  {
         
         return;
     }
+
     pub fn get(k:K) Option<V> {
         let hasher = new_paul_larson_hasher(self.salt);
         k.hash(&hasher);

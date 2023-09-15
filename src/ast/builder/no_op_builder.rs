@@ -539,15 +539,30 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         0
     }
 
-    fn build_int_signed_srem(&self,_lhs:ValueHandle,_rhs:ValueHandle,_name: &str) -> ValueHandle {
+    fn build_int_signed_srem(
+        &self,
+        _lhs: ValueHandle,
+        _rhs: ValueHandle,
+        _name: &str,
+    ) -> ValueHandle {
         0
     }
 
-    fn build_int_unsigned_div(&self,_lhs:ValueHandle,_rhs:ValueHandle,_name: &str) -> ValueHandle {
+    fn build_int_unsigned_div(
+        &self,
+        _lhs: ValueHandle,
+        _rhs: ValueHandle,
+        _name: &str,
+    ) -> ValueHandle {
         0
     }
 
-    fn build_int_unsigned_srem(&self,_lhs:ValueHandle,_rhs:ValueHandle,_name: &str) -> ValueHandle {
+    fn build_int_unsigned_srem(
+        &self,
+        _lhs: ValueHandle,
+        _rhs: ValueHandle,
+        _name: &str,
+    ) -> ValueHandle {
         0
     }
 }

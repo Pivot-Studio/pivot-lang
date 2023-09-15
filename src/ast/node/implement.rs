@@ -24,7 +24,11 @@ impl ImplNode {
     ) -> Result<(), PLDiag> {
         if self.generics.is_some() {
             let gm = self.generics.as_ref().unwrap().gen_generic_type(ctx);
-            self.generics.as_ref().unwrap().set_traits(ctx, builder, &gm).unwrap();
+            self.generics
+                .as_ref()
+                .unwrap()
+                .set_traits(ctx, builder, &gm)
+                .unwrap();
             _ = ctx.protect_generic_context(&gm, |ctx| {
                 let sttp = self.target.get_type(ctx, builder, true)?;
                 let trait_tp = self
@@ -151,7 +155,7 @@ impl Node for ImplNode {
             .as_ref()
             .map(|e| {
                 let gm = e.gen_generic_type(ctx);
-                e.set_traits(ctx,builder,&gm).unwrap();
+                e.set_traits(ctx, builder, &gm).unwrap();
                 gm
             })
             .unwrap_or_default();

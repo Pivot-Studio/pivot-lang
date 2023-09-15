@@ -567,7 +567,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .build_load(real_arr_raw, "loaded_arr")
             .into_pointer_value();
         let loop_var = self.builder.build_alloca(self.context.i64_type(), "i");
-        self.builder.build_store(loop_var, self.context.i64_type().const_zero());
+        self.builder
+            .build_store(loop_var, self.context.i64_type().const_zero());
         // arr is the real array
         let arr_len = self.builder.build_struct_gep(arr, 2, "arr_len").unwrap();
         let arr_len = self.builder.build_load(arr_len, "arr_len").into_int_value();
@@ -760,8 +761,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .fn_type(&param_types, false);
                 Ok(fn_type)
             })
-        }).unwrap()
-
+        })
+        .unwrap()
     }
 
     fn get_closure_fn_type(&self, closure: &ClosureType, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
@@ -1968,7 +1969,12 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
 
-    fn build_int_unsigned_div(&self,lhs:ValueHandle,rhs:ValueHandle,name: &str) -> ValueHandle {
+    fn build_int_unsigned_div(
+        &self,
+        lhs: ValueHandle,
+        rhs: ValueHandle,
+        name: &str,
+    ) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
         let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
         let v = self.builder.build_int_unsigned_div(lhs, rhs, name);
@@ -1982,7 +1988,12 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
 
-    fn build_int_unsigned_srem(&self,lhs:ValueHandle,rhs:ValueHandle,name: &str) -> ValueHandle {
+    fn build_int_unsigned_srem(
+        &self,
+        lhs: ValueHandle,
+        rhs: ValueHandle,
+        name: &str,
+    ) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
         let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
         let v = self.builder.build_int_unsigned_rem(lhs, rhs, name);
