@@ -489,7 +489,7 @@ impl<'a, 'ctx> Ctx<'a> {
             }
         }
         let (st_pltype, st_value) = self.auto_deref(ori_pltype, ori_value, builder);
-        match (&*target_pltype.borrow(), &*st_pltype.borrow()) {
+        match (&*target_pltype.borrow(), &*st_pltype.clone().borrow()) {
             (PLType::Trait(t), PLType::Struct(st)) => {
                 return self.run_in_type_mod(t, |ctx, t| {
                     ctx.protect_generic_context(&t.generic_map, |ctx| {
@@ -518,6 +518,31 @@ impl<'a, 'ctx> Ctx<'a> {
                                 }
                                 unreachable!()
                             });
+                            let bind = mthd.clone();
+                            let  m = bind.borrow();
+                            let mut m = m.clone();
+                            m.fntype = m.fntype.new_pltype();
+                            let mthd = if m.fntype.generic {
+                                ctx.protect_generic_context(&m.fntype.generic_map.clone(), |ctx|{
+                                    ctx.run_in_type_mod_mut(&mut m, |ctx,m| {
+                                        m.fntype.param_pltypes[0]
+                                        .eq_or_infer(ctx, Arc::new(RefCell::new(PLType::Pointer(st_pltype.clone()))) , builder)
+                                    })?;
+                                    if m.fntype.need_gen_code() {
+                                        let re = ctx.run_in_type_mod_mut(&mut m, |ctx, fnvalue| {
+                                            // actual code gen happens here
+                                            fnvalue.generic_infer_pltype(ctx, builder)
+                                        })?;
+                                        Ok(Arc::new(RefCell::new(re)))
+                                    }else {
+                                        unreachable!()
+                                    }
+                                })?
+                                
+
+                            }else {
+                                mthd
+                            };
 
                             let fnhandle = builder.get_or_insert_fn_handle(&mthd.borrow(), ctx).0;
                             let targetftp = f.typenode.get_type(ctx, builder, true).unwrap();
@@ -528,6 +553,7 @@ impl<'a, 'ctx> Ctx<'a> {
                                 .unwrap();
                             builder.build_store(f_ptr, casted);
                         }
+                        
                         let st_value = builder.bitcast(
                             ctx,
                             st_value,
@@ -1575,6 +1601,9 @@ impl<'a, 'ctx> Ctx<'a> {
         if l == r  {
             if matches!(&*l.borrow(), PLType::Generic(_))  {
                 if let PLType::Generic(l) = &mut *l.borrow_mut() {
+                    if l.curpltype.is_some() {
+                        return self.eq(l.curpltype.as_ref().unwrap().clone(), l.curpltype.as_ref().unwrap().clone());
+                    }
                     l.set_type(Arc::new(RefCell::new(PLType::Generic(l.clone()))));
                     return EqRes {
                         eq: true,

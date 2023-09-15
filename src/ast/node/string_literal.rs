@@ -46,7 +46,7 @@ impl Node for StringNode {
 
         builder.build_store(
             len,
-            builder.int_value(&PriType::I64, self.content.chars().count() as u64, true),
+            builder.int_value(&PriType::I64, vm::count_utf8_char(&self.content) as u64, true),
         );
         builder.build_store(
             byte_len,

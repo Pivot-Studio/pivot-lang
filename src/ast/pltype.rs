@@ -169,7 +169,7 @@ pub struct UnionType {
     pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
 }
 
-impl_mthd!(UnionType, STType);
+impl_mthd!(UnionType, STType, PlaceHolderType);
 
 impl UnionType {
     pub fn find_method(&self, method: &str) -> Option<Arc<RefCell<FNValue>>> {
@@ -826,7 +826,10 @@ impl FNValue {
                 .generic_map
                 .iter()
                 .map(|(_, v)| match &*v.clone().borrow() {
-                    PLType::Generic(g) => g.curpltype.as_ref().unwrap().borrow().get_llvm_name(),
+                    PLType::Generic(g) => {
+                        let name = g.curpltype.as_ref().unwrap().borrow().get_llvm_name();
+                        name
+                    },
                     _ => unreachable!(),
                 })
                 .collect::<Vec<_>>()
@@ -1500,14 +1503,43 @@ impl GenericType {
         self.curpltype = None;
     }
     pub fn set_place_holder(&mut self, ctx: &mut Ctx) {
-        if let Some(trait_place_holder) = &self.trait_place_holder {
-            self.curpltype = Some(trait_place_holder.clone());
+        if let Some(impls) = &self.trait_place_holder {
+            // let tph = self.trait_place_holder.as_ref().unwrap();
+            // let ph = Arc::new(RefCell::new(PLType::PlaceHolder(PlaceHolderType {
+            //     name: self.name.clone(),
+            //     range: self.range,
+            //     path: tph.borrow().get_path().unwrap_or_default(),
+            //     methods: Arc::new(RefCell::new(FxHashMap::default())),
+            // })));
+            // ctx.run_in_origin_mod(|ctx| {
+            //     for it in impls {
+            //         ctx.plmod.add_impl(
+            //             &ph.borrow().get_full_elm_name_without_generic(),
+            //             &it.clone().borrow().get_full_elm_name(),
+            //             Default::default(),
+            //         );
+            //         // if let PLType::Trait(t) = &*it.clone().borrow() {
+            //         //     let table = t.get_method();
+
+                        
+            //         // }
+            //     }
+
+
+                
+            // });
+
+            // self.curpltype = Some(ph);
+
+            self.curpltype = Some(impls.clone());
             return;
         }
         let range = self.range;
         let p = PlaceHolderType {
             name: self.name.clone(),
             range,
+            path: "".to_owned(),
+            methods: Arc::new(RefCell::new(FxHashMap::default())),
         };
         let name_in_map = p.get_place_holder_name();
         let pltype = Arc::new(RefCell::new(PLType::PlaceHolder(p)));
@@ -1516,10 +1548,12 @@ impl GenericType {
     }
 }
 generic_impl!(FnType, STType, UnionType);
+#[range]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlaceHolderType {
     pub name: String,
-    pub range: Range,
+    pub path: String,
+    pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
 }
 impl PlaceHolderType {
     fn get_place_holder_name(&self) -> String {

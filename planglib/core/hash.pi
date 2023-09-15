@@ -1,11 +1,12 @@
 use core::hash::hasher::Hasher64;
+use core::hash::pl_hash::PaulLarsonHasher;
 
 pub trait Hash<H:Hasher64> {
     fn hash(hasher:*H) void;
 }
 
-impl <H:Hasher64> Hash<H> for gc::string {
-    fn hash(hasher:*H) void {
+impl  Hash<PaulLarsonHasher> for gc::string {
+    fn hash(hasher:*PaulLarsonHasher) void {
         hasher.append(self.bytes());
         return;
     }

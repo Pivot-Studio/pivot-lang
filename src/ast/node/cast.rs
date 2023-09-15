@@ -333,10 +333,10 @@ impl<'a, 'ctx> Ctx<'a> {
         let tag = builder.build_struct_gep(val, 0, "tag").unwrap();
         // check if the tag is the same
         let tag = builder.build_load(tag, "tag");
-        let cond_block = builder.append_basic_block(self.function.unwrap(), "if.cond");
-        let then_block = builder.append_basic_block(self.function.unwrap(), "if.then");
-        let else_block = builder.append_basic_block(self.function.unwrap(), "if.else");
-        let after_block = builder.append_basic_block(self.function.unwrap(), "if.after");
+        let cond_block = builder.append_basic_block(self.function.unwrap(), "force.if.cond");
+        let then_block = builder.append_basic_block(self.function.unwrap(), "force.if.then");
+        let else_block = builder.append_basic_block(self.function.unwrap(), "force.if.else");
+        let after_block = builder.append_basic_block(self.function.unwrap(), "force.if.after");
 
         let result_tp = target_ty.clone();
         let result = builder.alloc("cast_result", &result_tp.borrow(), self, None);

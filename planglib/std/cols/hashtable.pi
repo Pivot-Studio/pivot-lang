@@ -12,6 +12,7 @@ pub struct HashTable<K:Hash<PaulLarsonHasher>|V> {
 struct TableNode<K:Hash<PaulLarsonHasher>|V> {
     key:K;
     value:V;
+    hash:u64;
     next:Option<TableNode<K|V>>;
 }
 
@@ -26,29 +27,48 @@ impl <K:Hash<PaulLarsonHasher>|V> HashTable<K|V>  {
             key:k,
             value:v,
             next:next,
+            hash:hash,
         };
         let current = self.buckets[bucket as i64];
-
+        if current is None {
+            self.buckets[bucket as i64] = node;
+        } else {
+            let head = current as TableNode<K|V>!;
+            let new_head = node;
+            new_head.next = head;
+            self.buckets[bucket as i64] = new_head;
+        }
+        
         return;
+    }
+    pub fn get(k:K) Option<V> {
+        let hasher = new_paul_larson_hasher(self.salt);
+        k.hash(&hasher);
+        let hash = hasher.finish();
+        let bucket = hash % self.total_buckets;
+        let current = self.buckets[bucket as i64];
+        if current is None {
+            return None{};
+        } else {
+            // current = self.buckets[bucket as i64];
+            let head = current as TableNode<K|V>!;
+            let ccc = head;
+            while !ccc.next is None {
+                if ccc.hash == hash {
+                    return ccc.value;
+                }
+                ccc = ccc.next as TableNode<K|V>!;
+            }
+            if ccc.hash == hash {
+                return ccc.value;
+            }
+
+            return None{};
+        }
     }
     
 }
 
-    pub fn insert<K:Hash<PaulLarsonHasher>|V>(a:HashTable<K|V>, k:K,v:V) void {
-        let hasher = new_paul_larson_hasher(a.salt);
-        k.hash(&hasher);
-        let hash = hasher.finish();
-        let bucket = hash % a.total_buckets;
-        let next:Option<TableNode<K|V>> = None{};
-        let node = TableNode<K|V> {
-            key:k,
-            value:v,
-            next:next,
-        };
-        let current = a.buckets[bucket as i64];
-
-        return;
-    }
 
 
 

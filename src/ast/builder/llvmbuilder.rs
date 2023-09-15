@@ -567,6 +567,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .build_load(real_arr_raw, "loaded_arr")
             .into_pointer_value();
         let loop_var = self.builder.build_alloca(self.context.i64_type(), "i");
+        self.builder.build_store(loop_var, self.context.i64_type().const_zero());
         // arr is the real array
         let arr_len = self.builder.build_struct_gep(arr, 2, "arr_len").unwrap();
         let arr_len = self.builder.build_load(arr_len, "arr_len").into_int_value();
@@ -599,13 +600,16 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             }
             PLType::Pointer(_) => {
                 // call the visit_ptr function
+                let casted = self.builder.build_bitcast(elm, i8ptrtp, "casted_arg");
                 self.builder
-                    .build_call(visit_ptr_f, &[visitor.into(), elm.into()], "call");
+                    .build_call(visit_ptr_f, &[visitor.into(), casted.into()], "call");
             }
             PLType::Trait(_) | PLType::Union(_) | PLType::Closure(_) => {
                 // call the visit_trait function
+                let casted = self.builder.build_bitcast(elm, i8ptrtp, "casted_arg");
+
                 self.builder
-                    .build_call(visit_trait_f, &[visitor.into(), elm.into()], "call");
+                    .build_call(visit_trait_f, &[visitor.into(), casted.into()], "call");
             }
             PLType::Fn(_)
             | PLType::Primitive(_)

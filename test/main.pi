@@ -63,17 +63,25 @@ pub fn main() i64 {
     let fd = io::open_read("./Cargo.toml");
     let s = fd.read_all_as_string() as string!;
     
-
     println!(s);
 
 
-    let hasher = new_paul_larson_hasher(0 as u64);
-    s.hash(&hasher);
-    let hash = hasher.finish() as i64;
-    println!(hash);
+    // let hasher = new_paul_larson_hasher(0 as u64);
+    // s.hash(&hasher);
+    // let hash = hasher.finish() as i64;
+    // println!(hash);
     
     
     arr::test_arr();
+
+
+    let table = hashtable::new_hash_table<string|string>(10 as u64, 100 as u64);
+    table.insert("hi", "World");
+    table.insert("tj", "love hj");
+    let v = table.get("hi") as string!;
+    println!(v);
+    v = table.get("tj") as string!;
+    println!(v);
     return 0;
 }
 

@@ -66,3 +66,8 @@ fn utf8_count(ptr: *mut u8, byte_len: i64) -> i64 {
     let s = unsafe { std::slice::from_raw_parts(ptr, byte_len as usize) };
     bytecount::num_chars(s) as _
 }
+
+
+pub fn count_utf8_char(s: &str) -> usize {
+    bytecount::num_chars(s.as_bytes())
+}
