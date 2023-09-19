@@ -61,4 +61,4 @@ impl <T|E> Result<T|E> {
 }
 
 pub use core::hash::*;
-
+pub use core::eq::*;

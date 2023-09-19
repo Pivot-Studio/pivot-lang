@@ -467,7 +467,10 @@ impl StructDefNode {
     pub fn add_to_symbols<'a, 'b>(&self, ctx: &'b mut Ctx<'a>, builder: &'b BuilderEnum<'a, '_>) {
         let generic_map = if let Some(generics) = &self.generics {
             let mp = generics.gen_generic_type(ctx);
-            _ = generics.set_traits(ctx, builder, &mp);
+            _ = ctx.protect_generic_context(&mp, |ctx|
+                generics.set_traits(ctx, builder, &mp)
+            );
+            
             mp
         } else {
             IndexMap::default()

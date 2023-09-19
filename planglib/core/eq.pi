@@ -1,0 +1,35 @@
+pub trait Eq<Self> {
+    fn eq(r:*Self) bool;
+}
+
+
+impl Eq<gc::string> for gc::string {
+    fn eq(r:*gc::string) bool {
+        if self.len() != r.len() {
+            return false;
+        }
+        for let i = 0; i < self.len(); i = i + 1 {
+            if self.bytes()[i] != r.bytes()[i] {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+
+
+
+impl <B|T:Eq<B>> Eq<[B]> for [T] {
+    fn eq(r:*[B]) bool {
+        if arr_len(*self) != arr_len(*r) {
+            return false;
+        }
+        for let i = 0; i < arr_len(*self); i = i + 1 {
+            if !(*self)[i].eq(&(*r)[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+

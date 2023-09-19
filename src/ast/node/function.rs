@@ -211,6 +211,11 @@ impl Node for FuncCallNode {
         let mut para_values = vec![];
         let mut receiver_type = None;
         if let Some((receiver, tp)) = v.get_receiver() {
+            // if let Some(tp) = tp.as_ref() {
+            //     if let PLType::Pointer(p) = &*tp.borrow() {
+            //         ctx.set_self_type(p.clone());
+            //     }
+            // }
             (skip, para_values, receiver_type) = (1, vec![receiver], tp);
         }
         let fn_handle = v.get_value();
@@ -363,26 +368,32 @@ impl TypeNode for FuncDefNode {
         let child = &mut ctx.new_child(self.range.start, builder);
         let generic_map = if let Some(generics) = &self.generics {
             let mp = generics.gen_generic_type(ctx);
-            generics.set_traits(child, builder, &mp)?;
+            // generics.set_traits(child, builder, &mp)?;
             mp
         } else {
             IndexMap::default()
         };
-        if let Some(trait_bounds) = &self.trait_bounds {
-            for trait_bound in trait_bounds.iter() {
-                trait_bound.set_traits(child, builder, &generic_map)?;
-            }
-        }
         let (pltype, flater) = child.protect_generic_context(&generic_map, |child| {
+            if let Some(generics) = &self.generics {
+                generics.set_traits(child, builder, &generic_map)?;
+            }
+            if let Some(trait_bounds) = &self.trait_bounds {
+                for trait_bound in trait_bounds.iter() {
+                    trait_bound.set_traits(child, builder, &generic_map)?;
+                }
+            }
             let mut flater: OptFOnce = None;
             let mut param_pltypes = Vec::new();
             let mut param_name = Vec::new();
             let method = self.is_method;
             let (trait_tp, generic) = if let Some((v, (_, r), generic)) = &self.impl_trait {
-                (
-                    Some((v.clone().get_type(child, builder, false)?, *r)),
+                {                
+                    let re = v.clone().get_type(child, builder, false)?;
+                    // child.set_self_type(re.clone());
+                    (
+                    Some((re, *r)),
                     *generic,
-                )
+                )}
             } else {
                 (None, false)
             };
@@ -394,10 +405,17 @@ impl TypeNode for FuncDefNode {
                     }
                     _ => unreachable!(),
                 });
+            // let mut first = true;
             for para in self.paralist.iter() {
-                _ = para.typenode.get_type(child, builder, true)?;
+                let tp = para.typenode.get_type(child, builder, true)?;
                 param_pltypes.push(para.typenode.clone());
                 param_name.push(para.id.name.clone());
+                // if first && method {
+                //     if let PLType::Pointer(p) = &*tp.borrow() {
+                //         child.set_self_type(p.clone());
+                //     }
+                // }
+                // first = false;
             }
             self.ret.get_type(child, builder, true)?;
             let fnvalue = FNValue {
@@ -697,8 +715,14 @@ impl FuncDefNode {
             if !self.generator {
                 child.rettp = Some(fnvalue.fntype.ret_pltype.get_type(child, builder, true)?);
             }
+
+            // trait method with generic
+            
+            if self.body.is_none() {
+                return Ok(());
+            }
             // body generation
-            let terminator = self.body.as_mut().unwrap().emit(child, builder)?.get_term();
+            let terminator = self.body.as_mut().expect(&self.id.name).emit(child, builder)?.get_term();
             if !terminator.is_return() && !self.generator {
                 return Err(child.add_diag(
                     self.range

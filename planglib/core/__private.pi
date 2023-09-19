@@ -4,4 +4,5 @@ use core::builtin;
 use core::hash::pl_hash;
 use core::hash::hasher;
 use core::hash;
+use core::eq;
 // use core::cols::hashtable;

@@ -1352,13 +1352,23 @@ impl STType {
                     let mut nf = f.clone();
                     if let TypeNodeEnum::Func(fd) = &*f.typenode {
                         let mut new_f = fd.clone();
+                        let mut first = true;
                         for f in new_f.paralist.iter_mut() {
-                            f.typenode = f
+                            if first {
+                                f.typenode = Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
+                                    elm: Box::new(TypeNameNode::new_from_str("i64").into()),
+                                    range: Default::default(),
+                                }));
+                                
+                            }else {
+                                f.typenode = f
                                 .typenode
                                 .get_type(ctx, builder, true)
                                 .unwrap()
                                 .borrow()
-                                .get_typenode(&ctx.get_file());
+                                .get_typenode(&ctx.get_file());   
+                            }
+                            first = false;
                         }
                         // eprintln!("{:?}", new_f.ret);
                         new_f.ret = new_f
@@ -1569,6 +1579,8 @@ impl GenericType {
 
             // });
 
+            // ctx.set_self_type(ph.clone());
+
             for it in impls {
                 if let PLType::Trait(t) = &*it.clone().borrow() {
                     ctx.get_root_ctx().plmod.add_impl(
@@ -1578,7 +1590,12 @@ impl GenericType {
                     );
                     let fields = t.list_trait_fields();
                     for field in fields {
-                        let tp = field.typenode.get_type(ctx, builder, true).unwrap();
+                        let re = field.typenode.get_type(ctx, builder, true);
+                        if re.is_err() {
+                            re.unwrap_err().add_to_ctx(ctx);
+                            continue;
+                        }
+                        let tp = re.unwrap();
                         if let PLType::Fn(f) = &*tp.clone().borrow() {
                             let mut f = f.clone();
                             f.fntype.param_pltypes[0] = ph.borrow().get_typenode(&ctx.get_file());

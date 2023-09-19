@@ -75,6 +75,7 @@ pub fn main() i64 {
     arr::test_arr();
 
 
+
     let table = hashtable::new_hash_table<string|string>(10 as u64, 100 as u64);
     table.insert("hi", "World");
     table.insert("tj", "love hj");

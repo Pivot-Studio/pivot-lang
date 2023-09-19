@@ -17,7 +17,6 @@ fn hash(data:[u8], salt:u64) u64 {
 }
 
 
-pub fn printi64ln(i: i64) void;
 
 pub struct PaulLarsonHasher {
     hash: u64;

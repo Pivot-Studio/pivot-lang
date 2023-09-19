@@ -51,7 +51,7 @@ impl MultiTraitNode {
         builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&name), &st, ctx);
         let trait_tp = Arc::new(RefCell::new(PLType::Trait(st)));
 
-        _ = ctx.add_type(name, trait_tp.clone(), Default::default());
+        _ = ctx.add_type_without_check(trait_tp.clone());
         Ok(trait_tp)
     }
     pub fn emit_highlight(&self, ctx: &mut Ctx) {
@@ -198,13 +198,14 @@ impl TraitDefNode {
             IndexMap::default()
         };
         ctx.protect_generic_context(&generic_map, |ctx| {
+            // ctx.set_self_type(Arc::new(RefCell::new(PLType::Primitive( PriType::I64))));// 随便放个类型，用Self的接口不能实例化 
             let mut fields = LinkedHashMap::new();
             // add generic type before field add type
             let derives = self.derives.get_types(ctx, builder)?;
             for (i, field) in self.methods.iter().enumerate() {
                 let mut tp = field.clone();
                 tp.paralist
-                    .insert(0, Box::new(new_i64ptr_tf_with_name("self")));
+                    .insert(0, Box::new(new_selfptr_tf_with_name("self")));
                 let id = field.id.clone();
                 let f = Field {
                     index: i as u32 + 2,
@@ -214,15 +215,15 @@ impl TraitDefNode {
                     modifier: Some((TokenType::PUB, field.range)),
                 };
                 field.emit_highlight(ctx);
-                if field.generics.is_some() {
-                    // TODO allow it
-                    // if there's generic in trait method, the vtable cannot be generated
-                    return Err(ctx.add_diag(
-                        field
-                            .range()
-                            .new_err(ErrorCode::GENERIC_NOT_ALLOWED_IN_TRAIT_METHOD),
-                    ));
-                }
+                // if field.generics.is_some() {
+                //     // TODO allow it
+                //     // if there's generic in trait method, the vtable cannot be generated
+                //     return Err(ctx.add_diag(
+                //         field
+                //             .range()
+                //             .new_err(ErrorCode::GENERIC_NOT_ALLOWED_IN_TRAIT_METHOD),
+                //     ));
+                // }
                 if field.get_type(ctx, builder, true).is_err() {
                     continue;
                 }
@@ -264,7 +265,7 @@ impl TraitDefNode {
     }
 }
 
-fn new_i64ptr_tf_with_name(n: &str) -> TypedIdentifierNode {
+fn new_selfptr_tf_with_name(n: &str) -> TypedIdentifierNode {
     TypedIdentifierNode {
         id: VarNode {
             name: n.to_string(),

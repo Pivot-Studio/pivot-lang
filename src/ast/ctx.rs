@@ -110,6 +110,7 @@ pub struct Ctx<'a> {
     pub origin_mod: *const Mod,
     pub linked_tp_tbl: FxHashMap<*mut PLType, Vec<Arc<RefCell<PLType>>>>,
     is_active_file: bool,
+    self_type: Option<Arc<RefCell<PLType>>>
 }
 
 #[derive(Clone, Default)]
@@ -146,6 +147,20 @@ pub enum MacroReplaceNode {
 }
 
 impl<'a, 'ctx> Ctx<'a> {
+    // pub fn set_self_type(&mut self, tp: Arc<RefCell<PLType>>) {
+    //     self.self_type = Some(tp);
+    // }
+    // pub fn get_self_type(&self) -> Option<Arc<RefCell<PLType>>> {
+    //     // recursive search in self and fathers
+    //     let mut ctx = Some(self);
+    //     while let Some(p) = ctx {
+    //         if let Some(tp) = &p.self_type {
+    //             return Some(tp.clone());
+    //         }
+    //         ctx = p.father;
+    //     }
+    //     None
+    // }
     /// lsp fn
     pub fn is_active_file(&self) -> bool {
         self.is_active_file
@@ -311,6 +326,7 @@ impl<'a, 'ctx> Ctx<'a> {
             origin_mod: std::ptr::null(),
             linked_tp_tbl: FxHashMap::default(),
             is_active_file,
+            self_type:None
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -352,6 +368,7 @@ impl<'a, 'ctx> Ctx<'a> {
             origin_mod: self.origin_mod,
             linked_tp_tbl: FxHashMap::default(),
             is_active_file: self.is_active_file,
+            self_type:None
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
@@ -549,13 +566,13 @@ impl<'a, 'ctx> Ctx<'a> {
                             };
 
                             let fnhandle = builder.get_or_insert_fn_handle(&mthd.borrow(), ctx).0;
-                            let targetftp = f.typenode.get_type(ctx, builder, true).unwrap();
-                            let casted =
-                                builder.bitcast(ctx, fnhandle, &targetftp.borrow(), "fncast_tmp");
+                            // let targetftp = f.typenode.get_type(ctx, builder, true).unwrap();
+                            // let casted =
+                            //     builder.bitcast(ctx, fnhandle, &targetftp.borrow(), "fncast_tmp");
                             let f_ptr = builder
                                 .build_struct_gep(trait_handle, f.index, "field_tmp")
                                 .unwrap();
-                            builder.build_store(f_ptr, casted);
+                            unsafe {builder.store_with_aoto_cast(f_ptr, fnhandle);}
                         }
 
                         let st_value = builder.bitcast(
@@ -604,13 +621,13 @@ impl<'a, 'ctx> Ctx<'a> {
                                 .build_struct_gep(st_value, field.index, "trait_mthd")
                                 .unwrap();
                             let fnhandle = builder.build_load(fnhandle, "trait_mthd");
-                            let targetftp = f.typenode.get_type(ctx, builder, true).unwrap();
-                            let casted =
-                                builder.bitcast(ctx, fnhandle, &targetftp.borrow(), "fncast_tmp");
+                            // let targetftp = f.typenode.get_type(ctx, builder, true).unwrap();
+                            // let casted =
+                            //     builder.bitcast(ctx, fnhandle, &targetftp.borrow(), "fncast_tmp");
                             let f_ptr = builder
                                 .build_struct_gep(trait_handle, f.index, "field_tmp")
                                 .unwrap();
-                            builder.build_store(f_ptr, casted);
+                            unsafe {builder.store_with_aoto_cast(f_ptr, fnhandle);}
                         }
                         let st = builder.build_struct_gep(st_value, 1, "src_v_tmp").unwrap();
                         let st = builder.build_load(st, "src_v");
@@ -953,11 +970,13 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn get_type(&self, name: &str, range: Range) -> Result<GlobType, PLDiag> {
         if let Some(pv) = self.generic_types.get(name) {
             self.set_if_refs_tp(pv.clone(), range);
-            self.send_if_go_to_def(
-                range,
-                pv.borrow().get_range().unwrap_or(range),
-                self.plmod.path.clone(),
-            );
+            if let Ok(pv) =pv.try_borrow() {
+                self.send_if_go_to_def(
+                    range,
+                    pv.get_range().unwrap_or(range),
+                    self.plmod.path.clone(),
+                );
+            }
             return Ok(pv.clone().into());
         }
         if let Ok(pv) = self.plmod.get_type(name, range, self) {
