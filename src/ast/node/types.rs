@@ -102,8 +102,7 @@ impl TypeNameNode {
                             }
                         }
                         Ok(())
-                    })
-                    .unwrap();
+                    })?;
                 }
                 let ret = if sttype.is_trait {
                     Arc::new(RefCell::new(PLType::Trait(sttype)))
@@ -150,8 +149,7 @@ impl TypeNameNode {
                             }
                         }
                         Ok(())
-                    })
-                    .unwrap();
+                    })?;
                 }
                 let ret = Arc::new(RefCell::new(PLType::Union(untype)));
                 ctx.linked_tp_tbl
