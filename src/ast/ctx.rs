@@ -1,5 +1,7 @@
 use super::builder::BlockHandle;
 use super::builder::ValueHandle;
+use super::builder::no_op_builder::NoOpBuilder;
+use super::diag::DiagCode;
 use super::diag::ErrorCode;
 use super::diag::PLDiag;
 
@@ -1126,6 +1128,9 @@ impl<'a, 'ctx> Ctx<'a> {
         if let Some(src) = &self.temp_source {
             dia.set_source(src);
         }
+        if dia.get_diag_code() ==DiagCode::Err(ErrorCode::UNDEFINED_TYPE) {
+            eprintln!("{:?}", dia);
+        }
         let dia2 = dia.clone();
         self.errs.borrow_mut().insert(dia);
         dia2
@@ -1598,13 +1603,17 @@ impl<'a, 'ctx> Ctx<'a> {
         None
     }
 
-    fn diff_trait_impl(&self, l: &GenericType, r: &GenericType) -> Option<String> {
-        let binding = l.trait_impl.clone().unwrap_or(vec![]);
+    fn diff_trait_impl(&mut self, l: &GenericType, r: &GenericType) -> Option<String> {
+        let noop = BuilderEnum::NoOp(NoOpBuilder::default());
+        // get it's pointer
+        let noop_ptr = &noop as *const BuilderEnum<'a, '_>;
+        let builder = unsafe { &*(noop_ptr as *const BuilderEnum<'a, '_>) };
+        let binding = l.trait_impl.clone().map(|e|e.get_types(self, builder).unwrap()).unwrap_or(vec![]);
         let miss = binding
             .iter()
             .filter(|lf| {
                 !r.trait_impl
-                    .clone()
+                    .clone().map(|e|e.get_types(self, builder).unwrap())
                     .unwrap_or(vec![])
                     .iter()
                     .any(|rf| self.eq(lf.clone().to_owned(), rf.clone()).eq)
@@ -1622,7 +1631,11 @@ impl<'a, 'ctx> Ctx<'a> {
     }
     /// 左是目标类型，右是实际类型
     /// when need eq trait and sttype,the left must be trait
-    pub fn eq(&self, l: Arc<RefCell<PLType>>, r: Arc<RefCell<PLType>>) -> EqRes {
+    pub fn eq(&mut self, l: Arc<RefCell<PLType>>, r: Arc<RefCell<PLType>>) -> EqRes {
+        let noop = BuilderEnum::NoOp(NoOpBuilder::default());
+        // get it's pointer
+        let noop_ptr = &noop as *const BuilderEnum<'a, '_>;
+        let builder = unsafe { &*(noop_ptr as *const BuilderEnum<'a, '_>) };
         if l == r && matches!(&*l.borrow(), PLType::Generic(_)) {
             if let PLType::Generic(l) = &mut *l.borrow_mut() {
                 if l.curpltype.is_some() {
@@ -1653,6 +1666,10 @@ impl<'a, 'ctx> Ctx<'a> {
                 if lg.curpltype.is_some() {
                     return self.eq(lg.curpltype.as_ref().unwrap().clone(), r);
                 }
+                lg.set_type(r.clone());
+
+            }
+            if let PLType::Generic(lg) = & *l.borrow() {
                 if lg.trait_impl.is_some() {
                     if let PLType::Generic(r) = &*r.borrow() {
                         if let Some(reason) = self.diff_trait_impl(lg, r) {
@@ -1665,7 +1682,7 @@ impl<'a, 'ctx> Ctx<'a> {
                     } else if lg
                         .trait_impl
                         .as_ref()
-                        .unwrap()
+                        .unwrap().get_types(self, builder).unwrap_or_default()
                         .iter()
                         .any(|lt| !self.eq(lt.clone(), r.clone()).eq)
                     {
@@ -1678,14 +1695,16 @@ impl<'a, 'ctx> Ctx<'a> {
                         };
                     }
                 }
-                lg.set_type(r);
-                return EqRes {
-                    eq: true,
-                    need_up_cast: false,
-                    reason: None,
-                };
             }
-            unreachable!()
+            if let PLType::Generic(lg) = &mut *l.borrow_mut() {
+            
+                lg.set_type(r);
+            }
+            return EqRes {
+                eq: true,
+                need_up_cast: false,
+                reason: None,
+            };
         }
         if l != r {
             if matches!(&*l.borrow(), PLType::Union(_)) {

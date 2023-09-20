@@ -28,7 +28,7 @@ impl ImplNode {
                 self.generics
                 .as_ref()
                 .unwrap()
-                .set_traits(ctx, builder, &gm)
+                .set_traits(ctx, &gm)
                 .unwrap();
                 let sttp = self.target.get_type(ctx, builder, true)?;
                 let trait_tp = self
@@ -160,7 +160,7 @@ impl Node for ImplNode {
             .unwrap_or_default();
         ctx.protect_generic_context(&gm, |ctx| {
             if let Some(g) = self.generics.as_ref() {
-                g.set_traits(ctx, builder, &gm)?;
+                g.set_traits(ctx, &gm)?;
             }
             let mut traittpandrange = None;
             let mut traitfns = FxHashSet::default();
@@ -227,7 +227,7 @@ impl Node for ImplNode {
                                     };
                                     ctx.protect_generic_context(&generic_map, |ctx| {
                                         if let Some(generics) = &method.generics {
-                                            generics.set_traits(ctx, builder, &generic_map)?;
+                                            generics.set_traits(ctx, &generic_map)?;
                                         }
                                         check_fn(
                                             ctx,

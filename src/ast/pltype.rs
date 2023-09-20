@@ -1,6 +1,7 @@
 use super::builder::ValueHandle;
 use super::ctx::Ctx;
 use super::diag::ErrorCode;
+use super::node::interface::MultiTraitNode;
 use super::node::types::ClosureTypeNode;
 use super::node::types::CustomTypeNode;
 use super::plmod::Mod;
@@ -1520,8 +1521,7 @@ pub struct GenericType {
     pub name: String,
     pub range: Range,
     pub curpltype: Option<Arc<RefCell<PLType>>>,
-    pub trait_impl: Option<Vec<Arc<RefCell<PLType>>>>,
-    pub trait_place_holder: Option<Arc<RefCell<PLType>>>,
+    pub trait_impl: Option<MultiTraitNode>,
     pub refs: Arc<MutVec<Location>>,
 }
 impl GenericType {
@@ -1581,7 +1581,7 @@ impl GenericType {
 
             // ctx.set_self_type(ph.clone());
 
-            for it in impls {
+            for it in impls.get_types(ctx, builder).unwrap() {
                 if let PLType::Trait(t) = &*it.clone().borrow() {
                     ctx.get_root_ctx().plmod.add_impl(
                         &ph.borrow().get_full_elm_name_without_generic(),

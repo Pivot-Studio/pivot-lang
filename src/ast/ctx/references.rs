@@ -39,13 +39,15 @@ impl<'a> Ctx<'a> {
         if range == Default::default() {
             return;
         }
-        tp.borrow().if_refs(
-            |tp| {
-                let name = tp.get_full_elm_name_without_generic();
-                self.set_glob_refs(&name, range)
-            },
-            |g| self.set_local_refs(g.refs.clone(), range),
-        )
+        if let Ok(tp) = tp.try_borrow() {
+            tp.if_refs(
+                |tp| {
+                    let name = tp.get_full_elm_name_without_generic();
+                    self.set_glob_refs(&name, range)
+                },
+                |g| self.set_local_refs(g.refs.clone(), range),
+            )   
+        }
     }
 
     /// # set_field_refs

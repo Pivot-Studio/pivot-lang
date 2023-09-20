@@ -468,7 +468,7 @@ impl StructDefNode {
         let generic_map = if let Some(generics) = &self.generics {
             let mp = generics.gen_generic_type(ctx);
             _ = ctx.protect_generic_context(&mp, |ctx|
-                generics.set_traits(ctx, builder, &mp)
+                generics.set_traits(ctx, &mp)
             );
             
             mp
@@ -854,11 +854,10 @@ impl GenericDefNode {
     pub fn set_traits<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, '_>,
         generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
     ) -> Result<(), PLDiag> {
         for g in self.generics.iter() {
-            g.set_traits(ctx, builder, generic_map)?;
+            g.set_traits(ctx, generic_map)?;
         }
         Ok(())
     }
@@ -872,7 +871,6 @@ impl GenericDefNode {
                 range,
                 curpltype: None,
                 trait_impl: None,
-                trait_place_holder: None,
                 refs: Arc::new(MutVec::new(vec![])),
             };
             let pltp = Arc::new(RefCell::new(PLType::Generic(gentype)));

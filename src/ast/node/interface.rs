@@ -87,15 +87,13 @@ impl TraitBoundNode {
     pub fn set_traits<'a, 'b>(
         &self,
         ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, '_>,
         generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
     ) -> Result<(), PLDiag> {
         if !generic_map.contains_key(&self.generic.name) {
             return Err(ctx.add_diag(self.generic.range().new_err(ErrorCode::GENERIC_NOT_FOUND)));
         }
         if let Some(impl_trait) = &self.impl_trait {
-            let trait_pltype = impl_trait.get_types(ctx, builder)?;
-            let trait_place_holder = impl_trait.merge_traits(ctx, builder)?;
+            // let trait_pltype = impl_trait.get_types(ctx, builder)?;
             let generic_type = generic_map.get(&self.generic.name).unwrap();
             if let PLType::Generic(generic_type) = &mut *generic_type.borrow_mut() {
                 if generic_type.trait_impl.is_some() {
@@ -103,8 +101,7 @@ impl TraitBoundNode {
                         ctx.add_diag(impl_trait.range().new_err(ErrorCode::DUPLICATE_TRAIT_BOUND))
                     );
                 }
-                generic_type.trait_impl = Some(trait_pltype);
-                generic_type.trait_place_holder = Some(trait_place_holder);
+                generic_type.trait_impl = Some(*impl_trait.clone());
                 return Ok(());
             }
             unreachable!()
@@ -161,7 +158,7 @@ impl TraitDefNode {
     pub fn add_to_symbols<'a, 'b>(&self, ctx: &'b mut Ctx<'a>, builder: &'b BuilderEnum<'a, '_>) {
         let generic_map = if let Some(generics) = &self.generics {
             let mp = generics.gen_generic_type(ctx);
-            _ = generics.set_traits(ctx, builder, &mp);
+            _ = generics.set_traits(ctx, &mp);
             mp
         } else {
             IndexMap::default()

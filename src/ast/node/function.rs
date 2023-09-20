@@ -193,19 +193,22 @@ impl Node for FuncCallNode {
                 ));
             }
             let generic_types = generic_params.get_generic_types(ctx, builder)?;
-            for (i, (_, pltype)) in fnvalue.fntype.generic_map.iter().enumerate() {
-                if i >= fnvalue.fntype.generics_size {
-                    break;
+            ctx.protect_generic_context(&fnvalue.fntype.generic_map.clone(), |ctx| {
+                for (i, (_, pltype)) in fnvalue.fntype.generic_map.iter().enumerate() {
+                    if i >= fnvalue.fntype.generics_size {
+                        break;
+                    }
+                    if generic_types[i].is_some()
+                        && !ctx
+                            .eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
+                            .eq
+                    {
+                        let r = generic_params.generics[i].as_ref().unwrap().range();
+                        return Err(r.new_err(ErrorCode::TYPE_MISMATCH).add_to_ctx(ctx));
+                    }
                 }
-                if generic_types[i].is_some()
-                    && !ctx
-                        .eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
-                        .eq
-                {
-                    let r = generic_params.generics[i].as_ref().unwrap().range();
-                    return Err(r.new_err(ErrorCode::TYPE_MISMATCH).add_to_ctx(ctx));
-                }
-            }
+                Ok(())
+            })?;
         }
         let mut skip = 0;
         let mut para_values = vec![];
@@ -375,11 +378,11 @@ impl TypeNode for FuncDefNode {
         };
         let (pltype, flater) = child.protect_generic_context(&generic_map, |child| {
             if let Some(generics) = &self.generics {
-                generics.set_traits(child, builder, &generic_map)?;
+                generics.set_traits(child, &generic_map)?;
             }
             if let Some(trait_bounds) = &self.trait_bounds {
                 for trait_bound in trait_bounds.iter() {
-                    trait_bound.set_traits(child, builder, &generic_map)?;
+                    trait_bound.set_traits(child, &generic_map)?;
                 }
             }
             let mut flater: OptFOnce = None;
@@ -414,7 +417,7 @@ impl TypeNode for FuncDefNode {
                 });
             // let mut first = true;
             for para in self.paralist.iter() {
-                let tp = para.typenode.get_type(child, builder, true)?;
+                _ = para.typenode.get_type(child, builder, true)?;
                 param_pltypes.push(para.typenode.clone());
                 param_name.push(para.id.name.clone());
                 // if first && method {

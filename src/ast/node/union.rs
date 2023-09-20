@@ -73,7 +73,7 @@ impl UnionDefNode {
             });
         _ = ctx.protect_generic_context(&generic_map, |ctx|{
             if let Some(generics) = self.generics.as_ref() {
-                generics.set_traits(ctx, builder, &generic_map)?;
+                generics.set_traits(ctx, &generic_map)?;
             }
             Ok(())
         });
