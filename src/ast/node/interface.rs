@@ -16,44 +16,44 @@ pub struct MultiTraitNode {
     pub traits: Vec<Box<TypeNodeEnum>>,
 }
 impl MultiTraitNode {
-    fn merge_traits<'a, 'b>(
-        &self,
-        ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, '_>,
-    ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
-        let derives = self.get_types(ctx, builder)?;
-        if derives.len() == 1 {
-            return Ok(derives[0].clone());
-        }
-        let name = derives
-            .iter()
-            .map(|t| t.borrow().get_name())
-            .collect::<Vec<_>>()
-            .join("+");
-        let st = STType {
-            generic_map: IndexMap::default(),
-            name: name.clone(),
-            path: ctx.plmod.path.clone(),
-            fields: LinkedHashMap::default(),
-            range: Default::default(),
-            doc: vec![],
-            derives,
-            modifier: None,
-            body_range: Default::default(),
-            is_trait: true,
-            is_tuple: false,
-            generic_infer_types: Default::default(),
-            // generic_infer: Default::default(),
-            methods: Default::default(),
-            trait_methods_impl: Default::default(),
-        };
-        builder.opaque_struct_type(&ctx.plmod.get_full_name(&name));
-        builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&name), &st, ctx);
-        let trait_tp = Arc::new(RefCell::new(PLType::Trait(st)));
+    // fn merge_traits<'a, 'b>(
+    //     &self,
+    //     ctx: &'b mut Ctx<'a>,
+    //     builder: &'b BuilderEnum<'a, '_>,
+    // ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
+    //     let derives = self.get_types(ctx, builder)?;
+    //     if derives.len() == 1 {
+    //         return Ok(derives[0].clone());
+    //     }
+    //     let name = derives
+    //         .iter()
+    //         .map(|t| t.borrow().get_name())
+    //         .collect::<Vec<_>>()
+    //         .join("+");
+    //     let st = STType {
+    //         generic_map: IndexMap::default(),
+    //         name: name.clone(),
+    //         path: ctx.plmod.path.clone(),
+    //         fields: LinkedHashMap::default(),
+    //         range: Default::default(),
+    //         doc: vec![],
+    //         derives,
+    //         modifier: None,
+    //         body_range: Default::default(),
+    //         is_trait: true,
+    //         is_tuple: false,
+    //         generic_infer_types: Default::default(),
+    //         // generic_infer: Default::default(),
+    //         methods: Default::default(),
+    //         trait_methods_impl: Default::default(),
+    //     };
+    //     builder.opaque_struct_type(&ctx.plmod.get_full_name(&name));
+    //     builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&name), &st, ctx);
+    //     let trait_tp = Arc::new(RefCell::new(PLType::Trait(st)));
 
-        _ = ctx.add_type_without_check(trait_tp.clone());
-        Ok(trait_tp)
-    }
+    //     _ = ctx.add_type_without_check(trait_tp.clone());
+    //     Ok(trait_tp)
+    // }
     pub fn emit_highlight(&self, ctx: &mut Ctx) {
         for t in &self.traits {
             t.emit_highlight(ctx);

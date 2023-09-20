@@ -64,12 +64,6 @@ pub fn main() i64 {
     let s = fd.read_all_as_string() as string!;
     
     println!(s);
-
-
-    // let hasher = new_paul_larson_hasher(0 as u64);
-    // s.hash(&hasher);
-    // let hash = hasher.finish() as i64;
-    // println!(hash);
     
     
     arr::test_arr();
@@ -82,6 +76,9 @@ pub fn main() i64 {
     let v = table.get("hi") as string!;
     println!(v);
     v = table.get("tj") as string!;
+    println!(v);
+    table.insert("hi", "World2");
+    v = table.get("hi") as string!;
     println!(v);
     return 0;
 }

@@ -14,11 +14,11 @@ pub struct HashTable<K:Hash+Eq<K>|V> {
 
 
 
-struct TableNode<K:Hash+Eq<K>|V> {
-    key:K;
+struct TableNode<Y:Hash+Eq<Y>|V> {
+    key:Y;
     value:V;
     hash:u64;
-    next:Option<TableNode<K|V>>;
+    next:Option<TableNode<Y|V>>;
 }
 
 
@@ -40,7 +40,7 @@ impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
         if current is None {
             self.buckets[bucket as i64] = node;
         } else {
-            // check if there's same value
+            // check if there's same key
             let head = current as TableNode<K|V>!;
             while !head.next is None {
                 if head.key.eq(&k) {
@@ -49,9 +49,11 @@ impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
                 }
                 head = head.next as TableNode<K|V>!;
             }
-            // let new_head = node;
-            // new_head.next = head;
-            // self.buckets[bucket as i64] = new_head;
+            // if the key doesn't exist, insert it to the head
+            // as the head is the most recently used
+            let new_head = node;
+            new_head.next = head;
+            self.buckets[bucket as i64] = new_head;
         }
         
         return;
@@ -74,7 +76,7 @@ impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
                 }
                 head = head.next as TableNode<K|V>!;
             }
-            if head.hash == hash {
+            if head.key.eq(&k) {
                 return head.value;
             }
 

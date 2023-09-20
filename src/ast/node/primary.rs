@@ -254,12 +254,6 @@ impl VarNode {
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE))),
             }
         }
-        // if self.name == "Self" {
-        //     if let Some(tp) = ctx.get_self_type()  {
-        //         return usize::MAX.new_output(tp).to_result();
-        //     }
-        // }
-        ctx.get_type(&self.name, self.range);
         Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)))
     }
 }

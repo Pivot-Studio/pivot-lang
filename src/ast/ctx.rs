@@ -1,7 +1,6 @@
 use super::builder::BlockHandle;
 use super::builder::ValueHandle;
 use super::builder::no_op_builder::NoOpBuilder;
-use super::diag::DiagCode;
 use super::diag::ErrorCode;
 use super::diag::PLDiag;
 
@@ -112,7 +111,6 @@ pub struct Ctx<'a> {
     pub origin_mod: *const Mod,
     pub linked_tp_tbl: FxHashMap<*mut PLType, Vec<Arc<RefCell<PLType>>>>,
     is_active_file: bool,
-    self_type: Option<Arc<RefCell<PLType>>>
 }
 
 #[derive(Clone, Default)]
@@ -328,7 +326,6 @@ impl<'a, 'ctx> Ctx<'a> {
             origin_mod: std::ptr::null(),
             linked_tp_tbl: FxHashMap::default(),
             is_active_file,
-            self_type:None
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -370,7 +367,6 @@ impl<'a, 'ctx> Ctx<'a> {
             origin_mod: self.origin_mod,
             linked_tp_tbl: FxHashMap::default(),
             is_active_file: self.is_active_file,
-            self_type:None
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
@@ -1128,9 +1124,6 @@ impl<'a, 'ctx> Ctx<'a> {
         if let Some(src) = &self.temp_source {
             dia.set_source(src);
         }
-        if dia.get_diag_code() ==DiagCode::Err(ErrorCode::UNDEFINED_TYPE) {
-            eprintln!("{:?}", dia);
-        }
         let dia2 = dia.clone();
         self.errs.borrow_mut().insert(dia);
         dia2
@@ -1720,13 +1713,6 @@ impl<'a, 'ctx> Ctx<'a> {
                 (&*trait_pltype.borrow(), &*st_pltype.borrow())
             {
                 let eq = st.implements_trait(t, &self.get_root_ctx().plmod);
-                if !eq {
-                    eprintln!(
-                        "trait `{}` is not implemented for `{}`",
-                        t.get_name(),
-                        st.get_name()
-                    );
-                }
                 return EqRes {
                     eq,
                     need_up_cast: true,
