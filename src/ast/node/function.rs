@@ -370,9 +370,8 @@ impl TypeNode for FuncDefNode {
     ) -> TypeNodeResult {
         let child = &mut ctx.new_child(self.range.start, builder);
         let generic_map = if let Some(generics) = &self.generics {
-            let mp = generics.gen_generic_type(ctx);
             // generics.set_traits(child, builder, &mp)?;
-            mp
+            generics.gen_generic_type(ctx)
         } else {
             IndexMap::default()
         };
@@ -390,30 +389,25 @@ impl TypeNode for FuncDefNode {
             let mut param_name = Vec::new();
             let method = self.is_method;
             let (trait_tp, generic) = if let Some((v, (_, r), generic)) = &self.impl_trait {
-                {                
+                {
                     let re = v.clone().get_type(child, builder, false)?;
                     // child.set_self_type(re.clone());
-                    (
-                    Some((re, *r)),
-                    *generic,
-                )}
+                    (Some((re, *r)), *generic)
+                }
             } else {
                 (None, false)
             };
             generic_map
                 .iter()
-                .map(|(_, pltype)| match & *pltype.clone().borrow() {
+                .map(|(_, pltype)| match &*pltype.clone().borrow() {
+                    PLType::Generic(g) => (pltype, g.set_place_holder(child, builder)),
+                    _ => unreachable!(),
+                })
+                .for_each(|(g, tp)| match &mut *g.borrow_mut() {
                     PLType::Generic(g) => {
-                        (pltype,g.set_place_holder(child, builder))
+                        g.curpltype = Some(tp);
                     }
                     _ => unreachable!(),
-                }).for_each(|(g,tp)| {
-                    match &mut *g.borrow_mut() {
-                        PLType::Generic(g) => {
-                            g.curpltype = Some(tp);
-                        }
-                        _ => unreachable!(),
-                    }
                 });
             // let mut first = true;
             for para in self.paralist.iter() {
@@ -573,21 +567,20 @@ impl FuncDefNode {
                     _ => return Ok(()),
                 }
                 builder = unsafe { &*(noop_ptr as *const BuilderEnum<'a, '_>) };
-                fnvalue.fntype.generic_map.iter().map(|(_, pltype)| {
-                    match & *pltype.clone().borrow() {
-                        PLType::Generic(g) => {
-                            (pltype,g.set_place_holder(child, builder))
-                        }
+                fnvalue
+                    .fntype
+                    .generic_map
+                    .iter()
+                    .map(|(_, pltype)| match &*pltype.clone().borrow() {
+                        PLType::Generic(g) => (pltype, g.set_place_holder(child, builder)),
                         _ => unreachable!(),
-                    }
-                }).for_each(|(g,tp)| {
-                    match &mut *g.borrow_mut() {
+                    })
+                    .for_each(|(g, tp)| match &mut *g.borrow_mut() {
                         PLType::Generic(g) => {
                             g.curpltype = Some(tp);
                         }
                         _ => unreachable!(),
-                    }
-                });
+                    });
                 let mut place_holder_fn = fnvalue.clone();
                 let name = place_holder_fn.append_name_with_generic(place_holder_fn.name.clone());
                 place_holder_fn.llvmname = place_holder_fn
@@ -734,12 +727,17 @@ impl FuncDefNode {
             }
 
             // trait method with generic
-            
+
             if self.body.is_none() {
                 return Ok(());
             }
             // body generation
-            let terminator = self.body.as_mut().expect(&self.id.name).emit(child, builder)?.get_term();
+            let terminator = self
+                .body
+                .as_mut()
+                .expect(&self.id.name)
+                .emit(child, builder)?
+                .get_term();
             if !terminator.is_return() && !self.generator {
                 return Err(child.add_diag(
                     self.range

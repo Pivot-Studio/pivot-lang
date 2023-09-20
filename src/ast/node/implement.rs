@@ -26,10 +26,10 @@ impl ImplNode {
             let gm = self.generics.as_ref().unwrap().gen_generic_type(ctx);
             _ = ctx.protect_generic_context(&gm, |ctx| {
                 self.generics
-                .as_ref()
-                .unwrap()
-                .set_traits(ctx, &gm)
-                .unwrap();
+                    .as_ref()
+                    .unwrap()
+                    .set_traits(ctx, &gm)
+                    .unwrap();
                 let sttp = self.target.get_type(ctx, builder, true)?;
                 let trait_tp = self
                     .impl_trait
@@ -153,10 +153,7 @@ impl Node for ImplNode {
         let gm = self
             .generics
             .as_ref()
-            .map(|e| {
-                let gm = e.gen_generic_type(ctx);
-                gm
-            })
+            .map(|e| e.gen_generic_type(ctx))
             .unwrap_or_default();
         ctx.protect_generic_context(&gm, |ctx| {
             if let Some(g) = self.generics.as_ref() {
@@ -220,8 +217,7 @@ impl Node for ImplNode {
                             if let PLType::Trait(t) = &*trait_tp.clone().borrow() {
                                 ctx.protect_generic_context(&t.generic_map, |ctx| {
                                     let generic_map = if let Some(generics) = &method.generics {
-                                        let mp = generics.gen_generic_type(ctx);
-                                        mp
+                                        generics.gen_generic_type(ctx)
                                     } else {
                                         IndexMap::default()
                                     };

@@ -1,6 +1,6 @@
+use super::builder::no_op_builder::NoOpBuilder;
 use super::builder::BlockHandle;
 use super::builder::ValueHandle;
-use super::builder::no_op_builder::NoOpBuilder;
 use super::diag::ErrorCode;
 use super::diag::PLDiag;
 
@@ -570,7 +570,9 @@ impl<'a, 'ctx> Ctx<'a> {
                             let f_ptr = builder
                                 .build_struct_gep(trait_handle, f.index, "field_tmp")
                                 .unwrap();
-                            unsafe {builder.store_with_aoto_cast(f_ptr, fnhandle);}
+                            unsafe {
+                                builder.store_with_aoto_cast(f_ptr, fnhandle);
+                            }
                         }
 
                         let st_value = builder.bitcast(
@@ -625,7 +627,9 @@ impl<'a, 'ctx> Ctx<'a> {
                             let f_ptr = builder
                                 .build_struct_gep(trait_handle, f.index, "field_tmp")
                                 .unwrap();
-                            unsafe {builder.store_with_aoto_cast(f_ptr, fnhandle);}
+                            unsafe {
+                                builder.store_with_aoto_cast(f_ptr, fnhandle);
+                            }
                         }
                         let st = builder.build_struct_gep(st_value, 1, "src_v_tmp").unwrap();
                         let st = builder.build_load(st, "src_v");
@@ -777,7 +781,7 @@ impl<'a, 'ctx> Ctx<'a> {
         generic: bool,
         target: Range,
     ) -> Result<(), PLDiag> {
-        if t.get_path() != self.get_file()  {
+        if t.get_path() != self.get_file() {
             self.add_trait_impl_method(t, mthd, fntp, impl_trait, generic, target)
         } else {
             t.add_method(mthd, fntp).map_err(|e| e.add_to_ctx(self))
@@ -968,7 +972,7 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn get_type(&self, name: &str, range: Range) -> Result<GlobType, PLDiag> {
         if let Some(pv) = self.generic_types.get(name) {
             self.set_if_refs_tp(pv.clone(), range);
-            if let Ok(pv) =pv.try_borrow() {
+            if let Ok(pv) = pv.try_borrow() {
                 self.send_if_go_to_def(
                     range,
                     pv.get_range().unwrap_or(range),
@@ -1601,12 +1605,17 @@ impl<'a, 'ctx> Ctx<'a> {
         // get it's pointer
         let noop_ptr = &noop as *const BuilderEnum<'a, '_>;
         let builder = unsafe { &*(noop_ptr as *const BuilderEnum<'a, '_>) };
-        let binding = l.trait_impl.clone().map(|e|e.get_types(self, builder).unwrap()).unwrap_or(vec![]);
+        let binding = l
+            .trait_impl
+            .clone()
+            .map(|e| e.get_types(self, builder).unwrap())
+            .unwrap_or(vec![]);
         let miss = binding
             .iter()
             .filter(|lf| {
                 !r.trait_impl
-                    .clone().map(|e|e.get_types(self, builder).unwrap())
+                    .clone()
+                    .map(|e| e.get_types(self, builder).unwrap())
                     .unwrap_or(vec![])
                     .iter()
                     .any(|rf| self.eq(lf.clone().to_owned(), rf.clone()).eq)
@@ -1660,9 +1669,8 @@ impl<'a, 'ctx> Ctx<'a> {
                     return self.eq(lg.curpltype.as_ref().unwrap().clone(), r);
                 }
                 lg.set_type(r.clone());
-
             }
-            if let PLType::Generic(lg) = & *l.borrow() {
+            if let PLType::Generic(lg) = &*l.borrow() {
                 if lg.trait_impl.is_some() {
                     if let PLType::Generic(r) = &*r.borrow() {
                         if let Some(reason) = self.diff_trait_impl(lg, r) {
@@ -1675,7 +1683,9 @@ impl<'a, 'ctx> Ctx<'a> {
                     } else if lg
                         .trait_impl
                         .as_ref()
-                        .unwrap().get_types(self, builder).unwrap_or_default()
+                        .unwrap()
+                        .get_types(self, builder)
+                        .unwrap_or_default()
                         .iter()
                         .any(|lt| !self.eq(lt.clone(), r.clone()).eq)
                     {
@@ -1690,7 +1700,6 @@ impl<'a, 'ctx> Ctx<'a> {
                 }
             }
             if let PLType::Generic(lg) = &mut *l.borrow_mut() {
-            
                 lg.set_type(r);
             }
             return EqRes {

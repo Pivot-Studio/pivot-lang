@@ -46,7 +46,7 @@ impl<'a> Ctx<'a> {
                     self.set_glob_refs(&name, range)
                 },
                 |g| self.set_local_refs(g.refs.clone(), range),
-            )   
+            )
         }
     }
 

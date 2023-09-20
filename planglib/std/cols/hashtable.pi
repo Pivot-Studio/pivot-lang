@@ -6,9 +6,9 @@ use core::eq::*;
 
 
 
-pub struct HashTable<K:Hash+Eq<K>|V> {
+pub struct HashTable<G:Hash+Eq<G>|V> {
     total_buckets:u64;
-    buckets:[Option<TableNode<K|V>>];
+    buckets:[Option<TableNode<G|V>>];
     salt:u64;
 }
 

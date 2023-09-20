@@ -1360,14 +1360,13 @@ impl STType {
                                     elm: Box::new(TypeNameNode::new_from_str("i64").into()),
                                     range: Default::default(),
                                 }));
-                                
-                            }else {
+                            } else {
                                 f.typenode = f
-                                .typenode
-                                .get_type(ctx, builder, true)
-                                .unwrap()
-                                .borrow()
-                                .get_typenode(&ctx.get_file());   
+                                    .typenode
+                                    .get_type(ctx, builder, true)
+                                    .unwrap()
+                                    .borrow()
+                                    .get_typenode(&ctx.get_file());
                             }
                             first = false;
                         }
@@ -1532,10 +1531,10 @@ impl GenericType {
         self.curpltype = None;
     }
     pub fn set_place_holder<'a, 'b>(
-        & self,
+        &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
-    ) ->Arc<RefCell<PLType>> {
+    ) -> Arc<RefCell<PLType>> {
         let range = self.range;
         if let Some(impls) = &self.trait_impl {
             let place_holder = STType {
@@ -1591,8 +1590,8 @@ impl GenericType {
                     let fields = t.list_trait_fields();
                     for field in fields {
                         let re = field.typenode.get_type(ctx, builder, true);
-                        if re.is_err() {
-                            re.unwrap_err().add_to_ctx(ctx);
+                        if let Err(e) = re {
+                            e.add_to_ctx(ctx);
                             continue;
                         }
                         let tp = re.unwrap();
@@ -1628,7 +1627,7 @@ impl GenericType {
         let name_in_map = p.get_place_holder_name();
         let pltype = Arc::new(RefCell::new(PLType::PlaceHolder(p)));
         ctx.add_type(name_in_map, pltype.clone(), range).unwrap();
-        return pltype;
+        pltype
     }
 }
 generic_impl!(FnType, STType, UnionType);

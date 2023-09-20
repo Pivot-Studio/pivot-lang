@@ -84,9 +84,9 @@ pub struct TraitBoundNode {
     pub impl_trait: Option<Box<MultiTraitNode>>,
 }
 impl TraitBoundNode {
-    pub fn set_traits<'a, 'b>(
+    pub fn set_traits(
         &self,
-        ctx: &'b mut Ctx<'a>,
+        ctx: &mut Ctx<'_>,
         generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
     ) -> Result<(), PLDiag> {
         if !generic_map.contains_key(&self.generic.name) {
@@ -111,7 +111,7 @@ impl TraitBoundNode {
     pub fn emit_highlight(&self, ctx: &mut Ctx) {
         ctx.push_semantic_token(self.generic.range, SemanticTokenType::TYPE, 0);
         if let Some(impl_trait) = &self.impl_trait {
-            ctx.push_semantic_token(impl_trait.range(), SemanticTokenType::TYPE, 0);
+            impl_trait.emit_highlight(ctx);
         }
     }
 }
@@ -195,7 +195,7 @@ impl TraitDefNode {
             IndexMap::default()
         };
         ctx.protect_generic_context(&generic_map, |ctx| {
-            // ctx.set_self_type(Arc::new(RefCell::new(PLType::Primitive( PriType::I64))));// 随便放个类型，用Self的接口不能实例化 
+            // ctx.set_self_type(Arc::new(RefCell::new(PLType::Primitive( PriType::I64))));// 随便放个类型，用Self的接口不能实例化
             let mut fields = LinkedHashMap::new();
             // add generic type before field add type
             let derives = self.derives.get_types(ctx, builder)?;

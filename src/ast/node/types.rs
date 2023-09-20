@@ -80,26 +80,30 @@ impl TypeNameNode {
                                 .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
                         ));
                     }
-                    for (i, st_generic_type) in sttype.generic_map.values().enumerate() {
-                        if generic_types[i].is_none() {
-                            continue;
-                        }
-                        let res = ctx.eq(
-                            st_generic_type.clone(),
-                            generic_types[i].as_ref().unwrap().clone(),
-                        );
-                        if !res.eq {
-                            let mut diag = generic_params.generics[i]
-                                .as_ref()
-                                .unwrap()
-                                .range()
-                                .new_err(ErrorCode::TYPE_MISMATCH);
-                            if let Some(reason) = res.reason {
-                                diag.add_help(&reason);
+                    ctx.protect_generic_context(&sttype.generic_map, |ctx| {
+                        for (i, st_generic_type) in sttype.generic_map.values().enumerate() {
+                            if generic_types[i].is_none() {
+                                continue;
                             }
-                            return Err(diag.add_to_ctx(ctx));
+                            let res = ctx.eq(
+                                st_generic_type.clone(),
+                                generic_types[i].as_ref().unwrap().clone(),
+                            );
+                            if !res.eq {
+                                let mut diag = generic_params.generics[i]
+                                    .as_ref()
+                                    .unwrap()
+                                    .range()
+                                    .new_err(ErrorCode::TYPE_MISMATCH);
+                                if let Some(reason) = res.reason {
+                                    diag.add_help(&reason);
+                                }
+                                return Err(diag.add_to_ctx(ctx));
+                            }
                         }
-                    }
+                        Ok(())
+                    })
+                    .unwrap();
                 }
                 let ret = if sttype.is_trait {
                     Arc::new(RefCell::new(PLType::Trait(sttype)))
@@ -123,27 +127,31 @@ impl TypeNameNode {
                                 .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
                         ));
                     }
-                    for (i, un_generic_type) in untype.generic_map.values().enumerate() {
-                        if generic_types[i].is_none() {
-                            continue;
-                        }
-                        let res = ctx.eq(
-                            un_generic_type.clone(),
-                            generic_types[i].as_ref().unwrap().clone(),
-                        );
-                        if !res.eq {
-                            let mut diag = generic_params.generics[i]
-                                .as_ref()
-                                .unwrap()
-                                .range()
-                                .new_err(ErrorCode::TYPE_MISMATCH);
-                            if let Some(reason) = res.reason {
-                                diag.add_help(&reason);
+                    ctx.protect_generic_context(&untype.generic_map, |ctx| {
+                        for (i, un_generic_type) in untype.generic_map.values().enumerate() {
+                            if generic_types[i].is_none() {
+                                continue;
                             }
+                            let res = ctx.eq(
+                                un_generic_type.clone(),
+                                generic_types[i].as_ref().unwrap().clone(),
+                            );
+                            if !res.eq {
+                                let mut diag = generic_params.generics[i]
+                                    .as_ref()
+                                    .unwrap()
+                                    .range()
+                                    .new_err(ErrorCode::TYPE_MISMATCH);
+                                if let Some(reason) = res.reason {
+                                    diag.add_help(&reason);
+                                }
 
-                            return Err(diag.add_to_ctx(ctx));
+                                return Err(diag.add_to_ctx(ctx));
+                            }
                         }
-                    }
+                        Ok(())
+                    })
+                    .unwrap();
                 }
                 let ret = Arc::new(RefCell::new(PLType::Union(untype)));
                 ctx.linked_tp_tbl
@@ -467,10 +475,8 @@ impl StructDefNode {
     pub fn add_to_symbols<'a, 'b>(&self, ctx: &'b mut Ctx<'a>, builder: &'b BuilderEnum<'a, '_>) {
         let generic_map = if let Some(generics) = &self.generics {
             let mp = generics.gen_generic_type(ctx);
-            _ = ctx.protect_generic_context(&mp, |ctx|
-                generics.set_traits(ctx, &mp)
-            );
-            
+            _ = ctx.protect_generic_context(&mp, |ctx| generics.set_traits(ctx, &mp));
+
             mp
         } else {
             IndexMap::default()
@@ -851,9 +857,9 @@ impl GenericDefNode {
             g.emit_highlight(ctx);
         }
     }
-    pub fn set_traits<'a, 'b>(
+    pub fn set_traits(
         &self,
-        ctx: &'b mut Ctx<'a>,
+        ctx: &mut Ctx<'_>,
         generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
     ) -> Result<(), PLDiag> {
         for g in self.generics.iter() {
