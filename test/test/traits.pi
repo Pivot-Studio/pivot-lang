@@ -80,26 +80,26 @@ pub fn test_trait() void {
     let a = B<i64>{};
     a.name1(1);
     let b:generic_trait1<i64> = a;
-    // b.name1(1);
-    // let dd: TestTrait;
-    // dd = x;
-    // dd = y;
-    // dd = z;
-    // let re = dd.set(100);
-    // panic::assert(re == 100);
-    // let re1 = trait_ret().set(1);
-    // panic::assert(re1 == 1);
-    // let re2 = trait_with_generic(x);
-    // panic::assert(re2 == 999);
-    // let re3 = trait_with_generic_ret(x, y);
-    // panic::assert(re3.x == 999);
-    // let st = StWithTrait{
-    //     x: Inner{
-    //         y: &y
-    //     }
-    // };
-    // st.call_trait();
-    // fn_with_trait(y);
+    b.name1(1);
+    let dd: TestTrait;
+    dd = x;
+    dd = y;
+    dd = z;
+    let re = dd.set(100);
+    panic::assert(re == 100);
+    let re1 = trait_ret().set(1);
+    panic::assert(re1 == 1);
+    let re2 = trait_with_generic(x);
+    panic::assert(re2 == 999);
+    let re3 = trait_with_generic_ret(x, y);
+    panic::assert(re3.x == 999);
+    let st = StWithTrait{
+        x: Inner{
+            y: &y
+        }
+    };
+    st.call_trait();
+    fn_with_trait(y);
     return;
 }
 

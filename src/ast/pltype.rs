@@ -1554,31 +1554,6 @@ impl GenericType {
                 range,
             };
             let ph = Arc::new(RefCell::new(PLType::Struct(place_holder)));
-            // ctx.run_in_origin_mod(|ctx| {
-            //     for it in impls {
-            //         if let PLType::Trait(t) = &*it.clone().borrow() {
-            //             ctx.get_root_ctx().plmod.add_impl(
-            //                 &ph.borrow().get_full_elm_name_without_generic(),
-            //                 &it.clone().borrow().get_full_elm_name(),
-            //                 t.generic_map.clone(),
-            //             );
-            //             let fields = t.list_trait_fields();
-            //             for field in fields {
-            //                 let tp = field.typenode.get_type(ctx, builder, true).unwrap();
-            //                 if let PLType::Fn(f) = &*tp.clone().borrow() {
-            //                     let mut f = f.clone();
-            //                     f.fntype.param_pltypes[0] = ph.borrow().get_typenode(&ctx.get_file());
-            //                     let generic = f.fntype.generic;
-            //                     ctx.add_method(&*ph.borrow(), &field.name, f, Some((it.clone(), Default::default())),generic , Default::default()).unwrap();
-            //                 }
-            //             }
-
-            //         }
-            //     }
-
-            // });
-
-            // ctx.set_self_type(ph.clone());
 
             for it in impls.get_types(ctx, builder).unwrap() {
                 if let PLType::Trait(t) = &*it.clone().borrow() {
@@ -1613,9 +1588,6 @@ impl GenericType {
                 }
             }
 
-            // ctx.add_type(name, ph.clone(), range).unwrap();
-
-            // self.curpltype = Some(ph);
             return ph;
         }
         let p = PlaceHolderType {

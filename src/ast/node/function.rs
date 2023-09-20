@@ -214,11 +214,6 @@ impl Node for FuncCallNode {
         let mut para_values = vec![];
         let mut receiver_type = None;
         if let Some((receiver, tp)) = v.get_receiver() {
-            // if let Some(tp) = tp.as_ref() {
-            //     if let PLType::Pointer(p) = &*tp.borrow() {
-            //         ctx.set_self_type(p.clone());
-            //     }
-            // }
             (skip, para_values, receiver_type) = (1, vec![receiver], tp);
         }
         let fn_handle = v.get_value();
