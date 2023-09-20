@@ -779,7 +779,7 @@ impl<'a, 'ctx> Ctx<'a> {
         generic: bool,
         target: Range,
     ) -> Result<(), PLDiag> {
-        if t.get_path() != self.get_file() {
+        if t.get_path() != self.get_file()  {
             self.add_trait_impl_method(t, mthd, fntp, impl_trait, generic, target)
         } else {
             t.add_method(mthd, fntp).map_err(|e| e.add_to_ctx(self))
@@ -1701,6 +1701,13 @@ impl<'a, 'ctx> Ctx<'a> {
                 (&*trait_pltype.borrow(), &*st_pltype.borrow())
             {
                 let eq = st.implements_trait(t, &self.get_root_ctx().plmod);
+                if !eq {
+                    eprintln!(
+                        "trait `{}` is not implemented for `{}`",
+                        t.get_name(),
+                        st.get_name()
+                    );
+                }
                 return EqRes {
                     eq,
                     need_up_cast: true,

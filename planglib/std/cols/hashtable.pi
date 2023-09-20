@@ -1,6 +1,8 @@
 use core::hash::*;
 use core::hash::hasher::*;
 use core::hash::pl_hash::*;
+use core::eq::*;
+
 
 
 
@@ -19,6 +21,8 @@ struct TableNode<K:Hash+Eq<K>|V> {
     next:Option<TableNode<K|V>>;
 }
 
+
+
 impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
     pub fn insert(k:K,v:V) void {
         let hasher = new_paul_larson_hasher(self.salt);
@@ -36,10 +40,18 @@ impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
         if current is None {
             self.buckets[bucket as i64] = node;
         } else {
+            // check if there's same value
             let head = current as TableNode<K|V>!;
-            let new_head = node;
-            new_head.next = head;
-            self.buckets[bucket as i64] = new_head;
+            while !head.next is None {
+                if head.key.eq(&k) {
+                    head.value = v;
+                    return;
+                }
+                head = head.next as TableNode<K|V>!;
+            }
+            // let new_head = node;
+            // new_head.next = head;
+            // self.buckets[bucket as i64] = new_head;
         }
         
         return;

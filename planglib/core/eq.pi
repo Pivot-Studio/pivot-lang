@@ -1,5 +1,5 @@
-pub trait Eq<Self> {
-    fn eq(r:*Self) bool;
+pub trait Eq<S> {
+    fn eq(r:*S) bool;
 }
 
 

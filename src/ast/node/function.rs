@@ -399,11 +399,18 @@ impl TypeNode for FuncDefNode {
             };
             generic_map
                 .iter()
-                .for_each(|(_, pltype)| match &mut *pltype.borrow_mut() {
+                .map(|(_, pltype)| match & *pltype.clone().borrow() {
                     PLType::Generic(g) => {
-                        g.set_place_holder(child, builder);
+                        (pltype,g.set_place_holder(child, builder))
                     }
                     _ => unreachable!(),
+                }).for_each(|(g,tp)| {
+                    match &mut *g.borrow_mut() {
+                        PLType::Generic(g) => {
+                            g.curpltype = Some(tp);
+                        }
+                        _ => unreachable!(),
+                    }
                 });
             // let mut first = true;
             for para in self.paralist.iter() {
@@ -563,10 +570,17 @@ impl FuncDefNode {
                     _ => return Ok(()),
                 }
                 builder = unsafe { &*(noop_ptr as *const BuilderEnum<'a, '_>) };
-                fnvalue.fntype.generic_map.iter().for_each(|(_, pltype)| {
-                    match &mut *pltype.borrow_mut() {
+                fnvalue.fntype.generic_map.iter().map(|(_, pltype)| {
+                    match & *pltype.clone().borrow() {
                         PLType::Generic(g) => {
-                            g.set_place_holder(child, builder);
+                            (pltype,g.set_place_holder(child, builder))
+                        }
+                        _ => unreachable!(),
+                    }
+                }).for_each(|(g,tp)| {
+                    match &mut *g.borrow_mut() {
+                        PLType::Generic(g) => {
+                            g.curpltype = Some(tp);
                         }
                         _ => unreachable!(),
                     }
