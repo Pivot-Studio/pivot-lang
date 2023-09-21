@@ -169,7 +169,20 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
   {
     AP.OutStreamer.get()->AddComment("global address");
     const GlobalValue *GV = &*GI;
-    if (GV->getName().contains("llvm."))
+    if (GV->getName().contains("llvm.")) // skip magic variables e.g. @llvm.global_ctors
+    {
+      continue;
+    }
+
+    if (isa<GlobalVariable>(GV) && cast<GlobalVariable>(GV)->isConstant()) // skip constants
+    {
+      // printf("skip %s\n", GV->getName().bytes());
+      continue;
+    }
+
+    if (GV->getName().startswith("_IMMIX_GC_MAP") ||
+        GV->getName().contains("_@IMMIX_OBJTYPE_") ||
+        GV->getName().startswith(".str")) // skip generated globals
     {
       continue;
     }
