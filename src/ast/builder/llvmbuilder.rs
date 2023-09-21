@@ -324,9 +324,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if alloca.get_terminator().is_some() {
             panic!("alloca block should not have terminator yet")
         }
-        let stack_ptr = self
-            .builder
-            .build_alloca(llvmtp.ptr_type(AddressSpace::default()), "stack_ptr");
+        let stack_ptr = self.builder.build_alloca(
+            llvmtp.ptr_type(AddressSpace::default()),
+            &format!("stack_ptr_{}", name),
+        );
         self.gc_add_root(stack_ptr.as_basic_value_enum(), obj_type);
         self.builder.position_at_end(lb);
         self.builder.build_store(stack_ptr, casted_result);
@@ -2634,6 +2635,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .iter()
                 .skip(1)
                 .copied()
+                .filter(|b| {
+                    b.get_name().to_str().unwrap().to_string().contains("yield")
+                        || b.get_name().to_str().unwrap().to_string().contains("entry")
+                })
                 .collect::<Vec<_>>(),
         );
     }

@@ -80,6 +80,12 @@ pub fn main() i64 {
     table.insert("hi", "World2");
     v = table.get("hi") as string!;
     println!(v);
+    let str = "1";
+    for let i = 0; i < 10; i = i + 1 {
+        str.append("1");
+        table.insert(str, "World2");
+    }
+    println!(table.bucket_size());
     return 0;
 }
 

@@ -195,6 +195,7 @@ pub(crate) fn save_generator_init_block<'a>(
     child: &mut Ctx<'a>,
     entry: usize,
 ) {
+    builder.position_at_end_block(child.generator_data.as_ref().unwrap().borrow().entry_bb);
     let address = builder.get_block_address(entry);
     let data = child.generator_data.as_ref().unwrap().clone();
     let address_ptr = builder
