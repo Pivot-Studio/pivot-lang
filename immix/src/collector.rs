@@ -473,13 +473,7 @@ impl Collector {
                     depth += 1;
                     true
                 });
-                STACK_MAP
-                    .global_roots
-                    .borrow()
-                    .iter()
-                    .for_each(|root| unsafe {
-                        self.mark_ptr((*root) as usize as *mut u8);
-                    });
+                self.mark_globals();
             }
         }
 
@@ -514,6 +508,17 @@ impl Collector {
             GC_MARK_COND.notify_all();
             drop(v);
         }
+    }
+
+    #[cfg(feature = "llvm_stackmap")]
+    fn mark_globals(&self) {
+        STACK_MAP
+            .global_roots
+            .borrow()
+            .iter()
+            .for_each(|root| unsafe {
+                self.mark_ptr((*root) as usize as *mut u8);
+            });
     }
 
     /// # sweep

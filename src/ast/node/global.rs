@@ -65,6 +65,7 @@ impl Node for GlobalNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
+        builder.rm_curr_debug_location();
         let entry = builder.get_last_basic_block(ctx.init_func.unwrap());
 
         ctx.position_at_end(entry, builder);

@@ -709,10 +709,10 @@ impl FuncDefNode {
                         data: None,
                     },
                 );
-                if let Some(inst) = builder.get_first_instruction(allocab) {
+                if let Some(inst) = builder.get_first_instruction(entry) {
                     builder.position_at(inst);
                 } else {
-                    child.position_at_end(allocab, builder);
+                    child.position_at_end(entry, builder);
                 }
                 child.init_global(builder);
                 child.position_at_end(entry, builder);
