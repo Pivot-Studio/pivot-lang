@@ -42,7 +42,9 @@ impl BigObjAllocator {
             panic!("big object mmap out of memory");
         }
 
-        self.mmap.commit(current, size);
+        if !self.mmap.commit(current, size) {
+            panic!("big object mmap out of memory");
+        }
 
         // self.current = next;
         let obj = BigObj::new(current, size);

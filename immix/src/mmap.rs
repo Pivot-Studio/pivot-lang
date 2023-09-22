@@ -51,9 +51,7 @@ mod _win {
         }
 
         pub fn commit(&self, page: *mut u8, size: usize) -> bool {
-            unsafe {
-                VirtualAlloc(page.cast(), size, MEM_COMMIT, PAGE_READWRITE) != std::ptr::null_mut()
-            }
+            unsafe { !VirtualAlloc(page.cast(), size, MEM_COMMIT, PAGE_READWRITE).is_null() }
         }
     }
 

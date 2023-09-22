@@ -4,6 +4,8 @@
 /// 2. 所有涉及llvm类型的函数（包括参数或返回值）都应该是private的
 use std::{
     cell::{Cell, RefCell},
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
     path::Path,
     sync::{
         atomic::{AtomicI64, Ordering},
@@ -546,7 +548,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let ty = ptrtp.get_element_type().into_struct_type();
         let ftp = self.mark_fn_tp(ptrtp);
         let arr_tp = ty.get_field_type_at_index(1).unwrap();
-        let fname = &(arr_tp.to_string() + "@" + &ctx.plmod.path);
+        // windows linker won't recognize flags with special caracters (llvm.used will add linker flags
+        // to prevent symbol trim), so we need to do a hash here to remove the special caracters
+        let mut hasher = DefaultHasher::new();
+        (arr_tp.to_string() + "@" + &ctx.plmod.path).hash(&mut hasher);
+        let fname = &format!("{:x}", hasher.finish());
         if let Some(f) = self.module.get_function(fname) {
             return f;
         }
