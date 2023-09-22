@@ -38,7 +38,6 @@ use crate::ast::{
     ctx::{CtxFlag, PLSymbol},
     diag::PLDiag,
     pltype::{get_type_deep, ClosureType, TraitImplAble},
-    traits::CustomType,
 };
 
 use super::{
@@ -2123,12 +2122,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             };
         }
 
-        let f = PathBuf::from(fntype.get_path());
-
-        let f = self.dibuilder.create_file(
-            f.file_name().unwrap().to_str().unwrap(),
-            f.parent().unwrap().to_str().unwrap(),
-        );
+        let f = self.get_cur_di_file();
         // debug info
         let subroutine_type = self.dibuilder.create_subroutine_type(
             f,

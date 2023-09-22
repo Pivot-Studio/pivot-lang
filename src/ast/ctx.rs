@@ -670,14 +670,6 @@ impl<'a, 'ctx> Ctx<'a> {
         let entry = builder.append_basic_block(self.init_func.unwrap(), "entry");
         self.position_at_end(entry, builder);
     }
-    pub fn clear_init_fn<'b>(&'b self, builder: &'b BuilderEnum<'a, 'ctx>) {
-        let alloc = builder.get_first_basic_block(self.init_func.unwrap());
-        let entry = builder.get_last_basic_block(self.init_func.unwrap());
-        builder.delete_block(alloc);
-        builder.delete_block(entry);
-        builder.append_basic_block(self.init_func.unwrap(), "alloc");
-        builder.append_basic_block(self.init_func.unwrap(), "entry");
-    }
     pub fn init_fn_ret<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
         let alloc = builder.get_first_basic_block(self.init_func.unwrap());
         let entry = builder.get_last_basic_block(self.init_func.unwrap());

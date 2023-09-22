@@ -104,7 +104,6 @@ impl Node for ProgramNode {
         self.globaldefs.iter_mut().for_each(|x| {
             _ = x.emit_global(ctx, builder);
         });
-        ctx.clear_init_fn(builder);
         ctx.plmod.semantic_tokens_builder = Arc::new(RefCell::new(Box::new(
             SemanticTokensBuilder::new(ctx.plmod.path.to_string()),
         )));

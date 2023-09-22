@@ -1,5 +1,6 @@
 use super::*;
 
+use crate::ast::builder::no_op_builder::NoOpBuilder;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::diag::ErrorCode;
@@ -92,17 +93,19 @@ impl GlobalNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<(), PLDiag> {
-        let exp_range = self.exp.range();
+        let noop = BuilderEnum::NoOp(NoOpBuilder::default());
+        // get it's pointer
+        let noop_ptr = &noop as *const BuilderEnum<'a, '_>;
+        let noop = unsafe { &*(noop_ptr as *const BuilderEnum<'a, '_>) };
         if ctx.get_symbol(&self.var.name, builder).is_some() {
             return Err(ctx.add_diag(self.var.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
         }
-        let v = self.exp.emit(ctx, builder)?.get_value();
+        let v = self.exp.emit(ctx, noop)?.get_value();
         if v.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
         }
         let v = v.unwrap();
         let pltype = v.get_ty();
-        ctx.try_load2var(exp_range, v.get_value(), builder)?;
         let globalptr = builder.add_global(
             &ctx.plmod.get_full_name(&self.var.name),
             pltype.clone(),
