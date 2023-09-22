@@ -222,6 +222,7 @@ impl UnionType {
         // .borrow_mut()
         // .insert(res.name.clone(), pltype.tp.clone());
         ctx.add_infer_result(self, &res.name, pltype.tp);
+        builder.set_di_file(&ctx.get_file());
         Ok(res)
     }
     pub fn has_type<'a, 'b>(
@@ -872,6 +873,7 @@ impl FNValue {
             builder.rm_curr_debug_location();
             // gencode
             n.gen_fntype(ctx, false, builder, f)?;
+            builder.set_di_file(&ctx.get_file());
         } else {
             unreachable!()
         }
@@ -1415,6 +1417,7 @@ impl STType {
             // }
 
             ctx.add_infer_result(self, &res.name, pltype.tp.clone());
+            builder.set_di_file(&ctx.get_file());
             Ok(pltype.tp)
         })
     }

@@ -565,4 +565,5 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     ) -> ValueHandle {
         0
     }
+    fn set_di_file(&self, _f: &str) {}
 }

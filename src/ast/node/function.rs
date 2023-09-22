@@ -817,6 +817,7 @@ impl Node for FuncDefNode {
                 _ => return Ok(Default::default()),
             };
             self.gen_fntype(ctx, true, builder, fntype)?;
+            builder.set_di_file(&ctx.get_file());
         }
         usize::MAX.new_output(pltype.tp).to_result()
     }

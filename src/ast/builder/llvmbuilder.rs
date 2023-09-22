@@ -6,7 +6,7 @@ use std::{
     cell::{Cell, RefCell},
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
-    path::Path,
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicI64, Ordering},
         Arc,
@@ -38,6 +38,7 @@ use crate::ast::{
     ctx::{CtxFlag, PLSymbol},
     diag::PLDiag,
     pltype::{get_type_deep, ClosureType, TraitImplAble},
+    traits::CustomType,
 };
 
 use super::{
@@ -146,6 +147,7 @@ pub struct LLVMBuilder<'a, 'ctx> {
     heap_stack_map: Arc<RefCell<FxHashMap<ValueHandle, ValueHandle>>>,
     optimized: Arc<RefCell<bool>>,
     used: Arc<RefCell<Vec<FunctionValue<'ctx>>>>,
+    difile: Cell<DIFile<'ctx>>,
 }
 
 pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
@@ -195,6 +197,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             heap_stack_map: Arc::new(RefCell::new(FxHashMap::default())),
             optimized: Arc::new(RefCell::new(false)),
             used: Default::default(),
+            difile: Cell::new(diunit.get_file()),
         }
     }
     fn alloc_raw(
@@ -413,6 +416,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .unwrap();
         let f = self.get_or_insert_fn(&f, ctx);
         f.0
+    }
+
+    fn get_cur_di_file(&self) -> DIFile<'ctx> {
+        self.difile.get()
     }
 
     /// # create_root_for
@@ -925,9 +932,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         (
             self.dibuilder
                 .create_member_type(
-                    self.diunit.get_file().as_debug_info_scope(),
+                    self.get_cur_di_file().as_debug_info_scope(),
                     &field.name,
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     field.range.start.line as u32,
                     size,
                     align,
@@ -967,9 +974,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let vtabledi = self.get_ditype(&PLType::Primitive(PriType::U64), ctx)?;
                 let offset = td.offset_of_element(&arr_st_tp, 0).unwrap();
                 let vtabletp = self.dibuilder.create_member_type(
-                    self.diunit.get_file().as_debug_info_scope(),
+                    self.get_cur_di_file().as_debug_info_scope(),
                     "_vtable",
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     0,
                     vtabledi.get_size_in_bits(),
                     vtabledi.get_align_in_bits(),
@@ -983,9 +990,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .as_type();
                 let offset = td.offset_of_element(&arr_st_tp, 1).unwrap();
                 let arrtp = self.dibuilder.create_member_type(
-                    self.diunit.get_file().as_debug_info_scope(),
+                    self.get_cur_di_file().as_debug_info_scope(),
                     "array",
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     0,
                     arrdi.get_size_in_bits(),
                     arrdi.get_align_in_bits(),
@@ -996,9 +1003,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let st = self
                     .dibuilder
                     .create_struct_type(
-                        self.diunit.get_file().as_debug_info_scope(),
+                        self.get_cur_di_file().as_debug_info_scope(),
                         "arr_wrapper",
-                        self.diunit.get_file(),
+                        self.get_cur_di_file(),
                         0,
                         st_size,
                         align,
@@ -1041,9 +1048,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let st = self
                     .dibuilder
                     .create_struct_type(
-                        self.diunit.get_file().as_debug_info_scope(),
+                        self.get_cur_di_file().as_debug_info_scope(),
                         &x.name,
-                        self.diunit.get_file(),
+                        self.get_cur_di_file(),
                         x.range.start.line as u32 + 1,
                         td.get_bit_size(&sttp),
                         td.get_abi_alignment(&sttp),
@@ -1142,9 +1149,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         let base_di = self.get_ditype(&tp, ctx).unwrap();
                         self.dibuilder
                             .create_member_type(
-                                self.diunit.get_file().as_debug_info_scope(),
+                                self.get_cur_di_file().as_debug_info_scope(),
                                 &tp.get_name(),
-                                self.diunit.get_file(),
+                                self.get_cur_di_file(),
                                 u.range.start.line as u32 + 1,
                                 td.get_bit_size(&self.context.i64_type()),
                                 td.get_abi_alignment(&self.context.i64_type()),
@@ -1157,9 +1164,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .collect::<Vec<_>>();
                 let ptr = self.context.i8_type().ptr_type(AddressSpace::default());
                 let tp = self.dibuilder.create_union_type(
-                    self.diunit.get_file().as_debug_info_scope(),
+                    self.get_cur_di_file().as_debug_info_scope(),
                     "data",
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     u.range.start.line as u32 + 1,
                     td.get_bit_size(&ptr),
                     td.get_abi_alignment(&ptr),
@@ -1180,9 +1187,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .unwrap()
                     .as_type();
                 let tag = self.dibuilder.create_member_type(
-                    self.diunit.get_file().as_debug_info_scope(),
+                    self.get_cur_di_file().as_debug_info_scope(),
                     "tag",
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     u.range.start.line as u32 + 1,
                     td.get_bit_size(&self.context.i64_type()),
                     td.get_abi_alignment(&self.context.i64_type()),
@@ -1191,9 +1198,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     tag_di,
                 );
                 let data = self.dibuilder.create_member_type(
-                    self.diunit.get_file().as_debug_info_scope(),
+                    self.get_cur_di_file().as_debug_info_scope(),
                     "data",
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     u.range.start.line as u32 + 1,
                     td.get_bit_size(&ptr),
                     td.get_abi_alignment(&ptr),
@@ -1202,9 +1209,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     tp.as_type(),
                 );
                 let st = self.dibuilder.create_struct_type(
-                    self.diunit.get_file().as_debug_info_scope(),
+                    self.get_cur_di_file().as_debug_info_scope(),
                     &format!("union::{}", u.name),
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     u.range.start.line as u32 + 1,
                     td.get_bit_size(&utp),
                     td.get_abi_alignment(&utp),
@@ -1446,7 +1453,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.dibuilder
                 .create_lexical_block(
                     scope,
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     start.line as u32,
                     start.column as u32,
                 )
@@ -1546,11 +1553,20 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.alloc_raw("ret_alloca", ret_type, ctx, None, "DioGC__malloc")
         };
         if let Some(dbg) = dbg {
-            self.build_dbg_location(Pos {
-                line: dbg.get_line() as _,
-                column: dbg.get_column() as _,
-                offset: 0,
-            })
+            if builder
+                .get_insert_block()
+                .unwrap()
+                .get_parent()
+                .unwrap()
+                .get_subprogram()
+                .is_some()
+            {
+                self.build_dbg_location(Pos {
+                    line: dbg.get_line() as _,
+                    column: dbg.get_column() as _,
+                    offset: 0,
+                })
+            }
         }
         builder.position_at_end(bb);
 
@@ -1809,7 +1825,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let debug_var_info = self.dibuilder.create_auto_variable(
             self.discope.get(),
             name,
-            self.diunit.get_file(),
+            self.get_cur_di_file(),
             pos.line as u32,
             ditype.unwrap(),
             true,
@@ -2076,6 +2092,15 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         }
         self.build_dbg_location(pos)
     }
+    fn set_di_file(&self, f: &str) {
+        let f = PathBuf::from(f);
+
+        let f = self.dibuilder.create_file(
+            f.file_name().unwrap().to_str().unwrap(),
+            f.parent().unwrap().to_str().unwrap(),
+        );
+        self.difile.set(f);
+    }
     fn build_sub_program(
         &self,
         paralist: Vec<Box<TypedIdentifierNode>>,
@@ -2097,9 +2122,16 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 }
             };
         }
+
+        let f = PathBuf::from(fntype.get_path());
+
+        let f = self.dibuilder.create_file(
+            f.file_name().unwrap().to_str().unwrap(),
+            f.parent().unwrap().to_str().unwrap(),
+        );
         // debug info
         let subroutine_type = self.dibuilder.create_subroutine_type(
-            self.diunit.get_file(),
+            f,
             self.get_ditype(
                 &ret.get_type(child, &self.clone().into(), true)?.borrow(),
                 child,
@@ -2108,10 +2140,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             DIFlags::PUBLIC,
         );
         let subprogram = self.dibuilder.create_function(
-            self.diunit.get_file().as_debug_info_scope(),
+            f.as_debug_info_scope(),
             &fntype.append_name_with_generic(fntype.name.clone()),
             None,
-            self.diunit.get_file(),
+            f,
             fntype.range.start.line as u32,
             subroutine_type,
             false,
@@ -2142,16 +2174,16 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         }
         // debug info
         let subroutine_type = self.dibuilder.create_subroutine_type(
-            self.diunit.get_file(),
+            self.get_cur_di_file(),
             self.get_ditype(&ret.borrow(), child),
             &param_ditypes,
             DIFlags::PUBLIC,
         );
         let subprogram = self.dibuilder.create_function(
-            self.diunit.get_file().as_debug_info_scope(),
+            self.get_cur_di_file().as_debug_info_scope(),
             &format!("{}__fn", name),
             None,
-            self.diunit.get_file(),
+            self.get_cur_di_file(),
             start_line,
             subroutine_type,
             false,
@@ -2189,7 +2221,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.discope.get(),
             name,
             i as u32,
-            self.diunit.get_file(),
+            self.get_cur_di_file(),
             pos.line as u32,
             self.get_ditype(pltp, child).unwrap(),
             false,
@@ -2230,7 +2262,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.discope.get(),
             &fnvalue.param_names[i],
             i as u32,
-            self.diunit.get_file(),
+            self.get_cur_di_file(),
             pos.line as u32,
             self.get_ditype(
                 &PLType::Pointer(
@@ -2328,7 +2360,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.diunit.as_debug_info_scope(),
             name,
             "",
-            self.diunit.get_file(),
+            self.get_cur_di_file(),
             line,
             ditype.unwrap(),
             false,

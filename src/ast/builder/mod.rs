@@ -254,6 +254,7 @@ pub trait IRBuilder<'a, 'ctx> {
     fn build_bit_right_shift(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
     fn build_bit_right_shift_arithmetic(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
     fn global_const(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle;
+    fn set_di_file(&self, f: &str);
 }
 
 pub type ValueHandle = usize;
