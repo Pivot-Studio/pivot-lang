@@ -401,6 +401,43 @@ impl PLType {
         }
     }
 
+    pub fn implements_trait(&self, tp: &STType, plmod: &Mod) -> bool {
+        let name = &self.get_full_elm_name_without_generic();
+
+        match self {
+            PLType::Struct(s) => s.implements_trait(tp, plmod),
+            PLType::Union(_) => todo!(),
+            _ => {
+                if plmod
+                    .impls
+                    .borrow()
+                    .get(name)
+                    .map(|v| {
+                        v.get(&tp.get_full_name_except_generic())
+                            .map(|gm| {
+                                tp.get_full_name()
+                                    == append_name_with_generic(
+                                        &gm,
+                                        &tp.get_full_name_except_generic(),
+                                    )
+                            })
+                            .unwrap_or(v.get(&tp.get_full_name_except_generic()).is_some())
+                    })
+                    .unwrap_or_default()
+                {
+                    return true;
+                } else {
+                    for (_, m) in &plmod.submods {
+                        if self.implements_trait(tp, m) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+        }
+    }
+
     pub fn is_int(&self) -> bool {
         match self {
             PLType::Primitive(p) => p.is_int(),

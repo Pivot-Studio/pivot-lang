@@ -31,7 +31,6 @@ use std::cols::hashtable;
 
 use core::hash::pl_hash::*;
 
-
 pub fn main() i64 {
     macros::test_macros();
     ifel::test_if_else();
@@ -69,7 +68,6 @@ pub fn main() i64 {
     arr::test_arr();
 
 
-
     let table = hashtable::new_hash_table<string|string>(10 as u64, 100 as u64);
     table.insert("hi", "World");
     table.insert("tj", "love hj");
@@ -86,6 +84,13 @@ pub fn main() i64 {
         table.insert(str, "World2");
     }
     println!(table.bucket_size());
+    let i_table = hashtable::new_hash_table<i64|i64>(10 as u64, 100 as u64);
+    i_table.insert(1, 2);
+    i_table.insert(3, 4);
+    let one =  i_table.get(1) as i64!;
+    let three = i_table.get(3) as i64!;
+    println!(one);
+    println!(three);
     return 0;
 }
 

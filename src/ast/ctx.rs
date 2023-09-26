@@ -1723,6 +1723,17 @@ impl<'a, 'ctx> Ctx<'a> {
                         st.get_name()
                     )),
                 };
+            }else if let PLType::Trait(t) = &*trait_pltype.borrow() {
+                let eq = st_pltype.borrow().implements_trait(t, &self.get_root_ctx().plmod);
+                return EqRes {
+                    eq,
+                    need_up_cast: true,
+                    reason: Some(format!(
+                        "trait `{}` is not implemented for `{}`",
+                        t.get_name(),
+                        st_pltype.borrow().get_name()
+                    )),
+                }; 
             }
             if get_type_deep(trait_pltype) == get_type_deep(st_pltype) {
                 return EqRes {

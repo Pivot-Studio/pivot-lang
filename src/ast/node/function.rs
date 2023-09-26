@@ -203,6 +203,8 @@ impl Node for FuncCallNode {
                             .eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
                             .eq
                     {
+                        let res = ctx
+                        .eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
                         let r = generic_params.generics[i].as_ref().unwrap().range();
                         return Err(r.new_err(ErrorCode::TYPE_MISMATCH).add_to_ctx(ctx));
                     }

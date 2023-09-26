@@ -222,8 +222,9 @@ fn emit_unsafe_cast<'a, 'b>(
             .add_to_ctx(ctx));
     }
     let ty = PLType::Pointer(generic);
-    let re = builder.bitcast(ctx, v.get_value(), &ty, "unsafe_casted");
-    re.new_output(Arc::new(RefCell::new(ty))).to_result()
+    let ty = Arc::new(RefCell::new(ty));
+    let re = builder.bitcast(ctx, v.get_value(), &PLType::Pointer(ty.clone()), "unsafe_casted");
+    re.new_output(ty).to_result()
 }
 
 fn emit_arr_from_raw<'a, 'b>(

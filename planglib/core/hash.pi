@@ -12,5 +12,121 @@ impl  Hash for gc::string {
     }
 }
 
+impl  Hash for i128 {
+    fn hash<H:Hasher64>(hasher:*H) void {
+        let byte_ptr = unsafe_cast<u8>(self);
+        let bytes = arr_from_raw(byte_ptr, 16);
+        hasher.append(bytes);
+        return;
+    }
+}
+
+
+impl  Hash for i64 {
+    fn hash<H:Hasher64>(hasher:*H) void {
+        let byte_ptr = unsafe_cast<u8>(self);
+        let bytes = arr_from_raw(byte_ptr, 8);
+        hasher.append(bytes);
+        return;
+    }
+}
+
+impl  Hash for i32 {
+    fn hash<H:Hasher64>(hasher:*H) void {
+        let byte_ptr = unsafe_cast<u8>(self);
+        let bytes = arr_from_raw(byte_ptr, 4);
+        hasher.append(bytes);
+        return;
+    }
+}
+
+
+impl  Hash for i16 {
+    fn hash<H:Hasher64>(hasher:*H) void {
+        let byte_ptr = unsafe_cast<u8>(self);
+        let bytes = arr_from_raw(byte_ptr, 2);
+        hasher.append(bytes);
+        return;
+    }
+}
+
+
+impl  Hash for i8 {
+    fn hash<H:Hasher64>(hasher:*H) void {
+        let byte_ptr = unsafe_cast<u8>(self);
+        let bytes = arr_from_raw(byte_ptr, 1);
+        hasher.append(bytes);
+        return;
+    }
+}
+
+
+impl  Hash for u128 {
+    fn hash<H:Hasher64>(hasher:*H) void {
+        let byte_ptr = unsafe_cast<u8>(self);
+        let bytes = arr_from_raw(byte_ptr, 16);
+        hasher.append(bytes);
+        return;
+    }
+}
+
+
+impl  Hash for u64 {
+    fn hash<H:Hasher64>(hasher:*H) void {
+        let byte_ptr = unsafe_cast<u8>(self);
+        let bytes = arr_from_raw(byte_ptr, 8);
+        hasher.append(bytes);
+        return;
+    }
+}
+
+impl  Hash for u32 {
+    fn hash<H:Hasher64>(hasher:*H) void {
+        let byte_ptr = unsafe_cast<u8>(self);
+        let bytes = arr_from_raw(byte_ptr, 4);
+        hasher.append(bytes);
+        return;
+    }
+}
+
+
+impl  Hash for u16 {
+    fn hash<H:Hasher64>(hasher:*H) void {
+        let byte_ptr = unsafe_cast<u8>(self);
+        let bytes = arr_from_raw(byte_ptr, 2);
+        hasher.append(bytes);
+        return;
+    }
+}
+
+
+impl  Hash for u8 {
+    fn hash<H:Hasher64>(hasher:*H) void {
+        let byte_ptr = unsafe_cast<u8>(self);
+        let bytes = arr_from_raw(byte_ptr, 1);
+        hasher.append(bytes);
+        return;
+    }
+}
+
+impl  Hash for f64 {
+    fn hash<H:Hasher64>(hasher:*H) void {
+        let byte_ptr = unsafe_cast<u8>(self);
+        let bytes = arr_from_raw(byte_ptr, 8);
+        hasher.append(bytes);
+        return;
+    }
+}
+
+impl  Hash for f32 {
+    fn hash<H:Hasher64>(hasher:*H) void {
+        let byte_ptr = unsafe_cast<u8>(self);
+        let bytes = arr_from_raw(byte_ptr, 4);
+        hasher.append(bytes);
+        return;
+    }
+}
+
+
 
 

@@ -33,3 +33,72 @@ impl <B|T:Eq<B>> Eq<[B]> for [T] {
     }
 }
 
+
+impl Eq<i128> for i128 {
+    fn eq(r:*i128) bool {
+        return *r == *self;
+    }
+}
+
+
+impl Eq<i64> for i64 {
+    fn eq(r:*i64) bool {
+        return *r == *self;
+    }
+}
+
+impl Eq<i32> for i32 {
+    fn eq(r:*i32) bool {
+        return *r == *self;
+    }
+}
+
+
+impl Eq<i16> for i16 {
+    fn eq(r:*i16) bool {
+        return *r == *self;
+    }
+}
+
+
+impl Eq<i8> for i8 {
+    fn eq(r:*i8) bool {
+        return *r == *self;
+    }
+}
+
+
+impl Eq<u128> for u128 {
+    fn eq(r:*u128) bool {
+        return *r == *self;
+    }
+}
+
+
+impl Eq<u64> for u64 {
+    fn eq(r:*u64) bool {
+        return *r == *self;
+    }
+}
+
+impl Eq<u32> for u32 {
+    fn eq(r:*u32) bool {
+        return *r == *self;
+    }
+}
+
+
+impl Eq<u16> for u16 {
+    fn eq(r:*u16) bool {
+        return *r == *self;
+    }
+}
+
+
+impl Eq<u8> for u8 {
+    fn eq(r:*u8) bool {
+        return *r == *self;
+    }
+}
+
+
