@@ -46,7 +46,7 @@ pub struct GlobalVar {
     pub constant: bool,
 }
 
-type ImplMap = FxHashMap<String, FxHashMap<String, IndexMap<String, Arc<RefCell<PLType>>>>>;
+pub type ImplMap = FxHashMap<String, FxHashMap<String, IndexMap<String, Arc<RefCell<PLType>>>>>;
 
 /// # Mod
 /// Represent a module

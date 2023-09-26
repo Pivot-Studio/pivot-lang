@@ -184,7 +184,7 @@ pub trait ImplAbleWithGeneric: Generic + TraitImplAble {
             return true;
         }
         for plmod in plmod.submods.values() {
-            if self.implements_trait(tp, plmod) {
+            if self.implements_trait_curr_mod(tp, plmod) {
                 return true;
             }
         }

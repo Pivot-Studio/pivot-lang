@@ -408,27 +408,11 @@ impl PLType {
             PLType::Struct(s) => s.implements_trait(tp, plmod),
             PLType::Union(u) => u.implements_trait(tp, plmod),
             _ => {
-                if plmod
-                    .impls
-                    .borrow()
-                    .get(name)
-                    .map(|v| {
-                        v.get(&tp.get_full_name_except_generic())
-                            .map(|gm| {
-                                tp.get_full_name()
-                                    == append_name_with_generic(
-                                        gm,
-                                        &tp.get_full_name_except_generic(),
-                                    )
-                            })
-                            .unwrap_or(v.get(&tp.get_full_name_except_generic()).is_some())
-                    })
-                    .unwrap_or_default()
-                {
+                if impl_in_mod(plmod, name, tp) {
                     return true;
                 } else {
                     for m in plmod.submods.values() {
-                        if self.implements_trait(tp, m) {
+                        if impl_in_mod(m, name, tp) {
                             return true;
                         }
                     }
@@ -709,6 +693,22 @@ impl PLType {
     pub fn is_void(&self) -> bool {
         matches!(self, PLType::Void)
     }
+}
+
+fn impl_in_mod(plmod: &Mod, name: &String, tp: &STType) -> bool {
+    plmod
+        .impls
+        .borrow()
+        .get(name)
+        .map(|v| {
+            v.get(&tp.get_full_name_except_generic())
+                .map(|gm| {
+                    tp.get_full_name()
+                        == append_name_with_generic(gm, &tp.get_full_name_except_generic())
+                })
+                .unwrap_or(v.get(&tp.get_full_name_except_generic()).is_some())
+        })
+        .unwrap_or_default()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

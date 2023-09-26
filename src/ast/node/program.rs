@@ -116,83 +116,39 @@ impl Node for ProgramNode {
     }
 }
 
+fn new_var(name: &str) -> Box<VarNode> {
+    Box::new(VarNode {
+        name: name.to_string(),
+        range: Default::default(),
+    })
+}
+fn new_use(ns: &[&str]) -> Box<NodeEnum> {
+    Box::new(NodeEnum::UseNode(UseNode {
+        ids: ns.iter().map(|a| new_var(a)).collect(),
+        range: Default::default(),
+        complete: true,
+        singlecolon: false,
+        modifier: None,
+        all_import: false,
+    }))
+}
+
 lazy_static::lazy_static! {
     static ref DEFAULT_USE_NODES: Vec<Box<NodeEnum>> = {
-        let core = Box::new(VarNode {
-            name: "core".to_string(),
-            range: Default::default(),
-        });
-        let std = Box::new(VarNode {
-            name: "std".to_string(),
-            range: Default::default(),
-        });
-        let mut uses = vec![];
-        let builtin = Box::new(VarNode {
-            name: "builtin".to_string(),
-            range: Default::default(),
-        });
-        let stdbuiltin = Box::new(VarNode {
-            name: "stdbuiltin".to_string(),
-            range: Default::default(),
-        });
-
-        uses.push(Box::new(NodeEnum::UseNode(UseNode {
-            ids: vec![core, builtin],
-            range: Default::default(),
-            complete: true,
-            singlecolon: false,
-            modifier:None,
-            all_import:false,
-        })));
-        uses.push(Box::new(NodeEnum::UseNode(UseNode {
-            ids: vec![std, stdbuiltin],
-            range: Default::default(),
-            complete: true,
-            singlecolon: false,
-            modifier:None,
-            all_import:false,
-        })));
-        uses
+        vec![
+            new_use(&["core", "builtin"]),
+            new_use(&["core", "hash"]),
+            new_use(&["core", "eq"]),
+            new_use(&["std", "stdbuiltin"])
+        ]
     };
 
     static ref GC_USE_NODES: Vec<Box<NodeEnum>> = {
-        let core = Box::new(VarNode {
-            name: "core".to_string(),
-            range: Default::default(),
-        });
-
-        let gc = Box::new(VarNode {
-            name: "gc".to_string(),
-            range: Default::default(),
-        });
-        vec![Box::new(NodeEnum::UseNode(UseNode {
-            ids: vec![core, gc],
-            range: Default::default(),
-            complete: true,
-            singlecolon: false,
-            modifier:None,
-            all_import:false,
-        }))]
+        vec![new_use(&["core", "gc"])]
     };
 
     static ref STD_USE_NODES: Vec<Box<NodeEnum>> = {
-        let core = Box::new(VarNode {
-            name: "core".to_string(),
-            range: Default::default(),
-        });
-
-        let builtin = Box::new(VarNode {
-            name: "builtin".to_string(),
-            range: Default::default(),
-        });
-        vec![Box::new(NodeEnum::UseNode(UseNode {
-            ids: vec![core, builtin],
-            range: Default::default(),
-            complete: true,
-            singlecolon: false,
-            modifier:None,
-            all_import:false,
-        }))]
+        vec![new_use(&["core", "builtin"])]
     };
 }
 

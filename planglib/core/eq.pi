@@ -19,8 +19,8 @@ impl Eq<gc::string> for gc::string {
 
 
 
-impl <B|T:Eq<B>> Eq<[B]> for [T] {
-    fn eq(r:*[B]) bool {
+impl <T:Eq<T>> Eq<[T]> for [T] {
+    fn eq(r:*[T]) bool {
         if arr_len(*self) != arr_len(*r) {
             return false;
         }
