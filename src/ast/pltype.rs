@@ -406,7 +406,7 @@ impl PLType {
 
         match self {
             PLType::Struct(s) => s.implements_trait(tp, plmod),
-            PLType::Union(_) => todo!(),
+            PLType::Union(u) => u.implements_trait(tp, plmod),
             _ => {
                 if plmod
                     .impls
@@ -417,7 +417,7 @@ impl PLType {
                             .map(|gm| {
                                 tp.get_full_name()
                                     == append_name_with_generic(
-                                        &gm,
+                                        gm,
                                         &tp.get_full_name_except_generic(),
                                     )
                             })
@@ -427,13 +427,13 @@ impl PLType {
                 {
                     return true;
                 } else {
-                    for (_, m) in &plmod.submods {
+                    for m in plmod.submods.values() {
                         if self.implements_trait(tp, m) {
                             return true;
                         }
                     }
                 }
-                return false;
+                false
             }
         }
     }
@@ -1250,40 +1250,7 @@ impl STType {
             .for_each(|(i, f)| f.index = i as u32);
         fields
     }
-    fn implements(&self, tp: &STType, plmod: &Mod) -> bool {
-        if plmod
-            .impls
-            .borrow()
-            .get(&self.get_full_name())
-            .and_then(|v| v.get(&tp.get_full_name()))
-            .is_some()
-        {
-            return true;
-        }
-        for plmod in plmod.submods.values() {
-            if plmod
-                .impls
-                .borrow()
-                .get(&self.get_full_name())
-                .and_then(|v| v.get(&tp.get_full_name()))
-                .is_some()
-            {
-                return true;
-            }
-        }
-        false
-    }
-    pub fn implements_trait(&self, tp: &STType, plmod: &Mod) -> bool {
-        if self.implements_trait_curr_mod(tp, plmod) {
-            return true;
-        }
-        for plmod in plmod.submods.values() {
-            if self.implements_trait(tp, plmod) {
-                return true;
-            }
-        }
-        false
-    }
+
     pub fn expect_field_pub(&self, ctx: &Ctx, f: &Field, range: Range) -> Result<(), PLDiag> {
         if self.path == ctx.plmod.path {
             return Ok(());
@@ -1301,61 +1268,7 @@ impl STType {
         );
         Ok(())
     }
-    fn implements_trait_curr_mod(&self, tp: &STType, plmod: &Mod) -> bool {
-        // FIXME: strange logic
-        let re = plmod
-            .impls
-            .borrow()
-            .get(&self.get_full_name())
-            .or(plmod
-                .impls
-                .borrow()
-                .get(&self.get_full_name_except_generic()))
-            .map(|v| {
-                v.get(&tp.get_full_name_except_generic())
-                    .map(|gm| {
-                        let mut gm = gm.clone();
-                        for (k, _) in &gm.clone() {
-                            if let Some(vv) = self.generic_map.get(k) {
-                                gm.insert(k.clone(), vv.clone());
-                            }
-                            if let Some(vv) = self.generic_infer_types.get(k) {
-                                gm.insert(k.clone(), vv.clone());
-                            }
-                        }
-                        tp.get_full_name()
-                            == append_name_with_generic(&gm, &tp.get_full_name_except_generic())
-                    })
-                    .unwrap_or_default()
-            })
-            .unwrap_or_default();
 
-        let re2 = plmod
-            .impls
-            .borrow()
-            .get(&self.get_full_name())
-            .or(plmod
-                .impls
-                .borrow()
-                .get(&self.get_full_name_except_generic()))
-            .map(|v| v.get(&tp.get_full_name()).is_some())
-            .unwrap_or_default();
-        if !re && !re2 {
-            return re;
-        }
-        for de in &tp.derives {
-            match &*de.borrow() {
-                PLType::Trait(t) => {
-                    let re = self.implements(t, plmod);
-                    if !re {
-                        return re;
-                    }
-                }
-                _ => unreachable!(),
-            }
-        }
-        true
-    }
     pub fn get_type_code(&self) -> u64 {
         let full_name = format!("{}..{}", self.path, self.append_name_with_generic());
         get_hash_code(full_name)

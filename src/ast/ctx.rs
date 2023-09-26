@@ -20,6 +20,7 @@ use super::pltype::FNValue;
 use super::pltype::Field;
 use super::pltype::GenericType;
 use super::pltype::ImplAble;
+use super::pltype::ImplAbleWithGeneric;
 use super::pltype::PLType;
 use super::pltype::PriType;
 use super::pltype::TraitImplAble;
@@ -147,20 +148,6 @@ pub enum MacroReplaceNode {
 }
 
 impl<'a, 'ctx> Ctx<'a> {
-    // pub fn set_self_type(&mut self, tp: Arc<RefCell<PLType>>) {
-    //     self.self_type = Some(tp);
-    // }
-    // pub fn get_self_type(&self) -> Option<Arc<RefCell<PLType>>> {
-    //     // recursive search in self and fathers
-    //     let mut ctx = Some(self);
-    //     while let Some(p) = ctx {
-    //         if let Some(tp) = &p.self_type {
-    //             return Some(tp.clone());
-    //         }
-    //         ctx = p.father;
-    //     }
-    //     None
-    // }
     /// lsp fn
     pub fn is_active_file(&self) -> bool {
         self.is_active_file
@@ -1710,21 +1697,10 @@ impl<'a, 'ctx> Ctx<'a> {
             }
             let trait_pltype = l;
             let st_pltype = self.auto_deref_tp(r);
-            if let (PLType::Trait(t), PLType::Struct(st)) =
-                (&*trait_pltype.borrow(), &*st_pltype.borrow())
-            {
-                let eq = st.implements_trait(t, &self.get_root_ctx().plmod);
-                return EqRes {
-                    eq,
-                    need_up_cast: true,
-                    reason: Some(format!(
-                        "trait `{}` is not implemented for `{}`",
-                        t.get_name(),
-                        st.get_name()
-                    )),
-                };
-            }else if let PLType::Trait(t) = &*trait_pltype.borrow() {
-                let eq = st_pltype.borrow().implements_trait(t, &self.get_root_ctx().plmod);
+            if let PLType::Trait(t) = &*trait_pltype.borrow() {
+                let eq = st_pltype
+                    .borrow()
+                    .implements_trait(t, &self.get_root_ctx().plmod);
                 return EqRes {
                     eq,
                     need_up_cast: true,
@@ -1733,7 +1709,7 @@ impl<'a, 'ctx> Ctx<'a> {
                         t.get_name(),
                         st_pltype.borrow().get_name()
                     )),
-                }; 
+                };
             }
             if get_type_deep(trait_pltype) == get_type_deep(st_pltype) {
                 return EqRes {
