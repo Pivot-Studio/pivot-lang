@@ -46,11 +46,7 @@ impl Node for StringNode {
 
         builder.build_store(
             len,
-            builder.int_value(
-                &PriType::I64,
-                vm::count_utf8_char(&self.content) as u64,
-                true,
-            ),
+            builder.int_value(&PriType::I64, count_utf8_char(&self.content), true),
         );
         builder.build_store(
             byte_len,
@@ -58,4 +54,14 @@ impl Node for StringNode {
         );
         alloca.new_output(tp.tp).set_const().to_result()
     }
+}
+
+#[cfg(feature = "vm")]
+fn count_utf8_char(s: &str) -> u64 {
+    vm::count_utf8_char(s) as u64
+}
+
+#[cfg(not(feature = "vm"))]
+fn count_utf8_char(s: &str) -> u64 {
+    0
 }
