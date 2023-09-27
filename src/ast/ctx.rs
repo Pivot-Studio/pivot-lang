@@ -8,6 +8,7 @@ use super::node::macro_nodes::MacroNode;
 use super::node::node_result::NodeResult;
 use super::node::NodeEnum;
 use super::node::TypeNode;
+use super::node::TypeNodeEnum;
 use super::plmod::CompletionItemWrapper;
 use super::plmod::GlobType;
 use super::plmod::GlobalVar;
@@ -482,6 +483,25 @@ impl<'a, 'ctx> Ctx<'a> {
             }
         }
         let (st_pltype, st_value) = self.auto_deref(ori_pltype, ori_value, builder);
+        if let PLType::Trait(t) = &*target_pltype.borrow() {
+            for f in t.list_trait_fields().iter() {
+                if let TypeNodeEnum::Func(fu) = &*f.typenode {
+                    if fu.generics.is_some() {
+                        return Err(target_range.new_err(ErrorCode::THE_TARGET_TRAIT_CANNOT_BE_INSTANTIATED)
+                        .add_label(
+                            target_range,
+                            self.get_file(),
+                            format_label!("trait type `{}`", t.get_name()),
+                        )
+                        .add_label(
+                            f.range,
+                            t.get_path(),
+                            format_label!("the method `{}` of trait `{}` has generic params, which makes it uninstantiatable",&f.name, t.get_name()),
+                        ).add_to_ctx(self));
+                    }
+                }
+            }
+        }
         match (&*target_pltype.borrow(), &*st_pltype.clone().borrow()) {
             (PLType::Trait(t), PLType::Struct(st)) => {
                 return self.cast_implable(
