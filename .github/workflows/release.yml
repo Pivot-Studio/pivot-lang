@@ -11,6 +11,7 @@ on:
     - '**.pi'
     - '**/Kagari.*'
     - 'codecov.yml'
+    - 'plc.scoop'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
