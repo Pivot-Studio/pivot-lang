@@ -91,6 +91,11 @@ pub fn main() i64 {
     let three = i_table.get(3) as i64!;
     println!(one);
     println!(three);
+    let attt = 1;
+    let ttt:Eq<i64> = attt;
+    let bbbb = 1;
+    let re = ttt.eq(&bbbb);
+    println!(re);
     return 0;
 }
 

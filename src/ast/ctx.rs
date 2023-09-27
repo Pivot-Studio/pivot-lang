@@ -20,7 +20,6 @@ use super::pltype::FNValue;
 use super::pltype::Field;
 use super::pltype::GenericType;
 use super::pltype::ImplAble;
-use super::pltype::ImplAbleWithGeneric;
 use super::pltype::PLType;
 use super::pltype::PriType;
 use super::pltype::TraitImplAble;
@@ -450,14 +449,6 @@ impl<'a, 'ctx> Ctx<'a> {
                 let tp = tp.get_type(self, builder, true)?;
                 union_members.push(tp);
             }
-            // let union_members = self.run_in_type_mod(u, |ctx, u| {
-            //     let mut union_members = vec![];
-            //     for tp in &u.sum_types {
-            //         let tp = tp.get_type(ctx, builder, true)?;
-            //         union_members.push(tp);
-            //     }
-            //     Ok(union_members)
-            // })?;
             for (i, tp) in union_members.iter().enumerate() {
                 if *get_type_deep(tp.to_owned()).borrow()
                     == *get_type_deep(ori_pltype.clone()).borrow()
@@ -493,94 +484,52 @@ impl<'a, 'ctx> Ctx<'a> {
         let (st_pltype, st_value) = self.auto_deref(ori_pltype, ori_value, builder);
         match (&*target_pltype.borrow(), &*st_pltype.clone().borrow()) {
             (PLType::Trait(t), PLType::Struct(st)) => {
-                return self.run_in_type_mod(t, |ctx, t| {
-                    ctx.protect_generic_context(&t.generic_map, |ctx| {
-                        if !st.implements_trait(t, &ctx.get_root_ctx().plmod) {
-                            return Err(mismatch_err!(
-                                ctx,
-                                ori_range,
-                                target_range,
-                                target_pltype.borrow(),
-                                st_pltype.borrow()
-                            ));
-                        }
-                        let trait_handle =
-                            builder.alloc("tmp_traitv", &target_pltype.borrow(), ctx, None);
-                        for f in t.list_trait_fields().iter() {
-                            let mthd = find_mthd(st, f, t).unwrap_or_else(|| {
-                                for t in &t.derives {
-                                    match &*t.borrow() {
-                                        PLType::Trait(t) => {
-                                            if let Some(mthd) = find_mthd(st, f, t) {
-                                                return mthd;
-                                            }
-                                        }
-                                        _ => unreachable!(),
-                                    }
-                                }
-                                unreachable!()
-                            });
-                            let bind = mthd.clone();
-                            let m = bind.borrow();
-                            let mut m = m.clone();
-                            m.fntype = m.fntype.new_pltype();
-                            let mthd = if m.fntype.generic {
-                                ctx.protect_generic_context(&m.fntype.generic_map.clone(), |ctx| {
-                                    ctx.run_in_type_mod_mut(&mut m, |ctx, m| {
-                                        m.fntype.param_pltypes[0].eq_or_infer(
-                                            ctx,
-                                            Arc::new(RefCell::new(PLType::Pointer(
-                                                st_pltype.clone(),
-                                            ))),
-                                            builder,
-                                        )
-                                    })?;
-                                    if m.fntype.need_gen_code() {
-                                        let re =
-                                            ctx.run_in_type_mod_mut(&mut m, |ctx, fnvalue| {
-                                                // actual code gen happens here
-                                                fnvalue.generic_infer_pltype(ctx, builder)
-                                            })?;
-                                        Ok(Arc::new(RefCell::new(re)))
-                                    } else {
-                                        unreachable!()
-                                    }
-                                })?
-                            } else {
-                                mthd
-                            };
-
-                            let fnhandle = builder.get_or_insert_fn_handle(&mthd.borrow(), ctx).0;
-                            // let targetftp = f.typenode.get_type(ctx, builder, true).unwrap();
-                            // let casted =
-                            //     builder.bitcast(ctx, fnhandle, &targetftp.borrow(), "fncast_tmp");
-                            let f_ptr = builder
-                                .build_struct_gep(trait_handle, f.index, "field_tmp")
-                                .unwrap();
-                            unsafe {
-                                builder.store_with_aoto_cast(f_ptr, fnhandle);
-                            }
-                        }
-
-                        let st_value = builder.bitcast(
-                            ctx,
-                            st_value,
-                            &PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(
-                                PriType::I64,
-                            )))),
-                            "traitcast_tmp",
-                        );
-                        let v_ptr = builder.build_struct_gep(trait_handle, 1, "v_tmp").unwrap();
-                        builder.build_store(v_ptr, st_value);
-                        let type_hash = builder
-                            .build_struct_gep(trait_handle, 0, "tp_hash")
-                            .unwrap();
-                        let hash = st.get_type_code();
-                        let hash = builder.int_value(&PriType::U64, hash, false);
-                        builder.build_store(type_hash, hash);
-                        Ok(trait_handle)
-                    })
-                });
+                return self.cast_implable(
+                    t,
+                    st,
+                    ori_range,
+                    target_range,
+                    builder,
+                    &target_pltype,
+                    &st_pltype,
+                    st_value,
+                );
+            }
+            (PLType::Trait(t), PLType::Union(st)) => {
+                return self.cast_implable(
+                    t,
+                    st,
+                    ori_range,
+                    target_range,
+                    builder,
+                    &target_pltype,
+                    &st_pltype,
+                    st_value,
+                );
+            }
+            (PLType::Trait(t), PLType::Primitive(st)) => {
+                return self.cast_trait_implable(
+                    t,
+                    st,
+                    ori_range,
+                    target_range,
+                    builder,
+                    &target_pltype,
+                    &st_pltype,
+                    st_value,
+                );
+            }
+            (PLType::Trait(t), PLType::Arr(st)) => {
+                return self.cast_trait_implable(
+                    t,
+                    st,
+                    ori_range,
+                    target_range,
+                    builder,
+                    &target_pltype,
+                    &st_pltype,
+                    st_value,
+                );
             }
             (PLType::Trait(t), PLType::Trait(t2)) => {
                 return self.run_in_type_mod(t, |ctx, t| {
@@ -1739,22 +1688,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 }
 
-fn find_mthd(
-    st: &super::pltype::STType,
-    f: &super::pltype::Field,
-    t: &super::pltype::STType,
-) -> Option<Arc<RefCell<FNValue>>> {
-    st.find_method(&f.name).or(t
-        .trait_methods_impl
-        .borrow()
-        .get(&st.get_full_name())
-        .or(t
-            .trait_methods_impl
-            .borrow()
-            .get(&st.get_full_name_except_generic()))
-        .and_then(|v| v.get(&f.name))
-        .cloned())
-}
+mod traitcast;
 pub struct EqRes {
     pub eq: bool,
     pub need_up_cast: bool,

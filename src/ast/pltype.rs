@@ -1421,7 +1421,7 @@ impl STType {
         completions
     }
     pub fn find_method(&self, method: &str) -> Option<Arc<RefCell<FNValue>>> {
-        self.methods.borrow().get(method).cloned()
+        self.get_method(method)
     }
     pub fn get_full_name(&self) -> String {
         format!("{}..{}", self.path, self.name)

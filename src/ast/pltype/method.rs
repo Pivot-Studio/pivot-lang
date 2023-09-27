@@ -14,9 +14,10 @@ use crate::{
         traits::CustomType,
     },
     format_label,
+    utils::get_hash_code,
 };
 
-use super::{append_name_with_generic, FNValue, PLType, STType, UnionType};
+use super::{append_name_with_generic, impl_in_mod, FNValue, PLType, STType, UnionType};
 
 pub trait ImplAble: RangeTrait + CustomType + TraitImplAble {
     fn get_method_table(&self) -> Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>;
@@ -73,6 +74,23 @@ pub trait ImplAble: RangeTrait + CustomType + TraitImplAble {
 pub trait TraitImplAble {
     fn get_full_name_except_generic(&self) -> String;
     fn get_full_name(&self) -> String;
+    fn get_type_code(&self) -> u64 {
+        let full_name = self.get_full_name();
+        get_hash_code(full_name)
+    }
+    fn traitimplable_implements_trait(&self, tp: &STType, plmod: &Mod) -> bool {
+        let name = &self.get_full_name_except_generic();
+        if impl_in_mod(plmod, name, tp) {
+            return true;
+        } else {
+            for m in plmod.submods.values() {
+                if impl_in_mod(m, name, tp) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 }
 
 pub trait Generic {
@@ -100,7 +118,7 @@ impl Generic for UnionType {
     }
 }
 
-pub trait ImplAbleWithGeneric: Generic + TraitImplAble {
+pub trait ImplAbleWithGeneric: Generic + ImplAble {
     fn implements_trait_curr_mod(&self, tp: &STType, plmod: &Mod) -> bool {
         // FIXME: strange logic
         let re = plmod
