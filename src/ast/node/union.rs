@@ -71,6 +71,12 @@ impl UnionDefNode {
             .map_or(IndexMap::default(), |generics| {
                 generics.gen_generic_type(ctx)
             });
+        _ = ctx.protect_generic_context(&generic_map, |ctx| {
+            if let Some(generics) = self.generics.as_ref() {
+                generics.set_traits(ctx, &generic_map)?;
+            }
+            Ok(())
+        });
         let stu = Arc::new(RefCell::new(PLType::Union(UnionType {
             name: self.name.name.clone(),
             path: ctx.plmod.path.clone(),

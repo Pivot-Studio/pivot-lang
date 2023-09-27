@@ -4,7 +4,9 @@
 /// 2. 所有涉及llvm类型的函数（包括参数或返回值）都应该是private的
 use std::{
     cell::{Cell, RefCell},
-    path::Path,
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    path::{Path, PathBuf},
     sync::{
         atomic::{AtomicI64, Ordering},
         Arc,
@@ -143,6 +145,8 @@ pub struct LLVMBuilder<'a, 'ctx> {
     ditypes: Arc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
     heap_stack_map: Arc<RefCell<FxHashMap<ValueHandle, ValueHandle>>>,
     optimized: Arc<RefCell<bool>>,
+    used: Arc<RefCell<Vec<FunctionValue<'ctx>>>>,
+    difile: Cell<DIFile<'ctx>>,
 }
 
 pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
@@ -191,6 +195,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             block_reverse_table: Arc::new(RefCell::new(FxHashMap::default())),
             heap_stack_map: Arc::new(RefCell::new(FxHashMap::default())),
             optimized: Arc::new(RefCell::new(false)),
+            used: Default::default(),
+            difile: Cell::new(diunit.get_file()),
         }
     }
     fn alloc_raw(
@@ -320,9 +326,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if alloca.get_terminator().is_some() {
             panic!("alloca block should not have terminator yet")
         }
-        let stack_ptr = self
-            .builder
-            .build_alloca(llvmtp.ptr_type(AddressSpace::default()), "stack_ptr");
+        let stack_ptr = self.builder.build_alloca(
+            llvmtp.ptr_type(AddressSpace::default()),
+            &format!("stack_ptr_{}", name),
+        );
         self.gc_add_root(stack_ptr.as_basic_value_enum(), obj_type);
         self.builder.position_at_end(lb);
         self.builder.build_store(stack_ptr, casted_result);
@@ -330,6 +337,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         self.builder.position_at_end(cb);
 
         if let PLType::Arr(arr) = tp {
+            // init the array size
             if arr.size_handle != 0 {
                 let f = self.get_malloc_f(ctx, "DioGC__malloc");
                 // let f = self.get_malloc_f(ctx, "DioGC__malloc_no_collect");
@@ -391,7 +399,12 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         while let Some(f) = root_ctx.root {
             root_ctx = f
         }
-        let gcmod = root_ctx.plmod.submods.get("gc").unwrap_or(&root_ctx.plmod);
+        let gcmod = root_ctx
+            .plmod
+            .submods
+            .get("gc")
+            .map(|rc| rc.as_ref())
+            .unwrap_or(&root_ctx.plmod);
         let f: FNValue = gcmod
             .types
             .get(malloc_fn)
@@ -402,6 +415,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .unwrap();
         let f = self.get_or_insert_fn(&f, ctx);
         f.0
+    }
+
+    fn get_cur_di_file(&self) -> DIFile<'ctx> {
+        self.difile.get()
     }
 
     /// # create_root_for
@@ -538,13 +555,18 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let ty = ptrtp.get_element_type().into_struct_type();
         let ftp = self.mark_fn_tp(ptrtp);
         let arr_tp = ty.get_field_type_at_index(1).unwrap();
-        let fname = &(arr_tp.to_string() + "@" + &ctx.plmod.path);
+        // windows linker won't recognize flags with special caracters (llvm.used will add linker flags
+        // to prevent symbol trim), so we need to do a hash here to remove the special caracters
+        let mut hasher = DefaultHasher::new();
+        (arr_tp.to_string() + "@" + &ctx.plmod.path).hash(&mut hasher);
+        let fname = &format!("{:x}", hasher.finish());
         if let Some(f) = self.module.get_function(fname) {
             return f;
         }
         let f = self
             .module
-            .add_function(fname, ftp, Some(Linkage::External));
+            .add_function(fname, ftp, Some(Linkage::LinkOnceAny));
+        self.used.borrow_mut().push(f);
         // the array is a struct, the first field is the visit function,
         // the second field is the real array, the third field is it's length
         // array struct it self is the first parameter
@@ -558,6 +580,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .build_load(real_arr_raw, "loaded_arr")
             .into_pointer_value();
         let loop_var = self.builder.build_alloca(self.context.i64_type(), "i");
+        self.builder
+            .build_store(loop_var, self.context.i64_type().const_zero());
         // arr is the real array
         let arr_len = self.builder.build_struct_gep(arr, 2, "arr_len").unwrap();
         let arr_len = self.builder.build_load(arr_len, "arr_len").into_int_value();
@@ -590,13 +614,16 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             }
             PLType::Pointer(_) => {
                 // call the visit_ptr function
+                let casted = self.builder.build_bitcast(elm, i8ptrtp, "casted_arg");
                 self.builder
-                    .build_call(visit_ptr_f, &[visitor.into(), elm.into()], "call");
+                    .build_call(visit_ptr_f, &[visitor.into(), casted.into()], "call");
             }
             PLType::Trait(_) | PLType::Union(_) | PLType::Closure(_) => {
                 // call the visit_trait function
+                let casted = self.builder.build_bitcast(elm, i8ptrtp, "casted_arg");
+
                 self.builder
-                    .build_call(visit_trait_f, &[visitor.into(), elm.into()], "call");
+                    .build_call(visit_trait_f, &[visitor.into(), casted.into()], "call");
             }
             PLType::Fn(_)
             | PLType::Primitive(_)
@@ -717,34 +744,38 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn get_fn_type(&self, fnvalue: &FNValue, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
-        ctx.run_in_type_mod(fnvalue, |ctx, fnvalue| {
-            let mut param_types = vec![];
-            for param_pltype in fnvalue.fntype.param_pltypes.iter() {
-                param_types.push(
-                    self.get_basic_type_op(
-                        &param_pltype
+        ctx.protect_generic_context(&fnvalue.fntype.generic_map, |ctx| {
+            ctx.run_in_type_mod(fnvalue, |ctx, fnvalue| {
+                let mut param_types = vec![];
+                for param_pltype in fnvalue.fntype.param_pltypes.iter() {
+                    // eprintln!("param_pltype: {:?}", param_pltype);
+                    param_types.push(
+                        self.get_basic_type_op(
+                            &param_pltype
+                                .get_type(ctx, &self.clone().into(), true)
+                                .unwrap()
+                                .borrow(),
+                            ctx,
+                        )
+                        .unwrap()
+                        .into(),
+                    );
+                }
+                let fn_type = self
+                    .get_ret_type(
+                        &fnvalue
+                            .fntype
+                            .ret_pltype
                             .get_type(ctx, &self.clone().into(), true)
                             .unwrap()
                             .borrow(),
                         ctx,
                     )
-                    .unwrap()
-                    .into(),
-                );
-            }
-            let fn_type = self
-                .get_ret_type(
-                    &fnvalue
-                        .fntype
-                        .ret_pltype
-                        .get_type(ctx, &self.clone().into(), true)
-                        .unwrap()
-                        .borrow(),
-                    ctx,
-                )
-                .fn_type(&param_types, false);
-            fn_type
+                    .fn_type(&param_types, false);
+                Ok(fn_type)
+            })
         })
+        .unwrap()
     }
 
     fn get_closure_fn_type(&self, closure: &ClosureType, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
@@ -852,6 +883,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             _ => RetTypeEnum::Basic(self.get_basic_type_op(pltp, ctx).unwrap()),
         }
     }
+    fn i8ptr(&self) -> PointerType<'ctx> {
+        self.context.i8_type().ptr_type(AddressSpace::default())
+    }
     /// array type in fact is a struct with three fields,
     /// the first is a function pointer to the visit function(used in gc)
     /// the second is the array itself
@@ -897,9 +931,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         (
             self.dibuilder
                 .create_member_type(
-                    self.diunit.get_file().as_debug_info_scope(),
+                    self.get_cur_di_file().as_debug_info_scope(),
                     &field.name,
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     field.range.start.line as u32,
                     size,
                     align,
@@ -939,9 +973,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let vtabledi = self.get_ditype(&PLType::Primitive(PriType::U64), ctx)?;
                 let offset = td.offset_of_element(&arr_st_tp, 0).unwrap();
                 let vtabletp = self.dibuilder.create_member_type(
-                    self.diunit.get_file().as_debug_info_scope(),
+                    self.get_cur_di_file().as_debug_info_scope(),
                     "_vtable",
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     0,
                     vtabledi.get_size_in_bits(),
                     vtabledi.get_align_in_bits(),
@@ -955,9 +989,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .as_type();
                 let offset = td.offset_of_element(&arr_st_tp, 1).unwrap();
                 let arrtp = self.dibuilder.create_member_type(
-                    self.diunit.get_file().as_debug_info_scope(),
+                    self.get_cur_di_file().as_debug_info_scope(),
                     "array",
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     0,
                     arrdi.get_size_in_bits(),
                     arrdi.get_align_in_bits(),
@@ -968,9 +1002,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let st = self
                     .dibuilder
                     .create_struct_type(
-                        self.diunit.get_file().as_debug_info_scope(),
+                        self.get_cur_di_file().as_debug_info_scope(),
                         "arr_wrapper",
-                        self.diunit.get_file(),
+                        self.get_cur_di_file(),
                         0,
                         st_size,
                         align,
@@ -1013,9 +1047,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let st = self
                     .dibuilder
                     .create_struct_type(
-                        self.diunit.get_file().as_debug_info_scope(),
+                        self.get_cur_di_file().as_debug_info_scope(),
                         &x.name,
-                        self.diunit.get_file(),
+                        self.get_cur_di_file(),
                         x.range.start.line as u32 + 1,
                         td.get_bit_size(&sttp),
                         td.get_abi_alignment(&sttp),
@@ -1114,9 +1148,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         let base_di = self.get_ditype(&tp, ctx).unwrap();
                         self.dibuilder
                             .create_member_type(
-                                self.diunit.get_file().as_debug_info_scope(),
+                                self.get_cur_di_file().as_debug_info_scope(),
                                 &tp.get_name(),
-                                self.diunit.get_file(),
+                                self.get_cur_di_file(),
                                 u.range.start.line as u32 + 1,
                                 td.get_bit_size(&self.context.i64_type()),
                                 td.get_abi_alignment(&self.context.i64_type()),
@@ -1129,9 +1163,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .collect::<Vec<_>>();
                 let ptr = self.context.i8_type().ptr_type(AddressSpace::default());
                 let tp = self.dibuilder.create_union_type(
-                    self.diunit.get_file().as_debug_info_scope(),
+                    self.get_cur_di_file().as_debug_info_scope(),
                     "data",
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     u.range.start.line as u32 + 1,
                     td.get_bit_size(&ptr),
                     td.get_abi_alignment(&ptr),
@@ -1152,9 +1186,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .unwrap()
                     .as_type();
                 let tag = self.dibuilder.create_member_type(
-                    self.diunit.get_file().as_debug_info_scope(),
+                    self.get_cur_di_file().as_debug_info_scope(),
                     "tag",
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     u.range.start.line as u32 + 1,
                     td.get_bit_size(&self.context.i64_type()),
                     td.get_abi_alignment(&self.context.i64_type()),
@@ -1163,9 +1197,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     tag_di,
                 );
                 let data = self.dibuilder.create_member_type(
-                    self.diunit.get_file().as_debug_info_scope(),
+                    self.get_cur_di_file().as_debug_info_scope(),
                     "data",
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     u.range.start.line as u32 + 1,
                     td.get_bit_size(&ptr),
                     td.get_abi_alignment(&ptr),
@@ -1174,9 +1208,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     tp.as_type(),
                 );
                 let st = self.dibuilder.create_struct_type(
-                    self.diunit.get_file().as_debug_info_scope(),
+                    self.get_cur_di_file().as_debug_info_scope(),
                     &format!("union::{}", u.name),
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     u.range.start.line as u32 + 1,
                     td.get_bit_size(&utp),
                     td.get_abi_alignment(&utp),
@@ -1190,7 +1224,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 // 填充占位符
                 for placeholder in RefCell::borrow_mut(&self.ditypes_placeholder)
                     .remove(&u.get_full_name())
-                    .unwrap()
+                    .unwrap_or_default()
                     .borrow()
                     .iter()
                 {
@@ -1276,6 +1310,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         name: &str,
         pltype: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
+        constant: bool,
     ) -> PointerValue<'ctx> {
         let global = self.get_global_var_handle(name);
         if global.is_none() {
@@ -1285,6 +1320,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 name,
             );
             global.set_linkage(Linkage::External);
+            global.set_constant(constant);
             return global.as_pointer_value();
         }
         self.get_llvm_value(global.unwrap())
@@ -1295,6 +1331,24 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if *self.optimized.borrow() {
             return;
         }
+        let used = self.used.borrow();
+        let used_arr = self.i8ptr().const_array(
+            &used
+                .iter()
+                .map(|v| {
+                    self.builder
+                        .build_bitcast(v.as_global_value().as_pointer_value(), self.i8ptr(), "")
+                        .into_pointer_value()
+                })
+                .collect::<Vec<_>>(),
+        );
+        // see https://llvm.org/docs/LangRef.html#the-llvm-used-global-variable
+        let used_global = self
+            .module
+            .add_global(used_arr.get_type(), None, "llvm.used");
+        used_global.set_linkage(Linkage::Appending);
+        used_global.set_initializer(&used_arr);
+
         if crate::ast::jit_config::IS_JIT.load(std::sync::atomic::Ordering::Relaxed) {
             // jit is using shadow stack, skip immix pass
             self.module.get_functions().for_each(|f| {
@@ -1398,7 +1452,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.dibuilder
                 .create_lexical_block(
                     scope,
-                    self.diunit.get_file(),
+                    self.get_cur_di_file(),
                     start.line as u32,
                     start.column as u32,
                 )
@@ -1430,10 +1484,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         name: &str,
         pltype: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
+        constant: bool,
     ) -> ValueHandle {
         self.get_llvm_value_handle(
             &self
-                .get_or_add_global_value(name, pltype, ctx)
+                .get_or_add_global_value(name, pltype, ctx, constant)
                 .as_any_value_enum(),
         )
     }
@@ -1497,11 +1552,20 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.alloc_raw("ret_alloca", ret_type, ctx, None, "DioGC__malloc")
         };
         if let Some(dbg) = dbg {
-            self.build_dbg_location(Pos {
-                line: dbg.get_line() as _,
-                column: dbg.get_column() as _,
-                offset: 0,
-            })
+            if builder
+                .get_insert_block()
+                .unwrap()
+                .get_parent()
+                .unwrap()
+                .get_subprogram()
+                .is_some()
+            {
+                self.build_dbg_location(Pos {
+                    line: dbg.get_line() as _,
+                    column: dbg.get_column() as _,
+                    offset: 0,
+                })
+            }
         }
         builder.position_at_end(bb);
 
@@ -1723,6 +1787,19 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         );
         self.get_llvm_value_handle(&s.as_any_value_enum())
     }
+
+    fn global_const(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle {
+        let global = self.get_global_var_handle(name);
+        if global.is_none() {
+            let global =
+                self.module
+                    .add_global(self.get_basic_type_op(pltype, ctx).unwrap(), None, name);
+            global.set_linkage(Linkage::External);
+            global.set_constant(true);
+            return self.get_llvm_value_handle(&global.as_any_value_enum());
+        }
+        global.unwrap()
+    }
     fn build_dbg_location(&self, pos: Pos) {
         let loc = self.dibuilder.create_debug_location(
             self.context,
@@ -1747,7 +1824,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let debug_var_info = self.dibuilder.create_auto_variable(
             self.discope.get(),
             name,
-            self.diunit.get_file(),
+            self.get_cur_di_file(),
             pos.line as u32,
             ditype.unwrap(),
             true,
@@ -1913,6 +1990,38 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let v = self.builder.build_int_signed_div(lhs, rhs, name);
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
+
+    fn build_int_unsigned_div(
+        &self,
+        lhs: ValueHandle,
+        rhs: ValueHandle,
+        name: &str,
+    ) -> ValueHandle {
+        let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
+        let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
+        let v = self.builder.build_int_unsigned_div(lhs, rhs, name);
+        self.get_llvm_value_handle(&v.as_any_value_enum())
+    }
+
+    fn build_int_signed_srem(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
+        let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
+        let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
+        let v = self.builder.build_int_signed_rem(lhs, rhs, name);
+        self.get_llvm_value_handle(&v.as_any_value_enum())
+    }
+
+    fn build_int_unsigned_srem(
+        &self,
+        lhs: ValueHandle,
+        rhs: ValueHandle,
+        name: &str,
+    ) -> ValueHandle {
+        let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
+        let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
+        let v = self.builder.build_int_unsigned_rem(lhs, rhs, name);
+        self.get_llvm_value_handle(&v.as_any_value_enum())
+    }
+
     fn build_float_neg(&self, v: ValueHandle, name: &str) -> ValueHandle {
         let v = self.get_llvm_value(v).unwrap().into_float_value();
         let v = self.builder.build_float_neg(v, name);
@@ -1982,6 +2091,15 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         }
         self.build_dbg_location(pos)
     }
+    fn set_di_file(&self, f: &str) {
+        let f = PathBuf::from(f);
+
+        let f = self.dibuilder.create_file(
+            f.file_name().unwrap().to_str().unwrap(),
+            f.parent().unwrap().to_str().unwrap(),
+        );
+        self.difile.set(f);
+    }
     fn build_sub_program(
         &self,
         paralist: Vec<Box<TypedIdentifierNode>>,
@@ -2003,9 +2121,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 }
             };
         }
+
+        let f = self.get_cur_di_file();
         // debug info
         let subroutine_type = self.dibuilder.create_subroutine_type(
-            self.diunit.get_file(),
+            f,
             self.get_ditype(
                 &ret.get_type(child, &self.clone().into(), true)?.borrow(),
                 child,
@@ -2014,10 +2134,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             DIFlags::PUBLIC,
         );
         let subprogram = self.dibuilder.create_function(
-            self.diunit.get_file().as_debug_info_scope(),
+            f.as_debug_info_scope(),
             &fntype.append_name_with_generic(fntype.name.clone()),
             None,
-            self.diunit.get_file(),
+            f,
             fntype.range.start.line as u32,
             subroutine_type,
             false,
@@ -2048,16 +2168,16 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         }
         // debug info
         let subroutine_type = self.dibuilder.create_subroutine_type(
-            self.diunit.get_file(),
+            self.get_cur_di_file(),
             self.get_ditype(&ret.borrow(), child),
             &param_ditypes,
             DIFlags::PUBLIC,
         );
         let subprogram = self.dibuilder.create_function(
-            self.diunit.get_file().as_debug_info_scope(),
+            self.get_cur_di_file().as_debug_info_scope(),
             &format!("{}__fn", name),
             None,
-            self.diunit.get_file(),
+            self.get_cur_di_file(),
             start_line,
             subroutine_type,
             false,
@@ -2095,7 +2215,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.discope.get(),
             name,
             i as u32,
-            self.diunit.get_file(),
+            self.get_cur_di_file(),
             pos.line as u32,
             self.get_ditype(pltp, child).unwrap(),
             false,
@@ -2136,7 +2256,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.discope.get(),
             &fnvalue.param_names[i],
             i as u32,
-            self.diunit.get_file(),
+            self.get_cur_di_file(),
             pos.line as u32,
             self.get_ditype(
                 &PLType::Pointer(
@@ -2234,7 +2354,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.diunit.as_debug_info_scope(),
             name,
             "",
-            self.diunit.get_file(),
+            self.get_cur_di_file(),
             line,
             ditype.unwrap(),
             false,
@@ -2260,12 +2380,17 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let ty = ptrtp.get_element_type().into_struct_type();
         let ftp = self.mark_fn_tp(ptrtp);
         let name = v.get_full_name() + "@";
+        // if !name.starts_with(&ctx.get_root_ctx().get_file()) {
+        //     return;
+        // }
         let f = match self.module.get_function(&name) {
             Some(f) => f,
             None => self
                 .module
-                .add_function(&name, ftp, Some(Linkage::External)),
+                .add_function(&name, ftp, Some(Linkage::LinkOnceAny)),
         };
+        self.used.borrow_mut().push(f);
+
         f.get_basic_blocks().iter().for_each(|bb| {
             unsafe { bb.delete().unwrap() };
         });
@@ -2388,6 +2513,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .into(),
         )
     }
+
     fn create_closure_parameter_variable(&self, i: u32, f: ValueHandle, alloca: ValueHandle) {
         let funcvalue = self.get_llvm_value(f).unwrap().into_function_value();
         self.build_store(
@@ -2535,6 +2661,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .iter()
                 .skip(1)
                 .copied()
+                .filter(|b| {
+                    b.get_name().to_str().unwrap().to_string().contains("yield")
+                        || b.get_name().to_str().unwrap().to_string().contains("entry")
+                })
                 .collect::<Vec<_>>(),
         );
     }

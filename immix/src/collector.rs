@@ -473,13 +473,7 @@ impl Collector {
                     depth += 1;
                     true
                 });
-                STACK_MAP
-                    .global_roots
-                    .borrow()
-                    .iter()
-                    .for_each(|root| unsafe {
-                        self.mark_ptr((*root) as usize as *mut u8);
-                    });
+                self.mark_globals();
             }
         }
 
@@ -514,6 +508,17 @@ impl Collector {
             GC_MARK_COND.notify_all();
             drop(v);
         }
+    }
+
+    #[cfg(feature = "llvm_stackmap")]
+    fn mark_globals(&self) {
+        STACK_MAP
+            .global_roots
+            .borrow()
+            .iter()
+            .for_each(|root| unsafe {
+                self.mark_ptr((*root) as usize as *mut u8);
+            });
     }
 
     /// # sweep
@@ -639,7 +644,9 @@ mod tests {
     use rand::random;
     use rustc_hash::FxHashSet;
 
-    use crate::{gc_disable_auto_collect, no_gc_thread, round_n_up, BLOCK_SIZE, SPACE};
+    use crate::{
+        gc_disable_auto_collect, no_gc_thread, round_n_up, BIG_OBJ_ALIGN, BLOCK_SIZE, SPACE,
+    };
 
     use super::*;
 
@@ -796,7 +803,7 @@ mod tests {
             let rustptr = (&mut a) as *mut *mut GCTestBigObj as *mut u8;
             gc.add_root(rustptr, ObjectType::Pointer);
             let size1 = gc.get_bigobjs_size();
-            assert_eq!(size1, 2 * BIGOBJ_ALLOC_SIZE);
+            assert_eq!(size1, round_n_up!(2 * BIGOBJ_ALLOC_SIZE, BIG_OBJ_ALIGN));
             let time = std::time::Instant::now();
             gc.collect(); // 不回收，剩余 a b
             println!("gc{} gc time = {:?}", gc.get_id(), time.elapsed());
@@ -826,7 +833,7 @@ mod tests {
             // |  b  | <-- |  a  | --> |  c  |
             //               ^ rustptr
             let size1 = gc.get_bigobjs_size();
-            assert_eq!(size1, 3 * BIGOBJ_ALLOC_SIZE);
+            assert_eq!(size1, round_n_up!(3 * BIGOBJ_ALLOC_SIZE, BIG_OBJ_ALIGN));
             (*a).b = null_mut();
             (*a).d = null_mut();
             gc.collect(); // 回收，剩余 a

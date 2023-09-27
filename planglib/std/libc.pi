@@ -1,0 +1,17 @@
+pub fn LibC__read(fd:i32,buf:*u8, size:u64) i64;
+pub fn LibC__write(buf:*u8, size:u64) i64;
+pub fn LibC__open(path:*u8, byte_len:i64, flags:i32) i32;
+pub fn LibC__close(fd:i32) i32;
+
+
+const STDIN_FILENO:i32;
+const STDOUT_FILENO:i32;
+const STDERR_FILENO:i32;
+
+const O_RDONLY:i32;
+const O_WRONLY:i32;
+const O_RDWR:i32;
+const O_CREAT:i32;
+
+
+pub fn LibC__memcpy(dest:*u8, src:*u8, n:u64) *u8;

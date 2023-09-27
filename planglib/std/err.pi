@@ -1,0 +1,3 @@
+pub trait Error {
+    fn msg() string;
+}

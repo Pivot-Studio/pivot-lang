@@ -94,8 +94,9 @@ fn add_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 
 #[test_parser("1 * 1")]
 #[test_parser("1 / 1")]
+#[test_parser("1 % 1")]
 fn mul_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    parse_bin_ops!(unary_exp, MUL, DIV)(input)
+    parse_bin_ops!(unary_exp, MUL, DIV, MOD)(input)
 }
 
 #[test_parser("-1")]

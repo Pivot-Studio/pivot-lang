@@ -1,0 +1,140 @@
+use core::hash::*;
+use core::hash::hasher::*;
+use core::hash::pl_hash::*;
+// use core::eq::*;
+
+use std::iter::*;
+
+
+
+
+pub struct HashTable<G:Hash+Eq<G>|V> {
+    buckets:[Option<TableNode<G|V>>];
+    salt:u64;
+    entries:u64;
+}
+
+
+
+struct TableNode<Y:Hash+Eq<Y>|V> {
+    key:Y;
+    value:V;
+    hash:u64;
+    next:Option<TableNode<Y|V>>;
+}
+
+
+
+
+impl <K:Hash+Eq<K>|V> HashTable<K|V>  {
+    fn try_expand() void {
+        if self.entries as f64 / arr_len(self.buckets) as f64 > 0.5 {
+            let new_size = arr_len(self.buckets) * 2;
+            let new_table = new_hash_table<K|V>(new_size as u64, self.salt +1);
+            let iterator = self.into_inter();
+            for let i = iterator.next(); !i is None; i = iterator.next() {
+                let (key, value) = i as (K,V)!;
+                new_table.insert(key, value);
+            }
+            self.buckets = new_table.buckets;
+            self.salt = new_table.salt;
+            self.entries = new_table.entries;
+        }
+        return;
+    }
+    gen pub fn into_inter() Iterator<(K,V)> {
+        for let i = 0; i < arr_len(self.buckets); i = i + 1 {
+            let node = self.buckets[i];
+            while node is TableNode<K|V> {
+                let v = node as TableNode<K|V>!;
+                yield return (v.key,v.value);
+                node = v.next;
+            }
+        }
+    }
+    pub fn bucket_size() i64 {
+        return arr_len(self.buckets);
+    }
+    pub fn insert(k:K,v:V) void {
+        self.try_expand();
+        let hasher = new_paul_larson_hasher(self.salt);
+        k.hash(&hasher);
+        let hash = hasher.finish();
+        let bucket = hash % arr_len(self.buckets) as u64;
+        let next:Option<TableNode<K|V>> = None{};
+        let node = TableNode<K|V> {
+            key:k,
+            value:v,
+            next:next,
+            hash:hash,
+        };
+        self.entries = self.entries+1;
+        let current = self.buckets[bucket as i64];
+        if current is None {
+            self.buckets[bucket as i64] = node;
+        } else {
+            // check if there's same key
+            let head = current as TableNode<K|V>!;
+            while !head.next is None {
+                if head.key.eq(&k) {
+                    head.value = v;
+                    return;
+                }
+                head = head.next as TableNode<K|V>!;
+            }
+            // if the key doesn't exist, insert it to the head
+            // as the head is the most recently used
+            let new_head = node;
+            new_head.next = head;
+            self.buckets[bucket as i64] = new_head;
+        }
+        
+        return;
+    }
+
+    pub fn get(k:K) Option<V> {
+        let hasher = new_paul_larson_hasher(self.salt);
+        k.hash(&hasher);
+        let hash = hasher.finish();
+        let bucket = hash % arr_len(self.buckets) as u64;
+        let current = self.buckets[bucket as i64];
+        if current is None {
+            return None{};
+        } else {
+            // current = self.buckets[bucket as i64];
+            let head = current as TableNode<K|V>!;
+            while !head.next is None {
+                if head.hash == hash {
+                    return head.value;
+                }
+                head = head.next as TableNode<K|V>!;
+            }
+            if head.key.eq(&k) {
+                return head.value;
+            }
+
+            return None{};
+        }
+    }
+    
+}
+
+
+
+
+
+pub fn new_hash_table<K:Hash+Eq<K>|V>(bucket_size:u64,salt:u64) HashTable<K|V> {
+    let  table = HashTable<K|V> {
+        buckets:[Option<TableNode<K|V>>*bucket_size as i64;],
+        salt:salt,
+    };
+    // init to None
+    for let i = 0; i < arr_len( table.buckets); i = i + 1 {
+        table.buckets[i] = None{};
+    }
+    return table;
+}
+
+
+
+

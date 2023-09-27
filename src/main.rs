@@ -12,11 +12,14 @@ mod flow;
 mod lsp;
 mod nomparser;
 mod utils;
+mod version;
 use std::{
     cell::RefCell,
     path::Path,
     sync::{Arc, Mutex},
 };
+
+use version::VergenInfo;
 
 use ast::compiler::{self, ActionType, HashOptimizationLevel};
 use clap::{CommandFactory, Parser, Subcommand};
@@ -28,7 +31,7 @@ use lsp::start_lsp;
 
 /// Pivot Lang compiler program
 #[derive(Parser)]
-#[command(author, version, about=r#"
+#[command(author, version = get_version(), about=r#"
 _______   __                        __            __                                    
 |       \ |  \                      |  \          |  \                                   
 | $$$$$$$\ \$$ __     __   ______  _| $$_         | $$       ______   _______    ______  
@@ -115,6 +118,8 @@ enum RunCommand {
         #[clap(value_parser)]
         name: String,
     },
+    /// Get the whole version infomation
+    Version,
 }
 
 fn main() {
@@ -194,6 +199,11 @@ fn main() {
             RunCommand::New { name } => {
                 utils::plc_new::init_package(name);
             }
+            RunCommand::Version => {
+                let mut v = VergenInfo::new();
+                v.build_semver = "alpha".to_string();
+                println!("{}", v)
+            }
         }
     } else {
         println!("No file provided");
@@ -214,4 +224,8 @@ pub fn get_styles() -> clap::builder::Styles {
                 .bold()
                 .fg_color(Some(anstyle::Color::Ansi(anstyle::AnsiColor::BrightGreen))),
         )
+}
+
+pub fn get_version() -> clap::builder::Str {
+    format!("alpha-{}", env!("VERGEN_GIT_SHA")).into()
 }

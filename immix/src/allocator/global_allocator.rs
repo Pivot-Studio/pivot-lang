@@ -46,7 +46,7 @@ impl GlobalAllocator {
     ///
     /// size is the max heap size
     pub fn new(size: usize) -> Self {
-        let mmap = Mmap::new(size);
+        let mmap = Mmap::new(size * 3 / 4);
 
         // mmap.commit(mmap.aligned(), BLOCK_SIZE);
 
@@ -57,7 +57,7 @@ impl GlobalAllocator {
             mmap,
             free_blocks: Vec::new(),
             lock: ReentrantMutex::new(()),
-            big_obj_allocator: BigObjAllocator::new(size),
+            big_obj_allocator: BigObjAllocator::new(size / 4),
             last_get_block_time: std::time::Instant::now(),
             mem_usage_flag: 0,
             round: 0,

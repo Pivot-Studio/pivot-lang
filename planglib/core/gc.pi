@@ -2,17 +2,21 @@ fn DioGC__malloc(size: i64, obj_type: u8) *u8;
 
 pub fn DioGC__collect() void;
 
-pub fn DioGC__malloc_no_collect(size: i64, obj_type: u8) *u8;
+// pub fn DioGC__malloc_no_collect(size: i64, obj_type: u8) *u8;
 
 
 pub fn malloc<T>() *u8 {
     return DioGC__malloc(sizeof<T>(), gc_type<T>());
 }
 
+pub fn malloc_size(size:i64) *u8  {
+    return DioGC__malloc(size, 0 as u8);
+}
+
 pub struct string {
-    pub len: i64;
-    pub byte_len: i64;
-    pub data: *u8;
+    _len: i64;
+    _byte_len: i64;
+    data: *u8;
 }
 
 pub fn memcpy(dst: *u8, src: *u8, len: i64) void;
@@ -21,20 +25,57 @@ pub fn int_to_ptr(i: i64) *u8;
 
 pub fn ptr_to_int(ptr: *u8) i64;
 
+pub fn utf8_count(ptr: *u8, len:i64) i64;
+
 impl string {
     pub fn append(str: string) void {
         let old = self.data;
         let atomic: u8 = 0;
-        let new = DioGC__malloc(self.byte_len + str.byte_len, atomic);
-        memcpy(new, old, self.byte_len);
-        let new_i_end = ptr_to_int(new) + self.byte_len;
+        let new = DioGC__malloc(self._byte_len + str._byte_len, atomic);
+        memcpy(new, old, self._byte_len);
+        let new_i_end = ptr_to_int(new) + self._byte_len;
         let new_end = int_to_ptr(new_i_end);
-        memcpy(new_end, str.data, str.byte_len);
+        memcpy(new_end, str.data, str._byte_len);
         self.data = new;
-        self.len = self.len + str.len;
-        self.byte_len = self.byte_len + str.byte_len;
+        self._len = self._len + str._len;
+        self._byte_len = self._byte_len + str._byte_len;
         return;
     }
 
+    pub fn from_raw(data:*u8, byte_len:i64) void {
+        self.data = data;
+        self._byte_len = byte_len;
+        self._len = utf8_count(data, byte_len);
+        return;
+    }
+
+    pub fn raw() *u8 {
+        return self.data;
+    }
+
+    pub fn len() i64 {   
+        return self._len;
+    }
+
+    pub fn byte_len() i64 {
+        return self._byte_len;
+    }
+
+    pub fn bytes() [u8] {
+        return arr_from_raw(self.data, self._byte_len);
+    }
+    
+
+}
+
+
+pub fn string_from_bytes(bytes:[u8]) string {
+
+    let s = string {
+        _len: utf8_count(&bytes[0], arr_len(bytes)),
+        _byte_len: arr_len(bytes),
+        data: &bytes[0],
+    };
+    return s;
 }
 

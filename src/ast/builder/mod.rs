@@ -127,6 +127,7 @@ pub trait IRBuilder<'a, 'ctx> {
         name: &str,
         pltype: Arc<RefCell<PLType>>,
         ctx: &mut Ctx<'a>,
+        constant: bool,
     ) -> ValueHandle;
     fn build_load(&self, ptr: ValueHandle, name: &str) -> ValueHandle;
     fn try_load2var(
@@ -172,6 +173,15 @@ pub trait IRBuilder<'a, 'ctx> {
     fn build_int_sub(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle;
     fn build_int_mul(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle;
     fn build_int_signed_div(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle;
+    fn build_int_signed_srem(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle;
+    fn build_int_unsigned_div(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str)
+        -> ValueHandle;
+    fn build_int_unsigned_srem(
+        &self,
+        lhs: ValueHandle,
+        rhs: ValueHandle,
+        name: &str,
+    ) -> ValueHandle;
     fn build_float_neg(&self, v: ValueHandle, name: &str) -> ValueHandle;
     fn build_float_add(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle;
     fn build_float_sub(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle;
@@ -243,6 +253,8 @@ pub trait IRBuilder<'a, 'ctx> {
     fn build_bit_left_shift(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
     fn build_bit_right_shift(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
     fn build_bit_right_shift_arithmetic(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
+    fn global_const(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle;
+    fn set_di_file(&self, f: &str);
 }
 
 pub type ValueHandle = usize;

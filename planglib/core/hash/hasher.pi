@@ -1,0 +1,6 @@
+
+pub trait Hasher64 {
+    fn append(data:[u8]) void;
+    fn finish() u64;
+}
+

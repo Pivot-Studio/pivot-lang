@@ -1,6 +1,7 @@
 use super::builder::ValueHandle;
 use super::ctx::Ctx;
 use super::diag::ErrorCode;
+use super::node::interface::MultiTraitNode;
 use super::node::types::ClosureTypeNode;
 use super::node::types::CustomTypeNode;
 use super::plmod::Mod;
@@ -169,7 +170,7 @@ pub struct UnionType {
     pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
 }
 
-impl_mthd!(UnionType, STType);
+impl_mthd!(UnionType, STType, PlaceHolderType);
 
 impl UnionType {
     pub fn find_method(&self, method: &str) -> Option<Arc<RefCell<FNValue>>> {
@@ -221,6 +222,7 @@ impl UnionType {
         // .borrow_mut()
         // .insert(res.name.clone(), pltype.tp.clone());
         ctx.add_infer_result(self, &res.name, pltype.tp);
+        builder.set_di_file(&ctx.get_file());
         Ok(res)
     }
     pub fn has_type<'a, 'b>(
@@ -234,7 +236,8 @@ impl UnionType {
                 .iter()
                 .enumerate()
                 .find(|(_, t)| {
-                    &*get_type_deep(t.get_type(ctx, builder, true).unwrap()).borrow() == pltype
+                    get_type_deep(t.get_type(ctx, builder, true).unwrap())
+                        == get_type_deep(Arc::new(RefCell::new(pltype.clone())))
                 })
                 .map(|(i, _)| i)
         })
@@ -395,6 +398,27 @@ impl PLType {
             PLType::Union(_) => ObjectType::Trait, // share same layout as trait
             PLType::Closure(_) => ObjectType::Trait, // share same layout as trait
             _ => ObjectType::Atomic,
+        }
+    }
+
+    pub fn implements_trait(&self, tp: &STType, plmod: &Mod) -> bool {
+        let name = &self.get_full_elm_name_without_generic();
+
+        match self {
+            PLType::Struct(s) => s.implements_trait(tp, plmod),
+            PLType::Union(u) => u.implements_trait(tp, plmod),
+            _ => {
+                if impl_in_mod(plmod, name, tp) {
+                    return true;
+                } else {
+                    for m in plmod.submods.values() {
+                        if impl_in_mod(m, name, tp) {
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
         }
     }
 
@@ -671,6 +695,22 @@ impl PLType {
     }
 }
 
+fn impl_in_mod(plmod: &Mod, name: &String, tp: &STType) -> bool {
+    plmod
+        .impls
+        .borrow()
+        .get(name)
+        .map(|v| {
+            v.get(&tp.get_full_name_except_generic())
+                .map(|gm| {
+                    tp.get_full_name()
+                        == append_name_with_generic(gm, &tp.get_full_name_except_generic())
+                })
+                .unwrap_or(v.get(&tp.get_full_name_except_generic()).is_some())
+        })
+        .unwrap_or_default()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Field {
     pub index: u32,
@@ -825,7 +865,10 @@ impl FNValue {
                 .generic_map
                 .iter()
                 .map(|(_, v)| match &*v.clone().borrow() {
-                    PLType::Generic(g) => g.curpltype.as_ref().unwrap().borrow().get_llvm_name(),
+                    PLType::Generic(g) => {
+                        let name = g.curpltype.as_ref().unwrap().borrow().get_llvm_name();
+                        name
+                    }
                     _ => unreachable!(),
                 })
                 .collect::<Vec<_>>()
@@ -867,6 +910,7 @@ impl FNValue {
             builder.rm_curr_debug_location();
             // gencode
             n.gen_fntype(ctx, false, builder, f)?;
+            builder.set_di_file(&ctx.get_file());
         } else {
             unreachable!()
         }
@@ -1085,6 +1129,37 @@ impl STType {
             err.add_to_ctx(ctx);
         }
     }
+
+    /// Test if current trait can cast to another trait (implicit cast)
+    ///
+    /// # Example
+    ///
+    /// ```pl
+    /// trait A {}
+    /// trait B:A {}
+    /// ```
+    /// trait B can cast to trait A
+    ///
+    /// # Note
+    ///
+    /// if source trait and target trait is the same, return **false**
+    pub fn trait_can_cast_to(&self, to_trait: &STType) -> bool {
+        debug_assert!(self.is_trait && to_trait.is_trait);
+
+        for derives in self.derives.iter() {
+            if let PLType::Trait(derive) = &*derives.borrow() {
+                if derive == to_trait {
+                    return true;
+                }
+                if derive.trait_can_cast_to(to_trait) {
+                    return true;
+                }
+            } else {
+                unreachable!()
+            }
+        }
+        false
+    }
     pub fn get_trait_field(&self, k: &str) -> Option<Field> {
         debug_assert!(self.is_trait);
         fn walk(st: &STType, k: &str) -> (Option<Field>, u32) {
@@ -1175,38 +1250,7 @@ impl STType {
             .for_each(|(i, f)| f.index = i as u32);
         fields
     }
-    fn implements(&self, tp: &STType, plmod: &Mod) -> bool {
-        if plmod
-            .impls
-            .get(&self.get_full_name())
-            .and_then(|v| v.get(&tp.get_full_name()))
-            .is_some()
-        {
-            return true;
-        }
-        for plmod in plmod.submods.values() {
-            if plmod
-                .impls
-                .get(&self.get_full_name())
-                .and_then(|v| v.get(&tp.get_full_name()))
-                .is_some()
-            {
-                return true;
-            }
-        }
-        false
-    }
-    pub fn implements_trait(&self, tp: &STType, plmod: &Mod) -> bool {
-        if self.implements_trait_curr_mod(tp, plmod) {
-            return true;
-        }
-        for plmod in plmod.submods.values() {
-            if self.implements_trait(tp, plmod) {
-                return true;
-            }
-        }
-        false
-    }
+
     pub fn expect_field_pub(&self, ctx: &Ctx, f: &Field, range: Range) -> Result<(), PLDiag> {
         if self.path == ctx.plmod.path {
             return Ok(());
@@ -1224,46 +1268,7 @@ impl STType {
         );
         Ok(())
     }
-    fn implements_trait_curr_mod(&self, tp: &STType, plmod: &Mod) -> bool {
-        // FIXME: check generic
-        let re = plmod
-            .impls
-            .get(&self.get_full_name())
-            .or(plmod.impls.get(&self.get_full_name_except_generic()))
-            .map(|v| {
-                v.get(&tp.get_full_name_except_generic())
-                    .map(|gm| {
-                        let mut gm = gm.clone();
-                        for (k, _) in &gm.clone() {
-                            if let Some(vv) = self.generic_map.get(k) {
-                                gm.insert(k.clone(), vv.clone());
-                            }
-                            if let Some(vv) = self.generic_infer_types.get(k) {
-                                gm.insert(k.clone(), vv.clone());
-                            }
-                        }
-                        tp.get_full_name()
-                            == append_name_with_generic(&gm, &tp.get_full_name_except_generic())
-                    })
-                    .unwrap_or_default()
-            })
-            .unwrap_or_default();
-        if !re {
-            return re;
-        }
-        for de in &tp.derives {
-            match &*de.borrow() {
-                PLType::Trait(t) => {
-                    let re = self.implements(t, plmod);
-                    if !re {
-                        return re;
-                    }
-                }
-                _ => unreachable!(),
-            }
-        }
-        true
-    }
+
     pub fn get_type_code(&self) -> u64 {
         let full_name = format!("{}..{}", self.path, self.append_name_with_generic());
         get_hash_code(full_name)
@@ -1300,13 +1305,22 @@ impl STType {
                     let mut nf = f.clone();
                     if let TypeNodeEnum::Func(fd) = &*f.typenode {
                         let mut new_f = fd.clone();
+                        let mut first = true;
                         for f in new_f.paralist.iter_mut() {
-                            f.typenode = f
-                                .typenode
-                                .get_type(ctx, builder, true)
-                                .unwrap()
-                                .borrow()
-                                .get_typenode(&ctx.get_file());
+                            if first {
+                                f.typenode = Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
+                                    elm: Box::new(TypeNameNode::new_from_str("i64").into()),
+                                    range: Default::default(),
+                                }));
+                            } else {
+                                f.typenode = f
+                                    .typenode
+                                    .get_type(ctx, builder, true)
+                                    .unwrap()
+                                    .borrow()
+                                    .get_typenode(&ctx.get_file());
+                            }
+                            first = false;
                         }
                         // eprintln!("{:?}", new_f.ret);
                         new_f.ret = new_f
@@ -1343,14 +1357,17 @@ impl STType {
             } else {
                 pltype.tp.replace(PLType::Struct(res.clone()));
             }
-            // TODO union & nested placeholder
-            if !res
-                .generic_infer_types
-                .values()
-                .any(|v| matches!(&*v.borrow(), PLType::PlaceHolder(_)))
-            {
-                ctx.add_infer_result(self, &res.name, pltype.tp.clone());
-            }
+            // // TODO union & nested placeholder
+            // if !res
+            //     .generic_infer_types
+            //     .values()
+            //     .any(|v| matches!(&*v.borrow(), PLType::PlaceHolder(_)))
+            // {
+            //     ctx.add_infer_result(self, &res.name, pltype.tp.clone());
+            // }
+
+            ctx.add_infer_result(self, &res.name, pltype.tp.clone());
+            builder.set_di_file(&ctx.get_file());
             Ok(pltype.tp)
         })
     }
@@ -1404,7 +1421,7 @@ impl STType {
         completions
     }
     pub fn find_method(&self, method: &str) -> Option<Arc<RefCell<FNValue>>> {
-        self.methods.borrow().get(method).cloned()
+        self.get_method(method)
     }
     pub fn get_full_name(&self) -> String {
         format!("{}..{}", self.path, self.name)
@@ -1456,8 +1473,7 @@ pub struct GenericType {
     pub name: String,
     pub range: Range,
     pub curpltype: Option<Arc<RefCell<PLType>>>,
-    pub trait_impl: Option<Vec<Arc<RefCell<PLType>>>>,
-    pub trait_place_holder: Option<Arc<RefCell<PLType>>>,
+    pub trait_impl: Option<MultiTraitNode>,
     pub refs: Arc<MutVec<Location>>,
 }
 impl GenericType {
@@ -1467,30 +1483,96 @@ impl GenericType {
     pub fn clear_type(&mut self) {
         self.curpltype = None;
     }
-    pub fn set_place_holder(&mut self, ctx: &mut Ctx) {
-        if let Some(trait_place_holder) = &self.trait_place_holder {
-            self.curpltype = Some(trait_place_holder.clone());
-            return;
-        }
+    pub fn set_place_holder<'a, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) -> Arc<RefCell<PLType>> {
         let range = self.range;
+        if let Some(impls) = &self.trait_impl {
+            let place_holder = STType {
+                name: self.name.clone(),
+                path: ctx.get_file(),
+                fields: Default::default(),
+                doc: Default::default(),
+                generic_map: Default::default(),
+                derives: Default::default(),
+                modifier: Default::default(),
+                body_range: range,
+                is_trait: false,
+                is_tuple: false,
+                generic_infer_types: Default::default(),
+                methods: Default::default(),
+                trait_methods_impl: Default::default(),
+                range,
+            };
+            let ph = Arc::new(RefCell::new(PLType::Struct(place_holder)));
+
+            for it in impls.get_types(ctx, builder).unwrap() {
+                if let PLType::Trait(t) = &*it.clone().borrow() {
+                    ctx.get_root_ctx().plmod.add_impl(
+                        &ph.borrow().get_full_elm_name_without_generic(),
+                        &it.clone().borrow().get_full_elm_name(),
+                        t.generic_map.clone(),
+                    );
+                    let fields = t.list_trait_fields();
+                    for field in fields {
+                        let re = field.typenode.get_type(ctx, builder, true);
+                        if let Err(e) = re {
+                            e.add_to_ctx(ctx);
+                            continue;
+                        }
+                        let tp = re.unwrap();
+                        if let PLType::Fn(f) = &*tp.clone().borrow() {
+                            let mut f = f.clone();
+                            f.fntype.param_pltypes[0] = ph.borrow().get_typenode(&ctx.get_file());
+                            let generic = f.fntype.generic;
+                            ctx.add_method(
+                                &ph.borrow(),
+                                &field.name,
+                                f,
+                                Some((it.clone(), Default::default())),
+                                generic,
+                                Default::default(),
+                            )
+                            .unwrap();
+                        }
+                    }
+                }
+            }
+
+            return ph;
+        }
         let p = PlaceHolderType {
             name: self.name.clone(),
             range,
+            path: "".to_owned(),
+            methods: Arc::new(RefCell::new(FxHashMap::default())),
         };
         let name_in_map = p.get_place_holder_name();
         let pltype = Arc::new(RefCell::new(PLType::PlaceHolder(p)));
-        self.curpltype = Some(pltype.clone());
-        ctx.add_type(name_in_map, pltype, range).unwrap();
+        ctx.add_type(name_in_map, pltype.clone(), range).unwrap();
+        pltype
     }
 }
 generic_impl!(FnType, STType, UnionType);
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[range]
+#[derive(Debug, Clone)]
 pub struct PlaceHolderType {
     pub name: String,
-    pub range: Range,
+    pub path: String,
+    pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
 }
 impl PlaceHolderType {
     fn get_place_holder_name(&self) -> String {
         format!("placeholder_::{}", self.name)
     }
 }
+
+impl PartialEq for PlaceHolderType {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.path == other.path && self.methods == other.methods
+    }
+}
+
+impl Eq for PlaceHolderType {}

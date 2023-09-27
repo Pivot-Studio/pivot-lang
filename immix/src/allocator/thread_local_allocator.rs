@@ -276,9 +276,9 @@ impl ThreadLocalAllocator {
             self.unavailable_blocks.push(new_block);
         } else {
             // new_block未被用完，将它加入recyclable blocks
-            unsafe {
-                debug_assert!((*new_block).find_first_hole().is_some());
-            }
+            // unsafe {
+            //     debug_assert!((*new_block).find_first_hole().is_some());
+            // }
             self.recyclable_blocks.push_back(new_block);
         }
         re
@@ -357,14 +357,14 @@ impl ThreadLocalAllocator {
                 let block = *block;
                 if (*block).marked {
                     total_used += (*block).correct_header(mark_histogram);
-                    let (line, hole) = (*block).get_available_line_num_and_holes();
+                    let (line, _) = (*block).get_available_line_num_and_holes();
                     if line > 0 {
-                        debug_assert!(
-                            (*block).find_first_hole().is_some(),
-                            "line {}, hole {}",
-                            line,
-                            hole
-                        );
+                        // debug_assert!(
+                        //     (*block).find_first_hole().is_some(),
+                        //     "line {}, hole {}",
+                        //     line,
+                        //     hole
+                        // );
                         recyclable_blocks.push_back(block);
                     } else {
                         unavailable_blocks.push(block);

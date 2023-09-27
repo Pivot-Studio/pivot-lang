@@ -28,7 +28,8 @@ pub struct GenericSelfRef<T|S> {
     x: *GenericSelfRef<T|S>;
 }
 
-fn placeholder_inner1<T>(b: T, a: One<T>) void {
+
+fn placeholder_inner1<J>(b: J, a: One<J>) void {
     return;
 }
 

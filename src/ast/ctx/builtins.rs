@@ -5,7 +5,7 @@ use crate::{
     ast::{
         builder::no_op_builder::NoOpBuilder,
         node::{node_result::NodeResultBuilder, RangeTrait},
-        pltype::{PlaceHolderType, PriType},
+        pltype::{ARRType, PlaceHolderType, PriType},
     },
     format_label,
 };
@@ -40,6 +40,7 @@ lazy_static! {
         mp.insert(usize::MAX - 7, emit_gc_type);
         mp.insert(usize::MAX - 8, emit_arr_len);
         mp.insert(usize::MAX - 9, emit_arr_copy);
+        mp.insert(usize::MAX - 10, emit_arr_from_raw);
         mp
     };
     pub static ref BUILTIN_FN_SNIPPET_MAP: HashMap<ValueHandle, String> = {
@@ -65,6 +66,10 @@ lazy_static! {
             usize::MAX - 9,
             r#"arr_copy(${1:from}, ${2:to}, ${3:len})$0"#.to_owned(),
         );
+        mp.insert(
+            usize::MAX - 10,
+            r"arr_from_raw(${1:ptr}, ${2:len})$0".to_owned(),
+        );
         mp
     };
     pub static ref BUILTIN_FN_NAME_MAP: HashMap<&'static str, ValueHandle> = {
@@ -78,6 +83,7 @@ lazy_static! {
         mp.insert("gc_type", usize::MAX - 7);
         mp.insert("arr_len", usize::MAX - 8);
         mp.insert("arr_copy", usize::MAX - 9);
+        mp.insert("arr_from_raw", usize::MAX - 10);
         mp
     };
 }
@@ -216,10 +222,69 @@ fn emit_unsafe_cast<'a, 'b>(
             .add_to_ctx(ctx));
     }
     let ty = PLType::Pointer(generic);
-    let re = builder.bitcast(ctx, v.get_value(), &ty, "unsafe_casted");
-    re.new_output(Arc::new(RefCell::new(ty))).to_result()
+    let ty = Arc::new(RefCell::new(ty));
+    let re = builder.bitcast(
+        ctx,
+        v.get_value(),
+        &PLType::Pointer(ty.clone()),
+        "unsafe_casted",
+    );
+    re.new_output(ty).to_result()
 }
 
+fn emit_arr_from_raw<'a, 'b>(
+    f: &mut FuncCallNode,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> NodeResult {
+    if f.paralist.len() != 2 {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::PARAMETER_LENGTH_NOT_MATCH)
+            .add_to_ctx(ctx));
+    }
+    if f.generic_params.is_some() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_PARAM_LEN_MISMATCH)
+            .add_to_ctx(ctx));
+    }
+
+    let st = f.paralist[0].emit(ctx, builder)?;
+    let v = st.get_value().unwrap();
+
+    let elm = if let PLType::Pointer(p) = &*v.get_ty().borrow() {
+        p.clone()
+    } else {
+        return Err(f.paralist[0]
+            .range()
+            .new_err(crate::ast::diag::ErrorCode::NOT_A_POINTER)
+            .add_to_ctx(ctx));
+    };
+
+    let len = f.paralist[1].emit(ctx, builder)?;
+    let v2 = len.get_value().unwrap();
+    if !matches!(&*v2.get_ty().borrow(), PLType::Primitive(PriType::I64)) {
+        return Err(f.paralist[1]
+            .range()
+            .new_err(crate::ast::diag::ErrorCode::TYPE_MISMATCH)
+            .add_to_ctx(ctx));
+    }
+
+    let arr_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
+        element_type: elm,
+        size_handle: 0,
+    })));
+    let arr = builder.alloc("array_alloca", &arr_tp.borrow(), ctx, None);
+    let arr_raw = builder.build_struct_gep(arr, 1, "arr_raw").unwrap();
+    let loaded = ctx.try_load2var(f.paralist[0].range(), v.get_value(), builder)?;
+    builder.build_store(arr_raw, loaded);
+    let arr_len = builder.build_struct_gep(arr, 2, "arr_len").unwrap();
+    let loaded = ctx.try_load2var(f.paralist[1].range(), v2.get_value(), builder)?;
+    builder.build_store(arr_len, loaded);
+
+    arr.new_output(arr_tp).to_result()
+}
 fn emit_arr_len<'a, 'b>(
     f: &mut FuncCallNode,
     ctx: &'b mut Ctx<'a>,
@@ -445,6 +510,8 @@ fn emit_for_fields<'a, 'b>(
                 let field_tp = Arc::new(RefCell::new(PLType::PlaceHolder(PlaceHolderType {
                     name: "T".to_owned(),
                     range: Default::default(),
+                    path: "".to_owned(),
+                    methods: Default::default(),
                 })));
                 let gep = builder.alloc("placeholder", &field_tp.borrow(), ctx, None);
                 ctx.add_symbol_raw("_field".to_string(), gep, field_tp, f.range);

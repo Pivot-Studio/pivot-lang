@@ -220,6 +220,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         _name: &str,
         _pltype: Arc<std::cell::RefCell<crate::ast::pltype::PLType>>,
         _ctx: &mut crate::ast::ctx::Ctx<'a>,
+        _constant: bool,
     ) -> super::ValueHandle {
         0
     }
@@ -533,4 +534,36 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     ) -> ValueHandle {
         0
     }
+
+    fn global_const(&self, _name: &str, _pltype: &PLType, _ctx: &mut Ctx<'a>) -> ValueHandle {
+        0
+    }
+
+    fn build_int_signed_srem(
+        &self,
+        _lhs: ValueHandle,
+        _rhs: ValueHandle,
+        _name: &str,
+    ) -> ValueHandle {
+        0
+    }
+
+    fn build_int_unsigned_div(
+        &self,
+        _lhs: ValueHandle,
+        _rhs: ValueHandle,
+        _name: &str,
+    ) -> ValueHandle {
+        0
+    }
+
+    fn build_int_unsigned_srem(
+        &self,
+        _lhs: ValueHandle,
+        _rhs: ValueHandle,
+        _name: &str,
+    ) -> ValueHandle {
+        0
+    }
+    fn set_di_file(&self, _f: &str) {}
 }

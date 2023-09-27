@@ -6,6 +6,7 @@ use std::process::exit;
 use backtrace::Backtrace;
 use internal_macro::is_runtime;
 pub mod gc;
+pub mod libcwrap;
 pub mod logger;
 
 #[is_runtime]
@@ -58,4 +59,14 @@ fn print_raw(bs: *const u8, len: i64) {
 #[is_runtime]
 fn print_i64(i: i64) {
     print!("{}", i);
+}
+
+#[is_runtime]
+fn utf8_count(ptr: *mut u8, byte_len: i64) -> i64 {
+    let s = unsafe { std::slice::from_raw_parts(ptr, byte_len as usize) };
+    bytecount::num_chars(s) as _
+}
+
+pub fn count_utf8_char(s: &str) -> usize {
+    bytecount::num_chars(s.as_bytes())
 }
