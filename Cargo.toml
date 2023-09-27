@@ -22,7 +22,7 @@ rowan = "0.15"
 dissimilar = "1.0"
 stderrlog = "0.5"
 log = "0.4"
-clap = { version = "4.1", features = ["derive", "unstable-styles"] }
+clap = { version = "4.4", features = ["derive", "string"] }
 colored = "2.0"
 serde = "1.0"
 lsp-types = { branch = "master", features = ["proposed"], git = "https://github.com/Pivot-Studio/lsp-types" }
@@ -104,3 +104,5 @@ codegen-units = 1
 [dev-dependencies]
 expect-test = "1.4.1"
 
+[build-dependencies]
+vergen = "7.3.2"
