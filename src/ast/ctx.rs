@@ -1670,9 +1670,7 @@ impl<'a, 'ctx> Ctx<'a> {
             let trait_pltype = l;
             let st_pltype = self.auto_deref_tp(r);
             if let PLType::Trait(t) = &*trait_pltype.borrow() {
-                let eq = st_pltype
-                    .borrow()
-                    .implements_trait(t, &self.get_root_ctx().plmod);
+                let eq = st_pltype.borrow().implements_trait(t, self.get_root_ctx());
                 return EqRes {
                     eq,
                     need_up_cast: true,

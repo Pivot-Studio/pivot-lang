@@ -401,13 +401,14 @@ impl PLType {
         }
     }
 
-    pub fn implements_trait(&self, tp: &STType, plmod: &Mod) -> bool {
+    pub fn implements_trait(&self, tp: &STType, ctx: &Ctx) -> bool {
         let name = &self.get_full_elm_name_without_generic();
 
         match self {
-            PLType::Struct(s) => s.implements_trait(tp, plmod),
-            PLType::Union(u) => u.implements_trait(tp, plmod),
+            PLType::Struct(s) => s.implements_trait(tp, ctx),
+            PLType::Union(u) => u.implements_trait(tp, ctx),
             _ => {
+                let plmod = &ctx.db.get_module(&tp.path).unwrap();
                 if impl_in_mod(plmod, name, tp) {
                     return true;
                 } else {
@@ -1113,7 +1114,7 @@ impl STType {
                     unreachable!()
                 }
             })
-            .filter(|derive| !st.implements_trait(derive, &ctx.plmod))
+            .filter(|derive| !st.implements_trait(derive, ctx))
             .collect::<Vec<_>>();
         if !errnames.is_empty() {
             let mut err = range.new_err(ErrorCode::DERIVE_TRAIT_NOT_IMPL);

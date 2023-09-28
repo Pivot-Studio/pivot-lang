@@ -200,7 +200,7 @@ impl<'a, 'ctx> Ctx<'a> {
     ) -> Result<usize, PLDiag> {
         self.run_in_type_mod(t, |ctx, t| {
             ctx.protect_generic_context(&t.generic_map, |ctx| {
-                if !st.implements_trait(t, &ctx.get_root_ctx().plmod) {
+                if !st.implements_trait(t, ctx.get_root_ctx()) {
                     return Err(mismatch_err!(
                         ctx,
                         ori_range,

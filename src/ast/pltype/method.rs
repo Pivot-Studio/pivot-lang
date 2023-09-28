@@ -197,14 +197,29 @@ pub trait ImplAbleWithGeneric: Generic + ImplAble {
         }
         false
     }
-    fn implements_trait(&self, tp: &STType, plmod: &Mod) -> bool {
-        if self.implements_trait_curr_mod(tp, plmod) {
-            return true;
-        }
-        for plmod in plmod.submods.values() {
+    fn implements_trait(&self, tp: &STType, ctx: &Ctx) -> bool {
+        if tp.path == ctx.plmod.path {
+            let plmod = &ctx.plmod;
             if self.implements_trait_curr_mod(tp, plmod) {
                 return true;
             }
+            return false;
+        }
+        let plmod = &ctx.db.get_module(&tp.path).unwrap();
+        if self.implements_trait_curr_mod(tp, plmod) {
+            return true;
+        }
+        let p = self.get_path();
+        if p == ctx.plmod.path {
+            let plmod = &ctx.plmod;
+            if self.implements_trait_curr_mod(tp, plmod) {
+                return true;
+            }
+            return false;
+        }
+        let plmod = &ctx.db.get_module(&p).unwrap();
+        if self.implements_trait_curr_mod(tp, plmod) {
+            return true;
         }
         false
     }
