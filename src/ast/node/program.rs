@@ -255,9 +255,16 @@ impl Program {
             let path = wrapper.resolve_dep_path(db);
             let p = self.config(db).project;
             log::trace!("load dep {:?} for {:?} (project {:?})", path, pkgname, p);
-            let f = path.to_str().unwrap().to_string();
-            let mut f = self.docs(db).get_file_params(db, f, false);
+            let ff = path.to_str().unwrap().to_string();
+            let mut f = self.docs(db).get_file_params(db, ff.clone(), false);
             let mut symbol_opt = None;
+            #[cfg(target_arch = "wasm32")]
+            if ff.starts_with("core") || ff.starts_with("std") {
+                let p = crate::lsp::wasm::PLLIB_DIR.get_entry(&path);
+                if p.is_none() {
+                    f = None;
+                }
+            }
             if f.is_none() {
                 if let Some(p) = path.parent() {
                     mod_id = Some(p.file_name().unwrap().to_str().unwrap().to_string());

@@ -91,6 +91,11 @@ impl Node for UseNode {
             .get_file(path.with_extension("pi"))
             .is_some()
         {
+            ctx.push_semantic_token(
+                self.ids.last().unwrap().range,
+                SemanticTokenType::NAMESPACE,
+                0,
+            );
             return Ok(Default::default());
         }
         if !path.with_extension("pi").exists() {
