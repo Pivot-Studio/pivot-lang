@@ -10,6 +10,7 @@ on:
     - '**/Cargo.*'
     - '.github/workflows/npmpkg.yml'
     - 'codecov.yml'
+  workflow_dispatch:
 jobs:
   build:
     runs-on: ubuntu-latest
