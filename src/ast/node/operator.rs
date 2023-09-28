@@ -509,7 +509,6 @@ fn handle_glob_mthd<T: TraitImplAble>(
     head_pltype: Arc<RefCell<PLType>>,
     id_range: Range,
 ) -> NodeResult {
-    let ctx = ctx.get_root_ctx();
     if let Some(mthd) = ctx
         .find_global_method(&t.get_full_name(), &id.name)
         .or(ctx.find_global_method(&t.get_full_name_except_generic(), &id.name))

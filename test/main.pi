@@ -1,102 +1,15 @@
-use project1::test::ifel;
-use project1::test::generic;
-use project1::test::st;
-use project1::test::method;
-use project1::test::constant;
-use project1::test::traits;
-use project1::test::simple;
-use project1::test::flow;
-use project1::test::list;
-use project1::test::module;
-use project1::test::str;
-use project1::test::macros;
-use project1::test::union;
-use project1::test::multi_trait;
-use project1::test::tuple;
-use project1::test::fntype;
-use project1::test::closure;
-use project1::test::map;
-use project1::test::tree;
-use project1::test::fixed_point;
-use project1::tmod2;
-use pl_test::main;
-use project1::test::compiletime_reflection::test_compile_time_reflection;
-use project1::test::deconstruct;
-use project1::test::st::*;
-use project1::test::arr;
-use project1::test::iter;
-use std::libc;
-use std::io;
 use std::cols::hashtable;
+use core::panic::assert;
+// use core::hash::Hash;
+use core::eq::*;
 
-use core::hash::pl_hash::*;
-
-pub fn main() i64 {
-    macros::test_macros();
-    ifel::test_if_else();
-    generic::test_generic();
-    method::test_impl();
-    test_struct();
-    constant::test_const();
-    traits::test_trait();
-    simple::test_simple();
-    flow::test_flow();
-    list::test_list();
-    main::simple_test();
-    module::test_module();
-    str::test_string();
-    union::test_union();
-    multi_trait::test_multi_trait();
-    deconstruct::test_deconstruct();
-    tuple::test_tuple();
-    fntype::test_fntype()();
-    closure::test_closure();
-    tree::test_eva();
-    map::test_map();
-    fixed_point::test_fixed_point();
-    generic::ret_generic1<i64>();
-    test_compile_time_reflection();
-    iter::test_generator();
-
-
-    let fd = io::open_read("./Cargo.toml");
-    let s = fd.read_all_as_string() as string!;
-    
-    println!(s);
-    
-    
-    arr::test_arr();
-
-
-    let table = hashtable::new_hash_table<string|string>(10 as u64, 100 as u64);
-    table.insert("hi", "World");
-    table.insert("tj", "love hj");
-    let v = table.get("hi") as string!;
-    println!(v);
-    v = table.get("tj") as string!;
-    println!(v);
-    table.insert("hi", "World2");
-    v = table.get("hi") as string!;
-    println!(v);
-    let str = "1";
-    for let i = 0; i < 10; i = i + 1 {
-        str.append("1");
-        table.insert(str, "World2");
-    }
-    println!(table.bucket_size());
-    let i_table = hashtable::new_hash_table<i64|i64>(10 as u64, 100 as u64);
-    i_table.insert(1, 2);
-    i_table.insert(3, 4);
-    let one =  i_table.get(1) as i64!;
-    let three = i_table.get(3) as i64!;
-    println!(one);
-    println!(three);
-    let attt = 1;
-    let ttt:Eq<i64> = attt;
-    let bbbb = 1;
-    let re = ttt.eq(&bbbb);
-    println!(re);
+fn main() i64 {
+    let table = hashtable::new_hash_table<string|string>(10 as u64, 1 as u64);
+    table.insert("hello","world");
+    table.insert("bye","bye");
+    assert(table.get("hello") is string);
+    let v = table.get("hello") as string!;
+    assert("world".eq(&v));
     return 0;
 }
-
 
