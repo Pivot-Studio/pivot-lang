@@ -137,6 +137,7 @@ fn main_loop(
     );
     let last_tokens = Cell::new(Default::default());
     let mut completions: Vec<Vec<lsp_types::CompletionItem>> = vec![];
+    let mut last_semantic_file = "".to_string();
 
     log::info!("starting main loop");
     for msg in &connection.receiver {
@@ -233,6 +234,7 @@ fn main_loop(
         })
         .on::<SemanticTokensFullRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
+            last_semantic_file = uri.clone();
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::SemanticTokensFull);
             docin
@@ -251,6 +253,21 @@ fn main_loop(
         })
         .on::<SemanticTokensFullDeltaRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
+            if last_semantic_file != uri {
+                let sender = connection.sender.clone();
+                pool.execute(move || {
+                    send_semantic_tokens_edit(
+                        &sender,
+                        id,
+                        SemanticTokensDelta {
+                            result_id: None,
+                            edits: vec![],
+                        },
+                    );
+                });
+                return;
+            }
+            last_semantic_file = uri.clone();
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::SemanticTokensFull);
             docin

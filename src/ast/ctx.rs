@@ -80,7 +80,7 @@ pub type GenericCache = Arc<RefCell<GenericCacheMap>>;
 /// Context for code generation
 pub struct Ctx<'a> {
     pub generic_types: FxHashMap<String, Arc<RefCell<PLType>>>,
-    pub need_highlight: usize,
+    pub need_highlight: Arc<RefCell<usize>>,
     pub plmod: Mod,
     pub father: Option<&'a Ctx<'a>>, // father context, for symbol lookup
     pub root: Option<&'a Ctx<'a>>,   // root context, for symbol lookup
@@ -280,7 +280,7 @@ impl<'a, 'ctx> Ctx<'a> {
     ) -> Ctx<'a> {
         let generic_infer: GenericCache = Default::default();
         Ctx {
-            need_highlight: 0,
+            need_highlight: Default::default(),
             generic_types: FxHashMap::default(),
             plmod: Mod::new(src_file_path.to_string(), generic_infer.clone()),
             father: None,
@@ -321,7 +321,7 @@ impl<'a, 'ctx> Ctx<'a> {
             root = Some(self);
         }
         let mut ctx = Ctx {
-            need_highlight: self.need_highlight,
+            need_highlight: self.need_highlight.clone(),
             generic_types: FxHashMap::default(),
             plmod: self.plmod.new_child(),
             father: Some(self),
@@ -1221,6 +1221,9 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn send_if_go_to_def(&self, range: Range, destrange: Range, file: String) {
+        if self.need_highlight.borrow().ne(&0) {
+            return;
+        }
         if range == Default::default() {
             return;
         }
@@ -1384,7 +1387,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn push_semantic_token(&self, range: Range, tp: SemanticTokenType, modifiers: u32) {
-        if self.need_highlight != 0 || self.in_macro {
+        if self.need_highlight.borrow().ne(&0) || self.in_macro {
             return;
         }
         self.get_root_ctx()
@@ -1394,7 +1397,7 @@ impl<'a, 'ctx> Ctx<'a> {
             .push(range.to_diag_range(), type_index(tp), modifiers)
     }
     pub fn push_type_hints(&self, range: Range, pltype: Arc<RefCell<PLType>>) {
-        if self.need_highlight != 0 || self.in_macro {
+        if self.need_highlight.borrow().ne(&0) || self.in_macro {
             return;
         }
         let hint = InlayHint {
@@ -1412,7 +1415,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.plmod.hints.borrow_mut().push(hint);
     }
     pub fn push_param_hint(&self, range: Range, name: String) {
-        if self.need_highlight != 0 || self.in_macro {
+        if self.need_highlight.borrow().ne(&0) || self.in_macro {
             return;
         }
         let hint = InlayHint {
@@ -1482,7 +1485,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn save_if_comment_doc_hover(&self, range: Range, docs: Option<Vec<Box<NodeEnum>>>) {
-        if self.need_highlight != 0 {
+        if self.need_highlight.borrow().ne(&0) {
             return;
         }
         let mut content = vec![];
@@ -1500,7 +1503,7 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn save_if_hover(&self, range: Range, value: HoverContents) {
-        if self.need_highlight != 0 {
+        if self.need_highlight.borrow().ne(&0) {
             return;
         }
         self.plmod.hovers.borrow_mut().insert(

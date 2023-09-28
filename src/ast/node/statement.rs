@@ -600,19 +600,21 @@ impl Node for StatementsNode {
             }
             terminator = re.unwrap().get_term();
         }
-        for (v, symbol) in &ctx.table {
-            if let Some(refs) = &symbol.refs {
-                if refs.borrow().len() <= 1 && v != "self" && !v.starts_with('_') {
-                    symbol
-                        .range
-                        .new_warn(WarnCode::UNUSED_VARIABLE)
-                        .set_source(&ctx.get_file())
-                        .add_label(
-                            symbol.range,
-                            ctx.get_file(),
-                            format_label!("Unused variable `{}`", v),
-                        )
-                        .add_to_ctx(ctx);
+        if ctx.need_highlight.borrow().eq(&0) {
+            for (v, symbol) in &ctx.table {
+                if let Some(refs) = &symbol.refs {
+                    if refs.borrow().len() <= 1 && v != "self" && !v.starts_with('_') {
+                        symbol
+                            .range
+                            .new_warn(WarnCode::UNUSED_VARIABLE)
+                            .set_source(&ctx.get_file())
+                            .add_label(
+                                symbol.range,
+                                ctx.get_file(),
+                                format_label!("Unused variable `{}`", v),
+                            )
+                            .add_to_ctx(ctx);
+                    }
                 }
             }
         }
