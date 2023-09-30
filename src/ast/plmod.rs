@@ -354,21 +354,23 @@ impl Mod {
         Ok(())
     }
     fn get_type_inner(&self, name: &str, range: Range, ctx: &Ctx) -> Option<GlobType> {
-        let v = self.types.get(name);
-        if let Some(pv) = v {
-            ctx.set_if_refs_tp(pv.tp.clone(), range);
-            ctx.send_if_go_to_def(
-                range,
-                pv.borrow().get_range().unwrap_or(range),
-                self.path.clone(),
-            );
-            return Some(pv.clone());
-        }
         if let Some(x) = PriType::try_from_str(name) {
             return Some(PLType::Primitive(x).into());
         }
         if name == "void" {
             return Some(PLType::Void.into());
+        }
+        let v = self.types.get(name);
+        if let Some(pv) = v {
+            if range != Default::default() {
+                ctx.set_if_refs_tp(pv.tp.clone(), range);
+                ctx.send_if_go_to_def(
+                    range,
+                    pv.borrow().get_range().unwrap_or(range),
+                    self.path.clone(),
+                );
+            }
+            return Some(pv.clone());
         }
         None
     }

@@ -66,12 +66,43 @@ mod references;
 
 pub use builtins::*;
 #[derive(Clone)]
-pub struct PLSymbol {
+pub struct PLSymbolData {
     pub value: ValueHandle,
     pub pltype: Arc<RefCell<PLType>>,
     pub range: Range,
     pub refs: Option<Arc<MutVec<Location>>>,
 }
+
+#[derive(Clone)]
+pub enum PLSymbol {
+    Local(PLSymbolData),
+    Global(PLSymbolData),
+    Captured(PLSymbolData),
+}
+
+impl PLSymbol {
+    pub fn is_global(&self) -> bool {
+        matches!(self, PLSymbol::Global(_))
+    }
+    pub fn is_captured(&self) -> bool {
+        matches!(self, PLSymbol::Captured(_))
+    }
+    pub fn get_data_ref(&self) -> &PLSymbolData {
+        match self {
+            PLSymbol::Local(d) => d,
+            PLSymbol::Global(d) => d,
+            PLSymbol::Captured(d) => d,
+        }
+    }
+    pub fn get_data(self) -> PLSymbolData {
+        match self {
+            PLSymbol::Local(d) => d,
+            PLSymbol::Global(d) => d,
+            PLSymbol::Captured(d) => d,
+        }
+    }
+}
+
 type GenericCacheMap = IndexMap<String, Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>>;
 
 pub type GenericCache = Arc<RefCell<GenericCacheMap>>;
@@ -92,7 +123,7 @@ pub struct Ctx<'a> {
     pub return_block: Option<(BlockHandle, Option<ValueHandle>)>, // the block to jump to when return and value
     pub errs: &'a RefCell<FxHashSet<PLDiag>>,                     // diagnostic list
     pub edit_pos: Option<Pos>,                                    // lsp params
-    pub table: FxHashMap<String, PLSymbol>,                       // variable table
+    pub table: FxHashMap<String, PLSymbolData>,                   // variable table
     pub config: Config,                                           // config
     pub db: &'a dyn Db,
     pub rettp: Option<Arc<RefCell<PLType>>>,
@@ -116,7 +147,7 @@ pub struct Ctx<'a> {
 
 #[derive(Clone, Default)]
 pub struct GeneratorCtxData {
-    pub table: LinkedHashMap<String, PLSymbol>,
+    pub table: LinkedHashMap<String, PLSymbolData>,
     pub entry_bb: BlockHandle,
     pub ctx_handle: ValueHandle, //handle in setup function
     pub ret_handle: ValueHandle, //handle in setup function
@@ -136,7 +167,7 @@ pub enum CtxFlag {
 
 #[derive(Clone, Default)]
 pub struct ClosureCtxData {
-    pub table: LinkedHashMap<String, (PLSymbol, ValueHandle)>,
+    pub table: LinkedHashMap<String, (PLSymbolData, ValueHandle)>,
     pub data_handle: ValueHandle,
     pub alloca_bb: Option<BlockHandle>,
 }
@@ -774,20 +805,21 @@ impl<'a, 'ctx> Ctx<'a> {
         &'b self,
         name: &str,
         builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Option<(PLSymbol, bool)> {
+    ) -> Option<PLSymbol> {
         let v = self.table.get(name);
         if let Some(symbol) = v {
-            return Some((symbol.clone(), false));
+            return Some(PLSymbol::Local(symbol.clone()));
         }
         if let Some(data) = &self.closure_data {
             let mut data = data.borrow_mut();
             if let Some((symbol, _)) = data.table.get(name) {
-                let new_symbol = symbol.clone();
-                return Some((new_symbol, false));
+                return Some(PLSymbol::Captured(symbol.clone()));
             } else if let Some(father) = self.father {
                 let re = father.get_symbol(name, builder);
-                if let Some((symbol, is_glob)) = &re {
-                    if !*is_glob {
+                if let Some(s) = &re {
+                    let symbol = s.get_data_ref();
+                    let is_glob = s.is_global();
+                    if !is_glob {
                         let cur = builder.get_cur_basic_block();
                         // just make sure we are in the alloca bb
                         // so that the captured value is not used before it is initialized
@@ -803,7 +835,7 @@ impl<'a, 'ctx> Ctx<'a> {
                         let new_symbol = symbol.clone();
                         let len = data.table.len();
                         builder.add_closure_st_field(data.data_handle, new_symbol.value);
-                        let new_symbol = PLSymbol {
+                        let new_symbol = PLSymbolData {
                             value: builder.build_load(
                                 builder
                                     .build_struct_gep(
@@ -819,7 +851,7 @@ impl<'a, 'ctx> Ctx<'a> {
                         data.table
                             .insert(name.to_string(), (new_symbol.clone(), symbol.value));
                         builder.position_at_end_block(cur);
-                        return Some((new_symbol, false));
+                        return Some(PLSymbol::Captured(new_symbol));
                     }
                 }
                 return re;
@@ -833,17 +865,14 @@ impl<'a, 'ctx> Ctx<'a> {
             tp: pltype, range, ..
         }) = self.plmod.get_global_symbol(name)
         {
-            return Some((
-                PLSymbol {
-                    value: builder
-                        .get_global_var_handle(&self.plmod.get_full_name(name))
-                        .unwrap_or(builder.get_global_var_handle(name).unwrap()),
-                    pltype: pltype.clone(),
-                    range: *range,
-                    refs: None,
-                },
-                true,
-            ));
+            return Some(PLSymbol::Global(PLSymbolData {
+                value: builder
+                    .get_global_var_handle(&self.plmod.get_full_name(name))
+                    .unwrap_or(builder.get_global_var_handle(name).unwrap()),
+                pltype: pltype.clone(),
+                range: *range,
+                refs: None,
+            }));
         }
         None
     }
@@ -879,7 +908,7 @@ impl<'a, 'ctx> Ctx<'a> {
             let refs = Arc::new(RefCell::new(vec![]));
             self.table.insert(
                 name,
-                PLSymbol {
+                PLSymbolData {
                     value: pv,
                     pltype,
                     range,
@@ -909,7 +938,7 @@ impl<'a, 'ctx> Ctx<'a> {
         let refs = Arc::new(RefCell::new(vec![]));
         self.table.insert(
             name,
-            PLSymbol {
+            PLSymbolData {
                 value: pv,
                 pltype,
                 range,
@@ -1225,6 +1254,9 @@ impl<'a, 'ctx> Ctx<'a> {
             return;
         }
         if range == Default::default() {
+            return;
+        }
+        if self.plmod.path != self.get_root_ctx().plmod.path {
             return;
         }
         self.get_root_ctx().plmod.defs.borrow_mut().insert(
