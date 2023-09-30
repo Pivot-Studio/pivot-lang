@@ -134,6 +134,7 @@ define_semantic_token_modifiers![
         (REFERENCE, "reference"),
         (TRAIT_MODIFIER, "trait"),
         (UNSAFE, "unsafe"),
+        (CAPTURED, "captured"),
     }
 ];
 
