@@ -81,7 +81,7 @@ impl Node for GlobalNode {
         if res.is_none() {
             return Ok(Default::default());
         }
-        let (global, _) = res.unwrap();
+        let global = res.unwrap().get_data();
         ctx.position_at_end(entry, builder);
         builder.build_store(global.value, base_value);
         Ok(Default::default())

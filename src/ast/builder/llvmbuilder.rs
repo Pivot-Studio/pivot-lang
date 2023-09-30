@@ -35,7 +35,7 @@ use llvm_sys::{core::LLVMStructSetBody, prelude::LLVMTypeRef};
 use rustc_hash::FxHashMap;
 
 use crate::ast::{
-    ctx::{CtxFlag, PLSymbol},
+    ctx::{CtxFlag, PLSymbolData},
     diag::PLDiag,
     pltype::{get_type_deep, ClosureType, TraitImplAble},
 };
@@ -1681,7 +1681,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             let id = data.borrow().table.len().to_string();
             data.borrow_mut().table.insert(
                 name.to_string() + &id,
-                PLSymbol {
+                PLSymbolData {
                     value: load,
                     pltype: Arc::new(RefCell::new(pltype.clone())),
                     range: Default::default(),

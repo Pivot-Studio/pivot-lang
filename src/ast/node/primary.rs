@@ -10,6 +10,7 @@ use crate::ast::ctx::MacroReplaceNode;
 use crate::ast::ctx::BUILTIN_FN_NAME_MAP;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{PLType, PriType};
+use crate::modifier_set;
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
 
@@ -155,13 +156,19 @@ impl Node for VarNode {
             }
         }
         ctx.if_completion(self.range, || ctx.get_completions());
-        if let Some((symbol, is_const)) = ctx.get_symbol(&self.name, builder) {
-            ctx.push_semantic_token(self.range, SemanticTokenType::VARIABLE, 0);
-            let o = symbol
-                .value
-                .new_output(symbol.pltype)
-                .set_const_v(is_const)
-                .to_result();
+        if let Some(s) = ctx.get_symbol(&self.name, builder) {
+            let is_captured = s.is_captured();
+            let symbol = s.get_data();
+            ctx.push_semantic_token(
+                self.range,
+                SemanticTokenType::VARIABLE,
+                if is_captured {
+                    modifier_set!(CAPTURED)
+                } else {
+                    0
+                },
+            );
+            let o = symbol.value.new_output(symbol.pltype).to_result();
             ctx.send_if_go_to_def(self.range, symbol.range, ctx.plmod.path.clone());
             symbol
                 .refs
