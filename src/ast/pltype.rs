@@ -242,6 +242,19 @@ impl UnionType {
                 .map(|(i, _)| i)
         })
     }
+
+    pub fn get_sum_types<'a, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) -> Vec<Arc<RefCell<PLType>>> {
+        ctx.run_in_type_mod(self, |ctx, u| {
+            u.sum_types
+                .iter()
+                .map(|t| t.get_type(ctx, builder, true).unwrap())
+                .collect()
+        })
+    }
 }
 /// # PriType
 /// Primitive type for pivot-lang

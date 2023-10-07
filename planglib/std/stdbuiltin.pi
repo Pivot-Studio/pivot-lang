@@ -34,6 +34,14 @@ pub fn print_any<T>(t:T) void {
         print_s(" )");
         return;
     }
+
+    if if_union(t, {
+        print_any(_inner);
+    }) {
+        print_s(" )");
+        return;
+    }
+
     match_type<bool>(t,{
         if _value {
             print_s("true");

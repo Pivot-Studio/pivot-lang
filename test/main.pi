@@ -96,6 +96,9 @@ pub fn main() i64 {
     let bbbb = 1;
     let re = ttt.eq(&bbbb);
     println!(re);
+    let opt:Option<i64> = 100 as i64;
+    println!(opt);
+
     return 0;
 }
 
