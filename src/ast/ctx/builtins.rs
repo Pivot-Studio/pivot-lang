@@ -43,6 +43,7 @@ lazy_static! {
         mp.insert(usize::MAX - 10, emit_arr_from_raw);
         mp.insert(usize::MAX - 11, emit_is_ptr);
         mp.insert(usize::MAX - 12, emit_if_arr);
+        mp.insert(usize::MAX - 13, emit_if_union);
         mp
     };
     pub static ref BUILTIN_FN_SNIPPET_MAP: HashMap<ValueHandle, String> = {
@@ -77,6 +78,10 @@ lazy_static! {
             usize::MAX - 12,
             r#"if_arr(${1:t}, { ${2:_field} })$0"#.to_owned(),
         );
+        mp.insert(
+            usize::MAX - 13,
+            r#"if_union(${1:t}, { ${2:_field} })$0"#.to_owned(),
+        );
         mp
     };
     pub static ref BUILTIN_FN_NAME_MAP: HashMap<&'static str, ValueHandle> = {
@@ -93,6 +98,7 @@ lazy_static! {
         mp.insert("arr_from_raw", usize::MAX - 10);
         mp.insert("is_ptr", usize::MAX - 11);
         mp.insert("if_arr", usize::MAX - 12);
+        mp.insert("if_union", usize::MAX - 13);
         mp
     };
 }
@@ -551,7 +557,7 @@ fn emit_for_fields<'a, 'b>(
         let v = g.get_value();
         let (tp, v) = ctx.auto_deref(tp, v, builder);
         let tp = get_type_deep(tp);
-        let (tp, mut v) = ctx.auto_deref(tp, v, builder);
+        let (tp, v) = ctx.auto_deref(tp, v, builder);
         let mut code_gen = false;
         let stp = match &*tp.borrow() {
             PLType::Struct(_) => {
@@ -562,6 +568,7 @@ fn emit_for_fields<'a, 'b>(
         };
         let mut builder = builder;
         let noop = BuilderEnum::NoOp(NoOpBuilder::default());
+        let ctx = &mut ctx.new_child(f.range().start, builder);
         // 处理不是结构体类型的情况
         if !code_gen {
             let b = builder.int_value(&PriType::BOOL, 0, false);
@@ -575,13 +582,14 @@ fn emit_for_fields<'a, 'b>(
                     methods: Default::default(),
                 })));
                 let gep = builder.alloc("placeholder", &field_tp.borrow(), ctx, None);
-                ctx.add_symbol_raw("_field".to_string(), gep, field_tp, f.range);
                 let mut sn = StringNode {
                     content: "field_T".to_owned(),
                     range: Range::default(),
                 };
                 let re = sn.emit(ctx, builder)?.get_value().unwrap();
                 let sv = re.get_value();
+                let ctx = &mut ctx.new_child(f.range().start, builder);
+                ctx.add_symbol_raw("_field".to_string(), gep, field_tp, f.range);
                 ctx.add_symbol_raw("_field_name".to_string(), sv, re.get_ty(), f.range);
                 if let NodeEnum::Sts(p) = &mut *f.paralist[1] {
                     p.emit(ctx, builder)?;
@@ -596,10 +604,6 @@ fn emit_for_fields<'a, 'b>(
         if let Some(s) = stp {
             if let PLType::Struct(sttp) = &*s.borrow() {
                 for (name, field) in sttp.fields.iter() {
-                    let ctx = &mut ctx.new_child(f.paralist[1].range().start, builder);
-                    if !builder.is_ptr(v) {
-                        v = builder.alloc("temp", &s.borrow(), ctx, None);
-                    }
                     let gep = builder.build_struct_gep(v, field.index, "tmp_gep").unwrap();
                     ctx.run_in_origin_mod(|ctx| {
                         ctx.run_in_type_mod(sttp, |ctx, _| {
@@ -614,6 +618,7 @@ fn emit_for_fields<'a, 'b>(
                             ctx.add_symbol_raw("_field_name".to_string(), sv, re.get_ty(), f.range);
                             Ok(())
                         })?;
+                        let ctx = &mut ctx.new_child(f.range().start, builder);
                         if let NodeEnum::Sts(p) = &mut *f.paralist[1] {
                             p.emit(ctx, builder)?;
                         }
@@ -673,6 +678,7 @@ fn emit_if_arr<'a, 'b>(
         };
         let mut builder = builder;
         let noop = BuilderEnum::NoOp(NoOpBuilder::default());
+        let ctx = &mut ctx.new_child(f.range().start, builder);
         // 处理不是结构体类型或者没有有效字段的情况
         if !code_gen {
             let b = builder.int_value(&PriType::BOOL, 0, false);
@@ -681,7 +687,7 @@ fn emit_if_arr<'a, 'b>(
             ctx.run_in_origin_mod(|ctx| {
                 let elm_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
                     element_type: Arc::new(RefCell::new(PLType::PlaceHolder(PlaceHolderType {
-                        name: "elm_T".to_owned(),
+                        name: "@elm_T".to_owned(),
                         range: Default::default(),
                         path: "".to_owned(),
                         methods: Default::default(),
@@ -690,7 +696,7 @@ fn emit_if_arr<'a, 'b>(
                 })));
                 let gep = builder.alloc("placeholder", &elm_tp.borrow(), ctx, None);
                 ctx.add_symbol_raw("_arr".to_string(), gep, elm_tp, f.range);
-
+                let ctx = &mut ctx.new_child(f.range().start, builder);
                 if let NodeEnum::Sts(p) = &mut *f.paralist[1] {
                     p.emit(ctx, builder)?;
                 }
@@ -706,9 +712,135 @@ fn emit_if_arr<'a, 'b>(
                 ctx.add_symbol_raw("_arr".to_string(), v, s.clone(), f.range);
 
                 let b = builder.int_value(&PriType::BOOL, 1, false);
+                let ctx = &mut ctx.new_child(f.range().start, builder);
                 if let NodeEnum::Sts(p) = &mut *f.paralist[1] {
                     p.emit(ctx, builder)?;
                 }
+                b.new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
+                    .to_result()
+            } else {
+                unreachable!()
+            }
+        } else {
+            let b = builder.int_value(&PriType::BOOL, 0, false);
+            b.new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
+                .to_result()
+        }
+    } else {
+        unreachable!()
+    }
+}
+
+fn emit_if_union<'a, 'b>(
+    f: &mut FuncCallNode,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> NodeResult {
+    if f.paralist.len() != 2 {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::PARAMETER_LENGTH_NOT_MATCH)
+            .add_to_ctx(ctx));
+    }
+    if f.generic_params.is_some() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_PARAM_LEN_MISMATCH)
+            .add_to_ctx(ctx));
+    }
+    let st = f.paralist[0].emit(ctx, builder)?;
+    let v = st.get_value();
+
+    if let Some(g) = &v {
+        let tp = g.get_ty();
+        let tp = get_type_deep(tp);
+        let v = g.get_value();
+        let (tp, v) = ctx.auto_deref(tp, v, builder);
+        let tp = get_type_deep(tp);
+        let (tp, v) = ctx.auto_deref(tp, v, builder);
+        let mut code_gen = false;
+        let stp = match &*tp.borrow() {
+            PLType::Union(_) => {
+                code_gen = true;
+                Some(tp.clone())
+            }
+            _ => None,
+        };
+        let mut builder = builder;
+        let noop = BuilderEnum::NoOp(NoOpBuilder::default());
+        let ctx = &mut ctx.new_child(f.range().start, builder);
+        // 处理不是结构体类型或者没有有效字段的情况
+        if !code_gen {
+            let b = builder.int_value(&PriType::BOOL, 0, false);
+            // 这种情况不会生成对应代码，但是需要进行相应的语法分析
+            builder = &noop;
+            ctx.run_in_origin_mod(|ctx| {
+                let elm_tp = Arc::new(RefCell::new(PLType::Pointer(Arc::new(RefCell::new(
+                    PLType::PlaceHolder(PlaceHolderType {
+                        name: "@inner_T".to_owned(),
+                        range: Default::default(),
+                        path: "".to_owned(),
+                        methods: Default::default(),
+                    }),
+                )))));
+                let gep = builder.alloc("placeholder", &elm_tp.borrow(), ctx, None);
+                ctx.add_symbol_raw("_inner".to_string(), gep, elm_tp, f.range);
+                let ctx = &mut ctx.new_child(f.range().start, builder);
+                if let NodeEnum::Sts(p) = &mut *f.paralist[1] {
+                    p.emit(ctx, builder)?;
+                }
+                Ok(())
+            })?;
+            return b
+                .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
+                .to_result();
+        }
+
+        if let Some(s) = stp {
+            if let PLType::Union(u) = &*s.borrow() {
+                let gep = builder.build_struct_gep(v, 0, "tmp_gep").unwrap();
+                let ptr = builder.build_struct_gep(v, 1, "inner_ptr").unwrap();
+                let ptr = builder.build_load(ptr, "inner_ptr");
+
+                let u_tp_i = builder.build_load(gep, "u_tp_i");
+                let after_bb = builder.append_basic_block(ctx.function.unwrap(), "after");
+
+                for (i, tp) in u.get_sum_types(ctx, builder).iter().enumerate() {
+                    // 生成分支，对比是否为该类型
+                    let b = builder.build_int_compare(
+                        crate::ast::builder::IntPredicate::EQ,
+                        u_tp_i,
+                        builder.int_value(&PriType::I64, i as _, true),
+                        "is_this_type",
+                    );
+                    let new_bb = builder
+                        .append_basic_block(ctx.function.unwrap(), &format!("is_this_type_{}", i));
+                    let next_bb = builder.append_basic_block(
+                        ctx.function.unwrap(),
+                        &format!("is_not_this_type_{}", i),
+                    );
+                    builder.build_conditional_branch(b, new_bb, next_bb);
+
+                    // 生成bitcast到该类型的代码
+                    builder.position_at_end_block(new_bb);
+                    let new_tp = tp.clone();
+                    let new_v =
+                        builder.bitcast(ctx, ptr, &PLType::Pointer(new_tp.clone()), "inner");
+
+                    ctx.add_symbol_raw("_inner".to_string(), new_v, new_tp.clone(), f.range);
+                    let ctx = &mut ctx.new_child(f.range().start, builder);
+                    if let NodeEnum::Sts(p) = &mut *f.paralist[1] {
+                        p.emit(ctx, builder)?;
+                    }
+
+                    builder.build_unconditional_branch(next_bb);
+                    builder.position_at_end_block(next_bb);
+                }
+
+                builder.build_unconditional_branch(after_bb);
+                builder.position_at_end_block(after_bb);
+
+                let b = builder.int_value(&PriType::BOOL, 1, false);
                 b.new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
                     .to_result()
             } else {
