@@ -11,6 +11,20 @@ fn print_u128(i:u128) void;
 pub fn print_any<T>(t:T) void {
     let s = nameof<T>();
     print_s(s);
+    if !is_ptr<T>()  {
+        let is_arr = if_arr(t, {
+            let arr = _arr;
+            print_s("[ ");
+            for let i = 0; i < arr_len(arr); i = i + 1 {
+                print_any(arr[i]);
+                print_s(" ");
+            }
+            print_s("]");
+        });
+        if is_arr {
+            return;
+        }
+    }
     print_s("( ");
     let b = false;
     if is_ptr<T>() {

@@ -42,6 +42,7 @@ lazy_static! {
         mp.insert(usize::MAX - 9, emit_arr_copy);
         mp.insert(usize::MAX - 10, emit_arr_from_raw);
         mp.insert(usize::MAX - 11, emit_is_ptr);
+        mp.insert(usize::MAX - 12, emit_if_arr);
         mp
     };
     pub static ref BUILTIN_FN_SNIPPET_MAP: HashMap<ValueHandle, String> = {
@@ -72,6 +73,10 @@ lazy_static! {
             r"arr_from_raw(${1:ptr}, ${2:len})$0".to_owned(),
         );
         mp.insert(usize::MAX - 11, r#"is_ptr<${1:T}>()$0"#.to_owned());
+        mp.insert(
+            usize::MAX - 12,
+            r#"if_arr(${1:t}, { ${2:_field} })$0"#.to_owned(),
+        );
         mp
     };
     pub static ref BUILTIN_FN_NAME_MAP: HashMap<&'static str, ValueHandle> = {
@@ -87,6 +92,7 @@ lazy_static! {
         mp.insert("arr_copy", usize::MAX - 9);
         mp.insert("arr_from_raw", usize::MAX - 10);
         mp.insert("is_ptr", usize::MAX - 11);
+        mp.insert("if_arr", usize::MAX - 12);
         mp
     };
 }
@@ -548,21 +554,22 @@ fn emit_for_fields<'a, 'b>(
         let (tp, mut v) = ctx.auto_deref(tp, v, builder);
         let mut code_gen = false;
         let stp = match &*tp.borrow() {
-            PLType::Struct(s) => {
-                code_gen = !s.fields.is_empty();
+            PLType::Struct(_) => {
+                code_gen = true;
                 Some(tp.clone())
             }
             _ => None,
         };
         let mut builder = builder;
         let noop = BuilderEnum::NoOp(NoOpBuilder::default());
-        // 处理不是结构体类型或者没有有效字段的情况
+        // 处理不是结构体类型的情况
         if !code_gen {
+            let b = builder.int_value(&PriType::BOOL, 0, false);
             // 这种情况不会生成对应代码，但是需要进行相应的语法分析
             builder = &noop;
             ctx.run_in_origin_mod(|ctx| {
                 let field_tp = Arc::new(RefCell::new(PLType::PlaceHolder(PlaceHolderType {
-                    name: "T".to_owned(),
+                    name: "@field_T".to_owned(),
                     range: Default::default(),
                     path: "".to_owned(),
                     methods: Default::default(),
@@ -581,7 +588,9 @@ fn emit_for_fields<'a, 'b>(
                 }
                 Ok(())
             })?;
-            return Ok(Default::default());
+            return b
+                .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
+                .to_result();
         }
 
         if let Some(s) = stp {
@@ -611,12 +620,104 @@ fn emit_for_fields<'a, 'b>(
                         Ok(())
                     })?;
                 }
-                Ok(Default::default())
+                let b = builder.int_value(&PriType::BOOL, 1, false);
+                b.new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
+                    .to_result()
             } else {
                 unreachable!()
             }
         } else {
-            Ok(Default::default())
+            let b = builder.int_value(&PriType::BOOL, 0, false);
+            b.new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
+                .to_result()
+        }
+    } else {
+        unreachable!()
+    }
+}
+
+fn emit_if_arr<'a, 'b>(
+    f: &mut FuncCallNode,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> NodeResult {
+    if f.paralist.len() != 2 {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::PARAMETER_LENGTH_NOT_MATCH)
+            .add_to_ctx(ctx));
+    }
+    if f.generic_params.is_some() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_PARAM_LEN_MISMATCH)
+            .add_to_ctx(ctx));
+    }
+    let st = f.paralist[0].emit(ctx, builder)?;
+    let v = st.get_value();
+
+    if let Some(g) = &v {
+        let tp = g.get_ty();
+        let tp = get_type_deep(tp);
+        let v = g.get_value();
+        let (tp, v) = ctx.auto_deref(tp, v, builder);
+        let tp = get_type_deep(tp);
+        let (tp, v) = ctx.auto_deref(tp, v, builder);
+        let mut code_gen = false;
+        let stp = match &*tp.borrow() {
+            PLType::Arr(_) => {
+                code_gen = true;
+                Some(tp.clone())
+            }
+            _ => None,
+        };
+        let mut builder = builder;
+        let noop = BuilderEnum::NoOp(NoOpBuilder::default());
+        // 处理不是结构体类型或者没有有效字段的情况
+        if !code_gen {
+            let b = builder.int_value(&PriType::BOOL, 0, false);
+            // 这种情况不会生成对应代码，但是需要进行相应的语法分析
+            builder = &noop;
+            ctx.run_in_origin_mod(|ctx| {
+                let elm_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
+                    element_type: Arc::new(RefCell::new(PLType::PlaceHolder(PlaceHolderType {
+                        name: "elm_T".to_owned(),
+                        range: Default::default(),
+                        path: "".to_owned(),
+                        methods: Default::default(),
+                    }))),
+                    size_handle: 0,
+                })));
+                let gep = builder.alloc("placeholder", &elm_tp.borrow(), ctx, None);
+                ctx.add_symbol_raw("_arr".to_string(), gep, elm_tp, f.range);
+
+                if let NodeEnum::Sts(p) = &mut *f.paralist[1] {
+                    p.emit(ctx, builder)?;
+                }
+                Ok(())
+            })?;
+            return b
+                .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
+                .to_result();
+        }
+
+        if let Some(s) = stp {
+            if let PLType::Arr(_) = &*s.borrow() {
+                ctx.add_symbol_raw("_arr".to_string(), v, s.clone(), f.range);
+
+                let b = builder.int_value(&PriType::BOOL, 1, false);
+                if let NodeEnum::Sts(p) = &mut *f.paralist[1] {
+                    p.emit(ctx, builder)?;
+                }
+                b.new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
+                    .to_result()
+            } else {
+                unreachable!()
+            }
+        } else {
+            let b = builder.int_value(&PriType::BOOL, 0, false);
+            b.new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
+                .to_result()
         }
     } else {
         unreachable!()
