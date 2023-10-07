@@ -41,6 +41,7 @@ lazy_static! {
         mp.insert(usize::MAX - 8, emit_arr_len);
         mp.insert(usize::MAX - 9, emit_arr_copy);
         mp.insert(usize::MAX - 10, emit_arr_from_raw);
+        mp.insert(usize::MAX - 11, emit_is_ptr);
         mp
     };
     pub static ref BUILTIN_FN_SNIPPET_MAP: HashMap<ValueHandle, String> = {
@@ -70,6 +71,7 @@ lazy_static! {
             usize::MAX - 10,
             r"arr_from_raw(${1:ptr}, ${2:len})$0".to_owned(),
         );
+        mp.insert(usize::MAX - 11, r#"is_ptr<${1:T}>()$0"#.to_owned());
         mp
     };
     pub static ref BUILTIN_FN_NAME_MAP: HashMap<&'static str, ValueHandle> = {
@@ -84,6 +86,7 @@ lazy_static! {
         mp.insert("arr_len", usize::MAX - 8);
         mp.insert("arr_copy", usize::MAX - 9);
         mp.insert("arr_from_raw", usize::MAX - 10);
+        mp.insert("is_ptr", usize::MAX - 11);
         mp
     };
 }
@@ -129,6 +132,57 @@ fn emit_sizeof<'a, 'b>(
         .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::I64))))
         .set_const()
         .to_result();
+}
+
+fn emit_is_ptr<'a, 'b>(
+    f: &mut FuncCallNode,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> NodeResult {
+    if !f.paralist.is_empty() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::PARAMETER_LENGTH_NOT_MATCH)
+            .add_to_ctx(ctx));
+    }
+    if f.generic_params.is_none() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_NOT_FOUND)
+            .add_to_ctx(ctx));
+    }
+    let generic = f.generic_params.as_ref().unwrap();
+    generic.emit_highlight(ctx);
+    if generic.generics.len() != 1 {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_NOT_FOUND)
+            .add_to_ctx(ctx));
+    }
+    if generic.generics[0].is_none() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_NOT_FOUND)
+            .add_to_ctx(ctx));
+    }
+    let generic = generic.generics[0]
+        .as_ref()
+        .unwrap()
+        .get_type(ctx, builder, true)?;
+    let binding = get_type_deep(generic);
+    let binding = binding.borrow();
+    match &*binding {
+        PLType::Pointer(_) => {
+            let b = builder.int_value(&PriType::BOOL, 1, false);
+            b.new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
+                .to_result()
+        }
+        _ => {
+            let b = builder.int_value(&PriType::BOOL, 0, false);
+            b.new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
+                .to_result()
+        }
+    }
 }
 
 fn emit_gc_type<'a, 'b>(
