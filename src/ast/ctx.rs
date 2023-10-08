@@ -65,7 +65,7 @@ mod builtins;
 mod references;
 
 pub use builtins::*;
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PLSymbolData {
     pub value: ValueHandle,
     pub pltype: Arc<RefCell<PLType>>,
@@ -143,6 +143,7 @@ pub struct Ctx<'a> {
     pub origin_mod: *const Mod,
     pub linked_tp_tbl: FxHashMap<*mut PLType, Vec<Arc<RefCell<PLType>>>>,
     is_active_file: bool,
+    as_root: bool,
 }
 
 #[derive(Clone, Default)]
@@ -179,6 +180,13 @@ pub enum MacroReplaceNode {
 }
 
 impl<'a, 'ctx> Ctx<'a> {
+    pub fn run_as_root_ctx<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
+        let old_as_root = self.as_root;
+        self.as_root = true;
+        let result = f(self);
+        self.as_root = old_as_root;
+        result
+    }
     /// lsp fn
     pub fn is_active_file(&self) -> bool {
         self.is_active_file
@@ -344,6 +352,7 @@ impl<'a, 'ctx> Ctx<'a> {
             origin_mod: std::ptr::null(),
             linked_tp_tbl: FxHashMap::default(),
             is_active_file,
+            as_root: false,
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -385,6 +394,7 @@ impl<'a, 'ctx> Ctx<'a> {
             origin_mod: self.origin_mod,
             linked_tp_tbl: FxHashMap::default(),
             is_active_file: self.is_active_file,
+            as_root: false,
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
@@ -857,9 +867,11 @@ impl<'a, 'ctx> Ctx<'a> {
                 return re;
             }
         }
-        if let Some(father) = self.father {
-            let re = father.get_symbol(name, builder);
-            return re;
+        if !self.as_root {
+            if let Some(father) = self.father {
+                let re = father.get_symbol(name, builder);
+                return re;
+            }
         }
         if let Some(GlobalVar {
             tp: pltype, range, ..
@@ -1368,6 +1380,9 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     fn get_var_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
+        if self.as_root {
+            return;
+        }
         for (k, _) in self.table.iter() {
             vmap.insert(
                 k.to_string(),
