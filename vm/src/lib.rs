@@ -77,6 +77,11 @@ fn print_u128(i: u128) {
 }
 
 #[is_runtime]
+fn print_hex(i: i64) {
+    print!("0x{:X}", i);
+}
+
+#[is_runtime]
 fn utf8_count(ptr: *mut u8, byte_len: i64) -> i64 {
     let s = unsafe { std::slice::from_raw_parts(ptr, byte_len as usize) };
     bytecount::num_chars(s) as _

@@ -6,6 +6,7 @@ fn print_i64(i:i64) void;
 fn print_i128(i:i128) void;
 fn print_u64(i:u64) void;
 fn print_u128(i:u128) void;
+fn print_hex(i:i64) void;
 
 
 pub fn print_any<T>(t:T) void {
@@ -30,7 +31,7 @@ pub fn print_any<T>(t:T) void {
     if is_ptr<T>() {
         let result = unsafe_cast<*u8>(&t);
         let i = gc::ptr_to_int(*result);
-        print_i64(i);
+        print_hex(i);
         print_s(" )");
         return;
     }
@@ -100,12 +101,22 @@ pub fn print_any<T>(t:T) void {
         print_s(" )");
         return;
     }
-    forfields(t, {
+    let re = forfields(t, {
         print_s(_field_name);
         print_s(": ");
         print_any(_field);
         print_s(" ");
     });
+    if !re {// is trait
+        let result = unsafe_cast<i64>(&t);
+        // let hash = *result;
+        let i_ptr = gc::ptr_to_int(unsafe_cast<u8>(result)) + 8;
+        let v_ptr = gc::int_to_ptr(i_ptr);
+        let v = unsafe_cast<i64>(v_ptr);
+        let i = *v;
+        print_hex(i);
+        print_s(" ");
+    }
     print_s(")");
     return;
 }
