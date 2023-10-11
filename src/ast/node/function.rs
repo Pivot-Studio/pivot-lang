@@ -1,3 +1,5 @@
+use self::generator::{ClosureCtxData, CtxFlag};
+
 use super::interface::TraitBoundNode;
 use super::node_result::NodeResultBuilder;
 use super::statement::StatementsNode;
@@ -6,7 +8,7 @@ use super::{types::TypedIdentifierNode, Node, TypeNode};
 use crate::ast::accumulators::PLCodeLens;
 use crate::ast::builder::no_op_builder::NoOpBuilder;
 use crate::ast::builder::ValueHandle;
-use crate::ast::ctx::{ClosureCtxData, CtxFlag, BUILTIN_FN_MAP};
+use crate::ast::ctx::BUILTIN_FN_MAP;
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 
@@ -21,7 +23,7 @@ use std::cell::RefCell;
 use std::sync::atomic::{AtomicI32, Ordering};
 use std::vec;
 
-mod generator;
+pub mod generator;
 #[node(comment)]
 pub struct FuncCallNode {
     pub generic_params: Option<Box<GenericParamNode>>,

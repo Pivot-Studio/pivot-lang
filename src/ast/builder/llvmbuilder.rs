@@ -35,8 +35,9 @@ use llvm_sys::{core::LLVMStructSetBody, prelude::LLVMTypeRef};
 use rustc_hash::FxHashMap;
 
 use crate::ast::{
-    ctx::{CtxFlag, PLSymbolData},
+    ctx::PLSymbolData,
     diag::PLDiag,
+    node::function::generator::CtxFlag,
     pltype::{get_type_deep, ClosureType, TraitImplAble},
 };
 

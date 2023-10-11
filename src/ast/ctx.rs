@@ -4,56 +4,42 @@ use super::builder::ValueHandle;
 use super::diag::ErrorCode;
 use super::diag::PLDiag;
 
+use super::node::function::generator::ClosureCtxData;
+use super::node::function::generator::CtxFlag;
 use super::node::macro_nodes::MacroNode;
 use super::node::node_result::NodeResult;
 use super::node::NodeEnum;
-use super::node::TypeNode;
-use super::node::TypeNodeEnum;
-use super::plmod::CompletionItemWrapper;
 use super::plmod::GlobType;
 use super::plmod::GlobalVar;
-use super::plmod::LSPDef;
 use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::pltype::add_primitive_types;
 use super::pltype::get_type_deep;
 use super::pltype::FNValue;
-use super::pltype::Field;
 use super::pltype::GenericType;
 use super::pltype::ImplAble;
 use super::pltype::PLType;
-use super::pltype::PriType;
 use super::pltype::TraitImplAble;
 use super::range::Pos;
 use super::range::Range;
-use super::tokens::TokenType;
+
 use super::traits::CustomType;
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::format_label;
-use crate::lsp::semantic_tokens::type_index;
 
-use crate::mismatch_err;
-use crate::skip_if_not_modified_by;
 use crate::utils::read_config::Config;
-use crate::utils::url_from_path;
+
 use crate::Db;
 
+use crate::ast::node::function::generator::GeneratorCtxData;
 use indexmap::IndexMap;
-use linked_hash_map::LinkedHashMap;
-use lsp_types::Command;
-use lsp_types::CompletionItem;
-use lsp_types::CompletionItemKind;
 
-use lsp_types::Hover;
-use lsp_types::HoverContents;
-use lsp_types::InlayHint;
-use lsp_types::InlayHintKind;
-use lsp_types::InsertTextFormat;
+use lsp_types::CompletionItem;
+
 use lsp_types::Location;
-use lsp_types::MarkedString;
-use lsp_types::SemanticTokenType;
+
 use lsp_types::Url;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
@@ -146,38 +132,13 @@ pub struct Ctx<'a> {
     as_root: bool,
 }
 
-#[derive(Clone, Default)]
-pub struct GeneratorCtxData {
-    pub table: LinkedHashMap<String, PLSymbolData>,
-    pub entry_bb: BlockHandle,
-    pub ctx_handle: ValueHandle, //handle in setup function
-    pub ret_handle: ValueHandle, //handle in setup function
-    pub prev_yield_bb: Option<BlockHandle>,
-    pub ctx_size_handle: ValueHandle,
-    pub param_tmp: ValueHandle,
-}
-
-/// # CtxFlag
-///
-/// flags that might change the behavior of the builder
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum CtxFlag {
-    Normal,
-    InGeneratorYield,
-}
-
-#[derive(Clone, Default)]
-pub struct ClosureCtxData {
-    pub table: LinkedHashMap<String, (PLSymbolData, ValueHandle)>,
-    pub data_handle: ValueHandle,
-    pub alloca_bb: Option<BlockHandle>,
-}
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum MacroReplaceNode {
     NodeEnum(NodeEnum),
     LoopNodeEnum(Vec<NodeEnum>),
 }
+
+mod generic;
 
 impl<'a, 'ctx> Ctx<'a> {
     pub fn run_as_root_ctx<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
@@ -212,51 +173,7 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         data.clone()
     }
-    pub fn add_infer_result(
-        &self,
-        tp: &impl TraitImplAble,
-        name: &str,
-        pltp: Arc<RefCell<PLType>>,
-    ) {
-        self.generic_cache
-            .borrow_mut()
-            .entry(tp.get_full_name_except_generic())
-            .or_insert(Default::default())
-            .borrow_mut()
-            .insert(name.to_string(), pltp);
-    }
 
-    pub fn get_infer_result(
-        &self,
-        tp: &impl TraitImplAble,
-        name: &str,
-    ) -> Option<Arc<RefCell<PLType>>> {
-        let infer_map = self.generic_cache.borrow();
-        let infer_map = infer_map.get(&tp.get_full_name_except_generic())?;
-        let x = infer_map.borrow().get(name).cloned();
-        x
-    }
-
-    fn import_all_infer_maps_from(&self, other: &GenericCacheMap) {
-        for (k, v) in other.iter() {
-            if !self.generic_cache.borrow().contains_key(k) {
-                let map: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>> = Default::default();
-                self.generic_cache
-                    .borrow_mut()
-                    .insert(k.clone(), map.clone());
-                map.borrow_mut().extend(v.borrow().clone());
-            } else {
-                let infer_map = self.generic_cache.borrow();
-                let infer_map = infer_map.get(k).unwrap();
-                infer_map.borrow_mut().extend(v.borrow().clone());
-            }
-        }
-    }
-    pub fn import_all_infer_maps_from_sub_mods(&self) {
-        for (_, sub_mod) in self.plmod.submods.iter() {
-            self.import_all_infer_maps_from(&sub_mod.generic_infer.borrow());
-        }
-    }
     pub fn check_self_ref(&self, name: &str, range: Range) -> Result<(), PLDiag> {
         if let Some(root) = self.root {
             root.check_self_ref_inner(name, name, range)
@@ -445,215 +362,6 @@ impl<'a, 'ctx> Ctx<'a> {
         self.macro_loop = old_macro_loop;
         self.macro_loop_idx = old_macro_loop_idx;
         result
-    }
-    pub fn up_cast<'b>(
-        &mut self,
-        target_pltype: Arc<RefCell<PLType>>,
-        ori_pltype: Arc<RefCell<PLType>>,
-        target_range: Range,
-        ori_range: Range,
-        ori_value: usize,
-        builder: &'b BuilderEnum<'a, 'ctx>,
-    ) -> Result<usize, PLDiag> {
-        if let (PLType::Closure(c), PLType::Fn(f)) =
-            (&*target_pltype.borrow(), &*ori_pltype.borrow())
-        {
-            if f.to_closure_ty(self, builder) != *c {
-                return Err(ori_range
-                    .new_err(ErrorCode::FUNCTION_TYPE_NOT_MATCH)
-                    .add_label(
-                        target_range,
-                        self.get_file(),
-                        format_label!("expected type `{}`", c.get_name()),
-                    )
-                    .add_label(
-                        ori_range,
-                        self.get_file(),
-                        format_label!("found type `{}`", f.to_closure_ty(self, builder).get_name()),
-                    )
-                    .add_to_ctx(self));
-            }
-            if ori_value == usize::MAX {
-                return Err(ori_range
-                    .new_err(ErrorCode::CANNOT_ASSIGN_INCOMPLETE_GENERICS)
-                    .add_help("try add generic type explicitly to fix this error.")
-                    .add_to_ctx(self));
-            }
-            let closure_v = builder.alloc("tmp", &target_pltype.borrow(), self, None);
-            let closure_f = builder.build_struct_gep(closure_v, 0, "closure_f").unwrap();
-            let ori_value = builder.try_load2var(ori_range, ori_value, self)?;
-            builder.build_store(closure_f, builder.get_closure_trampoline(ori_value));
-            return Ok(closure_v);
-        }
-        if let PLType::Union(u) = &*target_pltype.borrow() {
-            let mut union_members = vec![];
-            for tp in &u.sum_types {
-                let tp = tp.get_type(self, builder, true)?;
-                union_members.push(tp);
-            }
-            for (i, tp) in union_members.iter().enumerate() {
-                if *get_type_deep(tp.to_owned()).borrow()
-                    == *get_type_deep(ori_pltype.clone()).borrow()
-                {
-                    let union_handle =
-                        builder.alloc("tmp_unionv", &target_pltype.borrow(), self, None);
-                    let union_value = builder
-                        .build_struct_gep(union_handle, 1, "union_value")
-                        .unwrap();
-                    let union_type_field = builder
-                        .build_struct_gep(union_handle, 0, "union_type")
-                        .unwrap();
-                    let union_type = builder.int_value(&PriType::U64, i as u64, false);
-                    builder.build_store(union_type_field, union_type);
-                    let mut ptr = ori_value;
-                    if !builder.is_ptr(ori_value) {
-                        // mv to heap
-                        ptr = builder.alloc("tmp", &ori_pltype.borrow(), self, None);
-                        builder.build_store(ptr, ori_value);
-                    }
-                    let st_value = builder.bitcast(
-                        self,
-                        ptr,
-                        &PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::I8)))),
-                        "traitcast_tmp",
-                    );
-                    builder.build_store(union_value, st_value);
-
-                    return Ok(union_handle);
-                }
-            }
-        }
-        let (st_pltype, st_value) = self.auto_deref(ori_pltype, ori_value, builder);
-        if let PLType::Trait(t) = &*target_pltype.borrow() {
-            for f in t.list_trait_fields().iter() {
-                if let TypeNodeEnum::Func(fu) = &*f.typenode {
-                    if fu.generics.is_some() {
-                        return Err(target_range.new_err(ErrorCode::THE_TARGET_TRAIT_CANNOT_BE_INSTANTIATED)
-                        .add_label(
-                            target_range,
-                            self.get_file(),
-                            format_label!("trait type `{}`", t.get_name()),
-                        )
-                        .add_label(
-                            f.range,
-                            t.get_path(),
-                            format_label!("the method `{}` of trait `{}` has generic params, which makes it uninstantiatable",&f.name, t.get_name()),
-                        ).add_to_ctx(self));
-                    }
-                }
-            }
-        }
-        match (&*target_pltype.borrow(), &*st_pltype.clone().borrow()) {
-            (PLType::Trait(t), PLType::Struct(st)) => {
-                return self.cast_implable(
-                    t,
-                    st,
-                    ori_range,
-                    target_range,
-                    builder,
-                    &target_pltype,
-                    &st_pltype,
-                    st_value,
-                );
-            }
-            (PLType::Trait(t), PLType::Union(st)) => {
-                return self.cast_implable(
-                    t,
-                    st,
-                    ori_range,
-                    target_range,
-                    builder,
-                    &target_pltype,
-                    &st_pltype,
-                    st_value,
-                );
-            }
-            (PLType::Trait(t), PLType::Primitive(st)) => {
-                return self.cast_trait_implable(
-                    t,
-                    st,
-                    ori_range,
-                    target_range,
-                    builder,
-                    &target_pltype,
-                    &st_pltype,
-                    st_value,
-                );
-            }
-            (PLType::Trait(t), PLType::Arr(st)) => {
-                return self.cast_trait_implable(
-                    t,
-                    st,
-                    ori_range,
-                    target_range,
-                    builder,
-                    &target_pltype,
-                    &st_pltype,
-                    st_value,
-                );
-            }
-            (PLType::Trait(t), PLType::Trait(t2)) => {
-                return self.run_in_type_mod(t, |ctx, t| {
-                    ctx.protect_generic_context(&t.generic_map, |ctx| {
-                        if !t2.trait_can_cast_to(t) {
-                            return Err(mismatch_err!(
-                                ctx,
-                                ori_range,
-                                target_range,
-                                target_pltype.borrow(),
-                                st_pltype.borrow()
-                            ));
-                        }
-                        let trait_handle =
-                            builder.alloc("tmp_traitv", &target_pltype.borrow(), ctx, None);
-                        for f in t.list_trait_fields().iter() {
-                            let fs = t2.get_all_field();
-                            // convert to hash table
-                            let fs: FxHashMap<String, Field> =
-                                fs.into_iter().map(|f| (f.name.clone(), f)).collect();
-
-                            let field = fs.get(&f.name).unwrap();
-
-                            let fnhandle = builder
-                                .build_struct_gep(st_value, field.index, "trait_mthd")
-                                .unwrap();
-                            let fnhandle = builder.build_load(fnhandle, "trait_mthd");
-                            // let targetftp = f.typenode.get_type(ctx, builder, true).unwrap();
-                            // let casted =
-                            //     builder.bitcast(ctx, fnhandle, &targetftp.borrow(), "fncast_tmp");
-                            let f_ptr = builder
-                                .build_struct_gep(trait_handle, f.index, "field_tmp")
-                                .unwrap();
-                            unsafe {
-                                builder.store_with_aoto_cast(f_ptr, fnhandle);
-                            }
-                        }
-                        let st = builder.build_struct_gep(st_value, 1, "src_v_tmp").unwrap();
-                        let st = builder.build_load(st, "src_v");
-                        let v_ptr = builder.build_struct_gep(trait_handle, 1, "v_tmp").unwrap();
-                        builder.build_store(v_ptr, st);
-                        let type_hash = builder
-                            .build_struct_gep(trait_handle, 0, "tp_hash")
-                            .unwrap();
-                        let hash = builder
-                            .build_struct_gep(st_value, 0, "src_tp_hash")
-                            .unwrap();
-                        let hash = builder.build_load(hash, "src_tp_hash");
-                        builder.build_store(type_hash, hash);
-                        Ok(trait_handle)
-                    })
-                });
-            }
-            _ => (),
-        }
-        #[allow(clippy::needless_return)]
-        return Err(mismatch_err!(
-            self,
-            ori_range,
-            target_range,
-            target_pltype.borrow(),
-            st_pltype.borrow()
-        ));
     }
     pub fn set_init_fn<'b>(&'b mut self, builder: &'b BuilderEnum<'a, 'ctx>) {
         self.function = Some(builder.add_function(
@@ -1130,22 +838,6 @@ impl<'a, 'ctx> Ctx<'a> {
     ) -> Result<ValueHandle, PLDiag> {
         builder.try_load2var(range, v, self)
     }
-    pub fn if_completion(
-        &self,
-        range: Range,
-        get_completions: impl FnOnce() -> Vec<CompletionItem>,
-    ) {
-        if let Some(pos) = self.edit_pos {
-            if pos.is_in(range) && !self.plmod.completion_gened.borrow().is_true() {
-                let comps = get_completions();
-                let comps = comps.iter().map(|x| CompletionItemWrapper(x.clone()));
-                self.plmod.completions.borrow_mut().truncate(0);
-                self.plmod.completions.borrow_mut().extend(comps);
-                self.plmod.completion_gened.borrow_mut().set_true();
-            }
-        }
-    }
-
     fn set_mod(&mut self, plmod: Mod) -> Mod {
         let m = self.plmod.clone();
         self.plmod = plmod;
@@ -1260,223 +952,6 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn get_location(&self, range: Range) -> Location {
         Location::new(self.get_file_url(), range.to_diag_range())
     }
-
-    pub fn send_if_go_to_def(&self, range: Range, destrange: Range, file: String) {
-        if self.need_highlight.borrow().ne(&0) {
-            return;
-        }
-        if range == Default::default() {
-            return;
-        }
-        if self.plmod.path != self.get_root_ctx().plmod.path {
-            return;
-        }
-        self.get_root_ctx().plmod.defs.borrow_mut().insert(
-            range,
-            LSPDef::Scalar(Location {
-                uri: url_from_path(&file),
-                range: destrange.to_diag_range(),
-            }),
-        );
-    }
-
-    pub fn get_completions(&self) -> Vec<CompletionItem> {
-        let mut m = FxHashMap::default();
-        self.get_pltp_completions(&mut m, |_| true);
-        self.plmod.get_ns_completions_pri(&mut m);
-        self.get_var_completions(&mut m);
-        self.get_keyword_completions(&mut m);
-        self.get_macro_completions(&mut m);
-
-        let cm = m.values().cloned().collect();
-        cm
-    }
-
-    pub fn get_completions_in_ns(&self, ns: &str) -> Vec<CompletionItem> {
-        let mut m = FxHashMap::default();
-        self.get_const_completions_in_ns(ns, &mut m);
-        self.get_type_completions_in_ns(ns, &mut m);
-        self.get_macro_completion_in_ns(ns, &mut m);
-
-        let cm = m.values().cloned().collect();
-        cm
-    }
-
-    fn with_ns(&self, ns: &str, f: impl FnOnce(&Mod)) {
-        let ns = self.plmod.submods.get(ns);
-        if let Some(ns) = ns {
-            f(ns);
-        }
-    }
-
-    fn get_const_completions_in_ns(&self, ns: &str, m: &mut FxHashMap<String, CompletionItem>) {
-        self.with_ns(ns, |ns| {
-            for (k, v) in ns.global_table.iter() {
-                let mut item = CompletionItem {
-                    label: k.to_string(),
-                    kind: Some(CompletionItemKind::CONSTANT),
-                    ..Default::default()
-                };
-                item.detail = Some(v.tp.borrow().get_name());
-                m.insert(k.clone(), item);
-            }
-        });
-    }
-
-    fn get_type_completions_in_ns(&self, ns: &str, m: &mut FxHashMap<String, CompletionItem>) {
-        self.with_ns(ns, |ns| {
-            for (k, v) in ns.types.iter() {
-                if !v.visibal_outside() {
-                    continue;
-                }
-                let mut insert_text = None;
-                let mut command = None;
-                let tp = match &*v.clone().borrow() {
-                    PLType::Struct(s) => {
-                        skip_if_not_modified_by!(s.modifier, TokenType::PUB);
-                        CompletionItemKind::STRUCT
-                    }
-                    PLType::Fn(fnvalue) => {
-                        skip_if_not_modified_by!(fnvalue.fntype.modifier, TokenType::PUB);
-                        insert_text = Some(fnvalue.gen_snippet());
-                        command = Some(Command::new(
-                            "trigger help".to_string(),
-                            "editor.action.triggerParameterHints".to_string(),
-                            None,
-                        ));
-                        CompletionItemKind::FUNCTION
-                    }
-                    _ => continue, // skip completion for primary types
-                };
-                if k.starts_with('|') {
-                    // skip method
-                    continue;
-                }
-                let mut item = CompletionItem {
-                    label: k.to_string(),
-                    kind: Some(tp),
-                    insert_text,
-                    insert_text_format: Some(InsertTextFormat::SNIPPET),
-                    command,
-                    ..Default::default()
-                };
-                item.detail = Some(k.to_string());
-                m.insert(k.clone(), item);
-            }
-        });
-    }
-
-    fn get_macro_completion_in_ns(&self, ns: &str, m: &mut FxHashMap<String, CompletionItem>) {
-        self.with_ns(ns, |ns| {
-            ns.get_macro_completions(m);
-        });
-    }
-
-    pub fn get_type_completions(&self) -> Vec<CompletionItem> {
-        let mut m = FxHashMap::default();
-        self.get_pltp_completions(&mut m, |tp| !matches!(&*tp.borrow(), PLType::Fn(_)));
-        self.plmod.get_ns_completions_pri(&mut m);
-        m.values().cloned().collect()
-    }
-
-    fn get_var_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
-        if self.as_root {
-            return;
-        }
-        for (k, _) in self.table.iter() {
-            vmap.insert(
-                k.to_string(),
-                CompletionItem {
-                    label: k.to_string(),
-                    kind: Some(CompletionItemKind::VARIABLE),
-                    ..Default::default()
-                },
-            );
-        }
-        if let Some(father) = self.father {
-            father.get_var_completions(vmap);
-        }
-    }
-
-    fn get_macro_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
-        self.plmod.get_macro_completions(vmap);
-        if let Some(father) = self.father {
-            father.get_macro_completions(vmap);
-        }
-    }
-
-    fn get_builtin_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
-        for (name, handle) in BUILTIN_FN_NAME_MAP.iter() {
-            vmap.insert(
-                name.to_string(),
-                CompletionItem {
-                    label: name.to_string(),
-                    kind: Some(CompletionItemKind::FUNCTION),
-                    insert_text: Some(BUILTIN_FN_SNIPPET_MAP.get(handle).unwrap().to_string()),
-                    insert_text_format: Some(InsertTextFormat::SNIPPET),
-                    ..Default::default()
-                },
-            );
-        }
-    }
-
-    fn get_pltp_completions(
-        &self,
-        vmap: &mut FxHashMap<String, CompletionItem>,
-        filter: impl Fn(&GlobType) -> bool,
-    ) {
-        self.plmod
-            .get_pltp_completions(vmap, &filter, &self.generic_types, true);
-        self.get_builtin_completions(vmap);
-        if let Some(father) = self.father {
-            father.get_pltp_completions(vmap, filter);
-        }
-    }
-
-    pub fn push_semantic_token(&self, range: Range, tp: SemanticTokenType, modifiers: u32) {
-        if self.need_highlight.borrow().ne(&0) || self.in_macro {
-            return;
-        }
-        self.get_root_ctx()
-            .plmod
-            .semantic_tokens_builder
-            .borrow_mut()
-            .push(range.to_diag_range(), type_index(tp), modifiers)
-    }
-    pub fn push_type_hints(&self, range: Range, pltype: Arc<RefCell<PLType>>) {
-        if self.need_highlight.borrow().ne(&0) || self.in_macro {
-            return;
-        }
-        let hint = InlayHint {
-            position: range.to_diag_range().end,
-            label: lsp_types::InlayHintLabel::String(
-                ": ".to_string() + &pltype.borrow().get_name(),
-            ),
-            kind: Some(InlayHintKind::TYPE),
-            text_edits: None,
-            tooltip: None,
-            padding_left: None,
-            padding_right: None,
-            data: None,
-        };
-        self.plmod.hints.borrow_mut().push(hint);
-    }
-    pub fn push_param_hint(&self, range: Range, name: String) {
-        if self.need_highlight.borrow().ne(&0) || self.in_macro {
-            return;
-        }
-        let hint = InlayHint {
-            position: range.to_diag_range().start,
-            label: lsp_types::InlayHintLabel::String(name + ": "),
-            kind: Some(InlayHintKind::TYPE),
-            text_edits: None,
-            tooltip: None,
-            padding_left: None,
-            padding_right: None,
-            data: None,
-        };
-        self.plmod.hints.borrow_mut().push(hint);
-    }
     pub fn position_at_end<'b>(
         &'b mut self,
         block: BlockHandle,
@@ -1485,82 +960,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.block = Some(block);
         builder.position_at_end_block(block);
     }
-    fn get_keyword_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
-        let keywords = vec![
-            "if", "else", "while", "for", "return", "struct", "let", "true", "false", "as", "is",
-            "gen", "yield",
-        ];
-        let loopkeys = vec!["break", "continue"];
-        let toplevel = vec![
-            "fn", "struct", "const", "var", "use", "impl", "trait", "pub", "type", "gen",
-        ];
-        if self.father.is_none() {
-            for k in toplevel {
-                vmap.insert(
-                    k.to_string(),
-                    CompletionItem {
-                        label: k.to_string(),
-                        kind: Some(CompletionItemKind::KEYWORD),
-                        ..Default::default()
-                    },
-                );
-            }
-        } else {
-            for k in keywords {
-                vmap.insert(
-                    k.to_string(),
-                    CompletionItem {
-                        label: k.to_string(),
-                        kind: Some(CompletionItemKind::KEYWORD),
-                        ..Default::default()
-                    },
-                );
-            }
-        }
-        if self.break_block.is_some() && self.continue_block.is_some() {
-            for k in loopkeys {
-                vmap.insert(
-                    k.to_string(),
-                    CompletionItem {
-                        label: k.to_string(),
-                        kind: Some(CompletionItemKind::KEYWORD),
-                        ..Default::default()
-                    },
-                );
-            }
-        }
-    }
 
-    pub fn save_if_comment_doc_hover(&self, range: Range, docs: Option<Vec<Box<NodeEnum>>>) {
-        if self.need_highlight.borrow().ne(&0) {
-            return;
-        }
-        let mut content = vec![];
-        let mut string = String::new();
-        if let Some(docs) = docs {
-            for doc in docs {
-                if let NodeEnum::Comment(c) = *doc {
-                    string.push_str(&c.comment);
-                    string.push('\n');
-                }
-            }
-        }
-        content.push(MarkedString::String(string));
-        self.save_if_hover(range, HoverContents::Array(content))
-    }
-
-    pub fn save_if_hover(&self, range: Range, value: HoverContents) {
-        if self.need_highlight.borrow().ne(&0) {
-            return;
-        }
-        self.plmod.hovers.borrow_mut().insert(
-            range,
-            Hover {
-                range: None,
-                contents: value,
-            },
-        );
-    }
     /// # auto_deref
     /// 自动解引用，有几层解几层
     pub fn auto_deref<'b>(
@@ -1629,124 +1029,7 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         Some(s)
     }
-    /// 左是目标类型，右是实际类型
-    /// when need eq trait and sttype,the left must be trait
-    pub fn eq(&mut self, l: Arc<RefCell<PLType>>, r: Arc<RefCell<PLType>>) -> EqRes {
-        let noop = BuilderEnum::NoOp(NoOpBuilder::default());
-        // get it's pointer
-        let noop_ptr = &noop as *const BuilderEnum<'a, '_>;
-        let builder = unsafe { &*(noop_ptr as *const BuilderEnum<'a, '_>) };
-        if l == r && matches!(&*l.borrow(), PLType::Generic(_)) {
-            if let PLType::Generic(l) = &mut *l.borrow_mut() {
-                if l.curpltype.is_some() {
-                    return self.eq(
-                        l.curpltype.as_ref().unwrap().clone(),
-                        l.curpltype.as_ref().unwrap().clone(),
-                    );
-                }
-                l.set_type(Arc::new(RefCell::new(PLType::Generic(l.clone()))));
-                return EqRes {
-                    eq: true,
-                    need_up_cast: false,
-                    reason: None,
-                };
-            }
-        }
-        if let (PLType::Generic(l), PLType::Generic(r)) = (&*l.borrow(), &*r.borrow()) {
-            if l == r {
-                return EqRes {
-                    eq: true,
-                    need_up_cast: false,
-                    reason: None,
-                };
-            }
-        }
-        if matches!(&*l.borrow(), PLType::Generic(_)) {
-            if let PLType::Generic(lg) = &mut *l.borrow_mut() {
-                if lg.curpltype.is_some() {
-                    return self.eq(lg.curpltype.as_ref().unwrap().clone(), r);
-                }
-                lg.set_type(r.clone());
-            }
-            if let PLType::Generic(lg) = &*l.borrow() {
-                if lg.trait_impl.is_some() {
-                    if let PLType::Generic(r) = &*r.borrow() {
-                        if let Some(reason) = self.diff_trait_impl(lg, r) {
-                            return EqRes {
-                                eq: false,
-                                need_up_cast: false,
-                                reason: Some(reason),
-                            };
-                        }
-                    } else if lg
-                        .trait_impl
-                        .as_ref()
-                        .unwrap()
-                        .get_types(self, builder)
-                        .unwrap_or_default()
-                        .iter()
-                        .any(|lt| !self.eq(lt.clone(), r.clone()).eq)
-                    {
-                        return EqRes {
-                            eq: false,
-                            need_up_cast: false,
-                            reason: Some(
-                                "cannot cast a type to a trait it never implements".to_string(),
-                            ),
-                        };
-                    }
-                }
-            }
-            if let PLType::Generic(lg) = &mut *l.borrow_mut() {
-                lg.set_type(r);
-            }
-            return EqRes {
-                eq: true,
-                need_up_cast: false,
-                reason: None,
-            };
-        }
-        if l != r {
-            if matches!(&*l.borrow(), PLType::Union(_)) {
-                return EqRes {
-                    eq: true,
-                    need_up_cast: true,
-                    reason: None,
-                };
-            }
-            let trait_pltype = l;
-            let st_pltype = self.auto_deref_tp(r);
-            if let PLType::Trait(t) = &*trait_pltype.borrow() {
-                let eq = st_pltype.borrow().implements_trait(t, self.get_root_ctx());
-                return EqRes {
-                    eq,
-                    need_up_cast: true,
-                    reason: Some(format!(
-                        "trait `{}` is not implemented for `{}`",
-                        t.get_name(),
-                        st_pltype.borrow().get_name()
-                    )),
-                };
-            }
-            if get_type_deep(trait_pltype) == get_type_deep(st_pltype) {
-                return EqRes {
-                    eq: true,
-                    need_up_cast: false,
-                    reason: None,
-                };
-            }
-            return EqRes {
-                eq: false,
-                need_up_cast: false,
-                reason: None,
-            };
-        }
-        EqRes {
-            eq: true,
-            need_up_cast: false,
-            reason: None,
-        }
-    }
+
     pub fn try_set_closure_alloca_bb(&self, bb: BlockHandle) {
         if let Some(c) = &self.closure_data {
             c.borrow_mut().alloca_bb = Some(bb);
@@ -1756,15 +1039,10 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 }
 
-mod traitcast;
-pub struct EqRes {
-    pub eq: bool,
-    pub need_up_cast: bool,
-    pub reason: Option<String>,
-}
+mod lsp;
 
-impl EqRes {
-    pub fn total_eq(&self) -> bool {
-        self.eq && !self.need_up_cast
-    }
-}
+mod completion;
+
+mod cast;
+
+pub use generic::EqRes;
