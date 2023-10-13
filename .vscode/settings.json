@@ -2,6 +2,14 @@
     "cmake.sourceDirectory": "${workspaceFolder}/immix/llvm",
     "C_Cpp.autoAddFileAssociations": false,
     "C_Cpp.errorSquiggles": "enabled",
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/*/**": true,
+        "**/.hg/store/**": true,
+        "**/target/**": true,
+        "**/book/book/**": true,
+    }
     // "rust-analyzer.check.targets": [
     //     "wasm32-unknown-unknown",
     // ],

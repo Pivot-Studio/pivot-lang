@@ -9,9 +9,12 @@
   - [Basic Project](./tutorial/basicproject.md)
   - [VSC Support](./tutorial/vscsupport.md)
 - [References](./references/README.md)
+  - [Basic](./references/basic.md)
   - [Module](./references/module.md)
   - [Method](./references/method.md)
   - [Trait](./references/interface.md)
+  - [Generic](./references/generic.md)
+  - [Tuple](./references/tuple.md)
   - [Deconstruct](./references/deconstruct.md)
 
 # How the project works internally
