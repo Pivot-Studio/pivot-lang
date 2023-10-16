@@ -16,6 +16,7 @@
   - [Generic](./references/generic.md)
   - [Tuple](./references/tuple.md)
   - [Deconstruct](./references/deconstruct.md)
+  - [Union](./references/union.md)
 
 # How the project works internally
 
