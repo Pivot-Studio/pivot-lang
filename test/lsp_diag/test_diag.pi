@@ -79,7 +79,21 @@ gen fn iter_test4() Iterator<i64>  {
 }
 
 
+macro test {
+    ($a:@id) => {
+        test!($a);
+    };
+    ($($a:@id = $b:@expr,)*) => {
+        $(
+            test!($a);
+            io::printi64ln($b);  
+        )*
+
+    };
+}
+
 gen fn iter_test5() Iterator<i64>  {
+    test!();
 }
 
 
