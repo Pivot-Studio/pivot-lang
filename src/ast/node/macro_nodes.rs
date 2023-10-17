@@ -304,8 +304,10 @@ impl Node for MacroCallNode {
                             return Ok(Default::default());
                         }
                         Err(mut e) => {
-                            if e.get_diag_code() == DiagCode::Err(ErrorCode::MACRO_EXPAND_DEPTH_TOO_DEEP) {
-                                e.set_range(b.range());   
+                            if e.get_diag_code()
+                                == DiagCode::Err(ErrorCode::MACRO_EXPAND_DEPTH_TOO_DEEP)
+                            {
+                                e.set_range(b.range());
                             }
                             last_err = Some(e);
                             continue;
