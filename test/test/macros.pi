@@ -4,7 +4,7 @@ macro test {
     };
     ($($a:@id = $b:@expr,)*) => {
         $(
-            io::print_s($a);
+            test!($a);
             io::printi64ln($b);  
         )*
 

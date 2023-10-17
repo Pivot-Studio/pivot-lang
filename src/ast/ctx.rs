@@ -130,6 +130,7 @@ pub struct Ctx<'a> {
     pub linked_tp_tbl: FxHashMap<*mut PLType, Vec<Arc<RefCell<PLType>>>>,
     is_active_file: bool,
     as_root: bool,
+    macro_expand_depth: Arc<RefCell< u64>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -141,6 +142,15 @@ pub enum MacroReplaceNode {
 mod generic;
 
 impl<'a, 'ctx> Ctx<'a> {
+    pub fn add_macro_depth(&self) {
+        *self.macro_expand_depth.borrow_mut() += 1;
+    }
+    pub fn sub_macro_depth(&self) {
+        *self.macro_expand_depth.borrow_mut() -= 1;
+    }
+    pub fn get_macro_depth(&self) -> u64 {
+        *self.macro_expand_depth.borrow()
+    }
     pub fn run_as_root_ctx<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {
         let old_as_root = self.as_root;
         self.as_root = true;
@@ -270,6 +280,7 @@ impl<'a, 'ctx> Ctx<'a> {
             linked_tp_tbl: FxHashMap::default(),
             is_active_file,
             as_root: false,
+            macro_expand_depth:Default::default()
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -312,6 +323,7 @@ impl<'a, 'ctx> Ctx<'a> {
             linked_tp_tbl: FxHashMap::default(),
             is_active_file: self.is_active_file,
             as_root: false,
+            macro_expand_depth:self.macro_expand_depth.clone()
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
@@ -347,10 +359,16 @@ impl<'a, 'ctx> Ctx<'a> {
         result
     }
     pub fn with_macro_emit(&mut self, f: impl FnOnce(&mut Self) -> NodeResult) -> NodeResult {
+        self.add_macro_depth();
+        if self.get_macro_depth() > 30 {
+            self.sub_macro_depth();
+            return Err(Range::default().new_err(ErrorCode::MACRO_EXPAND_DEPTH_TOO_DEEP));
+        }
         let old_in_macro = self.in_macro;
         self.in_macro = true;
         let result = f(self);
         self.in_macro = old_in_macro;
+        self.sub_macro_depth();
         result
     }
     pub fn with_macro_loop_parse<T>(&mut self, f: impl FnOnce(&mut Self) -> T) -> T {

@@ -5,6 +5,7 @@ use nom::IResult;
 use super::*;
 use super::{primary::VarNode, NodeEnum};
 use crate::ast::ctx::MacroReplaceNode;
+use crate::ast::diag::DiagCode;
 use crate::ast::{range::Range, tokens::TokenType};
 use crate::nomparser::helper::tag_token_symbol_ex;
 use crate::nomparser::identifier::identifier;
@@ -302,7 +303,10 @@ impl Node for MacroCallNode {
                         Ok(_) => {
                             return Ok(Default::default());
                         }
-                        Err(e) => {
+                        Err(mut e) => {
+                            if e.get_diag_code() == DiagCode::Err(ErrorCode::MACRO_EXPAND_DEPTH_TOO_DEEP) {
+                                e.set_range(b.range());   
+                            }
                             last_err = Some(e);
                             continue;
                         }
