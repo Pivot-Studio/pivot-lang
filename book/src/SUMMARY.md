@@ -2,7 +2,7 @@
 
 - [About](./About.md)
 
-# Tutorial
+## Tutorial
 
 - [Quick Start](./tutorial/README.md)
   - [Installation](./tutorial/installation.md)
@@ -10,6 +10,8 @@
   - [VSC Support](./tutorial/vscsupport.md)
 - [References](./references/README.md)
   - [Basic](./references/basic.md)
+  - [Array](./references/array.md)
+  - [closure](./references/closure.md)
   - [Module](./references/module.md)
   - [Method](./references/method.md)
   - [Trait](./references/interface.md)
@@ -17,8 +19,9 @@
   - [Tuple](./references/tuple.md)
   - [Deconstruct](./references/deconstruct.md)
   - [Union](./references/union.md)
+  - [Macro](./references/macro.md)
 
-# How the project works internally
+## How the project works internally
 
 - [Dev Prepare](./dev-prepare.md)
 - [Compiler](./compiler/README.md)
@@ -38,12 +41,11 @@
 - [compiler theory](./compiler_theory/README.md)
   - [top-down parsing](./compiler_theory/top-down_parsing.md)
 
-
-# CONTRIBUTING
+## CONTRIBUTING
 
 - [Contributing](./CONTRIBUTING-CN.md)
 
-# Blogs
+## Blogs
 
 - [About pivot lang](blogs/aboutpl.md)
 - [lsp and salsa](blogs/lsp_and_salsa.md)

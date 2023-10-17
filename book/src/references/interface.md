@@ -43,7 +43,6 @@ impl B for test_struct {
 
 关于 `impl` 的更多信息，请参阅 [method](method.md)。
 
-
 ## Trait 使用
 
 一个 trait 可以被用作变量和函数参数的类型。这允许代码与实现了该 trait 的任何类型一起工作。例如：
@@ -57,12 +56,3 @@ let c: C;
 ## 结论
 
 Pivot Lang 中的 traits 提供了一种定义类型间共享行为的方式。它们允许代码重用和多态，使得语言更加灵活和强大。
-
-
-
-
-
-
-
-
-

@@ -1,20 +1,19 @@
 # Method
 
 method就是隶属于某个结构体的函数，它们与普通函数**没有**本质区别。  
-所有的method都必须在impl块里声明，且method都会隐式的有个`self`参数，该参数是`impl`类型的指针 
-
-
+所有的method都必须在impl块里声明，且method都会隐式的有个`self`参数，该参数是`impl`类型的指针
 
 ## Method Example
 
 最简单的添加method的例子：  
+
 ```pivot-lang
 {{#include ../../../test/test/method.pi:impl}}
 ```
-在一个包中，可以定义该包中结构体的`method` . 
 
+在一个包中，可以定义该包中结构体的`method` .
 
-调用method的时候，使用`<receiver类型>.<method>`即可 
+调用method的时候，使用`<receiver类型>.<method>`即可
 
 ```pivot-lang
 let a = A{};
@@ -24,6 +23,7 @@ a.method();
 ## Extension Method
 
 实际上，如果一个结构体不在当前包中定义，我们可以仍然可以定义它实现 **当前包中** `Trait` 的 `method` 。这种方法被称为`extension method`。  
+
 ```pivot-lang
 pub trait Eq<S> {
     fn eq(r:*S) bool;
