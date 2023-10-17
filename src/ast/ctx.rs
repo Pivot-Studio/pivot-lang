@@ -130,7 +130,7 @@ pub struct Ctx<'a> {
     pub linked_tp_tbl: FxHashMap<*mut PLType, Vec<Arc<RefCell<PLType>>>>,
     is_active_file: bool,
     as_root: bool,
-    macro_expand_depth: Arc<RefCell< u64>>,
+    macro_expand_depth: Arc<RefCell<u64>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -280,7 +280,7 @@ impl<'a, 'ctx> Ctx<'a> {
             linked_tp_tbl: FxHashMap::default(),
             is_active_file,
             as_root: false,
-            macro_expand_depth:Default::default()
+            macro_expand_depth: Default::default(),
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -323,7 +323,7 @@ impl<'a, 'ctx> Ctx<'a> {
             linked_tp_tbl: FxHashMap::default(),
             is_active_file: self.is_active_file,
             as_root: false,
-            macro_expand_depth:self.macro_expand_depth.clone()
+            macro_expand_depth: self.macro_expand_depth.clone(),
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
