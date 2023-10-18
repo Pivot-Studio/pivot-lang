@@ -920,15 +920,17 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let di_type = self.get_ditype(&field_pltype.borrow(), ctx);
         let debug_type = di_type.unwrap();
         let td = self.targetmachine.get_target_data();
-        let (size, align) = if matches!(*RefCell::borrow(&field_pltype), PLType::Pointer(_)) {
-            let ptr = self.context.i8_type().ptr_type(AddressSpace::default());
-            (td.get_bit_size(&ptr), td.get_abi_alignment(&ptr))
-        } else {
-            (
-                debug_type.get_size_in_bits(),
-                debug_type.get_align_in_bits(),
-            )
-        };
+        let (size, align, offset_1) =
+            if matches!(*RefCell::borrow(&field_pltype), PLType::Pointer(_)) {
+                let ptr = self.context.i8_type().ptr_type(AddressSpace::default());
+                (td.get_bit_size(&ptr), td.get_abi_alignment(&ptr), 0)
+            } else {
+                (
+                    debug_type.get_size_in_bits(),
+                    debug_type.get_align_in_bits(),
+                    debug_type.get_offset_in_bits(),
+                )
+            };
         (
             self.dibuilder
                 .create_member_type(
@@ -938,7 +940,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     field.range.start.line as u32,
                     size,
                     align,
-                    offset + debug_type.get_offset_in_bits(),
+                    offset + offset_1,
                     DIFlags::PUBLIC,
                     debug_type,
                 )
@@ -968,7 +970,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .get_basic_type_op(&arr.element_type.borrow(), ctx)
                     .unwrap();
                 let arr_st_tp = self.arr_type(arr, ctx).into_struct_type();
-                let size = 0;
                 let align = td.get_preferred_alignment(etp);
                 let st_size = td.get_bit_size(&arr_st_tp);
                 let vtabledi = self.get_ditype(&PLType::Primitive(PriType::U64), ctx)?;
@@ -986,12 +987,18 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 );
                 let arrdi = self
                     .dibuilder
-                    .create_array_type(elemdi, size, align, &[(0..0)])
+                    .create_pointer_type(
+                        "arr",
+                        elemdi,
+                        elemdi.get_size_in_bits(),
+                        elemdi.get_align_in_bits(),
+                        AddressSpace::default(),
+                    )
                     .as_type();
                 let offset = td.offset_of_element(&arr_st_tp, 1).unwrap();
                 let arrtp = self.dibuilder.create_member_type(
                     self.get_cur_di_file().as_debug_info_scope(),
-                    "array",
+                    "_arr",
                     self.get_cur_di_file(),
                     0,
                     arrdi.get_size_in_bits(),
