@@ -73,10 +73,10 @@ impl BigObjAllocator {
                 std::cmp::Ordering::Equal => {
                     self.unused_chunks.remove(i);
                     // self.mmap.commit(unused_obj as *mut u8, size);
-                    println!(
-                        "get_chunk: {:p}[reused {}/{}]",
-                        unused_obj, size, unused_size
-                    );
+                    // println!(
+                    //     "get_chunk: {:p}[reused {}/{}]",
+                    //     unused_obj, size, unused_size
+                    // );
                     return unused_obj;
                 }
                 std::cmp::Ordering::Greater => {
@@ -86,7 +86,7 @@ impl BigObjAllocator {
                         (*unused_obj).size -= size;
                     }
                     // self.mmap.commit(new_obj as *mut BigObj as *mut u8, size);
-                    println!("get_chunk: {:p}[reused {}/{}]", new_obj, size, unused_size);
+                    // println!("get_chunk: {:p}[reused {}/{}]", new_obj, size, unused_size);
                     return new_obj;
                 }
             };

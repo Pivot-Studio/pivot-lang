@@ -988,7 +988,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let arrdi = self
                     .dibuilder
                     .create_pointer_type(
-                        "arr",
+                        "",
                         elemdi,
                         elemdi.get_size_in_bits(),
                         elemdi.get_align_in_bits(),
@@ -1007,18 +1007,30 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     DIFlags::PUBLIC,
                     arrdi,
                 );
+                let offset = td.offset_of_element(&arr_st_tp, 2).unwrap();
+                let lentp = self.dibuilder.create_member_type(
+                    self.get_cur_di_file().as_debug_info_scope(),
+                    "_len",
+                    self.get_cur_di_file(),
+                    0,
+                    vtabledi.get_size_in_bits(),
+                    vtabledi.get_align_in_bits(),
+                    offset * 8,
+                    DIFlags::PUBLIC,
+                    vtabledi,
+                );
                 let st = self
                     .dibuilder
                     .create_struct_type(
                         self.get_cur_di_file().as_debug_info_scope(),
-                        "arr_wrapper",
+                        &format!("[{}]", arr.element_type.borrow().get_name()),
                         self.get_cur_di_file(),
                         0,
                         st_size,
                         align,
                         DIFlags::PUBLIC,
                         None,
-                        &[vtabletp.as_type(), arrtp.as_type()],
+                        &[vtabletp.as_type(), arrtp.as_type(), lentp.as_type()],
                         0,
                         None,
                         "arr_wrapper",
