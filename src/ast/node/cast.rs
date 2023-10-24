@@ -81,7 +81,7 @@ impl<'a, 'ctx> Ctx<'a> {
         node: &AsNode,
     ) -> Result<(ValueHandle, Arc<RefCell<PLType>>), PLDiag> {
         let target_rc = target_ty.clone();
-        match (ty, &*target_ty.borrow()) {
+        match (ty, &*target_ty.clone().borrow()) {
             (PLType::Primitive(ty), PLType::Primitive(target_ty)) => {
                 let val = builder.try_load2var(node.expr.range(), val, self)?;
                 Ok((builder.cast_primitives(val, ty, target_ty), target_rc))
@@ -157,24 +157,34 @@ impl<'a, 'ctx> Ctx<'a> {
                     Ok(self.force_cast_trait_to(builder, val, target_rc, node.range.start))
                 }
             }
-            _ => Err(node
-                .range()
-                .new_err(ErrorCode::INVALID_CAST)
-                .add_label(
-                    node.expr.range(),
-                    self.get_file(),
-                    format_label!("type of the expression is `{}`", ty.get_name()),
-                )
-                .add_label(
-                    node.ty.range(),
-                    self.get_file(),
-                    format_label!("target type is `{}`", target_ty.borrow().get_name()),
-                )
-                .add_help(
-                    "`as` cast can only be performed between primitives \
-                or from union/trait types.",
-                )
-                .add_to_ctx(self)),
+            _ => {
+                let re = self
+                    .up_cast(
+                        target_ty.clone(),
+                        Arc::new(RefCell::new(ty.clone())),
+                        node.ty.range(),
+                        node.expr.range(),
+                        val,
+                        builder,
+                    )
+                    .map_err(|_| {
+                        node.range()
+                            .new_err(ErrorCode::INVALID_CAST)
+                            .add_label(
+                                node.expr.range(),
+                                self.get_file(),
+                                format_label!("type of the expression is `{}`", ty.get_name()),
+                            )
+                            .add_label(
+                                node.ty.range(),
+                                self.get_file(),
+                                format_label!("target type is `{}`", target_ty.borrow().get_name()),
+                            )
+                            .add_help("`as` cast cannnot be performed between these types")
+                            .add_to_ctx(self)
+                    })?;
+                Ok((re, target_rc))
+            }
         }
     }
     fn cast_trait_to<'b>(

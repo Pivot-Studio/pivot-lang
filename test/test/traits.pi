@@ -98,6 +98,9 @@ pub fn test_trait() void {
             y: &y
         }
     };
+    let fff = x as TestTrait;
+    fff.set(100);
+    fff.name();
     st.call_trait();
     fn_with_trait(y);
     return;
