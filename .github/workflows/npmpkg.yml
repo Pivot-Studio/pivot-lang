@@ -27,7 +27,7 @@ jobs:
       - name: build wasm
         run: wasm-pack build --target bundler --no-default-features --scope pivot-lang --release
       # Setup .npmrc file to publish to npm
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-node@v4
         with:
           node-version: '16.x'
           registry-url: 'https://registry.npmjs.org'
