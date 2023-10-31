@@ -56,18 +56,6 @@ mod _immix {
             re
         }
 
-        pub unsafe fn malloc_no_collect(size: u64, obj_type: u8) -> *mut u8 {
-            trace!("malloc_no_collect: {} {}", size, obj_type);
-            let re = immix::gc_malloc_no_collect(size as usize, obj_type);
-            if re.is_null() && size != 0 {
-                eprintln!("gc malloc failed! (OOM)");
-                let bt = Backtrace::new();
-                println!("{:?}", bt);
-                exit(1);
-            }
-            re
-        }
-
         pub unsafe fn collect() {
             trace!("manual collect");
             immix::gc_collect()

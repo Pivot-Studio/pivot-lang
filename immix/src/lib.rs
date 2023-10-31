@@ -111,24 +111,6 @@ pub fn gc_malloc(size: usize, obj_type: u8) -> *mut u8 {
     })
 }
 
-/// This function is used to allocate a new object on the heap
-/// without the possibility of triggering a gc even
-/// the auto gc is enabled.
-///
-/// ## Warning
-///
-/// This function shall not be used in normal situation.
-/// When the heap is full, this function will always return null
-/// instead of triggering a gc and try again.
-pub fn gc_malloc_no_collect(size: usize, obj_type: u8) -> *mut u8 {
-    SPACE.with(|gc| {
-        // println!("start malloc_no_collect");
-        let gc = gc.borrow();
-        // println!("malloc_no_collect");
-        gc.alloc_no_collect(size, ObjectType::from_int(obj_type).unwrap())
-    })
-}
-
 /// This function is used to force a garbage collection.
 pub fn gc_collect() {
     SPACE.with(|gc| {
