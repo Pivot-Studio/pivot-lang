@@ -173,7 +173,7 @@
                     file: "",
                     txt: Some(
                         (
-                            "method {} not in impl block, whitch is required in trait {}",
+                            "method {} not in impl block, which is required in trait {}",
                             [
                                 "name1",
                                 "generic_trait1<T>",

@@ -248,7 +248,7 @@ impl Node for ImplNode {
                         r,
                         ctx.get_file(),
                         format_label!(
-                            "method {} not in impl block, whitch is required in trait {}",
+                            "method {} not in impl block, which is required in trait {}",
                             f,
                             tp.borrow().get_name()
                         ),
