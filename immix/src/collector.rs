@@ -1,7 +1,7 @@
 use std::{
     cell::RefCell,
     ptr::drop_in_place,
-    sync::atomic::{AtomicBool, AtomicPtr, Ordering},
+    sync::atomic::{AtomicBool, AtomicPtr, Ordering}, mem::{forget, ManuallyDrop},
 };
 
 use lazy_static::lazy_static;
@@ -42,7 +42,7 @@ pub struct Collector {
     id: usize,
     mark_histogram: *mut VecMap<usize, usize>,
     status: RefCell<CollectorStatus>,
-    frames_list: Option<Vec<(*mut libc::c_void, *mut libc::c_void)>>,
+    frames_list: AtomicPtr<Vec<(*mut libc::c_void, *mut libc::c_void)>>,
 }
 
 struct CollectorStatus {
@@ -112,7 +112,7 @@ impl Collector {
                     bytes_allocated_since_last_gc: 0,
                     collecting: false,
                 }),
-                frames_list: None,
+                frames_list: AtomicPtr::default(),
             }
         }
     }
@@ -150,6 +150,9 @@ impl Collector {
     pub fn alloc(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
         if size == 0 {
             return std::ptr::null_mut();
+        }
+        if !self.frames_list.load(Ordering::Acquire).is_null() {
+            panic!("gc stucked, can not alloc")
         }
         if gc_is_auto_collect_enabled() {
             if GC_RUNNING.load(Ordering::Acquire) {
@@ -449,9 +452,10 @@ impl Collector {
             } else {
                 // println!("{:?}", &STACK_MAP.map.borrow());
                 let mut depth = 0;
-                let frames = if let Some(f) = &self.frames_list {
+                let fl = self.frames_list.load(Ordering::Acquire);
+                let frames = if !fl.is_null() {
                     log::trace!("gc {}: tracing stucked frames", self.id);
-                    f.clone()
+                    unsafe {fl.as_mut().unwrap().clone()}
                 } else {
                     let mut frames: Vec<(*mut libc::c_void, *mut libc::c_void)> = vec![];
                     backtrace::trace(|frame| {
@@ -582,7 +586,7 @@ impl Collector {
         log::info!(
             "gc {} collecting... stucked: {}",
             self.id,
-            self.frames_list.is_some()
+            !self.frames_list.load(Ordering::Acquire).is_null()
         );
         // self.print_stats();
         let mut status = self.status.borrow_mut();
@@ -672,16 +676,18 @@ impl Collector {
 
     pub fn stuck(&mut self) {
         log::trace!("gc {}: stucking...", self.id);
-        let mut frames: Vec<(*mut libc::c_void, *mut libc::c_void)> = vec![];
+        let mut frames: Box< Vec<(*mut libc::c_void, *mut libc::c_void)>> = Box::new( vec![]);
         backtrace::trace(|frame| {
             frames.push((frame.ip(), frame.sp()));
             true
         });
         FRAMES_LIST.0.lock().borrow_mut().insert(self as _);
         unsafe {
-            self.frames_list = Some(frames);
+            let ptr = Box::leak(frames) as *mut _;
+            self.frames_list.store( ptr, Ordering::Release);
             let c: *mut Collector = self as *mut _;
             let c = c.as_mut().unwrap();
+            let ptr_i = ptr as usize;
             GLOBAL_ALLOCATOR.0.as_ref().unwrap().pool.execute(move || {
                 loop {
                     let mut i: i32 = 0;
@@ -695,7 +701,16 @@ impl Collector {
                     if FRAMES_LIST.0.lock().borrow().contains(&(c as *mut _)) {
                         c.safepoint();
                     } else {
-                        c.frames_list = None;
+                        let re = c.frames_list.compare_exchange(
+                            ptr_i as _,
+                            std::ptr::null_mut(),
+                            Ordering::SeqCst,
+                            Ordering::SeqCst,
+                        );
+                        // if seccess, drop it
+                        if re.is_ok() {
+                            drop_in_place(ptr_i as *mut Vec<(*mut libc::c_void, *mut libc::c_void)>);
+                        }
                         break;
                     }
                 }
@@ -708,7 +723,7 @@ impl Collector {
     pub fn unstuck(&mut self) {
         log::trace!("gc {}: unstucking...", self.id);
         FRAMES_LIST.0.lock().borrow_mut().remove(&(self as _));
-        spin_until!(self.frames_list.is_none());
+        spin_until!(self.frames_list.load(Ordering::Acquire).is_null());
     }
 }
 
