@@ -1,4 +1,4 @@
-use super::pltype::{FNValue, STType, UnionType};
+use super::pltype::{FNValue, PlaceHolderType, STType, UnionType};
 
 pub trait CustomType {
     fn get_path(&self) -> String;
@@ -32,4 +32,4 @@ macro_rules! impl_custom_type {
     };
 }
 use crate::ast::range::Range;
-impl_custom_type!(UnionType, STType, FNValue);
+impl_custom_type!(UnionType, STType, FNValue, PlaceHolderType);

@@ -10,8 +10,10 @@ pub const MAX_MEDIUM_OBJECT_SIZE: usize = BLOCK_SIZE;
 
 pub const EVA_BLOCK_PROPORTION: f64 = 0.025;
 
-pub const ALIGN: usize = 128;
+pub const ALIGN: usize = 4096;
 
 pub const THRESHOLD_PROPORTION: f64 = 1.75;
 
 pub const LLVM_GC_STRATEGY_NAME: &str = "plimmix";
+
+pub const BIG_OBJ_ALIGN: usize = 128;

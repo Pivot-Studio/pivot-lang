@@ -1,3 +1,5 @@
+use std::cell::Cell;
+
 use parking_lot::ReentrantMutex;
 
 use crate::{bigobj::BigObj, block::Block, consts::BLOCK_SIZE, mmap::Mmap};
@@ -11,7 +13,7 @@ pub struct GlobalAllocator {
     /// mmap region
     mmap: Mmap,
     /// current heap pointer
-    current: *mut u8,
+    current: Cell<*mut u8>,
     /// heap start
     heap_start: *mut u8,
     /// heap end
@@ -44,18 +46,18 @@ impl GlobalAllocator {
     ///
     /// size is the max heap size
     pub fn new(size: usize) -> Self {
-        let mmap = Mmap::new(size);
+        let mmap = Mmap::new(size * 3 / 4);
 
         // mmap.commit(mmap.aligned(), BLOCK_SIZE);
 
         Self {
-            current: mmap.aligned(BLOCK_SIZE),
+            current: Cell::new(mmap.aligned(BLOCK_SIZE)),
             heap_start: mmap.aligned(BLOCK_SIZE),
             heap_end: mmap.end(),
             mmap,
             free_blocks: Vec::new(),
             lock: ReentrantMutex::new(()),
-            big_obj_allocator: BigObjAllocator::new(size),
+            big_obj_allocator: BigObjAllocator::new(size / 4),
             last_get_block_time: std::time::Instant::now(),
             mem_usage_flag: 0,
             round: 0,
@@ -90,13 +92,18 @@ impl GlobalAllocator {
     ///
     /// 每次分配block会让current增加一个block的大小
     fn alloc_block(&self) -> Option<*mut Block> {
-        let current = self.current;
+        let current = self.current.get();
         let heap_end = self.heap_end;
-
-        if current >= heap_end {
+        self.current
+            .set(unsafe { self.current.get().add(BLOCK_SIZE) });
+        if unsafe { current.add(BLOCK_SIZE) } >= heap_end {
             return None;
         }
-        self.mmap.commit(current, BLOCK_SIZE);
+        if !self.mmap.commit(current, BLOCK_SIZE) {
+            self.current
+                .set(unsafe { self.current.get().sub(BLOCK_SIZE) });
+            return None;
+        }
         // if unsafe { current.add(BLOCK_SIZE * 32) } >= heap_end {
         //     return None;
         // }
@@ -126,14 +133,13 @@ impl GlobalAllocator {
         let _lock = self.lock.lock();
         self.mem_usage_flag += 1;
         let block = if let Some((block, freed)) = self.free_blocks.pop() {
-            if freed {
-                self.mmap.commit(block as *mut u8, BLOCK_SIZE);
+            if freed && !self.mmap.commit(block as *mut u8, BLOCK_SIZE) {
+                std::ptr::null_mut()
+            } else {
+                block
             }
-            block
         } else {
-            let b = self.alloc_block().unwrap_or(std::ptr::null_mut());
-            self.current = unsafe { self.current.add(BLOCK_SIZE) };
-            b
+            self.alloc_block().unwrap_or(std::ptr::null_mut())
         };
         if block.is_null() {
             return block;

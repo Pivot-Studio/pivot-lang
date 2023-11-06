@@ -1,5 +1,5 @@
 use core::panic;
-const a = 100;
+var a = 100;
 pub fn true_with_pnanic() bool {
     panic::pl_panic();
     return true;
@@ -111,6 +111,7 @@ pub fn generic_fn<A|B|C>(a: i64, x: A, y: B, z: C) i64 {
     }
     if a == 1 {
         return 1;
+    } else if true {
     }
     if a == 2 {
         return 1;

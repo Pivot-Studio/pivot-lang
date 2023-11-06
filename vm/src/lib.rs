@@ -6,6 +6,7 @@ use std::{process::exit, thread};
 use backtrace::Backtrace;
 use internal_macro::is_runtime;
 pub mod gc;
+pub mod libcwrap;
 pub mod logger;
 pub mod mutex;
 
@@ -84,4 +85,28 @@ fn sleep(secs: u64) {
 #[is_runtime]
 fn print_u64(u: u64) {
     println!("u64( {} )", u);
+}
+#[is_runtime]
+fn print_i128(i: i128) {
+    print!("{}", i);
+}
+
+#[is_runtime]
+fn print_u128(i: u128) {
+    print!("{}", i);
+}
+
+#[is_runtime]
+fn print_hex(i: i64) {
+    print!("0x{:X}", i);
+}
+
+#[is_runtime]
+fn utf8_count(ptr: *mut u8, byte_len: i64) -> i64 {
+    let s = unsafe { std::slice::from_raw_parts(ptr, byte_len as usize) };
+    bytecount::num_chars(s) as _
+}
+
+pub fn count_utf8_char(s: &str) -> usize {
+    bytecount::num_chars(s.as_bytes())
 }

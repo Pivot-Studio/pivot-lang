@@ -11,12 +11,12 @@ use log::debug;
 use lsp_types::{
     notification::{DidChangeTextDocument, DidCloseTextDocument, DidOpenTextDocument},
     request::{
-        Completion, DocumentSymbolRequest, Formatting, GotoDefinition, HoverRequest,
-        InlayHintRequest, References, Rename, SemanticTokensFullDeltaRequest,
+        CodeLensRequest, Completion, DocumentSymbolRequest, Formatting, GotoDefinition,
+        HoverRequest, InlayHintRequest, References, Rename, SemanticTokensFullDeltaRequest,
         SemanticTokensFullRequest, SignatureHelpRequest,
     },
-    Diagnostic, Hover, HoverContents, InitializeParams, MarkedString, OneOf, SemanticTokens,
-    SemanticTokensDelta, SemanticTokensOptions, ServerCapabilities, SignatureHelp,
+    CodeLensOptions, Diagnostic, Hover, HoverContents, InitializeParams, MarkedString, OneOf,
+    SemanticTokens, SemanticTokensDelta, SemanticTokensOptions, ServerCapabilities, SignatureHelp,
     TextDocumentSyncKind, TextDocumentSyncOptions,
 };
 
@@ -32,8 +32,8 @@ mod fake_thread_pool;
 use crate::{
     ast::{
         accumulators::{
-            Completions, Diagnostics, DocSymbols, GotoDef, Hints, PLFormat, PLHover, PLReferences,
-            PLSemanticTokens, PLSignatureHelp,
+            Completions, Diagnostics, DocSymbols, GotoDef, Hints, PLCodeLens, PLFormat, PLHover,
+            PLReferences, PLSemanticTokens, PLSignatureHelp,
         },
         compiler::{compile_dry, ActionType},
         range::Pos,
@@ -43,9 +43,9 @@ use crate::{
         config::SEMANTIC_LEGEND,
         dispatcher::Dispatcher,
         helpers::{
-            send_completions, send_diagnostics, send_doc_symbols, send_format, send_goto_def,
-            send_hints, send_hover, send_references, send_rename, send_semantic_tokens,
-            send_semantic_tokens_edit, send_signature_help, url_to_path,
+            send_code_lens, send_completions, send_diagnostics, send_doc_symbols, send_format,
+            send_goto_def, send_hints, send_hover, send_references, send_rename,
+            send_semantic_tokens, send_semantic_tokens_edit, send_signature_help, url_to_path,
         },
         mem_docs::MemDocsInput,
         semantic_tokens::diff_tokens,
@@ -102,6 +102,9 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
             ),
         ),
         rename_provider: Some(OneOf::Left(true)),
+        code_lens_provider: Some(CodeLensOptions {
+            resolve_provider: None,
+        }),
         ..Default::default()
     })
     .unwrap();
@@ -134,6 +137,7 @@ fn main_loop(
     );
     let last_tokens = Cell::new(Default::default());
     let mut completions: Vec<Vec<lsp_types::CompletionItem>> = vec![];
+    let mut last_semantic_file = "".to_string();
 
     log::info!("starting main loop");
     for msg in &connection.receiver {
@@ -214,8 +218,23 @@ fn main_loop(
                 });
             }
         })
+        .on::<CodeLensRequest, _>(|id, params| {
+            let uri = url_to_path(params.text_document.uri);
+            docin.set_file(&mut db).to(uri);
+            docin.set_action(&mut db).to(ActionType::CodeLens);
+            docin
+                .set_params(&mut db)
+                .to(Some((Default::default(), None)));
+            compile_dry(&db, docin);
+            let codelens = compile_dry::accumulated::<PLCodeLens>(&db, docin);
+            let sender = connection.sender.clone();
+            pool.execute(move || {
+                send_code_lens(&sender, id, codelens);
+            });
+        })
         .on::<SemanticTokensFullRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
+            last_semantic_file = uri.clone();
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::SemanticTokensFull);
             docin
@@ -234,6 +253,21 @@ fn main_loop(
         })
         .on::<SemanticTokensFullDeltaRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
+            if last_semantic_file != uri {
+                let sender = connection.sender.clone();
+                pool.execute(move || {
+                    send_semantic_tokens_edit(
+                        &sender,
+                        id,
+                        SemanticTokensDelta {
+                            result_id: None,
+                            edits: vec![],
+                        },
+                    );
+                });
+                return;
+            }
+            last_semantic_file = uri.clone();
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::SemanticTokensFull);
             docin

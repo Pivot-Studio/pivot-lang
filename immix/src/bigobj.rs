@@ -1,4 +1,4 @@
-use crate::consts::ALIGN;
+use crate::BIG_OBJ_ALIGN;
 
 // big obj struct
 #[derive(Debug)]
@@ -19,8 +19,8 @@ impl BigObj {
     pub fn new(at: *mut u8, size: usize) -> &'static mut Self {
         unsafe {
             let ptr = at as *mut Self;
-            debug_assert!(ptr as usize % ALIGN == 0);
-            debug_assert!(size % ALIGN == 0);
+            debug_assert!(ptr as usize % BIG_OBJ_ALIGN == 0);
+            debug_assert!(size % BIG_OBJ_ALIGN == 0);
             ptr.write(Self {
                 header: 0b10000000,
                 size, // size of [[ obj_st |     data     ]]

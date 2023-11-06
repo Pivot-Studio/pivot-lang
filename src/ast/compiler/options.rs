@@ -57,4 +57,5 @@ pub enum ActionType {
     Hint,
     DocSymbol,
     SignatureHelp,
+    CodeLens,
 }

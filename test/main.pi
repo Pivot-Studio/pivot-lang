@@ -35,7 +35,6 @@ impl Waker for TimeWaker {
         return;
     }
 }
-fn print_u64(u: u64) void;
 
 pub fn new_tf(secs: u64)*TimerFuture{
     let shared_state = &SharedState {};
@@ -130,10 +129,24 @@ gen fn generator() Iterator<Option<i64>> {
         yield return o;
     }
 }
-struct GenFuture<T>{ }
+struct GenFuture<T> {
+    it: Iterator<Option<T>>;
+}
 impl <T>Iterator<T> for GenFuture<T>{
-    fn next() Option<T>;
-} 
+    fn next() Option<T>{
+        while true {
+            let o = self.it.next();
+            if o is None {
+                return None{};
+            }
+            let v = o as Option<T>!;
+            if v is T {
+                return v;
+            }
+        }
+        return None{};
+    }
+}
 impl <T>Future<T> for GenFuture<T> {
     fn poll(wk: Waker) Poll<T>{
         let t = self.next();// as Option<T>!;
@@ -146,14 +159,6 @@ impl <T>Future<T> for GenFuture<T> {
     }
 }
 
-fn foo() Future<()> {
-    let t: Future<()>;
-
-    let a: Iterator<Option<i64>> = generator();
-    let f = GenFuture<i64> {it: a};
-    
-    return t;
-}
 
 fn main() i64 {
     println!("new_timerfuture");

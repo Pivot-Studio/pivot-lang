@@ -93,6 +93,26 @@ pub fn test_ret_struct_arr() void {
     return;
 }
 
+struct namet {
+    b:i64;
+    a:i64;
+}
+
+fn test_dangling_field_ptr() void {
+    let field_ptr = ret_field_ptr();
+    assert(*field_ptr == 1);
+    *field_ptr = 2;
+    assert(*field_ptr == 2);
+    return;
+}
+
+
+fn ret_field_ptr() *i64 {
+    let a = namet{a:1};
+    return &a.a;
+}
+
+
 pub fn test_struct() void {
     test_ret_struct();
     test_dangling();
@@ -100,6 +120,7 @@ pub fn test_struct() void {
     test_struct_father();
     test_ret_struct_arr();
     test_arr();
+    test_dangling_field_ptr();
     return;
 }
 

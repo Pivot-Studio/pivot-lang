@@ -59,14 +59,23 @@ pub struct StackMapWrapper {
 unsafe impl Sync for StackMapWrapper {}
 #[cfg(feature = "llvm_stackmap")]
 unsafe impl Send for StackMapWrapper {}
-const DEFAULT_HEAP_SIZE: usize = 1024 * 1024 * 1024;
+const DEFAULT_HEAP_SIZE: usize = 1024 * 1024 * 1024 * 16;
 
 lazy_static! {
     pub static ref GLOBAL_ALLOCATOR: GAWrapper = unsafe {
         let mut heap_size = DEFAULT_HEAP_SIZE;
+        if let Some(usage) = memory_stats::memory_stats() {
+            heap_size = usage.virtual_mem;
+        } else {
+            log::warn!(
+                "Failed to get virtual memory size, use default heap size {} byte",
+                heap_size
+            );
+        }
         if let Some(size) = option_env!("PL_IMMIX_HEAP_SIZE") {
             heap_size = size.parse().unwrap();
         }
+        heap_size = round_n_up!(heap_size, BLOCK_SIZE);
         let ga = GlobalAllocator::new(heap_size);
         let mem = malloc(core::mem::size_of::<GlobalAllocator>()).cast::<GlobalAllocator>();
         mem.write(ga);
@@ -85,23 +94,19 @@ lazy_static! {
 /// let obj = gc_malloc(size, obj_type);
 /// ```
 /// where obj is a pointer to the newly allocated object.
+///
+/// ## Behaviour
+///
+/// If auto gc is enabled, this function may trigger a gc if some conditions are met.
+///
+/// If the heap is full, this function will trigger an emergency gc and try again.
+/// If the heap is still full after the emergency gc, this function will return null.
 pub fn gc_malloc(size: usize, obj_type: u8) -> *mut u8 {
     SPACE.with(|gc| {
         // println!("start malloc");
         let gc = gc.borrow();
         // println!("malloc");
         gc.alloc(size, ObjectType::from_int(obj_type).unwrap())
-    })
-}
-
-/// This function is used to allocate a new object on the heap without logic
-/// triggering a garbage collection.
-pub fn gc_malloc_no_collect(size: usize, obj_type: u8) -> *mut u8 {
-    SPACE.with(|gc| {
-        // println!("start malloc_no_collect");
-        let gc = gc.borrow();
-        // println!("malloc_no_collect");
-        gc.alloc_no_collect(size, ObjectType::from_int(obj_type).unwrap())
     })
 }
 
@@ -240,7 +245,7 @@ static GC_STW_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 pub(crate) static USE_SHADOW_STACK: AtomicBool = AtomicBool::new(false);
 
-pub static ENABLE_EVA: AtomicBool = AtomicBool::new(false);
+pub static ENABLE_EVA: AtomicBool = AtomicBool::new(true);
 
 #[cfg(feature = "auto_gc")]
 static GC_AUTOCOLLECT_ENABLE: AtomicBool = AtomicBool::new(true);

@@ -1,0 +1,41 @@
+use core::hash::hasher::Hasher64;
+
+/// Paul Larson hash function
+/// https://stackoverflow.com/questions/628790/have-a-good-hash-function-for-a-c-hash-table
+/// 
+/// # Arguments
+/// 
+/// * `data` - data to hash
+/// * `salt` - salt to use, should be a random number, used to prevent hash collision attacks
+fn hash(data:[u8], salt:u64) u64 {
+    let hash = salt;
+
+    for let i = 0; i < arr_len(data); i = i + 1 {
+        hash = hash*101 + data[i] as u64;
+    }
+    return hash;
+}
+
+
+
+pub struct PaulLarsonHasher {
+    hash: u64;
+}
+
+
+impl Hasher64 for PaulLarsonHasher {
+    fn finish()  u64 {
+        return self.hash;
+    }
+
+    fn append(bytes: [u8]) void {
+        self.hash = hash(bytes, self.hash);
+        return;
+    }
+}
+
+pub fn new_paul_larson_hasher(salt:u64) PaulLarsonHasher {
+    return PaulLarsonHasher{hash:salt};
+}
+
+

@@ -121,6 +121,7 @@ pub fn test_trait() void {
     st.call_trait();
     fn_with_trait(y);
     fn_with_trait(y);
+    let hashtest:Hash = "a";
     return;
 }
 

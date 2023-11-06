@@ -173,7 +173,7 @@
                     file: "",
                     txt: Some(
                         (
-                            "method {} not in impl block, whitch is required in trait {}",
+                            "method {} not in impl block, which is required in trait {}",
                             [
                                 "name1",
                                 "generic_trait1<T>",
@@ -228,14 +228,14 @@
                     ),
                     range: Range {
                         start: Pos {
-                            line: 64,
-                            column: 10,
-                            offset: 672,
+                            line: 9,
+                            column: 7,
+                            offset: 90,
                         },
                         end: Pos {
-                            line: 64,
-                            column: 24,
-                            offset: 686,
+                            line: 9,
+                            column: 21,
+                            offset: 104,
                         },
                     },
                 },
@@ -605,6 +605,76 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
+                THE_TARGET_TRAIT_CANNOT_BE_INSTANTIATED,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "the method `{}` of trait `{}` has generic params, which makes it uninstantiatable",
+                            [
+                                "hash",
+                                "Hash",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 5,
+                            column: 5,
+                            offset: 99,
+                        },
+                        end: Pos {
+                            line: 5,
+                            column: 41,
+                            offset: 135,
+                        },
+                    },
+                },
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "trait type `{}`",
+                            [
+                                "Hash",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 124,
+                            column: 9,
+                            offset: 1811,
+                        },
+                        end: Pos {
+                            line: 124,
+                            column: 17,
+                            offset: 1819,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 124,
+                    column: 9,
+                    offset: 1811,
+                },
+                end: Pos {
+                    line: 124,
+                    column: 17,
+                    offset: 1819,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
                 UNDEFINED_TYPE,
             ),
             help: None,
@@ -612,14 +682,14 @@
             source: None,
             range: Range {
                 start: Pos {
-                    line: 172,
+                    line: 173,
                     column: 15,
-                    offset: 2446,
+                    offset: 2475,
                 },
                 end: Pos {
-                    line: 172,
+                    line: 173,
                     column: 17,
-                    offset: 2448,
+                    offset: 2477,
                 },
             },
         },
@@ -643,14 +713,14 @@
                     ),
                     range: Range {
                         start: Pos {
-                            line: 176,
+                            line: 177,
                             column: 6,
-                            offset: 2459,
+                            offset: 2488,
                         },
                         end: Pos {
-                            line: 176,
+                            line: 177,
                             column: 7,
-                            offset: 2460,
+                            offset: 2489,
                         },
                     },
                 },
@@ -658,14 +728,14 @@
             source: None,
             range: Range {
                 start: Pos {
-                    line: 176,
+                    line: 177,
                     column: 6,
-                    offset: 2459,
+                    offset: 2488,
                 },
                 end: Pos {
-                    line: 176,
+                    line: 177,
                     column: 7,
-                    offset: 2460,
+                    offset: 2489,
                 },
             },
         },

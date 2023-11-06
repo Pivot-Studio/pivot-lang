@@ -5,3 +5,7 @@ use std::cols::arr;
 use std::future;
 use std::chan;
 use std::mutex;
+use std::cols::hashtable;
+use std::libc;
+use std::buf;
+use std::err;

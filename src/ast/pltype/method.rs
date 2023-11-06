@@ -1,5 +1,6 @@
 use std::{cell::RefCell, sync::Arc};
 
+use indexmap::IndexMap;
 use lsp_types::{Command, CompletionItem, CompletionItemKind, InsertTextFormat};
 use rustc_hash::FxHashMap;
 
@@ -8,13 +9,15 @@ use crate::{
         ctx::Ctx,
         diag::{ErrorCode, PLDiag},
         node::RangeTrait,
+        plmod::Mod,
         tokens::TokenType,
         traits::CustomType,
     },
     format_label,
+    utils::get_hash_code,
 };
 
-use super::FNValue;
+use super::{append_name_with_generic, impl_in_mod, FNValue, PLType, STType, UnionType};
 
 pub trait ImplAble: RangeTrait + CustomType + TraitImplAble {
     fn get_method_table(&self) -> Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>;
@@ -71,4 +74,156 @@ pub trait ImplAble: RangeTrait + CustomType + TraitImplAble {
 pub trait TraitImplAble {
     fn get_full_name_except_generic(&self) -> String;
     fn get_full_name(&self) -> String;
+    fn get_type_code(&self) -> u64 {
+        let full_name = self.get_full_name();
+        get_hash_code(full_name)
+    }
+    fn traitimplable_implements_trait(&self, tp: &STType, plmod: &Mod) -> bool {
+        let name = &self.get_full_name_except_generic();
+        if impl_in_mod(plmod, name, tp) {
+            return true;
+        } else {
+            for m in plmod.submods.values() {
+                if impl_in_mod(m, name, tp) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
 }
+
+pub trait Generic {
+    fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>>;
+    fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>>;
+}
+
+impl Generic for STType {
+    fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
+        &self.generic_map
+    }
+
+    fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
+        Some(&self.generic_infer_types)
+    }
+}
+
+impl Generic for UnionType {
+    fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
+        &self.generic_map
+    }
+
+    fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
+        None
+    }
+}
+
+pub trait ImplAbleWithGeneric: Generic + ImplAble {
+    fn implements_trait_curr_mod(&self, tp: &STType, plmod: &Mod) -> bool {
+        // FIXME: strange logic
+        let re = plmod
+            .impls
+            .borrow()
+            .get(&self.get_full_name())
+            .or(plmod
+                .impls
+                .borrow()
+                .get(&self.get_full_name_except_generic()))
+            .map(|v| {
+                v.get(&tp.get_full_name_except_generic())
+                    .map(|gm| {
+                        let mut gm = gm.clone();
+                        for (k, _) in &gm.clone() {
+                            if let Some(vv) = self.get_generic_map().get(k) {
+                                gm.insert(k.clone(), vv.clone());
+                            }
+                            if let Some(vv) = self.get_generic_infer_map().and_then(|v| v.get(k)) {
+                                gm.insert(k.clone(), vv.clone());
+                            }
+                        }
+                        tp.get_full_name()
+                            == append_name_with_generic(&gm, &tp.get_full_name_except_generic())
+                    })
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
+
+        let re2 = plmod
+            .impls
+            .borrow()
+            .get(&self.get_full_name())
+            .or(plmod
+                .impls
+                .borrow()
+                .get(&self.get_full_name_except_generic()))
+            .map(|v| v.get(&tp.get_full_name()).is_some())
+            .unwrap_or_default();
+        if !re && !re2 {
+            return re;
+        }
+        for de in &tp.derives {
+            match &*de.borrow() {
+                PLType::Trait(t) => {
+                    let re = self.implements(t, plmod);
+                    if !re {
+                        return re;
+                    }
+                }
+                _ => unreachable!(),
+            }
+        }
+        true
+    }
+    fn implements(&self, tp: &STType, plmod: &Mod) -> bool {
+        if plmod
+            .impls
+            .borrow()
+            .get(&self.get_full_name())
+            .and_then(|v| v.get(&tp.get_full_name()))
+            .is_some()
+        {
+            return true;
+        }
+        for plmod in plmod.submods.values() {
+            if plmod
+                .impls
+                .borrow()
+                .get(&self.get_full_name())
+                .and_then(|v| v.get(&tp.get_full_name()))
+                .is_some()
+            {
+                return true;
+            }
+        }
+        false
+    }
+    fn implements_trait(&self, tp: &STType, ctx: &Ctx) -> bool {
+        if tp.path == ctx.plmod.path {
+            let plmod = &ctx.plmod;
+            if self.implements_trait_curr_mod(tp, plmod) {
+                return true;
+            }
+            return false;
+        }
+        let plmod = &ctx.db.get_module(&tp.path).unwrap();
+        if self.implements_trait_curr_mod(tp, plmod) {
+            return true;
+        }
+        let p = self.get_path();
+        if p == ctx.plmod.path {
+            let plmod = &ctx.plmod;
+            if self.implements_trait_curr_mod(tp, plmod) {
+                return true;
+            }
+            return false;
+        }
+        let plmod = &ctx.db.get_module(&p).unwrap();
+        if self.implements_trait_curr_mod(tp, plmod) {
+            return true;
+        }
+        false
+    }
+}
+
+impl ImplAbleWithGeneric for STType {}
+impl ImplAbleWithGeneric for UnionType {}

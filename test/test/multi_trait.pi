@@ -29,6 +29,11 @@ pub fn test_multi_trait() void {
     panic::assert(x);
     panic::assert(y == 1000);
     panic::assert(trait_with_generic(t) == 1000);
+    cc = c;
+    dd = cc is test_struct;
+    panic::assert(dd);
+    y = cc.b();
+    panic::assert(y == 1000);
     return;
 }
 

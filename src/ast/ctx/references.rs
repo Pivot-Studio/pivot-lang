@@ -39,13 +39,15 @@ impl<'a> Ctx<'a> {
         if range == Default::default() {
             return;
         }
-        tp.borrow().if_refs(
-            |tp| {
-                let name = tp.get_full_elm_name_without_generic();
-                self.set_glob_refs(&name, range)
-            },
-            |g| self.set_local_refs(g.refs.clone(), range),
-        )
+        if let Ok(tp) = tp.try_borrow() {
+            tp.if_refs(
+                |tp| {
+                    let name = tp.get_full_elm_name_without_generic();
+                    self.set_glob_refs(&name, range)
+                },
+                |g| self.set_local_refs(g.refs.clone(), range),
+            )
+        }
     }
 
     /// # set_field_refs
@@ -71,6 +73,9 @@ impl<'a> Ctx<'a> {
     ///
     /// For details, see the module documentation.
     pub fn set_glob_refs(&self, name: &str, range: Range) {
+        if self.need_highlight.borrow().ne(&0) {
+            return;
+        }
         let root = self.get_root_ctx();
         root.plmod
             .glob_refs
@@ -116,6 +121,9 @@ impl<'a> Ctx<'a> {
     ///
     /// For details, see the module documentation.
     pub fn set_local_refs(&self, refs: Arc<MutVec<Location>>, range: Range) {
+        if self.need_highlight.borrow().ne(&0) {
+            return;
+        }
         refs.borrow_mut().push(self.get_location(range));
         self.plmod.local_refs.borrow_mut().insert(range, refs);
     }

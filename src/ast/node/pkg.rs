@@ -91,6 +91,11 @@ impl Node for UseNode {
             .get_file(path.with_extension("pi"))
             .is_some()
         {
+            ctx.push_semantic_token(
+                self.ids.last().unwrap().range,
+                SemanticTokenType::NAMESPACE,
+                0,
+            );
             return Ok(Default::default());
         }
         if !path.with_extension("pi").exists() {
@@ -262,11 +267,12 @@ impl Node for ExternIdNode {
             let pltype = symbol.tp.clone();
             ctx.set_glob_refs(&plmod.get_full_name(&self.id.get_name(ctx)), self.id.range);
             ctx.send_if_go_to_def(self.range, symbol.range, plmod.path.clone());
-            let g = ctx.get_or_add_global(
-                &plmod.get_full_name(&self.id.get_name(ctx)),
-                symbol.tp.clone(),
-                builder,
-            );
+            let name = if symbol.is_extern {
+                self.id.get_name(ctx)
+            } else {
+                plmod.get_full_name(&self.id.get_name(ctx))
+            };
+            let g = ctx.get_or_add_global(&name, symbol.tp.clone(), builder, symbol.constant);
             return g.new_output(pltype).set_const().to_result();
         }
         if let Ok(tp) = plmod.get_type(&self.id.get_name(ctx), self.range, ctx) {

@@ -185,6 +185,7 @@ impl TypeNode for TupleTypeNode {
         Ok(crate::ast::ctx::EqRes {
             eq,
             need_up_cast: false,
+            reason: None,
         })
     }
 }

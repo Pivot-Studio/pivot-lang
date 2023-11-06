@@ -1,6 +1,6 @@
 use nom::{
     branch::alt,
-    combinator::{eof, map_res},
+    combinator::{eof, map, map_res},
     IResult,
 };
 
@@ -142,6 +142,10 @@ fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
                     TopLevel::Common(node)
                 }))
             },
+        ),
+        map(
+            del_newline_or_space!(semi_stmt(global_const, global_const)),
+            |node| Box::new(TopLevel::Common(node)),
         ),
         map_res(
             del_newline_or_space!(semi_stmt(use_statement, use_statement)),

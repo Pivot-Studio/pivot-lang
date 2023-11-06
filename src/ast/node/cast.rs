@@ -81,7 +81,7 @@ impl<'a, 'ctx> Ctx<'a> {
         node: &AsNode,
     ) -> Result<(ValueHandle, Arc<RefCell<PLType>>), PLDiag> {
         let target_rc = target_ty.clone();
-        match (ty, &*target_ty.borrow()) {
+        match (ty, &*target_ty.clone().borrow()) {
             (PLType::Primitive(ty), PLType::Primitive(target_ty)) => {
                 let val = builder.try_load2var(node.expr.range(), val, self)?;
                 Ok((builder.cast_primitives(val, ty, target_ty), target_rc))
@@ -157,24 +157,34 @@ impl<'a, 'ctx> Ctx<'a> {
                     Ok(self.force_cast_trait_to(builder, val, target_rc, node.range.start))
                 }
             }
-            _ => Err(node
-                .range()
-                .new_err(ErrorCode::INVALID_CAST)
-                .add_label(
-                    node.expr.range(),
-                    self.get_file(),
-                    format_label!("type of the expression is `{}`", ty.get_name()),
-                )
-                .add_label(
-                    node.ty.range(),
-                    self.get_file(),
-                    format_label!("target type is `{}`", target_ty.borrow().get_name()),
-                )
-                .add_help(
-                    "`as` cast can only be performed between primitives \
-                or from union/trait types.",
-                )
-                .add_to_ctx(self)),
+            _ => {
+                let re = self
+                    .up_cast(
+                        target_ty.clone(),
+                        Arc::new(RefCell::new(ty.clone())),
+                        node.ty.range(),
+                        node.expr.range(),
+                        val,
+                        builder,
+                    )
+                    .map_err(|_| {
+                        node.range()
+                            .new_err(ErrorCode::INVALID_CAST)
+                            .add_label(
+                                node.expr.range(),
+                                self.get_file(),
+                                format_label!("type of the expression is `{}`", ty.get_name()),
+                            )
+                            .add_label(
+                                node.ty.range(),
+                                self.get_file(),
+                                format_label!("target type is `{}`", target_ty.borrow().get_name()),
+                            )
+                            .add_help("`as` cast cannnot be performed between these types")
+                            .add_to_ctx(self)
+                    })?;
+                Ok((re, target_rc))
+            }
         }
     }
     fn cast_trait_to<'b>(
@@ -299,6 +309,9 @@ impl<'a, 'ctx> Ctx<'a> {
         let else_block = builder.append_basic_block(self.function.unwrap(), "if.else");
         let after_block = builder.append_basic_block(self.function.unwrap(), "if.after");
 
+        let result_tp = target_ty.clone();
+        let result = builder.alloc("cast_result", &result_tp.borrow(), self, None);
+
         builder.build_unconditional_branch(cond_block);
         self.position_at_end(cond_block, builder);
         let cond = builder.build_int_compare(IntPredicate::EQ, hash, hash_code, "hash.eq");
@@ -315,7 +328,9 @@ impl<'a, 'ctx> Ctx<'a> {
             after_block,
             else_block,
             pos,
-        )
+            result,
+        );
+        (result, result_tp)
     }
     fn force_cast_union_to<'b>(
         &mut self,
@@ -328,10 +343,14 @@ impl<'a, 'ctx> Ctx<'a> {
         let tag = builder.build_struct_gep(val, 0, "tag").unwrap();
         // check if the tag is the same
         let tag = builder.build_load(tag, "tag");
-        let cond_block = builder.append_basic_block(self.function.unwrap(), "if.cond");
-        let then_block = builder.append_basic_block(self.function.unwrap(), "if.then");
-        let else_block = builder.append_basic_block(self.function.unwrap(), "if.else");
-        let after_block = builder.append_basic_block(self.function.unwrap(), "if.after");
+        let cond_block = builder.append_basic_block(self.function.unwrap(), "force.if.cond");
+        let then_block = builder.append_basic_block(self.function.unwrap(), "force.if.then");
+        let else_block = builder.append_basic_block(self.function.unwrap(), "force.if.else");
+        let after_block = builder.append_basic_block(self.function.unwrap(), "force.if.after");
+
+        let result_tp = target_ty.clone();
+        let result = builder.alloc("cast_result", &result_tp.borrow(), self, None);
+
         builder.build_unconditional_branch(cond_block);
         self.position_at_end(cond_block, builder);
         let cond = builder.build_int_compare(
@@ -353,7 +372,9 @@ impl<'a, 'ctx> Ctx<'a> {
             after_block,
             else_block,
             pos,
-        )
+            result,
+        );
+        (result, result_tp)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -366,10 +387,10 @@ impl<'a, 'ctx> Ctx<'a> {
         after_block: usize,
         else_block: usize,
         pos: Pos,
-    ) -> (usize, Arc<RefCell<PLType>>) {
+        result: usize,
+    ) {
         // then block
-        let result_tp = target_ty.clone();
-        let result = builder.alloc("cast_result", &result_tp.borrow(), self, None);
+
         self.position_at_end(then_block, builder);
         let data = builder.build_struct_gep(val, 1, "data").unwrap();
         let data = builder.build_load(data, "data");
@@ -386,7 +407,6 @@ impl<'a, 'ctx> Ctx<'a> {
         builder.build_unconditional_branch(after_block);
         // after block
         self.position_at_end(after_block, builder);
-        (result, result_tp)
     }
 }
 

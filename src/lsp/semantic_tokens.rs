@@ -134,11 +134,28 @@ define_semantic_token_modifiers![
         (REFERENCE, "reference"),
         (TRAIT_MODIFIER, "trait"),
         (UNSAFE, "unsafe"),
+        (CAPTURED, "captured"),
     }
 ];
 
 #[derive(Default)]
 pub struct ModifierSet(pub u32);
+#[macro_export]
+macro_rules! modifier_set {
+    () => {
+        0
+    };
+    ($($modifier:ident)|+$(|)?) => {
+        {
+            use $crate::lsp::semantic_tokens::*;
+            #[allow(unused_imports)]
+            use lsp_types::SemanticTokenModifier;
+            let mut set = ModifierSet::default();
+            $(set |= $modifier;)*
+            set.0
+        }
+    };
+}
 
 impl ops::BitOrAssign<SemanticTokenModifier> for ModifierSet {
     fn bitor_assign(&mut self, rhs: SemanticTokenModifier) {
@@ -171,6 +188,14 @@ impl SemanticTokensBuilder {
         }
     }
 
+    pub fn set_modifier(&mut self, index: usize, modifier: u32) {
+        let token = &mut self.data[index];
+        token.token_modifiers_bitset = modifier;
+    }
+    pub fn get_data_len(&self) -> usize {
+        self.data.len()
+    }
+
     /// Push a new token onto the builder
     pub(crate) fn push(&mut self, range: Range, token_index: u32, modifier_bitset: u32) {
         let mut push_line = range.start.line;
@@ -182,7 +207,7 @@ impl SemanticTokensBuilder {
             }
             push_line -= self.prev_line;
             if push_line == 0 {
-                if self.prev_char > push_char {
+                if self.prev_char >= push_char {
                     return;
                 }
                 push_char -= self.prev_char;

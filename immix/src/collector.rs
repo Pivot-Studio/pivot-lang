@@ -20,14 +20,17 @@ use crate::{
 /// # Collector
 /// The collector is responsible for collecting garbage. It is the entry point for
 /// the garbage collection process. It is also responsible for allocating new
-/// blocks and for allocating new objects.
+/// blocks and objects.
 ///
-/// One thread has a collector associated with it. The collector is thread-local.
+/// Each thread has a collector associated with it. The collector is thread-local.
 ///
 /// ## Fields
 /// * `thread_local_allocator` - thread-local allocator
 /// * `roots` - gc roots
 /// * `queue` - gc queue
+/// * `id` - collector id
+/// * `mark_histogram` - mark histogram
+/// * `status` - collector status
 pub struct Collector {
     thread_local_allocator: *mut ThreadLocalAllocator,
     #[cfg(feature = "shadow_stack")]
@@ -43,7 +46,6 @@ struct CollectorStatus {
     collect_threshold: usize,
     /// in bytes
     bytes_allocated_since_last_gc: usize,
-    last_gc_time: std::time::SystemTime,
     collecting: bool,
 }
 
@@ -104,7 +106,6 @@ impl Collector {
                 status: RefCell::new(CollectorStatus {
                     collect_threshold: 1024,
                     bytes_allocated_since_last_gc: 0,
-                    last_gc_time: std::time::SystemTime::now(),
                     collecting: false,
                 }),
             }
@@ -167,19 +168,12 @@ impl Collector {
                 .alloc(size, obj_type);
             if ptr.is_null() {
                 self.collect();
-                return self.alloc(size, obj_type);
+                return self
+                    .thread_local_allocator
+                    .as_mut()
+                    .unwrap()
+                    .alloc(size, obj_type);
             }
-            ptr
-        }
-    }
-    pub fn alloc_no_collect(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
-        unsafe {
-            let ptr = self
-                .thread_local_allocator
-                .as_mut()
-                .unwrap()
-                .alloc(size, obj_type);
-            debug_assert!(!ptr.is_null());
             ptr
         }
     }
@@ -218,13 +212,13 @@ impl Collector {
     /// 现在纠正为
     ///
     /// ptr -> new_ptr(forwarded) -> value
-    unsafe fn correct_ptr(&self, ptr: *mut u8) {
+    unsafe fn correct_ptr(&self, ptr: *mut u8, offset: isize) {
         let ptr = ptr as *mut AtomicPtr<*mut u8>;
         let new_ptr = *(*ptr).load(Ordering::SeqCst);
         let ptr = ptr as *mut *mut u8;
         debug_assert!(!new_ptr.is_null());
         log::trace!("gc {} correct ptr {:p} to {:p}", self.id, ptr, new_ptr);
-        *ptr = new_ptr;
+        *ptr = new_ptr.offset(offset);
     }
 
     #[cfg(feature = "llvm_gc_plugin")]
@@ -244,68 +238,72 @@ impl Collector {
             return;
         }
 
-        let mut ptr = *(ptr as *mut *mut u8);
+        let ptr = *(ptr as *mut *mut u8);
         // println!("mark ptr {:p} -> {:p}", father, ptr);
         // mark it if it is in heap
         if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
             // println!("mark ptr succ {:p} -> {:p}", father, ptr);
             let block = Block::from_obj_ptr(ptr);
             let is_candidate = block.is_eva_candidate();
+            let mut head = block.get_head_ptr(ptr);
+            let offset_from_head = ptr.offset_from(head);
             if !is_candidate {
                 block.marked = true;
             } else {
-                let (line_header, _) = block.get_line_header_from_addr(ptr);
+                let (line_header, _) = block.get_line_header_from_addr(head);
                 if line_header.get_forwarded() {
-                    self.correct_ptr(father);
+                    self.correct_ptr(father, offset_from_head);
                     return;
                 }
             }
-            let (line_header, idx) = block.get_line_header_from_addr(ptr);
+            let (line_header, idx) = block.get_line_header_from_addr(head);
             if line_header.get_marked() {
                 return;
             }
             // 若此block是待驱逐对象
             if is_candidate {
-                let atomic_ptr = ptr as *mut AtomicPtr<u8>;
+                let atomic_ptr = head as *mut AtomicPtr<u8>;
                 let old_loaded = (*atomic_ptr).load(Ordering::SeqCst);
-                let obj_line_size = line_header.get_obj_line_size(idx, Block::from_obj_ptr(ptr));
+                let obj_line_size = line_header.get_obj_line_size(idx, Block::from_obj_ptr(head));
                 let new_ptr = self.alloc(obj_line_size * LINE_SIZE, line_header.get_obj_type());
-                let new_block = Block::from_obj_ptr(new_ptr);
-                let (new_line_header, _) = new_block.get_line_header_from_addr(new_ptr);
-                // 将数据复制到新的地址
-                core::ptr::copy_nonoverlapping(ptr, new_ptr, obj_line_size * LINE_SIZE);
-                // core::ptr::copy_nonoverlapping(line_header as * const u8, new_line_header as * mut u8, line_size);
+                if !new_ptr.is_null() {
+                    let new_block = Block::from_obj_ptr(new_ptr);
+                    let (new_line_header, _) = new_block.get_line_header_from_addr(new_ptr);
+                    // 将数据复制到新的地址
+                    core::ptr::copy_nonoverlapping(head, new_ptr, obj_line_size * LINE_SIZE);
+                    // core::ptr::copy_nonoverlapping(line_header as * const u8, new_line_header as * mut u8, line_size);
 
-                // 线程安全性说明
-                // 如果cas操作成功，代表没有别的线程与我们同时尝试驱逐这个模块
-                // 如果cas操作失败，代表别的线程已经驱逐了这个模块
-                // 此时虽然我们已经分配了驱逐空间并且将内容写入，但是我们还没有设置line_header的
-                // 标记位，所以这块地址很快会在sweep阶段被识别并且回收利用。
-                // 虽然这造成了一定程度的内存碎片化和潜在的重复操作，但是
-                // 这种情况理论上是很少见的，所以这么做问题不大
-                if (*atomic_ptr)
-                    .compare_exchange(old_loaded, new_ptr, Ordering::SeqCst, Ordering::SeqCst)
-                    .is_ok()
-                {
-                    // 成功驱逐
-                    log::trace!("gc {}: eva {:p} to {:p}", self.id, ptr, new_ptr);
-                    new_line_header.set_marked(true);
-                    line_header.set_forwarded(true);
-                    new_block.marked = true;
-                    ptr = new_ptr;
-                    self.correct_ptr(father);
-                } else {
-                    // 期间别的线程驱逐了它
-                    spin_until!(line_header.get_forwarded());
-                    self.correct_ptr(father);
-                    return;
+                    // 线程安全性说明
+                    // 如果cas操作成功，代表没有别的线程与我们同时尝试驱逐这个模块
+                    // 如果cas操作失败，代表别的线程已经驱逐了这个模块
+                    // 此时虽然我们已经分配了驱逐空间并且将内容写入，但是我们还没有设置line_header的
+                    // 标记位，所以这块地址很快会在sweep阶段被识别并且回收利用。
+                    // 虽然这造成了一定程度的内存碎片化和潜在的重复操作，但是
+                    // 这种情况理论上是很少见的，所以这么做问题不大
+                    if (*atomic_ptr)
+                        .compare_exchange(old_loaded, new_ptr, Ordering::SeqCst, Ordering::SeqCst)
+                        .is_ok()
+                    {
+                        // 成功驱逐
+                        log::trace!("gc {}: eva {:p} to {:p}", self.id, head, new_ptr);
+                        new_line_header.set_marked(true);
+                        line_header.set_forwarded(true);
+                        new_block.marked = true;
+                        head = new_ptr;
+                        self.correct_ptr(father, offset_from_head);
+                    } else {
+                        // 期间别的线程驱逐了它
+                        spin_until!(line_header.get_forwarded());
+                        self.correct_ptr(father, offset_from_head);
+                        return;
+                    }
                 }
             }
             line_header.set_marked(true);
             let obj_type = line_header.get_obj_type();
             match obj_type {
                 ObjectType::Atomic => {}
-                _ => (*self.queue).push((ptr, obj_type)),
+                _ => (*self.queue).push((head, obj_type)),
             }
             return;
         }
@@ -472,16 +470,7 @@ impl Collector {
                     }
                     depth += 1;
                 });
-                unsafe {
-                    STACK_MAP
-                        .global_roots
-                        .as_ref()
-                        .unwrap()
-                        .iter()
-                        .for_each(|root| {
-                            self.mark_ptr((*root) as usize as *mut u8);
-                        })
-                };
+                self.mark_globals();
             }
         }
 
@@ -518,6 +507,17 @@ impl Collector {
         }
     }
 
+    #[cfg(feature = "llvm_stackmap")]
+    fn mark_globals(&self) {
+        unsafe {STACK_MAP
+            .global_roots
+            .as_mut().unwrap()
+            .iter()
+            .for_each(|root|  {
+                self.mark_ptr((*root) as usize as *mut u8);
+            });}
+    }
+
     /// # sweep
     ///
     /// since we did synchronization in mark, we don't need to do synchronization again in sweep
@@ -541,8 +541,8 @@ impl Collector {
 
     /// # collect
     /// Collect garbage.
-    pub fn collect(&self) -> (std::time::Duration, std::time::Duration) {
-        let start_time = std::time::Instant::now();
+    pub fn collect(&self) {
+        // let start_time = std::time::Instant::now();
         log::info!("gc {} collecting...", self.id);
         // self.print_stats();
         let mut status = self.status.borrow_mut();
@@ -552,7 +552,6 @@ impl Collector {
         }
         status.collecting = true;
         status.bytes_allocated_since_last_gc = 0;
-        status.last_gc_time = std::time::SystemTime::now();
         drop(status);
         // evacuation pre process
         // 这个过程要在完成safepoint同步之前完成，因为在驱逐的情况下
@@ -593,7 +592,7 @@ impl Collector {
             }
             (*self.mark_histogram).clear();
         }
-        let time = std::time::Instant::now();
+        // let time = std::time::Instant::now();
         unsafe {
             self.thread_local_allocator
                 .as_mut()
@@ -601,9 +600,9 @@ impl Collector {
                 .set_collect_mode(true);
         }
         self.mark();
-        let mark_time = time.elapsed();
+        // let mark_time = time.elapsed();
         let _used = self.sweep();
-        let sweep_time = time.elapsed() - mark_time;
+        // let sweep_time = time.elapsed() - mark_time;
         unsafe {
             self.thread_local_allocator
                 .as_mut()
@@ -611,16 +610,13 @@ impl Collector {
                 .set_collect_mode(false);
         }
         log::info!(
-            "gc {} collect done, mark: {:?}, sweep: {:?}, used heap size: {} byte, total: {:?}",
+            "gc {} collect done, used heap size: {} byte",
             self.id,
-            mark_time,
-            sweep_time,
             _used,
-            start_time.elapsed()
+            // start_time.elapsed()
         );
         let mut status = self.status.borrow_mut();
         status.collecting = false;
-        (mark_time, sweep_time)
         // (Default::default(), Default::default())
     }
 
@@ -637,431 +633,4 @@ impl Collector {
 
 #[cfg(test)]
 #[cfg(feature = "shadow_stack")]
-mod tests {
-    use std::{mem::size_of, ptr::null_mut, thread::sleep, time::Duration};
-
-    use lazy_static::lazy_static;
-    use parking_lot::Mutex;
-    use rand::random;
-    use rustc_hash::FxHashSet;
-
-    use crate::{gc_disable_auto_collect, no_gc_thread, round_n_up, BLOCK_SIZE, SPACE};
-
-    use super::*;
-
-    const LINE_SIZE_OBJ: usize = 1;
-
-    #[repr(C)]
-    struct GCTestObj {
-        _vtable: VtableFunc,
-        b: *mut GCTestObj,
-        c: u64,
-        // _arr: [u8; 128],
-        d: *mut u64,
-        e: *mut GCTestObj,
-    }
-    extern "C" fn gctest_vtable(
-        ptr: *mut u8,
-        gc: &Collector,
-        mark_ptr: VisitFunc,
-        _mark_complex: VisitFunc,
-        _mark_trait: VisitFunc,
-    ) {
-        let obj = ptr as *mut GCTestObj;
-        unsafe {
-            mark_ptr(gc, (&mut (*obj).b) as *mut *mut GCTestObj as *mut u8);
-            mark_ptr(gc, (&mut (*obj).d) as *mut *mut u64 as *mut u8);
-            mark_ptr(gc, (&mut (*obj).e) as *mut *mut GCTestObj as *mut u8);
-        }
-    }
-
-    #[repr(C)]
-    struct GCTestBigObj {
-        _vtable: VtableFunc,
-        b: *mut GCTestBigObj,
-        _arr: [u8; BLOCK_SIZE],
-        d: *mut GCTestBigObj,
-    }
-    const BIGOBJ_ALLOC_SIZE: usize = round_n_up!(size_of::<GCTestBigObj>() + 16, 128);
-    extern "C" fn gctest_vtable_big(
-        ptr: *mut u8,
-        gc: &Collector,
-        mark_ptr: VisitFunc,
-        _mark_complex: VisitFunc,
-        _mark_trait: VisitFunc,
-    ) {
-        let obj = ptr as *mut GCTestBigObj;
-        unsafe {
-            mark_ptr(gc, (&mut (*obj).b) as *mut *mut GCTestBigObj as *mut u8);
-            mark_ptr(gc, (&mut (*obj).d) as *mut *mut GCTestBigObj as *mut u8);
-        }
-    }
-    #[test]
-    fn test_basic_multiple_thread_gc() {
-        let _lock = THE_RESOURCE.lock();
-        let mut handles = vec![];
-        gc_disable_auto_collect();
-        no_gc_thread();
-        for _ in 0..10 {
-            let t = std::thread::spawn(|| {
-                SPACE.with(|gc| unsafe {
-                    let mut gc = gc.borrow_mut();
-                    println!("thread1 gcid = {}", gc.get_id());
-                    let mut a =
-                        gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
-                    let rustptr = (&mut a) as *mut *mut GCTestObj as *mut u8;
-                    (*a).b = null_mut();
-                    (*a).c = 1;
-                    (*a).d = null_mut();
-                    (*a).e = null_mut();
-                    (*a)._vtable = gctest_vtable;
-                    gc.add_root(rustptr, ObjectType::Pointer);
-                    let b = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
-                    gc.print_stats();
-                    (*a).b = b;
-                    (*b)._vtable = gctest_vtable;
-                    (*b).c = 2;
-                    (*b).d = null_mut();
-                    (*b).e = null_mut();
-                    (*b).b = null_mut();
-                    let size1 = gc.get_size();
-                    let time = std::time::Instant::now();
-                    gc.collect();
-                    println!("gc{} gc time = {:?}", gc.get_id(), time.elapsed());
-                    let size2 = gc.get_size();
-                    assert_eq!(size2, LINE_SIZE_OBJ * 2, "gc {}", gc.get_id());
-                    assert_eq!(size1, size2, "gc {}", gc.get_id());
-                    let d = gc.alloc(size_of::<u64>(), ObjectType::Atomic) as *mut u64;
-                    (*b).d = d;
-                    (*d) = 3;
-                    gc.collect();
-                    let size3 = gc.get_size();
-                    assert_eq!(size3, LINE_SIZE_OBJ * 3);
-                    assert!(size3 > size2, "gc {}", gc.get_id());
-                    (*a).d = d;
-                    gc.collect();
-                    let size4 = gc.get_size();
-                    assert_eq!(size3, size4, "gc {}", gc.get_id());
-                    (*a).b = a;
-                    gc.collect();
-                    let size5 = gc.get_size();
-                    assert!(size5 < size4);
-                    (*a).d = core::ptr::null_mut();
-                    gc.collect();
-                    let size6 = gc.get_size();
-                    assert!(size5 > size6);
-                    gc.remove_root(rustptr);
-                    gc.collect();
-                    let size7 = gc.get_size();
-                    assert_eq!(0, size7);
-                    let mut a =
-                        gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
-                    (*a).b = null_mut();
-                    (*a).c = 1;
-                    (*a).d = null_mut();
-                    (*a).e = null_mut();
-                    (*a)._vtable = gctest_vtable;
-                    let rustptr = (&mut a) as *mut *mut GCTestObj as *mut u8;
-                    gc.add_root(rustptr, ObjectType::Pointer);
-                    let b = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
-                    (*a).b = b;
-                    (*a).c = 1;
-                    (*a)._vtable = gctest_vtable;
-                    (*b)._vtable = gctest_vtable;
-                    (*b).c = 2;
-                    (*b).d = null_mut();
-                    (*b).e = null_mut();
-                    (*b).b = null_mut();
-                    let size1 = gc.get_size();
-                    assert_eq!(size1, 2 * LINE_SIZE_OBJ);
-                    // drop(gc);
-                    // no_gc_thread();
-                });
-            });
-            handles.push(t);
-        }
-        for h in handles {
-            h.join().unwrap();
-        }
-    }
-
-    #[test]
-    fn test_big_obj_gc() {
-        gc_disable_auto_collect();
-        let _lock = THE_RESOURCE.lock();
-        SPACE.with(|gc| unsafe {
-            let mut gc = gc.borrow_mut();
-            println!("thread1 gcid = {}", gc.get_id());
-            let mut a =
-                gc.alloc(size_of::<GCTestBigObj>(), ObjectType::Complex) as *mut GCTestBigObj;
-            let b = gc.alloc(size_of::<GCTestBigObj>(), ObjectType::Complex) as *mut GCTestBigObj;
-            (*a).b = b;
-            (*a).d = null_mut();
-            (*a)._vtable = gctest_vtable_big;
-            (*b)._vtable = gctest_vtable_big;
-            let rustptr = (&mut a) as *mut *mut GCTestBigObj as *mut u8;
-            gc.add_root(rustptr, ObjectType::Pointer);
-            let size1 = gc.get_bigobjs_size();
-            assert_eq!(size1, 2 * BIGOBJ_ALLOC_SIZE);
-            let time = std::time::Instant::now();
-            gc.collect(); // 不回收，剩余 a b
-            println!("gc{} gc time = {:?}", gc.get_id(), time.elapsed());
-            let size2 = gc.get_bigobjs_size();
-            assert_eq!(size1, size2);
-            (*a).b = a;
-            gc.collect(); // 回收，剩余 a
-            let size3 = gc.get_bigobjs_size();
-            assert!(size3 < size2);
-            gc.remove_root(rustptr);
-
-            gc.collect(); // 回收，不剩余
-            let size4 = gc.get_bigobjs_size();
-            assert_eq!(0, size4);
-            let mut a =
-                gc.alloc(size_of::<GCTestBigObj>(), ObjectType::Complex) as *mut GCTestBigObj;
-            let b = gc.alloc(size_of::<GCTestBigObj>(), ObjectType::Complex) as *mut GCTestBigObj;
-            let c = gc.alloc(size_of::<GCTestBigObj>(), ObjectType::Complex) as *mut GCTestBigObj;
-            (*a).b = b;
-            (*a).d = c;
-            (*a)._vtable = gctest_vtable_big;
-            (*b)._vtable = gctest_vtable_big;
-            (*c)._vtable = gctest_vtable_big;
-            let rustptr = (&mut a) as *mut *mut GCTestBigObj as *mut u8;
-            gc.add_root(rustptr, ObjectType::Pointer);
-            //  32896       32896       32896
-            // |  b  | <-- |  a  | --> |  c  |
-            //               ^ rustptr
-            let size1 = gc.get_bigobjs_size();
-            assert_eq!(size1, 3 * BIGOBJ_ALLOC_SIZE);
-            (*a).b = null_mut();
-            (*a).d = null_mut();
-            gc.collect(); // 回收，剩余 a
-            gc.remove_root(rustptr);
-            gc.collect(); // 回收，不剩余, b a merge，a c merge。
-        });
-    }
-
-    unsafe fn alloc_test_obj(gc: &mut Collector) -> *mut GCTestObj {
-        let a = gc.alloc(size_of::<GCTestObj>(), ObjectType::Complex) as *mut GCTestObj;
-        a.write(GCTestObj {
-            _vtable: gctest_vtable,
-            b: null_mut(),
-            c: 0,
-            d: null_mut(),
-            e: null_mut(),
-        });
-        a
-    }
-
-    lazy_static! {
-        static ref TEST_OBJ_QUEUE: Mutex<Vec<TestObjWrap>> = Mutex::new(vec![]);
-    }
-    #[derive(Debug, PartialEq, Eq, Hash)]
-    struct TestObjWrap(*mut *mut GCTestObj);
-
-    unsafe impl Send for TestObjWrap {}
-    unsafe impl Sync for TestObjWrap {}
-
-    struct SingleThreadResult {
-        size1: usize,
-        expect_size1: usize,
-        size2: usize,
-        expect_size2: usize,
-        size3: usize,
-        expect_size3: usize,
-        expect_objs: usize,
-        set: FxHashSet<TestObjWrap>,
-        set2: FxHashSet<TestObjWrap>,
-    }
-
-    fn single_thread(obj_num: usize) -> SingleThreadResult {
-        gc_disable_auto_collect();
-        // let _lock = THE_RESOURCE.lock();
-        SPACE.with(|gc| unsafe {
-            // 睡眠一秒保证所有线程创建
-            let mut gc = gc.borrow_mut();
-            println!("thread1 gcid = {}", gc.get_id());
-            sleep(Duration::from_secs(1));
-            let mut first_obj = alloc_test_obj(&mut gc);
-            println!("first_obj = {:p}", first_obj);
-            let rustptr = (&mut first_obj) as *mut *mut GCTestObj as *mut u8;
-            gc.add_root(rustptr, ObjectType::Pointer);
-            println!(
-                "gcid = {} rustptr point to {:p}",
-                gc.get_id(),
-                *(rustptr as *mut *mut GCTestObj)
-            );
-            let mut live_obj = 1;
-            TEST_OBJ_QUEUE
-                .lock()
-                .push(TestObjWrap(&mut (*first_obj).b as *mut *mut GCTestObj));
-            TEST_OBJ_QUEUE
-                .lock()
-                .push(TestObjWrap(&mut (*first_obj).e as *mut *mut GCTestObj));
-            // let mut unused_objs = vec![&mut (*first_obj).b, &mut (*first_obj).e];
-            let mut has_loop = false;
-            for _ in 0..obj_num {
-                let obj = alloc_test_obj(&mut gc);
-                if random() {
-                    live_obj += 1;
-                    let father_ptr = TEST_OBJ_QUEUE.lock().pop().unwrap().0;
-                    *father_ptr = obj;
-                    if random() && random() && !has_loop {
-                        // 循环引用
-                        (*obj).b = first_obj;
-                        println!("live_obj = {} has loop", live_obj);
-                        has_loop = true;
-                    } else {
-                        TEST_OBJ_QUEUE
-                            .lock()
-                            .push(TestObjWrap(&mut (*obj).b as *mut *mut GCTestObj));
-                    }
-                    TEST_OBJ_QUEUE
-                        .lock()
-                        .push(TestObjWrap(&mut (*obj).e as *mut *mut GCTestObj));
-                }
-            }
-            let size1 = gc.get_size();
-
-            let mut set2 = FxHashSet::default();
-            let mut ii = 0;
-            gc.iter(|ptr| {
-                ii += 1;
-                // if set2.contains(&TestObjWrap(ptr as *mut *mut GCTestObj)) {
-                //     panic!("repeat ptr = {:p}", ptr);
-                // }
-                set2.insert(TestObjWrap(
-                    Block::from_obj_ptr(ptr) as *mut Block as *mut *mut GCTestObj
-                ));
-            });
-            println!("gc{} itered ", gc.get_id());
-
-            // assert_eq!(size1, 1001 * LINE_SIZE_OBJ);
-            let time = std::time::Instant::now();
-            gc.collect();
-            println!("gc{} gc time = {:?}", gc.get_id(), time.elapsed());
-            let size2 = gc.get_size();
-
-            // assert_eq!(live_obj * LINE_SIZE_OBJ, size2);
-            gc.collect();
-            let size3 = gc.get_size();
-            // assert_eq!(ii, size3);
-            // assert_eq!(set2.len(), size3);
-            let first_obj = *(rustptr as *mut *mut GCTestObj);
-            println!("new first_obj = {:p}", first_obj);
-            let mut set = FxHashSet::default();
-            let objs = walk_obj(first_obj, &mut set);
-            // assert_eq!(objs, live_obj);
-            assert_eq!(objs, set.len());
-            gc.remove_root(rustptr);
-            gc.collect();
-            // evacuation might be triggered, so it mat not be zero
-            // let size4 = gc.get_size();
-            // assert_eq!(size4, 0);
-            SingleThreadResult {
-                size1,
-                expect_size1: (obj_num + 1) * LINE_SIZE_OBJ,
-                size2,
-                expect_size2: live_obj * LINE_SIZE_OBJ,
-                size3,
-                expect_size3: size2,
-                set,
-                expect_objs: live_obj,
-                set2,
-            }
-        })
-    }
-
-    lazy_static! {
-        /// gc测试不能并发进行，需要加锁
-        static ref THE_RESOURCE: Mutex<()> = Mutex::new(());
-    }
-
-    #[test]
-    fn test_complecated_single_thread_gc() {
-        gc_disable_auto_collect();
-        // 这个测试和test_complecated_multiple_thread_gc不能同时跑，用了全局变量会相互干扰
-        let _lock = THE_RESOURCE.lock();
-        TEST_OBJ_QUEUE.lock().clear();
-        let re = single_thread(1000);
-        no_gc_thread();
-        assert_eq!(re.size1, re.expect_size1);
-        assert_eq!(re.size2, re.expect_size2);
-        assert_eq!(re.size3, re.size2);
-        assert_eq!(re.size3, re.expect_size3);
-        assert_eq!(re.set.len(), re.expect_objs);
-    }
-
-    fn walk_obj(obj: *mut GCTestObj, set: &mut FxHashSet<TestObjWrap>) -> usize {
-        unsafe {
-            let b = Block::from_obj_ptr(obj as *mut u8);
-            let (h, _) = b.get_line_header_from_addr(obj as *mut u8);
-            assert!(h.get_used());
-        }
-        if set.contains(&TestObjWrap(obj as *mut *mut GCTestObj)) {
-            return 0;
-        }
-        let mut count = 0;
-        set.insert(TestObjWrap(obj as *mut *mut GCTestObj));
-        unsafe {
-            if !(*obj).b.is_null() {
-                count += walk_obj((*obj).b, set);
-            }
-            if !(*obj).e.is_null() {
-                count += walk_obj((*obj).e, set);
-            }
-        }
-        count + 1
-    }
-    #[test]
-    fn test_complecated_multiple_thread_gc() {
-        gc_disable_auto_collect();
-        let _lock = THE_RESOURCE.lock();
-        TEST_OBJ_QUEUE.lock().clear();
-        let mut handles = vec![];
-        for _ in 0..10 {
-            let t = std::thread::Builder::new()
-                .spawn(|| single_thread(1000))
-                .unwrap();
-            handles.push(t);
-        }
-        let mut total_size1 = 0;
-        let mut total_target_size1 = 0;
-        let mut total_size2 = 0;
-        let mut total_target_size2 = 0;
-        let mut total_size3 = 0;
-        let mut total_target_size3 = 0;
-        let mut total_target_objs = 0;
-        let mut set = FxHashSet::default();
-        let mut set2 = FxHashSet::default();
-        for h in handles {
-            let mut re = h.join().unwrap();
-            total_size1 += re.size1;
-            total_target_size1 += re.expect_size1;
-            total_size2 += re.size2;
-            total_target_size2 += re.expect_size2;
-            total_size3 += re.size3;
-            total_target_size3 += re.expect_size3;
-            set.extend(re.set);
-            for s in re.set2.drain() {
-                if set2.contains(&s) {
-                    println!("repeat ptr = {:p}", s.0);
-                }
-                set2.insert(s);
-            }
-            total_target_objs += re.expect_objs;
-        }
-        assert_eq!(total_size1, total_target_size1);
-        assert_eq!(total_size2, total_target_size2);
-        assert_eq!(total_size3, total_size2);
-        assert_eq!(total_size3, total_target_size3);
-        for k in set2.iter() {
-            if !set.contains(k) {
-                println!("set2 not in set {:p}", k.0);
-            }
-        }
-        println!("set2 len {}", set2.len());
-        println!("size2 {} size3 {}", total_size2, total_size3);
-        assert_eq!(set.len(), total_target_objs);
-    }
-}
+mod tests;

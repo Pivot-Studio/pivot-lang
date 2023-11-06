@@ -1,6 +1,9 @@
 #[cfg(feature = "immix")]
 mod _immix {
+    use std::process::exit;
+
     use crate::logger::SimpleLogger;
+    use backtrace::Backtrace;
     use immix::gc_malloc;
     use internal_macro::is_runtime;
     use log::trace;
@@ -43,6 +46,12 @@ mod _immix {
             #[cfg(any(test, debug_assertions))] // enable eager gc in test mode
             immix::gc_collect();
             let re = gc_malloc(size as usize, obj_type);
+            if re.is_null() && size != 0 {
+                eprintln!("gc malloc failed! (OOM)");
+                let bt = Backtrace::new();
+                println!("{:?}", bt);
+                exit(1);
+            }
             re
         }
 
@@ -61,15 +70,16 @@ mod _immix {
             immix::thread_stuck_end();
         }
 
-        pub unsafe fn malloc_no_collect(size: u64, obj_type: u8) -> *mut u8 {
-            trace!("malloc_no_collect: {} {}", size, obj_type);
-            immix::gc_malloc_no_collect(size as usize, obj_type)
-        }
 
         pub unsafe fn collect() {
             trace!("manual collect");
             immix::gc_collect()
         }
+
+        pub fn get_stw_num() -> i64 {
+            immix::get_gc_stw_num() as _
+        }
+
         pub fn about() {
             let dio = "
         ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢹⡀⠀⠀⠀⠀⠀⠘⠀⣷⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⡀⠀⠀⠀⠙⢦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀

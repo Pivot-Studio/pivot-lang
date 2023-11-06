@@ -178,6 +178,7 @@ impl Node for BinOpNode {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
         }
         let right = ctx.try_load2var(rrange, re.unwrap().get_value(), builder)?;
+        let lpltype = get_type_deep(lpltype);
         Ok(match self.op.0 {
             TokenType::BIT_AND => {
                 if !lpltype.borrow().is_int() || !lpltype.borrow().is_int() {
@@ -236,10 +237,60 @@ impl Node for BinOpNode {
             TokenType::MUL => {
                 handle_calc!(ctx, mul, float_mul, lpltype, left, right, self.range, builder)
             }
-            TokenType::DIV => {
-                // TODO: 无符号触发
-                handle_calc!(ctx, signed_div, float_div, lpltype, left, right, self.range, builder)
-            }
+            TokenType::DIV => match *lpltype.clone().borrow() {
+                PLType::Primitive(
+                    PriType::I128 | PriType::I64 | PriType::I32 | PriType::I16 | PriType::I8,
+                ) => {
+                    return Ok(NodeOutput::new_value(NodeValue::new(
+                        builder.build_int_signed_div(left, right, "addtmp"),
+                        lpltype,
+                    )));
+                }
+                PLType::Primitive(
+                    PriType::U128 | PriType::U64 | PriType::U32 | PriType::U16 | PriType::U8,
+                ) => {
+                    return Ok(NodeOutput::new_value(NodeValue::new(
+                        builder.build_int_unsigned_div(left, right, "addtmp"),
+                        lpltype,
+                    )));
+                }
+                PLType::Primitive(PriType::F64 | PriType::F32) => {
+                    return Ok(NodeOutput::new_value(NodeValue::new(
+                        builder.build_float_div(left, right, "addtmp"),
+                        lpltype,
+                    )));
+                }
+                _ => {
+                    return Err(ctx.add_diag(
+                        (self.range)
+                            .new_err(crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR),
+                    ))
+                }
+            },
+            TokenType::MOD => match *lpltype.clone().borrow() {
+                PLType::Primitive(
+                    PriType::I128 | PriType::I64 | PriType::I32 | PriType::I16 | PriType::I8,
+                ) => {
+                    return Ok(NodeOutput::new_value(NodeValue::new(
+                        builder.build_int_signed_srem(left, right, "addtmp"),
+                        lpltype,
+                    )));
+                }
+                PLType::Primitive(
+                    PriType::U128 | PriType::U64 | PriType::U32 | PriType::U16 | PriType::U8,
+                ) => {
+                    return Ok(NodeOutput::new_value(NodeValue::new(
+                        builder.build_int_unsigned_srem(left, right, "addtmp"),
+                        lpltype,
+                    )));
+                }
+                _ => {
+                    return Err(ctx.add_diag(
+                        (self.range)
+                            .new_err(crate::ast::diag::ErrorCode::UNRECOGNIZED_BIN_OPERATOR),
+                    ))
+                }
+            },
             TokenType::EQ
             | TokenType::NE
             | TokenType::LEQ
@@ -318,6 +369,7 @@ impl Node for TakeOpNode {
                 | PLType::Union(_)
                 | PLType::Primitive(_)
                 | PLType::Closure(_)
+                | PLType::Arr(_)
         ) {
             return Err(ctx.add_diag(
                 self.head
@@ -351,6 +403,10 @@ impl Node for TakeOpNode {
                     ctx.get_global_mthd_completions(&s.get_full_name_except_generic(), &mut map);
                 }
                 PLType::Closure(s) => {
+                    ctx.get_global_mthd_completions(&s.get_full_name(), &mut map);
+                    ctx.get_global_mthd_completions(&s.get_full_name_except_generic(), &mut map);
+                }
+                PLType::Arr(s) => {
                     ctx.get_global_mthd_completions(&s.get_full_name(), &mut map);
                     ctx.get_global_mthd_completions(&s.get_full_name_except_generic(), &mut map);
                 }
@@ -420,6 +476,7 @@ impl Node for TakeOpNode {
             PLType::Union(union) => handle_mthd(union, ctx, id, headptr, head_pltype, id_range),
             PLType::Primitive(p) => handle_glob_mthd(p, ctx, id, headptr, head_pltype, id_range),
             PLType::Closure(p) => handle_glob_mthd(p, ctx, id, headptr, head_pltype, id_range),
+            PLType::Arr(p) => handle_glob_mthd(p, ctx, id, headptr, head_pltype, id_range),
             _ => Err(ctx.add_diag(
                 self.head
                     .range()
@@ -446,7 +503,7 @@ fn handle_mthd<T: ImplAble>(
 
 fn handle_glob_mthd<T: TraitImplAble>(
     t: &T,
-    ctx: &mut Ctx<'_>,
+    ctx: &Ctx<'_>,
     id: &VarNode,
     headptr: ValueHandle,
     head_pltype: Arc<RefCell<PLType>>,
@@ -466,7 +523,7 @@ fn handle_glob_mthd<T: TraitImplAble>(
 }
 
 fn pack_mthd(
-    ctx: &mut Ctx<'_>,
+    ctx: &Ctx<'_>,
     mthd: Arc<RefCell<crate::ast::pltype::FNValue>>,
     headptr: ValueHandle,
     head_pltype: Arc<RefCell<PLType>>,
@@ -475,11 +532,7 @@ fn pack_mthd(
     let mthd = mthd.borrow();
     _ = mthd.expect_pub(ctx, id_range);
     ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
-    ctx.send_if_go_to_def(
-        id_range,
-        mthd.range,
-        mthd.llvmname.split("..").next().unwrap().to_string(),
-    );
+    ctx.send_if_go_to_def(id_range, mthd.range, mthd.path.clone());
     usize::MAX
         .new_output(Arc::new(RefCell::new(PLType::Fn(mthd.clone()))))
         .with_receiver(

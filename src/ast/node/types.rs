@@ -18,6 +18,7 @@ use crate::ast::pltype::get_type_deep;
 use crate::ast::pltype::ClosureType;
 use crate::ast::pltype::{ARRType, Field, GenericType, PLType, STType};
 use crate::ast::tokens::TokenType;
+use crate::ast::traits::CustomType;
 use indexmap::IndexMap;
 
 use internal_macro::node;
@@ -79,26 +80,29 @@ impl TypeNameNode {
                                 .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
                         ));
                     }
-                    for (i, st_generic_type) in sttype.generic_map.values().enumerate() {
-                        if generic_types[i].is_none() {
-                            continue;
-                        }
-                        if !ctx
-                            .eq(
+                    ctx.protect_generic_context(&sttype.generic_map, |ctx| {
+                        for (i, st_generic_type) in sttype.generic_map.values().enumerate() {
+                            if generic_types[i].is_none() {
+                                continue;
+                            }
+                            let res = ctx.eq(
                                 st_generic_type.clone(),
                                 generic_types[i].as_ref().unwrap().clone(),
-                            )
-                            .eq
-                        {
-                            return Err(ctx.add_diag(
-                                generic_params.generics[i]
+                            );
+                            if !res.eq {
+                                let mut diag = generic_params.generics[i]
                                     .as_ref()
                                     .unwrap()
                                     .range()
-                                    .new_err(ErrorCode::TYPE_MISMATCH),
-                            ));
+                                    .new_err(ErrorCode::TYPE_MISMATCH);
+                                if let Some(reason) = res.reason {
+                                    diag.add_help(&reason);
+                                }
+                                return Err(diag.add_to_ctx(ctx));
+                            }
                         }
-                    }
+                        Ok(())
+                    })?;
                 }
                 let ret = if sttype.is_trait {
                     Arc::new(RefCell::new(PLType::Trait(sttype)))
@@ -122,26 +126,30 @@ impl TypeNameNode {
                                 .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
                         ));
                     }
-                    for (i, un_generic_type) in untype.generic_map.values().enumerate() {
-                        if generic_types[i].is_none() {
-                            continue;
-                        }
-                        if !ctx
-                            .eq(
+                    ctx.protect_generic_context(&untype.generic_map, |ctx| {
+                        for (i, un_generic_type) in untype.generic_map.values().enumerate() {
+                            if generic_types[i].is_none() {
+                                continue;
+                            }
+                            let res = ctx.eq(
                                 un_generic_type.clone(),
                                 generic_types[i].as_ref().unwrap().clone(),
-                            )
-                            .eq
-                        {
-                            return Err(ctx.add_diag(
-                                generic_params.generics[i]
+                            );
+                            if !res.eq {
+                                let mut diag = generic_params.generics[i]
                                     .as_ref()
                                     .unwrap()
                                     .range()
-                                    .new_err(ErrorCode::TYPE_MISMATCH),
-                            ));
+                                    .new_err(ErrorCode::TYPE_MISMATCH);
+                                if let Some(reason) = res.reason {
+                                    diag.add_help(&reason);
+                                }
+
+                                return Err(diag.add_to_ctx(ctx));
+                            }
                         }
-                    }
+                        Ok(())
+                    })?;
                 }
                 let ret = Arc::new(RefCell::new(PLType::Union(untype)));
                 ctx.linked_tp_tbl
@@ -239,6 +247,7 @@ impl TypeNode for TypeNameNode {
                 return Ok(EqRes {
                     eq: false,
                     need_up_cast: false,
+                    reason: None,
                 });
             }
             if let (PLType::Struct(left), PLType::Struct(right)) =
@@ -253,6 +262,7 @@ impl TypeNode for TypeNameNode {
                         .eq
                     }),
                     need_up_cast: false,
+                    reason: None,
                 });
             } else if let (PLType::Union(left), PLType::Union(right)) =
                 (&*left.borrow(), &*right.borrow())
@@ -264,12 +274,14 @@ impl TypeNode for TypeNameNode {
                             return Ok(EqRes {
                                 eq: false,
                                 need_up_cast: false,
+                                reason: None,
                             });
                         }
                     }
                     Ok(EqRes {
                         eq: true,
                         need_up_cast: false,
+                        reason: None,
                     })
                 });
             }
@@ -324,6 +336,7 @@ impl TypeNode for ArrayTypeNameNode {
             _ => Ok(EqRes {
                 eq: false,
                 need_up_cast: false,
+                reason: None,
             }),
         }
     }
@@ -370,6 +383,7 @@ impl TypeNode for PointerTypeNode {
             _ => Ok(EqRes {
                 eq: false,
                 need_up_cast: false,
+                reason: None,
             }),
         }
     }
@@ -459,7 +473,8 @@ impl StructDefNode {
     pub fn add_to_symbols<'a, 'b>(&self, ctx: &'b mut Ctx<'a>, builder: &'b BuilderEnum<'a, '_>) {
         let generic_map = if let Some(generics) = &self.generics {
             let mp = generics.gen_generic_type(ctx);
-            _ = generics.set_traits(ctx, builder, &mp);
+            _ = ctx.protect_generic_context(&mp, |ctx| generics.set_traits(ctx, &mp));
+
             mp
         } else {
             IndexMap::default()
@@ -599,14 +614,15 @@ impl Node for StructInitFieldNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
+        ctx.push_semantic_token(self.id.range(), SemanticTokenType::PROPERTY, 0);
         self.exp.emit(ctx, builder)
     }
 }
 
-#[node(comment)]
+#[node]
 pub struct StructInitNode {
     pub typename: Box<TypeNodeEnum>,
-    pub fields: Vec<Box<StructInitFieldNode>>, // TODO: comment db and salsa comment struct
+    pub fields: Vec<Box<NodeEnum>>, // TODO: comment db and salsa comment struct
 }
 
 impl PrintTrait for StructInitNode {
@@ -651,41 +667,50 @@ impl Node for StructInitNode {
         ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
         ctx.run_in_type_mod_mut(&mut sttype, |ctx, sttype| {
             for fieldinit in self.fields.iter_mut() {
-                let field_id_range = fieldinit.id.range;
-                let field_exp_range = fieldinit.exp.range();
-                let field = sttype.fields.get(&fieldinit.id.name);
-                if field.is_none() {
-                    ctx.if_completion(self.range, || sttype.get_completions(ctx));
-                    return Err(
-                        ctx.add_diag(field_id_range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND))
-                    );
-                }
-                let field = field.unwrap();
-                let v = fieldinit.emit(ctx, builder)?.get_value();
-                idx += 1;
-                ctx.emit_comment_highlight(&self.comments[idx - 1]);
-                if v.is_none() {
-                    return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
-                }
-                let v = v.unwrap();
-                let value = ctx.try_load2var(field_exp_range, v.get_value(), builder)?;
-                let value_pltype = v.get_ty();
-                ctx.protect_generic_context(&sttype.generic_map, |ctx| {
-                    if !field
-                        .typenode
-                        .eq_or_infer(ctx, value_pltype.clone(), builder)?
-                        .eq
-                    {
-                        return Err(ctx.add_diag(
-                            fieldinit
-                                .range
-                                .new_err(ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH),
-                        ));
+                if let NodeEnum::STInitField(fieldinit) = &mut **fieldinit {
+                    let field_id_range = fieldinit.id.range;
+                    let field_exp_range = fieldinit.exp.range();
+                    let field = sttype.fields.get(&fieldinit.id.name);
+                    if field.is_none() {
+                        ctx.if_completion(self.range, || sttype.get_completions(ctx));
+                        return Err(
+                            ctx.add_diag(field_id_range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND))
+                        );
                     }
-                    Ok(())
-                })?;
-                field_init_values.push((field.index, value));
-                ctx.set_field_refs(pltype.clone(), field, field_id_range);
+                    let field = field.unwrap();
+                    let v = fieldinit.emit(ctx, builder)?.get_value();
+                    idx += 1;
+                    if v.is_none() {
+                        return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
+                    }
+                    let v = v.unwrap();
+                    let value = ctx.try_load2var(field_exp_range, v.get_value(), builder)?;
+                    let value_pltype = v.get_ty();
+                    ctx.protect_generic_context(&sttype.generic_map, |ctx| {
+                        if !field
+                            .typenode
+                            .eq_or_infer(ctx, value_pltype.clone(), builder)?
+                            .eq
+                        {
+                            return Err(ctx.add_diag(
+                                fieldinit
+                                    .range()
+                                    .new_err(ErrorCode::STRUCT_FIELD_TYPE_NOT_MATCH),
+                            ));
+                        }
+                        Ok(())
+                    })?;
+                    field_init_values.push((field.index, value));
+                    ctx.send_if_go_to_def(field_id_range, field.range, sttype.get_path());
+                    ctx.set_field_refs(pltype.clone(), field, field_id_range);
+                } else if let NodeEnum::Err(fieldinit) = &mut **fieldinit {
+                    if !fieldinit.src.contains(':') {
+                        ctx.if_completion(fieldinit.range(), || sttype.get_completions(ctx));
+                    }
+                    let _ = fieldinit.emit(ctx, builder);
+                } else {
+                    unreachable!()
+                }
             }
             if !sttype.generic_map.is_empty() {
                 if sttype.need_gen_code() {
@@ -702,9 +727,6 @@ impl Node for StructInitNode {
             Ok(())
         })?;
 
-        if self.fields.len() < self.comments.len() {
-            ctx.emit_comment_highlight(&self.comments[idx]);
-        }
         let struct_pointer = builder.alloc("initstruct", &pltype.borrow(), ctx, None); //alloc(ctx, tp, "initstruct");
         field_init_values.iter().for_each(|(index, value)| {
             let fieldptr = builder
@@ -833,14 +855,13 @@ impl GenericDefNode {
             g.emit_highlight(ctx);
         }
     }
-    pub fn set_traits<'a, 'b>(
+    pub fn set_traits(
         &self,
-        ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, '_>,
+        ctx: &mut Ctx<'_>,
         generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
     ) -> Result<(), PLDiag> {
         for g in self.generics.iter() {
-            g.set_traits(ctx, builder, generic_map)?;
+            g.set_traits(ctx, generic_map)?;
         }
         Ok(())
     }
@@ -854,7 +875,6 @@ impl GenericDefNode {
                 range,
                 curpltype: None,
                 trait_impl: None,
-                trait_place_holder: None,
                 refs: Arc::new(MutVec::new(vec![])),
             };
             let pltp = Arc::new(RefCell::new(PLType::Generic(gentype)));
@@ -964,6 +984,7 @@ impl TypeNode for ClosureTypeNode {
                 return Ok(EqRes {
                     eq: false,
                     need_up_cast: false,
+                    reason: Some("closure arg len not match".to_string()),
                 });
             }
             for (i, arg) in closure.arg_types.iter().enumerate() {
@@ -971,6 +992,7 @@ impl TypeNode for ClosureTypeNode {
                     return Ok(EqRes {
                         eq: false,
                         need_up_cast: false,
+                        reason: Some("closure arg type not match".to_string()),
                     });
                 }
             }
@@ -982,16 +1004,19 @@ impl TypeNode for ClosureTypeNode {
                 return Ok(EqRes {
                     eq: false,
                     need_up_cast: false,
+                    reason: Some("closure ret type not match".to_string()),
                 });
             }
             return Ok(EqRes {
                 eq: true,
                 need_up_cast: false,
+                reason: None,
             });
         }
         Ok(EqRes {
             eq: false,
             need_up_cast: false,
+            reason: None,
         })
     }
 }
@@ -1047,7 +1072,13 @@ impl TypeNode for CustomTypeNode {
         _pltype: Arc<RefCell<PLType>>,
         _builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<EqRes, PLDiag> {
-        todo!()
+        let eq = get_type_deep(_pltype).borrow().get_full_elm_name()
+            == format!("{}..{}", self.path, self.name);
+        Ok(EqRes {
+            eq,
+            need_up_cast: false,
+            reason: None,
+        })
     }
 }
 
@@ -1065,6 +1096,6 @@ impl PrintTrait for CustomTypeNode {
 
 impl FmtTrait for CustomTypeNode {
     fn format(&self, _builder: &mut FmtBuilder) {
-        todo!()
+        _builder.token(&self.name)
     }
 }

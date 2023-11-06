@@ -1,6 +1,8 @@
+use std::cell::RefCell;
+
 use parking_lot::ReentrantMutex;
 
-use crate::{bigobj::BigObj, mmap::Mmap, round_n_up, ALIGN};
+use crate::{bigobj::BigObj, mmap::Mmap, round_n_up, ALIGN, BIG_OBJ_ALIGN};
 
 pub struct BigObjAllocator {
     mmap: Mmap,
@@ -9,6 +11,7 @@ pub struct BigObjAllocator {
     heap_end: *mut u8,
     unused_chunks: Vec<*mut BigObj>,
     lock: ReentrantMutex<()>,
+    commited_to: RefCell<*mut u8>,
 }
 
 impl BigObjAllocator {
@@ -17,6 +20,7 @@ impl BigObjAllocator {
         Self {
             current: mmap.aligned(ALIGN),
             heap_start: mmap.aligned(ALIGN),
+            commited_to: RefCell::new(mmap.aligned(ALIGN)),
             heap_end: mmap.end(),
             mmap,
             unused_chunks: Vec::new(),
@@ -41,8 +45,16 @@ impl BigObjAllocator {
         if next >= heap_end {
             panic!("big object mmap out of memory");
         }
+        unsafe {
+            let end = current.add(size);
+            let offset = current.align_offset(ALIGN);
+            let dest = *self.commited_to.borrow();
 
-        self.mmap.commit(current, size);
+            if end > dest && !self.mmap.commit(dest, size - offset) {
+                panic!("big object mmap out of memory");
+            }
+            self.commited_to.replace(end.add(end.align_offset(ALIGN)));
+        }
 
         // self.current = next;
         let obj = BigObj::new(current, size);
@@ -51,7 +63,7 @@ impl BigObjAllocator {
     }
 
     pub fn get_chunk(&mut self, size: usize) -> *mut BigObj {
-        let size = round_n_up!(size + 16, ALIGN); // 16 is the size of BigObj
+        let size = round_n_up!(size + 16, BIG_OBJ_ALIGN); // 16 is the size of BigObj
         let _lock = self.lock.lock();
         for i in 0..self.unused_chunks.len() {
             let unused_obj = self.unused_chunks[i];
@@ -61,10 +73,10 @@ impl BigObjAllocator {
                 std::cmp::Ordering::Equal => {
                     self.unused_chunks.remove(i);
                     // self.mmap.commit(unused_obj as *mut u8, size);
-                    println!(
-                        "get_chunk: {:p}[reused {}/{}]",
-                        unused_obj, size, unused_size
-                    );
+                    // println!(
+                    //     "get_chunk: {:p}[reused {}/{}]",
+                    //     unused_obj, size, unused_size
+                    // );
                     return unused_obj;
                 }
                 std::cmp::Ordering::Greater => {
@@ -74,7 +86,7 @@ impl BigObjAllocator {
                         (*unused_obj).size -= size;
                     }
                     // self.mmap.commit(new_obj as *mut BigObj as *mut u8, size);
-                    println!("get_chunk: {:p}[reused {}/{}]", new_obj, size, unused_size);
+                    // println!("get_chunk: {:p}[reused {}/{}]", new_obj, size, unused_size);
                     return new_obj;
                 }
             };

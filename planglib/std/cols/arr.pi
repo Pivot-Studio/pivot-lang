@@ -1,6 +1,5 @@
 use std::iter::*;
 use core::panic::*;
-use std::io;
 
 pub struct Array<T> {
     data:[T];
@@ -43,7 +42,6 @@ impl <T> Array<T> {
     }
     fn check_idx(i:i64) void {
         if i >= arr_len(self.data) {
-            io::print_s("Array index out of bounds");
             pl_panic();
         }
         return;
@@ -58,6 +56,29 @@ impl <T> Array<T> {
         for let i = 0; i < self.len as i64; i = i + 1 {
             yield return self.data[i];
         }
+    }
+
+    pub fn append(arr:Array<T>) void {
+        if arr.len == 0 {
+            return;
+        }
+        if self.len as i64 + arr.len as i64 > arr_len(self.data) {
+            let new_data = [T*(arr_len(self.data) * 2);];
+            arr_copy(self.data, new_data, arr_len(self.data));
+            self.data = new_data;
+        }
+        // use arr copy
+        let offset_ptr = &self.data[self.len as i64];
+        let len = arr.len as i64;
+        arr_copy(arr.data, arr_from_raw(offset_ptr, len), arr.len as i64);
+        self.len = self.len + arr.len;
+        return;
+    }
+    pub fn get_slice() [T] {
+        if self.len == 0 {
+            return [T*0;];
+        }
+        return arr_from_raw(&self.data[0], self.len as i64);
     }
 }
 

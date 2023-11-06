@@ -6,6 +6,7 @@ use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
 use crate::format_label;
+use crate::modifier_set;
 
 use indexmap::IndexMap;
 use internal_macro::node;
@@ -230,6 +231,7 @@ impl Node for DefNode {
                 expv,
                 &self.var,
                 true,
+                0,
             )
         })?;
         Ok(Default::default())
@@ -246,6 +248,7 @@ fn handle_deconstruct<'a, 'b>(
     expv: Option<usize>,
     def_var: &DefVar,
     is_def: bool,
+    semantic_idx: usize,
 ) -> Result<(), PLDiag> {
     match def_var {
         DefVar::Identifier(var) => {
@@ -256,17 +259,28 @@ fn handle_deconstruct<'a, 'b>(
                     ctx,
                     Some(def_var.range().start),
                 );
-                ctx.add_symbol(var.name.clone(), ptr2value, pltype, def_var.range(), false)?;
+                ctx.add_symbol(
+                    var.name.clone(),
+                    ptr2value,
+                    pltype,
+                    def_var.range(),
+                    false,
+                    false,
+                )?;
                 ptr2value
-            } else {
-                let v = var.clone().emit(ctx, builder)?.get_value();
-                if v.is_none() {
-                    return Err(var
-                        .range()
-                        .new_err(ErrorCode::NOT_ASSIGNABLE)
-                        .add_to_ctx(ctx));
+            } else if let Some(s) = ctx.get_symbol(&var.name, builder) {
+                if s.is_captured() {
+                    ctx.plmod
+                        .semantic_tokens_builder
+                        .borrow_mut()
+                        .set_modifier(semantic_idx, modifier_set!(CAPTURED));
                 }
-                v.unwrap().get_value()
+                s.get_data_ref().value
+            } else {
+                return Err(var
+                    .range()
+                    .new_err(ErrorCode::VAR_NOT_FOUND)
+                    .add_to_ctx(ctx));
             };
             if let Some(exp) = expv {
                 builder.build_dbg_location(def_var.range().start);
@@ -322,6 +336,7 @@ fn handle_deconstruct<'a, 'b>(
                             Some(expv),
                             deconstruct_v,
                             is_def,
+                            semantic_idx,
                         )?
                     }
                     return Ok(());
@@ -390,6 +405,7 @@ fn handle_deconstruct<'a, 'b>(
                                 Some(expv),
                                 &DefVar::Identifier(v.clone()),
                                 is_def,
+                                semantic_idx,
                             )?,
                             StructFieldDeconstructEnum::Taged(_, dec) => handle_deconstruct(
                                 range,
@@ -400,6 +416,7 @@ fn handle_deconstruct<'a, 'b>(
                                 Some(expv),
                                 dec,
                                 is_def,
+                                semantic_idx,
                             )?,
                         }
                     }
@@ -475,7 +492,6 @@ impl Node for AssignNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let exp_range = self.exp.range();
-        ctx.push_semantic_token(self.var.range(), SemanticTokenType::VARIABLE, 0);
         match &mut self.var {
             AssignVar::Pointer(var) => {
                 let rel = var.emit(ctx, builder)?.get_value();
@@ -499,6 +515,8 @@ impl Node for AssignNode {
                 Ok(Default::default())
             }
             AssignVar::Raw(def) => {
+                let idx = ctx.plmod.semantic_tokens_builder.borrow().get_data_len();
+                ctx.push_semantic_token(def.range(), SemanticTokenType::VARIABLE, 0);
                 let v = self.exp.emit(ctx, builder)?.get_value().unwrap();
                 let expv = v.get_value();
                 let pltype = v.get_ty();
@@ -511,6 +529,7 @@ impl Node for AssignNode {
                     Some(expv),
                     def,
                     false,
+                    idx,
                 )?;
                 Ok(Default::default())
             }
@@ -593,19 +612,21 @@ impl Node for StatementsNode {
             }
             terminator = re.unwrap().get_term();
         }
-        for (v, symbol) in &ctx.table {
-            if let Some(refs) = &symbol.refs {
-                if refs.borrow().len() <= 1 && v != "self" && !v.starts_with('_') {
-                    symbol
-                        .range
-                        .new_warn(WarnCode::UNUSED_VARIABLE)
-                        .set_source(&ctx.get_file())
-                        .add_label(
-                            symbol.range,
-                            ctx.get_file(),
-                            format_label!("Unused variable `{}`", v),
-                        )
-                        .add_to_ctx(ctx);
+        if ctx.need_highlight.borrow().eq(&0) {
+            for (v, symbol) in &ctx.table {
+                if let Some(refs) = &symbol.refs {
+                    if refs.borrow().len() <= 1 && v != "self" && !v.starts_with('_') {
+                        symbol
+                            .range
+                            .new_warn(WarnCode::UNUSED_VARIABLE)
+                            .set_source(&ctx.get_file())
+                            .add_label(
+                                symbol.range,
+                                ctx.get_file(),
+                                format_label!("Unused variable `{}`", v),
+                            )
+                            .add_to_ctx(ctx);
+                    }
                 }
             }
         }

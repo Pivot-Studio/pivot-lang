@@ -28,6 +28,7 @@ pub struct Jar(
     crate::ast::accumulators::Hints,
     crate::ast::accumulators::DocSymbols,
     crate::ast::accumulators::PLSignatureHelp,
+    crate::ast::accumulators::PLCodeLens,
     crate::ast::node::program::Program,
     crate::ast::node::program::Program_emit,
     crate::ast::node::program::ProgramNodeWrapper,

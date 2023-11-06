@@ -1,11 +1,16 @@
 use core::panic;
-const a = 100;
+var a = init_a();
 pub struct name {
     a: i64;
     b: i64;
 }
 
-const b = &name{
+fn init_a() *i64 {
+    let a = 100;
+    return &a;
+}
+
+var b = &name{
     a: 1
 };
 pub fn change_global() void {
@@ -13,8 +18,8 @@ pub fn change_global() void {
     return;
 }
 
-pub fn test_const() void {
-    panic::assert(a == 100);
+pub fn test_global() void {
+    panic::assert(*a == 100);
     change_global();
     panic::assert(b.a == 100);
     return;

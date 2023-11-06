@@ -24,7 +24,7 @@ pub struct ProgramEmitParam {
     pub fullpath: String,
     #[return_ref]
     pub params: LspParams,
-    pub submods: FxHashMap<String, Mod>,
+    pub submods: FxHashMap<String, Arc<Mod>>,
     #[return_ref]
     pub file_content: String,
     #[return_ref]
@@ -33,6 +33,7 @@ pub struct ProgramEmitParam {
     pub mth_table: MthdTableWrapper,
     #[return_ref]
     pub macro_table: UnsafeWrapper<FxHashMap<String, Arc<MacroNode>>>,
+    pub is_active_file: bool,
 }
 
 pub type MthdTableWrapper =

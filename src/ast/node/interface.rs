@@ -16,44 +16,6 @@ pub struct MultiTraitNode {
     pub traits: Vec<Box<TypeNodeEnum>>,
 }
 impl MultiTraitNode {
-    fn merge_traits<'a, 'b>(
-        &self,
-        ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, '_>,
-    ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
-        let derives = self.get_types(ctx, builder)?;
-        if derives.len() == 1 {
-            return Ok(derives[0].clone());
-        }
-        let name = derives
-            .iter()
-            .map(|t| t.borrow().get_name())
-            .collect::<Vec<_>>()
-            .join("+");
-        let st = STType {
-            generic_map: IndexMap::default(),
-            name: name.clone(),
-            path: ctx.plmod.path.clone(),
-            fields: LinkedHashMap::default(),
-            range: Default::default(),
-            doc: vec![],
-            derives,
-            modifier: None,
-            body_range: Default::default(),
-            is_trait: true,
-            is_tuple: false,
-            generic_infer_types: Default::default(),
-            // generic_infer: Default::default(),
-            methods: Default::default(),
-            trait_methods_impl: Default::default(),
-        };
-        builder.opaque_struct_type(&ctx.plmod.get_full_name(&name));
-        builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&name), &st, ctx);
-        let trait_tp = Arc::new(RefCell::new(PLType::Trait(st)));
-
-        _ = ctx.add_type(name, trait_tp.clone(), Default::default());
-        Ok(trait_tp)
-    }
     pub fn emit_highlight(&self, ctx: &mut Ctx) {
         for t in &self.traits {
             t.emit_highlight(ctx);
@@ -84,18 +46,16 @@ pub struct TraitBoundNode {
     pub impl_trait: Option<Box<MultiTraitNode>>,
 }
 impl TraitBoundNode {
-    pub fn set_traits<'a, 'b>(
+    pub fn set_traits(
         &self,
-        ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, '_>,
+        ctx: &mut Ctx<'_>,
         generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
     ) -> Result<(), PLDiag> {
         if !generic_map.contains_key(&self.generic.name) {
             return Err(ctx.add_diag(self.generic.range().new_err(ErrorCode::GENERIC_NOT_FOUND)));
         }
         if let Some(impl_trait) = &self.impl_trait {
-            let trait_pltype = impl_trait.get_types(ctx, builder)?;
-            let trait_place_holder = impl_trait.merge_traits(ctx, builder)?;
+            // let trait_pltype = impl_trait.get_types(ctx, builder)?;
             let generic_type = generic_map.get(&self.generic.name).unwrap();
             if let PLType::Generic(generic_type) = &mut *generic_type.borrow_mut() {
                 if generic_type.trait_impl.is_some() {
@@ -103,8 +63,7 @@ impl TraitBoundNode {
                         ctx.add_diag(impl_trait.range().new_err(ErrorCode::DUPLICATE_TRAIT_BOUND))
                     );
                 }
-                generic_type.trait_impl = Some(trait_pltype);
-                generic_type.trait_place_holder = Some(trait_place_holder);
+                generic_type.trait_impl = Some(*impl_trait.clone());
                 return Ok(());
             }
             unreachable!()
@@ -114,7 +73,7 @@ impl TraitBoundNode {
     pub fn emit_highlight(&self, ctx: &mut Ctx) {
         ctx.push_semantic_token(self.generic.range, SemanticTokenType::TYPE, 0);
         if let Some(impl_trait) = &self.impl_trait {
-            ctx.push_semantic_token(impl_trait.range(), SemanticTokenType::TYPE, 0);
+            impl_trait.emit_highlight(ctx);
         }
     }
 }
@@ -161,7 +120,7 @@ impl TraitDefNode {
     pub fn add_to_symbols<'a, 'b>(&self, ctx: &'b mut Ctx<'a>, builder: &'b BuilderEnum<'a, '_>) {
         let generic_map = if let Some(generics) = &self.generics {
             let mp = generics.gen_generic_type(ctx);
-            _ = generics.set_traits(ctx, builder, &mp);
+            _ = generics.set_traits(ctx, &mp);
             mp
         } else {
             IndexMap::default()
@@ -198,13 +157,14 @@ impl TraitDefNode {
             IndexMap::default()
         };
         ctx.protect_generic_context(&generic_map, |ctx| {
+            // ctx.set_self_type(Arc::new(RefCell::new(PLType::Primitive( PriType::I64))));// 随便放个类型，用Self的接口不能实例化
             let mut fields = LinkedHashMap::new();
             // add generic type before field add type
             let derives = self.derives.get_types(ctx, builder)?;
             for (i, field) in self.methods.iter().enumerate() {
                 let mut tp = field.clone();
                 tp.paralist
-                    .insert(0, Box::new(new_i64ptr_tf_with_name("self")));
+                    .insert(0, Box::new(new_selfptr_tf_with_name("self")));
                 let id = field.id.clone();
                 let f = Field {
                     index: i as u32 + 2,
@@ -213,6 +173,7 @@ impl TraitDefNode {
                     range: field.range,
                     modifier: Some((TokenType::PUB, field.range)),
                 };
+                field.emit_highlight(ctx);
                 if field.get_type(ctx, builder, true).is_err() {
                     continue;
                 }
@@ -254,7 +215,7 @@ impl TraitDefNode {
     }
 }
 
-fn new_i64ptr_tf_with_name(n: &str) -> TypedIdentifierNode {
+fn new_selfptr_tf_with_name(n: &str) -> TypedIdentifierNode {
     TypedIdentifierNode {
         id: VarNode {
             name: n.to_string(),

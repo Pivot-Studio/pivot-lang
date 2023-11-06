@@ -32,7 +32,6 @@ use internal_macro::node;
 use lsp_types::GotoDefinitionResponse;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
-use std::borrow::BorrowMut;
 use std::cell::RefCell;
 use std::collections::hash_map::DefaultHasher;
 use std::fs;
@@ -105,7 +104,6 @@ impl Node for ProgramNode {
         self.globaldefs.iter_mut().for_each(|x| {
             _ = x.emit_global(ctx, builder);
         });
-        ctx.clear_init_fn(builder);
         ctx.plmod.semantic_tokens_builder = Arc::new(RefCell::new(Box::new(
             SemanticTokensBuilder::new(ctx.plmod.path.to_string()),
         )));
@@ -118,83 +116,39 @@ impl Node for ProgramNode {
     }
 }
 
+fn new_var(name: &str) -> Box<VarNode> {
+    Box::new(VarNode {
+        name: name.to_string(),
+        range: Default::default(),
+    })
+}
+fn new_use(ns: &[&str]) -> Box<NodeEnum> {
+    Box::new(NodeEnum::UseNode(UseNode {
+        ids: ns.iter().map(|a| new_var(a)).collect(),
+        range: Default::default(),
+        complete: true,
+        singlecolon: false,
+        modifier: None,
+        all_import: false,
+    }))
+}
+
 lazy_static::lazy_static! {
     static ref DEFAULT_USE_NODES: Vec<Box<NodeEnum>> = {
-        let core = Box::new(VarNode {
-            name: "core".to_string(),
-            range: Default::default(),
-        });
-        let std = Box::new(VarNode {
-            name: "std".to_string(),
-            range: Default::default(),
-        });
-        let mut uses = vec![];
-        let builtin = Box::new(VarNode {
-            name: "builtin".to_string(),
-            range: Default::default(),
-        });
-        let stdbuiltin = Box::new(VarNode {
-            name: "stdbuiltin".to_string(),
-            range: Default::default(),
-        });
-
-        uses.push(Box::new(NodeEnum::UseNode(UseNode {
-            ids: vec![core, builtin],
-            range: Default::default(),
-            complete: true,
-            singlecolon: false,
-            modifier:None,
-            all_import:false,
-        })));
-        uses.push(Box::new(NodeEnum::UseNode(UseNode {
-            ids: vec![std, stdbuiltin],
-            range: Default::default(),
-            complete: true,
-            singlecolon: false,
-            modifier:None,
-            all_import:false,
-        })));
-        uses
+        vec![
+            new_use(&["core", "builtin"]),
+            new_use(&["core", "hash"]),
+            new_use(&["core", "eq"]),
+            new_use(&["std", "stdbuiltin"])
+        ]
     };
 
     static ref GC_USE_NODES: Vec<Box<NodeEnum>> = {
-        let core = Box::new(VarNode {
-            name: "core".to_string(),
-            range: Default::default(),
-        });
-
-        let gc = Box::new(VarNode {
-            name: "gc".to_string(),
-            range: Default::default(),
-        });
-        vec![Box::new(NodeEnum::UseNode(UseNode {
-            ids: vec![core, gc],
-            range: Default::default(),
-            complete: true,
-            singlecolon: false,
-            modifier:None,
-            all_import:false,
-        }))]
+        vec![new_use(&["core", "gc"])]
     };
 
     static ref STD_USE_NODES: Vec<Box<NodeEnum>> = {
-        let core = Box::new(VarNode {
-            name: "core".to_string(),
-            range: Default::default(),
-        });
-
-        let builtin = Box::new(VarNode {
-            name: "builtin".to_string(),
-            range: Default::default(),
-        });
-        vec![Box::new(NodeEnum::UseNode(UseNode {
-            ids: vec![core, builtin],
-            range: Default::default(),
-            complete: true,
-            singlecolon: false,
-            modifier:None,
-            all_import:false,
-        }))]
+        vec![new_use(&["core", "builtin"])]
     };
 }
 
@@ -224,7 +178,6 @@ fn import_symbol(
                 global_mthd_map
                     .entry(k.clone())
                     .or_insert(Default::default())
-                    .borrow_mut()
                     .insert(k2, v);
             }
         }
@@ -252,7 +205,7 @@ impl Program {
         };
         let params = self.params(db);
 
-        let mut modmap = FxHashMap::<String, Mod>::default();
+        let mut modmap = FxHashMap::<String, Arc<Mod>>::default();
         let binding = PathBuf::from(self.params(db).file(db)).with_extension("");
         let pkgname = binding.file_name().unwrap().to_str().unwrap();
         // 默认加入gc和builtin module
@@ -302,9 +255,16 @@ impl Program {
             let path = wrapper.resolve_dep_path(db);
             let p = self.config(db).project;
             log::trace!("load dep {:?} for {:?} (project {:?})", path, pkgname, p);
-            let f = path.to_str().unwrap().to_string();
-            let mut f = self.docs(db).get_file_params(db, f, false);
+            let ff = path.to_str().unwrap().to_string();
+            let mut f = self.docs(db).get_file_params(db, ff.clone(), false);
             let mut symbol_opt = None;
+            #[cfg(target_arch = "wasm32")]
+            if ff.starts_with("core") || ff.starts_with("std") {
+                let p = crate::lsp::wasm::PLLIB_DIR.get_entry(&path);
+                if p.is_none() {
+                    f = None;
+                }
+            }
             if f.is_none() {
                 if let Some(p) = path.parent() {
                     mod_id = Some(p.file_name().unwrap().to_str().unwrap().to_string());
@@ -348,7 +308,7 @@ impl Program {
                     import_symbol(s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
                 }
             }
-            modmap.insert(mod_id.unwrap(), module);
+            modmap.insert(mod_id.unwrap(), Arc::new(module));
         }
         log::trace!("done deps compile");
         let filepath = Path::new(self.params(db).file(db));
@@ -387,6 +347,7 @@ impl Program {
             UnsafeWrapper::new(global_tp_map),
             UnsafeWrapper::new(global_mthd_map),
             UnsafeWrapper::new(global_macro_map),
+            self.is_active_file(db),
         );
 
         let nn = p.node(db).node(db);
@@ -557,6 +518,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         params.params(db).params(db),
         params.params(db).config(db),
         db,
+        params.is_active_file(db),
     );
     ctx.plmod.trait_mthd_table = Arc::new(RefCell::new(params.mth_table(db).get().clone()));
     ctx.plmod.types = params.types(db).get().clone();

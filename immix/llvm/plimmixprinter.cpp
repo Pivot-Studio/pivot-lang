@@ -39,7 +39,7 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
   AP.emitAlignment(llvm::Align(8));
   // Put this in the data section.
   AP.OutStreamer.get()->SwitchSection(AP.getObjFileLowering().getDataSection());
-  std::string symbol ;
+  std::string symbol;
   symbol += "_IMMIX_GC_MAP_";
   symbol += M.getSourceFileName();
   // printf("symbol: %s \n", symbol.c_str());
@@ -140,10 +140,25 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
   for (auto GI = M.global_begin(), GE = M.global_end(); GI != GE; ++GI)
   {
     const GlobalValue *GV = &*GI;
-    if (GV->getName().contains("llvm."))
+    if (GV->getName().contains("llvm.")) // skip magic variables e.g. @llvm.global_ctors
     {
       continue;
     }
+
+    if (isa<GlobalVariable>(GV) && cast<GlobalVariable>(GV)->isConstant()) // skip constants
+    {
+      // printf("skip %s\n", GV->getName().bytes());
+      continue;
+    }
+
+    if (GV->getName().startswith("_IMMIX_GC_MAP") ||
+        GV->getName().contains("_@IMMIX_OBJTYPE_") ||
+        GV->getName().startswith(".str")) // skip generated globals
+    {
+      continue;
+    }
+    // printf("%s\n", GV->getName().bytes());
+
     ii++;
   }
   auto g = ii; // skip magic variables e.g. @llvm.global_ctors
@@ -154,7 +169,20 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
   {
     AP.OutStreamer.get()->AddComment("global address");
     const GlobalValue *GV = &*GI;
-    if (GV->getName().contains("llvm."))
+    if (GV->getName().contains("llvm.")) // skip magic variables e.g. @llvm.global_ctors
+    {
+      continue;
+    }
+
+    if (isa<GlobalVariable>(GV) && cast<GlobalVariable>(GV)->isConstant()) // skip constants
+    {
+      // printf("skip %s\n", GV->getName().bytes());
+      continue;
+    }
+
+    if (GV->getName().startswith("_IMMIX_GC_MAP") ||
+        GV->getName().contains("_@IMMIX_OBJTYPE_") ||
+        GV->getName().startswith(".str")) // skip generated globals
     {
       continue;
     }

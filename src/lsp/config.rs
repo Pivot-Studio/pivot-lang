@@ -1,5 +1,7 @@
 use lazy_static::lazy_static;
-use lsp_types::{SemanticTokenModifier, SemanticTokenType, SemanticTokensLegend};
+use lsp_types::{SemanticTokenType, SemanticTokensLegend};
+
+use crate::lsp::semantic_tokens::SUPPORTED_MODIFIERS;
 
 lazy_static! {
     pub static ref SEMANTIC_LEGEND: SemanticTokensLegend = {
@@ -27,17 +29,7 @@ lazy_static! {
                 SemanticTokenType::REGEXP,
                 SemanticTokenType::OPERATOR,
             ],
-            token_modifiers: vec![
-                SemanticTokenModifier::DECLARATION,
-                SemanticTokenModifier::DEFINITION,
-                SemanticTokenModifier::READONLY,
-                SemanticTokenModifier::STATIC,
-                SemanticTokenModifier::ABSTRACT,
-                SemanticTokenModifier::DEPRECATED,
-                SemanticTokenModifier::ASYNC,
-                SemanticTokenModifier::MODIFICATION,
-                SemanticTokenModifier::DOCUMENTATION,
-            ],
+            token_modifiers: SUPPORTED_MODIFIERS.to_vec(),
         }
     };
 }

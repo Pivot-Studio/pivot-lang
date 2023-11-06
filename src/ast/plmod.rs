@@ -42,10 +42,11 @@ use super::pltype::TraitMthdImpl;
 pub struct GlobalVar {
     pub tp: Arc<RefCell<PLType>>,
     pub range: Range,
-    // pub loc: Arc<RwVec<Location>>,
+    pub is_extern: bool, // pub loc: Arc<RwVec<Location>>,
+    pub constant: bool,
 }
 
-type ImplMap = FxHashMap<String, FxHashMap<String, IndexMap<String, Arc<RefCell<PLType>>>>>;
+pub type ImplMap = FxHashMap<String, FxHashMap<String, IndexMap<String, Arc<RefCell<PLType>>>>>;
 
 /// # Mod
 /// Represent a module
@@ -58,7 +59,7 @@ pub struct Mod {
     /// func and types
     pub types: FxHashMap<String, GlobType>,
     /// sub mods
-    pub submods: FxHashMap<String, Mod>,
+    pub submods: FxHashMap<String, Arc<Mod>>,
     /// global variable table
     pub global_table: FxHashMap<String, GlobalVar>,
     pub defs: LSPRangeMap<Range, LSPDef>,
@@ -73,7 +74,7 @@ pub struct Mod {
     pub semantic_tokens_builder: Arc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
     pub hints: Arc<RefCell<Vec<InlayHint>>>,
     pub doc_symbols: Arc<RefCell<Vec<DocumentSymbol>>>,
-    pub impls: ImplMap,
+    pub impls: Arc<RefCell<ImplMap>>,
     pub macros: FxHashMap<String, Arc<MacroNode>>,
     pub trait_mthd_table: TraitMthdImpl,
     pub generic_infer: GenericCache,
@@ -224,7 +225,7 @@ impl Mod {
             local_refs: Arc::new(RefCell::new(BTreeMap::new())),
             glob_refs: Arc::new(RefCell::new(BTreeMap::new())),
             refs_map: Arc::new(RefCell::new(BTreeMap::new())),
-            impls: FxHashMap::default(),
+            impls: Arc::new(RefCell::new(FxHashMap::default())),
             macros: FxHashMap::default(),
             trait_mthd_table: Default::default(),
             generic_infer,
@@ -250,7 +251,7 @@ impl Mod {
             local_refs: self.local_refs.clone(),
             glob_refs: self.glob_refs.clone(),
             refs_map: self.refs_map.clone(),
-            impls: FxHashMap::default(),
+            impls: self.impls.clone(),
             macros: FxHashMap::default(),
             trait_mthd_table: self.trait_mthd_table.clone(),
             generic_infer: self.generic_infer.clone(),
@@ -335,7 +336,8 @@ impl Mod {
         name: String,
         tp: Arc<RefCell<PLType>>,
         range: Range,
-        // refs: Arc<RwVec<Location>>,
+        is_extern: bool,
+        constant: bool,
     ) -> Result<(), PLDiag> {
         if self.global_table.contains_key(&name) {
             return Err(range.new_err(ErrorCode::UNDEFINED_TYPE));
@@ -345,27 +347,30 @@ impl Mod {
             GlobalVar {
                 tp,
                 range,
-                // loc: refs,
+                is_extern, // loc: refs,
+                constant,
             },
         );
         Ok(())
     }
     fn get_type_inner(&self, name: &str, range: Range, ctx: &Ctx) -> Option<GlobType> {
-        let v = self.types.get(name);
-        if let Some(pv) = v {
-            ctx.set_if_refs_tp(pv.tp.clone(), range);
-            ctx.send_if_go_to_def(
-                range,
-                pv.borrow().get_range().unwrap_or(range),
-                self.path.clone(),
-            );
-            return Some(pv.clone());
-        }
         if let Some(x) = PriType::try_from_str(name) {
             return Some(PLType::Primitive(x).into());
         }
         if name == "void" {
             return Some(PLType::Void.into());
+        }
+        let v = self.types.get(name);
+        if let Some(pv) = v {
+            if range != Default::default() {
+                ctx.set_if_refs_tp(pv.tp.clone(), range);
+                ctx.send_if_go_to_def(
+                    range,
+                    pv.borrow().get_range().unwrap_or(range),
+                    self.path.clone(),
+                );
+            }
+            return Some(pv.clone());
         }
         None
     }
@@ -397,7 +402,11 @@ impl Mod {
             match &*st_with_generic.borrow() {
                 PLType::Struct(st) | PLType::Trait(st) => {
                     if let Some(res) = ctx.get_infer_result(st, name) {
-                        return Ok(res.into());
+                        if let PLType::Struct(s) = &*res.clone().borrow() {
+                            if s.fields.len() == st.fields.len() {
+                                return Ok(res.into());
+                            }
+                        }
                     }
                 }
                 PLType::Union(st) => {
@@ -514,17 +523,18 @@ impl Mod {
     }
 
     pub fn add_impl(
-        &mut self,
+        &self,
         stname: &str,
         trait_tp_name: &str,
         generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     ) {
         self.impls
+            .borrow_mut()
             .entry(stname.to_string())
             .or_insert_with(Default::default)
             .insert(trait_tp_name.to_string(), generic_map);
     }
-    pub fn search_mod<TP: CustomType>(&self, u: &TP, m: &str) -> Option<Self> {
+    pub fn search_mod<TP: CustomType>(&self, u: &TP, m: &str) -> Option<Arc<Self>> {
         self.submods
             .get(m)
             .and_then(|x| {

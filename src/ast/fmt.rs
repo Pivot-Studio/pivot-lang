@@ -7,7 +7,7 @@ use super::{
         control::{BreakNode, ContinueNode, ForNode, IfNode, WhileNode},
         error::{ErrorNode, StErrorNode},
         function::{ClosureNode, FuncCallNode, FuncDefNode},
-        global::GlobalNode,
+        global::{GlobalConstNode, GlobalNode},
         implement::ImplNode,
         interface::{MultiTraitNode, TraitBoundNode, TraitDefNode},
         macro_nodes::{MacroCallNode, MacroLoopStatementNode, MacroNode, MacroRuleNode},
@@ -430,7 +430,7 @@ impl FmtBuilder {
         self.enter();
     }
     pub fn parse_global_node(&mut self, node: &GlobalNode) {
-        self.token("const");
+        self.token("var");
         self.space();
         node.var.format(self);
         self.space();
@@ -549,13 +549,14 @@ impl FmtBuilder {
             self.space();
             self.token("else");
             self.space();
+            if matches!(**el, NodeEnum::If(_)) {
+                el.format(self);
+                return;
+            }
             self.l_brace();
             self.add_tab();
             el.format(self);
             self.sub_tab();
-            // if el_str.bytes().len() > 0 {
-            //     self.prefix();
-            // }
             self.prefix();
             self.r_brace();
         } else {
@@ -839,5 +840,13 @@ impl FmtBuilder {
         self.sub_tab();
         self.prefix();
         self.r_brace();
+    }
+    pub fn parse_global_const_node(&mut self, node: &GlobalConstNode) {
+        self.token("const");
+        self.space();
+        node.var.format(self);
+        self.semicolon();
+        // 顶层节点加空格
+        self.enter();
     }
 }

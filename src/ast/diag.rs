@@ -9,33 +9,47 @@ use std::{
     fmt::{Display, Formatter},
     process::exit,
 };
-macro_rules! define_error {
-    ($(
-        $ident:ident = $string_keyword:expr
-    ),*) => {
-        #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, Default)]
-        #[allow(non_camel_case_types, dead_code)]
-        #[allow(clippy::upper_case_acronyms)]
-        pub enum ErrorCode {
-            #[default] UNKNOWN = 114513,
-            $($ident),*
-        }
-        $(pub const $ident: &'static str = $string_keyword;)*
-        lazy_static! {
-            pub static ref ERR_MSG: HashMap<ErrorCode, &'static str> = {
-                let mut mp = HashMap::new();
-                $(mp.insert(ErrorCode::$ident, $ident);)*
-                mp
-            };
+
+macro_rules! define_diag {
+    (
+        $code:expr,
+        $level:ident,
+        $(
+            $ident:ident = $string_keyword:expr
+        ),*
+    ) => {
+        paste::paste! {
+            #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, Default)]
+            #[allow(non_camel_case_types, dead_code)]
+            #[allow(clippy::upper_case_acronyms)]
+            pub enum [<$level:camel Code>] {
+                #[default] UNKNOWN = $code,
+                $($ident),*
+            }
+            $(pub const $ident: &'static str = $string_keyword;)*
+            lazy_static! {
+                pub static ref [<$level:upper _MSG>]: HashMap<[<$level:camel Code>], &'static str> = {
+                    let mut mp = HashMap::new();
+                    $(mp.insert([<$level:camel Code>]::$ident, $ident);)*
+                    mp
+                };
+            }
         }
     };
-    ($(
-        $ident:ident = $string_keyword:expr
-    ),*,) => {
-        define_error!($($ident = $string_keyword),*);
+    (
+        $code:expr,
+        $level:ident,
+        $(
+            $ident:ident = $string_keyword:expr
+        ),*,
+    ) => {
+        define_diag!($code, $level, $($ident = $string_keyword),*);
     };
 }
-define_error!(
+
+define_diag!(
+    114513,
+    Error,
     SYNTAX_ERROR_STATEMENT = "failed to parse statement",
     SYNTAX_ERROR_TOP_STATEMENT = "failed to parse top level statement",
     WHILE_CONDITION_MUST_BE_BOOL = "while condition must be bool",
@@ -133,7 +147,7 @@ define_error!(
     TRAIT_METHOD_NOT_FOUND = "trait method not found",
     ONLY_TRAIT_CAN_BE_IMPL = "only trait can be impl",
     EXPECT_TO_BE_A_TRAIT_IMPL = "expect to be a trait impl block",
-    TARGET_TYPE_NOT_IMPL_ABLE = "target type not impl able",
+    TARGET_TYPE_NOT_IMPL_ABLE = "target type not implable",
     TUPLE_WRONG_DECONSTRUCT_PARAM_LEN = "tuple wrong deconstruct param len",
     DEF_DECONSTRUCT_MUST_HAVE_VALUE = "def deconstruct must have value",
     STRUCT_FIELD_NOT_EXISTS = "struct field not exists",
@@ -145,34 +159,17 @@ define_error!(
     ARRAY_LEN_MUST_BE_I64 = "array len must be i64",
     EXPECT_ARRAY_TYPE = "expect array type",
     EXPECT_INT_VALUE = "expect int value",
+    METHODS_MUST_HAVE_BODY = "methods must have body",
+    INVALID_STRUCT_INIT = "invalid struct initialization",
+    REDUNDANT_COMMA = "REDUNDANT comma",
+    GENERIC_NOT_ALLOWED_IN_TRAIT_METHOD = "generic not allowed in trait method",
+    THE_TARGET_TRAIT_CANNOT_BE_INSTANTIATED = "the target trait type cannot be instantiated",
+    MACRO_EXPAND_DEPTH_TOO_DEEP = "macro expand depth too deep",
 );
-macro_rules! define_warn {
-    ($(
-        $ident:ident = $string_keyword:expr
-    ),*) => {
-        #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, Default)]
-        #[allow(non_camel_case_types)]
-        #[allow(clippy::upper_case_acronyms)]
-        pub enum WarnCode {
-            #[default] UNKNOWN = 1919809,
-            $($ident),*
-        }
-        $(pub const $ident: &'static str = $string_keyword;)*
-        lazy_static! {
-            pub static ref WARN_MSG: HashMap<WarnCode, &'static str> = {
-                let mut mp = HashMap::new();
-                $(mp.insert(WarnCode::$ident, $ident);)*
-                mp
-            };
-        }
-    };
-    ($(
-        $ident:ident = $string_keyword:expr
-    ),*,) => {
-        define_warn!($($ident = $string_keyword),*);
-    };
-}
-define_warn! {
+
+define_diag! {
+    1919809,
+    Warn,
     UNREACHABLE_STATEMENT= "unreachable statement",
     UNUSED_VARIABLE = "unused variable",
     UNUSED_FUNCTION = "unused function",
@@ -237,6 +234,7 @@ impl Pos {
         doc.line(self.line - 1).unwrap().offset() + self.column - 1
     }
 }
+use regex::Regex;
 use std::fmt::Debug;
 impl PLDiag {
     #[cfg(test)]
@@ -300,7 +298,12 @@ impl PLDiag {
             rb = rb.with_label(lab.with_color(color));
         }
         if let Some(help) = &self.raw.help {
-            rb = rb.with_help(help);
+            let re = Regex::new(r"`[a-zA-Z_$][a-zA-Z_$0-9]*`").unwrap();
+            let h = re.replace_all(help, |cap: &regex::Captures<'_>| {
+                let s = cap[0].to_string();
+                s.fg(colors.next()).to_string()
+            });
+            rb = rb.with_help(h);
         }
         let r = rb.finish();
         r.eprint(PLFileCache::new(db, Box::new(f))).unwrap();
@@ -319,7 +322,7 @@ impl PLDiag {
     }
     pub fn get_msg(&self) -> String {
         match self.raw.code {
-            DiagCode::Err(code) => ERR_MSG[&code].to_string(),
+            DiagCode::Err(code) => ERROR_MSG[&code].to_string(),
             DiagCode::Warn(code) => WARN_MSG[&code].to_string(),
         }
     }
@@ -332,7 +335,7 @@ impl PLDiag {
                 Some(PL_DIAG_SOURCE.to_string()),
                 format!(
                     "{} {}",
-                    ERR_MSG[&code],
+                    ERROR_MSG[&code],
                     &self
                         .raw
                         .help

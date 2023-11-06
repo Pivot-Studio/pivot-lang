@@ -1,8 +1,11 @@
 use super::super::cast::get_option_type;
 
+use crate::ast::builder::BlockHandle;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
+use crate::ast::builder::ValueHandle;
 use crate::ast::ctx::Ctx;
+use crate::ast::ctx::PLSymbolData;
 use crate::ast::diag::ErrorCode;
 
 use crate::ast::diag::PLDiag;
@@ -19,12 +22,37 @@ use std::sync::Arc;
 
 use crate::ast::pltype::Field;
 
-use crate::ast::ctx::CtxFlag;
-
 use crate::ast::pltype::STType;
 
 use crate::ast::node::RangeTrait;
 use crate::ast::pltype::PLType;
+
+#[derive(Clone, Default)]
+pub struct GeneratorCtxData {
+    pub table: LinkedHashMap<String, PLSymbolData>,
+    pub entry_bb: BlockHandle,
+    pub ctx_handle: ValueHandle, //handle in setup function
+    pub ret_handle: ValueHandle, //handle in setup function
+    pub prev_yield_bb: Option<BlockHandle>,
+    pub ctx_size_handle: ValueHandle,
+    pub param_tmp: ValueHandle,
+}
+
+/// # CtxFlag
+///
+/// flags that might change the behavior of the builder
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum CtxFlag {
+    Normal,
+    InGeneratorYield,
+}
+
+#[derive(Clone, Default)]
+pub struct ClosureCtxData {
+    pub table: LinkedHashMap<String, (PLSymbolData, ValueHandle)>,
+    pub data_handle: ValueHandle,
+    pub alloca_bb: Option<BlockHandle>,
+}
 
 pub(crate) fn end_generator<'a>(
     child: &mut Ctx<'a>,
@@ -195,6 +223,7 @@ pub(crate) fn save_generator_init_block<'a>(
     child: &mut Ctx<'a>,
     entry: usize,
 ) {
+    builder.position_at_end_block(child.generator_data.as_ref().unwrap().borrow().entry_bb);
     let address = builder.get_block_address(entry);
     let data = child.generator_data.as_ref().unwrap().clone();
     let address_ptr = builder

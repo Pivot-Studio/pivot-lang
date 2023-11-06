@@ -1,57 +1,138 @@
 use core::gc::string;
-use std::io;
+pub use std::io::print_s;
+
 
 fn print_i64(i:i64) void;
+fn print_i128(i:i128) void;
+fn print_u64(i:u64) void;
+fn print_u128(i:u128) void;
+fn print_hex(i:i64) void;
+
 
 pub fn print_any<T>(t:T) void {
     let s = nameof<T>();
-    io::print_s(s);
-    io::print_s("( ");
+    print_s(s);
+    if !is_ptr<T>()  {
+        let is_arr = if_arr(t, {
+            let arr = _arr;
+            print_s("[ ");
+            for let i = 0; i < arr_len(arr); i = i + 1 {
+                print_any(arr[i]);
+                print_s(" ");
+            }
+            print_s("]");
+        });
+        if is_arr {
+            return;
+        }
+    }
+    print_s("( ");
     let b = false;
+    if is_ptr<T>() {
+        let result = unsafe_cast<*u8>(&t);
+        let i = gc::ptr_to_int(*result);
+        print_hex(i);
+        print_s(" )");
+        return;
+    }
+
+    if if_union(t, {
+        print_any(_inner);
+    }) {
+        print_s(" )");
+        return;
+    }
+
     match_type<bool>(t,{
         if _value {
-            io::print_s("true");
+            print_s("true");
         }else {
-            io::print_s("false");
+            print_s("false");
         }
+        b = true;
+    });
+    match_type<i8>(t,{
+        print_i64(_value as i64);
+        b = true;
+    });
+    match_type<i16>(t,{
+        print_i64(_value as i64);
+        b = true;
+    });
+    match_type<i32>(t,{
+        print_i64(_value as i64);
         b = true;
     });
     match_type<i64>(t,{
         print_i64(_value);
         b = true;
     });
+    match_type<i128>(t,{
+        print_i128(_value);
+        b = true;
+    });
+    match_type<u8>(t,{
+        print_u64(_value as u64);
+        b = true;
+    });
+    match_type<u16>(t,{
+        print_u64(_value as u64);
+        b = true;
+    });
+    match_type<u32>(t,{
+        print_u64(_value as u64);
+        b = true;
+    });
+    match_type<u64>(t,{
+        print_u64(_value);
+        b = true;
+    });
+    match_type<u128>(t,{
+        print_u128(_value);
+        b = true;
+    });
     match_type<gc::string>(t,{
-        io::print_s("\"");
-        io::print_s(_value);
-        io::print_s("\"");
+        print_s("\"");
+        print_s(_value);
+        print_s("\"");
         b = true;
     });
     if b {
-        io::print_s(" )");
+        print_s(" )");
         return;
     }
-    forfields(t, {
-        io::print_s(_field_name);
-        io::print_s(": ");
+    let re = forfields(t, {
+        print_s(_field_name);
+        print_s(": ");
         print_any(_field);
-        io::print_s(" ");
+        print_s(" ");
     });
-    io::print_s(")");
+    if !re {// is trait
+        let result = unsafe_cast<i64>(&t);
+        // let hash = *result;
+        let i_ptr = gc::ptr_to_int(unsafe_cast<u8>(result)) + 8;
+        let v_ptr = gc::int_to_ptr(i_ptr);
+        let v = unsafe_cast<i64>(v_ptr);
+        let i = *v;
+        print_hex(i);
+        print_s(" ");
+    }
+    print_s(")");
     return;
 }
 
 macro println {
     ($start:@expr) => {
         stdbuiltin::print_any($start);
-        io::print_s("\n");
+        print_s("\n");
     };
     ($start:@expr$(,$expr:@expr)*) => {
         stdbuiltin::print_any($start);
-        io::print_s(" ");
+        print_s(" ");
         $(
             stdbuiltin::print_any($expr);
-            io::print_s(" ");
+            print_s(" ");
         )*
-        io::print_s("\n");
+        print_s("\n");
     };
 }

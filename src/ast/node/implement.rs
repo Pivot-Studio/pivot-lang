@@ -3,6 +3,7 @@ use crate::{
     ast::{ctx::Ctx, tokens::TokenType, traits::CustomType},
     format_label,
 };
+use indexmap::IndexMap;
 use internal_macro::node;
 use lsp_types::{DocumentSymbol, SymbolKind};
 use rustc_hash::FxHashSet;
@@ -24,6 +25,11 @@ impl ImplNode {
         if self.generics.is_some() {
             let gm = self.generics.as_ref().unwrap().gen_generic_type(ctx);
             _ = ctx.protect_generic_context(&gm, |ctx| {
+                self.generics
+                    .as_ref()
+                    .unwrap()
+                    .set_traits(ctx, &gm)
+                    .unwrap();
                 let sttp = self.target.get_type(ctx, builder, true)?;
                 let trait_tp = self
                     .impl_trait
@@ -150,6 +156,9 @@ impl Node for ImplNode {
             .map(|e| e.gen_generic_type(ctx))
             .unwrap_or_default();
         ctx.protect_generic_context(&gm, |ctx| {
+            if let Some(g) = self.generics.as_ref() {
+                g.set_traits(ctx, &gm)?;
+            }
             let mut traittpandrange = None;
             let mut traitfns = FxHashSet::default();
             if let Some((typename, _)) = &self.impl_trait {
@@ -182,6 +191,7 @@ impl Node for ImplNode {
                 }
                 let v = bt.id.as_ref().unwrap().get_type(ctx)?.get_value();
                 let st_pltype = v.unwrap().get_ty();
+                // ctx.set_self_type(st_pltype.clone());
                 if let PLType::Struct(sttp) = &*st_pltype.borrow() {
                     if let Some((trait_tp, r)) = &traittpandrange {
                         if let PLType::Trait(trait_tp) = &*trait_tp.borrow() {
@@ -206,15 +216,25 @@ impl Node for ImplNode {
                         if let Some((trait_tp, _)) = &traittpandrange {
                             if let PLType::Trait(t) = &*trait_tp.clone().borrow() {
                                 ctx.protect_generic_context(&t.generic_map, |ctx| {
-                                    check_fn(
-                                        ctx,
-                                        builder,
-                                        method,
-                                        trait_tp.clone(),
-                                        &mut traitfns,
-                                        fntype.clone(),
-                                    )?;
-                                    Ok(())
+                                    let generic_map = if let Some(generics) = &method.generics {
+                                        generics.gen_generic_type(ctx)
+                                    } else {
+                                        IndexMap::default()
+                                    };
+                                    ctx.protect_generic_context(&generic_map, |ctx| {
+                                        if let Some(generics) = &method.generics {
+                                            generics.set_traits(ctx, &generic_map)?;
+                                        }
+                                        check_fn(
+                                            ctx,
+                                            builder,
+                                            method,
+                                            trait_tp.clone(),
+                                            &mut traitfns,
+                                            fntype.clone(),
+                                        )?;
+                                        Ok(())
+                                    })
                                 })?;
                             }
                         }
@@ -228,7 +248,7 @@ impl Node for ImplNode {
                         r,
                         ctx.get_file(),
                         format_label!(
-                            "method {} not in impl block, whitch is required in trait {}",
+                            "method {} not in impl block, which is required in trait {}",
                             f,
                             tp.borrow().get_name()
                         ),

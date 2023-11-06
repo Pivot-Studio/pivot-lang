@@ -1,0 +1,104 @@
+pub trait Eq<S> {
+    fn eq(r:*S) bool;
+}
+
+
+impl Eq<gc::string> for gc::string {
+    fn eq(r:*gc::string) bool {
+        if self.len() != r.len() {
+            return false;
+        }
+        for let i = 0; i < self.len(); i = i + 1 {
+            if self.bytes()[i] != r.bytes()[i] {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+
+
+
+impl <T:Eq<T>> Eq<[T]> for [T] {
+    fn eq(r:*[T]) bool {
+        if arr_len(*self) != arr_len(*r) {
+            return false;
+        }
+        for let i = 0; i < arr_len(*self); i = i + 1 {
+            if !(*self)[i].eq(&(*r)[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+
+
+impl Eq<i128> for i128 {
+    fn eq(r:*i128) bool {
+        return *r == *self;
+    }
+}
+
+
+impl Eq<i64> for i64 {
+    fn eq(r:*i64) bool {
+        return *r == *self;
+    }
+}
+
+impl Eq<i32> for i32 {
+    fn eq(r:*i32) bool {
+        return *r == *self;
+    }
+}
+
+
+impl Eq<i16> for i16 {
+    fn eq(r:*i16) bool {
+        return *r == *self;
+    }
+}
+
+
+impl Eq<i8> for i8 {
+    fn eq(r:*i8) bool {
+        return *r == *self;
+    }
+}
+
+
+impl Eq<u128> for u128 {
+    fn eq(r:*u128) bool {
+        return *r == *self;
+    }
+}
+
+
+impl Eq<u64> for u64 {
+    fn eq(r:*u64) bool {
+        return *r == *self;
+    }
+}
+
+impl Eq<u32> for u32 {
+    fn eq(r:*u32) bool {
+        return *r == *self;
+    }
+}
+
+
+impl Eq<u16> for u16 {
+    fn eq(r:*u16) bool {
+        return *r == *self;
+    }
+}
+
+
+impl Eq<u8> for u8 {
+    fn eq(r:*u8) bool {
+        return *r == *self;
+    }
+}
+
+

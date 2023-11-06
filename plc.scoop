@@ -2,9 +2,9 @@
     "version": "{0}",
     "homepage": "https://lang.pivotstudio.cn",
     "license": "MIT",
-    "description": "Pivot Lang Compiler and language server",
+    "description": "Pivot Lang Compiler",
     "bin": [
-        "plc.exe"
+        "win64\\plc.exe"
     ],
     "architecture": {{
         "64bit":         {{
@@ -13,12 +13,14 @@
             "sha256": "{2}"
         }}
     }},
-    "env_add_path": [
-        "$dir"
-    ],
     "post_install": [
-        "tar xvf {1}",
         "setx KAGARI_LIB_ROOT \"$dir\\win64\\planglib\"",
-        "setx PL_ROOT \"$dir\\win64\""
+        "setx PL_ROOT \"$dir\\win64\"",
+        "$env:KAGARI_LIB_ROOT=\"$dir\\win64\\planglib\"",
+        "$env:PL_ROOT=\"$dir\\win64\""
+    ],
+    "post_uninstall":[
+        "[Environment]::SetEnvironmentVariable('KAGARI_LIB_ROOT', $null, 'User')",
+        "[Environment]::SetEnvironmentVariable('PL_ROOT', $null, 'User')"
     ]
 }}

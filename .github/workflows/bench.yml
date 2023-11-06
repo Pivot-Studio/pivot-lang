@@ -8,6 +8,9 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  RUST_TEST_NOCAPTURE: 1
+  PL_IMMIX_HEAP_SIZE: 1073741824
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,7 +21,7 @@ jobs:
     name: Benchmark immix
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
 

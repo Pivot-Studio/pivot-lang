@@ -2,3 +2,18 @@ pub trait Iterator<T> {
     fn next() Option<T>;
 }
 
+
+pub trait IntoIter<T> {
+    fn into_iter() Iterator<T>;
+}
+
+
+impl <T> IntoIter<T> for [T] {
+    gen fn into_iter() Iterator<T> {
+        let l = arr_len(*self);
+        for let i = 0; i < l; i = i + 1 {
+            let x = (*self)[i];
+            yield return x;
+        }
+    }
+}
