@@ -119,7 +119,7 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
         delspace(tuple((
             tag_token_word(TokenType::WHILE),
             alt_except(
-                general_exp,
+                parse_with_ex(general_exp, true),
                 "{",
                 "failed to parse while condition",
                 ErrorCode::WHILE_CONDITION_MUST_BE_BOOL,

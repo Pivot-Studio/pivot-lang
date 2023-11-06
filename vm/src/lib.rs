@@ -4,6 +4,7 @@
 use std::{process::exit, thread};
 
 use backtrace::Backtrace;
+use immix::{IntEnum, ObjectType};
 use internal_macro::is_runtime;
 pub mod gc;
 pub mod libcwrap;
@@ -63,14 +64,17 @@ fn print_i64(i: i64) {
 }
 
 #[is_runtime]
-fn new_thread(f: i128) -> i128 {
+fn new_thread(mut f: i128) -> i128 {
     // f's first 8 byte is fn pointer, next 8 byte is data pointer
     let ptr = &f as *const i128 as *const i64;
     let f_ptr = ptr as *const extern "C" fn(i64);
     let data_ptr = unsafe { *ptr.offset(1) };
+    immix::gc_add_root(&mut f as *mut _ as *mut _, ObjectType::Pointer.int_value());
+    // immix::gc_add_root(root, obj_type)
     let func = unsafe { *f_ptr };
     let c = move || {
         func(data_ptr);
+        immix::gc_remove_root(&mut f as *mut _ as *mut _);
     };
     thread::spawn(c);
     f

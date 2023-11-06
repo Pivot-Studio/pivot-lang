@@ -54,6 +54,7 @@ pub fn new_tf(secs: u64)*TimerFuture{
         }
         return;
     };
+
     println!("start a thread");
     // gc::DioGC__disable_auto_collect();
     new_thread(f);
@@ -101,7 +102,8 @@ impl Executor {
     fn run()void{
         let is_pending = true;
         while is_pending {
-            let task: Task = *self.ready_queue.recv();
+            let task = *self.ready_queue.recv();
+            println!("recved");
             let wk = task.time_future.shared_state.waker;
             let poll = task.time_future.poll(wk as Waker!);
             println!("polled");

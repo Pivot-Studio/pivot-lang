@@ -2,7 +2,15 @@ pub struct Mutex{}
 
 pub fn create_mutex(mutex: **Mutex) u64;
 
-pub fn lock_mutex(mutex: *Mutex) u64;
+fn lock_mutex(mutex: *Mutex) u64;
+
+
+pub fn lock_mutexWrap(mutex: *Mutex) u64{
+    gc::DioGC__stuck_begin();
+    let res = lock_mutex(mutex);
+    gc::DioGC__stuck_end();
+    return res;
+}
 
 pub fn unlock_mutex(mutex: *Mutex) u64;
 

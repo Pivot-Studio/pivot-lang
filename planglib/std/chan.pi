@@ -45,16 +45,21 @@ pub fn channel<T>(sz: u64) Chan<T> {
 }
 impl <S>Chan<S> {
     pub fn send(s: S) void {
-        while self.capacity <= self.count {}
-        lock_mutex(self.mtx);
+        gc::DioGC__stuck_begin();
+        while self.capacity <= self.count {
+        }
+        gc::DioGC__stuck_end();
+        lock_mutexWrap(self.mtx);
         self.buffer.push(s);
         self.count = self.count + 1;
         unlock_mutex(self.mtx);
         return;
     }
     pub fn recv() S {
+        gc::DioGC__stuck_begin();
         while self.count==0 {}
-        lock_mutex(self.mtx);
+        gc::DioGC__stuck_end();
+        lock_mutexWrap(self.mtx);
         let s = self.buffer.pop();
         self.count = self.count - 1;
         unlock_mutex(self.mtx);

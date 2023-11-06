@@ -70,7 +70,6 @@ mod _immix {
             immix::thread_stuck_end();
         }
 
-
         pub unsafe fn collect() {
             trace!("manual collect");
             immix::gc_collect()

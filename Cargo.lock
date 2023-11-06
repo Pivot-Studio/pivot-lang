@@ -843,6 +843,7 @@ dependencies = [
  "regex",
  "rustc-hash",
  "semver",
+ "threadpool",
  "vector-map",
  "winapi",
 ]
