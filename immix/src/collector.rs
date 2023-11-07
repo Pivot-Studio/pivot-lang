@@ -1,10 +1,15 @@
 use std::{
     cell::RefCell,
     ptr::drop_in_place,
-    sync::atomic::{AtomicBool, AtomicPtr, Ordering},
+    sync::{
+        atomic::{AtomicBool, AtomicPtr, Ordering},
+        Arc,
+    },
+    time::Instant,
 };
 
 use libc::malloc;
+use parking_lot::{Condvar, Mutex};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 #[cfg(feature = "llvm_stackmap")]
@@ -407,6 +412,7 @@ impl Collector {
     /// this mark function is __precise__
     pub fn mark(&self) {
         GC_RUNNING.store(true, Ordering::Release);
+        STUCK_COND.notify_all();
 
         let mut v = GC_COLLECTOR_COUNT.lock();
         let (count, mut waiting) = *v;
@@ -414,16 +420,25 @@ impl Collector {
         *v = (count, waiting);
         // println!("gc mark {}: waiting: {}, count: {}", self.id, waiting, count);
         if waiting != count {
-            GC_MARK_COND.wait_while(&mut v, |(c, _)| {
-                // 线程数量变化了？
-                if waiting == *c {
-                    GC_MARKING.store(true, Ordering::Release);
-                    GC_STW_COUNT.fetch_add(1, Ordering::Relaxed);
-                    GC_MARK_COND.notify_all();
-                    return false;
-                }
-                !GC_MARKING.load(Ordering::Acquire)
-            });
+            while GC_MARK_COND
+                .wait_while_until(
+                    &mut v,
+                    |(c, _)| {
+                        // 线程数量变化了？
+                        if waiting == *c {
+                            GC_MARKING.store(true, Ordering::Release);
+                            GC_STW_COUNT.fetch_add(1, Ordering::Relaxed);
+                            GC_MARK_COND.notify_all();
+                            return false;
+                        }
+                        !GC_MARKING.load(Ordering::Acquire)
+                    },
+                    Instant::now() + std::time::Duration::from_millis(100),
+                )
+                .timed_out()
+            {
+                // STUCK_COND.notify_all();
+            }
             drop(v);
         } else {
             GC_MARKING.store(true, Ordering::Release);
@@ -698,25 +713,33 @@ impl Collector {
             GLOBAL_ALLOCATOR.0.as_ref().unwrap().pool.execute(move || {
                 log::info!("gc {}: stucked, waiting for unstuck...", c.id);
                 loop {
-                    let mut i: i32 = 0;
-                    core::hint::spin_loop();
-                    let (re, _) = i.overflowing_add(1);
-                    i = re;
-                    if i % 100 == 0 {
-                        std::thread::yield_now();
-                    }
+                    // let mut i: i32 = 0;
+                    // core::hint::spin_loop();
+                    // let (re, _) = i.overflowing_add(1);
+                    // i = re;
+                    // if i % 100 == 0 {
+                    //     std::thread::yield_now();
+                    // }
                     // sleep(std::time::Duration::from_millis(100));
                     if c.frames_list.load(Ordering::SeqCst).is_null() {
                         log::trace!("gc {}: unstucking break...", c.id);
                         c.shadow_thread_running.store(false, Ordering::SeqCst);
                         break;
                     } else {
-                        c.safepoint();
+                        if GC_RUNNING.load(Ordering::Acquire) {
+                            c.collect();
+                        } else {
+                            STUCK_COND.wait_until(
+                                &mut STUCK_MUTEX.lock(),
+                                Instant::now() + std::time::Duration::from_millis(100),
+                            );
+                            c.safepoint();
+                        }
                     }
                 }
             });
         }
-
+        STUCK_COND.notify_all();
         // FRAMES_LIST.0.lock().borrow_mut().insert( self as _,frames);
     }
 
@@ -731,7 +754,10 @@ impl Collector {
             }
         }
         // wait until the shadow thread exit
-        spin_until!(!self.shadow_thread_running.load(Ordering::SeqCst));
+        spin_until!({
+            STUCK_COND.notify_all();
+            !self.shadow_thread_running.load(Ordering::SeqCst)
+        });
     }
 }
 
@@ -740,6 +766,11 @@ impl Collector {
 mod tests;
 
 static STUCK_GCED: AtomicBool = AtomicBool::new(false);
+
+lazy_static::lazy_static! {
+    static ref STUCK_COND: Arc<Condvar> = Arc::new(Condvar::new());
+    static ref STUCK_MUTEX:Mutex<()> = Mutex::new(());
+}
 
 unsafe impl Sync for Collector {}
 unsafe impl Send for Collector {}
