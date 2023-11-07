@@ -1,7 +1,7 @@
 #![allow(improper_ctypes_definitions)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::{process::exit, thread, sync::mpsc::channel};
+use std::{process::exit, sync::mpsc::channel, thread};
 
 use backtrace::Backtrace;
 use immix::{IntEnum, ObjectType};
@@ -68,13 +68,13 @@ fn new_thread(mut f: i128) -> i128 {
     // f's first 8 byte is fn pointer, next 8 byte is data pointer
     let ptr = &f as *const i128 as *const i64;
     let f_ptr = ptr as *const extern "C" fn(i64);
-    let  data_ptr = unsafe { *ptr.offset(1) };
+    let data_ptr = unsafe { *ptr.offset(1) };
     // immix::gc_add_root(root, obj_type)
     let func = unsafe { *f_ptr };
-    let (s,r)  = channel::<()>();
+    let (s, r) = channel::<()>();
     // immix::gc_add_root(&mut f as *mut _ as *mut _, ObjectType::Trait.int_value());
     let c = move || {
-        thread::sleep(std::time::Duration::from_secs(1));
+        // thread::sleep(std::time::Duration::from_secs(1));
         immix::gc_add_root(&mut f as *mut _ as *mut _, ObjectType::Trait.int_value());
         s.send(()).unwrap();
         func(data_ptr);

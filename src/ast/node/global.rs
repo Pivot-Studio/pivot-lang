@@ -116,11 +116,15 @@ impl GlobalNode {
         ctx.add_symbol(
             self.var.name.clone(),
             globalptr,
-            pltype,
+            pltype.clone(),
             self.var.range,
             false,
             false,
         )?;
+        // for gc reason, globals must be pointer
+        if !matches!(&*pltype.borrow(), PLType::Pointer(_)) {
+            return Err(ctx.add_diag(self.var.range.new_err(ErrorCode::GLOBAL_MUST_BE_POINTER)));
+        }
         Ok(())
     }
 }

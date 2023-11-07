@@ -1,13 +1,10 @@
 use std::{
     cell::RefCell,
     ptr::drop_in_place,
-    sync::atomic::{AtomicBool, AtomicPtr, Ordering}, mem::{forget, ManuallyDrop},
+    sync::atomic::{AtomicBool, AtomicPtr, Ordering},
 };
 
-use lazy_static::lazy_static;
 use libc::malloc;
-use parking_lot::Mutex;
-use rustc_hash::FxHashSet;
 use vector_map::VecMap;
 
 #[cfg(feature = "llvm_stackmap")]
@@ -433,9 +430,7 @@ impl Collector {
                     match obj_type {
                         ObjectType::Atomic => {}
                         ObjectType::Pointer => (*self.queue).push((*root, *obj_type)),
-                        _ => {
-                            (*self.queue).push((*root, *obj_type))
-                        }
+                        _ => (*self.queue).push((*root, *obj_type)),
                     }
                 }
             }
@@ -454,7 +449,7 @@ impl Collector {
                 let fl = self.frames_list.load(Ordering::SeqCst);
                 let frames = if !fl.is_null() {
                     log::trace!("gc {}: tracing stucked frames", self.id);
-                    unsafe {fl.as_mut().unwrap().clone()}
+                    unsafe { fl.as_mut().unwrap().clone() }
                 } else {
                     let mut frames: Vec<(*mut libc::c_void, *mut libc::c_void)> = vec![];
                     backtrace::trace(|frame| {
@@ -675,14 +670,14 @@ impl Collector {
 
     pub fn stuck(&mut self) {
         log::trace!("gc {}: stucking...", self.id);
-        let mut frames: Box< Vec<(*mut libc::c_void, *mut libc::c_void)>> = Box::new( vec![]);
+        let mut frames: Box<Vec<(*mut libc::c_void, *mut libc::c_void)>> = Box::default();
         backtrace::trace(|frame| {
             frames.push((frame.ip(), frame.sp()));
             true
         });
         unsafe {
             let ptr = Box::leak(frames) as *mut _;
-            self.frames_list.store( ptr, Ordering::SeqCst);
+            self.frames_list.store(ptr, Ordering::SeqCst);
             let c: *mut Collector = self as *mut _;
             let c = c.as_mut().unwrap();
             c.shadow_thread_running.store(true, Ordering::SeqCst);
@@ -713,7 +708,9 @@ impl Collector {
 
     pub fn unstuck(&mut self) {
         log::trace!("gc {}: unstucking...", self.id);
-        let old = self.frames_list.swap(std::ptr::null_mut(), Ordering::SeqCst);
+        let old = self
+            .frames_list
+            .swap(std::ptr::null_mut(), Ordering::SeqCst);
         if !old.is_null() {
             unsafe {
                 drop_in_place(old as *mut Vec<(*mut libc::c_void, *mut libc::c_void)>);
@@ -728,11 +725,7 @@ impl Collector {
 #[cfg(feature = "shadow_stack")]
 mod tests;
 
-
 static STUCK_GCED: AtomicBool = AtomicBool::new(false);
 
-pub struct FramesList(pub Mutex<RefCell<FxHashSet<*mut Collector>>>);
-unsafe impl Sync for FramesList {}
-unsafe impl Send for FramesList {}
 unsafe impl Sync for Collector {}
 unsafe impl Send for Collector {}

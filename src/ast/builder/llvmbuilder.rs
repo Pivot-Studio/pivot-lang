@@ -1566,7 +1566,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let dbg = builder.get_current_debug_location();
         let bb = builder.get_insert_block().unwrap();
         // malloc ret after call is not safe, as malloc may trigger collection
-        let alloca = if matches!(ret_type, PLType::Void|PLType::Primitive(_)) {
+        let alloca = if matches!(ret_type, PLType::Void | PLType::Primitive(_)) {
             0
         } else {
             self.alloc_raw("ret_alloca", ret_type, ctx, None, "DioGC__malloc")
@@ -1596,7 +1596,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let ret = v.left().unwrap();
 
         builder.unset_current_debug_location();
-        if alloca==0 {
+        if alloca == 0 {
             return Some(self.get_llvm_value_handle(&ret.as_any_value_enum()));
         }
         self.builder.build_store(

@@ -36,9 +36,6 @@ impl Waker for TimeWaker {
     }
 }
 
-var fff=||=>void{
-    return;
-};
 pub fn new_tf(secs: u64)*TimerFuture{
     let shared_state = &SharedState {};
     shared_state.completed = false;
@@ -60,7 +57,6 @@ pub fn new_tf(secs: u64)*TimerFuture{
         }
         return;
     };
-    fff = f;
     println!("start a thread");
     // gc::DioGC__disable_auto_collect();
     new_thread(f);
