@@ -1,4 +1,4 @@
-use std::{cell::Cell, thread::available_parallelism};
+use std::cell::Cell;
 
 use parking_lot::ReentrantMutex;
 use threadpool::ThreadPool;
@@ -52,7 +52,7 @@ impl GlobalAllocator {
         let mmap = Mmap::new(size * 3 / 4);
 
         // mmap.commit(mmap.aligned(), BLOCK_SIZE);
-        let n_workers = available_parallelism().unwrap().get();
+        // let n_workers = available_parallelism().unwrap().get();
 
         Self {
             current: Cell::new(mmap.aligned(BLOCK_SIZE)),
@@ -65,7 +65,7 @@ impl GlobalAllocator {
             last_get_block_time: std::time::Instant::now(),
             mem_usage_flag: 0,
             round: 0,
-            pool: ThreadPool::new(n_workers),
+            pool: ThreadPool::default(),
         }
     }
     /// 从big object mmap中分配一个大对象，大小为size

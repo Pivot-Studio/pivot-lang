@@ -1,7 +1,7 @@
 use std::chan::*;
 use std::future::*;
 use std::io;
-fn new_thread(f: ||=>void) i128;
+fn new_thread(f: *||=>void) i128;
 fn sleep(secs: u64) void;
 pub struct SharedState {
     completed: bool;
@@ -60,7 +60,7 @@ pub fn new_tf(secs: u64)*TimerFuture{
     println!("start a thread");
     // fff = &f;
     // gc::DioGC__disable_auto_collect();
-    new_thread(f);
+    new_thread(&f);
     let ret = TimerFuture {shared_state: shared_state};
     return &ret;
 }
