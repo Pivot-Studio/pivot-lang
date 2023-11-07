@@ -46,6 +46,9 @@ pub fn new_tf(secs: u64)*TimerFuture{
     let f = ||=>void{
         // gc::DioGC__enable_auto_collect();
         println!("begin sleep");
+        if secs!=3 {
+            let a = 1;
+        }
         // gc::DioGC__disable_auto_collect();
         sleep(secs);
         // gc::DioGC__enable_auto_collect();

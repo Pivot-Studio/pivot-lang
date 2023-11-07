@@ -43,6 +43,7 @@ pub struct Collector {
     mark_histogram: *mut VecMap<usize, usize>,
     status: RefCell<CollectorStatus>,
     frames_list: AtomicPtr<Vec<(*mut libc::c_void, *mut libc::c_void)>>,
+    shadow_thread_running: AtomicBool,
 }
 
 struct CollectorStatus {
@@ -113,6 +114,7 @@ impl Collector {
                     collecting: false,
                 }),
                 frames_list: AtomicPtr::default(),
+                shadow_thread_running: AtomicBool::new(false),
             }
         }
     }
@@ -151,7 +153,7 @@ impl Collector {
         if size == 0 {
             return std::ptr::null_mut();
         }
-        if !self.frames_list.load(Ordering::Acquire).is_null() {
+        if !self.frames_list.load(Ordering::SeqCst).is_null() {
             panic!("gc stucked, can not alloc")
         }
         if gc_is_auto_collect_enabled() {
@@ -432,9 +434,6 @@ impl Collector {
                         ObjectType::Atomic => {}
                         ObjectType::Pointer => (*self.queue).push((*root, *obj_type)),
                         _ => {
-                            if !self.thread_local_allocator.as_mut().unwrap().in_heap(*root) {
-                                continue;
-                            }
                             (*self.queue).push((*root, *obj_type))
                         }
                     }
@@ -452,7 +451,7 @@ impl Collector {
             } else {
                 // println!("{:?}", &STACK_MAP.map.borrow());
                 let mut depth = 0;
-                let fl = self.frames_list.load(Ordering::Acquire);
+                let fl = self.frames_list.load(Ordering::SeqCst);
                 let frames = if !fl.is_null() {
                     log::trace!("gc {}: tracing stucked frames", self.id);
                     unsafe {fl.as_mut().unwrap().clone()}
@@ -520,6 +519,7 @@ impl Collector {
         } else {
             GC_MARKING.store(false, Ordering::Release);
             GC_MARK_COND.notify_all();
+            GC_RUNNING.store(false, Ordering::Release);
             drop(v);
         }
     }
@@ -542,7 +542,6 @@ impl Collector {
     ///
     /// since we did synchronization in mark, we don't need to do synchronization again in sweep
     pub fn sweep(&self) -> usize {
-        GC_RUNNING.store(false, Ordering::Release);
         GC_SWEEPPING_NUM.fetch_add(1, Ordering::AcqRel);
         GC_SWEEPING.store(true, Ordering::Release);
         log::trace!("gc {}: sweeping...", self.id);
@@ -586,7 +585,7 @@ impl Collector {
         log::info!(
             "gc {} collecting... stucked: {}",
             self.id,
-            !self.frames_list.load(Ordering::Acquire).is_null()
+            !self.frames_list.load(Ordering::SeqCst).is_null()
         );
         // self.print_stats();
         let mut status = self.status.borrow_mut();
@@ -681,14 +680,14 @@ impl Collector {
             frames.push((frame.ip(), frame.sp()));
             true
         });
-        FRAMES_LIST.0.lock().borrow_mut().insert(self as _);
         unsafe {
             let ptr = Box::leak(frames) as *mut _;
-            self.frames_list.store( ptr, Ordering::Release);
+            self.frames_list.store( ptr, Ordering::SeqCst);
             let c: *mut Collector = self as *mut _;
             let c = c.as_mut().unwrap();
-            let ptr_i = ptr as usize;
+            c.shadow_thread_running.store(true, Ordering::SeqCst);
             GLOBAL_ALLOCATOR.0.as_ref().unwrap().pool.execute(move || {
+                log::info!("gc {}: stucked, waiting for unstuck...", c.id);
                 loop {
                     let mut i: i32 = 0;
                     core::hint::spin_loop();
@@ -698,20 +697,12 @@ impl Collector {
                         std::thread::yield_now();
                     }
                     // sleep(std::time::Duration::from_millis(100));
-                    if FRAMES_LIST.0.lock().borrow().contains(&(c as *mut _)) {
-                        c.safepoint();
-                    } else {
-                        let re = c.frames_list.compare_exchange(
-                            ptr_i as _,
-                            std::ptr::null_mut(),
-                            Ordering::SeqCst,
-                            Ordering::SeqCst,
-                        );
-                        // if seccess, drop it
-                        if re.is_ok() {
-                            drop_in_place(ptr_i as *mut Vec<(*mut libc::c_void, *mut libc::c_void)>);
-                        }
+                    if c.frames_list.load(Ordering::SeqCst).is_null() {
+                        log::trace!("gc {}: unstucking break...", c.id);
+                        c.shadow_thread_running.store(false, Ordering::SeqCst);
                         break;
+                    } else {
+                        c.safepoint();
                     }
                 }
             });
@@ -722,8 +713,14 @@ impl Collector {
 
     pub fn unstuck(&mut self) {
         log::trace!("gc {}: unstucking...", self.id);
-        FRAMES_LIST.0.lock().borrow_mut().remove(&(self as _));
-        spin_until!(self.frames_list.load(Ordering::Acquire).is_null());
+        let old = self.frames_list.swap(std::ptr::null_mut(), Ordering::SeqCst);
+        if !old.is_null() {
+            unsafe {
+                drop_in_place(old as *mut Vec<(*mut libc::c_void, *mut libc::c_void)>);
+            }
+        }
+        // wait until the shadow thread exit
+        spin_until!(!self.shadow_thread_running.load(Ordering::SeqCst));
     }
 }
 
@@ -731,10 +728,6 @@ impl Collector {
 #[cfg(feature = "shadow_stack")]
 mod tests;
 
-lazy_static! {
-    pub static ref FRAMES_LIST: FramesList =
-        FramesList(Mutex::new(RefCell::new(Default::default())));
-}
 
 static STUCK_GCED: AtomicBool = AtomicBool::new(false);
 
