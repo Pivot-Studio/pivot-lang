@@ -63,7 +63,7 @@ fn print_i64(i: i64) {
 }
 
 #[is_runtime]
-fn new_thread(f: * mut i128)  {
+fn new_thread(f: *mut i128) {
     // f's first 8 byte is fn pointer, next 8 byte is data pointer
     let ptr = f as *const i64;
     let f_ptr = ptr as *const extern "C" fn(i64);
