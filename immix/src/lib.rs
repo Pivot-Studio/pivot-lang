@@ -184,11 +184,16 @@ pub fn gc_init(ptr: *mut u8) {
     });
 }
 
-/// notify gc if a thread is going to stuck e.g.
-/// lock a mutex or doing sync io
+/// notify gc current thread is going to stuck e.g.
+/// lock a mutex or doing sync io or sleep etc.
 ///
-/// during thread stucking, if a gc is triggered, it will skip waiting for this thread to
-/// reach a safe point
+/// during thread stucking, gc will start a nanny thread to
+/// do gc works that original thread should do.
+///
+/// ## Note
+///
+/// During thread stucking, the stucking thread should not
+/// request any memory from gc, or it will cause a panic.
 pub fn thread_stuck_start() {
     // v.0 -= 1;
     SPACE.with(|gc| {
@@ -199,7 +204,7 @@ pub fn thread_stuck_start() {
     });
 }
 
-/// notify gc a thread is not stuck anymore
+/// notify gc current thread is not stuck anymore
 ///
 /// if a gc is triggered during thread stucking, this function
 /// will block until the gc is finished

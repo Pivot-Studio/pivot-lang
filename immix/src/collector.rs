@@ -5,7 +5,6 @@ use std::{
         atomic::{AtomicBool, AtomicPtr, Ordering},
         Arc,
     },
-    time::Instant,
 };
 
 use libc::malloc;
@@ -411,8 +410,10 @@ impl Collector {
     ///
     /// this mark function is __precise__
     pub fn mark(&self) {
+        let mutex = STUCK_MUTEX.lock();
         GC_RUNNING.store(true, Ordering::Release);
         STUCK_COND.notify_all();
+        drop(mutex);
 
         let mut v = GC_COLLECTOR_COUNT.lock();
         let (count, mut waiting) = *v;
@@ -420,25 +421,16 @@ impl Collector {
         *v = (count, waiting);
         // println!("gc mark {}: waiting: {}, count: {}", self.id, waiting, count);
         if waiting != count {
-            while GC_MARK_COND
-                .wait_while_until(
-                    &mut v,
-                    |(c, _)| {
-                        // 线程数量变化了？
-                        if waiting == *c {
-                            GC_MARKING.store(true, Ordering::Release);
-                            GC_STW_COUNT.fetch_add(1, Ordering::Relaxed);
-                            GC_MARK_COND.notify_all();
-                            return false;
-                        }
-                        !GC_MARKING.load(Ordering::Acquire)
-                    },
-                    Instant::now() + std::time::Duration::from_millis(100),
-                )
-                .timed_out()
-            {
-                // STUCK_COND.notify_all();
-            }
+            GC_MARK_COND.wait_while(&mut v, |(c, _)| {
+                // 线程数量变化了？
+                if waiting == *c {
+                    GC_MARKING.store(true, Ordering::Release);
+                    GC_STW_COUNT.fetch_add(1, Ordering::Relaxed);
+                    GC_MARK_COND.notify_all();
+                    return false;
+                }
+                !GC_MARKING.load(Ordering::Acquire)
+            });
             drop(v);
         } else {
             GC_MARKING.store(true, Ordering::Release);
@@ -446,7 +438,6 @@ impl Collector {
             GC_MARK_COND.notify_all();
             drop(v);
         }
-        STUCK_GCED.store(false, Ordering::SeqCst);
 
         #[cfg(feature = "shadow_stack")]
         {
@@ -590,22 +581,9 @@ impl Collector {
     }
 
     /// # collect
+    ///
     /// Collect garbage.
     pub fn collect(&self) {
-        // let start_time = std::time::Instant::now();
-        // log::info!("gc {} collecting...", self.id);
-        // if STUCK_GCED.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
-        //     for (c1,f) in FRAMES_LIST.0.lock().borrow().iter() {
-        //         unsafe {
-        //             let c = c1.as_mut().unwrap();
-        //             c.frames_list = Some(f.clone());
-        //             GLOBAL_ALLOCATOR.0.as_ref().unwrap().pool.execute(|| {
-        //                 c.collect();
-        //                 c.frames_list = None;
-        //             });
-        //         }
-        //     }
-        // }
         log::info!(
             "gc {} collecting... stucked: {}",
             self.id,
@@ -713,28 +691,19 @@ impl Collector {
             GLOBAL_ALLOCATOR.0.as_ref().unwrap().pool.execute(move || {
                 log::info!("gc {}: stucked, waiting for unstuck...", c.id);
                 loop {
-                    // let mut i: i32 = 0;
-                    // core::hint::spin_loop();
-                    // let (re, _) = i.overflowing_add(1);
-                    // i = re;
-                    // if i % 100 == 0 {
-                    //     std::thread::yield_now();
-                    // }
-                    // sleep(std::time::Duration::from_millis(100));
+                    let mut mutex = STUCK_MUTEX.lock();
                     if c.frames_list.load(Ordering::SeqCst).is_null() {
                         log::trace!("gc {}: unstucking break...", c.id);
                         c.shadow_thread_running.store(false, Ordering::SeqCst);
+                        drop(mutex);
                         break;
+                    } else if GC_RUNNING.load(Ordering::Acquire) {
+                        drop(mutex);
+                        c.collect();
                     } else {
-                        if GC_RUNNING.load(Ordering::Acquire) {
-                            c.collect();
-                        } else {
-                            STUCK_COND.wait_until(
-                                &mut STUCK_MUTEX.lock(),
-                                Instant::now() + std::time::Duration::from_millis(100),
-                            );
-                            c.safepoint();
-                        }
+                        STUCK_COND.wait(&mut mutex);
+                        drop(mutex);
+                        c.safepoint();
                     }
                 }
             });
@@ -745,19 +714,22 @@ impl Collector {
 
     pub fn unstuck(&mut self) {
         log::trace!("gc {}: unstucking...", self.id);
+        let mutex = STUCK_MUTEX.lock();
         let old = self
             .frames_list
             .swap(std::ptr::null_mut(), Ordering::SeqCst);
         if !old.is_null() {
+            STUCK_COND.notify_all();
+            drop(mutex);
             unsafe {
                 drop_in_place(old as *mut Vec<(*mut libc::c_void, *mut libc::c_void)>);
             }
+        } else {
+            STUCK_COND.notify_all();
+            drop(mutex);
         }
         // wait until the shadow thread exit
-        spin_until!({
-            STUCK_COND.notify_all();
-            !self.shadow_thread_running.load(Ordering::SeqCst)
-        });
+        spin_until!(!self.shadow_thread_running.load(Ordering::SeqCst));
     }
 }
 
@@ -765,7 +737,7 @@ impl Collector {
 #[cfg(feature = "shadow_stack")]
 mod tests;
 
-static STUCK_GCED: AtomicBool = AtomicBool::new(false);
+// static STUCK_GCED: AtomicBool = AtomicBool::new(false);
 
 lazy_static::lazy_static! {
     static ref STUCK_COND: Arc<Condvar> = Arc::new(Condvar::new());
