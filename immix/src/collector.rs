@@ -5,7 +5,7 @@ use std::{
 };
 
 use libc::malloc;
-use vector_map::VecMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 #[cfg(feature = "llvm_stackmap")]
 use crate::STACK_MAP;
@@ -33,14 +33,15 @@ use crate::{
 /// * `status` - collector status
 pub struct Collector {
     thread_local_allocator: *mut ThreadLocalAllocator,
-    // #[cfg(feature = "shadow_stack")]
+    #[cfg(feature = "shadow_stack")]
     roots: rustc_hash::FxHashMap<*mut u8, ObjectType>,
     queue: *mut Vec<(*mut u8, ObjectType)>,
     id: usize,
-    mark_histogram: *mut VecMap<usize, usize>,
+    mark_histogram: *mut FxHashMap<usize, usize>,
     status: RefCell<CollectorStatus>,
     frames_list: AtomicPtr<Vec<(*mut libc::c_void, *mut libc::c_void)>>,
     shadow_thread_running: AtomicBool,
+    live_set: FxHashSet<*mut u8>,
 }
 
 struct CollectorStatus {
@@ -90,9 +91,12 @@ impl Collector {
             let mem =
                 malloc(core::mem::size_of::<ThreadLocalAllocator>()).cast::<ThreadLocalAllocator>();
             mem.write(tla);
-            let memvecmap =
-                malloc(core::mem::size_of::<VecMap<usize, usize>>()).cast::<VecMap<usize, usize>>();
-            memvecmap.write(VecMap::with_capacity(NUM_LINES_PER_BLOCK));
+            let memvecmap = malloc(core::mem::size_of::<FxHashMap<usize, usize>>())
+                .cast::<FxHashMap<usize, usize>>();
+            memvecmap.write(FxHashMap::with_capacity_and_hasher(
+                NUM_LINES_PER_BLOCK,
+                Default::default(),
+            ));
             let queue = Vec::new();
             let memqueue =
                 malloc(core::mem::size_of::<Vec<(*mut u8, ObjectType)>>())
@@ -100,7 +104,7 @@ impl Collector {
             memqueue.write(queue);
             Self {
                 thread_local_allocator: mem,
-                // #[cfg(feature = "shadow_stack")]
+                #[cfg(feature = "shadow_stack")]
                 roots: rustc_hash::FxHashMap::default(),
                 id,
                 mark_histogram: memvecmap,
@@ -112,6 +116,7 @@ impl Collector {
                 }),
                 frames_list: AtomicPtr::default(),
                 shadow_thread_running: AtomicBool::new(false),
+                live_set: FxHashSet::default(),
             }
         }
     }
@@ -191,7 +196,7 @@ impl Collector {
     /// ## Parameters
     /// * `root` - root
     /// * `size` - root size
-    // #[cfg(feature = "shadow_stack")]
+    #[cfg(feature = "shadow_stack")]
     pub fn add_root(&mut self, root: *mut u8, obj_type: ObjectType) {
         self.roots.insert(root, obj_type);
     }
@@ -201,7 +206,7 @@ impl Collector {
     ///
     /// ## Parameters
     /// * `root` - root
-    // #[cfg(feature = "shadow_stack")]
+    #[cfg(feature = "shadow_stack")]
     pub fn remove_root(&mut self, root: *mut u8) {
         self.roots.remove(&(root));
     }
@@ -371,7 +376,12 @@ impl Collector {
         }
         self.mark_ptr(ptr as *mut u8);
     }
-
+    pub fn keep_live(&mut self, gc_ptr: *mut u8) {
+        self.live_set.insert(gc_ptr);
+    }
+    pub fn rm_live(&mut self, gc_ptr: *mut u8) {
+        self.live_set.remove(&gc_ptr);
+    }
     pub fn print_stats(&self) {
         println!("gc {} states:", self.id);
         unsafe {
@@ -423,16 +433,20 @@ impl Collector {
         }
         STUCK_GCED.store(false, Ordering::SeqCst);
 
-        // #[cfg(feature = "shadow_stack")]
+        #[cfg(feature = "shadow_stack")]
         {
             for (root, obj_type) in self.roots.iter() {
                 unsafe {
                     match obj_type {
                         ObjectType::Atomic => {}
-                        ObjectType::Pointer => (*self.queue).push((*root, *obj_type)),
                         _ => (*self.queue).push((*root, *obj_type)),
                     }
                 }
+            }
+        }
+        for live in self.live_set.iter() {
+            unsafe {
+                self.mark_ptr(live as *const _ as _);
             }
         }
         log::trace!("gc {}: marking...", self.id);
@@ -601,8 +615,8 @@ impl Collector {
             {
                 // 如果需要驱逐，首先计算驱逐阀域
                 let mut eva_threshold = 0;
-                let mut available_histogram: VecMap<usize, usize> =
-                    VecMap::with_capacity(NUM_LINES_PER_BLOCK);
+                let mut available_histogram: FxHashMap<usize, usize> =
+                    FxHashMap::with_capacity_and_hasher(NUM_LINES_PER_BLOCK, Default::default());
                 let mut available_lines = self
                     .thread_local_allocator
                     .as_mut()

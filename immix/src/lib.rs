@@ -120,7 +120,7 @@ pub fn gc_collect() {
     })
 }
 
-// #[cfg(feature = "shadow_stack")]
+#[cfg(feature = "shadow_stack")]
 pub fn gc_add_root(root: *mut u8, obj_type: u8) {
     SPACE.with(|gc| {
         // println!("start add_root");
@@ -130,7 +130,25 @@ pub fn gc_add_root(root: *mut u8, obj_type: u8) {
     })
 }
 
-// #[cfg(feature = "shadow_stack")]
+pub fn gc_keep_live(gc_ptr: *mut u8) {
+    SPACE.with(|gc| {
+        // println!("start add_root");
+        let mut gc = gc.borrow_mut();
+        gc.keep_live(gc_ptr);
+        // println!("add_root")
+    })
+}
+
+pub fn gc_rm_live(gc_ptr: *mut u8) {
+    SPACE.with(|gc| {
+        // println!("start add_root");
+        let mut gc = gc.borrow_mut();
+        gc.rm_live(gc_ptr);
+        // println!("add_root")
+    })
+}
+
+#[cfg(feature = "shadow_stack")]
 pub fn gc_remove_root(root: *mut u8) {
     SPACE.with(|gc| {
         // println!("start remove_root");
