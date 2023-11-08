@@ -49,3 +49,4 @@
 
 - [About pivot lang](blogs/aboutpl.md)
 - [lsp and salsa](blogs/lsp_and_salsa.md)
+- [GC basic tutorial](blogs/gc_for_beginner.md)

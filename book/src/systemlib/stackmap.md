@@ -97,7 +97,7 @@ safepoint对于stackmap至关重要，因为在回收时gc就是通过在stackma
 
 由于gc回收需要等待所有线程到达safepoint，所以如果一个线程长期不到达safepoint，别的线程在回收的时候就可能会一直等待。因此
 immix提供一些工具函数。`thread_stuck_start`和`thread_stuck_end`，用于标记线程在执行某些长时间“卡住”的任务，在此期间
-该线程需要保证不会使用gc分配新的内存，否则可能导致内存安全问题。在线程被标记为stuck的阶段触发的gc会跳过同步该线程。`no_gc_thread`
+该线程需要保证不会使用gc分配新的内存，否则会panic。在线程被标记为stuck的阶段触发的gc会跳过同步该线程。`no_gc_thread`
 可以告知gc目前正在执行的线程不需要gc功能，该线程不会分配对应的ThreadLocalAllocator。
 
 ```
