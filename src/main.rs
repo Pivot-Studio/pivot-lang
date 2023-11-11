@@ -13,6 +13,7 @@ mod lsp;
 mod nomparser;
 mod utils;
 mod version;
+mod inference;
 use std::{
     cell::RefCell,
     path::Path,

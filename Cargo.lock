@@ -594,6 +594,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7fcaabb2fef8c910e7f4c7ce9f67a1283a1715879a7c230ca9d6d1ae31f16d91"
 
 [[package]]
+name = "ena"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef6777d97afbda76a79b1edb9127ed1a72a25159e75e12829acee0e3e9f27495"
+
+[[package]]
 name = "encode_unicode"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1300,6 +1306,7 @@ dependencies = [
  "dissimilar",
  "dunce",
  "dyn-fmt",
+ "ena",
  "enum_dispatch",
  "expect-test",
  "immix",

@@ -630,7 +630,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             | PLType::Primitive(_)
             | PLType::Void
             | PLType::Generic(_)
-            | PLType::PlaceHolder(_) => (),
+            | PLType::PlaceHolder(_) |PLType::UnKnown  => (),
         }
         let i = self.builder.build_load(loop_var, "i").into_int_value();
         let i = self
@@ -874,6 +874,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 ];
                 Some(self.context.struct_type(&fields, false).into())
             }
+            PLType::UnKnown => None,
         }
     }
     /// # get_ret_type
@@ -1267,7 +1268,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .insert(u.get_full_name(), st.as_type());
                 Some(st.as_type())
             }
-            PLType::Closure(_) => self.get_ditype(&PLType::Primitive(PriType::I64), ctx), // TODO
+            PLType::Closure(_) => self.get_ditype(&PLType::Primitive(PriType::I64), ctx),
+            PLType::UnKnown => None, // TODO
         }
     }
 
@@ -2461,7 +2463,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 | PLType::Primitive(_)
                 | PLType::Void
                 | PLType::Generic(_)
-                | PLType::PlaceHolder(_) => (),
+                | PLType::PlaceHolder(_)|PLType::UnKnown  => (),
             }
             // 其他为原子类型，跳过
         }
