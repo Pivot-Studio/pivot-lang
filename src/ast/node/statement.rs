@@ -6,8 +6,10 @@ use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
 use crate::format_label;
+use crate::inference::TyVariable;
 use crate::modifier_set;
 
+use ena::unify::UnifyKey;
 use indexmap::IndexMap;
 use internal_macro::node;
 use internal_macro::range;
@@ -92,8 +94,9 @@ impl PrintTrait for DefNode {
         } else {
             self.exp
                 .as_ref()
-                .unwrap()
-                .print(tabs + 1, true, line.clone());
+                .map(|e|{
+                    e.print(tabs + 1, true, line.clone());
+                });
         }
     }
 }
@@ -170,10 +173,31 @@ impl Node for DefNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.var.range(), SemanticTokenType::VARIABLE, 0);
-        if self.exp.is_none() && self.tp.is_none() {
-            return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
-        }
         let mut pltype = None;
+        if self.exp.is_none() && self.tp.is_none() {
+            let mut tp = Arc::new(RefCell::new(PLType::Unknown));
+            if let DefVar::Identifier(i) = &*self.var {
+                if let Some(id) = i.id  {
+                    tp = ctx.unify_table.borrow_mut().probe(id).0.clone();   
+                    ctx.push_type_hints(self.var.range(), tp.clone());
+                }
+            }
+            if matches!(&*tp.borrow(), PLType::Unknown) {
+                match builder {
+                    BuilderEnum::LLVM(_) => {
+                        return                 Err(ctx.add_diag(
+                            self.var.range().new_err(ErrorCode::UNKNOWN_TYPE).add_to_ctx(ctx),
+                        ));
+                    },
+                    BuilderEnum::NoOp(_) => {
+                        ctx.add_diag(
+                            self.var.range().new_err(ErrorCode::UNKNOWN_TYPE).add_to_ctx(ctx),
+                        );
+                    },
+                }
+            }
+            pltype = Some(tp);
+        }
         let mut expv = None;
         if let Some(tp) = &self.tp {
             tp.emit_highlight(ctx);
@@ -190,7 +214,7 @@ impl Node for DefNode {
 
             // for err tolerate
             if re.is_none() {
-                return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
+                return Err(ctx.add_diag(self.var.range().new_err(ErrorCode::UNKNOWN_TYPE)));
             }
             let re = re.unwrap();
             let mut tp = re.get_ty();

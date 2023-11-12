@@ -120,6 +120,7 @@ fn new_var(name: &str) -> Box<VarNode> {
     Box::new(VarNode {
         name: name.to_string(),
         range: Default::default(),
+        id: None,
     })
 }
 fn new_use(ns: &[&str]) -> Box<NodeEnum> {

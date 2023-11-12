@@ -484,7 +484,7 @@ impl Mod {
                 PLType::PlaceHolder(_) => continue,
                 PLType::Union(_) => CompletionItemKind::ENUM,
                 PLType::Closure(_) => unreachable!(),
-                PLType::UnKnown => unreachable!(),
+                PLType::Unknown => unreachable!(),
             };
             if k.starts_with('|') {
                 // skip method

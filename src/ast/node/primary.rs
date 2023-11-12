@@ -10,6 +10,7 @@ use crate::ast::ctx::MacroReplaceNode;
 use crate::ast::ctx::BUILTIN_FN_NAME_MAP;
 use crate::ast::diag::ErrorCode;
 use crate::ast::pltype::{PLType, PriType};
+use crate::inference::TyVariable;
 use crate::modifier_set;
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
@@ -104,6 +105,7 @@ impl Node for NumNode {
 #[node]
 pub struct VarNode {
     pub name: String,
+    pub id:Option< TyVariable>
 }
 
 impl Node for VarNode {

@@ -67,7 +67,7 @@ pub enum PLType {
     Trait(STType),
     Union(UnionType),
     Closure(ClosureType),
-    UnKnown
+    Unknown
 }
 
 impl TraitImplAble for PriType {
@@ -344,12 +344,14 @@ fn new_typename_node(name: &str, range: Range, ns: &[String]) -> Box<TypeNodeEnu
                     Box::new(VarNode {
                         name: s.clone(),
                         range: Default::default(),
+                        id:None,
                     })
                 })
                 .collect(),
             id: Box::new(VarNode {
                 name: name.to_string(),
                 range,
+                id: None,
             }),
             complete: true,
             singlecolon: false,
@@ -456,7 +458,7 @@ impl PLType {
             PLType::Trait(_) => "trait".to_string(),
             PLType::Union(_) => "union".to_string(),
             PLType::Closure(_) => "closure".to_string(),
-            PLType::UnKnown => "unknown".to_string(),
+            PLType::Unknown => "unknown".to_string(),
         }
     }
 
@@ -487,7 +489,7 @@ impl PLType {
             PLType::Fn(_) => unreachable!(),
             PLType::Union(u) => Self::new_custom_tp_node(u, path),
             PLType::Closure(c) => Box::new(c.to_type_node(path)),
-            PLType::UnKnown => new_typename_node("Unknown", Default::default(), &[]),
+            PLType::Unknown => new_typename_node("Unknown", Default::default(), &[]),
         }
     }
     pub fn is(&self, pri_type: &PriType) -> bool {
@@ -509,7 +511,7 @@ impl PLType {
             PLType::Generic(g) => f_local(g),
             PLType::PlaceHolder(_) => (),
             PLType::Closure(_) => (),
-            PLType::UnKnown => (),
+            PLType::Unknown => (),
         }
     }
 
@@ -543,7 +545,7 @@ impl PLType {
             PLType::Trait(t) => t.name.clone(),
             PLType::Union(u) => u.name.clone(),
             PLType::Closure(c) => c.get_name(),
-            PLType::UnKnown => "Unknown".to_string(),
+            PLType::Unknown => "Unknown".to_string(),
         }
     }
     pub fn get_llvm_name(&self) -> String {
@@ -567,7 +569,7 @@ impl PLType {
             PLType::PlaceHolder(p) => p.get_place_holder_name(),
             PLType::Union(u) => u.name.clone(),
             PLType::Closure(c) => c.get_name(),
-            PLType::UnKnown => "Unknown".to_string(),
+            PLType::Unknown => "Unknown".to_string(),
         }
     }
 
@@ -592,7 +594,7 @@ impl PLType {
             PLType::PlaceHolder(p) => p.name.clone(),
             PLType::Union(u) => u.get_full_name(),
             PLType::Closure(c) => c.get_name(),
-            PLType::UnKnown => "Unknown".to_string(),
+            PLType::Unknown => "Unknown".to_string(),
         }
     }
     pub fn get_full_elm_name_without_generic(&self) -> String {
@@ -610,7 +612,7 @@ impl PLType {
             PLType::PlaceHolder(p) => p.name.clone(),
             PLType::Union(u) => u.get_full_name_except_generic(),
             PLType::Closure(c) => c.get_name(),
-            PLType::UnKnown => "Unknown".to_string(),
+            PLType::Unknown => "Unknown".to_string(),
         }
     }
     pub fn get_ptr_depth(&self) -> usize {
@@ -709,7 +711,7 @@ impl PLType {
             PLType::Trait(t) => Some(t.range),
             PLType::Union(u) => Some(u.range),
             PLType::Closure(c) => Some(c.range),
-            PLType::UnKnown => None,
+            PLType::Unknown => None,
         }
     }
 

@@ -37,6 +37,7 @@ impl TypeNameNode {
             id: Box::new(VarNode {
                 name: s.to_string(),
                 range: Default::default(),
+                id: None,
             }),
             range: Default::default(),
             ns: vec![],

@@ -14,6 +14,7 @@ use crate::ast::node::{deal_line, tab};
 
 use crate::ast::pltype::{get_type_deep, ClosureType, FNValue, Field, FnType, PLType, STType};
 use crate::ast::tokens::TokenType;
+use crate::inference::InferenceCtx;
 use indexmap::IndexMap;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
@@ -733,6 +734,8 @@ impl FuncDefNode {
                     return Ok(());
                 }
                 // body generation
+                let mut infer_ctx = InferenceCtx::new(ctx.unify_table.clone());
+                infer_ctx.inference_statements(self.body.as_mut().unwrap(), child, builder);
                 let terminator = self
                     .body
                     .as_mut()

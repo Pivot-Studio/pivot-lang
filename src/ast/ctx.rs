@@ -29,11 +29,13 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::format_label;
 
+use crate::inference::TyVariable;
 use crate::utils::read_config::Config;
 
 use crate::Db;
 
 use crate::ast::node::function::generator::GeneratorCtxData;
+use ena::unify::UnificationTable;
 use indexmap::IndexMap;
 
 use lsp_types::CompletionItem;
@@ -131,6 +133,7 @@ pub struct Ctx<'a> {
     is_active_file: bool,
     as_root: bool,
     macro_expand_depth: Arc<RefCell<u64>>,
+    pub unify_table: Arc<RefCell<UnificationTable<TyVariable>>>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -281,6 +284,7 @@ impl<'a, 'ctx> Ctx<'a> {
             is_active_file,
             as_root: false,
             macro_expand_depth: Default::default(),
+            unify_table: Arc::new(RefCell::new(UnificationTable::new())),
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -324,6 +328,7 @@ impl<'a, 'ctx> Ctx<'a> {
             is_active_file: self.is_active_file,
             as_root: false,
             macro_expand_depth: self.macro_expand_depth.clone(),
+            unify_table: self.unify_table.clone(),
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
