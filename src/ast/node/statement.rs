@@ -179,8 +179,10 @@ impl Node for DefNode {
             if let DefVar::Identifier(i) = &*self.var {
                 if let Some(id) = i.id  {
                     let v = ctx.unify_table.borrow_mut().probe(id);
-                    tp = v.get_type(& mut * ctx.unify_table.borrow_mut());   
-                    ctx.push_type_hints(self.var.range(), tp.clone());
+                    tp = v.get_type(& mut * ctx.unify_table.borrow_mut());
+                    if self.exp.is_none() {
+                        ctx.push_type_hints(self.var.range(), tp.clone());   
+                    }
                 }
             }
             if self.exp.is_none() && matches!(&*tp.borrow(), PLType::Unknown) {
@@ -241,6 +243,8 @@ impl Node for DefNode {
             if pltype.is_none() {
                 ctx.push_type_hints(self.var.range(), tp.clone());
                 pltype = Some(tp);
+            }else if self.tp.is_none() {
+                ctx.push_type_hints(self.var.range(), pltype.clone().unwrap());
             }
             expv = Some(v);
         }
