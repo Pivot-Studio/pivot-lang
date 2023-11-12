@@ -205,6 +205,9 @@ impl Node for DefNode {
             let pltp = tp.get_type(ctx, builder, true)?;
             pltype = Some(pltp);
         }
+        if self.exp.is_some() && matches!(pltype.clone(), Some(tp) if matches!(&*tp.borrow(), PLType::Unknown)) {
+            pltype = None;
+        }
         if let Some(exp) = &mut self.exp {
             let re = if let Some(pltype) = pltype.clone() {
                 ctx.emit_with_expectation(exp, pltype, self.var.range(), builder)?
