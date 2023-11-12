@@ -174,15 +174,16 @@ impl Node for DefNode {
     ) -> NodeResult {
         ctx.push_semantic_token(self.var.range(), SemanticTokenType::VARIABLE, 0);
         let mut pltype = None;
-        if self.exp.is_none() && self.tp.is_none() {
+        if self.tp.is_none() {
             let mut tp = Arc::new(RefCell::new(PLType::Unknown));
             if let DefVar::Identifier(i) = &*self.var {
                 if let Some(id) = i.id  {
-                    tp = ctx.unify_table.borrow_mut().probe(id).0.clone();   
+                    let v = ctx.unify_table.borrow_mut().probe(id);
+                    tp = v.get_type(& mut * ctx.unify_table.borrow_mut());   
                     ctx.push_type_hints(self.var.range(), tp.clone());
                 }
             }
-            if matches!(&*tp.borrow(), PLType::Unknown) {
+            if self.exp.is_none() && matches!(&*tp.borrow(), PLType::Unknown) {
                 match builder {
                     BuilderEnum::LLVM(_) => {
                         return                 Err(ctx.add_diag(
@@ -194,7 +195,7 @@ impl Node for DefNode {
                             self.var.range().new_err(ErrorCode::UNKNOWN_TYPE).add_to_ctx(ctx),
                         );
                     },
-                }
+                }  
             }
             pltype = Some(tp);
         }
