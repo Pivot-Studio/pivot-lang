@@ -228,9 +228,28 @@ impl <'ctx> InferenceCtx<'ctx> {
                     let id = self.new_key();
                     ex.id.id = Some(id);
                     if let Some(t) = self.get_symbol(&ex.id.name) {
-                        self.unify_table.borrow_mut().unify_var_var(id, t).unwrap() 
+                        self.unify_table.borrow_mut().unify_var_var(id, t).unwrap();
+                        return SymbolType::Var(id);
                     }
-                    return SymbolType::Var(id);
+                    if let Some(r) = ctx.get_root_ctx().plmod.global_table.get(&ex.id.name) {
+                        if let PLType::Fn(f) = &*r.tp.clone().borrow() {
+                            if f.fntype.generic {
+                                return unknown();
+                            }
+                            let mut argtys = vec![];
+                            for arg in &f.fntype.param_pltypes {
+                                let arg = arg.get_type(ctx, builder, true).unwrap_or(unknown_arc());
+                                let arg_key = self.new_key();
+                                self.unify(arg_key, SymbolType::PLType(arg));
+                                argtys.push(arg_key);
+
+                            }
+                            let ret_ty = self.new_key();
+                            self.unify(ret_ty, SymbolType::PLType(f.fntype.ret_pltype.get_type(ctx, builder, true).unwrap_or(unknown_arc())));
+                            self.unify_table.borrow_mut().unify_var_value(id, TyInfer::Closure((argtys, ret_ty))).unwrap();
+                            return SymbolType::Var(id);
+                        }
+                    }
                 }
             },
             NodeEnum::Bool(_) => return SymbolType::PLType( new_arc_refcell(PLType::Primitive(crate::ast::pltype::PriType::BOOL))),
