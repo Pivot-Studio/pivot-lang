@@ -134,6 +134,7 @@ pub struct Ctx<'a> {
     as_root: bool,
     macro_expand_depth: Arc<RefCell<u64>>,
     pub unify_table: Arc<RefCell<UnificationTable<TyVariable>>>,
+    pub disable_diag: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -285,6 +286,7 @@ impl<'a, 'ctx> Ctx<'a> {
             as_root: false,
             macro_expand_depth: Default::default(),
             unify_table: Arc::new(RefCell::new(UnificationTable::new())),
+            disable_diag: false,
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -329,6 +331,7 @@ impl<'a, 'ctx> Ctx<'a> {
             as_root: false,
             macro_expand_depth: self.macro_expand_depth.clone(),
             unify_table: self.unify_table.clone(),
+            disable_diag: self.disable_diag,
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
@@ -845,6 +848,9 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn add_diag(&self, mut dia: PLDiag) -> PLDiag {
+        if self.disable_diag {
+            return dia;
+        }
         if let Some(src) = &self.temp_source {
             dia.set_source(src);
         }

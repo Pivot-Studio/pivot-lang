@@ -735,6 +735,9 @@ impl FuncDefNode {
                 }
                 // body generation
                 let mut infer_ctx = InferenceCtx::new(ctx.unify_table.clone());
+                infer_ctx.import_global_symbols(&child);
+                let mut infer_ctx = infer_ctx.new_child();
+                infer_ctx.import_symbols(&child);
                 infer_ctx.inference_statements(self.body.as_mut().unwrap(), child, builder);
                 let terminator = self
                     .body
@@ -877,6 +880,10 @@ impl Node for ClosureNode {
             let tp = if let Some(typenode) = typenode {
                 typenode.emit_highlight(ctx);
                 typenode.get_type(ctx, builder, true)?
+            } else if let Some(id) = v.id {
+                let v = ctx.unify_table.borrow_mut().probe(id);
+                let tp = v.get_type(& mut *ctx.unify_table.borrow_mut());
+                tp
             } else if let Some(exp_ty) = &ctx.expect_ty {
                 match &*exp_ty.borrow() {
                     PLType::Closure(c) => {
