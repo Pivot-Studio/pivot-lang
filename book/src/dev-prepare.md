@@ -64,17 +64,16 @@ make test
 
 ### No suitable version of LLVM was found system-wide or pointed 
 
-需要设置llvm环境变量，如果你使用的是ubuntu，可以在`~/.bashrc`中加入如下代码：
+需要设置llvm环境变量，如果你使用的是ubuntu，可以在`~/.bashrc`中加入如下代码然后执行.
 
 ```bash
 export LLVM_SYS_140_PREFIX=/usr/lib/llvm-14
-
+source ~/.bashrc
 ```
 
-然后执行
-
+如果是macOS通过`brew install llvm@14`安装，则需要设置环境变量:
 ```bash
-source ~/.bashrc
+export LLVM_SYS_140_PREFIX=$(brew --prefix llvm@14)
 ```
 
 
