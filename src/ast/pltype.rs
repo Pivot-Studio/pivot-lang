@@ -424,8 +424,16 @@ impl PLType {
             PLType::Struct(s) => s.implements_trait(tp, ctx),
             PLType::Union(u) => u.implements_trait(tp, ctx),
             _ => {
-                let plmod = &ctx.db.get_module(&tp.path).unwrap();
-                if impl_in_mod(plmod, name, tp) {
+
+                let plmod = 
+                if tp.path == ctx.plmod.path {
+                    ctx.plmod.clone()
+                } else {
+                    ctx.db.get_module(&tp.path).expect(&format!(
+                    "expect module {} exists, trait name: {}",
+                    &tp.path, &tp.name))
+                };
+                if impl_in_mod(&plmod, name, tp) {
                     return true;
                 } else {
                     for m in plmod.submods.values() {

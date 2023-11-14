@@ -1,0 +1,33 @@
+pub fn test_inference() void {
+    let x;
+    x = 100;
+    let y;
+    y = x;
+
+    let z;
+    test_f_infer(z);
+    let d;
+    d = test_f_infer(z);
+    let a = t{};
+    let l;
+    l = a.a;
+    let h = |a| =>{
+        return a==a;
+    };
+    h(100);
+    let hh = |a,b,c| =>{
+        return b;
+    }(1,1.2,t{});
+
+    return;
+}
+
+fn test_f_infer(x:i32) i128 {
+    
+    return x as i128;
+}
+
+
+struct t {
+    a:i16;
+}

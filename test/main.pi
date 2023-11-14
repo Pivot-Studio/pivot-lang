@@ -1,6 +1,36 @@
 use std::chan::*;
 use std::future::*;
+use project1::test::ifel;
+use project1::test::generic;
+use project1::test::st;
+use project1::test::method;
+use project1::test::global;
+use project1::test::traits;
+use project1::test::simple;
+use project1::test::flow;
+use project1::test::compiletime_reflection::test_compile_time_reflection;
+use project1::test::list;
+use project1::test::module;
+use project1::test::str;
+use project1::test::macros;
+use project1::test::union;
+use project1::test::multi_trait;
+use project1::test::tuple;
+use project1::test::fntype;
+use project1::test::closure;
+use project1::test::map;
+use project1::test::tree;
+use project1::test::fixed_point;
+use project1::tmod2;
+use pl_test::main;
+use project1::test::deconstruct;
+use project1::test::st::*;
+use project1::test::arr;
+use project1::test::iter;
+use project1::test::inference;
+use std::libc;
 use std::io;
+use std::cols::hashtable;
 fn new_thread(f: *||=>void) i128;
 fn sleep(secs: u64) void;
 pub struct SharedState {
@@ -127,7 +157,6 @@ impl Executor {
 //     return;
 // }
 use std::iter::*;
-use project1::test::generic;
 
 gen fn generator() Iterator<Option<i64>> {
     for let i = 0; i < 2; i = i + 1 {

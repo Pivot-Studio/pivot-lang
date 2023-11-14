@@ -360,6 +360,7 @@ fn closure(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     paralist: args,
                     body,
                     ret,
+                    ret_id:None
                 }
                 .into(),
             )

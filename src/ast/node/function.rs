@@ -14,7 +14,7 @@ use crate::ast::node::{deal_line, tab};
 
 use crate::ast::pltype::{get_type_deep, ClosureType, FNValue, Field, FnType, PLType, STType};
 use crate::ast::tokens::TokenType;
-use crate::inference::InferenceCtx;
+use crate::inference::{InferenceCtx, TyVariable};
 use indexmap::IndexMap;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
@@ -841,6 +841,7 @@ pub struct ClosureNode {
     pub paralist: Vec<(Box<VarNode>, Option<Box<TypeNodeEnum>>)>,
     pub body: StatementsNode,
     pub ret: Option<Box<TypeNodeEnum>>,
+    pub ret_id: Option<TyVariable>,
 }
 
 static CLOSURE_COUNT: AtomicI32 = AtomicI32::new(0);
@@ -881,8 +882,16 @@ impl Node for ClosureNode {
                 typenode.emit_highlight(ctx);
                 typenode.get_type(ctx, builder, true)?
             } else if let Some(id) = v.id {
-                let v = ctx.unify_table.borrow_mut().probe(id);
-                let tp = v.get_type(& mut *ctx.unify_table.borrow_mut());
+                let vv = ctx.unify_table.borrow_mut().probe(id);
+                let tp = vv.get_type(& mut *ctx.unify_table.borrow_mut());
+                if &*tp.borrow() == &PLType::Unknown {
+                    v
+                    .range()
+                    .new_err(ErrorCode::CLOSURE_PARAM_TYPE_UNKNOWN)
+                    .add_help("try manually specify the parameter type of the closure")
+                    .add_to_ctx(ctx);
+                }
+                ctx.push_type_hints(v.range(), tp.clone());
                 tp
             } else if let Some(exp_ty) = &ctx.expect_ty {
                 match &*exp_ty.borrow() {
@@ -917,6 +926,10 @@ impl Node for ClosureNode {
         let ret_tp = if let Some(ret) = &self.ret {
             ret.emit_highlight(ctx);
             ret.get_type(ctx, builder, true)?
+        } else if let Some(ty) = self.ret_id {
+            let v = ctx.unify_table.borrow_mut().probe(ty);
+            let tp = v.get_type(& mut *ctx.unify_table.borrow_mut());
+            tp
         } else if let Some(exp_ty) = &ctx.expect_ty {
             match &*exp_ty.borrow() {
                 PLType::Closure(c) => c.ret_type.clone(),
