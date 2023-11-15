@@ -3,7 +3,7 @@ use std::{sync::Arc, cell::RefCell};
 use ena::unify::{UnifyKey, UnifyValue, UnificationTable};
 use rustc_hash::FxHashMap;
 
-use crate::ast::{pltype::{PLType, ClosureType}, node::{NodeEnum, statement::{DefVar, StatementsNode}, TypeNode}, ctx::Ctx, builder::BuilderEnum, tokens::TokenType};
+use crate::ast::{pltype::{PLType, ClosureType, get_type_deep}, node::{NodeEnum, statement::{DefVar, StatementsNode}, TypeNode, pointer::PointerOpEnum}, ctx::Ctx, builder::BuilderEnum, tokens::TokenType};
 
 
 
@@ -48,10 +48,10 @@ impl UnifyValue for TyInfer {
         // if there's no error, then set unknown to the real type
         if value1 == value2 {
             Ok(value1.clone())
-        }else if matches!(value1, TyInfer::Term(ty) if &*ty.borrow()== &PLType::Unknown)  {
+        }else if matches!(value1, TyInfer::Term(ty) if &*get_type_deep(ty.clone()).borrow()== &PLType::Unknown)  {
             Ok(value2.clone())
             
-        }else if matches!(value2, TyInfer::Term(ty) if &*ty.borrow()== &PLType::Unknown)  {
+        }else if matches!(value2, TyInfer::Term(ty) if &*get_type_deep(ty.clone()).borrow()== &PLType::Unknown)  {
             Ok(value1.clone())
         }else if matches!(value2, TyInfer::Closure(_)) || matches!(value1, TyInfer::Closure(_)) {
             Ok(value1.clone())
@@ -281,7 +281,7 @@ impl <'ctx> InferenceCtx<'ctx> {
                                 let id = self.new_key();
                                 v.id = Some(id);
                                 if let Some(ty) = self.get_symbol(&v.name) {
-                                    self.unify_table.borrow_mut().unify_var_var(id, ty).unwrap();
+                                    self.unify_two_symbol(SymbolType::Var(id), SymbolType::Var(ty), ctx, builder);
                                 }
                                 self.unify(id, ty,ctx, builder);
                             },
@@ -311,7 +311,7 @@ impl <'ctx> InferenceCtx<'ctx> {
                     let id = self.new_key();
                     ex.id.id = Some(id);
                     if let Some(t) = self.get_symbol(&ex.id.name) {
-                        self.unify_table.borrow_mut().unify_var_var(id, t).unwrap();
+                        self.unify_two_symbol(SymbolType::Var(id), SymbolType::Var(t), ctx, builder);
                         return SymbolType::Var(id);
                     }
                     if let Some(r) = ctx.get_root_ctx().plmod.types.get(&ex.id.name) {
@@ -484,7 +484,7 @@ impl <'ctx> InferenceCtx<'ctx> {
                         let ty = self.inference(&mut *r, ctx, builder);
                         self.unify(ret, ty,ctx, builder);
                     }else {
-                        self.unify_table.borrow_mut().unify_var_value(ret, TyInfer::Term(new_arc_refcell(PLType::Void))).unwrap();
+                        self.unify(ret, SymbolType::PLType(new_arc_refcell(PLType::Void)),ctx,builder);
                     }
                 }
             }
@@ -547,6 +547,54 @@ impl <'ctx> InferenceCtx<'ctx> {
                     _ => (),
                     
                 };
+            }
+            NodeEnum::Un(u) => {
+                return self.inference(&mut *u.exp, ctx, builder);
+            }
+            NodeEnum::PointerOpNode(p) =>{
+                let ty = self.inference(&mut *p.value, ctx, builder);
+                match ty {
+                    SymbolType::Var(v) => {
+                        let k = self.unify_table.borrow_mut().probe(v);
+                        match k {
+                            TyInfer::Term(t) => {
+                                if p.op == PointerOpEnum::Addr {
+                                    if &*t.borrow() != &PLType::Unknown {
+                                        return SymbolType::PLType(new_arc_refcell(PLType::Pointer(t)));   
+                                    }
+                                }else if p.op == PointerOpEnum::Deref {
+                                    match &*t.borrow() {
+                                        PLType::Pointer(p) => {
+                                            return SymbolType::PLType(p.clone());
+                                        },
+                                        _ => (),
+                                    }
+                                    
+                                }
+                            },
+                            _ => (),
+
+                        }
+                    },
+                    SymbolType::PLType(t) => {
+                        if p.op == PointerOpEnum::Addr {
+                            if &*t.borrow() != &PLType::Unknown {
+                                return SymbolType::PLType(new_arc_refcell(PLType::Pointer(t)));   
+                            }
+                        }else if p.op == PointerOpEnum::Deref {
+                            match &*t.borrow() {
+                                PLType::Pointer(p) => {
+                                    return SymbolType::PLType(p.clone());
+                                },
+                                _ => (),
+                            }
+                            
+                        }
+                    },
+                }
+            }
+            NodeEnum::ParanthesesNode(p) => {
+                return self.inference(&mut *p.node, ctx, builder);
             }
 
             _ => (),

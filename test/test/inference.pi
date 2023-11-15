@@ -18,6 +18,10 @@ pub fn test_inference() void {
     let hh = |a,b,c| =>{
         return b;
     }(1,1.2,t{});
+    let yy;
+    yy = ~y;
+    let xx ;
+    xx = &(~y);
 
     return;
 }
