@@ -299,10 +299,16 @@ impl <'ctx> InferenceCtx<'ctx> {
                     | TokenType::GEQ
                     | TokenType::GREATER
                     | TokenType::LESS=>{
+                        let i1 = self.inference(&mut *e.left, ctx, builder);
+                        let i2 = self.inference(&mut *e.right, ctx, builder);
+                        self.unify_two_symbol(i1, i2, ctx, builder);
                         return SymbolType::PLType( new_arc_refcell(PLType::Primitive(crate::ast::pltype::PriType::BOOL)));
                     }
                     _ =>{
-                        return self.inference(&mut * e.left, ctx, builder);
+                        let i1 = self.inference(&mut *e.left, ctx, builder);
+                        let i2 = self.inference(&mut *e.right, ctx, builder);
+                        self.unify_two_symbol(i1.clone(), i2, ctx, builder);
+                        return i1;
                     }
                 }
             },
@@ -414,6 +420,17 @@ impl <'ctx> InferenceCtx<'ctx> {
                                             i += 1;
                                         }
                                         return SymbolType::PLType(f.fntype.ret_pltype.get_type(ctx, builder, true).unwrap_or(unknown_arc()));
+                                    },
+                                    PLType::Unknown => {
+                                        let mut arg_keys = vec![];
+                                        for arg in argtys {
+                                            let arg_key = self.new_key();
+                                            self.unify(arg_key, arg,ctx, builder);
+                                            arg_keys.push(arg_key);
+                                        }
+                                        let ret_ty = self.new_key();
+                                        self.unify_table.borrow_mut().unify_var_value(id, TyInfer::Closure((arg_keys, ret_ty))).unwrap();
+                                        return SymbolType::Var(ret_ty);
                                     },
                                     _ => (),
                                 }

@@ -88,7 +88,16 @@ pub struct ClosureType {
 
 impl PartialEq for ClosureType {
     fn eq(&self, other: &Self) -> bool {
-        self.arg_types == other.arg_types && self.ret_type == other.ret_type
+        if self.arg_types.len() != other.arg_types.len() {
+            return false;
+        }
+        for i in 0..self.arg_types.len() {
+            if get_type_deep(self.arg_types[i].clone()) != get_type_deep(other.arg_types[i].clone())
+            {
+                return false;
+            }
+        }
+        get_type_deep(self.ret_type.clone()) == get_type_deep(other.ret_type.clone())
     }
 }
 
