@@ -51,11 +51,14 @@ impl Node for PointerOpNode {
             }
             PointerOpEnum::Addr => {
                 // let old_tp = tp.clone().unwrap();
+                let oldtp = tp.clone();
                 tp = Arc::new(RefCell::new(PLType::Pointer(tp)));
-                if v.is_const() {
-                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::CAN_NOT_REF_CONSTANT)));
+                let mut val = value;
+                if !builder.is_ptr(v.get_value()) { // if not a pointer, then alloc a new tmp var
+                    let var = builder.alloc("var", &oldtp.borrow(), ctx, None);
+                    builder.build_store(var, value);
+                    val = var;
                 }
-                let val = value;
                 let v = builder.alloc("addr", &tp.borrow(), ctx, None);
                 builder.build_store(v, val);
                 v
