@@ -1,3 +1,29 @@
+//! # Inference
+//! 
+//! This module is used to do type inference.
+//! 
+//! ## How it works
+//! 
+//! The basic idea is that most of statements 
+//! have type constraints, for example,
+//! 
+//! ```pl
+//! a = b
+//! ```
+//! 
+//! The type of `a` and `b` shall be the same.
+//! 
+//! So we can use a unify table to record the type relationship.
+//! It's not always necessary to generate all the type constraints,
+//! as type inference will only take effect when the type is unknown.
+//! 
+//! > What is unify table?
+//! > 
+//! > Unify table is very much like a hashtable, but it can map
+//! > multiple keys to the same value. In type inference, one
+//! > variable has many constraints, and different variables'
+//! > constraints may be the same. So we use unify table to
+//! > record the constraints.
 use std::{sync::Arc, cell::RefCell};
 
 use ena::unify::{UnifyKey, UnifyValue, UnificationTable};
@@ -31,7 +57,29 @@ impl UnifyKey for TyVariable {
 
 
 
-
+/// # The type inference result
+/// 
+/// ## Term
+/// 
+/// A `Term`` is a `PLType`. When it's `PLType::Unknown`,
+/// it means that the type is not inferred yet. An `Unknown`
+/// type unify with any other type will become the other type.
+/// 
+/// ## Err
+/// 
+/// If an inference error occurs, the type will be `Err`.
+/// 
+/// `Err`'s type is `PLType::Unknown`.
+/// However, it's not the same as `Term(PLType::Unknown)`.
+/// When `Err` unify with any other type, it will always become `Err`.
+/// 
+/// ## Closure
+/// 
+/// A `Closure` is a function type. It contains a list of argument types,
+/// and a return type.
+/// 
+/// As the function type may not be inferred yet, the argument types and return type
+/// are all `TyVariable`, which allows them to unify with other `TyVariable`s.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TyInfer {
     Err,

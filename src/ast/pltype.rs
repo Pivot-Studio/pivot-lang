@@ -503,7 +503,7 @@ impl PLType {
             }
             PLType::PlaceHolder(p) => new_typename_node(&p.name, Default::default(), &[]),
             PLType::Trait(t) => Self::new_custom_tp_node(t, path),
-            PLType::Fn(_) => unreachable!(),
+            PLType::Fn(_) => new_typename_node("Unknown", Default::default(), &[]),
             PLType::Union(u) => Self::new_custom_tp_node(u, path),
             PLType::Closure(c) => Box::new(c.to_type_node(path)),
             PLType::Unknown => new_typename_node("Unknown", Default::default(), &[]),
