@@ -4,6 +4,7 @@ use std::{
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
 };
+
 use syn::{parse_macro_input, ItemFn};
 #[proc_macro_attribute]
 pub fn test_parser(args: TokenStream, input: TokenStream) -> TokenStream {
