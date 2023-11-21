@@ -13,8 +13,16 @@ use nom_locate::LocatedSpan;
 use super::*;
 
 #[test_parser("//123")]
+#[test_parser("//123\t")]
+#[test_parser("//123 \u{1234}")]
 #[test_parser("/// 123\n")]
+#[test_parser("//12\r //3")]
+#[test_parser("//12\r \\//3")]
+#[test_parser_error("//12\r\n /3")]
+#[test_parser("/// 123\r 456")]
+#[test_parser_error("/// 12\n 3 ///")]
 #[test_parser_error("/ / 123\n")]
+#[test_parser_error("//123 \n \n ///")]
 pub fn comment(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         pair(
