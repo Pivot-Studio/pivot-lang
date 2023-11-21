@@ -172,12 +172,12 @@ impl<'a, 'ctx> Ctx<'a> {
         curbb: usize,
     ) -> Arc<RefCell<crate::ast::ctx::GeneratorCtxData>> {
         let ctx = self;
-        let data = ctx.generator_data.as_ref().unwrap();
+        let data = ctx.generator_data.as_ref().unwrap().clone();
         if let Some(prev_bb) = data.borrow().prev_yield_bb {
             builder.position_at_end_block(prev_bb);
             let ctx_handle = builder.get_nth_param(ctx.function.unwrap(), 0);
             let ptr = builder
-                .build_struct_gep(ctx_handle, 1, "block_ptr", &data.borrow().ctx_tp.as_ref().unwrap().borrow(), self)
+                .build_struct_gep(ctx_handle, 1, "block_ptr", &data.borrow().ctx_tp.as_ref().unwrap().borrow(), ctx)
                 .unwrap();
 
             let addr = builder.get_block_address(curbb);
@@ -546,7 +546,7 @@ impl<'a, 'ctx> Ctx<'a> {
     /// # get_symbol
     /// search in current and all father symbol tables
     pub fn get_symbol<'b>(
-        &'b mut self,
+        &'b self,
         name: &str,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Option<PLSymbol> {
@@ -578,12 +578,18 @@ impl<'a, 'ctx> Ctx<'a> {
                         // captured by closure
                         let new_symbol = symbol.clone();
                         let len = data.table.len();
-                        let st = data.data_tp.as_ref().unwrap().borrow();
-                        let st = match &*st {
+                        let st_r = data.data_tp.as_ref().unwrap().borrow();
+                        let st = match &*st_r {
                             PLType::Struct(s) => s,
                             _ => unreachable!(),
                         };
-                        builder.add_closure_st_field(st, new_symbol.value,self);
+                        let ptr = father as * const _;
+                        let ptr = ptr as usize;
+                        let ptr = ptr as *mut Ctx<'_>;
+                        builder.add_closure_st_field(st, new_symbol.value, unsafe {
+                            &mut *ptr
+                        });
+                        drop(st_r);
                         let new_symbol = PLSymbolData {
                             value: builder.build_load(
                                 builder
@@ -591,13 +597,17 @@ impl<'a, 'ctx> Ctx<'a> {
                                         data.data_handle,
                                         len as u32 + 1,
                                         "closure_tmp",
-                                        &data.data_tp.unwrap().borrow(),
-                                        self
+                                        &data.data_tp.as_ref().unwrap().borrow(),
+                                        unsafe {
+                                            &mut *ptr
+                                        }
                                     )
                                     .unwrap(),
                                 "closure_loaded",
-                                &new_symbol.pltype.borrow(),
-                                self
+                                &new_symbol.pltype.clone().borrow(),
+                                unsafe {
+                                    &mut *ptr
+                                }
                             ),
                             ..new_symbol
                         };
@@ -1085,3 +1095,5 @@ mod completion;
 mod cast;
 
 pub use generic::EqRes;
+
+

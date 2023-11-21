@@ -391,30 +391,30 @@ impl<'a, 'ctx> Ctx<'a> {
                             let field = fs.get(&f.name).unwrap();
 
                             let fnhandle = builder
-                                .build_struct_gep(st_value, field.index, "trait_mthd",&st_pltype.borrow(),self)
+                                .build_struct_gep(st_value, field.index, "trait_mthd",&st_pltype.borrow(),ctx)
                                 .unwrap();
-                            let fnhandle = builder.build_load(fnhandle, "trait_mthd",&PLType::new_i8_ptr(), self);
+                            let fnhandle = builder.build_load(fnhandle, "trait_mthd",&PLType::new_i8_ptr(), ctx);
                             // let targetftp = f.typenode.get_type(ctx, builder, true).unwrap();
                             // let casted =
                             //     builder.bitcast(ctx, fnhandle, &targetftp.borrow(), "fncast_tmp");
                             let f_ptr = builder
-                                .build_struct_gep(trait_handle, f.index, "field_tmp",&target_pltype.borrow(),self)
+                                .build_struct_gep(trait_handle, f.index, "field_tmp",&target_pltype.borrow(),ctx)
                                 .unwrap();
                             unsafe {
                                 builder.store_with_aoto_cast(f_ptr, fnhandle);
                             }
                         }
-                        let st = builder.build_struct_gep(st_value, 1, "src_v_tmp",&st_pltype.borrow(),self).unwrap();
-                        let st = builder.build_load(st, "src_v",&PLType::new_i8_ptr(), self);
-                        let v_ptr = builder.build_struct_gep(trait_handle, 1, "v_tmp",&target_pltype.borrow(),self).unwrap();
+                        let st = builder.build_struct_gep(st_value, 1, "src_v_tmp",&st_pltype.borrow(),ctx).unwrap();
+                        let st = builder.build_load(st, "src_v",&PLType::new_i8_ptr(), ctx);
+                        let v_ptr = builder.build_struct_gep(trait_handle, 1, "v_tmp",&target_pltype.borrow(),ctx).unwrap();
                         builder.build_store(v_ptr, st);
                         let type_hash = builder
-                            .build_struct_gep(trait_handle, 0, "tp_hash",&target_pltype.borrow(),self)
+                            .build_struct_gep(trait_handle, 0, "tp_hash",&target_pltype.borrow(),ctx)
                             .unwrap();
                         let hash = builder
-                            .build_struct_gep(st_value, 0, "src_tp_hash",&st_pltype.borrow(),self)
+                            .build_struct_gep(st_value, 0, "src_tp_hash",&st_pltype.borrow(),ctx)
                             .unwrap();
-                        let hash = builder.build_load(hash, "src_tp_hash",&PLType::new_i64(), self);
+                        let hash = builder.build_load(hash, "src_tp_hash",&PLType::new_i64(), ctx);
                         builder.build_store(type_hash, hash);
                         Ok(trait_handle)
                     })

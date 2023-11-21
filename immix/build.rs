@@ -244,7 +244,7 @@ fn main() {
         fn get_system_libraries() -> Vec<String> {
             llvm_config("--system-libs")
                 .split(&[' ', '\n'] as &[char])
-                .filter(|s| !s.is_empty())
+                .filter(|s| !s.is_empty()&& s.starts_with("-l"))
                 .map(|flag| {
                     if cfg!(target_env = "msvc") {
                         // Same as --libnames, foo.lib
@@ -255,8 +255,10 @@ fn main() {
                         // assert!(flag.starts_with("-l"), "{}",flag);
                         if flag.ends_with(".tbd") && flag.starts_with("-llib") {
                             &flag[5..flag.len() - 4]
-                        } else {
+                        } else if flag.starts_with("-l") {
                             &flag[2..]
+                        }else {
+                            flag
                         }
                     } else {
                         if let Some(f) = flag.strip_prefix("-l") {

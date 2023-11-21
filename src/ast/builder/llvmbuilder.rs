@@ -2768,7 +2768,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .get_llvm_value(data.borrow().ctx_size_handle)
             .unwrap()
             .into_pointer_value();
-        self.builder.build_store(v, size);
+        self.builder.build_store(v, size).unwrap();
 
         self.builder.position_at_end(cur_bb);
     }
