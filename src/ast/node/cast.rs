@@ -82,9 +82,9 @@ impl<'a, 'ctx> Ctx<'a> {
     ) -> Result<(ValueHandle, Arc<RefCell<PLType>>), PLDiag> {
         let target_rc = target_ty.clone();
         match (ty, &*target_ty.clone().borrow()) {
-            (PLType::Primitive(ty), PLType::Primitive(target_ty)) => {
-                let val = builder.try_load2var(node.expr.range(), val, self)?;
-                Ok((builder.cast_primitives(val, ty, target_ty), target_rc))
+            (PLType::Primitive(tyi), PLType::Primitive(target_ty)) => {
+                let val = builder.try_load2var(node.expr.range(), val, ty, self)?;
+                Ok((builder.cast_primitives(val, tyi, target_ty), target_rc))
             }
             (PLType::Union(union), target_ty) => {
                 if node.tail.is_none() {
@@ -103,13 +103,14 @@ impl<'a, 'ctx> Ctx<'a> {
                 if let Some(tag) = union.has_type(target_ty, self, builder) {
                     let (token, _) = node.tail.unwrap();
                     if token == TokenType::QUESTION {
-                        Ok(self.cast_union_to(builder, val, tag, target_rc))
+                        Ok(self.cast_union_to(builder, val, tag,ty ,target_rc))
                     } else {
                         Ok(
                             self.force_cast_union_to(
                                 builder,
                                 val,
                                 tag,
+                                ty,
                                 target_rc,
                                 node.range.start,
                             ),
@@ -152,9 +153,9 @@ impl<'a, 'ctx> Ctx<'a> {
                 }
                 let (token, _) = node.tail.unwrap();
                 if token == TokenType::QUESTION {
-                    Ok(self.cast_trait_to(builder, val, target_rc))
+                    Ok(self.cast_trait_to(builder, val, ty,target_rc))
                 } else {
-                    Ok(self.force_cast_trait_to(builder, val, target_rc, node.range.start))
+                    Ok(self.force_cast_trait_to(builder, val, ty, target_rc, node.range.start))
                 }
             }
             _ => {
@@ -191,10 +192,11 @@ impl<'a, 'ctx> Ctx<'a> {
         &mut self,
         builder: &'b BuilderEnum<'a, 'ctx>,
         val: ValueHandle,
+        ori_ty: &PLType,
         target_ty: Arc<RefCell<PLType>>,
     ) -> (ValueHandle, Arc<RefCell<PLType>>) {
-        let hash = builder.build_struct_gep(val, 0, "tp_hash").unwrap();
-        let hash = builder.build_load(hash, "tp_hash");
+        let hash = builder.build_struct_gep(val, 0, "tp_hash", ori_ty,self).unwrap();
+        let hash = builder.build_load(hash, "tp_hash", &PLType::new_i64(), self);
         let hasn_code = get_hash_code(target_ty.borrow().get_full_elm_name());
         let hash_code = builder.int_value(&PriType::U64, hasn_code, false);
         let cond_block = builder.append_basic_block(self.function.unwrap(), "if.cond");
@@ -206,7 +208,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.position_at_end(cond_block, builder);
         let cond = builder.build_int_compare(IntPredicate::EQ, hash, hash_code, "hash.eq");
         let cond = builder
-            .try_load2var(Default::default(), cond, self)
+            .try_load2var(Default::default(), cond,&PLType::Primitive(PriType::BOOL) ,self)
             .unwrap();
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
 
@@ -218,6 +220,7 @@ impl<'a, 'ctx> Ctx<'a> {
             cond,
             after_block,
             else_block,
+            ori_ty
         )
     }
     /// -> Option<_>
@@ -226,12 +229,13 @@ impl<'a, 'ctx> Ctx<'a> {
         builder: &'b BuilderEnum<'a, 'ctx>,
         val: ValueHandle,
         union_tag: usize,
+        ori_ty: &PLType,
         target_ty: Arc<RefCell<PLType>>,
     ) -> (ValueHandle, Arc<RefCell<PLType>>) {
-        let tag = builder.build_struct_gep(val, 0, "tag").unwrap();
+        let tag = builder.build_struct_gep(val, 0, "tag",ori_ty,self).unwrap();
 
         // check if the tag is the same
-        let tag = builder.build_load(tag, "tag");
+        let tag = builder.build_load(tag, "tag", &PLType::new_i64(), self);
         let cond_block = builder.append_basic_block(self.function.unwrap(), "if.cond");
         let then_block = builder.append_basic_block(self.function.unwrap(), "if.then");
         let else_block = builder.append_basic_block(self.function.unwrap(), "if.else");
@@ -245,7 +249,7 @@ impl<'a, 'ctx> Ctx<'a> {
             "tag.eq",
         );
         let cond = builder
-            .try_load2var(Default::default(), cond, self)
+            .try_load2var(Default::default(), cond, &PLType::Primitive(PriType::BOOL), self)
             .unwrap();
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
 
@@ -257,6 +261,7 @@ impl<'a, 'ctx> Ctx<'a> {
             cond,
             after_block,
             else_block,
+            ori_ty
         )
     }
 
@@ -270,16 +275,17 @@ impl<'a, 'ctx> Ctx<'a> {
         cond: usize,
         after_block: usize,
         else_block: usize,
+        ori_ty: &PLType,
     ) -> (usize, Arc<RefCell<PLType>>) {
-        let result_tp = get_option_type(self, builder, target_ty).unwrap();
+        let result_tp = get_option_type(self, builder, target_ty.clone()).unwrap();
         let result = builder.alloc("cast_result", &result_tp.borrow(), self, None);
-        let result_tag_field = builder.build_struct_gep(result, 0, "tag").unwrap();
-        let result_data_field = builder.build_struct_gep(result, 1, "data").unwrap();
+        let result_tag_field = builder.build_struct_gep(result, 0, "tag", &result_tp.borrow(), self).unwrap();
+        let result_data_field = builder.build_struct_gep(result, 1, "data", &result_tp.borrow(), self).unwrap();
         builder.build_conditional_branch(cond, then_block, else_block);
         // then block
         self.position_at_end(then_block, builder);
-        let data = builder.build_struct_gep(val, 1, "data").unwrap();
-        let data = builder.build_load(data, "data");
+        let data = builder.build_struct_gep(val, 1, "data", ori_ty,self).unwrap();
+        let data = builder.build_load(data, "data", &target_ty.borrow(), self);
         builder.build_store(result_data_field, data);
         builder.build_store(result_tag_field, builder.int_value(&PriType::U64, 0, false));
         builder.build_unconditional_branch(after_block);
@@ -297,11 +303,12 @@ impl<'a, 'ctx> Ctx<'a> {
         &mut self,
         builder: &'b BuilderEnum<'a, 'ctx>,
         val: ValueHandle,
+        ori_ty: &PLType,
         target_ty: Arc<RefCell<PLType>>,
         pos: Pos,
     ) -> (ValueHandle, Arc<RefCell<PLType>>) {
-        let hash = builder.build_struct_gep(val, 0, "tp_hash").unwrap();
-        let hash = builder.build_load(hash, "tp_hash");
+        let hash = builder.build_struct_gep(val, 0, "tp_hash",ori_ty, self).unwrap();
+        let hash = builder.build_load(hash, "tp_hash", &PLType::new_i64(), self);
         let hasn_code = get_hash_code(target_ty.borrow().get_full_elm_name());
         let hash_code = builder.int_value(&PriType::U64, hasn_code, false);
         let cond_block = builder.append_basic_block(self.function.unwrap(), "if.cond");
@@ -316,11 +323,12 @@ impl<'a, 'ctx> Ctx<'a> {
         self.position_at_end(cond_block, builder);
         let cond = builder.build_int_compare(IntPredicate::EQ, hash, hash_code, "hash.eq");
         let cond = builder
-            .try_load2var(Default::default(), cond, self)
+            .try_load2var(Default::default(), cond, &PLType::Primitive(PriType::BOOL),self)
             .unwrap();
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
         builder.build_conditional_branch(cond, then_block, else_block);
         self.build_cast_ret(
+            ori_ty,
             target_ty,
             builder,
             then_block,
@@ -337,12 +345,13 @@ impl<'a, 'ctx> Ctx<'a> {
         builder: &'b BuilderEnum<'a, 'ctx>,
         val: ValueHandle,
         union_tag: usize,
+        ori_ty: &PLType,
         target_ty: Arc<RefCell<PLType>>,
         pos: Pos,
     ) -> (ValueHandle, Arc<RefCell<PLType>>) {
-        let tag = builder.build_struct_gep(val, 0, "tag").unwrap();
+        let tag = builder.build_struct_gep(val, 0, "tag",ori_ty, self).unwrap();
         // check if the tag is the same
-        let tag = builder.build_load(tag, "tag");
+        let tag = builder.build_load(tag, "tag", ori_ty,self);
         let cond_block = builder.append_basic_block(self.function.unwrap(), "force.if.cond");
         let then_block = builder.append_basic_block(self.function.unwrap(), "force.if.then");
         let else_block = builder.append_basic_block(self.function.unwrap(), "force.if.else");
@@ -360,11 +369,12 @@ impl<'a, 'ctx> Ctx<'a> {
             "tag.eq",
         );
         let cond = builder
-            .try_load2var(Default::default(), cond, self)
+            .try_load2var(Default::default(), cond, &PLType::Primitive(PriType::BOOL) ,self)
             .unwrap();
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
         builder.build_conditional_branch(cond, then_block, else_block);
         self.build_cast_ret(
+            ori_ty,
             target_ty,
             builder,
             then_block,
@@ -380,6 +390,7 @@ impl<'a, 'ctx> Ctx<'a> {
     #[allow(clippy::too_many_arguments)]
     fn build_cast_ret<'b>(
         &mut self,
+        ori_ty: &PLType,
         target_ty: Arc<RefCell<PLType>>,
         builder: &'b BuilderEnum<'a, 'ctx>,
         then_block: usize,
@@ -392,10 +403,10 @@ impl<'a, 'ctx> Ctx<'a> {
         // then block
 
         self.position_at_end(then_block, builder);
-        let data = builder.build_struct_gep(val, 1, "data").unwrap();
-        let data = builder.build_load(data, "data");
-        let data = builder.bitcast(self, data, &PLType::Pointer(target_ty), "bitcasttemp");
-        let data = builder.build_load(data, "data");
+        let data = builder.build_struct_gep(val, 1, "data", ori_ty, self).unwrap();
+        let data = builder.build_load(data, "data", &PLType::new_i8_ptr(), self);
+        let data = builder.bitcast(self, data, &PLType::Pointer(target_ty.clone()), "bitcasttemp");
+        let data = builder.build_load(data, "data", &target_ty.borrow(), self);
         builder.build_store(result, data);
         builder.build_unconditional_branch(after_block);
         // else block
@@ -455,15 +466,15 @@ impl Node for IsNode {
         match tp {
             PLType::Union(u) => {
                 if let Some(tag) = u.has_type(&target_tp.borrow(), ctx, builder) {
-                    let tag_v = builder.build_struct_gep(val, 0, "tag").unwrap();
-                    let tag_v = builder.build_load(tag_v, "tag");
+                    let tag_v = builder.build_struct_gep(val, 0, "tag",tp, ctx).unwrap();
+                    let tag_v = builder.build_load(tag_v, "tag", &PLType::new_i64(), ctx);
                     let cond = builder.build_int_compare(
                         IntPredicate::EQ,
                         tag_v,
                         builder.int_value(&PriType::U64, tag as u64, false),
                         "tag.eq",
                     );
-                    let cond = builder.try_load2var(Default::default(), cond, ctx).unwrap();
+                    let cond = builder.try_load2var(Default::default(), cond, &PLType::Primitive(PriType::BOOL),ctx).unwrap();
                     let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
                     cond.new_output(ctx.get_type("bool", Default::default()).unwrap().tp)
                         .set_const()
@@ -480,10 +491,10 @@ impl Node for IsNode {
                 let name = target_tp.borrow().get_full_elm_name();
                 let hash_code = get_hash_code(name);
                 let hash_code = builder.int_value(&PriType::U64, hash_code, false);
-                let hash = builder.build_struct_gep(val, 0, "tp_hash").unwrap();
-                let hash = builder.build_load(hash, "tp_hash");
+                let hash = builder.build_struct_gep(val, 0, "tp_hash", tp, ctx).unwrap();
+                let hash = builder.build_load(hash, "tp_hash",&PLType::new_i64(), ctx);
                 let cond = builder.build_int_compare(IntPredicate::EQ, hash, hash_code, "hash.eq");
-                let cond = builder.try_load2var(Default::default(), cond, ctx).unwrap();
+                let cond = builder.try_load2var(Default::default(), cond, &PLType::Primitive(PriType::BOOL),ctx).unwrap();
                 let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
                 cond.new_output(ctx.get_type("bool", Default::default()).unwrap().tp)
                     .set_const()

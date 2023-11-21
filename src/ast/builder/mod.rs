@@ -52,14 +52,14 @@ pub trait IRBuilder<'a, 'ctx> {
         then_bb: BlockHandle,
         else_bb: BlockHandle,
     );
-    fn build_const_in_bounds_gep(&self, ptr: ValueHandle, index: &[u64], name: &str)
+    fn build_const_in_bounds_gep(&self, ptr: ValueHandle, index: &[u64], name: &str, tp:&PLType,ctx: &mut Ctx<'a>)
         -> ValueHandle;
     fn build_dbg_location(&self, pos: Pos);
     fn build_in_bounds_gep(
         &self,
         ptr: ValueHandle,
         index: &[ValueHandle],
-        name: &str,
+        name: &str, tp:&PLType,ctx: &mut Ctx<'a>
     ) -> ValueHandle;
     fn build_return(&self, v: Option<ValueHandle>);
     fn build_store(&self, ptr: ValueHandle, value: ValueHandle);
@@ -67,7 +67,7 @@ pub trait IRBuilder<'a, 'ctx> {
         &self,
         structv: ValueHandle,
         index: u32,
-        name: &str,
+        name: &str, tp:&PLType,ctx: &mut Ctx<'a>
     ) -> Result<ValueHandle, ()>;
     fn build_sub_program(
         &self,
@@ -129,12 +129,11 @@ pub trait IRBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
         constant: bool,
     ) -> ValueHandle;
-    fn build_load(&self, ptr: ValueHandle, name: &str) -> ValueHandle;
+    fn build_load(&self, ptr: ValueHandle, name: &str, tp:&PLType,ctx: &mut Ctx<'a>) -> ValueHandle;
     fn try_load2var(
         &self,
         range: Range,
-        v: ValueHandle,
-        ctx: &mut Ctx<'a>,
+        v: ValueHandle, tp:&PLType,ctx: &mut Ctx<'a>
     ) -> Result<ValueHandle, PLDiag>;
     fn get_function(&self, name: &str) -> Option<ValueHandle>;
     fn build_call(
@@ -211,7 +210,7 @@ pub trait IRBuilder<'a, 'ctx> {
     fn get_closure_trampoline(&self, f: ValueHandle) -> ValueHandle;
     fn create_closure_parameter_variable(&self, i: u32, f: ValueHandle, alloca: ValueHandle);
     fn get_nth_param(&self, f: ValueHandle, i: u32) -> ValueHandle;
-    fn add_closure_st_field(&self, st: ValueHandle, field: ValueHandle);
+    fn add_closure_st_field(&self, st: &STType, field: ValueHandle, ctx: &mut Ctx<'a>);
     fn build_sub_program_by_pltp(
         &self,
         paralist: &[Arc<RefCell<PLType>>],
@@ -245,7 +244,7 @@ pub trait IRBuilder<'a, 'ctx> {
     fn stack_alloc(&self, name: &str, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle;
     fn correct_generator_ctx_malloc_inst(&self, ctx: &mut Ctx<'a>, name: &str);
     fn sizeof(&self, pltype: &PLType, ctx: &mut Ctx<'a>) -> u64;
-    fn build_memcpy(&self, from: ValueHandle, to: ValueHandle, len: ValueHandle);
+    fn build_memcpy(&self, from: ValueHandle, from_tp:&PLType, to: ValueHandle, to_tp:&PLType, len: ValueHandle, ctx: &mut Ctx<'a>);
     fn build_bit_not(&self, v: ValueHandle) -> ValueHandle;
     fn build_bit_and(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
     fn build_bit_or(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;

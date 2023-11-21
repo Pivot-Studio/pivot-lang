@@ -414,6 +414,14 @@ fn expect_pub_err(err: ErrorCode, ctx: &Ctx, range: Range, name: String) -> Resu
         .add_to_ctx(ctx))
 }
 impl PLType {
+    pub fn new_i8_ptr() -> PLType{
+        PLType::Pointer(Arc::new(RefCell::new(
+            PLType::Primitive(PriType::I8),
+        )))
+    }
+    pub fn new_i64() -> PLType{
+        PLType::Primitive(PriType::I64)
+    }
     #[cfg(feature = "llvm")]
     pub fn get_immix_type(&self) -> ObjectType {
         match self {

@@ -36,6 +36,8 @@ pub struct GeneratorCtxData {
     pub prev_yield_bb: Option<BlockHandle>,
     pub ctx_size_handle: ValueHandle,
     pub param_tmp: ValueHandle,
+    pub ctx_tp: Option<Arc<RefCell<PLType>>>,
+    pub ret_type: Option<Arc<RefCell<PLType>>>,
 }
 
 /// # CtxFlag
@@ -52,6 +54,7 @@ pub struct ClosureCtxData {
     pub table: LinkedHashMap<String, (PLSymbolData, ValueHandle)>,
     pub data_handle: ValueHandle,
     pub alloca_bb: Option<BlockHandle>,
+    pub data_tp:Option< Arc<RefCell<PLType>>>
 }
 
 pub(crate) fn end_generator<'a>(
@@ -90,8 +93,9 @@ pub(crate) fn end_generator<'a>(
     builder.gen_st_visit_function(child, st_tp, &tps);
     builder.position_at_end_block(data.borrow().entry_bb);
     // 3. 在setup函数中给返回值（接口）的对应字段赋值，并返回
+    let b = data.borrow();
     let ptr = builder
-        .build_struct_gep(data.borrow().ret_handle, 1, "ctx_handle_gep")
+        .build_struct_gep(b.ret_handle, 1, "ctx_handle_gep", &b.ret_type.as_ref().unwrap().borrow(),child)
         .unwrap();
     let ptr = builder.bitcast(
         child,
@@ -103,10 +107,10 @@ pub(crate) fn end_generator<'a>(
     );
     builder.build_store(ptr, data.borrow().ctx_handle);
     let ptr = builder
-        .build_struct_gep(data.borrow().ret_handle, 2, "ctx_handle_gep")
+        .build_struct_gep(data.borrow().ret_handle, 2, "ctx_handle_gep",&b.ret_type.as_ref().unwrap().borrow(),child)
         .unwrap();
     unsafe { builder.store_with_aoto_cast(ptr, funcvalue) };
-    let ret_load = builder.build_load(data.borrow().ret_handle, "ret_load");
+    let ret_load = builder.build_load(data.borrow().ret_handle, "ret_load",&b.ret_type.as_ref().unwrap().borrow(),child);
     builder.build_return(Some(ret_load));
 
     // 4. 生成yield函数的done分支代码
@@ -114,7 +118,7 @@ pub(crate) fn end_generator<'a>(
     builder.build_unconditional_branch(data.borrow().entry_bb);
     builder.position_at_end_block(done);
     let flag = builder
-        .build_struct_gep(child.return_block.unwrap().1.unwrap(), 0, "flag")
+        .build_struct_gep(child.return_block.unwrap().1.unwrap(), 0, "flag",&b.ret_type.as_ref().unwrap().borrow(),child)
         .unwrap();
     builder.build_store(flag, builder.int_value(&PriType::U64, 1, false));
     builder.build_unconditional_branch(child.return_block.unwrap().0);
@@ -122,8 +126,8 @@ pub(crate) fn end_generator<'a>(
     // 5. 生成yield函数的跳转代码
     builder.position_at_end_block(allocab);
     let ctx_v = builder.get_nth_param(child.function.unwrap(), 0);
-    let address = builder.build_struct_gep(ctx_v, 1, "block_address").unwrap();
-    let address = builder.build_load(address, "block_address");
+    let address = builder.build_struct_gep(ctx_v, 1, "block_address", &PLType::new_i8_ptr(), child).unwrap();
+    let address = builder.build_load(address, "block_address", &PLType::new_i8_ptr(), child);
     builder.build_indirect_br(address, child);
 
     // 6. 用最终的generator_ctx大小修正之前的malloc语句
@@ -214,6 +218,12 @@ pub(crate) fn init_generator<'a>(
         .unwrap()
         .borrow_mut()
         .ctx_handle = ctx_handle;
+    child
+    .generator_data
+    .as_ref()
+    .unwrap()
+    .borrow_mut()
+    .ctx_tp = Some(Arc::new(RefCell::new(PLType::Struct(st_tp.clone()))));
     *sttp_opt = Some(st_tp);
     Ok(())
 }
@@ -227,7 +237,7 @@ pub(crate) fn save_generator_init_block<'a>(
     let address = builder.get_block_address(entry);
     let data = child.generator_data.as_ref().unwrap().clone();
     let address_ptr = builder
-        .build_struct_gep(data.borrow().ctx_handle, 1, "block_address")
+        .build_struct_gep(data.borrow().ctx_handle, 1, "block_address",&data.borrow().ctx_tp.as_ref().unwrap().borrow(),child)
         .unwrap();
     builder.build_store(address_ptr, address);
 }
@@ -242,16 +252,18 @@ pub(crate) fn build_generator_ret<'a>(
     let data = child.generator_data.as_ref().unwrap().clone();
     child.position_at_end(data.borrow().entry_bb, builder);
     let tp = child.rettp.clone().unwrap();
-    match &*fnvalue
-        .fntype
-        .ret_pltype
-        .get_type(child, builder, true)?
+    let r = fnvalue
+    .fntype
+    .ret_pltype
+    .get_type(child, builder, true)?;
+    match &*r.clone()
         .borrow()
     {
         PLType::Void => unreachable!(),
         other => {
             builder.rm_curr_debug_location();
             data.borrow_mut().ret_handle = builder.alloc("retvalue", other, child, None);
+            data.borrow_mut().ret_type = Some( r);
         }
     }
     child.position_at_end(entry, builder);

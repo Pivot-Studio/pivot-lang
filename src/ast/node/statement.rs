@@ -294,7 +294,7 @@ fn handle_deconstruct<'a, 'b>(
                 ctx.add_symbol(
                     var.name.clone(),
                     ptr2value,
-                    pltype,
+                    pltype.clone(),
                     def_var.range(),
                     false,
                     false,
@@ -316,7 +316,7 @@ fn handle_deconstruct<'a, 'b>(
             };
             if let Some(exp) = expv {
                 builder.build_dbg_location(def_var.range().start);
-                builder.build_store(ptr2value, ctx.try_load2var(range, exp, builder)?);
+                builder.build_store(ptr2value, ctx.try_load2var(range, exp, builder, &pltype.borrow())?);
             }
         }
         DefVar::TupleDeconstruct(TupleDeconstructNode {
@@ -356,7 +356,7 @@ fn handle_deconstruct<'a, 'b>(
                     for (i, (_, f)) in st.fields.iter().enumerate() {
                         let ftp = f.typenode.get_type(ctx, builder, false)?;
                         let expv = builder
-                            .build_struct_gep(expv, f.index, "_deconstruct")
+                            .build_struct_gep(expv, f.index, "_deconstruct", &pltype.borrow(), ctx)
                             .unwrap();
                         let deconstruct_v = var[i].as_ref();
                         handle_deconstruct(
@@ -421,7 +421,7 @@ fn handle_deconstruct<'a, 'b>(
                                 }
                                 let f = st.fields.get(&v.name).unwrap();
                                 let expv = builder
-                                    .build_struct_gep(expv, f.index, "_deconstruct")
+                                    .build_struct_gep(expv, f.index, "_deconstruct",&pltype.borrow(),ctx)
                                     .unwrap();
                                 let ftp = f.typenode.get_type(ctx, builder, false)?;
                                 (expv, ftp)
@@ -535,14 +535,14 @@ impl Node for AssignNode {
                 let lpltype = rel.get_ty();
                 // 要走转换逻辑，所以不和下方分支统一
                 let value = ctx
-                    .emit_with_expectation(&mut self.exp, lpltype, self.var.range(), builder)?
+                    .emit_with_expectation(&mut self.exp, lpltype.clone(), self.var.range(), builder)?
                     .get_value()
                     .unwrap()
                     .get_value();
                 if rel.is_const() {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::ASSIGN_CONST)));
                 }
-                let load = ctx.try_load2var(exp_range, value, builder)?;
+                let load = ctx.try_load2var(exp_range, value, builder, &lpltype.borrow())?;
                 builder.build_store(ptr, load);
                 Ok(Default::default())
             }

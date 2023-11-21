@@ -685,7 +685,7 @@ impl Node for StructInitNode {
                         return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
                     }
                     let v = v.unwrap();
-                    let value = ctx.try_load2var(field_exp_range, v.get_value(), builder)?;
+                    let value = ctx.try_load2var(field_exp_range, v.get_value(), builder, &v.get_ty().borrow())?;
                     let value_pltype = v.get_ty();
                     ctx.protect_generic_context(&sttype.generic_map, |ctx| {
                         if !field
@@ -731,7 +731,7 @@ impl Node for StructInitNode {
         let struct_pointer = builder.alloc("initstruct", &pltype.borrow(), ctx, None); //alloc(ctx, tp, "initstruct");
         field_init_values.iter().for_each(|(index, value)| {
             let fieldptr = builder
-                .build_struct_gep(struct_pointer, *index, "fieldptr")
+                .build_struct_gep(struct_pointer, *index, "fieldptr", &pltype.borrow(), ctx)
                 .unwrap();
             builder.build_store(fieldptr, *value);
         });
@@ -782,7 +782,7 @@ impl Node for ArrayInitNode {
             }
             let v = v.unwrap();
             let tp = v.get_ty();
-            exps.push((ctx.try_load2var(range, v.get_value(), builder)?, tp));
+            exps.push((ctx.try_load2var(range, v.get_value(), builder, &v.get_ty().borrow())?, tp));
         }
         let sz = exps.len() as u64;
         let (tp, size_handle) = if let Some((tp, len_v)) = &mut self.tp {
@@ -792,7 +792,7 @@ impl Node for ArrayInitNode {
             if !matches!(&*len.get_ty().borrow(), PLType::Primitive(PriType::I64)) {
                 return Err(ctx.add_diag(len_v.range().new_err(ErrorCode::ARRAY_LEN_MUST_BE_I64)));
             }
-            let len = ctx.try_load2var(len_v.range(), len.get_value(), builder)?;
+            let len = ctx.try_load2var(len_v.range(), len.get_value(), builder, & len.get_ty().borrow())?;
             if let Some(tp0) = &tp0 {
                 if !ctx.eq(tp.clone(), tp0.clone()).total_eq() {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_TYPE_NOT_MATCH)));
@@ -807,15 +807,15 @@ impl Node for ArrayInitNode {
             (tp, builder.int_value(&PriType::I64, sz, true))
         };
         let arr_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
-            element_type: tp,
+            element_type: tp.clone(),
             size_handle,
         })));
         let arr = builder.alloc("array_alloca", &arr_tp.borrow(), ctx, None);
-        let real_arr = builder.build_struct_gep(arr, 1, "real_arr").unwrap();
+        let real_arr = builder.build_struct_gep(arr, 1, "real_arr", &arr_tp.borrow(), ctx).unwrap();
 
-        let real_arr = builder.build_load(real_arr, "load_arr");
+        let real_arr = builder.build_load(real_arr, "load_arr", &tp.borrow(), ctx);
         for (i, (v, _)) in exps.into_iter().enumerate() {
-            let ptr = builder.build_const_in_bounds_gep(real_arr, &[i as u64], "elem_ptr");
+            let ptr = builder.build_const_in_bounds_gep(real_arr, &[i as u64], "elem_ptr", &tp.borrow(), ctx);
             builder.build_store(ptr, v);
         }
         arr.new_output(arr_tp).to_result()

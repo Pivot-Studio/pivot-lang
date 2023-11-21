@@ -71,10 +71,11 @@ impl Node for TupleInitNode {
         // 初始化赋值
         for (i, value) in expr_values.into_iter().enumerate() {
             let field_ptr = builder
-                .build_struct_gep(v, i as u32 + 1, &i.to_string())
+                .build_struct_gep(v, i as u32 + 1, &i.to_string(), &stu.borrow(), ctx)
                 .unwrap();
+            let vv = value.get_value().unwrap();
             let v =
-                builder.try_load2var(self.range, value.get_value().unwrap().get_value(), ctx)?;
+                builder.try_load2var(self.range, vv.get_value(), &vv.get_ty().borrow(),ctx)?;
             builder.build_store(field_ptr, v);
         }
         v.new_output(stu).to_result()

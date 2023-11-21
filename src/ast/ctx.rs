@@ -122,7 +122,7 @@ pub struct Ctx<'a> {
     pub macro_loop_len: usize,
     pub temp_source: Option<String>,
     pub in_macro: bool,
-    pub closure_data: Option<RefCell<ClosureCtxData>>,
+    pub closure_data: Option<Arc< RefCell<ClosureCtxData>>>,
     pub expect_ty: Option<Arc<RefCell<PLType>>>,
     pub self_ref_map: FxHashMap<String, FxHashSet<(String, Range)>>, // used to recognize self reference
     pub ctx_flag: CtxFlag,
@@ -166,9 +166,9 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn is_active_file(&self) -> bool {
         self.is_active_file
     }
-    pub fn add_term_to_previous_yield(
-        &self,
-        builder: &'a BuilderEnum<'a, 'ctx>,
+    pub fn add_term_to_previous_yield<'b>(
+        &'b mut self,
+        builder: &'b BuilderEnum<'a, 'ctx>,
         curbb: usize,
     ) -> Arc<RefCell<crate::ast::ctx::GeneratorCtxData>> {
         let ctx = self;
@@ -177,7 +177,7 @@ impl<'a, 'ctx> Ctx<'a> {
             builder.position_at_end_block(prev_bb);
             let ctx_handle = builder.get_nth_param(ctx.function.unwrap(), 0);
             let ptr = builder
-                .build_struct_gep(ctx_handle, 1, "block_ptr")
+                .build_struct_gep(ctx_handle, 1, "block_ptr", &data.borrow().ctx_tp.as_ref().unwrap().borrow(), self)
                 .unwrap();
 
             let addr = builder.get_block_address(curbb);
@@ -546,7 +546,7 @@ impl<'a, 'ctx> Ctx<'a> {
     /// # get_symbol
     /// search in current and all father symbol tables
     pub fn get_symbol<'b>(
-        &'b self,
+        &'b mut self,
         name: &str,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Option<PLSymbol> {
@@ -578,7 +578,12 @@ impl<'a, 'ctx> Ctx<'a> {
                         // captured by closure
                         let new_symbol = symbol.clone();
                         let len = data.table.len();
-                        builder.add_closure_st_field(data.data_handle, new_symbol.value);
+                        let st = data.data_tp.as_ref().unwrap().borrow();
+                        let st = match &*st {
+                            PLType::Struct(s) => s,
+                            _ => unreachable!(),
+                        };
+                        builder.add_closure_st_field(st, new_symbol.value,self);
                         let new_symbol = PLSymbolData {
                             value: builder.build_load(
                                 builder
@@ -586,9 +591,13 @@ impl<'a, 'ctx> Ctx<'a> {
                                         data.data_handle,
                                         len as u32 + 1,
                                         "closure_tmp",
+                                        &data.data_tp.unwrap().borrow(),
+                                        self
                                     )
                                     .unwrap(),
                                 "closure_loaded",
+                                &new_symbol.pltype.borrow(),
+                                self
                             ),
                             ..new_symbol
                         };
@@ -864,8 +873,9 @@ impl<'a, 'ctx> Ctx<'a> {
         range: Range,
         v: ValueHandle,
         builder: &'b BuilderEnum<'a, 'ctx>,
+        tp:&PLType
     ) -> Result<ValueHandle, PLDiag> {
-        builder.try_load2var(range, v, self)
+        builder.try_load2var(range, v, tp, self)
     }
     fn set_mod(&mut self, plmod: Mod) -> Mod {
         let m = self.plmod.clone();
@@ -993,7 +1003,7 @@ impl<'a, 'ctx> Ctx<'a> {
     /// # auto_deref
     /// 自动解引用，有几层解几层
     pub fn auto_deref<'b>(
-        &'b self,
+        &'b mut self,
         tp: Arc<RefCell<PLType>>,
         value: ValueHandle,
         builder: &'b BuilderEnum<'a, 'ctx>,
@@ -1002,7 +1012,7 @@ impl<'a, 'ctx> Ctx<'a> {
         let mut value = value;
         while let PLType::Pointer(p) = &*get_type_deep(tp.clone()).borrow() {
             tp = p.clone();
-            value = builder.build_load(value, "load");
+            value = builder.build_load(value, "load", &tp.borrow(), self);
         }
         (tp, value)
     }

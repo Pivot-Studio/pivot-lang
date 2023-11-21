@@ -33,33 +33,33 @@ fn main() {
         lazy_static! {
             /// A single path to search for LLVM in (containing bin/llvm-config)
             static ref ENV_LLVM_PREFIX: String =
-                format!("LLVM_SYS_{}_PREFIX", 140);
+                format!("LLVM_SYS_{}_PREFIX", 160);
 
             /// If exactly "YES", ignore the version blocklist
             static ref ENV_IGNORE_BLOCKLIST: String =
-                format!("LLVM_SYS_{}_IGNORE_BLOCKLIST", 140);
+                format!("LLVM_SYS_{}_IGNORE_BLOCKLIST", 160);
 
             /// If set, enforce precise correspondence between crate and binary versions.
             static ref ENV_STRICT_VERSIONING: String =
-                format!("LLVM_SYS_{}_STRICT_VERSIONING", 140);
+                format!("LLVM_SYS_{}_STRICT_VERSIONING", 160);
 
             /// If set, do not attempt to strip irrelevant options for llvm-config --cflags
             static ref ENV_NO_CLEAN_CFLAGS: String =
-                format!("LLVM_SYS_{}_NO_CLEAN_CFLAGS", 140);
+                format!("LLVM_SYS_{}_NO_CLEAN_CFLAGS", 160);
 
             /// If set and targeting MSVC, force the debug runtime library
             static ref ENV_USE_DEBUG_MSVCRT: String =
-                format!("LLVM_SYS_{}_USE_DEBUG_MSVCRT", 140);
+                format!("LLVM_SYS_{}_USE_DEBUG_MSVCRT", 160);
 
             /// If set, always link against libffi
             static ref ENV_FORCE_FFI: String =
-                format!("LLVM_SYS_{}_FFI_WORKAROUND", 140);
+                format!("LLVM_SYS_{}_FFI_WORKAROUND", 160);
         }
 
         lazy_static! {
             /// LLVM version used by this version of the crate.
             static ref CRATE_VERSION: Version = {
-                let crate_version = Version::parse("140.0.6")
+                let crate_version = Version::parse("160.0.6")
                     .expect("Crate version is somehow not valid semver");
                 Version {
                     major: crate_version.major / 10,
@@ -252,7 +252,7 @@ fn main() {
                         &flag[..flag.len() - 4]
                     } else if cfg!(target_os = "macos") {
                         // Linker flags style, -lfoo
-                        assert!(flag.starts_with("-l"));
+                        // assert!(flag.starts_with("-l"), "{}",flag);
                         if flag.ends_with(".tbd") && flag.starts_with("-llib") {
                             &flag[5..flag.len() - 4]
                         } else {

@@ -297,15 +297,15 @@ impl Node for ArrayElementNode {
             let index_range = self.index.range();
             let v = self.index.emit(ctx, builder)?.get_value().unwrap();
             let index = v.get_value();
-            let index = ctx.try_load2var(index_range, index, builder)?;
+            let index = ctx.try_load2var(index_range, index, builder,&v.get_ty().borrow())?;
             if !v.get_ty().borrow().is(&PriType::I64) {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_INDEX_MUST_BE_INT)));
             }
             let elemptr = {
                 let index = &[index];
-                let real_arr = builder.build_struct_gep(arr, 1, "real_arr").unwrap();
-                let real_arr = builder.build_load(real_arr, "load_arr");
-                builder.build_in_bounds_gep(real_arr, index, "element_ptr")
+                let real_arr = builder.build_struct_gep(arr, 1, "real_arr", &pltype.borrow(), ctx).unwrap();
+                let real_arr = builder.build_load(real_arr, "load_arr", &PLType::new_i8_ptr(), ctx);
+                builder.build_in_bounds_gep(real_arr, index, "element_ptr", &arrtp.element_type.borrow(),ctx)
             };
             ctx.emit_comment_highlight(&self.comments[0]);
             return elemptr.new_output(arrtp.element_type.clone()).to_result();
