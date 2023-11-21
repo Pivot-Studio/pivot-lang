@@ -2,6 +2,7 @@ use crate::ast::diag::ErrorCode;
 use crate::ast::node::error::{ErrorNode, StErrorNode};
 use crate::nomparser::Span;
 use crate::{ast::range::Range, ast::tokens::TokenType};
+use internal_macro::{test_parser, test_semi_stmt};
 use nom::branch::alt;
 use nom::character::complete::space1;
 use nom::character::is_alphanumeric;
@@ -13,7 +14,6 @@ use nom::{
     bytes::complete::tag, character::complete::space0, combinator::map_res, error::ParseError,
     sequence::delimited, AsChar, IResult, InputTake, InputTakeAtPosition, Parser,
 };
-
 use super::*;
 
 /// parse token with space trimed
@@ -90,6 +90,20 @@ pub fn tag_token_word(token: TokenType) -> impl Fn(Span) -> IResult<Span, (Token
         }
     }
 }
+
+/// delete all spaces(spaces and tabs) around one token.
+/// 
+/// ```rust
+/// # use nom::{Err, error::ErrorKind, Needed};
+/// # use nom::Needed::Size;
+/// use nom::sequence::delimited;
+/// use nom::bytes::complete::tag;
+///
+/// assert_eq!(parser(" \t(abc) \t"), Ok(("", "abc")));
+/// assert_eq!(parser(" \t(abc) \tdef"), Ok(("def", "abc")));
+/// assert_eq!(parser(""), Ok(("", "")));
+/// assert_eq!(parser("123"), Ok(("", "123")));
+/// ```
 pub fn delspace<I, O, E, G>(parser: G) -> impl FnMut(I) -> IResult<I, O, E>
 where
     G: Parser<I, O, E>,
@@ -99,6 +113,7 @@ where
 {
     delimited(space0, parser, space0)
 }
+
 pub fn parse_with_ex<'a, O, E, G>(
     mut parser: G,
     extra: bool,
@@ -154,6 +169,7 @@ pub fn create_bin((mut left, rights): PLBin) -> Result<Box<NodeEnum>, ()> {
 }
 type PLBin = (Box<NodeEnum>, Vec<((TokenType, Range), Box<NodeEnum>)>);
 
+#[test_semi_stmt("let u:u16 = 2;")]
 pub fn semi_stmt<'a, G>(
     p: G,
     p2: G,
