@@ -1,5 +1,3 @@
-use std::sync::atomic::{AtomicBool, AtomicU32};
-
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -68,8 +66,6 @@ pub fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
         },
     ))(input)
 }
-
-
 
 pub fn identifier(input: Span) -> IResult<Span, Box<VarNode>> {
     delspace(map_res(

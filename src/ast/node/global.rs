@@ -76,7 +76,8 @@ impl Node for GlobalNode {
         let v = self.exp.emit(ctx, builder)?.get_value();
         let v = v.unwrap();
         ctx.push_type_hints(self.var.range, v.get_ty());
-        let base_value = ctx.try_load2var(exp_range, v.get_value(), builder,&v.get_ty().borrow())?;
+        let base_value =
+            ctx.try_load2var(exp_range, v.get_value(), builder, &v.get_ty().borrow())?;
         let res = ctx.get_symbol(&self.var.name, builder);
         if res.is_none() {
             return Ok(Default::default());

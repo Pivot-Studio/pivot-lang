@@ -685,7 +685,12 @@ impl Node for StructInitNode {
                         return Err(ctx.add_diag(field_exp_range.new_err(ErrorCode::EXPECT_VALUE)));
                     }
                     let v = v.unwrap();
-                    let value = ctx.try_load2var(field_exp_range, v.get_value(), builder, &v.get_ty().borrow())?;
+                    let value = ctx.try_load2var(
+                        field_exp_range,
+                        v.get_value(),
+                        builder,
+                        &v.get_ty().borrow(),
+                    )?;
                     let value_pltype = v.get_ty();
                     ctx.protect_generic_context(&sttype.generic_map, |ctx| {
                         if !field
@@ -782,7 +787,10 @@ impl Node for ArrayInitNode {
             }
             let v = v.unwrap();
             let tp = v.get_ty();
-            exps.push((ctx.try_load2var(range, v.get_value(), builder, &v.get_ty().borrow())?, tp));
+            exps.push((
+                ctx.try_load2var(range, v.get_value(), builder, &v.get_ty().borrow())?,
+                tp,
+            ));
         }
         let sz = exps.len() as u64;
         let (tp, size_handle) = if let Some((tp, len_v)) = &mut self.tp {
@@ -792,7 +800,12 @@ impl Node for ArrayInitNode {
             if !matches!(&*len.get_ty().borrow(), PLType::Primitive(PriType::I64)) {
                 return Err(ctx.add_diag(len_v.range().new_err(ErrorCode::ARRAY_LEN_MUST_BE_I64)));
             }
-            let len = ctx.try_load2var(len_v.range(), len.get_value(), builder, & len.get_ty().borrow())?;
+            let len = ctx.try_load2var(
+                len_v.range(),
+                len.get_value(),
+                builder,
+                &len.get_ty().borrow(),
+            )?;
             if let Some(tp0) = &tp0 {
                 if !ctx.eq(tp.clone(), tp0.clone()).total_eq() {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_TYPE_NOT_MATCH)));
@@ -811,11 +824,19 @@ impl Node for ArrayInitNode {
             size_handle,
         })));
         let arr = builder.alloc("array_alloca", &arr_tp.borrow(), ctx, None);
-        let real_arr = builder.build_struct_gep(arr, 1, "real_arr", &arr_tp.borrow(), ctx).unwrap();
+        let real_arr = builder
+            .build_struct_gep(arr, 1, "real_arr", &arr_tp.borrow(), ctx)
+            .unwrap();
 
-        let real_arr = builder.build_load(real_arr, "load_arr", &PLType::Pointer( tp.clone()), ctx);
+        let real_arr = builder.build_load(real_arr, "load_arr", &PLType::Pointer(tp.clone()), ctx);
         for (i, (v, _)) in exps.into_iter().enumerate() {
-            let ptr = builder.build_const_in_bounds_gep(real_arr, &[i as u64], "elem_ptr", &tp.borrow(), ctx);
+            let ptr = builder.build_const_in_bounds_gep(
+                real_arr,
+                &[i as u64],
+                "elem_ptr",
+                &tp.borrow(),
+                ctx,
+            );
             builder.build_store(ptr, v);
         }
         arr.new_output(arr_tp).to_result()

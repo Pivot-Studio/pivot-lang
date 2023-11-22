@@ -74,8 +74,7 @@ impl Node for TupleInitNode {
                 .build_struct_gep(v, i as u32 + 1, &i.to_string(), &stu.borrow(), ctx)
                 .unwrap();
             let vv = value.get_value().unwrap();
-            let v =
-                builder.try_load2var(self.range, vv.get_value(), &vv.get_ty().borrow(),ctx)?;
+            let v = builder.try_load2var(self.range, vv.get_value(), &vv.get_ty().borrow(), ctx)?;
             builder.build_store(field_ptr, v);
         }
         v.new_output(stu).to_result()

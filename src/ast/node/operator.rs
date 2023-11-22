@@ -51,7 +51,7 @@ impl Node for UnaryOpNode {
         }
         let rv = rv.unwrap();
         let pltype = rv.get_ty();
-        let exp = ctx.try_load2var(exp_range, rv.get_value(), builder,&rv.get_ty().borrow())?;
+        let exp = ctx.try_load2var(exp_range, rv.get_value(), builder, &rv.get_ty().borrow())?;
         return Ok(match (&*pltype.borrow(), self.op.0) {
             (
                 PLType::Primitive(
@@ -147,7 +147,8 @@ impl Node for BinOpNode {
                         return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
                     }
                     let rv = rv.unwrap();
-                    let right = ctx.try_load2var(rrange, rv.get_value(), builder, &rv.get_ty().borrow())?;
+                    let right =
+                        ctx.try_load2var(rrange, rv.get_value(), builder, &rv.get_ty().borrow())?;
                     let incoming_bb2 = builder.get_cur_basic_block(); // get incoming block 2
                     builder.build_unconditional_branch(merge_bb);
                     // merge bb
@@ -179,7 +180,7 @@ impl Node for BinOpNode {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
         }
         let re = re.unwrap();
-        let right = ctx.try_load2var(rrange, re.get_value(), builder, & re.get_ty().borrow())?;
+        let right = ctx.try_load2var(rrange, re.get_value(), builder, &re.get_ty().borrow())?;
         let lpltype = get_type_deep(lpltype);
         Ok(match self.op.0 {
             TokenType::BIT_AND => {
@@ -443,11 +444,25 @@ impl Node for TakeOpNode {
 
                         let re = field.typenode.get_type(ctx, builder, true)?;
                         let fnv = builder
-                            .build_struct_gep(headptr, field.index, "mthd_ptr",&head_pltype.borrow(),ctx)
+                            .build_struct_gep(
+                                headptr,
+                                field.index,
+                                "mthd_ptr",
+                                &head_pltype.borrow(),
+                                ctx,
+                            )
                             .unwrap();
-                        let fnv = builder.build_load(fnv, "mthd_ptr_load", &PLType::new_i8_ptr(), ctx);
-                        let headptr = builder.build_struct_gep(headptr, 1, "traitptr",&head_pltype.borrow(),ctx).unwrap();
-                        let headptr = builder.build_load(headptr, "traitptr_load",&PLType::new_i8_ptr(), ctx);
+                        let fnv =
+                            builder.build_load(fnv, "mthd_ptr_load", &PLType::new_i8_ptr(), ctx);
+                        let headptr = builder
+                            .build_struct_gep(headptr, 1, "traitptr", &head_pltype.borrow(), ctx)
+                            .unwrap();
+                        let headptr = builder.build_load(
+                            headptr,
+                            "traitptr_load",
+                            &PLType::new_i8_ptr(),
+                            ctx,
+                        );
                         ctx.emit_comment_highlight(&self.comments[0]);
                         Ok(NodeOutput::new_value(NodeValue::new_receiver(
                             fnv, re, headptr, None,
@@ -468,7 +483,13 @@ impl Node for TakeOpNode {
                     }
                     return Ok(NodeOutput::new_value(NodeValue::new(
                         builder
-                            .build_struct_gep(headptr, field.index, "structgep", &head_pltype.borrow(), ctx)
+                            .build_struct_gep(
+                                headptr,
+                                field.index,
+                                "structgep",
+                                &head_pltype.borrow(),
+                                ctx,
+                            )
                             .unwrap(),
                         field.typenode.get_type(ctx, builder, true)?,
                     )));

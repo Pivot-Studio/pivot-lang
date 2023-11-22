@@ -67,7 +67,7 @@ pub enum PLType {
     Trait(STType),
     Union(UnionType),
     Closure(ClosureType),
-    Unknown
+    Unknown,
 }
 
 impl TraitImplAble for PriType {
@@ -353,7 +353,7 @@ fn new_typename_node(name: &str, range: Range, ns: &[String]) -> Box<TypeNodeEnu
                     Box::new(VarNode {
                         name: s.clone(),
                         range: Default::default(),
-                        id:None,
+                        id: None,
                     })
                 })
                 .collect(),
@@ -414,12 +414,10 @@ fn expect_pub_err(err: ErrorCode, ctx: &Ctx, range: Range, name: String) -> Resu
         .add_to_ctx(ctx))
 }
 impl PLType {
-    pub fn new_i8_ptr() -> PLType{
-        PLType::Pointer(Arc::new(RefCell::new(
-            PLType::Primitive(PriType::I8),
-        )))
+    pub fn new_i8_ptr() -> PLType {
+        PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::I8))))
     }
-    pub fn new_i64() -> PLType{
+    pub fn new_i64() -> PLType {
         PLType::Primitive(PriType::I64)
     }
     #[cfg(feature = "llvm")]
@@ -441,14 +439,15 @@ impl PLType {
             PLType::Struct(s) => s.implements_trait(tp, ctx),
             PLType::Union(u) => u.implements_trait(tp, ctx),
             _ => {
-
-                let plmod = 
-                if tp.path == ctx.plmod.path {
+                let plmod = if tp.path == ctx.plmod.path {
                     ctx.plmod.clone()
                 } else {
-                    ctx.db.get_module(&tp.path).expect(&format!(
-                    "expect module {} exists, trait name: {}",
-                    &tp.path, &tp.name))
+                    ctx.db.get_module(&tp.path).unwrap_or_else(|| {
+                        panic!(
+                            "expect module {} exists, trait name: {}",
+                            &tp.path, &tp.name
+                        )
+                    })
                 };
                 if impl_in_mod(&plmod, name, tp) {
                     return true;

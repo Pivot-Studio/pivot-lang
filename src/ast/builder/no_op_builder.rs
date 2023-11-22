@@ -74,7 +74,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         &self,
         _ptr: super::ValueHandle,
         _index: &[u64],
-        _name: &str, tp:&PLType,ctx: &mut Ctx<'a>
+        _name: &str,
+        _tp: &PLType,
+        _ctx: &mut Ctx<'a>,
     ) -> super::ValueHandle {
         0
     }
@@ -85,7 +87,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         &self,
         _ptr: super::ValueHandle,
         _index: &[super::ValueHandle],
-        _name: &str, tp:&PLType,ctx: &mut Ctx<'a>
+        _name: &str,
+        _tp: &PLType,
+        _ctx: &mut Ctx<'a>,
     ) -> super::ValueHandle {
         0
     }
@@ -98,8 +102,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         &self,
         _structv: super::ValueHandle,
         _index: u32,
-        _name: &str, _tp:&PLType,_ctx: &mut Ctx<'a>
-    ) -> Result<ValueHandle, String>{
+        _name: &str,
+        _tp: &PLType,
+        _ctx: &mut Ctx<'a>,
+    ) -> Result<ValueHandle, String> {
         Ok(0)
     }
 
@@ -225,14 +231,22 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         0
     }
 
-    fn build_load(&self, _ptr: super::ValueHandle, _name: &str, _tp:&PLType,_ctx: &mut Ctx<'a>) -> super::ValueHandle {
+    fn build_load(
+        &self,
+        _ptr: super::ValueHandle,
+        _name: &str,
+        _tp: &PLType,
+        _ctx: &mut Ctx<'a>,
+    ) -> super::ValueHandle {
         0
     }
 
     fn try_load2var(
         &self,
         _range: crate::ast::range::Range,
-        _v: super::ValueHandle, _tp:&PLType,_ctx: &mut Ctx<'a>
+        _v: super::ValueHandle,
+        _tp: &PLType,
+        _ctx: &mut Ctx<'a>,
     ) -> Result<super::ValueHandle, crate::ast::diag::PLDiag> {
         Ok(0)
     }
@@ -449,7 +463,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         f
     }
 
-    fn add_closure_st_field(&self, _st: &STType, _field: ValueHandle, ctx: &mut Ctx<'a>) {}
+    fn add_closure_st_field(&self, _st: &STType, _field: ValueHandle, _ctx: &mut Ctx<'a>) {}
 
     fn build_sub_program_by_pltp(
         &self,
@@ -500,7 +514,15 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     fn sizeof(&self, _pltype: &PLType, _ctx: &mut Ctx<'a>) -> u64 {
         0
     }
-    fn build_memcpy(&self, from: ValueHandle, from_tp:&PLType, to: ValueHandle,  len: ValueHandle, ctx: &mut Ctx<'a>) {}
+    fn build_memcpy(
+        &self,
+        _from: ValueHandle,
+        _from_tp: &PLType,
+        _to: ValueHandle,
+        _len: ValueHandle,
+        _ctx: &mut Ctx<'a>,
+    ) {
+    }
 
     fn build_bit_not(&self, _v: ValueHandle) -> ValueHandle {
         0

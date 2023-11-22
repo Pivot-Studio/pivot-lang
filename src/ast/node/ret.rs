@@ -61,7 +61,7 @@ impl Node for RetNode {
                 v.get_value(),
                 builder,
             )?;
-            let value = ctx.try_load2var(self.range, value, builder,&ret_pltype.borrow())?;
+            let value = ctx.try_load2var(self.range, value, builder, &ret_pltype.borrow())?;
             builder.build_store(ctx.return_block.unwrap().1.unwrap(), value);
             let curbb = builder.get_cur_basic_block();
 
@@ -93,7 +93,8 @@ impl Node for RetNode {
             let v = ret_node.emit(ctx, builder)?.get_value().unwrap();
             ctx.emit_comment_highlight(&self.comments[0]);
             let value_pltype = v.get_ty();
-            let mut value = ctx.try_load2var(self.range, v.get_value(), builder, &v.get_ty().borrow())?;
+            let mut value =
+                ctx.try_load2var(self.range, v.get_value(), builder, &v.get_ty().borrow())?;
             let eqres = ctx.eq(ret_pltype.clone(), value_pltype.clone());
             if !eqres.eq {
                 let err = ctx.add_diag(self.range.new_err(ErrorCode::RETURN_TYPE_MISMATCH));

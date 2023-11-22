@@ -342,11 +342,25 @@ fn emit_arr_from_raw<'a, 'b>(
         size_handle: 0,
     })));
     let arr = builder.alloc("array_alloca", &arr_tp.borrow(), ctx, None);
-    let arr_raw = builder.build_struct_gep(arr, 1, "arr_raw", &arr_tp.borrow(), ctx).unwrap();
-    let loaded = ctx.try_load2var(f.paralist[0].range(), v.get_value(), builder,&v.get_ty().borrow())?;
+    let arr_raw = builder
+        .build_struct_gep(arr, 1, "arr_raw", &arr_tp.borrow(), ctx)
+        .unwrap();
+    let loaded = ctx.try_load2var(
+        f.paralist[0].range(),
+        v.get_value(),
+        builder,
+        &v.get_ty().borrow(),
+    )?;
     builder.build_store(arr_raw, loaded);
-    let arr_len = builder.build_struct_gep(arr, 2, "arr_len", &arr_tp.borrow(), ctx).unwrap();
-    let loaded = ctx.try_load2var(f.paralist[1].range(), v2.get_value(), builder,&*v2.get_ty().borrow())?;
+    let arr_len = builder
+        .build_struct_gep(arr, 2, "arr_len", &arr_tp.borrow(), ctx)
+        .unwrap();
+    let loaded = ctx.try_load2var(
+        f.paralist[1].range(),
+        v2.get_value(),
+        builder,
+        &v2.get_ty().borrow(),
+    )?;
     builder.build_store(arr_len, loaded);
 
     arr.new_output(arr_tp).to_result()
@@ -379,7 +393,7 @@ fn emit_arr_len<'a, 'b>(
             .add_to_ctx(ctx));
     }
     let len = builder
-        .build_struct_gep(v.get_value(), 2, "arr_len",&*v.get_ty().borrow(),ctx)
+        .build_struct_gep(v.get_value(), 2, "arr_len", &v.get_ty().borrow(), ctx)
         .unwrap();
     len.new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::I64))))
         .to_result()
@@ -439,20 +453,30 @@ fn emit_arr_copy<'a, 'b>(
     }
 
     let from_raw = builder
-        .build_struct_gep(v.get_value(), 1, "arr_raw",&*v.get_ty().borrow(), ctx)
+        .build_struct_gep(v.get_value(), 1, "arr_raw", &v.get_ty().borrow(), ctx)
         .unwrap();
     let to_raw = builder
-        .build_struct_gep(to.get_value(), 1, "arr_raw",&*to.get_ty().borrow(), ctx)
+        .build_struct_gep(to.get_value(), 1, "arr_raw", &to.get_ty().borrow(), ctx)
         .unwrap();
 
     let len_raw = len.get_value();
     match (&*v.get_ty().borrow(), &*to.get_ty().borrow()) {
         (PLType::Arr(a1), PLType::Arr(a2)) => {
-            let from_raw = builder.build_load(from_raw, "arr_load_field", &PLType::Pointer(a1.element_type.clone()), ctx);
-            let to_raw = builder.build_load(to_raw, "arr_load_field", &PLType::Pointer(a2.element_type.clone()), ctx);
-            builder.build_memcpy( from_raw, & a1.element_type.borrow(), to_raw, len_raw,ctx);
+            let from_raw = builder.build_load(
+                from_raw,
+                "arr_load_field",
+                &PLType::Pointer(a1.element_type.clone()),
+                ctx,
+            );
+            let to_raw = builder.build_load(
+                to_raw,
+                "arr_load_field",
+                &PLType::Pointer(a2.element_type.clone()),
+                ctx,
+            );
+            builder.build_memcpy(from_raw, &a1.element_type.borrow(), to_raw, len_raw, ctx);
             Ok(Default::default())
-        },
+        }
         _ => unreachable!(),
     }
 }
@@ -612,7 +636,9 @@ fn emit_for_fields<'a, 'b>(
         if let Some(s) = stp {
             if let PLType::Struct(sttp) = &*s.borrow() {
                 for (name, field) in sttp.fields.iter() {
-                    let gep = builder.build_struct_gep(v, field.index, "tmp_gep", &s.borrow(),ctx).unwrap();
+                    let gep = builder
+                        .build_struct_gep(v, field.index, "tmp_gep", &s.borrow(), ctx)
+                        .unwrap();
                     ctx.run_in_origin_mod(|ctx| {
                         ctx.run_in_type_mod(sttp, |ctx, _| {
                             let field_tp = field.typenode.get_type(ctx, builder, true)?;
@@ -806,11 +832,16 @@ fn emit_if_union<'a, 'b>(
 
         if let Some(s) = stp {
             if let PLType::Union(u) = &*s.borrow() {
-                let gep = builder.build_struct_gep(v, 0, "tmp_gep", &s.borrow(),ctx).unwrap();
-                let ptr = builder.build_struct_gep(v, 1, "inner_ptr", &s.borrow(),ctx).unwrap();
-                let ptr = builder.build_load(ptr, "inner_ptr", &PLType::Pointer(s.clone()),ctx);
+                let gep = builder
+                    .build_struct_gep(v, 0, "tmp_gep", &s.borrow(), ctx)
+                    .unwrap();
+                let ptr = builder
+                    .build_struct_gep(v, 1, "inner_ptr", &s.borrow(), ctx)
+                    .unwrap();
+                let ptr = builder.build_load(ptr, "inner_ptr", &PLType::Pointer(s.clone()), ctx);
 
-                let u_tp_i = builder.build_load(gep, "u_tp_i", &PLType::Primitive(PriType::I64),ctx);
+                let u_tp_i =
+                    builder.build_load(gep, "u_tp_i", &PLType::Primitive(PriType::I64), ctx);
                 let after_bb = builder.append_basic_block(ctx.function.unwrap(), "after");
 
                 for (i, tp) in u.get_sum_types(ctx, builder).iter().enumerate() {

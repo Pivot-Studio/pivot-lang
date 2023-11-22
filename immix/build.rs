@@ -244,7 +244,7 @@ fn main() {
         fn get_system_libraries() -> Vec<String> {
             llvm_config("--system-libs")
                 .split(&[' ', '\n'] as &[char])
-                .filter(|s| !s.is_empty()&& s.starts_with("-l"))
+                .filter(|s| !s.is_empty() && s.starts_with("-l"))
                 .map(|flag| {
                     if cfg!(target_env = "msvc") {
                         // Same as --libnames, foo.lib
@@ -257,7 +257,7 @@ fn main() {
                             &flag[5..flag.len() - 4]
                         } else if flag.starts_with("-l") {
                             &flag[2..]
-                        }else {
+                        } else {
                             flag
                         }
                     } else {

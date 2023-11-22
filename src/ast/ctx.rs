@@ -122,7 +122,7 @@ pub struct Ctx<'a> {
     pub macro_loop_len: usize,
     pub temp_source: Option<String>,
     pub in_macro: bool,
-    pub closure_data: Option<Arc< RefCell<ClosureCtxData>>>,
+    pub closure_data: Option<Arc<RefCell<ClosureCtxData>>>,
     pub expect_ty: Option<Arc<RefCell<PLType>>>,
     pub self_ref_map: FxHashMap<String, FxHashSet<(String, Range)>>, // used to recognize self reference
     pub ctx_flag: CtxFlag,
@@ -177,7 +177,13 @@ impl<'a, 'ctx> Ctx<'a> {
             builder.position_at_end_block(prev_bb);
             let ctx_handle = builder.get_nth_param(ctx.function.unwrap(), 0);
             let ptr = builder
-                .build_struct_gep(ctx_handle, 1, "block_ptr", &data.borrow().ctx_tp.as_ref().unwrap().borrow(), ctx)
+                .build_struct_gep(
+                    ctx_handle,
+                    1,
+                    "block_ptr",
+                    &data.borrow().ctx_tp.as_ref().unwrap().borrow(),
+                    ctx,
+                )
                 .unwrap();
 
             let addr = builder.get_block_address(curbb);
@@ -583,12 +589,10 @@ impl<'a, 'ctx> Ctx<'a> {
                             PLType::Struct(s) => s,
                             _ => unreachable!(),
                         };
-                        let ptr = father as * const _;
+                        let ptr = father as *const _;
                         let ptr = ptr as usize;
                         let ptr = ptr as *mut Ctx<'_>;
-                        builder.add_closure_st_field(st, new_symbol.value, unsafe {
-                            &mut *ptr
-                        });
+                        builder.add_closure_st_field(st, new_symbol.value, unsafe { &mut *ptr });
                         drop(st_r);
                         let new_symbol = PLSymbolData {
                             value: builder.build_load(
@@ -598,16 +602,12 @@ impl<'a, 'ctx> Ctx<'a> {
                                         len as u32 + 1,
                                         "closure_tmp",
                                         &data.data_tp.as_ref().unwrap().borrow(),
-                                        unsafe {
-                                            &mut *ptr
-                                        }
+                                        unsafe { &mut *ptr },
                                     )
                                     .unwrap(),
                                 "closure_loaded",
-                                &PLType::Pointer(Arc::new(RefCell::new(PLType::new_i8_ptr()))) ,
-                                unsafe {
-                                    &mut *ptr
-                                }
+                                &PLType::Pointer(Arc::new(RefCell::new(PLType::new_i8_ptr()))),
+                                unsafe { &mut *ptr },
                             ),
                             ..new_symbol
                         };
@@ -883,7 +883,7 @@ impl<'a, 'ctx> Ctx<'a> {
         range: Range,
         v: ValueHandle,
         builder: &'b BuilderEnum<'a, 'ctx>,
-        tp:&PLType
+        tp: &PLType,
     ) -> Result<ValueHandle, PLDiag> {
         builder.try_load2var(range, v, tp, self)
     }
@@ -1096,5 +1096,3 @@ mod completion;
 mod cast;
 
 pub use generic::EqRes;
-
-

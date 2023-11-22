@@ -6,10 +6,9 @@ use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
 use crate::format_label;
-use crate::inference::TyVariable;
+
 use crate::modifier_set;
 
-use ena::unify::UnifyKey;
 use indexmap::IndexMap;
 use internal_macro::node;
 use internal_macro::range;
@@ -91,12 +90,8 @@ impl PrintTrait for DefNode {
         self.var.print(tabs + 1, false, line.clone());
         if let Some(tp) = &self.tp {
             tp.print(tabs + 1, true, line.clone());
-        } else {
-            self.exp
-                .as_ref()
-                .map(|e|{
-                    e.print(tabs + 1, true, line.clone());
-                });
+        } else if let Some(e) = self.exp.as_ref() {
+            e.print(tabs + 1, true, line.clone());
         }
     }
 }
@@ -177,27 +172,33 @@ impl Node for DefNode {
         if self.tp.is_none() {
             let mut tp = Arc::new(RefCell::new(PLType::Unknown));
             if let DefVar::Identifier(i) = &*self.var {
-                if let Some(id) = i.id  {
+                if let Some(id) = i.id {
                     let v = ctx.unify_table.borrow_mut().probe(id);
-                    tp = v.get_type(& mut * ctx.unify_table.borrow_mut());
+                    tp = v.get_type(&mut ctx.unify_table.borrow_mut());
                     if self.exp.is_none() {
-                        ctx.push_type_hints(self.var.range(), tp.clone());   
+                        ctx.push_type_hints(self.var.range(), tp.clone());
                     }
                 }
             }
             if self.exp.is_none() && matches!(&*tp.borrow(), PLType::Unknown) {
                 match builder {
                     BuilderEnum::LLVM(_) => {
-                        return                 Err(ctx.add_diag(
-                            self.var.range().new_err(ErrorCode::UNKNOWN_TYPE).add_to_ctx(ctx),
+                        return Err(ctx.add_diag(
+                            self.var
+                                .range()
+                                .new_err(ErrorCode::UNKNOWN_TYPE)
+                                .add_to_ctx(ctx),
                         ));
-                    },
+                    }
                     BuilderEnum::NoOp(_) => {
                         ctx.add_diag(
-                            self.var.range().new_err(ErrorCode::UNKNOWN_TYPE).add_to_ctx(ctx),
+                            self.var
+                                .range()
+                                .new_err(ErrorCode::UNKNOWN_TYPE)
+                                .add_to_ctx(ctx),
                         );
-                    },
-                }  
+                    }
+                }
             }
             pltype = Some(tp);
         }
@@ -207,7 +208,9 @@ impl Node for DefNode {
             let pltp = tp.get_type(ctx, builder, true)?;
             pltype = Some(pltp);
         }
-        if self.exp.is_some() && matches!(pltype.clone(), Some(tp) if matches!(&*tp.borrow(), PLType::Unknown)) {
+        if self.exp.is_some()
+            && matches!(pltype.clone(), Some(tp) if matches!(&*tp.borrow(), PLType::Unknown))
+        {
             pltype = None;
         }
         if let Some(exp) = &mut self.exp {
@@ -243,7 +246,7 @@ impl Node for DefNode {
             if pltype.is_none() {
                 ctx.push_type_hints(self.var.range(), tp.clone());
                 pltype = Some(tp);
-            }else if self.tp.is_none() {
+            } else if self.tp.is_none() {
                 ctx.push_type_hints(self.var.range(), pltype.clone().unwrap());
             }
             expv = Some(v);
@@ -316,7 +319,10 @@ fn handle_deconstruct<'a, 'b>(
             };
             if let Some(exp) = expv {
                 builder.build_dbg_location(def_var.range().start);
-                builder.build_store(ptr2value, ctx.try_load2var(range, exp, builder, &pltype.borrow())?);
+                builder.build_store(
+                    ptr2value,
+                    ctx.try_load2var(range, exp, builder, &pltype.borrow())?,
+                );
             }
         }
         DefVar::TupleDeconstruct(TupleDeconstructNode {
@@ -421,7 +427,13 @@ fn handle_deconstruct<'a, 'b>(
                                 }
                                 let f = st.fields.get(&v.name).unwrap();
                                 let expv = builder
-                                    .build_struct_gep(expv, f.index, "_deconstruct",&pltype.borrow(),ctx)
+                                    .build_struct_gep(
+                                        expv,
+                                        f.index,
+                                        "_deconstruct",
+                                        &pltype.borrow(),
+                                        ctx,
+                                    )
                                     .unwrap();
                                 let ftp = f.typenode.get_type(ctx, builder, false)?;
                                 (expv, ftp)
@@ -535,7 +547,12 @@ impl Node for AssignNode {
                 let lpltype = rel.get_ty();
                 // 要走转换逻辑，所以不和下方分支统一
                 let value = ctx
-                    .emit_with_expectation(&mut self.exp, lpltype.clone(), self.var.range(), builder)?
+                    .emit_with_expectation(
+                        &mut self.exp,
+                        lpltype.clone(),
+                        self.var.range(),
+                        builder,
+                    )?
                     .get_value()
                     .unwrap()
                     .get_value();
