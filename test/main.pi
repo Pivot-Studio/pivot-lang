@@ -28,6 +28,7 @@ use project1::test::iter;
 use std::libc;
 use std::io;
 use std::cols::hashtable;
+use project1::test::inference;
 
 use core::hash::pl_hash::*;
 
@@ -57,6 +58,7 @@ pub fn main() i64 {
     generic::ret_generic1<i64>();
     test_compile_time_reflection();
     iter::test_generator();
+    inference::test_inference();
 
 
     let fd = io::open_read("./Cargo.toml");
