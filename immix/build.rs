@@ -255,8 +255,8 @@ fn main() {
                         // assert!(flag.starts_with("-l"), "{}",flag);
                         if flag.ends_with(".tbd") && flag.starts_with("-llib") {
                             &flag[5..flag.len() - 4]
-                        } else if flag.starts_with("-l") {
-                            &flag[2..]
+                        } else if let Some(postfix) = flag.strip_prefix("-l") {
+                            postfix
                         } else {
                             flag
                         }

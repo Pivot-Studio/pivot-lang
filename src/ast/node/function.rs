@@ -893,7 +893,7 @@ impl Node for ClosureNode {
             } else if let Some(id) = v.id {
                 let vv = ctx.unify_table.borrow_mut().probe(id);
                 let tp = vv.get_type(&mut ctx.unify_table.borrow_mut());
-                if &*tp.borrow() == &PLType::Unknown {
+                if *tp.borrow() == PLType::Unknown {
                     v.range()
                         .new_err(ErrorCode::CLOSURE_PARAM_TYPE_UNKNOWN)
                         .add_help("try manually specify the parameter type of the closure")

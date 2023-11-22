@@ -585,7 +585,7 @@ mod tests {
             let l = block.get_nth_line_header(6).get_obj_type();
             assert_eq!(l, crate::block::ObjectType::Complex);
             assert_eq!(start, 6);
-            assert_eq!(newcursor, false);
+            assert!(!newcursor);
             assert_eq!(block.cursor, 4);
             // assert_eq!(block.limit, 1);
             let (start, newcursor) = block
@@ -606,7 +606,7 @@ mod tests {
             // ......
             // |  255 | 已使用
             assert_eq!(start, 4);
-            assert_eq!(newcursor, false);
+            assert!(!newcursor);
             // assert_eq!(block.first_hole_line_idx, 255); 这个时候没hole了，此值无意义，len为0
             // assert_eq!(block.limit, 0);
 

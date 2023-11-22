@@ -101,13 +101,13 @@ impl UnifyValue for TyInfer {
         // if there's no error, then set unknown to the real type
         if value1 == value2 {
             Ok(value1.clone())
-        } else if matches!(value1, TyInfer::Term(ty) if &*get_type_deep(ty.clone()).borrow()== &PLType::Unknown)
+        } else if matches!(value1, TyInfer::Term(ty) if *get_type_deep(ty.clone()).borrow()== PLType::Unknown)
         {
             Ok(value2.clone())
-        } else if matches!(value2, TyInfer::Term(ty) if &*get_type_deep(ty.clone()).borrow()== &PLType::Unknown)
+        } else if matches!(value2, TyInfer::Term(ty) if *get_type_deep(ty.clone()).borrow()== PLType::Unknown)
+            || matches!(value2, TyInfer::Closure(_))
+            || matches!(value1, TyInfer::Closure(_))
         {
-            Ok(value1.clone())
-        } else if matches!(value2, TyInfer::Closure(_)) || matches!(value1, TyInfer::Closure(_)) {
             Ok(value1.clone())
         } else {
             Ok(TyInfer::Err)
@@ -212,15 +212,13 @@ impl<'ctx> InferenceCtx<'ctx> {
                 match (v_1, v_2) {
                     (TyInfer::Closure(c1), TyInfer::Closure(c2)) => {
                         if c1.0.len() == c2.0.len() {
-                            let mut i = 0;
-                            for arg in &c1.0 {
+                            for (i, arg) in c1.0.iter().enumerate() {
                                 self.unify_two_symbol(
                                     SymbolType::Var(*arg),
                                     SymbolType::Var(c2.0[i]),
                                     ctx,
                                     builder,
                                 );
-                                i += 1;
                             }
                         }
                         self.unify_two_symbol(
@@ -262,18 +260,15 @@ impl<'ctx> InferenceCtx<'ctx> {
         match (ty, &*tp.borrow()) {
             (TyInfer::Closure(c1), PLType::Closure(c2)) => {
                 if c1.0.len() == c2.arg_types.len() {
-                    let mut i = 0;
-                    for arg in &c1.0 {
+                    for (i, arg) in c1.0.iter().enumerate() {
                         self.unify_var_tp(*arg, c2.arg_types[i].clone(), ctx, builder);
-                        i += 1;
                     }
                 }
                 self.unify_var_tp(c1.1, c2.ret_type.clone(), ctx, builder);
             }
             (TyInfer::Closure(c1), PLType::Fn(c2)) => {
                 if c1.0.len() == c2.fntype.param_pltypes.len() {
-                    let mut i = 0;
-                    for arg in &c1.0 {
+                    for (i, arg) in c1.0.iter().enumerate() {
                         self.unify_var_tp(
                             *arg,
                             c2.fntype.param_pltypes[i]
@@ -282,7 +277,6 @@ impl<'ctx> InferenceCtx<'ctx> {
                             ctx,
                             builder,
                         );
-                        i += 1;
                     }
                 }
                 self.unify_var_tp(
@@ -557,15 +551,14 @@ impl<'ctx> InferenceCtx<'ctx> {
                                     if c.arg_types.len() != argtys.len() {
                                         return unknown();
                                     }
-                                    let mut i = 0;
-                                    for arg in &c.arg_types {
+
+                                    for (i, arg) in c.arg_types.iter().enumerate() {
                                         self.unify_two_symbol(
                                             argtys[i].clone(),
                                             SymbolType::PLType(arg.clone()),
                                             ctx,
                                             builder,
                                         );
-                                        i += 1;
                                     }
                                     return SymbolType::PLType(c.ret_type.clone());
                                 }
@@ -573,8 +566,8 @@ impl<'ctx> InferenceCtx<'ctx> {
                                     if f.fntype.param_pltypes.len() != argtys.len() {
                                         return unknown();
                                     }
-                                    let mut i = 0;
-                                    for arg in &f.fntype.param_pltypes {
+
+                                    for (i, arg) in f.fntype.param_pltypes.iter().enumerate() {
                                         self.unify_two_symbol(
                                             argtys[i].clone(),
                                             SymbolType::PLType(
@@ -584,7 +577,6 @@ impl<'ctx> InferenceCtx<'ctx> {
                                             ctx,
                                             builder,
                                         );
-                                        i += 1;
                                     }
                                     return SymbolType::PLType(
                                         f.fntype
@@ -613,10 +605,8 @@ impl<'ctx> InferenceCtx<'ctx> {
                                 if args.len() != argtys.len() {
                                     return unknown();
                                 }
-                                let mut i = 0;
-                                for arg in args {
-                                    self.unify(arg, argtys[i].clone(), ctx, builder);
-                                    i += 1;
+                                for (i, arg) in args.iter().enumerate() {
+                                    self.unify(*arg, argtys[i].clone(), ctx, builder);
                                 }
                                 return SymbolType::Var(ret);
                             }
@@ -627,8 +617,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                             if f.fntype.param_pltypes.len() != argtys.len() {
                                 return unknown();
                             }
-                            let mut i = 0;
-                            for arg in &f.fntype.param_pltypes {
+                            for (i, arg) in f.fntype.param_pltypes.iter().enumerate() {
                                 self.unify_two_symbol(
                                     argtys[i].clone(),
                                     SymbolType::PLType(
@@ -639,7 +628,6 @@ impl<'ctx> InferenceCtx<'ctx> {
                                     ctx,
                                     builder,
                                 );
-                                i += 1;
                             }
                             return SymbolType::PLType(
                                 f.fntype
@@ -652,15 +640,13 @@ impl<'ctx> InferenceCtx<'ctx> {
                             if cl.arg_types.len() != argtys.len() {
                                 return unknown();
                             }
-                            let mut i = 0;
-                            for arg in &cl.arg_types {
+                            for (i, arg) in cl.arg_types.iter().enumerate() {
                                 self.unify_two_symbol(
                                     argtys[i].clone(),
                                     SymbolType::PLType(arg.clone()),
                                     ctx,
                                     builder,
                                 );
-                                i += 1;
                             }
                             return SymbolType::PLType(cl.ret_type.clone());
                         }
@@ -690,8 +676,10 @@ impl<'ctx> InferenceCtx<'ctx> {
             }
             NodeEnum::Ret(r) => {
                 let ret = self.get_symbol("@ret");
-                if r.yiel.is_none() && ret.is_some() {
-                    let ret = ret.unwrap();
+                if r.yiel.is_some() {
+                    return unknown();
+                }
+                if let Some(ret) = ret {
                     if let Some(r) = &mut r.value {
                         let ty = self.inference(&mut *r, ctx, builder);
                         self.unify(ret, ty, ctx, builder);
@@ -794,7 +782,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                         match k {
                             TyInfer::Term(t) => {
                                 if p.op == PointerOpEnum::Addr {
-                                    if &*t.borrow() != &PLType::Unknown {
+                                    if *t.borrow() != PLType::Unknown {
                                         return SymbolType::PLType(new_arc_refcell(
                                             PLType::Pointer(t),
                                         ));
@@ -813,7 +801,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                     }
                     SymbolType::PLType(t) => {
                         if p.op == PointerOpEnum::Addr {
-                            if &*t.borrow() != &PLType::Unknown {
+                            if *t.borrow() != PLType::Unknown {
                                 return SymbolType::PLType(new_arc_refcell(PLType::Pointer(t)));
                             }
                         } else if p.op == PointerOpEnum::Deref {
