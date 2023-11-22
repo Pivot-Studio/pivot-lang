@@ -444,10 +444,13 @@ fn emit_arr_copy<'a, 'b>(
     let to_raw = builder
         .build_struct_gep(to.get_value(), 1, "arr_raw",&*to.get_ty().borrow(), ctx)
         .unwrap();
+
     let len_raw = len.get_value();
     match (&*v.get_ty().borrow(), &*to.get_ty().borrow()) {
         (PLType::Arr(a1), PLType::Arr(a2)) => {
-            builder.build_memcpy(from_raw, &a1.element_type.borrow(), to_raw,&a2.element_type.borrow(), len_raw,ctx);
+            let from_raw = builder.build_load(from_raw, "arr_load_field", &PLType::Pointer(a1.element_type.clone()), ctx);
+            let to_raw = builder.build_load(to_raw, "arr_load_field", &PLType::Pointer(a2.element_type.clone()), ctx);
+            builder.build_memcpy( from_raw, & a1.element_type.borrow(), to_raw, len_raw,ctx);
             Ok(Default::default())
         },
         _ => unreachable!(),

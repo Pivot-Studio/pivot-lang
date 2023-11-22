@@ -813,7 +813,7 @@ impl Node for ArrayInitNode {
         let arr = builder.alloc("array_alloca", &arr_tp.borrow(), ctx, None);
         let real_arr = builder.build_struct_gep(arr, 1, "real_arr", &arr_tp.borrow(), ctx).unwrap();
 
-        let real_arr = builder.build_load(real_arr, "load_arr", &tp.borrow(), ctx);
+        let real_arr = builder.build_load(real_arr, "load_arr", &PLType::Pointer( tp.clone()), ctx);
         for (i, (v, _)) in exps.into_iter().enumerate() {
             let ptr = builder.build_const_in_bounds_gep(real_arr, &[i as u64], "elem_ptr", &tp.borrow(), ctx);
             builder.build_store(ptr, v);

@@ -99,7 +99,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         _structv: super::ValueHandle,
         _index: u32,
         _name: &str, _tp:&PLType,_ctx: &mut Ctx<'a>
-    ) -> Result<super::ValueHandle, ()> {
+    ) -> Result<ValueHandle, String>{
         Ok(0)
     }
 
@@ -500,7 +500,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     fn sizeof(&self, _pltype: &PLType, _ctx: &mut Ctx<'a>) -> u64 {
         0
     }
-    fn build_memcpy(&self, from: ValueHandle, from_tp:&PLType, to: ValueHandle, to_tp:&PLType, len: ValueHandle, ctx: &mut Ctx<'a>) {}
+    fn build_memcpy(&self, from: ValueHandle, from_tp:&PLType, to: ValueHandle,  len: ValueHandle, ctx: &mut Ctx<'a>) {}
 
     fn build_bit_not(&self, _v: ValueHandle) -> ValueHandle {
         0

@@ -68,7 +68,7 @@ pub trait IRBuilder<'a, 'ctx> {
         structv: ValueHandle,
         index: u32,
         name: &str, tp:&PLType,ctx: &mut Ctx<'a>
-    ) -> Result<ValueHandle, ()>;
+    ) -> Result<ValueHandle, String>;
     fn build_sub_program(
         &self,
         paralist: Vec<Box<TypedIdentifierNode>>,
@@ -244,7 +244,7 @@ pub trait IRBuilder<'a, 'ctx> {
     fn stack_alloc(&self, name: &str, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle;
     fn correct_generator_ctx_malloc_inst(&self, ctx: &mut Ctx<'a>, name: &str);
     fn sizeof(&self, pltype: &PLType, ctx: &mut Ctx<'a>) -> u64;
-    fn build_memcpy(&self, from: ValueHandle, from_tp:&PLType, to: ValueHandle, to_tp:&PLType, len: ValueHandle, ctx: &mut Ctx<'a>);
+    fn build_memcpy(&self, from: ValueHandle, from_tp:&PLType, to: ValueHandle,  len: ValueHandle, ctx: &mut Ctx<'a>);
     fn build_bit_not(&self, v: ValueHandle) -> ValueHandle;
     fn build_bit_and(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
     fn build_bit_or(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;

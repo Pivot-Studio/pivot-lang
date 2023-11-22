@@ -55,7 +55,8 @@ impl FuncCallNode {
         c: &ClosureType,
         v: ValueHandle,
     ) -> NodeResult {
-        let data = builder.build_struct_gep(v, 1, "closure_data",&PLType::Closure(c.clone()),ctx).unwrap();
+        let ct = PLType::Closure(c.clone());
+        let data = builder.build_struct_gep(v, 1, "closure_data",&ct,ctx).unwrap();
         let data = builder.build_load(data, "loaded_closure_data", &PLType::new_i8_ptr(), ctx);
         let mut para_values = vec![data];
         let mut value_pltypes = vec![];
@@ -85,7 +86,7 @@ impl FuncCallNode {
             para_values.push(load);
             value_pltypes.push((value_pltype, pararange));
         }
-        let re = builder.build_struct_gep(v, 0, "real_fn", &PLType::new_i8_ptr(), ctx).unwrap();
+        let re = builder.build_struct_gep(v, 0, "real_fn", &ct, ctx).unwrap();
         let re = builder.build_load(re, "real_fn", &PLType::new_i8_ptr(), ctx);
         let ret = builder.build_call(re, &para_values, &c.ret_type.borrow(), ctx);
         builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
@@ -631,10 +632,12 @@ impl FuncDefNode {
                 let ret_value_ptr = if self.generator {
                     generator::build_generator_ret(builder, child, &fnvalue, entry)?
                 } else {
-                    match &*fnvalue
-                        .fntype
-                        .ret_pltype
-                        .get_type(child, builder, true)?
+                    let tp = fnvalue
+                    .fntype
+                    .ret_pltype
+                    .get_type(child, builder, true)?;
+                    child.rettp = Some(tp.clone());
+                    match &*tp.clone()
                         .borrow()
                     {
                         PLType::Void => None,
@@ -657,6 +660,7 @@ impl FuncDefNode {
                 if self.generator {
                     // 设置flag，该flag影响alloc逻辑
                     child.ctx_flag = CtxFlag::InGeneratorYield;
+                    child.generator_data.as_ref().unwrap().borrow_mut().is_para = true;
                 }
                 // alloc para
                 for (i, para) in fnvalue.fntype.param_pltypes.iter().enumerate() {
@@ -686,6 +690,9 @@ impl FuncDefNode {
                             false,
                         )
                         .unwrap();
+                }
+                if self.generator {
+                    child.generator_data.as_ref().unwrap().borrow_mut().is_para = false;
                 }
                 // emit body
                 builder.rm_curr_debug_location();

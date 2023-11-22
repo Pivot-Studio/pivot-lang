@@ -447,7 +447,7 @@ impl Node for TakeOpNode {
                             .unwrap();
                         let fnv = builder.build_load(fnv, "mthd_ptr_load", &PLType::new_i8_ptr(), ctx);
                         let headptr = builder.build_struct_gep(headptr, 1, "traitptr",&head_pltype.borrow(),ctx).unwrap();
-                        let headptr = builder.build_load(headptr, "traitptr_load",&head_pltype.borrow(), ctx);
+                        let headptr = builder.build_load(headptr, "traitptr_load",&PLType::new_i8_ptr(), ctx);
                         ctx.emit_comment_highlight(&self.comments[0]);
                         Ok(NodeOutput::new_value(NodeValue::new_receiver(
                             fnv, re, headptr, None,

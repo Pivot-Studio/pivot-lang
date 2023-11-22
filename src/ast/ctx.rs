@@ -604,7 +604,7 @@ impl<'a, 'ctx> Ctx<'a> {
                                     )
                                     .unwrap(),
                                 "closure_loaded",
-                                &new_symbol.pltype.clone().borrow(),
+                                &PLType::Pointer(Arc::new(RefCell::new(PLType::new_i8_ptr()))) ,
                                 unsafe {
                                     &mut *ptr
                                 }
@@ -1021,8 +1021,9 @@ impl<'a, 'ctx> Ctx<'a> {
         let mut tp = tp;
         let mut value = value;
         while let PLType::Pointer(p) = &*get_type_deep(tp.clone()).borrow() {
+            let old_tp = tp.clone();
             tp = p.clone();
-            value = builder.build_load(value, "load", &tp.borrow(), self);
+            value = builder.build_load(value, "load", &old_tp.borrow(), self);
         }
         (tp, value)
     }

@@ -44,7 +44,7 @@ impl Node for PointerOpNode {
             PointerOpEnum::Deref => {
                 if let PLType::Pointer(tp1) = &*btp.borrow() {
                     tp = tp1.clone();
-                    builder.build_load(value, "deref",&tp.borrow(), ctx)
+                    builder.build_load(value, "deref",&btp.borrow(), ctx)
                 } else {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::NOT_A_POINTER)));
                 }

@@ -351,7 +351,7 @@ impl<'a, 'ctx> Ctx<'a> {
     ) -> (ValueHandle, Arc<RefCell<PLType>>) {
         let tag = builder.build_struct_gep(val, 0, "tag",ori_ty, self).unwrap();
         // check if the tag is the same
-        let tag = builder.build_load(tag, "tag", ori_ty,self);
+        let tag = builder.build_load(tag, "tag", &PLType::new_i64(),self);
         let cond_block = builder.append_basic_block(self.function.unwrap(), "force.if.cond");
         let then_block = builder.append_basic_block(self.function.unwrap(), "force.if.then");
         let else_block = builder.append_basic_block(self.function.unwrap(), "force.if.else");

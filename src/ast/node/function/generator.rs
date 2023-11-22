@@ -35,7 +35,8 @@ pub struct GeneratorCtxData {
     pub ret_handle: ValueHandle, //handle in setup function
     pub prev_yield_bb: Option<BlockHandle>,
     pub ctx_size_handle: ValueHandle,
-    pub param_tmp: ValueHandle,
+    pub is_para: bool,
+    pub para_tmp:ValueHandle,
     pub ctx_tp: Option<Arc<RefCell<PLType>>>,
     pub ret_type: Option<Arc<RefCell<PLType>>>,
 }
@@ -126,7 +127,7 @@ pub(crate) fn end_generator<'a>(
     // 5. 生成yield函数的跳转代码
     builder.position_at_end_block(allocab);
     let ctx_v = builder.get_nth_param(child.function.unwrap(), 0);
-    let address = builder.build_struct_gep(ctx_v, 1, "block_address", &PLType::new_i8_ptr(), child).unwrap();
+    let address = builder.build_struct_gep(ctx_v, 1, "block_address", &data.borrow().ctx_tp.as_ref().unwrap().borrow(), child).unwrap();
     let address = builder.build_load(address, "block_address", &PLType::new_i8_ptr(), child);
     builder.build_indirect_br(address, child);
 
