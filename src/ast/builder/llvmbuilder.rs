@@ -634,9 +634,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if let Some(f) = self.module.get_function(fname) {
             return f;
         }
-        let f = self
-            .module
-            .add_function(fname, ftp, Some(Linkage::LinkOnceAny));
+        let f = self.module.add_function(fname, ftp, Some(Linkage::Private));
         self.used.borrow_mut().push(f);
         // the array is a struct, the first field is the visit function,
         // the second field is the real array, the third field is it's length
