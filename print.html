@@ -1208,7 +1208,7 @@ pub trait RangeTrait {
         check_bool(&amp;v, ctx, condrange, code)?;
         let v = v.unwrap();
         let cond = v.get_value();
-        let cond = ctx.try_load2var(condrange, cond, builder)?;
+        let cond = ctx.try_load2var(condrange, cond, builder, &amp;v.get_ty().borrow())?;
         let cond = builder.build_int_truncate(cond, &amp;PriType::BOOL, &quot;trunctemp&quot;);
         builder.build_conditional_branch(cond, then_block, else_block);
         // then block
