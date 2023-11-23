@@ -156,8 +156,8 @@
 <p>国内如果没代理安装rust比较困难，建议使用清华源进行安装，见<a href="https://mirrors.tuna.tsinghua.edu.cn/help/rustup/">此处</a></p>
 <p>安装完毕后，可以进行cargo换源设置，防止依赖无法下载，见<a href="https://mirrors.tuna.tsinghua.edu.cn/help/crates.io-index.git/">此处</a></p>
 <h2 id="llvm"><a class="header" href="#llvm">LLVM</a></h2>
-<p>Pivot-Lang目前使用LLVM 14作为后端，所以需要安装LLVM。如果你使用的是MacOS，可以使用brew安装LLVM。</p>
-<pre><code class="language-bash">brew install llvm@14
+<p>Pivot-Lang目前使用LLVM 16作为后端，所以需要安装LLVM。如果你使用的是MacOS，可以使用brew安装LLVM。</p>
+<pre><code class="language-bash">brew install llvm@16
 </code></pre>
 <p>如果你使用的是ubuntu，可以使用<a href="https://github.com/Pivot-Studio/setup-llvm/blob/main/scripts/install_llvm.sh">这里</a>的脚本进行安装</p>
 <h1 id="cmake"><a class="header" href="#cmake">CMake</a></h1>
@@ -182,15 +182,19 @@ make devmac # mac
 <h2 id="常见问题"><a class="header" href="#常见问题">常见问题</a></h2>
 <h3 id="no-suitable-version-of-llvm-was-found-system-wide-or-pointed"><a class="header" href="#no-suitable-version-of-llvm-was-found-system-wide-or-pointed">No suitable version of LLVM was found system-wide or pointed</a></h3>
 <p>需要设置llvm环境变量，如果你使用的是ubuntu，可以在<code>~/.bashrc</code>中加入如下代码然后执行.</p>
-<pre><code class="language-bash">export LLVM_SYS_140_PREFIX=/usr/lib/llvm-14
+<pre><code class="language-bash">export LLVM_SYS_160_PREFIX=/usr/lib/llvm-16
 source ~/.bashrc
 </code></pre>
-<p>如果是macOS通过<code>brew install llvm@14</code>安装，则需要设置环境变量:</p>
-<pre><code class="language-bash">export LLVM_SYS_140_PREFIX=$(brew --prefix llvm@14)
+<p>如果是macOS通过<code>brew install llvm@16</code>安装，则需要设置环境变量:</p>
+<pre><code class="language-bash">export LLVM_SYS_160_PREFIX=$(brew --prefix llvm@16)
 </code></pre>
 <h3 id="could-not-find-zlib-missing-zlib_library-zlib_include_dir"><a class="header" href="#could-not-find-zlib-missing-zlib_library-zlib_include_dir">Could NOT find ZLIB (missing: ZLIB_LIBRARY ZLIB_INCLUDE_DIR)</a></h3>
 <p>缺少zlibdev造成的，如果你是ubuntu机器，使用下方命令进行安装：</p>
 <pre><code class="language-bash">sudo apt install zlib1g-dev
+</code></pre>
+<h3 id="unknown-linker-flag--lzstd"><a class="header" href="#unknown-linker-flag--lzstd">Unknown linker flag: -lzstd</a></h3>
+<p>在Mac上出现时，可能是缺少<code>LIBRARY_PATH</code>环境变量</p>
+<pre><code class="language-bash">export LIBRARY_PATH=$LIBRARY_PATH:$(brew --prefix zstd)/lib
 </code></pre>
 
                     </main>
