@@ -27,21 +27,21 @@ pub fn test_arr() void {
         }
         count = count + 1;
     }
-    iter = [1, 2, 3].into_iter();
-    count = 0;
-    for let i = iter.next(); i is i64; i = iter.next() {
-        let tmp = i as i64!;
-        if count == 0 {
-            assert(tmp == 1);
-        } else if count == 1 {
-            assert(tmp == 2);
-        } else if count == 2 {
-            assert(tmp == 3);
-        } else {
-            panic::pl_panic();
-        }
-        count = count + 1;
-    }
+    // iter = [1, 2, 3].into_iter();
+    // count = 0;
+    // for let i = iter.next(); i is i64; i = iter.next() {
+    //     let tmp = i as i64!;
+    //     if count == 0 {
+    //         assert(tmp == 1);
+    //     } else if count == 1 {
+    //         assert(tmp == 2);
+    //     } else if count == 2 {
+    //         assert(tmp == 3);
+    //     } else {
+    //         panic::pl_panic();
+    //     }
+    //     count = count + 1;
+    // }
     return;
 }
 

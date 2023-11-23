@@ -284,7 +284,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .unwrap()
             .get_first_basic_block()
             .unwrap();
-        let obj_type = tp.get_immix_type().int_value();
+        // let obj_type = tp.get_immix_type().int_value();
         let f = self.get_malloc_f(ctx, malloc_fn);
         let llvmtp = self.get_basic_type_op(tp, ctx).unwrap();
         let immix_tp = self
@@ -367,7 +367,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         //     self.context.i64_type().const_int(  td.get_store_size(&self.i8ptr()),false),
         // )
         // .unwrap();
-        self.gc_add_root(stack_ptr.as_basic_value_enum(), obj_type);
+        self.gc_add_root(stack_ptr.as_basic_value_enum(), ObjectType::Pointer.int_value());
         self.builder.position_at_end(lb);
         self.builder.build_store(stack_ptr, casted_result).unwrap();
 
@@ -508,6 +508,29 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             self.get_llvm_value_handle(&stack_ptr.as_any_value_enum()),
         );
         stack_ptr.as_basic_value_enum()
+    }
+
+    fn tag_root(&self, stack_ptr: BasicValueEnum<'ctx>, tp:ObjectType) {
+        let lb = self.builder.get_insert_block().unwrap();
+        let alloca = self
+            .builder
+            .get_insert_block()
+            .unwrap()
+            .get_parent()
+            .unwrap()
+            .get_first_basic_block()
+            .unwrap();
+        self.builder.position_at_end(alloca);
+        let root_ptr = self
+        .builder
+        .build_alloca(stack_ptr.get_type(), "root_ptr")
+        .unwrap();
+        self.gc_add_root(
+            root_ptr.as_basic_value_enum(),
+            tp.int_value(),
+        );
+        self.builder.position_at_end(lb);
+        self.builder.build_store(root_ptr, stack_ptr).unwrap();
     }
 
     /// 第一个参数必须是一个二重以上的指针，且不能是一重指针bitcast过来的二重指针
@@ -1947,6 +1970,23 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     ) -> Result<ValueHandle, String> {
         let structv = self.get_llvm_value(structv).unwrap();
         let structv = structv.into_pointer_value();
+        let obj_tp = match tp {
+            PLType::Struct(stpltype) => {
+                let fs = stpltype.get_all_field();
+                if fs.len() <= index as usize {
+                    ObjectType::Atomic
+                    
+                }else {
+                    ctx.run_in_type_mod(stpltype, |ctx, stpltype| {
+                        fs[index as usize]
+                        .typenode
+                        .get_type(ctx, &self.clone().into(), true)
+                        .unwrap().borrow().get_immix_type()
+                    })   
+                }
+            },
+            _ => ObjectType::Atomic,
+        };
         let sttp = self.get_basic_type_op(tp, ctx).unwrap();
         let gep = self.builder.build_struct_gep(sttp, structv, index, name);
         if let Ok(gep) = gep {
@@ -1962,6 +2002,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 self.create_root_for(loadgep);
                 return Ok(self.get_llvm_value_handle(&gep.as_any_value_enum()));
             } else {
+                if obj_tp!=ObjectType::Atomic {
+                    self.tag_root(gep.as_basic_value_enum(), obj_tp );   
+                }
                 return Ok(self.get_llvm_value_handle(&gep.as_any_value_enum()));
             }
         } else {
@@ -3028,6 +3071,16 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .unwrap();
         self.builder.position_at_end(alloca);
         let stack_ptr = self.builder.build_alloca(llvmtp, name).unwrap();
+        self.tag_root(stack_ptr.as_basic_value_enum(), tp.get_immix_type());
+        let td = self.targetmachine.get_target_data();
+        self.builder
+        .build_memset(
+            stack_ptr,
+            td.get_abi_alignment(&self.i8ptr()),
+            self.context.i8_type().const_zero(),
+            self.context.i64_type().const_int(  td.get_store_size(&self.i8ptr()),false),
+        )
+        .unwrap();
         self.builder.position_at_end(lb);
         self.get_llvm_value_handle(&stack_ptr.as_any_value_enum())
     }

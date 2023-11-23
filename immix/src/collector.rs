@@ -353,6 +353,9 @@ impl Collector {
     /// it self does not mark the object, but mark the object's fields by calling
     /// mark_ptr
     unsafe extern "C" fn mark_complex(&self, ptr: *mut u8) {
+        if ptr.is_null() {
+            return;
+        }
         let vptr = *(ptr as *mut *mut u8);
         if vptr.is_null() {
             return;
@@ -372,12 +375,12 @@ impl Collector {
         //    &&!self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr) {
         //     return;
         // }
-        let loaded = ptr as *mut *mut u8;
-        let ptr = loaded.offset(1);
         // the trait is not init
         if ptr.is_null() {
             return;
         }
+        let loaded = ptr as *mut *mut u8;
+        let ptr = loaded.offset(1);
         self.mark_ptr(ptr as *mut u8);
     }
     pub fn keep_live(&mut self, gc_ptr: *mut u8) {
@@ -492,11 +495,20 @@ impl Collector {
                     // );
                     if let Some(f) = f {
                         // println!("found fn in stackmap, f: {:?} sp: {:p}", f,frame.sp());
-                        f.iter_roots().for_each(|(offset, _obj_type)| {
+                        f.iter_roots().for_each(|(offset, obj_type)| {
                             // println!("offset: {}", offset);
                             let sp = *sp as *mut u8;
                             let root = sp.offset(offset as isize);
-                            self.mark_ptr(root);
+                            if root.is_null() {
+                                return;
+                            }
+                            match obj_type {
+                                ObjectType::Atomic => panic!("stack root shall never be atomic"),
+                                ObjectType::Trait => self.mark_trait(*(root as *mut*mut u8)),
+                                ObjectType::Complex => self.mark_complex(*(root as *mut*mut u8)),
+                                ObjectType::Pointer => self.mark_ptr(root),
+                            }
+                            // self.mark_ptr(root);
                         });
                     }
                     depth += 1;
