@@ -182,6 +182,7 @@ impl Node for DefNode {
             }
             if self.exp.is_none() && matches!(&*tp.borrow(), PLType::Unknown) {
                 match builder {
+                    #[cfg(feature = "llvm")]
                     BuilderEnum::LLVM(_) => {
                         return Err(ctx.add_diag(
                             self.var

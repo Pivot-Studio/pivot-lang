@@ -14,10 +14,10 @@ rustup install $(cat rust-toolchain)
 
 ## LLVM
 
-Pivot-Lang目前使用LLVM 14作为后端，所以需要安装LLVM。如果你使用的是MacOS，可以使用brew安装LLVM。
+Pivot-Lang目前使用LLVM 16作为后端，所以需要安装LLVM。如果你使用的是MacOS，可以使用brew安装LLVM。
 
 ```bash
-brew install llvm@14
+brew install llvm@16
 ```
 
 如果你使用的是ubuntu，可以使用[这里](https://github.com/Pivot-Studio/setup-llvm/blob/main/scripts/install_llvm.sh)的脚本进行安装
@@ -36,6 +36,7 @@ brew install llvm@14
 make devlinux # linux
 make devmac # mac
 ```
+
 注意这些命令都只需要跑一次
 
 ## 测试是否成功配置开发环境
@@ -48,11 +49,9 @@ make test
 
 如果上方命令都成功执行，那么恭喜你，你已经成功配置了开发环境
 
-
 ## 使用github codespace 进行开发
 
 使用github codespace进行开发的环境配置较为简单，但是请注意费用问题。
-
 
 点击以下链接即可创建一个包含pl开发环境的codespace
 
@@ -62,20 +61,20 @@ make test
 
 ## 常见问题
 
-### No suitable version of LLVM was found system-wide or pointed 
+### No suitable version of LLVM was found system-wide or pointed
 
 需要设置llvm环境变量，如果你使用的是ubuntu，可以在`~/.bashrc`中加入如下代码然后执行.
 
 ```bash
-export LLVM_SYS_140_PREFIX=/usr/lib/llvm-14
+export LLVM_SYS_160_PREFIX=/usr/lib/llvm-16
 source ~/.bashrc
 ```
 
-如果是macOS通过`brew install llvm@14`安装，则需要设置环境变量:
-```bash
-export LLVM_SYS_140_PREFIX=$(brew --prefix llvm@14)
-```
+如果是macOS通过`brew install llvm@16`安装，则需要设置环境变量:
 
+```bash
+export LLVM_SYS_160_PREFIX=$(brew --prefix llvm@16)
+```
 
 ### Could NOT find ZLIB (missing: ZLIB_LIBRARY ZLIB_INCLUDE_DIR)
 
@@ -85,6 +84,10 @@ export LLVM_SYS_140_PREFIX=$(brew --prefix llvm@14)
 sudo apt install zlib1g-dev
 ```
 
+### Unknown linker flag: -lzstd
 
+在Mac上出现时，可能是缺少`LIBRARY_PATH`环境变量
 
-
+```bash
+export LIBRARY_PATH=$LIBRARY_PATH:$(brew --prefix zstd)/lib
+```
