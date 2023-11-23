@@ -1,3 +1,4 @@
+use crate::ast::compiler::HashOptimizationLevel;
 use crate::ast::node::macro_nodes::MacroNode;
 use crate::ast::node::NodeEnum;
 use crate::ast::pltype::FNValue;
@@ -34,6 +35,7 @@ pub struct ProgramEmitParam {
     #[return_ref]
     pub macro_table: UnsafeWrapper<FxHashMap<String, Arc<MacroNode>>>,
     pub is_active_file: bool,
+    pub opt: HashOptimizationLevel,
 }
 
 pub type MthdTableWrapper =
@@ -64,4 +66,5 @@ pub struct Program {
     pub params: EmitParams,
     pub docs: MemDocsInput,
     pub config: Config,
+    pub opt: HashOptimizationLevel,
 }

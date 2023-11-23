@@ -10,7 +10,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     ast::{
-        compiler::{ActionType, Options},
+        compiler::{ActionType, HashOptimizationLevel, Options},
         range::Pos,
     },
     nomparser::SourceProgram,
@@ -56,6 +56,7 @@ pub struct FileCompileInput {
     pub modpath: String,
     pub docs: MemDocsInput,
     pub config: Config,
+    pub opt: HashOptimizationLevel,
 }
 #[salsa::tracked]
 impl FileCompileInput {
@@ -176,6 +177,7 @@ impl MemDocsInput {
             parant.to_str().unwrap().to_string(),
             self,
             config,
+            self.op(db).optimization,
         ))
     }
 }

@@ -92,6 +92,7 @@ pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrappe
         docs.get_emit_params(db),
         docs.docs(db),
         docs.config(db),
+        docs.opt(db),
     );
     log::trace!("entering emit");
     Some(program.emit(db))

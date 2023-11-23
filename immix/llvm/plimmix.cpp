@@ -30,8 +30,67 @@ extern "C" void LLVMLinkPLImmixGC()
 #include "llvm-c/Transforms/PassManagerBuilder.h"
 
 extern "C" void add_module_pass(llvm::legacy::PassManagerBase * PB) {
-    PB->add(new Immix());
+    PB->add(new ImmixLegacy());
+
 }
+#include "llvm/Passes/PassBuilder.h"
+#include "llvm/Passes/PassPlugin.h"
+
+#include "llvm-c/Types.h"
+#include "llvm-c/Transforms/PassBuilder.h"
+
+// param: opt opt level
+extern "C" void run_module_pass(LLVMModuleRef  M, int opt) {
+    // These must be declared in this order so that they are destroyed in the
+    // correct order due to inter-analysis-manager references.
+    LoopAnalysisManager LAM;
+    FunctionAnalysisManager FAM;
+    CGSCCAnalysisManager CGAM;
+    ModuleAnalysisManager MAM;
+
+    // Create the new pass manager builder.
+    // Take a look at the PassBuilder constructor parameters for more
+    // customization, e.g. specifying a TargetMachine or various debugging
+    // options.
+    PassBuilder PB;
+
+    // Register all the basic analyses with the managers.
+    PB.registerModuleAnalyses(MAM);
+    PB.registerCGSCCAnalyses(CGAM);
+    PB.registerFunctionAnalyses(FAM);
+    PB.registerLoopAnalyses(LAM);
+    PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
+
+    auto O = OptimizationLevel::O2;
+    switch (opt)
+    {
+    case 0:
+        O = OptimizationLevel::O0;
+        break;
+    case 1:
+        O = OptimizationLevel::O1;
+        break;
+    case 2:
+        O = OptimizationLevel::O2;
+        break;
+    case 3:
+        O = OptimizationLevel::O3;
+        break;
+    default:
+        break;
+    }
+
+    // Create the pass manager.
+    // This one corresponds to a typical -O2 optimization pipeline.
+    ModulePassManager MPM = PB.buildPerModuleDefaultPipeline(O);
+    MPM.addPass(ImmixPass());
+
+    // Optimize the IR!
+    MPM.run(*unwrap(M), MAM);
+
+
+}
+
 
 extern "C"
 {
