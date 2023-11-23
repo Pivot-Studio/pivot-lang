@@ -1,11 +1,15 @@
 use std::{
     cell::RefCell,
     ptr::drop_in_place,
-    sync::atomic::{AtomicPtr, Ordering},
+    sync::{
+        atomic::{AtomicBool, AtomicPtr, Ordering},
+        Arc,
+    },
 };
 
 use libc::malloc;
-use vector_map::VecMap;
+use parking_lot::{Condvar, Mutex};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 #[cfg(feature = "llvm_stackmap")]
 use crate::STACK_MAP;
@@ -13,8 +17,8 @@ use crate::{
     allocator::{GlobalAllocator, ThreadLocalAllocator},
     block::{Block, LineHeaderExt, ObjectType},
     gc_is_auto_collect_enabled, spin_until, HeaderExt, ENABLE_EVA, GC_COLLECTOR_COUNT, GC_ID,
-    GC_MARKING, GC_MARK_COND, GC_RUNNING, GC_STW_COUNT, GC_SWEEPING, GC_SWEEPPING_NUM, LINE_SIZE,
-    NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION, USE_SHADOW_STACK,
+    GC_MARKING, GC_MARK_COND, GC_RUNNING, GC_STW_COUNT, GC_SWEEPING, GC_SWEEPPING_NUM,
+    GLOBAL_ALLOCATOR, LINE_SIZE, NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION, USE_SHADOW_STACK,
 };
 
 /// # Collector
@@ -37,8 +41,11 @@ pub struct Collector {
     roots: rustc_hash::FxHashMap<*mut u8, ObjectType>,
     queue: *mut Vec<(*mut u8, ObjectType)>,
     id: usize,
-    mark_histogram: *mut VecMap<usize, usize>,
+    mark_histogram: *mut FxHashMap<usize, usize>,
     status: RefCell<CollectorStatus>,
+    frames_list: AtomicPtr<Vec<(*mut libc::c_void, *mut libc::c_void)>>,
+    shadow_thread_running: AtomicBool,
+    live_set: FxHashSet<*mut u8>,
 }
 
 struct CollectorStatus {
@@ -88,9 +95,12 @@ impl Collector {
             let mem =
                 malloc(core::mem::size_of::<ThreadLocalAllocator>()).cast::<ThreadLocalAllocator>();
             mem.write(tla);
-            let memvecmap =
-                malloc(core::mem::size_of::<VecMap<usize, usize>>()).cast::<VecMap<usize, usize>>();
-            memvecmap.write(VecMap::with_capacity(NUM_LINES_PER_BLOCK));
+            let memvecmap = malloc(core::mem::size_of::<FxHashMap<usize, usize>>())
+                .cast::<FxHashMap<usize, usize>>();
+            memvecmap.write(FxHashMap::with_capacity_and_hasher(
+                NUM_LINES_PER_BLOCK,
+                Default::default(),
+            ));
             let queue = Vec::new();
             let memqueue =
                 malloc(core::mem::size_of::<Vec<(*mut u8, ObjectType)>>())
@@ -108,6 +118,9 @@ impl Collector {
                     bytes_allocated_since_last_gc: 0,
                     collecting: false,
                 }),
+                frames_list: AtomicPtr::default(),
+                shadow_thread_running: AtomicBool::new(false),
+                live_set: FxHashSet::default(),
             }
         }
     }
@@ -145,6 +158,9 @@ impl Collector {
     pub fn alloc(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
         if size == 0 {
             return std::ptr::null_mut();
+        }
+        if !self.frames_list.load(Ordering::SeqCst).is_null() {
+            panic!("gc stucked, can not alloc")
         }
         if gc_is_auto_collect_enabled() {
             if GC_RUNNING.load(Ordering::Acquire) {
@@ -364,7 +380,12 @@ impl Collector {
         }
         self.mark_ptr(ptr as *mut u8);
     }
-
+    pub fn keep_live(&mut self, gc_ptr: *mut u8) {
+        self.live_set.insert(gc_ptr);
+    }
+    pub fn rm_live(&mut self, gc_ptr: *mut u8) {
+        self.live_set.remove(&gc_ptr);
+    }
     pub fn print_stats(&self) {
         println!("gc {} states:", self.id);
         unsafe {
@@ -389,7 +410,10 @@ impl Collector {
     ///
     /// this mark function is __precise__
     pub fn mark(&self) {
+        let mutex = STUCK_MUTEX.lock();
         GC_RUNNING.store(true, Ordering::Release);
+        STUCK_COND.notify_all();
+        drop(mutex);
 
         let mut v = GC_COLLECTOR_COUNT.lock();
         let (count, mut waiting) = *v;
@@ -421,17 +445,17 @@ impl Collector {
                 unsafe {
                     match obj_type {
                         ObjectType::Atomic => {}
-                        ObjectType::Pointer => (*self.queue).push((*root, *obj_type)),
-                        _ => {
-                            if !self.thread_local_allocator.as_mut().unwrap().in_heap(*root) {
-                                continue;
-                            }
-                            (*self.queue).push((*root, *obj_type))
-                        }
+                        _ => (*self.queue).push((*root, *obj_type)),
                     }
                 }
             }
         }
+        for live in self.live_set.iter() {
+            unsafe {
+                self.mark_ptr(live as *const _ as _);
+            }
+        }
+        log::trace!("gc {}: marking...", self.id);
         #[cfg(feature = "llvm_stackmap")]
         {
             if USE_SHADOW_STACK.load(Ordering::Relaxed) {
@@ -442,10 +466,23 @@ impl Collector {
             } else {
                 // println!("{:?}", &STACK_MAP.map.borrow());
                 let mut depth = 0;
-                backtrace::trace(|frame| {
-                    let addr = frame.ip() as *mut u8;
+                let fl = self.frames_list.load(Ordering::SeqCst);
+                let frames = if !fl.is_null() {
+                    log::trace!("gc {}: tracing stucked frames", self.id);
+                    unsafe { fl.as_mut().unwrap().clone() }
+                } else {
+                    let mut frames: Vec<(*mut libc::c_void, *mut libc::c_void)> = vec![];
+                    backtrace::trace(|frame| {
+                        frames.push((frame.ip(), frame.sp()));
+                        true
+                    });
+                    frames
+                };
+
+                frames.iter().for_each(|(ip, sp)| unsafe {
+                    let addr = *ip as *mut u8;
                     let const_addr = addr as *const u8;
-                    let map = STACK_MAP.map.borrow();
+                    let map = STACK_MAP.map.as_ref().unwrap();
                     let f = map.get(&const_addr);
                     // backtrace::resolve_frame(frame,
                     //     |s|
@@ -455,15 +492,14 @@ impl Collector {
                     // );
                     if let Some(f) = f {
                         // println!("found fn in stackmap, f: {:?} sp: {:p}", f,frame.sp());
-                        f.iter_roots().for_each(|(offset, _obj_type)| unsafe {
+                        f.iter_roots().for_each(|(offset, _obj_type)| {
                             // println!("offset: {}", offset);
-                            let sp = frame.sp() as *mut u8;
+                            let sp = *sp as *mut u8;
                             let root = sp.offset(offset as isize);
                             self.mark_ptr(root);
                         });
                     }
                     depth += 1;
-                    true
                 });
                 self.mark_globals();
             }
@@ -498,28 +534,32 @@ impl Collector {
         } else {
             GC_MARKING.store(false, Ordering::Release);
             GC_MARK_COND.notify_all();
+            GC_RUNNING.store(false, Ordering::Release);
             drop(v);
         }
     }
 
     #[cfg(feature = "llvm_stackmap")]
     fn mark_globals(&self) {
-        STACK_MAP
-            .global_roots
-            .borrow()
-            .iter()
-            .for_each(|root| unsafe {
-                self.mark_ptr((*root) as usize as *mut u8);
-            });
+        unsafe {
+            STACK_MAP
+                .global_roots
+                .as_mut()
+                .unwrap()
+                .iter()
+                .for_each(|root| {
+                    self.mark_ptr((*root) as usize as *mut u8);
+                });
+        }
     }
 
     /// # sweep
     ///
     /// since we did synchronization in mark, we don't need to do synchronization again in sweep
     pub fn sweep(&self) -> usize {
-        GC_RUNNING.store(false, Ordering::Release);
         GC_SWEEPPING_NUM.fetch_add(1, Ordering::AcqRel);
         GC_SWEEPING.store(true, Ordering::Release);
+        log::trace!("gc {}: sweeping...", self.id);
         let used = unsafe {
             self.thread_local_allocator
                 .as_mut()
@@ -534,11 +574,21 @@ impl Collector {
         used
     }
 
+    pub fn safepoint(&self) {
+        if GC_RUNNING.load(Ordering::Acquire) {
+            self.collect();
+        }
+    }
+
     /// # collect
+    ///
     /// Collect garbage.
     pub fn collect(&self) {
-        // let start_time = std::time::Instant::now();
-        log::info!("gc {} collecting...", self.id);
+        log::info!(
+            "gc {} collecting... stucked: {}",
+            self.id,
+            !self.frames_list.load(Ordering::SeqCst).is_null()
+        );
         // self.print_stats();
         let mut status = self.status.borrow_mut();
         // println!("gc {} collecting... {}", self.id,status.bytes_allocated_since_last_gc);
@@ -558,8 +608,8 @@ impl Collector {
             {
                 // 如果需要驱逐，首先计算驱逐阀域
                 let mut eva_threshold = 0;
-                let mut available_histogram: VecMap<usize, usize> =
-                    VecMap::with_capacity(NUM_LINES_PER_BLOCK);
+                let mut available_histogram: FxHashMap<usize, usize> =
+                    FxHashMap::with_capacity_and_hasher(NUM_LINES_PER_BLOCK, Default::default());
                 let mut available_lines = self
                     .thread_local_allocator
                     .as_mut()
@@ -624,8 +674,75 @@ impl Collector {
                 .get_bigobjs_size()
         }
     }
+
+    pub fn stuck(&mut self) {
+        log::trace!("gc {}: stucking...", self.id);
+        let mut frames: Box<Vec<(*mut libc::c_void, *mut libc::c_void)>> = Box::default();
+        backtrace::trace(|frame| {
+            frames.push((frame.ip(), frame.sp()));
+            true
+        });
+        unsafe {
+            let ptr = Box::leak(frames) as *mut _;
+            self.frames_list.store(ptr, Ordering::SeqCst);
+            let c: *mut Collector = self as *mut _;
+            let c = c.as_mut().unwrap();
+            c.shadow_thread_running.store(true, Ordering::SeqCst);
+            GLOBAL_ALLOCATOR.0.as_ref().unwrap().pool.execute(move || {
+                log::info!("gc {}: stucked, waiting for unstuck...", c.id);
+                loop {
+                    let mut mutex = STUCK_MUTEX.lock();
+                    if c.frames_list.load(Ordering::SeqCst).is_null() {
+                        log::trace!("gc {}: unstucking break...", c.id);
+                        c.shadow_thread_running.store(false, Ordering::SeqCst);
+                        drop(mutex);
+                        break;
+                    } else if GC_RUNNING.load(Ordering::Acquire) {
+                        drop(mutex);
+                        c.collect();
+                    } else {
+                        STUCK_COND.wait(&mut mutex);
+                        drop(mutex);
+                        c.safepoint();
+                    }
+                }
+            });
+        }
+        STUCK_COND.notify_all();
+        // FRAMES_LIST.0.lock().borrow_mut().insert( self as _,frames);
+    }
+
+    pub fn unstuck(&mut self) {
+        log::trace!("gc {}: unstucking...", self.id);
+        let mutex = STUCK_MUTEX.lock();
+        let old = self
+            .frames_list
+            .swap(std::ptr::null_mut(), Ordering::SeqCst);
+        if !old.is_null() {
+            STUCK_COND.notify_all();
+            drop(mutex);
+            unsafe {
+                drop_in_place(old as *mut Vec<(*mut libc::c_void, *mut libc::c_void)>);
+            }
+        } else {
+            STUCK_COND.notify_all();
+            drop(mutex);
+        }
+        // wait until the shadow thread exit
+        spin_until!(!self.shadow_thread_running.load(Ordering::SeqCst));
+    }
 }
 
 #[cfg(test)]
 #[cfg(feature = "shadow_stack")]
 mod tests;
+
+// static STUCK_GCED: AtomicBool = AtomicBool::new(false);
+
+lazy_static::lazy_static! {
+    static ref STUCK_COND: Arc<Condvar> = Arc::new(Condvar::new());
+    static ref STUCK_MUTEX:Mutex<()> = Mutex::new(());
+}
+
+unsafe impl Sync for Collector {}
+unsafe impl Send for Collector {}

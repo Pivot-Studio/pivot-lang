@@ -13,6 +13,7 @@ pub fn test_generator() void {
     next = iterator.next();
     assert(next is i64);
     i = next as i64!;
+    println!(i);
     assert(i == 100);
     next = iterator.next();
     assert(next is i64);

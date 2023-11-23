@@ -77,6 +77,7 @@ define_diag!(
     REF_CONST = "try referencing to a const value",
     INVALID_STRUCT_DEF = "invalid struct definition",
     UNDEFINED_TYPE = "undefined type",
+    UNKNOWN_TYPE = "unknown type",
     RETURN_VALUE_IN_VOID_FUNCTION = "return value in void function",
     RETURN_TYPE_MISMATCH = "return type mismatch",
     NO_RETURN_VALUE_IN_NON_VOID_FUNCTION = "non void function must have a return value",
@@ -99,7 +100,6 @@ define_diag!(
     TYPE_MISMATCH = "type mismatch",
     ILLEGAL_GET_FIELD_OPERATION = "illegal get field operation",
     NOT_A_POINTER = "not a pointer",
-    CAN_NOT_REF_CONSTANT = "can not ref constant",
     ILLEGAL_SELF_RECURSION = "illegal self recursion, please use pointer",
     GENERIC_CANNOT_BE_INFER = "generic can not be infer",
     RECEIVER_CANNOT_BE_INFER = "receiver can not be infer",
@@ -165,6 +165,7 @@ define_diag!(
     GENERIC_NOT_ALLOWED_IN_TRAIT_METHOD = "generic not allowed in trait method",
     THE_TARGET_TRAIT_CANNOT_BE_INSTANTIATED = "the target trait type cannot be instantiated",
     MACRO_EXPAND_DEPTH_TOO_DEEP = "macro expand depth too deep",
+    GLOBAL_MUST_BE_POINTER = "global must be pointer type",
 );
 
 define_diag! {

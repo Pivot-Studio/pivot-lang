@@ -2,6 +2,7 @@
 #![allow(suspicious_double_ref_op)]
 #![allow(clippy::derive_ord_xor_partial_ord)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::single_match)]
 
 mod jar;
 pub use jar::*;
@@ -9,6 +10,7 @@ pub use jar::*;
 mod ast;
 mod db;
 mod flow;
+mod inference;
 mod lsp;
 mod nomparser;
 mod utils;

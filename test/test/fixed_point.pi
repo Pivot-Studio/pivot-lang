@@ -1,6 +1,6 @@
 use core::panic;
 pub fn test_fixed_point() void {
-    let g = |f: |i64| => i64, x: i64| => i64 {
+    let g = |f, x| => {
         if x == 0 {
             return 1;
         }
@@ -30,7 +30,7 @@ fn Y<A|R>(g: ||A| => R, A| => R) |A| => R {
             return f.call(f, x);
         }(Func{
             f: |f: Func<A|R>, x: A| => R {
-                return g(|x: A| => R {
+                return g(|x| =>  {
                     return f.call(f, x);
                 }, x);
             }

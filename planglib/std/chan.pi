@@ -1,0 +1,68 @@
+use std::mutex::*;
+pub struct Chan<T> {
+    buffer: Queue<T>;
+    count: u64;
+    capacity: u64;
+    mtx: *Mutex;
+}
+struct Node<T> {
+    data: T;
+    next: *Node<T>;
+}
+
+
+struct Queue<T> {
+    head: *Node<T>;
+    tail: *Node<T>;
+}
+
+impl <T>Queue<T>{
+    pub fn push(t: T) void {
+        let node = Node<T>{};
+        node.data = t;
+        self.tail.next = &node;
+        self.tail = &node;
+        return;
+    }
+
+    pub fn pop() T {
+        let node = self.head.next;
+        self.head = node;
+        return node.data;
+    }
+
+}
+pub fn channel<T>(sz: u64) Chan<T> {
+    let node = Node<T>{};
+    let ch = Chan<T> {};
+    ch.buffer = Queue<T>{};
+    ch.buffer.head = &node;
+    ch.buffer.tail = &node;
+    ch.count = 0;
+    ch.capacity = sz;
+    create_mutex(&ch.mtx);
+    return ch;
+}
+impl <S>Chan<S> {
+    pub fn send(s: S) void {
+        gc::DioGC__stuck_begin();
+        while self.capacity <= self.count {
+        }
+        gc::DioGC__stuck_end();
+        lock_mutexWrap(self.mtx);
+        self.buffer.push(s);
+        self.count = self.count + 1;
+        unlock_mutex(self.mtx);
+        return;
+    }
+    pub fn recv() S {
+        gc::DioGC__stuck_begin();
+        while self.count==0 {}
+        gc::DioGC__stuck_end();
+        lock_mutexWrap(self.mtx);
+        let s = self.buffer.pop();
+        self.count = self.count - 1;
+        unlock_mutex(self.mtx);
+        return s;
+    }
+}

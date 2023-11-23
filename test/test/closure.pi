@@ -2,9 +2,9 @@ use core::panic;
 pub fn test_closure() i64 {
     let b = 1;
     let bb = 100;
-    test_type_infer(|a| => {
+    test_type_infer(|a| =>  {
         let c = b;
-        let aa = |a: i64| => i64 {
+        let aa = |a| => {
             let c = bb;
             return c;
         };
@@ -12,6 +12,25 @@ pub fn test_closure() i64 {
         panic::assert(re == 100);
         return c;
     });
+    let fff = |a:|i64| => i64| => {
+        return;
+    };
+    let ddd = |a| => {
+        return;
+    };
+    fff = ddd;
+    let eee = |a| =>  {
+        let c = b;
+        let aa = |a| => {
+            let c = bb;
+            return c;
+        };
+        let re = aa(2);
+        panic::assert(re == 100);
+        return c;
+    };
+    fff(eee);
+
     let f = test_ret_closure();
     let d = f(2);
     panic::assert(d == 1);

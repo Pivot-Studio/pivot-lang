@@ -6,6 +6,7 @@ use crate::ast::builder::IRBuilder;
 use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
 use crate::format_label;
+
 use crate::modifier_set;
 
 use indexmap::IndexMap;
@@ -89,11 +90,8 @@ impl PrintTrait for DefNode {
         self.var.print(tabs + 1, false, line.clone());
         if let Some(tp) = &self.tp {
             tp.print(tabs + 1, true, line.clone());
-        } else {
-            self.exp
-                .as_ref()
-                .unwrap()
-                .print(tabs + 1, true, line.clone());
+        } else if let Some(e) = self.exp.as_ref() {
+            e.print(tabs + 1, true, line.clone());
         }
     }
 }
@@ -170,15 +168,50 @@ impl Node for DefNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.var.range(), SemanticTokenType::VARIABLE, 0);
-        if self.exp.is_none() && self.tp.is_none() {
-            return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
-        }
         let mut pltype = None;
+        if self.tp.is_none() {
+            let mut tp = Arc::new(RefCell::new(PLType::Unknown));
+            if let DefVar::Identifier(i) = &*self.var {
+                if let Some(id) = i.id {
+                    let v = ctx.unify_table.borrow_mut().probe(id);
+                    tp = v.get_type(&mut ctx.unify_table.borrow_mut());
+                    if self.exp.is_none() {
+                        ctx.push_type_hints(self.var.range(), tp.clone());
+                    }
+                }
+            }
+            if self.exp.is_none() && matches!(&*tp.borrow(), PLType::Unknown) {
+                match builder {
+                    BuilderEnum::LLVM(_) => {
+                        return Err(ctx.add_diag(
+                            self.var
+                                .range()
+                                .new_err(ErrorCode::UNKNOWN_TYPE)
+                                .add_to_ctx(ctx),
+                        ));
+                    }
+                    BuilderEnum::NoOp(_) => {
+                        ctx.add_diag(
+                            self.var
+                                .range()
+                                .new_err(ErrorCode::UNKNOWN_TYPE)
+                                .add_to_ctx(ctx),
+                        );
+                    }
+                }
+            }
+            pltype = Some(tp);
+        }
         let mut expv = None;
         if let Some(tp) = &self.tp {
             tp.emit_highlight(ctx);
             let pltp = tp.get_type(ctx, builder, true)?;
             pltype = Some(pltp);
+        }
+        if self.exp.is_some()
+            && matches!(pltype.clone(), Some(tp) if matches!(&*tp.borrow(), PLType::Unknown))
+        {
+            pltype = None;
         }
         if let Some(exp) = &mut self.exp {
             let re = if let Some(pltype) = pltype.clone() {
@@ -190,7 +223,7 @@ impl Node for DefNode {
 
             // for err tolerate
             if re.is_none() {
-                return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
+                return Err(ctx.add_diag(self.var.range().new_err(ErrorCode::UNKNOWN_TYPE)));
             }
             let re = re.unwrap();
             let mut tp = re.get_ty();
@@ -213,6 +246,8 @@ impl Node for DefNode {
             if pltype.is_none() {
                 ctx.push_type_hints(self.var.range(), tp.clone());
                 pltype = Some(tp);
+            } else if self.tp.is_none() {
+                ctx.push_type_hints(self.var.range(), pltype.clone().unwrap());
             }
             expv = Some(v);
         }
@@ -262,7 +297,7 @@ fn handle_deconstruct<'a, 'b>(
                 ctx.add_symbol(
                     var.name.clone(),
                     ptr2value,
-                    pltype,
+                    pltype.clone(),
                     def_var.range(),
                     false,
                     false,
@@ -284,7 +319,10 @@ fn handle_deconstruct<'a, 'b>(
             };
             if let Some(exp) = expv {
                 builder.build_dbg_location(def_var.range().start);
-                builder.build_store(ptr2value, ctx.try_load2var(range, exp, builder)?);
+                builder.build_store(
+                    ptr2value,
+                    ctx.try_load2var(range, exp, builder, &pltype.borrow())?,
+                );
             }
         }
         DefVar::TupleDeconstruct(TupleDeconstructNode {
@@ -324,7 +362,7 @@ fn handle_deconstruct<'a, 'b>(
                     for (i, (_, f)) in st.fields.iter().enumerate() {
                         let ftp = f.typenode.get_type(ctx, builder, false)?;
                         let expv = builder
-                            .build_struct_gep(expv, f.index, "_deconstruct")
+                            .build_struct_gep(expv, f.index, "_deconstruct", &pltype.borrow(), ctx)
                             .unwrap();
                         let deconstruct_v = var[i].as_ref();
                         handle_deconstruct(
@@ -389,7 +427,13 @@ fn handle_deconstruct<'a, 'b>(
                                 }
                                 let f = st.fields.get(&v.name).unwrap();
                                 let expv = builder
-                                    .build_struct_gep(expv, f.index, "_deconstruct")
+                                    .build_struct_gep(
+                                        expv,
+                                        f.index,
+                                        "_deconstruct",
+                                        &pltype.borrow(),
+                                        ctx,
+                                    )
                                     .unwrap();
                                 let ftp = f.typenode.get_type(ctx, builder, false)?;
                                 (expv, ftp)
@@ -503,14 +547,19 @@ impl Node for AssignNode {
                 let lpltype = rel.get_ty();
                 // 要走转换逻辑，所以不和下方分支统一
                 let value = ctx
-                    .emit_with_expectation(&mut self.exp, lpltype, self.var.range(), builder)?
+                    .emit_with_expectation(
+                        &mut self.exp,
+                        lpltype.clone(),
+                        self.var.range(),
+                        builder,
+                    )?
                     .get_value()
                     .unwrap()
                     .get_value();
                 if rel.is_const() {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::ASSIGN_CONST)));
                 }
-                let load = ctx.try_load2var(exp_range, value, builder)?;
+                let load = ctx.try_load2var(exp_range, value, builder, &lpltype.borrow())?;
                 builder.build_store(ptr, load);
                 Ok(Default::default())
             }

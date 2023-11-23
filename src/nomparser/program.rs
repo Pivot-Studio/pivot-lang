@@ -72,6 +72,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
                                 id: VarNode {
                                     name: "self".to_string(),
                                     range: Default::default(),
+                                    id: None,
                                 },
                                 typenode: Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
                                     elm: Box::new(target.clone()),

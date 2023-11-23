@@ -38,7 +38,7 @@ void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter 
   unsigned IntPtrSize = AP.getPointerSize();
   AP.emitAlignment(llvm::Align(8));
   // Put this in the data section.
-  AP.OutStreamer.get()->SwitchSection(AP.getObjFileLowering().getDataSection());
+  AP.OutStreamer.get()->switchSection(AP.getObjFileLowering().getDataSection());
   std::string symbol;
   symbol += "_IMMIX_GC_MAP_";
   symbol += M.getSourceFileName();

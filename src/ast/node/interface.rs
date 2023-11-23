@@ -220,6 +220,7 @@ fn new_selfptr_tf_with_name(n: &str) -> TypedIdentifierNode {
         id: VarNode {
             name: n.to_string(),
             range: Default::default(),
+            id: None,
         },
         typenode: Box::new(TypeNodeEnum::Pointer(PointerTypeNode {
             elm: Box::new(TypeNameNode::new_from_str("i64").into()),

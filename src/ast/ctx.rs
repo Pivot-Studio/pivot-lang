@@ -29,11 +29,13 @@ use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::format_label;
 
+use crate::inference::TyVariable;
 use crate::utils::read_config::Config;
 
 use crate::Db;
 
 use crate::ast::node::function::generator::GeneratorCtxData;
+use ena::unify::UnificationTable;
 use indexmap::IndexMap;
 
 use lsp_types::CompletionItem;
@@ -120,7 +122,7 @@ pub struct Ctx<'a> {
     pub macro_loop_len: usize,
     pub temp_source: Option<String>,
     pub in_macro: bool,
-    pub closure_data: Option<RefCell<ClosureCtxData>>,
+    pub closure_data: Option<Arc<RefCell<ClosureCtxData>>>,
     pub expect_ty: Option<Arc<RefCell<PLType>>>,
     pub self_ref_map: FxHashMap<String, FxHashSet<(String, Range)>>, // used to recognize self reference
     pub ctx_flag: CtxFlag,
@@ -131,6 +133,8 @@ pub struct Ctx<'a> {
     is_active_file: bool,
     as_root: bool,
     macro_expand_depth: Arc<RefCell<u64>>,
+    pub unify_table: Arc<RefCell<UnificationTable<TyVariable>>>,
+    pub disable_diag: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -162,18 +166,24 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn is_active_file(&self) -> bool {
         self.is_active_file
     }
-    pub fn add_term_to_previous_yield(
-        &self,
-        builder: &'a BuilderEnum<'a, 'ctx>,
+    pub fn add_term_to_previous_yield<'b>(
+        &'b mut self,
+        builder: &'b BuilderEnum<'a, 'ctx>,
         curbb: usize,
     ) -> Arc<RefCell<crate::ast::ctx::GeneratorCtxData>> {
         let ctx = self;
-        let data = ctx.generator_data.as_ref().unwrap();
+        let data = ctx.generator_data.as_ref().unwrap().clone();
         if let Some(prev_bb) = data.borrow().prev_yield_bb {
             builder.position_at_end_block(prev_bb);
             let ctx_handle = builder.get_nth_param(ctx.function.unwrap(), 0);
             let ptr = builder
-                .build_struct_gep(ctx_handle, 1, "block_ptr")
+                .build_struct_gep(
+                    ctx_handle,
+                    1,
+                    "block_ptr",
+                    &data.borrow().ctx_tp.as_ref().unwrap().borrow(),
+                    ctx,
+                )
                 .unwrap();
 
             let addr = builder.get_block_address(curbb);
@@ -281,6 +291,8 @@ impl<'a, 'ctx> Ctx<'a> {
             is_active_file,
             as_root: false,
             macro_expand_depth: Default::default(),
+            unify_table: Arc::new(RefCell::new(UnificationTable::new())),
+            disable_diag: false,
         }
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
@@ -324,6 +336,8 @@ impl<'a, 'ctx> Ctx<'a> {
             is_active_file: self.is_active_file,
             as_root: false,
             macro_expand_depth: self.macro_expand_depth.clone(),
+            unify_table: self.unify_table.clone(),
+            disable_diag: self.disable_diag,
         };
         add_primitive_types(&mut ctx);
         if start != Default::default() {
@@ -570,7 +584,16 @@ impl<'a, 'ctx> Ctx<'a> {
                         // captured by closure
                         let new_symbol = symbol.clone();
                         let len = data.table.len();
-                        builder.add_closure_st_field(data.data_handle, new_symbol.value);
+                        let st_r = data.data_tp.as_ref().unwrap().borrow();
+                        let st = match &*st_r {
+                            PLType::Struct(s) => s,
+                            _ => unreachable!(),
+                        };
+                        let ptr = father as *const _;
+                        let ptr = ptr as usize;
+                        let ptr = ptr as *mut Ctx<'_>;
+                        builder.add_closure_st_field(st, new_symbol.value, unsafe { &mut *ptr });
+                        drop(st_r);
                         let new_symbol = PLSymbolData {
                             value: builder.build_load(
                                 builder
@@ -578,9 +601,13 @@ impl<'a, 'ctx> Ctx<'a> {
                                         data.data_handle,
                                         len as u32 + 1,
                                         "closure_tmp",
+                                        &data.data_tp.as_ref().unwrap().borrow(),
+                                        unsafe { &mut *ptr },
                                     )
                                     .unwrap(),
                                 "closure_loaded",
+                                &PLType::Pointer(Arc::new(RefCell::new(PLType::new_i8_ptr()))),
+                                unsafe { &mut *ptr },
                             ),
                             ..new_symbol
                         };
@@ -840,6 +867,9 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn add_diag(&self, mut dia: PLDiag) -> PLDiag {
+        if self.disable_diag {
+            return dia;
+        }
         if let Some(src) = &self.temp_source {
             dia.set_source(src);
         }
@@ -853,8 +883,9 @@ impl<'a, 'ctx> Ctx<'a> {
         range: Range,
         v: ValueHandle,
         builder: &'b BuilderEnum<'a, 'ctx>,
+        tp: &PLType,
     ) -> Result<ValueHandle, PLDiag> {
-        builder.try_load2var(range, v, self)
+        builder.try_load2var(range, v, tp, self)
     }
     fn set_mod(&mut self, plmod: Mod) -> Mod {
         let m = self.plmod.clone();
@@ -982,7 +1013,7 @@ impl<'a, 'ctx> Ctx<'a> {
     /// # auto_deref
     /// 自动解引用，有几层解几层
     pub fn auto_deref<'b>(
-        &'b self,
+        &'b mut self,
         tp: Arc<RefCell<PLType>>,
         value: ValueHandle,
         builder: &'b BuilderEnum<'a, 'ctx>,
@@ -990,8 +1021,9 @@ impl<'a, 'ctx> Ctx<'a> {
         let mut tp = tp;
         let mut value = value;
         while let PLType::Pointer(p) = &*get_type_deep(tp.clone()).borrow() {
+            let old_tp = tp.clone();
             tp = p.clone();
-            value = builder.build_load(value, "load");
+            value = builder.build_load(value, "load", &old_tp.borrow(), self);
         }
         (tp, value)
     }

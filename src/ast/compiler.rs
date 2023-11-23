@@ -109,7 +109,7 @@ pub fn run_pass(llvmmod: &Module, op: OptimizationLevel) {
         pass_manager_builder.set_size_level(0);
         pass_manager_builder.populate_function_pass_manager(&fpm);
         pass_manager_builder.populate_module_pass_manager(&mpm);
-        pass_manager_builder.populate_lto_pass_manager(&mpm, false, true);
+        // pass_manager_builder.populate_lto_pass_manager(&mpm, false, true);
     }
     let b = fpm.initialize();
     trace!("fpm init: {}", b);

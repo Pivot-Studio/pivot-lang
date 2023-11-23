@@ -67,6 +67,7 @@ pub enum PLType {
     Trait(STType),
     Union(UnionType),
     Closure(ClosureType),
+    Unknown,
 }
 
 impl TraitImplAble for PriType {
@@ -87,7 +88,16 @@ pub struct ClosureType {
 
 impl PartialEq for ClosureType {
     fn eq(&self, other: &Self) -> bool {
-        self.arg_types == other.arg_types && self.ret_type == other.ret_type
+        if self.arg_types.len() != other.arg_types.len() {
+            return false;
+        }
+        for i in 0..self.arg_types.len() {
+            if get_type_deep(self.arg_types[i].clone()) != get_type_deep(other.arg_types[i].clone())
+            {
+                return false;
+            }
+        }
+        get_type_deep(self.ret_type.clone()) == get_type_deep(other.ret_type.clone())
     }
 }
 
@@ -343,12 +353,14 @@ fn new_typename_node(name: &str, range: Range, ns: &[String]) -> Box<TypeNodeEnu
                     Box::new(VarNode {
                         name: s.clone(),
                         range: Default::default(),
+                        id: None,
                     })
                 })
                 .collect(),
             id: Box::new(VarNode {
                 name: name.to_string(),
                 range,
+                id: None,
             }),
             complete: true,
             singlecolon: false,
@@ -402,6 +414,12 @@ fn expect_pub_err(err: ErrorCode, ctx: &Ctx, range: Range, name: String) -> Resu
         .add_to_ctx(ctx))
 }
 impl PLType {
+    pub fn new_i8_ptr() -> PLType {
+        PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::I8))))
+    }
+    pub fn new_i64() -> PLType {
+        PLType::Primitive(PriType::I64)
+    }
     #[cfg(feature = "llvm")]
     pub fn get_immix_type(&self) -> ObjectType {
         match self {
@@ -421,8 +439,17 @@ impl PLType {
             PLType::Struct(s) => s.implements_trait(tp, ctx),
             PLType::Union(u) => u.implements_trait(tp, ctx),
             _ => {
-                let plmod = &ctx.db.get_module(&tp.path).unwrap();
-                if impl_in_mod(plmod, name, tp) {
+                let plmod = if tp.path == ctx.plmod.path {
+                    ctx.plmod.clone()
+                } else {
+                    ctx.db.get_module(&tp.path).unwrap_or_else(|| {
+                        panic!(
+                            "expect module {} exists, trait name: {}",
+                            &tp.path, &tp.name
+                        )
+                    })
+                };
+                if impl_in_mod(&plmod, name, tp) {
                     return true;
                 } else {
                     for m in plmod.submods.values() {
@@ -455,6 +482,7 @@ impl PLType {
             PLType::Trait(_) => "trait".to_string(),
             PLType::Union(_) => "union".to_string(),
             PLType::Closure(_) => "closure".to_string(),
+            PLType::Unknown => "unknown".to_string(),
         }
     }
 
@@ -482,9 +510,10 @@ impl PLType {
             }
             PLType::PlaceHolder(p) => new_typename_node(&p.name, Default::default(), &[]),
             PLType::Trait(t) => Self::new_custom_tp_node(t, path),
-            PLType::Fn(_) => unreachable!(),
+            PLType::Fn(_) => new_typename_node("Unknown", Default::default(), &[]),
             PLType::Union(u) => Self::new_custom_tp_node(u, path),
             PLType::Closure(c) => Box::new(c.to_type_node(path)),
+            PLType::Unknown => new_typename_node("Unknown", Default::default(), &[]),
         }
     }
     pub fn is(&self, pri_type: &PriType) -> bool {
@@ -506,6 +535,7 @@ impl PLType {
             PLType::Generic(g) => f_local(g),
             PLType::PlaceHolder(_) => (),
             PLType::Closure(_) => (),
+            PLType::Unknown => (),
         }
     }
 
@@ -539,6 +569,7 @@ impl PLType {
             PLType::Trait(t) => t.name.clone(),
             PLType::Union(u) => u.name.clone(),
             PLType::Closure(c) => c.get_name(),
+            PLType::Unknown => "Unknown".to_string(),
         }
     }
     pub fn get_llvm_name(&self) -> String {
@@ -562,6 +593,7 @@ impl PLType {
             PLType::PlaceHolder(p) => p.get_place_holder_name(),
             PLType::Union(u) => u.name.clone(),
             PLType::Closure(c) => c.get_name(),
+            PLType::Unknown => "Unknown".to_string(),
         }
     }
 
@@ -586,6 +618,7 @@ impl PLType {
             PLType::PlaceHolder(p) => p.name.clone(),
             PLType::Union(u) => u.get_full_name(),
             PLType::Closure(c) => c.get_name(),
+            PLType::Unknown => "Unknown".to_string(),
         }
     }
     pub fn get_full_elm_name_without_generic(&self) -> String {
@@ -603,6 +636,7 @@ impl PLType {
             PLType::PlaceHolder(p) => p.name.clone(),
             PLType::Union(u) => u.get_full_name_except_generic(),
             PLType::Closure(c) => c.get_name(),
+            PLType::Unknown => "Unknown".to_string(),
         }
     }
     pub fn get_ptr_depth(&self) -> usize {
@@ -701,6 +735,7 @@ impl PLType {
             PLType::Trait(t) => Some(t.range),
             PLType::Union(u) => Some(u.range),
             PLType::Closure(c) => Some(c.range),
+            PLType::Unknown => None,
         }
     }
 
@@ -1088,28 +1123,8 @@ impl PartialEq for STType {
     fn eq(&self, other: &Self) -> bool {
         if self.is_tuple && other.is_tuple {
             self.fields == other.fields
-        } else if self.is_trait && other.is_trait {
-            self.name == other.name
-                && self.path == other.path
-                && self.range == other.range
-                && self.derives == other.derives
-                && self.modifier == other.modifier
-                && self.body_range == other.body_range
-                && self.is_trait == other.is_trait
-                && self.is_tuple == other.is_tuple
-                && self.generic_map == other.generic_map
         } else {
-            self.name == other.name
-                && self.path == other.path
-                && self.fields == other.fields
-                && self.range == other.range
-                && self.doc == other.doc
-                && self.generic_map == other.generic_map
-                && self.derives == other.derives
-                && self.modifier == other.modifier
-                && self.body_range == other.body_range
-                && self.is_trait == other.is_trait
-                && self.is_tuple == other.is_tuple
+            self.name == other.name && self.path == other.path
         }
     }
 }

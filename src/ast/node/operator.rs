@@ -51,7 +51,7 @@ impl Node for UnaryOpNode {
         }
         let rv = rv.unwrap();
         let pltype = rv.get_ty();
-        let exp = ctx.try_load2var(exp_range, rv.get_value(), builder)?;
+        let exp = ctx.try_load2var(exp_range, rv.get_value(), builder, &rv.get_ty().borrow())?;
         return Ok(match (&*pltype.borrow(), self.op.0) {
             (
                 PLType::Primitive(
@@ -113,7 +113,7 @@ impl Node for BinOpNode {
         let lv = lv.unwrap();
         let lpltype = lv.get_ty();
         let lv = lv.get_value();
-        let left = ctx.try_load2var(lrange, lv, builder)?;
+        let left = ctx.try_load2var(lrange, lv, builder, &lpltype.borrow())?;
         if self.op.0 == TokenType::AND || self.op.0 == TokenType::OR {
             return Ok(match *lpltype.clone().borrow() {
                 PLType::Primitive(PriType::BOOL) => {
@@ -146,7 +146,9 @@ impl Node for BinOpNode {
                     if rv.is_none() {
                         return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
                     }
-                    let right = ctx.try_load2var(rrange, rv.unwrap().get_value(), builder)?;
+                    let rv = rv.unwrap();
+                    let right =
+                        ctx.try_load2var(rrange, rv.get_value(), builder, &rv.get_ty().borrow())?;
                     let incoming_bb2 = builder.get_cur_basic_block(); // get incoming block 2
                     builder.build_unconditional_branch(merge_bb);
                     // merge bb
@@ -177,7 +179,8 @@ impl Node for BinOpNode {
         if re.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_VALUE)));
         }
-        let right = ctx.try_load2var(rrange, re.unwrap().get_value(), builder)?;
+        let re = re.unwrap();
+        let right = ctx.try_load2var(rrange, re.get_value(), builder, &re.get_ty().borrow())?;
         let lpltype = get_type_deep(lpltype);
         Ok(match self.op.0 {
             TokenType::BIT_AND => {
@@ -436,16 +439,30 @@ impl Node for TakeOpNode {
                     if let Some(field) = field {
                         _ = s.expect_field_pub(ctx, &field, id_range);
                         ctx.push_semantic_token(id_range, SemanticTokenType::METHOD, 0);
-                        ctx.set_field_refs(head_pltype, &field, id_range);
+                        ctx.set_field_refs(head_pltype.clone(), &field, id_range);
                         ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
 
                         let re = field.typenode.get_type(ctx, builder, true)?;
                         let fnv = builder
-                            .build_struct_gep(headptr, field.index, "mthd_ptr")
+                            .build_struct_gep(
+                                headptr,
+                                field.index,
+                                "mthd_ptr",
+                                &head_pltype.borrow(),
+                                ctx,
+                            )
                             .unwrap();
-                        let fnv = builder.build_load(fnv, "mthd_ptr_load");
-                        let headptr = builder.build_struct_gep(headptr, 1, "traitptr").unwrap();
-                        let headptr = builder.build_load(headptr, "traitptr_load");
+                        let fnv =
+                            builder.build_load(fnv, "mthd_ptr_load", &PLType::new_i8_ptr(), ctx);
+                        let headptr = builder
+                            .build_struct_gep(headptr, 1, "traitptr", &head_pltype.borrow(), ctx)
+                            .unwrap();
+                        let headptr = builder.build_load(
+                            headptr,
+                            "traitptr_load",
+                            &PLType::new_i8_ptr(),
+                            ctx,
+                        );
                         ctx.emit_comment_highlight(&self.comments[0]);
                         Ok(NodeOutput::new_value(NodeValue::new_receiver(
                             fnv, re, headptr, None,
@@ -459,14 +476,20 @@ impl Node for TakeOpNode {
                 if let Some(field) = s.fields.get(&id.name) {
                     _ = s.expect_field_pub(ctx, field, id_range);
                     ctx.push_semantic_token(id_range, SemanticTokenType::PROPERTY, 0);
-                    ctx.set_field_refs(head_pltype, field, id_range);
+                    ctx.set_field_refs(head_pltype.clone(), field, id_range);
                     if field.range != Default::default() {
                         // walkaround for tuple types
                         ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
                     }
                     return Ok(NodeOutput::new_value(NodeValue::new(
                         builder
-                            .build_struct_gep(headptr, field.index, "structgep")
+                            .build_struct_gep(
+                                headptr,
+                                field.index,
+                                "structgep",
+                                &head_pltype.borrow(),
+                                ctx,
+                            )
                             .unwrap(),
                         field.typenode.get_type(ctx, builder, true)?,
                     )));

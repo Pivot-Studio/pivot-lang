@@ -128,6 +128,7 @@ impl Linker for LdLinker {
             "/lib/x86_64-linux-gnu/crti.o",
             // "/usr/lib/gcc/x86_64-linux-gnu/<version>/crtbeginS.o",
             "-lc",
+            "-lm",
             "-lpthread",
             "-lunwind",
             "--no-as-needed",

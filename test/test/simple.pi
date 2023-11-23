@@ -29,7 +29,7 @@ pub fn test_primitives() void {
     panic::assert(f as i64 == -64);
     let g = test >>> 1;
     panic::assert(g as i64 == 64);
-    let h = ~test;
+    let h = ~test ;
     panic::assert(h as i64 == 127);
     return;
 }

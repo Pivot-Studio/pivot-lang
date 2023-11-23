@@ -76,7 +76,8 @@ impl Node for GlobalNode {
         let v = self.exp.emit(ctx, builder)?.get_value();
         let v = v.unwrap();
         ctx.push_type_hints(self.var.range, v.get_ty());
-        let base_value = ctx.try_load2var(exp_range, v.get_value(), builder)?;
+        let base_value =
+            ctx.try_load2var(exp_range, v.get_value(), builder, &v.get_ty().borrow())?;
         let res = ctx.get_symbol(&self.var.name, builder);
         if res.is_none() {
             return Ok(Default::default());
@@ -116,11 +117,15 @@ impl GlobalNode {
         ctx.add_symbol(
             self.var.name.clone(),
             globalptr,
-            pltype,
+            pltype.clone(),
             self.var.range,
             false,
             false,
         )?;
+        // for gc reason, globals must be pointer
+        if !matches!(&*pltype.borrow(), PLType::Pointer(_)) {
+            return Err(ctx.add_diag(self.var.range.new_err(ErrorCode::GLOBAL_MUST_BE_POINTER)));
+        }
         Ok(())
     }
 }

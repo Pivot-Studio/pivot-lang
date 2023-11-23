@@ -14,6 +14,7 @@ use crate::ast::node::{deal_line, tab};
 
 use crate::ast::pltype::{get_type_deep, ClosureType, FNValue, Field, FnType, PLType, STType};
 use crate::ast::tokens::TokenType;
+use crate::inference::{InferenceCtx, TyVariable};
 use indexmap::IndexMap;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
@@ -54,8 +55,11 @@ impl FuncCallNode {
         c: &ClosureType,
         v: ValueHandle,
     ) -> NodeResult {
-        let data = builder.build_struct_gep(v, 1, "closure_data").unwrap();
-        let data = builder.build_load(data, "loaded_closure_data");
+        let ct = PLType::Closure(c.clone());
+        let data = builder
+            .build_struct_gep(v, 1, "closure_data", &ct, ctx)
+            .unwrap();
+        let data = builder.build_load(data, "loaded_closure_data", &PLType::new_i8_ptr(), ctx);
         let mut para_values = vec![data];
         let mut value_pltypes = vec![];
         if self.paralist.len() != c.arg_types.len() {
@@ -80,12 +84,12 @@ impl FuncCallNode {
             let v = v.unwrap();
             let value_pltype = v.get_ty();
             let value_pltype = get_type_deep(value_pltype);
-            let load = ctx.try_load2var(pararange, v.get_value(), builder)?;
+            let load = ctx.try_load2var(pararange, v.get_value(), builder, &v.get_ty().borrow())?;
             para_values.push(load);
             value_pltypes.push((value_pltype, pararange));
         }
-        let re = builder.build_struct_gep(v, 0, "real_fn").unwrap();
-        let re = builder.build_load(re, "real_fn");
+        let re = builder.build_struct_gep(v, 0, "real_fn", &ct, ctx).unwrap();
+        let re = builder.build_load(re, "real_fn", &PLType::new_i8_ptr(), ctx);
         let ret = builder.build_call(re, &para_values, &c.ret_type.borrow(), ctx);
         builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
         handle_ret(ret, c.ret_type.clone())
@@ -122,7 +126,7 @@ impl FuncCallNode {
             let v = v.unwrap();
             let value_pltype = v.get_ty();
             let value_pltype = get_type_deep(value_pltype);
-            let load = ctx.try_load2var(pararange, v.get_value(), builder)?;
+            let load = ctx.try_load2var(pararange, v.get_value(), builder, &v.get_ty().borrow())?;
             para_values.push(load);
             value_pltypes.push((value_pltype, pararange));
         }
@@ -311,14 +315,14 @@ fn check_and_cast_params<'a, 'b>(
             builder.build_store(ptr2v, value);
             let trait_pltype = param_types[i + skip as usize].get_type(ctx, builder, true)?;
             value = ctx.up_cast(
-                trait_pltype,
+                trait_pltype.clone(),
                 value_pltype.clone(),
                 param_types[i + skip as usize].range(),
                 *pararange,
                 ptr2v,
                 builder,
             )?;
-            value = ctx.try_load2var(*pararange, value, builder)?;
+            value = ctx.try_load2var(*pararange, value, builder, &trait_pltype.borrow())?;
             para_values[i + skip as usize] = value;
         }
     }
@@ -630,12 +634,9 @@ impl FuncDefNode {
                 let ret_value_ptr = if self.generator {
                     generator::build_generator_ret(builder, child, &fnvalue, entry)?
                 } else {
-                    match &*fnvalue
-                        .fntype
-                        .ret_pltype
-                        .get_type(child, builder, true)?
-                        .borrow()
-                    {
+                    let tp = fnvalue.fntype.ret_pltype.get_type(child, builder, true)?;
+                    child.rettp = Some(tp.clone());
+                    match &*tp.clone().borrow() {
                         PLType::Void => None,
                         other => {
                             builder.rm_curr_debug_location();
@@ -647,7 +648,12 @@ impl FuncDefNode {
                 child.position_at_end(return_block, builder);
                 child.return_block = Some((return_block, ret_value_ptr));
                 if let Some(ptr) = ret_value_ptr {
-                    let value = builder.build_load(ptr, "load_ret_tmp");
+                    let value = builder.build_load(
+                        ptr,
+                        "load_ret_tmp",
+                        &child.rettp.clone().unwrap().borrow(),
+                        child,
+                    );
                     builder.build_return(Some(value));
                 } else {
                     builder.build_return(None);
@@ -656,6 +662,7 @@ impl FuncDefNode {
                 if self.generator {
                     // 设置flag，该flag影响alloc逻辑
                     child.ctx_flag = CtxFlag::InGeneratorYield;
+                    child.generator_data.as_ref().unwrap().borrow_mut().is_para = true;
                 }
                 // alloc para
                 for (i, para) in fnvalue.fntype.param_pltypes.iter().enumerate() {
@@ -685,6 +692,9 @@ impl FuncDefNode {
                             false,
                         )
                         .unwrap();
+                }
+                if self.generator {
+                    child.generator_data.as_ref().unwrap().borrow_mut().is_para = false;
                 }
                 // emit body
                 builder.rm_curr_debug_location();
@@ -733,6 +743,11 @@ impl FuncDefNode {
                     return Ok(());
                 }
                 // body generation
+                let mut infer_ctx = InferenceCtx::new(ctx.unify_table.clone());
+                infer_ctx.import_global_symbols(child);
+                let mut infer_ctx = infer_ctx.new_child();
+                infer_ctx.import_symbols(child);
+                infer_ctx.inference_statements(self.body.as_mut().unwrap(), child, builder);
                 let terminator = self
                     .body
                     .as_mut()
@@ -835,6 +850,7 @@ pub struct ClosureNode {
     pub paralist: Vec<(Box<VarNode>, Option<Box<TypeNodeEnum>>)>,
     pub body: StatementsNode,
     pub ret: Option<Box<TypeNodeEnum>>,
+    pub ret_id: Option<TyVariable>,
 }
 
 static CLOSURE_COUNT: AtomicI32 = AtomicI32::new(0);
@@ -874,6 +890,17 @@ impl Node for ClosureNode {
             let tp = if let Some(typenode) = typenode {
                 typenode.emit_highlight(ctx);
                 typenode.get_type(ctx, builder, true)?
+            } else if let Some(id) = v.id {
+                let vv = ctx.unify_table.borrow_mut().probe(id);
+                let tp = vv.get_type(&mut ctx.unify_table.borrow_mut());
+                if *tp.borrow() == PLType::Unknown {
+                    v.range()
+                        .new_err(ErrorCode::CLOSURE_PARAM_TYPE_UNKNOWN)
+                        .add_help("try manually specify the parameter type of the closure")
+                        .add_to_ctx(ctx);
+                }
+                ctx.push_type_hints(v.range(), tp.clone());
+                tp
             } else if let Some(exp_ty) = &ctx.expect_ty {
                 match &*exp_ty.borrow() {
                     PLType::Closure(c) => {
@@ -907,6 +934,10 @@ impl Node for ClosureNode {
         let ret_tp = if let Some(ret) = &self.ret {
             ret.emit_highlight(ctx);
             ret.get_type(ctx, builder, true)?
+        } else if let Some(ty) = self.ret_id {
+            let v = ctx.unify_table.borrow_mut().probe(ty);
+            let tp = v.get_type(&mut ctx.unify_table.borrow_mut());
+            tp
         } else if let Some(exp_ty) = &ctx.expect_ty {
             match &*exp_ty.borrow() {
                 PLType::Closure(c) => c.ret_type.clone(),
@@ -933,7 +964,8 @@ impl Node for ClosureNode {
         child.ctx_flag = CtxFlag::Normal;
         child.function = Some(f);
         let stpltp = PLType::Struct(st_tp.clone());
-        let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)));
+        let stp = Arc::new(RefCell::new(stpltp));
+        let ptr_tp = PLType::Pointer(stp.clone());
         let mut all_tps = vec![Arc::new(RefCell::new(i8ptr.clone()))];
         all_tps.extend(paratps.clone());
         builder.build_sub_program_by_pltp(
@@ -961,7 +993,7 @@ impl Node for ClosureNode {
         child.position_at_end(return_block, builder);
         child.return_block = Some((return_block, ret_value_ptr));
         if let Some(ptr) = ret_value_ptr {
-            let value = builder.build_load(ptr, "load_ret_tmp");
+            let value = builder.build_load(ptr, "load_ret_tmp", &ret_tp.borrow(), child);
             builder.build_return(Some(value));
         } else {
             builder.build_return(None);
@@ -973,11 +1005,12 @@ impl Node for ClosureNode {
         // let alloca = builder.alloc("closure_data",&ptr_tp, child, None);
         // builder.build_store(alloca, casted_data);
         child.position_at_end(entry, builder);
-        child.closure_data = Some(RefCell::new(ClosureCtxData {
+        child.closure_data = Some(Arc::new(RefCell::new(ClosureCtxData {
             table: LinkedHashMap::default(),
             data_handle: casted_data,
             alloca_bb: None,
-        }));
+            data_tp: Some(stp),
+        })));
         // alloc para
         for (i, tp) in paratps.iter().enumerate() {
             let b = tp.clone();
@@ -1060,16 +1093,22 @@ impl Node for ClosureNode {
         for (k, (_, ori_v)) in &closure_table.borrow().table {
             let field = st_tp.fields.get(k).unwrap();
             let alloca: usize = builder
-                .build_struct_gep(closure_data_alloca, field.index, k)
+                .build_struct_gep(
+                    closure_data_alloca,
+                    field.index,
+                    k,
+                    &PLType::Struct(st_tp.clone()),
+                    ctx,
+                )
                 .unwrap();
             builder.build_store(alloca, *ori_v);
         }
         let f_field = builder
-            .build_struct_gep(closure_alloca, 0, "closure_f")
+            .build_struct_gep(closure_alloca, 0, "closure_f", &closure_f_tp, ctx)
             .unwrap();
         builder.build_store(f_field, f);
         let d_field = builder
-            .build_struct_gep(closure_alloca, 1, "closure_d")
+            .build_struct_gep(closure_alloca, 1, "closure_d", &closure_f_tp, ctx)
             .unwrap();
         let d_casted = builder.bitcast(ctx, closure_data_alloca, &i8ptr, "casted_closure_d");
         builder.build_store(d_field, d_casted);

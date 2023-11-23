@@ -173,7 +173,7 @@ fn test_complecated_multiple_thread_gc(num_iter: usize, threads: usize) -> Durat
     for h in handles {
         times.push(h.join().unwrap());
     }
-    times.sort_by(|k1, k2| (k1).cmp(k2));
+    times.sort();
     times.pop().unwrap()
 }
 

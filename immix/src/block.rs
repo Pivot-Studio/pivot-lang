@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use int_enum::IntEnum;
-use vector_map::VecMap;
+use rustc_hash::FxHashMap;
 
 use crate::consts::{BLOCK_SIZE, LINE_SIZE, NUM_LINES_PER_BLOCK};
 
@@ -220,7 +220,7 @@ impl Block {
 
     /// # correct_header
     /// 回收的最后阶段，重置block的header
-    pub unsafe fn correct_header(&mut self, mark_histogram: *mut VecMap<usize, usize>) -> usize {
+    pub unsafe fn correct_header(&mut self, mark_histogram: *mut FxHashMap<usize, usize>) -> usize {
         let mut idx = 3;
         let mut len = 0;
         let mut first_hole_line_idx: usize = 3;
@@ -585,7 +585,7 @@ mod tests {
             let l = block.get_nth_line_header(6).get_obj_type();
             assert_eq!(l, crate::block::ObjectType::Complex);
             assert_eq!(start, 6);
-            assert_eq!(newcursor, false);
+            assert!(!newcursor);
             assert_eq!(block.cursor, 4);
             // assert_eq!(block.limit, 1);
             let (start, newcursor) = block
@@ -606,7 +606,7 @@ mod tests {
             // ......
             // |  255 | 已使用
             assert_eq!(start, 4);
-            assert_eq!(newcursor, false);
+            assert!(!newcursor);
             // assert_eq!(block.first_hole_line_idx, 255); 这个时候没hole了，此值无意义，len为0
             // assert_eq!(block.limit, 0);
 

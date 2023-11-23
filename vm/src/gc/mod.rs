@@ -45,7 +45,6 @@ mod _immix {
             trace!("malloc: {} {}", size, obj_type);
             #[cfg(any(test, debug_assertions))] // enable eager gc in test mode
             immix::gc_collect();
-            // immix::gc_disable_auto_collect();
             let re = gc_malloc(size as usize, obj_type);
             if re.is_null() && size != 0 {
                 eprintln!("gc malloc failed! (OOM)");
@@ -54,6 +53,21 @@ mod _immix {
                 exit(1);
             }
             re
+        }
+
+        pub unsafe fn disable_auto_collect() {
+            immix::gc_disable_auto_collect();
+        }
+
+        pub unsafe fn enable_auto_collect() {
+            immix::gc_enable_auto_collect();
+        }
+
+        pub unsafe fn stuck_begin() {
+            immix::thread_stuck_start();
+        }
+        pub unsafe fn stuck_end() {
+            immix::thread_stuck_end();
         }
 
         pub unsafe fn collect() {

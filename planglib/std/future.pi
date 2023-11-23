@@ -1,0 +1,14 @@
+pub trait Waker {
+    fn wake()void;
+}
+
+pub struct Pending {}
+
+pub struct Ready<T> {
+    v: T;
+}
+
+pub type Poll<T> = Ready<T> | Pending;
+pub trait Future<T> {
+    fn poll(wk: Waker) Poll<T>;
+}

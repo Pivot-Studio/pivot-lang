@@ -5,13 +5,18 @@ cmake_minimum_required(VERSION 3.5)
 # Set the project name
 project (plimmix)
 
-find_package(LLVM 14.0.0 REQUIRED CONFIG)
+find_package(LLVM 16.0.0 REQUIRED CONFIG)
 
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
 add_definitions(${LLVM_DEFINITIONS_LIST})
 include_directories(${LLVM_INCLUDE_DIRS})
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+
+if (WIN32)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
+else()
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+endif()
 
 set(SOURCES
   memory_manager.cpp

@@ -22,6 +22,7 @@ use internal_macro::{test_parser, test_parser_error};
 
 use super::{cast::as_exp, macro_parse::macro_call_op, string_literal::string_literal, *};
 
+#[test_parser("a")]
 pub fn general_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     logic_exp(input)
 }
@@ -359,6 +360,7 @@ fn closure(input: Span) -> IResult<Span, Box<NodeEnum>> {
                     paralist: args,
                     body,
                     ret,
+                    ret_id: None,
                 }
                 .into(),
             )

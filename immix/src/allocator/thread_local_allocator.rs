@@ -8,7 +8,7 @@
 
 use std::collections::VecDeque;
 
-use vector_map::VecMap;
+use rustc_hash::FxHashMap;
 
 use crate::{
     bigobj::BigObj,
@@ -127,7 +127,7 @@ impl ThreadLocalAllocator {
         self.recyclable_blocks.len() > 1
     }
 
-    pub fn fill_available_histogram(&self, histogram: &mut VecMap<usize, usize>) -> usize {
+    pub fn fill_available_histogram(&self, histogram: &mut FxHashMap<usize, usize>) -> usize {
         let mut total_available = 0;
         self.recyclable_blocks
             .iter()
@@ -343,7 +343,7 @@ impl ThreadLocalAllocator {
     /// Iterate all blocks, if a block is not marked, free it.
     /// Correct all remain blocks' headers, and classify them
     /// into recyclable blocks and unavailable blocks.
-    pub fn sweep(&mut self, mark_histogram: *mut VecMap<usize, usize>) -> usize {
+    pub fn sweep(&mut self, mark_histogram: *mut FxHashMap<usize, usize>) -> usize {
         let mut recyclable_blocks = VecDeque::new();
         let mut unavailable_blocks = Vec::new();
         let mut free_blocks = Vec::new();

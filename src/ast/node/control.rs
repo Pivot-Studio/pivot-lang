@@ -49,7 +49,7 @@ impl Node for IfNode {
         check_bool(&v, ctx, condrange, code)?;
         let v = v.unwrap();
         let cond = v.get_value();
-        let cond = ctx.try_load2var(condrange, cond, builder)?;
+        let cond = ctx.try_load2var(condrange, cond, builder, &v.get_ty().borrow())?;
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
         builder.build_conditional_branch(cond, then_block, else_block);
         // then block
@@ -136,8 +136,9 @@ impl Node for WhileNode {
         let v = self.cond.emit(ctx, builder)?.get_value();
 
         check_bool(&v, ctx, condrange, ErrorCode::WHILE_CONDITION_MUST_BE_BOOL)?;
-        let cond = v.unwrap().get_value();
-        let cond = ctx.try_load2var(condrange, cond, builder)?;
+        let v = v.unwrap();
+        let cond = v.get_value();
+        let cond = ctx.try_load2var(condrange, cond, builder, &v.get_ty().borrow())?;
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
         builder.build_conditional_branch(cond, body_block, after_block);
         ctx.position_at_end(body_block, builder);
@@ -207,8 +208,9 @@ impl Node for ForNode {
         let cond_start = self.cond.range().start;
         let v = self.cond.emit(ctx, builder)?.get_value();
         check_bool(&v, ctx, condrange, ErrorCode::FOR_CONDITION_MUST_BE_BOOL)?;
-        let cond = v.unwrap().get_value();
-        let cond = ctx.try_load2var(condrange, cond, builder)?;
+        let node_value = &v.unwrap();
+        let cond = node_value.get_value();
+        let cond = ctx.try_load2var(condrange, cond, builder, &node_value.get_ty().borrow())?;
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
         builder.build_dbg_location(self.body.range().start);
         builder.build_conditional_branch(cond, body_block, after_block);

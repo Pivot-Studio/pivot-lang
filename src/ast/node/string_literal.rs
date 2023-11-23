@@ -39,9 +39,15 @@ impl Node for StringNode {
             .map(|m| m.types.get("string").unwrap().clone())
             .unwrap_or_else(|| ctx.plmod.types.get("string").unwrap().clone());
         let alloca = builder.alloc("string", &tp.borrow(), ctx, None);
-        let len = builder.build_struct_gep(alloca, 1, "len").unwrap();
-        let byte_len = builder.build_struct_gep(alloca, 2, "byte_len").unwrap();
-        let read_arr = builder.build_struct_gep(alloca, 3, "real_arr").unwrap();
+        let len = builder
+            .build_struct_gep(alloca, 1, "len", &tp.borrow(), ctx)
+            .unwrap();
+        let byte_len = builder
+            .build_struct_gep(alloca, 2, "byte_len", &tp.borrow(), ctx)
+            .unwrap();
+        let read_arr = builder
+            .build_struct_gep(alloca, 3, "real_arr_str", &tp.borrow(), ctx)
+            .unwrap();
         builder.build_store(read_arr, v);
 
         builder.build_store(

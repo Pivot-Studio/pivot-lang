@@ -44,17 +44,16 @@ thread_local! {
 #[cfg(feature = "llvm_stackmap")]
 lazy_static! {
     static ref STACK_MAP: StackMapWrapper = {
-        StackMapWrapper {
-            map: RefCell::new(FxHashMap::default()),
-            global_roots: RefCell::new(vec![]),
-        }
+        let map = Box::into_raw(Box::default());
+        let global_roots = Box::into_raw(Box::default());
+        StackMapWrapper { map, global_roots }
     };
 }
 
 #[cfg(feature = "llvm_stackmap")]
 pub struct StackMapWrapper {
-    pub map: RefCell<FxHashMap<*const u8, Function>>,
-    pub global_roots: RefCell<Vec<*const u8>>,
+    pub map: *mut FxHashMap<*const u8, Function>,
+    pub global_roots: *mut Vec<*const u8>,
 }
 #[cfg(feature = "llvm_stackmap")]
 unsafe impl Sync for StackMapWrapper {}
@@ -131,6 +130,24 @@ pub fn gc_add_root(root: *mut u8, obj_type: u8) {
     })
 }
 
+pub fn gc_keep_live(gc_ptr: *mut u8) {
+    SPACE.with(|gc| {
+        // println!("start add_root");
+        let mut gc = gc.borrow_mut();
+        gc.keep_live(gc_ptr);
+        // println!("add_root")
+    })
+}
+
+pub fn gc_rm_live(gc_ptr: *mut u8) {
+    SPACE.with(|gc| {
+        // println!("start add_root");
+        let mut gc = gc.borrow_mut();
+        gc.rm_live(gc_ptr);
+        // println!("add_root")
+    })
+}
+
 #[cfg(feature = "shadow_stack")]
 pub fn gc_remove_root(root: *mut u8) {
     SPACE.with(|gc| {
@@ -162,35 +179,45 @@ pub fn no_gc_thread() {
 #[cfg(feature = "llvm_stackmap")]
 pub fn gc_init(ptr: *mut u8) {
     // println!("stackmap: {:?}", &STACK_MAP.map.borrow());
-    build_root_maps(
-        ptr,
-        &mut STACK_MAP.map.borrow_mut(),
-        &mut STACK_MAP.global_roots.borrow_mut(),
-    );
+    build_root_maps(ptr, unsafe { STACK_MAP.map.as_mut().unwrap() }, unsafe {
+        STACK_MAP.global_roots.as_mut().unwrap()
+    });
 }
 
-/// notify gc if a thread is going to stuck e.g.
-/// lock a mutex or doing sync io
+/// notify gc current thread is going to stuck e.g.
+/// lock a mutex or doing sync io or sleep etc.
 ///
-/// during thread stucking, if a gc is triggered, it will skip waiting for this thread to
-/// reach a safe point
+/// during thread stucking, gc will start a nanny thread to
+/// do gc works that original thread should do.
+///
+/// ## Note
+///
+/// During thread stucking, the stucking thread should not
+/// request any memory from gc, or it will cause a panic.
 pub fn thread_stuck_start() {
-    let mut v = GC_COLLECTOR_COUNT.lock();
-    v.0 -= 1;
-    GC_MARK_COND.notify_all();
-    drop(v);
+    // v.0 -= 1;
+    SPACE.with(|gc| {
+        // println!("start add_root");
+        let mut gc = gc.borrow_mut();
+        gc.stuck()
+        // println!("add_root")
+    });
 }
 
-/// notify gc a thread is not stuck anymore
+/// notify gc current thread is not stuck anymore
 ///
 /// if a gc is triggered during thread stucking, this function
 /// will block until the gc is finished
 pub fn thread_stuck_end() {
-    let mut v = GC_COLLECTOR_COUNT.lock();
-    GC_MARK_COND.wait_while(&mut v, |_| GC_RUNNING.load(Ordering::SeqCst));
-    v.0 += 1;
-    GC_MARK_COND.notify_all();
-    drop(v);
+    log::trace!("unstucking...");
+    spin_until!(!GC_RUNNING.load(Ordering::SeqCst));
+    // v.0 += 1;
+    SPACE.with(|gc| {
+        // println!("start add_root");
+        let mut gc = gc.borrow_mut();
+        gc.unstuck()
+        // println!("add_root")
+    });
 }
 
 /// # set evacuation

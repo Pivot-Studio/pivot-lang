@@ -1,13 +1,14 @@
 #![allow(improper_ctypes_definitions)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::process::exit;
+use std::{process::exit, sync::mpsc::channel, thread};
 
 use backtrace::Backtrace;
 use internal_macro::is_runtime;
 pub mod gc;
 pub mod libcwrap;
 pub mod logger;
+pub mod mutex;
 
 #[is_runtime]
 fn test_vm_link() -> i64 {
@@ -62,12 +63,44 @@ fn print_i64(i: i64) {
 }
 
 #[is_runtime]
-fn print_i128(i: i128) {
-    print!("{}", i);
+fn new_thread(f: *mut i128) {
+    // f's first 8 byte is fn pointer, next 8 byte is data pointer
+    let ptr = f as *const i64;
+    let f_ptr = ptr as *const extern "C" fn(i64);
+    let data_ptr = unsafe { *ptr.offset(1) };
+    let func = unsafe { *f_ptr };
+    let (s, r) = channel::<()>();
+    let ptr_i = ptr as i64;
+    // immix::gc_add_root(data_ptr  as *mut _, ObjectType::Pointer.int_value());
+    let c = move || {
+        // thread::sleep(std::time::Duration::from_secs(1));
+        immix::gc_keep_live(ptr_i as _);
+        // immix::gc_add_root(&mut f as *mut _ as *mut _, ObjectType::Trait.int_value());
+        s.send(()).unwrap();
+        func(data_ptr);
+        // immix::gc_remove_root(&mut f as *mut _ as *mut _);
+        immix::gc_rm_live(ptr_i as _);
+        immix::no_gc_thread();
+    };
+    thread::spawn(c);
+    r.recv().unwrap();
 }
 
 #[is_runtime]
-fn print_u64(i: u64) {
+fn sleep(secs: u64) {
+    gc::DioGC__stuck_begin();
+    println!("sleeping for {} secs", secs);
+    thread::sleep(std::time::Duration::from_secs(secs));
+    gc::DioGC__stuck_end();
+    println!("sleeping done");
+}
+
+#[is_runtime]
+fn print_u64(u: u64) {
+    println!("u64( {} )", u);
+}
+#[is_runtime]
+fn print_i128(i: i128) {
     print!("{}", i);
 }
 
