@@ -63,17 +63,18 @@ make test
 
 ### No suitable version of LLVM was found system-wide or pointed
 
-需要设置llvm环境变量，如果你使用的是ubuntu，可以在`~/.bashrc`中加入如下代码然后执行.
+需要设置llvm环境变量，如果你使用的是ubuntu，可以执行如下脚本.
 
 ```bash
-export LLVM_SYS_160_PREFIX=/usr/lib/llvm-16
+echo "export LLVM_SYS_160_PREFIX=/usr/lib/llvm-16" >> ~/.bashrc
 source ~/.bashrc
 ```
 
 如果是macOS通过`brew install llvm@16`安装，则需要设置环境变量:
 
 ```bash
-export LLVM_SYS_160_PREFIX=$(brew --prefix llvm@16)
+echo "export LLVM_SYS_160_PREFIX=$(brew --prefix llvm@16)" >> ~/.bashrc
+source ~/.bashrc
 ```
 
 ### Could NOT find ZLIB (missing: ZLIB_LIBRARY ZLIB_INCLUDE_DIR)
@@ -89,5 +90,6 @@ sudo apt install zlib1g-dev
 在Mac上出现时，可能是缺少`LIBRARY_PATH`环境变量
 
 ```bash
-export LIBRARY_PATH=$LIBRARY_PATH:$(brew --prefix zstd)/lib
+echo "export LIBRARY_PATH=$LIBRARY_PATH:$(brew --prefix zstd)/lib" >> ~/.bashrc
+source ~/.bashrc
 ```
