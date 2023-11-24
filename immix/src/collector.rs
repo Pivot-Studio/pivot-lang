@@ -215,26 +215,47 @@ impl Collector {
         self.roots.remove(&(root));
     }
 
-    /// used to correct forward pointer
+    /// # correct_ptr
+    /// 
+    /// used to correct forward pointer in `evacuation`
     ///
+    /// ## 一般情况
+    /// 
     /// 原本
     ///
+    /// ```
     /// ptr -> heap_ptr -> value
+    /// ```
     ///
     /// evacuate之后
     ///
+    /// ```
     /// ptr -> heap_ptr -> new_ptr(forwarded) -> value
-    ///
+    /// ```
+    /// 
     /// 现在纠正为
     ///
+    /// ```
     /// ptr -> new_ptr(forwarded) -> value
+    /// ```
+    /// 
+    /// ## 特殊情况
+    /// 
+    /// 有时候gc接触的指针不是原本的堆指针，他有个offset（derived pointer）
+    /// 这种情况下我们需要找到原本的堆指针，然后加上一个offset，这样才能纠正
+    /// 
+    /// ## Parameters
+    /// 
+    /// * `ptr` - pointer which points to the evacuated heap pointer
+    /// * `offset` - offset from derived pointer to heap pointer
     unsafe fn correct_ptr(&self, ptr: *mut u8, offset: isize) {
-        let ptr = ptr as *mut AtomicPtr<*mut u8>;
-        let new_ptr = *(*ptr).load(Ordering::SeqCst);
-        let ptr = ptr as *mut *mut u8;
+        let father = ptr as *mut*mut u8;
+        let ptr =         AtomicPtr::new( (*father).offset(-offset) as *mut*mut u8);
+        let ptr = ptr.load(Ordering::SeqCst);
+        let new_ptr = *ptr;
         debug_assert!(!new_ptr.is_null());
         log::trace!("gc {} correct ptr {:p} to {:p}", self.id, ptr, new_ptr);
-        *ptr = new_ptr.offset(offset);
+        *father = new_ptr.offset(offset);
     }
 
     #[cfg(feature = "llvm_gc_plugin")]

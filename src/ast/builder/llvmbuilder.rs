@@ -377,6 +377,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             // init the array size
             if arr.size_handle != 0 {
                 let f = self.get_malloc_f(ctx, "DioGC__malloc");
+                // every heap pointer has possible to move after malloc(if this malloc triigers gc's evacuation) so we need to reload it
+                let casted_result = self.builder.build_load(self.i8ptr(), stack_ptr, "reload").unwrap();
                 // let f = self.get_malloc_f(ctx, "DioGC__malloc_no_collect");
                 let etp = self
                     .get_basic_type_op(&arr.element_type.borrow(), ctx)
@@ -1751,6 +1753,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         ret_type: &PLType,
         ctx: &mut Ctx<'a>,
     ) -> Option<ValueHandle> {
+        // malloc ret after call is not safe, as malloc may trigger collection
+        // 不仅要在调用前分配，还要在get_llvm_value之前，否则如果这次malloc触发了回收和驱逐算法
+        // 我们load出来的heap ptr可能就move掉了
+        let alloca = if matches!(ret_type, PLType::Void | PLType::Primitive(_)) {
+            0
+        } else {
+            self.alloc_raw("ret_alloca", ret_type, ctx, None, "DioGC__malloc")
+        };
         let builder = self.builder;
         let f = self.get_llvm_value(f).unwrap();
         let f = if f.is_function_value() {
@@ -1769,12 +1779,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .unzip();
         let dbg = builder.get_current_debug_location();
         let bb = builder.get_insert_block().unwrap();
-        // malloc ret after call is not safe, as malloc may trigger collection
-        let alloca = if matches!(ret_type, PLType::Void | PLType::Primitive(_)) {
-            0
-        } else {
-            self.alloc_raw("ret_alloca", ret_type, ctx, None, "DioGC__malloc")
-        };
         if let Some(dbg) = dbg {
             if builder
                 .get_insert_block()
@@ -1970,43 +1974,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     ) -> Result<ValueHandle, String> {
         let structv = self.get_llvm_value(structv).unwrap();
         let structv = structv.into_pointer_value();
-        let obj_tp = match tp {
-            PLType::Struct(stpltype) => {
-                let fs = stpltype.get_all_field();
-                if fs.len() <= index as usize {
-                    ObjectType::Atomic
-                    
-                }else {
-                    ctx.run_in_type_mod(stpltype, |ctx, stpltype| {
-                        fs[index as usize]
-                        .typenode
-                        .get_type(ctx, &self.clone().into(), true)
-                        .unwrap().borrow().get_immix_type()
-                    })   
-                }
-            },
-            _ => ObjectType::Atomic,
-        };
         let sttp = self.get_basic_type_op(tp, ctx).unwrap();
         let gep = self.builder.build_struct_gep(sttp, structv, index, name);
         if let Ok(gep) = gep {
-            let geptp = sttp
-                .into_struct_type()
-                .get_field_type_at_index(index)
-                .unwrap();
-            if geptp.is_pointer_type() {
-                let loadgep = self
-                    .builder
-                    .build_load(geptp, gep, "field_heap_ptr")
-                    .unwrap();
-                self.create_root_for(loadgep);
-                return Ok(self.get_llvm_value_handle(&gep.as_any_value_enum()));
-            } else {
-                if obj_tp!=ObjectType::Atomic {
-                    self.tag_root(gep.as_basic_value_enum(), obj_tp );   
-                }
-                return Ok(self.get_llvm_value_handle(&gep.as_any_value_enum()));
-            }
+            // 这里的gep是个derived pointer，它也是对heap pointer的引用，为了
+            // 保证evacuation正确性需要添加root
+            self.create_root_for(gep.as_basic_value_enum());
+            return Ok(self.get_llvm_value_handle(&gep.as_any_value_enum()));
         } else {
             Err(format!("{:?}\ntp: {:?}\nindex: {}", gep, tp, index))
         }
@@ -2049,16 +2023,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 )
                 .unwrap()
         };
-        if tp.is_pointer_type() {
-            let loadgep = self
-                .builder
-                .build_load(self.i8ptr(), gep, "field_heap_ptr")
-                .unwrap();
-            self.create_root_for(loadgep);
-            return self.get_llvm_value_handle(&gep.as_any_value_enum());
-        } else {
-            return self.get_llvm_value_handle(&gep.as_any_value_enum());
-        }
+        // same reason as build_struct_gep
+        self.create_root_for(gep.as_basic_value_enum());
+        return self.get_llvm_value_handle(&gep.as_any_value_enum());
     }
     fn build_in_bounds_gep(
         &self,
@@ -2084,6 +2051,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 )
                 .unwrap()
         };
+        // same reason as build_struct_gep
+        self.create_root_for(gep.as_basic_value_enum());
         self.get_llvm_value_handle(&gep.as_any_value_enum())
     }
     fn const_string(&self, s: &str) -> ValueHandle {
@@ -2604,6 +2573,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.builder.get_current_debug_location().unwrap(),
             self.get_llvm_block(allocab).unwrap(),
         );
+
         if child.ctx_flag == CtxFlag::InGeneratorYield {
             let data = child.generator_data.as_ref().unwrap().clone();
             let bb_v = data.borrow().entry_bb;
@@ -2611,6 +2581,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             let funcvalue = bb.get_parent().unwrap();
             let origin_bb = child.block.unwrap();
             self.position_at_end_block(bb_v);
+            child.ctx_flag = CtxFlag::Normal;
+            let ptr = self.alloc("param_ptr", tp, child, None);
+            child.ctx_flag = CtxFlag::InGeneratorYield;
             let ctx_v = data.borrow().ctx_handle;
             let para_ptr = self
                 .build_struct_gep(
@@ -2621,9 +2594,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                     child,
                 )
                 .unwrap();
-            child.ctx_flag = CtxFlag::Normal;
-            let ptr = self.alloc("param_ptr", tp, child, None);
-            child.ctx_flag = CtxFlag::InGeneratorYield;
+
             self.build_store(
                 ptr,
                 self.get_llvm_value_handle(
