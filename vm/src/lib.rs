@@ -54,13 +54,6 @@ fn int_to_ptr(i: i64) -> *const u8 {
 #[is_runtime]
 fn print_raw(bs: *const u8, len: i64) {
     let re = std::str::from_utf8(unsafe { std::slice::from_raw_parts(bs, len as usize) });
-    if let Err(e) = re {
-        let len = e.valid_up_to();
-        let re =
-            std::str::from_utf8(unsafe { std::slice::from_raw_parts(bs, len as usize) }).unwrap();
-        println!("invalid utf8: {}", re);
-        return;
-    }
     let s = re.unwrap();
     print!("{}", s);
 }
@@ -82,12 +75,13 @@ fn new_thread(f: *mut i128) {
     // immix::gc_add_root(data_ptr  as *mut _, ObjectType::Pointer.int_value());
     let c = move || {
         // thread::sleep(std::time::Duration::from_secs(1));
-        immix::gc_keep_live(ptr_i as _);
+        let handle = immix::gc_keep_live(ptr_i as _);
+        // immix::set_evacuation(false);
         // immix::gc_add_root(&mut f as *mut _ as *mut _, ObjectType::Trait.int_value());
         s.send(()).unwrap();
         func(data_ptr);
         // immix::gc_remove_root(&mut f as *mut _ as *mut _);
-        immix::gc_rm_live(ptr_i as _);
+        immix::gc_rm_live(handle);
         immix::no_gc_thread();
     };
     thread::spawn(c);

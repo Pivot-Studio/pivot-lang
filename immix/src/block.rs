@@ -42,7 +42,8 @@ pub trait LineHeaderExt {
     fn get_is_used_follow(&self) -> bool;
     fn get_obj_line_size(&self, idx: usize, block: &mut Block) -> usize;
     fn set_forwarded(&mut self, forwarded: bool);
-    fn get_forwarded(&self) -> bool;
+    fn get_forwarded(&self) -> (bool, LineHeader);
+    fn forward_cas(&mut self, old: u8) -> bool;
 }
 
 /// A block is a 32KB memory region.
@@ -119,9 +120,19 @@ impl LineHeaderExt for LineHeader {
         }
     }
     #[inline]
-    fn get_forwarded(&self) -> bool {
+    fn get_forwarded(&self) -> (bool, LineHeader) {
         let atom_self = self as *const u8 as *const AtomicU8;
-        unsafe { (*atom_self).load(Ordering::Acquire) & 0b1000000 == 0b1000000 }
+        let load = unsafe { (*atom_self).load(Ordering::Acquire) };
+        (load & 0b1000000 == 0b1000000, load)
+    }
+    #[inline]
+    fn forward_cas(&mut self, old: u8) -> bool {
+        let atom_self = self as *mut u8 as *mut AtomicU8;
+        unsafe {
+            (*atom_self)
+                .compare_exchange(old, old | 0b1000000, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+        }
     }
 
     fn get_obj_line_size(&self, idx: usize, block: &mut Block) -> usize {
@@ -222,7 +233,10 @@ impl Block {
 
     /// # correct_header
     /// 回收的最后阶段，重置block的header
-    pub unsafe fn correct_header(&mut self, mark_histogram: *mut FxHashMap<usize, usize>) -> usize {
+    pub unsafe fn correct_header(
+        &mut self,
+        mark_histogram: *mut FxHashMap<usize, usize>,
+    ) -> (usize, usize) {
         let mut idx = 3;
         let mut len = 0;
         let mut first_hole_line_idx: usize = 3;
@@ -231,6 +245,7 @@ impl Block {
         // 这个marked代表之前是否有被标记的对象头出现
         let mut marked = false;
         let mut marked_num = 0;
+        let curr_avai = self.available_line_num;
         self.available_line_num = 0;
 
         while idx < NUM_LINES_PER_BLOCK {
@@ -283,7 +298,7 @@ impl Block {
         } else {
             (*mark_histogram).insert(self.hole_num, marked_num);
         }
-        marked_num
+        (marked_num, self.available_line_num - curr_avai)
     }
 
     /// # find_next_hole

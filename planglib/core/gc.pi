@@ -12,6 +12,8 @@ pub fn DioGC__stuck_begin() void;
 
 pub fn DioGC__stuck_end() void;
 
+pub fn DioGC__set_eva(ev:bool) void;
+
 pub fn malloc<T>() *u8 {
     return DioGC__malloc(sizeof<T>(), gc_type<T>());
 }

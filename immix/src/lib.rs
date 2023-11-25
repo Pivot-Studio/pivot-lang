@@ -130,20 +130,20 @@ pub fn gc_add_root(root: *mut u8, obj_type: u8) {
     })
 }
 
-pub fn gc_keep_live(gc_ptr: *mut u8) {
+pub fn gc_keep_live(gc_ptr: *mut u8) -> u64 {
     SPACE.with(|gc| {
         // println!("start add_root");
-        let mut gc = gc.borrow_mut();
-        gc.keep_live(gc_ptr);
+        let gc = gc.borrow();
+        gc.keep_live(gc_ptr)
         // println!("add_root")
     })
 }
 
-pub fn gc_rm_live(gc_ptr: *mut u8) {
+pub fn gc_rm_live(handle: u64) {
     SPACE.with(|gc| {
         // println!("start add_root");
-        let mut gc = gc.borrow_mut();
-        gc.rm_live(gc_ptr);
+        let gc = gc.borrow();
+        gc.rm_live(handle);
         // println!("add_root")
     })
 }

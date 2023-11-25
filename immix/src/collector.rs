@@ -9,7 +9,7 @@ use std::{
 
 use libc::malloc;
 use parking_lot::{Condvar, Mutex};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 
 #[cfg(feature = "llvm_stackmap")]
 use crate::STACK_MAP;
@@ -45,7 +45,7 @@ pub struct Collector {
     status: RefCell<CollectorStatus>,
     frames_list: AtomicPtr<Vec<(*mut libc::c_void, *mut libc::c_void)>>,
     shadow_thread_running: AtomicBool,
-    live_set: FxHashSet<*mut u8>,
+    live_set: RefCell<FxHashMap<u64, *mut u8>>,
 }
 
 struct CollectorStatus {
@@ -120,7 +120,7 @@ impl Collector {
                 }),
                 frames_list: AtomicPtr::default(),
                 shadow_thread_running: AtomicBool::new(false),
-                live_set: FxHashSet::default(),
+                live_set: RefCell::new(FxHashMap::default()),
             }
         }
     }
@@ -156,6 +156,9 @@ impl Collector {
     /// ## Return
     /// * `ptr` - object pointer
     pub fn alloc(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
+        if !self.frames_list.load(Ordering::SeqCst).is_null() {
+            panic!("gc stucked, can not alloc")
+        }
         if gc_is_auto_collect_enabled() {
             if GC_RUNNING.load(Ordering::Acquire) {
                 self.collect();
@@ -176,9 +179,6 @@ impl Collector {
     fn alloc_raw(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
         if size == 0 {
             return std::ptr::null_mut();
-        }
-        if !self.frames_list.load(Ordering::SeqCst).is_null() {
-            panic!("gc stucked, can not alloc")
         }
         unsafe {
             let ptr = self
@@ -297,11 +297,14 @@ impl Collector {
             let is_candidate = block.is_eva_candidate();
             let mut head = block.get_head_ptr(ptr);
             let offset_from_head = ptr.offset_from(head);
+            let mut old_h = 0;
             if !is_candidate {
                 block.marked = true;
             } else {
                 let (line_header, _) = block.get_line_header_from_addr(head);
-                if line_header.get_forwarded() {
+                let (forward, h) = line_header.get_forwarded();
+                old_h = h;
+                if forward {
                     self.correct_ptr(father, offset_from_head);
                     return;
                 }
@@ -314,6 +317,11 @@ impl Collector {
             if is_candidate {
                 let atomic_ptr = head as *mut AtomicPtr<u8>;
                 let old_loaded = (*atomic_ptr).load(Ordering::SeqCst);
+                let (forward, _) = line_header.get_forwarded();
+                if forward {
+                    self.correct_ptr(father, offset_from_head);
+                    return;
+                }
                 let obj_line_size = line_header.get_obj_line_size(idx, Block::from_obj_ptr(head));
                 let new_ptr = self.alloc_raw(obj_line_size * LINE_SIZE, line_header.get_obj_type());
                 if !new_ptr.is_null() {
@@ -330,20 +338,21 @@ impl Collector {
                     // 标记位，所以这块地址很快会在sweep阶段被识别并且回收利用。
                     // 虽然这造成了一定程度的内存碎片化和潜在的重复操作，但是
                     // 这种情况理论上是很少见的，所以这么做问题不大
-                    if (*atomic_ptr)
+                    let ok1 = (*atomic_ptr)
                         .compare_exchange(old_loaded, new_ptr, Ordering::SeqCst, Ordering::SeqCst)
-                        .is_ok()
-                    {
+                        .is_ok();
+                    let ok2 = line_header.forward_cas(old_h);
+                    if ok1 || ok2 {
                         // 成功驱逐
+                        let new_ptr = (*atomic_ptr).load(Ordering::SeqCst);
                         log::trace!("gc {}: eva {:p} to {:p}", self.id, head, new_ptr);
                         new_line_header.set_marked(true);
-                        line_header.set_forwarded(true);
                         new_block.marked = true;
                         head = new_ptr;
                         self.correct_ptr(father, offset_from_head);
                     } else {
                         // 期间别的线程驱逐了它
-                        spin_until!(line_header.get_forwarded());
+                        spin_until!(line_header.get_forwarded().0);
                         self.correct_ptr(father, offset_from_head);
                         return;
                     }
@@ -420,11 +429,13 @@ impl Collector {
         let ptr = loaded.offset(1);
         self.mark_ptr(ptr as *mut u8);
     }
-    pub fn keep_live(&mut self, gc_ptr: *mut u8) {
-        self.live_set.insert(gc_ptr);
+    pub fn keep_live(&self, gc_ptr: *mut u8) -> u64 {
+        let len = self.live_set.borrow().len();
+        self.live_set.borrow_mut().insert(len as _, gc_ptr);
+        len as _
     }
-    pub fn rm_live(&mut self, gc_ptr: *mut u8) {
-        self.live_set.remove(&gc_ptr);
+    pub fn rm_live(&self, handle: u64) {
+        self.live_set.borrow_mut().remove(&handle);
     }
     pub fn print_stats(&self) {
         println!("gc {} states:", self.id);
@@ -488,11 +499,6 @@ impl Collector {
                         _ => (*self.queue).push((*root, *obj_type)),
                     }
                 }
-            }
-        }
-        for live in self.live_set.iter() {
-            unsafe {
-                self.mark_ptr(live as *const _ as _);
             }
         }
         log::trace!("gc {}: marking...", self.id);
@@ -571,6 +577,19 @@ impl Collector {
                 }
             }
         }
+        let mut lives = vec![];
+        for (i, live) in self.live_set.borrow().iter() {
+            unsafe {
+                let p = live as *const _ as _;
+                self.mark_ptr(p);
+                let p = p as *mut *mut u8;
+                lives.push((*i, *p));
+            }
+        }
+        self.live_set.borrow_mut().clear();
+        for (i, live) in lives {
+            self.live_set.borrow_mut().insert(i, live);
+        }
 
         let mut v = GC_COLLECTOR_COUNT.lock();
         let (count, mut waiting) = *v;
@@ -604,7 +623,7 @@ impl Collector {
     /// # sweep
     ///
     /// since we did synchronization in mark, we don't need to do synchronization again in sweep
-    pub fn sweep(&self) -> usize {
+    pub fn sweep(&self) -> (usize, usize) {
         GC_SWEEPPING_NUM.fetch_add(1, Ordering::AcqRel);
         GC_SWEEPING.store(true, Ordering::Release);
         log::trace!("gc {}: sweeping...", self.id);
@@ -614,7 +633,8 @@ impl Collector {
                 .unwrap()
                 .sweep(self.mark_histogram)
         };
-        self.status.borrow_mut().collect_threshold = (used as f64 * THRESHOLD_PROPORTION) as usize;
+        self.status.borrow_mut().collect_threshold =
+            (used.0 as f64 * THRESHOLD_PROPORTION) as usize;
         let v = GC_SWEEPPING_NUM.fetch_sub(1, Ordering::AcqRel);
         if v - 1 == 0 {
             GC_SWEEPING.store(false, Ordering::Release);
@@ -651,7 +671,7 @@ impl Collector {
         // 他要设置每个block是否是驱逐目标
         // 如果设置的时候别的线程的mark已经开始，那么将无法保证能够纠正所有被驱逐的指针
         unsafe {
-            if ENABLE_EVA.load(Ordering::Relaxed)
+            if ENABLE_EVA.load(Ordering::SeqCst)
                 && self.thread_local_allocator.as_mut().unwrap().should_eva()
             {
                 // 如果需要驱逐，首先计算驱逐阀域
@@ -694,7 +714,7 @@ impl Collector {
         }
         self.mark();
         // let mark_time = time.elapsed();
-        let _used = self.sweep();
+        let (_used, free) = self.sweep();
         // let sweep_time = time.elapsed() - mark_time;
         unsafe {
             self.thread_local_allocator
@@ -703,10 +723,10 @@ impl Collector {
                 .set_collect_mode(false);
         }
         log::info!(
-            "gc {} collect done, used heap size: {} byte",
+            "gc {} collect done, used heap size: {} bytes, freed {} bytes in this gc",
             self.id,
             _used,
-            // start_time.elapsed()
+            free
         );
         let mut status = self.status.borrow_mut();
         status.collecting = false;
