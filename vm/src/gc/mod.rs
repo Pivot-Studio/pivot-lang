@@ -52,6 +52,7 @@ mod _immix {
                 println!("{:?}", bt);
                 exit(1);
             }
+            // eprintln!("malloc: {:p}", re);
             re
         }
 

@@ -627,6 +627,7 @@ impl FuncDefNode {
                 let allocab = builder.append_basic_block(funcvalue, "alloc");
                 let entry = builder.append_basic_block(funcvalue, "entry");
                 if self.generator {
+                    builder.tag_generator_ctx_as_root(funcvalue, child);
                     generator::save_generator_init_block(builder, child, entry);
                 }
                 let return_block = builder.append_basic_block(funcvalue, "return");
@@ -863,7 +864,11 @@ impl Node for ClosureNode {
     ) -> NodeResult {
         // 设计： https://github.com/Pivot-Studio/pivot-lang/issues/284
         let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap().tp);
-        let closure_name = format!("closure_{}", CLOSURE_COUNT.fetch_add(1, Ordering::Relaxed));
+        let closure_name = format!(
+            "closure_line{}_{}",
+            self.range.start.line,
+            CLOSURE_COUNT.fetch_add(1, Ordering::Relaxed)
+        );
         let mut st_tp = STType {
             name: closure_name.clone(),
             path: ctx.plmod.path.clone(),
@@ -1023,7 +1028,13 @@ impl Node for ClosureNode {
             );
 
             let parapltype = tp;
-            builder.create_closure_parameter_variable(i as u32 + 1, f, alloca);
+            builder.create_closure_parameter_variable(
+                i as u32 + 1,
+                f,
+                alloca,
+                allocab,
+                &parapltype.borrow(),
+            );
             child
                 .add_symbol(
                     self.paralist[i].0.name.clone(),

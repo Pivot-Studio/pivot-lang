@@ -20,6 +20,13 @@ use super::{
 
 #[enum_dispatch]
 pub trait IRBuilder<'a, 'ctx> {
+    fn create_params_roots(
+        &self,
+        f: ValueHandle,
+        allocab: ValueHandle,
+        params: &[Arc<RefCell<PLType>>],
+    );
+    fn tag_generator_ctx_as_root(&self, f: ValueHandle, ctx: &mut Ctx<'a>);
     fn bitcast(&self, ctx: &mut Ctx<'a>, from: ValueHandle, to: &PLType, name: &str)
         -> ValueHandle;
     fn pointer_cast(
@@ -226,7 +233,14 @@ pub trait IRBuilder<'a, 'ctx> {
     ) -> ValueHandle;
     fn i8ptr_null(&self) -> ValueHandle;
     fn get_closure_trampoline(&self, f: ValueHandle) -> ValueHandle;
-    fn create_closure_parameter_variable(&self, i: u32, f: ValueHandle, alloca: ValueHandle);
+    fn create_closure_parameter_variable(
+        &self,
+        i: u32,
+        f: ValueHandle,
+        alloca: ValueHandle,
+        allocab: BlockHandle,
+        tp: &PLType,
+    );
     fn get_nth_param(&self, f: ValueHandle, i: u32) -> ValueHandle;
     fn add_closure_st_field(&self, st: &STType, field: ValueHandle, ctx: &mut Ctx<'a>);
     fn build_sub_program_by_pltp(

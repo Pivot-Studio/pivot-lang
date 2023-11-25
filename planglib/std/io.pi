@@ -63,6 +63,11 @@ impl File {
         return ar.get_slice();
     }
 
+    pub fn close() void {
+        LibC__close(self.fd);
+        return;
+    }
+
     pub fn read_all_as_string() Result<string|IoError> {
         let slice = self.read_all();
         

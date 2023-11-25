@@ -428,6 +428,13 @@ impl PLType {
             PLType::Trait(_) => ObjectType::Trait,
             PLType::Union(_) => ObjectType::Trait, // share same layout as trait
             PLType::Closure(_) => ObjectType::Trait, // share same layout as trait
+            PLType::Generic(g) => {
+                if g.curpltype.is_some() {
+                    g.curpltype.as_ref().unwrap().borrow().get_immix_type()
+                } else {
+                    ObjectType::Atomic
+                }
+            }
             _ => ObjectType::Atomic,
         }
     }

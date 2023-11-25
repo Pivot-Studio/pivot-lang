@@ -457,7 +457,15 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         f
     }
 
-    fn create_closure_parameter_variable(&self, _i: u32, _f: ValueHandle, _alloca: ValueHandle) {}
+    fn create_closure_parameter_variable(
+        &self,
+        _i: u32,
+        _f: ValueHandle,
+        _alloca: ValueHandle,
+        _allocab: super::BlockHandle,
+        _tp: &PLType,
+    ) {
+    }
 
     fn get_nth_param(&self, f: ValueHandle, _i: u32) -> ValueHandle {
         f
@@ -587,4 +595,12 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         0
     }
     fn set_di_file(&self, _f: &str) {}
+    fn tag_generator_ctx_as_root(&self, _f: ValueHandle, _ctx: &mut Ctx<'a>) {}
+    fn create_params_roots(
+        &self,
+        _f: ValueHandle,
+        _allocab: ValueHandle,
+        _params: &[Arc<RefCell<PLType>>],
+    ) {
+    }
 }

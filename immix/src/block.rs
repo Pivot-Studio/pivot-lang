@@ -65,6 +65,7 @@ pub struct Block {
     hole_num: usize,
     available_line_num: usize,
     eva_target: bool,
+    pub eva_alloced: bool,
 }
 
 impl HeaderExt for u8 {
@@ -170,6 +171,7 @@ impl Block {
                 hole_num: 1,
                 available_line_num: NUM_LINES_PER_BLOCK - 3,
                 eva_target: false,
+                eva_alloced: false,
             });
 
             &mut *ptr
@@ -275,6 +277,7 @@ impl Block {
         self.marked = false;
         self.hole_num = holes;
         self.eva_target = false;
+        self.eva_alloced = false;
         if let Some(count) = (*mark_histogram).get_mut(&self.hole_num) {
             *count += marked_num;
         } else {

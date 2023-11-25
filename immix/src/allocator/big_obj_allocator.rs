@@ -101,7 +101,7 @@ impl BigObjAllocator {
     pub fn return_chunk(&mut self, obj: *mut BigObj) {
         let _lock = self.lock.lock();
         let size = unsafe { (*obj).size };
-        println!("ret_chunk: {:p}[size {}]", obj, size);
+        // println!("ret_chunk: {:p}[size {}]", obj, size);
         let mut merged = false;
         // 合并相邻free_obj
         for i in 0..self.unused_chunks.len() {

@@ -53,7 +53,15 @@ fn int_to_ptr(i: i64) -> *const u8 {
 
 #[is_runtime]
 fn print_raw(bs: *const u8, len: i64) {
-    let s = std::str::from_utf8(unsafe { std::slice::from_raw_parts(bs, len as usize) }).unwrap();
+    let re = std::str::from_utf8(unsafe { std::slice::from_raw_parts(bs, len as usize) });
+    if let Err(e) = re {
+        let len = e.valid_up_to();
+        let re =
+            std::str::from_utf8(unsafe { std::slice::from_raw_parts(bs, len as usize) }).unwrap();
+        println!("invalid utf8: {}", re);
+        return;
+    }
+    let s = re.unwrap();
     print!("{}", s);
 }
 

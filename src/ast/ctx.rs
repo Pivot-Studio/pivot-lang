@@ -606,7 +606,7 @@ impl<'a, 'ctx> Ctx<'a> {
                                     )
                                     .unwrap(),
                                 "closure_loaded",
-                                &PLType::Pointer(Arc::new(RefCell::new(PLType::new_i8_ptr()))),
+                                &PLType::new_i8_ptr(),
                                 unsafe { &mut *ptr },
                             ),
                             ..new_symbol

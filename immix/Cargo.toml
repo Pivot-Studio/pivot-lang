@@ -51,3 +51,4 @@ semver = "1.0"
 
 [lib]
 bench = false
+doctest = false

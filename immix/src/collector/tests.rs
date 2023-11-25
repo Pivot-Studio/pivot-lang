@@ -58,6 +58,7 @@ extern "C" fn gctest_vtable_big(
 }
 #[test]
 fn test_basic_multiple_thread_gc() {
+    ENABLE_EVA.store(false, Ordering::SeqCst);
     let _lock = THE_RESOURCE.lock();
     let mut handles = vec![];
     gc_disable_auto_collect();

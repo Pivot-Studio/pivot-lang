@@ -124,7 +124,14 @@ impl ThreadLocalAllocator {
     ///
     /// whether the collection should run evacuation algorithm
     pub fn should_eva(&self) -> bool {
-        self.recyclable_blocks.len() > 1
+        #[cfg(debug_assertions)]
+        {
+            true
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            self.recyclable_blocks.len() > 1
+        }
     }
 
     pub fn fill_available_histogram(&self, histogram: &mut FxHashMap<usize, usize>) -> usize {
@@ -144,11 +151,22 @@ impl ThreadLocalAllocator {
         total_available
     }
 
-    pub fn set_eva_threshold(&mut self, threshold: usize) {
+    pub fn set_eva_threshold(&mut self, _threshold: usize) {
         self.recyclable_blocks
             .iter()
             .chain(self.unavailable_blocks.iter())
-            .for_each(|block| unsafe { (**block).set_eva_threshold(threshold) });
+            .for_each(|block| unsafe {
+                (**block).set_eva_threshold({
+                    #[cfg(not(debug_assertions))]
+                    {
+                        _threshold
+                    }
+                    #[cfg(debug_assertions)]
+                    {
+                        0
+                    }
+                })
+            });
     }
 
     /// # get_size
@@ -321,11 +339,19 @@ impl ThreadLocalAllocator {
     ///
     /// * `*mut Block` - block pointer
     fn get_new_block(&mut self) -> *mut Block {
-        if self.collect_mode && !self.eva_blocks.is_empty() {
-            return self.eva_blocks.pop().unwrap();
+        let block = if self.collect_mode && !self.eva_blocks.is_empty() {
+            self.eva_blocks.pop().unwrap()
+        } else {
+            unsafe { (*self.global_allocator).get_block() }
+        };
+        if self.collect_mode {
+            // is evacuation mode
+            unsafe {
+                (*block).marked = true;
+                (*block).eva_alloced = true;
+            }
         }
-
-        unsafe { (*self.global_allocator).get_block() }
+        block
     }
 
     /// # in_heap

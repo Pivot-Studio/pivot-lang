@@ -156,12 +156,6 @@ impl Collector {
     /// ## Return
     /// * `ptr` - object pointer
     pub fn alloc(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
-        if size == 0 {
-            return std::ptr::null_mut();
-        }
-        if !self.frames_list.load(Ordering::SeqCst).is_null() {
-            panic!("gc stucked, can not alloc")
-        }
         if gc_is_auto_collect_enabled() {
             if GC_RUNNING.load(Ordering::Acquire) {
                 self.collect();
@@ -175,6 +169,16 @@ impl Collector {
             }
             let mut status = self.status.borrow_mut();
             status.bytes_allocated_since_last_gc += ((size - 1) / LINE_SIZE + 1) * LINE_SIZE;
+        }
+        self.alloc_raw(size, obj_type)
+    }
+
+    fn alloc_raw(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
+        if size == 0 {
+            return std::ptr::null_mut();
+        }
+        if !self.frames_list.load(Ordering::SeqCst).is_null() {
+            panic!("gc stucked, can not alloc")
         }
         unsafe {
             let ptr = self
@@ -216,45 +220,51 @@ impl Collector {
     }
 
     /// # correct_ptr
-    /// 
+    ///
     /// used to correct forward pointer in `evacuation`
     ///
     /// ## 一般情况
-    /// 
+    ///
     /// 原本
     ///
-    /// ```
+    /// ```no_run
     /// ptr -> heap_ptr -> value
     /// ```
     ///
     /// evacuate之后
     ///
-    /// ```
+    /// ```no_run
     /// ptr -> heap_ptr -> new_ptr(forwarded) -> value
     /// ```
-    /// 
+    ///
     /// 现在纠正为
     ///
-    /// ```
+    /// ```no_run
     /// ptr -> new_ptr(forwarded) -> value
     /// ```
-    /// 
+    ///
     /// ## 特殊情况
-    /// 
+    ///
     /// 有时候gc接触的指针不是原本的堆指针，他有个offset（derived pointer）
     /// 这种情况下我们需要找到原本的堆指针，然后加上一个offset，这样才能纠正
-    /// 
+    ///
     /// ## Parameters
-    /// 
+    ///
     /// * `ptr` - pointer which points to the evacuated heap pointer
     /// * `offset` - offset from derived pointer to heap pointer
     unsafe fn correct_ptr(&self, ptr: *mut u8, offset: isize) {
-        let father = ptr as *mut*mut u8;
-        let ptr =         AtomicPtr::new( (*father).offset(-offset) as *mut*mut u8);
+        let father = ptr as *mut *mut u8;
+        let ptr = AtomicPtr::new((*father).offset(-offset) as *mut *mut u8);
         let ptr = ptr.load(Ordering::SeqCst);
         let new_ptr = *ptr;
-        debug_assert!(!new_ptr.is_null());
-        log::trace!("gc {} correct ptr {:p} to {:p}", self.id, ptr, new_ptr);
+        debug_assert!(!new_ptr.is_null(), "{:p}", new_ptr);
+        log::trace!(
+            "gc {} correct ptr in {:p} from  {:p} to {:p}",
+            self.id,
+            father,
+            *father,
+            new_ptr.offset(offset)
+        );
         *father = new_ptr.offset(offset);
     }
 
@@ -281,6 +291,9 @@ impl Collector {
         if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
             // println!("mark ptr succ {:p} -> {:p}", father, ptr);
             let block = Block::from_obj_ptr(ptr);
+            // if block.eva_alloced { // allocated for evacuation, skip marking
+            //     return;
+            // }
             let is_candidate = block.is_eva_candidate();
             let mut head = block.get_head_ptr(ptr);
             let offset_from_head = ptr.offset_from(head);
@@ -302,7 +315,7 @@ impl Collector {
                 let atomic_ptr = head as *mut AtomicPtr<u8>;
                 let old_loaded = (*atomic_ptr).load(Ordering::SeqCst);
                 let obj_line_size = line_header.get_obj_line_size(idx, Block::from_obj_ptr(head));
-                let new_ptr = self.alloc(obj_line_size * LINE_SIZE, line_header.get_obj_type());
+                let new_ptr = self.alloc_raw(obj_line_size * LINE_SIZE, line_header.get_obj_type());
                 if !new_ptr.is_null() {
                     let new_block = Block::from_obj_ptr(new_ptr);
                     let (new_line_header, _) = new_block.get_line_header_from_addr(new_ptr);
@@ -340,7 +353,10 @@ impl Collector {
             let obj_type = line_header.get_obj_type();
             match obj_type {
                 ObjectType::Atomic => {}
-                _ => (*self.queue).push((head, obj_type)),
+                ObjectType::Trait => self.mark_trait(head),
+                ObjectType::Complex => self.mark_complex(head),
+                ObjectType::Pointer => self.mark_ptr(head),
+                // _ => (*self.queue).push((head, obj_type)),
             }
             return;
         }
@@ -525,8 +541,8 @@ impl Collector {
                             }
                             match obj_type {
                                 ObjectType::Atomic => panic!("stack root shall never be atomic"),
-                                ObjectType::Trait => self.mark_trait(*(root as *mut*mut u8)),
-                                ObjectType::Complex => self.mark_complex(*(root as *mut*mut u8)),
+                                ObjectType::Trait => self.mark_trait(*(root as *mut *mut u8)),
+                                ObjectType::Complex => self.mark_complex(*(root as *mut *mut u8)),
                                 ObjectType::Pointer => self.mark_ptr(root),
                             }
                             // self.mark_ptr(root);
@@ -540,7 +556,6 @@ impl Collector {
 
         // iterate through queue and mark all reachable objects
         unsafe {
-            // (*self.queue).extend(self.roots.iter().map(|(a,b)|(*a,*b)));
             while let Some((obj, obj_type)) = (*self.queue).pop() {
                 match obj_type {
                     ObjectType::Atomic => {}
