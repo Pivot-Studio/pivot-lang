@@ -11,6 +11,7 @@ pub fn test_string() void {
     panic::assert(ss.len() == 5);
     panic::assert(ss.byte_len() == 13);
     s.append(ss);
+    println!(s.len());
     panic::assert(s.len() == 18);
     panic::assert(s.byte_len() == 26);
     io::print_s(s);
