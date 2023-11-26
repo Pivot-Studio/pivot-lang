@@ -126,7 +126,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --debug --manifest-path vm/Cargo.toml --target-dir target -vv
+          args: --manifest-path vm/Cargo.toml --target-dir target -vv
 
       # - name: build plc
       #   uses: actions-rs/cargo@v1

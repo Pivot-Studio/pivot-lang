@@ -290,38 +290,38 @@ impl Collector {
         // mark it if it is in heap
         if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
             // println!("mark ptr succ {:p} -> {:p}", father, ptr);
-            let block = Block::from_obj_ptr(ptr);
+            let block_p: *mut Block = Block::from_obj_ptr(ptr) as *mut _;
+
             // if block.eva_alloced { // allocated for evacuation, skip marking
             //     return;
             // }
+            let block = &mut *block_p;
             let is_candidate = block.is_eva_candidate();
             let mut head = block.get_head_ptr(ptr);
             let offset_from_head = ptr.offset_from(head);
-            let mut old_h = 0;
-            if !is_candidate {
-                block.marked = true;
-            } else {
-                let (line_header, _) = block.get_line_header_from_addr(head);
-                let (forward, h) = line_header.get_forwarded();
-                old_h = h;
-                if forward {
-                    self.correct_ptr(father, offset_from_head);
-                    return;
-                }
-            }
             let (line_header, idx) = block.get_line_header_from_addr(head);
-            if line_header.get_marked() {
-                return;
-            }
-            // 若此block是待驱逐对象
-            if is_candidate {
-                let atomic_ptr = head as *mut AtomicPtr<u8>;
-                let old_loaded = (*atomic_ptr).load(Ordering::SeqCst);
-                let (forward, _) = line_header.get_forwarded();
-                if forward {
+            if !is_candidate {
+                let block = &mut *block_p;
+                block.marked = true;
+
+                if line_header.get_marked() {
+                    return;
+                }
+            } else {
+                // evacuation logic
+                let (forward, h) = line_header.get_forward_start();
+                let old_h = h;
+                // if forward is true or cas is failed, then it's forwarded by other thread.
+                let shall_i_forward = !forward && line_header.forward_cas(old_h);
+                if !shall_i_forward {
+                    spin_until!(line_header.get_forwarded());
                     self.correct_ptr(father, offset_from_head);
                     return;
                 }
+
+                // otherwise, we shall forward it
+                let atomic_ptr = head as *mut AtomicPtr<u8>;
+
                 let obj_line_size = line_header.get_obj_line_size(idx, Block::from_obj_ptr(head));
                 let new_ptr = self.alloc_raw(obj_line_size * LINE_SIZE, line_header.get_obj_type());
                 if !new_ptr.is_null() {
@@ -331,33 +331,22 @@ impl Collector {
                     core::ptr::copy_nonoverlapping(head, new_ptr, obj_line_size * LINE_SIZE);
                     // core::ptr::copy_nonoverlapping(line_header as * const u8, new_line_header as * mut u8, line_size);
 
-                    // 线程安全性说明
-                    // 如果cas操作成功，代表没有别的线程与我们同时尝试驱逐这个模块
-                    // 如果cas操作失败，代表别的线程已经驱逐了这个模块
-                    // 此时虽然我们已经分配了驱逐空间并且将内容写入，但是我们还没有设置line_header的
-                    // 标记位，所以这块地址很快会在sweep阶段被识别并且回收利用。
-                    // 虽然这造成了一定程度的内存碎片化和潜在的重复操作，但是
-                    // 这种情况理论上是很少见的，所以这么做问题不大
-                    let ok1 = (*atomic_ptr)
-                        .compare_exchange(old_loaded, new_ptr, Ordering::SeqCst, Ordering::SeqCst)
-                        .is_ok();
-                    let ok2 = line_header.forward_cas(old_h);
-                    if ok1 || ok2 {
-                        // 成功驱逐
-                        let new_ptr = (*atomic_ptr).load(Ordering::SeqCst);
-                        log::trace!("gc {}: eva {:p} to {:p}", self.id, head, new_ptr);
-                        new_line_header.set_marked(true);
-                        new_block.marked = true;
-                        head = new_ptr;
-                        self.correct_ptr(father, offset_from_head);
-                    } else {
-                        // 期间别的线程驱逐了它
-                        spin_until!(line_header.get_forwarded().0);
-                        self.correct_ptr(father, offset_from_head);
-                        return;
-                    }
+                    // 将新指针写入老数据区开头
+                    (*atomic_ptr).store(new_ptr, Ordering::SeqCst);
+
+                    log::trace!("gc {}: eva {:p} to {:p}", self.id, head, new_ptr);
+                    new_line_header.set_marked(true);
+                    new_block.marked = true;
+                    head = new_ptr;
+                    self.correct_ptr(father, offset_from_head);
+                    // 成功驱逐
+                    line_header.set_forwarded();
+                } else {
+                    // 驱逐失败
+                    panic!("gc: OOM during evacuation");
                 }
             }
+
             line_header.set_marked(true);
             let obj_type = line_header.get_obj_type();
             match obj_type {
@@ -615,7 +604,7 @@ impl Collector {
                 .unwrap()
                 .iter()
                 .for_each(|root| {
-                    self.mark_ptr((*root) as usize as *mut u8);
+                    self.mark_ptr(*root);
                 });
         }
     }

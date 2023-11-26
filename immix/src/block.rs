@@ -41,8 +41,9 @@ pub trait LineHeaderExt {
     fn set_is_head(&mut self, is_head: bool);
     fn get_is_used_follow(&self) -> bool;
     fn get_obj_line_size(&self, idx: usize, block: &mut Block) -> usize;
-    fn set_forwarded(&mut self, forwarded: bool);
-    fn get_forwarded(&self) -> (bool, LineHeader);
+    fn set_forwarded(&mut self);
+    fn get_forwarded(&self) -> bool;
+    fn get_forward_start(&self) -> (bool, LineHeader);
     fn forward_cas(&mut self, old: u8) -> bool;
 }
 
@@ -54,7 +55,7 @@ pub trait LineHeaderExt {
 pub struct Block {
     /// |                           LINE HEADER(1 byte)                         |
     /// |    7   |    6   |    5   |    4   |    3   |    2   |    1   |    0   |
-    /// | is head|   eva  |     not used    |    object type  | marked |  used  |
+    /// | is head|   eva  |  evaed |    -   |    object type  | marked |  used  |
     line_map: [LineHeader; NUM_LINES_PER_BLOCK],
     /// 第一个hole的起始行号
     cursor: usize,
@@ -66,7 +67,6 @@ pub struct Block {
     hole_num: usize,
     available_line_num: usize,
     eva_target: bool,
-    pub eva_alloced: bool,
 }
 
 impl HeaderExt for u8 {
@@ -107,23 +107,26 @@ impl HeaderExt for u8 {
 }
 impl LineHeaderExt for LineHeader {
     #[inline]
-    fn set_forwarded(&mut self, forwarded: bool) {
+    fn set_forwarded(&mut self) {
         let atom_self = self as *mut u8 as *mut AtomicU8;
         unsafe {
             let value = (*atom_self).load(Ordering::SeqCst);
-            let forwarded = if forwarded {
-                value | 0b1000000
-            } else {
-                value & !0b1000000
-            };
+            let forwarded = value | 0b100000;
             (*atom_self).store(forwarded, Ordering::Release);
         }
     }
     #[inline]
-    fn get_forwarded(&self) -> (bool, LineHeader) {
+    fn get_forward_start(&self) -> (bool, LineHeader) {
         let atom_self = self as *const u8 as *const AtomicU8;
         let load = unsafe { (*atom_self).load(Ordering::Acquire) };
         (load & 0b1000000 == 0b1000000, load)
+    }
+
+    #[inline]
+    fn get_forwarded(&self) -> bool {
+        let atom_self = self as *const u8 as *const AtomicU8;
+        let load = unsafe { (*atom_self).load(Ordering::Acquire) };
+        load & 0b100000 == 0b100000
     }
     #[inline]
     fn forward_cas(&mut self, old: u8) -> bool {
@@ -182,7 +185,6 @@ impl Block {
                 hole_num: 1,
                 available_line_num: NUM_LINES_PER_BLOCK - 3,
                 eva_target: false,
-                eva_alloced: false,
             });
 
             &mut *ptr
@@ -249,7 +251,8 @@ impl Block {
         self.available_line_num = 0;
 
         while idx < NUM_LINES_PER_BLOCK {
-            // 未使用或者未标记
+            self.line_map[idx] &= !0b1100000; // unset forward bits
+                                              // 未使用或者未标记
             if !self.line_map[idx].get_used()
                 || (self.line_map[idx] & 0b10 == 0 //即使标记位为0，也有可能是被标记的对象数据体
                     && (!marked || self.line_map[idx] & 0b10000010 == 0b10000000))
@@ -292,7 +295,6 @@ impl Block {
         self.marked = false;
         self.hole_num = holes;
         self.eva_target = false;
-        self.eva_alloced = false;
         if let Some(count) = (*mark_histogram).get_mut(&self.hole_num) {
             *count += marked_num;
         } else {

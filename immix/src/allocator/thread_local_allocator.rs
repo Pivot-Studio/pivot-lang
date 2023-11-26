@@ -339,19 +339,11 @@ impl ThreadLocalAllocator {
     ///
     /// * `*mut Block` - block pointer
     fn get_new_block(&mut self) -> *mut Block {
-        let block = if self.collect_mode && !self.eva_blocks.is_empty() {
+        if self.collect_mode && !self.eva_blocks.is_empty() {
             self.eva_blocks.pop().unwrap()
         } else {
             unsafe { (*self.global_allocator).get_block() }
-        };
-        // if self.collect_mode {
-        //     // is evacuation mode
-        //     unsafe {
-        //         (*block).marked = true;
-        //         (*block).eva_alloced = true;
-        //     }
-        // }
-        block
+        }
     }
 
     /// # in_heap
