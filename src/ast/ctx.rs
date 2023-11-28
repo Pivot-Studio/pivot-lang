@@ -800,7 +800,7 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         let f = builder.add_function(&name, &[], PLType::Void, self);
         builder.rm_curr_debug_location();
-        builder.build_call(f, &[], &PLType::Void, self,None);
+        builder.build_call(f, &[], &PLType::Void, self, None);
         set.insert(name);
     }
 

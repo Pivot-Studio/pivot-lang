@@ -167,7 +167,7 @@ pub trait IRBuilder<'a, 'ctx> {
         args: &[ValueHandle],
         ret_type: &PLType,
         ctx: &mut Ctx<'a>,
-        pos: Option< Pos>,
+        pos: Option<Pos>,
     ) -> Option<ValueHandle>;
     fn add_function(
         &self,

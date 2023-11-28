@@ -520,6 +520,27 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         stack_ptr.as_basic_value_enum()
     }
 
+    /// # tag_root
+    ///
+    /// 为一个可能有堆指针的栈上对象创建gcroot
+    ///
+    /// ## 例子
+    ///
+    /// 下方对象：
+    /// ```pivot
+    /// struct A {
+    ///    a:[i64];
+    /// }
+    /// ```
+    /// A.a里面有堆指针，所以即使A本身在栈上，
+    /// 也需要为它创建GCRoot，否则在evacuation之后，A.a的指针不会被修正向新地址
+    ///
+    /// ## Safety
+    ///
+    /// - stack_ptr必须是一个栈上指针
+    /// - tp必须正确
+    ///
+    /// 否则会导致不可预测的结果
     fn tag_root(&self, stack_ptr: BasicValueEnum<'ctx>, tp: ObjectType) {
         if tp == ObjectType::Atomic {
             return;
@@ -736,17 +757,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .build_load(self.context.i64_type(), arr_len, "arr_len")
             .unwrap()
             .into_int_value();
-        // let ff = self.get_or_insert_print_fn("printi64ln");
-        // self.builder
-        // .build_call(ff, &[self.context.i64_type().const_int(9999, true).into()], "printi64ln")
-        // .unwrap();
-        // self.builder
-        //     .build_call(ff, &[arr_len.into()], "printi64ln")
-        //     .unwrap();
-        // self.builder
-        // .build_call(ff, &[self.context.i64_type().const_int(9999, true).into()], "printi64ln")
-        // .unwrap();
-        // generate a loop, iterate the real array, and do nothing
+
+        // generate a loop, iterate the real array, and mark each element if needed
         let condbb = self.context.append_basic_block(f, "cond");
         self.builder.build_unconditional_branch(condbb).unwrap();
         self.builder.position_at_end(condbb);
@@ -778,10 +790,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
         .unwrap();
 
-        // let ff = self.get_or_insert_print_fn("printi64ln");
-        // self.builder
-        //     .build_call(ff, &[i.into()], "printi64ln")
-        //     .unwrap();
         match &*elm_tp.borrow() {
             PLType::Arr(_) | PLType::Struct(_) => {
                 let casted = self
@@ -1832,7 +1840,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         args: &[ValueHandle],
         ret_type: &PLType,
         ctx: &mut Ctx<'a>,
-        pos: Option< Pos>,
+        pos: Option<Pos>,
     ) -> Option<ValueHandle> {
         // malloc ret after call is not safe, as malloc may trigger collection
         // 不仅要在调用前分配，还要在get_llvm_value之前，否则如果这次malloc触发了回收和驱逐算法
@@ -1859,8 +1867,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             })
             .unzip();
         let bb = builder.get_insert_block().unwrap();
-            if let Some(pos) = pos  {
-                if builder
+        if let Some(pos) = pos {
+            if builder
                 .get_insert_block()
                 .unwrap()
                 .get_parent()
@@ -2205,9 +2213,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             Some(debug_var_info),
             None,
             self.builder.get_current_debug_location().unwrap(),
-            self.builder
-                .get_insert_block()
-                .unwrap(),
+            self.builder.get_insert_block().unwrap(),
         );
         // dbg.map(|d| self.builder.set_current_debug_location(d));
     }

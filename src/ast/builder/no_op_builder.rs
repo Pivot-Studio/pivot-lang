@@ -2,7 +2,8 @@ use std::{cell::RefCell, sync::Arc};
 
 use crate::ast::{
     ctx::Ctx,
-    pltype::{PLType, PriType, STType}, range::Pos,
+    pltype::{PLType, PriType, STType},
+    range::Pos,
 };
 
 use super::{IRBuilder, ValueHandle};
@@ -261,7 +262,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         _args: &[super::ValueHandle],
         _ret_type: &PLType,
         _ctx: &mut Ctx<'a>,
-        _pos: Option< Pos>,
+        _pos: Option<Pos>,
     ) -> Option<super::ValueHandle> {
         Some(0)
     }
