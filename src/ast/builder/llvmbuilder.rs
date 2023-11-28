@@ -492,6 +492,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     ///   segment fault、bus error在内的一系列问题。关于驱逐算法的详细信息，见[gc文档](https://lang.pivotstudio.cn/docs/systemlib/immix.html#evacuation)
     /// 3. 如果禁用了evacuation，那么这个函数将不会有实际作用
     fn create_root_for(&self, heap_ptr: BasicValueEnum<'ctx>) -> BasicValueEnum<'ctx> {
+        self.builder.unset_current_debug_location();
         let lb = self.builder.get_insert_block().unwrap();
         let alloca = self
             .builder
@@ -1787,6 +1788,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .get_first_basic_block()
             .unwrap();
         self.builder.position_at_end(allocabb);
+        self.builder.unset_current_debug_location();
         let stack_ptr = self
             .builder
             .build_alloca(b.get_type(), "stack_ptr")
@@ -1830,6 +1832,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         args: &[ValueHandle],
         ret_type: &PLType,
         ctx: &mut Ctx<'a>,
+        pos: Option< Pos>,
     ) -> Option<ValueHandle> {
         // malloc ret after call is not safe, as malloc may trigger collection
         // 不仅要在调用前分配，还要在get_llvm_value之前，否则如果这次malloc触发了回收和驱逐算法
@@ -1855,10 +1858,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 (bme, ty)
             })
             .unzip();
-        let dbg = builder.get_current_debug_location();
         let bb = builder.get_insert_block().unwrap();
-        if let Some(dbg) = dbg {
-            if builder
+            if let Some(pos) = pos  {
+                if builder
                 .get_insert_block()
                 .unwrap()
                 .get_parent()
@@ -1866,11 +1868,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .get_subprogram()
                 .is_some()
             {
-                self.build_dbg_location(Pos {
-                    line: dbg.get_line() as _,
-                    column: dbg.get_column() as _,
-                    offset: 0,
-                })
+                self.build_dbg_location(pos)
             }
         }
         builder.position_at_end(bb);
@@ -2165,6 +2163,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         global.unwrap()
     }
     fn build_dbg_location(&self, pos: Pos) {
+        if pos.line as u32 > 1000 {
+            eprintln!("line number too large: {}", pos.line);
+        }
         let loc = self.dibuilder.create_debug_location(
             self.context,
             pos.line as u32,
@@ -2206,10 +2207,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.builder.get_current_debug_location().unwrap(),
             self.builder
                 .get_insert_block()
-                .unwrap()
-                .get_parent()
-                .unwrap()
-                .get_first_basic_block()
                 .unwrap(),
         );
         // dbg.map(|d| self.builder.set_current_debug_location(d));
