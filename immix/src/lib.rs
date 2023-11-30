@@ -176,6 +176,12 @@ pub fn no_gc_thread() {
     })
 }
 
+pub fn safepoint() {
+    SPACE.with(|gc| {
+        gc.borrow().safepoint();
+    })
+}
+
 #[cfg(feature = "llvm_stackmap")]
 pub fn gc_init(ptr: *mut u8) {
     // println!("stackmap: {:?}", &STACK_MAP.map.borrow());

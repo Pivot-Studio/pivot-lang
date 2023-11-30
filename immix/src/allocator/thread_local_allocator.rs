@@ -50,11 +50,13 @@ impl Drop for ThreadLocalAllocator {
             return;
         }
         let global_allocator = unsafe { &mut *self.global_allocator };
-        global_allocator.return_blocks(
-            self.unavailable_blocks
-                .drain(..)
-                .chain(self.recyclable_blocks.drain(..))
-                .chain(self.eva_blocks.drain(..)),
+        // here we should return all blocks to global allocator
+        // however, when a thread exits, it may still hold some non-empty blocks
+        // those blocks shall be stored and give to another thread latter
+        global_allocator.on_thread_destroy(
+            &self.eva_blocks,
+            self.recyclable_blocks.drain(..),
+            &self.unavailable_blocks,
         );
         self.live = false;
     }
@@ -92,6 +94,14 @@ impl ThreadLocalAllocator {
         self.collect_mode = collect_mode;
     }
 
+    pub fn get_more_works(&mut self) {
+        unsafe {
+            self.global_allocator
+                .as_mut()
+                .unwrap()
+                .get_returned_blocks(&mut self.recyclable_blocks, &mut self.unavailable_blocks);
+        }
+    }
     pub fn print_stats(&self) {
         println!("unavailable blocks: {}", self.unavailable_blocks.len());
         for block in &self.unavailable_blocks {

@@ -82,6 +82,10 @@ fn new_thread(f: *mut i128) {
         func(data_ptr);
         // immix::gc_remove_root(&mut f as *mut _ as *mut _);
         immix::gc_rm_live(handle);
+        // ESSENTIAL: must collect before exit
+        // although I don't know why yet
+        immix::gc_collect();
+        // sleep(1000);
         immix::no_gc_thread();
     };
     thread::spawn(c);

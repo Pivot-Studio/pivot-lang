@@ -84,6 +84,10 @@ mod _immix {
             immix::set_evacuation(eva);
         }
 
+        pub fn safepoint() {
+            immix::safepoint()
+        }
+
         pub fn about() {
             let dio = "
         ⠀⠀⠀⠀⠀⠀⠀⠀⠀⢹⡀⠀⠀⠀⠀⠀⠘⠀⣷⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⡀⠀⠀⠀⠙⢦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀

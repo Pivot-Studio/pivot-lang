@@ -27,7 +27,9 @@ fn create_mutex(mutex: *mut *mut OpaqueMutex) -> u64 {
 #[is_runtime]
 fn lock_mutex(mutex: *mut OpaqueMutex) -> u64 {
     let container: &MutexContainer = &*mutex.cast();
+    immix::thread_stuck_start();
     let lock: MutexGuard<'static, _> = mem::transmute(container.mutex.lock().unwrap());
+    immix::thread_stuck_end();
     container.guard.set(Some(lock));
     0
 }

@@ -400,6 +400,10 @@ impl Block {
     /// passing the pointer to the field b.
     pub unsafe fn get_head_ptr(&mut self, ptr: *mut u8) -> *mut u8 {
         let mut idx = self.get_line_idx_from_addr(ptr);
+        if idx < 3 {
+            log::warn!("invalid pointer: {:p}", ptr);
+            return std::ptr::null_mut();
+        }
         let mut header = self.get_nth_line_header(idx);
         // 如果是head，直接返回
         if header.get_is_head() {
@@ -407,6 +411,10 @@ impl Block {
         }
         // 否则往前找到head
         while !header.get_is_head() {
+            if idx < 3 {
+                log::warn!("invalid pointer: {:p}", ptr);
+                return std::ptr::null_mut();
+            }
             header = self.get_nth_line_header(idx - 1);
             idx -= 1;
         }

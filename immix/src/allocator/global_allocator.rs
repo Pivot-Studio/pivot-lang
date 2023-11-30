@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::{cell::Cell, collections::VecDeque};
 
 use parking_lot::ReentrantMutex;
 use threadpool::ThreadPool;
@@ -21,6 +21,10 @@ pub struct GlobalAllocator {
     heap_end: *mut u8,
     /// 所有被归还的Block都会被放到这个Vec里面
     free_blocks: Vec<(*mut Block, bool)>,
+    /// 所有被归还的Block都会被放到这个Vec里面
+    unavailable_blocks: Vec<*mut Block>,
+    /// 所有被归还的Block都会被放到这个Vec里面
+    recycle_blocks: Vec<*mut Block>,
     /// lock
     lock: ReentrantMutex<()>,
     /// big object mmap
@@ -66,6 +70,8 @@ impl GlobalAllocator {
             mem_usage_flag: 0,
             round: 0,
             pool: ThreadPool::default(),
+            unavailable_blocks: vec![],
+            recycle_blocks: vec![],
         }
     }
     /// 从big object mmap中分配一个大对象，大小为size
@@ -124,6 +130,19 @@ impl GlobalAllocator {
     // pub fn out_of_space(&self) ->bool {
     //     (self.heap_end as usize - self.current as usize) < BLOCK_SIZE && self.free_blocks.len() == 0
     // }
+
+    /// # get_returned_blocks
+    ///
+    /// 获取所有因为线程被销毁而被归还的非空block
+    pub fn get_returned_blocks(
+        &mut self,
+        recycle: &mut VecDeque<*mut Block>,
+        unv: &mut Vec<*mut Block>,
+    ) {
+        let _lock = self.lock.lock();
+        recycle.extend(self.recycle_blocks.drain(..));
+        unv.append(&mut self.unavailable_blocks);
+    }
 
     /// # get_block
     ///
@@ -199,6 +218,19 @@ impl GlobalAllocator {
             self.free_blocks.push((block, false));
             // self.mmap
             //     .dontneed(block as *mut Block as *mut u8, BLOCK_SIZE);
+        }
+    }
+
+    pub fn on_thread_destroy<I>(&mut self, eva: &[*mut Block], recycle: I, unv: &[*mut Block])
+    where
+        I: IntoIterator<Item = *mut Block>,
+    {
+        let _lock = self.lock.lock();
+        self.unavailable_blocks.extend_from_slice(unv);
+        self.recycle_blocks.extend(recycle);
+        for block in eva {
+            self.mem_usage_flag -= 1;
+            self.free_blocks.push((*block, false));
         }
     }
 
