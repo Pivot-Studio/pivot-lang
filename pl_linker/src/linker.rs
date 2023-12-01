@@ -335,6 +335,7 @@ impl Linker for MsvcLinker {
         self.push_args("advapi32.lib");
         self.push_args("ntdll.lib");
         self.push_args("psapi.lib");
+        self.push_args("PowrProf.lib");
 
         // use linker directly, since lld may report
         // lld-link: error: The CodeView record is corrupted.

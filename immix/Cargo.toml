@@ -14,7 +14,7 @@ lazy_static = "1.4"
 backtrace = "0.3"
 log = "0.4"
 threadpool = {version = "1.8"}
-sys-info = "0.9"
+sys-info = {git="https://github.com/Pivot-Studio/sys-info-rs.git"}
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser","memoryapi"] }
