@@ -19,11 +19,13 @@ pub struct GlobalAllocator {
     heap_start: *mut u8,
     /// heap end
     heap_end: *mut u8,
-    /// 所有被归还的Block都会被放到这个Vec里面
+    /// 所有被归还的空Block都会被放到这个Vec里面
     free_blocks: Vec<(*mut Block, bool)>,
-    /// 所有被归还的Block都会被放到这个Vec里面
+    /// 线程被销毁时的unavailable_blocks会被暂存到这里，直到下次GC的时候被别的线程
+    /// 的GC获取
     unavailable_blocks: Vec<*mut Block>,
-    /// 所有被归还的Block都会被放到这个Vec里面
+    /// 线程被销毁时的urecycle_blocks会被暂存到这里，直到下次GC的时候被别的线程
+    /// 的GC获取
     recycle_blocks: Vec<*mut Block>,
     /// lock
     lock: ReentrantMutex<()>,
