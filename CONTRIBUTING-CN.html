@@ -154,6 +154,8 @@
 <p>如果您刚开始了解pivot-lang项目，可以加入我们的社区 <a href="https://jq.qq.com/?_wv=1027&amp;k=I5vdShVl">qq 群</a> 向我们提问.</p>
 <p><strong>因为本项目还处于早期阶段</strong>: 本页面的指导很可能会在未来有更改，欢迎帮助我们改进此页面！</p>
 <h2 id="基础"><a class="header" href="#基础">基础</a></h2>
+<h3 id="开发文档"><a class="header" href="#开发文档">开发文档</a></h3>
+<p>我们的基础环境配置教程在 <a href="./dev-prepare.html">dev-prepare</a> 中，开发前请务必阅读。</p>
 <h3 id="开源协议"><a class="header" href="#开源协议">开源协议</a></h3>
 <p>本项目使用 <a href="https://opensource.org/licenses/MIT">MIT</a> 协议。对本项目贡献代码即表示您同意您的更改遵守该协议。</p>
 <h2 id="您能做的事情"><a class="header" href="#您能做的事情">您能做的事情</a></h2>
@@ -171,14 +173,14 @@
 </ul>
 <p>一些简单的需求可以跳过第二个阶段，所有超过第一个阶段的需求都会被放在我们的<a href="https://github.com/orgs/Pivot-Studio/projects/7/views/1">project</a>中。如果您想帮助实现
 已有需求，请去此页面寻找处于new或者ready状态的项目。如果您想实现一个新的需求，请先在<a href="https://github.com/Pivot-Studio/pivot-lang/issues">issues</a>中提出，最好加入
-<a href="https://jq.qq.com/?_wv=1027&amp;k=I5vdShVl">qq群</a> 和我们一起讨论方案，在讨论决定通过后，我们会在<a href="https://github.com/orgs/Pivot-Studio/projects/7/views/1">project</a>中添加一个新的对应项目。</p>
+<a href="http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&amp;k=vjKI1nbRHAIz1UbmDOjttLurEw93mLhA&amp;authKey=U6cUmnIxiptTskr9trZZ9vc2p291uWht8TlzPSOEPXliihLC9vAYMaRwDI0%2FolR8&amp;noverify=0&amp;group_code=688301255">qq群</a> 和我们一起讨论方案，在讨论决定通过后，我们会在<a href="https://github.com/orgs/Pivot-Studio/projects/7/views/1">project</a>中添加一个新的对应项目。</p>
 <h3 id="tests"><a class="header" href="#tests">Tests</a></h3>
 <p>强烈建议在提交修改的时候同时添加对应的测试，帮助我们将测试覆盖率保持在 <strong>85%</strong>, 帮助我们进一步完善测试也是相当欢迎的。</p>
 <p>请在提交pr前确认自己的修改能通过所有的测试(通过运行 <code>cargo test --all</code>)</p>
 <h3 id="benchmark"><a class="header" href="#benchmark">Benchmark</a></h3>
 <p>目前我们还没有基准测试，欢迎帮助我们添加基准测试。</p>
 <h3 id="文档"><a class="header" href="#文档">文档</a></h3>
-<p>参见 <a href="https://lang.pivotstudio.cn/">文档</a> 网站。对应源码在 <a href="https://github.com/Pivot-Studio/pivot-lang/tree/master/book">book</a> 目录中，欢迎帮助我们完善文档。</p>
+<p>参见 <a href="./dev-prepare.html">文档</a> 网站。对应源码在 <a href="https://github.com/Pivot-Studio/pivot-lang/tree/master/book">book</a> 目录中，欢迎帮助我们完善文档。</p>
 <h2 id="风格"><a class="header" href="#风格">风格</a></h2>
 <h3 id="issue-风格"><a class="header" href="#issue-风格">Issue 风格</a></h3>
 <p>请在提出issue时提供至少三个小自然段的说明，包括：你想干什么，遇到了什么问题，如果复现这个问题等。</p>
@@ -192,6 +194,15 @@
 <p>rust代码风格通过使用 <a href="https://github.com/rust-lang-nursery/rustfmt">rustfmt</a> 进行统一 
 请尽量减少代码重复率，增加可读性。</p>
 <p>为了避免不同的rust小版本格式化的区别，请使用以下命令格式化: <code>cargo +stable fmt</code></p>
+<h2 id="其他重要事项"><a class="header" href="#其他重要事项">其他重要事项</a></h2>
+<h3 id="immix-gc对代码生成的影响"><a class="header" href="#immix-gc对代码生成的影响">Immix GC对代码生成的影响</a></h3>
+<p>Pivot Lang使用的Immix GC是一个精确的、可重定位的垃圾回收器。重定位（evacuation）指
+GC在触发的时候可能会移动堆中的对象，这主要是为了解决内存碎片化的问题。</p>
+<p>GC的重定位正确性依赖于严谨准确的代码生成。</p>
+<p>由于GC要保证堆对象在被移动之后，所有指向原对象位置的指针都被更新为指向新对象，所以GC需要
+知道所有指向堆对象的指针。所以在Pivot中，一切堆对象的直接或间接的指针都会有个对应的栈
+指针。同时，因为触发重定向的逻辑比较复杂，这种问题往往很难测试出来，具有很高的随机性，
+所以目前的debug模式编译的GC在每次malloc都会触发GC，并且会强制每次回收都触发重定向，并且每一个堆里的对象都会被重定向。</p>
 
                     </main>
 
