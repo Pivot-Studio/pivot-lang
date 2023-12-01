@@ -43,7 +43,7 @@ pub fn new_tf(secs: u64)*TimerFuture{
     shared_state.completed = false;
     shared_state.waker = None{};
     let f = ||=>void{
-        gc::DioGC__set_eva(true);
+        // gc::DioGC__set_eva(true);
         // gc::DioGC__enable_auto_collect();
         println!("begin sleep");
         // gc::DioGC__disable_auto_collect();
@@ -60,7 +60,7 @@ pub fn new_tf(secs: u64)*TimerFuture{
     println!("start a thread");
     // fff = &f;
     // gc::DioGC__disable_auto_collect();
-    gc::DioGC__set_eva(false);
+    // gc::DioGC__set_eva(false);
     new_thread(&f);
     let ret = TimerFuture {shared_state: shared_state};
     return &ret;

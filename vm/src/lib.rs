@@ -84,7 +84,7 @@ fn new_thread(f: *mut i128) {
         immix::gc_rm_live(handle);
         // ESSENTIAL: must collect before exit
         // although I don't know why yet
-        immix::gc_collect();
+        // immix::gc_collect();
         // sleep(1000);
         immix::no_gc_thread();
     };
