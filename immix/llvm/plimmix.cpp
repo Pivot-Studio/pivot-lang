@@ -4,11 +4,20 @@
 #include "llvm/Support/Compiler.h"
 #include "plimmixprinter.cpp"
 #include "plimmix_pass.cpp"
+#include "llvm/Passes/PassBuilder.h"
+#include "llvm/Passes/PassPlugin.h"
+
+#include "llvm-c/Types.h"
+#include "llvm-c/Transforms/PassBuilder.h"
 
 using namespace llvm;
 
 namespace
 {
+    /*
+        This is the GC strategy for immix.
+        It is used to register our immix GC with LLVM.
+    */
     class LLVM_LIBRARY_VISIBILITY PLImmixGC : public GCStrategy
     {
     public:
@@ -29,17 +38,16 @@ extern "C" void LLVMLinkPLImmixGC()
 }
 #include "llvm-c/Transforms/PassManagerBuilder.h"
 
-extern "C" void add_module_pass(llvm::legacy::PassManagerBase * PB) {
+extern "C" void add_module_pass(llvm::legacy::PassManagerBase *PB) {
     PB->add(new ImmixLegacy());
 
 }
-#include "llvm/Passes/PassBuilder.h"
-#include "llvm/Passes/PassPlugin.h"
+/*
+    param: opt opt level
 
-#include "llvm-c/Types.h"
-#include "llvm-c/Transforms/PassBuilder.h"
-
-// param: opt opt level
+    The new LLVM Pass Manager does not have official C bindings yet.
+    So we have to write one ourselves.
+*/
 extern "C" void run_module_pass(LLVMModuleRef  M, int opt) {
     // These must be declared in this order so that they are destroyed in the
     // correct order due to inter-analysis-manager references.
@@ -92,6 +100,9 @@ extern "C" void run_module_pass(LLVMModuleRef  M, int opt) {
 }
 
 
+/*
+    Shadow stack implementation for immix. (used in JIT mode, but may not work now)
+*/
 extern "C"
 {
     /// The map for a single function's stack frame.  One of these is

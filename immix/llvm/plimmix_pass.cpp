@@ -1,3 +1,8 @@
+/*
+  Some LLVM passes helpful for
+  integrating immix with LLVM
+*/
+
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/Transforms/Utils/ModuleUtils.h"
@@ -10,6 +15,7 @@ using namespace llvm;
 namespace
 {
   void immixPassLogic(Module &M);
+  // The new pass manager plugin
   class ImmixPass : public PassInfoMixin<ImmixPass>
   {
     static char ID;
@@ -23,6 +29,24 @@ namespace
     return PreservedAnalyses::all();
   }
 
+  /*
+    This pass helps integrate immix with LLVM.
+
+    It does the following:
+    - Sets the GC name to "plimmix" for all functions
+    - Adds a call to immix_gc_init in the global constructor
+    - Adds a global variable declaration for the module stack map
+
+    However, it does not generate the stack map. This is done by the
+    immix compiler plugin.
+
+    Also note that mauch more work is needed to get immix working with
+    LLVM. Besides the pass, you need to:
+    - Implement visit functions for all complex types
+    - insert stack roots for all heap pointers
+    - replace all malloc calls with immix::alloc
+    ...
+  */
   void immixPassLogic(Module &M)
   {
     for (auto FB = M.functions().begin(), FE = M.functions().end(); FB != FE; ++FB)
@@ -51,6 +75,8 @@ namespace
     // appendToCompilerUsed(M, gc_init_f);
     appendToGlobalCtors(M, gc_init_f, 1000);
   }
+
+  // The old pass manager plugin
   struct ImmixLegacy : public ModulePass
   {
     static char ID;

@@ -1,3 +1,10 @@
+/*
+  LLVM memory manager for Pivot Lang
+  
+  This is very muck a work in progress. 
+  We are using this to get immix working with JIT.
+*/
+
 #include "llvm-c/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
 #include "llvm-c/Core.h"
