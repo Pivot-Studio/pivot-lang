@@ -1,9 +1,22 @@
 #include "llvm/CodeGen/GCMetadataPrinter.h"
 #include "llvm/Support/Compiler.h"
+#include "llvm/CodeGen/AsmPrinter.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/DataLayout.h"
+// #include "llvm/Target/TargetAsmInfo.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/IR/GCStrategy.h"
+#include "llvm/CodeGen/GCMetadata.h"
+#include "llvm/MC/MCStreamer.h"
+#include "llvm/Target/TargetLoweringObjectFile.h"
+#include "llvm/MC/MCAsmInfo.h"
 using namespace llvm;
 
 namespace
 {
+  /*
+    Stackmap printer for immix.
+  */
   class LLVM_LIBRARY_VISIBILITY PLImmixGCPrinter : public GCMetadataPrinter
   {
   public:
@@ -17,22 +30,16 @@ namespace
       P("plimmix", "pivot-lang immix garbage collector.");
 }
 
-#include "llvm/CodeGen/AsmPrinter.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/DataLayout.h"
-// #include "llvm/Target/TargetAsmInfo.h"
-#include "llvm/Target/TargetMachine.h"
-#include "llvm/IR/GCStrategy.h"
-#include "llvm/CodeGen/GCMetadata.h"
-#include "llvm/MC/MCStreamer.h"
-#include "llvm/Target/TargetLoweringObjectFile.h"
-#include "llvm/MC/MCAsmInfo.h"
 
 void PLImmixGCPrinter::beginAssembly(Module &M, GCModuleInfo &Info, AsmPrinter &AP)
 {
   // Nothing to do.
 }
 
+
+/*
+  We need to emit the stack map in the data section.
+*/
 void PLImmixGCPrinter::finishAssembly(Module &M, GCModuleInfo &Info, AsmPrinter &AP)
 {
   unsigned IntPtrSize = AP.getPointerSize();

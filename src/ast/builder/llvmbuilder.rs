@@ -144,6 +144,7 @@ pub struct LLVMBuilder<'a, 'ctx> {
     optimized: Arc<RefCell<bool>>,
     used: Arc<RefCell<Vec<FunctionValue<'ctx>>>>,
     difile: Cell<DIFile<'ctx>>,
+    optlevel: OptimizationLevel,
 }
 
 pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
@@ -184,6 +185,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         dibuilder: &'a DebugInfoBuilder<'ctx>,
         diunit: &'a DICompileUnit<'ctx>,
         tm: &'a TargetMachine,
+        opt: OptimizationLevel,
     ) -> Self {
         module.set_triple(&TargetMachine::get_default_triple());
         Self {
@@ -204,6 +206,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             optimized: Arc::new(RefCell::new(false)),
             used: Default::default(),
             difile: Cell::new(diunit.get_file()),
+            optlevel: opt,
         }
     }
     fn alloc_raw(
@@ -1583,7 +1586,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .add_global(used_arr.get_type(), None, "llvm.used");
         used_global.set_linkage(Linkage::Appending);
         used_global.set_initializer(&used_arr);
-
         if crate::ast::jit_config::IS_JIT.load(std::sync::atomic::Ordering::Relaxed) {
             // jit is using shadow stack, skip immix pass
             self.module.get_functions().for_each(|f| {
@@ -1591,16 +1593,20 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             });
         } else {
             extern "C" {
-                fn add_module_pass(ptr: *mut u8);
+                // fn add_module_pass(ptr: *mut u8);
+                fn run_module_pass(m: *mut u8, tm: i32);
             }
-            let ptr = unsafe { llvm_sys::core::LLVMCreatePassManager() };
-            let mpm: inkwell::passes::PassManager<Module> =
-                unsafe { inkwell::passes::PassManager::new(ptr) };
+            // let ptr = unsafe { llvm_sys::core::LLVMCreatePassManager() };
+            // let mpm: inkwell::passes::PassManager<Module> =
+            //     unsafe { inkwell::passes::PassManager::new(ptr) };
 
+            // unsafe {
+            //     add_module_pass(ptr as _);
+            // };
+            // mpm.run_on(self.module);
             unsafe {
-                add_module_pass(ptr as _);
-            };
-            mpm.run_on(self.module);
+                run_module_pass(self.module.as_mut_ptr() as _, self.optlevel as i32);
+            }
         }
         *self.optimized.borrow_mut() = true;
     }
