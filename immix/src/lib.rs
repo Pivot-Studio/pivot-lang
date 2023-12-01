@@ -64,8 +64,8 @@ const DEFAULT_HEAP_SIZE: usize = 1024 * 1024 * 1024 * 16;
 lazy_static! {
     pub static ref GLOBAL_ALLOCATOR: GAWrapper = unsafe {
         let mut heap_size = DEFAULT_HEAP_SIZE;
-        if let Some(usage) = memory_stats::memory_stats() {
-            heap_size = usage.virtual_mem;
+        if let Ok(usage) = sys_info::mem_info() {
+            heap_size = usage.total as usize * 1024;
         } else {
             log::warn!(
                 "Failed to get virtual memory size, use default heap size {} byte",
@@ -76,6 +76,7 @@ lazy_static! {
             heap_size = size.parse().unwrap();
         }
         heap_size = round_n_up!(heap_size, BLOCK_SIZE);
+        log::info!("heap size: {}", heap_size);
         let ga = GlobalAllocator::new(heap_size);
         let mem = malloc(core::mem::size_of::<GlobalAllocator>()).cast::<GlobalAllocator>();
         mem.write(ga);

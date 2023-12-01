@@ -821,12 +821,12 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "memory-stats",
  "parking_lot",
  "rand",
  "regex",
  "rustc-hash",
  "semver",
+ "sys-info",
  "threadpool",
  "winapi",
 ]
@@ -1109,16 +1109,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d61c719bcfbcf5d62b3a09efa6088de8c54bc0bfcd3ea7ae39fcc186108b8de1"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "memory-stats"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34f79cf9964c5c9545493acda1263f1912f8d2c56c8a2ffee2606cb960acaacc"
-dependencies = [
- "libc",
- "winapi",
 ]
 
 [[package]]
@@ -1747,6 +1737,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
+]
+
+[[package]]
+name = "sys-info"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b3a0d0aba8bf96a0e1ddfdc352fc53b3df7f39318c71854910c3c4b024ae52c"
+dependencies = [
+ "cc",
+ "libc",
 ]
 
 [[package]]
