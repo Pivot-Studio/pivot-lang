@@ -20,15 +20,16 @@ impl <T>Queue<T>{
     pub fn push(t: T) void {
         let node = Node<T>{};
         node.data = t;
-        self.tail.next = &node;
-        self.tail = &node;
+        // self.tail.next = &node;
+        *self.tail = node;
         return;
     }
 
     pub fn pop() T {
         let node = self.head.next;
+        let data = self.head.data;
         self.head = node;
-        return node.data;
+        return data;
     }
 
 }
@@ -36,30 +37,41 @@ pub fn channel<T>(sz: u64) Chan<T> {
     let node = Node<T>{};
     let ch = Chan<T> {};
     ch.buffer = Queue<T>{};
-    ch.buffer.head = &node;
-    ch.buffer.tail = &node;
+    let a = &node;
+    ch.buffer.head = a;
+    ch.buffer.tail = a;
     ch.count = 0;
     ch.capacity = sz;
     create_mutex(&ch.mtx);
     return ch;
 }
+use std::io;
 impl <S>Chan<S> {
     pub fn send(s: S) void {
-        gc::DioGC__stuck_begin();
+        let i = 0;
         while self.capacity <= self.count {
+            i = i + 1;
+            if i % 1000 == 0 {
+                gc::DioGC__safepoint();
+            }
         }
-        gc::DioGC__stuck_end();
         lock_mutexWrap(self.mtx);
         self.buffer.push(s);
         self.count = self.count + 1;
+        io::printi64ln(1111);
         unlock_mutex(self.mtx);
         return;
     }
     pub fn recv() S {
-        gc::DioGC__stuck_begin();
-        while self.count==0 {}
-        gc::DioGC__stuck_end();
+        let i = 0;
+        while self.count==0 {
+            i = i + 1;
+            if i % 1000 == 0 {
+                gc::DioGC__safepoint();
+            }
+        }
         lock_mutexWrap(self.mtx);
+        io::printi64ln(2222);
         let s = self.buffer.pop();
         self.count = self.count - 1;
         unlock_mutex(self.mtx);

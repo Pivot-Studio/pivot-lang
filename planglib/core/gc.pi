@@ -8,9 +8,13 @@ pub fn DioGC__disable_auto_collect() void;
 
 pub fn DioGC__enable_auto_collect() void;
 
-pub fn DioGC__stuck_begin() void;
+// pub fn DioGC__stuck_begin() void;
 
-pub fn DioGC__stuck_end() void;
+// pub fn DioGC__stuck_end() void;
+
+pub fn DioGC__safepoint() void;
+
+pub fn DioGC__set_eva(ev:bool) void;
 
 pub fn malloc<T>() *u8 {
     return DioGC__malloc(sizeof<T>(), gc_type<T>());
@@ -28,8 +32,31 @@ pub struct string {
 
 pub fn memcpy(dst: *u8, src: *u8, len: i64) void;
 
+/// # int_to_ptr
+/// 
+/// convert int to ptr
+/// 
+/// ## Safety
+/// 
+/// The pl's gc is a relocate gc which has an evacuate algorithm.
+/// During the evacuation, the pointers might be moved to another location,
+/// and all references to the moved pointer known by gc will be 
+/// automatically fixed to the new location. However, the poinetr 
+/// stored in interger is not the case.
+/// 
+/// As such, this function is highly dangerous and shall
+/// be used for debug purpose only. In no case the function shall be used
+/// to modify pointers.
 pub fn int_to_ptr(i: i64) *u8;
 
+
+/// # ptr_to_int
+/// 
+/// convert ptr to int
+/// 
+/// ## Safety
+/// 
+/// Shall be used for debug porpose only. See [int_to_ptr](gc.pi#48)
 pub fn ptr_to_int(ptr: *u8) i64;
 
 pub fn utf8_count(ptr: *u8, len:i64) i64;
@@ -40,8 +67,9 @@ impl string {
         let atomic: u8 = 0;
         let new = DioGC__malloc(self._byte_len + str._byte_len, atomic);
         memcpy(new, old, self._byte_len);
-        let new_i_end = ptr_to_int(new) + self._byte_len;
-        let new_end = int_to_ptr(new_i_end);
+        let arr = arr_from_raw(new, self._byte_len + str._byte_len);
+        // let new_i_end = ptr_to_int(new) + self._byte_len;
+        let new_end = &arr[self._byte_len];
         memcpy(new_end, str.data, str._byte_len);
         self.data = new;
         self._len = self._len + str._len;

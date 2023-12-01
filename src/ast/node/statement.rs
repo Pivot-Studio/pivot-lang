@@ -638,6 +638,7 @@ impl Node for StatementsNode {
             if let NodeEnum::Empty(_) = **m {
                 continue;
             }
+            builder.set_di_file(&ctx.get_file());
             if !terminator.is_none() {
                 if let NodeEnum::Comment(c) = &**m {
                     ctx.push_semantic_token(c.range, SemanticTokenType::COMMENT, 0);

@@ -453,7 +453,8 @@ impl<'a, 'ctx> Ctx<'a> {
         // builder.build_store(result_data_field, builder.int_value(&PriType::U64, 0, false)); TODO store null
         let cp = builder.get_or_insert_helper_fn_handle("__cast_panic");
         builder.try_set_fn_dbg(pos, cp);
-        builder.build_call(cp, &[], &PLType::Void, self);
+        builder.build_call(cp, &[], &PLType::Void, self, None);
+        builder.try_set_fn_dbg(pos, self.function.unwrap());
         builder.build_unconditional_branch(after_block);
         // after block
         self.position_at_end(after_block, builder);

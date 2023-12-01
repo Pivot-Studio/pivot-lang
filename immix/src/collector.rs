@@ -9,7 +9,7 @@ use std::{
 
 use libc::malloc;
 use parking_lot::{Condvar, Mutex};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 
 #[cfg(feature = "llvm_stackmap")]
 use crate::STACK_MAP;
@@ -45,7 +45,7 @@ pub struct Collector {
     status: RefCell<CollectorStatus>,
     frames_list: AtomicPtr<Vec<(*mut libc::c_void, *mut libc::c_void)>>,
     shadow_thread_running: AtomicBool,
-    live_set: FxHashSet<*mut u8>,
+    live_set: RefCell<FxHashMap<u64, *mut u8>>,
 }
 
 struct CollectorStatus {
@@ -120,7 +120,7 @@ impl Collector {
                 }),
                 frames_list: AtomicPtr::default(),
                 shadow_thread_running: AtomicBool::new(false),
-                live_set: FxHashSet::default(),
+                live_set: RefCell::new(FxHashMap::default()),
             }
         }
     }
@@ -156,9 +156,6 @@ impl Collector {
     /// ## Return
     /// * `ptr` - object pointer
     pub fn alloc(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
-        if size == 0 {
-            return std::ptr::null_mut();
-        }
         if !self.frames_list.load(Ordering::SeqCst).is_null() {
             panic!("gc stucked, can not alloc")
         }
@@ -175,6 +172,13 @@ impl Collector {
             }
             let mut status = self.status.borrow_mut();
             status.bytes_allocated_since_last_gc += ((size - 1) / LINE_SIZE + 1) * LINE_SIZE;
+        }
+        self.alloc_raw(size, obj_type)
+    }
+
+    fn alloc_raw(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
+        if size == 0 {
+            return std::ptr::null_mut();
         }
         unsafe {
             let ptr = self
@@ -215,26 +219,59 @@ impl Collector {
         self.roots.remove(&(root));
     }
 
-    /// used to correct forward pointer
+    /// # correct_ptr
+    ///
+    /// used to correct forward pointer in `evacuation`
+    ///
+    /// ## 一般情况
     ///
     /// 原本
     ///
+    /// ```no_run
     /// ptr -> heap_ptr -> value
+    /// ```
     ///
     /// evacuate之后
     ///
+    /// ```no_run
     /// ptr -> heap_ptr -> new_ptr(forwarded) -> value
+    /// ```
     ///
     /// 现在纠正为
     ///
+    /// ```no_run
     /// ptr -> new_ptr(forwarded) -> value
-    unsafe fn correct_ptr(&self, ptr: *mut u8, offset: isize) {
-        let ptr = ptr as *mut AtomicPtr<*mut u8>;
-        let new_ptr = *(*ptr).load(Ordering::SeqCst);
-        let ptr = ptr as *mut *mut u8;
-        debug_assert!(!new_ptr.is_null());
-        log::trace!("gc {} correct ptr {:p} to {:p}", self.id, ptr, new_ptr);
-        *ptr = new_ptr.offset(offset);
+    /// ```
+    ///
+    /// ## 特殊情况
+    ///
+    /// 有时候gc接触的指针不是原本的堆指针，他有个offset（derived pointer）
+    /// 这种情况下我们需要找到原本的堆指针，然后加上一个offset，这样才能纠正
+    ///
+    /// ## Parameters
+    ///
+    /// * `ptr` - pointer which points to the evacuated heap pointer
+    /// * `offset` - offset from derived pointer to heap pointer
+    ///
+    /// ## Return
+    ///
+    /// * `ptr` - corrected pointer
+    unsafe fn correct_ptr(&self, ptr: *mut u8, offset: isize) -> *mut u8 {
+        let father = ptr as *mut *mut u8;
+        let ptr = AtomicPtr::new((*father).offset(-offset) as *mut *mut u8);
+        let ptr = ptr.load(Ordering::SeqCst);
+        let new_ptr = *ptr;
+        debug_assert!(!new_ptr.is_null(), "{:p}", new_ptr);
+        let np = new_ptr.offset(offset);
+        log::trace!(
+            "gc {} correct ptr in {:p} from  {:p} to {:p}",
+            self.id,
+            father,
+            *father,
+            np
+        );
+        *father = np;
+        np
     }
 
     #[cfg(feature = "llvm_gc_plugin")]
@@ -259,29 +296,43 @@ impl Collector {
         // mark it if it is in heap
         if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
             // println!("mark ptr succ {:p} -> {:p}", father, ptr);
-            let block = Block::from_obj_ptr(ptr);
+            let block_p: *mut Block = Block::from_obj_ptr(ptr) as *mut _;
+
+            // if block.eva_alloced { // allocated for evacuation, skip marking
+            //     return;
+            // }
+            let block = &mut *block_p;
             let is_candidate = block.is_eva_candidate();
             let mut head = block.get_head_ptr(ptr);
+            if head.is_null() {
+                return;
+            }
             let offset_from_head = ptr.offset_from(head);
+            let (line_header, idx) = block.get_line_header_from_addr(head);
             if !is_candidate {
+                let block = &mut *block_p;
                 block.marked = true;
+
+                if line_header.get_marked() {
+                    return;
+                }
             } else {
-                let (line_header, _) = block.get_line_header_from_addr(head);
-                if line_header.get_forwarded() {
+                // evacuation logic
+                let (forward, h) = line_header.get_forward_start();
+                let old_h = h;
+                // if forward is true or cas is failed, then it's forwarded by other thread.
+                let shall_i_forward = !forward && line_header.forward_cas(old_h);
+                if !shall_i_forward {
+                    spin_until!(line_header.get_forwarded());
                     self.correct_ptr(father, offset_from_head);
                     return;
                 }
-            }
-            let (line_header, idx) = block.get_line_header_from_addr(head);
-            if line_header.get_marked() {
-                return;
-            }
-            // 若此block是待驱逐对象
-            if is_candidate {
+
+                // otherwise, we shall forward it
                 let atomic_ptr = head as *mut AtomicPtr<u8>;
-                let old_loaded = (*atomic_ptr).load(Ordering::SeqCst);
+
                 let obj_line_size = line_header.get_obj_line_size(idx, Block::from_obj_ptr(head));
-                let new_ptr = self.alloc(obj_line_size * LINE_SIZE, line_header.get_obj_type());
+                let new_ptr = self.alloc_raw(obj_line_size * LINE_SIZE, line_header.get_obj_type());
                 if !new_ptr.is_null() {
                     let new_block = Block::from_obj_ptr(new_ptr);
                     let (new_line_header, _) = new_block.get_line_header_from_addr(new_ptr);
@@ -289,36 +340,29 @@ impl Collector {
                     core::ptr::copy_nonoverlapping(head, new_ptr, obj_line_size * LINE_SIZE);
                     // core::ptr::copy_nonoverlapping(line_header as * const u8, new_line_header as * mut u8, line_size);
 
-                    // 线程安全性说明
-                    // 如果cas操作成功，代表没有别的线程与我们同时尝试驱逐这个模块
-                    // 如果cas操作失败，代表别的线程已经驱逐了这个模块
-                    // 此时虽然我们已经分配了驱逐空间并且将内容写入，但是我们还没有设置line_header的
-                    // 标记位，所以这块地址很快会在sweep阶段被识别并且回收利用。
-                    // 虽然这造成了一定程度的内存碎片化和潜在的重复操作，但是
-                    // 这种情况理论上是很少见的，所以这么做问题不大
-                    if (*atomic_ptr)
-                        .compare_exchange(old_loaded, new_ptr, Ordering::SeqCst, Ordering::SeqCst)
-                        .is_ok()
-                    {
-                        // 成功驱逐
-                        log::trace!("gc {}: eva {:p} to {:p}", self.id, head, new_ptr);
-                        new_line_header.set_marked(true);
-                        line_header.set_forwarded(true);
-                        new_block.marked = true;
-                        head = new_ptr;
-                        self.correct_ptr(father, offset_from_head);
-                    } else {
-                        // 期间别的线程驱逐了它
-                        spin_until!(line_header.get_forwarded());
-                        self.correct_ptr(father, offset_from_head);
-                        return;
-                    }
+                    // 将新指针写入老数据区开头
+                    (*atomic_ptr).store(new_ptr, Ordering::SeqCst);
+
+                    log::trace!("gc {}: eva {:p} to {:p}", self.id, head, new_ptr);
+                    new_line_header.set_marked(true);
+                    new_block.marked = true;
+                    head = new_ptr;
+                    self.correct_ptr(father, offset_from_head);
+                    // 成功驱逐
+                    line_header.set_forwarded();
+                } else {
+                    // 驱逐失败
+                    panic!("gc: OOM during evacuation");
                 }
             }
+
             line_header.set_marked(true);
             let obj_type = line_header.get_obj_type();
             match obj_type {
                 ObjectType::Atomic => {}
+                // ObjectType::Trait => self.mark_trait(head),
+                // ObjectType::Complex => self.mark_complex(head),
+                // ObjectType::Pointer => self.mark_ptr(head),
                 _ => (*self.queue).push((head, obj_type)),
             }
             return;
@@ -353,6 +397,9 @@ impl Collector {
     /// it self does not mark the object, but mark the object's fields by calling
     /// mark_ptr
     unsafe extern "C" fn mark_complex(&self, ptr: *mut u8) {
+        if ptr.is_null() {
+            return;
+        }
         let vptr = *(ptr as *mut *mut u8);
         if vptr.is_null() {
             return;
@@ -372,19 +419,21 @@ impl Collector {
         //    &&!self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr) {
         //     return;
         // }
-        let loaded = ptr as *mut *mut u8;
-        let ptr = loaded.offset(1);
         // the trait is not init
         if ptr.is_null() {
             return;
         }
+        let loaded = ptr as *mut *mut u8;
+        let ptr = loaded.offset(1);
         self.mark_ptr(ptr as *mut u8);
     }
-    pub fn keep_live(&mut self, gc_ptr: *mut u8) {
-        self.live_set.insert(gc_ptr);
+    pub fn keep_live(&self, gc_ptr: *mut u8) -> u64 {
+        let len = self.live_set.borrow().len();
+        self.live_set.borrow_mut().insert(len as _, gc_ptr);
+        len as _
     }
-    pub fn rm_live(&mut self, gc_ptr: *mut u8) {
-        self.live_set.remove(&gc_ptr);
+    pub fn rm_live(&self, handle: u64) {
+        self.live_set.borrow_mut().remove(&handle);
     }
     pub fn print_stats(&self) {
         println!("gc {} states:", self.id);
@@ -436,6 +485,12 @@ impl Collector {
             GC_MARKING.store(true, Ordering::Release);
             GC_STW_COUNT.fetch_add(1, Ordering::Relaxed);
             GC_MARK_COND.notify_all();
+            unsafe {
+                self.thread_local_allocator
+                    .as_mut()
+                    .unwrap()
+                    .get_more_works();
+            }
             drop(v);
         }
 
@@ -448,11 +503,6 @@ impl Collector {
                         _ => (*self.queue).push((*root, *obj_type)),
                     }
                 }
-            }
-        }
-        for live in self.live_set.iter() {
-            unsafe {
-                self.mark_ptr(live as *const _ as _);
             }
         }
         log::trace!("gc {}: marking...", self.id);
@@ -492,11 +542,20 @@ impl Collector {
                     // );
                     if let Some(f) = f {
                         // println!("found fn in stackmap, f: {:?} sp: {:p}", f,frame.sp());
-                        f.iter_roots().for_each(|(offset, _obj_type)| {
+                        f.iter_roots().for_each(|(offset, obj_type)| {
                             // println!("offset: {}", offset);
                             let sp = *sp as *mut u8;
                             let root = sp.offset(offset as isize);
-                            self.mark_ptr(root);
+                            if root.is_null() {
+                                return;
+                            }
+                            match obj_type {
+                                ObjectType::Atomic => panic!("stack root shall never be atomic"),
+                                ObjectType::Trait => self.mark_trait(*(root as *mut *mut u8)),
+                                ObjectType::Complex => self.mark_complex(*(root as *mut *mut u8)),
+                                ObjectType::Pointer => self.mark_ptr(root),
+                            }
+                            // self.mark_ptr(root);
                         });
                     }
                     depth += 1;
@@ -507,7 +566,6 @@ impl Collector {
 
         // iterate through queue and mark all reachable objects
         unsafe {
-            // (*self.queue).extend(self.roots.iter().map(|(a,b)|(*a,*b)));
             while let Some((obj, obj_type)) = (*self.queue).pop() {
                 match obj_type {
                     ObjectType::Atomic => {}
@@ -522,6 +580,19 @@ impl Collector {
                     }
                 }
             }
+        }
+        let mut lives = vec![];
+        for (i, live) in self.live_set.borrow().iter() {
+            unsafe {
+                let p = live as *const _ as _;
+                self.mark_ptr(p);
+                let p = p as *mut *mut u8;
+                lives.push((*i, *p));
+            }
+        }
+        self.live_set.borrow_mut().clear();
+        for (i, live) in lives {
+            self.live_set.borrow_mut().insert(i, live);
         }
 
         let mut v = GC_COLLECTOR_COUNT.lock();
@@ -548,7 +619,7 @@ impl Collector {
                 .unwrap()
                 .iter()
                 .for_each(|root| {
-                    self.mark_ptr((*root) as usize as *mut u8);
+                    self.mark_ptr(*root);
                 });
         }
     }
@@ -556,7 +627,7 @@ impl Collector {
     /// # sweep
     ///
     /// since we did synchronization in mark, we don't need to do synchronization again in sweep
-    pub fn sweep(&self) -> usize {
+    pub fn sweep(&self) -> (usize, usize) {
         GC_SWEEPPING_NUM.fetch_add(1, Ordering::AcqRel);
         GC_SWEEPING.store(true, Ordering::Release);
         log::trace!("gc {}: sweeping...", self.id);
@@ -566,7 +637,8 @@ impl Collector {
                 .unwrap()
                 .sweep(self.mark_histogram)
         };
-        self.status.borrow_mut().collect_threshold = (used as f64 * THRESHOLD_PROPORTION) as usize;
+        self.status.borrow_mut().collect_threshold =
+            (used.0 as f64 * THRESHOLD_PROPORTION) as usize;
         let v = GC_SWEEPPING_NUM.fetch_sub(1, Ordering::AcqRel);
         if v - 1 == 0 {
             GC_SWEEPING.store(false, Ordering::Release);
@@ -603,7 +675,7 @@ impl Collector {
         // 他要设置每个block是否是驱逐目标
         // 如果设置的时候别的线程的mark已经开始，那么将无法保证能够纠正所有被驱逐的指针
         unsafe {
-            if ENABLE_EVA.load(Ordering::Relaxed)
+            if ENABLE_EVA.load(Ordering::SeqCst)
                 && self.thread_local_allocator.as_mut().unwrap().should_eva()
             {
                 // 如果需要驱逐，首先计算驱逐阀域
@@ -646,7 +718,7 @@ impl Collector {
         }
         self.mark();
         // let mark_time = time.elapsed();
-        let _used = self.sweep();
+        let (_used, free) = self.sweep();
         // let sweep_time = time.elapsed() - mark_time;
         unsafe {
             self.thread_local_allocator
@@ -655,10 +727,10 @@ impl Collector {
                 .set_collect_mode(false);
         }
         log::info!(
-            "gc {} collect done, used heap size: {} byte",
+            "gc {} collect done, used heap size: {} bytes, freed {} bytes in this gc",
             self.id,
             _used,
-            // start_time.elapsed()
+            free
         );
         let mut status = self.status.borrow_mut();
         status.collecting = false;

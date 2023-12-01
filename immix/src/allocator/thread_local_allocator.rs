@@ -50,11 +50,13 @@ impl Drop for ThreadLocalAllocator {
             return;
         }
         let global_allocator = unsafe { &mut *self.global_allocator };
-        global_allocator.return_blocks(
-            self.unavailable_blocks
-                .drain(..)
-                .chain(self.recyclable_blocks.drain(..))
-                .chain(self.eva_blocks.drain(..)),
+        // here we should return all blocks to global allocator
+        // however, when a thread exits, it may still hold some non-empty blocks
+        // those blocks shall be stored and give to another thread latter
+        global_allocator.on_thread_destroy(
+            &self.eva_blocks,
+            self.recyclable_blocks.drain(..),
+            &self.unavailable_blocks,
         );
         self.live = false;
     }
@@ -92,6 +94,14 @@ impl ThreadLocalAllocator {
         self.collect_mode = collect_mode;
     }
 
+    pub fn get_more_works(&mut self) {
+        unsafe {
+            self.global_allocator
+                .as_mut()
+                .unwrap()
+                .get_returned_blocks(&mut self.recyclable_blocks, &mut self.unavailable_blocks);
+        }
+    }
     pub fn print_stats(&self) {
         println!("unavailable blocks: {}", self.unavailable_blocks.len());
         for block in &self.unavailable_blocks {
@@ -124,7 +134,14 @@ impl ThreadLocalAllocator {
     ///
     /// whether the collection should run evacuation algorithm
     pub fn should_eva(&self) -> bool {
-        self.recyclable_blocks.len() > 1
+        #[cfg(debug_assertions)]
+        {
+            true
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            self.recyclable_blocks.len() > 1
+        }
     }
 
     pub fn fill_available_histogram(&self, histogram: &mut FxHashMap<usize, usize>) -> usize {
@@ -144,11 +161,22 @@ impl ThreadLocalAllocator {
         total_available
     }
 
-    pub fn set_eva_threshold(&mut self, threshold: usize) {
+    pub fn set_eva_threshold(&mut self, _threshold: usize) {
         self.recyclable_blocks
             .iter()
             .chain(self.unavailable_blocks.iter())
-            .for_each(|block| unsafe { (**block).set_eva_threshold(threshold) });
+            .for_each(|block| unsafe {
+                (**block).set_eva_threshold({
+                    #[cfg(not(debug_assertions))]
+                    {
+                        _threshold
+                    }
+                    #[cfg(debug_assertions)]
+                    {
+                        0
+                    }
+                })
+            });
     }
 
     /// # get_size
@@ -322,10 +350,10 @@ impl ThreadLocalAllocator {
     /// * `*mut Block` - block pointer
     fn get_new_block(&mut self) -> *mut Block {
         if self.collect_mode && !self.eva_blocks.is_empty() {
-            return self.eva_blocks.pop().unwrap();
+            self.eva_blocks.pop().unwrap()
+        } else {
+            unsafe { (*self.global_allocator).get_block() }
         }
-
-        unsafe { (*self.global_allocator).get_block() }
     }
 
     /// # in_heap
@@ -343,11 +371,12 @@ impl ThreadLocalAllocator {
     /// Iterate all blocks, if a block is not marked, free it.
     /// Correct all remain blocks' headers, and classify them
     /// into recyclable blocks and unavailable blocks.
-    pub fn sweep(&mut self, mark_histogram: *mut FxHashMap<usize, usize>) -> usize {
+    pub fn sweep(&mut self, mark_histogram: *mut FxHashMap<usize, usize>) -> (usize, usize) {
         let mut recyclable_blocks = VecDeque::new();
         let mut unavailable_blocks = Vec::new();
         let mut free_blocks = Vec::new();
         let mut total_used = 0;
+        let mut free_lines = 0;
         unsafe {
             for block in self
                 .recyclable_blocks
@@ -356,7 +385,9 @@ impl ThreadLocalAllocator {
             {
                 let block = *block;
                 if (*block).marked {
-                    total_used += (*block).correct_header(mark_histogram);
+                    let (delta_u, delta_f) = (*block).correct_header(mark_histogram);
+                    total_used += delta_u;
+                    free_lines += delta_f;
                     let (line, _) = (*block).get_available_line_num_and_holes();
                     if line > 0 {
                         // debug_assert!(
@@ -413,6 +444,7 @@ impl ThreadLocalAllocator {
             }
         }
         self.big_objs = big_objs;
-        total_used * LINE_SIZE
+        let used_lines = total_used * LINE_SIZE;
+        (used_lines, free_lines * LINE_SIZE)
     }
 }

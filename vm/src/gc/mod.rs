@@ -52,6 +52,7 @@ mod _immix {
                 println!("{:?}", bt);
                 exit(1);
             }
+            // eprintln!("malloc: {:p}", re);
             re
         }
 
@@ -77,6 +78,14 @@ mod _immix {
 
         pub fn get_stw_num() -> i64 {
             immix::get_gc_stw_num() as _
+        }
+
+        pub fn set_eva(eva: bool) {
+            immix::set_evacuation(eva);
+        }
+
+        pub fn safepoint() {
+            immix::safepoint()
         }
 
         pub fn about() {

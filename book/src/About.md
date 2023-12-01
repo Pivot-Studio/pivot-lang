@@ -19,13 +19,12 @@
 
 ## CONTRIBUTING
 
-[CONTRIBUTING](CONTRIBUTING.md)  
-中文见[此处](https://lang.pivotstudio.cn/CONTRIBUTING-CN.html)  
-欢迎加入[社区群](https://jq.qq.com/?_wv=1027&k=I5vdShVl)
+中文见[此处](./CONTRIBUTING-CN.md)  
+欢迎加入[qq群](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=vjKI1nbRHAIz1UbmDOjttLurEw93mLhA&authKey=U6cUmnIxiptTskr9trZZ9vc2p291uWht8TlzPSOEPXliihLC9vAYMaRwDI0%2FolR8&noverify=0&group_code=688301255)
 
 ## dependencies
 
-- [llvm-14](https://github.com/llvm/llvm-project/releases/tag/llvmorg-14.0.6)
+- [llvm-16](https://github.com/llvm/llvm-project/releases/tag/llvmorg-16.0.6)
 - [rust](https://www.rust-lang.org/)
 
 **重要**：如果你想参与开发，请先在项目目录`make vm install`，然后根据自己是linux还是mac运行`make devlinux`或者`make devmac`

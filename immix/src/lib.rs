@@ -53,7 +53,7 @@ lazy_static! {
 #[cfg(feature = "llvm_stackmap")]
 pub struct StackMapWrapper {
     pub map: *mut FxHashMap<*const u8, Function>,
-    pub global_roots: *mut Vec<*const u8>,
+    pub global_roots: *mut Vec<*mut u8>,
 }
 #[cfg(feature = "llvm_stackmap")]
 unsafe impl Sync for StackMapWrapper {}
@@ -130,20 +130,20 @@ pub fn gc_add_root(root: *mut u8, obj_type: u8) {
     })
 }
 
-pub fn gc_keep_live(gc_ptr: *mut u8) {
+pub fn gc_keep_live(gc_ptr: *mut u8) -> u64 {
     SPACE.with(|gc| {
         // println!("start add_root");
-        let mut gc = gc.borrow_mut();
-        gc.keep_live(gc_ptr);
+        let gc = gc.borrow();
+        gc.keep_live(gc_ptr)
         // println!("add_root")
     })
 }
 
-pub fn gc_rm_live(gc_ptr: *mut u8) {
+pub fn gc_rm_live(handle: u64) {
     SPACE.with(|gc| {
         // println!("start add_root");
-        let mut gc = gc.borrow_mut();
-        gc.rm_live(gc_ptr);
+        let gc = gc.borrow();
+        gc.rm_live(handle);
         // println!("add_root")
     })
 }
@@ -173,6 +173,12 @@ pub fn gc_is_auto_collect_enabled() -> bool {
 pub fn no_gc_thread() {
     SPACE.with(|gc| {
         gc.borrow().unregister_current_thread();
+    })
+}
+
+pub fn safepoint() {
+    SPACE.with(|gc| {
+        gc.borrow().safepoint();
     })
 }
 

@@ -41,8 +41,10 @@ pub trait LineHeaderExt {
     fn set_is_head(&mut self, is_head: bool);
     fn get_is_used_follow(&self) -> bool;
     fn get_obj_line_size(&self, idx: usize, block: &mut Block) -> usize;
-    fn set_forwarded(&mut self, forwarded: bool);
+    fn set_forwarded(&mut self);
     fn get_forwarded(&self) -> bool;
+    fn get_forward_start(&self) -> (bool, LineHeader);
+    fn forward_cas(&mut self, old: u8) -> bool;
 }
 
 /// A block is a 32KB memory region.
@@ -53,7 +55,7 @@ pub trait LineHeaderExt {
 pub struct Block {
     /// |                           LINE HEADER(1 byte)                         |
     /// |    7   |    6   |    5   |    4   |    3   |    2   |    1   |    0   |
-    /// | is head|   eva  |     not used    |    object type  | marked |  used  |
+    /// | is head|   eva  |  evaed |    -   |    object type  | marked |  used  |
     line_map: [LineHeader; NUM_LINES_PER_BLOCK],
     /// 第一个hole的起始行号
     cursor: usize,
@@ -105,22 +107,35 @@ impl HeaderExt for u8 {
 }
 impl LineHeaderExt for LineHeader {
     #[inline]
-    fn set_forwarded(&mut self, forwarded: bool) {
+    fn set_forwarded(&mut self) {
         let atom_self = self as *mut u8 as *mut AtomicU8;
         unsafe {
             let value = (*atom_self).load(Ordering::SeqCst);
-            let forwarded = if forwarded {
-                value | 0b1000000
-            } else {
-                value & !0b1000000
-            };
+            let forwarded = value | 0b100000;
             (*atom_self).store(forwarded, Ordering::Release);
         }
     }
     #[inline]
+    fn get_forward_start(&self) -> (bool, LineHeader) {
+        let atom_self = self as *const u8 as *const AtomicU8;
+        let load = unsafe { (*atom_self).load(Ordering::Acquire) };
+        (load & 0b1000000 == 0b1000000, load)
+    }
+
+    #[inline]
     fn get_forwarded(&self) -> bool {
         let atom_self = self as *const u8 as *const AtomicU8;
-        unsafe { (*atom_self).load(Ordering::Acquire) & 0b1000000 == 0b1000000 }
+        let load = unsafe { (*atom_self).load(Ordering::Acquire) };
+        load & 0b100000 == 0b100000
+    }
+    #[inline]
+    fn forward_cas(&mut self, old: u8) -> bool {
+        let atom_self = self as *mut u8 as *mut AtomicU8;
+        unsafe {
+            (*atom_self)
+                .compare_exchange(old, old | 0b1000000, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+        }
     }
 
     fn get_obj_line_size(&self, idx: usize, block: &mut Block) -> usize {
@@ -220,7 +235,10 @@ impl Block {
 
     /// # correct_header
     /// 回收的最后阶段，重置block的header
-    pub unsafe fn correct_header(&mut self, mark_histogram: *mut FxHashMap<usize, usize>) -> usize {
+    pub unsafe fn correct_header(
+        &mut self,
+        mark_histogram: *mut FxHashMap<usize, usize>,
+    ) -> (usize, usize) {
         let mut idx = 3;
         let mut len = 0;
         let mut first_hole_line_idx: usize = 3;
@@ -229,10 +247,12 @@ impl Block {
         // 这个marked代表之前是否有被标记的对象头出现
         let mut marked = false;
         let mut marked_num = 0;
+        let curr_avai = self.available_line_num;
         self.available_line_num = 0;
 
         while idx < NUM_LINES_PER_BLOCK {
-            // 未使用或者未标记
+            self.line_map[idx] &= !0b1100000; // unset forward bits
+                                              // 未使用或者未标记
             if !self.line_map[idx].get_used()
                 || (self.line_map[idx] & 0b10 == 0 //即使标记位为0，也有可能是被标记的对象数据体
                     && (!marked || self.line_map[idx] & 0b10000010 == 0b10000000))
@@ -280,7 +300,7 @@ impl Block {
         } else {
             (*mark_histogram).insert(self.hole_num, marked_num);
         }
-        marked_num
+        (marked_num, self.available_line_num - curr_avai)
     }
 
     /// # find_next_hole
@@ -380,6 +400,10 @@ impl Block {
     /// passing the pointer to the field b.
     pub unsafe fn get_head_ptr(&mut self, ptr: *mut u8) -> *mut u8 {
         let mut idx = self.get_line_idx_from_addr(ptr);
+        if idx < 3 {
+            log::warn!("invalid pointer: {:p}", ptr);
+            return std::ptr::null_mut();
+        }
         let mut header = self.get_nth_line_header(idx);
         // 如果是head，直接返回
         if header.get_is_head() {
@@ -387,6 +411,10 @@ impl Block {
         }
         // 否则往前找到head
         while !header.get_is_head() {
+            if idx < 3 {
+                log::warn!("invalid pointer: {:p}", ptr);
+                return std::ptr::null_mut();
+            }
             header = self.get_nth_line_header(idx - 1);
             idx -= 1;
         }

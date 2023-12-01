@@ -31,8 +31,9 @@ use crate::ast::pltype::PLType;
 pub struct GeneratorCtxData {
     pub table: LinkedHashMap<String, PLSymbolData>,
     pub entry_bb: BlockHandle,
-    pub ctx_handle: ValueHandle, //handle in setup function
-    pub ret_handle: ValueHandle, //handle in setup function
+    pub ctx_handle: ValueHandle,       //handle in setup function
+    pub ret_handle: ValueHandle,       //handle in setup function
+    pub yield_ctx_handle: ValueHandle, //handle in yield function
     pub prev_yield_bb: Option<BlockHandle>,
     pub ctx_size_handle: ValueHandle,
     pub is_para: bool,
@@ -237,6 +238,13 @@ pub(crate) fn init_generator<'a>(
     let f = builder.add_generator_yield_fn(child, &st_tp.get_full_name(), &rettp.borrow());
     child.function = Some(f);
     let allocab = builder.append_basic_block(*funcvalue, "alloc");
+    let param_tys = fnvalue
+        .fntype
+        .param_pltypes
+        .iter()
+        .map(|x| x.get_type(child, builder, false).unwrap())
+        .collect::<Vec<_>>();
+    builder.create_params_roots(*funcvalue, allocab, &param_tys);
     let entry = builder.append_basic_block(*funcvalue, "set_up_entry");
     builder.position_at_end_block(allocab);
     *generator_alloca_b = allocab;

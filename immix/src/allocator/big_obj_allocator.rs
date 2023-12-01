@@ -94,14 +94,14 @@ impl BigObjAllocator {
 
         let chunk = self.alloc_chunk(size).unwrap();
         unsafe { self.current = self.current.add(size) };
-        println!("get_chunk: {:p}[new {}]", chunk, size);
+        log::trace!("get_chunk: {:p}[new {}]", chunk, size);
         chunk
     }
 
     pub fn return_chunk(&mut self, obj: *mut BigObj) {
         let _lock = self.lock.lock();
         let size = unsafe { (*obj).size };
-        println!("ret_chunk: {:p}[size {}]", obj, size);
+        log::trace!("ret_chunk: {:p}[size {}]", obj, size);
         let mut merged = false;
         // 合并相邻free_obj
         for i in 0..self.unused_chunks.len() {

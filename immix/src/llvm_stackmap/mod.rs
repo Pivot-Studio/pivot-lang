@@ -119,7 +119,7 @@ fn get_function_roots(ptr: *const u8, num: i32) -> (Vec<(i32, ObjectType)>, *con
 pub fn build_root_maps(
     mapptr: *const u8,
     roots: &mut FxHashMap<*const u8, Function>,
-    global_roots: &mut Vec<*const u8>,
+    global_roots: &mut Vec<*mut u8>,
 ) {
     let num_functions = get_num_functions(mapptr);
     let mut ptr = get_first_function_addr(mapptr);
@@ -136,14 +136,14 @@ pub fn build_root_maps(
     build_global_roots(ptr, global_roots);
 }
 
-fn build_global_roots(ptr: *const u8, global_roots: &mut Vec<*const u8>) {
+fn build_global_roots(ptr: *const u8, global_roots: &mut Vec<*mut u8>) {
     let num_globals = unsafe { *(ptr as *const i32) };
     let ptr = unsafe { ptr.add(4) };
     let ptr = align_up_to(ptr as usize, 8) as *const u8;
     let mut ptr = ptr as *const *const u8;
     for _ in 0..num_globals {
         let global = unsafe { *ptr };
-        global_roots.push(global);
+        global_roots.push(global.cast_mut());
         ptr = unsafe { ptr.add(1) };
     }
 }

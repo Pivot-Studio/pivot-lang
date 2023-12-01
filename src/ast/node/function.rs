@@ -90,7 +90,13 @@ impl FuncCallNode {
         }
         let re = builder.build_struct_gep(v, 0, "real_fn", &ct, ctx).unwrap();
         let re = builder.build_load(re, "real_fn", &PLType::new_i8_ptr(), ctx);
-        let ret = builder.build_call(re, &para_values, &c.ret_type.borrow(), ctx);
+        let ret = builder.build_call(
+            re,
+            &para_values,
+            &c.ret_type.borrow(),
+            ctx,
+            Some(self.range.start),
+        );
         builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
         handle_ret(ret, c.ret_type.clone())
     }
@@ -285,7 +291,13 @@ impl Node for FuncCallNode {
             //     fnvalue.fntype.ret_pltype.get_type(ctx, builder, true)
             // })?;
             builder.position_at_end_block(bb);
-            let ret = builder.build_call(function, &para_values, &rettp.borrow(), ctx);
+            let ret = builder.build_call(
+                function,
+                &para_values,
+                &rettp.borrow(),
+                ctx,
+                Some(self.range.start),
+            );
             ctx.save_if_comment_doc_hover(id_range, Some(fnvalue.doc.clone()));
             handle_ret(ret, rettp)
         });
@@ -556,7 +568,7 @@ impl FuncDefNode {
         mut builder: &'b BuilderEnum<'a, '_>,
         fnvalue: FNValue,
     ) -> Result<(), PLDiag> {
-        ctx.run_as_root_ctx(|ctx| {
+        let re = ctx.run_as_root_ctx(|ctx| {
             let noop = BuilderEnum::NoOp(NoOpBuilder::default());
             // get it's pointer
             let noop_ptr = &noop as *const BuilderEnum<'a, '_>;
@@ -616,6 +628,7 @@ impl FuncDefNode {
                     )?;
                 }
 
+                builder.set_di_file(&fnvalue.path);
                 builder.build_sub_program(
                     self.paralist.clone(),
                     fnvalue.fntype.ret_pltype.clone(),
@@ -627,6 +640,7 @@ impl FuncDefNode {
                 let allocab = builder.append_basic_block(funcvalue, "alloc");
                 let entry = builder.append_basic_block(funcvalue, "entry");
                 if self.generator {
+                    builder.tag_generator_ctx_as_root(funcvalue, child);
                     generator::save_generator_init_block(builder, child, entry);
                 }
                 let return_block = builder.append_basic_block(funcvalue, "return");
@@ -777,7 +791,10 @@ impl FuncDefNode {
                 builder.build_unconditional_branch(entry);
                 Ok(())
             })
-        })
+        });
+        builder.set_di_file(&ctx.get_file());
+        // builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
+        re
     }
 }
 
@@ -863,7 +880,11 @@ impl Node for ClosureNode {
     ) -> NodeResult {
         // 设计： https://github.com/Pivot-Studio/pivot-lang/issues/284
         let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap().tp);
-        let closure_name = format!("closure_{}", CLOSURE_COUNT.fetch_add(1, Ordering::Relaxed));
+        let closure_name = format!(
+            "closure_line{}_{}",
+            self.range.start.line,
+            CLOSURE_COUNT.fetch_add(1, Ordering::Relaxed)
+        );
         let mut st_tp = STType {
             name: closure_name.clone(),
             path: ctx.plmod.path.clone(),
@@ -1023,7 +1044,13 @@ impl Node for ClosureNode {
             );
 
             let parapltype = tp;
-            builder.create_closure_parameter_variable(i as u32 + 1, f, alloca);
+            builder.create_closure_parameter_variable(
+                i as u32 + 1,
+                f,
+                alloca,
+                allocab,
+                &parapltype.borrow(),
+            );
             child
                 .add_symbol(
                     self.paralist[i].0.name.clone(),

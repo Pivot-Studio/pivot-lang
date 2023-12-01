@@ -606,7 +606,7 @@ impl<'a, 'ctx> Ctx<'a> {
                                     )
                                     .unwrap(),
                                 "closure_loaded",
-                                &PLType::Pointer(Arc::new(RefCell::new(PLType::new_i8_ptr()))),
+                                &PLType::new_i8_ptr(),
                                 unsafe { &mut *ptr },
                             ),
                             ..new_symbol
@@ -782,6 +782,7 @@ impl<'a, 'ctx> Ctx<'a> {
             &[],
             &PLType::Void,
             self,
+            None,
         );
     }
     fn init_global_walk<'b>(
@@ -799,7 +800,7 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         let f = builder.add_function(&name, &[], PLType::Void, self);
         builder.rm_curr_debug_location();
-        builder.build_call(f, &[], &PLType::Void, self);
+        builder.build_call(f, &[], &PLType::Void, self, None);
         set.insert(name);
     }
 
