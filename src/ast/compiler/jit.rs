@@ -1,9 +1,9 @@
-use inkwell::module::Module;
+use inkwell::{module::Module, memory_buffer::MemoryBuffer};
 
 use inkwell::context::Context;
 
 use log;
-use std::ffi::CString;
+use std::ffi::{CString, c_char};
 
 use immix::set_shadow_stack_addr;
 use inkwell::support;
@@ -39,7 +39,7 @@ pub fn run(p: &Path, opt: OptimizationLevel) -> i64 {
     // FIXME: currently stackmap support on jit code is not possible due to
     // lack of support in inkwell https://github.com/TheDan64/inkwell/issues/296
     // so we disable gc in jit mode for now
-    // immix::gc_disable_auto_collect();
+    immix::gc_disable_auto_collect();
     // extern "C" fn gc_init(ptr: *mut u8) {
     //     println!("gc init {:p}", ptr);
     //     immix::gc_init(ptr);
@@ -48,7 +48,18 @@ pub fn run(p: &Path, opt: OptimizationLevel) -> i64 {
 
     support::enable_llvm_pretty_stack_trace();
     let ctx = &Context::create();
-    let re = Module::parse_bitcode_from_path(p, ctx).unwrap();
+    extern "C" {fn parse_ir(path: *const c_char) -> llvm_sys::prelude::LLVMMemoryBufferRef;}
+    let re = if p.to_str().unwrap().ends_with(".ll") {
+        let c_str = CString::new(p.to_str().unwrap()).unwrap();
+        let m = unsafe {parse_ir(c_str.as_ptr())};
+        let mb = unsafe {
+            MemoryBuffer::new(m)
+        };
+        Module::parse_bitcode_from_buffer(&mb, ctx).unwrap()
+    } else {
+        Module::parse_bitcode_from_path(p, ctx).unwrap()
+        
+    };
     // let chain = re.get_global("llvm_gc_root_chain").unwrap();
     // // chain.set_thread_local(true);
     // // chain.set_thread_local_mode(Some(inkwell::ThreadLocalMode::InitialExecTLSModel));

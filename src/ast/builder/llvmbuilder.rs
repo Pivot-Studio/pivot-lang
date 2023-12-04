@@ -1580,18 +1580,18 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 })
                 .collect::<Vec<_>>(),
         );
-        // see https://llvm.org/docs/LangRef.html#the-llvm-used-global-variable
-        let used_global = self
-            .module
-            .add_global(used_arr.get_type(), None, "llvm.used");
-        used_global.set_linkage(Linkage::Appending);
-        used_global.set_initializer(&used_arr);
         if crate::ast::jit_config::IS_JIT.load(std::sync::atomic::Ordering::Relaxed) {
             // jit is using shadow stack, skip immix pass
             self.module.get_functions().for_each(|f| {
                 f.set_gc("shadow-stack");
             });
         } else {
+            // see https://llvm.org/docs/LangRef.html#the-llvm-used-global-variable
+            let used_global = self
+                .module
+                .add_global(used_arr.get_type(), None, "llvm.used");
+            used_global.set_linkage(Linkage::Appending);
+            used_global.set_initializer(&used_arr);
             extern "C" {
                 // fn add_module_pass(ptr: *mut u8);
                 fn run_module_pass(m: *mut u8, tm: i32);

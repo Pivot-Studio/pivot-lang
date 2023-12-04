@@ -1,6 +1,7 @@
 // #include "llvm/CodeGen/GCStrategy.h"
 #include "llvm/IR/GCStrategy.h"
 #include "llvm/IR/BuiltinGCs.h"
+#include "llvm/IRReader/IRReader.h"
 #include "llvm/Support/Compiler.h"
 #include "plimmixprinter.cpp"
 #include "plimmix_pass.cpp"
@@ -8,6 +9,7 @@
 #include "llvm/Passes/PassPlugin.h"
 
 #include "llvm-c/Types.h"
+#include "llvm-c/BitWriter.h"
 #include "llvm-c/Transforms/PassBuilder.h"
 
 using namespace llvm;
@@ -30,6 +32,22 @@ namespace
 
     GCRegistry::Add<PLImmixGC>
         X("plimmix", "pivot-lang immix garbage collector.");
+}
+
+extern "C" LLVMMemoryBufferRef parse_ir(char* ir)
+{
+    SMDiagnostic Err;
+    auto Ctx = std::make_unique<LLVMContext>();
+    auto sIr = std::string(ir);
+    auto Mod = parseIRFile(sIr, Err, *Ctx);
+    if (!Mod)
+    {
+        Err.print("immix", errs());
+        return nullptr;
+    }
+    auto mb = LLVMWriteBitcodeToMemoryBuffer(wrap(Mod.release()));
+
+    return mb;
 }
 
 extern "C" void LLVMLinkPLImmixGC()

@@ -57,7 +57,7 @@
             },
             "args": [
                 "run",
-                "out.bc"
+                "out.ll"
             ]
         },
         {
