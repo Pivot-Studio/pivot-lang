@@ -160,7 +160,9 @@ impl Collector {
             panic!("gc stucked, can not alloc")
         }
         if gc_is_auto_collect_enabled() {
-            if GC_RUNNING.load(Ordering::Acquire) || unsafe{GLOBAL_ALLOCATOR.0.as_ref().unwrap().should_gc() }{
+            if GC_RUNNING.load(Ordering::Acquire)
+                || unsafe { GLOBAL_ALLOCATOR.0.as_ref().unwrap().should_gc() }
+            {
                 self.collect();
             }
             let status = self.status.borrow();
@@ -173,11 +175,10 @@ impl Collector {
             let mut status = self.status.borrow_mut();
             status.bytes_allocated_since_last_gc += ((size - 1) / LINE_SIZE + 1) * LINE_SIZE;
         }
-        let p = self.alloc_raw(size, obj_type);
-        p
+        self.alloc_raw(size, obj_type)
     }
 
-     pub fn alloc_raw(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
+    pub fn alloc_raw(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
         if size == 0 {
             return std::ptr::null_mut();
         }
@@ -370,7 +371,6 @@ impl Collector {
                 // ObjectType::Pointer => self.mark_ptr(head),
                 _ => (*self.queue).push((head, obj_type)),
             }
-            return;
         }
         // mark it if it is a big object
         else if self

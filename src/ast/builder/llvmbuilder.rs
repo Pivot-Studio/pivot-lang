@@ -148,7 +148,6 @@ pub struct LLVMBuilder<'a, 'ctx> {
 }
 
 pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
-
     let triple = &TargetMachine::get_default_triple();
     let s1 = TargetMachine::get_host_cpu_name();
     let cpu = s1.to_str().unwrap();
@@ -156,7 +155,8 @@ pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
     let features = s2.to_str().unwrap();
     Target::initialize_native(&InitializationConfig::default()).unwrap();
     let target = Target::from_triple(triple).unwrap();
-    let tm = target
+
+    target
         .create_target_machine(
             triple,
             cpu,
@@ -165,8 +165,7 @@ pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
             inkwell::targets::RelocMode::Default,
             inkwell::targets::CodeModel::Default,
         )
-        .unwrap();
-    tm
+        .unwrap()
 }
 
 impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
@@ -425,7 +424,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .left()
                     .unwrap();
 
-
                 self.builder
                     .build_memset(
                         arr_space.into_pointer_value(),
@@ -436,12 +434,16 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .unwrap();
                 // store arr rtti
                 // it's the arr pointer at offset 8 of arr_space
-                let arr_space = unsafe{self.builder.build_in_bounds_gep(
-                    self.context.i8_type(),
-                    arr_space.into_pointer_value(),
-                    &[self.context.i64_type().const_int(8, false)],
-                    "arr_space",
-                ).unwrap()};
+                let arr_space = unsafe {
+                    self.builder
+                        .build_in_bounds_gep(
+                            self.context.i8_type(),
+                            arr_space.into_pointer_value(),
+                            &[self.context.i64_type().const_int(8, false)],
+                            "arr_space",
+                        )
+                        .unwrap()
+                };
                 // rtti is the heap pointer
                 let rtti = self
                     .builder
@@ -453,9 +455,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .unwrap();
                 self.builder.build_store(arr_space, rtti).unwrap();
 
-
-                
-
                 // every heap pointer has possible to move after malloc(if this malloc triigers gc's evacuation) so we need to reload it
                 casted_result = self
                     .builder
@@ -466,12 +465,16 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .build_struct_gep(llvmtp, casted_result.into_pointer_value(), 1, "arr_ptr")
                     .unwrap();
                 // offset arr_space 8 bytes (rtti)
-                let arr_space = unsafe{self.builder.build_in_bounds_gep(
-                    self.context.i8_type(),
-                    arr_space,
-                    &[self.context.i64_type().const_int(8, false)],
-                    "arr_space",
-                ).unwrap()};
+                let arr_space = unsafe {
+                    self.builder
+                        .build_in_bounds_gep(
+                            self.context.i8_type(),
+                            arr_space,
+                            &[self.context.i64_type().const_int(8, false)],
+                            "arr_space",
+                        )
+                        .unwrap()
+                };
                 self.builder.build_store(arr_ptr, arr_space).unwrap();
             }
         }
@@ -597,7 +600,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
 
     /// 第一个参数必须是一个二重以上的指针，且不能是一重指针bitcast过来的二重指针
     /// 否则可能导致bus error
-    fn gc_add_root(&self, stackptr: BasicValueEnum<'ctx>, obj_type: u8) {
+    fn gc_add_root(&self, _stackptr: BasicValueEnum<'ctx>, _obj_type: u8) {
         // self.module
         //     .get_function("llvm.gcroot")
         //     .or_else(|| {
@@ -696,7 +699,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn gen_or_get_arr_visit_function(&self, ctx: &mut Ctx<'a>, v: &ARRType) -> FunctionValue<'ctx> {
-        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::from(1));
+        let _i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::from(1));
         let currentbb = self.builder.get_insert_block();
         self.builder.unset_current_debug_location();
         let ptrtp = self.arr_type(v, ctx).ptr_type(AddressSpace::from(1));
@@ -1579,9 +1582,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let used_arr = self.i8ptr().const_array(
             &used
                 .iter()
-                .map(|v| {
-                    v.as_global_value().as_pointer_value()
-                })
+                .map(|v| v.as_global_value().as_pointer_value())
                 .collect::<Vec<_>>(),
         );
         if crate::ast::jit_config::IS_JIT.load(std::sync::atomic::Ordering::Relaxed) {
@@ -1691,8 +1692,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let lv = self.get_llvm_value(from).unwrap();
         let re = if lv.is_function_value() {
             lv.into_function_value()
-                        .as_global_value()
-                        .as_pointer_value()
+                .as_global_value()
+                .as_pointer_value()
         } else {
             lv.into_pointer_value()
         };
@@ -1846,7 +1847,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let alloca = if matches!(ret_type, PLType::Void | PLType::Primitive(_)) {
             0
         } else {
-            self.alloc_raw("ret_alloca", ret_type, ctx, None, "DioGC__malloc_no_collect")
+            self.alloc_raw(
+                "ret_alloca",
+                ret_type,
+                ctx,
+                None,
+                "DioGC__malloc_no_collect",
+            )
         };
         let builder = self.builder;
         let f = self.get_llvm_value(f).unwrap();
@@ -2892,7 +2899,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     ) {
         let currentbb = ctx.block;
         self.builder.unset_current_debug_location();
-        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::from(1));
+        let _i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::from(1));
         let ty = self.struct_type(v, ctx);
         let ptrtp = ty.ptr_type(AddressSpace::from(1));
         let ftp = self.mark_fn_tp(ptrtp);

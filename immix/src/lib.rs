@@ -63,7 +63,6 @@ const DEFAULT_HEAP_SIZE: usize = 1024 * 1024 * 1024 * 16;
 
 lazy_static! {
     pub static ref GLOBAL_ALLOCATOR: GAWrapper = unsafe {
-
         let mut heap_size = DEFAULT_HEAP_SIZE;
         if let Ok(usage) = sys_info::mem_info() {
             heap_size = usage.total as usize * 1024;
@@ -111,7 +110,6 @@ pub fn gc_malloc(size: usize, obj_type: u8) -> *mut u8 {
         gc.alloc(size, ObjectType::from_int(obj_type).unwrap())
     })
 }
-
 
 pub fn gc_malloc_no_collect(size: usize, obj_type: u8) -> *mut u8 {
     SPACE.with(|gc| {

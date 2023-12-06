@@ -1,9 +1,9 @@
-use inkwell::{module::Module, memory_buffer::MemoryBuffer};
+use inkwell::{memory_buffer::MemoryBuffer, module::Module};
 
 use inkwell::context::Context;
 
 use log;
-use std::ffi::{CString, c_char};
+use std::ffi::{c_char, CString};
 
 use immix::set_shadow_stack_addr;
 use inkwell::support;
@@ -48,17 +48,16 @@ pub fn run(p: &Path, opt: OptimizationLevel) -> i64 {
 
     support::enable_llvm_pretty_stack_trace();
     let ctx = &Context::create();
-    extern "C" {fn parse_ir(path: *const c_char) -> llvm_sys::prelude::LLVMMemoryBufferRef;}
+    extern "C" {
+        fn parse_ir(path: *const c_char) -> llvm_sys::prelude::LLVMMemoryBufferRef;
+    }
     let re = if p.to_str().unwrap().ends_with(".ll") {
         let c_str = CString::new(p.to_str().unwrap()).unwrap();
-        let m = unsafe {parse_ir(c_str.as_ptr())};
-        let mb = unsafe {
-            MemoryBuffer::new(m)
-        };
+        let m = unsafe { parse_ir(c_str.as_ptr()) };
+        let mb = unsafe { MemoryBuffer::new(m) };
         Module::parse_bitcode_from_buffer(&mb, ctx).unwrap()
     } else {
         Module::parse_bitcode_from_path(p, ctx).unwrap()
-        
     };
     // let chain = re.get_global("llvm_gc_root_chain").unwrap();
     // // chain.set_thread_local(true);

@@ -131,7 +131,7 @@ impl GlobalAllocator {
 
     pub fn should_gc(&self) -> bool {
         unsafe {
-            let p =         self.current.get().add(BLOCK_SIZE*3);
+            let p = self.current.get().add(BLOCK_SIZE * 3);
             p >= self.heap_end
         }
     }

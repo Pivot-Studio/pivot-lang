@@ -17,11 +17,11 @@ pub struct NoOpBuilder<'a, 'ctx> {
 impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     fn alloc_no_collect(
         &self,
-        name: &str,
-        pltype: &PLType,
-        ctx: &mut Ctx<'a>,
-        declare: Option<Pos>,
-    ) -> ValueHandle{
+        _name: &str,
+        _pltype: &PLType,
+        _ctx: &mut Ctx<'a>,
+        _declare: Option<Pos>,
+    ) -> ValueHandle {
         0
     }
     fn bitcast(

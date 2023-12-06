@@ -34,15 +34,6 @@ mod _immix {
         num_constants: u32,
         num_records: u32,
     }
-    extern "C" {
-        // The section name on macOS is `__llvm_stackmaps`, but
-        // on Linux it is `.llvm_stackmaps`, however the segment
-        // name is the same on both.
-        #[link_name = "__LLVM_STACKMAPS"]
-        pub(crate) static STACK_MAP_HEADER: StackMapHeader;
-    }
-
-
     #[used]
     #[no_mangle]
     pub static _IMMIX_OBJTYPE_ATOMIC: u8 = 0;

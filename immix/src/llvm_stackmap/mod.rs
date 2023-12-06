@@ -1,14 +1,12 @@
+#![allow(dead_code)]
 use int_enum::IntEnum;
 use rustc_hash::FxHashMap;
 
 use crate::ObjectType;
-use std::{rc::Rc, marker::PhantomData, ptr::read_unaligned};
+use std::marker::PhantomData;
 
-
-const SAFE_POINT_ID:u64 = 2882400000;
-const GC_ROOT_ID :u64 = 114514;
-
-
+const SAFE_POINT_ID: u64 = 2882400000;
+// const GC_ROOT_ID: u64 = 114514;
 
 #[no_mangle]
 pub fn print_stack_map(mapptr: *const u8) {
@@ -62,7 +60,7 @@ pub struct Function {
 
 impl Function {
     pub fn new(ptr: *const u8) -> (Function, *const u8) {
-        let (frame_size, arg_num, root_size) = get_function_meta(ptr);
+        let (frame_size, _, root_size) = get_function_meta(ptr);
         // println!("frame_size: {}", frame_size);
         // println!("arg_num: {}", arg_num);
         // println!("root size: {}", root_size);
@@ -166,7 +164,7 @@ struct StkMapRecord {
 struct Location {
     tp: u8,
     reserved: u8,
-    size : u16,
+    size: u16,
     dwarf_reg_num: u16,
     reserved2: u16,
     offset_or_small_const: i32,
@@ -223,7 +221,7 @@ struct LiveOuts {
 pub fn build_root_maps(
     mapptr: *const u8,
     roots: &mut FxHashMap<*const u8, Function>,
-    global_roots: &mut Vec<*const u8>,
+    _global_roots: &mut Vec<*const u8>,
 ) {
     let header_ptr = mapptr as *const Header;
     let header = unsafe { *header_ptr };
@@ -231,14 +229,14 @@ pub fn build_root_maps(
         return;
     }
     // println!("header: {:?}", header);
-    let meta_ptr = unsafe { header_ptr.add(1)  } as *const Meta;
+    let meta_ptr = unsafe { header_ptr.add(1) } as *const Meta;
     let meta = unsafe { *meta_ptr };
     // println!("meta: {:?}", meta);
     let ptr = unsafe { meta_ptr.add(1) } as *const StkSizeRecord;
     let stk_sizes_slice = unsafe { std::slice::from_raw_parts(ptr, meta.num_functions as usize) };
     // println!("stk_sizes: {:?}", stk_sizes_slice);
     let ptr = unsafe { ptr.add(meta.num_functions as usize) } as *const Constants;
-    let constants_slice = unsafe { std::slice::from_raw_parts(ptr, meta.num_constants as usize) };
+    // let constants_slice = unsafe { std::slice::from_raw_parts(ptr, meta.num_constants as usize) };
     // println!("constants: {:?}", constants_slice);
     let mut start_ptr = unsafe { ptr.add(meta.num_constants as usize) } as *const StkMapRecord;
     for f in stk_sizes_slice {
@@ -246,12 +244,17 @@ pub fn build_root_maps(
             let record = unsafe { *start_ptr };
             // println!("record: {:?}", record);
             let ptr = unsafe { start_ptr.add(1) } as *const Location;
-            let locations_slice = unsafe { std::slice::from_raw_parts(ptr, record.num_locations as usize) };
+            let locations_slice =
+                unsafe { std::slice::from_raw_parts(ptr, record.num_locations as usize) };
             #[cfg(debug_assertions)]
             for loc in locations_slice {
-                debug_assert!(loc.tp == 1 || loc.tp == 2 || loc.tp == 3 || loc.tp == 4|| loc.tp == 5, "loc.tp: {}", loc.tp);
+                debug_assert!(
+                    loc.tp == 1 || loc.tp == 2 || loc.tp == 3 || loc.tp == 4 || loc.tp == 5,
+                    "loc.tp: {}",
+                    loc.tp
+                );
                 let s = loc.size;
-                debug_assert_eq!(s , 8 as u16);
+                debug_assert_eq!(s, 8_u16);
             }
             // if record.patch_point_id == GC_ROOT_ID {
             //     let mut size = 0;
@@ -260,19 +263,22 @@ pub fn build_root_maps(
             //         size += loc.size as i32;
             //     }
             // }
-            if record.patch_point_id == SAFE_POINT_ID  {
-                let mut fn_roots:Vec<(i32, ObjectType)> = vec![];
+            if record.patch_point_id == SAFE_POINT_ID {
+                let mut fn_roots: Vec<(i32, ObjectType)> = vec![];
                 for loc in locations_slice {
                     if loc.tp == 3 {
-                        fn_roots.push((loc.offset_or_small_const, ObjectType::Pointer));   
-                    }else if loc.tp == 2 ||  loc.tp == 1||  loc.tp == 5 {
+                        fn_roots.push((loc.offset_or_small_const, ObjectType::Pointer));
+                    } else if loc.tp == 2 || loc.tp == 1 || loc.tp == 5 {
                         panic!("tp = {}", loc.tp);
                     }
                 }
-                roots.insert(unsafe { (f.addr as * const u8).add(record.instruction_offset as usize) }, Function {
-                    roots: fn_roots,
-                    frame_size: f.stack_size as i32,
-                });
+                roots.insert(
+                    unsafe { (f.addr as *const u8).add(record.instruction_offset as usize) },
+                    Function {
+                        roots: fn_roots,
+                        frame_size: f.stack_size as i32,
+                    },
+                );
             }
             // println!("locations: {:?}", locations_slice);
             // paddings
@@ -284,11 +290,11 @@ pub fn build_root_maps(
                 unsafe { ptr.add(1) }
             };
             // pad u16 directly
-            let ptr  = unsafe { (ptr as *const u16).add(1) };
+            let ptr = unsafe { (ptr as *const u16).add(1) };
             let num_live_outs = unsafe { *ptr };
             let ptr = unsafe { ptr.add(1) } as *const LiveOuts;
-            let live_outs_slice = unsafe { std::slice::from_raw_parts(ptr, num_live_outs as usize) };
-            // println!("live_outs: {:?}", live_outs_slice);
+            // let _live_outs_slice =
+            //     unsafe { std::slice::from_raw_parts(ptr, num_live_outs as usize) };
             // pad i32 if need to align to 8 bytes
             let ptr = unsafe { ptr.add(num_live_outs as usize) } as *const u32;
             let ptr = if (ptr as usize) % 8 == 0 {
@@ -299,10 +305,8 @@ pub fn build_root_maps(
             start_ptr = ptr as *const StkMapRecord;
         }
     }
-    
 
-    build_root_maps(start_ptr as _, roots, global_roots);
-    
+    build_root_maps(start_ptr as _, roots, _global_roots);
 
     // let num_functions = get_num_functions(mapptr);
     // let mut ptr = get_first_function_addr(mapptr);

@@ -683,7 +683,8 @@ impl FuncDefNode {
                     let tp = para.get_type(child, builder, true)?;
                     let b = tp.clone();
                     let basetype = b.borrow();
-                    let alloca = builder.alloc_no_collect(&fnvalue.param_names[i], &basetype, child, None);
+                    let alloca =
+                        builder.alloc_no_collect(&fnvalue.param_names[i], &basetype, child, None);
                     // add alloc var debug info
                     builder.create_parameter_variable(
                         &fnvalue,
