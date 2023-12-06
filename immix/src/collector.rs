@@ -173,7 +173,8 @@ impl Collector {
             let mut status = self.status.borrow_mut();
             status.bytes_allocated_since_last_gc += ((size - 1) / LINE_SIZE + 1) * LINE_SIZE;
         }
-        self.alloc_raw(size, obj_type)
+        let p = self.alloc_raw(size, obj_type);
+        p
     }
 
      pub fn alloc_raw(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
@@ -288,10 +289,14 @@ impl Collector {
         let father = ptr;
         // check pointer is valid (divided by 8)
         if (ptr as usize) % 8 != 0 {
+            // eprintln!("invalid pointer: {:p}", ptr);
             return;
         }
 
         let ptr = *(ptr as *mut *mut u8);
+        if ptr.is_null() {
+            return;
+        }
         // eprintln!("mark ptr {:p} -> {:p}", father, ptr);
         // mark it if it is in heap
         if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
@@ -342,7 +347,7 @@ impl Collector {
 
                     // 将新指针写入老数据区开头
                     (*atomic_ptr).store(new_ptr, Ordering::SeqCst);
-
+                    // eprintln!("gc {}: eva {:p} to {:p}", self.id, head, new_ptr);
                     log::trace!("gc {}: eva {:p} to {:p}", self.id, head, new_ptr);
                     new_line_header.set_marked(true);
                     new_block.marked = true;
@@ -368,7 +373,7 @@ impl Collector {
             return;
         }
         // mark it if it is a big object
-        if self
+        else if self
             .thread_local_allocator
             .as_mut()
             .unwrap()

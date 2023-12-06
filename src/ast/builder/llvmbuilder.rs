@@ -10,7 +10,7 @@ use std::{
     sync::{
         atomic::{AtomicI64, Ordering},
         Arc,
-    }, f32::consts::E,
+    },
 };
 
 use immix::{IntEnum, ObjectType};
@@ -147,10 +147,8 @@ pub struct LLVMBuilder<'a, 'ctx> {
     optlevel: OptimizationLevel,
 }
 
-pub fn get_target_machine(_level: OptimizationLevel) -> TargetMachine {
-    // disable optimization for target machine
-    // The optimization for target machine is not working properly with llvm statepoint api
-    let level = OptimizationLevel::None;
+pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
+
     let triple = &TargetMachine::get_default_triple();
     let s1 = TargetMachine::get_host_cpu_name();
     let cpu = s1.to_str().unwrap();
@@ -379,7 +377,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if let PLType::Arr(arr) = tp {
             // init the array size
             if arr.size_handle != 0 {
-                let f = self.get_malloc_f(ctx, "DioGC__malloc");
+                let f = self.get_malloc_f(ctx, "DioGC__malloc_no_collect");
 
                 // let f = self.get_malloc_f(ctx, "DioGC__malloc_no_collect");
                 let etp = self
@@ -394,6 +392,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let arr_size = self
                     .builder
                     .build_int_mul(arr_len, size, "arr_size")
+                    .unwrap();
+                // add 16 bytes (rtti)
+                let arr_size = self
+                    .builder
+                    .build_int_add(arr_size, self.context.i64_type().const_int(16, false), "")
                     .unwrap();
                 let arr_size = self
                     .builder
@@ -412,7 +415,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                             arr_size.into(),
                             self.context
                                 .i8_type()
-                                .const_int(immix::ObjectType::Atomic.int_value() as u64, false)
+                                .const_int(immix::ObjectType::Trait.int_value() as u64, false)
                                 .into(),
                         ],
                         "arr_space",
@@ -421,6 +424,38 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .try_as_basic_value()
                     .left()
                     .unwrap();
+
+
+                self.builder
+                    .build_memset(
+                        arr_space.into_pointer_value(),
+                        8,
+                        self.context.i8_type().const_zero(),
+                        arr_size,
+                    )
+                    .unwrap();
+                // store arr rtti
+                // it's the arr pointer at offset 8 of arr_space
+                let arr_space = unsafe{self.builder.build_in_bounds_gep(
+                    self.context.i8_type(),
+                    arr_space.into_pointer_value(),
+                    &[self.context.i64_type().const_int(8, false)],
+                    "arr_space",
+                ).unwrap()};
+                // rtti is the heap pointer
+                let rtti = self
+                    .builder
+                    .build_ptr_to_int(
+                        casted_result.into_pointer_value(),
+                        self.context.i64_type(),
+                        "rtti",
+                    )
+                    .unwrap();
+                self.builder.build_store(arr_space, rtti).unwrap();
+
+
+                
+
                 // every heap pointer has possible to move after malloc(if this malloc triigers gc's evacuation) so we need to reload it
                 casted_result = self
                     .builder
@@ -430,15 +465,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .builder
                     .build_struct_gep(llvmtp, casted_result.into_pointer_value(), 1, "arr_ptr")
                     .unwrap();
-                self.builder
-                    .build_memset(
-                        arr_space.into_pointer_value(),
-                        8,
-                        self.context.i8_type().const_zero(),
-                        arr_size,
-                    )
-                    .unwrap();
-                let arr_space = arr_space;
+                // offset arr_space 8 bytes (rtti)
+                let arr_space = unsafe{self.builder.build_in_bounds_gep(
+                    self.context.i8_type(),
+                    arr_space,
+                    &[self.context.i64_type().const_int(8, false)],
+                    "arr_space",
+                ).unwrap()};
                 self.builder.build_store(arr_ptr, arr_space).unwrap();
             }
         }
@@ -1050,7 +1083,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 // all closures are represented as a struct with a function pointer and an i8ptr(point to closure data)
                 let fields = vec![
                     self.get_closure_fn_type(c, ctx)
-                        .ptr_type(AddressSpace::from(1))
+                        .ptr_type(AddressSpace::from(0))
                         .into(),
                     self.context
                         .i8_type()
@@ -2319,6 +2352,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     }
     fn print_to_file(&self, file: &Path) -> Result<(), String> {
         self.optimize();
+        // self.module.strip_debug_info();
         if let Err(s) = self.module.print_to_file(file) {
             return Err(s.to_string());
         }
