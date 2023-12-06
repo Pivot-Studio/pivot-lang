@@ -15,6 +15,15 @@ pub struct NoOpBuilder<'a, 'ctx> {
 }
 
 impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
+    fn alloc_no_collect(
+        &self,
+        name: &str,
+        pltype: &PLType,
+        ctx: &mut Ctx<'a>,
+        declare: Option<Pos>,
+    ) -> ValueHandle{
+        0
+    }
     fn bitcast(
         &self,
         _ctx: &mut Ctx<'a>,
@@ -515,9 +524,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
 
     unsafe fn store_with_aoto_cast(&self, _ptr: ValueHandle, _value: ValueHandle) {}
 
-    fn stack_alloc(&self, _name: &str, _ctx: &mut Ctx<'a>, _tp: &PLType) -> ValueHandle {
-        0
-    }
+    // fn stack_alloc(&self, _name: &str, _ctx: &mut Ctx<'a>, _tp: &PLType) -> ValueHandle {
+    //     0
+    // }
 
     fn correct_generator_ctx_malloc_inst(&self, _ctx: &mut Ctx<'a>, _name: &str) {}
 

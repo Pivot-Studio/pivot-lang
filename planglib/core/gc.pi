@@ -2,7 +2,7 @@ fn DioGC__malloc(size: i64, obj_type: u8) *u8;
 
 pub fn DioGC__collect() void;
 
-// pub fn DioGC__malloc_no_collect(size: i64, obj_type: u8) *u8;
+pub fn DioGC__malloc_no_collect(size: i64, obj_type: u8) *u8;
 
 pub fn DioGC__disable_auto_collect() void;
 
@@ -61,6 +61,8 @@ pub fn ptr_to_int(ptr: *u8) i64;
 
 pub fn utf8_count(ptr: *u8, len:i64) i64;
 
+    fn printi64ln(i:i64) void;
+
 impl string {
     pub fn append(str: string) void {
         let old = self.data;
@@ -83,7 +85,6 @@ impl string {
         self._len = utf8_count(data, byte_len);
         return;
     }
-
     pub fn raw() *u8 {
         return self.data;
     }
@@ -102,7 +103,6 @@ impl string {
     
 
 }
-
 
 pub fn string_from_bytes(bytes:[u8]) string {
 

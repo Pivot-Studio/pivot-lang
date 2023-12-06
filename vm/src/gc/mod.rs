@@ -4,7 +4,7 @@ mod _immix {
 
     use crate::logger::SimpleLogger;
     use backtrace::Backtrace;
-    use immix::gc_malloc;
+    use immix::{gc_malloc, gc_malloc_no_collect};
     use internal_macro::is_runtime;
     use log::trace;
 
@@ -23,6 +23,25 @@ mod _immix {
         #[cfg(not(feature = "jit"))]
         immix::gc_init(ptr)
     }
+
+    #[repr(C, packed)]
+    #[derive(Debug, Clone, Copy)]
+    pub(crate) struct StackMapHeader {
+        version: u8,
+        _reserved1: u8,
+        _reserved2: u16,
+        num_functions: u32,
+        num_constants: u32,
+        num_records: u32,
+    }
+    extern "C" {
+        // The section name on macOS is `__llvm_stackmaps`, but
+        // on Linux it is `.llvm_stackmaps`, however the segment
+        // name is the same on both.
+        #[link_name = "__LLVM_STACKMAPS"]
+        pub(crate) static STACK_MAP_HEADER: StackMapHeader;
+    }
+
 
     #[used]
     #[no_mangle]
@@ -53,6 +72,19 @@ mod _immix {
                 exit(1);
             }
             // eprintln!("malloc: {:p}", re);
+            re
+        }
+
+        pub unsafe fn malloc_no_collect(size: u64, obj_type: u8) -> *mut u8 {
+            trace!("malloc: {} {}", size, obj_type);
+            let re = gc_malloc_no_collect(size as usize, obj_type);
+            if re.is_null() && size != 0 {
+                eprintln!("gc malloc failed! (OOM)");
+                let bt = Backtrace::new();
+                println!("{:?}", bt);
+                exit(1);
+            }
+            // eprintln!("malloc_no_collect: {:p}", re);
             re
         }
 

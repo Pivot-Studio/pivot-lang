@@ -274,7 +274,7 @@ pub trait IRBuilder<'a, 'ctx> {
     fn build_indirect_br(&self, block: ValueHandle, ctx: &Ctx<'a>);
     // only used in special case, as it does not add gc root
     unsafe fn store_with_aoto_cast(&self, ptr: ValueHandle, value: ValueHandle);
-    fn stack_alloc(&self, name: &str, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle;
+    // fn stack_alloc(&self, name: &str, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle;
     fn correct_generator_ctx_malloc_inst(&self, ctx: &mut Ctx<'a>, name: &str);
     fn sizeof(&self, pltype: &PLType, ctx: &mut Ctx<'a>) -> u64;
     fn build_memcpy(
@@ -294,6 +294,13 @@ pub trait IRBuilder<'a, 'ctx> {
     fn build_bit_right_shift_arithmetic(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
     fn global_const(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle;
     fn set_di_file(&self, f: &str);
+    fn alloc_no_collect(
+        &self,
+        name: &str,
+        pltype: &PLType,
+        ctx: &mut Ctx<'a>,
+        declare: Option<Pos>,
+    ) -> ValueHandle;
 }
 
 pub type ValueHandle = usize;

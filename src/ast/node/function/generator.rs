@@ -289,6 +289,7 @@ pub(crate) fn build_generator_ret<'a>(
     child: &mut Ctx<'a>,
     fnvalue: &FNValue,
     entry: usize,
+    allocab: usize,
 ) -> Result<Option<usize>, PLDiag> {
     builder.rm_curr_debug_location();
     let data = child.generator_data.as_ref().unwrap().clone();
@@ -299,11 +300,12 @@ pub(crate) fn build_generator_ret<'a>(
         PLType::Void => unreachable!(),
         other => {
             builder.rm_curr_debug_location();
-            data.borrow_mut().ret_handle = builder.alloc("retvalue", other, child, None);
+            data.borrow_mut().ret_handle = builder.alloc_no_collect("retvalue", other, child, None);
             data.borrow_mut().ret_type = Some(r);
         }
     }
+    child.position_at_end(allocab, builder);
+    let retv = builder.alloc_no_collect("retvalue", &tp.borrow(), child, None);
     child.position_at_end(entry, builder);
-    let retv = builder.stack_alloc("retvalue", child, &tp.borrow());
     Ok(Some(retv))
 }

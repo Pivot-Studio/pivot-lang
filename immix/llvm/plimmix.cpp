@@ -11,6 +11,7 @@
 #include "llvm-c/Types.h"
 #include "llvm-c/BitWriter.h"
 #include "llvm-c/Transforms/PassBuilder.h"
+#include "llvm/Transforms/Scalar/RewriteStatepointsForGC.h"
 
 using namespace llvm;
 
@@ -110,6 +111,7 @@ extern "C" void run_module_pass(LLVMModuleRef  M, int opt) {
     // This one corresponds to a typical -O2 optimization pipeline.
     ModulePassManager MPM = PB.buildPerModuleDefaultPipeline(O);
     MPM.addPass(ImmixPass());
+    MPM.addPass(RewriteStatepointsForGC());
 
     // Optimize the IR!
     MPM.run(*unwrap(M), MAM);

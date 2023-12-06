@@ -160,7 +160,7 @@ impl Collector {
             panic!("gc stucked, can not alloc")
         }
         if gc_is_auto_collect_enabled() {
-            if GC_RUNNING.load(Ordering::Acquire) {
+            if GC_RUNNING.load(Ordering::Acquire) || unsafe{GLOBAL_ALLOCATOR.0.as_ref().unwrap().should_gc() }{
                 self.collect();
             }
             let status = self.status.borrow();
@@ -176,7 +176,7 @@ impl Collector {
         self.alloc_raw(size, obj_type)
     }
 
-    fn alloc_raw(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
+     pub fn alloc_raw(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
         if size == 0 {
             return std::ptr::null_mut();
         }
@@ -292,7 +292,7 @@ impl Collector {
         }
 
         let ptr = *(ptr as *mut *mut u8);
-        // println!("mark ptr {:p} -> {:p}", father, ptr);
+        // eprintln!("mark ptr {:p} -> {:p}", father, ptr);
         // mark it if it is in heap
         if self.thread_local_allocator.as_mut().unwrap().in_heap(ptr) {
             // println!("mark ptr succ {:p} -> {:p}", father, ptr);
@@ -534,13 +534,18 @@ impl Collector {
                     let const_addr = addr as *const u8;
                     let map = STACK_MAP.map.as_ref().unwrap();
                     let f = map.get(&const_addr);
-                    // backtrace::resolve_frame(frame,
-                    //     |s|
-                    //     {
-                    //         println!("{}: {:?} ip: {:p}, address: {:p}, sp: {:?}", depth, s.name(), frame.ip(), const_addr, frame.sp());
-                    //     }
-                    // );
                     if let Some(f) = f {
+                        // backtrace::resolve(*ip, |s| {
+                        //     eprintln!(
+                        //         "gc {}: {:?} ip: {:p}, address: {:p}, sp: {:p}",
+                        //         self.id,
+                        //         s.name(),
+                        //         ip,
+                        //         const_addr,
+                        //         sp
+                        //     );
+                        // });
+                        // eprintln!("gc {}: found fn in stackmap, f: {:?} sp: {:p}", self.id, f, sp);
                         // println!("found fn in stackmap, f: {:?} sp: {:p}", f,frame.sp());
                         f.iter_roots().for_each(|(offset, obj_type)| {
                             // println!("offset: {}", offset);
@@ -619,7 +624,7 @@ impl Collector {
                 .unwrap()
                 .iter()
                 .for_each(|root| {
-                    self.mark_ptr(*root);
+                    self.mark_ptr(root.cast_mut());
                 });
         }
     }

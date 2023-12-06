@@ -10,7 +10,7 @@ use std::{
     sync::{
         atomic::{AtomicI64, Ordering},
         Arc,
-    },
+    }, f32::consts::E,
 };
 
 use immix::{IntEnum, ObjectType};
@@ -147,7 +147,10 @@ pub struct LLVMBuilder<'a, 'ctx> {
     optlevel: OptimizationLevel,
 }
 
-pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
+pub fn get_target_machine(_level: OptimizationLevel) -> TargetMachine {
+    // disable optimization for target machine
+    // The optimization for target machine is not working properly with llvm statepoint api
+    let level = OptimizationLevel::None;
     let triple = &TargetMachine::get_default_triple();
     let s1 = TargetMachine::get_host_cpu_name();
     let cpu = s1.to_str().unwrap();
@@ -155,16 +158,17 @@ pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
     let features = s2.to_str().unwrap();
     Target::initialize_native(&InitializationConfig::default()).unwrap();
     let target = Target::from_triple(triple).unwrap();
-    target
+    let tm = target
         .create_target_machine(
             triple,
             cpu,
             features,
             level,
-            inkwell::targets::RelocMode::DynamicNoPic,
+            inkwell::targets::RelocMode::Default,
             inkwell::targets::CodeModel::Default,
         )
-        .unwrap()
+        .unwrap();
+    tm
 }
 
 impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
@@ -330,14 +334,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .left()
             .unwrap();
 
-        let mut casted_result = self
-            .builder
-            .build_bitcast(
-                heapptr.into_pointer_value(),
-                llvmtp.ptr_type(AddressSpace::default()),
-                name,
-            )
-            .unwrap();
+        let mut casted_result = heapptr;
 
         // TODO: force user to manually init all structs, so we can remove this memset
         self.builder
@@ -358,7 +355,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let stack_ptr = self
             .builder
             .build_alloca(
-                llvmtp.ptr_type(AddressSpace::default()),
+                llvmtp.ptr_type(AddressSpace::from(1)),
                 &format!("stack_ptr_{}", name),
             )
             .unwrap();
@@ -441,14 +438,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         arr_size,
                     )
                     .unwrap();
-                let arr_space = self
-                    .builder
-                    .build_bitcast(
-                        arr_space.into_pointer_value(),
-                        etp.ptr_type(AddressSpace::default()),
-                        "arr_space",
-                    )
-                    .unwrap();
+                let arr_space = arr_space;
                 self.builder.build_store(arr_ptr, arr_space).unwrap();
             }
         }
@@ -575,61 +565,53 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     /// 第一个参数必须是一个二重以上的指针，且不能是一重指针bitcast过来的二重指针
     /// 否则可能导致bus error
     fn gc_add_root(&self, stackptr: BasicValueEnum<'ctx>, obj_type: u8) {
-        self.module
-            .get_function("llvm.gcroot")
-            .or_else(|| {
-                let i8ptr = self.context.i8_type().ptr_type(AddressSpace::default());
-                let ty = self.context.void_type().fn_type(
-                    &[i8ptr.ptr_type(AddressSpace::default()).into(), i8ptr.into()],
-                    false,
-                );
-                Some(self.module.add_function("llvm.gcroot", ty, None))
-            })
-            .and_then(|f| {
-                let i8ptr = self.context.i8_type().ptr_type(AddressSpace::default());
-                let stackptr = self
-                    .builder
-                    .build_bitcast(
-                        stackptr.into_pointer_value(),
-                        i8ptr.ptr_type(AddressSpace::default()),
-                        "stackptr",
-                    )
-                    .unwrap();
-                let tp = ObjectType::from_int(obj_type).expect("invalid object type");
-                let tp_const_name = format!(
-                    "@{}_@IMMIX_OBJTYPE_{}",
-                    self.module.get_source_file_name().to_str().unwrap(),
-                    match tp {
-                        ObjectType::Atomic => "ATOMIC",
-                        ObjectType::Trait => "TRAIT",
-                        ObjectType::Complex => "COMPLEX",
-                        ObjectType::Pointer => "POINTER",
-                    }
-                );
-                self.module
-                    .get_global(&tp_const_name)
-                    .or_else(|| {
-                        let g =
-                            self.module
-                                .add_global(self.context.i8_type(), None, &tp_const_name);
-                        g.set_linkage(Linkage::Internal);
-                        g.set_constant(true);
-                        g.set_initializer(&self.context.i8_type().const_int(obj_type as u64, true));
-                        Some(g)
-                    })
-                    .map(|g| {
-                        self.builder
-                            .build_call(
-                                f,
-                                &[
-                                    stackptr.into_pointer_value().into(),
-                                    g.as_pointer_value().into(),
-                                ],
-                                "add_root",
-                            )
-                            .unwrap();
-                    })
-            });
+        // self.module
+        //     .get_function("llvm.gcroot")
+        //     .or_else(|| {
+        //         let i8ptr = self.context.i8_type().ptr_type(AddressSpace::from(1));
+        //         let ty = self.context.void_type().fn_type(
+        //             &[i8ptr.ptr_type(AddressSpace::from(1)).into(), i8ptr.into()],
+        //             false,
+        //         );
+        //         Some(self.module.add_function("llvm.gcroot", ty, None))
+        //     })
+        //     .and_then(|f| {
+        //         let stackptr = stackptr;
+        //         let tp = ObjectType::from_int(obj_type).expect("invalid object type");
+        //         let tp_const_name = format!(
+        //             "@{}_@IMMIX_OBJTYPE_{}",
+        //             self.module.get_source_file_name().to_str().unwrap(),
+        //             match tp {
+        //                 ObjectType::Atomic => "ATOMIC",
+        //                 ObjectType::Trait => "TRAIT",
+        //                 ObjectType::Complex => "COMPLEX",
+        //                 ObjectType::Pointer => "POINTER",
+        //             }
+        //         );
+        //         self.module
+        //             .get_global(&tp_const_name)
+        //             .or_else(|| {
+        //                 let g =
+        //                     self.module
+        //                         .add_global(self.context.i8_type(), None, &tp_const_name);
+        //                 g.set_linkage(Linkage::Internal);
+        //                 g.set_constant(true);
+        //                 g.set_initializer(&self.context.i8_type().const_int(obj_type as u64, true));
+        //                 Some(g)
+        //             })
+        //             .map(|g| {
+        //                 self.builder
+        //                     .build_call(
+        //                         f,
+        //                         &[
+        //                             stackptr.into_pointer_value().into(),
+        //                             g.as_pointer_value().into(),
+        //                         ],
+        //                         "add_root",
+        //                     )
+        //                     .unwrap();
+        //             })
+        //     });
     }
 
     fn get_llvm_value_handle(&self, value: &AnyValueEnum<'ctx>) -> ValueHandle {
@@ -658,15 +640,15 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn visit_f_tp(&self) -> PointerType<'ctx> {
-        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::default());
+        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::from(1));
         self.context
             .void_type()
             .fn_type(&[i8ptrtp.into(), i8ptrtp.into()], false)
-            .ptr_type(AddressSpace::default())
+            .ptr_type(AddressSpace::from(1))
     }
 
     fn mark_fn_tp(&self, ptrtp: PointerType<'ctx>) -> FunctionType<'ctx> {
-        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::default());
+        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::from(1));
         let visit_ftp = self.visit_f_tp();
         self.context.void_type().fn_type(
             &[
@@ -681,10 +663,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn gen_or_get_arr_visit_function(&self, ctx: &mut Ctx<'a>, v: &ARRType) -> FunctionValue<'ctx> {
-        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::default());
+        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::from(1));
         let currentbb = self.builder.get_insert_block();
         self.builder.unset_current_debug_location();
-        let ptrtp = self.arr_type(v, ctx).ptr_type(AddressSpace::default());
+        let ptrtp = self.arr_type(v, ctx).ptr_type(AddressSpace::from(1));
         let ty = self.arr_type(v, ctx).into_struct_type();
         let ftp = self.mark_fn_tp(ptrtp);
         // windows linker won't recognize flags with special caracters (llvm.used will add linker flags
@@ -692,7 +674,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let mut hasher = DefaultHasher::new();
         let name = v.get_full_name();
         (name.clone() + "@" + &ctx.plmod.path).hash(&mut hasher);
-        let fname = &format!("arr_visit{:x}", hasher.finish());
+        let fname = &format!("arr_visit{:x}_visitorf@", hasher.finish());
         // eprintln!("name: {}, hashname: {}", name, fname);
         if let Some(f) = self.module.get_function(fname) {
             return f;
@@ -716,10 +698,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let visit_trait_f = get_nth_mark_fn(f, 4);
 
         // call the visit_ptr function
-        let casted = self
-            .builder
-            .build_bitcast(real_arr_raw, i8ptrtp, "casted_arg")
-            .unwrap();
+        let casted = real_arr_raw;
         self.builder
             .build_indirect_call(
                 self.context.void_type().fn_type(
@@ -795,10 +774,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
 
         match &*elm_tp.borrow() {
             PLType::Arr(_) | PLType::Struct(_) => {
-                let casted = self
-                    .builder
-                    .build_bitcast(elm, i8ptrtp, "casted_arg")
-                    .unwrap();
+                let casted = elm;
                 // call the visit_complex function
                 self.builder
                     .build_indirect_call(
@@ -814,10 +790,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             }
             PLType::Pointer(_) => {
                 // call the visit_ptr function
-                let casted = self
-                    .builder
-                    .build_bitcast(elm, i8ptrtp, "casted_arg")
-                    .unwrap();
+                let casted = elm;
                 self.builder
                     .build_indirect_call(
                         self.context.void_type().fn_type(
@@ -832,10 +805,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             }
             PLType::Trait(_) | PLType::Union(_) | PLType::Closure(_) => {
                 // call the visit_trait function
-                let casted = self
-                    .builder
-                    .build_bitcast(elm, i8ptrtp, "casted_arg")
-                    .unwrap();
+                let casted = elm;
                 self.builder
                     .build_indirect_call(
                         self.context.void_type().fn_type(
@@ -934,16 +904,16 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         st: &STType,
     ) -> FunctionValue<'ctx> {
         let ptrtp = p.get_type();
-        let llvmname = st.get_full_name() + "@";
+        let llvmname = st.get_full_name() + "_visitorf@";
         if let Some(v) = self.module.get_function(&llvmname) {
             return v;
         }
-        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::default());
+        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::from(1));
         let visit_ftp = self
             .context
             .void_type()
             .fn_type(&[i8ptrtp.into(), i8ptrtp.into()], false)
-            .ptr_type(AddressSpace::default());
+            .ptr_type(AddressSpace::from(1));
         let ftp = self.context.void_type().fn_type(
             &[
                 ptrtp.into(),
@@ -998,7 +968,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let ptr: BasicMetadataTypeEnum = self
             .context
             .i8_type()
-            .ptr_type(AddressSpace::default())
+            .ptr_type(AddressSpace::from(1))
             .as_basic_type_enum()
             .into();
         let params = vec![ptr]
@@ -1038,7 +1008,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             },
             PLType::Fn(f) => Some(
                 self.get_fn_type(f, ctx)
-                    .ptr_type(AddressSpace::default())
+                    .ptr_type(AddressSpace::from(1))
                     .as_basic_type_enum(),
             ),
             PLType::Struct(s) => Some(self.struct_type(s, ctx).as_basic_type_enum()),
@@ -1049,7 +1019,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             PLType::Pointer(p) => Some(
                 self.get_basic_type_op(&p.borrow(), ctx)
                     .unwrap()
-                    .ptr_type(AddressSpace::default())
+                    .ptr_type(AddressSpace::from(1))
                     .as_basic_type_enum(),
             ),
             PLType::PlaceHolder(p) => Some({
@@ -1071,7 +1041,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     self.context.i64_type().into(),
                     self.context
                         .i8_type()
-                        .ptr_type(AddressSpace::default())
+                        .ptr_type(AddressSpace::from(1))
                         .into(),
                 ];
                 Some(self.context.struct_type(&fields, false).into())
@@ -1080,11 +1050,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 // all closures are represented as a struct with a function pointer and an i8ptr(point to closure data)
                 let fields = vec![
                     self.get_closure_fn_type(c, ctx)
-                        .ptr_type(AddressSpace::default())
+                        .ptr_type(AddressSpace::from(1))
                         .into(),
                     self.context
                         .i8_type()
-                        .ptr_type(AddressSpace::default())
+                        .ptr_type(AddressSpace::from(1))
                         .into(),
                 ];
                 Some(self.context.struct_type(&fields, false).into())
@@ -1101,7 +1071,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
     }
     fn i8ptr(&self) -> PointerType<'ctx> {
-        self.context.i8_type().ptr_type(AddressSpace::default())
+        self.context.i8_type().ptr_type(AddressSpace::from(1))
     }
     /// array type in fact is a struct with three fields,
     /// the first is a function pointer to the visit function(used in gc)
@@ -1114,7 +1084,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     self.context.i64_type().as_basic_type_enum(),
                     self.get_basic_type_op(&arrtp.element_type.borrow(), ctx)
                         .unwrap()
-                        .ptr_type(Default::default())
+                        .ptr_type(AddressSpace::from(1))
                         .as_basic_type_enum(),
                     self.context.i64_type().as_basic_type_enum(),
                 ],
@@ -1138,7 +1108,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let td = self.targetmachine.get_target_data();
         let (size, align, offset_1) =
             if matches!(*RefCell::borrow(&field_pltype), PLType::Pointer(_)) {
-                let ptr = self.context.i8_type().ptr_type(AddressSpace::default());
+                let ptr = self.context.i8_type().ptr_type(AddressSpace::from(1));
                 (td.get_bit_size(&ptr), td.get_abi_alignment(&ptr), 0)
             } else {
                 (
@@ -1208,7 +1178,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         elemdi,
                         elemdi.get_size_in_bits(),
                         elemdi.get_align_in_bits(),
-                        AddressSpace::default(),
+                        AddressSpace::from(1),
                     )
                     .as_type();
                 let offset = td.offset_of_element(&arr_st_tp, 1).unwrap();
@@ -1309,7 +1279,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         st,
                         st.get_size_in_bits(),
                         st.get_align_in_bits(),
-                        AddressSpace::default(),
+                        AddressSpace::from(1),
                     );
                     unsafe { self.dibuilder.replace_placeholder_derived_type(*m, realtp) };
                 }
@@ -1348,13 +1318,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let etp = &self
                     .get_basic_type_op(&p.borrow(), ctx)
                     .unwrap()
-                    .ptr_type(AddressSpace::default())
+                    .ptr_type(AddressSpace::from(1))
                     .as_basic_type_enum();
                 let size = td.get_bit_size(etp);
                 let align = td.get_preferred_alignment(etp);
                 let di = self
                     .dibuilder
-                    .create_pointer_type("", elemdi, size, align, AddressSpace::default())
+                    .create_pointer_type("", elemdi, size, align, AddressSpace::from(1))
                     .as_type();
                 self.ditypes
                     .borrow_mut()
@@ -1397,7 +1367,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                             .as_type()
                     })
                     .collect::<Vec<_>>();
-                let ptr = self.context.i8_type().ptr_type(AddressSpace::default());
+                let ptr = self.context.i8_type().ptr_type(AddressSpace::from(1));
                 let tp = self.dibuilder.create_union_type(
                     self.get_cur_di_file().as_debug_info_scope(),
                     "data",
@@ -1471,7 +1441,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         st.as_type(),
                         size,
                         align,
-                        AddressSpace::default(),
+                        AddressSpace::from(1),
                     );
                     unsafe {
                         self.dibuilder
@@ -1556,6 +1526,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 None,
                 name,
             );
+            if name.to_uppercase() == "__LLVM_STACKMAPS" {
+                global.set_alignment(4);
+                global.set_section(Some("__llvm_stackmaps"));
+            }
             global.set_linkage(Linkage::External);
             global.set_constant(constant);
             return global.as_pointer_value();
@@ -1573,10 +1547,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             &used
                 .iter()
                 .map(|v| {
-                    self.builder
-                        .build_bitcast(v.as_global_value().as_pointer_value(), self.i8ptr(), "")
-                        .unwrap()
-                        .into_pointer_value()
+                    v.as_global_value().as_pointer_value()
                 })
                 .collect::<Vec<_>>(),
         );
@@ -1679,36 +1650,24 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     }
     fn bitcast(
         &self,
-        ctx: &mut Ctx<'a>,
+        _ctx: &mut Ctx<'a>,
         from: ValueHandle,
-        to: &PLType,
-        name: &str,
+        _to: &PLType,
+        _name: &str,
     ) -> ValueHandle {
         let lv = self.get_llvm_value(from).unwrap();
         let re = if lv.is_function_value() {
-            self.builder
-                .build_bitcast(
-                    lv.into_function_value()
+            lv.into_function_value()
                         .as_global_value()
-                        .as_pointer_value(),
-                    self.get_basic_type_op(to, ctx).unwrap(),
-                    name,
-                )
-                .unwrap()
+                        .as_pointer_value()
         } else {
-            self.builder
-                .build_bitcast(
-                    lv.into_pointer_value(),
-                    self.get_basic_type_op(to, ctx).unwrap(),
-                    name,
-                )
-                .unwrap()
+            lv.into_pointer_value()
         };
         let new_handle = self.get_llvm_value_handle(&re.as_any_value_enum());
-        let root = self.heap_stack_map.borrow().get(&from).copied();
-        if let Some(v) = root {
-            self.heap_stack_map.borrow_mut().insert(new_handle, v);
-        }
+        // let root = self.heap_stack_map.borrow().get(&from).copied();
+        // if let Some(v) = root {
+        //     self.heap_stack_map.borrow_mut().insert(new_handle, v);
+        // }
         new_handle
     }
     fn pointer_cast(
@@ -1854,7 +1813,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let alloca = if matches!(ret_type, PLType::Void | PLType::Primitive(_)) {
             0
         } else {
-            self.alloc_raw("ret_alloca", ret_type, ctx, None, "DioGC__malloc")
+            self.alloc_raw("ret_alloca", ret_type, ctx, None, "DioGC__malloc_no_collect")
         };
         let builder = self.builder;
         let f = self.get_llvm_value(f).unwrap();
@@ -1987,7 +1946,102 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .get_basic_type_op(&data.borrow().ctx_tp.as_ref().unwrap().borrow(), ctx)
                 .unwrap()
                 .into_struct_type();
-            let count = add_field(tp, bt.ptr_type(Default::default()).into());
+            let count = add_field(tp, bt.ptr_type(AddressSpace::from(1)).into());
+            let i = count - 1;
+            let data_ptr = self
+                .build_struct_gep(
+                    data.borrow().yield_ctx_handle,
+                    i,
+                    name,
+                    &data.borrow().ctx_tp.as_ref().unwrap().borrow(),
+                    ctx,
+                )
+                .unwrap();
+
+            // 我们现在在alloca block上（第一个block），egnerator yield函数每次进入都会执行这个
+            // block，所以在这里我们要设置好所有的变量初始值，将他们从generator ctx中取出。
+            let stack_root = self.get_stack_root(ret_handle);
+            let load = self.build_load_raw(
+                data_ptr,
+                &format!("data_load_{}", name),
+                self.i8ptr().as_basic_type_enum(),
+            );
+            self.build_store(stack_root, load);
+
+            self.builder.position_at_end(lb);
+
+            // 到目前正在生成代码的block上，这里是malloc函数所在的地方。
+            // malloc之后要将生成的内存保存到generator ctx中，以便下次进入时可以取出来。
+            // 但是函数参数除外，在一般函数的逻辑中函数进入后要将参数保存到堆中，然而
+            // generator yield函数的参数在generator init的时候就已经分配好了内存
+            // 而且保存在了generator ctx中，所以这里的malloc其实是不需要的，而且不能回
+            // 存到ctx里，如果回存会导致参数被覆盖。
+            if !data.borrow_mut().is_para {
+                self.build_store(data_ptr, ret_handle);
+            }
+            let load = self.build_load_raw(
+                data_ptr,
+                &format!("data_load_{}", name),
+                self.i8ptr().as_basic_type_enum(),
+            );
+
+            let load_again = self.build_load_raw(
+                load,
+                &format!("data_load_again_{}", name),
+                self.i8ptr().as_basic_type_enum(),
+            );
+            data.borrow_mut().para_tmp = load_again;
+            // self.build_store(ret_handle, load_again);
+            // self.build_store(stack_root, load);
+            // self.build_store(data_ptr, ret_handle);
+            self.set_root(load, stack_root);
+            ret_handle = load;
+
+            let id = data.borrow().table.len().to_string();
+            data.borrow_mut().table.insert(
+                name.to_string() + &id,
+                PLSymbolData {
+                    value: load,
+                    pltype: Arc::new(RefCell::new(pltype.clone())),
+                    range: Default::default(),
+                    refs: None,
+                },
+            );
+            // let data_ptr = self.build_struct_gep(ctx_v, (i +2) as u32, "para").unwrap();
+            // return data_ptr;
+        }
+
+        ret_handle
+    }
+    fn alloc_no_collect(
+        &self,
+        name: &str,
+        pltype: &PLType,
+        ctx: &mut Ctx<'a>,
+        declare: Option<Pos>,
+    ) -> ValueHandle {
+        let mut ret_handle = self.alloc_raw(name, pltype, ctx, declare, "DioGC__malloc_no_collect");
+        if ctx.ctx_flag == CtxFlag::InGeneratorYield {
+            let data = ctx.generator_data.as_ref().unwrap().clone();
+
+            let lb = self.builder.get_insert_block().unwrap();
+            let alloca = self
+                .builder
+                .get_insert_block()
+                .unwrap()
+                .get_parent()
+                .unwrap()
+                .get_first_basic_block()
+                .unwrap();
+            self.builder.position_at_end(alloca);
+
+            // let f_v = ctx.function.unwrap();
+            let bt = self.get_basic_type_op(pltype, ctx).unwrap();
+            let tp = self
+                .get_basic_type_op(&data.borrow().ctx_tp.as_ref().unwrap().borrow(), ctx)
+                .unwrap()
+                .into_struct_type();
+            let count = add_field(tp, bt.ptr_type(AddressSpace::from(1)).into());
             let i = count - 1;
             let data_ptr = self
                 .build_struct_gep(
@@ -2153,14 +2207,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 format!(".str_{}", ID.fetch_add(1, Ordering::Relaxed)).as_str(),
             )
             .unwrap();
-        let s = self
-            .builder
-            .build_bitcast(
-                s,
-                self.context.i8_type().ptr_type(Default::default()),
-                ".str",
-            )
-            .unwrap();
+        let s = s;
         self.get_llvm_value_handle(&s.as_any_value_enum())
     }
 
@@ -2811,11 +2858,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     ) {
         let currentbb = ctx.block;
         self.builder.unset_current_debug_location();
-        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::default());
+        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::from(1));
         let ty = self.struct_type(v, ctx);
-        let ptrtp = ty.ptr_type(AddressSpace::default());
+        let ptrtp = ty.ptr_type(AddressSpace::from(1));
         let ftp = self.mark_fn_tp(ptrtp);
-        let name = v.get_full_name() + "@";
+        let name = v.get_full_name() + "_visitorf@";
         // if !name.starts_with(&ctx.get_root_ctx().get_file()) {
         //     return;
         // }
@@ -2854,10 +2901,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             match field_pltp {
                 PLType::Pointer(_) => {
                     let ptr = f;
-                    let casted = self
-                        .builder
-                        .build_bitcast(ptr, i8ptrtp, "casted_arg")
-                        .unwrap();
+                    let casted = ptr;
                     self.builder
                         .build_indirect_call(
                             self.context.void_type().fn_type(
@@ -2872,10 +2916,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 }
                 PLType::Struct(_) | PLType::Arr(_) => {
                     let ptr = f;
-                    let casted = self
-                        .builder
-                        .build_bitcast(ptr, i8ptrtp, "casted_arg")
-                        .unwrap();
+                    let casted = ptr;
                     self.builder
                         .build_indirect_call(
                             self.context.void_type().fn_type(
@@ -2890,10 +2931,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 }
                 PLType::Trait(_) | PLType::Union(_) | PLType::Closure(_) => {
                     let ptr = f;
-                    let casted = self
-                        .builder
-                        .build_bitcast(ptr, i8ptrtp, "casted_arg")
-                        .unwrap();
+                    let casted = ptr;
                     self.builder
                         .build_indirect_call(
                             self.context.void_type().fn_type(
@@ -2989,7 +3027,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             &self
                 .context
                 .i8_type()
-                .ptr_type(AddressSpace::default())
+                .ptr_type(AddressSpace::from(1))
                 .const_null()
                 .into(),
         )
@@ -3041,7 +3079,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         params: &[Arc<RefCell<PLType>>],
         ret: &PLType,
     ) -> ValueHandle {
-        let i8ptr = self.context.i8_type().ptr_type(AddressSpace::default());
+        let i8ptr = self.context.i8_type().ptr_type(AddressSpace::from(1));
         let mut closure_param_tps: Vec<BasicMetadataTypeEnum> =
             vec![i8ptr.as_basic_type_enum().into()];
         closure_param_tps.extend(
@@ -3075,7 +3113,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             return self.get_llvm_value_handle(&closure_f.into());
         }
         let f_tp = ori_f.get_type();
-        let i8ptr = self.context.i8_type().ptr_type(AddressSpace::default());
+        let i8ptr = self.context.i8_type().ptr_type(AddressSpace::from(1));
         let param_tps = f_tp.get_param_types();
         let mut closure_param_tps = vec![i8ptr.as_basic_type_enum()];
         closure_param_tps.extend(param_tps);
@@ -3144,7 +3182,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .context
             .get_struct_type(ctx_name)
             .unwrap()
-            .ptr_type(Default::default())
+            .ptr_type(AddressSpace::from(1))
             .into();
         let ftp = self
             .get_basic_type_op(ret_tp, ctx)
@@ -3200,34 +3238,34 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let _value_tp = v.get_type();
         self.build_store(ptr, value);
     }
-    fn stack_alloc(&self, name: &str, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle {
-        let lb = self.builder.get_insert_block().unwrap();
-        let llvmtp = self.get_basic_type_op(tp, ctx).unwrap();
-        let alloca = self
-            .builder
-            .get_insert_block()
-            .unwrap()
-            .get_parent()
-            .unwrap()
-            .get_first_basic_block()
-            .unwrap();
-        self.builder.position_at_end(alloca);
-        let stack_ptr = self.builder.build_alloca(llvmtp, name).unwrap();
-        self.tag_root(stack_ptr.as_basic_value_enum(), tp.get_immix_type());
-        let td = self.targetmachine.get_target_data();
-        self.builder
-            .build_memset(
-                stack_ptr,
-                td.get_abi_alignment(&self.i8ptr()),
-                self.context.i8_type().const_zero(),
-                self.context
-                    .i64_type()
-                    .const_int(td.get_store_size(&self.i8ptr()), false),
-            )
-            .unwrap();
-        self.builder.position_at_end(lb);
-        self.get_llvm_value_handle(&stack_ptr.as_any_value_enum())
-    }
+    // fn stack_alloc(&self, name: &str, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle {
+    //     let lb = self.builder.get_insert_block().unwrap();
+    //     let llvmtp = self.get_basic_type_op(tp, ctx).unwrap();
+    //     let alloca = self
+    //         .builder
+    //         .get_insert_block()
+    //         .unwrap()
+    //         .get_parent()
+    //         .unwrap()
+    //         .get_first_basic_block()
+    //         .unwrap();
+    //     self.builder.position_at_end(alloca);
+    //     let stack_ptr = self.builder.build_alloca(llvmtp, name).unwrap();
+    //     self.tag_root(stack_ptr.as_basic_value_enum(), tp.get_immix_type());
+    //     let td = self.targetmachine.get_target_data();
+    //     self.builder
+    //         .build_memset(
+    //             stack_ptr,
+    //             td.get_abi_alignment(&self.i8ptr()),
+    //             self.context.i8_type().const_zero(),
+    //             self.context
+    //                 .i64_type()
+    //                 .const_int(td.get_store_size(&self.i8ptr()), false),
+    //         )
+    //         .unwrap();
+    //     self.builder.position_at_end(lb);
+    //     self.get_llvm_value_handle(&stack_ptr.as_any_value_enum())
+    // }
     fn correct_generator_ctx_malloc_inst(&self, ctx: &mut Ctx<'a>, name: &str) {
         let data = ctx.generator_data.as_ref().unwrap();
         let bb = data.borrow().entry_bb;

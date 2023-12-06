@@ -53,7 +53,7 @@ lazy_static! {
 #[cfg(feature = "llvm_stackmap")]
 pub struct StackMapWrapper {
     pub map: *mut FxHashMap<*const u8, Function>,
-    pub global_roots: *mut Vec<*mut u8>,
+    pub global_roots: *mut Vec<*const u8>,
 }
 #[cfg(feature = "llvm_stackmap")]
 unsafe impl Sync for StackMapWrapper {}
@@ -63,6 +63,7 @@ const DEFAULT_HEAP_SIZE: usize = 1024 * 1024 * 1024 * 16;
 
 lazy_static! {
     pub static ref GLOBAL_ALLOCATOR: GAWrapper = unsafe {
+
         let mut heap_size = DEFAULT_HEAP_SIZE;
         if let Ok(usage) = sys_info::mem_info() {
             heap_size = usage.total as usize * 1024;
@@ -108,6 +109,16 @@ pub fn gc_malloc(size: usize, obj_type: u8) -> *mut u8 {
         let gc = gc.borrow();
         // println!("malloc");
         gc.alloc(size, ObjectType::from_int(obj_type).unwrap())
+    })
+}
+
+
+pub fn gc_malloc_no_collect(size: usize, obj_type: u8) -> *mut u8 {
+    SPACE.with(|gc| {
+        // println!("start malloc");
+        let gc = gc.borrow();
+        // println!("malloc");
+        gc.alloc_raw(size, ObjectType::from_int(obj_type).unwrap())
     })
 }
 
@@ -185,6 +196,7 @@ pub fn safepoint() {
 
 #[cfg(feature = "llvm_stackmap")]
 pub fn gc_init(ptr: *mut u8) {
+    // print_stack_map(ptr);
     // println!("stackmap: {:?}", &STACK_MAP.map.borrow());
     build_root_maps(ptr, unsafe { STACK_MAP.map.as_mut().unwrap() }, unsafe {
         STACK_MAP.global_roots.as_mut().unwrap()

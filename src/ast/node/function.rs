@@ -646,7 +646,7 @@ impl FuncDefNode {
                 let return_block = builder.append_basic_block(funcvalue, "return");
                 child.position_at_end(entry, builder);
                 let ret_value_ptr = if self.generator {
-                    generator::build_generator_ret(builder, child, &fnvalue, entry)?
+                    generator::build_generator_ret(builder, child, &fnvalue, entry, allocab)?
                 } else {
                     let tp = fnvalue.fntype.ret_pltype.get_type(child, builder, true)?;
                     child.rettp = Some(tp.clone());
@@ -654,7 +654,7 @@ impl FuncDefNode {
                         PLType::Void => None,
                         other => {
                             builder.rm_curr_debug_location();
-                            let retv = builder.alloc("retvalue", other, child, None);
+                            let retv = builder.alloc_no_collect("retvalue", other, child, None);
                             Some(retv)
                         }
                     }
@@ -683,7 +683,7 @@ impl FuncDefNode {
                     let tp = para.get_type(child, builder, true)?;
                     let b = tp.clone();
                     let basetype = b.borrow();
-                    let alloca = builder.alloc(&fnvalue.param_names[i], &basetype, child, None);
+                    let alloca = builder.alloc_no_collect(&fnvalue.param_names[i], &basetype, child, None);
                     // add alloc var debug info
                     builder.create_parameter_variable(
                         &fnvalue,
@@ -1007,7 +1007,7 @@ impl Node for ClosureNode {
             PLType::Void => None,
             other => {
                 builder.rm_curr_debug_location();
-                let retv = builder.alloc("retvalue", other, child, None);
+                let retv = builder.alloc_no_collect("retvalue", other, child, None);
                 Some(retv)
             }
         };
@@ -1036,7 +1036,7 @@ impl Node for ClosureNode {
         for (i, tp) in paratps.iter().enumerate() {
             let b = tp.clone();
             let basetype = b.borrow();
-            let alloca = builder.alloc(
+            let alloca = builder.alloc_no_collect(
                 &self.paralist[i].0.name,
                 &basetype,
                 child,

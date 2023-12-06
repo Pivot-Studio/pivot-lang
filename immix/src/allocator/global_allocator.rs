@@ -129,6 +129,13 @@ impl GlobalAllocator {
         Some(block)
     }
 
+    pub fn should_gc(&self) -> bool {
+        unsafe {
+            let p =         self.current.get().add(BLOCK_SIZE*3);
+            p >= self.heap_end
+        }
+    }
+
     // pub fn out_of_space(&self) ->bool {
     //     (self.heap_end as usize - self.current as usize) < BLOCK_SIZE && self.free_blocks.len() == 0
     // }
