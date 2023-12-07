@@ -67,7 +67,10 @@ impl Node for TupleInitNode {
         builder.gen_st_visit_function(ctx, &sttype, &field_tps);
         let stu = Arc::new(RefCell::new(PLType::Struct(sttype)));
         ctx.add_type_without_check(stu.clone());
-        let v = builder.alloc("tuple_v", &stu.borrow(), ctx, Some(self.range().start));
+        let mut v = builder.alloc("tuple_v", &stu.borrow(), ctx, Some(self.range().start));
+        if ctx.generator_data.is_some() {
+            v = builder.build_load(v, "load_ctx_var", &PLType::new_i8_ptr(), ctx);
+        }
         // 初始化赋值
         for (i, value) in expr_values.into_iter().enumerate() {
             let field_ptr = builder

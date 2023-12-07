@@ -654,7 +654,7 @@ impl FuncDefNode {
                         PLType::Void => None,
                         other => {
                             builder.rm_curr_debug_location();
-                            let retv = builder.alloc_no_collect("retvalue", other, child, None);
+                            let retv = builder.alloc_no_collect("retvalue3", other, child, None);
                             Some(retv)
                         }
                     }
@@ -1008,7 +1008,7 @@ impl Node for ClosureNode {
             PLType::Void => None,
             other => {
                 builder.rm_curr_debug_location();
-                let retv = builder.alloc_no_collect("retvalue", other, child, None);
+                let retv = builder.alloc_no_collect("retvalue4", other, child, None);
                 Some(retv)
             }
         };

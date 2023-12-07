@@ -2,6 +2,7 @@ use super::builder::ValueHandle;
 use super::ctx::Ctx;
 use super::diag::ErrorCode;
 use super::node::interface::MultiTraitNode;
+use super::node::tuple::TupleTypeNode;
 use super::node::types::ClosureTypeNode;
 use super::node::types::CustomTypeNode;
 use super::plmod::Mod;
@@ -246,8 +247,10 @@ impl UnionType {
                 .iter()
                 .enumerate()
                 .find(|(_, t)| {
-                    get_type_deep(t.get_type(ctx, builder, true).unwrap())
-                        == get_type_deep(Arc::new(RefCell::new(pltype.clone())))
+                    get_type_deep(
+                        t.get_type(ctx, builder, true)
+                            .unwrap_or_else(|_| panic!("{:?}", t)),
+                    ) == get_type_deep(Arc::new(RefCell::new(pltype.clone())))
                 })
                 .map(|(i, _)| i)
         })
@@ -503,7 +506,20 @@ impl PLType {
 
     pub fn get_typenode(&self, path: &str) -> Box<TypeNodeEnum> {
         match self {
-            PLType::Struct(st) => Self::new_custom_tp_node(st, path),
+            PLType::Struct(st) => {
+                if st.is_tuple {
+                    Box::new(TypeNodeEnum::Tuple(TupleTypeNode {
+                        tps: st
+                            .fields
+                            .iter()
+                            .map(|v| v.1.typenode.clone())
+                            .collect::<Vec<_>>(),
+                        range: st.range,
+                    }))
+                } else {
+                    Self::new_custom_tp_node(st, path)
+                }
+            }
             PLType::Arr(arr) => new_arrtype_node(arr.get_elem_type().borrow().get_typenode(path)),
             PLType::Primitive(p) => new_typename_node(&p.get_name(), Default::default(), &[]),
             PLType::Void => new_typename_node("void", Default::default(), &[]),

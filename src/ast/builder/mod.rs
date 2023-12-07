@@ -221,7 +221,6 @@ pub trait IRBuilder<'a, 'ctx> {
         v: &STType,
         field_tps: &[Arc<RefCell<PLType>>],
     );
-    fn get_stack_root(&self, v: ValueHandle) -> ValueHandle;
     fn cast_primitives(&self, handle: ValueHandle, tp: &PriType, target: &PriType) -> ValueHandle;
     fn is_ptr(&self, v: ValueHandle) -> bool;
     fn get_or_insert_helper_fn_handle(&self, name: &str) -> ValueHandle;

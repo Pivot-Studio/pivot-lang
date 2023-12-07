@@ -140,7 +140,6 @@ pub struct LLVMBuilder<'a, 'ctx> {
     discope: Cell<DIScope<'ctx>>,          // debug info scope
     ditypes_placeholder: Arc<RefCell<FxHashMap<String, RefCell<Vec<DIDerivedType<'ctx>>>>>>, // hold the generated debug info type place holder
     ditypes: Arc<RefCell<FxHashMap<String, DIType<'ctx>>>>, // hold the generated debug info type
-    heap_stack_map: Arc<RefCell<FxHashMap<ValueHandle, ValueHandle>>>,
     optimized: Arc<RefCell<bool>>,
     used: Arc<RefCell<Vec<FunctionValue<'ctx>>>>,
     difile: Cell<DIFile<'ctx>>,
@@ -174,9 +173,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let ptr = self.get_llvm_value(ptr).unwrap();
         let ptr = ptr.into_pointer_value();
         let ptr = self.builder.build_load(llvm_type, ptr, name).unwrap();
-        if ptr.is_pointer_value() {
-            self.create_root_for(ptr);
-        }
+
         self.get_llvm_value_handle(&ptr.as_any_value_enum())
     }
     pub fn new(
@@ -203,7 +200,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             handle_reverse_table: Arc::new(RefCell::new(FxHashMap::default())),
             block_table: Arc::new(RefCell::new(FxHashMap::default())),
             block_reverse_table: Arc::new(RefCell::new(FxHashMap::default())),
-            heap_stack_map: Arc::new(RefCell::new(FxHashMap::default())),
             optimized: Arc::new(RefCell::new(false)),
             used: Default::default(),
             difile: Cell::new(diunit.get_file()),
@@ -220,7 +216,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     ) -> ValueHandle {
         let builder = self.builder;
         builder.unset_current_debug_location();
-        let (p, stack_root, _) = self.gc_malloc(name, ctx, pltype, malloc_fn);
+        let (p, _) = self.gc_malloc(name, ctx, pltype, malloc_fn);
         let llvm_tp = self.get_basic_type_op(pltype, ctx).unwrap();
         if let PLType::Struct(tp) = pltype {
             let f = self.get_or_insert_st_visit_fn_handle(&p, tp);
@@ -255,22 +251,17 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
         if let Some(p) = declare {
             self.build_dbg_location(p);
-            self.insert_var_declare(
-                name,
-                p,
-                &PLType::Pointer(Arc::new(RefCell::new(pltype.clone()))),
-                self.get_llvm_value_handle(&stack_root.as_any_value_enum()),
-                ctx,
-            );
+            // TODO
+            // self.insert_var_declare(
+            //     name,
+            //     p,
+            //     &PLType::Pointer(Arc::new(RefCell::new(pltype.clone()))),
+            //     self.get_llvm_value_handle(&stack_root.as_any_value_enum()),
+            //     ctx,
+            // );
         }
-        let v_stack = self.get_llvm_value_handle(&stack_root.as_any_value_enum());
         let v_heap = self.get_llvm_value_handle(&p.as_any_value_enum());
-        self.set_root(v_heap, v_stack);
         v_heap
-    }
-
-    fn set_root(&self, v_heap: usize, v_stack: usize) {
-        self.heap_stack_map.borrow_mut().insert(v_heap, v_stack);
     }
     fn gc_malloc(
         &self,
@@ -278,7 +269,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
         tp: &PLType,
         malloc_fn: &str,
-    ) -> (PointerValue<'ctx>, PointerValue<'ctx>, BasicTypeEnum<'ctx>) {
+    ) -> (PointerValue<'ctx>, BasicTypeEnum<'ctx>) {
         let lb = self.builder.get_insert_block().unwrap();
         let alloca = self
             .builder
@@ -319,6 +310,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 .unwrap()
                 .into_int_value();
         }
+        if name == "retvalue_generator" {
+            self.builder.position_at_end(alloca);
+        }
         let heapptr = self
             .builder
             .build_call(
@@ -330,8 +324,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .try_as_basic_value()
             .left()
             .unwrap();
+        self.builder.position_at_end(lb);
 
-        let mut casted_result = heapptr;
+        let casted_result = heapptr;
 
         // TODO: force user to manually init all structs, so we can remove this memset
         self.builder
@@ -349,13 +344,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if alloca.get_terminator().is_some() {
             panic!("alloca block should not have terminator yet")
         }
-        let stack_ptr = self
-            .builder
-            .build_alloca(
-                llvmtp.ptr_type(AddressSpace::from(1)),
-                &format!("stack_ptr_{}", name),
-            )
-            .unwrap();
         // self.builder
         // .build_memset(
         //     stack_ptr,
@@ -364,13 +352,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         //     self.context.i64_type().const_int(  td.get_store_size(&self.i8ptr()),false),
         // )
         // .unwrap();
-        self.gc_add_root(
-            stack_ptr.as_basic_value_enum(),
-            ObjectType::Pointer.int_value(),
-        );
         self.builder.position_at_end(lb);
-        self.builder.build_store(stack_ptr, casted_result).unwrap();
-
+        // self.set_root(self.get_llvm_value_handle( &casted_result.as_any_value_enum()), self.get_llvm_value_handle( &stack_ptr.as_any_value_enum()));
         self.builder.position_at_end(cb);
 
         if let PLType::Arr(arr) = tp {
@@ -455,11 +438,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .unwrap();
                 self.builder.build_store(arr_space, rtti).unwrap();
 
-                // every heap pointer has possible to move after malloc(if this malloc triigers gc's evacuation) so we need to reload it
-                casted_result = self
-                    .builder
-                    .build_load(casted_result.get_type(), stack_ptr, "reload")
-                    .unwrap();
                 let arr_ptr = self
                     .builder
                     .build_struct_gep(llvmtp, casted_result.into_pointer_value(), 1, "arr_ptr")
@@ -480,7 +458,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
 
         self.builder.position_at_end(lb);
-        (casted_result.into_pointer_value(), stack_ptr, llvmtp)
+        (casted_result.into_pointer_value(), llvmtp)
     }
 
     fn get_malloc_f(&self, ctx: &mut Ctx<'a>, malloc_fn: &str) -> FunctionValue<'ctx> {
@@ -508,146 +486,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
 
     fn get_cur_di_file(&self) -> DIFile<'ctx> {
         self.difile.get()
-    }
-
-    /// # create_root_for
-    ///
-    /// 为一个堆上的对象创建gcroot
-    ///
-    /// ## safety
-    ///
-    /// 1. 如果传入的值不是堆上的对象，可能导致segment fault在内的一系列问题。
-    /// 2. 如果在应该调用这个函数的时候没有调用，可能导致pl程序在gc进行evacuation之后，无法正确的访问堆上的对象。导致
-    ///   segment fault、bus error在内的一系列问题。关于驱逐算法的详细信息，见[gc文档](https://lang.pivotstudio.cn/docs/systemlib/immix.html#evacuation)
-    /// 3. 如果禁用了evacuation，那么这个函数将不会有实际作用
-    fn create_root_for(&self, heap_ptr: BasicValueEnum<'ctx>) -> BasicValueEnum<'ctx> {
-        self.builder.unset_current_debug_location();
-        let lb = self.builder.get_insert_block().unwrap();
-        let alloca = self
-            .builder
-            .get_insert_block()
-            .unwrap()
-            .get_parent()
-            .unwrap()
-            .get_first_basic_block()
-            .unwrap();
-        self.builder.position_at_end(alloca);
-        let stack_ptr = self
-            .builder
-            .build_alloca(heap_ptr.get_type(), "stack_ptr")
-            .unwrap();
-        self.gc_add_root(
-            stack_ptr.as_basic_value_enum(),
-            ObjectType::Pointer.int_value(),
-        );
-        self.builder.position_at_end(lb);
-        self.builder.build_store(stack_ptr, heap_ptr).unwrap();
-        self.heap_stack_map.borrow_mut().insert(
-            self.get_llvm_value_handle(&heap_ptr.as_any_value_enum()),
-            self.get_llvm_value_handle(&stack_ptr.as_any_value_enum()),
-        );
-        stack_ptr.as_basic_value_enum()
-    }
-
-    /// # tag_root
-    ///
-    /// 为一个可能有堆指针的栈上对象创建gcroot
-    ///
-    /// ## 例子
-    ///
-    /// 下方对象：
-    /// ```pivot
-    /// struct A {
-    ///    a:[i64];
-    /// }
-    /// ```
-    /// A.a里面有堆指针，所以即使A本身在栈上，
-    /// 也需要为它创建GCRoot，否则在evacuation之后，A.a的指针不会被修正向新地址
-    ///
-    /// ## Safety
-    ///
-    /// - stack_ptr必须是一个栈上指针
-    /// - tp必须正确
-    ///
-    /// 否则会导致不可预测的结果
-    fn tag_root(&self, stack_ptr: BasicValueEnum<'ctx>, tp: ObjectType) {
-        if tp == ObjectType::Atomic {
-            return;
-        }
-        let lb = self.builder.get_insert_block().unwrap();
-        let alloca = self
-            .builder
-            .get_insert_block()
-            .unwrap()
-            .get_parent()
-            .unwrap()
-            .get_first_basic_block()
-            .unwrap();
-        self.builder.position_at_end(alloca);
-        if tp == ObjectType::Pointer {
-            self.gc_add_root(stack_ptr, tp.int_value());
-            self.builder.position_at_end(lb);
-            return;
-        }
-        let root_ptr = self
-            .builder
-            .build_alloca(stack_ptr.get_type(), "root_ptr")
-            .unwrap();
-        self.gc_add_root(root_ptr.as_basic_value_enum(), tp.int_value());
-        self.builder.position_at_end(lb);
-        self.builder.build_store(root_ptr, stack_ptr).unwrap();
-    }
-
-    /// 第一个参数必须是一个二重以上的指针，且不能是一重指针bitcast过来的二重指针
-    /// 否则可能导致bus error
-    fn gc_add_root(&self, _stackptr: BasicValueEnum<'ctx>, _obj_type: u8) {
-        // self.module
-        //     .get_function("llvm.gcroot")
-        //     .or_else(|| {
-        //         let i8ptr = self.context.i8_type().ptr_type(AddressSpace::from(1));
-        //         let ty = self.context.void_type().fn_type(
-        //             &[i8ptr.ptr_type(AddressSpace::from(1)).into(), i8ptr.into()],
-        //             false,
-        //         );
-        //         Some(self.module.add_function("llvm.gcroot", ty, None))
-        //     })
-        //     .and_then(|f| {
-        //         let stackptr = stackptr;
-        //         let tp = ObjectType::from_int(obj_type).expect("invalid object type");
-        //         let tp_const_name = format!(
-        //             "@{}_@IMMIX_OBJTYPE_{}",
-        //             self.module.get_source_file_name().to_str().unwrap(),
-        //             match tp {
-        //                 ObjectType::Atomic => "ATOMIC",
-        //                 ObjectType::Trait => "TRAIT",
-        //                 ObjectType::Complex => "COMPLEX",
-        //                 ObjectType::Pointer => "POINTER",
-        //             }
-        //         );
-        //         self.module
-        //             .get_global(&tp_const_name)
-        //             .or_else(|| {
-        //                 let g =
-        //                     self.module
-        //                         .add_global(self.context.i8_type(), None, &tp_const_name);
-        //                 g.set_linkage(Linkage::Internal);
-        //                 g.set_constant(true);
-        //                 g.set_initializer(&self.context.i8_type().const_int(obj_type as u64, true));
-        //                 Some(g)
-        //             })
-        //             .map(|g| {
-        //                 self.builder
-        //                     .build_call(
-        //                         f,
-        //                         &[
-        //                             stackptr.into_pointer_value().into(),
-        //                             g.as_pointer_value().into(),
-        //                         ],
-        //                         "add_root",
-        //                     )
-        //                     .unwrap();
-        //             })
-        //     });
     }
 
     fn get_llvm_value_handle(&self, value: &AnyValueEnum<'ctx>) -> ValueHandle {
@@ -882,21 +720,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 
     fn get_llvm_value(&self, handle: ValueHandle) -> Option<AnyValueEnum<'ctx>> {
-        if let Some(root) = self.heap_stack_map.borrow().get(&handle) {
-            self.handle_table.borrow().get(root).map(|v| {
-                let handle = self.handle_table.borrow().get(&handle).copied().unwrap();
-                self.builder
-                    .build_load::<BasicTypeEnum>(
-                        handle.get_type().try_into().unwrap(),
-                        v.into_pointer_value(),
-                        "load_stack",
-                    )
-                    .unwrap()
-                    .as_any_value_enum()
-            })
-        } else {
-            self.handle_table.borrow().get(&handle).copied()
-        }
+        self.handle_table.borrow().get(&handle).copied()
     }
     fn get_llvm_value_raw(&self, handle: ValueHandle) -> Option<AnyValueEnum<'ctx>> {
         self.handle_table.borrow().get(&handle).copied()
@@ -1086,7 +910,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 // all closures are represented as a struct with a function pointer and an i8ptr(point to closure data)
                 let fields = vec![
                     self.get_closure_fn_type(c, ctx)
-                        .ptr_type(AddressSpace::from(0))
+                        .ptr_type(AddressSpace::from(1))
                         .into(),
                     self.context
                         .i8_type()
@@ -1579,7 +1403,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             return;
         }
         let used = self.used.borrow();
-        let used_arr = self.i8ptr().const_array(
+        let used_arr = self.i8ptr().ptr_type(AddressSpace::from(0)).const_array(
             &used
                 .iter()
                 .map(|v| v.as_global_value().as_pointer_value())
@@ -1597,7 +1421,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .module
                     .add_global(used_arr.get_type(), None, "llvm.used");
                 used_global.set_linkage(Linkage::Appending);
-                used_global.set_initializer(&used_arr);   
+                used_global.set_initializer(&used_arr);
             }
             extern "C" {
                 // fn add_module_pass(ptr: *mut u8);
@@ -1681,7 +1505,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .unwrap()
             .borrow_mut()
             .yield_ctx_handle = ctx_handle;
-        self.create_root_for(ctx_param);
         self.builder.position_at_end(prev_bb);
     }
     fn bitcast(
@@ -1786,7 +1609,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     ) -> ValueHandle {
         let llvm_type = self.get_basic_type_op(tp, ctx).unwrap();
         let h = self.build_load_raw(ptr, name, llvm_type);
-        let b: BasicValueEnum<'_> = self.get_llvm_value(h).unwrap().try_into().unwrap();
+        let _b: BasicValueEnum<'_> = self.get_llvm_value(h).unwrap().try_into().unwrap();
         let currbb = self.builder.get_insert_block().unwrap();
         let allocabb = self
             .builder
@@ -1798,21 +1621,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .unwrap();
         self.builder.position_at_end(allocabb);
         self.builder.unset_current_debug_location();
-        let stack_ptr = self
-            .builder
-            .build_alloca(b.get_type(), "stack_ptr")
-            .unwrap();
         // init to null
-        self.builder
-            .build_store(stack_ptr, b.get_type().const_zero())
-            .unwrap();
-        self.tag_root(stack_ptr.as_basic_value_enum(), tp.get_immix_type());
+
         self.builder.position_at_end(currbb);
-        self.builder.build_store(stack_ptr, b).unwrap();
-        self.heap_stack_map.borrow_mut().insert(
-            h,
-            self.get_llvm_value_handle(&stack_ptr.as_any_value_enum()),
-        );
+
         h
     }
     fn try_load2var(
@@ -1968,7 +1780,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         declare: Option<Pos>,
     ) -> ValueHandle {
         let mut ret_handle = self.alloc_raw(name, pltype, ctx, declare, "DioGC__malloc");
-        if ctx.ctx_flag == CtxFlag::InGeneratorYield {
+        if ctx.ctx_flag == CtxFlag::InGeneratorYield && declare.is_some() {
             let data = ctx.generator_data.as_ref().unwrap().clone();
 
             let lb = self.builder.get_insert_block().unwrap();
@@ -2002,14 +1814,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
 
             // 我们现在在alloca block上（第一个block），egnerator yield函数每次进入都会执行这个
             // block，所以在这里我们要设置好所有的变量初始值，将他们从generator ctx中取出。
-            let stack_root = self.get_stack_root(ret_handle);
-            let load = self.build_load_raw(
-                data_ptr,
-                &format!("data_load_{}", name),
-                self.i8ptr().as_basic_type_enum(),
-            );
-            self.build_store(stack_root, load);
-
+            // let stack_root = self.get_stack_root(ret_handle);
+            // let load = self.build_load_raw(
+            //     data_ptr,
+            //     &format!("data_load_{}", name),
+            //     self.i8ptr().as_basic_type_enum(),
+            // );
+            // self.build_store(stack_root, load);
             self.builder.position_at_end(lb);
 
             // 到目前正在生成代码的block上，这里是malloc函数所在的地方。
@@ -2036,14 +1847,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             // self.build_store(ret_handle, load_again);
             // self.build_store(stack_root, load);
             // self.build_store(data_ptr, ret_handle);
-            self.set_root(load, stack_root);
-            ret_handle = load;
+            // self.set_root(load, stack_root);
+            ret_handle = data_ptr;
 
             let id = data.borrow().table.len().to_string();
             data.borrow_mut().table.insert(
                 name.to_string() + &id,
                 PLSymbolData {
-                    value: load,
+                    value: data_ptr,
                     pltype: Arc::new(RefCell::new(pltype.clone())),
                     range: Default::default(),
                     refs: None,
@@ -2097,13 +1908,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
 
             // 我们现在在alloca block上（第一个block），egnerator yield函数每次进入都会执行这个
             // block，所以在这里我们要设置好所有的变量初始值，将他们从generator ctx中取出。
-            let stack_root = self.get_stack_root(ret_handle);
-            let load = self.build_load_raw(
-                data_ptr,
-                &format!("data_load_{}", name),
-                self.i8ptr().as_basic_type_enum(),
-            );
-            self.build_store(stack_root, load);
+            // let load = self.build_load_raw(
+            //     data_ptr,
+            //     &format!("data_load_{}", name),
+            //     self.i8ptr().as_basic_type_enum(),
+            // );
 
             self.builder.position_at_end(lb);
 
@@ -2131,14 +1940,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             // self.build_store(ret_handle, load_again);
             // self.build_store(stack_root, load);
             // self.build_store(data_ptr, ret_handle);
-            self.set_root(load, stack_root);
-            ret_handle = load;
+            ret_handle = data_ptr;
 
             let id = data.borrow().table.len().to_string();
             data.borrow_mut().table.insert(
                 name.to_string() + &id,
                 PLSymbolData {
-                    value: load,
+                    value: data_ptr,
                     pltype: Arc::new(RefCell::new(pltype.clone())),
                     range: Default::default(),
                     refs: None,
@@ -2163,9 +1971,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let sttp = self.get_basic_type_op(tp, ctx).unwrap();
         let gep = self.builder.build_struct_gep(sttp, structv, index, name);
         if let Ok(gep) = gep {
-            // 这里的gep是个derived pointer，它也是对heap pointer的引用，为了
-            // 保证evacuation正确性需要添加root
-            self.create_root_for(gep.as_basic_value_enum());
             return Ok(self.get_llvm_value_handle(&gep.as_any_value_enum()));
         } else {
             Err(format!("{:?}\ntp: {:?}\nindex: {}", gep, tp, index))
@@ -2210,7 +2015,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .unwrap()
         };
         // same reason as build_struct_gep
-        self.create_root_for(gep.as_basic_value_enum());
         return self.get_llvm_value_handle(&gep.as_any_value_enum());
     }
     fn build_in_bounds_gep(
@@ -2237,8 +2041,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 )
                 .unwrap()
         };
-        // same reason as build_struct_gep
-        self.create_root_for(gep.as_basic_value_enum());
+
         self.get_llvm_value_handle(&gep.as_any_value_enum())
     }
     fn const_string(&self, s: &str) -> ValueHandle {
@@ -2360,11 +2163,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.dibuilder.finalize();
     }
     fn print_to_file(&self, file: &Path) -> Result<(), String> {
-        self.optimize();
-        // self.module.strip_debug_info();
         if let Err(s) = self.module.print_to_file(file) {
             return Err(s.to_string());
         }
+        self.optimize();
+        // self.module.strip_debug_info();
+        // if let Err(s) = self.module.print_to_file(file) {
+        //     return Err(s.to_string());
+        // }
         Ok(())
     }
     fn write_bitcode_to_path(&self, path: &Path) -> bool {
@@ -2714,32 +2520,28 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
 
     fn create_params_roots(
         &self,
-        f: ValueHandle,
-        allocab: ValueHandle,
-        params: &[Arc<RefCell<PLType>>],
+        _f: ValueHandle,
+        _allocab: ValueHandle,
+        _params: &[Arc<RefCell<PLType>>],
     ) {
-        let cubb = self.get_cur_basic_block();
-        self.position_at_end_block(allocab);
-        let funcvalue = self.get_llvm_value(f).unwrap().into_function_value();
-        for (i, nv) in funcvalue.get_param_iter().enumerate() {
-            let alloca_stack = self
-                .builder
-                .build_alloca(nv.get_type(), "param_alloca")
-                .unwrap();
-            self.builder.build_store(alloca_stack, nv).unwrap();
-            let t = if nv.get_type().is_pointer_type() {
-                ObjectType::Pointer
-            } else {
-                params[i].borrow().get_immix_type()
-            };
-            self.tag_root(alloca_stack.as_basic_value_enum(), t);
-            let nv_handle = self.get_llvm_value_handle(&nv.as_any_value_enum());
-            let stack_handle = self.get_llvm_value_handle(&alloca_stack.as_any_value_enum());
-            self.heap_stack_map
-                .borrow_mut()
-                .insert(nv_handle, stack_handle);
-        }
-        self.position_at_end_block(cubb);
+        // let cubb = self.get_cur_basic_block();
+        // self.position_at_end_block(allocab);
+        // let funcvalue = self.get_llvm_value(f).unwrap().into_function_value();
+        // for (i, nv) in funcvalue.get_param_iter().enumerate() {
+        //     let alloca_stack = self
+        //         .builder
+        //         .build_alloca(nv.get_type(), "param_alloca")
+        //         .unwrap();
+        //     self.builder.build_store(alloca_stack, nv).unwrap();
+        //     let t = if nv.get_type().is_pointer_type() {
+        //         ObjectType::Pointer
+        //     } else {
+        //         params[i].borrow().get_immix_type()
+        //     };
+
+        //     let nv_handle = self.get_llvm_value_handle(&nv.as_any_value_enum());
+        // }
+        // self.position_at_end_block(cubb);
     }
     #[allow(clippy::too_many_arguments)]
     fn create_parameter_variable(
@@ -2753,7 +2555,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         allocab: BlockHandle,
         tp: &PLType,
     ) {
-        let divar = self.dibuilder.create_parameter_variable(
+        let _divar = self.dibuilder.create_parameter_variable(
             self.discope.get(),
             &fnvalue.param_names[i],
             i as u32,
@@ -2772,14 +2574,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             DIFlags::PUBLIC,
         );
         self.build_dbg_location(pos);
-        let stack_ptr = self.get_stack_root(alloca);
-        self.dibuilder.insert_declare_at_end(
-            self.get_llvm_value(stack_ptr).unwrap().into_pointer_value(),
-            Some(divar),
-            None,
-            self.builder.get_current_debug_location().unwrap(),
-            self.get_llvm_block(allocab).unwrap(),
-        );
+        // TODO
+        // self.dibuilder.insert_declare_at_end(
+        //     self.get_llvm_value(stack_ptr).unwrap().into_pointer_value(),
+        //     Some(divar),
+        //     None,
+        //     self.builder.get_current_debug_location().unwrap(),
+        //     self.get_llvm_block(allocab).unwrap(),
+        // );
 
         if child.ctx_flag == CtxFlag::InGeneratorYield {
             let data = child.generator_data.as_ref().unwrap().clone();
@@ -2814,7 +2616,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.build_store(para_ptr, ptr);
             self.position_at_end_block(origin_bb);
 
-            self.build_store(alloca, data.borrow().para_tmp);
+            // self.build_store(alloca, data.borrow().para_tmp);
             return;
         }
         let funcvalue = self
@@ -2828,22 +2630,18 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .get_nth_param(i as _)
             .unwrap()
             .as_basic_value_enum();
-        let alloca_stack = self
-            .builder
-            .build_alloca(nv.get_type(), "param_alloca")
-            .unwrap();
-        self.builder.build_store(alloca_stack, nv).unwrap();
-        let t = if nv.get_type().is_pointer_type() {
-            ObjectType::Pointer
-        } else {
-            tp.get_immix_type()
-        };
-        self.tag_root(alloca_stack.as_basic_value_enum(), t);
+        // let alloca_stack = self
+        //     .builder
+        //     .build_alloca(nv.get_type(), "param_alloca")
+        //     .unwrap();
+        // self.builder.build_store(alloca_stack, nv).unwrap();
+        // let t = if nv.get_type().is_pointer_type() {
+        //     ObjectType::Pointer
+        // } else {
+        //     tp.get_immix_type()
+        // };
+
         let nv_handle = self.get_llvm_value_handle(&nv.as_any_value_enum());
-        let stack_handle = self.get_llvm_value_handle(&alloca_stack.as_any_value_enum());
-        self.heap_stack_map
-            .borrow_mut()
-            .insert(nv_handle, stack_handle);
 
         self.position_at_end_block(cubb);
         self.build_store(alloca, nv_handle);
@@ -3003,10 +2801,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         }
     }
 
-    fn get_stack_root(&self, v: ValueHandle) -> ValueHandle {
-        *self.heap_stack_map.borrow().get(&v).unwrap()
-    }
-
     fn cast_primitives(&self, handle: ValueHandle, tp: &PriType, target: &PriType) -> ValueHandle {
         let val = self.get_llvm_value(handle).unwrap();
         let signed = tp.signed();
@@ -3097,17 +2891,12 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .build_alloca(nv.get_type(), "param_alloca")
             .unwrap();
         self.builder.build_store(alloca_stack, nv).unwrap();
-        let t = if nv.get_type().is_pointer_type() {
+        let _t = if nv.get_type().is_pointer_type() {
             ObjectType::Pointer
         } else {
             tp.get_immix_type()
         };
-        self.tag_root(alloca_stack.as_basic_value_enum(), t);
-        let nv_handle = self.get_llvm_value_handle(&nv.as_any_value_enum());
-        let stack_handle = self.get_llvm_value_handle(&alloca_stack.as_any_value_enum());
-        self.heap_stack_map
-            .borrow_mut()
-            .insert(nv_handle, stack_handle);
+        let _nv_handle = self.get_llvm_value_handle(&nv.as_any_value_enum());
 
         self.position_at_end_block(cubb);
         self.build_store(

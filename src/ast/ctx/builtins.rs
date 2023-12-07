@@ -44,6 +44,7 @@ lazy_static! {
         mp.insert(usize::MAX - 11, emit_is_ptr);
         mp.insert(usize::MAX - 12, emit_if_arr);
         mp.insert(usize::MAX - 13, emit_if_union);
+        mp.insert(usize::MAX - 14, emit_arr_slice);
         mp
     };
     pub static ref BUILTIN_FN_SNIPPET_MAP: HashMap<ValueHandle, String> = {
@@ -82,6 +83,10 @@ lazy_static! {
             usize::MAX - 13,
             r#"if_union(${1:t}, { ${2:_field} })$0"#.to_owned(),
         );
+        mp.insert(
+            usize::MAX - 14,
+            r#"arr_slice(${1:from}, ${2:start}, ${3:len})$0"#.to_owned(),
+        );
         mp
     };
     pub static ref BUILTIN_FN_NAME_MAP: HashMap<&'static str, ValueHandle> = {
@@ -99,6 +104,7 @@ lazy_static! {
         mp.insert("is_ptr", usize::MAX - 11);
         mp.insert("if_arr", usize::MAX - 12);
         mp.insert("if_union", usize::MAX - 13);
+        mp.insert("arr_slice", usize::MAX - 14);
         mp
     };
 }
@@ -336,10 +342,16 @@ fn emit_arr_from_raw<'a, 'b>(
             .new_err(crate::ast::diag::ErrorCode::TYPE_MISMATCH)
             .add_to_ctx(ctx));
     }
+    let lenloaded = ctx.try_load2var(
+        f.paralist[1].range(),
+        v2.get_value(),
+        builder,
+        &v2.get_ty().borrow(),
+    )?;
 
     let arr_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
-        element_type: elm,
-        size_handle: 0,
+        element_type: elm.clone(),
+        size_handle: lenloaded,
     })));
     let arr = builder.alloc("array_alloca", &arr_tp.borrow(), ctx, None);
     let arr_raw = builder
@@ -351,17 +363,14 @@ fn emit_arr_from_raw<'a, 'b>(
         builder,
         &v.get_ty().borrow(),
     )?;
-    builder.build_store(arr_raw, loaded);
+    let raw_loaded = builder.build_load(arr_raw, "arr_raw_load", &PLType::new_i8_ptr(), ctx);
+
+    builder.build_memcpy(loaded, &elm.borrow(), raw_loaded, lenloaded, ctx);
+    // builder.build_store(arr_raw, loaded);
     let arr_len = builder
         .build_struct_gep(arr, 2, "arr_len", &arr_tp.borrow(), ctx)
         .unwrap();
-    let loaded = ctx.try_load2var(
-        f.paralist[1].range(),
-        v2.get_value(),
-        builder,
-        &v2.get_ty().borrow(),
-    )?;
-    builder.build_store(arr_len, loaded);
+    builder.build_store(arr_len, lenloaded);
 
     arr.new_output(arr_tp).to_result()
 }
@@ -474,10 +483,123 @@ fn emit_arr_copy<'a, 'b>(
                 &PLType::Pointer(a2.element_type.clone()),
                 ctx,
             );
+            let len_raw =
+                ctx.try_load2var(Default::default(), len_raw, builder, &PLType::new_i64())?;
             builder.build_memcpy(from_raw, &a1.element_type.borrow(), to_raw, len_raw, ctx);
             Ok(Default::default())
         }
         _ => unreachable!(),
+    }
+}
+
+fn emit_arr_slice<'a, 'b>(
+    f: &mut FuncCallNode,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> NodeResult {
+    if f.paralist.len() != 3 {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::PARAMETER_LENGTH_NOT_MATCH)
+            .add_to_ctx(ctx));
+    }
+    if f.generic_params.is_some() {
+        return Err(f
+            .range
+            .new_err(crate::ast::diag::ErrorCode::GENERIC_PARAM_LEN_MISMATCH)
+            .add_to_ctx(ctx));
+    }
+
+    let st = f.paralist[0].emit(ctx, builder)?;
+    let v = st.get_value().unwrap();
+
+    if !matches!(&*v.get_ty().borrow(), PLType::Arr(_)) {
+        return Err(f.paralist[0]
+            .range()
+            .new_err(crate::ast::diag::ErrorCode::EXPECT_ARRAY_TYPE)
+            .add_to_ctx(ctx));
+    }
+
+    let st = f.paralist[1].emit(ctx, builder)?;
+    let startlen = st.get_value().unwrap();
+
+    if !matches!(
+        &*startlen.get_ty().borrow(),
+        PLType::Primitive(PriType::I64)
+    ) {
+        return Err(f.paralist[1]
+            .range()
+            .new_err(crate::ast::diag::ErrorCode::TYPE_MISMATCH)
+            .add_label(
+                f.paralist[2].range(),
+                ctx.get_file(),
+                format_label!(
+                    "expect i64, found {}",
+                    startlen.get_ty().borrow().get_name()
+                ),
+            )
+            .add_to_ctx(ctx));
+    }
+
+    let st = f.paralist[2].emit(ctx, builder)?;
+    let len = st.get_value().unwrap();
+
+    if !matches!(&*len.get_ty().borrow(), PLType::Primitive(PriType::I64)) {
+        return Err(f.paralist[2]
+            .range()
+            .new_err(crate::ast::diag::ErrorCode::TYPE_MISMATCH)
+            .add_label(
+                f.paralist[2].range(),
+                ctx.get_file(),
+                format_label!("expect i64, found {}", len.get_ty().borrow().get_name()),
+            )
+            .add_to_ctx(ctx));
+    }
+
+    let from_raw = builder
+        .build_struct_gep(v.get_value(), 1, "arr_raw", &v.get_ty().borrow(), ctx)
+        .unwrap();
+
+    let from_raw = builder.build_load(from_raw, "arr_load_field", &PLType::new_i8_ptr(), ctx);
+
+    if let PLType::Arr(arr) = &*v.get_ty().borrow() {
+        let startlen = ctx.try_load2var(
+            Default::default(),
+            startlen.get_value(),
+            builder,
+            &PLType::new_i64(),
+        )?;
+        // to raw is just from raw reslice
+        let to_raw = builder.build_in_bounds_gep(
+            from_raw,
+            &[startlen],
+            "offset_p",
+            &arr.element_type.borrow(),
+            ctx,
+        );
+        let len = ctx.try_load2var(
+            Default::default(),
+            len.get_value(),
+            builder,
+            &PLType::new_i64(),
+        )?;
+        // store them
+        let arr_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
+            element_type: arr.element_type.clone(),
+            size_handle: len,
+        })));
+        let arr = builder.alloc("array_alloca", &arr_tp.borrow(), ctx, None);
+        let arr_raw = builder
+            .build_struct_gep(arr, 1, "arr_raw", &arr_tp.borrow(), ctx)
+            .unwrap();
+        builder.build_store(arr_raw, to_raw);
+        let arr_len = builder
+            .build_struct_gep(arr, 2, "arr_len", &arr_tp.borrow(), ctx)
+            .unwrap();
+        builder.build_store(arr_len, len);
+        arr.new_output(arr_tp).to_result()
+    } else {
+        unreachable!()
     }
 }
 

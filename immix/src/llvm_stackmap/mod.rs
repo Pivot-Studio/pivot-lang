@@ -268,7 +268,7 @@ pub fn build_root_maps(
                 for loc in locations_slice {
                     if loc.tp == 3 {
                         fn_roots.push((loc.offset_or_small_const, ObjectType::Pointer));
-                    } else if loc.tp == 2 || loc.tp == 1 || loc.tp == 5 {
+                    } else if loc.tp == 2 || loc.tp == 1 {
                         panic!("tp = {}", loc.tp);
                     }
                 }

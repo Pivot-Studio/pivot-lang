@@ -66,14 +66,15 @@ pub fn utf8_count(ptr: *u8, len:i64) i64;
 impl string {
     pub fn append(str: string) void {
         let old = self.data;
-        let atomic: u8 = 0;
-        let new = DioGC__malloc(self._byte_len + str._byte_len, atomic);
-        memcpy(new, old, self._byte_len);
-        let arr = arr_from_raw(new, self._byte_len + str._byte_len);
+        // let atomic: u8 = 0;
+        // let new = DioGC__malloc(self._byte_len + str._byte_len, atomic);
+        // memcpy(new, old, self._byte_len);
+        let arr = [u8*self._byte_len + str._byte_len;];
+        memcpy(&arr[0], old, self._byte_len);
         // let new_i_end = ptr_to_int(new) + self._byte_len;
         let new_end = &arr[self._byte_len];
         memcpy(new_end, str.data, str._byte_len);
-        self.data = new;
+        self.data = &arr[0];
         self._len = self._len + str._len;
         self._byte_len = self._byte_len + str._byte_len;
         return;

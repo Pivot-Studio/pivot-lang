@@ -68,9 +68,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     ) -> super::ValueHandle {
         0
     }
-    fn get_stack_root(&self, _v: ValueHandle) -> ValueHandle {
-        0
-    }
 
     fn build_conditional_branch(
         &self,
