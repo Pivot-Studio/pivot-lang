@@ -1591,12 +1591,14 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 f.set_gc("shadow-stack");
             });
         } else {
-            // see https://llvm.org/docs/LangRef.html#the-llvm-used-global-variable
-            let used_global = self
-                .module
-                .add_global(used_arr.get_type(), None, "llvm.used");
-            used_global.set_linkage(Linkage::Appending);
-            used_global.set_initializer(&used_arr);
+            if !used.is_empty() {
+                // see https://llvm.org/docs/LangRef.html#the-llvm-used-global-variable
+                let used_global = self
+                    .module
+                    .add_global(used_arr.get_type(), None, "llvm.used");
+                used_global.set_linkage(Linkage::Appending);
+                used_global.set_initializer(&used_arr);   
+            }
             extern "C" {
                 // fn add_module_pass(ptr: *mut u8);
                 fn run_module_pass(m: *mut u8, tm: i32);

@@ -89,27 +89,33 @@ extern "C" void run_module_pass(LLVMModuleRef  M, int opt) {
     PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 
     auto O = OptimizationLevel::O2;
+    ModulePassManager MPM;
     switch (opt)
     {
     case 0:
         O = OptimizationLevel::O0;
+        MPM = PB.buildO0DefaultPipeline(O);
         break;
     case 1:
         O = OptimizationLevel::O1;
+        MPM = PB.buildPerModuleDefaultPipeline(O);
         break;
     case 2:
         O = OptimizationLevel::O2;
+        MPM = PB.buildPerModuleDefaultPipeline(O);
         break;
     case 3:
         O = OptimizationLevel::O3;
+        MPM = PB.buildPerModuleDefaultPipeline(O);
         break;
     default:
+        MPM = PB.buildPerModuleDefaultPipeline(O);
         break;
     }
 
     // Create the pass manager.
     // This one corresponds to a typical -O2 optimization pipeline.
-    ModulePassManager MPM = PB.buildPerModuleDefaultPipeline(O);
+    
     MPM.addPass(ImmixPass());
     MPM.addPass(RewriteStatepointsForGC());
 
