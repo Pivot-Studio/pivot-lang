@@ -1,3 +1,4 @@
+#[cfg(feature = "llvm")]
 use crate::compiler::Options;
 use console::Emoji;
 use std::time::Duration;
@@ -27,6 +28,7 @@ lazy_static! {
             .unwrap();
 }
 
+#[cfg(feature = "llvm")]
 pub fn prepare_prgressbar(pb: &indicatif::ProgressBar, op: Options, prefix: String) {
     pb.enable_steady_tick(Duration::from_millis(50));
     pb.set_style(PROGRESS_STYLE.clone());

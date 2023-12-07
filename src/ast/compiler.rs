@@ -83,6 +83,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
 }
 
 /// process_llvm_ir retrieves llvm IR from db and docs and optimizes it with the help of llvm optimizer.
+#[cfg(feature = "llvm")]
 pub fn process_llvm_ir<'a>(
     db: &dyn Db,
     docs: MemDocsInput,
@@ -132,6 +133,7 @@ pub fn process_llvm_ir<'a>(
     (llvmmod, output_files)
 }
 
+#[cfg(feature = "llvm")]
 pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
     llvmmod.verify().unwrap();
     if op.genir {
