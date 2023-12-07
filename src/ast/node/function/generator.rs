@@ -124,13 +124,13 @@ pub(crate) fn end_generator<'a>(
         )
         .unwrap();
     unsafe { builder.store_with_aoto_cast(ptr, funcvalue) };
-    let ret_load = builder.build_load(
-        data.borrow().ret_handle,
-        "ret_load",
-        &b.ret_type.as_ref().unwrap().borrow(),
-        child,
-    );
-    builder.build_return(Some(ret_load));
+    // let ret_load = builder.build_load(
+    //     data.borrow().ret_handle,
+    //     "ret_load",
+    //     &b.ret_type.as_ref().unwrap().borrow(),
+    //     child,
+    // );
+    builder.build_return(Some(data.borrow().ret_handle));
 
     // 4. 生成yield函数的done分支代码
     builder.position_at_end_block(generator_alloca_b);

@@ -161,7 +161,7 @@ pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
             cpu,
             features,
             level,
-            inkwell::targets::RelocMode::Default,
+            inkwell::targets::RelocMode::DynamicNoPic,
             inkwell::targets::CodeModel::Default,
         )
         .unwrap()
@@ -816,6 +816,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                             .unwrap()
                             .borrow(),
                         ctx,
+                        !fnvalue.is_declare && fnvalue.name != "main",
                     )
                     .fn_type(&param_types, false);
                 Ok(fn_type)
@@ -841,7 +842,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             }))
             .collect::<Vec<_>>();
         let fn_type = self
-            .get_ret_type(&closure.ret_type.borrow(), ctx)
+            .get_ret_type(&closure.ret_type.borrow(), ctx, true)
             .fn_type(&params, false);
         fn_type
     }
@@ -923,11 +924,39 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
     }
     /// # get_ret_type
-    /// get the return type, which is void type or primitive type
-    fn get_ret_type(&self, pltp: &PLType, ctx: &mut Ctx<'a>) -> RetTypeEnum<'ctx> {
+    ///
+    /// get the return type
+    ///
+    /// ## About `is_gc_statepoint`
+    ///
+    /// Whether the function can be treated as a gc statepoint
+    ///
+    /// There's an issue with llvm statepoint api when returning large
+    /// structures (larger than 24 bit) [[1]].
+    /// To bypass this issue, we make function return a pointer
+    /// instead if it's possible to be a gc statepoint.
+    ///
+    /// Most of the functions can be treated as a gc statepoint,
+    /// except ffi functions and main function.
+    ///
+    ///
+    /// [1]:https://github.com/llvm/llvm-project/issues/74612
+    fn get_ret_type(
+        &self,
+        pltp: &PLType,
+        ctx: &mut Ctx<'a>,
+        is_gc_statepoint: bool,
+    ) -> RetTypeEnum<'ctx> {
         match pltp {
             PLType::Void => RetTypeEnum::Void(self.context.void_type()),
-            _ => RetTypeEnum::Basic(self.get_basic_type_op(pltp, ctx).unwrap()),
+            _ => RetTypeEnum::Basic({
+                let tp = self.get_basic_type_op(pltp, ctx).unwrap();
+                if is_gc_statepoint {
+                    tp.ptr_type(AddressSpace::from(1)).as_basic_type_enum()
+                } else {
+                    tp
+                }
+            }),
         }
     }
     fn i8ptr(&self) -> PointerType<'ctx> {
@@ -1402,6 +1431,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if *self.optimized.borrow() {
             return;
         }
+        self.module.strip_debug_info(); // FIXME
+        self.module.verify().unwrap();
         let used = self.used.borrow();
         let used_arr = self.i8ptr().ptr_type(AddressSpace::from(0)).const_array(
             &used
@@ -1655,23 +1686,25 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
         pos: Option<Pos>,
     ) -> Option<ValueHandle> {
-        // malloc ret after call is not safe, as malloc may trigger collection
-        // 不仅要在调用前分配，还要在get_llvm_value之前，否则如果这次malloc触发了回收和驱逐算法
-        // 我们load出来的heap ptr可能就move掉了
-        let alloca = if matches!(ret_type, PLType::Void | PLType::Primitive(_)) {
-            0
-        } else {
-            self.alloc_raw(
-                "ret_alloca",
-                ret_type,
-                ctx,
-                None,
-                "DioGC__malloc_no_collect",
-            )
-        };
+        // // malloc ret after call is not safe, as malloc may trigger collection
+        // // 不仅要在调用前分配，还要在get_llvm_value之前，否则如果这次malloc触发了回收和驱逐算法
+        // // 我们load出来的heap ptr可能就move掉了
+        // let alloca = if matches!(ret_type, PLType::Void | PLType::Primitive(_)) {
+        //     0
+        // } else {
+        //     self.alloc_raw(
+        //         "ret_alloca",
+        //         ret_type,
+        //         ctx,
+        //         None,
+        //         "DioGC__malloc_no_collect",
+        //     )
+        // };
         let builder = self.builder;
         let f = self.get_llvm_value(f).unwrap();
+        let mut f_tp: Option<FunctionType> = None;
         let f = if f.is_function_value() {
+            f_tp = Some(f.into_function_value().get_type());
             f.into_function_value().as_global_value().as_pointer_value()
         } else {
             f.into_pointer_value()
@@ -1699,10 +1732,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             }
         }
         builder.position_at_end(bb);
-        let fntp = match self.get_basic_type_op(ret_type, ctx) {
-            Some(r) => r.fn_type(&tys, false),
+        let fntp = f_tp.unwrap_or(match self.get_basic_type_op(ret_type, ctx) {
+            Some(r) => r.ptr_type(AddressSpace::from(1)).fn_type(&tys, false),
             None => self.context.void_type().fn_type(&tys, false),
-        };
+        });
 
         let v = builder
             .build_indirect_call(fntp, f, &args, "calltmp")
@@ -1714,16 +1747,17 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let ret = v.left().unwrap();
 
         builder.unset_current_debug_location();
-        if alloca == 0 {
-            return Some(self.get_llvm_value_handle(&ret.as_any_value_enum()));
-        }
-        self.builder
-            .build_store(
-                self.get_llvm_value(alloca).unwrap().into_pointer_value(),
-                ret,
-            )
-            .unwrap();
-        Some(alloca)
+        return Some(self.get_llvm_value_handle(&ret.as_any_value_enum()));
+        // if alloca == 0 {
+        //     return Some(self.get_llvm_value_handle(&ret.as_any_value_enum()));
+        // }
+        // self.builder
+        //     .build_store(
+        //         self.get_llvm_value(alloca).unwrap().into_pointer_value(),
+        //         ret,
+        //     )
+        //     .unwrap();
+        // Some(alloca)
     }
     fn add_function(
         &self,
@@ -1736,7 +1770,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         for param_pltype in paramtps.iter() {
             param_types.push(self.get_basic_type_op(param_pltype, ctx).unwrap().into());
         }
-        let fn_type = self.get_ret_type(&ret, ctx).fn_type(&param_types, false);
+        let fn_type = self
+            .get_ret_type(&ret, ctx, true)
+            .fn_type(&param_types, false);
         let fn_value = self
             .module
             .add_function(name, fn_type, Some(Linkage::External));
@@ -2163,14 +2199,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.dibuilder.finalize();
     }
     fn print_to_file(&self, file: &Path) -> Result<(), String> {
-        if let Err(s) = self.module.print_to_file(file) {
-            return Err(s.to_string());
-        }
-        self.optimize();
-        // self.module.strip_debug_info();
         // if let Err(s) = self.module.print_to_file(file) {
         //     return Err(s.to_string());
         // }
+        self.optimize();
+        // self.module.strip_debug_info();
+        if let Err(s) = self.module.print_to_file(file) {
+            return Err(s.to_string());
+        }
         Ok(())
     }
     fn write_bitcode_to_path(&self, path: &Path) -> bool {
@@ -2921,9 +2957,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .collect::<Vec<_>>(),
         );
         let f_tp = self
-            .get_basic_type_op(ret, ctx)
-            .map(|ret| ret.fn_type(&closure_param_tps, false))
-            .unwrap_or_else(|| self.context.void_type().fn_type(&closure_param_tps, false));
+            .get_ret_type(ret, ctx, true)
+            .fn_type(&closure_param_tps, false);
         let f_v = self
             .module
             .add_function(&format!("{}__fn", closure_name), f_tp, None);
@@ -3016,10 +3051,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .unwrap()
             .ptr_type(AddressSpace::from(1))
             .into();
-        let ftp = self
-            .get_basic_type_op(ret_tp, ctx)
-            .unwrap()
-            .fn_type(&[tp], false);
+        let ftp = self.get_ret_type(ret_tp, ctx, true).fn_type(&[tp], false);
         let f = self
             .module
             .add_function(&format!("{}__yield", ctx_name), ftp, None);

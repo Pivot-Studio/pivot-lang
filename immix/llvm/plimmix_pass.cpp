@@ -72,7 +72,11 @@ namespace
       SmallVector<Type *, 1> argTypes;
       argTypes.push_back(PointerType::get(IntegerType::get(M.getContext(), 8), 0));
       std::string symbol;
+      #ifdef __APPLE__ 
       symbol += "_LLVM_StackMaps";
+      #else
+      symbol += "__LLVM_StackMaps";
+      #endif
       // symbol += M.getSourceFileName();
       auto g = M.getOrInsertGlobal(symbol, Type::getInt8Ty(M.getContext()));
       GlobalVariable *g_c = cast<GlobalVariable>(g);

@@ -832,6 +832,7 @@ pub struct FNValue {
     pub fntype: FnType,
     pub body_range: Range,
     pub in_trait: bool,
+    pub is_declare: bool,
 }
 impl TryFrom<PLType> for FNValue {
     type Error = ();

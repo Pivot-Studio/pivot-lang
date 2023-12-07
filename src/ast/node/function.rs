@@ -470,6 +470,7 @@ impl TypeNode for FuncDefNode {
                 node: Some(Box::new(self.clone())),
                 body_range: self.range,
                 in_trait: self.in_trait_def,
+                is_declare: self.declare,
             };
             if self.generics.is_none() {
                 builder.get_or_insert_fn_handle(&fnvalue, child);
@@ -662,12 +663,16 @@ impl FuncDefNode {
                 child.position_at_end(return_block, builder);
                 child.return_block = Some((return_block, ret_value_ptr));
                 if let Some(ptr) = ret_value_ptr {
-                    let value = builder.build_load(
-                        ptr,
-                        "load_ret_tmp",
-                        &child.rettp.clone().unwrap().borrow(),
-                        child,
-                    );
+                    let value = if self.id.name == "main" {
+                        builder.build_load(
+                            ptr,
+                            "load_ret_tmp",
+                            &child.rettp.clone().unwrap().borrow(),
+                            child,
+                        )
+                    } else {
+                        ptr
+                    };
                     builder.build_return(Some(value));
                 } else {
                     builder.build_return(None);
@@ -1015,8 +1020,8 @@ impl Node for ClosureNode {
         child.position_at_end(return_block, builder);
         child.return_block = Some((return_block, ret_value_ptr));
         if let Some(ptr) = ret_value_ptr {
-            let value = builder.build_load(ptr, "load_ret_tmp", &ret_tp.borrow(), child);
-            builder.build_return(Some(value));
+            // let value = builder.build_load(ptr, "load_ret_tmp", &ret_tp.borrow(), child);
+            builder.build_return(Some(ptr));
         } else {
             builder.build_return(None);
         };
