@@ -51,6 +51,7 @@ fn get_first_function_addr(mapptr: *const u8) -> *const u8 {
 #[derive(Debug, Clone)]
 pub struct Function {
     // pub addr: *const u8,
+    // pub offset:u32,
     // pub root_size: i32,
     pub roots: Vec<(i32, ObjectType)>, // offset / wordsize
     pub frame_size: i32,
@@ -59,37 +60,6 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn new(ptr: *const u8) -> (Function, *const u8) {
-        let (frame_size, _, root_size) = get_function_meta(ptr);
-        // println!("frame_size: {}", frame_size);
-        // println!("arg_num: {}", arg_num);
-        // println!("root size: {}", root_size);
-        let ptr = unsafe { ptr.add(20) };
-        // load safe points
-        let safepoint_num = unsafe { *(ptr as *const i32) };
-        // println!("safepoint_num: {}", safepoint_num);
-        let ptr = unsafe { ptr.add(4) };
-        let mut safepoints = vec![];
-        let mut ptr = ptr as *const *const u8;
-        for _ in 0..safepoint_num {
-            let safepoint = unsafe { *ptr };
-            // println!("safepoint: {:p}", safepoint);
-            safepoints.push(safepoint);
-            ptr = unsafe { ptr.add(1) };
-        }
-        let (roots, ptr) = get_function_roots(ptr as *const _, root_size);
-        (
-            Function {
-                // addr: unsafe { *(ptr as *const *const u8) },
-                // root_size,
-                roots,
-                frame_size,
-                // arg_num,
-                // safe_points: Rc::new(safepoints),
-            },
-            ptr,
-        )
-    }
     pub fn iter_roots(&self) -> impl Iterator<Item = (i32, ObjectType)> + '_ {
         self.roots.iter().copied()
     }
@@ -223,16 +193,24 @@ pub fn build_root_maps(
     roots: &mut FxHashMap<*const u8, Function>,
     _global_roots: &mut Vec<*const u8>,
 ) {
-    let header_ptr = mapptr as *const Header;
-    let header = unsafe { *header_ptr };
+    let mut header_ptr = mapptr as *const Header;
+    let mut header = unsafe { *header_ptr };
+    while header.format_version == 0 {
+        header_ptr = unsafe { header_ptr.add(1) };
+        header = unsafe { *header_ptr };
+    }
     if header.format_version != 3 {
         return;
     }
     // println!("header: {:?}", header);
     let meta_ptr = unsafe { header_ptr.add(1) } as *const Meta;
     let meta = unsafe { *meta_ptr };
+    // eprintln!("meta: {:?}", meta);
     // println!("meta: {:?}", meta);
     let ptr = unsafe { meta_ptr.add(1) } as *const StkSizeRecord;
+    // eprintln!("stk: {:?}", unsafe {
+    //     *ptr
+    // });
     let stk_sizes_slice = unsafe { std::slice::from_raw_parts(ptr, meta.num_functions as usize) };
     // println!("stk_sizes: {:?}", stk_sizes_slice);
     let ptr = unsafe { ptr.add(meta.num_functions as usize) } as *const Constants;
@@ -277,6 +255,8 @@ pub fn build_root_maps(
                     Function {
                         roots: fn_roots,
                         frame_size: f.stack_size as i32,
+                        // offset: record.instruction_offset,
+                        // addr:f.addr as _,
                     },
                 );
             }

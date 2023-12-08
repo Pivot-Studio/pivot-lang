@@ -1358,11 +1358,15 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             return (v, v.count_basic_blocks() != 0);
         }
         let fn_type = self.get_fn_type(pltp, ctx);
-        (
-            self.module
-                .add_function(&llvmname, fn_type, Some(Linkage::External)),
-            false,
-        )
+        let f = self
+            .module
+            .add_function(&llvmname, fn_type, Some(Linkage::External));
+        f.add_attribute(
+            inkwell::attributes::AttributeLoc::Function,
+            self.context.create_string_attribute("uwtable", "sync"),
+        );
+        f.set_call_conventions(0);
+        (f, false)
     }
     fn get_fields(&self, pltp: &STType, ctx: &mut Ctx<'a>) -> Vec<BasicTypeEnum> {
         ctx.run_in_type_mod(pltp, |ctx, pltp| {
@@ -1431,7 +1435,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if *self.optimized.borrow() {
             return;
         }
-        self.module.strip_debug_info(); // FIXME
+        if self.module.get_name().to_str().unwrap().contains("global") {
+            self.module.strip_debug_info();
+        }
+        // self.module.strip_debug_info(); // FIXME
         self.module.verify().unwrap();
         let used = self.used.borrow();
         let used_arr = self.i8ptr().ptr_type(AddressSpace::from(0)).const_array(

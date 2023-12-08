@@ -192,6 +192,8 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         module.verify().unwrap();
         tm.write_to_file(&module, inkwell::targets::FileType::Object, &o)
             .unwrap();
+        // tm.write_to_file(&module, inkwell::targets::FileType::Assembly, &o.with_extension("asm"))
+        // .unwrap();
         objs.push(o);
         _ = llvmmod.link_in_module(module);
     }
