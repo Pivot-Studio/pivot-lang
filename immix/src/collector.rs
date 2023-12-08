@@ -161,7 +161,7 @@ impl Collector {
         }
         if gc_is_auto_collect_enabled() {
             if GC_RUNNING.load(Ordering::Acquire)
-                || unsafe { GLOBAL_ALLOCATOR.0.as_ref().unwrap().should_gc() }
+                || (unsafe { self.thread_local_allocator.as_mut().unwrap().should_gc() })
             {
                 self.collect();
             }

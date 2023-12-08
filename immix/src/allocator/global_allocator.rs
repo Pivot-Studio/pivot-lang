@@ -132,7 +132,7 @@ impl GlobalAllocator {
     pub fn should_gc(&self) -> bool {
         unsafe {
             let p = self.current.get().add(BLOCK_SIZE * 3);
-            p >= self.heap_end
+            p >= self.heap_end && self.free_blocks.is_empty()
         }
     }
 

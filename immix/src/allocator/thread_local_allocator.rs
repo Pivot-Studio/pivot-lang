@@ -208,6 +208,11 @@ impl ThreadLocalAllocator {
         }
         size
     }
+
+    pub fn should_gc(&self) -> bool {
+        unsafe { self.recyclable_blocks.is_empty() && (*self.global_allocator).should_gc() }
+    }
+
     /// # alloc
     ///
     /// 优先从recycle blocks中分配，如果中对象分配失败，使用overflow_alloc，
