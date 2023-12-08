@@ -193,12 +193,8 @@ pub fn build_root_maps(
     roots: &mut FxHashMap<*const u8, Function>,
     _global_roots: &mut Vec<*const u8>,
 ) {
-    let mut header_ptr = mapptr as *const Header;
-    let mut header = unsafe { *header_ptr };
-    while header.format_version == 0 {
-        header_ptr = unsafe { header_ptr.add(1) };
-        header = unsafe { *header_ptr };
-    }
+    let header_ptr = mapptr as *const Header;
+    let header = unsafe { *header_ptr };
     if header.format_version != 3 {
         return;
     }
