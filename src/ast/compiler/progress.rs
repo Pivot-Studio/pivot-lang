@@ -1,6 +1,9 @@
+#[cfg(feature = "llvm")]
+use crate::compiler::Options;
 use console::Emoji;
+use std::time::Duration;
 
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use lazy_static::lazy_static;
 
 lazy_static! {
@@ -23,4 +26,18 @@ lazy_static! {
     pub(crate) static ref MSG_PROGRESS_STYLE: ProgressStyle =
         ProgressStyle::with_template("{prefix:.bold} {spinner} {wide_msg:.green} ({elapsed})",)
             .unwrap();
+}
+
+#[cfg(feature = "llvm")]
+pub fn prepare_prgressbar(pb: &indicatif::ProgressBar, op: Options, prefix: String) {
+    pb.enable_steady_tick(Duration::from_millis(50));
+    pb.set_style(PROGRESS_STYLE.clone());
+
+    let is_present_only = op.printast || op.flow;
+    if is_present_only {
+        pb.set_draw_target(ProgressDrawTarget::hidden());
+    } else {
+        pb.set_draw_target(ProgressDrawTarget::stderr());
+    }
+    pb.set_prefix(prefix);
 }

@@ -486,7 +486,9 @@ impl<'a> Cache<&str> for PLFileCache<'a> {
 
 mod dot;
 
-pub(crate) fn handle_errors(db: &dyn Db, docs: MemDocsInput) {
+/// ensure_no_error validates the results after parsing from db and docs to ensure there is no error.
+/// it panic directly if there is an error.
+pub(crate) fn ensure_no_error(db: &dyn Db, docs: MemDocsInput) {
     let mut errs_num = 0;
     let errs = compile_dry::accumulated::<Diagnostics>(db, docs);
     if !errs.is_empty() {
