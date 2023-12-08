@@ -199,6 +199,7 @@ pub fn gc_init(ptr: *mut u8) {
     build_root_maps(ptr, unsafe { STACK_MAP.map.as_mut().unwrap() }, unsafe {
         STACK_MAP.global_roots.as_mut().unwrap()
     });
+    log::info!("read stack map done");
 }
 
 /// notify gc current thread is going to stuck e.g.

@@ -201,7 +201,7 @@ pub fn build_root_maps(
     // println!("header: {:?}", header);
     let meta_ptr = unsafe { header_ptr.add(1) } as *const Meta;
     let meta = unsafe { *meta_ptr };
-    // eprintln!("meta: {:?}", meta);
+    log::info!("gc stackmap meta: {:?}", meta);
     // println!("meta: {:?}", meta);
     let ptr = unsafe { meta_ptr.add(1) } as *const StkSizeRecord;
     // eprintln!("stk: {:?}", unsafe {
