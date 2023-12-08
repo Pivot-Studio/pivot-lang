@@ -10,7 +10,11 @@ use crate::{
     Db,
 };
 
-pub fn get_config_path(current: String) -> Result<String, &'static str> {
+static KAGARI_CONFIG_FILE: &str = "Kagari.toml";
+
+/// search_config_file search configuration file KAGARI_CONFIG_FILE recursively from current path and return the file path,
+/// if it isn't found in current path, search_config_file will search at its parent folder util there is no more parent.
+pub fn search_config_file(current: String) -> Result<String, &'static str> {
     log::trace!("get_config_path: {:?}", current);
     #[cfg(target_arch = "wasm32")] // TODO support std on wasm
     {
@@ -28,32 +32,25 @@ pub fn get_config_path(current: String) -> Result<String, &'static str> {
     if cur_path.is_file() && !cur_path.pop() {
         return Err("找不到配置文件～");
     }
-    let dir = cur_path.read_dir();
-    if dir.is_err() {
-        return Err("找不到配置文件～");
-    }
-    let dir = dir.unwrap();
-    for path in dir.flatten() {
-        if path.file_name().eq("Kagari.toml") {
-            if let Some(p) = cur_path.to_str() {
-                let res = p.to_string();
-                return Ok(res + "/Kagari.toml");
-            } else {
-                return Err("找不到配置文件～");
-            }
+
+    let iter = cur_path.read_dir().unwrap();
+    for f in iter.flatten() {
+        if f.file_name().eq(KAGARI_CONFIG_FILE) {
+            let p = f.path();
+            let kagari_file_path = p.to_str().unwrap();
+            return Ok(kagari_file_path.to_string());
         }
     }
+
     if !cur_path.pop() {
         return Err("找不到配置文件～");
     }
-    let mut next_path = String::new();
 
-    if let Some(p) = &cur_path.to_str() {
-        next_path.push_str(p);
+    if let Some(parent) = &cur_path.to_str() {
+        search_config_file(parent.to_string())
     } else {
-        return Err("找不到配置文件～");
+        Err("找不到配置文件～")
     }
-    get_config_path(next_path)
 }
 
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq, Default, Hash)]

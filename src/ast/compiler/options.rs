@@ -23,6 +23,16 @@ pub enum HashOptimizationLevel {
     Aggressive = 3,
 }
 
+pub fn convert(optimization: u64) -> HashOptimizationLevel {
+    match optimization {
+        0 => HashOptimizationLevel::None,
+        1 => HashOptimizationLevel::Less,
+        2 => HashOptimizationLevel::Default,
+        3 => HashOptimizationLevel::Aggressive,
+        _ => panic!("optimization level must be 0-3"),
+    }
+}
+
 impl Default for HashOptimizationLevel {
     /// Returns the default value for `OptimizationLevel`, namely `OptimizationLevel::Default`.
     fn default() -> Self {
