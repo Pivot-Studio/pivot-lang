@@ -1,0 +1,44 @@
+name: wasm-check
+on:
+  pull_request:
+    paths:
+    - '**.rs'
+    - '**/Cargo.*'
+    - '.github/workflows/wasm.yml'
+    - '**.pi'
+    - '**/Kagari.*'
+    - 'codecov.yml'
+  push:
+    branches:
+      - "master"
+      - "release/*"
+      - "staging"
+      - "trying"
+    paths:
+      - '**.rs'
+      - '**/Cargo.*'
+      - '.github/workflows/wasm.yml'
+      - '**.pi'
+      - '**/Kagari.*'
+      - 'codecov.yml'
+
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  wasm-test:
+    name: Wasm Build Check
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: 1
+
+    steps:
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: test wasm
+        run: wasm-pack build --target bundler --no-default-features --scope pivot-lang
