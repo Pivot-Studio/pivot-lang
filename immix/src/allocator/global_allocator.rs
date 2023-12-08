@@ -186,12 +186,12 @@ impl GlobalAllocator {
         // 距离上次alloc时间超过1秒，把free_blocks中的block都dont need
         if now.duration_since(self.last_get_block_time).as_millis() > ROUND_MIN_TIME_MILLIS {
             self.last_get_block_time = now;
-            self.mem_usage_flag = 0;
             if self.mem_usage_flag > 0 {
                 self.round += 1;
             } else if self.mem_usage_flag <= 0 {
                 self.round -= 1;
             }
+            self.mem_usage_flag = 0;
             if self.round <= -ROUND_THRESHOLD {
                 // 总体有三个周期处于内存不变或减少状态，进行dontneed
                 self.round = 0;
