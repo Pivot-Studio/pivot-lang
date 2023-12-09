@@ -158,17 +158,23 @@ pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
 
     out.push_str(".bc");
 
-    let tm = crate::ast::builder::llvmbuilder::get_target_machine(op.optimization.to_llvm());
-    llvmmod.set_triple(&tm.get_triple());
-    llvmmod.set_data_layout(&tm.get_target_data().get_data_layout());
+    // let tm = crate::ast::builder::llvmbuilder::get_target_machine(op.optimization.to_llvm());
+    // llvmmod.set_triple(&tm.get_triple());
+    // llvmmod.set_data_layout(&tm.get_target_data().get_data_layout());
 
     let total_steps = if op.jit { 2 } else { 3 };
     let pb = ProgressBar::new(1);
-    prepare_prgressbar(&pb, op, format!("{}[{:2}/{:2}]", CLIP, 3, total_steps));
+    prepare_prgressbar(
+        &pb,
+        op,
+        format!("{}[{:2}/{:2}]", CLIP, total_steps, total_steps),
+    );
 
     if op.jit {
+        llvmmod.strip_debug_info();
         llvmmod.write_bitcode_to_path(Path::new(&out));
-        pb.set_message("JIT完成文件写入");
+        pb.finish_with_message("JIT完成文件写入");
+
         eprintln!("{}jit executable file written to: {}", SPARKLE, &out);
         return;
     }
