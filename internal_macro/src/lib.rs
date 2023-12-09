@@ -49,6 +49,7 @@ macro_rules! add_symbol_consts {
 
     };
     ($($names:ident),* ) => {
+        #[cfg(feature = "jit")]
         #[internal_macro::ctor::ctor]
         fn add_symbol_consts() {
             internal_macro::add_runtime_consts!(
