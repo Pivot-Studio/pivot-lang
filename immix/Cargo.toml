@@ -33,7 +33,7 @@ name = "immix_stress_bench"
 harness = false
 
 [features]
-default = ["madv_dontneed", "shadow_stack"]
+default = ["madv_dontneed", "shadow_stack", "llvm_stackmap"]
 madv_free = []
 madv_dontneed = []
 zero_init = []

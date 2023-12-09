@@ -318,12 +318,11 @@ fn align_up_to(n: usize, align: usize) -> usize {
 #[cfg(feature = "llvm_gc_plugin")]
 extern "C" {
     fn LLVMLinkPLImmixGC();
-    pub fn CreatePLJITEngine(
-        engine: *mut u8,
+    pub fn CreateAndRunPLJITEngine(
         module: *mut u8,
         opt: u32,
-        cb: extern "C" fn(map: *mut u8),
-    );
+        cb: unsafe extern "C" fn(map: *mut u8),
+    ) -> !;
 }
 
 /// Register the LLVM GC plugins.

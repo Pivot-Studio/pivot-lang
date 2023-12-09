@@ -3,6 +3,7 @@
 #![allow(clippy::derive_ord_xor_partial_ord)]
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::single_match)]
+#![allow(clippy::option_map_unit_fn)]
 
 mod jar;
 pub use jar::*;

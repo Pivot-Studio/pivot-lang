@@ -22,6 +22,45 @@ pub unsafe fn add_symbol(name: &str, ptr: *const ()) {
     let addr = ptr as *mut c_void;
     support::LLVMAddSymbol(name.as_ptr(), addr)
 }
+#[macro_export]
+macro_rules! add_runtime_consts {
+    () => {
+
+    };
+    ($name:ident) => {
+        let ptr = &$name as * const _ as *const ();
+        let name = stringify!($name);
+        unsafe {
+            internal_macro::add_symbol(name, ptr);
+        }
+    };
+    ($name:ident, $($names:ident),*) => {
+        internal_macro::add_runtime_consts!($name);
+        internal_macro::add_runtime_consts!($($names),*);
+    };
+    ($($names:ident),* ,) => {
+        internal_macro::add_runtime_consts!($($names),*);
+    };
+}
+
+#[macro_export]
+macro_rules! add_symbol_consts {
+    () => {
+
+    };
+    ($($names:ident),* ) => {
+        #[internal_macro::ctor::ctor]
+        fn add_symbol_consts() {
+            internal_macro::add_runtime_consts!(
+                $($names),*
+            );
+        }
+    };
+    ($($names:ident),* ,) => {
+        internal_macro::add_symbol_consts!($($names),*);
+    };
+
+}
 
 pub use add_symbol_macro::is_runtime;
 pub use comment_macro::comments;

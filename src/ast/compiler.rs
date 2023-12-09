@@ -127,8 +127,19 @@ pub fn process_llvm_ir<'a>(
         tm.write_to_file(&module, inkwell::targets::FileType::Object, &o)
             .unwrap();
         output_files.push(o);
-        _ = llvmmod.link_in_module(module);
+        module.get_global("llvm.used").map(|v| unsafe {
+            v.delete();
+        });
+        llvmmod.link_in_module(module).unwrap();
     }
+    llvmmod.get_functions().for_each(|f| {
+        if f.get_name().to_str().unwrap().contains("_visitorf@") && f.get_basic_blocks().is_empty()
+        {
+            let b = llvmmod.get_context().create_builder();
+            b.position_at_end(llvmmod.get_context().append_basic_block(f, "entry"));
+            b.build_return(None).unwrap();
+        }
+    });
     pb.finish_with_message("中间代码优化完成");
     (llvmmod, output_files)
 }

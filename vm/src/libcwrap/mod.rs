@@ -38,6 +38,16 @@ pub static O_RDWR: libc::c_int = libc::O_RDWR;
 #[no_mangle]
 pub static O_CREAT: libc::c_int = libc::O_CREAT;
 
+internal_macro::add_symbol_consts!(
+    STDIN_FILENO,
+    STDOUT_FILENO,
+    STDERR_FILENO,
+    O_RDONLY,
+    O_WRONLY,
+    O_RDWR,
+    O_CREAT,
+);
+
 #[is_runtime]
 impl LibC {
     fn read(fd: libc::c_int, buf: *mut libc::c_void, count: libc::size_t) -> libc::ssize_t {
