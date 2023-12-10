@@ -315,7 +315,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
 
         let fp_asm_ftp = self.i8ptr().ptr_type(AddressSpace::from(0)).fn_type(&[], false);
+        #[cfg(target_arch="x86_64")]
+        let rspf = self.context.create_inline_asm(fp_asm_ftp, "mov %rsp, $0".to_string(), "=r".to_string(),false, true, None, false);
+        #[cfg(target_arch="x86_64")]
+        let rbpf = self.context.create_inline_asm(fp_asm_ftp, "mov %rbp, $0".to_string(), "=r".to_string(),false, true, None, false);
+        #[cfg(target_arch="aarch64")]
         let rspf = self.context.create_inline_asm(fp_asm_ftp, "mov $0, sp".to_string(), "=r".to_string(),false, true, None, false);
+        #[cfg(target_arch="aarch64")]
         let rbpf = self.context.create_inline_asm(fp_asm_ftp, "mov $0, fp".to_string(), "=r".to_string(),false, true, None, false);
         let rsp = self.builder.build_indirect_call(fp_asm_ftp, rspf, &[], "rsp").unwrap();
         rsp.add_attribute(inkwell::attributes::AttributeLoc::Function, self.context.create_string_attribute("gc-leaf-function", ""));
@@ -402,8 +408,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .unwrap();
                 self.builder.build_store(len_ptr, arr_len).unwrap();
                 let fp_asm_ftp = self.i8ptr().ptr_type(AddressSpace::from(0)).fn_type(&[], false);
-                let rspf = self.context.create_inline_asm(fp_asm_ftp, "mov $0, sp".to_string(), "=r".to_string(),false, true, None, false);
-                let rbpf = self.context.create_inline_asm(fp_asm_ftp, "mov $0, fp".to_string(), "=r".to_string(),false, true, None, false);
+                let rspf = self.context.create_inline_asm(fp_asm_ftp, "mov %rsp, $0".to_string(), "=r".to_string(),false, true, None, false);
+                let rbpf = self.context.create_inline_asm(fp_asm_ftp, "mov %rbp, $0".to_string(), "=r".to_string(),false, true, None, false);
                 let rsp = self.builder.build_indirect_call(fp_asm_ftp, rspf, &[], "rsp").unwrap();
                 rsp.add_attribute(inkwell::attributes::AttributeLoc::Function, self.context.create_string_attribute("gc-leaf-function", ""));
                 let rbp = self.builder.build_indirect_call(fp_asm_ftp, rbpf, &[], "rbp").unwrap();
