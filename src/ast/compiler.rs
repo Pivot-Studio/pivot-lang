@@ -139,6 +139,10 @@ pub fn process_llvm_ir<'a>(
             b.position_at_end(llvmmod.get_context().append_basic_block(f, "entry"));
             b.build_return(None).unwrap();
         }
+        if f.get_linkage() == inkwell::module::Linkage::LinkOnceAny  {
+            f.set_linkage(inkwell::module::Linkage::External);
+        }
+        
     });
     pb.finish_with_message("中间代码优化完成");
     (llvmmod, output_files)
@@ -147,6 +151,7 @@ pub fn process_llvm_ir<'a>(
 #[cfg(feature = "llvm")]
 pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
     llvmmod.verify().unwrap();
+    llvmmod.strip_debug_info();
     if op.genir {
         let mut s = out.to_string();
         s.push_str(".ll");
@@ -171,7 +176,6 @@ pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
     );
 
     if op.jit {
-        llvmmod.strip_debug_info();
         llvmmod.write_bitcode_to_path(Path::new(&out));
         pb.finish_with_message("JIT完成文件写入");
 

@@ -100,6 +100,7 @@ extern "C"
     LLVMInitializeMCJITCompilerOptions(&Options, sizeof(Options));
     Options.MCJMM = mem_manager;
     Options.OptLevel = opt;
+    Options.NoFramePointerElim = 1;
 
     char *Error;
     //      LLVMExecutionEngineRef jit;

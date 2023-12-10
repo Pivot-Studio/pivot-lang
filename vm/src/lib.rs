@@ -23,6 +23,8 @@ fn printi64ln(i: i64) {
 #[cfg(feature = "jit")]
 pub fn reg() {
     gc::reg();
+    libcwrap::reg();
+    mutex::reg();
 }
 
 #[is_runtime]

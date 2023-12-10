@@ -313,11 +313,23 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if name == "retvalue_generator" {
             self.builder.position_at_end(alloca);
         }
+
+        let fp_asm_ftp = self.i8ptr().ptr_type(AddressSpace::from(0)).fn_type(&[], false);
+        let rspf = self.context.create_inline_asm(fp_asm_ftp, "mov $0, sp".to_string(), "=r".to_string(),false, true, None, false);
+        let rbpf = self.context.create_inline_asm(fp_asm_ftp, "mov $0, fp".to_string(), "=r".to_string(),false, true, None, false);
+        let rsp = self.builder.build_indirect_call(fp_asm_ftp, rspf, &[], "rsp").unwrap();
+        rsp.add_attribute(inkwell::attributes::AttributeLoc::Function, self.context.create_string_attribute("gc-leaf-function", ""));
+        let rbp = self.builder.build_indirect_call(fp_asm_ftp, rbpf, &[], "rbp").unwrap();
+        rbp.add_attribute(inkwell::attributes::AttributeLoc::Function, self.context.create_string_attribute("gc-leaf-function", ""));
+        let rsp = self.builder.build_ptr_to_int(rsp.try_as_basic_value().unwrap_left().into_pointer_value(), self.context.i64_type(), "").unwrap();
+        let rbp = self.builder.build_ptr_to_int(rbp.try_as_basic_value().unwrap_left().into_pointer_value(), self.context.i64_type(), "").unwrap();
         let heapptr = self
             .builder
             .build_call(
                 f,
-                &[size.into(), immix_tp.into()],
+                &[size.into(), immix_tp.into(), 
+                rsp.into(),
+                rbp.into(),],
                 &format!("heapptr_{}", name),
             )
             .unwrap()
@@ -389,6 +401,15 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .build_struct_gep(llvmtp, casted_result.into_pointer_value(), 2, "arr_len")
                     .unwrap();
                 self.builder.build_store(len_ptr, arr_len).unwrap();
+                let fp_asm_ftp = self.i8ptr().ptr_type(AddressSpace::from(0)).fn_type(&[], false);
+                let rspf = self.context.create_inline_asm(fp_asm_ftp, "mov $0, sp".to_string(), "=r".to_string(),false, true, None, false);
+                let rbpf = self.context.create_inline_asm(fp_asm_ftp, "mov $0, fp".to_string(), "=r".to_string(),false, true, None, false);
+                let rsp = self.builder.build_indirect_call(fp_asm_ftp, rspf, &[], "rsp").unwrap();
+                rsp.add_attribute(inkwell::attributes::AttributeLoc::Function, self.context.create_string_attribute("gc-leaf-function", ""));
+                let rbp = self.builder.build_indirect_call(fp_asm_ftp, rbpf, &[], "rbp").unwrap();
+                rbp.add_attribute(inkwell::attributes::AttributeLoc::Function, self.context.create_string_attribute("gc-leaf-function", ""));
+                let rsp = self.builder.build_ptr_to_int(rsp.try_as_basic_value().unwrap_left().into_pointer_value(), self.context.i64_type(), "").unwrap();
+                let rbp = self.builder.build_ptr_to_int(rbp.try_as_basic_value().unwrap_left().into_pointer_value(), self.context.i64_type(), "").unwrap();
                 let arr_space = self
                     .builder
                     .build_call(
@@ -399,6 +420,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                                 .i8_type()
                                 .const_int(immix::ObjectType::Trait.int_value() as u64, false)
                                 .into(),
+                                rsp.into(),
+                                rbp.into(),
                         ],
                         "arr_space",
                     )

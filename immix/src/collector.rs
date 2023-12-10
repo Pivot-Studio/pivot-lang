@@ -540,16 +540,17 @@ impl Collector {
                     let map = STACK_MAP.map.as_ref().unwrap();
                     let f = map.get(&const_addr);
                     if let Some(f) = f {
-                        // backtrace::resolve(*ip, |s| {
-                        //     eprintln!(
-                        //         "gc {}: {:?} ip: {:p}, address: {:p}, sp: {:p}",
-                        //         self.id,
-                        //         s.name(),
-                        //         ip,
-                        //         const_addr,
-                        //         sp
-                        //     );
-                        // });
+                        backtrace::resolve(*ip, |s| {
+                            eprintln!(
+                                "gc {}: {:?} ip: {:p}, address: {:p}, sp: {:p}, size {}",
+                                self.id,
+                                s.name(),
+                                *ip,
+                                const_addr,
+                                *sp,
+                                f.frame_size
+                            );
+                        });
                         // eprintln!("gc {}: found fn in stackmap, f: {:?} sp: {:p}", self.id, f, sp);
                         // println!("found fn in stackmap, f: {:?} sp: {:p}", f,frame.sp());
                         f.iter_roots().for_each(|(offset, obj_type)| {

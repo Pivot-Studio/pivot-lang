@@ -1,6 +1,6 @@
 #[cfg(feature = "immix")]
 mod _immix {
-    use std::process::exit;
+    use std::{process::exit, arch::asm};
 
     use crate::logger::SimpleLogger;
     use backtrace::Backtrace;
@@ -51,7 +51,8 @@ mod _immix {
 
     #[is_runtime] // jit注册
     impl DioGC {
-        pub unsafe fn malloc(size: u64, obj_type: u8) -> *mut u8 {
+        pub unsafe fn malloc(size: u64, obj_type: u8, rsp:*mut*mut u8, rbp:*mut u8 ) -> *mut u8 {
+            eprintln!("rsp {:p} rbp {:p} rspload {:p}", rsp, rbp, *rsp.offset(-1));
             trace!("malloc: {} {}", size, obj_type);
             #[cfg(any(test, debug_assertions))] // enable eager gc in test mode
             immix::gc_collect();
@@ -66,7 +67,8 @@ mod _immix {
             re
         }
 
-        pub unsafe fn malloc_no_collect(size: u64, obj_type: u8) -> *mut u8 {
+        pub unsafe fn malloc_no_collect(size: u64, obj_type: u8, rsp:*mut*mut u8, rbp:*mut u8) -> *mut u8 {
+            eprintln!("rsp {:p} rbp {:p} rspload {:p}", rsp, rbp, *rsp.offset(-1));
             trace!("malloc: {} {}", size, obj_type);
             let re = gc_malloc_no_collect(size as usize, obj_type);
             if re.is_null() && size != 0 {
