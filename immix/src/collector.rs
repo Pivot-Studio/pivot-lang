@@ -36,7 +36,13 @@ fn walk_gc_frames(sp:* mut u8, mut walker: impl FnMut(* mut u8,i32, ObjectType))
             for (o, tp) in frame.iter_roots() {
                 walker(sp, o, tp);
             }
-            sp = unsafe{ sp.offset(frame.frame_size as _) };
+            
+            sp = unsafe{ 
+                #[cfg(target_arch="aarch64")]
+                {sp.offset(frame.frame_size as _)}
+                #[cfg(target_arch="x86_64")]
+                {sp.offset(frame.frame_size as isize + 8)}
+            };
         }else {
             break;
         }
