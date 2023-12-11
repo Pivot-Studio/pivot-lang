@@ -111,12 +111,22 @@ pub fn gc_malloc(size: usize, obj_type: u8) -> *mut u8 {
     })
 }
 
+
+pub fn gc_malloc_fast_unwind(size: usize, obj_type: u8, sp:*mut u8) -> *mut u8 {
+    SPACE.with(|gc| {
+        // println!("start malloc");
+        let gc = gc.borrow();
+        // println!("malloc");
+        gc.alloc_fast_unwind(size, ObjectType::from_int(obj_type).unwrap(),sp)
+    })
+}
+
 pub fn gc_malloc_no_collect(size: usize, obj_type: u8) -> *mut u8 {
     SPACE.with(|gc| {
         // println!("start malloc");
         let gc = gc.borrow();
         // println!("malloc");
-        gc.alloc_raw(size, ObjectType::from_int(obj_type).unwrap())
+        gc.alloc_no_collect(size, ObjectType::from_int(obj_type).unwrap())
     })
 }
 
@@ -126,6 +136,15 @@ pub fn gc_collect() {
         // println!("start collect");
         let gc = gc.borrow();
         gc.collect();
+        // println!("collect")
+    })
+}
+
+pub fn gc_collect_fast_unwind(sp:* mut u8) {
+    SPACE.with(|gc| {
+        // println!("start collect");
+        let gc = gc.borrow();
+        gc.collect_fast_unwind(sp);
         // println!("collect")
     })
 }
@@ -218,6 +237,16 @@ pub fn thread_stuck_start() {
         // println!("start add_root");
         let mut gc = gc.borrow_mut();
         gc.stuck()
+        // println!("add_root")
+    });
+}
+
+pub fn thread_stuck_start_fast(sp:*mut u8) {
+    // v.0 -= 1;
+    SPACE.with(|gc| {
+        // println!("start add_root");
+        let mut gc = gc.borrow_mut();
+        gc.stuck_fast_unwind(sp)
         // println!("add_root")
     });
 }

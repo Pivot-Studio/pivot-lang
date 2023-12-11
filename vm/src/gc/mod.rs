@@ -4,7 +4,7 @@ mod _immix {
 
     use crate::logger::SimpleLogger;
     use backtrace::Backtrace;
-    use immix::{gc_malloc, gc_malloc_no_collect};
+    use immix::{gc_malloc, gc_malloc_no_collect, gc_malloc_fast_unwind};
     use internal_macro::is_runtime;
     use log::trace;
 
@@ -51,12 +51,15 @@ mod _immix {
 
     #[is_runtime] // jit注册
     impl DioGC {
-        pub unsafe fn malloc(size: u64, obj_type: u8, rsp:*mut*mut u8, rbp:*mut u8 ) -> *mut u8 {
-            eprintln!("rsp {:p} rbp {:p} rspload {:p}", rsp, rbp, *rsp.offset(-1));
+        pub unsafe fn malloc(size: u64, obj_type: u8, rsp:*mut u8 ) -> *mut u8 {
+            // asm read sp
+            // let mut rust_sp: *mut u8;
+            // asm!("mov {}, sp", out(reg) rust_sp);
+            // eprintln!("rsp {:p}, rust_sp: {:p}", rsp, rust_sp);
             trace!("malloc: {} {}", size, obj_type);
             #[cfg(any(test, debug_assertions))] // enable eager gc in test mode
-            immix::gc_collect();
-            let re = gc_malloc(size as usize, obj_type);
+            immix::gc_collect_fast_unwind(rsp);
+            let re = gc_malloc_fast_unwind(size as usize, obj_type, rsp);
             if re.is_null() && size != 0 {
                 eprintln!("gc malloc failed! (OOM)");
                 let bt = Backtrace::new();
@@ -67,8 +70,7 @@ mod _immix {
             re
         }
 
-        pub unsafe fn malloc_no_collect(size: u64, obj_type: u8, rsp:*mut*mut u8, rbp:*mut u8) -> *mut u8 {
-            eprintln!("rsp {:p} rbp {:p} rspload {:p}", rsp, rbp, *rsp.offset(-1));
+        pub unsafe fn malloc_no_collect(size: u64, obj_type: u8) -> *mut u8 {
             trace!("malloc: {} {}", size, obj_type);
             let re = gc_malloc_no_collect(size as usize, obj_type);
             if re.is_null() && size != 0 {
@@ -89,8 +91,8 @@ mod _immix {
             immix::gc_enable_auto_collect();
         }
 
-        pub unsafe fn stuck_begin() {
-            immix::thread_stuck_start();
+        pub unsafe fn stuck_begin(sp:* mut u8) {
+            immix::thread_stuck_start_fast(sp);
         }
         pub unsafe fn stuck_end() {
             immix::thread_stuck_end();

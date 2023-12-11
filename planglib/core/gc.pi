@@ -1,16 +1,16 @@
-fn DioGC__malloc(size: i64, obj_type: u8, rsp:i64, rbp:i64) *u8;
+fn DioGC__malloc(size: i64, obj_type: u8, rsp:i64) *u8;
 
 pub fn DioGC__collect() void;
 
-pub fn DioGC__malloc_no_collect(size: i64, obj_type: u8, rsp:i64, rbp:i64) *u8;
+pub fn DioGC__malloc_no_collect(size: i64, obj_type: u8) *u8;
 
 pub fn DioGC__disable_auto_collect() void;
 
 pub fn DioGC__enable_auto_collect() void;
 
-// pub fn DioGC__stuck_begin() void;
+fn DioGC__stuck_begin(sp:i64) void;
 
-// pub fn DioGC__stuck_end() void;
+fn DioGC__stuck_end() void;
 
 pub fn DioGC__safepoint() void;
 

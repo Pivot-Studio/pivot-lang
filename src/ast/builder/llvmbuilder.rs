@@ -35,7 +35,7 @@ use llvm_sys::{core::LLVMStructSetBody, prelude::LLVMTypeRef};
 use rustc_hash::FxHashMap;
 
 use crate::ast::{
-    ctx::PLSymbolData,
+    ctx::{PLSymbolData, STUCK_FNS},
     diag::PLDiag,
     node::function::generator::CtxFlag,
     pltype::{get_type_deep, ClosureType, TraitImplAble},
@@ -280,7 +280,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .get_first_basic_block()
             .unwrap();
         // let obj_type = tp.get_immix_type().int_value();
-        let f = self.get_malloc_f(ctx, malloc_fn);
+        let f = self.get_gc_mod_f(ctx, malloc_fn);
         let llvmtp = self.get_basic_type_op(tp, ctx).unwrap();
         let immix_tp = self
             .context
@@ -314,28 +314,17 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             self.builder.position_at_end(alloca);
         }
 
-        let fp_asm_ftp = self.i8ptr().ptr_type(AddressSpace::from(0)).fn_type(&[], false);
-        #[cfg(target_arch="x86_64")]
-        let rspf = self.context.create_inline_asm(fp_asm_ftp, "mov %rsp, $0".to_string(), "=r".to_string(),false, true, None, false);
-        #[cfg(target_arch="x86_64")]
-        let rbpf = self.context.create_inline_asm(fp_asm_ftp, "mov %rbp, $0".to_string(), "=r".to_string(),false, true, None, false);
-        #[cfg(target_arch="aarch64")]
-        let rspf = self.context.create_inline_asm(fp_asm_ftp, "mov $0, sp".to_string(), "=r".to_string(),false, true, None, false);
-        #[cfg(target_arch="aarch64")]
-        let rbpf = self.context.create_inline_asm(fp_asm_ftp, "mov $0, fp".to_string(), "=r".to_string(),false, true, None, false);
-        let rsp = self.builder.build_indirect_call(fp_asm_ftp, rspf, &[], "rsp").unwrap();
-        rsp.add_attribute(inkwell::attributes::AttributeLoc::Function, self.context.create_string_attribute("gc-leaf-function", ""));
-        let rbp = self.builder.build_indirect_call(fp_asm_ftp, rbpf, &[], "rbp").unwrap();
-        rbp.add_attribute(inkwell::attributes::AttributeLoc::Function, self.context.create_string_attribute("gc-leaf-function", ""));
-        let rsp = self.builder.build_ptr_to_int(rsp.try_as_basic_value().unwrap_left().into_pointer_value(), self.context.i64_type(), "").unwrap();
-        let rbp = self.builder.build_ptr_to_int(rbp.try_as_basic_value().unwrap_left().into_pointer_value(), self.context.i64_type(), "").unwrap();
+        let  rsp = self.get_sp();
         let heapptr = self
             .builder
             .build_call(
                 f,
-                &[size.into(), immix_tp.into(), 
-                rsp.into(),
-                rbp.into(),],
+                &if malloc_fn == "DioGC__malloc" {
+                    [size.into(), immix_tp.into(), rsp.into()].to_vec()
+                }else {
+                    [size.into(), immix_tp.into()].to_vec()
+                }
+                ,
                 &format!("heapptr_{}", name),
             )
             .unwrap()
@@ -377,7 +366,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if let PLType::Arr(arr) = tp {
             // init the array size
             if arr.size_handle != 0 {
-                let f = self.get_malloc_f(ctx, "DioGC__malloc_no_collect");
+                let mf = "DioGC__malloc_no_collect";
+                let f = self.get_gc_mod_f(ctx, mf);
 
                 // let f = self.get_malloc_f(ctx, "DioGC__malloc_no_collect");
                 let etp = self
@@ -408,27 +398,33 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .unwrap();
                 self.builder.build_store(len_ptr, arr_len).unwrap();
                 let fp_asm_ftp = self.i8ptr().ptr_type(AddressSpace::from(0)).fn_type(&[], false);
+                #[cfg(target_arch="x86_64")]
                 let rspf = self.context.create_inline_asm(fp_asm_ftp, "mov %rsp, $0".to_string(), "=r".to_string(),false, true, None, false);
-                let rbpf = self.context.create_inline_asm(fp_asm_ftp, "mov %rbp, $0".to_string(), "=r".to_string(),false, true, None, false);
+                #[cfg(target_arch="aarch64")]
+                let rspf = self.context.create_inline_asm(fp_asm_ftp, "mov $0, sp".to_string(), "=r".to_string(),false, true, None, false);
                 let rsp = self.builder.build_indirect_call(fp_asm_ftp, rspf, &[], "rsp").unwrap();
                 rsp.add_attribute(inkwell::attributes::AttributeLoc::Function, self.context.create_string_attribute("gc-leaf-function", ""));
-                let rbp = self.builder.build_indirect_call(fp_asm_ftp, rbpf, &[], "rbp").unwrap();
-                rbp.add_attribute(inkwell::attributes::AttributeLoc::Function, self.context.create_string_attribute("gc-leaf-function", ""));
                 let rsp = self.builder.build_ptr_to_int(rsp.try_as_basic_value().unwrap_left().into_pointer_value(), self.context.i64_type(), "").unwrap();
-                let rbp = self.builder.build_ptr_to_int(rbp.try_as_basic_value().unwrap_left().into_pointer_value(), self.context.i64_type(), "").unwrap();
                 let arr_space = self
                     .builder
                     .build_call(
                         f,
-                        &[
-                            arr_size.into(),
+                        &if mf == "DioGC__malloc" {
+                            [                           arr_size.into(),
                             self.context
                                 .i8_type()
                                 .const_int(immix::ObjectType::Trait.int_value() as u64, false)
                                 .into(),
-                                rsp.into(),
-                                rbp.into(),
-                        ],
+                                rsp.into(), ].to_vec()
+                        }else {
+                            [                           arr_size.into(),
+                            self.context
+                                .i8_type()
+                                .const_int(immix::ObjectType::Trait.int_value() as u64, false)
+                                .into(),
+                                ].to_vec()
+                        }
+                        ,
                         "arr_space",
                     )
                     .unwrap()
@@ -490,7 +486,19 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         (casted_result.into_pointer_value(), llvmtp)
     }
 
-    fn get_malloc_f(&self, ctx: &mut Ctx<'a>, malloc_fn: &str) -> FunctionValue<'ctx> {
+    fn get_sp(&self) ->  inkwell::values::IntValue<'ctx> {
+        let fp_asm_ftp = self.i8ptr().ptr_type(AddressSpace::from(0)).fn_type(&[], false);
+        #[cfg(target_arch="x86_64")]
+        let rspf = self.context.create_inline_asm(fp_asm_ftp, "mov %rsp, $0".to_string(), "=r".to_string(),false, true, None, false);
+        #[cfg(target_arch="aarch64")]
+        let rspf = self.context.create_inline_asm(fp_asm_ftp, "mov $0, sp".to_string(), "=r".to_string(),false, true, None, false);
+        let rsp = self.builder.build_indirect_call(fp_asm_ftp, rspf, &[], "rsp").unwrap();
+        rsp.add_attribute(inkwell::attributes::AttributeLoc::Function, self.context.create_string_attribute("gc-leaf-function", ""));
+        let rsp = self.builder.build_ptr_to_int(rsp.try_as_basic_value().unwrap_left().into_pointer_value(), self.context.i64_type(), "").unwrap();
+        rsp
+    }
+
+    fn get_gc_mod_f(&self, ctx: &mut Ctx<'a>, malloc_fn: &str) -> FunctionValue<'ctx> {
         let mut root_ctx = &*ctx;
         while let Some(f) = root_ctx.root {
             root_ctx = f
@@ -1732,9 +1740,12 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let builder = self.builder;
         let f = self.get_llvm_value(f).unwrap();
         let mut f_tp: Option<FunctionType> = None;
+        let mut fv = None;
         let f = if f.is_function_value() {
-            f_tp = Some(f.into_function_value().get_type());
-            f.into_function_value().as_global_value().as_pointer_value()
+            let ff = f.into_function_value();
+            fv = Some(ff);
+            f_tp = Some(ff.get_type());
+            ff.as_global_value().as_pointer_value()
         } else {
             f.into_pointer_value()
         };
@@ -1765,11 +1776,28 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             Some(r) => r.ptr_type(AddressSpace::from(1)).fn_type(&tys, false),
             None => self.context.void_type().fn_type(&tys, false),
         });
-
+        if let Some(ff) = fv {
+            let name = ff.get_name().to_str().unwrap();
+            if STUCK_FNS.contains(&name) {
+                // it is a stuck function, we need to add stuck fn before it
+                let f = self.get_gc_mod_f(ctx, "DioGC__stuck_begin");
+                let sp = self.get_sp();
+                self.builder.build_call(f, &[sp.into()], "").unwrap();
+            }
+        }
+        
         let v = builder
             .build_indirect_call(fntp, f, &args, "calltmp")
             .unwrap()
             .try_as_basic_value();
+        if let Some(ff) = fv {
+            let name = ff.get_name().to_str().unwrap();
+            if STUCK_FNS.contains(&name) {
+                // unstuck
+                let f = self.get_gc_mod_f(ctx, "DioGC__stuck_end");
+                self.builder.build_call(f, &[], "").unwrap();
+            }
+        }
         if v.right().is_some() {
             return None;
         }

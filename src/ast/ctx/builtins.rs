@@ -12,6 +12,7 @@ use crate::{
 use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use lazy_static::lazy_static;
+use rustc_hash::FxHashSet;
 
 use crate::ast::{
     builder::{BuilderEnum, IRBuilder, ValueHandle},
@@ -1081,4 +1082,13 @@ fn emit_match_type<'a, 'b>(
             .new_err(crate::ast::diag::ErrorCode::PARAMETER_TYPE_NOT_MATCH)
             .add_to_ctx(ctx))
     }
+}
+
+
+lazy_static!{
+    pub static ref STUCK_FNS:FxHashSet<&'static str>  = {
+        let mut set:FxHashSet<&'static str>  = Default::default();
+        set.insert("sleep");
+        set
+    };
 }
