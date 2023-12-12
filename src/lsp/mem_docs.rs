@@ -14,7 +14,7 @@ use crate::{
         range::Pos,
     },
     nomparser::SourceProgram,
-    utils::read_config::{get_config, get_config_path, Config},
+    utils::read_config::{get_config, search_config_file, Config},
     Db,
 };
 
@@ -146,7 +146,7 @@ impl MemDocsInput {
             return None;
         }
         let mut file = f.unwrap().to_string_lossy().to_string();
-        let path = get_config_path(file.clone());
+        let path = search_config_file(file.clone());
         if path.is_err() {
             log::debug!("lsp error: {}", path.err().unwrap());
             return None;

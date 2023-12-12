@@ -6,7 +6,7 @@ use crate::{
     ast::{accumulators::ModBuffer, diag::ensure_no_error, node::program::Program},
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
-    utils::read_config::get_config_path,
+    utils::read_config::search_config_file,
     Db,
 };
 
@@ -210,16 +210,17 @@ pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
 
 #[salsa::tracked]
 pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
-    let path = get_config_path(docs.file(db).to_string());
+    let path = search_config_file(docs.file(db).to_string());
     if path.is_err() {
         log::error!("lsp error: {}", path.err().unwrap());
         return None;
     }
 
-    let input = docs.get_file_params(db, docs.file(db).clone(), true);
-    input?;
-    let input = input.unwrap();
+    let input = docs
+        .get_file_params(db, docs.file(db).clone(), true)
+        .unwrap();
     log::trace!("entering compile_dry_file");
+
     let re = compile_dry_file(db, input);
     // calculate find references results
     if docs.action(db) != ActionType::FindReferences {

@@ -23,13 +23,45 @@ use std::{
 
 use version::VergenInfo;
 
-use ast::compiler::{self, ActionType, HashOptimizationLevel};
-use clap::{CommandFactory, Parser, Subcommand};
+use ast::compiler::{self, convert, ActionType};
+use clap::{Parser, Subcommand};
 use db::Database;
 use lsp::mem_docs::{self, MemDocsInput};
 
 #[cfg(not(target_arch = "wasm32"))]
 use lsp::start_lsp;
+
+fn main() {
+    #[cfg(target_arch = "wasm32")]
+    unimplemented!("compiler on wasm32 is not supported yet");
+    let mut cli = Cli::parse();
+    cli.logger = stderrlog::new();
+    cli.logger
+        .module(module_path!())
+        .quiet(cli.quiet)
+        .verbosity(cli.verbose as usize);
+
+    match cli.command {
+        Some(ref cmd) => match cmd {
+            RunCommand::Run { name } => cli.run(name.clone()),
+            RunCommand::Lsp {} => cli.lsp(),
+            RunCommand::Fmt { name } => cli.fmt(name.clone()),
+            RunCommand::New { name } => cli.new_project(name.clone()),
+            RunCommand::Version => cli.version(),
+            RunCommand::Build { name } => cli.build(name.clone()),
+        },
+        // todo(griffin): refine it in the future, technically it should compile one file only instead of a whole project.
+        None => {
+            if cli.name.as_deref().is_none() {
+                cli.version();
+                return;
+            }
+
+            let name = cli.name.as_deref().unwrap();
+            cli.build(name.to_string())
+        }
+    }
+}
 
 /// Pivot Lang compiler program
 #[derive(Parser)]
@@ -48,7 +80,7 @@ _______   __                        __            __
                                                                                  \$$$$$$ 
 "#, long_about = None, styles = get_styles())]
 struct Cli {
-    /// Name of the source file
+    /// Name of the source file, we will use it as an entry path to find and build a pl project with a kagari.toml
     #[arg(value_parser)]
     name: Option<String>,
 
@@ -101,6 +133,127 @@ struct Cli {
     /// print source fmt
     #[command(subcommand)]
     command: Option<RunCommand>,
+
+    #[clap(skip)]
+    logger: stderrlog::StdErrLog,
+}
+
+impl Cli {
+    // todo(griffin): make the input name more generic
+    // currently it support file path input only,
+    pub fn build(&mut self, name: String) {
+        self.logger
+            .timestamp(stderrlog::Timestamp::Off)
+            .init()
+            .unwrap();
+
+        let db = Database::default();
+        let filepath = Path::new(&name);
+        let abs = crate::utils::canonicalize(filepath).unwrap();
+
+        let op = compiler::Options {
+            genir: self.genir,
+            printast: self.printast,
+            flow: self.flow,
+            fmt: false,
+            optimization: convert(self.optimization),
+            jit: self.jit,
+        };
+
+        let action = if self.flow {
+            ActionType::Flow
+        } else if self.printast {
+            ActionType::PrintAst
+        } else {
+            ActionType::Compile
+        };
+
+        let mem = MemDocsInput::new(
+            &db,
+            Arc::new(Mutex::new(RefCell::new(mem_docs::MemDocs::default()))),
+            abs.to_str().unwrap().to_string(),
+            op,
+            action,
+            None,
+            None,
+        );
+        compiler::compile(&db, mem, self.out.clone(), op);
+    }
+    pub fn version(&self) {
+        let mut v = VergenInfo::new();
+        v.build_semver = "alpha".to_string();
+        println!("{}", v)
+    }
+    pub fn run(&self, name: String) {
+        #[cfg(feature = "jit")]
+        compiler::run(
+            Path::new(name.as_str()),
+            convert(self.optimization).to_llvm(),
+        );
+
+        #[cfg(not(feature = "jit"))]
+        println!(
+            "feature jit is not enabled, cannot use run command, failed to compile {}",
+            name
+        );
+    }
+    pub fn new_project(&self, name: String) {
+        utils::plc_new::init_package(name);
+    }
+    pub fn lsp(&mut self) {
+        self.logger
+            .timestamp(stderrlog::Timestamp::Microsecond)
+            .init()
+            .unwrap();
+
+        #[cfg(not(target_arch = "wasm32"))]
+        start_lsp().unwrap();
+    }
+    /// fmt formats the input file with desired pivot-language format
+    /// currently, it doesn't support to format a whole project.
+    pub fn fmt(&mut self, name: String) {
+        if name.is_empty() {
+            println!("a file is required to pass as fmt command is not fully implemented yet");
+            return;
+        }
+
+        self.logger
+            .timestamp(stderrlog::Timestamp::Off)
+            .init()
+            .unwrap();
+
+        let db = Database::default();
+        let filepath = Path::new(&name);
+        let abs = crate::utils::canonicalize(filepath).unwrap();
+
+        let op = compiler::Options {
+            genir: self.genir,
+            printast: self.printast,
+            flow: self.flow,
+            fmt: true,
+            optimization: convert(self.optimization),
+            jit: self.jit,
+        };
+
+        let action = if self.flow {
+            ActionType::Flow
+        } else if self.printast {
+            ActionType::PrintAst
+        } else {
+            ActionType::Fmt
+        };
+
+        let mem = MemDocsInput::new(
+            &db,
+            Arc::new(Mutex::new(RefCell::new(mem_docs::MemDocs::default()))),
+            abs.to_str().unwrap().to_string(),
+            op,
+            action,
+            None,
+            None,
+        );
+        compiler::compile(&db, mem, self.out.clone(), op);
+    }
 }
 
 #[derive(Subcommand)]
@@ -113,8 +266,12 @@ enum RunCommand {
     },
     /// Start the language server
     Lsp,
-    /// Format current project
-    Fmt,
+    Fmt {
+        #[clap(value_parser, default_value = "")]
+        // the file name to be formatted
+        // currently format all files under executing path is supported yet, so we don't allow it empty.
+        name: String,
+    },
     /// Make a new pl package at path
     New {
         #[clap(value_parser)]
@@ -122,95 +279,15 @@ enum RunCommand {
     },
     /// Get the whole version infomation
     Version,
-}
 
-fn main() {
-    #[cfg(target_arch = "wasm32")]
-    unimplemented!("compiler on wasm32 is not supported yet");
-    let cli = Cli::parse();
-    let opt = match cli.optimization {
-        0 => HashOptimizationLevel::None,
-        1 => HashOptimizationLevel::Less,
-        2 => HashOptimizationLevel::Default,
-        3 => HashOptimizationLevel::Aggressive,
-        _ => panic!("optimization level must be 0-3"),
-    };
-
-    let mut logger = stderrlog::new();
-    logger
-        .module(module_path!())
-        .quiet(cli.quiet)
-        .verbosity(cli.verbose as usize);
-
-    let fmt = matches!(cli.command, Some(RunCommand::Fmt));
-    // You can check the value provided by positional arguments, or option arguments
-    if let Some(name) = cli.name.as_deref() {
-        logger.timestamp(stderrlog::Timestamp::Off).init().unwrap();
-        let db = Database::default();
-        let filepath = Path::new(name);
-        let abs = crate::utils::canonicalize(filepath).unwrap();
-        let op = compiler::Options {
-            genir: cli.genir,
-            printast: cli.printast,
-            flow: cli.flow,
-            fmt,
-            optimization: opt,
-            jit: cli.jit,
-        };
-        let action = if cli.flow {
-            ActionType::Flow
-        } else if cli.printast {
-            ActionType::PrintAst
-        } else if fmt {
-            ActionType::Fmt
-        } else {
-            ActionType::Compile
-        };
-        let mem = MemDocsInput::new(
-            &db,
-            Arc::new(Mutex::new(RefCell::new(mem_docs::MemDocs::default()))),
-            abs.to_str().unwrap().to_string(),
-            op,
-            action,
-            None,
-            None,
-        );
-        compiler::compile(&db, mem, cli.out.clone(), op);
-    } else if let Some(command) = cli.command {
-        match command {
-            RunCommand::Run { name } => {
-                #[cfg(feature = "jit")]
-                compiler::run(Path::new(name.as_str()), opt.to_llvm());
-                #[cfg(not(feature = "jit"))]
-                println!(
-                    "feature jit is not enabled, cannot use run command, failed to compile {}",
-                    name
-                );
-            }
-            RunCommand::Lsp {} => {
-                logger
-                    .timestamp(stderrlog::Timestamp::Microsecond)
-                    .init()
-                    .unwrap();
-                #[cfg(not(target_arch = "wasm32"))]
-                start_lsp().unwrap();
-            }
-            RunCommand::Fmt {} => {
-                println!("fmt command is not implemented yet");
-            }
-            RunCommand::New { name } => {
-                utils::plc_new::init_package(name);
-            }
-            RunCommand::Version => {
-                let mut v = VergenInfo::new();
-                v.build_semver = "alpha".to_string();
-                println!("{}", v)
-            }
-        }
-    } else {
-        println!("No file provided");
-        Cli::command().print_help().unwrap();
-    }
+    /// Build the source code written in pivot language
+    /// todo(griffin): inside this command, we should enquery the kagari.toml in all children files,
+    /// instead of find it among files under its ancestor
+    Build {
+        #[arg(value_parser)]
+        // Name of a file for a project entry
+        name: String,
+    },
 }
 
 pub fn get_styles() -> clap::builder::Styles {
