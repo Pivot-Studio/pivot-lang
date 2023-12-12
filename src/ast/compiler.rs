@@ -208,6 +208,8 @@ pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
     }
 }
 
+/// compile_dry compiles the source code of pivot-lang into the pivot-lang AST with a wrapper.
+/// the `dry` refers the function ends up parsing at pivot-lang AST and won't interact with llvm.
 #[salsa::tracked]
 pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
     let path = search_config_file(docs.file(db).to_string());
@@ -216,16 +218,18 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
         return None;
     }
 
-    let input = docs
-        .get_file_params(db, docs.file(db).clone(), true)
+    let parser_entry = docs
+        .finalize_parser_input(db, docs.file(db).clone(), true)
         .unwrap();
-    log::trace!("entering compile_dry_file");
 
-    let re = compile_dry_file(db, input);
-    // calculate find references results
+    log::trace!("entering compile_dry_file");
+    let re = compile_dry_file(db, parser_entry);
+
+    // calculate find references results for lsp
     if docs.action(db) != ActionType::FindReferences {
         return re;
     }
+
     if let Some(res) = db.get_ref_str() {
         if let Some(plmod) = re {
             plmod
@@ -238,33 +242,39 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
 }
 
 #[salsa::tracked(recovery_fn=cycle_deps_recover)]
-pub fn compile_dry_file(db: &dyn Db, docs: FileCompileInput) -> Option<ModWrapper> {
-    if docs.file(db).ends_with(".toml") {
-        log::error!("lsp error: toml file {}", docs.file(db));
+pub fn compile_dry_file(db: &dyn Db, parser_entry: FileCompileInput) -> Option<ModWrapper> {
+    if parser_entry.file(db).ends_with(".toml") {
+        log::error!("lsp error: toml file {}", parser_entry.file(db));
         // skip toml
         return None;
     }
-    // eprintln!("compile_dry_file: {:#?}", docs.debug_all(db));
-    let re = docs.get_file_content(db);
-    re?;
-    let src = re.unwrap();
-    log::trace!("src {:#?} id {:?}", src.text(db), src.path(db));
-    let parse_result = parse(db, src);
-    if let Err(e) = parse_result {
-        log::error!("source code parse failed {}", e);
-        return None;
-    }
-    let node = parse_result.unwrap();
-    let program = Program::new(
-        db,
-        node,
-        docs.get_emit_params(db),
-        docs.docs(db),
-        docs.config(db),
-        docs.opt(db),
+
+    let entry_file_content = parser_entry.get_file_content(db).unwrap();
+    log::trace!(
+        "src {:#?} id {:?}",
+        entry_file_content.text(db),
+        entry_file_content.path(db)
     );
-    log::trace!("entering emit");
-    Some(program.emit(db))
+
+    let parsing_result = parse(db, entry_file_content);
+    match parsing_result {
+        Err(e) => {
+            log::error!("source code parse failed {}", e);
+            None
+        }
+        Ok(root_node) => {
+            let program = Program::new(
+                db,
+                root_node,
+                parser_entry.get_emit_params(db),
+                parser_entry.docs(db),
+                parser_entry.config(db),
+                parser_entry.opt(db),
+            );
+            log::trace!("entering emit");
+            Some(program.emit(db))
+        }
+    }
 }
 
 #[cfg(feature = "llvm")]
