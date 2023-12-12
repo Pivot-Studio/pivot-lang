@@ -12,7 +12,7 @@ fn DioGC__stuck_begin(sp:i64) void;
 
 fn DioGC__stuck_end() void;
 
-pub fn DioGC__safepoint() void;
+pub fn DioGC__safepoint(sp:i64) void;
 
 pub fn DioGC__set_eva(ev:bool) void;
 

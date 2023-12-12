@@ -111,13 +111,12 @@ pub fn gc_malloc(size: usize, obj_type: u8) -> *mut u8 {
     })
 }
 
-
-pub fn gc_malloc_fast_unwind(size: usize, obj_type: u8, sp:*mut u8) -> *mut u8 {
+pub fn gc_malloc_fast_unwind(size: usize, obj_type: u8, sp: *mut u8) -> *mut u8 {
     SPACE.with(|gc| {
         // println!("start malloc");
         let gc = gc.borrow();
         // println!("malloc");
-        gc.alloc_fast_unwind(size, ObjectType::from_int(obj_type).unwrap(),sp)
+        gc.alloc_fast_unwind(size, ObjectType::from_int(obj_type).unwrap(), sp)
     })
 }
 
@@ -140,7 +139,7 @@ pub fn gc_collect() {
     })
 }
 
-pub fn gc_collect_fast_unwind(sp:* mut u8) {
+pub fn gc_collect_fast_unwind(sp: *mut u8) {
     SPACE.with(|gc| {
         // println!("start collect");
         let gc = gc.borrow();
@@ -211,6 +210,12 @@ pub fn safepoint() {
     })
 }
 
+pub fn safepoint_fast_unwind(sp: *mut u8) {
+    SPACE.with(|gc| {
+        gc.borrow().safepoint_fast_unwind(sp);
+    })
+}
+
 #[cfg(feature = "llvm_stackmap")]
 pub fn gc_init(ptr: *mut u8) {
     // print_stack_map(ptr);
@@ -241,7 +246,7 @@ pub fn thread_stuck_start() {
     });
 }
 
-pub fn thread_stuck_start_fast(sp:*mut u8) {
+pub fn thread_stuck_start_fast(sp: *mut u8) {
     // v.0 -= 1;
     SPACE.with(|gc| {
         // println!("start add_root");

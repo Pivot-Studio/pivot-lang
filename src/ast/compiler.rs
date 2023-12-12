@@ -139,10 +139,9 @@ pub fn process_llvm_ir<'a>(
             b.position_at_end(llvmmod.get_context().append_basic_block(f, "entry"));
             b.build_return(None).unwrap();
         }
-        if f.get_linkage() == inkwell::module::Linkage::LinkOnceAny  {
+        if f.get_linkage() == inkwell::module::Linkage::LinkOnceAny {
             f.set_linkage(inkwell::module::Linkage::External);
         }
-        
     });
     pb.finish_with_message("中间代码优化完成");
     (llvmmod, output_files)

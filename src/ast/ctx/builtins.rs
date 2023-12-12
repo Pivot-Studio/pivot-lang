@@ -1084,10 +1084,9 @@ fn emit_match_type<'a, 'b>(
     }
 }
 
-
-lazy_static!{
-    pub static ref STUCK_FNS:FxHashSet<&'static str>  = {
-        let mut set:FxHashSet<&'static str>  = Default::default();
+lazy_static! {
+    pub static ref STUCK_FNS: FxHashSet<&'static str> = {
+        let mut set: FxHashSet<&'static str> = Default::default();
         set.insert("sleep");
         set
     };

@@ -51,9 +51,6 @@ impl <S>Chan<S> {
         let i = 0;
         while self.capacity <= self.count {
             i = i + 1;
-            if i % 1000 == 0 {
-                gc::DioGC__safepoint();
-            }
         }
         lock_mutexWrap(self.mtx);
         self.buffer.push(s);
@@ -66,9 +63,6 @@ impl <S>Chan<S> {
         let i = 0;
         while self.count==0 {
             i = i + 1;
-            if i % 1000 == 0 {
-                gc::DioGC__safepoint();
-            }
         }
         lock_mutexWrap(self.mtx);
         io::printi64ln(2222);

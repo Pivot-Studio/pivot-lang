@@ -713,6 +713,7 @@ impl FuncDefNode {
                         )
                         .unwrap();
                 }
+                builder.place_safepoint(child);
                 if self.generator {
                     child.generator_data.as_ref().unwrap().borrow_mut().is_para = false;
                 }
@@ -1068,6 +1069,7 @@ impl Node for ClosureNode {
                 )
                 .unwrap();
         }
+        builder.place_safepoint(child);
         child.rettp = Some(ret_tp.clone());
         // emit body
         let terminator = self.body.emit(child, builder)?.get_term();

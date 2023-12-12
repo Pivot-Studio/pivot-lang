@@ -21,34 +21,35 @@ use crate::{
     GLOBAL_ALLOCATOR, LINE_SIZE, NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION, USE_SHADOW_STACK,
 };
 
-
-fn get_ip_from_sp(sp:* mut u8) -> * mut u8 {
-    let sp = sp as * mut * mut u8;
+fn get_ip_from_sp(sp: *mut u8) -> *mut u8 {
+    let sp = sp as *mut *mut u8;
     unsafe { *sp.offset(-1) }
 }
 
-fn walk_gc_frames(sp:* mut u8, mut walker: impl FnMut(* mut u8,i32, ObjectType)) {
+fn walk_gc_frames(sp: *mut u8, mut walker: impl FnMut(*mut u8, i32, ObjectType)) {
     let mut sp = sp;
     loop {
         let ip = get_ip_from_sp(sp);
-        let frame = unsafe{STACK_MAP.map.as_ref().unwrap().get(&ip.cast_const())};
+        let frame = unsafe { STACK_MAP.map.as_ref().unwrap().get(&ip.cast_const()) };
         if let Some(frame) = frame {
             for (o, tp) in frame.iter_roots() {
                 walker(sp, o, tp);
             }
-            
-            sp = unsafe{ 
-                #[cfg(target_arch="aarch64")]
-                {sp.offset(frame.frame_size as _)}
-                #[cfg(target_arch="x86_64")]
-                {sp.offset(frame.frame_size as isize + 8)}
+
+            sp = unsafe {
+                #[cfg(target_arch = "aarch64")]
+                {
+                    sp.offset(frame.frame_size as _)
+                }
+                #[cfg(target_arch = "x86_64")]
+                {
+                    sp.offset(frame.frame_size as isize + 8)
+                }
             };
-        }else {
+        } else {
             break;
         }
     }
-
-    
 }
 
 /// # Collector
@@ -176,7 +177,7 @@ impl Collector {
         unsafe { self.thread_local_allocator.as_mut().unwrap().get_size() }
     }
 
-    pub fn alloc(&self, size: usize, obj_type: ObjectType) -> *mut u8  {
+    pub fn alloc(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
         self.alloc_fast_unwind(size, obj_type, std::ptr::null_mut())
     }
     /// # alloc
@@ -189,36 +190,41 @@ impl Collector {
     ///
     /// ## Return
     /// * `ptr` - object pointer
-    pub fn alloc_fast_unwind(&self, size: usize, obj_type: ObjectType, sp:*mut u8) -> *mut u8 {
+    pub fn alloc_fast_unwind(&self, size: usize, obj_type: ObjectType, sp: *mut u8) -> *mut u8 {
         if !self.frames_list.load(Ordering::SeqCst).is_null() {
             panic!("gc stucked, can not alloc")
         }
         if gc_is_auto_collect_enabled() {
-            if GC_RUNNING.load(Ordering::Acquire)
-                || (unsafe { self.thread_local_allocator.as_mut().unwrap().should_gc() })
-            {
-                self.collect_fast_unwind(sp);
-            }
-            let status = self.status.borrow();
-            if status.collect_threshold < status.bytes_allocated_since_last_gc {
-                drop(status);
-                self.collect_fast_unwind(sp);
-            } else {
-                drop(status);
-            }
+            self.safepoint_fast_unwind(sp);
             let mut status = self.status.borrow_mut();
             status.bytes_allocated_since_last_gc += ((size - 1) / LINE_SIZE + 1) * LINE_SIZE;
         }
         let ptr = self.alloc_no_collect(size, obj_type);
-        if ptr.is_null()  {
+        if ptr.is_null() {
             self.collect_fast_unwind(sp);
-            return unsafe{self
-                .thread_local_allocator
-                .as_mut()
-                .unwrap()
-                .alloc(size, obj_type)};
+            return unsafe {
+                self.thread_local_allocator
+                    .as_mut()
+                    .unwrap()
+                    .alloc(size, obj_type)
+            };
         }
         ptr
+    }
+
+    pub fn safepoint_fast_unwind(&self, sp: *mut u8) {
+        if GC_RUNNING.load(Ordering::Acquire)
+            || (unsafe { self.thread_local_allocator.as_mut().unwrap().should_gc() })
+        {
+            self.collect_fast_unwind(sp);
+        }
+        let status = self.status.borrow();
+        if status.collect_threshold < status.bytes_allocated_since_last_gc {
+            drop(status);
+            self.collect_fast_unwind(sp);
+        } else {
+            drop(status);
+        }
     }
 
     pub fn alloc_no_collect(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
@@ -373,7 +379,8 @@ impl Collector {
                 let atomic_ptr = head as *mut AtomicPtr<u8>;
 
                 let obj_line_size = line_header.get_obj_line_size(idx, Block::from_obj_ptr(head));
-                let new_ptr = self.alloc_no_collect(obj_line_size * LINE_SIZE, line_header.get_obj_type());
+                let new_ptr =
+                    self.alloc_no_collect(obj_line_size * LINE_SIZE, line_header.get_obj_type());
                 if !new_ptr.is_null() {
                     let new_block = Block::from_obj_ptr(new_ptr);
                     let (new_line_header, _) = new_block.get_line_header_from_addr(new_ptr);
@@ -498,9 +505,8 @@ impl Collector {
         self.mark_fast_unwind(std::ptr::null_mut());
     }
 
-
-    fn mark_stack_offset(&self,sp:*mut u8,offset:i32, obj_type:ObjectType) {
-        unsafe{
+    fn mark_stack_offset(&self, sp: *mut u8, offset: i32, obj_type: ObjectType) {
+        unsafe {
             let root = sp.offset(offset as isize);
             if root.is_null() {
                 return;
@@ -518,7 +524,7 @@ impl Collector {
     /// From gc roots, mark all reachable objects.
     ///
     /// this mark function is __precise__
-    pub fn mark_fast_unwind(&self, sp:*mut u8) {
+    pub fn mark_fast_unwind(&self, sp: *mut u8) {
         let mutex = STUCK_MUTEX.lock();
         GC_RUNNING.store(true, Ordering::Release);
         STUCK_COND.notify_all();
@@ -579,15 +585,16 @@ impl Collector {
                 if !fl.is_null() {
                     log::trace!("gc {}: tracing stucked frames", self.id);
                     self.mark_gc_frames(unsafe { fl.as_mut().unwrap().clone() });
-                } else if sp.is_null() { // use backtrace.rs or stored frames
+                } else if sp.is_null() {
+                    // use backtrace.rs or stored frames
                     let mut frames: Vec<(*mut libc::c_void, *mut libc::c_void)> = vec![];
                     backtrace::trace(|frame| {
                         frames.push((frame.ip(), frame.sp()));
                         true
                     });
-    
+
                     self.mark_gc_frames(frames);
-                }else {
+                } else {
                     walk_gc_frames(sp, |sp, offset, obj_type| {
                         self.mark_stack_offset(sp, offset, obj_type);
                     });
@@ -719,11 +726,8 @@ impl Collector {
     }
 
     pub fn safepoint(&self) {
-        if GC_RUNNING.load(Ordering::Acquire) {
-            self.collect();
-        }
+        self.safepoint_fast_unwind(std::ptr::null_mut());
     }
-
     pub fn collect(&self) {
         self.collect_fast_unwind(std::ptr::null_mut());
     }
@@ -731,7 +735,7 @@ impl Collector {
     /// # collect
     ///
     /// Collect garbage.
-    pub fn collect_fast_unwind(&self, sp:*mut u8) {
+    pub fn collect_fast_unwind(&self, sp: *mut u8) {
         log::info!(
             "gc {} collecting... stucked: {}",
             self.id,
@@ -826,16 +830,18 @@ impl Collector {
         self.stuck_fast_unwind(std::ptr::null_mut());
     }
 
-    pub fn stuck_fast_unwind(&mut self, sp:*mut u8) {
+    pub fn stuck_fast_unwind(&mut self, sp: *mut u8) {
         log::trace!("gc {}: stucking...", self.id);
         let mut frames: Box<Vec<(*mut libc::c_void, *mut libc::c_void)>> = Box::default();
         if sp.is_null() {
             backtrace::trace(|frame| {
                 frames.push((frame.ip(), frame.sp()));
                 true
-            });   
-        }else {
-            walk_gc_frames(sp, |sp, _, _| frames.push((get_ip_from_sp(sp) as _, sp as _)));
+            });
+        } else {
+            walk_gc_frames(sp, |sp, _, _| {
+                frames.push((get_ip_from_sp(sp) as _, sp as _))
+            });
         }
         unsafe {
             let ptr = Box::leak(frames) as *mut _;

@@ -611,4 +611,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         _params: &[Arc<RefCell<PLType>>],
     ) {
     }
+
+    fn place_safepoint(&self, _ctx: &mut Ctx<'a>) {}
 }
