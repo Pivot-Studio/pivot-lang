@@ -170,13 +170,13 @@
 pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNodeWrapper, String&gt; {
     let text = source.text(db);
     let re = program(Span::new_extra(text, false));
-    if let Err(e) = re {
-        return Err(format!(&quot;{:?}&quot;, e));
+    match re {
+        Err(e) =&gt; Err(format!(&quot;{:?}&quot;, e)),
+        Ok((_, node)) =&gt; {
+            log::info!(&quot;parse {:?}&quot;, source.path(db));
+            Ok(ProgramNodeWrapper::new(db, node))
+        }
     }
-    let (_, node) = re.unwrap();
-    log::info!(&quot;parse {:?}&quot;, source.path(db));
-
-    Ok(ProgramNodeWrapper::new(db, node))
 }</code></pre>
 
                     </main>
