@@ -39,6 +39,7 @@ use crate::ast::{
     diag::PLDiag,
     node::function::generator::CtxFlag,
     pltype::{get_type_deep, ClosureType, TraitImplAble},
+    tokens::TokenType,
 };
 
 use super::{
@@ -1546,13 +1547,14 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             return (v, v.count_basic_blocks() != 0);
         }
         let fn_type = self.get_fn_type(pltp, ctx);
-        let f = self
-            .module
-            .add_function(&llvmname, fn_type, Some(Linkage::External));
-        f.add_attribute(
-            inkwell::attributes::AttributeLoc::Function,
-            self.context.create_string_attribute("uwtable", "sync"),
-        );
+        let linkage =
+            if pltp.is_declare || pltp.is_modified_by(TokenType::PUB) || pltp.name == "main" {
+                Linkage::External
+            } else {
+                Linkage::Private
+            };
+        let f = self.module.add_function(&llvmname, fn_type, Some(linkage));
+
         f.set_call_conventions(0);
         (f, false)
     }
@@ -1643,26 +1645,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             used_global.set_linkage(Linkage::Appending);
             used_global.set_initializer(&used_arr);
         }
-        extern "C" {
-            /// # run_module_pass
-            ///
-            /// run the module pass
-            ///
-            /// defined in immix crate cpp code
-            ///
-            /// ## Parameters
-            ///
-            /// * `m` - the module
-            /// * `opt` - the optimization level
-            ///
-            /// the pass selection is mostly determined by the optlevel,
-            /// while some special passes are always enabled (Immix GC pass
-            /// and Rewrite Statepoint pass)
-            fn run_module_pass(m: *mut u8, opt: i32);
-        }
 
         unsafe {
-            run_module_pass(self.module.as_mut_ptr() as _, self.optlevel as i32);
+            immix::run_module_pass(self.module.as_mut_ptr() as _, self.optlevel as i32);
         }
         *self.optimized.borrow_mut() = true;
     }
@@ -2747,6 +2732,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         );
         global.set_initializer(&base_type.const_zero());
         global.set_metadata(exp.as_metadata_value(self.context), 0);
+        let f = self.get_gc_mod_f(ctx, "DioGC__register_global");
+        let ptrtoint = self
+            .builder
+            .build_ptr_to_int(global.as_pointer_value(), self.context.i64_type(), "")
+            .unwrap();
+        self.builder
+            .build_call(f, &[ptrtoint.into()], "register_global")
+            .unwrap();
         self.get_llvm_value_handle(&global.as_any_value_enum())
     }
 

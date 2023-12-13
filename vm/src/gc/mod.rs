@@ -51,6 +51,9 @@ mod _immix {
 
     #[is_runtime] // jit注册
     impl DioGC {
+        pub unsafe fn register_global(p: *mut u8) {
+            immix::register_global(p);
+        }
         pub unsafe fn malloc(size: u64, obj_type: u8, rsp: *mut *mut u8) -> *mut u8 {
             // asm read sp
             // let mut rust_sp: *mut u8;

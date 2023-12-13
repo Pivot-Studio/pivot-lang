@@ -298,6 +298,21 @@ extern "C" {
         opt: u32,
         cb: unsafe extern "C" fn(map: *mut u8),
     ) -> !;
+    /// # run_module_pass
+    ///
+    /// run the module pass
+    ///
+    /// defined in immix crate cpp code
+    ///
+    /// ## Parameters
+    ///
+    /// * `m` - the module
+    /// * `opt` - the optimization level
+    ///
+    /// the pass selection is mostly determined by the optlevel,
+    /// while some special passes are always enabled (Immix GC pass
+    /// and Rewrite Statepoint pass)
+    pub fn run_module_pass(m: *mut u8, opt: i32);
 }
 
 /// Register the LLVM GC plugins.

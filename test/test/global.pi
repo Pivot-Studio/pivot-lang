@@ -19,9 +19,9 @@ pub fn change_global() void {
 }
 
 pub fn test_global() void {
-    // panic::assert(*a == 100);
-    // change_global();
-    // panic::assert(b.a == 100);
+    panic::assert(*a == 100);
+    change_global();
+    panic::assert(b.a == 100);
     return;
 }
 
