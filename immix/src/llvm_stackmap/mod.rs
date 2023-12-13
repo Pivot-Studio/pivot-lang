@@ -293,11 +293,11 @@ fn align_up_to(n: usize, align: usize) -> usize {
 #[cfg(feature = "llvm_gc_plugin")]
 extern "C" {
     fn LLVMLinkPLImmixGC();
-    pub fn CreateAndRunPLJITEngine(
+    pub fn CreatePLJITEngine(
         module: *mut u8,
         opt: u32,
         cb: unsafe extern "C" fn(map: *mut u8),
-    ) -> !;
+    ) -> *mut libc::c_void;
     /// # run_module_pass
     ///
     /// run the module pass

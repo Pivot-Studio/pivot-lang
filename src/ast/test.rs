@@ -499,48 +499,48 @@ fn test_doc_symbol() {
     );
 }
 
-// #[test]
-// #[cfg(feature = "jit")]
-// fn test_jit() {
-//     use crate::ast::compiler::{compile, Options};
-//     use std::path::PathBuf;
-//     let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
-//         .lock()
-//         .unwrap();
-//     let out = "testjitout";
-//     let docs = MemDocs::default();
-//     let db = Database::default();
-//     let input = MemDocsInput::new(
-//         &db,
-//         Arc::new(Mutex::new(RefCell::new(docs))),
-//         "test/main.pi".to_string(),
-//         Default::default(),
-//         ActionType::Compile,
-//         None,
-//         None,
-//     );
-//     let outplb = "testjitout.bc";
-//     compile(
-//         &db,
-//         input,
-//         out.to_string(),
-//         Options {
-//             optimization: crate::ast::compiler::HashOptimizationLevel::None,
-//             genir: true,
-//             printast: false,
-//             flow: false,
-//             fmt: false,
-//             jit: true,
-//         },
-//     );
-//     assert!(
-//         crate::ast::compiler::run(
-//             PathBuf::from(outplb).as_path(),
-//             inkwell::OptimizationLevel::None,
-//         ) == 0,
-//         "jit compiled program exit with non-zero status"
-//     );
-// }
+#[test]
+#[cfg(feature = "jit")]
+fn test_jit() {
+    use crate::ast::compiler::{compile, Options};
+    use std::path::PathBuf;
+    let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
+        .lock()
+        .unwrap();
+    let out = "testjitout";
+    let docs = MemDocs::default();
+    let db = Database::default();
+    let input = MemDocsInput::new(
+        &db,
+        Arc::new(Mutex::new(RefCell::new(docs))),
+        "test/main.pi".to_string(),
+        Default::default(),
+        ActionType::Compile,
+        None,
+        None,
+    );
+    let outplb = "testjitout.bc";
+    compile(
+        &db,
+        input,
+        out.to_string(),
+        Options {
+            optimization: crate::ast::compiler::HashOptimizationLevel::None,
+            genir: true,
+            printast: false,
+            flow: false,
+            fmt: false,
+            jit: true,
+        },
+    );
+    assert!(
+        crate::ast::compiler::run(
+            PathBuf::from(outplb).as_path(),
+            inkwell::OptimizationLevel::None,
+        ) == 0,
+        "jit compiled program exit with non-zero status"
+    );
+}
 #[test]
 fn test_compile() {
     let out = "testout";
@@ -556,7 +556,7 @@ fn test_compile() {
     use crate::ast::compiler::{compile, Options};
 
     let docs = MemDocs::default();
-    let mut db = Database::default();
+    let db = Database::default();
     let input = MemDocsInput::new(
         &db,
         Arc::new(Mutex::new(RefCell::new(docs))),
@@ -581,6 +581,7 @@ fn test_compile() {
     );
     let exe = crate::utils::canonicalize(&exe)
         .unwrap_or_else(|_| panic!("static compiled file not found {:?}", exe));
+    eprintln!("exec: {:?}", exe);
     let o = Command::new(exe.to_str().unwrap())
         .output()
         .expect("failed to execute compiled program");
@@ -591,7 +592,23 @@ fn test_compile() {
         String::from_utf8_lossy(&o.stdout),
         String::from_utf8_lossy(&o.stderr)
     );
-    input.set_action(&mut db).to(ActionType::PrintAst);
+}
+
+#[test]
+fn test_printast() {
+    use crate::ast::compiler::{compile, Options};
+    let out = "testout";
+    let docs = MemDocs::default();
+    let db = Database::default();
+    let input = MemDocsInput::new(
+        &db,
+        Arc::new(Mutex::new(RefCell::new(docs))),
+        "test/main.pi".to_string(),
+        Default::default(),
+        ActionType::PrintAst,
+        None,
+        None,
+    );
     compile(
         &db,
         input,
@@ -602,7 +619,7 @@ fn test_compile() {
             printast: true,
             flow: false,
             fmt: false,
-            jit: true,
+            jit: false,
         },
     );
     test_lsp::<Completions>(

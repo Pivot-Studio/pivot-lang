@@ -19,6 +19,7 @@ mod version;
 use std::{
     cell::RefCell,
     path::Path,
+    process::exit,
     sync::{Arc, Mutex},
 };
 
@@ -187,10 +188,13 @@ impl Cli {
     }
     pub fn run(&self, name: String) {
         #[cfg(feature = "jit")]
-        compiler::run(
-            Path::new(name.as_str()),
-            convert(self.optimization).to_llvm(),
-        );
+        {
+            let re = compiler::run(
+                Path::new(name.as_str()),
+                convert(self.optimization).to_llvm(),
+            );
+            exit(re);
+        }
 
         #[cfg(not(feature = "jit"))]
         println!(

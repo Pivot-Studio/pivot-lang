@@ -566,10 +566,11 @@ impl FuncDefNode {
         &mut self,
         ctx: &'b mut Ctx<'a>,
         first: bool,
-        mut builder: &'b BuilderEnum<'a, '_>,
+        builder: &'b BuilderEnum<'a, '_>,
         fnvalue: FNValue,
     ) -> Result<(), PLDiag> {
         let re = ctx.run_as_root_ctx(|ctx| {
+            let mut builder = builder;
             let noop = BuilderEnum::NoOp(NoOpBuilder::default());
             // get it's pointer
             let noop_ptr = &noop as *const BuilderEnum<'a, '_>;

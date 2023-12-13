@@ -1,10 +1,13 @@
+use inkwell::execution_engine::ExecutionEngine;
 use inkwell::targets::InitializationConfig;
 use inkwell::{memory_buffer::MemoryBuffer, module::Module};
 
 use inkwell::context::Context;
 
+use llvm_sys::execution_engine::LLVMExecutionEngineRef;
 use log;
 use std::ffi::{c_char, CString};
+use std::rc::Rc;
 
 use inkwell::support;
 
@@ -20,7 +23,7 @@ use std::path::Path;
 ///
 /// * `p` - module path
 /// * `opt` - optimization level
-pub fn run(p: &Path, opt: OptimizationLevel) {
+pub fn run(p: &Path, opt: OptimizationLevel) -> i32 {
     vm::logger::SimpleLogger::init_from_env_default("PL_LOG", log::LevelFilter::Error);
     vm::reg();
 
@@ -54,6 +57,13 @@ pub fn run(p: &Path, opt: OptimizationLevel) {
         .map(|v| unsafe { v.delete() });
     inkwell::targets::Target::initialize_native(&InitializationConfig::default()).unwrap();
     unsafe {
-        immix::CreateAndRunPLJITEngine(re.as_mut_ptr() as _, opt as u32, gc_init);
-    };
+        let jit = immix::CreatePLJITEngine(re.as_mut_ptr() as _, opt as u32, gc_init);
+        let engine = ExecutionEngine::new(Rc::new(*(jit as *mut LLVMExecutionEngineRef)), true);
+        let r = re
+            .get_function("main")
+            .map(|f| engine.run_function_as_main(f, &[]))
+            .expect("cannot find main");
+        std::mem::forget(re);
+        r
+    }
 }
