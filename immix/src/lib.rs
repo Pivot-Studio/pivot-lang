@@ -111,6 +111,15 @@ pub fn gc_malloc(size: usize, obj_type: u8) -> *mut u8 {
     })
 }
 
+/// # gc_malloc_fast_unwind
+///
+/// Same behavior as gc_malloc, but this function will use stack
+/// pointer to perform fast unwind
+///
+/// If the stack pointer is not provided, this function will use
+/// backtrace-rs to walk the stack.
+///
+/// For more information, see [mark_fast_unwind](crate::collector::Collector::mark_fast_unwind)
 pub fn gc_malloc_fast_unwind(size: usize, obj_type: u8, sp: *mut u8) -> *mut u8 {
     SPACE.with(|gc| {
         // println!("start malloc");
@@ -120,6 +129,10 @@ pub fn gc_malloc_fast_unwind(size: usize, obj_type: u8, sp: *mut u8) -> *mut u8 
     })
 }
 
+/// # gc_malloc_no_collect
+///
+/// Same behavior as gc_malloc, but this function will never trigger
+/// a gc.
 pub fn gc_malloc_no_collect(size: usize, obj_type: u8) -> *mut u8 {
     SPACE.with(|gc| {
         // println!("start malloc");
@@ -130,6 +143,11 @@ pub fn gc_malloc_no_collect(size: usize, obj_type: u8) -> *mut u8 {
 }
 
 /// This function is used to force a garbage collection.
+///
+/// During the collection mark phase, this function will
+/// use backtrace-rs to walk the stack.
+///
+/// For more information, see [mark_fast_unwind](crate::collector::Collector::mark_fast_unwind)
 pub fn gc_collect() {
     SPACE.with(|gc| {
         // println!("start collect");
@@ -139,6 +157,12 @@ pub fn gc_collect() {
     })
 }
 
+/// # gc_collect_fast_unwind
+///
+/// Same behavior as gc_collect, but this function will use stack
+/// pointer to perform fast unwind.
+///
+/// For more information, see [mark_fast_unwind](crate::collector::Collector::mark_fast_unwind)
 pub fn gc_collect_fast_unwind(sp: *mut u8) {
     SPACE.with(|gc| {
         // println!("start collect");

@@ -60,15 +60,14 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     immix::register_llvm_gc_plugins();
     ensure_target_folder();
 
-    compile_dry(db, docs).unwrap();
-
-    let total_steps = if op.jit { 2 } else { 3 };
+    let total_steps = 3;
     let pb = &COMPILE_PROGRESS;
     prepare_prgressbar(
         pb,
         op,
         format!("{}[{:2}/{:2}]", LOOKING_GLASS, 1, total_steps),
     );
+    compile_dry(db, docs).unwrap();
 
     pb.finish_with_message("中间代码分析完成");
     let is_present_only = op.printast || op.flow;
@@ -93,9 +92,10 @@ pub fn process_llvm_ir<'a>(
     let mods = compile_dry::accumulated::<ModBuffer>(db, docs);
     ensure_no_error(db, docs);
 
-    let total_steps = if op.jit { 2 } else { 3 };
-    let pb = ProgressBar::new(mods.len() as u64);
+    let total_steps = 3;
+    let pb = ProgressBar::hidden();
     prepare_prgressbar(&pb, op, format!("{}[{:2}/{:2}]", TRUCK, 2, total_steps));
+    pb.set_length(mods.len() as u64);
 
     let mut set = FxHashSet::default();
     let mut output_files = vec![];
@@ -166,19 +166,21 @@ pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
     // llvmmod.set_triple(&tm.get_triple());
     // llvmmod.set_data_layout(&tm.get_target_data().get_data_layout());
 
-    let total_steps = if op.jit { 2 } else { 3 };
-    let pb = ProgressBar::new(1);
+    let total_steps = 3;
+    let pb = ProgressBar::hidden();
     prepare_prgressbar(
         &pb,
         op,
         format!("{}[{:2}/{:2}]", CLIP, total_steps, total_steps),
     );
+    pb.set_length(1);
 
     if op.jit {
+        pb.set_message("正在输出jit文件");
         llvmmod.write_bitcode_to_path(Path::new(&out));
         pb.finish_with_message("JIT完成文件写入");
 
-        eprintln!("{}jit executable file written to: {}", SPARKLE, &out);
+        eprintln!("jit executable file written to: {}", &out);
         return;
     }
 

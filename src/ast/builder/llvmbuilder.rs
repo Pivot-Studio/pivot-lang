@@ -206,6 +206,89 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             optlevel: opt,
         }
     }
+    fn alloc_with_f(
+        &self,
+        name: &str,
+        pltype: &PLType,
+        ctx: &mut Ctx<'a>,
+        declare: Option<Pos>,
+        fname: &str,
+    ) -> ValueHandle {
+        let mut ret_handle = self.alloc_raw(name, pltype, ctx, declare, fname);
+        if ctx.ctx_flag == CtxFlag::InGeneratorYield
+            && (declare.is_some() || fname != "DioGC__malloc")
+        {
+            let data = ctx.generator_data.as_ref().unwrap().clone();
+
+            let lb = self.builder.get_insert_block().unwrap();
+            let alloca = self
+                .builder
+                .get_insert_block()
+                .unwrap()
+                .get_parent()
+                .unwrap()
+                .get_first_basic_block()
+                .unwrap();
+            self.builder.position_at_end(alloca);
+
+            // 我们现在在alloca block上（第一个block），gnerator yield函数每次进入都会执行这个
+            // block，所以在这里我们要设置好所有的变量初始值，将他们从generator ctx中取出。
+            let bt = self.get_basic_type_op(pltype, ctx).unwrap();
+            let tp = self
+                .get_basic_type_op(&data.borrow().ctx_tp.as_ref().unwrap().borrow(), ctx)
+                .unwrap()
+                .into_struct_type();
+            let count = add_field(tp, bt.ptr_type(AddressSpace::from(1)).into());
+            let i = count - 1;
+            let data_ptr = self
+                .build_struct_gep(
+                    data.borrow().yield_ctx_handle,
+                    i,
+                    name,
+                    &data.borrow().ctx_tp.as_ref().unwrap().borrow(),
+                    ctx,
+                )
+                .unwrap();
+
+            self.builder.position_at_end(lb);
+
+            // 到目前正在生成代码的block上，这里是malloc函数所在的地方。
+            // malloc之后要将生成的内存保存到generator ctx中，以便下次进入时可以取出来。
+            // 但是函数参数除外，在一般函数的逻辑中函数进入后要将参数保存到堆中，然而
+            // generator yield函数的参数在generator init的时候就已经分配好了内存
+            // 而且保存在了generator ctx中，所以这里的malloc其实是不需要的，而且不能回
+            // 存到ctx里，如果回存会导致参数被覆盖。
+            if !data.borrow_mut().is_para {
+                self.build_store(data_ptr, ret_handle);
+            }
+            let load = self.build_load_raw(
+                data_ptr,
+                &format!("data_load_{}", name),
+                self.i8ptr().as_basic_type_enum(),
+            );
+
+            let load_again = self.build_load_raw(
+                load,
+                &format!("data_load_again_{}", name),
+                self.i8ptr().as_basic_type_enum(),
+            );
+            data.borrow_mut().para_tmp = load_again;
+            ret_handle = data_ptr;
+
+            let id = data.borrow().table.len().to_string();
+            data.borrow_mut().table.insert(
+                name.to_string() + &id,
+                PLSymbolData {
+                    value: data_ptr,
+                    pltype: Arc::new(RefCell::new(pltype.clone())),
+                    range: Default::default(),
+                    refs: None,
+                },
+            );
+        }
+
+        ret_handle
+    }
     fn alloc_raw(
         &self,
         name: &str,
@@ -1561,17 +1644,23 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             used_global.set_initializer(&used_arr);
         }
         extern "C" {
-            // fn add_module_pass(ptr: *mut u8);
-            fn run_module_pass(m: *mut u8, tm: i32);
+            /// # run_module_pass
+            ///
+            /// run the module pass
+            ///
+            /// defined in immix crate cpp code
+            ///
+            /// ## Parameters
+            ///
+            /// * `m` - the module
+            /// * `opt` - the optimization level
+            ///
+            /// the pass selection is mostly determined by the optlevel,
+            /// while some special passes are always enabled (Immix GC pass
+            /// and Rewrite Statepoint pass)
+            fn run_module_pass(m: *mut u8, opt: i32);
         }
-        // let ptr = unsafe { llvm_sys::core::LLVMCreatePassManager() };
-        // let mpm: inkwell::passes::PassManager<Module> =
-        //     unsafe { inkwell::passes::PassManager::new(ptr) };
 
-        // unsafe {
-        //     add_module_pass(ptr as _);
-        // };
-        // mpm.run_on(self.module);
         unsafe {
             run_module_pass(self.module.as_mut_ptr() as _, self.optlevel as i32);
         }
@@ -1659,10 +1748,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             lv.into_pointer_value()
         };
         let new_handle = self.get_llvm_value_handle(&re.as_any_value_enum());
-        // let root = self.heap_stack_map.borrow().get(&from).copied();
-        // if let Some(v) = root {
-        //     self.heap_stack_map.borrow_mut().insert(new_handle, v);
-        // }
         new_handle
     }
     fn pointer_cast(
@@ -1791,20 +1876,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
         pos: Option<Pos>,
     ) -> Option<ValueHandle> {
-        // // malloc ret after call is not safe, as malloc may trigger collection
-        // // 不仅要在调用前分配，还要在get_llvm_value之前，否则如果这次malloc触发了回收和驱逐算法
-        // // 我们load出来的heap ptr可能就move掉了
-        // let alloca = if matches!(ret_type, PLType::Void | PLType::Primitive(_)) {
-        //     0
-        // } else {
-        //     self.alloc_raw(
-        //         "ret_alloca",
-        //         ret_type,
-        //         ctx,
-        //         None,
-        //         "DioGC__malloc_no_collect",
-        //     )
-        // };
         let builder = self.builder;
         let f = self.get_llvm_value(f).unwrap();
         let mut f_tp: Option<FunctionType> = None;
@@ -1940,92 +2011,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
         declare: Option<Pos>,
     ) -> ValueHandle {
-        let mut ret_handle = self.alloc_raw(name, pltype, ctx, declare, "DioGC__malloc");
-        if ctx.ctx_flag == CtxFlag::InGeneratorYield && declare.is_some() {
-            let data = ctx.generator_data.as_ref().unwrap().clone();
-
-            let lb = self.builder.get_insert_block().unwrap();
-            let alloca = self
-                .builder
-                .get_insert_block()
-                .unwrap()
-                .get_parent()
-                .unwrap()
-                .get_first_basic_block()
-                .unwrap();
-            self.builder.position_at_end(alloca);
-
-            // let f_v = ctx.function.unwrap();
-            let bt = self.get_basic_type_op(pltype, ctx).unwrap();
-            let tp = self
-                .get_basic_type_op(&data.borrow().ctx_tp.as_ref().unwrap().borrow(), ctx)
-                .unwrap()
-                .into_struct_type();
-            let count = add_field(tp, bt.ptr_type(AddressSpace::from(1)).into());
-            let i = count - 1;
-            let data_ptr = self
-                .build_struct_gep(
-                    data.borrow().yield_ctx_handle,
-                    i,
-                    name,
-                    &data.borrow().ctx_tp.as_ref().unwrap().borrow(),
-                    ctx,
-                )
-                .unwrap();
-
-            // 我们现在在alloca block上（第一个block），egnerator yield函数每次进入都会执行这个
-            // block，所以在这里我们要设置好所有的变量初始值，将他们从generator ctx中取出。
-            // let stack_root = self.get_stack_root(ret_handle);
-            // let load = self.build_load_raw(
-            //     data_ptr,
-            //     &format!("data_load_{}", name),
-            //     self.i8ptr().as_basic_type_enum(),
-            // );
-            // self.build_store(stack_root, load);
-            self.builder.position_at_end(lb);
-
-            // 到目前正在生成代码的block上，这里是malloc函数所在的地方。
-            // malloc之后要将生成的内存保存到generator ctx中，以便下次进入时可以取出来。
-            // 但是函数参数除外，在一般函数的逻辑中函数进入后要将参数保存到堆中，然而
-            // generator yield函数的参数在generator init的时候就已经分配好了内存
-            // 而且保存在了generator ctx中，所以这里的malloc其实是不需要的，而且不能回
-            // 存到ctx里，如果回存会导致参数被覆盖。
-            if !data.borrow_mut().is_para {
-                self.build_store(data_ptr, ret_handle);
-            }
-            let load = self.build_load_raw(
-                data_ptr,
-                &format!("data_load_{}", name),
-                self.i8ptr().as_basic_type_enum(),
-            );
-
-            let load_again = self.build_load_raw(
-                load,
-                &format!("data_load_again_{}", name),
-                self.i8ptr().as_basic_type_enum(),
-            );
-            data.borrow_mut().para_tmp = load_again;
-            // self.build_store(ret_handle, load_again);
-            // self.build_store(stack_root, load);
-            // self.build_store(data_ptr, ret_handle);
-            // self.set_root(load, stack_root);
-            ret_handle = data_ptr;
-
-            let id = data.borrow().table.len().to_string();
-            data.borrow_mut().table.insert(
-                name.to_string() + &id,
-                PLSymbolData {
-                    value: data_ptr,
-                    pltype: Arc::new(RefCell::new(pltype.clone())),
-                    range: Default::default(),
-                    refs: None,
-                },
-            );
-            // let data_ptr = self.build_struct_gep(ctx_v, (i +2) as u32, "para").unwrap();
-            // return data_ptr;
-        }
-
-        ret_handle
+        self.alloc_with_f(name, pltype, ctx, declare, "DioGC__malloc")
     }
     fn alloc_no_collect(
         &self,
@@ -2034,90 +2020,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
         declare: Option<Pos>,
     ) -> ValueHandle {
-        let mut ret_handle = self.alloc_raw(name, pltype, ctx, declare, "DioGC__malloc_no_collect");
-        if ctx.ctx_flag == CtxFlag::InGeneratorYield {
-            let data = ctx.generator_data.as_ref().unwrap().clone();
-
-            let lb = self.builder.get_insert_block().unwrap();
-            let alloca = self
-                .builder
-                .get_insert_block()
-                .unwrap()
-                .get_parent()
-                .unwrap()
-                .get_first_basic_block()
-                .unwrap();
-            self.builder.position_at_end(alloca);
-
-            // let f_v = ctx.function.unwrap();
-            let bt = self.get_basic_type_op(pltype, ctx).unwrap();
-            let tp = self
-                .get_basic_type_op(&data.borrow().ctx_tp.as_ref().unwrap().borrow(), ctx)
-                .unwrap()
-                .into_struct_type();
-            let count = add_field(tp, bt.ptr_type(AddressSpace::from(1)).into());
-            let i = count - 1;
-            let data_ptr = self
-                .build_struct_gep(
-                    data.borrow().yield_ctx_handle,
-                    i,
-                    name,
-                    &data.borrow().ctx_tp.as_ref().unwrap().borrow(),
-                    ctx,
-                )
-                .unwrap();
-
-            // 我们现在在alloca block上（第一个block），egnerator yield函数每次进入都会执行这个
-            // block，所以在这里我们要设置好所有的变量初始值，将他们从generator ctx中取出。
-            // let load = self.build_load_raw(
-            //     data_ptr,
-            //     &format!("data_load_{}", name),
-            //     self.i8ptr().as_basic_type_enum(),
-            // );
-
-            self.builder.position_at_end(lb);
-
-            // 到目前正在生成代码的block上，这里是malloc函数所在的地方。
-            // malloc之后要将生成的内存保存到generator ctx中，以便下次进入时可以取出来。
-            // 但是函数参数除外，在一般函数的逻辑中函数进入后要将参数保存到堆中，然而
-            // generator yield函数的参数在generator init的时候就已经分配好了内存
-            // 而且保存在了generator ctx中，所以这里的malloc其实是不需要的，而且不能回
-            // 存到ctx里，如果回存会导致参数被覆盖。
-            if !data.borrow_mut().is_para {
-                self.build_store(data_ptr, ret_handle);
-            }
-            let load = self.build_load_raw(
-                data_ptr,
-                &format!("data_load_{}", name),
-                self.i8ptr().as_basic_type_enum(),
-            );
-
-            let load_again = self.build_load_raw(
-                load,
-                &format!("data_load_again_{}", name),
-                self.i8ptr().as_basic_type_enum(),
-            );
-            data.borrow_mut().para_tmp = load_again;
-            // self.build_store(ret_handle, load_again);
-            // self.build_store(stack_root, load);
-            // self.build_store(data_ptr, ret_handle);
-            ret_handle = data_ptr;
-
-            let id = data.borrow().table.len().to_string();
-            data.borrow_mut().table.insert(
-                name.to_string() + &id,
-                PLSymbolData {
-                    value: data_ptr,
-                    pltype: Arc::new(RefCell::new(pltype.clone())),
-                    range: Default::default(),
-                    refs: None,
-                },
-            );
-            // let data_ptr = self.build_struct_gep(ctx_v, (i +2) as u32, "para").unwrap();
-            // return data_ptr;
-        }
-
-        ret_handle
+        self.alloc_with_f(name, pltype, ctx, declare, "DioGC__malloc_no_collect")
     }
     fn build_struct_gep(
         &self,
@@ -2532,7 +2435,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         if f.get_subprogram().is_some() {
             self.discope
                 .set(f.get_subprogram().unwrap().as_debug_info_scope());
-            // ctx.discope = currscope;
         }
         self.build_dbg_location(pos)
     }
@@ -2784,7 +2686,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.build_store(para_ptr, ptr);
             self.position_at_end_block(origin_bb);
 
-            // self.build_store(alloca, data.borrow().para_tmp);
             return;
         }
         let funcvalue = self
@@ -2798,16 +2699,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .get_nth_param(i as _)
             .unwrap()
             .as_basic_value_enum();
-        // let alloca_stack = self
-        //     .builder
-        //     .build_alloca(nv.get_type(), "param_alloca")
-        //     .unwrap();
-        // self.builder.build_store(alloca_stack, nv).unwrap();
-        // let t = if nv.get_type().is_pointer_type() {
-        //     ObjectType::Pointer
-        // } else {
-        //     tp.get_immix_type()
-        // };
 
         let nv_handle = self.get_llvm_value_handle(&nv.as_any_value_enum());
 
@@ -2872,9 +2763,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let ptrtp = ty.ptr_type(AddressSpace::from(1));
         let ftp = self.mark_fn_tp(ptrtp);
         let name = v.get_full_name() + "_visitorf@";
-        // if !name.starts_with(&ctx.get_root_ctx().get_file()) {
-        //     return;
-        // }
+
         let f = match self.module.get_function(&name) {
             Some(f) => f,
             None => self
@@ -2888,10 +2777,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         });
         let bb = self.context.append_basic_block(f, "entry");
         self.builder.position_at_end(bb);
-        // let ff = self.get_or_insert_print_fn("printi64ln");
-        // self.builder
-        // .build_call(ff, &[self.context.i64_type().const_int(9999, true).into()], "printi64ln")
-        // .unwrap();
 
         let fieldn = ty.count_fields();
         let st = f.get_nth_param(0).unwrap().into_pointer_value();
@@ -3234,34 +3119,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let _value_tp = v.get_type();
         self.build_store(ptr, value);
     }
-    // fn stack_alloc(&self, name: &str, ctx: &mut Ctx<'a>, tp: &PLType) -> ValueHandle {
-    //     let lb = self.builder.get_insert_block().unwrap();
-    //     let llvmtp = self.get_basic_type_op(tp, ctx).unwrap();
-    //     let alloca = self
-    //         .builder
-    //         .get_insert_block()
-    //         .unwrap()
-    //         .get_parent()
-    //         .unwrap()
-    //         .get_first_basic_block()
-    //         .unwrap();
-    //     self.builder.position_at_end(alloca);
-    //     let stack_ptr = self.builder.build_alloca(llvmtp, name).unwrap();
-    //     self.tag_root(stack_ptr.as_basic_value_enum(), tp.get_immix_type());
-    //     let td = self.targetmachine.get_target_data();
-    //     self.builder
-    //         .build_memset(
-    //             stack_ptr,
-    //             td.get_abi_alignment(&self.i8ptr()),
-    //             self.context.i8_type().const_zero(),
-    //             self.context
-    //                 .i64_type()
-    //                 .const_int(td.get_store_size(&self.i8ptr()), false),
-    //         )
-    //         .unwrap();
-    //     self.builder.position_at_end(lb);
-    //     self.get_llvm_value_handle(&stack_ptr.as_any_value_enum())
-    // }
+
     fn correct_generator_ctx_malloc_inst(&self, ctx: &mut Ctx<'a>, name: &str) {
         let data = ctx.generator_data.as_ref().unwrap();
         let bb = data.borrow().entry_bb;
@@ -3377,11 +3235,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
 }
 
 fn add_field(st_tp: StructType, field_tp: inkwell::types::AnyTypeEnum<'_>) -> u32 {
-    // let st_tp = st_v
-    //     .get_type()
-    //     .into_pointer_type()
-    //     .get_element_type()
-    //     .into_struct_type();
     let mut closure_data_tps = st_tp.get_field_types();
     closure_data_tps.push(field_tp.try_into().unwrap());
     set_body(&st_tp, &closure_data_tps, false);

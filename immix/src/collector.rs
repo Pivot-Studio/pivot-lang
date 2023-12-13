@@ -177,12 +177,12 @@ impl Collector {
         unsafe { self.thread_local_allocator.as_mut().unwrap().get_size() }
     }
 
-    pub fn alloc(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
-        self.alloc_fast_unwind(size, obj_type, std::ptr::null_mut())
-    }
     /// # alloc
     ///
     /// Allocate a new object.
+    ///
+    /// This function is considered as a
+    /// GC safepoint, which means it may trigger a GC.
     ///
     /// ## Parameters
     /// * `size` - object size
@@ -190,6 +190,15 @@ impl Collector {
     ///
     /// ## Return
     /// * `ptr` - object pointer
+    pub fn alloc(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
+        self.alloc_fast_unwind(size, obj_type, std::ptr::null_mut())
+    }
+
+    /// # alloc_fast_unwind
+    ///
+    /// Allocate a new object, if it trigger a GC, it will use stack pointer to walk gc frames.
+    ///
+    /// For more information, see [mark_fast_unwind](Collector::mark_fast_unwind)
     pub fn alloc_fast_unwind(&self, size: usize, obj_type: ObjectType, sp: *mut u8) -> *mut u8 {
         if !self.frames_list.load(Ordering::SeqCst).is_null() {
             panic!("gc stucked, can not alloc")
@@ -212,6 +221,11 @@ impl Collector {
         ptr
     }
 
+    /// # safepoint_fast_unwind
+    ///
+    /// Safepoint, if it trigger a GC, it will use stack pointer to walk gc frames.
+    ///
+    /// For more information, see [mark_fast_unwind](Collector::mark_fast_unwind)
     pub fn safepoint_fast_unwind(&self, sp: *mut u8) {
         if GC_RUNNING.load(Ordering::Acquire)
             || (unsafe { self.thread_local_allocator.as_mut().unwrap().should_gc() })
@@ -227,6 +241,9 @@ impl Collector {
         }
     }
 
+    /// # alloc_no_collect
+    ///
+    /// Allocate a new object without possibility triggering a GC.
     pub fn alloc_no_collect(&self, size: usize, obj_type: ObjectType) -> *mut u8 {
         if size == 0 {
             return std::ptr::null_mut();
@@ -345,9 +362,6 @@ impl Collector {
             // println!("mark ptr succ {:p} -> {:p}", father, ptr);
             let block_p: *mut Block = Block::from_obj_ptr(ptr) as *mut _;
 
-            // if block.eva_alloced { // allocated for evacuation, skip marking
-            //     return;
-            // }
             let block = &mut *block_p;
             let is_candidate = block.is_eva_candidate();
             let mut head = block.get_head_ptr(ptr);
@@ -462,10 +476,6 @@ impl Collector {
     }
     /// precise mark a trait object
     unsafe extern "C" fn mark_trait(&self, ptr: *mut u8) {
-        // if !self.thread_local_allocator.as_mut().unwrap().in_heap(ptr)
-        //    &&!self.thread_local_allocator.as_mut().unwrap().in_big_heap(ptr) {
-        //     return;
-        // }
         // the trait is not init
         if ptr.is_null() {
             return;
@@ -501,6 +511,11 @@ impl Collector {
         }
     }
 
+    /// # mark
+    ///
+    /// mark using backtrace-rs
+    ///
+    /// for more information, see [mark_fast_unwind](Collector::mark_fast_unwind)
     pub fn mark(&self) {
         self.mark_fast_unwind(std::ptr::null_mut());
     }
@@ -520,10 +535,36 @@ impl Collector {
         }
     }
 
-    /// # mark
+    /// # mark_fast_unwind
+    ///
+    ///
     /// From gc roots, mark all reachable objects.
     ///
     /// this mark function is __precise__
+    ///
+    /// ## Parameters
+    ///
+    /// * `sp` - stack pointer
+    ///
+    /// if the stack pointer is null, then it will use backtrace-rs to walk
+    /// the stack.
+    ///
+    /// Stack walk using sp is lock-free and more precise(it only walks gc frames).
+    ///
+    /// ## Safety
+    ///
+    /// The fast version relies heavily on llvm generated stackmap, calling convention and
+    /// made some assumptions on the stack layout, which may not work on some
+    /// platforms. A known issue is it breaks on [linux x86_64][1] with
+    /// late machine code optimization enabled(in llvm 16).
+    ///
+    /// [1]:https://github.com/llvm/llvm-project/issues/75162
+    ///
+    /// The backtrace-rs version works on most platforms in aot mode, but it
+    /// failed on [macos aarch64 in jit mode][2], as there's a issue for llvm
+    /// to emit __eh_frame section.
+    ///
+    /// [2]:https://github.com/llvm/llvm-project/issues/49036
     pub fn mark_fast_unwind(&self, sp: *mut u8) {
         let mutex = STUCK_MUTEX.lock();
         GC_RUNNING.store(true, Ordering::Release);
@@ -649,6 +690,13 @@ impl Collector {
         }
     }
 
+    /// # mark_gc_frames
+    ///
+    /// mark gc frames
+    ///
+    /// ## Parameters
+    ///
+    /// * `frames` - gc frames, each frame is a tuple of (ip, sp)
     fn mark_gc_frames(&self, frames: Vec<(*mut libc::c_void, *mut libc::c_void)>) {
         frames.iter().for_each(|(ip, sp)| unsafe {
             let addr = *ip as *mut u8;
@@ -656,33 +704,7 @@ impl Collector {
             let map = STACK_MAP.map.as_ref().unwrap();
             let f = map.get(&const_addr);
             if let Some(f) = f {
-                // backtrace::resolve(*ip, |s| {
-                //     eprintln!(
-                //         "gc {}: {:?} ip: {:p}, address: {:p}, sp: {:p}, size {}",
-                //         self.id,
-                //         s.name(),
-                //         *ip,
-                //         const_addr,
-                //         *sp,
-                //         f.frame_size
-                //     );
-                // });
-                // eprintln!("gc {}: found fn in stackmap, f: {:?} sp: {:p}", self.id, f, sp);
-                // println!("found fn in stackmap, f: {:?} sp: {:p}", f,frame.sp());
                 f.iter_roots().for_each(|(offset, obj_type)| {
-                    // // println!("offset: {}", offset);
-                    // let sp = *sp as *mut u8;
-                    // let root = sp.offset(offset as isize);
-                    // if root.is_null() {
-                    //     return;
-                    // }
-                    // match obj_type {
-                    //     ObjectType::Atomic => panic!("stack root shall never be atomic"),
-                    //     ObjectType::Trait => self.mark_trait(*(root as *mut *mut u8)),
-                    //     ObjectType::Complex => self.mark_complex(*(root as *mut *mut u8)),
-                    //     ObjectType::Pointer => self.mark_ptr(root),
-                    // }
-                    // // self.mark_ptr(root);
                     self.mark_stack_offset(*sp as _, offset, obj_type)
                 });
             }
@@ -725,16 +747,44 @@ impl Collector {
         used
     }
 
+    /// # safepoint
+    ///
+    /// A safepoint is a point in the program where the garbage collector can
+    /// safely run.
+    ///
+    /// Safepoint, if it trigger a GC, it will use backtrace-rs to walk gc frames.
     pub fn safepoint(&self) {
         self.safepoint_fast_unwind(std::ptr::null_mut());
-    }
-    pub fn collect(&self) {
-        self.collect_fast_unwind(std::ptr::null_mut());
     }
 
     /// # collect
     ///
     /// Collect garbage.
+    ///
+    /// This default implementation is walk stack using backtrace-rs,
+    /// which is kind of slow but perfectly works on most of platforms. Backtrace-rs is
+    /// using a global mutex during stack walking, which may cause
+    /// performance issue.
+    ///
+    /// If you want to gain more performance, you can use its fast version
+    /// `collect_fast_unwind`, which requires you to pass the stack pointer,
+    /// and perform stack walking using frame size recorded in stackmap, which
+    /// is lock-free and more precise(it only walks gc frames).
+    pub fn collect(&self) {
+        self.collect_fast_unwind(std::ptr::null_mut());
+    }
+
+    /// # collect_fast_unwind
+    ///
+    /// Collect garbage, use stack pointer to walk gc frames.
+    ///
+    /// ## Parameters
+    ///
+    /// * `sp` - stack pointer
+    ///
+    /// if `sp` is null, then use backtrace-rs to walk stack
+    ///
+    /// for more information, see [mark_fast_unwind](Collector::mark_fast_unwind)
     pub fn collect_fast_unwind(&self, sp: *mut u8) {
         log::info!(
             "gc {} collecting... stucked: {}",
@@ -826,10 +876,23 @@ impl Collector {
                 .get_bigobjs_size()
         }
     }
+
+    /// # stuck
+    ///
+    /// tell the collector that the current thread is stucked.
     pub fn stuck(&mut self) {
         self.stuck_fast_unwind(std::ptr::null_mut());
     }
 
+    /// # stuck_fast_unwind
+    ///
+    /// tell the collector that the current thread is stucked.
+    ///
+    /// ## Parameters
+    ///
+    /// - `sp` - stack pointer
+    ///
+    /// for more information, see [mark_fast_unwind](Collector::mark_fast_unwind)
     pub fn stuck_fast_unwind(&mut self, sp: *mut u8) {
         log::trace!("gc {}: stucking...", self.id);
         let mut frames: Box<Vec<(*mut libc::c_void, *mut libc::c_void)>> = Box::default();

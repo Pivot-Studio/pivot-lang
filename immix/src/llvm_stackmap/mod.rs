@@ -10,29 +10,15 @@ const SAFE_POINT_ID: u64 = 2882400000;
 
 #[no_mangle]
 pub fn print_stack_map(mapptr: *const u8) {
-    // let format_version = get_format_version(mapptr);
-    // println!("format_version: {}", format_version);
-    // let num_functions = get_num_functions(mapptr);
-    // println!("num_functions: {}", num_functions);
     let mut map = FxHashMap::default();
     let mut global_roots = vec![];
     build_root_maps(mapptr, &mut map, &mut global_roots);
-    // for (addr, func) in map.iter() {
-    //     println!("addr: {:p}", *addr);
-    //     // println!("size: {}", func.root_size);
-    //     println!("roots: {:?}", func.roots);
-    //     println!("frame_size: {}", func.frame_size);
-    //     // println!("arg_num: {}", func.arg_num);
-    // }
-    // println!("global_roots: {:?}", global_roots);
+    for (addr, func) in map.iter() {
+        println!("addr: {:p}", *addr);
+        println!("roots: {:?}", func.roots);
+        println!("frame_size: {}", func.frame_size);
+    }
 }
-
-// pub(crate) fn get_format_version(mapptr: *const u8) -> i32 {
-//     unsafe {
-//         let ptr = mapptr as *const i32;
-//         *ptr
-//     }
-// }
 
 fn get_num_functions(mapptr: *const u8) -> i32 {
     unsafe {
@@ -148,7 +134,9 @@ struct LiveOuts {
     size: u8,
 }
 
-/// see https://llvm.org/docs/StackMaps.html#stack-map-format
+/// see <https://llvm.org/docs/StackMaps.html#stack-map-format>
+///
+/// ```ignore
 /// Header {
 ///   uint8  : Stack Map Version (current version is 3)
 ///   uint8  : Reserved (expected to be 0)
@@ -188,6 +176,7 @@ struct LiveOuts {
 ///   }
 ///   uint32 : Padding (only if required to align to 8 byte)
 /// }
+/// ```
 pub fn build_root_maps(
     mapptr: *const u8,
     roots: &mut FxHashMap<*const u8, Function>,
@@ -283,20 +272,6 @@ pub fn build_root_maps(
     }
 
     build_root_maps(start_ptr as _, roots, _global_roots);
-
-    // let num_functions = get_num_functions(mapptr);
-    // let mut ptr = get_first_function_addr(mapptr);
-    // for _ in 0..num_functions {
-    //     let (function, next_ptr) = Function::new(ptr);
-    //     function.safe_points.iter().for_each(|&safe_point| {
-    //         roots
-    //             .insert(safe_point, function.clone())
-    //             .and_then(|_| -> Option<()> { panic!("duplicate safe point: {:p}", safe_point) });
-    //     });
-    //     // roots.insert(function.addr, function);
-    //     ptr = next_ptr;
-    // }
-    // build_global_roots(ptr, global_roots);
 }
 
 fn build_global_roots(ptr: *const u8, global_roots: &mut Vec<*const u8>) {

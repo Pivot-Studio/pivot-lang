@@ -20,12 +20,6 @@ use std::path::Path;
 ///
 /// * `p` - module path
 /// * `opt` - optimization level
-///
-/// ## Limitation
-///
-/// * windows doesn't support jit with shadow stack yet
-/// * currently stackmap support on jit code is not possible, gc is using shadow stack
-/// * shadow stack is not thread safe, may cause crash in multi-threaded environment
 pub fn run(p: &Path, opt: OptimizationLevel) {
     vm::logger::SimpleLogger::init_from_env_default("PL_LOG", log::LevelFilter::Error);
     vm::reg();
@@ -35,8 +29,8 @@ pub fn run(p: &Path, opt: OptimizationLevel) {
     extern "C" {
         fn parse_ir(path: *const c_char) -> llvm_sys::prelude::LLVMMemoryBufferRef;
     }
+    // expected to be called by memory manager on stackmap section initialized
     extern "C" fn gc_init(map: *mut u8) {
-        eprintln!("gc init {:p}", map);
         immix::gc_init(map);
     }
     let re = if p.to_str().unwrap().ends_with(".ll") {
@@ -47,6 +41,8 @@ pub fn run(p: &Path, opt: OptimizationLevel) {
     } else {
         Module::parse_bitcode_from_path(p, ctx).unwrap()
     };
+    // remove all static link related global variables and gc init function
+    // because in jit gc init is done by memory manager
     re.get_global("llvm.global_ctors")
         .map(|v| unsafe { v.delete() });
     re.get_global("llvm.used").map(|v| unsafe { v.delete() });
