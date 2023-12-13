@@ -9,7 +9,7 @@ pub struct Jar(
     crate::lsp::mem_docs::MemDocsInput,
     crate::lsp::mem_docs::MemDocsInput_get_current_file_content,
     crate::lsp::mem_docs::MemDocsInput_get_file_content,
-    crate::lsp::mem_docs::MemDocsInput_get_file_params,
+    crate::lsp::mem_docs::MemDocsInput_finalize_parser_input,
     crate::lsp::mem_docs::EmitParams,
     crate::lsp::mem_docs::FileCompileInput,
     crate::lsp::mem_docs::FileCompileInput_get_file_content,
@@ -37,7 +37,7 @@ pub struct Jar(
     crate::ast::node::program::emit_file,
     crate::ast::node::program::LspParams,
     crate::ast::node::program::Program_is_active_file,
-    crate::utils::read_config::get_config,
+    crate::utils::read_config::prepare_build_envs,
     crate::utils::read_config::ConfigWrapper,
     crate::utils::read_config::ConfigWrapper_resolve_dep_path,
 );

@@ -10,7 +10,11 @@ use crate::{
     Db,
 };
 
-pub fn get_config_path(current: String) -> Result<String, &'static str> {
+static KAGARI_CONFIG_FILE: &str = "Kagari.toml";
+
+/// search_config_file search configuration file KAGARI_CONFIG_FILE recursively from current path and return the file path,
+/// if it isn't found in current path, search_config_file will search at its parent folder util there is no more parent.
+pub fn search_config_file(current: String) -> Result<String, &'static str> {
     log::trace!("get_config_path: {:?}", current);
     #[cfg(target_arch = "wasm32")] // TODO support std on wasm
     {
@@ -28,34 +32,28 @@ pub fn get_config_path(current: String) -> Result<String, &'static str> {
     if cur_path.is_file() && !cur_path.pop() {
         return Err("找不到配置文件～");
     }
-    let dir = cur_path.read_dir();
-    if dir.is_err() {
-        return Err("找不到配置文件～");
-    }
-    let dir = dir.unwrap();
-    for path in dir.flatten() {
-        if path.file_name().eq("Kagari.toml") {
-            if let Some(p) = cur_path.to_str() {
-                let res = p.to_string();
-                return Ok(res + "/Kagari.toml");
-            } else {
-                return Err("找不到配置文件～");
-            }
+
+    let iter = cur_path.read_dir().unwrap();
+    for f in iter.flatten() {
+        if f.file_name().eq(KAGARI_CONFIG_FILE) {
+            let p = f.path();
+            let kagari_file_path = p.to_str().unwrap();
+            return Ok(kagari_file_path.to_string());
         }
     }
+
     if !cur_path.pop() {
         return Err("找不到配置文件～");
     }
-    let mut next_path = String::new();
 
-    if let Some(p) = &cur_path.to_str() {
-        next_path.push_str(p);
+    if let Some(parent) = &cur_path.to_str() {
+        search_config_file(parent.to_string())
     } else {
-        return Err("找不到配置文件～");
+        Err("找不到配置文件～")
     }
-    get_config_path(next_path)
 }
 
+/// Config represents the values of a valid content of kagari.toml
 #[derive(Deserialize, Clone, Debug, PartialEq, Eq, Default, Hash)]
 pub struct Config {
     pub project: String,
@@ -116,7 +114,7 @@ pub struct GitInfo {
 }
 #[salsa::tracked]
 #[cfg(target_arch = "wasm32")]
-pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
+pub fn prepare_build_envs(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     let config = entry.text(db);
     let mut config_root = PathBuf::from(entry.path(db)); // xxx/Kagari.toml
     config_root.pop();
@@ -147,29 +145,32 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
     return Ok(config);
 }
 
+/// prepare_build_envs reads the kagari input, ensures the kagari data and resolves the specified dependencies.
 #[salsa::tracked]
 #[cfg(not(target_arch = "wasm32"))]
-pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
-    let config = entry.text(db);
-    let mut config_root = PathBuf::from(entry.path(db)); // xxx/Kagari.toml
+pub fn prepare_build_envs(db: &dyn Db, kagari_source: SourceProgram) -> Result<Config, String> {
+    let config = kagari_source.text(db);
+    let mut config_root = PathBuf::from(kagari_source.path(db));
     config_root.pop();
-    let re = toml::from_str(config);
-    if let Err(re) = re {
+
+    let re_kagari_config = toml::from_str(config);
+    if let Err(re) = re_kagari_config {
         return Err(format!("配置文件解析错误:{:?}", re));
     }
 
-    let mut config: Config = re.unwrap();
-    let libroot = env::var("KAGARI_LIB_ROOT");
-    if libroot.is_err() {
-        return Err("未设置环境变量KAGARI_LIB_ROOT，无法找到系统库".to_string());
+    let mut config: Config = re_kagari_config.unwrap();
+    let re_libroot = env::var("KAGARI_LIB_ROOT");
+    if re_libroot.is_err() {
+        return Err("未设置环境变量KAGARI_LIB_ROOT, 无法找到系统库".to_string());
     }
     let mut deps = BTreeMap::<String, Dependency>::default();
-    let libroot = crate::utils::canonicalize(PathBuf::from(libroot.unwrap())).unwrap();
+    let libroot = crate::utils::canonicalize(PathBuf::from(re_libroot.unwrap())).unwrap();
     let lib_path = libroot.clone();
     let libroot = libroot.read_dir();
     if libroot.is_err() {
-        return Err("KAGARI_LIB_ROOT没有指向合法的目录，无法找到系统库".to_string());
+        return Err("KAGARI_LIB_ROOT没有指向合法的目录, 无法找到系统库".to_string());
     }
+
     let libroot = libroot.unwrap();
     for path in libroot.flatten() {
         if path.path().is_dir() && !path.file_name().eq("thirdparty") {
@@ -193,17 +194,20 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
         &read_to_string(lockfile.clone()).unwrap_or_default(),
     )
     .unwrap_or_default();
+
     let mut sum_changed = false;
+
     if config.deps.is_none() {
         config.deps = Some(deps);
     } else {
         let mut rawdeps = config.deps.clone().unwrap();
         let pb = &COMPILE_PROGRESS;
-        if pb.length().is_none() {
-            pb.set_length(rawdeps.len() as u64);
-        } else {
-            pb.inc_length(rawdeps.len() as u64);
+
+        match pb.length() {
+            None => pb.set_length(rawdeps.len() as u64),
+            _ => pb.inc_length(rawdeps.len() as u64),
         }
+
         // pb.set_prefix(format!("[{:3}/{:3}]", pb.position(), pb.length().unwrap()));
         pb.set_message("正在分析依赖");
         rawdeps.iter_mut().for_each(|(k, v)| {
@@ -289,11 +293,13 @@ pub fn get_config(db: &dyn Db, entry: SourceProgram) -> Result<Config, String> {
                 });
             pb.inc(1);
         });
+
         if let Some(err) = err {
             return Err(err);
         }
         config.deps = Some(deps);
     }
+
     if sum_changed {
         toml::to_string_pretty(&sums)
             .map_err(|e| format!("error: {:?}", e))

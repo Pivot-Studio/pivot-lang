@@ -14,7 +14,7 @@ use crate::{
         range::Pos,
     },
     nomparser::SourceProgram,
-    utils::read_config::{get_config, get_config_path, Config},
+    utils::read_config::{prepare_build_envs, search_config_file, Config},
     Db,
 };
 
@@ -39,9 +39,13 @@ pub struct EmitParams {
 #[salsa::input]
 pub struct MemDocsInput {
     pub docs: Arc<Mutex<RefCell<MemDocs>>>,
+    /// file is the absolute path of the input file to be build,
+    /// currently we will build the whole project instead of this file only.
     #[return_ref]
     pub file: String,
     pub op: Options,
+
+    /// the following fields are used for lsp server to hold additional information
     pub action: ActionType,
     pub params: Option<(Pos, Option<String>)>,
     pub edit_pos: Option<Pos>,
@@ -50,6 +54,7 @@ pub struct MemDocsInput {
 /// 必须有#[id]，否则会导致lru cache失效
 #[salsa::tracked]
 pub struct FileCompileInput {
+    /// file represents the entry file path to parse
     #[return_ref]
     pub file: String,
     #[return_ref]
@@ -61,6 +66,7 @@ pub struct FileCompileInput {
 #[salsa::tracked]
 impl FileCompileInput {
     #[salsa::tracked]
+    // get_file_content gets the file content from cache or reads from file with the self.file
     pub fn get_file_content(self, db: &dyn Db) -> Option<SourceProgram> {
         // let f = self.file(db);
         // eprintln!("get_file_content {}", f);
@@ -71,11 +77,14 @@ impl FileCompileInput {
             .unwrap()
             .borrow_mut()
             .get_file_content(db, self.file(db));
-        if re.is_none() {
-            let f = self.file(db);
-            log::error!("lsp error: get_file_content failed {}", f);
+        match re {
+            None => {
+                let f = self.file(db);
+                log::error!("lsp error: get_file_content failed {}", f);
+                None
+            }
+            _ => re,
         }
-        re
     }
     #[salsa::tracked]
     pub fn get_emit_params(self, db: &dyn Db) -> EmitParams {
@@ -138,47 +147,69 @@ impl MemDocsInput {
             .get_file_content(db, &f);
         re
     }
+
+    /// finalize_parser_input prepares the building environments according to the kagari.toml,
+    /// and generates the parser entry file.
+    /// it applies the entry_file as the parser entry if override_with_kagari_entry is false,
+    /// otherwise the entry field in kagari.toml will be applied.
     #[salsa::tracked]
-    pub fn get_file_params(self, db: &dyn Db, f: String, entry: bool) -> Option<FileCompileInput> {
-        let f = crate::utils::canonicalize(f);
-        if f.is_err() {
-            log::debug!("lsp error: {}", f.err().unwrap());
+    pub fn finalize_parser_input(
+        self,
+        db: &dyn Db,
+        entry_file: String,
+        override_with_kagari_entry: bool,
+    ) -> Option<FileCompileInput> {
+        let mut final_entry_file: String;
+        let re_entry_file = crate::utils::canonicalize(entry_file);
+        match re_entry_file {
+            Err(e) => {
+                log::debug!("lsp error: {}", e);
+                return None;
+            }
+            Ok(f) => {
+                final_entry_file = f.to_string_lossy().to_string();
+            }
+        }
+
+        let re_kagari_path = search_config_file(final_entry_file.clone());
+        if re_kagari_path.is_err() {
+            log::debug!("lsp error: {}", re_kagari_path.err().unwrap());
             return None;
         }
-        let mut file = f.unwrap().to_string_lossy().to_string();
-        let path = get_config_path(file.clone());
-        if path.is_err() {
-            log::debug!("lsp error: {}", path.err().unwrap());
-            return None;
-        }
-        let path = path.unwrap();
-        let buf = crate::utils::canonicalize(PathBuf::from(path.clone())).unwrap();
-        let parant = buf.parent().unwrap();
-        let re = get_config(
+
+        let kagari_path = re_kagari_path.unwrap();
+        let re_config = prepare_build_envs(
             db,
             self.docs(db)
                 .lock()
                 .unwrap()
                 .borrow_mut()
-                .get_file_content(db, &path)
+                .get_file_content(db, &kagari_path)
                 .unwrap(),
         );
-        if re.is_err() {
-            log::debug!("lsp error: {}", re.err().unwrap());
-            return None;
+
+        match re_config {
+            Err(info) => {
+                log::debug!("lsp error: {}", info);
+                None
+            }
+            Ok(config) => {
+                // use entry path inside kagari.toml instead of the input file
+                if override_with_kagari_entry {
+                    final_entry_file = config.entry.clone();
+                }
+                let buf = crate::utils::canonicalize(PathBuf::from(kagari_path.clone())).unwrap();
+                let parant = buf.parent().unwrap();
+                Some(FileCompileInput::new(
+                    db,
+                    final_entry_file,
+                    parant.to_str().unwrap().to_string(),
+                    self,
+                    config,
+                    self.op(db).optimization,
+                ))
+            }
         }
-        let config = re.unwrap();
-        if entry {
-            file = config.entry.clone();
-        }
-        Some(FileCompileInput::new(
-            db,
-            file,
-            parant.to_str().unwrap().to_string(),
-            self,
-            config,
-            self.op(db).optimization,
-        ))
     }
 }
 

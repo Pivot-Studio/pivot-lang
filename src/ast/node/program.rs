@@ -257,7 +257,7 @@ impl Program {
             let p = self.config(db).project;
             log::trace!("load dep {:?} for {:?} (project {:?})", path, pkgname, p);
             let ff = path.to_str().unwrap().to_string();
-            let mut f = self.docs(db).get_file_params(db, ff.clone(), false);
+            let mut f = self.docs(db).finalize_parser_input(db, ff.clone(), false);
             let mut symbol_opt = None;
             #[cfg(target_arch = "wasm32")]
             if ff.starts_with("core") || ff.starts_with("std") {
@@ -270,7 +270,7 @@ impl Program {
                 if let Some(p) = path.parent() {
                     mod_id = Some(p.file_name().unwrap().to_str().unwrap().to_string());
                     let file = p.with_extension("pi").to_str().unwrap().to_string();
-                    f = self.docs(db).get_file_params(db, file, false);
+                    f = self.docs(db).finalize_parser_input(db, file, false);
                     symbol_opt = Some(
                         path.with_extension("")
                             .file_name()

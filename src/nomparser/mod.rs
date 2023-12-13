@@ -81,6 +81,7 @@ pub enum ComplexOp {
     Field(Option<Box<VarNode>>),
 }
 
+/// SourceProgram represents a single file with its contents and the absulate path
 #[salsa::input]
 pub struct SourceProgram {
     #[return_ref]
@@ -94,12 +95,12 @@ pub struct SourceProgram {
 pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, String> {
     let text = source.text(db);
     let re = program(Span::new_extra(text, false));
-    if let Err(e) = re {
-        return Err(format!("{:?}", e));
+    match re {
+        Err(e) => Err(format!("{:?}", e)),
+        Ok((_, node)) => {
+            log::info!("parse {:?}", source.path(db));
+            Ok(ProgramNodeWrapper::new(db, node))
+        }
     }
-    let (_, node) = re.unwrap();
-    log::info!("parse {:?}", source.path(db));
-
-    Ok(ProgramNodeWrapper::new(db, node))
 }
 // ANCHOR_END: parse
