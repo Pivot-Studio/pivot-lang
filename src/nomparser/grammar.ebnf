@@ -1,0 +1,38 @@
+
+newline = "\r\n" | "\n" | "\r" ; (*CRLF for windows, LF for unix and macos X, CR for Mac up through version 9*)
+letter = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N" 
+        | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z" 
+        | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" 
+        | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z";
+
+digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+
+characters = "!" | "@" | "#" | "$" | "%" | "^" | "&" | "*" | "(" | ")" | "-" | "_" | "=" 
+        | "+" | "[" | "]" | "{" | "}" | ";" | ":" | "'" | "\"" | "," | "." | "<" | ">" 
+        | "/" | "?" | "\\" | "|" | "`" | "~" | " ";
+
+space = " " | "\t"
+
+Comment = { ( "///" | "//" ) { letter | digit | characters } newline };
+
+(*------------------ identifier.rs ----------------------*)
+Identifier = (letter | "$" | "_" ) { letter | digit | "_"};
+
+ExternalIdentifier = Identifier { "::" Identifier };
+
+(* todo: typed identifier *)
+
+(*------------------ types.rs ----------------------*)
+
+(*todo: BasicType EBNF is different from the implementation*)
+TypeName = { "*" } ( BasicType | ArrayType | ClosureType | TupleType ) ;
+BasicType = ExternalIdentifier GenericParamDef?;
+ArrayType = "[" TypeName "]";
+GenericTypeDef = "<" { "|" Identifier ( ":" MultiTrait )? } ">";
+GenericParamDef = "<" TypeName { "|" TypeName } ">";
+(*todo: support FunctionDef in the future*)
+TraitDef = "pub"? "trait" Identifier GenericTypeDef? ( ":" TypeAdd )? "{" {FunctionDef} "}";
+TypeAdd = TypeName { "+" TypeName };
+MultiTrait = TypeAdd;
+TupleType = "(" (TypeName { "," TypeName })? ")";
+ClosureType = "|" TypeName {"," TypeName} "|=>" TypeName;
