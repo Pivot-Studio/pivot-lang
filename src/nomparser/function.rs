@@ -17,6 +17,15 @@ use super::*;
 /// function_def = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name (statement_block | newline) ;
 /// ```
 #[test_parser(
+    "
+    /// this is a comment
+    gen pub fn f(  x: int, y  : int  ) int {
+        x = x+1;
+        return 0;
+    }
+    "
+)]
+#[test_parser(
     "gen pub fn f(  x: int, y  : int  ) int {
         x = x+1;
         return 0;
