@@ -1,8 +1,5 @@
 #![allow(dead_code)]
-use int_enum::IntEnum;
-use rustc_hash::FxHashMap;
-
-use crate::ObjectType;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::marker::PhantomData;
 
 const SAFE_POINT_ID: u64 = 2882400000;
@@ -20,58 +17,20 @@ pub fn print_stack_map(mapptr: *const u8) {
     }
 }
 
-fn get_num_functions(mapptr: *const u8) -> i32 {
-    unsafe {
-        let ptr = mapptr as *const i32;
-        *ptr.offset(2)
-    }
-}
-
-fn get_first_function_addr(mapptr: *const u8) -> *const u8 {
-    unsafe {
-        let ptr = mapptr as *const u8;
-        ptr.offset(16)
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Function {
     // pub addr: *const u8,
     // pub offset:u32,
     // pub root_size: i32,
-    pub roots: Vec<(i32, ObjectType)>, // offset / wordsize
+    pub roots: Vec<i32>, // offset / wordsize
     pub frame_size: i32,
-    // pub arg_num: i32,
+    pub call_conv: i32,
     // pub safe_points: Rc<Vec<*const u8>>,
 }
 
 impl Function {
-    pub fn iter_roots(&self) -> impl Iterator<Item = (i32, ObjectType)> + '_ {
+    pub fn iter_roots(&self) -> impl Iterator<Item = i32> + '_ {
         self.roots.iter().copied()
-    }
-}
-
-fn get_function_meta(ptr: *const u8) -> (i32, i32, i32) {
-    unsafe {
-        let ptr = ptr as *const i32;
-        (*ptr.offset(2), *ptr.offset(3), *ptr.offset(4))
-    }
-}
-
-fn get_function_roots(ptr: *const u8, num: i32) -> (Vec<(i32, ObjectType)>, *const u8) {
-    unsafe {
-        let mut ptr = ptr as *const i32;
-        let mut roots = Vec::new();
-        for _ in 0..num as isize {
-            // println!("root: {} {:p}", *ptr,ptr);
-            // println!("type: {} {:p}", *ptr.offset(1),ptr.offset(1));
-            roots.push((
-                *ptr,
-                ObjectType::from_int((*ptr.offset(1)).try_into().unwrap()).unwrap(),
-            ));
-            ptr = ptr.offset(2);
-        }
-        (roots, ptr as *const _)
     }
 }
 
@@ -227,10 +186,22 @@ pub fn build_root_maps(
             //     }
             // }
             if record.patch_point_id == SAFE_POINT_ID {
-                let mut fn_roots: Vec<(i32, ObjectType)> = vec![];
-                for loc in locations_slice {
+                let mut fn_roots = FxHashSet::<i32>::default();
+                let mut cc = 0;
+                for (i, loc) in locations_slice.iter().enumerate() {
+                    // see <https://www.llvm.org/docs/Statepoints.html#stack-map-format>
+                    // the first location is call convention
+                    // the second location is flag (should be zero)
+                    // the third location is number of following deopt Locations (should be zero)
+                    if i == 0 {
+                        cc = loc.offset_or_small_const;
+                    }
+                    if i < 3 {
+                        continue;
+                    }
+                    // we don't care about if pointer is derived pointer or base pointer
                     if loc.tp == 3 {
-                        fn_roots.push((loc.offset_or_small_const, ObjectType::Pointer));
+                        fn_roots.insert(loc.offset_or_small_const);
                     } else if loc.tp == 2 || loc.tp == 1 {
                         panic!("tp = {}", loc.tp);
                     }
@@ -238,8 +209,9 @@ pub fn build_root_maps(
                 roots.insert(
                     unsafe { (f.addr as *const u8).add(record.instruction_offset as usize) },
                     Function {
-                        roots: fn_roots,
+                        roots: fn_roots.iter().copied().collect(),
                         frame_size: f.stack_size as i32,
+                        call_conv: cc,
                         // offset: record.instruction_offset,
                         // addr:f.addr as _,
                     },
@@ -293,11 +265,11 @@ fn align_up_to(n: usize, align: usize) -> usize {
 #[cfg(feature = "llvm_gc_plugin")]
 extern "C" {
     fn LLVMLinkPLImmixGC();
-    pub fn CreatePLJITEngine(
+    pub fn CreateAndRunPLJITEngine(
         module: *mut u8,
         opt: u32,
         cb: unsafe extern "C" fn(map: *mut u8),
-    ) -> *mut libc::c_void;
+    ) -> i32;
     /// # run_module_pass
     ///
     /// run the module pass

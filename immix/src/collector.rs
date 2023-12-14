@@ -32,8 +32,8 @@ fn walk_gc_frames(sp: *mut u8, mut walker: impl FnMut(*mut u8, i32, ObjectType))
         let ip = get_ip_from_sp(sp);
         let frame = unsafe { STACK_MAP.map.as_ref().unwrap().get(&ip.cast_const()) };
         if let Some(frame) = frame {
-            for (o, tp) in frame.iter_roots() {
-                walker(sp, o, tp);
+            for o in frame.iter_roots() {
+                walker(sp, o, ObjectType::Pointer);
             }
 
             sp = unsafe {
@@ -202,6 +202,9 @@ impl Collector {
     pub fn alloc_fast_unwind(&self, size: usize, obj_type: ObjectType, sp: *mut u8) -> *mut u8 {
         if !self.frames_list.load(Ordering::SeqCst).is_null() {
             panic!("gc stucked, can not alloc")
+        }
+        if size == 0 {
+            panic!("alloc size can not be zero");
         }
         if gc_is_auto_collect_enabled() {
             self.safepoint_fast_unwind(sp);
@@ -704,8 +707,8 @@ impl Collector {
             let map = STACK_MAP.map.as_ref().unwrap();
             let f = map.get(&const_addr);
             if let Some(f) = f {
-                f.iter_roots().for_each(|(offset, obj_type)| {
-                    self.mark_stack_offset(*sp as _, offset, obj_type)
+                f.iter_roots().for_each(|offset| {
+                    self.mark_stack_offset(*sp as _, offset, ObjectType::Pointer)
                 });
             }
         });

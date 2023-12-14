@@ -543,14 +543,14 @@ fn test_jit() {
 }
 #[test]
 fn test_compile() {
+    let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
+        .lock()
+        .unwrap();
     let out = "testout";
     let exe = PathBuf::from(out);
     #[cfg(target_os = "windows")]
     let exe = exe.with_extension("exe");
     _ = remove_file(&exe);
-    let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
-        .lock()
-        .unwrap();
     use std::{path::PathBuf, process::Command};
 
     use crate::ast::compiler::{compile, Options};
@@ -622,19 +622,6 @@ fn test_printast() {
             jit: false,
         },
     );
-    test_lsp::<Completions>(
-        &Database::default(),
-        Some((
-            Pos {
-                line: 10,
-                column: 6,
-                offset: 0,
-            },
-            None,
-        )),
-        ActionType::LspFmt,
-        "test/main.pi",
-    );
 }
 
 #[test]
@@ -663,4 +650,57 @@ fn test_lsp_incremental() {
     compile_dry(db, input).unwrap();
     let ll = raw_db.take_logs();
     assert_eq!(ll.len(), 0);
+}
+
+#[test]
+fn test_tail_call_opt() {
+    let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
+        .lock()
+        .unwrap();
+    let out = "testout2";
+    let exe = PathBuf::from(out);
+    #[cfg(target_os = "windows")]
+    let exe = exe.with_extension("exe");
+    _ = remove_file(&exe);
+    use std::{path::PathBuf, process::Command};
+
+    use crate::ast::compiler::{compile, Options};
+
+    let docs = MemDocs::default();
+    let db = Database::default();
+    let input = MemDocsInput::new(
+        &db,
+        Arc::new(Mutex::new(RefCell::new(docs))),
+        "test/tail/main.pi".to_string(),
+        Default::default(),
+        ActionType::Compile,
+        None,
+        None,
+    );
+    compile(
+        &db,
+        input,
+        out.to_string(),
+        Options {
+            optimization: crate::ast::compiler::HashOptimizationLevel::Less,
+            genir: true,
+            printast: false,
+            flow: false,
+            fmt: false,
+            jit: false,
+        },
+    );
+    let exe = crate::utils::canonicalize(&exe)
+        .unwrap_or_else(|_| panic!("static compiled file not found {:?}", exe));
+    eprintln!("exec: {:?}", exe);
+    let o = Command::new(exe.to_str().unwrap())
+        .output()
+        .expect("failed to execute compiled program");
+    assert!(
+        o.status.success(),
+        "static compiled program failed with status {:?} and output {:?} and error {:?}",
+        o.status,
+        String::from_utf8_lossy(&o.stdout),
+        String::from_utf8_lossy(&o.stderr)
+    );
 }

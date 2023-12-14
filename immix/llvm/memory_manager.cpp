@@ -86,7 +86,7 @@ static void roundTripDestroy(void *object)
 
 extern "C"
 {
-  LLVMExecutionEngineRef * CreatePLJITEngine( LLVMModuleRef module, unsigned int opt, stackmap_cb cb)
+  int CreateAndRunPLJITEngine( LLVMModuleRef module, unsigned int opt, stackmap_cb cb)
   {
     LLVMExecutionEngineRef *jit = new LLVMExecutionEngineRef();
     finalize_cb = cb;
@@ -112,6 +112,11 @@ extern "C"
       printf("%s\n", Error);
       exit(1945);
     }
-    return jit;
+    auto f = LLVMGetFunctionAddress(*jit, "main");
+    auto m = (mainf)f;
+    auto ret = m();
+    LLVMDisposeExecutionEngine(*jit);
+    delete jit;
+    return ret;
   }
 }

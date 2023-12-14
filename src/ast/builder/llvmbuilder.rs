@@ -64,6 +64,8 @@ const DW_ATE_SIGNED: u32 = 0x05;
 const DW_ATE_UNSIGNED: u32 = 0x07;
 // pub const DW_TAG_union_type: u32 = 0x17;
 static ID: AtomicI64 = AtomicI64::new(0);
+
+const CALL_CONV: u32 = 0;
 // const DW_TAG_REFERENCE_TYPE: u32 = 16;
 fn get_dw_ate_encoding(pritp: &PriType) -> u32 {
     match pritp {
@@ -1554,8 +1556,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 Linkage::Private
             };
         let f = self.module.add_function(&llvmname, fn_type, Some(linkage));
-
-        f.set_call_conventions(0);
+        if !pltp.is_declare {
+            f.set_call_conventions(CALL_CONV);
+        }
         (f, false)
     }
     fn get_fields(&self, pltp: &STType, ctx: &mut Ctx<'a>) -> Vec<BasicTypeEnum> {
@@ -1628,6 +1631,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if self.module.get_name().to_str().unwrap().contains("global") {
             self.module.strip_debug_info();
         }
+        self.module.strip_debug_info();
         // self.module.strip_debug_info(); // FIXME
         self.module.verify().unwrap();
         let used = self.used.borrow();
@@ -1900,7 +1904,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             Some(r) => r.ptr_type(AddressSpace::from(1)).fn_type(&tys, false),
             None => self.context.void_type().fn_type(&tys, false),
         });
+        let cc;
         if let Some(ff) = fv {
+            cc = ff.get_call_conventions();
             let name = ff.get_name().to_str().unwrap();
             if STUCK_FNS.contains(&name) {
                 // it is a stuck function, we need to add stuck fn before it
@@ -1908,12 +1914,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 let sp = self.get_sp();
                 self.builder.build_call(f, &[sp.into()], "").unwrap();
             }
+        } else {
+            cc = CALL_CONV;
         }
-
-        let v = builder
+        let c = builder
             .build_indirect_call(fntp, f, &args, "calltmp")
-            .unwrap()
-            .try_as_basic_value();
+            .unwrap();
+        c.set_call_convention(cc);
+        let v = c.try_as_basic_value();
         if let Some(ff) = fv {
             let name = ff.get_name().to_str().unwrap();
             if STUCK_FNS.contains(&name) {
@@ -1957,6 +1965,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let fn_value = self
             .module
             .add_function(name, fn_type, Some(Linkage::External));
+        fn_value.set_call_conventions(CALL_CONV);
         self.get_llvm_value_handle(&fn_value.as_any_value_enum())
     }
     fn opaque_struct_type(&self, name: &str) {
@@ -2973,6 +2982,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .module
             .add_function(&format!("{}__fn", closure_name), f_tp, None);
 
+        f_v.set_call_conventions(CALL_CONV);
         self.get_llvm_value_handle(&f_v.into())
     }
     /// # get_closure_trampoline
@@ -3006,6 +3016,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let f = self
             .module
             .add_function(&trampoline_name, closure_ftp, None);
+        f.set_call_conventions(CALL_CONV);
         let bb = self.context.append_basic_block(f, "entry");
         let old_bb = self.builder.get_insert_block();
         self.builder.position_at_end(bb);
@@ -3022,6 +3033,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 "re",
             )
             .unwrap();
+        re.set_call_convention(ori_f.get_call_conventions());
         if let Some(ret) = re.try_as_basic_value().left() {
             self.builder.build_return(Some(&ret)).unwrap();
         } else {
@@ -3065,6 +3077,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let f = self
             .module
             .add_function(&format!("{}__yield", ctx_name), ftp, None);
+        f.set_call_conventions(CALL_CONV);
         self.get_llvm_value_handle(&f.into())
     }
 

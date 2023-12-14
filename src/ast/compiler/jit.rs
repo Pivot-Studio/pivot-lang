@@ -1,13 +1,10 @@
-use inkwell::execution_engine::ExecutionEngine;
 use inkwell::targets::InitializationConfig;
 use inkwell::{memory_buffer::MemoryBuffer, module::Module};
 
 use inkwell::context::Context;
 
-use llvm_sys::execution_engine::LLVMExecutionEngineRef;
 use log;
 use std::ffi::{c_char, CString};
-use std::rc::Rc;
 
 use inkwell::support;
 
@@ -57,13 +54,8 @@ pub fn run(p: &Path, opt: OptimizationLevel) -> i32 {
         .map(|v| unsafe { v.delete() });
     inkwell::targets::Target::initialize_native(&InitializationConfig::default()).unwrap();
     unsafe {
-        let jit = immix::CreatePLJITEngine(re.as_mut_ptr() as _, opt as u32, gc_init);
-        let engine = ExecutionEngine::new(Rc::new(*(jit as *mut LLVMExecutionEngineRef)), true);
-        let r = re
-            .get_function("main")
-            .map(|f| engine.run_function_as_main(f, &[]))
-            .expect("cannot find main");
+        let ret = immix::CreateAndRunPLJITEngine(re.as_mut_ptr() as _, opt as u32, gc_init);
         std::mem::forget(re);
-        r
+        ret
     }
 }

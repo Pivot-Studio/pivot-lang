@@ -113,6 +113,10 @@ impl Node for RetNode {
                 )?;
                 ctx.try_load2var(self.range, value, builder, &ret_pltype.borrow())?
             } else {
+                if builder.is_ptr(v.get_value()) {
+                    builder.build_return(Some(v.get_value()));
+                    return NodeOutput::new_term(TerminatorEnum::Return).to_result();
+                }
                 ctx.try_load2var(self.range, v.get_value(), builder, &v.get_ty().borrow())?
             };
             if ctx.return_block.unwrap().1.is_none() {
