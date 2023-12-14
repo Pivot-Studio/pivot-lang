@@ -12,6 +12,7 @@
 #include "llvm-c/BitWriter.h"
 #include "llvm-c/Transforms/PassBuilder.h"
 #include "llvm/Transforms/Scalar/RewriteStatepointsForGC.h"
+#include "llvm/Transforms/Utils/StripGCRelocates.h"
 
 using namespace llvm;
 
@@ -118,6 +119,8 @@ extern "C" void run_module_pass(LLVMModuleRef  M, int opt) {
     
     MPM.addPass(ImmixPass());
     MPM.addPass(RewriteStatepointsForGC());
+    // MPM.addPass(createModuleToFunctionPassAdaptor(StripGCRelocates()));
+    
 
     // Optimize the IR!
     MPM.run(*unwrap(M), MAM);

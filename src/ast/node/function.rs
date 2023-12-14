@@ -569,6 +569,7 @@ impl FuncDefNode {
         builder: &'b BuilderEnum<'a, '_>,
         fnvalue: FNValue,
     ) -> Result<(), PLDiag> {
+        builder.rm_curr_debug_location();
         let re = ctx.run_as_root_ctx(|ctx| {
             let mut builder = builder;
             let noop = BuilderEnum::NoOp(NoOpBuilder::default());

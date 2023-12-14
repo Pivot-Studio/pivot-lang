@@ -57,7 +57,7 @@ namespace
       {
         isMain = true;
       }
-      if (!FV->getName().ends_with("visitorf@"))
+      if (!FV->getName().ends_with("visitorf@") && !FV->getName().starts_with("llvm"))
       {
         FV->setGC("statepoint-example");
       }

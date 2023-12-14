@@ -335,16 +335,15 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 .unwrap();
             self.builder.build_store(vtable, i).unwrap();
         }
-        if let Some(p) = declare {
-            self.build_dbg_location(p);
-            // TODO
-            // self.insert_var_declare(
-            //     name,
-            //     p,
-            //     &PLType::Pointer(Arc::new(RefCell::new(pltype.clone()))),
-            //     self.get_llvm_value_handle(&stack_root.as_any_value_enum()),
-            //     ctx,
-            // );
+        if let Some(pos) = declare {
+            self.build_dbg_location(pos);
+            self.insert_var_declare(
+                name,
+                pos,
+                pltype,
+                self.get_llvm_value_handle(&p.as_any_value_enum()),
+                ctx,
+            );
         }
         let v_heap = self.get_llvm_value_handle(&p.as_any_value_enum());
         v_heap
@@ -1628,12 +1627,17 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if *self.optimized.borrow() {
             return;
         }
-        if self.module.get_name().to_str().unwrap().contains("global") {
-            self.module.strip_debug_info();
-        }
-        self.module.strip_debug_info();
+        // if self.module.get_name().to_str().unwrap().contains("global") {
+        //     self.module.strip_debug_info();
+        // }
+        // self.module.strip_debug_info();
         // self.module.strip_debug_info(); // FIXME
-        self.module.verify().unwrap();
+        self.module.verify().unwrap_or_else(|_| {
+            panic!(
+                "module {} is not valid",
+                self.module.get_name().to_str().unwrap()
+            )
+        });
         let used = self.used.borrow();
         let used_arr = self.i8ptr().ptr_type(AddressSpace::from(0)).const_array(
             &used
@@ -2134,8 +2138,16 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         global.unwrap()
     }
     fn build_dbg_location(&self, pos: Pos) {
-        if pos.line as u32 > 1000 {
-            eprintln!("line number too large: {}", pos.line);
+        if self
+            .builder
+            .get_insert_block()
+            .unwrap()
+            .get_parent()
+            .unwrap()
+            .get_subprogram()
+            .is_none()
+        {
+            return;
         }
         let loc = self.dibuilder.create_debug_location(
             self.context,
@@ -2231,7 +2243,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         // if let Err(s) = self.module.print_to_file(file) {
         //     return Err(s.to_string());
         // }
-        self.optimize();
+        // self.optimize();
         // self.module.strip_debug_info();
         if let Err(s) = self.module.print_to_file(file) {
             return Err(s.to_string());
@@ -2429,8 +2441,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         if f.get_subprogram().is_some() {
             self.discope
                 .set(f.get_subprogram().unwrap().as_debug_info_scope());
+            self.build_dbg_location(pos)
         }
-        self.build_dbg_location(pos)
     }
     fn set_di_file(&self, f: &str) {
         let f = PathBuf::from(f);
@@ -2619,18 +2631,17 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         allocab: BlockHandle,
         tp: &PLType,
     ) {
-        let _divar = self.dibuilder.create_parameter_variable(
+        let divar = self.dibuilder.create_parameter_variable(
             self.discope.get(),
             &fnvalue.param_names[i],
             i as u32,
             self.get_cur_di_file(),
             pos.line as u32,
             self.get_ditype(
-                &PLType::Pointer(
-                    fnvalue.fntype.param_pltypes[i]
-                        .get_type(child, &self.clone().into(), true)
-                        .unwrap(),
-                ),
+                &fnvalue.fntype.param_pltypes[i]
+                    .get_type(child, &self.clone().into(), true)
+                    .unwrap()
+                    .borrow(),
                 child,
             )
             .unwrap(),
@@ -2638,14 +2649,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             DIFlags::PUBLIC,
         );
         self.build_dbg_location(pos);
-        // TODO
-        // self.dibuilder.insert_declare_at_end(
-        //     self.get_llvm_value(stack_ptr).unwrap().into_pointer_value(),
-        //     Some(divar),
-        //     None,
-        //     self.builder.get_current_debug_location().unwrap(),
-        //     self.get_llvm_block(allocab).unwrap(),
-        // );
+
+        self.dibuilder.insert_declare_at_end(
+            self.get_llvm_value(alloca).unwrap().into_pointer_value(),
+            Some(divar),
+            None,
+            self.builder.get_current_debug_location().unwrap(),
+            self.builder.get_insert_block().unwrap(),
+        );
 
         if child.ctx_flag == CtxFlag::InGeneratorYield {
             let data = child.generator_data.as_ref().unwrap().clone();
