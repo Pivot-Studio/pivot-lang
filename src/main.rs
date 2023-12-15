@@ -112,6 +112,9 @@ struct Cli {
     #[arg(long, default_value = "false")]
     quiet: bool,
 
+    #[arg(long, default_value = "false")]
+    debug: bool,
+
     /// print ast
     #[arg(long)]
     printast: bool,
@@ -128,13 +131,13 @@ struct Cli {
     #[arg(long)]
     jit: bool,
 
-    /// optimization level, 0-3
-    #[arg(short = 'O', value_parser, default_value = "0")]
-    optimization: u64,
-
     /// print source fmt
     #[command(subcommand)]
     command: Option<RunCommand>,
+
+    /// optimization level, 0-3
+    #[arg(short = 'O', value_parser, default_value = "0")]
+    optimization: u64,
 
     #[clap(skip)]
     logger: stderrlog::StdErrLog,
@@ -160,6 +163,7 @@ impl Cli {
             fmt: false,
             optimization: convert(self.optimization),
             jit: self.jit,
+            debug: self.debug,
         };
 
         let action = if self.flow {
@@ -238,6 +242,7 @@ impl Cli {
             fmt: true,
             optimization: convert(self.optimization),
             jit: self.jit,
+            debug: self.debug,
         };
 
         let action = if self.flow {

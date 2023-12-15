@@ -112,8 +112,8 @@ mod _immix {
             immix::get_gc_stw_num() as _
         }
 
-        pub fn set_eva(eva: bool) {
-            immix::set_evacuation(eva);
+        pub fn set_eva(eva: i32) {
+            immix::set_evacuation(eva == 1);
         }
 
         pub fn safepoint(sp: *mut u8) {

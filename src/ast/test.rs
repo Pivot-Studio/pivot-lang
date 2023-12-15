@@ -531,6 +531,7 @@ fn test_jit() {
             flow: false,
             fmt: false,
             jit: true,
+            debug: false,
         },
     );
     assert!(
@@ -578,6 +579,7 @@ fn test_compile() {
             flow: false,
             fmt: false,
             jit: false,
+            debug: false,
         },
     );
     let exe = crate::utils::canonicalize(&exe)
@@ -622,6 +624,7 @@ fn test_printast() {
             flow: false,
             fmt: false,
             jit: false,
+            debug: false,
         },
     );
 }
@@ -690,6 +693,7 @@ fn test_tail_call_opt() {
             flow: false,
             fmt: false,
             jit: false,
+            debug: false,
         },
     );
     let exe = crate::utils::canonicalize(&exe)

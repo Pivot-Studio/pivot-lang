@@ -148,6 +148,7 @@ pub struct LLVMBuilder<'a, 'ctx> {
     used: Arc<RefCell<Vec<FunctionValue<'ctx>>>>,
     difile: Cell<DIFile<'ctx>>,
     optlevel: OptimizationLevel,
+    debug: bool,
 }
 
 pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
@@ -180,6 +181,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
 
         self.get_llvm_value_handle(&ptr.as_any_value_enum())
     }
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         context: &'ctx Context,
         module: &'a Module<'ctx>,
@@ -188,6 +190,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         diunit: &'a DICompileUnit<'ctx>,
         tm: &'a TargetMachine,
         opt: OptimizationLevel,
+        debug: bool,
     ) -> Self {
         module.set_triple(&TargetMachine::get_default_triple());
         Self {
@@ -208,6 +211,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             used: Default::default(),
             difile: Cell::new(diunit.get_file()),
             optlevel: opt,
+            debug,
         }
     }
     fn alloc_with_f(
@@ -1668,9 +1672,33 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             used_global.set_linkage(Linkage::Appending);
             used_global.set_initializer(&used_arr);
         }
+        if self.debug {
+            // disable gc evacuation
+            self.module
+                .get_function("main")
+                .and_then(FunctionValue::get_first_basic_block)
+                .map(|bb| {
+                    self.builder
+                        .position_before(&bb.get_first_instruction().unwrap());
+                    let f = self.module.add_function(
+                        "DioGC__set_eva",
+                        self.context
+                            .void_type()
+                            .fn_type(&[self.context.i32_type().into()], false),
+                        None,
+                    );
+                    self.builder
+                        .build_call(f, &[self.context.i32_type().const_int(0, false).into()], "")
+                        .unwrap();
+                });
+        }
 
         unsafe {
-            immix::run_module_pass(self.module.as_mut_ptr() as _, self.optlevel as i32);
+            immix::run_module_pass(
+                self.module.as_mut_ptr() as _,
+                self.optlevel as i32,
+                self.debug as i32,
+            );
         }
         *self.optimized.borrow_mut() = true;
     }

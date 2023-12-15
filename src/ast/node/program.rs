@@ -350,6 +350,7 @@ impl Program {
             UnsafeWrapper::new(global_macro_map),
             self.is_active_file(db),
             self.opt(db),
+            self.docs(db).op(db).debug,
         );
 
         let nn = p.node(db).node(db);
@@ -550,8 +551,16 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
             unreachable!("llvm feature is not enabled");
             #[cfg(feature = "llvm")]
             {
-                let builder =
-                    LLVMBuilder::new(context, &a, &b, &c, &d, &e, params.opt(db).to_llvm());
+                let builder = LLVMBuilder::new(
+                    context,
+                    &a,
+                    &b,
+                    &c,
+                    &d,
+                    &e,
+                    params.opt(db).to_llvm(),
+                    params.debug(db),
+                );
                 builder.into()
             }
         }

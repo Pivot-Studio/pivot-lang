@@ -12,9 +12,7 @@
 #include "llvm-c/BitWriter.h"
 #include "llvm-c/Transforms/PassBuilder.h"
 #include "llvm/Transforms/Scalar/RewriteStatepointsForGC.h"
-#include "llvm/Transforms/Utils/StripGCRelocates.h"
-
-using namespace llvm;
+#include "stripRelocationPass.cpp"
 
 namespace
 {
@@ -68,7 +66,7 @@ extern "C" void add_module_pass(llvm::legacy::PassManagerBase *PB) {
     The new LLVM Pass Manager does not have official C bindings yet.
     So we have to write one ourselves.
 */
-extern "C" void run_module_pass(LLVMModuleRef  M, int opt) {
+extern "C" void run_module_pass(LLVMModuleRef  M, int opt, int debug) {
     // These must be declared in this order so that they are destroyed in the
     // correct order due to inter-analysis-manager references.
     LoopAnalysisManager LAM;
@@ -119,7 +117,11 @@ extern "C" void run_module_pass(LLVMModuleRef  M, int opt) {
     
     MPM.addPass(ImmixPass());
     MPM.addPass(RewriteStatepointsForGC());
-    // MPM.addPass(createModuleToFunctionPassAdaptor(StripGCRelocates()));
+    if (debug)
+    {
+        MPM.addPass(createModuleToFunctionPassAdaptor(PLStripGCRelocates()));
+    }
+    
     
 
     // Optimize the IR!

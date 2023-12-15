@@ -93,6 +93,7 @@ pub mod tests {
             fmt: false,
             optimization: HashOptimizationLevel::Aggressive,
             jit: false,
+            debug: false,
         };
 
         let input = MemDocsInput::new(
