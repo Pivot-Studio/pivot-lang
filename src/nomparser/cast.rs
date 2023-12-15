@@ -26,6 +26,7 @@ use super::*;
 /// let a = 1 as i128 as f32;
 /// ```
 #[test_parser("1 as i128 as f32")]
+#[test_parser("1 as i128 as f32 !")]
 #[test_parser(
     "(2.3+10-800*9).add(100)[0] as
  i128 as f32"
@@ -37,6 +38,7 @@ pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
             complex_exp,
             many0(pair(tag_modifier(TokenType::AS), type_name)),
             opt(alt((
+                // look the next charactor after "!" to eliminate the "!=" case
                 terminated(
                     tag_token_symbol_ex(TokenType::NOT),
                     peek(not(tag_token(TokenType::ASSIGN))),
