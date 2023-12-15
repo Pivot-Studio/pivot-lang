@@ -73,7 +73,7 @@ pub mod tests {
 
     #[test]
     fn test_init_package() {
-        let _l = TEST_COMPILE_MUTEX.lock().unwrap();
+        let l = TEST_COMPILE_MUTEX.lock().unwrap();
         _ = remove_file("plc_new_testout");
         let package_name = "plc_new_testfile".to_string();
         // test init_package
@@ -113,5 +113,6 @@ pub mod tests {
 
         #[cfg(target_os = "windows")]
         assert!(fs::metadata("plc_new_testout.exe").is_ok());
+        drop(l);
     }
 }

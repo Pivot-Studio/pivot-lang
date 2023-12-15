@@ -504,7 +504,7 @@ fn test_doc_symbol() {
 fn test_jit() {
     use crate::ast::compiler::{compile, Options};
     use std::path::PathBuf;
-    let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
+    let l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
         .lock()
         .unwrap();
     let out = "testjitout";
@@ -540,10 +540,11 @@ fn test_jit() {
         ) == 0,
         "jit compiled program exit with non-zero status"
     );
+    drop(l);
 }
 #[test]
 fn test_compile() {
-    let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
+    let l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
         .lock()
         .unwrap();
     let out = "testout";
@@ -592,6 +593,7 @@ fn test_compile() {
         String::from_utf8_lossy(&o.stdout),
         String::from_utf8_lossy(&o.stderr)
     );
+    drop(l);
 }
 
 #[test]
@@ -654,7 +656,7 @@ fn test_lsp_incremental() {
 
 #[test]
 fn test_tail_call_opt() {
-    let _l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
+    let l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
         .lock()
         .unwrap();
     let out = "testout2";
@@ -703,4 +705,5 @@ fn test_tail_call_opt() {
         String::from_utf8_lossy(&o.stdout),
         String::from_utf8_lossy(&o.stderr)
     );
+    drop(l);
 }

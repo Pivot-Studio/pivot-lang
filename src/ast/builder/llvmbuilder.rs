@@ -15,6 +15,7 @@ use std::{
 
 use immix::{IntEnum, ObjectType};
 use inkwell::{
+    attributes::Attribute,
     basic_block::BasicBlock,
     builder::Builder,
     context::Context,
@@ -639,6 +640,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         rsp.add_attribute(
             inkwell::attributes::AttributeLoc::Function,
             self.context.create_string_attribute("gc-leaf-function", ""),
+        );
+        rsp.add_attribute(
+            inkwell::attributes::AttributeLoc::Function,
+            self.context
+                .create_enum_attribute(Attribute::get_named_enum_kind_id("allockind"), 1),
         );
         let rsp = self
             .builder
@@ -1558,6 +1564,15 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if !pltp.is_declare {
             f.set_call_conventions(CALL_CONV);
         }
+
+        if pltp.name.starts_with("DioGC__malloc") {
+            f.add_attribute(
+                inkwell::attributes::AttributeLoc::Function,
+                self.context
+                    .create_enum_attribute(Attribute::get_named_enum_kind_id("allockind"), 1),
+            );
+            // f.add_attribute(inkwell::attributes::AttributeLoc::Function,self.context.create_string_attribute("allockind", "alloc"));
+        }
         (f, false)
     }
     fn get_fields(&self, pltp: &STType, ctx: &mut Ctx<'a>) -> Vec<BasicTypeEnum> {
@@ -1711,6 +1726,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
 }
 impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
+    fn is_main(&self, f: ValueHandle) -> bool {
+        let f = self.get_llvm_value(f).unwrap().into_function_value();
+        f.get_name().to_str().unwrap() == "main"
+    }
     fn tag_generator_ctx_as_root(&self, f: ValueHandle, ctx: &mut Ctx<'a>) {
         let f = self.get_llvm_value(f).unwrap().into_function_value();
         let allocab = f.get_first_basic_block().unwrap();

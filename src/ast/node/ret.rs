@@ -113,7 +113,7 @@ impl Node for RetNode {
                 )?;
                 ctx.try_load2var(self.range, value, builder, &ret_pltype.borrow())?
             } else {
-                if builder.is_ptr(v.get_value()) {
+                if builder.is_ptr(v.get_value()) && !builder.is_main(ctx.function.unwrap()) {
                     builder.build_return(Some(v.get_value()));
                     return NodeOutput::new_term(TerminatorEnum::Return).to_result();
                 }

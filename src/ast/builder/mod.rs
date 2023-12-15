@@ -301,6 +301,7 @@ pub trait IRBuilder<'a, 'ctx> {
         declare: Option<Pos>,
     ) -> ValueHandle;
     fn place_safepoint(&self, ctx: &mut Ctx<'a>);
+    fn is_main(&self, f: ValueHandle) -> bool;
 }
 
 pub type ValueHandle = usize;
