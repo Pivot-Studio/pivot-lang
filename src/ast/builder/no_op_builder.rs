@@ -524,10 +524,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
 
     unsafe fn store_with_aoto_cast(&self, _ptr: ValueHandle, _value: ValueHandle) {}
 
-    // fn stack_alloc(&self, _name: &str, _ctx: &mut Ctx<'a>, _tp: &PLType) -> ValueHandle {
-    //     0
-    // }
-
     fn correct_generator_ctx_malloc_inst(&self, _ctx: &mut Ctx<'a>, _name: &str) {}
 
     fn sizeof(&self, _pltype: &PLType, _ctx: &mut Ctx<'a>) -> u64 {

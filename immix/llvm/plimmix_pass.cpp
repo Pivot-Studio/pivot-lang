@@ -33,9 +33,11 @@ namespace
     This pass helps integrate immix with LLVM.
 
     It does the following:
-    - Sets the GC name to "plimmix" for all functions
+    - Sets the GC name to "statepoint-example" for all functions. 
+      TODO: current llvm-16 does not support custom gc strategy using
+      RewriteStatepointsForGC pass. So we need to use the default gc strategy.
     - Adds a call to immix_gc_init in the global constructor
-    - Adds a global variable declaration for the module stack map
+    - Adds a global variable declaration for the module stack map if the main function is present.
 
     However, it does not generate the stack map. This is done by the
     immix compiler plugin.
@@ -43,7 +45,6 @@ namespace
     Also note that mauch more work is needed to get immix working with
     LLVM. Besides the pass, you need to:
     - Implement visit functions for all complex types
-    - insert stack roots for all heap pointers
     - replace all malloc calls with immix::alloc
     ...
   */
@@ -72,6 +73,7 @@ namespace
       SmallVector<Type *, 1> argTypes;
       argTypes.push_back(PointerType::get(IntegerType::get(M.getContext(), 8), 0));
       std::string symbol;
+      // mac's symbol name has only one underscore
       #ifdef __APPLE__ 
       symbol += "_LLVM_StackMaps";
       #else

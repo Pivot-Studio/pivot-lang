@@ -35,7 +35,8 @@ static uint8_t *roundTripAllocateDataSection(void *object, uintptr_t size,
 {
   auto alloc_addr = static_cast<SectionMemoryManager *>(object)->allocateDataSection(
       size, alignment, sectionID, sectionName, isReadOnly);
-// printf("sec name: %s\n", sectionName);
+// the stackmap section on mac is `__llvm_stackmaps`, while on other platform is .llvm_stackmaps
+// see https://llvm.org/docs/StackMaps.html#stack-map-section
 #ifdef __APPLE__
   auto llvmSectionName = "__llvm_stackmaps";
 #else

@@ -162,10 +162,6 @@ pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
 
     out.push_str(".bc");
 
-    // let tm = crate::ast::builder::llvmbuilder::get_target_machine(op.optimization.to_llvm());
-    // llvmmod.set_triple(&tm.get_triple());
-    // llvmmod.set_data_layout(&tm.get_target_data().get_data_layout());
-
     let total_steps = 3;
     let pb = ProgressBar::hidden();
     prepare_prgressbar(

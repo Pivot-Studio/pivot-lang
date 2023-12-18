@@ -6,6 +6,7 @@ use std::{
 
 use internal_macro::is_runtime;
 
+/// see https://lang.pivotstudio.cn/docs/systemlib/vm.html#jit-invalid-memory-access-issue
 #[cfg(feature = "jit")]
 pub fn reg() {
     add_symbol_create_mutex();

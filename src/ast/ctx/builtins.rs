@@ -493,6 +493,9 @@ fn emit_arr_copy<'a, 'b>(
     }
 }
 
+/// # emit_arr_slice
+///
+/// builtin function to slice an array
 fn emit_arr_slice<'a, 'b>(
     f: &mut FuncCallNode,
     ctx: &'b mut Ctx<'a>,

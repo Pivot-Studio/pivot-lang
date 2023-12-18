@@ -3,7 +3,6 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use std::marker::PhantomData;
 
 const SAFE_POINT_ID: u64 = 2882400000;
-// const GC_ROOT_ID: u64 = 114514;
 
 #[no_mangle]
 pub fn print_stack_map(mapptr: *const u8) {

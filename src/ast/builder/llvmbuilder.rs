@@ -214,6 +214,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             debug,
         }
     }
+    /// 分配内存使用的函数
+    ///
+    /// 需要自行选择分配函数
     fn alloc_with_f(
         &self,
         name: &str,
