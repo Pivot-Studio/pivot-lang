@@ -52,9 +52,6 @@ pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
 }
 
 #[test_parser("[123]")]
-/// ```ebnf
-/// array_element_op = ('[' logic_exp ']') ;
-/// ```
 pub fn array_element_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
     delspace(map_res(
         tuple((
