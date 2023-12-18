@@ -155,15 +155,6 @@
 <li>静态编译：编译器会将源码编译成一个可执行文件，能给在操作系统上原生运行</li>
 <li>jit编译：编译器会将源码编译成一个字节码文件，然后在运行时使用编译器指令进行解释执行</li>
 </ul>
-<div id="admonition-warning" class="admonition warning">
-<div class="admonition-title">
-<p>Warning</p>
-<p><a class="admonition-anchor-link" href="#admonition-warning"></a></p>
-</div>
-<div>
-<p>目前不建议使用jit模式，因为它与我们新的immix gc的stackmap不兼容，详细情况请看<a href="../references/stackmap.html">这里</a></p>
-</div>
-</div>
 <p>目前这两种方案使用的编译器是同一个可执行文件（plc），然而他们在依赖和功能上存在一些差别，
 下方是一个简单的对比图：</p>
 <div class="table-wrapper"><table><thead><tr><th></th><th>jit</th><th>静态编译</th></tr></thead><tbody>
@@ -173,7 +164,7 @@
 <tr><td>依赖预编译的pivot lang系统库</td><td>❌</td><td>✅</td></tr>
 <tr><td>运行时优化</td><td>✅</td><td>❌</td></tr>
 <tr><td>支持debug</td><td>❌</td><td>✅</td></tr>
-<tr><td>stackmap支持</td><td>❌</td><td>✅</td></tr>
+<tr><td>stackmap支持</td><td>✅</td><td>✅</td></tr>
 </tbody></table>
 </div>
 <h2 id="项目结构"><a class="header" href="#项目结构">项目结构</a></h2>
@@ -200,7 +191,7 @@ pub fn main() i64 {
 
 </code></pre>
 <p>源文件的后缀名必须为<code>.pi</code>。<br />
-在示例中，我们调用了一个系统库重的函数<code>print_s</code>，该函数用于打印一个字符串类型的值并换行。此源代码编译后执行会输出<code>Hello World</code>。</p>
+在示例中，我们调用了一个系统库中的函数<code>print_s</code>，该函数用于打印一个字符串类型的值并换行。此源代码编译后执行会输出<code>Hello World</code>。</p>
 <h2 id="编译"><a class="header" href="#编译">编译</a></h2>
 <p>如果你已经安装了<code>plc</code>，那么你可以在项目根目录下执行<code>plc main.pi</code>命令来编译该项目。此指令会生成一个名叫<code>out</code>的文件，
 还有一些中间文件（在target目录下）。</p>
