@@ -63,6 +63,7 @@ pub mod tests {
     pub static TEST_COMPILE_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
     use super::*;
     use crate::ast::compiler::{self, ActionType, HashOptimizationLevel};
+    use crate::ast::test::set_test_asset;
     use crate::db::Database;
     use crate::lsp::mem_docs::{self, MemDocsInput};
     use std::fs::remove_file;
@@ -74,6 +75,7 @@ pub mod tests {
     #[test]
     fn test_init_package() {
         let l = TEST_COMPILE_MUTEX.lock().unwrap();
+        set_test_asset();
         _ = remove_file("plc_new_testout");
         let package_name = "plc_new_testfile".to_string();
         // test init_package

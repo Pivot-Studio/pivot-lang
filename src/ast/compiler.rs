@@ -1,5 +1,6 @@
 use super::node::program::cycle_deps_recover;
 use super::node::program::ModWrapper;
+use super::node::program::ASSET_PATH;
 #[cfg(feature = "llvm")]
 use crate::ast::jit_config::IS_JIT;
 use crate::{
@@ -331,8 +332,8 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
 /// It will panic if fail to ensure.
 /// todo(griffin): move it to util crate as it's not the compiler logic
 pub fn ensure_target_folder() {
-    let targetdir = PathBuf::from("target");
+    let targetdir = PathBuf::from(ASSET_PATH.lock().unwrap().as_str());
     if !targetdir.exists() {
-        fs::create_dir(&targetdir).unwrap();
+        fs::create_dir_all(&targetdir).unwrap();
     }
 }

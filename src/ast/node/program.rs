@@ -29,6 +29,7 @@ use colored::Colorize;
 use inkwell::context::Context;
 
 use internal_macro::node;
+use lazy_static::lazy_static;
 use lsp_types::GotoDefinitionResponse;
 use rustc_hash::FxHashMap;
 use rustc_hash::FxHashSet;
@@ -42,6 +43,7 @@ use std::ops::Bound::*;
 use std::path::{Path, PathBuf};
 
 use std::sync::Arc;
+use std::sync::Mutex;
 
 #[node]
 pub struct ProgramNode {
@@ -65,6 +67,10 @@ impl PrintTrait for ProgramNode {
             statement.print(tabs, i == 0, line.clone());
         }
     }
+}
+
+lazy_static! {
+    pub static ref ASSET_PATH: Mutex<String> = Mutex::new("target".to_string());
 }
 
 impl Node for ProgramNode {
@@ -580,7 +586,8 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         let mut hasher = DefaultHasher::new();
         params.fullpath(db).hash(&mut hasher);
         let hashed = format!(
-            "target/{}_{:x}",
+            "{}/{}_{:x}",
+            &ASSET_PATH.lock().unwrap(),
             Path::new(&params.file(db))
                 .with_extension("")
                 .to_str()

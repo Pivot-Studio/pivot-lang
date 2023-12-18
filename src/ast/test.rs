@@ -3,7 +3,7 @@ use std::{
     cell::RefCell,
     fs::remove_file,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{atomic::AtomicUsize, Arc, Mutex},
 };
 
 use expect_test::expect_file;
@@ -21,6 +21,7 @@ use crate::{
         },
         compiler::{compile_dry, ActionType},
         diag::PLDiag,
+        node::program::ASSET_PATH,
         range::Pos,
     },
     db::Database,
@@ -507,6 +508,7 @@ fn test_jit() {
     let l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
         .lock()
         .unwrap();
+    set_test_asset();
     let out = "testjitout";
     let docs = MemDocs::default();
     let db = Database::default();
@@ -548,6 +550,7 @@ fn test_compile() {
     let l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
         .lock()
         .unwrap();
+    set_test_asset();
     let out = "testout";
     let exe = PathBuf::from(out);
     #[cfg(target_os = "windows")]
@@ -662,6 +665,7 @@ fn test_tail_call_opt() {
     let l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
         .lock()
         .unwrap();
+    set_test_asset();
     let out = "testout2";
     let exe = PathBuf::from(out);
     #[cfg(target_os = "windows")]
@@ -711,3 +715,14 @@ fn test_tail_call_opt() {
     );
     drop(l);
 }
+
+#[cfg(test)]
+pub(crate) fn set_test_asset() {
+    let mut p = ASSET_PATH.lock().unwrap();
+    *p = format!(
+        "target/test{}",
+        TEST_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+    );
+}
+
+static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
