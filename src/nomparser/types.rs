@@ -81,10 +81,6 @@ fn array_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
     )(input)
 }
 
-/// ```enbf
-/// generic_type_def = "<" identifier ("|" identifier)* ">" ;
-/// ```
-/// 形参
 pub fn generic_type_def(input: Span) -> IResult<Span, Box<GenericDefNode>> {
     map_res(
         tuple((
@@ -103,10 +99,6 @@ pub fn generic_type_def(input: Span) -> IResult<Span, Box<GenericDefNode>> {
     )(input)
 }
 
-/// ```enbf
-/// generic_param_def = "<" (extern_id|"_") ("|"(extern_id|"_"))* ">" ;
-/// ```
-/// 实参
 #[test_parser("<a|b|B::c>")]
 #[test_parser("<a>")]
 pub fn generic_param_def(input: Span) -> IResult<Span, Box<GenericParamNode>> {
@@ -132,9 +124,6 @@ pub fn generic_param_def(input: Span) -> IResult<Span, Box<GenericParamNode>> {
     )(input)
 }
 
-/// ```enbf
-/// trait_def = "trait" identifier generic_type_def? "{" function_def* "}" ;
-/// ```
 #[test_parser(
     "trait mytrait {
     fn a() A;
@@ -188,9 +177,6 @@ pub fn trait_def(input: Span) -> IResult<Span, Box<TraitDefNode>> {
     )(input)
 }
 
-/// ```enbf
-/// type_add = type_name ("+" type_name)* ;
-/// ```
 #[test_parser("a+b+c")]
 #[test_parser("a")]
 #[test_parser(

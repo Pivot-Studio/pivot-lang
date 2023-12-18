@@ -1,0 +1,92 @@
+
+newline = "\r\n" | "\n" | "\r" ; (*CRLF for windows, LF for unix and macos X, CR for Mac up through version 9*)
+letter = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N" 
+        | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z" 
+        | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" 
+        | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z";
+
+digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9";
+
+characters = "!" | "@" | "#" | "$" | "%" | "^" | "&" | "*" | "(" | ")" | "-" | "_" | "=" 
+        | "+" | "[" | "]" | "{" | "}" | ";" | ":" | "'" | "\"" | "," | "." | "<" | ">" 
+        | "/" | "?" | "\\" | "|" | "`" | "~" | " ";
+
+space = " " | "\t";
+
+
+(*------------------ array.rs ----------------------*)
+(*todo: refactor the nomparser handler name,
+        the hanlder name should be as same as the EBNF definition,
+        so it benefits the maintenance in the long run.
+*)
+ArrayInit = "[" ( TypeName “*” GeneralExp ":" )? GeneralExp { "," GeneralExp } "]";
+(* todo: rename me as well
+        the comment usage is wrong here Comment itself contains multiple lines already.
+        refactor is needed.
+*)
+ArrayElementOp = "[" GeneralExp? "]" { Comment };
+
+
+(*------------------ cast.rs ----------------------*)
+AsExp = ComplexExp { "as" TypeName } ( "!" | "?" )? ( "is" TypeName )?;
+
+
+(*------------------ comment.rs. ----------------------*)
+Comment = { ( "///" | "//" ) { letter | digit | characters } newline };
+
+
+(*------------------ constval.rs. ----------------------*)
+Number =  Decimal | Float;
+BoolConst = "true" | "false" ;
+Decimal = (digit { "_"? digit });
+Float = Base Exponent?;
+Base =  ( Decimal ("." Decimal)? ) | ("." Decimal);
+Exponent = ( "e" | "E" ) ("-" | "+")? Decimal;
+
+(*------------------ control.rs. ----------------------*)
+(* todo: think about the block separator should occur inside IfStatement? 
+        moreover, "else if" should be parsed together?
+*)
+IfStatement = "if" GeneralExp StatementBlock Comment? ( "else" ( IfStatement | StatementBlock ) )?;
+WhileStatement = "while" GeneralExp StatementBlock Comment?;
+ForStatement = "for" ( Assignment | NewVariable )? ";" GeneralExp ";" Assignment? StatementBlock Comment?;
+BreakStatement = "break" ";" Comment?;
+ContinueStatement = "continue" ";" Comment?;
+
+
+(*------------------ identifier.rs ----------------------*)
+Identifier = (letter | "$" | "_" ) { letter | digit | "_"};
+
+ExternalIdentifier = Identifier { "::" Identifier };
+
+(*todo: refactor me as it's not a desired syntax,
+        typically we only want one line code AFTER the identifier,
+        and many lines above the identifier。
+*)
+TypedIdentifier = Identifier ":" TypeName? Comment?;
+
+
+(*------------------ types.rs ----------------------*)
+(*todo: BasicType EBNF is different from the implementation, 
+        can consider to refactor the nomparser
+*)
+TypeName = { "*" } ( BasicType | ArrayType | ClosureType | TupleType ) ;
+BasicType = ExternalIdentifier GenericParamDef?;
+ArrayType = "[" TypeName "]";
+GenericTypeDef = "<" { "|" Identifier ( ":" MultiTrait )? } ">";
+GenericParamDef = "<" TypeName { "|" TypeName } ">";
+TraitDef = "pub"? "trait" Identifier GenericTypeDef? ( ":" TypeAdd )? "{" {FunctionDef} "}";
+TypeAdd = TypeName { "+" TypeName };
+MultiTrait = TypeAdd;
+TupleType = "(" (TypeName { "," TypeName })? ")";
+ClosureType = "|" TypeName {"," TypeName} "|=>" TypeName;
+
+
+(*------------------ todo field ----------------------*)
+(* items are used to hint the IDE and need to replace them with the real definition*)
+FunctionDef = "";
+GeneralExp = "";
+ComplexExp = "";
+StatementBlock = "";
+Assignment = "";
+NewVariable = "";
