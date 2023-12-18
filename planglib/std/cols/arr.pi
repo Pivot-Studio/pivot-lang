@@ -63,14 +63,13 @@ impl <T> Array<T> {
             return;
         }
         if self.len as i64 + arr.len as i64 > arr_len(self.data) {
-            let new_data = [T*(arr_len(self.data) * 2);];
+            let new_data = [T*((self.len as i64 + arr.len as i64) * 2);];
             arr_copy(self.data, new_data, arr_len(self.data));
             self.data = new_data;
         }
         // use arr copy
-        let offset_ptr = &self.data[self.len as i64];
-        let len = arr.len as i64;
-        arr_copy(arr.data, arr_from_raw(offset_ptr, len), arr.len as i64);
+        let slice = arr_slice(self.data, self.len as i64, arr.len as i64);
+        arr_copy(arr.data, slice, arr.len as i64);
         self.len = self.len + arr.len;
         return;
     }

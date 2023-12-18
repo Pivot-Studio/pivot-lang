@@ -50,10 +50,16 @@ lazy_static! {
     };
 }
 
+pub fn register_global(p: *mut u8) {
+    unsafe {
+        STACK_MAP.global_roots.as_mut().unwrap().push(p);
+    }
+}
+
 #[cfg(feature = "llvm_stackmap")]
 pub struct StackMapWrapper {
     pub map: *mut FxHashMap<*const u8, Function>,
-    pub global_roots: *mut Vec<*mut u8>,
+    pub global_roots: *mut Vec<*const u8>,
 }
 #[cfg(feature = "llvm_stackmap")]
 unsafe impl Sync for StackMapWrapper {}
@@ -111,12 +117,63 @@ pub fn gc_malloc(size: usize, obj_type: u8) -> *mut u8 {
     })
 }
 
+/// # gc_malloc_fast_unwind
+///
+/// Same behavior as gc_malloc, but this function will use stack
+/// pointer to perform fast unwind
+///
+/// If the stack pointer is not provided, this function will use
+/// backtrace-rs to walk the stack.
+///
+/// For more information, see [mark_fast_unwind](crate::collector::Collector::mark_fast_unwind)
+pub fn gc_malloc_fast_unwind(size: usize, obj_type: u8, sp: *mut u8) -> *mut u8 {
+    SPACE.with(|gc| {
+        // println!("start malloc");
+        let gc = gc.borrow();
+        // println!("malloc");
+        gc.alloc_fast_unwind(size, ObjectType::from_int(obj_type).unwrap(), sp)
+    })
+}
+
+/// # gc_malloc_no_collect
+///
+/// Same behavior as gc_malloc, but this function will never trigger
+/// a gc.
+pub fn gc_malloc_no_collect(size: usize, obj_type: u8) -> *mut u8 {
+    SPACE.with(|gc| {
+        // println!("start malloc");
+        let gc = gc.borrow();
+        // println!("malloc");
+        gc.alloc_no_collect(size, ObjectType::from_int(obj_type).unwrap())
+    })
+}
+
 /// This function is used to force a garbage collection.
+///
+/// During the collection mark phase, this function will
+/// use backtrace-rs to walk the stack.
+///
+/// For more information, see [mark_fast_unwind](crate::collector::Collector::mark_fast_unwind)
 pub fn gc_collect() {
     SPACE.with(|gc| {
         // println!("start collect");
         let gc = gc.borrow();
         gc.collect();
+        // println!("collect")
+    })
+}
+
+/// # gc_collect_fast_unwind
+///
+/// Same behavior as gc_collect, but this function will use stack
+/// pointer to perform fast unwind.
+///
+/// For more information, see [mark_fast_unwind](crate::collector::Collector::mark_fast_unwind)
+pub fn gc_collect_fast_unwind(sp: *mut u8) {
+    SPACE.with(|gc| {
+        // println!("start collect");
+        let gc = gc.borrow();
+        gc.collect_fast_unwind(sp);
         // println!("collect")
     })
 }
@@ -183,12 +240,20 @@ pub fn safepoint() {
     })
 }
 
+pub fn safepoint_fast_unwind(sp: *mut u8) {
+    SPACE.with(|gc| {
+        gc.borrow().safepoint_fast_unwind(sp);
+    })
+}
+
 #[cfg(feature = "llvm_stackmap")]
 pub fn gc_init(ptr: *mut u8) {
+    // print_stack_map(ptr);
     // println!("stackmap: {:?}", &STACK_MAP.map.borrow());
     build_root_maps(ptr, unsafe { STACK_MAP.map.as_mut().unwrap() }, unsafe {
         STACK_MAP.global_roots.as_mut().unwrap()
     });
+    log::info!("read stack map done");
 }
 
 /// notify gc current thread is going to stuck e.g.
@@ -207,6 +272,16 @@ pub fn thread_stuck_start() {
         // println!("start add_root");
         let mut gc = gc.borrow_mut();
         gc.stuck()
+        // println!("add_root")
+    });
+}
+
+pub fn thread_stuck_start_fast(sp: *mut u8) {
+    // v.0 -= 1;
+    SPACE.with(|gc| {
+        // println!("start add_root");
+        let mut gc = gc.borrow_mut();
+        gc.stuck_fast_unwind(sp)
         // println!("add_root")
     });
 }

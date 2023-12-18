@@ -142,6 +142,7 @@ impl Node for WhileNode {
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
         builder.build_conditional_branch(cond, body_block, after_block);
         ctx.position_at_end(body_block, builder);
+        builder.place_safepoint(ctx);
         let terminator = self.body.emit_child(ctx, builder)?.get_term();
         builder.build_dbg_location(start);
         builder.build_unconditional_branch(cond_block);
@@ -222,6 +223,7 @@ impl Node for ForNode {
         builder.build_dbg_location(cond_start);
         builder.build_unconditional_branch(cond_block);
         ctx.position_at_end(body_block, builder);
+        builder.place_safepoint(ctx);
         let terminator = self.body.emit_child(ctx, builder)?.get_term();
         builder.build_unconditional_branch(opt_block);
         ctx.position_at_end(after_block, builder);

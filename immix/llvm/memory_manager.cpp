@@ -1,7 +1,5 @@
 /*
   LLVM memory manager for Pivot Lang
-  
-  This is very muck a work in progress. 
   We are using this to get immix working with JIT.
 */
 
@@ -37,9 +35,14 @@ static uint8_t *roundTripAllocateDataSection(void *object, uintptr_t size,
 {
   auto alloc_addr = static_cast<SectionMemoryManager *>(object)->allocateDataSection(
       size, alignment, sectionID, sectionName, isReadOnly);
-  // printf("sec name: %s\n", sectionName);
-  auto mapName = "_GC_MAP_";
-  if (strncmp(sectionName, mapName, strlen(mapName)) == 0)
+// the stackmap section on mac is `__llvm_stackmaps`, while on other platform is .llvm_stackmaps
+// see https://llvm.org/docs/StackMaps.html#stack-map-section
+#ifdef __APPLE__
+  auto llvmSectionName = "__llvm_stackmaps";
+#else
+  auto llvmSectionName = ".llvm_stackmaps";
+#endif
+  if (strcmp(sectionName, llvmSectionName) == 0)
   {
     // printf("push back\n");
     stackMaps.push_back(alloc_addr);
@@ -80,12 +83,16 @@ static void roundTripDestroy(void *object)
 {
   delete static_cast<SectionMemoryManager *>(object);
 }
+
+
 extern "C"
 {
-  void CreatePLJITEngine(LLVMExecutionEngineRef *jit, LLVMModuleRef module, unsigned int opt, stackmap_cb cb)
+  int CreateAndRunPLJITEngine( LLVMModuleRef module, unsigned int opt, stackmap_cb cb)
   {
+    LLVMExecutionEngineRef *jit = new LLVMExecutionEngineRef();
     finalize_cb = cb;
-    auto mem_manager = LLVMCreateSimpleMCJITMemoryManager(new SectionMemoryManager(),
+    auto sm = new SectionMemoryManager();
+    auto mem_manager = LLVMCreateSimpleMCJITMemoryManager(sm,
                                                           roundTripAllocateCodeSection,
                                                           roundTripAllocateDataSection,
                                                           roundTripFinalizeMemory,
@@ -94,6 +101,7 @@ extern "C"
     LLVMInitializeMCJITCompilerOptions(&Options, sizeof(Options));
     Options.MCJMM = mem_manager;
     Options.OptLevel = opt;
+    Options.NoFramePointerElim = 1;
 
     char *Error;
     //      LLVMExecutionEngineRef jit;
@@ -105,11 +113,11 @@ extern "C"
       printf("%s\n", Error);
       exit(1945);
     }
-
-    //      LLVMRunStaticConstructors(jit);
-    //      auto f  = LLVMGetFunctionAddress(jit, "main");
-    //      auto m = (mainf)f;
-    //      auto ret = m();
-    //      printf("ret = %d \n", ret);
+    auto f = LLVMGetFunctionAddress(*jit, "main");
+    auto m = (mainf)f;
+    auto ret = m();
+    LLVMDisposeExecutionEngine(*jit);
+    delete jit;
+    return ret;
   }
 }

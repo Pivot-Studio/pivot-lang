@@ -320,6 +320,11 @@ fn handle_deconstruct<'a, 'b>(
             };
             if let Some(exp) = expv {
                 builder.build_dbg_location(def_var.range().start);
+                let ptr2value = if ctx.generator_data.is_some() {
+                    builder.build_load(ptr2value, "load_generator_var", &PLType::new_i8_ptr(), ctx)
+                } else {
+                    ptr2value
+                };
                 builder.build_store(
                     ptr2value,
                     ctx.try_load2var(range, exp, builder, &pltype.borrow())?,

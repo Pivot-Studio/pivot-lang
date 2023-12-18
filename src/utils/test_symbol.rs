@@ -47,9 +47,11 @@ impl<'ctx> CodeGen<'ctx> {
         let demo = self.module.add_function(fnname, fn_type, None);
         let sum = self
             .builder
-            .build_call(demo, &[x.into(), y.into(), z.into()], fnname);
+            .build_call(demo, &[x.into(), y.into(), z.into()], fnname)
+            .unwrap();
         self.builder
-            .build_return(Some(&sum.try_as_basic_value().left().unwrap()));
+            .build_return(Some(&sum.try_as_basic_value().left().unwrap()))
+            .unwrap();
         unsafe {
             let demo = self.execution_engine.get_function("sum");
             if let Ok(demo1) = demo {

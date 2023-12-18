@@ -52,7 +52,7 @@ impl Node for RetNode {
                 let err = ctx.add_diag(self.range.new_err(ErrorCode::RETURN_TYPE_MISMATCH));
                 return Err(err);
             }
-            // let value = ctx.try_load2var(self.range, v.get_value(), builder)?;
+            // let value = ctx.generator_data.as_ref().unwrap().borrow().ret_handle;
             let value = ctx.up_cast(
                 ret_pltype.clone(),
                 value_pltype,
@@ -93,15 +93,15 @@ impl Node for RetNode {
             let v = ret_node.emit(ctx, builder)?.get_value().unwrap();
             ctx.emit_comment_highlight(&self.comments[0]);
             let value_pltype = v.get_ty();
-            let mut value =
-                ctx.try_load2var(self.range, v.get_value(), builder, &v.get_ty().borrow())?;
             let eqres = ctx.eq(ret_pltype.clone(), value_pltype.clone());
             if !eqres.eq {
                 let err = ctx.add_diag(self.range.new_err(ErrorCode::RETURN_TYPE_MISMATCH));
                 return Err(err);
             }
-            if eqres.need_up_cast {
+            let value = if eqres.need_up_cast {
                 let ptr2v = builder.alloc("tmp_up_cast_ptr", &value_pltype.borrow(), ctx, None);
+                let mut value =
+                    ctx.try_load2var(self.range, v.get_value(), builder, &v.get_ty().borrow())?;
                 builder.build_store(ptr2v, value);
                 value = ctx.up_cast(
                     ret_pltype.clone(),
@@ -111,8 +111,14 @@ impl Node for RetNode {
                     ptr2v,
                     builder,
                 )?;
-                value = ctx.try_load2var(self.range, value, builder, &ret_pltype.borrow())?;
-            }
+                ctx.try_load2var(self.range, value, builder, &ret_pltype.borrow())?
+            } else {
+                if builder.is_ptr(v.get_value()) && !builder.is_main(ctx.function.unwrap()) {
+                    builder.build_return(Some(v.get_value()));
+                    return NodeOutput::new_term(TerminatorEnum::Return).to_result();
+                }
+                ctx.try_load2var(self.range, v.get_value(), builder, &v.get_ty().borrow())?
+            };
             if ctx.return_block.unwrap().1.is_none() {
                 return Err(self
                     .range()

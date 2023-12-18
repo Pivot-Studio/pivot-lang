@@ -733,7 +733,7 @@ impl Node for StructInitNode {
             Ok(())
         })?;
 
-        let struct_pointer = builder.alloc("initstruct", &pltype.borrow(), ctx, None); //alloc(ctx, tp, "initstruct");
+        let struct_pointer = builder.alloc_no_collect("initstruct", &pltype.borrow(), ctx, None); //alloc(ctx, tp, "initstruct");
         field_init_values.iter().for_each(|(index, value)| {
             let fieldptr = builder
                 .build_struct_gep(struct_pointer, *index, "fieldptr", &pltype.borrow(), ctx)
@@ -787,10 +787,7 @@ impl Node for ArrayInitNode {
             }
             let v = v.unwrap();
             let tp = v.get_ty();
-            exps.push((
-                ctx.try_load2var(range, v.get_value(), builder, &v.get_ty().borrow())?,
-                tp,
-            ));
+            exps.push((v.get_value(), tp, range));
         }
         let sz = exps.len() as u64;
         let (tp, size_handle) = if let Some((tp, len_v)) = &mut self.tp {
@@ -829,7 +826,7 @@ impl Node for ArrayInitNode {
             .unwrap();
 
         let real_arr = builder.build_load(real_arr, "load_arr", &PLType::Pointer(tp.clone()), ctx);
-        for (i, (v, _)) in exps.into_iter().enumerate() {
+        for (i, (v, _, r)) in exps.into_iter().enumerate() {
             let ptr = builder.build_const_in_bounds_gep(
                 real_arr,
                 &[i as u64],
@@ -837,7 +834,8 @@ impl Node for ArrayInitNode {
                 &tp.borrow(),
                 ctx,
             );
-            builder.build_store(ptr, v);
+
+            builder.build_store(ptr, ctx.try_load2var(r, v, builder, &tp.borrow())?);
         }
         arr.new_output(arr_tp).to_result()
     }

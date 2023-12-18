@@ -4,6 +4,11 @@ use std::ffi::CString;
 use internal_macro::is_runtime;
 
 struct LibC {}
+#[cfg(feature = "jit")]
+pub fn reg() {
+    add_symbol_consts();
+    add_symbol_impl_libc();
+}
 
 #[cfg(not(target_os = "windows"))]
 #[no_mangle]
@@ -37,6 +42,16 @@ pub static O_WRONLY: libc::c_int = libc::O_WRONLY;
 pub static O_RDWR: libc::c_int = libc::O_RDWR;
 #[no_mangle]
 pub static O_CREAT: libc::c_int = libc::O_CREAT;
+
+internal_macro::add_symbol_consts!(
+    STDIN_FILENO,
+    STDOUT_FILENO,
+    STDERR_FILENO,
+    O_RDONLY,
+    O_WRONLY,
+    O_RDWR,
+    O_CREAT,
+);
 
 #[is_runtime]
 impl LibC {

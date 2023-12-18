@@ -12,6 +12,7 @@ pub struct Options {
     pub optimization: HashOptimizationLevel,
     pub fmt: bool,
     pub jit: bool,
+    pub debug: bool,
 }
 
 #[repr(u32)]

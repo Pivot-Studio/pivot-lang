@@ -1,6 +1,7 @@
 // #include "llvm/CodeGen/GCStrategy.h"
 #include "llvm/IR/GCStrategy.h"
 #include "llvm/IR/BuiltinGCs.h"
+#include "llvm/IRReader/IRReader.h"
 #include "llvm/Support/Compiler.h"
 #include "plimmixprinter.cpp"
 #include "plimmix_pass.cpp"
@@ -8,9 +9,10 @@
 #include "llvm/Passes/PassPlugin.h"
 
 #include "llvm-c/Types.h"
+#include "llvm-c/BitWriter.h"
 #include "llvm-c/Transforms/PassBuilder.h"
-
-using namespace llvm;
+#include "llvm/Transforms/Scalar/RewriteStatepointsForGC.h"
+#include "stripRelocationPass.cpp"
 
 namespace
 {
@@ -32,6 +34,22 @@ namespace
         X("plimmix", "pivot-lang immix garbage collector.");
 }
 
+extern "C" LLVMMemoryBufferRef parse_ir(char* ir)
+{
+    SMDiagnostic Err;
+    auto Ctx = std::make_unique<LLVMContext>();
+    auto sIr = std::string(ir);
+    auto Mod = parseIRFile(sIr, Err, *Ctx);
+    if (!Mod)
+    {
+        Err.print("immix", errs());
+        return nullptr;
+    }
+    auto mb = LLVMWriteBitcodeToMemoryBuffer(wrap(Mod.release()));
+
+    return mb;
+}
+
 extern "C" void LLVMLinkPLImmixGC()
 {
     linkAllBuiltinGCs();
@@ -48,7 +66,7 @@ extern "C" void add_module_pass(llvm::legacy::PassManagerBase *PB) {
     The new LLVM Pass Manager does not have official C bindings yet.
     So we have to write one ourselves.
 */
-extern "C" void run_module_pass(LLVMModuleRef  M, int opt) {
+extern "C" void run_module_pass(LLVMModuleRef  M, int opt, int debug) {
     // These must be declared in this order so that they are destroyed in the
     // correct order due to inter-analysis-manager references.
     LoopAnalysisManager LAM;
@@ -70,28 +88,41 @@ extern "C" void run_module_pass(LLVMModuleRef  M, int opt) {
     PB.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 
     auto O = OptimizationLevel::O2;
+    ModulePassManager MPM;
     switch (opt)
     {
     case 0:
         O = OptimizationLevel::O0;
+        MPM = PB.buildO0DefaultPipeline(O);
         break;
     case 1:
         O = OptimizationLevel::O1;
+        MPM = PB.buildPerModuleDefaultPipeline(O);
         break;
     case 2:
         O = OptimizationLevel::O2;
+        MPM = PB.buildPerModuleDefaultPipeline(O);
         break;
     case 3:
         O = OptimizationLevel::O3;
+        MPM = PB.buildPerModuleDefaultPipeline(O);
         break;
     default:
+        MPM = PB.buildPerModuleDefaultPipeline(O);
         break;
     }
 
     // Create the pass manager.
     // This one corresponds to a typical -O2 optimization pipeline.
-    ModulePassManager MPM = PB.buildPerModuleDefaultPipeline(O);
+    
     MPM.addPass(ImmixPass());
+    MPM.addPass(RewriteStatepointsForGC());
+    if (debug)
+    {
+        MPM.addPass(createModuleToFunctionPassAdaptor(PLStripGCRelocates()));
+    }
+    
+    
 
     // Optimize the IR!
     MPM.run(*unwrap(M), MAM);

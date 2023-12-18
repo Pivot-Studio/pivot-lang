@@ -328,6 +328,11 @@ impl Linker for MsvcLinker {
         });
 
         self.push_args("/NOLOGO");
+        // ESSENTIAL: we need to disable incremental linking, otherwise
+        // the function pointer in the generated code might print to
+        // jump thunk instead of the real function address, making the
+        // gc stack map recording wrong function address
+        self.push_args("/INCREMENTAL:NO");
         self.push_args("/DEBUG");
         self.push_args("ws2_32.lib");
         self.push_args("bcrypt.lib");

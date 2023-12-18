@@ -1,0 +1,19 @@
+/// tail call optimization test
+pub fn main() i64 {
+    let re = fib_tail(400000);
+    println!(re);
+    return 0;
+}
+
+
+fn fib_tail_helper(n:i64, a:i64, b:i64) i64 {
+    if n == 0 {
+        return a;
+    } else {
+        return fib_tail_helper(n - 1, b, a + b);
+    }
+}
+
+fn fib_tail(n:i64) i64 {
+    return fib_tail_helper(n, 0, 1);
+}

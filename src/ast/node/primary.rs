@@ -170,7 +170,17 @@ impl Node for VarNode {
                     0
                 },
             );
-            let o = symbol.value.new_output(symbol.pltype).to_result();
+            let value = if ctx.generator_data.is_some() {
+                builder.build_load(
+                    symbol.value,
+                    "load_generator_var",
+                    &PLType::new_i8_ptr(),
+                    ctx,
+                )
+            } else {
+                symbol.value
+            };
+            let o = value.new_output(symbol.pltype).to_result();
             ctx.send_if_go_to_def(self.range, symbol.range, ctx.plmod.path.clone());
             symbol
                 .refs

@@ -470,6 +470,7 @@ impl TypeNode for FuncDefNode {
                 node: Some(Box::new(self.clone())),
                 body_range: self.range,
                 in_trait: self.in_trait_def,
+                is_declare: self.declare,
             };
             if self.generics.is_none() {
                 builder.get_or_insert_fn_handle(&fnvalue, child);
@@ -565,10 +566,12 @@ impl FuncDefNode {
         &mut self,
         ctx: &'b mut Ctx<'a>,
         first: bool,
-        mut builder: &'b BuilderEnum<'a, '_>,
+        builder: &'b BuilderEnum<'a, '_>,
         fnvalue: FNValue,
     ) -> Result<(), PLDiag> {
+        builder.rm_curr_debug_location();
         let re = ctx.run_as_root_ctx(|ctx| {
+            let mut builder = builder;
             let noop = BuilderEnum::NoOp(NoOpBuilder::default());
             // get it's pointer
             let noop_ptr = &noop as *const BuilderEnum<'a, '_>;
@@ -646,7 +649,7 @@ impl FuncDefNode {
                 let return_block = builder.append_basic_block(funcvalue, "return");
                 child.position_at_end(entry, builder);
                 let ret_value_ptr = if self.generator {
-                    generator::build_generator_ret(builder, child, &fnvalue, entry)?
+                    generator::build_generator_ret(builder, child, &fnvalue, entry, allocab)?
                 } else {
                     let tp = fnvalue.fntype.ret_pltype.get_type(child, builder, true)?;
                     child.rettp = Some(tp.clone());
@@ -654,7 +657,7 @@ impl FuncDefNode {
                         PLType::Void => None,
                         other => {
                             builder.rm_curr_debug_location();
-                            let retv = builder.alloc("retvalue", other, child, None);
+                            let retv = builder.alloc_no_collect("retvalue3", other, child, None);
                             Some(retv)
                         }
                     }
@@ -662,12 +665,16 @@ impl FuncDefNode {
                 child.position_at_end(return_block, builder);
                 child.return_block = Some((return_block, ret_value_ptr));
                 if let Some(ptr) = ret_value_ptr {
-                    let value = builder.build_load(
-                        ptr,
-                        "load_ret_tmp",
-                        &child.rettp.clone().unwrap().borrow(),
-                        child,
-                    );
+                    let value = if self.id.name == "main" {
+                        builder.build_load(
+                            ptr,
+                            "load_ret_tmp",
+                            &child.rettp.clone().unwrap().borrow(),
+                            child,
+                        )
+                    } else {
+                        ptr
+                    };
                     builder.build_return(Some(value));
                 } else {
                     builder.build_return(None);
@@ -683,7 +690,8 @@ impl FuncDefNode {
                     let tp = para.get_type(child, builder, true)?;
                     let b = tp.clone();
                     let basetype = b.borrow();
-                    let alloca = builder.alloc(&fnvalue.param_names[i], &basetype, child, None);
+                    let alloca =
+                        builder.alloc_no_collect(&fnvalue.param_names[i], &basetype, child, None);
                     // add alloc var debug info
                     builder.create_parameter_variable(
                         &fnvalue,
@@ -707,6 +715,7 @@ impl FuncDefNode {
                         )
                         .unwrap();
                 }
+                builder.place_safepoint(child);
                 if self.generator {
                     child.generator_data.as_ref().unwrap().borrow_mut().is_para = false;
                 }
@@ -1007,15 +1016,15 @@ impl Node for ClosureNode {
             PLType::Void => None,
             other => {
                 builder.rm_curr_debug_location();
-                let retv = builder.alloc("retvalue", other, child, None);
+                let retv = builder.alloc_no_collect("retvalue4", other, child, None);
                 Some(retv)
             }
         };
         child.position_at_end(return_block, builder);
         child.return_block = Some((return_block, ret_value_ptr));
         if let Some(ptr) = ret_value_ptr {
-            let value = builder.build_load(ptr, "load_ret_tmp", &ret_tp.borrow(), child);
-            builder.build_return(Some(value));
+            // let value = builder.build_load(ptr, "load_ret_tmp", &ret_tp.borrow(), child);
+            builder.build_return(Some(ptr));
         } else {
             builder.build_return(None);
         };
@@ -1036,7 +1045,7 @@ impl Node for ClosureNode {
         for (i, tp) in paratps.iter().enumerate() {
             let b = tp.clone();
             let basetype = b.borrow();
-            let alloca = builder.alloc(
+            let alloca = builder.alloc_no_collect(
                 &self.paralist[i].0.name,
                 &basetype,
                 child,
@@ -1062,6 +1071,7 @@ impl Node for ClosureNode {
                 )
                 .unwrap();
         }
+        builder.place_safepoint(child);
         child.rettp = Some(ret_tp.clone());
         // emit body
         let terminator = self.body.emit(child, builder)?.get_term();

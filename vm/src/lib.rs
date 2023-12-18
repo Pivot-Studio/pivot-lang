@@ -20,9 +20,12 @@ fn printi64ln(i: i64) {
     println!("{}", i);
 }
 
+/// see https://lang.pivotstudio.cn/docs/systemlib/vm.html#jit-invalid-memory-access-issue
 #[cfg(feature = "jit")]
 pub fn reg() {
     gc::reg();
+    libcwrap::reg();
+    mutex::reg();
 }
 
 #[is_runtime]
@@ -94,10 +97,10 @@ fn new_thread(f: *mut i128) {
 
 #[is_runtime]
 fn sleep(secs: u64) {
-    gc::DioGC__stuck_begin();
+    // gc::DioGC__stuck_begin(sp);
     println!("sleeping for {} secs", secs);
     thread::sleep(std::time::Duration::from_secs(secs));
-    gc::DioGC__stuck_end();
+    // gc::DioGC__stuck_end();
     println!("sleeping done");
 }
 

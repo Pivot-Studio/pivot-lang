@@ -129,6 +129,13 @@ impl GlobalAllocator {
         Some(block)
     }
 
+    pub fn should_gc(&self) -> bool {
+        unsafe {
+            let p = self.current.get().add(BLOCK_SIZE * 10);
+            p >= self.heap_end && self.free_blocks.is_empty()
+        }
+    }
+
     // pub fn out_of_space(&self) ->bool {
     //     (self.heap_end as usize - self.current as usize) < BLOCK_SIZE && self.free_blocks.len() == 0
     // }
@@ -179,12 +186,12 @@ impl GlobalAllocator {
         // 距离上次alloc时间超过1秒，把free_blocks中的block都dont need
         if now.duration_since(self.last_get_block_time).as_millis() > ROUND_MIN_TIME_MILLIS {
             self.last_get_block_time = now;
-            self.mem_usage_flag = 0;
             if self.mem_usage_flag > 0 {
                 self.round += 1;
             } else if self.mem_usage_flag <= 0 {
                 self.round -= 1;
             }
+            self.mem_usage_flag = 0;
             if self.round <= -ROUND_THRESHOLD {
                 // 总体有三个周期处于内存不变或减少状态，进行dontneed
                 self.round = 0;

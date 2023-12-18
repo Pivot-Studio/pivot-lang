@@ -1,5 +1,6 @@
 use super::node::program::cycle_deps_recover;
 use super::node::program::ModWrapper;
+use super::node::program::ASSET_PATH;
 #[cfg(feature = "llvm")]
 use crate::ast::jit_config::IS_JIT;
 use crate::{
@@ -60,15 +61,14 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     immix::register_llvm_gc_plugins();
     ensure_target_folder();
 
-    compile_dry(db, docs).unwrap();
-
-    let total_steps = if op.jit { 2 } else { 3 };
+    let total_steps = 3;
     let pb = &COMPILE_PROGRESS;
     prepare_prgressbar(
         pb,
         op,
         format!("{}[{:2}/{:2}]", LOOKING_GLASS, 1, total_steps),
     );
+    compile_dry(db, docs).unwrap();
 
     pb.finish_with_message("中间代码分析完成");
     let is_present_only = op.printast || op.flow;
@@ -93,9 +93,10 @@ pub fn process_llvm_ir<'a>(
     let mods = compile_dry::accumulated::<ModBuffer>(db, docs);
     ensure_no_error(db, docs);
 
-    let total_steps = if op.jit { 2 } else { 3 };
-    let pb = ProgressBar::new(mods.len() as u64);
+    let total_steps = 3;
+    let pb = ProgressBar::hidden();
     prepare_prgressbar(&pb, op, format!("{}[{:2}/{:2}]", TRUCK, 2, total_steps));
+    pb.set_length(mods.len() as u64);
 
     let mut set = FxHashSet::default();
     let mut output_files = vec![];
@@ -127,8 +128,22 @@ pub fn process_llvm_ir<'a>(
         tm.write_to_file(&module, inkwell::targets::FileType::Object, &o)
             .unwrap();
         output_files.push(o);
-        _ = llvmmod.link_in_module(module);
+        module.get_global("llvm.used").map(|v| unsafe {
+            v.delete();
+        });
+        llvmmod.link_in_module(module).unwrap();
     }
+    llvmmod.get_functions().for_each(|f| {
+        if f.get_name().to_str().unwrap().contains("_visitorf@") && f.get_basic_blocks().is_empty()
+        {
+            let b = llvmmod.get_context().create_builder();
+            b.position_at_end(llvmmod.get_context().append_basic_block(f, "entry"));
+            b.build_return(None).unwrap();
+        }
+        if f.get_linkage() == inkwell::module::Linkage::LinkOnceAny {
+            f.set_linkage(inkwell::module::Linkage::External);
+        }
+    });
     pb.finish_with_message("中间代码优化完成");
     (llvmmod, output_files)
 }
@@ -136,6 +151,7 @@ pub fn process_llvm_ir<'a>(
 #[cfg(feature = "llvm")]
 pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
     llvmmod.verify().unwrap();
+    llvmmod.strip_debug_info();
     if op.genir {
         let mut s = out.to_string();
         s.push_str(".ll");
@@ -147,18 +163,21 @@ pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
 
     out.push_str(".bc");
 
-    let tm = crate::ast::builder::llvmbuilder::get_target_machine(op.optimization.to_llvm());
-    llvmmod.set_triple(&tm.get_triple());
-    llvmmod.set_data_layout(&tm.get_target_data().get_data_layout());
-
-    let total_steps = if op.jit { 2 } else { 3 };
-    let pb = ProgressBar::new(1);
-    prepare_prgressbar(&pb, op, format!("{}[{:2}/{:2}]", CLIP, 3, total_steps));
+    let total_steps = 3;
+    let pb = ProgressBar::hidden();
+    prepare_prgressbar(
+        &pb,
+        op,
+        format!("{}[{:2}/{:2}]", CLIP, total_steps, total_steps),
+    );
+    pb.set_length(1);
 
     if op.jit {
+        pb.set_message("正在输出jit文件");
         llvmmod.write_bitcode_to_path(Path::new(&out));
-        pb.set_message("JIT完成文件写入");
-        eprintln!("{}jit executable file written to: {}", SPARKLE, &out);
+        pb.finish_with_message("JIT完成文件写入");
+
+        eprintln!("jit executable file written to: {}", &out);
         return;
     }
 
@@ -313,8 +332,8 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
 /// It will panic if fail to ensure.
 /// todo(griffin): move it to util crate as it's not the compiler logic
 pub fn ensure_target_folder() {
-    let targetdir = PathBuf::from("target");
+    let targetdir = PathBuf::from(ASSET_PATH.lock().unwrap().as_str());
     if !targetdir.exists() {
-        fs::create_dir(&targetdir).unwrap();
+        fs::create_dir_all(&targetdir).unwrap();
     }
 }

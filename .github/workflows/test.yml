@@ -76,7 +76,6 @@ jobs:
             CARGO_TARGET_DIR: "target"
             KAGARI_LIB_ROOT: /planglib
             PL_ROOT: /target/debug/
-            GC_LOG: trace
           - os: "windows-latest"
             RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"
             CARGO_INCREMENTAL: 0
@@ -91,6 +90,7 @@ jobs:
       CARGO_TARGET_DIR: ${{ matrix.CARGO_TARGET_DIR }}
       KAGARI_LIB_ROOT: ${{ github.workspace }}${{ matrix.KAGARI_LIB_ROOT }}
       PL_ROOT: ${{ github.workspace }}${{ matrix.PL_ROOT }}
+      GC_LOG: info
     steps:
       - uses: actions/checkout@v4
         with:

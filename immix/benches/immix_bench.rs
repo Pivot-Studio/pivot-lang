@@ -160,7 +160,7 @@ fn test_complecated_single_thread_gc(num_iter: usize) -> Duration {
     #[cfg(not(feature = "shadow_stack"))]
     eprintln!("shadow stack is not enabled, skip the bench");
     #[cfg(not(feature = "shadow_stack"))]
-    (Duration::new(0, 100), Duration::new(0, 100))
+    (Duration::new(0, 100))
 }
 
 fn test_complecated_multiple_thread_gc(num_iter: usize, threads: usize) -> Duration {

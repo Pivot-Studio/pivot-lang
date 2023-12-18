@@ -124,13 +124,7 @@ pub(crate) fn end_generator<'a>(
         )
         .unwrap();
     unsafe { builder.store_with_aoto_cast(ptr, funcvalue) };
-    let ret_load = builder.build_load(
-        data.borrow().ret_handle,
-        "ret_load",
-        &b.ret_type.as_ref().unwrap().borrow(),
-        child,
-    );
-    builder.build_return(Some(ret_load));
+    builder.build_return(Some(data.borrow().ret_handle));
 
     // 4. 生成yield函数的done分支代码
     builder.position_at_end_block(generator_alloca_b);
@@ -289,6 +283,7 @@ pub(crate) fn build_generator_ret<'a>(
     child: &mut Ctx<'a>,
     fnvalue: &FNValue,
     entry: usize,
+    _allocab: usize,
 ) -> Result<Option<usize>, PLDiag> {
     builder.rm_curr_debug_location();
     let data = child.generator_data.as_ref().unwrap().clone();
@@ -299,11 +294,13 @@ pub(crate) fn build_generator_ret<'a>(
         PLType::Void => unreachable!(),
         other => {
             builder.rm_curr_debug_location();
-            data.borrow_mut().ret_handle = builder.alloc("retvalue", other, child, None);
+            data.borrow_mut().ret_handle =
+                builder.alloc_no_collect("retvalue1", other, child, None);
             data.borrow_mut().ret_type = Some(r);
         }
     }
+
     child.position_at_end(entry, builder);
-    let retv = builder.stack_alloc("retvalue", child, &tp.borrow());
+    let retv = builder.alloc_no_collect("retvalue_generator", &tp.borrow(), child, None);
     Ok(Some(retv))
 }
