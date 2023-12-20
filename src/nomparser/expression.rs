@@ -29,6 +29,10 @@ pub fn general_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 
 #[test_parser("a&&b")]
 #[test_parser("a||b")]
+#[test_parser("a &&  b")]
+#[test_parser("a  || b")]
+#[test_parser("a&&b||c")]
+#[test_parser("a||b&&c")]
 pub fn logic_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     parse_bin_ops!(compare_exp_eq, AND, OR)(input)
 }
@@ -105,6 +109,7 @@ fn mul_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser("~a")]
 #[test_parser_error("+a")]
 fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
+    // todo: consider to aligh the implementation with UnaryExp EBNF
     delspace(alt((
         pointer_exp,
         map_res(
@@ -131,9 +136,6 @@ fn unary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     )))(input)
 }
 
-/// ```ebnf
-/// ("&"|"*")* complex_exp;
-/// ```
 #[test_parser("&&a{}.d")]
 #[test_parser("***ad")]
 pub fn pointer_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {

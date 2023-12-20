@@ -19,6 +19,8 @@ macro_rules! del_newline_or_space {
     };
 }
 
+/// parse_bin_ops matches an expression, which is consisted by
+/// the exp type separated by one of ops.
 macro_rules! parse_bin_ops {
     ($exp:ident, $($op:ident),*) => {
         delspace(map_res(

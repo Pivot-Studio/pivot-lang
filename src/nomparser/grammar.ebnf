@@ -54,6 +54,28 @@ BreakStatement = "break" ";" Comment?;
 ContinueStatement = "continue" ";" Comment?;
 
 
+(*------------------ expression.rs ----------------------*)
+GeneralExp = LogicExp;
+LogicExp = CompareExpEq { ( "&&" | "||" ) CompareExpEq };
+CompareExpEq = CompareExp { ( "!=" | "==" ) CompareExp };
+CompareExp = BitOr { ( ">=" | "<=" | ">" | "<" ) BitOr };
+BitOr = BitXor { "|" BitXor };
+BitXor = BitAnd { "^" BitAnd};
+BitAnd = BitMove { "&" BitMove };
+BitMove = AddExp { ( "<<" | ">>" | ">>>" ) AddExp };
+AddExp = MulExp { ( "+" | "-" ) MulExp };
+MulExp = UnaryExp { ( "*" | "/" | "%" )  UnaryExp };
+(* todo: unary_exp implementation differ from the ebnf, try to refactor it *)
+UnaryExp = ( "-" | "!" | "~" )? PointerExp;
+PointerExp = ( "&" | "*" ) { "&" | "*" } AsExp;
+MacroCallExp = ExternalIdentifier MacroCallOp;
+ComplexExp = PrimaryExp { TakeExpOp | ArrayElementOp | CallFunctionOp };
+PrimaryExp = { Comment } ( Closure | Number | BoolConst | StructInit | ArrayInit | TupleInit | MacroCallExp | ExternalIdentifier |  );
+TakeExpOp = "." ( Identifier |  TupleFieldIdentifer) {Comment};
+ParanthesesExp = "(" GeneralExp ")";
+Closure = "|" Identifier (":" TypeName)? { "," Identifier (":" TypeName)? } "|" "=>" TypeName? StatementBlock;
+
+
 (*------------------ identifier.rs ----------------------*)
 Identifier = (letter | "$" | "_" ) { letter | digit | "_"};
 
@@ -85,8 +107,13 @@ ClosureType = "|" TypeName {"," TypeName} "|=>" TypeName;
 (*------------------ todo field ----------------------*)
 (* items are used to hint the IDE and need to replace them with the real definition*)
 FunctionDef = "";
-GeneralExp = "";
+TupleFieldIdentifer = "";
+StructInit = "";
+TupleInit = "";
+StringLiteral = "";
 ComplexExp = "";
 StatementBlock = "";
 Assignment = "";
 NewVariable = "";
+MacroCallOp = "";
+CallFunctionOp = "";
