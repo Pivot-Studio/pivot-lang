@@ -687,6 +687,7 @@ impl Collector {
             GC_MARK_COND.wait_while(&mut v, |_| GC_MARKING.load(Ordering::Acquire));
         } else {
             GC_MARKING.store(false, Ordering::Release);
+            GLOBAL_MARK_FLAG.store(false, Ordering::Release);
             GC_MARK_COND.notify_all();
             GC_RUNNING.store(false, Ordering::Release);
             drop(v);
@@ -716,15 +717,20 @@ impl Collector {
 
     #[cfg(feature = "llvm_stackmap")]
     fn mark_globals(&self) {
-        unsafe {
-            STACK_MAP
-                .global_roots
-                .as_mut()
-                .unwrap()
-                .iter()
-                .for_each(|root| {
-                    self.mark_ptr(root.cast_mut());
-                });
+        if GLOBAL_MARK_FLAG
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            unsafe {
+                STACK_MAP
+                    .global_roots
+                    .as_mut()
+                    .unwrap()
+                    .iter()
+                    .for_each(|root| {
+                        self.mark_ptr(root.cast_mut());
+                    });
+            }
         }
     }
 
@@ -963,6 +969,8 @@ impl Collector {
 #[cfg(test)]
 #[cfg(feature = "shadow_stack")]
 mod tests;
+
+static GLOBAL_MARK_FLAG: AtomicBool = AtomicBool::new(false);
 
 // static STUCK_GCED: AtomicBool = AtomicBool::new(false);
 
