@@ -76,6 +76,12 @@ ParanthesesExp = "(" GeneralExp ")";
 Closure = "|" Identifier (":" TypeName)? { "," Identifier (":" TypeName)? } "|" "=>" TypeName? StatementBlock;
 
 
+(*------------------ function.rs ----------------------*)
+FunctionDef = { Comment } "gen"? "pub"? "fn" Identifier GenericTypeDef? "(" 
+        ( TypedIdentifier { "," TypedIdentifier})? ")" TypeName ( "where" (TraitBound { "," TraitBound})? )? ( StatementBlock | ";" );
+CallFunctionOp = GenericTypeDef? "(" (( GeneralExp | StatementBlockNode )? { "," ( GeneralExp | StatementBlockNode )})? ")" { Comment };
+
+
 (*------------------ identifier.rs ----------------------*)
 Identifier = (letter | "$" | "_" ) { letter | digit | "_"};
 
@@ -106,7 +112,6 @@ ClosureType = "|" TypeName {"," TypeName} "|=>" TypeName;
 
 (*------------------ todo field ----------------------*)
 (* items are used to hint the IDE and need to replace them with the real definition*)
-FunctionDef = "";
 TupleFieldIdentifer = "";
 StructInit = "";
 TupleInit = "";
@@ -116,4 +121,5 @@ StatementBlock = "";
 Assignment = "";
 NewVariable = "";
 MacroCallOp = "";
-CallFunctionOp = "";
+TraitBound = "";
+StatementBlockNode = "";

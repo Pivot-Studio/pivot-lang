@@ -59,6 +59,7 @@ pub fn tag_modifier(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenTy
     }
 }
 
+/// modifiable return a pair with optional tag_modifier and the parser
 pub fn modifiable<'a, O, G>(
     parser: G,
     token: TokenType,
@@ -74,7 +75,8 @@ where
     pair(opt(tag_modifier(token)), parser)
 }
 
-/// 不能直接接 `字母`、`数字` 或 `_`，用于关键字
+/// tag_token_word trims the spaces and `fn` keyword from the input, and then check the precede strings
+/// to ensure the token won't be started with number/letter/underscore.
 pub fn tag_token_word(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
     move |input| {
         let (s1, s2): (LocatedSpan<&str, bool>, LocatedSpan<&str, bool>) =
