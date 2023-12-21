@@ -302,6 +302,24 @@ pub fn thread_stuck_end() {
     });
 }
 
+pub fn add_coro_stack(sp: * mut u8, stack:* mut u8) {
+    SPACE.with(|gc| {
+        // println!("start add_root");
+        let mut gc = gc.borrow_mut();
+        gc.add_coro_stack(sp, stack)
+        // println!("add_root")
+    });
+}
+
+pub fn remove_coro_stack(stack: * mut u8) {
+    SPACE.with(|gc| {
+        // println!("start add_root");
+        let mut gc = gc.borrow_mut();
+        gc.remove_coro_stack(stack)
+        // println!("add_root")
+    });
+}
+
 /// # set evacuation
 ///
 /// 设置是否开启自动驱逐
@@ -354,7 +372,7 @@ static GC_STW_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 pub(crate) static USE_SHADOW_STACK: AtomicBool = AtomicBool::new(false);
 
-pub static ENABLE_EVA: AtomicBool = AtomicBool::new(true);
+pub static ENABLE_EVA: AtomicBool = AtomicBool::new(false);
 
 #[cfg(feature = "auto_gc")]
 static GC_AUTOCOLLECT_ENABLE: AtomicBool = AtomicBool::new(true);

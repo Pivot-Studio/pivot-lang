@@ -63,6 +63,11 @@ impl Drop for ThreadLocalAllocator {
 }
 
 impl ThreadLocalAllocator {
+    // pub fn verify(&self) {
+    //     self.recyclable_blocks.iter().chain(self.unavailable_blocks.iter()).for_each(|b| unsafe{
+    //         assert!(b.as_ref().unwrap().cursor<300);
+    //     })
+    // }
     /// # new
     ///
     /// Create a new thread-local allocator.

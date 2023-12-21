@@ -11,6 +11,8 @@ pub fn DioGC__enable_auto_collect() void;
 fn DioGC__stuck_begin(sp:i64) void;
 
 fn DioGC__stuck_end() void;
+fn DioGC__add_coro_stack(sp:i64, stack:* u8) void;
+fn DioGC__remove_coro_stack(stack:i64) void;
 
 pub fn DioGC__safepoint(sp:i64) void;
 
@@ -18,6 +20,15 @@ pub fn DioGC__register_global(p:i64) void;
 
 pub fn DioGC__set_eva(ev:bool) void;
 
+pub fn add_coro_stack(stack:* u8) void {
+    DioGC__add_coro_stack(asm_sp(), stack);
+    return;
+}
+
+pub fn remove_coro_stack(stack:i64) void {
+    DioGC__remove_coro_stack(stack);
+    return;
+}
 
 pub struct string {
     _len: i64;

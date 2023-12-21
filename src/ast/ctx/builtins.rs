@@ -46,6 +46,7 @@ lazy_static! {
         mp.insert(usize::MAX - 12, emit_if_arr);
         mp.insert(usize::MAX - 13, emit_if_union);
         mp.insert(usize::MAX - 14, emit_arr_slice);
+        mp.insert(usize::MAX - 16, emit_asm_sp);
         mp
     };
     pub static ref BUILTIN_FN_SNIPPET_MAP: HashMap<ValueHandle, String> = {
@@ -88,6 +89,7 @@ lazy_static! {
             usize::MAX - 14,
             r#"arr_slice(${1:from}, ${2:start}, ${3:len})$0"#.to_owned(),
         );
+        mp.insert(usize::MAX - 16, r#"asm_sp()$0"#.to_owned());
         mp
     };
     pub static ref BUILTIN_FN_NAME_MAP: HashMap<&'static str, ValueHandle> = {
@@ -106,6 +108,7 @@ lazy_static! {
         mp.insert("if_arr", usize::MAX - 12);
         mp.insert("if_union", usize::MAX - 13);
         mp.insert("arr_slice", usize::MAX - 14);
+        mp.insert("asm_sp", usize::MAX - 16);
         mp
     };
 }
@@ -153,6 +156,13 @@ fn emit_sizeof<'a, 'b>(
         .to_result();
 }
 
+fn emit_asm_sp<'a, 'b>(
+    f: &mut FuncCallNode,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> NodeResult {
+    builder.get_sp_handle().new_output(Arc::new(RefCell::new(PLType::new_i64()))).to_result()
+}
 fn emit_is_ptr<'a, 'b>(
     f: &mut FuncCallNode,
     ctx: &'b mut Ctx<'a>,
@@ -1091,6 +1101,7 @@ lazy_static! {
     pub static ref STUCK_FNS: FxHashSet<&'static str> = {
         let mut set: FxHashSet<&'static str> = Default::default();
         set.insert("sleep");
+        set.insert("lock_mutex");
         set
     };
 }

@@ -59,8 +59,6 @@ pub struct Block {
     line_map: [LineHeader; NUM_LINES_PER_BLOCK],
     /// 第一个hole的起始行号
     cursor: usize,
-    // /// 第一个hole的长度（行数
-    // limit: usize,
     /// 是否被标记
     pub marked: bool,
     /// 洞的数量

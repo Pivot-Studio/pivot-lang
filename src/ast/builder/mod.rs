@@ -38,6 +38,7 @@ pub trait IRBuilder<'a, 'ctx> {
     ) -> ValueHandle;
     fn get_global_var_handle(&self, name: &str) -> Option<ValueHandle>;
     fn new_subscope(&self, start: Pos);
+    fn get_sp_handle(&self) ->ValueHandle;
     fn add_global(
         &self,
         name: &str,

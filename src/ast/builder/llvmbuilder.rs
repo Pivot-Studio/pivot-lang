@@ -2327,6 +2327,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let v = self.builder.build_or(lhs, rhs, name).unwrap();
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
+    fn get_sp_handle(&self) ->ValueHandle {
+        self.get_llvm_value_handle(&self.get_sp().as_any_value_enum())
+    }
     fn build_and(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();
         let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();

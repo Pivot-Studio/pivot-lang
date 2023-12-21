@@ -1,0 +1,66 @@
+fn new_coro_ctx(stack:i64) i64;
+fn new_coro_stack() i64;
+fn coro_yield(data:i64, sp:i64) void;
+fn coro_stack_from_heap_ptr(ptr:* u8) i64;
+fn coro_run(ctx:i64, f:*||=>void, sp:i64) i64;
+fn set_current_coro(ctx:i64, stack:i64) void;
+fn set_current_stack( stack:i64) void;
+fn dispose_coro_stack(stack:i64) void;
+fn get_current_coro(ctx:*i64, stack:*i64) void;
+
+use std::chan::*;
+
+pub struct Coroutine {
+    ctx:i64;
+    stack:i64;
+    f: ||=>void;
+}
+
+pub fn new_coro(f: ||=>void) Coroutine {
+    // let c = [u8*7680;];
+    let p = new_coro_stack();
+    // let p = &c[0];
+    let ctx = new_coro_ctx(p);
+    return Coroutine{ctx:ctx, stack:p, f:f};
+}
+
+impl Coroutine {
+    pub fn resume() void {
+        let ctx = coro_run(self.ctx, &||=> {
+            set_current_stack( self.stack);
+            self.f();
+            gc::remove_coro_stack(self.stack);
+            return;
+        }, asm_sp());
+        self.ctx = ctx;
+        return;
+    }
+    pub fn dispose_coro_stack() void {
+        dispose_coro_stack(self.stack);
+        return;
+    }
+}
+
+
+
+fn coro_sleep() void {
+    
+    let ctx;
+    let stack;
+    get_current_coro(ctx, stack);
+
+    coro__yield();
+    return;
+}
+
+fn go(f:||=>void) void {
+
+    return;
+}
+
+
+
+pub fn coro__yield() void {
+    coro_yield(0, asm_sp());
+    return;
+}

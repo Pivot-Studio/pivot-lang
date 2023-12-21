@@ -23,7 +23,15 @@ use crate::{
 
 fn get_ip_from_sp(sp: *mut u8) -> *mut u8 {
     let sp = sp as *mut *mut u8;
-    unsafe { *sp.offset(-1) }
+    // check align
+    unsafe { 
+        let p = sp.offset(-1);
+        if p as usize % 8 == 0 {
+            *p
+        }else {
+            std::ptr::null_mut()
+        }
+     }
 }
 
 fn walk_gc_frames(sp: *mut u8, mut walker: impl FnMut(*mut u8, i32, ObjectType)) {
@@ -77,6 +85,7 @@ pub struct Collector {
     frames_list: AtomicPtr<Vec<(*mut libc::c_void, *mut libc::c_void)>>,
     shadow_thread_running: AtomicBool,
     live_set: RefCell<FxHashMap<u64, *mut u8>>,
+    coro_stacks: FxHashMap<*mut u8, Box<Vec<(*mut libc::c_void, *mut libc::c_void)>>>,
 }
 
 struct CollectorStatus {
@@ -152,6 +161,7 @@ impl Collector {
                 frames_list: AtomicPtr::default(),
                 shadow_thread_running: AtomicBool::new(false),
                 live_set: RefCell::new(FxHashMap::default()),
+                coro_stacks: FxHashMap::default(),
             }
         }
     }
@@ -644,6 +654,7 @@ impl Collector {
                     });
                 }
                 self.mark_globals();
+                self.mark_coro_stacks();
             }
         }
 
@@ -795,6 +806,9 @@ impl Collector {
     ///
     /// for more information, see [mark_fast_unwind](Collector::mark_fast_unwind)
     pub fn collect_fast_unwind(&self, sp: *mut u8) {
+        // unsafe {
+        //     self.thread_local_allocator.as_ref().unwrap().verify();
+        // }
         log::info!(
             "gc {} collecting... stucked: {}",
             self.id,
@@ -872,6 +886,9 @@ impl Collector {
             free
         );
         let mut status = self.status.borrow_mut();
+        // unsafe {
+        //     self.thread_local_allocator.as_ref().unwrap().verify();
+        // }
         status.collecting = false;
         // (Default::default(), Default::default())
     }
@@ -904,17 +921,7 @@ impl Collector {
     /// for more information, see [mark_fast_unwind](Collector::mark_fast_unwind)
     pub fn stuck_fast_unwind(&mut self, sp: *mut u8) {
         log::trace!("gc {}: stucking...", self.id);
-        let mut frames: Box<Vec<(*mut libc::c_void, *mut libc::c_void)>> = Box::default();
-        if sp.is_null() {
-            backtrace::trace(|frame| {
-                frames.push((frame.ip(), frame.sp()));
-                true
-            });
-        } else {
-            walk_gc_frames(sp, |sp, _, _| {
-                frames.push((get_ip_from_sp(sp) as _, sp as _))
-            });
-        }
+        let frames = get_frames(sp);
         unsafe {
             let ptr = Box::leak(frames) as *mut _;
             self.frames_list.store(ptr, Ordering::SeqCst);
@@ -945,6 +952,33 @@ impl Collector {
         // FRAMES_LIST.0.lock().borrow_mut().insert( self as _,frames);
     }
 
+    fn mark_coro_stacks(&self) {
+        for (_, frames) in self.coro_stacks.iter() {
+            for (ip, sp) in frames.iter() {
+                let addr = *ip as *mut u8;
+                let const_addr = addr as *const u8;
+                let map = unsafe{STACK_MAP.map.as_ref()}.unwrap();
+                let f = map.get(&const_addr);
+                if let Some(f) = f {
+                    // eprintln!("marking coro stack {:p} {:p}, key: {:p}", *ip, *sp, *k);
+                    f.iter_roots().for_each(|offset| {
+                        self.mark_stack_offset(*sp as _, offset, ObjectType::Pointer)
+                    });
+                }
+            }
+        }
+    }
+
+    pub fn add_coro_stack(& mut self,sp: * mut u8, stack:* mut u8) {
+        let frames = get_frames(sp);
+        // eprintln!("add coro stack {:?}", frames);
+        self.coro_stacks.insert(stack,frames);
+    }
+
+    pub fn remove_coro_stack(& mut self,stack:* mut u8) {
+        self.coro_stacks.remove(&stack);
+    }
+
     pub fn unstuck(&mut self) {
         log::trace!("gc {}: unstucking...", self.id);
         let mutex = STUCK_MUTEX.lock();
@@ -955,7 +989,7 @@ impl Collector {
             STUCK_COND.notify_all();
             drop(mutex);
             unsafe {
-                drop_in_place(old as *mut Vec<(*mut libc::c_void, *mut libc::c_void)>);
+                drop(Box::from_raw(old));
             }
         } else {
             STUCK_COND.notify_all();
@@ -964,6 +998,21 @@ impl Collector {
         // wait until the shadow thread exit
         spin_until!(!self.shadow_thread_running.load(Ordering::SeqCst));
     }
+}
+
+fn get_frames(sp: *mut u8) -> Box<Vec<(*mut libc::c_void, *mut libc::c_void)>> {
+    let mut frames: Box<Vec<(*mut libc::c_void, *mut libc::c_void)>> = Box::default();
+    if sp.is_null() {
+        backtrace::trace(|frame| {
+            frames.push((frame.ip(), frame.sp()));
+            true
+        });
+    } else {
+        walk_gc_frames(sp, |sp, _, _| {
+            frames.push((get_ip_from_sp(sp) as _, sp as _))
+        });
+    }
+    frames
 }
 
 #[cfg(test)]
