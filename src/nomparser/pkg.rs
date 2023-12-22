@@ -11,9 +11,6 @@ use internal_macro::{test_parser, test_parser_error};
 
 use super::*;
 
-/// ```enbf
-/// use_statement = "use" identifier ("::" identifier)* ;
-/// ```
 #[test_parser("use a::b")]
 #[test_parser("use a::")]
 #[test_parser("use a")]

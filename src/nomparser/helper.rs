@@ -92,6 +92,8 @@ pub fn tag_token_word(token: TokenType) -> impl Fn(Span) -> IResult<Span, (Token
         }
     }
 }
+
+/// delspace trims all prefix/suffix spaces for the input firstly before calling parser.
 pub fn delspace<I, O, E, G>(parser: G) -> impl FnMut(I) -> IResult<I, O, E>
 where
     G: Parser<I, O, E>,
