@@ -1,0 +1,1 @@
+pub fn exit_now(code:i64) void;

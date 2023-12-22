@@ -43,7 +43,7 @@ pub trait LineHeaderExt {
     fn get_obj_line_size(&self, idx: usize, block: &mut Block) -> usize;
     fn set_forwarded(&mut self);
     fn get_forwarded(&self) -> bool;
-    fn get_forward_start(&self) -> (bool, LineHeader);
+    fn get_forward_stat(&self) -> (bool, LineHeader);
     fn forward_cas(&mut self, old: u8) -> bool;
 }
 
@@ -114,7 +114,7 @@ impl LineHeaderExt for LineHeader {
         }
     }
     #[inline]
-    fn get_forward_start(&self) -> (bool, LineHeader) {
+    fn get_forward_stat(&self) -> (bool, LineHeader) {
         let atom_self = self as *const u8 as *const AtomicU8;
         let load = unsafe { (*atom_self).load(Ordering::Acquire) };
         (load & 0b1000000 == 0b1000000, load)
@@ -292,7 +292,7 @@ impl Block {
         self.cursor = first_hole_line_idx;
         self.marked = false;
         self.hole_num = holes;
-        self.eva_target = false;
+        // self.eva_target = false;
         if let Some(count) = (*mark_histogram).get_mut(&self.hole_num) {
             *count += marked_num;
         } else {

@@ -1,6 +1,5 @@
 use std::{
     cell::RefCell,
-    ptr::drop_in_place,
     sync::{
         atomic::{AtomicBool, AtomicPtr, Ordering},
         Arc,
@@ -107,11 +106,10 @@ impl Drop for Collector {
             if (*self.thread_local_allocator).is_live() {
                 let mut v = GC_COLLECTOR_COUNT.lock();
                 v.0 -= 1;
+                drop(Box::from_raw(self.thread_local_allocator));
                 GC_MARK_COND.notify_all();
                 drop(v);
-                drop_in_place(self.thread_local_allocator);
             }
-            libc::free(self.thread_local_allocator as *mut libc::c_void);
             libc::free(self.mark_histogram as *mut libc::c_void);
             libc::free(self.queue as *mut libc::c_void);
         }
@@ -133,8 +131,7 @@ impl Collector {
         unsafe {
             let tla = ThreadLocalAllocator::new(ga);
             let mem =
-                malloc(core::mem::size_of::<ThreadLocalAllocator>()).cast::<ThreadLocalAllocator>();
-            mem.write(tla);
+                Box::leak( Box::new(tla)) as * mut _;
             let memvecmap = malloc(core::mem::size_of::<FxHashMap<usize, usize>>())
                 .cast::<FxHashMap<usize, usize>>();
             memvecmap.write(FxHashMap::with_capacity_and_hasher(
@@ -169,11 +166,9 @@ impl Collector {
     pub fn unregister_current_thread(&self) {
         let mut v = GC_COLLECTOR_COUNT.lock();
         v.0 -= 1;
+        drop(unsafe{Box::from_raw(self.thread_local_allocator)});
         GC_MARK_COND.notify_all();
         drop(v);
-        unsafe {
-            drop_in_place(self.thread_local_allocator);
-        }
     }
 
     /// # get_size
@@ -329,8 +324,8 @@ impl Collector {
     /// ## Return
     ///
     /// * `ptr` - corrected pointer
-    unsafe fn correct_ptr(&self, ptr: *mut u8, offset: isize) -> *mut u8 {
-        let father = ptr as *mut *mut u8;
+    unsafe fn correct_ptr(&self, father: *mut u8, offset: isize, origin_ptr:* mut u8) -> *mut u8 {
+        let father = father as *mut *mut u8;
         let ptr = AtomicPtr::new((*father).offset(-offset) as *mut *mut u8);
         let ptr = ptr.load(Ordering::SeqCst);
         let new_ptr = *ptr;
@@ -343,7 +338,20 @@ impl Collector {
             *father,
             np
         );
-        *father = np;
+        // if np as usize == 0xa {
+        //     panic!()
+        // }
+        // eprintln!(
+        //     "gc {} correct ptr in {:p} from  {:p} to {:p}",
+        //     self.id,
+        //     father,
+        //     *father,
+        //     np
+        // );
+            // *father = np;
+        let atomic_father = father as *mut AtomicPtr<u8>;
+        // cas store
+        let _ = atomic_father.as_mut().unwrap().compare_exchange(origin_ptr, np, Ordering::SeqCst, Ordering::SeqCst);
         np
     }
 
@@ -392,13 +400,14 @@ impl Collector {
                 }
             } else {
                 // evacuation logic
-                let (forward, h) = line_header.get_forward_start();
+                let (forward, h) = line_header.get_forward_stat();
                 let old_h = h;
                 // if forward is true or cas is failed, then it's forwarded by other thread.
                 let shall_i_forward = !forward && line_header.forward_cas(old_h);
                 if !shall_i_forward {
                     spin_until!(line_header.get_forwarded());
-                    self.correct_ptr(father, offset_from_head);
+                    
+                    self.correct_ptr(father, offset_from_head, ptr);
                     return;
                 }
 
@@ -410,6 +419,8 @@ impl Collector {
                     self.alloc_no_collect(obj_line_size * LINE_SIZE, line_header.get_obj_type());
                 if !new_ptr.is_null() {
                     let new_block = Block::from_obj_ptr(new_ptr);
+                    // eprintln!("eva to block addr: {:p}", new_block);
+                    debug_assert_eq!(new_block.is_eva_candidate(), false);
                     let (new_line_header, _) = new_block.get_line_header_from_addr(new_ptr);
                     // 将数据复制到新的地址
                     core::ptr::copy_nonoverlapping(head, new_ptr, obj_line_size * LINE_SIZE);
@@ -419,10 +430,11 @@ impl Collector {
                     (*atomic_ptr).store(new_ptr, Ordering::SeqCst);
                     // eprintln!("gc {}: eva {:p} to {:p}", self.id, head, new_ptr);
                     log::trace!("gc {}: eva {:p} to {:p}", self.id, head, new_ptr);
+                    debug_assert_eq!(new_line_header.get_forwarded(), false);
                     new_line_header.set_marked(true);
                     new_block.marked = true;
                     head = new_ptr;
-                    self.correct_ptr(father, offset_from_head);
+                    self.correct_ptr(father, offset_from_head, ptr);
                     // 成功驱逐
                     line_header.set_forwarded();
                 } else {
@@ -658,6 +670,13 @@ impl Collector {
             }
         }
 
+        for (_, live) in self.live_set.borrow_mut().iter_mut() {
+            unsafe {
+                let p = live as *mut _ as _;
+                self.mark_ptr(p);
+            }
+        }
+
         // iterate through queue and mark all reachable objects
         unsafe {
             while let Some((obj, obj_type)) = (*self.queue).pop() {
@@ -674,19 +693,6 @@ impl Collector {
                     }
                 }
             }
-        }
-        let mut lives = vec![];
-        for (i, live) in self.live_set.borrow().iter() {
-            unsafe {
-                let p = live as *const _ as _;
-                self.mark_ptr(p);
-                let p = p as *mut *mut u8;
-                lives.push((*i, *p));
-            }
-        }
-        self.live_set.borrow_mut().clear();
-        for (i, live) in lives {
-            self.live_set.borrow_mut().insert(i, live);
         }
 
         let mut v = GC_COLLECTOR_COUNT.lock();
@@ -739,7 +745,8 @@ impl Collector {
                     .unwrap()
                     .iter()
                     .for_each(|root| {
-                        self.mark_ptr(root.cast_mut());
+                        // eprintln!("gc {}: mark global {:p} {:p}", self.id, *root,* ((*root) as * mut * mut u8));
+                        self.mark_ptr((*root));
                     });
             }
         }

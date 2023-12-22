@@ -2,15 +2,23 @@ pub struct Mutex{}
 
 pub fn create_mutex(mutex: **Mutex) u64;
 
-fn lock_mutex(mutex: *Mutex) u64;
+pub fn lock_mutex(mutex: *Mutex) u64;
 
 
-pub fn lock_mutexWrap(mutex: *Mutex) u64{
-    let res:u64;
-    res = lock_mutex(mutex);
-    return res;
-}
+
 
 pub fn unlock_mutex(mutex: *Mutex) u64;
 
 pub fn drop_mutex(mutex: *Mutex) u64;
+
+pub struct CondVar{}
+
+pub fn create_condvar(condvar: **CondVar) u64;
+
+pub fn condvar_wait(condvar: *CondVar, mutex: *Mutex) u64;
+
+pub fn condvar_notify(condvar: *CondVar) u64;
+
+pub fn condvar_notify_all(condvar: *CondVar) u64;
+
+pub fn drop_condvar(condvar: *CondVar) u64;

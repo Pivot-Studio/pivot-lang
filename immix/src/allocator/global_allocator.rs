@@ -3,7 +3,7 @@ use std::{cell::Cell, collections::VecDeque};
 use parking_lot::ReentrantMutex;
 use threadpool::ThreadPool;
 
-use crate::{bigobj::BigObj, block::Block, consts::BLOCK_SIZE, mmap::Mmap};
+use crate::{bigobj::BigObj, block::Block, consts::BLOCK_SIZE, mmap::Mmap, NUM_LINES_PER_BLOCK};
 
 use super::big_obj_allocator::BigObjAllocator;
 
@@ -149,8 +149,14 @@ impl GlobalAllocator {
         unv: &mut Vec<*mut Block>,
     ) {
         let _lock = self.lock.lock();
-        recycle.extend(self.recycle_blocks.drain(..));
-        unv.append(&mut self.unavailable_blocks);
+        recycle.extend(self.recycle_blocks.drain(..).map(|b| unsafe{
+            b.as_mut().unwrap().set_eva_threshold(NUM_LINES_PER_BLOCK);
+            b
+        }));
+        unv.extend(self.unavailable_blocks.drain(..).map(|b| unsafe{
+            b.as_mut().unwrap().set_eva_threshold(NUM_LINES_PER_BLOCK);
+            b
+        }));
     }
 
     /// # get_block

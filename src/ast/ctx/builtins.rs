@@ -1102,6 +1102,7 @@ lazy_static! {
         let mut set: FxHashSet<&'static str> = Default::default();
         set.insert("sleep");
         set.insert("lock_mutex");
+        set.insert("condvar_wait");
         set
     };
 }

@@ -119,7 +119,7 @@ impl GlobalNode {
             globalptr,
             pltype.clone(),
             self.var.range,
-            false,
+            true,
             false,
         )?;
         // for gc reason, globals must be pointer

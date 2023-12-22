@@ -1,6 +1,6 @@
 use std::chan::*;
 use std::future::*;
-fn new_thread(f: *||=>void) i128;
+fn new_thread(f: *||=>void) void;
 fn sleep(secs: u64) void;
 pub struct SharedState {
     completed: bool;

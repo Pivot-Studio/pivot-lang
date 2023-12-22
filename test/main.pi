@@ -1,19 +1,45 @@
 use core::coro::*;
-use project1::test::map;
+use core::process;
+use core::coro::Coroutine;
+use project1::test::global;
+
 pub fn main() i64 {
-    let c = new_coro(||=>{
-        for let i = 0; i < 10; i = i + 1 {
-            map::test_map();
-            println!("coro", i);
-            coro__yield();
-        }
+    let c1 = new_coro(||=> {
+        coro_sleep(3 as u64);
+        let a = 1;
+        println!("sleep done c1");
+        go(||=> {
+            coro_sleep(3 as u64);
+            println!("should be seen at last");
+            process::exit_now(0);
+            return;
+        });
+        coro__yield();
         return;
     });
-    for let i = 0; i<5; i = i + 1 {
-        println!("resume", i);
-        c.resume();
-    }
-    c.dispose_coro_stack();
+    let c2 = new_coro(||=> {
+        coro_sleep(3 as u64);
+        println!("sleep done c2");
+        go(||=> {
+            coro_sleep(2 as u64);
+            println!("should be seen before exit 2");
+            coro__yield();
+            return;
+        });
+        go(||=> {
+            coro_sleep(1 as u64);
+            println!("should be seen before exit 1");
+            coro__yield();
+            return;
+        });
+
+        coro__yield();
+        return;
+    });
+    sched_coro(c1);
+    sched_coro(c2);
+    start_sched_loop();
+    
     return 0;
 }
 

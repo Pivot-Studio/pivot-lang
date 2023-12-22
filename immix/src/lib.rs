@@ -59,7 +59,7 @@ pub fn register_global(p: *mut u8) {
 #[cfg(feature = "llvm_stackmap")]
 pub struct StackMapWrapper {
     pub map: *mut FxHashMap<*const u8, Function>,
-    pub global_roots: *mut Vec<*const u8>,
+    pub global_roots: *mut Vec<*mut u8>,
 }
 #[cfg(feature = "llvm_stackmap")]
 unsafe impl Sync for StackMapWrapper {}
@@ -372,7 +372,7 @@ static GC_STW_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 pub(crate) static USE_SHADOW_STACK: AtomicBool = AtomicBool::new(false);
 
-pub static ENABLE_EVA: AtomicBool = AtomicBool::new(false);
+pub static ENABLE_EVA: AtomicBool = AtomicBool::new(true);
 
 #[cfg(feature = "auto_gc")]
 static GC_AUTOCOLLECT_ENABLE: AtomicBool = AtomicBool::new(true);

@@ -5,6 +5,7 @@ use std::{process::exit, sync::mpsc::channel, thread, cell:: RefCell};
 
 use backtrace::Backtrace;
 use context::{Transfer, Context, stack::{Stack, ProtectedFixedSizeStack}};
+use immix::VisitFunc;
 use internal_macro::is_runtime;
 pub mod gc;
 pub mod libcwrap;
@@ -139,7 +140,6 @@ extern "C" fn context_function(t: Transfer) -> ! {
     // let context = unsafe{std::mem::transmute::<Context,usize>(t.context)};
     unsafe{set_current_coro(t.context, std::ptr::null_mut());}
     func(data_ptr);
-
     todo!()
 }
 
@@ -193,12 +193,44 @@ fn set_current_stack(stack:*mut u8) {
 }
 
 #[is_runtime]
-fn coro_run(ctx:Context,f: *mut i128, sp:* mut u8) ->Context {
+fn coro_run(ctx:Context,f: *mut i128, sp:* mut u8) ->* mut CoroRunRet {
     immix::add_coro_stack(sp, std::ptr::null_mut());
-    let ctx = ctx.resume(f as usize).context;
+    let tr = ctx.resume(f as usize);
+    let ctx = tr.context;
     immix::remove_coro_stack(std::ptr::null_mut());
-    ctx
+    Box::leak( Box::new( CoroRunRet{
+        ctx:std::mem::transmute::<Context,i64>(ctx),
+        data: tr.data as _
+    }))
 }
+
+#[is_runtime]
+fn get_run_ret_ctx(r:* mut CoroRunRet) ->i64 {
+    r.as_mut().unwrap().ctx
+}
+
+#[is_runtime]
+fn get_run_ret_data(r:* mut CoroRunRet) ->i64 {
+    r.as_mut().unwrap().data
+}
+
+#[is_runtime]
+fn dispose_run_ret(r:* mut CoroRunRet) {
+    drop(unsafe{Box::from_raw(r)});
+}
+
+
+
+
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct CoroRunRet {
+    pub ctx: i64,
+    pub data: i64
+}
+
+
 
 
 
@@ -236,4 +268,9 @@ thread_local! {
     pub static TRANS: RefCell<Option<(usize, * mut u8)>> =  {
         Default::default()
     };
+}
+
+#[is_runtime]
+fn exit_now(code: i64) {
+    std::process::exit(code as _);
 }

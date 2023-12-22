@@ -178,7 +178,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let ptr = self.get_llvm_value(ptr).unwrap();
         let ptr = ptr.into_pointer_value();
         let ptr = self.builder.build_load(llvm_type, ptr, name).unwrap();
-
         self.get_llvm_value_handle(&ptr.as_any_value_enum())
     }
     #[allow(clippy::too_many_arguments)]
