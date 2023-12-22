@@ -143,7 +143,6 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     )(input)
 }
 
-/// ```ebnf
 /// call_function_op = "(" (logic_exp (","logic_exp)*)? ")" ;
 /// ```
 #[test_parser("(a,c,c)")]

@@ -188,9 +188,6 @@ fn macro_call_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     })(input)
 }
 
-/// ```ebnf
-/// complex_exp = primary_exp (take_exp_op|array_element_op|call_function_exp_op)*;
-/// ```
 #[test_parser("a[1][2]()[3].b()()[4].c")]
 #[test_parser("a{}.d")]
 #[test_parser("ad")]
@@ -292,9 +289,6 @@ fn primary_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     ))(input)
 }
 
-/// ```ebnf
-/// take_exp_op = ("." identifier?) ;
-/// ```
 #[test_parser(".0")]
 fn take_exp_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
     delspace(map_res(
@@ -309,9 +303,6 @@ fn take_exp_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
     ))(input)
 }
 
-/// ```ebnf
-/// parantheses_exp = "(" logic_exp ")";
-/// ```
 #[test_parser("(a)")]
 #[test_parser("(a+a*b/c)")]
 fn parantheses_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
