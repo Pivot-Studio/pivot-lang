@@ -230,7 +230,7 @@ pub fn gc_is_auto_collect_enabled() -> bool {
 
 pub fn no_gc_thread() {
     SPACE.with(|gc| {
-        gc.borrow().unregister_current_thread();
+        gc.borrow_mut().unregister_current_thread();
     })
 }
 

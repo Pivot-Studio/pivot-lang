@@ -2,6 +2,8 @@ use core::coro::*;
 use core::process;
 use core::coro::Coroutine;
 use project1::test::global;
+use std::thread;
+use core::panic;
 
 pub fn main() i64 {
     let c1 = new_coro(||=> {
@@ -39,6 +41,31 @@ pub fn main() i64 {
     sched_coro(c1);
     sched_coro(c2);
     start_sched_loop();
+    // let a = 1;
+    // thread::spawn(||=>{
+    //     while true {
+    //         let b = 0;
+    //         if a != 1 {
+    //             panic::pl_panic();
+    //         }
+    //     }
+    //     return;
+    // });
+    // thread::spawn(||=>{
+    //     while true {
+    //         let b = 0;
+    //         if a != 1 {
+    //             panic::pl_panic();
+    //         }
+    //     }
+    //     return;
+    // });
+    // while true {
+    //     let b = 0;
+    //     if a != 1 {
+    //         panic::pl_panic();
+    //     }
+    // }
     
     return 0;
 }

@@ -41,14 +41,10 @@ pub struct ThreadLocalAllocator {
     big_objs: Vec<*mut BigObj>,
     eva_blocks: Vec<*mut Block>,
     collect_mode: bool,
-    live: bool,
 }
 
 impl Drop for ThreadLocalAllocator {
     fn drop(&mut self) {
-        if !self.live {
-            return;
-        }
         let global_allocator = unsafe { &mut *self.global_allocator };
         // here we should return all blocks to global allocator
         // however, when a thread exits, it may still hold some non-empty blocks
@@ -59,7 +55,6 @@ impl Drop for ThreadLocalAllocator {
             self.recyclable_blocks.drain(..),
             &self.unavailable_blocks,
         );
-        self.live = false;
     }
 }
 
@@ -84,13 +79,9 @@ impl ThreadLocalAllocator {
             eva_blocks: Vec::new(),
             big_objs: Vec::new(),
             collect_mode: false,
-            live: true,
         }
     }
 
-    pub fn is_live(&self) -> bool {
-        self.live
-    }
 
     // pub fn has_emergency(&self) -> bool {
     //     unsafe{(*self.global_allocator).out_of_space() && self.recyclable_blocks.len() == 0 }
@@ -414,6 +405,7 @@ impl ThreadLocalAllocator {
                         unavailable_blocks.push(block);
                     }
                 } else {
+                    block.as_mut().unwrap().reset_header();
                     free_blocks.push(block);
                 }
             }

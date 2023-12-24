@@ -59,6 +59,7 @@ impl <S>Chan<S> {
             condvar_wait(self.condvar, self.mtx);
         }
         self.buffer.push(s);
+        // io::printi64ln(self.count as i64);
         self.count = self.count + 1;
         if self.count == 1 {
             condvar_notify(self.condvar);

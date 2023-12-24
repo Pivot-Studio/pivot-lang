@@ -197,7 +197,7 @@ fn coro_run(ctx:Context,f: *mut i128, sp:* mut u8) ->* mut CoroRunRet {
     immix::add_coro_stack(sp, std::ptr::null_mut());
     let tr = ctx.resume(f as usize);
     let ctx = tr.context;
-    immix::remove_coro_stack(std::ptr::null_mut());
+    // immix::remove_coro_stack(std::ptr::null_mut());
     Box::leak( Box::new( CoroRunRet{
         ctx:std::mem::transmute::<Context,i64>(ctx),
         data: tr.data as _
