@@ -157,11 +157,14 @@ fn emit_sizeof<'a, 'b>(
 }
 
 fn emit_asm_sp<'a, 'b>(
-    f: &mut FuncCallNode,
-    ctx: &'b mut Ctx<'a>,
+    _f: &mut FuncCallNode,
+    _ctx: &'b mut Ctx<'a>,
     builder: &'b BuilderEnum<'a, '_>,
 ) -> NodeResult {
-    builder.get_sp_handle().new_output(Arc::new(RefCell::new(PLType::new_i64()))).to_result()
+    builder
+        .get_sp_handle()
+        .new_output(Arc::new(RefCell::new(PLType::new_i64())))
+        .to_result()
 }
 fn emit_is_ptr<'a, 'b>(
     f: &mut FuncCallNode,
@@ -306,13 +309,11 @@ fn emit_unsafe_cast<'a, 'b>(
     }
     let ty = PLType::Pointer(generic);
     let ty = Arc::new(RefCell::new(ty));
-    let re = builder.bitcast(
-        ctx,
-        v.get_value(),
-        &PLType::Pointer(ty.clone()),
-        "unsafe_casted",
-    );
-    re.new_output(ty).to_result()
+    let loaded = builder.try_load2var(Default::default(), v.get_value(), &ty.borrow(), ctx)?;
+    let re = builder.bitcast(ctx, loaded, &PLType::Pointer(ty.clone()), "unsafe_casted");
+    let alloca = builder.alloc_no_collect("tmp_cast", &ty.borrow(), ctx, None);
+    builder.build_store(alloca, re);
+    alloca.new_output(ty).to_result()
 }
 
 fn emit_arr_from_raw<'a, 'b>(

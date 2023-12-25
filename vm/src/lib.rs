@@ -1,11 +1,13 @@
 #![allow(improper_ctypes_definitions)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::{process::exit, sync::mpsc::channel, thread, cell:: RefCell};
+use std::{cell::RefCell, ops::Deref, process::exit, sync::mpsc::channel, thread};
 
 use backtrace::Backtrace;
-use context::{Transfer, Context, stack::{Stack, ProtectedFixedSizeStack}};
-use immix::VisitFunc;
+use context::{
+    stack::{ProtectedFixedSizeStack, Stack},
+    Context, Transfer,
+};
 use internal_macro::is_runtime;
 pub mod gc;
 pub mod libcwrap;
@@ -138,13 +140,15 @@ extern "C" fn context_function(t: Transfer) -> ! {
     let data_ptr = unsafe { *ptr.offset(1) };
     let func = unsafe { *f_ptr };
     // let context = unsafe{std::mem::transmute::<Context,usize>(t.context)};
-    unsafe{set_current_coro(t.context, std::ptr::null_mut());}
+    unsafe {
+        set_current_coro(t.context, std::ptr::null_mut());
+    }
     func(data_ptr);
     todo!()
 }
 
 #[is_runtime]
-fn new_coro_ctx(stack:* mut ProtectedFixedSizeStack) -> Context {
+fn new_coro_ctx(stack: *mut ProtectedFixedSizeStack) -> Context {
     // // Allocate a Context on the stack.
     // let offseted = stack.offset(7680);
     // eprintln!("{:p}->{:p}", offseted,stack);
@@ -152,117 +156,127 @@ fn new_coro_ctx(stack:* mut ProtectedFixedSizeStack) -> Context {
 }
 
 #[is_runtime]
-fn new_coro_stack() -> * mut ProtectedFixedSizeStack {
-    Box::leak( Box::new(ProtectedFixedSizeStack::new(8*1024).unwrap())) as * mut ProtectedFixedSizeStack
-}
-
-
-#[is_runtime]
-fn coro_stack_from_heap_ptr(stack:* mut u8) -> * mut Stack {
-    
-    Box::leak( Box::new(Stack::new(stack.offset(7000) as _, stack as _))) as * mut _
-}
-
-
-#[is_runtime]
-fn dispose_coro_stack(stack:* mut ProtectedFixedSizeStack) {
-    drop(unsafe{Box::from_raw(stack)});
+fn new_coro_stack() -> *mut ProtectedFixedSizeStack {
+    Box::leak(Box::new(ProtectedFixedSizeStack::new(8 * 1024).unwrap()))
+        as *mut ProtectedFixedSizeStack
 }
 
 #[is_runtime]
-fn set_current_coro(ctx:Context, stack:*mut u8) {
-    TRANS.with(|tr|{
-        tr.borrow_mut().replace((unsafe{std::mem::transmute::<Context,usize>(ctx)}, stack));
+fn coro_stack_from_heap_ptr(stack: *mut u8) -> *mut Stack {
+    Box::leak(Box::new(Stack::new(stack.offset(7000) as _, stack as _))) as *mut _
+}
+
+#[is_runtime]
+fn dispose_coro_stack(stack: *mut ProtectedFixedSizeStack) {
+    drop(unsafe { Box::from_raw(stack) });
+}
+
+#[is_runtime]
+fn set_current_coro(ctx: Context, stack: *mut u8) {
+    TRANS.with(|tr| {
+        tr.borrow_mut()
+            .replace((unsafe { std::mem::transmute::<Context, usize>(ctx) }, stack));
     });
 }
 
 #[is_runtime]
-fn set_current_ctx(ctx:Context) {
-    TRANS.with(|tr|{
-        let stack = tr.borrow().clone().map(|(_,s)|s).unwrap_or(std::ptr::null_mut());
-        tr.borrow_mut().replace((unsafe{std::mem::transmute::<Context,usize>(ctx)}, stack));
+fn set_current_ctx(ctx: Context) {
+    TRANS.with(|tr| {
+        let stack = tr
+            .borrow()
+            .deref()
+            .map(|(_, s)| s)
+            .unwrap_or(std::ptr::null_mut());
+        tr.borrow_mut()
+            .replace((unsafe { std::mem::transmute::<Context, usize>(ctx) }, stack));
     });
 }
 
 #[is_runtime]
-fn set_current_stack(stack:*mut u8) {
-    TRANS.with(|tr|{
-        let ctx = tr.borrow().clone().unwrap().0;
+fn set_current_stack(stack: *mut u8) {
+    // eprintln!("set_current_stack {:p}", stack);
+    TRANS.with(|tr| {
+        let ctx = tr.borrow().deref().unwrap().0;
         tr.borrow_mut().replace((ctx, stack));
     });
 }
 
 #[is_runtime]
-fn coro_run(ctx:Context,f: *mut i128, sp:* mut u8) ->* mut CoroRunRet {
+fn coro_run(ctx: Context, f: *mut i128, sp: *mut u8) -> *mut CoroRunRet {
     immix::add_coro_stack(sp, std::ptr::null_mut());
     let tr = ctx.resume(f as usize);
     let ctx = tr.context;
-    // immix::remove_coro_stack(std::ptr::null_mut());
-    Box::leak( Box::new( CoroRunRet{
-        ctx:std::mem::transmute::<Context,i64>(ctx),
-        data: tr.data as _
+    immix::remove_coro_stack(std::ptr::null_mut());
+    Box::leak(Box::new(CoroRunRet {
+        ctx: std::mem::transmute::<Context, i64>(ctx),
+        data: tr.data as _,
     }))
 }
 
 #[is_runtime]
-fn get_run_ret_ctx(r:* mut CoroRunRet) ->i64 {
+fn get_run_ret_ctx(r: *mut CoroRunRet) -> i64 {
     r.as_mut().unwrap().ctx
 }
 
 #[is_runtime]
-fn get_run_ret_data(r:* mut CoroRunRet) ->i64 {
+fn get_run_ret_data(r: *mut CoroRunRet) -> i64 {
     r.as_mut().unwrap().data
 }
 
 #[is_runtime]
-fn dispose_run_ret(r:* mut CoroRunRet) {
-    drop(unsafe{Box::from_raw(r)});
+fn dispose_run_ret(r: *mut CoroRunRet) {
+    drop(unsafe { Box::from_raw(r) });
 }
-
-
-
-
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct CoroRunRet {
     pub ctx: i64,
-    pub data: i64
+    pub data: i64,
 }
 
-
-
-
-
 #[is_runtime]
-fn coro_yield(data:usize, sp:* mut u8) {
-    TRANS.with(| tr|{
-        let bind = tr.borrow().clone();
-        if let Some( (t, stack)) =   bind {
+fn coro_yield(data: usize, sp: *mut u8) {
+    let stack = TRANS.with(|tr| {
+        let stack_p;
+        let binding = tr.borrow();
+        let bind = binding.deref();
+        if let Some((t, stack)) = *bind {
             // eprintln!("coro yield {:p}->{:p}", stack, sp);
+            stack_p = stack;
             immix::add_coro_stack(sp, stack);
-            let c = std::mem::transmute::<usize,Context>(t).resume(data).context;
-            unsafe{set_current_ctx(c);}
-        }else {
+            let c = std::mem::transmute::<usize, Context>(t)
+                .resume(data)
+                .context;
+            unsafe {
+                set_current_ctx(c);
+            }
+        } else {
             unreachable!()
         }
+        stack_p
     });
+    set_current_stack(stack);
 }
 
 #[is_runtime]
-fn get_current_coro(ctx: * mut usize, stack_p: * mut * mut u8) {
-    TRANS.with(| tr|{
-        let bind = tr.borrow().clone();
-        if let Some( (t, stack)) =   bind {
+fn get_current_coro(ctx: *mut usize, stack_p: *mut *mut u8) {
+    TRANS.with(|tr| {
+        let binding = tr.borrow();
+        let bind = binding.deref();
+        if let Some((t, stack)) = *bind {
             // eprintln!("coro yield {:p}->{:p}", stack, sp);
-            unsafe{*ctx = t;}
-            unsafe{*stack_p = stack;}
-        }else {
+            unsafe {
+                *ctx = t;
+            }
+            unsafe {
+                *stack_p = stack;
+            }
+        } else {
             unreachable!()
         }
     });
 }
-
 
 thread_local! {
     pub static TRANS: RefCell<Option<(usize, * mut u8)>> =  {

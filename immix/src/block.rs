@@ -44,7 +44,7 @@ pub trait LineHeaderExt {
     fn set_forwarded(&mut self);
     fn get_forwarded(&self) -> bool;
     fn get_forward_start(&self) -> (bool, LineHeader);
-    fn forward_cas(&mut self, old: u8) -> Result<u8,u8>;
+    fn forward_cas(&mut self, old: u8) -> Result<u8, u8>;
 }
 
 /// A block is a 32KB memory region.
@@ -95,9 +95,6 @@ impl HeaderExt for u8 {
     }
     #[inline]
     fn set_marked(&mut self, marked: bool) {
-        let b = unsafe {Block::from_obj_ptr(self as _)};
-        let obj = b.get_obj_from_header_ptr(self as _);
-        debug_assert!(*self & 0b10000000 != 0, "obj: {:p}, header: {:p}", obj, self);
         if marked {
             *self |= 0b10;
         } else {
@@ -129,11 +126,10 @@ impl LineHeaderExt for LineHeader {
         load & 0b100000 == 0b100000
     }
     #[inline]
-    fn forward_cas(&mut self, old: u8) -> Result<u8,u8> {
+    fn forward_cas(&mut self, old: u8) -> Result<u8, u8> {
         let atom_self = self as *mut u8 as *mut AtomicU8;
         unsafe {
-            (*atom_self)
-                .compare_exchange(old, old | 0b1000000, Ordering::SeqCst, Ordering::SeqCst)
+            (*atom_self).compare_exchange(old, old | 0b1000000, Ordering::SeqCst, Ordering::SeqCst)
         }
     }
 
@@ -444,13 +440,13 @@ impl Block {
         (addr as usize - self as *const Self as usize) / LINE_SIZE
     }
 
-
-    pub fn get_obj_from_header_ptr(&mut self, header:* mut LineHeader) -> * mut u8 {
+    pub fn get_obj_from_header_ptr(&mut self, header: *mut LineHeader) -> *mut u8 {
         // from header get index in line map
-        let idx = (header as usize - self.line_map.as_ptr() as usize) / std::mem::size_of::<LineHeader>();
+        let idx =
+            (header as usize - self.line_map.as_ptr() as usize) / std::mem::size_of::<LineHeader>();
         // from index get line
-        let line = unsafe{self.get_nth_line(idx)};
-        line
+
+        unsafe { self.get_nth_line(idx) }
     }
 
     /// # set_eva_threshold

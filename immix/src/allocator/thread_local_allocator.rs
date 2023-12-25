@@ -82,7 +82,6 @@ impl ThreadLocalAllocator {
         }
     }
 
-
     // pub fn has_emergency(&self) -> bool {
     //     unsafe{(*self.global_allocator).out_of_space() && self.recyclable_blocks.len() == 0 }
     // }
@@ -356,7 +355,8 @@ impl ThreadLocalAllocator {
         } else {
             unsafe { (*self.global_allocator).get_block() }
         };
-        unsafe{b.as_mut().unwrap().set_eva_threshold(NUM_LINES_PER_BLOCK)};
+
+        unsafe { b.as_mut().map(|b| b.set_eva_threshold(NUM_LINES_PER_BLOCK)) };
         b
     }
 

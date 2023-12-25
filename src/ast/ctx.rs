@@ -630,18 +630,17 @@ impl<'a, 'ctx> Ctx<'a> {
             tp: pltype, range, ..
         }) = self.plmod.get_global_symbol(name)
         {
-            return             builder
-            .get_global_var_handle(&self.plmod.get_full_name(name))
-            .or(builder.get_global_var_handle(name)).and_then(
-        |value| {
-            Some(PLSymbol::Global(PLSymbolData {
-                value,
-                pltype: pltype.clone(),
-                range: *range,
-                refs: None,
-            }))
-        },
-            );
+            return builder
+                .get_global_var_handle(&self.plmod.get_full_name(name))
+                .or(builder.get_global_var_handle(name))
+                .map(|value| {
+                    PLSymbol::Global(PLSymbolData {
+                        value,
+                        pltype: pltype.clone(),
+                        range: *range,
+                        refs: None,
+                    })
+                });
         }
         None
     }

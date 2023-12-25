@@ -88,8 +88,8 @@ mod _immix {
             re
         }
 
-        pub unsafe fn add_coro_stack(sp: *mut u8, stack : *mut u8) {
-            immix::add_coro_stack(sp,stack);
+        pub unsafe fn add_coro_stack(sp: *mut u8, stack: *mut u8) {
+            immix::add_coro_stack(sp, stack);
         }
 
         pub unsafe fn remove_coro_stack(stack: *mut u8) {

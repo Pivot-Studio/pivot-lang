@@ -15,7 +15,7 @@ pub struct NoOpBuilder<'a, 'ctx> {
 }
 
 impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
-    fn get_sp_handle(&self) ->ValueHandle {
+    fn get_sp_handle(&self) -> ValueHandle {
         0
     }
     fn is_main(&self, _f: ValueHandle) -> bool {

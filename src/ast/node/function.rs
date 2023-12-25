@@ -98,7 +98,7 @@ impl FuncCallNode {
             Some(self.range.start),
         );
         builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
-        handle_ret(ret, c.ret_type.clone())
+        handle_ret(ret, c.ret_type.clone(), false, ctx, builder)
     }
 
     fn build_params<'a, 'b>(
@@ -299,7 +299,7 @@ impl Node for FuncCallNode {
                 Some(self.range.start),
             );
             ctx.save_if_comment_doc_hover(id_range, Some(fnvalue.doc.clone()));
-            handle_ret(ret, rettp)
+            handle_ret(ret, rettp, fnvalue.is_declare && skip == 0, ctx, builder)
         });
         ctx.set_if_refs_tp(pltype, id_range);
         ctx.emit_comment_highlight(&self.comments[0]);
@@ -341,14 +341,26 @@ fn check_and_cast_params<'a, 'b>(
     Ok(())
 }
 
-fn handle_ret(ret: Option<usize>, rettp: Arc<RefCell<PLType>>) -> Result<NodeOutput, PLDiag> {
+fn handle_ret<'a, 'b>(
+    ret: Option<usize>,
+    rettp: Arc<RefCell<PLType>>,
+    declare: bool,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> Result<NodeOutput, PLDiag> {
     match ret {
-        Some(v) => v
-            .new_output(match &*rettp.clone().borrow() {
+        Some(mut v) => {
+            if declare {
+                let alloca = builder.alloc_no_collect("ret_tmp", &rettp.borrow(), ctx, None);
+                builder.build_store(alloca, v);
+                v = alloca;
+            }
+            v.new_output(match &*rettp.clone().borrow() {
                 PLType::Generic(g) => g.curpltype.as_ref().unwrap().clone(),
                 _ => rettp,
             })
-            .to_result(),
+            .to_result()
+        }
         None => usize::MAX.new_output(rettp).to_result(),
     }
 }

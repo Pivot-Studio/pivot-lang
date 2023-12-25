@@ -1,7 +1,7 @@
 use std::{
     cell::Cell,
     mem,
-    sync::{Mutex, MutexGuard, Condvar},
+    sync::{Condvar, Mutex, MutexGuard},
 };
 
 use internal_macro::is_runtime;
@@ -62,23 +62,23 @@ fn drop_mutex(mutex: *mut OpaqueMutex) -> u64 {
 }
 
 #[is_runtime]
-fn create_condvar(cv:* mut* mut Condvar) -> u64 {
-    let condvar = Box::leak( Box::new(Condvar::new()));
+fn create_condvar(cv: *mut *mut Condvar) -> u64 {
+    let condvar = Box::leak(Box::new(Condvar::new()));
     *cv = condvar;
     0
 }
 
 #[is_runtime]
-fn drop_condvar(cond: * mut Condvar) -> u64 {
+fn drop_condvar(cond: *mut Condvar) -> u64 {
     drop(Box::from_raw(cond));
     0
 }
 
 #[is_runtime]
-fn condvar_wait(cond: * mut Condvar, mutex: * mut OpaqueMutex) -> u64 {
+fn condvar_wait(cond: *mut Condvar, mutex: *mut OpaqueMutex) -> u64 {
     let container: &MutexContainer = &*mutex.cast();
     let lock = container.guard.replace(None).unwrap();
-    let cond = unsafe{&*cond};
+    let cond = unsafe { &*cond };
     let lock = cond.wait::<()>(lock).unwrap();
     container.guard.set(Some(lock));
 
@@ -86,15 +86,15 @@ fn condvar_wait(cond: * mut Condvar, mutex: * mut OpaqueMutex) -> u64 {
 }
 
 #[is_runtime]
-fn condvar_notify(cond: * mut Condvar) -> u64 {
-    let cond = unsafe{&*cond};
+fn condvar_notify(cond: *mut Condvar) -> u64 {
+    let cond = unsafe { &*cond };
     cond.notify_one();
     0
 }
 
 #[is_runtime]
-fn condvar_notify_all(cond: * mut Condvar) -> u64 {
-    let cond = unsafe{&*cond};
+fn condvar_notify_all(cond: *mut Condvar) -> u64 {
+    let cond = unsafe { &*cond };
     cond.notify_all();
     0
 }

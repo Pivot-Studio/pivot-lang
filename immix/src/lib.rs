@@ -302,7 +302,7 @@ pub fn thread_stuck_end() {
     });
 }
 
-pub fn add_coro_stack(sp: * mut u8, stack:* mut u8) {
+pub fn add_coro_stack(sp: *mut u8, stack: *mut u8) {
     SPACE.with(|gc| {
         // println!("start add_root");
         let mut gc = gc.borrow_mut();
@@ -311,7 +311,7 @@ pub fn add_coro_stack(sp: * mut u8, stack:* mut u8) {
     });
 }
 
-pub fn remove_coro_stack(stack: * mut u8) {
+pub fn remove_coro_stack(stack: *mut u8) {
     SPACE.with(|gc| {
         // println!("start add_root");
         let mut gc = gc.borrow_mut();
