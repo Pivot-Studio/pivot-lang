@@ -65,19 +65,6 @@ pub fn statement_block_node(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(statement_block, |s| res_enum(s.into()))(input)
 }
 
-/// ```ebnf
-/// statement =
-/// | new_variable newline
-/// | assignment newline
-/// | if_statement
-/// | while_statement
-/// | for_statement
-/// | break_statement
-/// | continue_statement
-/// | return_statement
-/// | newline
-/// ;
-/// ```
 #[test_parser("test!(a);")]
 pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((

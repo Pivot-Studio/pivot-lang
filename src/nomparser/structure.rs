@@ -101,10 +101,6 @@ pub fn struct_def(input: Span) -> IResult<Span, Box<TopLevel>> {
 }
 
 #[test_parser("a : 1")]
-/// ```enbf
-/// struct_init_field = identifier ":" logic_exp "," ;
-/// ```
-/// special: del newline or space
 fn struct_init_field(input: Span) -> IResult<Span, Box<NodeEnum>> {
     del_newline_or_space!(map_res(
         tuple((identifier, tag_token_symbol(TokenType::COLON), general_exp,)),
@@ -146,9 +142,7 @@ fn struct_init_field(input: Span) -> IResult<Span, Box<NodeEnum>> {
     "a{a : 1,dsadasd  ,,,
 }"
 )] // fault tolerant
-/// ```enbf
-/// struct_init = type_name "{" (struct_init_field ("," struct_init_field)* )? "}" ;
-/// ```
+
 pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
     if input.extra {
         // extra为true代表在if的逻辑表达区域内，为了避免二义性 跳过 struct init

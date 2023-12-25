@@ -73,27 +73,3 @@ where
 {
     alt((parser, except(ex, msg, code)))
 }
-
-// pub fn expect<'a, E,F>(
-//     parser: F,
-//     ex: &'static str,
-//     msg: &'static str,
-// ) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, Box<NodeEnum>, E>
-// where E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt::Error>,
-//       F: FnMut(Span<'a>) -> IResult<Span<'a>, Box<NodeEnum>, E>, {
-//     alt((
-//         parser,
-//         move |i:Span<'a>|->IResult<Span, Box<NodeEnum>, E>{
-//             let msg = msg.to_string();
-//             let src = i.fragment().to_string();
-//             let (i,out) = recognize(is_not(Span::from(ex)))(i)?;
-//             let end = i.take_split(out.len()).0;
-//             let node = box_node(ErrorNode {
-//                 msg,
-//                 src,
-//                 range: Range::new(i, end),
-//             });
-//             Ok((i,node))
-//         },
-//     ))
-// }

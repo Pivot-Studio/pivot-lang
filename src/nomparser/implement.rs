@@ -10,9 +10,6 @@ use internal_macro::{test_parser, test_parser_error};
 
 use super::*;
 
-/// ```ebnf
-/// impl_def = "impl" extern_identifier "{" (function_def)* "}" ;
-/// ```
 #[test_parser(
     "impl a::b::c {
         fn f(x: int) int {

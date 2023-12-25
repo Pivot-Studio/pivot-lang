@@ -13,9 +13,6 @@ use internal_macro::{test_parser, test_parser_error};
 
 use super::*;
 
-/// ```ebnf
-/// function_def = "fn" identifier "(" (typed_identifier (","typed_identifier)*)? ")" type_name (statement_block | newline) ;
-/// ```
 #[test_parser(
     "
     /// this is a comment
@@ -146,7 +143,6 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
     )(input)
 }
 
-/// ```ebnf
 /// call_function_op = "(" (logic_exp (","logic_exp)*)? ")" ;
 /// ```
 #[test_parser("(a,c,c)")]

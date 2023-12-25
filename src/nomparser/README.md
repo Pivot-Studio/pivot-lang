@@ -1,6 +1,10 @@
 # nomparser
 
-使用nom完成的parser，兼具parser和lexer功能  
+Nomparser uses nom to scan and parse the source code into an AST. It takes charges on both a lexer and a parser.
+The nomparser is an LL parser, which uses the SDD(syntax-directed-definition), which combines the parser and syntax tree construction.
+
+The syntax of pivot-language is specified in [grammar.enbf](./grammar.ebnf), and the respective parsing handler could be searched by the snake case of EBNF item. 
+
 
 ## 注意事项
 

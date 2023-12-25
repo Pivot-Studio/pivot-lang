@@ -12,7 +12,7 @@ characters = "!" | "@" | "#" | "$" | "%" | "^" | "&" | "*" | "(" | ")" | "-" | "
         | "/" | "?" | "\\" | "|" | "`" | "~" | " ";
 
 space = " " | "\t";
-
+string_literal = ""; (* represents the unicode, ignore to express it here *)
 
 (*------------------ array.rs ----------------------*)
 (*todo: refactor the nomparser handler name,
@@ -54,16 +54,98 @@ BreakStatement = "break" ";" Comment?;
 ContinueStatement = "continue" ";" Comment?;
 
 
+(*------------------ expression.rs ----------------------*)
+GeneralExp = LogicExp;
+LogicExp = CompareExpEq { ( "&&" | "||" ) CompareExpEq };
+CompareExpEq = CompareExp { ( "!=" | "==" ) CompareExp };
+CompareExp = BitOr { ( ">=" | "<=" | ">" | "<" ) BitOr };
+BitOr = BitXor { "|" BitXor };
+BitXor = BitAnd { "^" BitAnd};
+BitAnd = BitMove { "&" BitMove };
+BitMove = AddExp { ( "<<" | ">>" | ">>>" ) AddExp };
+AddExp = MulExp { ( "+" | "-" ) MulExp };
+MulExp = UnaryExp { ( "*" | "/" | "%" )  UnaryExp };
+(* todo: unary_exp implementation differ from the ebnf, try to refactor it *)
+UnaryExp = ( "-" | "!" | "~" )? PointerExp;
+PointerExp = ( "&" | "*" ) { "&" | "*" } AsExp;
+MacroCallExp = ExternalIdentifier MacroCallOp;
+ComplexExp = PrimaryExp { TakeExpOp | ArrayElementOp | CallFunctionOp };
+PrimaryExp = { Comment } ( Closure | Number | BoolConst | StructInit | ArrayInit | TupleInit | MacroCallExp | ExternalIdentifier |  );
+TakeExpOp = "." ( Identifier |  TupleFieldIdentifer) {Comment};
+ParanthesesExp = "(" GeneralExp ")";
+Closure = "|" Identifier (":" TypeName)? { "," Identifier (":" TypeName)? } "|" "=>" TypeName? StatementBlock;
+
+
+(*------------------ function.rs ----------------------*)
+FunctionDef = { Comment } "gen"? "pub"? "fn" Identifier GenericTypeDef? "(" 
+        ( TypedIdentifier { "," TypedIdentifier})? ")" TypeName ( "where" (TraitBound { "," TraitBound})? )? ( StatementBlock | ";" );
+CallFunctionOp = GenericTypeDef? "(" (( GeneralExp | StatementBlockNode )? { "," ( GeneralExp | StatementBlockNode )})? ")" { Comment };
+
+
 (*------------------ identifier.rs ----------------------*)
-Identifier = (letter | "$" | "_" ) { letter | digit | "_"};
-
 ExternalIdentifier = Identifier { "::" Identifier };
-
+Identifier = (letter | "$" | "_" ) { letter | digit | "_"};
 (*todo: refactor me as it's not a desired syntax,
         typically we only want one line code AFTER the identifier,
         and many lines above the identifier。
 *)
 TypedIdentifier = Identifier ":" TypeName? Comment?;
+TupleFieldIdentifer = digit {digit};
+
+(*------------------ implement.rs ----------------------*)
+ImplDef = "impl" GenericTypeDef? ( TypeName "for" )? TypeName "{" { FunctionDef } { Comment } "}";
+
+
+(*------------------ macro_parse.rs ----------------------*)
+macro_char = "," | "=" | "|" | "-" | ";" | "&" | "^" | "%" | "#" | "@" | "!" | "<"
+                | ">" | "[" | "] | "{" | "}" | "\" | "\" | "/" | "~" | "`" | "." | "*" | "+" | "?";
+macro_letter = letter | "_";
+MacroMatchExp = ("$" Identifier ":" ( "@id" | "@str" | "@exp" | "@stmt" | "@stmts" )) 
+        | ( "$" "(" { MacroMatchExp } ")" ( "*" | "+" ) )
+        | ( "(" {Macro } ")" )
+        | ( macro_letter { macro_letter } | macro_char );
+MacroBodyLoopParser = "$" "(" { Statement } ")" "*";
+MacroParser = "macro" Identifier "(" { MacroRuleParser } ")";
+MacroRuleParser = "(" { MacroMatchExp } ")" "=>" "{}" { MacroBodyLoopParser | Statement } "}" ";";
+MacroCallOp = "!" "(" { AnyExpWithParens } ")";
+AnyExpWithParens = "(" { AnyExpWithParens } ")";
+
+
+(*------------------ pkg.rs ----------------------*)
+UseStatement = "use" Identifier { "::" Identifier } ( "::" "*" )? ("::")? ":"? ;
+
+
+(*------------------ stetement.rs ----------------------*)
+EmptyStatement = ":" { Comment };
+StatementBlock = "{" { Statement } "}";
+StatementBlockNode = StetementBlock;
+Statement = NewVariable ";" newline
+          | Assignment newline
+          | IfStatement
+          | WhileStatement
+          | ForStatement
+          | BreakStatement
+          | ContinueStatement
+          | ReturnStatement
+          | PointerExp ";" newline
+          | EmptyStatement
+          | Comment;
+NewVariable = "let" Deconstruct ( ":" TypeName)? ( "=" GeneralExp)?;
+Deconstruct = Identifier | TupleDeconstruct | StructDeconstruct ;
+TupleDeconstruct = "(" Deconstruct { "," Deconstruct } ")";
+StructDeconstruct = "{" StructDeconstructField { "," StructDeconstructField } "}";
+StructDeconstructField = Identifier ( ":" Deconstruct )?;
+Assignment = ( PointerExp | Deconstruct ) "=" GeneralExp;
+ReturnStatement = "yield"? "return" GeneralExp? ";" Comment?;
+GlobalVariable = "var" Identifier "=" GeneralExp;
+GlobalConst = "const" TypedIdentifier;
+
+
+(*------------------ structure.rs ----------------------*)
+StructDef = { Comment } "pub"? "strcut" Identifier GenericTypeDef? "{" { "pub"? TypedIdentifier Comment? };
+StructInitField = Identifier ":" GeneralExp;
+StructInit = BasicType "{" ( StructInitField { "," StructInitField } )? "}" ;
+TupleInit = "(" GeneralExp { "," GeneralExp } ")";
 
 
 (*------------------ types.rs ----------------------*)
@@ -76,17 +158,13 @@ ArrayType = "[" TypeName "]";
 GenericTypeDef = "<" { "|" Identifier ( ":" MultiTrait )? } ">";
 GenericParamDef = "<" TypeName { "|" TypeName } ">";
 TraitDef = "pub"? "trait" Identifier GenericTypeDef? ( ":" TypeAdd )? "{" {FunctionDef} "}";
+TraitBound = Identifier ( ":" MultiTrait)?;
 TypeAdd = TypeName { "+" TypeName };
 MultiTrait = TypeAdd;
 TupleType = "(" (TypeName { "," TypeName })? ")";
 ClosureType = "|" TypeName {"," TypeName} "|=>" TypeName;
 
 
-(*------------------ todo field ----------------------*)
-(* items are used to hint the IDE and need to replace them with the real definition*)
-FunctionDef = "";
-GeneralExp = "";
-ComplexExp = "";
-StatementBlock = "";
-Assignment = "";
-NewVariable = "";
+(*------------------ union.rs ----------------------*)
+Union = "pub"? "type" Identifier  GenericTypeDef? "=" TypeName { "|" TypeName } ;
+UnionStmt = Union ";";

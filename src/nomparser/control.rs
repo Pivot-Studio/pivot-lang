@@ -52,9 +52,6 @@ use super::*;
     a = 2;
 }"
 )]
-/// ```ebnf
-/// if_statement = "if" logic_exp statement_block ("else" (if_statement | statement_block))? ;
-/// ```
 pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
@@ -111,9 +108,6 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
 }
 "
 )]
-/// ```ebnf
-/// while_statement = "while" logic_exp statement_block ;
-/// ```
 pub fn while_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
@@ -177,9 +171,7 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 
     }"
 )]
-/// ```enbf
-/// for_statement = "for" (assignment | new_variable) ";" logic_exp ";" assignment statement_block;
-/// ```
+
 pub fn for_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
@@ -241,6 +233,7 @@ pub fn break_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
         },
     )(input)
 }
+
 #[test_parser("continue;")]
 pub fn continue_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
