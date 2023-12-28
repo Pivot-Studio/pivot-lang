@@ -59,7 +59,7 @@ pub fn register_global(p: *mut u8) {
 #[cfg(feature = "llvm_stackmap")]
 pub struct StackMapWrapper {
     pub map: *mut FxHashMap<*const u8, Function>,
-    pub global_roots: *mut Vec<*const u8>,
+    pub global_roots: *mut Vec<*mut u8>,
 }
 #[cfg(feature = "llvm_stackmap")]
 unsafe impl Sync for StackMapWrapper {}
@@ -230,7 +230,7 @@ pub fn gc_is_auto_collect_enabled() -> bool {
 
 pub fn no_gc_thread() {
     SPACE.with(|gc| {
-        gc.borrow().unregister_current_thread();
+        gc.borrow_mut().unregister_current_thread();
     })
 }
 
@@ -298,6 +298,24 @@ pub fn thread_stuck_end() {
         // println!("start add_root");
         let mut gc = gc.borrow_mut();
         gc.unstuck()
+        // println!("add_root")
+    });
+}
+
+pub fn add_coro_stack(sp: *mut u8, stack: *mut u8) {
+    SPACE.with(|gc| {
+        // println!("start add_root");
+        let mut gc = gc.borrow_mut();
+        gc.add_coro_stack(sp, stack)
+        // println!("add_root")
+    });
+}
+
+pub fn remove_coro_stack(stack: *mut u8) {
+    SPACE.with(|gc| {
+        // println!("start add_root");
+        let mut gc = gc.borrow_mut();
+        gc.remove_coro_stack(stack)
         // println!("add_root")
     });
 }

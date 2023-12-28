@@ -630,14 +630,17 @@ impl<'a, 'ctx> Ctx<'a> {
             tp: pltype, range, ..
         }) = self.plmod.get_global_symbol(name)
         {
-            return Some(PLSymbol::Global(PLSymbolData {
-                value: builder
-                    .get_global_var_handle(&self.plmod.get_full_name(name))
-                    .unwrap_or(builder.get_global_var_handle(name).unwrap()),
-                pltype: pltype.clone(),
-                range: *range,
-                refs: None,
-            }));
+            return builder
+                .get_global_var_handle(&self.plmod.get_full_name(name))
+                .or(builder.get_global_var_handle(name))
+                .map(|value| {
+                    PLSymbol::Global(PLSymbolData {
+                        value,
+                        pltype: pltype.clone(),
+                        range: *range,
+                        refs: None,
+                    })
+                });
         }
         None
     }
@@ -648,13 +651,13 @@ impl<'a, 'ctx> Ctx<'a> {
         pv: ValueHandle,
         pltype: Arc<RefCell<PLType>>,
         range: Range,
-        is_const: bool,
+        is_glob: bool,
         is_extern: bool,
     ) -> Result<(), PLDiag> {
         if self.table.contains_key(&name) {
             return Err(self.add_diag(range.new_err(ErrorCode::REDECLARATION)));
         }
-        self.add_symbol_without_check(name, pv, pltype, range, is_const, is_extern)
+        self.add_symbol_without_check(name, pv, pltype, range, is_glob, is_extern)
     }
     pub fn add_symbol_without_check(
         &mut self,
@@ -662,13 +665,13 @@ impl<'a, 'ctx> Ctx<'a> {
         pv: ValueHandle,
         pltype: Arc<RefCell<PLType>>,
         range: Range,
-        is_const: bool,
+        is_glob: bool,
         is_extern: bool,
     ) -> Result<(), PLDiag> {
-        if is_const {
+        if is_glob {
             self.set_glob_refs(&self.plmod.get_full_name(&name), range);
             self.plmod
-                .add_global_symbol(name, pltype, range, is_extern, is_const)?;
+                .add_global_symbol(name, pltype, range, is_extern)?;
         } else {
             let refs = Arc::new(RefCell::new(vec![]));
             self.table.insert(

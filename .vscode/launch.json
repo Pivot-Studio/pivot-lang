@@ -80,6 +80,9 @@
             "program": "${workspaceFolder}/out",
             "args": [],
             "cwd": "${workspaceFolder}",
+            "env": {
+                // "GC_LOG": "info"
+            }
             // "stopOnEntry": true
         },
         {

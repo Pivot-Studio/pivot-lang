@@ -1,7 +1,7 @@
 use std::{
     cell::Cell,
     mem,
-    sync::{Mutex, MutexGuard},
+    sync::{Condvar, Mutex, MutexGuard},
 };
 
 use internal_macro::is_runtime;
@@ -36,9 +36,9 @@ fn create_mutex(mutex: *mut *mut OpaqueMutex) -> u64 {
 #[is_runtime]
 fn lock_mutex(mutex: *mut OpaqueMutex) -> u64 {
     let container: &MutexContainer = &*mutex.cast();
-    immix::thread_stuck_start();
+    // immix::thread_stuck_start();
     let lock: MutexGuard<'static, _> = mem::transmute(container.mutex.lock().unwrap());
-    immix::thread_stuck_end();
+    // immix::thread_stuck_end();
     container.guard.set(Some(lock));
     0
 }
@@ -58,5 +58,43 @@ fn unlock_mutex(mutex: *mut OpaqueMutex) -> u64 {
 fn drop_mutex(mutex: *mut OpaqueMutex) -> u64 {
     unlock_mutex(mutex);
     drop(Box::from_raw(mutex.cast::<MutexContainer>()));
+    0
+}
+
+#[is_runtime]
+fn create_condvar(cv: *mut *mut Condvar) -> u64 {
+    let condvar = Box::leak(Box::new(Condvar::new()));
+    *cv = condvar;
+    0
+}
+
+#[is_runtime]
+fn drop_condvar(cond: *mut Condvar) -> u64 {
+    drop(Box::from_raw(cond));
+    0
+}
+
+#[is_runtime]
+fn condvar_wait(cond: *mut Condvar, mutex: *mut OpaqueMutex) -> u64 {
+    let container: &MutexContainer = &*mutex.cast();
+    let lock = container.guard.replace(None).unwrap();
+    let cond = unsafe { &*cond };
+    let lock = cond.wait::<()>(lock).unwrap();
+    container.guard.set(Some(lock));
+
+    0
+}
+
+#[is_runtime]
+fn condvar_notify(cond: *mut Condvar) -> u64 {
+    let cond = unsafe { &*cond };
+    cond.notify_one();
+    0
+}
+
+#[is_runtime]
+fn condvar_notify_all(cond: *mut Condvar) -> u64 {
+    let cond = unsafe { &*cond };
+    cond.notify_all();
     0
 }

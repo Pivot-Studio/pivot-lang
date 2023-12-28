@@ -1,6 +1,6 @@
+#![allow(clippy::box_collection)]
 use std::{
     cell::RefCell,
-    ptr::drop_in_place,
     sync::{
         atomic::{AtomicBool, AtomicPtr, Ordering},
         Arc,
@@ -23,7 +23,15 @@ use crate::{
 
 fn get_ip_from_sp(sp: *mut u8) -> *mut u8 {
     let sp = sp as *mut *mut u8;
-    unsafe { *sp.offset(-1) }
+    // check align
+    unsafe {
+        let p = sp.offset(-1);
+        if p as usize % 8 == 0 {
+            *p
+        } else {
+            std::ptr::null_mut()
+        }
+    }
 }
 
 fn walk_gc_frames(sp: *mut u8, mut walker: impl FnMut(*mut u8, i32, ObjectType)) {
@@ -76,7 +84,10 @@ pub struct Collector {
     status: RefCell<CollectorStatus>,
     frames_list: AtomicPtr<Vec<(*mut libc::c_void, *mut libc::c_void)>>,
     shadow_thread_running: AtomicBool,
+    shadow_thread_should_stop: AtomicBool,
     live_set: RefCell<FxHashMap<u64, *mut u8>>,
+    coro_stacks: FxHashMap<*mut u8, Box<Vec<(*mut libc::c_void, *mut libc::c_void)>>>,
+    live: bool,
 }
 
 struct CollectorStatus {
@@ -95,14 +106,14 @@ impl Drop for Collector {
     fn drop(&mut self) {
         // println!("Collector {} is dropped", self.id);
         unsafe {
-            if (*self.thread_local_allocator).is_live() {
+            if self.live {
                 let mut v = GC_COLLECTOR_COUNT.lock();
                 v.0 -= 1;
+                drop(Box::from_raw(self.thread_local_allocator));
+                self.live = false;
                 GC_MARK_COND.notify_all();
                 drop(v);
-                drop_in_place(self.thread_local_allocator);
             }
-            libc::free(self.thread_local_allocator as *mut libc::c_void);
             libc::free(self.mark_histogram as *mut libc::c_void);
             libc::free(self.queue as *mut libc::c_void);
         }
@@ -123,9 +134,7 @@ impl Collector {
         let id = GC_ID.fetch_add(1, Ordering::Relaxed);
         unsafe {
             let tla = ThreadLocalAllocator::new(ga);
-            let mem =
-                malloc(core::mem::size_of::<ThreadLocalAllocator>()).cast::<ThreadLocalAllocator>();
-            mem.write(tla);
+            let mem = Box::leak(Box::new(tla)) as *mut _;
             let memvecmap = malloc(core::mem::size_of::<FxHashMap<usize, usize>>())
                 .cast::<FxHashMap<usize, usize>>();
             memvecmap.write(FxHashMap::with_capacity_and_hasher(
@@ -152,18 +161,20 @@ impl Collector {
                 frames_list: AtomicPtr::default(),
                 shadow_thread_running: AtomicBool::new(false),
                 live_set: RefCell::new(FxHashMap::default()),
+                coro_stacks: FxHashMap::default(),
+                live: true,
+                shadow_thread_should_stop: AtomicBool::new(false),
             }
         }
     }
 
-    pub fn unregister_current_thread(&self) {
+    pub fn unregister_current_thread(&mut self) {
         let mut v = GC_COLLECTOR_COUNT.lock();
         v.0 -= 1;
+        drop(unsafe { Box::from_raw(self.thread_local_allocator) });
+        self.live = false;
         GC_MARK_COND.notify_all();
         drop(v);
-        unsafe {
-            drop_in_place(self.thread_local_allocator);
-        }
     }
 
     /// # get_size
@@ -319,22 +330,35 @@ impl Collector {
     /// ## Return
     ///
     /// * `ptr` - corrected pointer
-    unsafe fn correct_ptr(&self, ptr: *mut u8, offset: isize) -> *mut u8 {
-        let father = ptr as *mut *mut u8;
+    unsafe fn correct_ptr(
+        &self,
+        father: *mut u8,
+        offset: isize,
+        origin_ptr: *mut u8,
+    ) -> Result<*mut u8, *mut u8> {
+        let father = father as *mut *mut u8;
         let ptr = AtomicPtr::new((*father).offset(-offset) as *mut *mut u8);
         let ptr = ptr.load(Ordering::SeqCst);
         let new_ptr = *ptr;
-        debug_assert!(!new_ptr.is_null(), "{:p}", new_ptr);
         let np = new_ptr.offset(offset);
-        log::trace!(
-            "gc {} correct ptr in {:p} from  {:p} to {:p}",
+        let atomic_father = father as *mut AtomicPtr<u8>;
+        // cas store
+        // 以前的指针如果变化了，代表别人和我们标记的同一个地方，而且他们已经更正了指针
+        let re = atomic_father.as_mut().unwrap().compare_exchange(
+            origin_ptr,
+            np,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+        );
+        log::debug!(
+            "gc {} correct ptr result: {:?} in {:p} from  {:p} to {:p}",
             self.id,
+            re,
             father,
             *father,
             np
         );
-        *father = np;
-        np
+        re
     }
 
     #[cfg(feature = "llvm_gc_plugin")]
@@ -385,10 +409,13 @@ impl Collector {
                 let (forward, h) = line_header.get_forward_start();
                 let old_h = h;
                 // if forward is true or cas is failed, then it's forwarded by other thread.
-                let shall_i_forward = !forward && line_header.forward_cas(old_h);
+                let re = line_header.forward_cas(old_h);
+                let shall_i_forward = !forward && re.is_ok();
                 if !shall_i_forward {
                     spin_until!(line_header.get_forwarded());
-                    self.correct_ptr(father, offset_from_head);
+
+                    let _ = self.correct_ptr(father, offset_from_head, ptr);
+                    debug_assert!(line_header.get_used());
                     return;
                 }
 
@@ -400,6 +427,8 @@ impl Collector {
                     self.alloc_no_collect(obj_line_size * LINE_SIZE, line_header.get_obj_type());
                 if !new_ptr.is_null() {
                     let new_block = Block::from_obj_ptr(new_ptr);
+                    // eprintln!("eva to block addr: {:p}", new_block);
+                    debug_assert!(!new_block.is_eva_candidate());
                     let (new_line_header, _) = new_block.get_line_header_from_addr(new_ptr);
                     // 将数据复制到新的地址
                     core::ptr::copy_nonoverlapping(head, new_ptr, obj_line_size * LINE_SIZE);
@@ -409,10 +438,13 @@ impl Collector {
                     (*atomic_ptr).store(new_ptr, Ordering::SeqCst);
                     // eprintln!("gc {}: eva {:p} to {:p}", self.id, head, new_ptr);
                     log::trace!("gc {}: eva {:p} to {:p}", self.id, head, new_ptr);
+                    debug_assert!(!new_line_header.get_forwarded());
                     new_line_header.set_marked(true);
                     new_block.marked = true;
                     head = new_ptr;
-                    self.correct_ptr(father, offset_from_head);
+                    self.correct_ptr(father, offset_from_head, ptr).expect(
+                        "The thread evacuated pointer changed by another thread during evacuation.",
+                    );
                     // 成功驱逐
                     line_header.set_forwarded();
                 } else {
@@ -640,10 +672,43 @@ impl Collector {
                     self.mark_gc_frames(frames);
                 } else {
                     walk_gc_frames(sp, |sp, offset, obj_type| {
+                        log::debug!("{}", {
+                            let root = unsafe { sp.offset(offset as isize) } as *mut *mut *mut u8;
+                            format!(
+                                "gc {} root: {:p}, value: {:p}, *value: {:p}",
+                                self.id,
+                                root,
+                                unsafe { *root },
+                                unsafe {
+                                    if self
+                                        .thread_local_allocator
+                                        .as_mut()
+                                        .unwrap()
+                                        .in_heap(*root as _)
+                                    {
+                                        **root
+                                    } else {
+                                        std::ptr::null_mut()
+                                    }
+                                }
+                            )
+                        });
                         self.mark_stack_offset(sp, offset, obj_type);
                     });
                 }
+                log::debug!("gc {} global roots", self.id);
                 self.mark_globals();
+                log::debug!("gc {} global roots end", self.id);
+                log::debug!("gc {} coro roots", self.id);
+                self.mark_coro_stacks();
+                log::debug!("gc {} coro roots end", self.id);
+            }
+        }
+
+        for (_, live) in self.live_set.borrow_mut().iter_mut() {
+            unsafe {
+                let p = live as *mut _ as _;
+                self.mark_ptr(p);
             }
         }
 
@@ -664,19 +729,6 @@ impl Collector {
                 }
             }
         }
-        let mut lives = vec![];
-        for (i, live) in self.live_set.borrow().iter() {
-            unsafe {
-                let p = live as *const _ as _;
-                self.mark_ptr(p);
-                let p = p as *mut *mut u8;
-                lives.push((*i, *p));
-            }
-        }
-        self.live_set.borrow_mut().clear();
-        for (i, live) in lives {
-            self.live_set.borrow_mut().insert(i, live);
-        }
 
         let mut v = GC_COLLECTOR_COUNT.lock();
         let (count, mut waiting) = *v;
@@ -687,6 +739,7 @@ impl Collector {
             GC_MARK_COND.wait_while(&mut v, |_| GC_MARKING.load(Ordering::Acquire));
         } else {
             GC_MARKING.store(false, Ordering::Release);
+            GLOBAL_MARK_FLAG.store(false, Ordering::Release);
             GC_MARK_COND.notify_all();
             GC_RUNNING.store(false, Ordering::Release);
             drop(v);
@@ -716,15 +769,38 @@ impl Collector {
 
     #[cfg(feature = "llvm_stackmap")]
     fn mark_globals(&self) {
-        unsafe {
-            STACK_MAP
-                .global_roots
-                .as_mut()
-                .unwrap()
-                .iter()
-                .for_each(|root| {
-                    self.mark_ptr(root.cast_mut());
-                });
+        if GLOBAL_MARK_FLAG
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .is_ok()
+        {
+            unsafe {
+                STACK_MAP
+                    .global_roots
+                    .as_mut()
+                    .unwrap()
+                    .iter()
+                    .for_each(|root| {
+                        log::debug!(
+                            "gc {}: mark global {:p} {:p} {:p}",
+                            self.id,
+                            *root,
+                            *((*root) as *mut *mut u8),
+                            {
+                                if self
+                                    .thread_local_allocator
+                                    .as_mut()
+                                    .unwrap()
+                                    .in_heap(*((*root) as *mut *mut u8) as _)
+                                {
+                                    **((*root) as *mut *mut *mut u8)
+                                } else {
+                                    std::ptr::null_mut()
+                                }
+                            }
+                        );
+                        self.mark_ptr(*root);
+                    });
+            }
         }
     }
 
@@ -789,6 +865,9 @@ impl Collector {
     ///
     /// for more information, see [mark_fast_unwind](Collector::mark_fast_unwind)
     pub fn collect_fast_unwind(&self, sp: *mut u8) {
+        // unsafe {
+        //     self.thread_local_allocator.as_ref().unwrap().verify();
+        // }
         log::info!(
             "gc {} collecting... stucked: {}",
             self.id,
@@ -866,6 +945,9 @@ impl Collector {
             free
         );
         let mut status = self.status.borrow_mut();
+        // unsafe {
+        //     self.thread_local_allocator.as_ref().unwrap().verify();
+        // }
         status.collecting = false;
         // (Default::default(), Default::default())
     }
@@ -898,17 +980,7 @@ impl Collector {
     /// for more information, see [mark_fast_unwind](Collector::mark_fast_unwind)
     pub fn stuck_fast_unwind(&mut self, sp: *mut u8) {
         log::trace!("gc {}: stucking...", self.id);
-        let mut frames: Box<Vec<(*mut libc::c_void, *mut libc::c_void)>> = Box::default();
-        if sp.is_null() {
-            backtrace::trace(|frame| {
-                frames.push((frame.ip(), frame.sp()));
-                true
-            });
-        } else {
-            walk_gc_frames(sp, |sp, _, _| {
-                frames.push((get_ip_from_sp(sp) as _, sp as _))
-            });
-        }
+        let frames = self.get_frames(sp);
         unsafe {
             let ptr = Box::leak(frames) as *mut _;
             self.frames_list.store(ptr, Ordering::SeqCst);
@@ -919,7 +991,7 @@ impl Collector {
                 log::info!("gc {}: stucked, waiting for unstuck...", c.id);
                 loop {
                     let mut mutex = STUCK_MUTEX.lock();
-                    if c.frames_list.load(Ordering::SeqCst).is_null() {
+                    if c.shadow_thread_should_stop.load(Ordering::SeqCst) {
                         log::trace!("gc {}: unstucking break...", c.id);
                         c.shadow_thread_running.store(false, Ordering::SeqCst);
                         drop(mutex);
@@ -939,30 +1011,75 @@ impl Collector {
         // FRAMES_LIST.0.lock().borrow_mut().insert( self as _,frames);
     }
 
+    fn mark_coro_stacks(&self) {
+        for (_k, frames) in self.coro_stacks.iter() {
+            for (ip, sp) in frames.iter() {
+                let addr = *ip as *mut u8;
+                let const_addr = addr as *const u8;
+                let map = unsafe { STACK_MAP.map.as_ref() }.unwrap();
+                let f = map.get(&const_addr);
+                if let Some(f) = f {
+                    log::debug!("marking coro stack {:p} {:p}, key: {:p}", *ip, *sp, *_k);
+                    f.iter_roots().for_each(|offset| {
+                        self.mark_stack_offset(*sp as _, offset, ObjectType::Pointer)
+                    });
+                }
+            }
+        }
+    }
+
+    pub fn add_coro_stack(&mut self, sp: *mut u8, stack: *mut u8) {
+        let frames = self.get_frames(sp);
+        log::debug!("gc {} add coro stack {:p} {:?}", self.id, stack, frames);
+        self.coro_stacks.insert(stack, frames);
+    }
+
+    pub fn remove_coro_stack(&mut self, stack: *mut u8) {
+        log::debug!("gc {} remove coro stack {:p}", self.id, stack);
+        self.coro_stacks.remove(&stack);
+    }
+
     pub fn unstuck(&mut self) {
         log::trace!("gc {}: unstucking...", self.id);
+        self.shadow_thread_should_stop.store(true, Ordering::SeqCst);
         let mutex = STUCK_MUTEX.lock();
+        STUCK_COND.notify_all();
+        drop(mutex);
+        // wait until the shadow thread exit
+        spin_until!(!self.shadow_thread_running.load(Ordering::SeqCst));
         let old = self
             .frames_list
             .swap(std::ptr::null_mut(), Ordering::SeqCst);
         if !old.is_null() {
-            STUCK_COND.notify_all();
-            drop(mutex);
             unsafe {
-                drop_in_place(old as *mut Vec<(*mut libc::c_void, *mut libc::c_void)>);
+                drop(Box::from_raw(old));
             }
-        } else {
-            STUCK_COND.notify_all();
-            drop(mutex);
         }
-        // wait until the shadow thread exit
-        spin_until!(!self.shadow_thread_running.load(Ordering::SeqCst));
+        self.shadow_thread_should_stop
+            .store(false, Ordering::SeqCst);
+    }
+    fn get_frames(&self, sp: *mut u8) -> Box<Vec<(*mut libc::c_void, *mut libc::c_void)>> {
+        let mut frames: Box<Vec<(*mut libc::c_void, *mut libc::c_void)>> = Box::default();
+        if sp.is_null() {
+            backtrace::trace(|frame| {
+                frames.push((frame.ip(), frame.sp()));
+                true
+            });
+        } else {
+            walk_gc_frames(sp, |sp, _, _| {
+                let ip = get_ip_from_sp(sp);
+                frames.push((ip as _, sp as _))
+            });
+        }
+        frames
     }
 }
 
 #[cfg(test)]
 #[cfg(feature = "shadow_stack")]
 mod tests;
+
+static GLOBAL_MARK_FLAG: AtomicBool = AtomicBool::new(false);
 
 // static STUCK_GCED: AtomicBool = AtomicBool::new(false);
 

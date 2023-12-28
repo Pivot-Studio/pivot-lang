@@ -1,0 +1,9 @@
+fn new_thread(f: *||=>void) void;
+
+
+pub fn spawn(f:||=>void) void {
+    new_thread(&f);
+    return;
+}
+
+pub fn sleep(secs: u64) void;

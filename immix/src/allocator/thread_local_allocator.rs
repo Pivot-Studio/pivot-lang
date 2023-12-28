@@ -14,7 +14,7 @@ use crate::{
     bigobj::BigObj,
     block::{Block, ObjectType},
     consts::{BLOCK_SIZE, LINE_SIZE},
-    HeaderExt, EVA_BLOCK_PROPORTION,
+    HeaderExt, EVA_BLOCK_PROPORTION, NUM_LINES_PER_BLOCK,
 };
 
 use super::GlobalAllocator;
@@ -41,28 +41,29 @@ pub struct ThreadLocalAllocator {
     big_objs: Vec<*mut BigObj>,
     eva_blocks: Vec<*mut Block>,
     collect_mode: bool,
-    live: bool,
 }
 
 impl Drop for ThreadLocalAllocator {
     fn drop(&mut self) {
-        if !self.live {
-            return;
-        }
         let global_allocator = unsafe { &mut *self.global_allocator };
         // here we should return all blocks to global allocator
         // however, when a thread exits, it may still hold some non-empty blocks
         // those blocks shall be stored and give to another thread latter
+        // eprintln!("drop thread local allocator {} eva blocks {} un blocks {} re blocks", self.eva_blocks.len(), self.unavailable_blocks.len(), self.recyclable_blocks.len());
         global_allocator.on_thread_destroy(
             &self.eva_blocks,
             self.recyclable_blocks.drain(..),
             &self.unavailable_blocks,
         );
-        self.live = false;
     }
 }
 
 impl ThreadLocalAllocator {
+    // pub fn verify(&self) {
+    //     self.recyclable_blocks.iter().chain(self.unavailable_blocks.iter()).for_each(|b| unsafe{
+    //         assert!(b.as_ref().unwrap().cursor<300);
+    //     })
+    // }
     /// # new
     ///
     /// Create a new thread-local allocator.
@@ -78,12 +79,7 @@ impl ThreadLocalAllocator {
             eva_blocks: Vec::new(),
             big_objs: Vec::new(),
             collect_mode: false,
-            live: true,
         }
-    }
-
-    pub fn is_live(&self) -> bool {
-        self.live
     }
 
     // pub fn has_emergency(&self) -> bool {
@@ -354,11 +350,14 @@ impl ThreadLocalAllocator {
     ///
     /// * `*mut Block` - block pointer
     fn get_new_block(&mut self) -> *mut Block {
-        if self.collect_mode && !self.eva_blocks.is_empty() {
+        let b = if self.collect_mode && !self.eva_blocks.is_empty() {
             self.eva_blocks.pop().unwrap()
         } else {
             unsafe { (*self.global_allocator).get_block() }
-        }
+        };
+
+        unsafe { b.as_mut().map(|b| b.set_eva_threshold(NUM_LINES_PER_BLOCK)) };
+        b
     }
 
     /// # in_heap
@@ -406,6 +405,7 @@ impl ThreadLocalAllocator {
                         unavailable_blocks.push(block);
                     }
                 } else {
+                    block.as_mut().unwrap().reset_header();
                     free_blocks.push(block);
                 }
             }

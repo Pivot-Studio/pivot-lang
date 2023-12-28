@@ -44,7 +44,7 @@ pub trait LineHeaderExt {
     fn set_forwarded(&mut self);
     fn get_forwarded(&self) -> bool;
     fn get_forward_start(&self) -> (bool, LineHeader);
-    fn forward_cas(&mut self, old: u8) -> bool;
+    fn forward_cas(&mut self, old: u8) -> Result<u8, u8>;
 }
 
 /// A block is a 32KB memory region.
@@ -59,8 +59,6 @@ pub struct Block {
     line_map: [LineHeader; NUM_LINES_PER_BLOCK],
     /// 第一个hole的起始行号
     cursor: usize,
-    // /// 第一个hole的长度（行数
-    // limit: usize,
     /// 是否被标记
     pub marked: bool,
     /// 洞的数量
@@ -97,7 +95,6 @@ impl HeaderExt for u8 {
     }
     #[inline]
     fn set_marked(&mut self, marked: bool) {
-        debug_assert!(*self & 0b10000000 != 0);
         if marked {
             *self |= 0b10;
         } else {
@@ -129,12 +126,10 @@ impl LineHeaderExt for LineHeader {
         load & 0b100000 == 0b100000
     }
     #[inline]
-    fn forward_cas(&mut self, old: u8) -> bool {
+    fn forward_cas(&mut self, old: u8) -> Result<u8, u8> {
         let atom_self = self as *mut u8 as *mut AtomicU8;
         unsafe {
-            (*atom_self)
-                .compare_exchange(old, old | 0b1000000, Ordering::SeqCst, Ordering::SeqCst)
-                .is_ok()
+            (*atom_self).compare_exchange(old, old | 0b1000000, Ordering::SeqCst, Ordering::SeqCst)
         }
     }
 
@@ -294,7 +289,7 @@ impl Block {
         self.cursor = first_hole_line_idx;
         self.marked = false;
         self.hole_num = holes;
-        self.eva_target = false;
+        // self.eva_target = false;
         if let Some(count) = (*mark_histogram).get_mut(&self.hole_num) {
             *count += marked_num;
         } else {
@@ -443,6 +438,15 @@ impl Block {
         debug_assert!(addr as *const u8 >= self as *const Self as *const u8);
         debug_assert!((addr as *const u8) < (self as *const Self as *const u8).add(BLOCK_SIZE));
         (addr as usize - self as *const Self as usize) / LINE_SIZE
+    }
+
+    pub fn get_obj_from_header_ptr(&mut self, header: *mut LineHeader) -> *mut u8 {
+        // from header get index in line map
+        let idx =
+            (header as usize - self.line_map.as_ptr() as usize) / std::mem::size_of::<LineHeader>();
+        // from index get line
+
+        unsafe { self.get_nth_line(idx) }
     }
 
     /// # set_eva_threshold

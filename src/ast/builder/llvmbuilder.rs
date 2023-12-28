@@ -178,7 +178,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let ptr = self.get_llvm_value(ptr).unwrap();
         let ptr = ptr.into_pointer_value();
         let ptr = self.builder.build_load(llvm_type, ptr, name).unwrap();
-
         self.get_llvm_value_handle(&ptr.as_any_value_enum())
     }
     #[allow(clippy::too_many_arguments)]
@@ -2326,6 +2325,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let rhs = self.get_llvm_value(rhs).unwrap().into_int_value();
         let v = self.builder.build_or(lhs, rhs, name).unwrap();
         self.get_llvm_value_handle(&v.as_any_value_enum())
+    }
+    fn get_sp_handle(&self) -> ValueHandle {
+        self.get_llvm_value_handle(&self.get_sp().as_any_value_enum())
     }
     fn build_and(&self, lhs: ValueHandle, rhs: ValueHandle, name: &str) -> ValueHandle {
         let lhs = self.get_llvm_value(lhs).unwrap().into_int_value();

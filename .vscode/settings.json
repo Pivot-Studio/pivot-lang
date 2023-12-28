@@ -9,7 +9,11 @@
         "**/.hg/store/**": true,
         "**/target/**": true,
         "**/book/book/**": true,
-    }
+    },
+    "lldb.displayFormat": "auto",
+    "lldb.showDisassembly": "auto",
+    "lldb.dereferencePointers": true,
+    "lldb.consoleMode": "commands"
     // "rust-analyzer.check.targets": [
     //     "wasm32-unknown-unknown",
     // ],

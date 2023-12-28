@@ -1,0 +1,140 @@
+fn new_coro_ctx(stack:i64) i64;
+fn new_coro_stack() i64;
+fn coro_yield(data:i64, sp:i64) void;
+fn coro_stack_from_heap_ptr(ptr:* u8) i64;
+fn coro_run(ctx:i64, f:*||=>void, sp:i64) i64;
+fn set_current_coro(ctx:i64, stack:i64) void;
+fn set_current_stack( stack:i64) void;
+fn dispose_coro_stack(stack:i64) void;
+fn get_current_coro(ctx:*i64, stack:*i64) void;
+fn get_run_ret_ctx(r:i64) i64;
+fn get_run_ret_data(r:i64) i64;
+fn dispose_run_ret(r:i64) void;
+use std::chan::*;
+use std::thread;
+use core::hash::*;
+use core::eq::*;
+use std::cols::hashtable;
+use std::mutex;
+
+pub struct Coroutine {
+    ctx:i64;
+    stack:i64;
+    f: ||=>void;
+}
+
+pub fn new_coro(f: ||=>void) Coroutine {
+    // let c = [u8*7680;];
+    let p = new_coro_stack();
+    // let p = &c[0];
+    let ctx = new_coro_ctx(p);
+    return Coroutine{ctx:ctx, stack:p, f:f};
+}
+
+fn create_mutex() *mutex::Mutex {
+    let m :*mutex::Mutex ;
+    let mm = &m;
+    mutex::create_mutex(mm);
+    return *mm;
+}
+
+var lock = create_mutex();
+
+
+use std::io;
+impl Coroutine {
+    pub fn resume() i64 {
+        let re = 0;
+        let ctx = 0;
+        let data = 0;
+        re = coro_run(self.ctx, &||=> {
+            set_current_stack( self.stack);
+            self.f();
+            // io::printi64ln(self.stack);
+            gc::remove_coro_stack(self.stack);
+            coro_yield(0, asm_sp());
+            return;
+        },asm_sp());
+        ctx = get_run_ret_ctx(re);
+        data = get_run_ret_data(re);
+        dispose_run_ret(re);
+        // io::printi64ln(data);
+        self.ctx = ctx;
+        return data;
+    }
+    pub fn dispose_coro_stack() void {
+        dispose_coro_stack(self.stack);
+        return;
+    }
+}
+
+
+fn init_ch() *Chan<Coroutine> {
+    
+    return &channel<Coroutine>(10 as u64);
+}
+
+
+
+var work_queue = init_ch();
+
+
+pub fn coro_sleep(s:u64) void {
+    let a = 1;
+    let b = 1;
+    let ctx= &a;
+    let stack= &b;
+    get_current_coro(ctx, stack);
+
+    let promise = &|c| => {
+        thread::spawn(||=>{
+            thread::sleep(s);
+            sched_coro(c);
+            return;
+        });
+        return;
+    };
+    coro_yield(gc::ptr_to_int(unsafe_cast<u8>(promise)), asm_sp());
+    return;
+}
+
+// fn init_table() *hashtable::HashTable<i64|Coroutine> {
+//     let table:hashtable::HashTable<i64|Coroutine>;// = hashtable::new_hash_table<i64|Coroutine>(0 as u64, 12 as u64);
+//     return &table;
+// }
+
+
+// var m = init_table();
+
+pub fn start_sched_loop() void {
+    // m = init_table();
+    while true {
+        let c = work_queue.recv();
+        let t:*|Coroutine|=>void;
+        t = unsafe_cast<|Coroutine|=>void>(gc::int_to_ptr( c.resume()));
+        // io::printi64ln(9999);
+        let handle = gc::ptr_to_int(unsafe_cast<u8>( t));
+        if  handle != 0 {
+            (*t)(c);
+        }else {
+            gc::remove_coro_stack(c.stack);
+            // io::printi64ln(1024);
+            c.dispose_coro_stack();
+        }
+    }
+    return;
+}
+
+pub fn sched_coro(c:Coroutine) void {
+    work_queue.send(c);
+    return;
+}
+
+
+pub fn go(f:||=>void) void {
+    let co = new_coro(f);
+    sched_coro(co);
+    return;
+}
+
+

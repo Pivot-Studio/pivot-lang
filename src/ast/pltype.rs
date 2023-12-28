@@ -420,6 +420,9 @@ impl PLType {
     pub fn new_i8_ptr() -> PLType {
         PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::I8))))
     }
+    pub fn new_u8_ptr() -> PLType {
+        PLType::Pointer(Arc::new(RefCell::new(PLType::Primitive(PriType::U8))))
+    }
     pub fn new_i64() -> PLType {
         PLType::Primitive(PriType::I64)
     }
