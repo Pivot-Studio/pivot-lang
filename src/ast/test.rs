@@ -605,6 +605,7 @@ fn test_compile() {
 fn test_printast() {
     use crate::ast::compiler::{compile, Options};
     let out = "testout";
+    set_test_asset();
     let docs = MemDocs::default();
     let db = Database::default();
     let input = MemDocsInput::new(
@@ -718,11 +719,12 @@ fn test_tail_call_opt() {
 
 #[cfg(test)]
 pub(crate) fn set_test_asset() {
-    let mut p = ASSET_PATH.lock().unwrap();
-    *p = format!(
-        "target/test{}",
-        TEST_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
-    );
-}
+    use std::time::SystemTime;
 
-static TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
+    let mut p = ASSET_PATH.lock().unwrap();
+    let duration_since_epoch = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap();
+    let timestamp_nanos = duration_since_epoch.as_nanos(); // u128
+    *p = format!("target/test{}", timestamp_nanos);
+}
