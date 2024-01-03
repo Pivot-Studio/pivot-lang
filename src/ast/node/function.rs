@@ -595,7 +595,7 @@ impl FuncDefNode {
                         BuilderEnum::NoOp(_) => (),
                         _ => return Ok(()),
                     }
-                    builder = unsafe { &*(noop_ptr as *const BuilderEnum<'a, '_>) };
+                    builder = unsafe { noop_ptr.as_ref().unwrap() };
                     fnvalue
                         .fntype
                         .generic_map

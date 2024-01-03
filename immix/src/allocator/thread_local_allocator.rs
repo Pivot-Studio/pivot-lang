@@ -433,7 +433,7 @@ impl ThreadLocalAllocator {
             }
         }
         unsafe {
-            (*self.global_allocator).return_blocks(free_blocks.into_iter());
+            (*self.global_allocator).return_blocks(free_blocks);
         }
         let mut big_objs = Vec::new();
         for obj in self.big_objs.iter() {

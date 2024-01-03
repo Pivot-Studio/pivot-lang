@@ -210,7 +210,7 @@ fn test_struct_field_completion() {
     );
     assert!(!comps.is_empty());
     assert_eq!(comps[0].len(), 3);
-    let compstr = vec!["a", "b", "c"];
+    let compstr = ["a", "b", "c"];
     for comp in comps[0].iter() {
         assert!(compstr.contains(&comp.label.as_str()));
     }

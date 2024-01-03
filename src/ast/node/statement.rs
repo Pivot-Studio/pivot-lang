@@ -416,7 +416,7 @@ fn handle_deconstruct<'a, 'b>(
             let expv = expv.unwrap();
             if let PLType::Struct(st) = &*pltype.borrow() {
                 if !st.is_tuple {
-                    for (_, deconstruct_field) in var.iter().enumerate() {
+                    for deconstruct_field in var.iter() {
                         let (expv, ftp) = match deconstruct_field {
                             StructFieldDeconstructEnum::Var(v)
                             | StructFieldDeconstructEnum::Taged(v, _) => {

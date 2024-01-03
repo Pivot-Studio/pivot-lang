@@ -309,7 +309,7 @@ impl<'a, 'ctx> Ctx<'a> {
             edit_pos: self.edit_pos,
             table: FxHashMap::default(),
             config: self.config.clone(),
-            db: self.db.clone(),
+            db: self.db,
             block: self.block,
             continue_block: self.continue_block,
             break_block: self.break_block,
@@ -1056,19 +1056,19 @@ impl<'a, 'ctx> Ctx<'a> {
         let noop = BuilderEnum::NoOp(NoOpBuilder::default());
         // get it's pointer
         let noop_ptr = &noop as *const BuilderEnum<'a, '_>;
-        let builder = unsafe { &*(noop_ptr as *const BuilderEnum<'a, '_>) };
+        let builder = unsafe { noop_ptr.as_ref().unwrap() };
         let binding = l
             .trait_impl
             .clone()
             .map(|e| e.get_types(self, builder).unwrap())
-            .unwrap_or(vec![]);
+            .unwrap_or_default();
         let miss = binding
             .iter()
             .filter(|lf| {
                 !r.trait_impl
                     .clone()
                     .map(|e| e.get_types(self, builder).unwrap())
-                    .unwrap_or(vec![])
+                    .unwrap_or_default()
                     .iter()
                     .any(|rf| self.eq(lf.clone().to_owned(), rf.clone()).eq)
             })

@@ -29,7 +29,7 @@ impl<'a> Ctx<'a> {
         self.generic_cache
             .borrow_mut()
             .entry(tp.get_full_name_except_generic())
-            .or_insert(Default::default())
+            .or_default()
             .borrow_mut()
             .insert(name.to_string(), pltp);
     }
@@ -71,7 +71,7 @@ impl<'a> Ctx<'a> {
         let noop = BuilderEnum::NoOp(NoOpBuilder::default());
         // get it's pointer
         let noop_ptr = &noop as *const BuilderEnum<'a, '_>;
-        let builder = unsafe { &*(noop_ptr as *const BuilderEnum<'a, '_>) };
+        let builder = unsafe { noop_ptr.as_ref().unwrap() };
         if l == r && matches!(&*l.borrow(), PLType::Generic(_)) {
             if let PLType::Generic(l) = &mut *l.borrow_mut() {
                 if l.curpltype.is_some() {

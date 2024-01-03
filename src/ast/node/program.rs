@@ -182,10 +182,7 @@ fn import_symbol(
     if let PLType::Trait(t) = &*x.borrow() {
         for (k, v) in t.trait_methods_impl.borrow().clone() {
             for (k2, v) in v {
-                global_mthd_map
-                    .entry(k.clone())
-                    .or_insert(Default::default())
-                    .insert(k2, v);
+                global_mthd_map.entry(k.clone()).or_default().insert(k2, v);
             }
         }
     }
@@ -602,7 +599,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
         ModBuffer::push(
             db,
             PLModBuffer {
-                path: p.clone().to_path_buf(),
+                path: p.to_path_buf(),
                 is_main: builder.get_function("main").is_some(),
             },
         );

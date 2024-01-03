@@ -1034,7 +1034,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .ptr_type(AddressSpace::from(1))
             .as_basic_type_enum()
             .into();
-        let params = vec![ptr]
+        let params = [ptr]
             .iter()
             .copied()
             .chain(closure.arg_types.iter().map(|pltype| {
@@ -2170,7 +2170,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 format!(".str_{}", ID.fetch_add(1, Ordering::Relaxed)).as_str(),
             )
             .unwrap();
-        let s = s;
         self.get_llvm_value_handle(&s.as_any_value_enum())
     }
 

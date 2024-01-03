@@ -97,7 +97,7 @@ impl GlobalNode {
         let noop = BuilderEnum::NoOp(NoOpBuilder::default());
         // get it's pointer
         let noop_ptr = &noop as *const BuilderEnum<'a, '_>;
-        let noop = unsafe { &*(noop_ptr as *const BuilderEnum<'a, '_>) };
+        let noop = unsafe { noop_ptr.as_ref().unwrap() };
         if ctx.get_symbol(&self.var.name, builder).is_some() {
             return Err(ctx.add_diag(self.var.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
         }

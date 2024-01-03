@@ -24,7 +24,7 @@ use indexmap::IndexMap;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
 use lsp_types::SemanticTokenType;
-use rustc_hash::FxHashSet;
+
 #[node]
 pub struct TypeNameNode {
     pub id: Option<ExternIdNode>,
@@ -112,7 +112,7 @@ impl TypeNameNode {
                 };
                 ctx.linked_tp_tbl
                     .entry(pltype.as_ptr())
-                    .or_insert(vec![])
+                    .or_default()
                     .push(ret.clone());
                 Ok(ret)
             }
@@ -155,7 +155,7 @@ impl TypeNameNode {
                 let ret = Arc::new(RefCell::new(PLType::Union(untype)));
                 ctx.linked_tp_tbl
                     .entry(pltype.as_ptr())
-                    .or_insert(vec![])
+                    .or_default()
                     .push(ret.clone());
                 Ok(ret)
             }
@@ -516,10 +516,7 @@ impl StructDefNode {
                 if let Some(id) = &b.id {
                     if id.ns.is_empty() {
                         // 只有本包内类型可能自引用
-                        let v = ctx
-                            .self_ref_map
-                            .entry(id.id.name.clone())
-                            .or_insert(FxHashSet::default());
+                        let v = ctx.self_ref_map.entry(id.id.name.clone()).or_default();
                         v.insert((self.id.name.clone(), self.id.range()));
                         ctx.check_self_ref(&id.id.name, id.range)?;
                     }

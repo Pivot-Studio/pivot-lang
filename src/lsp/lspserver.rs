@@ -328,10 +328,8 @@ fn main_loop(
                     if set.get(&url).is_some() && set.get(&url).unwrap().contains(&r.range) {
                         continue;
                     }
-                    set.entry(url.clone())
-                        .or_insert(FxHashSet::default())
-                        .insert(r.range);
-                    rf.entry(url).or_insert(vec![]).push(edit);
+                    set.entry(url.clone()).or_default().insert(r.range);
+                    rf.entry(url).or_default().push(edit);
                 }
             }
             pool.execute(move || {

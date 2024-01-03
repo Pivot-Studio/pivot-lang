@@ -274,7 +274,7 @@ impl Mod {
     ) {
         let mut m = self.trait_mthd_table.borrow_mut();
         m.entry(st_name.to_string())
-            .or_insert_with(Default::default)
+            .or_default()
             .insert(mthd_name.to_owned(), fntp);
     }
 
@@ -529,7 +529,7 @@ impl Mod {
         self.impls
             .borrow_mut()
             .entry(stname.to_string())
-            .or_insert_with(Default::default)
+            .or_default()
             .insert(trait_tp_name.to_string(), generic_map);
     }
     pub fn search_mod<TP: CustomType>(&self, u: &TP, m: &str) -> Option<Arc<Self>> {
