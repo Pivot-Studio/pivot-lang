@@ -34,6 +34,7 @@ use project1::test::futuretest;
 use core::hash::pl_hash::*;
 
 pub fn main() i64 {
+
     macros::test_macros();
     ifel::test_if_else();
     generic::test_generic();

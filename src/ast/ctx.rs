@@ -915,7 +915,7 @@ impl<'a, 'ctx> Ctx<'a> {
         u: &TP,
         mut f: F,
     ) -> R {
-        if u.get_path() != self.plmod.path {
+        if u.get_path() != self.plmod.path && !u.get_path().is_empty() {
             let ori_mod = unsafe { &*self.origin_mod as &Mod };
             let m = if u.get_path() == ori_mod.path {
                 ori_mod.clone()

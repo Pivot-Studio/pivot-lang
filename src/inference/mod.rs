@@ -27,6 +27,7 @@
 use std::{cell::RefCell, sync::Arc};
 
 use ena::unify::{UnificationTable, UnifyKey, UnifyValue};
+use linked_hash_map::LinkedHashMap;
 use rustc_hash::FxHashMap;
 
 use crate::ast::{
@@ -35,6 +36,7 @@ use crate::ast::{
     node::{
         pointer::PointerOpEnum,
         statement::{DefVar, StatementsNode},
+        tuple::{new_tuple_field, new_tuple_type},
         NodeEnum, TypeNode,
     },
     pltype::{get_type_deep, ClosureType, PLType},
@@ -92,9 +94,14 @@ pub enum TyInfer {
     Generic((Vec<TyVariable>, GenericTy)),
 }
 
+/// # GenericTy
+///
+/// In inference, we treat
+/// closure and tuple as generic type
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenericTy {
     Closure,
+    Tuple,
 }
 
 impl UnifyValue for TyInfer {
@@ -140,6 +147,32 @@ impl TyInfer {
                             ret_type: ret_ty,
                             range: Default::default(),
                         })))
+                    }
+                    GenericTy::Tuple => {
+                        let mut fields = LinkedHashMap::default();
+                        let mut name = "".to_string();
+                        for (i, arg) in gen.iter().enumerate() {
+                            if i != 0 {
+                                name += ", ";
+                            }
+                            let ty = unify_table.probe(*arg).get_type(unify_table);
+                            fields.insert(
+                                i.to_string(),
+                                new_tuple_field(
+                                    i,
+                                    &ty.borrow(),
+                                    &ty.borrow().get_path().unwrap_or("".to_string()),
+                                ),
+                            );
+                            name += &ty.borrow().get_llvm_name();
+                        }
+                        name = format!("({})", name);
+
+                        Arc::new(RefCell::new(PLType::Struct(new_tuple_type(
+                            name,
+                            fields,
+                            Default::default(),
+                        ))))
                     }
                 }
             }
@@ -597,6 +630,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                                 }
                                 return SymbolType::Var(gen.last().unwrap().to_owned());
                             }
+                            _ => (),
                         }
                     }
                     SymbolType::PLType(tp) => match &*tp.borrow() {
@@ -784,13 +818,21 @@ impl<'ctx> InferenceCtx<'ctx> {
             NodeEnum::ParanthesesNode(p) => {
                 return self.inference(&mut p.node, ctx, builder);
             }
-            // NodeEnum::TupleInitNode(ti) => {
-            //     let mut tys = vec![];
-            //     for t in &mut ti.tuple {
-
-            //     }
-
-            // }
+            NodeEnum::TupleInitNode(ti) => {
+                let mut tys = vec![];
+                for t in &mut ti.exprs {
+                    let ty = self.inference(&mut *t, ctx, builder);
+                    let key = self.new_key();
+                    self.unify(key, ty, ctx, builder);
+                    tys.push(key);
+                }
+                let id = self.new_key();
+                self.unify_table
+                    .borrow_mut()
+                    .unify_var_value(id, TyInfer::Generic((tys, GenericTy::Tuple)))
+                    .unwrap();
+                return SymbolType::Var(id);
+            }
             _ => (),
         }
         unknown()
@@ -864,6 +906,12 @@ impl<'ctx> InferenceCtx<'ctx> {
                         let tp = ctx.auto_deref_tp(t);
                         if let Some(value) = tp_field_symbol(tp, f, ctx, builder) {
                             return Some(value);
+                        }
+                    }
+                    TyInfer::Generic((tys, GenericTy::Tuple)) => {
+                        let f = f.parse::<usize>().unwrap();
+                        if f < tys.len() {
+                            return Some(SymbolType::Var(tys[f]));
                         }
                     }
                     _ => (),

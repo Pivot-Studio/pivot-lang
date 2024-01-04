@@ -22,7 +22,24 @@ pub fn test_inference() void {
     yy = ~y;
     let xx ;
     xx = &(~y);
+    test_deconstruct_inference();
 
+    return;
+}
+
+fn test_deconstruct_inference() void {
+    let a;
+    let b;
+    let c;
+    let d;
+    let e;
+    let f;
+    (a,(b,c)) = (d,(e,f));
+    let func = |a,b|=> {
+        let c = a + b + 1;
+        return c;
+    };
+    f = func(d,e);
     return;
 }
 
