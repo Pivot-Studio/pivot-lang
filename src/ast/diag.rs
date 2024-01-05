@@ -166,6 +166,7 @@ define_diag!(
     THE_TARGET_TRAIT_CANNOT_BE_INSTANTIATED = "the target trait type cannot be instantiated",
     MACRO_EXPAND_DEPTH_TOO_DEEP = "macro expand depth too deep",
     GLOBAL_MUST_BE_POINTER = "global must be pointer type",
+    ILLEGAL_GENERIC_PARAM = "illegal generic parameter",
 );
 
 define_diag! {

@@ -934,7 +934,7 @@ impl Node for ClosureNode {
                 typenode.get_type(ctx, builder, true)?
             } else if let Some(id) = v.id {
                 let vv = ctx.unify_table.borrow_mut().probe(id);
-                let tp = vv.get_type(&mut ctx.unify_table.borrow_mut());
+                let tp = vv.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut());
                 if *tp.borrow() == PLType::Unknown {
                     v.range()
                         .new_err(ErrorCode::CLOSURE_PARAM_TYPE_UNKNOWN)
@@ -978,7 +978,7 @@ impl Node for ClosureNode {
             ret.get_type(ctx, builder, true)?
         } else if let Some(ty) = self.ret_id {
             let v = ctx.unify_table.borrow_mut().probe(ty);
-            let tp = v.get_type(&mut ctx.unify_table.borrow_mut());
+            let tp = v.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut());
             tp
         } else if let Some(exp_ty) = &ctx.expect_ty {
             match &*exp_ty.borrow() {

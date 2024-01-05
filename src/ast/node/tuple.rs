@@ -79,7 +79,6 @@ impl Node for TupleInitNode {
 }
 
 pub fn new_tuple_field(i: usize, tp: &PLType, f: &str) -> Field {
-    
     Field {
         index: i as u32 + 1,
         typenode: tp.get_typenode(f),

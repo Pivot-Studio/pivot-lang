@@ -16,6 +16,7 @@ use crate::ast::builder::BuilderEnum;
 use crate::format_label;
 use crate::generic_impl;
 use crate::if_not_modified_by;
+use crate::inference::unknown_arc;
 use crate::skip_if_not_modified_by;
 use crate::utils::get_hash_code;
 
@@ -371,6 +372,7 @@ fn new_typename_node(name: &str, range: Range, ns: &[String]) -> Box<TypeNodeEnu
         }),
         generic_params: None,
         range,
+        generic_infer: None,
     }))
 }
 fn new_arrtype_node(typenode: Box<TypeNodeEnum>) -> Box<TypeNodeEnum> {
@@ -1400,7 +1402,11 @@ impl STType {
             let field_pltps = res
                 .fields
                 .values()
-                .map(|f| f.typenode.get_type(ctx, builder, true).unwrap())
+                .map(|f| {
+                    f.typenode
+                        .get_type(ctx, builder, true)
+                        .unwrap_or(unknown_arc())
+                })
                 .collect::<Vec<_>>();
             if !res.is_trait {
                 builder.gen_st_visit_function(ctx, &res, &field_pltps);

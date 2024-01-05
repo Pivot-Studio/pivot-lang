@@ -88,23 +88,48 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
-                TYPE_MISMATCH,
+                ILLEGAL_GENERIC_PARAM,
             ),
             help: Some(
                 "missing impl for trait(s): `TestTrait`",
             ),
-            labels: [],
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "parameter `{}` defined in `{}`",
+                            [
+                                "T",
+                                "BInner",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 16,
+                            column: 15,
+                            offset: 125,
+                        },
+                        end: Pos {
+                            line: 16,
+                            column: 16,
+                            offset: 126,
+                        },
+                    },
+                },
+            ],
             source: None,
             range: Range {
                 start: Pos {
                     line: 13,
-                    column: 15,
-                    offset: 104,
+                    column: 8,
+                    offset: 97,
                 },
                 end: Pos {
                     line: 13,
-                    column: 16,
-                    offset: 105,
+                    column: 14,
+                    offset: 103,
                 },
             },
         },

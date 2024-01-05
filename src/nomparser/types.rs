@@ -57,6 +57,7 @@ pub fn basic_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
                 generic_params,
                 id: Some(exid),
                 range,
+                generic_infer: None,
             })))
         },
     ))(input)
