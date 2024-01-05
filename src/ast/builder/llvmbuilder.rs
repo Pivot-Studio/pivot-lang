@@ -2828,11 +2828,15 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let ftp = self.mark_fn_tp(ptrtp);
         let name = v.get_full_name() + "_visitorf@";
 
+        let linkage = if v.is_tuple {
+            Linkage::Internal
+        } else {
+            Linkage::LinkOnceAny
+        };
+
         let f = match self.module.get_function(&name) {
             Some(f) => f,
-            None => self
-                .module
-                .add_function(&name, ftp, Some(Linkage::LinkOnceAny)),
+            None => self.module.add_function(&name, ftp, Some(linkage)),
         };
         self.used.borrow_mut().push(f);
 
