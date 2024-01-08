@@ -41,16 +41,21 @@ fn test_generic_inference() void {
     let b;
     ad3.a = &b;
     b = 1;
-    let f = |a| => {
+    
+    let f ;
+    f = |a| => {
         return;
     };
-    // let ad4 = ad3{};
-    // ad4.d = f;
-
+    let ad4 = st3{};
+    ad4.d = f;
     f(1);
-
-
     return;
+}
+
+
+struct st3<TB> {
+    a:*TB;
+    d:|TB|=>void;
 }
 
 fn test_deconstruct_inference() void {
@@ -88,7 +93,4 @@ struct st2<T|TT> {
     b:TT;
 }
 
-struct st3<TB> {
-    a:*TB;
-    d:|TB|=>void;
-}
+

@@ -99,7 +99,7 @@ pub enum TyInfer {
 /// # GenericTy
 ///
 /// In inference, we treat
-/// closure and tuple as generic type
+/// closure and tuple as generic type as well
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenericTy {
     Closure,
@@ -1147,6 +1147,27 @@ impl Inferable for TypeNodeEnum {
                     infer_ctx.unify_var_value(ptr, TyInfer::Pointer(id));
                     return Some(SymbolType::Var(ptr));
                 }
+            }
+            TypeNodeEnum::Closure(c) => {
+                let mut tys = vec![];
+                for arg_ty in &c.arg_types {
+                    let arg_ty = arg_ty
+                        .solve_in_infer_generic_ctx(ctx, builder, infer_ctx, generic_map)
+                        .unwrap_or(SymbolType::PLType(unknown_arc()));
+                    let arg_ty_key = infer_ctx.new_key();
+                    infer_ctx.unify(arg_ty_key, arg_ty, ctx, builder);
+                    tys.push(arg_ty_key);
+                }
+                let ret_ty = c
+                    .ret_type
+                    .solve_in_infer_generic_ctx(ctx, builder, infer_ctx, generic_map)
+                    .unwrap_or(SymbolType::PLType(unknown_arc()));
+                let ret_ty_key = infer_ctx.new_key();
+                infer_ctx.unify(ret_ty_key, ret_ty, ctx, builder);
+                tys.push(ret_ty_key);
+                let id = infer_ctx.new_key();
+                infer_ctx.unify_var_value(id, TyInfer::Generic((tys, GenericTy::Closure)));
+                return Some(SymbolType::Var(id));
             }
             _ => (),
         };
