@@ -40,7 +40,7 @@ use crate::ast::{
         types::TypeNameNode,
         NodeEnum, TypeNode, TypeNodeEnum,
     },
-    pltype::{get_type_deep, ClosureType, PLType, STType},
+    pltype::{get_type_deep, ARRType, ClosureType, PLType, STType},
     tokens::TokenType,
 };
 
@@ -93,7 +93,7 @@ pub enum TyInfer {
     Err,
     Term(Arc<RefCell<PLType>>),
     Generic((Vec<TyVariable>, GenericTy)),
-    Pointer(TyVariable),
+    // Pointer(TyVariable),
 }
 
 /// # GenericTy
@@ -105,6 +105,8 @@ pub enum GenericTy {
     Closure,
     Tuple,
     St(STType),
+    Pointer,
+    Array,
 }
 
 impl UnifyValue for TyInfer {
@@ -204,13 +206,34 @@ impl TyInfer {
                         }
                         st.gen_code(ctx, builder).unwrap_or(unknown_arc())
                     }
+                    GenericTy::Pointer => {
+                        let p = gen[0];
+                        let infer = unify_table.probe(p);
+                        let ty = infer.get_type(ctx, builder, unify_table);
+                        if let PLType::Unknown = &*ty.borrow() {
+                            return unknown_arc();
+                        }
+                        Arc::new(RefCell::new(PLType::Pointer(ty)))
+                    }
+                    GenericTy::Array => {
+                        let p = gen[0];
+                        let infer = unify_table.probe(p);
+                        let ty = infer.get_type(ctx, builder, unify_table);
+                        if let PLType::Unknown = &*ty.borrow() {
+                            return unknown_arc();
+                        }
+                        Arc::new(RefCell::new(PLType::Arr(ARRType {
+                            element_type: ty,
+                            size_handle: 0,
+                        })))
+                    }
                 }
             }
-            TyInfer::Pointer(p) => {
-                let infer = unify_table.probe(*p);
-                let ty = infer.get_type(ctx, builder, unify_table);
-                Arc::new(RefCell::new(PLType::Pointer(ty)))
-            }
+            // TyInfer::Pointer(p) => {
+            //     let infer = unify_table.probe(*p);
+            //     let ty = infer.get_type(ctx, builder, unify_table);
+            //     Arc::new(RefCell::new(PLType::Pointer(ty)))
+            // }
             _ => unknown_arc(),
         }
     }
@@ -334,17 +357,17 @@ impl<'ctx> InferenceCtx<'ctx> {
             (TyInfer::Term(t), TyInfer::Generic(_)) => {
                 self.unify_var_tp(v2, t, ctx, builder);
             }
-            (TyInfer::Pointer(t1), TyInfer::Pointer(t2)) => {
-                self.handle_unify(t1, t2, ctx, builder);
-            }
-            (TyInfer::Term(t), TyInfer::Pointer(p)) | (TyInfer::Pointer(p), TyInfer::Term(t)) => {
-                match &*t.borrow() {
-                    PLType::Pointer(ptr_ty) => {
-                        self.unify_var_tp(p, ptr_ty.clone(), ctx, builder);
-                    }
-                    _ => (),
-                }
-            }
+            // (TyInfer::Pointer(t1), TyInfer::Pointer(t2)) => {
+            //     self.handle_unify(t1, t2, ctx, builder);
+            // }
+            // (TyInfer::Term(t), TyInfer::Pointer(p)) | (TyInfer::Pointer(p), TyInfer::Term(t)) => {
+            //     match &*t.borrow() {
+            //         PLType::Pointer(ptr_ty) => {
+            //             self.unify_var_tp(p, ptr_ty.clone(), ctx, builder);
+            //         }
+            //         _ => (),
+            //     }
+            // }
             _ => (),
         };
         self.unify_table.borrow_mut().unify_var_var(v, v2).unwrap();
@@ -386,8 +409,11 @@ impl<'ctx> InferenceCtx<'ctx> {
                     }
                 }
             }
-            (TyInfer::Pointer(p), PLType::Pointer(ptr_ty)) => {
-                self.unify_var_tp(p, ptr_ty.clone(), ctx, builder);
+            (TyInfer::Generic((c1, GenericTy::Pointer)), PLType::Pointer(ptr_ty)) => {
+                self.unify_var_tp(c1[0], ptr_ty.clone(), ctx, builder);
+            }
+            (TyInfer::Generic((c1, GenericTy::Array)), PLType::Arr(arr)) => {
+                self.unify_var_tp(c1[0], arr.element_type.clone(), ctx, builder);
             }
             _ => (),
         }
@@ -408,6 +434,7 @@ impl<'ctx> InferenceCtx<'ctx> {
             self.add_symbol(name, key);
         }
     }
+
     #[allow(dead_code)]
     pub fn add_unknown_variable(&mut self, name: &str) {
         let key = self.new_key();
@@ -644,13 +671,30 @@ impl<'ctx> InferenceCtx<'ctx> {
                                     return SymbolType::PLType(c.ret_type.clone());
                                 }
                                 PLType::Fn(f) => {
-                                    if f.fntype.param_pltypes.len() != argtys.len() {
+                                    let offset = if f.fntype.method { 1 } else { 0 };
+                                    if f.fntype.param_pltypes.len() != argtys.len() + offset {
                                         return unknown();
                                     }
 
                                     for (i, arg) in f.fntype.param_pltypes.iter().enumerate() {
+                                        if i < offset {
+                                            if let NodeEnum::Take(t) = &mut *fc.callee {
+                                                let head_ty =
+                                                    self.inference(&mut t.head, ctx, builder);
+                                                self.unify_two_symbol(
+                                                    head_ty,
+                                                    SymbolType::PLType(
+                                                        arg.get_type(ctx, builder, true)
+                                                            .unwrap_or(unknown_arc()),
+                                                    ),
+                                                    ctx,
+                                                    builder,
+                                                );
+                                            }
+                                            continue;
+                                        }
                                         self.unify_two_symbol(
-                                            argtys[i].clone(),
+                                            argtys[i - offset].clone(),
                                             SymbolType::PLType(
                                                 arg.get_type(ctx, builder, true)
                                                     .unwrap_or(unknown_arc()),
@@ -700,16 +744,30 @@ impl<'ctx> InferenceCtx<'ctx> {
                     }
                     SymbolType::PLType(tp) => match &*tp.borrow() {
                         PLType::Fn(f) => {
-                            if f.fntype.param_pltypes.len() != argtys.len() {
+                            let offset = if f.fntype.method { 1 } else { 0 };
+                            if f.fntype.param_pltypes.len() != argtys.len() + offset {
                                 return unknown();
                             }
                             for (i, arg) in f.fntype.param_pltypes.iter().enumerate() {
+                                if i < offset {
+                                    if let NodeEnum::Take(t) = &mut *fc.callee {
+                                        let head_ty = self.inference(&mut t.head, ctx, builder);
+                                        self.unify_two_symbol(
+                                            head_ty,
+                                            SymbolType::PLType(
+                                                arg.get_type(ctx, builder, true)
+                                                    .unwrap_or(unknown_arc()),
+                                            ),
+                                            ctx,
+                                            builder,
+                                        );
+                                    }
+                                    continue;
+                                }
                                 self.unify_two_symbol(
-                                    argtys[i].clone(),
+                                    argtys[i - offset].clone(),
                                     SymbolType::PLType(
-                                        arg.get_type(ctx, builder, true)
-                                            .unwrap_or(unknown_arc())
-                                            .clone(),
+                                        arg.get_type(ctx, builder, true).unwrap_or(unknown_arc()),
                                     ),
                                     ctx,
                                     builder,
@@ -893,7 +951,10 @@ impl<'ctx> InferenceCtx<'ctx> {
                                         ));
                                     } else {
                                         let ptr = self.new_key();
-                                        self.unify_var_value(ptr, TyInfer::Pointer(v));
+                                        self.unify_var_value(
+                                            ptr,
+                                            TyInfer::Generic((vec![v], GenericTy::Pointer)),
+                                        );
                                         return SymbolType::Var(ptr);
                                     }
                                 } else if p.op == PointerOpEnum::Deref {
@@ -905,20 +966,30 @@ impl<'ctx> InferenceCtx<'ctx> {
                                     }
                                 }
                             }
+                            TyInfer::Generic((v, GenericTy::Pointer))
+                                if p.op == PointerOpEnum::Deref =>
+                            {
+                                return SymbolType::Var(v[0]);
+                            }
+                            TyInfer::Generic((_, GenericTy::Pointer))
+                                if p.op == PointerOpEnum::Addr =>
+                            {
+                                let ptr = self.new_key();
+                                self.unify_var_value(
+                                    ptr,
+                                    TyInfer::Generic((vec![v], GenericTy::Pointer)),
+                                );
+                                return SymbolType::Var(ptr);
+                            }
                             TyInfer::Generic(_) => {
                                 if p.op == PointerOpEnum::Addr {
                                     let ptr = self.new_key();
-                                    self.unify_var_value(ptr, TyInfer::Pointer(v));
+                                    self.unify_var_value(
+                                        ptr,
+                                        TyInfer::Generic((vec![v], GenericTy::Pointer)),
+                                    );
                                     return SymbolType::Var(ptr);
                                 }
-                            }
-                            TyInfer::Pointer(ptr) if p.op == PointerOpEnum::Deref => {
-                                return SymbolType::Var(ptr);
-                            }
-                            TyInfer::Pointer(_) if p.op == PointerOpEnum::Addr => {
-                                let ptr = self.new_key();
-                                self.unify_var_value(ptr, TyInfer::Pointer(v));
-                                return SymbolType::Var(ptr);
                             }
                             _ => (),
                         }
@@ -955,6 +1026,49 @@ impl<'ctx> InferenceCtx<'ctx> {
                     .borrow_mut()
                     .unify_var_value(id, TyInfer::Generic((tys, GenericTy::Tuple)))
                     .unwrap();
+                return SymbolType::Var(id);
+            }
+            NodeEnum::ArrayElementNode(ae) => {
+                let ty = self.inference(&mut ae.arr, ctx, builder);
+                match ty {
+                    SymbolType::Var(v) => {
+                        let k = self.unify_table.borrow_mut().probe(v);
+                        match k {
+                            TyInfer::Term(t) => {
+                                if let PLType::Arr(arr) = &*t.borrow() {
+                                    return SymbolType::PLType(arr.element_type.clone());
+                                }
+                            }
+                            TyInfer::Generic((v, GenericTy::Array)) => {
+                                return SymbolType::Var(v[0]);
+                            }
+                            _ => (),
+                        }
+                    }
+                    SymbolType::PLType(t) => {
+                        if let PLType::Arr(arr) = &*t.borrow() {
+                            return SymbolType::PLType(arr.element_type.clone());
+                        }
+                    }
+                }
+            }
+            NodeEnum::ArrayInitNode(ai) => {
+                let elm_ty = ai
+                    .tp
+                    .as_mut()
+                    .map(|(tp, _)| {
+                        SymbolType::PLType(tp.get_type(ctx, builder, true).unwrap_or(unknown_arc()))
+                    })
+                    .unwrap_or(
+                        ai.exps
+                            .first_mut()
+                            .map(|e| self.inference(e, ctx, builder))
+                            .unwrap_or(unknown()),
+                    );
+                let elm_id = self.new_key();
+                self.unify(elm_id, elm_ty, ctx, builder);
+                let id = self.new_key();
+                self.unify_var_value(id, TyInfer::Generic((vec![elm_id], GenericTy::Array)));
                 return SymbolType::Var(id);
             }
             _ => (),
@@ -1144,7 +1258,8 @@ impl Inferable for TypeNodeEnum {
                     let id = infer_ctx.new_key();
                     infer_ctx.unify(id, sym, ctx, builder);
                     let ptr = infer_ctx.new_key();
-                    infer_ctx.unify_var_value(ptr, TyInfer::Pointer(id));
+                    infer_ctx
+                        .unify_var_value(ptr, TyInfer::Generic((vec![id], GenericTy::Pointer)));
                     return Some(SymbolType::Var(ptr));
                 }
             }
@@ -1169,6 +1284,30 @@ impl Inferable for TypeNodeEnum {
                 infer_ctx.unify_var_value(id, TyInfer::Generic((tys, GenericTy::Closure)));
                 return Some(SymbolType::Var(id));
             }
+            TypeNodeEnum::Array(a) => {
+                let elm =
+                    a.id.solve_in_infer_generic_ctx(ctx, builder, infer_ctx, generic_map)
+                        .unwrap_or(SymbolType::PLType(unknown_arc()));
+                let elm_key = infer_ctx.new_key();
+                infer_ctx.unify(elm_key, elm, ctx, builder);
+                let id = infer_ctx.new_key();
+                infer_ctx.unify_var_value(id, TyInfer::Generic((vec![elm_key], GenericTy::Array)));
+                return Some(SymbolType::Var(id));
+            }
+            TypeNodeEnum::Tuple(t) => {
+                let mut tys = vec![];
+                for ty in &t.tps {
+                    let ty = ty
+                        .solve_in_infer_generic_ctx(ctx, builder, infer_ctx, generic_map)
+                        .unwrap_or(SymbolType::PLType(unknown_arc()));
+                    let ty_key = infer_ctx.new_key();
+                    infer_ctx.unify(ty_key, ty, ctx, builder);
+                    tys.push(ty_key);
+                }
+                let id = infer_ctx.new_key();
+                infer_ctx.unify_var_value(id, TyInfer::Generic((tys, GenericTy::Tuple)));
+                return Some(SymbolType::Var(id));
+            }
             _ => (),
         };
         self.get_type(ctx, builder, true)
@@ -1185,6 +1324,19 @@ fn tp_field_symbol<'a, 'b>(
 ) -> Option<SymbolType> {
     match &*tp.borrow() {
         PLType::Struct(a) => {
+            // return ctx.run_in_type_mod(a, |ctx, a| {
+            //     ctx.protect_generic_context_ex(&a.generic_map, |ctx| {
+            //         let f = a.fields.get(field);
+            //         if let Some(f) = f {
+            //             return Some(SymbolType::PLType(
+            //                 f.typenode
+            //                     .get_type(ctx, builder, true)
+            //                     .unwrap_or(unknown_arc()),
+            //             ));
+            //         }
+            //         None
+            //     })
+            // });
             let f = a.fields.get(field);
             if let Some(f) = f {
                 return Some(SymbolType::PLType(

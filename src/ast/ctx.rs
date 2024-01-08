@@ -896,11 +896,12 @@ impl<'a, 'ctx> Ctx<'a> {
         self.plmod = plmod;
         m
     }
-    pub fn protect_generic_context<'b, T, F: FnMut(&mut Ctx<'a>) -> Result<T, PLDiag>>(
+
+    pub fn protect_generic_context<'b, T, F: FnMut(&mut Ctx<'a>) -> T>(
         &mut self,
         generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
         mut f: F,
-    ) -> Result<T, PLDiag> {
+    ) -> T {
         let mp = self.generic_types.clone();
         for (name, pltype) in generic_map.iter() {
             self.add_generic_type(name.clone(), pltype.clone());

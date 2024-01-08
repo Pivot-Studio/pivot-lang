@@ -996,7 +996,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             ctx.run_in_type_mod(fnvalue, |ctx, fnvalue| {
                 let mut param_types = vec![];
                 for param_pltype in fnvalue.fntype.param_pltypes.iter() {
-                    // eprintln!("param_pltype: {:?}", param_pltype);
                     param_types.push(
                         self.get_basic_type_op(
                             &param_pltype
@@ -1021,10 +1020,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         !fnvalue.is_declare && fnvalue.name != "main",
                     )
                     .fn_type(&param_types, false);
-                Ok(fn_type)
+                fn_type
             })
         })
-        .unwrap()
     }
 
     fn get_closure_fn_type(&self, closure: &ClosureType, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {

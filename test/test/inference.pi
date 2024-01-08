@@ -49,6 +49,29 @@ fn test_generic_inference() void {
     let ad4 = st3{};
     ad4.d = f;
     f(1);
+
+    let c  ;
+    let ad5 = st3{};
+    c = [&b];
+    ad5.c = c;
+
+
+
+    let d;
+    let ad6 = st3{};
+    ad6.e = d;
+    d = (1,2);
+    
+
+    return;
+}
+
+
+fn test_inference_no_run() void {
+    let e;
+    let ad7 = st3{};
+    ad7.c[0] = &e ;
+    e = 10;
     return;
 }
 
@@ -56,6 +79,8 @@ fn test_generic_inference() void {
 struct st3<TB> {
     a:*TB;
     d:|TB|=>void;
+    c:[*TB];
+    e:(TB, TB);
 }
 
 fn test_deconstruct_inference() void {

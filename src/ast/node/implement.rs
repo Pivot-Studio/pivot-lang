@@ -44,7 +44,7 @@ impl ImplNode {
                         t.generic_map.clone(),
                     );
                 }
-                Ok(())
+                Ok::<_, PLDiag>(())
             });
         } else {
             let sttp = self.target.get_type(ctx, builder, true)?;
