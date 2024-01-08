@@ -36,6 +36,19 @@ fn test_generic_inference() void {
     ad2 = st2 {};
     ad2.taaa.a = 1;
     ad2.b = 2.0;
+    let ad3;
+    ad3 = st3 {};
+    let b;
+    ad3.a = &b;
+    b = 1;
+    let f = |a| => {
+        return;
+    };
+    // let ad4 = ad3{};
+    // ad4.d = f;
+
+    f(1);
+
 
     return;
 }
@@ -73,4 +86,9 @@ struct st<T> {
 struct st2<T|TT> {
     taaa:st<T>;
     b:TT;
+}
+
+struct st3<TB> {
+    a:*TB;
+    d:|TB|=>void;
 }

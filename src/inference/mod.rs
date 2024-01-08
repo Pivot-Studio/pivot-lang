@@ -93,7 +93,7 @@ pub enum TyInfer {
     Err,
     Term(Arc<RefCell<PLType>>),
     Generic((Vec<TyVariable>, GenericTy)),
-    Pointer(Box<TyInfer>),
+    Pointer(TyVariable),
 }
 
 /// # GenericTy
@@ -206,6 +206,11 @@ impl TyInfer {
                     }
                 }
             }
+            TyInfer::Pointer(p) => {
+                let infer = unify_table.probe(*p);
+                let ty = infer.get_type(ctx, builder, unify_table);
+                Arc::new(RefCell::new(PLType::Pointer(ty)))
+            }
             _ => unknown_arc(),
         }
     }
@@ -273,6 +278,13 @@ impl<'ctx> InferenceCtx<'ctx> {
         self.unify_two_symbol(SymbolType::Var(var), value, ctx, builder)
     }
 
+    pub fn unify_var_value(&self, var: TyVariable, value: TyInfer) {
+        self.unify_table
+            .borrow_mut()
+            .unify_var_value(var, value)
+            .unwrap()
+    }
+
     pub fn unify_two_symbol<'a, 'b>(
         &self,
         var1: SymbolType,
@@ -282,30 +294,7 @@ impl<'ctx> InferenceCtx<'ctx> {
     ) {
         match (var1, var2) {
             (SymbolType::Var(v), SymbolType::Var(v2)) => {
-                let v_1 = self.unify_table.borrow_mut().probe(v);
-                let v_2 = self.unify_table.borrow_mut().probe(v2);
-                match (v_1, v_2) {
-                    (TyInfer::Generic(c1), TyInfer::Generic(c2)) => {
-                        if c1.0.len() == c2.0.len() && c1.1 == c2.1 {
-                            for (i, arg) in c1.0.iter().enumerate() {
-                                self.unify_two_symbol(
-                                    SymbolType::Var(*arg),
-                                    SymbolType::Var(c2.0[i]),
-                                    ctx,
-                                    builder,
-                                );
-                            }
-                        }
-                    }
-                    (TyInfer::Generic(_), TyInfer::Term(t)) => {
-                        self.unify_var_tp(v, t, ctx, builder);
-                    }
-                    (TyInfer::Term(t), TyInfer::Generic(_)) => {
-                        self.unify_var_tp(v2, t, ctx, builder);
-                    }
-                    _ => (),
-                };
-                self.unify_table.borrow_mut().unify_var_var(v, v2).unwrap();
+                self.handle_unify(v, v2, ctx, builder);
             }
             (SymbolType::Var(v), SymbolType::PLType(tp)) => {
                 self.unify_var_tp(v, tp, ctx, builder);
@@ -317,6 +306,50 @@ impl<'ctx> InferenceCtx<'ctx> {
         }
     }
 
+    fn handle_unify<'a, 'b>(
+        &self,
+        v: TyVariable,
+        v2: TyVariable,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) {
+        let v_1 = self.unify_table.borrow_mut().probe(v);
+        let v_2 = self.unify_table.borrow_mut().probe(v2);
+        match (v_1, v_2) {
+            (TyInfer::Generic(c1), TyInfer::Generic(c2)) => {
+                if c1.0.len() == c2.0.len() && c1.1 == c2.1 {
+                    for (i, arg) in c1.0.iter().enumerate() {
+                        self.unify_two_symbol(
+                            SymbolType::Var(*arg),
+                            SymbolType::Var(c2.0[i]),
+                            ctx,
+                            builder,
+                        );
+                    }
+                }
+            }
+            (TyInfer::Generic(_), TyInfer::Term(t)) => {
+                self.unify_var_tp(v, t, ctx, builder);
+            }
+            (TyInfer::Term(t), TyInfer::Generic(_)) => {
+                self.unify_var_tp(v2, t, ctx, builder);
+            }
+            (TyInfer::Pointer(t1), TyInfer::Pointer(t2)) => {
+                self.handle_unify(t1, t2, ctx, builder);
+            }
+            (TyInfer::Term(t), TyInfer::Pointer(p)) | (TyInfer::Pointer(p), TyInfer::Term(t)) => {
+                match &*t.borrow() {
+                    PLType::Pointer(ptr_ty) => {
+                        self.unify_var_tp(p, ptr_ty.clone(), ctx, builder);
+                    }
+                    _ => (),
+                }
+            }
+            _ => (),
+        };
+        self.unify_table.borrow_mut().unify_var_var(v, v2).unwrap();
+    }
+
     pub fn unify_var_tp<'a, 'b>(
         &self,
         var: TyVariable,
@@ -325,7 +358,6 @@ impl<'ctx> InferenceCtx<'ctx> {
         builder: &'b BuilderEnum<'a, '_>,
     ) {
         let ty = self.unify_table.borrow_mut().probe(var);
-        // check if closure
         match (ty, &*tp.borrow()) {
             (TyInfer::Generic((c1, GenericTy::Closure)), PLType::Closure(c2)) => {
                 if c1.len() == c2.arg_types.len() + 1 {
@@ -353,6 +385,9 @@ impl<'ctx> InferenceCtx<'ctx> {
                         );
                     }
                 }
+            }
+            (TyInfer::Pointer(p), PLType::Pointer(ptr_ty)) => {
+                self.unify_var_tp(p, ptr_ty.clone(), ctx, builder);
             }
             _ => (),
         }
@@ -856,6 +891,10 @@ impl<'ctx> InferenceCtx<'ctx> {
                                         return SymbolType::PLType(new_arc_refcell(
                                             PLType::Pointer(t),
                                         ));
+                                    } else {
+                                        let ptr = self.new_key();
+                                        self.unify_var_value(ptr, TyInfer::Pointer(v));
+                                        return SymbolType::Var(ptr);
                                     }
                                 } else if p.op == PointerOpEnum::Deref {
                                     match &*t.borrow() {
@@ -865,6 +904,21 @@ impl<'ctx> InferenceCtx<'ctx> {
                                         _ => (),
                                     }
                                 }
+                            }
+                            TyInfer::Generic(_) => {
+                                if p.op == PointerOpEnum::Addr {
+                                    let ptr = self.new_key();
+                                    self.unify_var_value(ptr, TyInfer::Pointer(v));
+                                    return SymbolType::Var(ptr);
+                                }
+                            }
+                            TyInfer::Pointer(ptr) if p.op == PointerOpEnum::Deref => {
+                                return SymbolType::Var(ptr);
+                            }
+                            TyInfer::Pointer(_) if p.op == PointerOpEnum::Addr => {
+                                let ptr = self.new_key();
+                                self.unify_var_value(ptr, TyInfer::Pointer(v));
+                                return SymbolType::Var(ptr);
                             }
                             _ => (),
                         }
@@ -1082,6 +1136,18 @@ impl Inferable for TypeNodeEnum {
                 }
                 _ => (),
             },
+            TypeNodeEnum::Pointer(p) => {
+                let sym = p
+                    .elm
+                    .solve_in_infer_generic_ctx(ctx, builder, infer_ctx, generic_map);
+                if let Some(sym) = sym {
+                    let id = infer_ctx.new_key();
+                    infer_ctx.unify(id, sym, ctx, builder);
+                    let ptr = infer_ctx.new_key();
+                    infer_ctx.unify_var_value(ptr, TyInfer::Pointer(id));
+                    return Some(SymbolType::Var(ptr));
+                }
+            }
             _ => (),
         };
         self.get_type(ctx, builder, true)
