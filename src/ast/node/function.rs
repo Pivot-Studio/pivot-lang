@@ -783,12 +783,14 @@ impl FuncDefNode {
                 let mut infer_ctx = infer_ctx.new_child();
                 infer_ctx.import_symbols(child);
                 infer_ctx.inference_statements(self.body.as_mut().unwrap(), child, builder);
-                let terminator = self
-                    .body
-                    .as_mut()
-                    .expect(&self.id.name)
-                    .emit(child, builder)?
-                    .get_term();
+                let terminator = child.with_diag_src(&child.get_file(), |child| {
+                    Ok(self
+                        .body
+                        .as_mut()
+                        .expect(&self.id.name)
+                        .emit(child, builder)?
+                        .get_term())
+                })?;
                 if !terminator.is_return() && !self.generator {
                     return Err(child.add_diag(
                         self.range

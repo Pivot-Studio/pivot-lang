@@ -70,6 +70,14 @@ pub enum PLType {
     Union(UnionType),
     Closure(ClosureType),
     Unknown,
+    PartialInfered(Arc<RefCell<PLType>>),
+}
+
+impl PLType {
+    pub fn is_complete(&self) -> bool {
+        // Unknow/PartialInfered type are not complete
+        !matches!(self, PLType::Unknown | PLType::PartialInfered(_))
+    }
 }
 
 impl TraitImplAble for PriType {
@@ -498,6 +506,7 @@ impl PLType {
             PLType::Union(_) => "union".to_string(),
             PLType::Closure(_) => "closure".to_string(),
             PLType::Unknown => "unknown".to_string(),
+            PLType::PartialInfered(_) => "partial".to_string(),
         }
     }
 
@@ -542,6 +551,7 @@ impl PLType {
             PLType::Union(u) => Self::new_custom_tp_node(u, path),
             PLType::Closure(c) => Box::new(c.to_type_node(path)),
             PLType::Unknown => new_typename_node("Unknown", Default::default(), &[]),
+            PLType::PartialInfered(p) => p.borrow().get_typenode(path),
         }
     }
     pub fn is(&self, pri_type: &PriType) -> bool {
@@ -564,6 +574,7 @@ impl PLType {
             PLType::PlaceHolder(_) => (),
             PLType::Closure(_) => (),
             PLType::Unknown => (),
+            PLType::PartialInfered(p) => p.borrow().if_refs(f, f_local),
         }
     }
 
@@ -598,6 +609,7 @@ impl PLType {
             PLType::Union(u) => u.name.clone(),
             PLType::Closure(c) => c.get_name(),
             PLType::Unknown => "Unknown".to_string(),
+            PLType::PartialInfered(p) => p.borrow().get_name(),
         }
     }
     pub fn get_llvm_name(&self) -> String {
@@ -622,6 +634,7 @@ impl PLType {
             PLType::Union(u) => u.name.clone(),
             PLType::Closure(c) => c.get_name(),
             PLType::Unknown => "Unknown".to_string(),
+            PLType::PartialInfered(p) => p.borrow().get_llvm_name(),
         }
     }
 
@@ -647,6 +660,7 @@ impl PLType {
             PLType::Union(u) => u.get_full_name(),
             PLType::Closure(c) => c.get_name(),
             PLType::Unknown => "Unknown".to_string(),
+            PLType::PartialInfered(p) => p.borrow().get_full_elm_name(),
         }
     }
     pub fn get_full_elm_name_without_generic(&self) -> String {
@@ -665,6 +679,7 @@ impl PLType {
             PLType::Union(u) => u.get_full_name_except_generic(),
             PLType::Closure(c) => c.get_name(),
             PLType::Unknown => "Unknown".to_string(),
+            PLType::PartialInfered(p) => p.borrow().get_full_elm_name_without_generic(),
         }
     }
     pub fn get_ptr_depth(&self) -> usize {
@@ -689,6 +704,7 @@ impl PLType {
                 if_not_modified_by!(st.modifier, TokenType::PUB, return false);
                 true
             }
+            PLType::PartialInfered(p) => p.borrow().is_pub(),
             _ => true,
         }
     }
@@ -744,6 +760,7 @@ impl PLType {
                 );
                 Ok(())
             }
+            PLType::PartialInfered(p) => p.borrow().expect_pub(ctx, range),
             _ => Ok(()),
         }
     }
@@ -764,6 +781,7 @@ impl PLType {
             PLType::Union(u) => Some(u.range),
             PLType::Closure(c) => Some(c.range),
             PLType::Unknown => None,
+            PLType::PartialInfered(p) => p.borrow().get_range(),
         }
     }
 

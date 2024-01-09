@@ -180,14 +180,14 @@ impl Node for DefNode {
                     }
                 }
             }
-            if self.exp.is_none() && matches!(&*tp.borrow(), PLType::Unknown) {
+            if self.exp.is_none() && !tp.borrow().is_complete() {
                 match builder {
                     #[cfg(feature = "llvm")]
                     BuilderEnum::LLVM(_) => {
                         return Err(ctx.add_diag(
                             self.var
                                 .range()
-                                .new_err(ErrorCode::UNKNOWN_TYPE)
+                                .new_err(ErrorCode::TYPE_CANNOT_BE_FULLY_INFERRED)
                                 .add_to_ctx(ctx),
                         ));
                     }
@@ -195,7 +195,7 @@ impl Node for DefNode {
                         ctx.add_diag(
                             self.var
                                 .range()
-                                .new_err(ErrorCode::UNKNOWN_TYPE)
+                                .new_err(ErrorCode::TYPE_CANNOT_BE_FULLY_INFERRED)
                                 .add_to_ctx(ctx),
                         );
                     }

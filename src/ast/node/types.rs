@@ -359,6 +359,9 @@ impl TypeNode for ArrayTypeNameNode {
         gen_code: bool,
     ) -> TypeNodeResult {
         let pltype = self.id.get_type(ctx, builder, gen_code)?;
+        if !pltype.borrow().is_complete() {
+            eprintln!("array type not complete {:?}", pltype);
+        }
         let arrtype = ARRType {
             element_type: pltype,
             size_handle: 0,

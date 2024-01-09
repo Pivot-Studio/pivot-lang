@@ -116,12 +116,14 @@ impl UnifyValue for TyInfer {
         }
 
         // if there's no error, then set unknown to the real type
-        if value1 == value2 {
+        if value1 == value2
+            || matches!((value1,value2), (TyInfer::Term(t1), TyInfer::Term(t2)) if get_type_deep(t1.clone()) == get_type_deep(t2.clone()))
+        {
             Ok(value1.clone())
-        } else if matches!(value1, TyInfer::Term(ty) if *get_type_deep(ty.clone()).borrow()== PLType::Unknown)
+        } else if matches!(value1, TyInfer::Term(ty) if !get_type_deep(ty.clone()).borrow().is_complete())
         {
             Ok(value2.clone())
-        } else if matches!(value2, TyInfer::Term(ty) if *get_type_deep(ty.clone()).borrow()== PLType::Unknown)
+        } else if matches!(value2, TyInfer::Term(ty) if !get_type_deep(ty.clone()).borrow().is_complete())
             || matches!(value2, TyInfer::Generic(_))
             || matches!(value1, TyInfer::Generic(_))
         {
@@ -210,8 +212,13 @@ impl TyInfer {
                         let p = gen[0];
                         let infer = unify_table.probe(p);
                         let ty = infer.get_type(ctx, builder, unify_table);
-                        if let PLType::Unknown = &*ty.borrow() {
-                            return unknown_arc();
+                        if !ty.borrow().is_complete() {
+                            return new_arc_refcell(PLType::PartialInfered(Arc::new(
+                                RefCell::new(PLType::Arr(ARRType {
+                                    element_type: ty,
+                                    size_handle: 0,
+                                })),
+                            )));
                         }
                         Arc::new(RefCell::new(PLType::Pointer(ty)))
                     }
@@ -219,8 +226,13 @@ impl TyInfer {
                         let p = gen[0];
                         let infer = unify_table.probe(p);
                         let ty = infer.get_type(ctx, builder, unify_table);
-                        if let PLType::Unknown = &*ty.borrow() {
-                            return unknown_arc();
+                        if !ty.borrow().is_complete() {
+                            return new_arc_refcell(PLType::PartialInfered(Arc::new(
+                                RefCell::new(PLType::Arr(ARRType {
+                                    element_type: ty,
+                                    size_handle: 0,
+                                })),
+                            )));
                         }
                         Arc::new(RefCell::new(PLType::Arr(ARRType {
                             element_type: ty,
@@ -1324,27 +1336,27 @@ fn tp_field_symbol<'a, 'b>(
 ) -> Option<SymbolType> {
     match &*tp.borrow() {
         PLType::Struct(a) => {
-            // return ctx.run_in_type_mod(a, |ctx, a| {
-            //     ctx.protect_generic_context_ex(&a.generic_map, |ctx| {
-            //         let f = a.fields.get(field);
-            //         if let Some(f) = f {
-            //             return Some(SymbolType::PLType(
-            //                 f.typenode
-            //                     .get_type(ctx, builder, true)
-            //                     .unwrap_or(unknown_arc()),
-            //             ));
-            //         }
-            //         None
-            //     })
-            // });
-            let f = a.fields.get(field);
-            if let Some(f) = f {
-                return Some(SymbolType::PLType(
-                    f.typenode
-                        .get_type(ctx, builder, true)
-                        .unwrap_or(unknown_arc()),
-                ));
-            }
+            return ctx.run_in_type_mod(a, |ctx, a| {
+                ctx.protect_generic_context(&a.generic_map, |ctx| {
+                    let f = a.fields.get(field);
+                    if let Some(f) = f {
+                        return Some(SymbolType::PLType(
+                            f.typenode
+                                .get_type(ctx, builder, true)
+                                .unwrap_or(unknown_arc()),
+                        ));
+                    }
+                    None
+                })
+            });
+            // let f = a.fields.get(field);
+            // if let Some(f) = f {
+            //     return Some(SymbolType::PLType(
+            //         f.typenode
+            //             .get_type(ctx, builder, true)
+            //             .unwrap_or(unknown_arc()),
+            //     ));
+            // }
         }
         _ => (),
     };

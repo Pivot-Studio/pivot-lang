@@ -657,7 +657,8 @@ impl<'a, 'ctx> Ctx<'a> {
         if self.table.contains_key(&name) {
             return Err(self.add_diag(range.new_err(ErrorCode::REDECLARATION)));
         }
-        self.add_symbol_without_check(name, pv, pltype, range, is_glob, is_extern)
+
+        self.add_symbol_without_check(name, pv, real_tp(pltype), range, is_glob, is_extern)
     }
     pub fn add_symbol_without_check(
         &mut self,
@@ -1091,6 +1092,13 @@ impl<'a, 'ctx> Ctx<'a> {
         } else if let Some(father) = &self.father {
             father.try_set_closure_alloca_bb(bb);
         }
+    }
+}
+
+fn real_tp(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
+    match &*pltype.clone().borrow() {
+        PLType::PartialInfered(p) => real_tp(p.clone()),
+        _ => pltype,
     }
 }
 
