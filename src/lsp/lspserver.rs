@@ -1,10 +1,9 @@
 use std::{
-    cell::{Cell, RefCell},
     collections::HashMap,
     error::Error,
+    ops::Deref,
     sync::{Arc, Mutex},
     thread::available_parallelism,
-    time::Instant,
 };
 
 use log::debug;
@@ -15,15 +14,15 @@ use lsp_types::{
         HoverRequest, InlayHintRequest, References, Rename, SemanticTokensFullDeltaRequest,
         SemanticTokensFullRequest, SignatureHelpRequest,
     },
-    CodeLensOptions, Diagnostic, Hover, HoverContents, InitializeParams, MarkedString, OneOf,
-    SemanticTokens, SemanticTokensDelta, SemanticTokensOptions, ServerCapabilities, SignatureHelp,
-    TextDocumentSyncKind, TextDocumentSyncOptions,
+    CodeLensOptions, CompletionItem, Diagnostic, Hover, HoverContents, InitializeParams,
+    MarkedString, OneOf, SemanticTokens, SemanticTokensDelta, SemanticTokensOptions,
+    ServerCapabilities, SignatureHelp, TextDocumentSyncKind, TextDocumentSyncOptions,
 };
 
-use lsp_server::{Connection, Message};
+use lsp_server::{Connection, Message, RequestId};
 
-use mem_docs::MemDocs;
 use rustc_hash::{FxHashMap, FxHashSet};
+use salsa::ParallelDatabase;
 #[cfg(not(target_arch = "wasm32"))]
 use threadpool::ThreadPool;
 
@@ -38,7 +37,7 @@ use crate::{
         compiler::{compile_dry, ActionType},
         range::Pos,
     },
-    db,
+    db::{self},
     lsp::{
         config::SEMANTIC_LEGEND,
         dispatcher::Dispatcher,
@@ -53,8 +52,6 @@ use crate::{
 };
 #[cfg(target_arch = "wasm32")]
 use fake_thread_pool::ThreadPool;
-
-use super::mem_docs;
 
 pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
     // Note that  we must have our logging only write out to stderr.
@@ -117,6 +114,8 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
     Ok(())
 }
 
+type Comple = Arc<Mutex<(Vec<Vec<CompletionItem>>, Option<RequestId>)>>;
+
 fn main_loop(
     connection: Connection,
     params: serde_json::Value,
@@ -125,7 +124,7 @@ fn main_loop(
     let pool = ThreadPool::new(n_workers);
     let mut db = db::Database::default();
     let _params: InitializeParams = serde_json::from_value(params).unwrap();
-    let docs = Arc::new(Mutex::new(RefCell::new(MemDocs::default())));
+    let docs = Arc::new(Mutex::new(Default::default()));
     let docin = MemDocsInput::new(
         &db,
         docs.clone(),
@@ -135,33 +134,39 @@ fn main_loop(
         None,
         None,
     );
-    let last_tokens = Cell::new(Default::default());
-    let mut completions: Vec<Vec<lsp_types::CompletionItem>> = vec![];
+    let completions: Comple = Arc::new(Mutex::new((vec![], None)));
     let mut last_semantic_file = "".to_string();
+    let mut last_tokens: SemanticTokens = SemanticTokens::default();
 
     log::info!("starting main loop");
     for msg in &connection.receiver {
-        let now = Instant::now();
+        // let now = Instant::now();
         let di = Dispatcher::new(msg.clone());
         if let Message::Request(req) = &msg {
             if connection.handle_shutdown(req)? {
                 return Ok(());
             }
         }
+        let completions = completions.clone();
         di.on::<GotoDefinition, _>(|id, params| {
             let uri = url_to_path(params.text_document_position_params.text_document.uri);
             let pos = Pos::from_diag_pos(&params.text_document_position_params.position);
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::GotoDef);
             docin.set_params(&mut db).to(Some((pos, None)));
-            compile_dry(&db, docin);
-            let defs = compile_dry::accumulated::<GotoDef>(&db, docin);
+            docin
+                .set_docs(&mut db)
+                .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
+            let snapshot = db.snapshot();
             let sender = connection.sender.clone();
-            if !defs.is_empty() {
-                pool.execute(move || {
+            pool.execute(move || {
+                compile_dry(snapshot.deref(), docin);
+                let defs = compile_dry::accumulated::<GotoDef>(snapshot.deref(), docin);
+                if !defs.is_empty() {
                     send_goto_def(&sender, id, defs[0].clone());
-                });
-            }
+                }
+            });
+            // compile_dry(db.snapshot().deref(), docin);
         })
         .on::<HoverRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document_position_params.text_document.uri);
@@ -169,12 +174,16 @@ fn main_loop(
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::Hover);
             docin.set_params(&mut db).to(Some((pos, None)));
-            compile_dry(&db, docin);
-            let mut hover = compile_dry::accumulated::<PLHover>(&db, docin);
-            let hover = hover.pop();
+            docin
+                .set_docs(&mut db)
+                .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
+            let snapshot = db.snapshot();
             let sender = connection.sender.clone();
-            if hover.is_none() {
-                pool.execute(move || {
+            pool.execute(move || {
+                compile_dry(snapshot.deref(), docin);
+                let mut hover = compile_dry::accumulated::<PLHover>(snapshot.deref(), docin);
+                let hover = hover.pop();
+                if hover.is_none() {
                     send_hover(
                         &sender,
                         id,
@@ -183,10 +192,8 @@ fn main_loop(
                             range: None,
                         },
                     );
-                });
-                return;
-            }
-            pool.execute(move || {
+                    return;
+                }
                 send_hover(&sender, id, hover.unwrap());
             });
         })
@@ -196,23 +203,33 @@ fn main_loop(
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::FindReferences);
             docin.set_params(&mut db).to(Some((pos, None)));
-            compile_dry(&db, docin);
-            let refs = compile_dry::accumulated::<PLReferences>(&db, docin);
+            docin
+                .set_docs(&mut db)
+                .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
+            let snapshot = db.snapshot();
             let sender = connection.sender.clone();
-            let mut rf = vec![];
-            for r in refs {
-                for r in r.clone().iter() {
-                    rf.push(r.clone());
-                }
-            }
             pool.execute(move || {
+                compile_dry(snapshot.deref(), docin);
+                let refs = compile_dry::accumulated::<PLReferences>(snapshot.deref(), docin);
+                let mut rf = vec![];
+                for r in refs {
+                    for r in r.clone().iter() {
+                        rf.push(r.clone());
+                    }
+                }
                 send_references(&sender, id, &rf);
             });
         })
         .on::<Completion, _>(|id, _| {
-            if !completions.is_empty() {
+            let mut guard = completions.lock().unwrap();
+            if !guard.0.is_empty() {
                 let sender = connection.sender.clone();
-                let comps = completions[0].clone();
+                if guard.0[0].is_empty() {
+                    guard.1 = Some(id);
+                    return;
+                }
+                let comps = guard.0[0].clone();
+                log::info!("send completions {}", comps.len());
                 pool.execute(move || {
                     send_completions(&sender, id, comps.clone());
                 });
@@ -225,6 +242,9 @@ fn main_loop(
             docin
                 .set_params(&mut db)
                 .to(Some((Default::default(), None)));
+            docin
+                .set_docs(&mut db)
+                .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
             compile_dry(&db, docin);
             let codelens = compile_dry::accumulated::<PLCodeLens>(&db, docin);
             let sender = connection.sender.clone();
@@ -235,17 +255,17 @@ fn main_loop(
         .on::<SemanticTokensFullRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
             last_semantic_file = uri.clone();
-            docin.set_file(&mut db).to(uri);
-            docin.set_action(&mut db).to(ActionType::SemanticTokensFull);
-            docin
-                .set_params(&mut db)
-                .to(Some((Default::default(), None)));
-            compile_dry(&db, docin);
-            let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(&db, docin);
+            if docin.file(&db) != &uri {
+                docin.set_file(&mut db).to(uri);
+            }
+            let snapshot = db.snapshot();
+            compile_dry(snapshot.deref(), docin);
+            let mut newtokens =
+                compile_dry::accumulated::<PLSemanticTokens>(snapshot.deref(), docin);
             if newtokens.is_empty() {
                 newtokens.push(SemanticTokens::default());
             }
-            last_tokens.replace(newtokens[0].clone());
+            last_tokens = newtokens[0].clone();
             let sender = connection.sender.clone();
             pool.execute(move || {
                 send_semantic_tokens(&sender, id, newtokens[0].clone());
@@ -268,18 +288,21 @@ fn main_loop(
                 return;
             }
             last_semantic_file = uri.clone();
-            docin.set_file(&mut db).to(uri);
-            docin.set_action(&mut db).to(ActionType::SemanticTokensFull);
-            docin
-                .set_params(&mut db)
-                .to(Some((Default::default(), None)));
-            compile_dry(&db, docin);
-            let mut newtokens = compile_dry::accumulated::<PLSemanticTokens>(&db, docin);
+            // docin.set_file(&mut db).to(uri);
+            // docin.set_action(&mut db).to(ActionType::SemanticTokensFull);
+            // docin
+            //     .set_params(&mut db)
+            //     .to(Some((Default::default(), None)));
+            // docin.set_docs(&mut db).to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
+            let snapshot = db.snapshot();
+            compile_dry(snapshot.deref(), docin);
+            let mut newtokens =
+                compile_dry::accumulated::<PLSemanticTokens>(snapshot.deref(), docin);
             if newtokens.is_empty() {
                 newtokens.push(SemanticTokens::default());
             }
-
-            let old = last_tokens.replace(newtokens[0].clone());
+            let old = last_tokens.clone();
+            last_tokens = newtokens[0].clone();
             let delta = diff_tokens(&old.data, &newtokens[0].data);
             let sender = connection.sender.clone();
             pool.execute(move || {
@@ -292,6 +315,8 @@ fn main_loop(
                     },
                 );
             });
+
+            log::info!("send semantic tokens delta");
         })
         .on::<Formatting, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
@@ -300,6 +325,9 @@ fn main_loop(
             docin
                 .set_params(&mut db)
                 .to(Some((Default::default(), None)));
+            docin
+                .set_docs(&mut db)
+                .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
             compile_dry(&db, docin);
             let fmt = compile_dry::accumulated::<PLFormat>(&db, docin);
             if !fmt.is_empty() {
@@ -315,6 +343,9 @@ fn main_loop(
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::FindReferences);
             docin.set_params(&mut db).to(Some((pos, None)));
+            docin
+                .set_docs(&mut db)
+                .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
             compile_dry(&db, docin);
             let refs = compile_dry::accumulated::<PLReferences>(&db, docin);
             let sender = connection.sender.clone();
@@ -343,6 +374,9 @@ fn main_loop(
             docin.set_file(&mut db).to(uri);
             docin.set_action(&mut db).to(ActionType::SignatureHelp);
             docin.set_params(&mut db).to(Some((pos, None)));
+            docin
+                .set_docs(&mut db)
+                .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
             compile_dry(&db, docin);
             let sigs = compile_dry::accumulated::<PLSignatureHelp>(&db, docin);
             if !sigs.is_empty() {
@@ -367,58 +401,91 @@ fn main_loop(
         })
         .on::<InlayHintRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
-            docin.set_file(&mut db).to(uri);
-            docin.set_action(&mut db).to(ActionType::Hint);
-            docin
-                .set_params(&mut db)
-                .to(Some((Default::default(), None)));
-            compile_dry(&db, docin);
-            let hints = compile_dry::accumulated::<Hints>(&db, docin);
-            let sender = connection.sender.clone();
-            if !hints.is_empty() {
-                pool.execute(move || {
-                    send_hints(&sender, id, hints[0].clone());
-                });
+            if docin.file(&db) != &uri {
+                docin.set_file(&mut db).to(uri.clone());
+                docin.set_action(&mut db).to(ActionType::Hint);
+                docin
+                    .set_params(&mut db)
+                    .to(Some((Default::default(), None)));
             }
+            docin
+                .set_docs(&mut db)
+                .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
+            let sender = connection.sender.clone();
+            let snapshot = db.snapshot();
+            pool.execute(move || {
+                if docin.file(snapshot.deref()) != &uri {
+                    compile_dry(snapshot.deref(), docin);
+                }
+                let hints = compile_dry::accumulated::<Hints>(snapshot.deref(), docin);
+                if !hints.is_empty() {
+                    send_hints(&sender, id, hints[0].clone());
+                }
+            });
         })
         .on::<DocumentSymbolRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
-            docin.set_file(&mut db).to(uri);
-            docin.set_action(&mut db).to(ActionType::DocSymbol);
-            docin
-                .set_params(&mut db)
-                .to(Some((Default::default(), None)));
-            compile_dry(&db, docin);
-            let doc_symbols = compile_dry::accumulated::<DocSymbols>(&db, docin);
-            let sender = connection.sender.clone();
-            if !doc_symbols.is_empty() {
-                pool.execute(move || {
-                    send_doc_symbols(&sender, id, doc_symbols[0].clone());
-                });
+            if docin.file(&db) != &uri {
+                docin.set_file(&mut db).to(uri.clone());
+                docin.set_action(&mut db).to(ActionType::DocSymbol);
+                docin
+                    .set_params(&mut db)
+                    .to(Some((Default::default(), None)));
             }
+            docin
+                .set_docs(&mut db)
+                .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
+
+            let sender = connection.sender.clone();
+            let snapshot = db.snapshot();
+            pool.execute(move || {
+                if docin.file(snapshot.deref()) != &uri {
+                    compile_dry(snapshot.deref(), docin);
+                }
+                let doc_symbols = compile_dry::accumulated::<DocSymbols>(snapshot.deref(), docin);
+                if !doc_symbols.is_empty() {
+                    send_doc_symbols(&sender, id, doc_symbols[0].clone());
+                }
+            });
         })
         .on_noti::<DidChangeTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
             for content_change in params.content_changes.iter() {
-                docs.lock().unwrap().borrow_mut().change(
-                    &mut db,
+                let (doc, txt) = docs.lock().unwrap().change_txt(
+                    &db,
                     content_change.range.unwrap(),
-                    f.clone(),
+                    &f,
                     content_change.text.clone(),
                 );
+
+                doc.set_text(&mut db).to(txt);
                 let mut pos = Pos::from_diag_pos(&content_change.range.unwrap().start);
                 pos.column += 1;
                 docin.set_edit_pos(&mut db).to(Some(pos));
-                docin.set_docs(&mut db).to(docs.clone());
             }
+            docin
+                .set_docs(&mut db)
+                .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
             docin.set_file(&mut db).to(f);
 
             docin.set_action(&mut db).to(ActionType::Diagnostic);
-            compile_dry(&db, docin);
-            completions = compile_dry::accumulated::<Completions>(&db, docin);
-            let diags = compile_dry::accumulated::<Diagnostics>(&db, docin);
+            let snapshot = db.snapshot();
             let sender = connection.sender.clone();
+            let completions = completions.clone();
             pool.execute(move || {
+                compile_dry(snapshot.deref(), docin);
+                let comps = compile_dry::accumulated::<Completions>(snapshot.deref(), docin);
+                let mut guard = completions.lock().unwrap();
+                if let Some(id) = &guard.1 {
+                    send_completions(
+                        &sender,
+                        id.clone(),
+                        comps.first().cloned().unwrap_or_default(),
+                    );
+                }
+                guard.1 = None;
+                guard.0 = comps;
+                let diags = compile_dry::accumulated::<Diagnostics>(snapshot.deref(), docin);
                 debug!("diags: {:#?}", diags);
                 let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();
                 for (p, diags) in &diags {
@@ -436,12 +503,9 @@ fn main_loop(
         })
         .on_noti::<DidOpenTextDocument, _>(|params| {
             let f = url_to_path(params.text_document.uri);
-            docs.lock().unwrap().borrow_mut().insert(
-                &db,
-                f.clone(),
-                params.text_document.text,
-                f.clone(),
-            );
+            docs.lock()
+                .unwrap()
+                .insert(&db, f.clone(), params.text_document.text, f.clone());
             docin.set_docs(&mut db).to(docs.clone());
             docin.set_file(&mut db).to(f);
             docin.set_action(&mut db).to(ActionType::Diagnostic);
@@ -464,8 +528,7 @@ fn main_loop(
             // docs.lock().unwrap().borrow_mut().remove(&f);
             // docin.set_docs(&mut db).to(docs.clone());
         });
-        let elapsed = now.elapsed();
-        log::info!("req {:?} finished, time: {:?}", docin.action(&db), elapsed);
+        // let elapsed = now.elapsed();
     }
     Ok(())
 }

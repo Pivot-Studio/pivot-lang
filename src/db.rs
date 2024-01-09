@@ -21,7 +21,7 @@ pub struct Database {
     //
     logs: Option<Arc<Mutex<Vec<String>>>>,
     ref_str: Arc<Mutex<Cell<Option<String>>>>,
-    module_map: Arc<Mutex<RefCell<FxHashMap<String, Mod>>>>,
+    module_map: Arc<Mutex<FxHashMap<String, Mod>>>,
 }
 // ANCHOR_END: db_struct
 
@@ -64,22 +64,17 @@ impl Db for Database {
     }
 
     fn add_module(&self, name: String, plmod: Mod) {
-        self.module_map
-            .lock()
-            .unwrap()
-            .borrow_mut()
-            .insert(name, plmod);
+        self.module_map.lock().unwrap().insert(name, plmod);
     }
 
     fn get_module(&self, name: &str) -> Option<Mod> {
-        self.module_map.lock().unwrap().borrow().get(name).cloned()
+        self.module_map.lock().unwrap().get(name).cloned()
     }
 
     fn add_tp_to_mod(&self, name: &str, tpname: &str, pltype: Arc<RefCell<PLType>>) {
         self.module_map
             .lock()
             .unwrap()
-            .borrow_mut()
             .get_mut(name)
             .and_then(|m| m.types.insert(tpname.to_string(), pltype.into()));
     }

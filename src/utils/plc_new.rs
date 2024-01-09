@@ -67,10 +67,8 @@ pub mod tests {
     use crate::db::Database;
     use crate::lsp::mem_docs::{self, MemDocsInput};
     use std::fs::remove_file;
-    use std::{
-        cell::RefCell,
-        sync::{Arc, Mutex},
-    };
+    use std::sync::Arc;
+    use std::sync::Mutex;
 
     #[test]
     fn test_init_package() {
@@ -100,7 +98,7 @@ pub mod tests {
 
         let input = MemDocsInput::new(
             &db,
-            Arc::new(Mutex::new(RefCell::new(mem_docs::MemDocs::default()))),
+            Arc::new(Mutex::new(mem_docs::MemDocs::default())),
             "plc_new_testfile/main.pi".to_string(),
             Default::default(),
             ActionType::Compile,

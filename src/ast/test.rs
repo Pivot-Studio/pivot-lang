@@ -1,6 +1,5 @@
 #![cfg(test)]
 use std::{
-    cell::RefCell,
     fs::remove_file,
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -51,7 +50,7 @@ where
     // let db = Database::default();
     let input = MemDocsInput::new(
         db,
-        Arc::new(Mutex::new(RefCell::new(docs))),
+        Arc::new(Mutex::new(docs)),
         src.to_string(),
         Default::default(),
         action,
@@ -156,7 +155,7 @@ fn test_memory_leak() {
     // let db = Database::default();
     let input = MemDocsInput::new(
         db,
-        Arc::new(Mutex::new(RefCell::new(docs))),
+        Arc::new(Mutex::new(docs)),
         "test/lsp/mod.pi".to_string(),
         Default::default(),
         ActionType::FindReferences,
@@ -170,12 +169,11 @@ fn test_memory_leak() {
         .to_str()
         .unwrap()
         .to_string();
-    input.docs(db).lock().unwrap().borrow_mut().change(
-        db,
-        new_diag_range(0, 0, 0, 0),
-        path,
-        "\n".repeat(2),
-    );
+    input
+        .docs(db)
+        .lock()
+        .unwrap()
+        .change(db, new_diag_range(0, 0, 0, 0), path, "\n".repeat(2));
     input.set_action(db).to(ActionType::Diagnostic);
     input.set_params(db).to(Some((
         Pos {
@@ -514,7 +512,7 @@ fn test_jit() {
     let db = Database::default();
     let input = MemDocsInput::new(
         &db,
-        Arc::new(Mutex::new(RefCell::new(docs))),
+        Arc::new(Mutex::new(docs)),
         "test/main.pi".to_string(),
         Default::default(),
         ActionType::Compile,
@@ -564,7 +562,7 @@ fn test_compile() {
     let db = Database::default();
     let input = MemDocsInput::new(
         &db,
-        Arc::new(Mutex::new(RefCell::new(docs))),
+        Arc::new(Mutex::new(docs)),
         "test/main.pi".to_string(),
         Default::default(),
         ActionType::Compile,
@@ -610,7 +608,7 @@ fn test_printast() {
     let db = Database::default();
     let input = MemDocsInput::new(
         &db,
-        Arc::new(Mutex::new(RefCell::new(docs))),
+        Arc::new(Mutex::new(docs)),
         "test/main.pi".to_string(),
         Default::default(),
         ActionType::PrintAst,
@@ -647,7 +645,7 @@ fn test_lsp_incremental() {
     let docs = MemDocs::default();
     let input = MemDocsInput::new(
         db,
-        Arc::new(Mutex::new(RefCell::new(docs))),
+        Arc::new(Mutex::new(docs)),
         "test/lsp_incremental/main.pi".to_string(),
         Default::default(),
         ActionType::Diagnostic,
@@ -680,7 +678,7 @@ fn test_tail_call_opt() {
     let db = Database::default();
     let input = MemDocsInput::new(
         &db,
-        Arc::new(Mutex::new(RefCell::new(docs))),
+        Arc::new(Mutex::new(docs)),
         "test/tail/main.pi".to_string(),
         Default::default(),
         ActionType::Compile,

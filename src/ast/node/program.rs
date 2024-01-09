@@ -380,6 +380,8 @@ impl Program {
             Hints::push(db, hints);
             let docs = plmod.doc_symbols.borrow().clone();
             DocSymbols::push(db, docs);
+            let b = plmod.semantic_tokens_builder.borrow().build();
+            PLSemanticTokens::push(db, b);
         }
         self.handle_actions(db, p, nn, m);
         m
@@ -499,10 +501,6 @@ impl Program {
                         PLHover::push(db, res.clone());
                     }
                 }
-            }
-            ActionType::SemanticTokensFull => {
-                let b = plmod.semantic_tokens_builder.borrow().build();
-                PLSemanticTokens::push(db, b);
             }
             _ => {}
         }
