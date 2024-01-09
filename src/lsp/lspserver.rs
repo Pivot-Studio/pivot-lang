@@ -4,6 +4,7 @@ use std::{
     ops::Deref,
     sync::{Arc, Mutex},
     thread::available_parallelism,
+    time::Instant,
 };
 
 use log::debug;
@@ -140,7 +141,7 @@ fn main_loop(
 
     log::info!("starting main loop");
     for msg in &connection.receiver {
-        // let now = Instant::now();
+        let now = Instant::now();
         let di = Dispatcher::new(msg.clone());
         if let Message::Request(req) = &msg {
             if connection.handle_shutdown(req)? {
@@ -485,6 +486,7 @@ fn main_loop(
                 }
                 guard.1 = None;
                 guard.0 = comps;
+                drop(guard);
                 let diags = compile_dry::accumulated::<Diagnostics>(snapshot.deref(), docin);
                 debug!("diags: {:#?}", diags);
                 let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();
@@ -528,7 +530,8 @@ fn main_loop(
             // docs.lock().unwrap().borrow_mut().remove(&f);
             // docin.set_docs(&mut db).to(docs.clone());
         });
-        // let elapsed = now.elapsed();
+        let elapsed = now.elapsed();
+        log::info!("main loop handle message: {:?}", elapsed);
     }
     Ok(())
 }
