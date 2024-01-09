@@ -136,8 +136,11 @@ pub fn test_generic_same_name() void {
 }
 
 pub fn test_ret_generic<T>() void {
-    let x = ret_generic1<i64>();
-    let y = ret_generic2(true);
+    let x;
+    x = ret_generic1<i64>();
+    let yy ;
+    yy = true;
+    let y = ret_generic2(yy);
     let z = ret_generic2([1, 2, 3]);
     let i = ret_generic2(&z);
     x.c.b.a = 999;

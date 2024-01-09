@@ -30,6 +30,7 @@ pub struct FuncCallNode {
     pub generic_params: Option<Box<GenericParamNode>>,
     pub callee: Box<NodeEnum>,
     pub paralist: Vec<Box<NodeEnum>>,
+    pub generic_infer: Option<Vec<TyVariable>>,
 }
 
 impl PrintTrait for FuncCallNode {
@@ -196,32 +197,60 @@ impl Node for FuncCallNode {
             _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND))),
         };
 
-        if let Some(generic_params) = &self.generic_params {
-            let generic_params_range = generic_params.range;
+        let generic_params = if let Some(generic_params) = &self.generic_params {
             generic_params.emit_highlight(ctx);
+            let generic_params_range = generic_params.range;
             if generic_params.generics.len() != fnvalue.fntype.generics_size {
                 return Err(ctx.add_diag(
                     generic_params_range.new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
                 ));
             }
-            let generic_types = generic_params.get_generic_types(ctx, builder)?;
-            ctx.protect_generic_context(&fnvalue.fntype.generic_map.clone(), |ctx| {
-                for (i, (_, pltype)) in fnvalue.fntype.generic_map.iter().enumerate() {
-                    if i >= fnvalue.fntype.generics_size {
-                        break;
-                    }
-                    if generic_types[i].is_some()
-                        && !ctx
-                            .eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
-                            .eq
-                    {
-                        let r = generic_params.generics[i].as_ref().unwrap().range();
-                        return Err(r.new_err(ErrorCode::TYPE_MISMATCH).add_to_ctx(ctx));
+            generic_params.clone()
+        } else {
+            Box::new(GenericParamNode {
+                generics: vec![None; fnvalue.fntype.generics_size],
+                range: self.range(),
+            })
+        };
+        let mut generic_types = generic_params.get_generic_types(ctx, builder)?;
+
+        ctx.protect_generic_context(&fnvalue.fntype.generic_map.clone(), |ctx| {
+            for (i, (_, pltype)) in fnvalue.fntype.generic_map.iter().enumerate() {
+                if i >= fnvalue.fntype.generics_size {
+                    break;
+                }
+                if generic_types[i].is_none() {
+                    // fill inferred types
+                    let ty = self
+                        .generic_infer
+                        .clone()
+                        .unwrap_or_default()
+                        .get(i)
+                        .map(|v| {
+                            let ty = ctx.unify_table.borrow_mut().probe(*v);
+                            ty.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut())
+                        });
+                    if let Some(ty) = ty {
+                        if *ty.borrow() != PLType::Unknown {
+                            generic_types[i] = Some(ty);
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        continue;
                     }
                 }
-                Ok(())
-            })?;
-        }
+                if generic_types[i].is_some()
+                    && !ctx
+                        .eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
+                        .eq
+                {
+                    let r = generic_params.generics[i].as_ref().unwrap().range();
+                    return Err(r.new_err(ErrorCode::TYPE_MISMATCH).add_to_ctx(ctx));
+                }
+            }
+            Ok(())
+        })?;
         let mut skip = 0;
         let mut para_values = vec![];
         let mut receiver_type = None;
@@ -581,6 +610,9 @@ impl FuncDefNode {
         builder: &'b BuilderEnum<'a, '_>,
         fnvalue: FNValue,
     ) -> Result<(), PLDiag> {
+        if !first && matches!(builder, BuilderEnum::NoOp(_)) {
+            return Ok(());
+        }
         builder.rm_curr_debug_location();
         let re = ctx.run_as_root_ctx(|ctx| {
             let mut builder = builder;

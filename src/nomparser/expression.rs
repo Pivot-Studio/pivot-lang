@@ -215,6 +215,7 @@ pub fn complex_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
                                 callee: res,
                                 paralist: args,
                                 comments: vec![op.1],
+                                generic_infer: None,
                             }
                             .into(),
                         )

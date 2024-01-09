@@ -30,7 +30,7 @@ pub fn test_inference() void {
 fn test_generic_inference() void {
     let ad ;
     ad = st {};
-    ad.a = 1;
+    ad.a = 100;
 
     let ad2;
     ad2 = st2 {};
@@ -96,6 +96,14 @@ fn test_deconstruct_inference() void {
         return c;
     };
     f = func(d,e);
+    let g;
+    g = generic_f(1);
+    let dddd;
+
+    let eeee ;
+    dddd = st{};
+    eeee = dddd.test(eeee);
+    eeee = 1;
     return;
 }
 
@@ -104,6 +112,11 @@ fn test_f_infer(x:i32) i128 {
     return x as i128;
 }
 
+
+fn generic_f<T>(a:T) T {
+    
+    return a;
+}
 
 struct t {
     a:i16;
@@ -118,4 +131,11 @@ struct st2<T|TT> {
     b:TT;
 }
 
+
+impl <T> st<T> {
+    fn test(t:T) T {
+        
+        return self.a;
+    }
+}
 

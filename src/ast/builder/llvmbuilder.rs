@@ -3060,6 +3060,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     /// 闭包函数相比原函数多出一个参数（第一个），用于存放闭包的环境。在函数为纯函数的情况，
     /// 该值不会被使用，因此可以直接传入null。
     fn get_closure_trampoline(&self, f: ValueHandle) -> ValueHandle {
+        if !self.get_llvm_value(f).unwrap().is_function_value() {
+            return f;
+        }
         let ori_f = self.get_llvm_value(f).unwrap().into_function_value();
         let name = ori_f.get_name();
         let trampoline_name = format!("{}__trampoline", name.to_str().unwrap());
