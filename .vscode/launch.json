@@ -65,7 +65,6 @@
             "request": "attach",
             "name": "debug lsp",
             "program": "plc",
-            "preLaunchTask": "install debug plc"
         },
         {
             "type": "pivot",

@@ -238,18 +238,14 @@ fn main_loop(
         })
         .on::<CodeLensRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
-            docin.set_file(&mut db).to(uri);
-            docin.set_action(&mut db).to(ActionType::CodeLens);
-            docin
-                .set_params(&mut db)
-                .to(Some((Default::default(), None)));
-            docin
-                .set_docs(&mut db)
-                .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
-            compile_dry(&db, docin);
-            let codelens = compile_dry::accumulated::<PLCodeLens>(&db, docin);
+            if docin.file(&db) != &uri {
+                docin.set_file(&mut db).to(uri);
+            }
+            let snapshot = db.snapshot();
             let sender = connection.sender.clone();
             pool.execute(move || {
+                compile_dry(snapshot.deref(), docin);
+                let codelens = compile_dry::accumulated::<PLCodeLens>(snapshot.deref(), docin);
                 send_code_lens(&sender, id, codelens);
             });
         })
@@ -289,12 +285,6 @@ fn main_loop(
                 return;
             }
             last_semantic_file = uri.clone();
-            // docin.set_file(&mut db).to(uri);
-            // docin.set_action(&mut db).to(ActionType::SemanticTokensFull);
-            // docin
-            //     .set_params(&mut db)
-            //     .to(Some((Default::default(), None)));
-            // docin.set_docs(&mut db).to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
             let snapshot = db.snapshot();
             compile_dry(snapshot.deref(), docin);
             let mut newtokens =
@@ -408,10 +398,10 @@ fn main_loop(
                 docin
                     .set_params(&mut db)
                     .to(Some((Default::default(), None)));
+                docin
+                    .set_docs(&mut db)
+                    .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
             }
-            docin
-                .set_docs(&mut db)
-                .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
             let sender = connection.sender.clone();
             let snapshot = db.snapshot();
             pool.execute(move || {
