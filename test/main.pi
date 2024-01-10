@@ -32,6 +32,7 @@ use project1::test::inference;
 use project1::test::futuretest;
 
 use core::hash::pl_hash::*;
+// use std::cols::hashtable::new_hash_table;
 
 pub fn main() i64 {
 
@@ -72,9 +73,11 @@ pub fn main() i64 {
     fd.close();
     
     arr::test_arr();
+    let table1 = hashtable::new_hash_table(10 as u64, 100 as u64);
+    table1.insert(1, "");
 
-
-    let table = hashtable::new_hash_table<string|string>(10 as u64, 100 as u64);
+    let table;
+    table = hashtable::new_hash_table(10 as u64, 100 as u64);
     table.insert("hi", "World");
     table.insert("tj", "love hj");
     let v = table.get("hi") as string!;
@@ -89,8 +92,8 @@ pub fn main() i64 {
         str.append("1");
         table.insert(str, "World2");
     }
-    println!(table.bucket_size());
-    let i_table = hashtable::new_hash_table<i64|i64>(10 as u64, 100 as u64);
+    // println!(table.bucket_size());
+    let i_table = hashtable::new_hash_table(10 as u64, 100 as u64);
     i_table.insert(1, 2);
     i_table.insert(3, 4);
     let one =  i_table.get(1) as i64!;

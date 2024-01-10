@@ -489,46 +489,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .build_struct_gep(llvmtp, casted_result.into_pointer_value(), 2, "arr_len")
                     .unwrap();
                 self.builder.build_store(len_ptr, arr_len).unwrap();
-                let fp_asm_ftp = self
-                    .i8ptr()
-                    .ptr_type(AddressSpace::from(0))
-                    .fn_type(&[], false);
-                #[cfg(target_arch = "x86_64")]
-                let rspf = self.context.create_inline_asm(
-                    fp_asm_ftp,
-                    "mov %rsp, $0".to_string(),
-                    "=r".to_string(),
-                    false,
-                    true,
-                    None,
-                    false,
-                );
-                #[cfg(target_arch = "aarch64")]
-                let rspf = self.context.create_inline_asm(
-                    fp_asm_ftp,
-                    "mov $0, sp".to_string(),
-                    "=r".to_string(),
-                    false,
-                    true,
-                    None,
-                    false,
-                );
-                let rsp = self
-                    .builder
-                    .build_indirect_call(fp_asm_ftp, rspf, &[], "rsp")
-                    .unwrap();
-                rsp.add_attribute(
-                    inkwell::attributes::AttributeLoc::Function,
-                    self.context.create_string_attribute("gc-leaf-function", ""),
-                );
-                let rsp = self
-                    .builder
-                    .build_ptr_to_int(
-                        rsp.try_as_basic_value().unwrap_left().into_pointer_value(),
-                        self.context.i64_type(),
-                        "",
-                    )
-                    .unwrap();
+
+                let rsp = self.get_sp();
                 let arr_space = self
                     .builder
                     .build_call(
@@ -657,7 +619,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .build_ptr_to_int(
                 rsp.try_as_basic_value().unwrap_left().into_pointer_value(),
                 self.context.i64_type(),
-                "",
+                "rspi",
             )
             .unwrap();
         rsp
@@ -1872,24 +1834,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
     ) -> ValueHandle {
         let llvm_type = self.get_basic_type_op(tp, ctx).unwrap();
-        let h = self.build_load_raw(ptr, name, llvm_type);
-        let _b: BasicValueEnum<'_> = self.get_llvm_value(h).unwrap().try_into().unwrap();
-        let currbb = self.builder.get_insert_block().unwrap();
-        let allocabb = self
-            .builder
-            .get_insert_block()
-            .unwrap()
-            .get_parent()
-            .unwrap()
-            .get_first_basic_block()
-            .unwrap();
-        self.builder.position_at_end(allocabb);
-        self.builder.unset_current_debug_location();
-        // init to null
-
-        self.builder.position_at_end(currbb);
-
-        h
+        self.build_load_raw(ptr, name, llvm_type)
     }
     fn try_load2var(
         &self,
@@ -1940,7 +1885,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 (bme, ty)
             })
             .unzip();
-        let bb = builder.get_insert_block().unwrap();
         if let Some(pos) = pos {
             if builder
                 .get_insert_block()
@@ -1953,7 +1897,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 self.build_dbg_location(pos)
             }
         }
-        builder.position_at_end(bb);
+
         let fntp = f_tp.unwrap_or(match self.get_basic_type_op(ret_type, ctx) {
             Some(r) => r.ptr_type(AddressSpace::from(1)).fn_type(&tys, false),
             None => self.context.void_type().fn_type(&tys, false),

@@ -31,7 +31,7 @@ use linked_hash_map::LinkedHashMap;
 use rustc_hash::FxHashMap;
 
 use crate::ast::{
-    builder::BuilderEnum,
+    builder::{BuilderEnum, IRBuilder},
     ctx::Ctx,
     node::{
         pointer::PointerOpEnum,
@@ -145,6 +145,18 @@ impl TyInfer {
         builder: &'b BuilderEnum<'a, '_>,
         unify_table: &mut UnificationTable<TyVariable>,
     ) -> Arc<RefCell<PLType>> {
+        let cur_bb = builder.get_cur_basic_block();
+        let re = self.get_type_inner(ctx, builder, unify_table);
+        ctx.position_at_end(cur_bb, builder);
+        re
+    }
+
+    fn get_type_inner<'a, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+        unify_table: &mut UnificationTable<TyVariable>,
+    ) -> Arc<RefCell<PLType>> {
         match self {
             TyInfer::Term(ty) => ty.clone(),
             TyInfer::Generic((gen, gty)) => {
@@ -212,7 +224,9 @@ impl TyInfer {
                                 _ => unreachable!(),
                             };
                         }
-                        let st = st.gen_code(ctx, builder).unwrap_or(unknown_arc());
+                        let st = ctx.run_in_type_mod(&st, |ctx, st| {
+                            st.gen_code(ctx, builder).unwrap_or(unknown_arc())
+                        });
                         if partial {
                             return new_arc_refcell(PLType::PartialInfered(st));
                         }
@@ -545,9 +559,9 @@ impl<'ctx> InferenceCtx<'ctx> {
             },
             NodeEnum::ExternIdNode(ex) => {
                 if ex.ns.is_empty() {
-                    let id = self.new_key();
-                    ex.id.id = Some(id);
                     if let Some(t) = self.get_symbol(&ex.id.name) {
+                        let id = self.new_key();
+                        ex.id.id = Some(id);
                         self.unify_two_symbol(
                             SymbolType::Var(id),
                             SymbolType::Var(t),
@@ -556,7 +570,13 @@ impl<'ctx> InferenceCtx<'ctx> {
                         );
                         return SymbolType::Var(id);
                     }
-                    if let Some(r) = ctx.get_root_ctx().plmod.types.get(&ex.id.name) {
+                }
+                let plmod = &ctx.get_root_ctx().plmod;
+                if let Ok(plmod) = ex.solve_mod(plmod, ctx) {
+                    if let Some(t) = plmod.global_table.get(&ex.id.name) {
+                        return SymbolType::PLType(t.tp.clone());
+                    }
+                    if let Some(r) = plmod.types.get(&ex.id.name) {
                         return SymbolType::PLType(r.tp.clone());
                     }
                 }
@@ -1019,6 +1039,15 @@ impl<'ctx> InferenceCtx<'ctx> {
                 self.unify_var_value(id, TyInfer::Generic((vec![elm_id], GenericTy::Array)));
                 return SymbolType::Var(id);
             }
+            NodeEnum::StringNode(_) => {
+                let tp = ctx
+                    .plmod
+                    .submods
+                    .get("gc")
+                    .map(|m| m.types.get("string").unwrap().clone())
+                    .unwrap_or_else(|| ctx.plmod.types.get("string").unwrap().clone());
+                return SymbolType::PLType(tp.tp.clone());
+            }
             _ => (),
         }
         unknown()
@@ -1070,24 +1099,27 @@ impl<'ctx> InferenceCtx<'ctx> {
                         }
                         _ => (),
                     };
-                    let sym = arg
-                        .solve_in_infer_generic_ctx(ctx, builder, self, &generic_map)
-                        .unwrap_or(SymbolType::PLType(unknown_arc()));
+                    let sym = ctx.run_in_type_mod(f, |ctx, _| {
+                        arg.solve_in_infer_generic_ctx(ctx, builder, self, &generic_map)
+                            .unwrap_or(SymbolType::PLType(unknown_arc()))
+                    });
                     self.unify_two_symbol(head_ty, sym, ctx, builder);
                 }
                 continue;
             }
-            let sym = arg
-                .solve_in_infer_generic_ctx(ctx, builder, self, &generic_map)
-                .unwrap_or(SymbolType::PLType(unknown_arc()));
+
+            let sym = ctx.run_in_type_mod(f, |ctx, _| {
+                arg.solve_in_infer_generic_ctx(ctx, builder, self, &generic_map)
+                    .unwrap_or(SymbolType::PLType(unknown_arc()))
+            });
             self.unify_two_symbol(argtys[i - offset].clone(), sym, ctx, builder);
         }
-        Some(
+        Some(ctx.run_in_type_mod(f, |ctx, f| {
             f.fntype
                 .ret_pltype
                 .solve_in_infer_generic_ctx(ctx, builder, self, &generic_map)
-                .unwrap_or(SymbolType::PLType(unknown_arc())),
-        )
+                .unwrap_or(SymbolType::PLType(unknown_arc()))
+        }))
     }
 
     fn def_inference<'a, 'b>(

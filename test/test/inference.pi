@@ -72,6 +72,14 @@ fn test_inference_no_run() void {
     let ad7 = st3{};
     ad7.c[0] = &e ;
     e = 10;
+    let a;
+    param_reference(a);
+    a.a = 1;
+    let c;
+    let b;
+    b = ret_reference(c);
+    b.test("adsada");
+
     return;
 }
 
@@ -139,3 +147,12 @@ impl <T> st<T> {
     }
 }
 
+
+fn param_reference<T>(s:st<T>) T {
+    return s.a;
+}
+
+
+fn ret_reference<T>(a:T) st<T> {
+    return st<T>{};
+}

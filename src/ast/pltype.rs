@@ -1374,7 +1374,7 @@ impl STType {
             let mut res = self.clone();
             res.name = name;
             ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Struct(res.clone()))));
-            res.fields = self
+            let fields: Result<Vec<_>, _> = self
                 .fields
                 .values()
                 .map(|f| {
@@ -1391,8 +1391,7 @@ impl STType {
                             } else {
                                 f.typenode = f
                                     .typenode
-                                    .get_type(ctx, builder, true)
-                                    .unwrap()
+                                    .get_type(ctx, builder, true)?
                                     .borrow()
                                     .get_typenode(&ctx.get_file());
                             }
@@ -1401,22 +1400,21 @@ impl STType {
                         // eprintln!("{:?}", new_f.ret);
                         new_f.ret = new_f
                             .ret
-                            .get_type(ctx, builder, true)
-                            .unwrap()
+                            .get_type(ctx, builder, true)?
                             .borrow()
                             .get_typenode(&ctx.get_file());
                         nf.typenode = Box::new(TypeNodeEnum::Func(new_f));
                     } else {
                         nf.typenode = f
                             .typenode
-                            .get_type(ctx, builder, true)
-                            .unwrap()
+                            .get_type(ctx, builder, true)?
                             .borrow()
                             .get_typenode(&ctx.get_file());
                     }
-                    (nf.name.clone(), nf)
+                    Ok::<(std::string::String, Field), PLDiag>((nf.name.clone(), nf))
                 })
                 .collect();
+            res.fields = LinkedHashMap::from_iter(fields?);
             let field_pltps = res
                 .fields
                 .values()

@@ -56,7 +56,7 @@ lazy_static! {
     static ref DOCIN: MemDocsInput = {
         let b = &DB.inner;
         let db = b.borrow_mut();
-        let docs = Arc::new(Mutex::new(RefCell::new(MemDocs::default())));
+        let docs = Arc::new(Mutex::new(MemDocs::default()));
         let doc = MemDocsInput::new(
             &*db,
             docs.clone(),
@@ -87,7 +87,7 @@ pub unsafe fn on_change_doc(req: &str) -> String {
     // let mut completions: Vec<Vec<lsp_types::CompletionItem>> = vec![];
     let f = url_to_path(params.text_document.uri);
     for content_change in params.content_changes.iter() {
-        docs.lock().unwrap().borrow_mut().change(
+        docs.lock().unwrap().change(
             db,
             content_change.range.unwrap(),
             f.clone(),
@@ -139,16 +139,15 @@ pub unsafe fn on_change_doc(req: &str) -> String {
 
 pub static PLLIB_DIR: Dir = include_dir!("./planglib");
 
-fn add_file(db: &mut Database, docs: Arc<Mutex<RefCell<MemDocs>>>, fpath: &str, content: &str) {
+fn add_file(db: &mut Database, docs: Arc<Mutex<MemDocs>>, fpath: &str, content: &str) {
     // include!(real_path);
     // log::error!("add file: {}", fpath);
     docs.lock()
         .unwrap()
-        .borrow_mut()
         .insert(db, fpath.into(), content.into(), fpath.into());
 }
 
-fn add_fill_rec(db: &mut Database, docs: Arc<Mutex<RefCell<MemDocs>>>, dir: &Dir) {
+fn add_fill_rec(db: &mut Database, docs: Arc<Mutex<MemDocs>>, dir: &Dir) {
     dir.files().for_each(|f| {
         let path = f.path();
         f.contents_utf8().map(|x| {
@@ -160,7 +159,7 @@ fn add_fill_rec(db: &mut Database, docs: Arc<Mutex<RefCell<MemDocs>>>, dir: &Dir
     });
 }
 
-fn add_pl_libs(db: &mut Database, docs: Arc<Mutex<RefCell<MemDocs>>>) {
+fn add_pl_libs(db: &mut Database, docs: Arc<Mutex<MemDocs>>) {
     for entry in PLLIB_DIR.dirs() {
         let path = entry.path();
         if path.starts_with("thirdparty") {
@@ -179,13 +178,13 @@ pub fn set_init_content(content: &str) -> String {
     let binding = &DB.inner;
     let db = &mut *binding.borrow_mut();
     let docs = docin.docs(db);
-    docs.lock().unwrap().borrow_mut().insert(
+    docs.lock().unwrap().insert(
         db,
         LSP_DEMO_URI.to_string(),
         content.to_string(),
         LSP_DEMO_URI.to_string(),
     );
-    docs.lock().unwrap().borrow_mut().insert(
+    docs.lock().unwrap().insert(
         db,
         LSP_DEMO_CONF_URI.to_string(),
         r#"entry = "http://www.test.com/main.pi"

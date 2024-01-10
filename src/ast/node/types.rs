@@ -20,6 +20,7 @@ use crate::ast::pltype::{ARRType, Field, GenericType, PLType, STType};
 use crate::ast::tokens::TokenType;
 use crate::ast::traits::CustomType;
 use crate::format_label;
+use crate::inference::unknown_arc;
 use crate::inference::TyVariable;
 use indexmap::IndexMap;
 
@@ -303,7 +304,11 @@ impl TypeNode for TypeNameNode {
                     eq: !left.generic_map.iter().any(|(k, l_type)| {
                         !ctx.eq(
                             l_type.clone(),
-                            right.generic_infer_types.get(k).unwrap().clone(),
+                            right
+                                .generic_infer_types
+                                .get(k)
+                                .cloned()
+                                .unwrap_or(unknown_arc()),
                         )
                         .eq
                     }),

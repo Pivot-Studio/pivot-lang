@@ -19,7 +19,7 @@ macro_rules! define_diag {
         ),*
     ) => {
         paste::paste! {
-            #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, Default)]
+            #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, Default, PartialOrd, Ord)]
             #[allow(non_camel_case_types, dead_code)]
             #[allow(clippy::upper_case_acronyms)]
             pub enum [<$level:camel Code>] {
@@ -178,7 +178,7 @@ define_diag! {
     UNUSED_FUNCTION = "unused function",
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DiagCode {
     Err(ErrorCode),
     Warn(WarnCode),
@@ -210,13 +210,13 @@ use super::{
 };
 
 #[range]
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct PLLabel {
     file: String,
     txt: Option<(String, Vec<String>)>,
 }
 #[range]
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct PLDiagRaw {
     code: DiagCode,
     help: Option<String>,
@@ -225,7 +225,7 @@ pub struct PLDiagRaw {
 }
 /// # PLDiag
 /// Diagnostic for pivot-lang
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct PLDiag {
     pub raw: Box<PLDiagRaw>,
 }
