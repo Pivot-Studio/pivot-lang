@@ -576,6 +576,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         (casted_result.into_pointer_value(), llvmtp)
     }
 
+    /// # get_sp
+    ///
+    /// get the stack pointer, return as i64
     fn get_sp(&self) -> inkwell::values::IntValue<'ctx> {
         let fp_asm_ftp = self
             .i8ptr()
@@ -861,7 +864,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             | PLType::Void
             | PLType::Generic(_)
             | PLType::PlaceHolder(_)
-            | PLType::PartialInfered(_)
+            | PLType::PartialInferred(_)
             | PLType::Unknown => (),
         }
         let i = self
@@ -1084,7 +1087,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 Some(self.context.struct_type(&fields, false).into())
             }
             PLType::Unknown => None,
-            PLType::PartialInfered(_) => None,
+            PLType::PartialInferred(_) => None,
         }
     }
     /// # get_ret_type
@@ -1508,7 +1511,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             }
             PLType::Closure(_) => self.get_ditype(&PLType::Primitive(PriType::I64), ctx),
             PLType::Unknown => None, // TODO
-            PLType::PartialInfered(_) => None,
+            PLType::PartialInferred(_) => None,
         }
     }
 
@@ -2774,6 +2777,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let name = v.get_full_name() + "_visitorf@";
 
         let linkage = if v.is_tuple {
+            // tuple will not be used outside of the current module
             Linkage::Internal
         } else {
             Linkage::LinkOnceAny
@@ -2856,7 +2860,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 | PLType::Void
                 | PLType::Generic(_)
                 | PLType::PlaceHolder(_)
-                | PLType::PartialInfered(_)
+                | PLType::PartialInferred(_)
                 | PLType::Unknown => (),
             }
             // 其他为原子类型，跳过
@@ -3005,6 +3009,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     /// 该值不会被使用，因此可以直接传入null。
     fn get_closure_trampoline(&self, f: ValueHandle) -> ValueHandle {
         if !self.get_llvm_value(f).unwrap().is_function_value() {
+            // already a closure
             return f;
         }
         let ori_f = self.get_llvm_value(f).unwrap().into_function_value();

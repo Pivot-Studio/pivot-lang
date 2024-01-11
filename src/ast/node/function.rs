@@ -12,9 +12,13 @@ use crate::ast::ctx::BUILTIN_FN_MAP;
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 
-use crate::ast::pltype::{get_type_deep, ClosureType, FNValue, Field, FnType, PLType, STType};
+use crate::ast::pltype::{
+    get_type_deep, ClosureType, FNValue, Field, FnType, Generic, PLType, STType,
+};
 use crate::ast::tokens::TokenType;
-use crate::inference::{InferenceCtx, TyVariable};
+use crate::ast::traits::CustomType;
+use crate::format_label;
+use crate::inference::{GenericInferenceAble, InferenceCtx, TyVariable};
 use indexmap::IndexMap;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
@@ -31,6 +35,16 @@ pub struct FuncCallNode {
     pub callee: Box<NodeEnum>,
     pub paralist: Vec<Box<NodeEnum>>,
     pub generic_infer: Option<Vec<TyVariable>>,
+}
+
+impl GenericInferenceAble for FuncCallNode {
+    fn get_inference_result(&self) -> &Option<Vec<TyVariable>> {
+        &self.generic_infer
+    }
+
+    fn get_generic_params(&self) -> &Option<Box<GenericParamNode>> {
+        &self.generic_params
+    }
 }
 
 impl PrintTrait for FuncCallNode {
@@ -197,60 +211,7 @@ impl Node for FuncCallNode {
             _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND))),
         };
 
-        let generic_params = if let Some(generic_params) = &self.generic_params {
-            generic_params.emit_highlight(ctx);
-            let generic_params_range = generic_params.range;
-            if generic_params.generics.len() != fnvalue.fntype.generics_size {
-                return Err(ctx.add_diag(
-                    generic_params_range.new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
-                ));
-            }
-            generic_params.clone()
-        } else {
-            Box::new(GenericParamNode {
-                generics: vec![None; fnvalue.fntype.generics_size],
-                range: self.range(),
-            })
-        };
-        let mut generic_types = generic_params.get_generic_types(ctx, builder)?;
-
-        ctx.protect_generic_context(&fnvalue.fntype.generic_map.clone(), |ctx| {
-            for (i, (_, pltype)) in fnvalue.fntype.generic_map.iter().enumerate() {
-                if i >= fnvalue.fntype.generics_size {
-                    break;
-                }
-                if generic_types[i].is_none() {
-                    // fill inferred types
-                    let ty = self
-                        .generic_infer
-                        .clone()
-                        .unwrap_or_default()
-                        .get(i)
-                        .map(|v| {
-                            let ty = ctx.unify_table.borrow_mut().probe(*v);
-                            ty.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut())
-                        });
-                    if let Some(ty) = ty {
-                        if *ty.borrow() != PLType::Unknown {
-                            generic_types[i] = Some(ty);
-                        } else {
-                            continue;
-                        }
-                    } else {
-                        continue;
-                    }
-                }
-                if generic_types[i].is_some()
-                    && !ctx
-                        .eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
-                        .eq
-                {
-                    let r = generic_params.generics[i].as_ref().unwrap().range();
-                    return Err(r.new_err(ErrorCode::TYPE_MISMATCH).add_to_ctx(ctx));
-                }
-            }
-            Ok(())
-        })?;
+        generic_tp_apply(&fnvalue, self, ctx, builder)?;
         let mut skip = 0;
         let mut para_values = vec![];
         let mut receiver_type = None;
@@ -334,6 +295,93 @@ impl Node for FuncCallNode {
         ctx.emit_comment_highlight(&self.comments[0]);
         res
     }
+}
+
+pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble + RangeTrait>(
+    t: &T,
+    n: &N,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> Result<(), PLDiag> {
+    let generic_size = t.get_generic_size();
+    let generic_params = n.get_generic_params();
+    let range = n.range();
+    let mut generic_types = preprocess_generics(generic_params, generic_size, range, ctx, builder)?;
+
+    ctx.protect_generic_context(t.get_generic_map(), |ctx| {
+        for (i, (_, pltype)) in t.get_generic_map().iter().enumerate() {
+            if i >= generic_size {
+                break;
+            }
+            if generic_types[i].is_none() {
+                // fill inferred types
+                let ty = n
+                    .get_inference_result()
+                    .clone()
+                    .unwrap_or_default()
+                    .get(i)
+                    .map(|v| {
+                        let ty = ctx.unify_table.borrow_mut().probe(*v);
+                        ty.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut())
+                    });
+                if let Some(ty) = ty {
+                    if *ty.borrow() != PLType::Unknown {
+                        generic_types[i] = Some(ty);
+                    } else {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+            }
+            let res = ctx.eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
+            if !res.eq {
+                // let r = generic_params.generics[i].as_ref().unwrap().range();
+                // return Err(r.new_err(ErrorCode::ILLEGAL_GENERIC_PARAM).add_to_ctx(ctx));
+                let g = t.get_generic_map().get_index(i).unwrap();
+                let mut diag = range.new_err(ErrorCode::ILLEGAL_GENERIC_PARAM);
+                if let Some(reason) = res.reason {
+                    diag.add_help(&reason);
+                }
+                diag.add_label(
+                    g.1.borrow().get_range().unwrap_or_default(),
+                    t.get_path(),
+                    format_label!("parameter `{}` defined in `{}`", g.0, t.get_name()),
+                );
+                return Err(diag.add_to_ctx(ctx));
+            }
+        }
+        Ok(())
+    })
+}
+
+/// # preprocess_generics
+///
+/// This method will ensure that the number of generic parameters is correct.
+fn preprocess_generics<'a, 'b>(
+    generic_params: &Option<Box<GenericParamNode>>,
+    generic_size: usize,
+    range: Range,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> Result<Vec<Option<Arc<RefCell<PLType>>>>, PLDiag> {
+    let generic_params = if let Some(generic_params) = generic_params {
+        generic_params.emit_highlight(ctx);
+        let generic_params_range = generic_params.range;
+        if generic_params.generics.len() != generic_size {
+            return Err(
+                ctx.add_diag(generic_params_range.new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH))
+            );
+        }
+        generic_params.clone()
+    } else {
+        Box::new(GenericParamNode {
+            generics: vec![None; generic_size],
+            range,
+        })
+    };
+    let generic_types = generic_params.get_generic_types(ctx, builder)?;
+    Ok(generic_types)
 }
 
 fn check_and_cast_params<'a, 'b>(

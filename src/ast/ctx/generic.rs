@@ -123,7 +123,6 @@ impl<'a> Ctx<'a> {
                         .iter()
                         .any(|lt| !self.eq(lt.clone(), r.clone()).eq)
                     {
-                        // eprintln!("lt:{:?},r:{:?}", l, r);
                         return EqRes {
                             eq: false,
                             need_up_cast: false,

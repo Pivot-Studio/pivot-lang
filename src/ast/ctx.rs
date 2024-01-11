@@ -1097,7 +1097,7 @@ impl<'a, 'ctx> Ctx<'a> {
 
 fn real_tp(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
     match &*pltype.clone().borrow() {
-        PLType::PartialInfered(p) => real_tp(p.clone()),
+        PLType::PartialInferred(p) => real_tp(p.clone()),
         _ => pltype,
     }
 }

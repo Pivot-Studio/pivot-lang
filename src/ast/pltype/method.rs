@@ -96,6 +96,7 @@ pub trait TraitImplAble {
 pub trait Generic {
     fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>>;
     fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>>;
+    fn get_generic_size(&self) -> usize;
 }
 
 impl Generic for STType {
@@ -106,6 +107,24 @@ impl Generic for STType {
     fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
         Some(&self.generic_infer_types)
     }
+
+    fn get_generic_size(&self) -> usize {
+        self.generic_map.len()
+    }
+}
+
+impl Generic for FNValue {
+    fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
+        &self.fntype.generic_map
+    }
+
+    fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
+        None
+    }
+
+    fn get_generic_size(&self) -> usize {
+        self.fntype.generics_size
+    }
 }
 
 impl Generic for UnionType {
@@ -115,6 +134,10 @@ impl Generic for UnionType {
 
     fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
         None
+    }
+
+    fn get_generic_size(&self) -> usize {
+        self.generic_map.len()
     }
 }
 

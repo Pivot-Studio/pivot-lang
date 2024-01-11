@@ -563,7 +563,7 @@ fn completion_kind(
         PLType::Union(_) => CompletionItemKind::ENUM,
         PLType::Closure(_) => unreachable!(),
         PLType::Unknown => unreachable!(),
-        PLType::PartialInfered(p) => {
+        PLType::PartialInferred(p) => {
             return completion_kind(&p.borrow(), need_snippet, insert_text, command);
         }
     };

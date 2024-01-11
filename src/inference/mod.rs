@@ -37,7 +37,7 @@ use crate::ast::{
         pointer::PointerOpEnum,
         statement::{DefVar, StatementsNode},
         tuple::{new_tuple_field, new_tuple_type},
-        types::TypeNameNode,
+        types::{GenericParamNode, TypeNameNode},
         NodeEnum, TypeNode, TypeNodeEnum,
     },
     pltype::{get_type_deep, ARRType, ClosureType, ImplAble, PLType, STType, TraitImplAble},
@@ -47,6 +47,11 @@ use crate::ast::{
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TyVariable {
     id: u32,
+}
+
+pub trait GenericInferenceAble {
+    fn get_inference_result(&self) -> &Option<Vec<TyVariable>>;
+    fn get_generic_params(&self) -> &Option<Box<GenericParamNode>>;
 }
 
 impl UnifyKey for TyVariable {
@@ -228,7 +233,7 @@ impl TyInfer {
                             st.gen_code(ctx, builder).unwrap_or(unknown_arc())
                         });
                         if partial {
-                            return new_arc_refcell(PLType::PartialInfered(st));
+                            return new_arc_refcell(PLType::PartialInferred(st));
                         }
                         st
                     }
@@ -237,7 +242,7 @@ impl TyInfer {
                         let infer = unify_table.probe(p);
                         let ty = infer.get_type(ctx, builder, unify_table);
                         if !ty.borrow().is_complete() {
-                            return new_arc_refcell(PLType::PartialInfered(Arc::new(
+                            return new_arc_refcell(PLType::PartialInferred(Arc::new(
                                 RefCell::new(PLType::Arr(ARRType {
                                     element_type: ty,
                                     size_handle: 0,
@@ -251,7 +256,7 @@ impl TyInfer {
                         let infer = unify_table.probe(p);
                         let ty = infer.get_type(ctx, builder, unify_table);
                         if !ty.borrow().is_complete() {
-                            return new_arc_refcell(PLType::PartialInfered(Arc::new(
+                            return new_arc_refcell(PLType::PartialInferred(Arc::new(
                                 RefCell::new(PLType::Arr(ARRType {
                                     element_type: ty,
                                     size_handle: 0,

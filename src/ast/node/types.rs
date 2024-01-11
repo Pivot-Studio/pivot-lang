@@ -19,8 +19,8 @@ use crate::ast::pltype::ClosureType;
 use crate::ast::pltype::{ARRType, Field, GenericType, PLType, STType};
 use crate::ast::tokens::TokenType;
 use crate::ast::traits::CustomType;
-use crate::format_label;
 use crate::inference::unknown_arc;
+use crate::inference::GenericInferenceAble;
 use crate::inference::TyVariable;
 use indexmap::IndexMap;
 
@@ -33,6 +33,16 @@ pub struct TypeNameNode {
     pub id: Option<ExternIdNode>,
     pub generic_params: Option<Box<GenericParamNode>>,
     pub generic_infer: Option<Vec<TyVariable>>,
+}
+
+impl GenericInferenceAble for TypeNameNode {
+    fn get_inference_result(&self) -> &Option<Vec<TyVariable>> {
+        &self.generic_infer
+    }
+
+    fn get_generic_params(&self) -> &Option<Box<GenericParamNode>> {
+        &self.generic_params
+    }
 }
 
 impl TypeNameNode {
@@ -92,65 +102,7 @@ impl TypeNameNode {
                     ));
                 }
 
-                let mut generic_params =
-                    self.generic_params
-                        .clone()
-                        .unwrap_or(Box::new(GenericParamNode {
-                            generics: vec![None; sttype.generic_map.len()],
-                            range: self.range(),
-                        }));
-                if generic_params.generics.len() != sttype.generic_map.len() {
-                    generic_params.generics = vec![None; sttype.generic_map.len()];
-                }
-                let mut generic_types = generic_params.get_generic_types(ctx, builder)?;
-
-                ctx.protect_generic_context(&sttype.generic_map, |ctx| {
-                    for (i, st_generic_type) in sttype.generic_map.values().enumerate() {
-                        if generic_types[i].is_none() {
-                            // fill inferred types
-                            let ty =
-                                self.generic_infer
-                                    .clone()
-                                    .unwrap_or_default()
-                                    .get(i)
-                                    .map(|v| {
-                                        let ty = ctx.unify_table.borrow_mut().probe(*v);
-                                        ty.get_type(
-                                            ctx,
-                                            builder,
-                                            &mut ctx.unify_table.clone().borrow_mut(),
-                                        )
-                                    });
-                            if let Some(ty) = ty {
-                                if *ty.borrow() != PLType::Unknown {
-                                    generic_types[i] = Some(ty);
-                                } else {
-                                    continue;
-                                }
-                            } else {
-                                continue;
-                            }
-                        }
-                        let res = ctx.eq(
-                            st_generic_type.clone(),
-                            generic_types[i].as_ref().unwrap().clone(),
-                        );
-                        if !res.eq {
-                            let g = sttype.generic_map.get_index(i).unwrap();
-                            let mut diag = self.range().new_err(ErrorCode::ILLEGAL_GENERIC_PARAM);
-                            if let Some(reason) = res.reason {
-                                diag.add_help(&reason);
-                            }
-                            diag.add_label(
-                                g.1.borrow().get_range().unwrap_or_default(),
-                                sttype.get_path(),
-                                format_label!("parameter `{}` defined in `{}`", g.0, &sttype.name),
-                            );
-                            return Err(diag.add_to_ctx(ctx));
-                        }
-                    }
-                    Ok(())
-                })?;
+                generic_tp_apply(&sttype, self, ctx, builder)?;
                 let ret = if sttype.is_trait {
                     Arc::new(RefCell::new(PLType::Trait(sttype)))
                 } else {

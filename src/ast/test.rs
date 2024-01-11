@@ -695,4 +695,5 @@ pub(crate) fn set_test_asset() {
         .unwrap();
     let timestamp_nanos = duration_since_epoch.as_nanos(); // u128
     *p = format!("target/test{}", timestamp_nanos);
+    std::fs::create_dir_all(&*p).unwrap();
 }
