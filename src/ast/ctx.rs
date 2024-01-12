@@ -843,7 +843,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 if self.get_file() != fnvalue.get_path() {
                     return;
                 }
-                if !fnvalue.fntype.method && !fnvalue.in_trait {
+                if !fnvalue.fntype.st_method && !fnvalue.in_trait {
                     self.plmod
                         .doc_symbols
                         .borrow_mut()

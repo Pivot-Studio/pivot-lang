@@ -852,7 +852,8 @@ pub struct FnType {
     pub ret_pltype: Box<TypeNodeEnum>,
     pub generic: bool,
     pub modifier: Option<(TokenType, Range)>,
-    pub method: bool,
+    pub st_method: bool,
+    pub trait_method: bool,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub generics_size: usize, // the size of generics except the generics from impl node
 }
@@ -1056,7 +1057,7 @@ impl FNValue {
     pub fn gen_snippet(&self) -> String {
         let mut name = self.name.clone();
         let mut iter = self.param_names.iter();
-        if self.fntype.method {
+        if self.fntype.st_method {
             iter.next();
             name = name.split("::").last().unwrap().to_string();
         }
@@ -1071,13 +1072,13 @@ impl FNValue {
     pub fn get_doc_symbol(&self) -> DocumentSymbol {
         #[allow(deprecated)]
         DocumentSymbol {
-            name: if self.fntype.method {
+            name: if self.fntype.st_method {
                 self.name.split("::").last().unwrap().to_string()
             } else {
                 self.name.clone()
             },
             detail: Some(self.get_signature()),
-            kind: if self.fntype.method {
+            kind: if self.fntype.st_method {
                 SymbolKind::METHOD
             } else {
                 SymbolKind::FUNCTION
@@ -1092,7 +1093,7 @@ impl FNValue {
     pub fn get_signature(&self) -> String {
         let mut params = String::new();
         if !self.param_names.is_empty() {
-            if !self.fntype.method {
+            if !self.fntype.st_method {
                 params += &format!(
                     "{}: {}",
                     self.param_names[0],

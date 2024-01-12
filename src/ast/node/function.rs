@@ -303,12 +303,13 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
     ctx: &'b mut Ctx<'a>,
     builder: &'b BuilderEnum<'a, '_>,
 ) -> Result<(), PLDiag> {
+    *ctx.need_highlight.borrow_mut() += 1;
     let generic_size = t.get_generic_size();
     let generic_params = n.get_generic_params();
     let range = n.range();
     let mut generic_types = preprocess_generics(generic_params, generic_size, range, ctx, builder)?;
 
-    ctx.protect_generic_context(t.get_generic_map(), |ctx| {
+    let re = ctx.protect_generic_context(t.get_generic_map(), |ctx| {
         for (i, (_, pltype)) in t.get_generic_map().iter().enumerate() {
             if i >= generic_size {
                 break;
@@ -352,7 +353,9 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
             }
         }
         Ok(())
-    })
+    });
+    *ctx.need_highlight.borrow_mut() -= 1;
+    re
 }
 
 /// # preprocess_generics
@@ -544,7 +547,7 @@ impl TypeNode for FuncDefNode {
                 fntype: FnType {
                     ret_pltype: self.ret.clone(),
                     param_pltypes,
-                    method,
+                    st_method: method,
                     generic_map: generic_map.clone(),
                     generic: self.generics.is_some(),
                     modifier: self.modifier.or_else(|| {
@@ -553,6 +556,7 @@ impl TypeNode for FuncDefNode {
                             _ => unreachable!(),
                         })
                     }),
+                    trait_method: self.in_trait_def,
                     generics_size: self.generics_size,
                 },
                 generic_infer: Arc::new(RefCell::new(IndexMap::default())),

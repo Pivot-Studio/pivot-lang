@@ -91,6 +91,7 @@ struct st3<TB> {
     e:(TB, TB);
 }
 
+use core::eq::Eq;
 fn test_deconstruct_inference() void {
     let a;
     let b;
@@ -112,6 +113,16 @@ fn test_deconstruct_inference() void {
     dddd = st{};
     eeee = dddd.test(eeee);
     eeee = 1;
+    let fhjkdshfjdks ;
+    eeee.eq(&fhjkdshfjdks);
+    let adc:Eq<i64> = eeee;
+    let aadsadsa;
+    aadsadsa = adc;
+
+    let yuyudsyfsui;
+    aadsadsa.eq(yuyudsyfsui);
+
+    
     return;
 }
 

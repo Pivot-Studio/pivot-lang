@@ -40,7 +40,9 @@ use crate::ast::{
         types::{GenericParamNode, TypeNameNode},
         NodeEnum, TypeNode, TypeNodeEnum,
     },
-    pltype::{get_type_deep, ARRType, ClosureType, ImplAble, PLType, STType, TraitImplAble},
+    pltype::{
+        get_type_deep, ARRType, ClosureType, FNValue, ImplAble, PLType, STType, TraitImplAble,
+    },
     tokens::TokenType,
 };
 
@@ -495,9 +497,11 @@ impl<'ctx> InferenceCtx<'ctx> {
     ) {
         let prev = ctx.disable_diag;
         ctx.disable_diag = true;
+        *ctx.need_highlight.borrow_mut() += 1;
         for s in &mut node.statements {
             self.inference(&mut *s, ctx, builder);
         }
+        *ctx.need_highlight.borrow_mut() -= 1;
         ctx.disable_diag = prev;
     }
 
@@ -564,6 +568,9 @@ impl<'ctx> InferenceCtx<'ctx> {
             },
             NodeEnum::ExternIdNode(ex) => {
                 if ex.ns.is_empty() {
+                    // if ex.id.name=="yuyudsyfsui" {
+                    //     eprintln!("111");
+                    // }
                     if let Some(t) = self.get_symbol(&ex.id.name) {
                         let id = self.new_key();
                         ex.id.id = Some(id);
@@ -748,19 +755,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                             TyInfer::Err => (),
                             TyInfer::Term(t) => match &*t.borrow() {
                                 PLType::Closure(c) => {
-                                    if c.arg_types.len() != argtys.len() {
-                                        return unknown();
-                                    }
-
-                                    for (i, arg) in c.arg_types.iter().enumerate() {
-                                        self.unify_two_symbol(
-                                            argtys[i].clone(),
-                                            SymbolType::PLType(arg.clone()),
-                                            ctx,
-                                            builder,
-                                        );
-                                    }
-                                    return SymbolType::PLType(c.ret_type.clone());
+                                    return self.handle_closure_call(c, argtys, ctx, builder);
                                 }
                                 PLType::Fn(f) => {
                                     if let Some(value) =
@@ -807,19 +802,8 @@ impl<'ctx> InferenceCtx<'ctx> {
                                 return value;
                             }
                         }
-                        PLType::Closure(cl) => {
-                            if cl.arg_types.len() != argtys.len() {
-                                return unknown();
-                            }
-                            for (i, arg) in cl.arg_types.iter().enumerate() {
-                                self.unify_two_symbol(
-                                    argtys[i].clone(),
-                                    SymbolType::PLType(arg.clone()),
-                                    ctx,
-                                    builder,
-                                );
-                            }
-                            return SymbolType::PLType(cl.ret_type.clone());
+                        PLType::Closure(c) => {
+                            return self.handle_closure_call(c, argtys, ctx, builder);
                         }
                         _ => (),
                     },
@@ -1058,6 +1042,27 @@ impl<'ctx> InferenceCtx<'ctx> {
         unknown()
     }
 
+    fn handle_closure_call<'a, 'b>(
+        &mut self,
+        cl: &ClosureType,
+        argtys: Vec<SymbolType>,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) -> SymbolType {
+        if cl.arg_types.len() != argtys.len() {
+            return unknown();
+        }
+        for (i, arg) in cl.arg_types.iter().enumerate() {
+            self.unify_two_symbol(
+                argtys[i].clone(),
+                SymbolType::PLType(arg.clone()),
+                ctx,
+                builder,
+            );
+        }
+        SymbolType::PLType(cl.ret_type.clone())
+    }
+
     fn handle_fn_ty<'a, 'b>(
         &mut self,
         f: &crate::ast::pltype::FNValue,
@@ -1079,7 +1084,11 @@ impl<'ctx> InferenceCtx<'ctx> {
             }
         }
         fc.generic_infer = Some(tys.clone());
-        let offset = if f.fntype.method { 1 } else { 0 };
+        let offset = if f.fntype.st_method || f.fntype.trait_method {
+            1
+        } else {
+            0
+        };
         if f.fntype.param_pltypes.len() != argtys.len() + offset {
             return Some(unknown());
         }
@@ -1092,17 +1101,31 @@ impl<'ctx> InferenceCtx<'ctx> {
                 if let NodeEnum::Take(t) = &mut *fc.callee {
                     let head_ty = self.inference(&mut t.head, ctx, builder);
                     // on method, unify type generic
-                    match head_ty {
+                    match &head_ty {
                         SymbolType::Var(v) => {
+                            let v = *v;
                             let k = self.unify_table.borrow_mut().probe(v);
-                            if let TyInfer::Generic((v, GenericTy::St(_))) = k {
-                                let offset = tys.len() - v.len();
-                                for (i, g) in v.iter().enumerate() {
-                                    self.unify(*g, SymbolType::Var(tys[offset + i]), ctx, builder);
+                            match k {
+                                TyInfer::Generic((v, GenericTy::St(_))) => {
+                                    let offset = tys.len() - v.len();
+                                    for (i, g) in v.iter().enumerate() {
+                                        self.unify(
+                                            *g,
+                                            SymbolType::Var(tys[offset + i]),
+                                            ctx,
+                                            builder,
+                                        );
+                                    }
                                 }
+                                TyInfer::Term(t) => {
+                                    self.pltype_receiver_unify(t, &tys, ctx, builder);
+                                }
+                                _ => (),
                             }
                         }
-                        _ => (),
+                        SymbolType::PLType(p) => {
+                            self.pltype_receiver_unify(p.clone(), &tys, ctx, builder);
+                        }
                     };
                     let sym = ctx.run_in_type_mod(f, |ctx, _| {
                         arg.solve_in_infer_generic_ctx(ctx, builder, self, &generic_map)
@@ -1125,6 +1148,40 @@ impl<'ctx> InferenceCtx<'ctx> {
                 .solve_in_infer_generic_ctx(ctx, builder, self, &generic_map)
                 .unwrap_or(SymbolType::PLType(unknown_arc()))
         }))
+    }
+
+    fn pltype_receiver_unify<'a, 'b>(
+        &mut self,
+        t: Arc<RefCell<PLType>>,
+        tys: &Vec<TyVariable>,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) {
+        match &*t.borrow() {
+            PLType::Struct(st) | PLType::Trait(st) => {
+                let offset = tys.len() - st.generic_map.len();
+                for (i, (_, ty)) in st.generic_map.iter().enumerate() {
+                    self.unify(
+                        tys[offset + i],
+                        SymbolType::PLType(ty.clone()),
+                        ctx,
+                        builder,
+                    );
+                }
+            }
+            PLType::Union(st) => {
+                let offset = tys.len() - st.generic_map.len();
+                for (i, (_, ty)) in st.generic_map.iter().enumerate() {
+                    self.unify(
+                        tys[offset + i],
+                        SymbolType::PLType(ty.clone()),
+                        ctx,
+                        builder,
+                    );
+                }
+            }
+            _ => (),
+        }
     }
 
     fn def_inference<'a, 'b>(
@@ -1386,7 +1443,7 @@ fn tp_field_symbol<'a, 'b>(
     builder: &'b BuilderEnum<'a, '_>,
 ) -> Option<SymbolType> {
     match &*tp.borrow() {
-        PLType::Struct(a) => {
+        PLType::Struct(a) | PLType::Trait(a) => {
             return ctx.run_in_type_mod(a, |ctx, a| {
                 ctx.protect_generic_context(&a.generic_map, |ctx| {
                     let f = a.fields.get(field);
@@ -1397,21 +1454,47 @@ fn tp_field_symbol<'a, 'b>(
                                 .unwrap_or(unknown_arc()),
                         ));
                     }
-
-                    if let Some(mthd) = a.get_method(field).or(ctx
-                        .find_global_method(&a.get_full_name(), field)
-                        .or(ctx.find_global_method(&a.get_full_name_except_generic(), field)))
-                    {
-                        return Some(SymbolType::PLType(new_arc_refcell(PLType::Fn(
-                            mthd.borrow().clone(),
-                        ))));
-                    }
-                    None
+                    a.get_method(field)
+                        .or(get_global_mthd(a, field, ctx))
+                        .map(|o| {
+                            SymbolType::PLType(new_arc_refcell(PLType::Fn(o.borrow().clone())))
+                        })
                 })
             });
         }
+        PLType::Primitive(a) => {
+            return get_global_mthd(a, field, ctx)
+                .map(|o| SymbolType::PLType(new_arc_refcell(PLType::Fn(o.borrow().clone()))));
+        }
+        PLType::Closure(a) => {
+            return get_global_mthd(a, field, ctx)
+                .map(|o| SymbolType::PLType(new_arc_refcell(PLType::Fn(o.borrow().clone()))));
+        }
+        PLType::Arr(a) => {
+            return get_global_mthd(a, field, ctx)
+                .map(|o| SymbolType::PLType(new_arc_refcell(PLType::Fn(o.borrow().clone()))));
+        }
+        PLType::Union(a) => {
+            return get_global_mthd(a, field, ctx)
+                .map(|o| SymbolType::PLType(new_arc_refcell(PLType::Fn(o.borrow().clone()))));
+        }
+
         _ => (),
     };
+    None
+}
+
+fn get_global_mthd<T: TraitImplAble>(
+    a: &T,
+    field: &str,
+    ctx: &mut Ctx,
+) -> Option<Arc<RefCell<FNValue>>> {
+    if let Some(mthd) = ctx
+        .find_global_method(&a.get_full_name(), field)
+        .or(ctx.find_global_method(&a.get_full_name_except_generic(), field))
+    {
+        return Some(mthd);
+    }
     None
 }
 
