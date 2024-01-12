@@ -18,7 +18,7 @@ use crate::ast::pltype::{
 use crate::ast::tokens::TokenType;
 use crate::ast::traits::CustomType;
 use crate::format_label;
-use crate::inference::{GenericInferenceAble, InferenceCtx, TyVariable};
+use crate::inference::{unknown_arc, GenericInferenceAble, InferenceCtx, TyVariable};
 use indexmap::IndexMap;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
@@ -309,50 +309,52 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
     let range = n.range();
     let mut generic_types = preprocess_generics(generic_params, generic_size, range, ctx, builder)?;
 
-    let re = ctx.protect_generic_context(t.get_generic_map(), |ctx| {
-        for (i, (_, pltype)) in t.get_generic_map().iter().enumerate() {
-            if i >= generic_size {
-                break;
-            }
-            if generic_types[i].is_none() {
-                // fill inferred types
-                let ty = n
-                    .get_inference_result()
-                    .clone()
-                    .unwrap_or_default()
-                    .get(i)
-                    .map(|v| {
-                        let ty = ctx.unify_table.borrow_mut().probe(*v);
-                        ty.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut())
-                    });
-                if let Some(ty) = ty {
-                    if *ty.borrow() != PLType::Unknown {
-                        generic_types[i] = Some(ty);
+    let re = ctx.run_in_type_mod(t, |ctx, t| {
+        ctx.protect_generic_context(t.get_generic_map(), |ctx| {
+            for (i, (_, pltype)) in t.get_generic_map().iter().enumerate() {
+                if i >= generic_size {
+                    break;
+                }
+                if generic_types[i].is_none() {
+                    // fill inferred types
+                    let ty = n
+                        .get_inference_result()
+                        .clone()
+                        .unwrap_or_default()
+                        .get(i)
+                        .map(|v| {
+                            let ty = ctx.unify_table.borrow_mut().probe(*v);
+                            ty.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut())
+                        });
+                    if let Some(ty) = ty {
+                        if *ty.borrow() != PLType::Unknown {
+                            generic_types[i] = Some(ty);
+                        } else {
+                            continue;
+                        }
                     } else {
                         continue;
                     }
-                } else {
-                    continue;
+                }
+                let res = ctx.eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
+                if !res.eq {
+                    // let r = generic_params.generics[i].as_ref().unwrap().range();
+                    // return Err(r.new_err(ErrorCode::ILLEGAL_GENERIC_PARAM).add_to_ctx(ctx));
+                    let g = t.get_generic_map().get_index(i).unwrap();
+                    let mut diag = range.new_err(ErrorCode::ILLEGAL_GENERIC_PARAM);
+                    if let Some(reason) = res.reason {
+                        diag.add_help(&reason);
+                    }
+                    diag.add_label(
+                        g.1.borrow().get_range().unwrap_or_default(),
+                        t.get_path(),
+                        format_label!("parameter `{}` defined in `{}`", g.0, t.get_name()),
+                    );
+                    return Err(diag.add_to_ctx(ctx));
                 }
             }
-            let res = ctx.eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
-            if !res.eq {
-                // let r = generic_params.generics[i].as_ref().unwrap().range();
-                // return Err(r.new_err(ErrorCode::ILLEGAL_GENERIC_PARAM).add_to_ctx(ctx));
-                let g = t.get_generic_map().get_index(i).unwrap();
-                let mut diag = range.new_err(ErrorCode::ILLEGAL_GENERIC_PARAM);
-                if let Some(reason) = res.reason {
-                    diag.add_help(&reason);
-                }
-                diag.add_label(
-                    g.1.borrow().get_range().unwrap_or_default(),
-                    t.get_path(),
-                    format_label!("parameter `{}` defined in `{}`", g.0, t.get_name()),
-                );
-                return Err(diag.add_to_ctx(ctx));
-            }
-        }
-        Ok(())
+            Ok(())
+        })
     });
     *ctx.need_highlight.borrow_mut() -= 1;
     re
@@ -866,6 +868,11 @@ impl FuncDefNode {
                 infer_ctx.import_global_symbols(child);
                 let mut infer_ctx = infer_ctx.new_child();
                 infer_ctx.import_symbols(child);
+                infer_ctx.set_fn_ret_tp(
+                    child.rettp.clone().unwrap_or(unknown_arc()),
+                    child,
+                    builder,
+                );
                 infer_ctx.inference_statements(self.body.as_mut().unwrap(), child, builder);
                 let terminator = child.with_diag_src(&child.get_file(), |child| {
                     Ok(self

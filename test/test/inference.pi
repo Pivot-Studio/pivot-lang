@@ -119,9 +119,6 @@ fn test_deconstruct_inference() void {
     let aadsadsa;
     aadsadsa = adc;
 
-    let yuyudsyfsui;
-    aadsadsa.eq(yuyudsyfsui);
-
     
     return;
 }

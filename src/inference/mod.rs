@@ -392,17 +392,6 @@ impl<'ctx> InferenceCtx<'ctx> {
             (TyInfer::Term(t), TyInfer::Generic(_)) => {
                 self.unify_var_tp(v2, t, ctx, builder);
             }
-            // (TyInfer::Pointer(t1), TyInfer::Pointer(t2)) => {
-            //     self.handle_unify(t1, t2, ctx, builder);
-            // }
-            // (TyInfer::Term(t), TyInfer::Pointer(p)) | (TyInfer::Pointer(p), TyInfer::Term(t)) => {
-            //     match &*t.borrow() {
-            //         PLType::Pointer(ptr_ty) => {
-            //             self.unify_var_tp(p, ptr_ty.clone(), ctx, builder);
-            //         }
-            //         _ => (),
-            //     }
-            // }
             _ => (),
         };
         _ = self.unify_table.borrow_mut().unify_var_var(v, v2);
@@ -468,6 +457,17 @@ impl<'ctx> InferenceCtx<'ctx> {
                 .unify_var_value(key, TyInfer::Term(ty.pltype.clone()));
             self.add_symbol(name, key);
         }
+    }
+
+    pub fn set_fn_ret_tp<'a, 'b>(
+        &mut self,
+        tp: Arc<RefCell<PLType>>,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) {
+        let new_id = self.new_key();
+        self.unify_var_tp(new_id, tp, ctx, builder);
+        self.add_symbol("@ret", new_id);
     }
 
     #[allow(dead_code)]
