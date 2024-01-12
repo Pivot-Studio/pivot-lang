@@ -142,11 +142,12 @@ pub fn res_box<T: ?Sized>(i: Box<T>) -> Result<Box<T>, ()> {
 }
 
 pub fn create_bin((mut left, rights): PLBin) -> Result<Box<NodeEnum>, ()> {
-    for ((op, orange), right) in rights {
+    for ((op, op_range), right) in rights {
         let range = left.range().start.to(right.range().end);
+
         left = Box::new(
             BinOpNode {
-                op: (op, orange),
+                op: (op, op_range),
                 left,
                 right,
                 range,

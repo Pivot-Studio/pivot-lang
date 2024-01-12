@@ -198,14 +198,14 @@ pub fn trait_bound(input: Span) -> IResult<Span, Box<TraitBoundNode>> {
             identifier,
             opt(preceded(tag_token_symbol(TokenType::COLON), multi_trait)),
         )),
-        |(generic, impl_trait)| {
+        |(ident, impl_trait)| {
             let range = if let Some(impl_trait) = &impl_trait {
-                generic.range.start.to(impl_trait.range().end)
+                ident.range.start.to(impl_trait.range().end)
             } else {
-                generic.range
+                ident.range
             };
             res_box(Box::new(TraitBoundNode {
-                generic,
+                identifier: ident,
                 impl_trait,
                 range,
             }))
@@ -240,10 +240,10 @@ fn tuple_type(input: Span) -> IResult<Span, Box<TypeNodeEnum>> {
             )),
             tag_token_symbol(TokenType::RPAREN),
         )),
-        |((_, rs), types, (_, re))| {
+        |((_, rs), tps, (_, re))| {
             let range = rs.start.to(re.end);
-            let tps = types.unwrap_or_default();
-            let node = Box::new(TypeNodeEnum::Tuple(TupleTypeNode { tps, range }));
+            let types = tps.unwrap_or_default();
+            let node = Box::new(TypeNodeEnum::Tuple(TupleTypeNode { types, range }));
             res_box(node)
         },
     )(input)

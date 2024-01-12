@@ -47,7 +47,6 @@ pub fn except<'a, E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt
             }
         }
         let msg = msg.to_string();
-        // let end = sp.take_split(sp.len()).0;
         let node = Box::new(
             ErrorNode {
                 msg,

@@ -14,11 +14,18 @@ use indexmap::IndexMap;
 use internal_macro::node;
 use internal_macro::range;
 use lsp_types::SemanticTokenType;
+
 #[node(comment)]
+/// DefNode stands for a let statement to define a new variable
+///
 pub struct DefNode {
+    /// var is the definition of a variable
     pub var: Box<DefVar>,
-    pub tp: Option<Box<TypeNodeEnum>>,
-    pub exp: Option<Box<NodeEnum>>,
+    /// variable_type is the type provided during defining the variable
+    pub variable_type: Option<Box<TypeNodeEnum>>,
+
+    /// value_expression is the value of the var
+    pub value_expression: Option<Box<NodeEnum>>,
 }
 
 #[range]
@@ -89,15 +96,17 @@ impl PrintTrait for DefNode {
         tab(tabs, line.clone(), end);
         println!("DefNode");
         self.var.print(tabs + 1, false, line.clone());
-        if let Some(tp) = &self.tp {
+        if let Some(tp) = &self.variable_type {
             tp.print(tabs + 1, true, line.clone());
-        } else if let Some(e) = self.exp.as_ref() {
+        } else if let Some(e) = self.value_expression.as_ref() {
             e.print(tabs + 1, true, line.clone());
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// DefVar stands for the variables defined by `let` keyword
+/// it might be a single variable, a deconstructed tuple, or a deconstructed structure.
 pub enum DefVar {
     Identifier(VarNode),
     TupleDeconstruct(TupleDeconstructNode),
@@ -170,7 +179,7 @@ impl Node for DefNode {
     ) -> NodeResult {
         ctx.push_semantic_token(self.var.range(), SemanticTokenType::VARIABLE, 0);
         let mut pltype = None;
-        if self.tp.is_none() {
+        if self.variable_type.is_none() {
             let mut tp = Arc::new(RefCell::new(PLType::Unknown));
             if let DefVar::Identifier(i) = &*self.var {
                 if let Some(id) = i.id {
@@ -182,17 +191,17 @@ impl Node for DefNode {
             pltype = Some(tp);
         }
         let mut expv = None;
-        if let Some(tp) = &self.tp {
+        if let Some(tp) = &self.variable_type {
             tp.emit_highlight(ctx);
             let pltp = tp.get_type(ctx, builder, true)?;
             pltype = Some(pltp);
         }
-        if self.exp.is_some()
+        if self.value_expression.is_some()
             && matches!(pltype.clone(), Some(tp) if matches!(&*tp.borrow(), PLType::Unknown))
         {
             pltype = None;
         }
-        if let Some(exp) = &mut self.exp {
+        if let Some(exp) = &mut self.value_expression {
             let re = if let Some(expect) = pltype.clone() {
                 ctx.emit_with_expectation(exp, expect, self.var.range(), builder)
             } else {
@@ -220,7 +229,7 @@ impl Node for DefNode {
                     } else {
                         re.get_value()
                     };
-                    if self.tp.is_none() && pltype.is_none() {
+                    if self.variable_type.is_none() && pltype.is_none() {
                         pltype = Some(tp);
                     }
                     expv = Some(v);
@@ -228,7 +237,7 @@ impl Node for DefNode {
             }
         }
         let pltype = pltype.unwrap_or(unknown_arc());
-        if self.tp.is_none() {
+        if self.variable_type.is_none() {
             ctx.push_type_hints(self.var.range(), pltype.clone());
         }
         let mut gm = IndexMap::new();
@@ -246,7 +255,7 @@ impl Node for DefNode {
         ctx.protect_generic_context(&gm, |ctx| {
             handle_deconstruct(
                 self.range(),
-                self.exp.as_ref().map(|e| e.range()),
+                self.value_expression.as_ref().map(|e| e.range()),
                 builder,
                 pltype.clone(),
                 ctx,
@@ -480,7 +489,9 @@ fn handle_deconstruct<'a, 'b>(
 }
 #[node]
 pub struct AssignNode {
+    /// var is the variable to be assigned at the left
     pub var: AssignVar,
+    /// exp is the value to assign the var
     pub exp: Box<NodeEnum>,
 }
 
@@ -601,7 +612,10 @@ impl Node for EmptyNode {
 }
 
 #[node]
+/// StatementsNode stands several statements held by {}
 pub struct StatementsNode {
+    /// statements is a vector of all statements under a statement block
+    /// the order is same of the code, from top to bottom
     pub statements: Vec<Box<NodeEnum>>,
 }
 

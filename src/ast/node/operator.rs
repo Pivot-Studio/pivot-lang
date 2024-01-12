@@ -82,8 +82,10 @@ impl Node for UnaryOpNode {
 
 #[node]
 pub struct BinOpNode {
+    /// left holds the left part of the binary operation of the first binary operator in an expression
     pub left: Box<NodeEnum>,
     pub op: (TokenType, Range),
+    /// right holds the right part of the binary operation of the first binary operator in an expression
     pub right: Box<NodeEnum>,
 }
 

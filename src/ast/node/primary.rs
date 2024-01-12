@@ -104,6 +104,7 @@ impl Node for NumNode {
 
 #[node]
 pub struct VarNode {
+    /// identifier name of a variable
     pub name: String,
     pub id: Option<TyVariable>,
 }

@@ -239,7 +239,7 @@ impl Node for MacroCallNode {
     ) -> NodeResult {
         match &*self.callee {
             NodeEnum::ExternIdNode(ex_node) => {
-                for ns in &ex_node.ns {
+                for ns in &ex_node.namespace {
                     ctx.push_semantic_token(ns.range(), SemanticTokenType::NAMESPACE, 0);
                 }
                 ctx.push_semantic_token(ex_node.id.range(), SemanticTokenType::MACRO, 0);

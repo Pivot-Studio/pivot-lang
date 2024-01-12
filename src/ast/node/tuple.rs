@@ -19,6 +19,7 @@ use super::{Node, NodeEnum, PrintTrait, TypeNode, TypeNodeEnum};
 
 #[node]
 pub struct TupleInitNode {
+    // exprs holds the expressions inside a tuple separated by comma `,`
     pub exprs: Vec<Box<NodeEnum>>,
 }
 
@@ -120,7 +121,8 @@ impl PrintTrait for TupleInitNode {
 
 #[node]
 pub struct TupleTypeNode {
-    pub tps: Vec<Box<TypeNodeEnum>>,
+    /// types hold all types in a tuple with order from left to right
+    pub types: Vec<Box<TypeNodeEnum>>,
 }
 
 impl TypeNode for TupleTypeNode {
@@ -134,7 +136,7 @@ impl TypeNode for TupleTypeNode {
         let mut field_tps = vec![];
         let mut err = None;
         let mut name = String::new();
-        for (i, tp) in self.tps.iter().enumerate() {
+        for (i, tp) in self.types.iter().enumerate() {
             let tp = tp.get_type(ctx, builder, gen_code);
             match tp {
                 Ok(tp) => {
@@ -171,7 +173,7 @@ impl TypeNode for TupleTypeNode {
     }
 
     fn emit_highlight(&self, ctx: &mut crate::ast::ctx::Ctx) {
-        for tp in &self.tps {
+        for tp in &self.types {
             tp.emit_highlight(ctx);
         }
     }
@@ -197,8 +199,8 @@ impl PrintTrait for TupleTypeNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("TupleTypeNode");
-        for (i, tp) in self.tps.iter().enumerate() {
-            tp.print(tabs + 1, i == self.tps.len() - 1, line.clone());
+        for (i, tp) in self.types.iter().enumerate() {
+            tp.print(tabs + 1, i == self.types.len() - 1, line.clone());
         }
     }
 }

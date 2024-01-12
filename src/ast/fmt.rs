@@ -144,9 +144,9 @@ impl FmtBuilder {
     pub fn parse_use_node(&mut self, node: &UseNode) {
         self.token("use");
         self.space();
-        for (i, id) in node.ids.iter().enumerate() {
+        for (i, id) in node.namespace.iter().enumerate() {
             id.format(self);
-            if i != node.ids.len() - 1 {
+            if i != node.namespace.len() - 1 {
                 self.dbcolon();
             }
         }
@@ -158,9 +158,9 @@ impl FmtBuilder {
         self.enter();
     }
     pub fn parse_extern_id_node(&mut self, node: &ExternIdNode) {
-        for (i, id) in node.ns.iter().enumerate() {
+        for (i, id) in node.namespace.iter().enumerate() {
             id.format(self);
-            if i != node.ns.len() {
+            if i != node.namespace.len() {
                 self.dbcolon();
             }
         }
@@ -192,7 +192,7 @@ impl FmtBuilder {
         }
     }
     pub fn parse_struct_def_node(&mut self, node: &StructDefNode) {
-        for c in node.pre_comments.iter() {
+        for c in node.docs.iter() {
             c.format(self);
         }
         self.prefix();
@@ -303,12 +303,12 @@ impl FmtBuilder {
         self.token("let");
         self.space();
         node.var.format(self);
-        if let Some(tp) = &node.tp {
+        if let Some(tp) = &node.variable_type {
             self.colon();
             self.space();
             tp.format(self);
         }
-        if let Some(exp) = &node.exp {
+        if let Some(exp) = &node.value_expression {
             self.space();
             self.equal();
             self.space();
@@ -350,7 +350,7 @@ impl FmtBuilder {
         }
     }
     pub fn parse_ret_node(&mut self, node: &RetNode) {
-        if let Some((t, _)) = node.yiel {
+        if let Some((t, _)) = node.yield_identifier {
             self.token(t.get_str());
             self.space();
         }
@@ -713,7 +713,7 @@ impl FmtBuilder {
         self.r_paren();
     }
     pub fn parse_trait_bound_node(&mut self, node: &TraitBoundNode) {
-        node.generic.format(self);
+        node.identifier.format(self);
         if let Some(impl_trait) = &node.impl_trait {
             impl_trait.format(self);
         }
@@ -756,7 +756,7 @@ impl FmtBuilder {
         self.space();
         self.token("as");
         self.space();
-        node.ty.format(self);
+        node.target_type.format(self);
         if let Some((t, _)) = node.tail {
             if t == TokenType::QUESTION {
                 self.token("?");
@@ -770,7 +770,7 @@ impl FmtBuilder {
         self.space();
         self.token("is");
         self.space();
-        node.ty.format(self);
+        node.target_type.format(self);
     }
     pub fn parse_tuple_init_node(&mut self, node: &TupleInitNode) {
         self.l_paren();
@@ -788,7 +788,7 @@ impl FmtBuilder {
     }
     pub fn parse_tuple_type_node(&mut self, node: &TupleTypeNode) {
         self.l_paren();
-        for (i, ty) in node.tps.iter().enumerate() {
+        for (i, ty) in node.types.iter().enumerate() {
             if i > 0 {
                 self.comma();
                 self.space();
@@ -844,7 +844,7 @@ impl FmtBuilder {
     pub fn parse_global_const_node(&mut self, node: &GlobalConstNode) {
         self.token("const");
         self.space();
-        node.var.format(self);
+        node.constant.format(self);
         self.semicolon();
         // 顶层节点加空格
         self.enter();

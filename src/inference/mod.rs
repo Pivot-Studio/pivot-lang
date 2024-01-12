@@ -520,10 +520,10 @@ impl<'ctx> InferenceCtx<'ctx> {
         match node {
             NodeEnum::Def(d) => {
                 let mut ty = unknown();
-                if let Some(exp) = &mut d.exp {
+                if let Some(exp) = &mut d.value_expression {
                     ty = self.inference(&mut *exp, ctx, builder);
                 }
-                if let Some(tp) = &d.tp {
+                if let Some(tp) = &d.variable_type {
                     let new_ty = SymbolType::PLType(
                         tp.get_type(ctx, builder, true).unwrap_or(unknown_arc()),
                     );
@@ -567,10 +567,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                 }
             },
             NodeEnum::ExternIdNode(ex) => {
-                if ex.ns.is_empty() {
-                    // if ex.id.name=="yuyudsyfsui" {
-                    //     eprintln!("111");
-                    // }
+                if ex.namespace.is_empty() {
                     if let Some(t) = self.get_symbol(&ex.id.name) {
                         let id = self.new_key();
                         ex.id.id = Some(id);
@@ -615,7 +612,10 @@ impl<'ctx> InferenceCtx<'ctx> {
             }
             NodeEnum::AsNode(a) => {
                 if a.tail.is_none() || a.tail.unwrap().0 == TokenType::NOT {
-                    let tp = a.ty.get_type(ctx, builder, true).unwrap_or(unknown_arc());
+                    let tp = a
+                        .target_type
+                        .get_type(ctx, builder, true)
+                        .unwrap_or(unknown_arc());
                     return SymbolType::PLType(tp);
                 }
             }
@@ -831,7 +831,7 @@ impl<'ctx> InferenceCtx<'ctx> {
             }
             NodeEnum::Ret(r) => {
                 let ret = self.get_symbol("@ret");
-                if r.yiel.is_some() {
+                if r.yield_identifier.is_some() {
                     return unknown();
                 }
                 if let Some(ret) = ret {
@@ -1364,7 +1364,7 @@ impl Inferable for TypeNodeEnum {
                     generic_params: None,
                     ..
                 } => {
-                    if i.ns.is_empty() && generic_map.contains_key(&i.id.name) {
+                    if i.namespace.is_empty() && generic_map.contains_key(&i.id.name) {
                         return Some(SymbolType::Var(*generic_map.get(&i.id.name).unwrap()));
                     }
                 }
@@ -1416,7 +1416,7 @@ impl Inferable for TypeNodeEnum {
             }
             TypeNodeEnum::Tuple(t) => {
                 let mut tys = vec![];
-                for ty in &t.tps {
+                for ty in &t.types {
                     let ty = ty
                         .solve_in_infer_generic_ctx(ctx, builder, infer_ctx, generic_map)
                         .unwrap_or(SymbolType::PLType(unknown_arc()));

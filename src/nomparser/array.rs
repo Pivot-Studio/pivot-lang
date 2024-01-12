@@ -17,8 +17,8 @@ use crate::{
 use super::*;
 
 #[test_parser("[1,2,3]")]
-#[test_parser("[test*test2;]")]
-#[test_parser("[test*test2;2,3,4]")]
+#[test_parser("[i8*capicity;]")]
+#[test_parser("[i32*expected_capicity*2;2,3,4]")]
 #[test_parser(
     "[
         1,
@@ -44,6 +44,7 @@ pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
             ),
             tag_token_symbol(TokenType::RBRACKET),
         )),
+        // lb and rb are used to mark the boundaries of an arry.
         |((_, lb), tp, exps, (_, rb))| {
             let range = lb.start.to(rb.end);
             res_enum(ArrayInitNode { exps, range, tp }.into())
@@ -52,6 +53,7 @@ pub fn array_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
 }
 
 #[test_parser("[123]")]
+#[test_parser("[index]")]
 pub fn array_element_op(input: Span) -> IResult<Span, (ComplexOp, Vec<Box<NodeEnum>>)> {
     delspace(map_res(
         tuple((

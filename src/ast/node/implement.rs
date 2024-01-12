@@ -10,9 +10,16 @@ use rustc_hash::FxHashSet;
 
 #[node(comment)]
 pub struct ImplNode {
+    /// generics stands for the generics types when implements for a structure
     pub generics: Option<Box<GenericDefNode>>,
+
+    /// target is the structure which implements the methods in impl_trait
     pub target: Box<TypeNodeEnum>,
+
+    /// methods holds the definitions of the implemented methods
     pub methods: Vec<Box<FuncDefNode>>,
+
+    /// impl_trait is the trait to implement for the target structure
     pub impl_trait: Option<(Box<TypeNodeEnum>, (TokenType, Range))>,
 }
 

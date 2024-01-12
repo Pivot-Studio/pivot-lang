@@ -10,7 +10,7 @@ use lsp_types::SemanticTokenType;
 
 #[node]
 pub struct GlobalConstNode {
-    pub var: Box<TypedIdentifierNode>,
+    pub constant: Box<TypedIdentifierNode>,
 }
 
 impl PrintTrait for GlobalConstNode {
@@ -18,7 +18,7 @@ impl PrintTrait for GlobalConstNode {
         deal_line(tabs, &mut line, end);
         tab(tabs, line.clone(), end);
         println!("GlobalConstNode");
-        self.var.print(tabs + 1, true, line.clone());
+        self.constant.print(tabs + 1, true, line.clone());
     }
 }
 
@@ -28,15 +28,15 @@ impl Node for GlobalConstNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
-        ctx.push_semantic_token(self.var.id.range, SemanticTokenType::VARIABLE, 0);
-        ctx.push_semantic_token(self.var.typenode.range(), SemanticTokenType::TYPE, 0);
-        let pltype = self.var.typenode.get_type(ctx, builder, true)?;
-        let globalptr = builder.global_const(&self.var.id.name, &pltype.borrow(), ctx);
+        ctx.push_semantic_token(self.constant.id.range, SemanticTokenType::VARIABLE, 0);
+        ctx.push_semantic_token(self.constant.typenode.range(), SemanticTokenType::TYPE, 0);
+        let pltype = self.constant.typenode.get_type(ctx, builder, true)?;
+        let globalptr = builder.global_const(&self.constant.id.name, &pltype.borrow(), ctx);
         ctx.add_symbol(
-            self.var.id.name.clone(),
+            self.constant.id.name.clone(),
             globalptr,
             pltype,
-            self.var.range,
+            self.constant.range,
             true,
             true,
         )?;
@@ -45,8 +45,12 @@ impl Node for GlobalConstNode {
 }
 
 #[node]
+/// GlobalNode stands for the code starts with `var` keyword
 pub struct GlobalNode {
+    /// var is the variable defined by `var` keyword
     pub var: VarNode,
+
+    /// exp is the value of the variable
     pub exp: Box<NodeEnum>,
 }
 

@@ -30,6 +30,7 @@ use lsp_types::SemanticTokenType;
 
 #[node]
 pub struct TypeNameNode {
+    /// id is the identifier of a type
     pub id: Option<ExternIdNode>,
     pub generic_params: Option<Box<GenericParamNode>>,
     /// # generic_infer
@@ -57,7 +58,7 @@ impl TypeNameNode {
                 id: None,
             }),
             range: Default::default(),
-            ns: vec![],
+            namespace: vec![],
             complete: true,
             singlecolon: false,
         };
@@ -182,7 +183,7 @@ impl PrintTrait for TypeNameNode {
 impl TypeNode for TypeNameNode {
     fn emit_highlight(&self, ctx: &mut Ctx) {
         if let Some(id) = &self.id {
-            for ns in id.ns.iter() {
+            for ns in id.namespace.iter() {
                 ctx.push_semantic_token(ns.range, SemanticTokenType::NAMESPACE, 0);
             }
             ctx.push_semantic_token(id.id.range, SemanticTokenType::TYPE, 0);
@@ -299,6 +300,7 @@ impl TypeNode for TypeNameNode {
 
 #[node]
 pub struct ArrayTypeNameNode {
+    /// id is the identifier of a type
     pub id: Box<TypeNodeEnum>,
 }
 
@@ -353,6 +355,8 @@ impl TypeNode for ArrayTypeNameNode {
 
 #[node]
 pub struct PointerTypeNode {
+    /// elm is the element type pointed by a pointer, it de-reference one layer only.
+    /// the elm might be a pointer as well, for example, the element of **i8 is *i8.
     pub elm: Box<TypeNodeEnum>,
 }
 
@@ -400,7 +404,10 @@ impl TypeNode for PointerTypeNode {
 
 #[node]
 pub struct TypedIdentifierNode {
+    // identifier of a typed identifier node
     pub id: VarNode,
+
+    // typenode is the type of id
     pub typenode: Box<TypeNodeEnum>,
     pub doc: Option<CommentNode>,
 }
@@ -421,11 +428,22 @@ impl TypedIdentifierNode {
 
 #[node]
 pub struct StructDefNode {
+    /// docs is the documentation of the structure started with `///`
+    pub docs: Vec<Box<NodeEnum>>,
+
+    /// pre_comments is the comments above a structure
     pub pre_comments: Vec<Box<NodeEnum>>,
-    pub doc: Vec<Box<NodeEnum>>,
+
+    /// id is the identifier of the structure
     pub id: Box<VarNode>,
+
+    /// fields is all fields of a structure, the order follows the code order from top to bottom
     pub fields: Vec<StructField>,
+
+    /// generics stands for the generics arguments in the structure
     pub generics: Option<Box<GenericDefNode>>,
+
+    /// modifier indicates whether the trait is decorated by a keyword `pub`
     pub modifier: Option<(TokenType, Range)>,
 }
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -442,7 +460,7 @@ impl PrintTrait for StructDefNode {
         println!("StructDefNode");
         tab(tabs + 1, line.clone(), false);
         println!("id: {}", self.id.name);
-        for c in self.pre_comments.iter() {
+        for c in self.docs.iter() {
             c.print(tabs + 1, false, line.clone());
         }
         let mut i = self.fields.len();
@@ -459,7 +477,7 @@ impl Node for StructDefNode {
         ctx: &'b mut Ctx<'a>,
         _builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
-        ctx.emit_comment_highlight(&self.pre_comments);
+        ctx.emit_comment_highlight(&self.docs);
         ctx.push_semantic_token(self.id.range, SemanticTokenType::STRUCT, 0);
         if let Some(generics) = &mut self.generics {
             generics.emit_highlight(ctx);
@@ -522,7 +540,7 @@ impl StructDefNode {
             // 自引用检查
             if let TypeNodeEnum::Basic(b) = &*id.typenode {
                 if let Some(id) = &b.id {
-                    if id.ns.is_empty() {
+                    if id.namespace.is_empty() {
                         // 只有本包内类型可能自引用
                         let v = ctx.self_ref_map.entry(id.id.name.clone()).or_default();
                         v.insert((self.id.name.clone(), self.id.range()));
@@ -568,12 +586,12 @@ impl StructDefNode {
             ctx.plmod.types = clone_map;
             if let PLType::Struct(st) = &mut *pltype.borrow_mut() {
                 st.fields = fields.clone();
-                st.doc = self.doc.clone();
+                st.doc = self.pre_comments.clone();
                 if let Some(stpltype) = ctx.linked_tp_tbl.remove(&pltype.tp.as_ptr()) {
                     for st in stpltype {
                         if let PLType::Struct(st) = &mut *st.borrow_mut() {
                             st.fields = fields.clone();
-                            st.doc = self.doc.clone();
+                            st.doc = self.pre_comments.clone();
                         }
                     }
                 }
@@ -591,7 +609,7 @@ impl StructDefNode {
             }
             ctx.set_if_refs_tp(pltype.tp.clone(), self.id.range);
             ctx.add_doc_symbols(pltype.tp.clone());
-            ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
+            ctx.save_if_comment_doc_hover(self.range, Some(self.pre_comments.clone()));
             Ok(())
         })
     }
@@ -627,7 +645,10 @@ impl Node for StructInitFieldNode {
 
 #[node]
 pub struct StructInitNode {
+    /// typename is the structure type to initialize
     pub typename: Box<TypeNodeEnum>,
+    // fields is all provided fields with values to initialize a structure
+    // the order is the code order from left to right, from top to bottom
     pub fields: Vec<Box<NodeEnum>>, // TODO: comment db and salsa comment struct
 }
 
@@ -849,6 +870,7 @@ impl Node for ArrayInitNode {
 #[node]
 pub struct GenericDefNode {
     pub generics: Vec<Box<TraitBoundNode>>,
+    /// generics_size is the number in a generic list
     pub generics_size: usize,
 }
 
@@ -860,7 +882,7 @@ impl PrintTrait for GenericDefNode {
         let mut i = self.generics.len();
         for g in &self.generics {
             i -= 1;
-            g.generic.print(tabs + 1, i == 0, line.clone());
+            g.identifier.print(tabs + 1, i == 0, line.clone());
         }
     }
 }
@@ -893,8 +915,8 @@ impl GenericDefNode {
     pub fn gen_generic_type(&self, ctx: &Ctx) -> IndexMap<String, Arc<RefCell<PLType>>> {
         let mut res = IndexMap::default();
         for g in self.generics.iter() {
-            let range = g.generic.range;
-            let name = g.generic.name.clone();
+            let range = g.identifier.range;
+            let name = g.identifier.name.clone();
             let gentype = GenericType {
                 name: name.clone(),
                 range,

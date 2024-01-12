@@ -80,11 +80,11 @@ impl ConfigWrapper {
         // 加载依赖包的路径
         if let Some(cm) = &self.config(db).deps {
             // 如果use的是依赖包
-            if let Some(dep) = cm.get(&u.ids[0].name) {
+            if let Some(dep) = cm.get(&u.namespace[0].name) {
                 path = path.join(&dep.path);
             }
         }
-        for p in u.ids[1..].iter() {
+        for p in u.namespace[1..].iter() {
             path = path.join(p.name.clone());
         }
         path = path.with_extension("pi");

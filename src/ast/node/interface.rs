@@ -42,7 +42,8 @@ impl MultiTraitNode {
 }
 #[node]
 pub struct TraitBoundNode {
-    pub generic: Box<VarNode>,
+    pub identifier: Box<VarNode>,
+    /// impl_trait is the trait identifier bound to
     pub impl_trait: Option<Box<MultiTraitNode>>,
 }
 impl TraitBoundNode {
@@ -51,12 +52,16 @@ impl TraitBoundNode {
         ctx: &mut Ctx<'_>,
         generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
     ) -> Result<(), PLDiag> {
-        if !generic_map.contains_key(&self.generic.name) {
-            return Err(ctx.add_diag(self.generic.range().new_err(ErrorCode::GENERIC_NOT_FOUND)));
+        if !generic_map.contains_key(&self.identifier.name) {
+            return Err(ctx.add_diag(
+                self.identifier
+                    .range()
+                    .new_err(ErrorCode::GENERIC_NOT_FOUND),
+            ));
         }
         if let Some(impl_trait) = &self.impl_trait {
             // let trait_pltype = impl_trait.get_types(ctx, builder)?;
-            let generic_type = generic_map.get(&self.generic.name).unwrap();
+            let generic_type = generic_map.get(&self.identifier.name).unwrap();
             if let PLType::Generic(generic_type) = &mut *generic_type.borrow_mut() {
                 if generic_type.trait_impl.is_some() {
                     return Err(
@@ -71,7 +76,7 @@ impl TraitBoundNode {
         Ok(())
     }
     pub fn emit_highlight(&self, ctx: &mut Ctx) {
-        ctx.push_semantic_token(self.generic.range, SemanticTokenType::TYPE, 0);
+        ctx.push_semantic_token(self.identifier.range, SemanticTokenType::TYPE, 0);
         if let Some(impl_trait) = &self.impl_trait {
             impl_trait.emit_highlight(ctx);
         }
@@ -79,9 +84,13 @@ impl TraitBoundNode {
 }
 #[node]
 pub struct TraitDefNode {
+    /// id is the identifier of the trait
     pub id: Box<VarNode>,
+    /// methods is all methods defined by a trait
     pub methods: Vec<FuncDefNode>,
+    /// derives is the trait derived by the current trait, multiple traits derivation are allowed
     pub derives: MultiTraitNode,
+    /// modifier indicates whether the trait is decorated by a keyword `pub`
     pub modifier: Option<(TokenType, Range)>,
     pub generics: Option<Box<GenericDefNode>>,
 }

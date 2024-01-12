@@ -18,9 +18,12 @@ use super::{
 
 #[node]
 pub struct UnionDefNode {
+    /// modifier indicates whether the trait is decorated by a keyword `pub`
     pub modifier: Option<(TokenType, Range)>,
+    /// name is the name of union
     pub name: VarNode,
     pub generics: Option<Box<GenericDefNode>>,
+    /// sum_types is the types supported in a union
     pub sum_types: Vec<Box<TypeNodeEnum>>,
 }
 
