@@ -15,9 +15,9 @@ use lsp_types::{
         HoverRequest, InlayHintRequest, References, Rename, SemanticTokensFullDeltaRequest,
         SemanticTokensFullRequest, SignatureHelpRequest,
     },
-    CodeLensOptions, CompletionItem, Diagnostic, Hover, HoverContents, InitializeParams,
-    MarkedString, OneOf, SemanticTokens, SemanticTokensDelta, SemanticTokensOptions,
-    ServerCapabilities, SignatureHelp, TextDocumentSyncKind, TextDocumentSyncOptions,
+    CodeLensOptions, Diagnostic, Hover, HoverContents, InitializeParams, MarkedString, OneOf,
+    SemanticTokens, SemanticTokensDelta, SemanticTokensOptions, ServerCapabilities, SignatureHelp,
+    TextDocumentSyncKind, TextDocumentSyncOptions,
 };
 
 use lsp_server::{Connection, Message, RequestId};
@@ -115,7 +115,7 @@ pub fn start_lsp() -> Result<(), Box<dyn Error + Sync + Send>> {
     Ok(())
 }
 
-type Comple = Arc<Mutex<(Vec<Vec<CompletionItem>>, Option<RequestId>)>>;
+type Comple = Arc<Mutex<Option<RequestId>>>;
 
 fn main_loop(
     connection: Connection,
@@ -135,7 +135,7 @@ fn main_loop(
         None,
         None,
     );
-    let completions: Comple = Arc::new(Mutex::new((vec![], None)));
+    let completions: Comple = Arc::new(Mutex::new(None));
     let mut last_semantic_file = "".to_string();
     let mut last_tokens: SemanticTokens = SemanticTokens::default();
 
@@ -223,18 +223,7 @@ fn main_loop(
         })
         .on::<Completion, _>(|id, _| {
             let mut guard = completions.lock().unwrap();
-            if !guard.0.is_empty() {
-                let sender = connection.sender.clone();
-                if guard.0[0].is_empty() {
-                    guard.1 = Some(id);
-                    return;
-                }
-                let comps = guard.0[0].clone();
-                log::info!("send completions {}", comps.len());
-                pool.execute(move || {
-                    send_completions(&sender, id, comps.clone());
-                });
-            }
+            *guard = Some(id);
         })
         .on::<CodeLensRequest, _>(|id, params| {
             let uri = url_to_path(params.text_document.uri);
@@ -467,15 +456,14 @@ fn main_loop(
                 compile_dry(snapshot.deref(), docin);
                 let comps = compile_dry::accumulated::<Completions>(snapshot.deref(), docin);
                 let mut guard = completions.lock().unwrap();
-                if let Some(id) = &guard.1 {
+                if let Some(id) = &*guard {
                     send_completions(
                         &sender,
                         id.clone(),
                         comps.first().cloned().unwrap_or_default(),
                     );
                 }
-                guard.1 = None;
-                guard.0 = comps;
+                *guard = None;
                 drop(guard);
                 let diags = compile_dry::accumulated::<Diagnostics>(snapshot.deref(), docin);
                 debug!("diags: {:#?}", diags);
