@@ -7,6 +7,7 @@ use crate::ast::ctx::Ctx;
 use crate::ast::diag::{ErrorCode, WarnCode};
 use crate::format_label;
 
+use crate::inference::unknown_arc;
 use crate::modifier_set;
 
 use indexmap::IndexMap;
@@ -174,33 +175,10 @@ impl Node for DefNode {
             if let DefVar::Identifier(i) = &*self.var {
                 if let Some(id) = i.id {
                     let v = ctx.unify_table.borrow_mut().probe(id);
-                    tp = v.get_type(&mut ctx.unify_table.borrow_mut());
-                    if self.exp.is_none() {
-                        ctx.push_type_hints(self.var.range(), tp.clone());
-                    }
+                    tp = v.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut());
                 }
             }
-            if self.exp.is_none() && matches!(&*tp.borrow(), PLType::Unknown) {
-                match builder {
-                    #[cfg(feature = "llvm")]
-                    BuilderEnum::LLVM(_) => {
-                        return Err(ctx.add_diag(
-                            self.var
-                                .range()
-                                .new_err(ErrorCode::UNKNOWN_TYPE)
-                                .add_to_ctx(ctx),
-                        ));
-                    }
-                    BuilderEnum::NoOp(_) => {
-                        ctx.add_diag(
-                            self.var
-                                .range()
-                                .new_err(ErrorCode::UNKNOWN_TYPE)
-                                .add_to_ctx(ctx),
-                        );
-                    }
-                }
-            }
+
             pltype = Some(tp);
         }
         let mut expv = None;
@@ -215,47 +193,55 @@ impl Node for DefNode {
             pltype = None;
         }
         if let Some(exp) = &mut self.exp {
-            let re = if let Some(pltype) = pltype.clone() {
-                ctx.emit_with_expectation(exp, pltype, self.var.range(), builder)?
-                    .get_value()
+            let re = if let Some(expect) = pltype.clone() {
+                ctx.emit_with_expectation(exp, expect, self.var.range(), builder)
             } else {
-                exp.emit(ctx, builder)?.get_value()
+                exp.emit(ctx, builder)
             };
 
             // for err tolerate
-            if re.is_none() {
-                return Err(ctx.add_diag(self.var.range().new_err(ErrorCode::UNKNOWN_TYPE)));
+            if let Ok(v) = re {
+                if let Some(re) = v.get_value() {
+                    let mut tp = re.get_ty();
+                    let v = if let PLType::Fn(f) = &*tp.clone().borrow() {
+                        let oritp = tp;
+                        let c =
+                            Arc::new(RefCell::new(PLType::Closure(f.to_closure_ty(ctx, builder))));
+                        tp = c.clone();
+                        ctx.up_cast(
+                            c,
+                            oritp,
+                            Default::default(),
+                            Default::default(),
+                            re.get_value(),
+                            builder,
+                        )
+                        .unwrap()
+                    } else {
+                        re.get_value()
+                    };
+                    if self.tp.is_none() && pltype.is_none() {
+                        pltype = Some(tp);
+                    }
+                    expv = Some(v);
+                }
             }
-            let re = re.unwrap();
-            let mut tp = re.get_ty();
-            let v = if let PLType::Fn(f) = &*tp.clone().borrow() {
-                let oritp = tp;
-                let c = Arc::new(RefCell::new(PLType::Closure(f.to_closure_ty(ctx, builder))));
-                tp = c.clone();
-                ctx.up_cast(
-                    c,
-                    oritp,
-                    Default::default(),
-                    Default::default(),
-                    re.get_value(),
-                    builder,
-                )
-                .unwrap()
-            } else {
-                re.get_value()
-            };
-            if pltype.is_none() {
-                ctx.push_type_hints(self.var.range(), tp.clone());
-                pltype = Some(tp);
-            } else if self.tp.is_none() {
-                ctx.push_type_hints(self.var.range(), pltype.clone().unwrap());
-            }
-            expv = Some(v);
         }
-        let pltype = pltype.unwrap();
+        let pltype = pltype.unwrap_or(unknown_arc());
+        if self.tp.is_none() {
+            ctx.push_type_hints(self.var.range(), pltype.clone());
+        }
         let mut gm = IndexMap::new();
         if let PLType::Trait(t) = &*pltype.borrow() {
             gm = t.generic_map.clone();
+        }
+        if !pltype.borrow().is_complete() {
+            ctx.add_diag(
+                self.var
+                    .range()
+                    .new_err(ErrorCode::TYPE_CANNOT_BE_FULLY_INFERRED)
+                    .add_to_ctx(ctx),
+            );
         }
         ctx.protect_generic_context(&gm, |ctx| {
             handle_deconstruct(

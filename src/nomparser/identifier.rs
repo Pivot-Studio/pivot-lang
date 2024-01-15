@@ -118,6 +118,7 @@ pub fn typed_identifier(input: Span) -> IResult<Span, Box<TypedIdentifierNode>> 
                 id: None,
                 range: tprange,
                 generic_params: None,
+                generic_infer: None,
             }));
 
             let mut doc = None;

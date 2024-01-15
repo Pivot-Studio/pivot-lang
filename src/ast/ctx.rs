@@ -657,7 +657,8 @@ impl<'a, 'ctx> Ctx<'a> {
         if self.table.contains_key(&name) {
             return Err(self.add_diag(range.new_err(ErrorCode::REDECLARATION)));
         }
-        self.add_symbol_without_check(name, pv, pltype, range, is_glob, is_extern)
+
+        self.add_symbol_without_check(name, pv, real_tp(pltype), range, is_glob, is_extern)
     }
     pub fn add_symbol_without_check(
         &mut self,
@@ -842,7 +843,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 if self.get_file() != fnvalue.get_path() {
                     return;
                 }
-                if !fnvalue.fntype.method && !fnvalue.in_trait {
+                if !fnvalue.fntype.st_method && !fnvalue.in_trait {
                     self.plmod
                         .doc_symbols
                         .borrow_mut()
@@ -896,11 +897,12 @@ impl<'a, 'ctx> Ctx<'a> {
         self.plmod = plmod;
         m
     }
-    pub fn protect_generic_context<'b, T, F: FnMut(&mut Ctx<'a>) -> Result<T, PLDiag>>(
+
+    pub fn protect_generic_context<'b, T, F: FnMut(&mut Ctx<'a>) -> T>(
         &mut self,
         generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
         mut f: F,
-    ) -> Result<T, PLDiag> {
+    ) -> T {
         let mp = self.generic_types.clone();
         for (name, pltype) in generic_map.iter() {
             self.add_generic_type(name.clone(), pltype.clone());
@@ -915,7 +917,7 @@ impl<'a, 'ctx> Ctx<'a> {
         u: &TP,
         mut f: F,
     ) -> R {
-        if u.get_path() != self.plmod.path {
+        if u.get_path() != self.plmod.path && !u.get_path().is_empty() {
             let ori_mod = unsafe { &*self.origin_mod as &Mod };
             let m = if u.get_path() == ori_mod.path {
                 ori_mod.clone()
@@ -1090,6 +1092,18 @@ impl<'a, 'ctx> Ctx<'a> {
         } else if let Some(father) = &self.father {
             father.try_set_closure_alloca_bb(bb);
         }
+    }
+}
+
+/// # real_tp
+///
+/// PartialInferred is just a wrapper for real type
+///
+/// This function will unwrap it recursively
+fn real_tp(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
+    match &*pltype.clone().borrow() {
+        PLType::PartialInferred(p) => real_tp(p.clone()),
+        _ => pltype,
     }
 }
 

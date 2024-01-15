@@ -25,12 +25,12 @@ impl<A|F> Func<A|F> {
 }
 
 fn Y<A|R>(g: ||A| => R, A| => R) |A| => R {
-    return |x: A| => R {
-        return |f: Func<A|R>, x: A| => R {
+    return |x| => {
+        return |f, x| => {
             return f.call(f, x);
         }(Func{
-            f: |f: Func<A|R>, x: A| => R {
-                return g(|x| =>  {
+            f: |f, x| => {
+                return g(|x| => {
                     return f.call(f, x);
                 }, x);
             }

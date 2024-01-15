@@ -64,7 +64,7 @@ name = "plc"
 path = "src/main.rs"
 
 [lib]
-name = "plc"
+name = "plclib"
 path = "src/lib.rs"
 crate-type = ["cdylib"]
 

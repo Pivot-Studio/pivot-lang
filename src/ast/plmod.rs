@@ -459,29 +459,10 @@ impl Mod {
             if !filter(&f) {
                 continue;
             }
-            let tp = match &*f.clone().borrow() {
-                PLType::Fn(f) => {
-                    if need_snippet {
-                        insert_text = Some(f.gen_snippet());
-                        command = Some(Command::new(
-                            "trigger help".to_string(),
-                            "editor.action.triggerParameterHints".to_string(),
-                            None,
-                        ));
-                    }
-                    CompletionItemKind::FUNCTION
-                }
-                PLType::Struct(_) => CompletionItemKind::STRUCT,
-                PLType::Trait(_) => CompletionItemKind::INTERFACE,
-                PLType::Arr(_) => unreachable!(),
-                PLType::Primitive(_) => CompletionItemKind::KEYWORD,
-                PLType::Generic(_) => CompletionItemKind::TYPE_PARAMETER,
-                PLType::Void => CompletionItemKind::KEYWORD,
-                PLType::Pointer(_) => unreachable!(),
-                PLType::PlaceHolder(_) => continue,
-                PLType::Union(_) => CompletionItemKind::ENUM,
-                PLType::Closure(_) => unreachable!(),
-                PLType::Unknown => unreachable!(),
+            let tp = &*f.borrow();
+            let tp = match completion_kind(tp, need_snippet, &mut insert_text, &mut command) {
+                Some(value) => value,
+                None => continue,
             };
             if k.starts_with('|') {
                 // skip method
@@ -551,6 +532,45 @@ impl Mod {
                 None
             })
     }
+}
+
+/// # completion_kind
+///
+/// get completion kind from pltype
+fn completion_kind(
+    tp: &PLType,
+    need_snippet: bool,
+    insert_text: &mut Option<String>,
+    command: &mut Option<Command>,
+) -> Option<CompletionItemKind> {
+    let tp = match tp {
+        PLType::Fn(f) => {
+            if need_snippet {
+                *insert_text = Some(f.gen_snippet());
+                *command = Some(Command::new(
+                    "trigger help".to_string(),
+                    "editor.action.triggerParameterHints".to_string(),
+                    None,
+                ));
+            }
+            CompletionItemKind::FUNCTION
+        }
+        PLType::Struct(_) => CompletionItemKind::STRUCT,
+        PLType::Trait(_) => CompletionItemKind::INTERFACE,
+        PLType::Arr(_) => unreachable!(),
+        PLType::Primitive(_) => CompletionItemKind::KEYWORD,
+        PLType::Generic(_) => CompletionItemKind::TYPE_PARAMETER,
+        PLType::Void => CompletionItemKind::KEYWORD,
+        PLType::Pointer(_) => unreachable!(),
+        PLType::PlaceHolder(_) => return None,
+        PLType::Union(_) => CompletionItemKind::ENUM,
+        PLType::Closure(_) => unreachable!(),
+        PLType::Unknown => unreachable!(),
+        PLType::PartialInferred(p) => {
+            return completion_kind(&p.borrow(), need_snippet, insert_text, command);
+        }
+    };
+    Some(tp)
 }
 
 fn get_ns_path_completions_pri(path: &str, vmap: &mut FxHashMap<String, CompletionItem>) {

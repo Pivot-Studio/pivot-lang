@@ -22,7 +22,104 @@ pub fn test_inference() void {
     yy = ~y;
     let xx ;
     xx = &(~y);
+    test_deconstruct_inference();
+    test_generic_inference();
+    return;
+}
 
+fn test_generic_inference() void {
+    let ad ;
+    ad = st {};
+    ad.a = 100;
+
+    let ad2;
+    ad2 = st2 {};
+    ad2.taaa.a = 1;
+    ad2.b = 2.0;
+    let ad3;
+    ad3 = st3 {};
+    let b;
+    ad3.a = &b;
+    b = 1;
+    
+    let f ;
+    f = |a| => {
+        return;
+    };
+    let ad4 = st3{};
+    ad4.d = f;
+    f(1);
+
+    let c  ;
+    let ad5 = st3{};
+    c = [&b];
+    ad5.c = c;
+
+
+
+    let d;
+    let ad6 = st3{};
+    ad6.e = d;
+    d = (1,2);
+    
+
+    return;
+}
+
+
+fn test_inference_no_run() void {
+    let e;
+    let ad7 = st3{};
+    ad7.c[0] = &e ;
+    e = 10;
+    let a;
+    param_reference(a);
+    a.a = 1;
+    let c;
+    let b;
+    b = ret_reference(c);
+    b.test("adsada");
+
+    return;
+}
+
+
+struct st3<TB> {
+    a:*TB;
+    d:|TB|=>void;
+    c:[*TB];
+    e:(TB, TB);
+}
+
+use core::eq::Eq;
+fn test_deconstruct_inference() void {
+    let a;
+    let b;
+    let c;
+    let d;
+    let e;
+    let f;
+    (a,(b,c)) = (d,(e,f));
+    let func = |a,b|=> {
+        let c = a + b + 1;
+        return c;
+    };
+    f = func(d,e);
+    let g;
+    g = generic_f(1);
+    let dddd;
+
+    let eeee ;
+    dddd = st{};
+    eeee = dddd.test(eeee);
+    eeee = 1;
+    let fhjkdshfjdks ;
+    eeee.eq(&fhjkdshfjdks);
+    let adc:Eq<i64> = eeee;
+    let aadsadsa;
+    aadsadsa = adc;
+
+    
     return;
 }
 
@@ -32,6 +129,38 @@ fn test_f_infer(x:i32) i128 {
 }
 
 
+fn generic_f<T>(a:T) T {
+    
+    return a;
+}
+
 struct t {
     a:i16;
+}
+
+struct st<T> {
+    a:T;
+}
+
+struct st2<T|TT> {
+    taaa:st<T>;
+    b:TT;
+}
+
+
+impl <T> st<T> {
+    fn test(t:T) T {
+        
+        return self.a;
+    }
+}
+
+
+fn param_reference<T>(s:st<T>) T {
+    return s.a;
+}
+
+
+fn ret_reference<T>(a:T) st<T> {
+    return st<T>{};
 }

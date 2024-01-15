@@ -1,5 +1,4 @@
 use std::{
-    cell::RefCell,
     fs::read_to_string,
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -38,7 +37,7 @@ pub struct EmitParams {
 
 #[salsa::input]
 pub struct MemDocsInput {
-    pub docs: Arc<Mutex<RefCell<MemDocs>>>,
+    pub docs: Arc<Mutex<MemDocs>>,
     /// file is the absolute path of the input file to be build,
     /// currently we will build the whole project instead of this file only.
     #[return_ref]
@@ -75,7 +74,6 @@ impl FileCompileInput {
             .docs(db)
             .lock()
             .unwrap()
-            .borrow_mut()
             .get_file_content(db, self.file(db));
         match re {
             None => {
@@ -132,19 +130,13 @@ impl MemDocsInput {
             .docs(db)
             .lock()
             .unwrap()
-            .borrow_mut()
             .get_file_content(db, self.file(db));
         re
     }
     #[salsa::tracked]
     pub fn get_file_content(self, db: &dyn Db, f: String) -> Option<SourceProgram> {
         debug!("memdocinput get_file_content {}", f);
-        let re = self
-            .docs(db)
-            .lock()
-            .unwrap()
-            .borrow_mut()
-            .get_file_content(db, &f);
+        let re = self.docs(db).lock().unwrap().get_file_content(db, &f);
         re
     }
 
@@ -183,7 +175,6 @@ impl MemDocsInput {
             self.docs(db)
                 .lock()
                 .unwrap()
-                .borrow_mut()
                 .get_file_content(db, &kagari_path)
                 .unwrap(),
         );
@@ -214,15 +205,26 @@ impl MemDocsInput {
 }
 
 impl MemDocs {
-    pub fn change(&mut self, db: &mut dyn Db, range: lsp_types::Range, uri: String, text: String) {
-        let doc = self.docs.get_mut(&uri).unwrap();
+    pub fn change(&self, db: &mut dyn Db, range: lsp_types::Range, uri: String, text: String) {
+        let (doc, txt) = self.change_txt(db, range, &uri, text);
+        log::trace!("{} change text to: {}", &uri.as_str().to_string(), txt);
+        doc.set_text(db).to(txt);
+    }
+
+    pub fn change_txt(
+        &self,
+        db: &dyn Db,
+        range: lsp_types::Range,
+        uri: &String,
+        text: String,
+    ) -> (SourceProgram, String) {
+        let doc = self.docs.get(uri).unwrap();
         let mut txt = doc.text(db).clone();
         txt.replace_range(
             position_to_offset(&txt, range.start)..position_to_offset(&txt, range.end),
             &text,
         );
-        log::trace!("{} change text to: {}", &uri.as_str().to_string(), txt);
-        doc.set_text(db).to(txt);
+        (*doc, txt)
     }
     pub fn insert(&mut self, db: &dyn Db, key: String, value: String, path: String) {
         self.docs.insert(key, SourceProgram::new(db, value, path));

@@ -489,46 +489,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .build_struct_gep(llvmtp, casted_result.into_pointer_value(), 2, "arr_len")
                     .unwrap();
                 self.builder.build_store(len_ptr, arr_len).unwrap();
-                let fp_asm_ftp = self
-                    .i8ptr()
-                    .ptr_type(AddressSpace::from(0))
-                    .fn_type(&[], false);
-                #[cfg(target_arch = "x86_64")]
-                let rspf = self.context.create_inline_asm(
-                    fp_asm_ftp,
-                    "mov %rsp, $0".to_string(),
-                    "=r".to_string(),
-                    false,
-                    true,
-                    None,
-                    false,
-                );
-                #[cfg(target_arch = "aarch64")]
-                let rspf = self.context.create_inline_asm(
-                    fp_asm_ftp,
-                    "mov $0, sp".to_string(),
-                    "=r".to_string(),
-                    false,
-                    true,
-                    None,
-                    false,
-                );
-                let rsp = self
-                    .builder
-                    .build_indirect_call(fp_asm_ftp, rspf, &[], "rsp")
-                    .unwrap();
-                rsp.add_attribute(
-                    inkwell::attributes::AttributeLoc::Function,
-                    self.context.create_string_attribute("gc-leaf-function", ""),
-                );
-                let rsp = self
-                    .builder
-                    .build_ptr_to_int(
-                        rsp.try_as_basic_value().unwrap_left().into_pointer_value(),
-                        self.context.i64_type(),
-                        "",
-                    )
-                    .unwrap();
+
+                let rsp = self.get_sp();
                 let arr_space = self
                     .builder
                     .build_call(
@@ -614,6 +576,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         (casted_result.into_pointer_value(), llvmtp)
     }
 
+    /// # get_sp
+    ///
+    /// get the stack pointer, return as i64
     fn get_sp(&self) -> inkwell::values::IntValue<'ctx> {
         let fp_asm_ftp = self
             .i8ptr()
@@ -657,7 +622,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .build_ptr_to_int(
                 rsp.try_as_basic_value().unwrap_left().into_pointer_value(),
                 self.context.i64_type(),
-                "",
+                "rspi",
             )
             .unwrap();
         rsp
@@ -899,6 +864,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             | PLType::Void
             | PLType::Generic(_)
             | PLType::PlaceHolder(_)
+            | PLType::PartialInferred(_)
             | PLType::Unknown => (),
         }
         let i = self
@@ -996,7 +962,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             ctx.run_in_type_mod(fnvalue, |ctx, fnvalue| {
                 let mut param_types = vec![];
                 for param_pltype in fnvalue.fntype.param_pltypes.iter() {
-                    // eprintln!("param_pltype: {:?}", param_pltype);
                     param_types.push(
                         self.get_basic_type_op(
                             &param_pltype
@@ -1021,10 +986,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         !fnvalue.is_declare && fnvalue.name != "main",
                     )
                     .fn_type(&param_types, false);
-                Ok(fn_type)
+                fn_type
             })
         })
-        .unwrap()
     }
 
     fn get_closure_fn_type(&self, closure: &ClosureType, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
@@ -1123,6 +1087,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 Some(self.context.struct_type(&fields, false).into())
             }
             PLType::Unknown => None,
+            PLType::PartialInferred(_) => None,
         }
     }
     /// # get_ret_type
@@ -1546,6 +1511,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             }
             PLType::Closure(_) => self.get_ditype(&PLType::Primitive(PriType::I64), ctx),
             PLType::Unknown => None, // TODO
+            PLType::PartialInferred(_) => None,
         }
     }
 
@@ -1871,24 +1837,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
     ) -> ValueHandle {
         let llvm_type = self.get_basic_type_op(tp, ctx).unwrap();
-        let h = self.build_load_raw(ptr, name, llvm_type);
-        let _b: BasicValueEnum<'_> = self.get_llvm_value(h).unwrap().try_into().unwrap();
-        let currbb = self.builder.get_insert_block().unwrap();
-        let allocabb = self
-            .builder
-            .get_insert_block()
-            .unwrap()
-            .get_parent()
-            .unwrap()
-            .get_first_basic_block()
-            .unwrap();
-        self.builder.position_at_end(allocabb);
-        self.builder.unset_current_debug_location();
-        // init to null
-
-        self.builder.position_at_end(currbb);
-
-        h
+        self.build_load_raw(ptr, name, llvm_type)
     }
     fn try_load2var(
         &self,
@@ -1939,7 +1888,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 (bme, ty)
             })
             .unzip();
-        let bb = builder.get_insert_block().unwrap();
         if let Some(pos) = pos {
             if builder
                 .get_insert_block()
@@ -1952,7 +1900,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 self.build_dbg_location(pos)
             }
         }
-        builder.position_at_end(bb);
+
         let fntp = f_tp.unwrap_or(match self.get_basic_type_op(ret_type, ctx) {
             Some(r) => r.ptr_type(AddressSpace::from(1)).fn_type(&tys, false),
             None => self.context.void_type().fn_type(&tys, false),
@@ -2828,11 +2776,16 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let ftp = self.mark_fn_tp(ptrtp);
         let name = v.get_full_name() + "_visitorf@";
 
+        let linkage = if v.is_tuple {
+            // tuple will not be used outside of the current module
+            Linkage::Internal
+        } else {
+            Linkage::LinkOnceAny
+        };
+
         let f = match self.module.get_function(&name) {
             Some(f) => f,
-            None => self
-                .module
-                .add_function(&name, ftp, Some(Linkage::LinkOnceAny)),
+            None => self.module.add_function(&name, ftp, Some(linkage)),
         };
         self.used.borrow_mut().push(f);
 
@@ -2907,6 +2860,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 | PLType::Void
                 | PLType::Generic(_)
                 | PLType::PlaceHolder(_)
+                | PLType::PartialInferred(_)
                 | PLType::Unknown => (),
             }
             // 其他为原子类型，跳过
@@ -3054,6 +3008,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     /// 闭包函数相比原函数多出一个参数（第一个），用于存放闭包的环境。在函数为纯函数的情况，
     /// 该值不会被使用，因此可以直接传入null。
     fn get_closure_trampoline(&self, f: ValueHandle) -> ValueHandle {
+        if !self.get_llvm_value(f).unwrap().is_function_value() {
+            // already a closure
+            return f;
+        }
         let ori_f = self.get_llvm_value(f).unwrap().into_function_value();
         let name = ori_f.get_name();
         let trampoline_name = format!("{}__trampoline", name.to_str().unwrap());

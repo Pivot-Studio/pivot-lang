@@ -202,7 +202,7 @@ pub(crate) fn init_generator<'a>(
         modifier: Some((TokenType::PUB, Default::default())),
         body_range: Default::default(),
         is_trait: false,
-        is_tuple: true,
+        is_tuple: false,
         generic_infer_types: Default::default(),
         // generic_infer: Default::default(),
         methods: Default::default(),

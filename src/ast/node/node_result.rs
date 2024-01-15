@@ -114,6 +114,17 @@ pub struct NodeValue {
     receiver: Option<(ValueHandle, Option<Arc<RefCell<PLType>>>)>,
 }
 
+impl Default for NodeValue {
+    fn default() -> Self {
+        Self {
+            value: ValueHandle::default(),
+            ty: Arc::new(RefCell::new(PLType::Unknown)),
+            is_const: false,
+            receiver: None,
+        }
+    }
+}
+
 impl NodeValue {
     pub fn new(value: ValueHandle, ty: Arc<RefCell<PLType>>) -> Self {
         Self {

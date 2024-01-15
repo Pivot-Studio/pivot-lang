@@ -20,7 +20,7 @@ use project1::test::map;
 use project1::test::tree;
 use project1::test::fixed_point;
 use project1::tmod2;
-use pl_test::main;
+// use pl_test::main;
 use project1::test::deconstruct;
 use project1::test::st::*;
 use project1::test::arr;
@@ -32,8 +32,10 @@ use project1::test::inference;
 use project1::test::futuretest;
 
 use core::hash::pl_hash::*;
+// use std::cols::hashtable::new_hash_table;
 
 pub fn main() i64 {
+
     macros::test_macros();
     ifel::test_if_else();
     generic::test_generic();
@@ -44,7 +46,7 @@ pub fn main() i64 {
     simple::test_simple();
     flow::test_flow();
     list::test_list();
-    main::simple_test();
+    // main::simple_test();
     module::test_module();
     str::test_string();
     union::test_union();
@@ -71,9 +73,11 @@ pub fn main() i64 {
     fd.close();
     
     arr::test_arr();
+    let table1 = hashtable::new_hash_table(10 as u64, 100 as u64);
+    table1.insert(1, "");
 
-
-    let table = hashtable::new_hash_table<string|string>(10 as u64, 100 as u64);
+    let table;
+    table = hashtable::new_hash_table(10 as u64, 100 as u64);
     table.insert("hi", "World");
     table.insert("tj", "love hj");
     let v = table.get("hi") as string!;
@@ -88,12 +92,15 @@ pub fn main() i64 {
         str.append("1");
         table.insert(str, "World2");
     }
-    println!(table.bucket_size());
-    let i_table = hashtable::new_hash_table<i64|i64>(10 as u64, 100 as u64);
+    // println!(table.bucket_size());
+    let i_table = hashtable::new_hash_table(10 as u64, 100 as u64);
     i_table.insert(1, 2);
     i_table.insert(3, 4);
     let one =  i_table.get(1) as i64!;
     let three = i_table.get(3) as i64!;
+    let hasher;
+    hasher = new_paul_larson_hasher(1 as u64);
+    three.hash(&hasher);
     println!(one);
     println!(three);
     let attt = 1;

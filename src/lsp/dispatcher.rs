@@ -15,6 +15,7 @@ impl Dispatcher {
         if let Message::Request(req) = self.0.clone() {
             let params = cast::<R>(req).map_err(|_| ());
             if let Ok(params) = params {
+                log::info!("req: {}", R::METHOD);
                 f(params.0, params.1);
             }
         }
@@ -29,6 +30,7 @@ impl Dispatcher {
         if let Message::Notification(req) = self.0.clone() {
             let params = cast_noti::<R>(req).map_err(|_| ());
             if let Ok(params) = params {
+                log::info!("noti: {}", R::METHOD);
                 f(params);
             }
         }

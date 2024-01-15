@@ -1,6 +1,5 @@
 #![cfg(test)]
 use std::{
-    cell::RefCell,
     fs::remove_file,
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -29,8 +28,6 @@ use crate::{
     Db,
 };
 
-use super::range::Range;
-
 fn test_lsp<'db, A>(
     db: &'db dyn Db,
     params: Option<(Pos, Option<String>)>,
@@ -51,7 +48,7 @@ where
     // let db = Database::default();
     let input = MemDocsInput::new(
         db,
-        Arc::new(Mutex::new(RefCell::new(docs))),
+        Arc::new(Mutex::new(docs)),
         src.to_string(),
         Default::default(),
         action,
@@ -102,39 +99,11 @@ fn sanitize_diag(diag: &[super::diag::PLDiag]) -> Vec<super::diag::PLDiag> {
             d
         })
         .collect::<Vec<_>>();
-    diag.sort_by(sort());
-    diag.iter_mut()
-        .for_each(|d| d.raw.labels.sort_by(sort_lable()));
+    diag.sort();
+    diag.iter_mut().for_each(|d| d.raw.labels.sort());
     diag
 }
 
-fn sort() -> impl Fn(&super::diag::PLDiag, &super::diag::PLDiag) -> std::cmp::Ordering {
-    |a, b| compare_range(a.raw.range, b.raw.range)
-}
-
-fn compare_range(l: Range, r: Range) -> std::cmp::Ordering {
-    if compare_pos(l.start, r.start) == std::cmp::Ordering::Less {
-        std::cmp::Ordering::Less
-    } else if compare_pos(l.start, r.start) == std::cmp::Ordering::Equal {
-        compare_pos(l.end, r.end)
-    } else {
-        std::cmp::Ordering::Greater
-    }
-}
-
-fn compare_pos(l: Pos, r: Pos) -> std::cmp::Ordering {
-    if l.line < r.line || (l.line == r.line && l.column < r.column) {
-        std::cmp::Ordering::Less
-    } else if l.line == r.line && l.column == r.column {
-        std::cmp::Ordering::Equal
-    } else {
-        std::cmp::Ordering::Greater
-    }
-}
-
-fn sort_lable() -> impl Fn(&super::diag::PLLabel, &super::diag::PLLabel) -> std::cmp::Ordering {
-    |a, b| compare_range(a.range, b.range)
-}
 #[test]
 fn test_memory_leak() {
     let db = &mut Database::default();
@@ -156,7 +125,7 @@ fn test_memory_leak() {
     // let db = Database::default();
     let input = MemDocsInput::new(
         db,
-        Arc::new(Mutex::new(RefCell::new(docs))),
+        Arc::new(Mutex::new(docs)),
         "test/lsp/mod.pi".to_string(),
         Default::default(),
         ActionType::FindReferences,
@@ -170,12 +139,11 @@ fn test_memory_leak() {
         .to_str()
         .unwrap()
         .to_string();
-    input.docs(db).lock().unwrap().borrow_mut().change(
-        db,
-        new_diag_range(0, 0, 0, 0),
-        path,
-        "\n".repeat(2),
-    );
+    input
+        .docs(db)
+        .lock()
+        .unwrap()
+        .change(db, new_diag_range(0, 0, 0, 0), path, "\n".repeat(2));
     input.set_action(db).to(ActionType::Diagnostic);
     input.set_params(db).to(Some((
         Pos {
@@ -514,7 +482,7 @@ fn test_jit() {
     let db = Database::default();
     let input = MemDocsInput::new(
         &db,
-        Arc::new(Mutex::new(RefCell::new(docs))),
+        Arc::new(Mutex::new(docs)),
         "test/main.pi".to_string(),
         Default::default(),
         ActionType::Compile,
@@ -564,7 +532,7 @@ fn test_compile() {
     let db = Database::default();
     let input = MemDocsInput::new(
         &db,
-        Arc::new(Mutex::new(RefCell::new(docs))),
+        Arc::new(Mutex::new(docs)),
         "test/main.pi".to_string(),
         Default::default(),
         ActionType::Compile,
@@ -610,7 +578,7 @@ fn test_printast() {
     let db = Database::default();
     let input = MemDocsInput::new(
         &db,
-        Arc::new(Mutex::new(RefCell::new(docs))),
+        Arc::new(Mutex::new(docs)),
         "test/main.pi".to_string(),
         Default::default(),
         ActionType::PrintAst,
@@ -647,7 +615,7 @@ fn test_lsp_incremental() {
     let docs = MemDocs::default();
     let input = MemDocsInput::new(
         db,
-        Arc::new(Mutex::new(RefCell::new(docs))),
+        Arc::new(Mutex::new(docs)),
         "test/lsp_incremental/main.pi".to_string(),
         Default::default(),
         ActionType::Diagnostic,
@@ -680,7 +648,7 @@ fn test_tail_call_opt() {
     let db = Database::default();
     let input = MemDocsInput::new(
         &db,
-        Arc::new(Mutex::new(RefCell::new(docs))),
+        Arc::new(Mutex::new(docs)),
         "test/tail/main.pi".to_string(),
         Default::default(),
         ActionType::Compile,
@@ -727,4 +695,5 @@ pub(crate) fn set_test_asset() {
         .unwrap();
     let timestamp_nanos = duration_since_epoch.as_nanos(); // u128
     *p = format!("target/test{}", timestamp_nanos);
+    std::fs::create_dir_all(&*p).unwrap();
 }

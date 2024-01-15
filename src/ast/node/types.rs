@@ -19,6 +19,9 @@ use crate::ast::pltype::ClosureType;
 use crate::ast::pltype::{ARRType, Field, GenericType, PLType, STType};
 use crate::ast::tokens::TokenType;
 use crate::ast::traits::CustomType;
+use crate::inference::unknown_arc;
+use crate::inference::GenericInferenceAble;
+use crate::inference::TyVariable;
 use indexmap::IndexMap;
 
 use internal_macro::node;
@@ -29,6 +32,20 @@ use lsp_types::SemanticTokenType;
 pub struct TypeNameNode {
     pub id: Option<ExternIdNode>,
     pub generic_params: Option<Box<GenericParamNode>>,
+    /// # generic_infer
+    ///
+    /// Holding inference result of generic parameters.
+    pub generic_infer: Option<Vec<TyVariable>>,
+}
+
+impl GenericInferenceAble for TypeNameNode {
+    fn get_inference_result(&self) -> &Option<Vec<TyVariable>> {
+        &self.generic_infer
+    }
+
+    fn get_generic_params(&self) -> &Option<Box<GenericParamNode>> {
+        &self.generic_params
+    }
 }
 
 impl TypeNameNode {
@@ -48,6 +65,7 @@ impl TypeNameNode {
             id: Some(id),
             generic_params: None,
             range: Default::default(),
+            generic_infer: None,
         }
     }
     pub fn get_origin_type_with_infer<'a, 'b>(
@@ -72,39 +90,22 @@ impl TypeNameNode {
         match &*pltype.clone().borrow() {
             PLType::Struct(sttype) | PLType::Trait(sttype) => {
                 let sttype = sttype.new_pltype();
-                if let Some(generic_params) = &self.generic_params {
-                    let generic_types = generic_params.get_generic_types(ctx, builder)?;
-                    if generic_params.generics.len() != sttype.generic_map.len() {
-                        return Err(ctx.add_diag(
-                            generic_params
-                                .range
-                                .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
-                        ));
-                    }
-                    ctx.protect_generic_context(&sttype.generic_map, |ctx| {
-                        for (i, st_generic_type) in sttype.generic_map.values().enumerate() {
-                            if generic_types[i].is_none() {
-                                continue;
-                            }
-                            let res = ctx.eq(
-                                st_generic_type.clone(),
-                                generic_types[i].as_ref().unwrap().clone(),
-                            );
-                            if !res.eq {
-                                let mut diag = generic_params.generics[i]
-                                    .as_ref()
-                                    .unwrap()
-                                    .range()
-                                    .new_err(ErrorCode::TYPE_MISMATCH);
-                                if let Some(reason) = res.reason {
-                                    diag.add_help(&reason);
-                                }
-                                return Err(diag.add_to_ctx(ctx));
-                            }
-                        }
-                        Ok(())
-                    })?;
+                if self
+                    .generic_params
+                    .as_ref()
+                    .map(|g| g.generics.len() != sttype.generic_map.len())
+                    .unwrap_or_default()
+                {
+                    return Err(ctx.add_diag(
+                        self.generic_params
+                            .as_ref()
+                            .unwrap()
+                            .range
+                            .new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
+                    ));
                 }
+
+                generic_tp_apply(&sttype, self, ctx, builder)?;
                 let ret = if sttype.is_trait {
                     Arc::new(RefCell::new(PLType::Trait(sttype)))
                 } else {
@@ -258,7 +259,11 @@ impl TypeNode for TypeNameNode {
                     eq: !left.generic_map.iter().any(|(k, l_type)| {
                         !ctx.eq(
                             l_type.clone(),
-                            right.generic_infer_types.get(k).unwrap().clone(),
+                            right
+                                .generic_infer_types
+                                .get(k)
+                                .cloned()
+                                .unwrap_or(unknown_arc()),
                         )
                         .eq
                     }),
@@ -314,6 +319,9 @@ impl TypeNode for ArrayTypeNameNode {
         gen_code: bool,
     ) -> TypeNodeResult {
         let pltype = self.id.get_type(ctx, builder, gen_code)?;
+        if !pltype.borrow().is_complete() {
+            eprintln!("array type not complete {:?}", pltype);
+        }
         let arrtype = ARRType {
             element_type: pltype,
             size_handle: 0,

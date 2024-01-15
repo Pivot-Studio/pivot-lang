@@ -254,14 +254,7 @@ impl Node for ExternIdNode {
             ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
         }
         let mut plmod = &ctx.plmod;
-        for ns in self.ns.iter() {
-            let re = plmod.submods.get(&ns.get_name(ctx));
-            if let Some(re) = re {
-                plmod = re;
-            } else {
-                return Err(ctx.add_diag(ns.range.new_err(ErrorCode::UNRESOLVED_MODULE)));
-            }
-        }
+        plmod = self.solve_mod(plmod, ctx)?;
         if let Some(symbol) = plmod.get_global_symbol(&self.id.get_name(ctx)) {
             ctx.push_semantic_token(self.id.range, SemanticTokenType::VARIABLE, 0);
             let pltype = symbol.tp.clone();
@@ -360,5 +353,24 @@ impl ExternIdNode {
             return Ok(m.clone());
         }
         Err(ctx.add_diag(self.range.new_err(ErrorCode::MACRO_NOT_FOUND)))
+    }
+
+    /// # solve_mod
+    ///
+    /// 从当前模块开始，解析出该节点对应的符号所在模块
+    pub fn solve_mod<'b>(
+        &self,
+        mut plmod: &'b crate::ast::plmod::Mod,
+        ctx: &Ctx,
+    ) -> Result<&'b crate::ast::plmod::Mod, PLDiag> {
+        for ns in self.ns.iter() {
+            let re = plmod.submods.get(&ns.get_name(ctx));
+            if let Some(re) = re {
+                plmod = re;
+            } else {
+                return Err(ctx.add_diag(ns.range.new_err(ErrorCode::UNRESOLVED_MODULE)));
+            }
+        }
+        Ok(plmod)
     }
 }

@@ -12,9 +12,13 @@ use crate::ast::ctx::BUILTIN_FN_MAP;
 use crate::ast::diag::ErrorCode;
 use crate::ast::node::{deal_line, tab};
 
-use crate::ast::pltype::{get_type_deep, ClosureType, FNValue, Field, FnType, PLType, STType};
+use crate::ast::pltype::{
+    get_type_deep, ClosureType, FNValue, Field, FnType, Generic, PLType, STType,
+};
 use crate::ast::tokens::TokenType;
-use crate::inference::{InferenceCtx, TyVariable};
+use crate::ast::traits::CustomType;
+use crate::format_label;
+use crate::inference::{unknown_arc, GenericInferenceAble, InferenceCtx, TyVariable};
 use indexmap::IndexMap;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
@@ -30,6 +34,20 @@ pub struct FuncCallNode {
     pub generic_params: Option<Box<GenericParamNode>>,
     pub callee: Box<NodeEnum>,
     pub paralist: Vec<Box<NodeEnum>>,
+    /// # generic_infer
+    ///
+    /// Holding inference result of generic parameters.
+    pub generic_infer: Option<Vec<TyVariable>>,
+}
+
+impl GenericInferenceAble for FuncCallNode {
+    fn get_inference_result(&self) -> &Option<Vec<TyVariable>> {
+        &self.generic_infer
+    }
+
+    fn get_generic_params(&self) -> &Option<Box<GenericParamNode>> {
+        &self.generic_params
+    }
 }
 
 impl PrintTrait for FuncCallNode {
@@ -196,32 +214,7 @@ impl Node for FuncCallNode {
             _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND))),
         };
 
-        if let Some(generic_params) = &self.generic_params {
-            let generic_params_range = generic_params.range;
-            generic_params.emit_highlight(ctx);
-            if generic_params.generics.len() != fnvalue.fntype.generics_size {
-                return Err(ctx.add_diag(
-                    generic_params_range.new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH),
-                ));
-            }
-            let generic_types = generic_params.get_generic_types(ctx, builder)?;
-            ctx.protect_generic_context(&fnvalue.fntype.generic_map.clone(), |ctx| {
-                for (i, (_, pltype)) in fnvalue.fntype.generic_map.iter().enumerate() {
-                    if i >= fnvalue.fntype.generics_size {
-                        break;
-                    }
-                    if generic_types[i].is_some()
-                        && !ctx
-                            .eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone())
-                            .eq
-                    {
-                        let r = generic_params.generics[i].as_ref().unwrap().range();
-                        return Err(r.new_err(ErrorCode::TYPE_MISMATCH).add_to_ctx(ctx));
-                    }
-                }
-                Ok(())
-            })?;
-        }
+        generic_tp_apply(&fnvalue, self, ctx, builder)?;
         let mut skip = 0;
         let mut para_values = vec![];
         let mut receiver_type = None;
@@ -305,6 +298,99 @@ impl Node for FuncCallNode {
         ctx.emit_comment_highlight(&self.comments[0]);
         res
     }
+}
+/// # generic_tp_apply
+///
+/// This method will apply generic parameter types to a generic custom type.
+pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble + RangeTrait>(
+    tp: &T,
+    node: &N,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> Result<(), PLDiag> {
+    // disable highlight
+    *ctx.need_highlight.borrow_mut() += 1;
+    let generic_size = tp.get_generic_size();
+    let generic_params = node.get_generic_params();
+    let range = node.range();
+    let mut generic_types = preprocess_generics(generic_params, generic_size, range, ctx, builder)?;
+
+    let re = ctx.run_in_type_mod(tp, |ctx, t| {
+        ctx.protect_generic_context(t.get_generic_map(), |ctx| {
+            for (i, (_, pltype)) in t.get_generic_map().iter().enumerate() {
+                if i >= generic_size {
+                    break;
+                }
+                if generic_types[i].is_none() {
+                    // fill inferred types
+                    let ty = node
+                        .get_inference_result()
+                        .clone()
+                        .unwrap_or_default()
+                        .get(i)
+                        .map(|v| {
+                            let ty = ctx.unify_table.borrow_mut().probe(*v);
+                            ty.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut())
+                        });
+                    if let Some(ty) = ty {
+                        if *ty.borrow() != PLType::Unknown {
+                            generic_types[i] = Some(ty);
+                        } else {
+                            continue;
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+                let res = ctx.eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
+                if !res.eq {
+                    let g = t.get_generic_map().get_index(i).unwrap();
+                    let mut diag = range.new_err(ErrorCode::ILLEGAL_GENERIC_PARAM);
+                    if let Some(reason) = res.reason {
+                        diag.add_help(&reason);
+                    }
+                    diag.add_label(
+                        g.1.borrow().get_range().unwrap_or_default(),
+                        t.get_path(),
+                        format_label!("parameter `{}` defined in `{}`", g.0, t.get_name()),
+                    );
+                    return Err(diag.add_to_ctx(ctx));
+                }
+            }
+            Ok(())
+        })
+    });
+    *ctx.need_highlight.borrow_mut() -= 1;
+    re
+}
+
+/// # preprocess_generics
+///
+/// This method will ensure that the number of generic parameters is correct.
+fn preprocess_generics<'a, 'b>(
+    generic_params: &Option<Box<GenericParamNode>>,
+    generic_size: usize,
+    range: Range,
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> Result<Vec<Option<Arc<RefCell<PLType>>>>, PLDiag> {
+    let generic_params = if let Some(generic_params) = generic_params {
+        generic_params.emit_highlight(ctx);
+        let generic_params_range = generic_params.range;
+        if generic_params.generics.len() != generic_size {
+            return Err(
+                ctx.add_diag(generic_params_range.new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH))
+            );
+        }
+        generic_params.clone()
+    } else {
+        Box::new(GenericParamNode {
+            generics: vec![None; generic_size],
+            range,
+        })
+    };
+    let generic_types = generic_params.get_generic_types(ctx, builder)?;
+    Ok(generic_types)
 }
 
 fn check_and_cast_params<'a, 'b>(
@@ -434,17 +520,10 @@ impl TypeNode for FuncDefNode {
                     }
                     _ => unreachable!(),
                 });
-            // let mut first = true;
             for para in self.paralist.iter() {
                 _ = para.typenode.get_type(child, builder, true)?;
                 param_pltypes.push(para.typenode.clone());
                 param_name.push(para.id.name.clone());
-                // if first && method {
-                //     if let PLType::Pointer(p) = &*tp.borrow() {
-                //         child.set_self_type(p.clone());
-                //     }
-                // }
-                // first = false;
             }
             self.ret.get_type(child, builder, true)?;
             let fnvalue = FNValue {
@@ -467,7 +546,7 @@ impl TypeNode for FuncDefNode {
                 fntype: FnType {
                     ret_pltype: self.ret.clone(),
                     param_pltypes,
-                    method,
+                    st_method: method,
                     generic_map: generic_map.clone(),
                     generic: self.generics.is_some(),
                     modifier: self.modifier.or_else(|| {
@@ -476,6 +555,7 @@ impl TypeNode for FuncDefNode {
                             _ => unreachable!(),
                         })
                     }),
+                    trait_method: self.in_trait_def,
                     generics_size: self.generics_size,
                 },
                 generic_infer: Arc::new(RefCell::new(IndexMap::default())),
@@ -577,10 +657,17 @@ impl FuncDefNode {
     pub fn gen_fntype<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        first: bool,
+        first: bool, // If this is the first time to generate this function.
         builder: &'b BuilderEnum<'a, '_>,
         fnvalue: FNValue,
     ) -> Result<(), PLDiag> {
+        // The first time to generate this function, we need to do
+        // highlight and other lsp stuffs, and do code analysis, but not code gen.
+        // Otherwise, we only need to do code gen.
+        // So, if it's not the first time, and the builder is NoOpBuilder, we can just return.
+        if !first && matches!(builder, BuilderEnum::NoOp(_)) {
+            return Ok(());
+        }
         builder.rm_curr_debug_location();
         let re = ctx.run_as_root_ctx(|ctx| {
             let mut builder = builder;
@@ -782,13 +869,20 @@ impl FuncDefNode {
                 infer_ctx.import_global_symbols(child);
                 let mut infer_ctx = infer_ctx.new_child();
                 infer_ctx.import_symbols(child);
+                infer_ctx.set_fn_ret_tp(
+                    child.rettp.clone().unwrap_or(unknown_arc()),
+                    child,
+                    builder,
+                );
                 infer_ctx.inference_statements(self.body.as_mut().unwrap(), child, builder);
-                let terminator = self
-                    .body
-                    .as_mut()
-                    .expect(&self.id.name)
-                    .emit(child, builder)?
-                    .get_term();
+                let terminator = child.with_diag_src(&child.get_file(), |child| {
+                    Ok(self
+                        .body
+                        .as_mut()
+                        .expect(&self.id.name)
+                        .emit(child, builder)?
+                        .get_term())
+                })?;
                 if !terminator.is_return() && !self.generator {
                     return Err(child.add_diag(
                         self.range
@@ -934,7 +1028,7 @@ impl Node for ClosureNode {
                 typenode.get_type(ctx, builder, true)?
             } else if let Some(id) = v.id {
                 let vv = ctx.unify_table.borrow_mut().probe(id);
-                let tp = vv.get_type(&mut ctx.unify_table.borrow_mut());
+                let tp = vv.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut());
                 if *tp.borrow() == PLType::Unknown {
                     v.range()
                         .new_err(ErrorCode::CLOSURE_PARAM_TYPE_UNKNOWN)
@@ -978,7 +1072,7 @@ impl Node for ClosureNode {
             ret.get_type(ctx, builder, true)?
         } else if let Some(ty) = self.ret_id {
             let v = ctx.unify_table.borrow_mut().probe(ty);
-            let tp = v.get_type(&mut ctx.unify_table.borrow_mut());
+            let tp = v.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut());
             tp
         } else if let Some(exp_ty) = &ctx.expect_ty {
             match &*exp_ty.borrow() {

@@ -19,7 +19,7 @@ macro_rules! define_diag {
         ),*
     ) => {
         paste::paste! {
-            #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, Default)]
+            #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, Default, PartialOrd, Ord)]
             #[allow(non_camel_case_types, dead_code)]
             #[allow(clippy::upper_case_acronyms)]
             pub enum [<$level:camel Code>] {
@@ -78,6 +78,7 @@ define_diag!(
     INVALID_STRUCT_DEF = "invalid struct definition",
     UNDEFINED_TYPE = "undefined type",
     UNKNOWN_TYPE = "unknown type",
+    TYPE_CANNOT_BE_FULLY_INFERRED = "type cannot be fully inferred",
     RETURN_VALUE_IN_VOID_FUNCTION = "return value in void function",
     RETURN_TYPE_MISMATCH = "return type mismatch",
     NO_RETURN_VALUE_IN_NON_VOID_FUNCTION = "non void function must have a return value",
@@ -166,6 +167,7 @@ define_diag!(
     THE_TARGET_TRAIT_CANNOT_BE_INSTANTIATED = "the target trait type cannot be instantiated",
     MACRO_EXPAND_DEPTH_TOO_DEEP = "macro expand depth too deep",
     GLOBAL_MUST_BE_POINTER = "global must be pointer type",
+    ILLEGAL_GENERIC_PARAM = "illegal generic parameter",
 );
 
 define_diag! {
@@ -176,7 +178,7 @@ define_diag! {
     UNUSED_FUNCTION = "unused function",
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum DiagCode {
     Err(ErrorCode),
     Warn(WarnCode),
@@ -208,13 +210,13 @@ use super::{
 };
 
 #[range]
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct PLLabel {
     file: String,
     txt: Option<(String, Vec<String>)>,
 }
 #[range]
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct PLDiagRaw {
     code: DiagCode,
     help: Option<String>,
@@ -223,7 +225,7 @@ pub struct PLDiagRaw {
 }
 /// # PLDiag
 /// Diagnostic for pivot-lang
-#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct PLDiag {
     pub raw: Box<PLDiagRaw>,
 }

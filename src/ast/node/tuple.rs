@@ -45,13 +45,7 @@ impl Node for TupleInitNode {
                     }
                     name.push_str(&tp.get_name());
                     expr_values.push(value);
-                    let f = Field {
-                        index: i as u32 + 1,
-                        typenode: tp.get_typenode(&ctx.get_file()),
-                        name: i.to_string(),
-                        range: Default::default(),
-                        modifier: Some((TokenType::PUB, Default::default())),
-                    };
+                    let f = new_tuple_field(i, &tp, &ctx.get_file());
                     fields.insert(i.to_string(), f);
                 }
                 Err(diag) => {
@@ -63,7 +57,7 @@ impl Node for TupleInitNode {
         if let Some(err) = err {
             return Err(err);
         }
-        let sttype = new_tuple_type(name, ctx, fields, self.range);
+        let sttype = new_tuple_type(name, fields, self.range);
         builder.gen_st_visit_function(ctx, &sttype, &field_tps);
         let stu = Arc::new(RefCell::new(PLType::Struct(sttype)));
         ctx.add_type_without_check(stu.clone());
@@ -84,15 +78,20 @@ impl Node for TupleInitNode {
     }
 }
 
-fn new_tuple_type(
-    name: String,
-    ctx: &mut crate::ast::ctx::Ctx,
-    fields: LinkedHashMap<String, Field>,
-    range: Range,
-) -> STType {
+pub fn new_tuple_field(i: usize, tp: &PLType, f: &str) -> Field {
+    Field {
+        index: i as u32 + 1,
+        typenode: tp.get_typenode(f),
+        name: i.to_string(),
+        range: Default::default(),
+        modifier: Some((TokenType::PUB, Default::default())),
+    }
+}
+
+pub fn new_tuple_type(name: String, fields: LinkedHashMap<String, Field>, range: Range) -> STType {
     STType {
         name,
-        path: ctx.plmod.path.clone(),
+        path: "".to_string(),
         fields,
         range: Default::default(),
         doc: vec![],
@@ -164,7 +163,7 @@ impl TypeNode for TupleTypeNode {
         if let Some(err) = err {
             return Err(err);
         }
-        let sttype = new_tuple_type(name, ctx, fields, self.range);
+        let sttype = new_tuple_type(name, fields, self.range);
         builder.gen_st_visit_function(ctx, &sttype, &field_tps);
         let stu = Arc::new(RefCell::new(PLType::Struct(sttype)));
         ctx.add_type_without_check(stu.clone());

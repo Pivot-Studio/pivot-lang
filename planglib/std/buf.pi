@@ -59,7 +59,7 @@ impl Buffer {
         }
         // otherwise, copy the data out of the buffer
 
-        let dst_arr = [u8*len as i64;];
+        let dst_arr:[u8] = [u8*len as i64;];
         arr_copy(self.data, dst_arr, len as i64);
         // return the data
         return dst_arr;

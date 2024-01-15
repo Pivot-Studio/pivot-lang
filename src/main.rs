@@ -18,7 +18,6 @@ mod nomparser;
 mod utils;
 mod version;
 use std::{
-    cell::RefCell,
     path::Path,
     process::exit,
     sync::{Arc, Mutex},
@@ -177,7 +176,7 @@ impl Cli {
 
         let mem = MemDocsInput::new(
             &db,
-            Arc::new(Mutex::new(RefCell::new(mem_docs::MemDocs::default()))),
+            Arc::new(Mutex::new(mem_docs::MemDocs::default())),
             abs.to_str().unwrap().to_string(),
             op,
             action,
@@ -256,7 +255,7 @@ impl Cli {
 
         let mem = MemDocsInput::new(
             &db,
-            Arc::new(Mutex::new(RefCell::new(mem_docs::MemDocs::default()))),
+            Arc::new(Mutex::new(mem_docs::MemDocs::default())),
             abs.to_str().unwrap().to_string(),
             op,
             action,

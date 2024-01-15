@@ -16,6 +16,7 @@ use crate::ast::builder::BuilderEnum;
 use crate::format_label;
 use crate::generic_impl;
 use crate::if_not_modified_by;
+use crate::inference::unknown_arc;
 use crate::skip_if_not_modified_by;
 use crate::utils::get_hash_code;
 
@@ -68,7 +69,31 @@ pub enum PLType {
     Trait(STType),
     Union(UnionType),
     Closure(ClosureType),
+    /// # Unknown
+    ///
+    /// Unknown type means that the type is not inferred
+    /// or cannot be inferred
     Unknown,
+    /// # PartialInferred
+    ///
+    /// PartialInfered type is used for type inference
+    ///
+    /// When a type is wrapped by PartialInfered, it means that the type
+    /// is not fully inferred
+    /// e.g. it 'contains' Unknown type
+    PartialInferred(Arc<RefCell<PLType>>),
+}
+
+impl PLType {
+    /// # is_complete
+    ///
+    /// Check if the type is complete
+    ///
+    /// if the type is Unknown or PartialInferred, it is not complete
+    pub fn is_complete(&self) -> bool {
+        // Unknow/PartialInfered type are not complete
+        !matches!(self, PLType::Unknown | PLType::PartialInferred(_))
+    }
 }
 
 impl TraitImplAble for PriType {
@@ -371,6 +396,7 @@ fn new_typename_node(name: &str, range: Range, ns: &[String]) -> Box<TypeNodeEnu
         }),
         generic_params: None,
         range,
+        generic_infer: None,
     }))
 }
 fn new_arrtype_node(typenode: Box<TypeNodeEnum>) -> Box<TypeNodeEnum> {
@@ -496,6 +522,7 @@ impl PLType {
             PLType::Union(_) => "union".to_string(),
             PLType::Closure(_) => "closure".to_string(),
             PLType::Unknown => "unknown".to_string(),
+            PLType::PartialInferred(_) => "partial".to_string(),
         }
     }
 
@@ -540,6 +567,7 @@ impl PLType {
             PLType::Union(u) => Self::new_custom_tp_node(u, path),
             PLType::Closure(c) => Box::new(c.to_type_node(path)),
             PLType::Unknown => new_typename_node("Unknown", Default::default(), &[]),
+            PLType::PartialInferred(p) => p.borrow().get_typenode(path),
         }
     }
     pub fn is(&self, pri_type: &PriType) -> bool {
@@ -562,6 +590,7 @@ impl PLType {
             PLType::PlaceHolder(_) => (),
             PLType::Closure(_) => (),
             PLType::Unknown => (),
+            PLType::PartialInferred(p) => p.borrow().if_refs(f, f_local),
         }
     }
 
@@ -596,6 +625,7 @@ impl PLType {
             PLType::Union(u) => u.name.clone(),
             PLType::Closure(c) => c.get_name(),
             PLType::Unknown => "Unknown".to_string(),
+            PLType::PartialInferred(p) => p.borrow().get_name(),
         }
     }
     pub fn get_llvm_name(&self) -> String {
@@ -620,6 +650,7 @@ impl PLType {
             PLType::Union(u) => u.name.clone(),
             PLType::Closure(c) => c.get_name(),
             PLType::Unknown => "Unknown".to_string(),
+            PLType::PartialInferred(p) => p.borrow().get_llvm_name(),
         }
     }
 
@@ -645,6 +676,7 @@ impl PLType {
             PLType::Union(u) => u.get_full_name(),
             PLType::Closure(c) => c.get_name(),
             PLType::Unknown => "Unknown".to_string(),
+            PLType::PartialInferred(p) => p.borrow().get_full_elm_name(),
         }
     }
     pub fn get_full_elm_name_without_generic(&self) -> String {
@@ -663,6 +695,7 @@ impl PLType {
             PLType::Union(u) => u.get_full_name_except_generic(),
             PLType::Closure(c) => c.get_name(),
             PLType::Unknown => "Unknown".to_string(),
+            PLType::PartialInferred(p) => p.borrow().get_full_elm_name_without_generic(),
         }
     }
     pub fn get_ptr_depth(&self) -> usize {
@@ -687,6 +720,7 @@ impl PLType {
                 if_not_modified_by!(st.modifier, TokenType::PUB, return false);
                 true
             }
+            PLType::PartialInferred(p) => p.borrow().is_pub(),
             _ => true,
         }
     }
@@ -742,6 +776,7 @@ impl PLType {
                 );
                 Ok(())
             }
+            PLType::PartialInferred(p) => p.borrow().expect_pub(ctx, range),
             _ => Ok(()),
         }
     }
@@ -762,6 +797,7 @@ impl PLType {
             PLType::Union(u) => Some(u.range),
             PLType::Closure(c) => Some(c.range),
             PLType::Unknown => None,
+            PLType::PartialInferred(p) => p.borrow().get_range(),
         }
     }
 
@@ -816,7 +852,9 @@ pub struct FnType {
     pub ret_pltype: Box<TypeNodeEnum>,
     pub generic: bool,
     pub modifier: Option<(TokenType, Range)>,
-    pub method: bool,
+    /// flag indicating whether the function is a method
+    pub st_method: bool,
+    pub trait_method: bool,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
     pub generics_size: usize, // the size of generics except the generics from impl node
 }
@@ -1020,7 +1058,7 @@ impl FNValue {
     pub fn gen_snippet(&self) -> String {
         let mut name = self.name.clone();
         let mut iter = self.param_names.iter();
-        if self.fntype.method {
+        if self.fntype.st_method {
             iter.next();
             name = name.split("::").last().unwrap().to_string();
         }
@@ -1035,13 +1073,13 @@ impl FNValue {
     pub fn get_doc_symbol(&self) -> DocumentSymbol {
         #[allow(deprecated)]
         DocumentSymbol {
-            name: if self.fntype.method {
+            name: if self.fntype.st_method {
                 self.name.split("::").last().unwrap().to_string()
             } else {
                 self.name.clone()
             },
             detail: Some(self.get_signature()),
-            kind: if self.fntype.method {
+            kind: if self.fntype.st_method {
                 SymbolKind::METHOD
             } else {
                 SymbolKind::FUNCTION
@@ -1056,7 +1094,7 @@ impl FNValue {
     pub fn get_signature(&self) -> String {
         let mut params = String::new();
         if !self.param_names.is_empty() {
-            if !self.fntype.method {
+            if !self.fntype.st_method {
                 params += &format!(
                     "{}: {}",
                     self.param_names[0],
@@ -1354,7 +1392,7 @@ impl STType {
             let mut res = self.clone();
             res.name = name;
             ctx.add_type_without_check(Arc::new(RefCell::new(PLType::Struct(res.clone()))));
-            res.fields = self
+            let fields: Result<Vec<_>, _> = self
                 .fields
                 .values()
                 .map(|f| {
@@ -1371,8 +1409,7 @@ impl STType {
                             } else {
                                 f.typenode = f
                                     .typenode
-                                    .get_type(ctx, builder, true)
-                                    .unwrap()
+                                    .get_type(ctx, builder, true)?
                                     .borrow()
                                     .get_typenode(&ctx.get_file());
                             }
@@ -1381,26 +1418,29 @@ impl STType {
                         // eprintln!("{:?}", new_f.ret);
                         new_f.ret = new_f
                             .ret
-                            .get_type(ctx, builder, true)
-                            .unwrap()
+                            .get_type(ctx, builder, true)?
                             .borrow()
                             .get_typenode(&ctx.get_file());
                         nf.typenode = Box::new(TypeNodeEnum::Func(new_f));
                     } else {
                         nf.typenode = f
                             .typenode
-                            .get_type(ctx, builder, true)
-                            .unwrap()
+                            .get_type(ctx, builder, true)?
                             .borrow()
                             .get_typenode(&ctx.get_file());
                     }
-                    (nf.name.clone(), nf)
+                    Ok::<(std::string::String, Field), PLDiag>((nf.name.clone(), nf))
                 })
                 .collect();
+            res.fields = LinkedHashMap::from_iter(fields?);
             let field_pltps = res
                 .fields
                 .values()
-                .map(|f| f.typenode.get_type(ctx, builder, true).unwrap())
+                .map(|f| {
+                    f.typenode
+                        .get_type(ctx, builder, true)
+                        .unwrap_or(unknown_arc())
+                })
                 .collect::<Vec<_>>();
             if !res.is_trait {
                 builder.gen_st_visit_function(ctx, &res, &field_pltps);
