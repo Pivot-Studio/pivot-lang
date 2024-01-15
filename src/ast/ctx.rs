@@ -1095,6 +1095,11 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 }
 
+/// # real_tp
+///
+/// PartialInferred is just a wrapper for real type
+///
+/// This function will unwrap it recursively
 fn real_tp(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
     match &*pltype.clone().borrow() {
         PLType::PartialInferred(p) => real_tp(p.clone()),

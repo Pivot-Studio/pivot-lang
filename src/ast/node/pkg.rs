@@ -355,6 +355,9 @@ impl ExternIdNode {
         Err(ctx.add_diag(self.range.new_err(ErrorCode::MACRO_NOT_FOUND)))
     }
 
+    /// # solve_mod
+    ///
+    /// 从当前模块开始，解析出该节点对应的符号所在模块
     pub fn solve_mod<'b>(
         &self,
         mut plmod: &'b crate::ast::plmod::Mod,

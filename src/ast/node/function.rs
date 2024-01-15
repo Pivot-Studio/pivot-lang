@@ -34,6 +34,9 @@ pub struct FuncCallNode {
     pub generic_params: Option<Box<GenericParamNode>>,
     pub callee: Box<NodeEnum>,
     pub paralist: Vec<Box<NodeEnum>>,
+    /// # generic_infer
+    ///
+    /// Holding inference result of generic parameters.
     pub generic_infer: Option<Vec<TyVariable>>,
 }
 
@@ -296,20 +299,23 @@ impl Node for FuncCallNode {
         res
     }
 }
-
+/// # generic_tp_apply
+///
+/// This method will apply generic parameter types to a generic custom type.
 pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble + RangeTrait>(
-    t: &T,
-    n: &N,
+    tp: &T,
+    node: &N,
     ctx: &'b mut Ctx<'a>,
     builder: &'b BuilderEnum<'a, '_>,
 ) -> Result<(), PLDiag> {
+    // disable highlight
     *ctx.need_highlight.borrow_mut() += 1;
-    let generic_size = t.get_generic_size();
-    let generic_params = n.get_generic_params();
-    let range = n.range();
+    let generic_size = tp.get_generic_size();
+    let generic_params = node.get_generic_params();
+    let range = node.range();
     let mut generic_types = preprocess_generics(generic_params, generic_size, range, ctx, builder)?;
 
-    let re = ctx.run_in_type_mod(t, |ctx, t| {
+    let re = ctx.run_in_type_mod(tp, |ctx, t| {
         ctx.protect_generic_context(t.get_generic_map(), |ctx| {
             for (i, (_, pltype)) in t.get_generic_map().iter().enumerate() {
                 if i >= generic_size {
@@ -317,7 +323,7 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
                 }
                 if generic_types[i].is_none() {
                     // fill inferred types
-                    let ty = n
+                    let ty = node
                         .get_inference_result()
                         .clone()
                         .unwrap_or_default()
@@ -338,8 +344,6 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
                 }
                 let res = ctx.eq(pltype.clone(), generic_types[i].as_ref().unwrap().clone());
                 if !res.eq {
-                    // let r = generic_params.generics[i].as_ref().unwrap().range();
-                    // return Err(r.new_err(ErrorCode::ILLEGAL_GENERIC_PARAM).add_to_ctx(ctx));
                     let g = t.get_generic_map().get_index(i).unwrap();
                     let mut diag = range.new_err(ErrorCode::ILLEGAL_GENERIC_PARAM);
                     if let Some(reason) = res.reason {
@@ -516,17 +520,10 @@ impl TypeNode for FuncDefNode {
                     }
                     _ => unreachable!(),
                 });
-            // let mut first = true;
             for para in self.paralist.iter() {
                 _ = para.typenode.get_type(child, builder, true)?;
                 param_pltypes.push(para.typenode.clone());
                 param_name.push(para.id.name.clone());
-                // if first && method {
-                //     if let PLType::Pointer(p) = &*tp.borrow() {
-                //         child.set_self_type(p.clone());
-                //     }
-                // }
-                // first = false;
             }
             self.ret.get_type(child, builder, true)?;
             let fnvalue = FNValue {
@@ -660,10 +657,14 @@ impl FuncDefNode {
     pub fn gen_fntype<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,
-        first: bool,
+        first: bool, // If this is the first time to generate this function.
         builder: &'b BuilderEnum<'a, '_>,
         fnvalue: FNValue,
     ) -> Result<(), PLDiag> {
+        // The first time to generate this function, we need to do
+        // highlight and other lsp stuffs, and do code analysis, but not code gen.
+        // Otherwise, we only need to do code gen.
+        // So, if it's not the first time, and the builder is NoOpBuilder, we can just return.
         if !first && matches!(builder, BuilderEnum::NoOp(_)) {
             return Ok(());
         }

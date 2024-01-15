@@ -32,6 +32,9 @@ use lsp_types::SemanticTokenType;
 pub struct TypeNameNode {
     pub id: Option<ExternIdNode>,
     pub generic_params: Option<Box<GenericParamNode>>,
+    /// # generic_infer
+    ///
+    /// Holding inference result of generic parameters.
     pub generic_infer: Option<Vec<TyVariable>>,
 }
 

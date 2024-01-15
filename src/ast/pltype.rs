@@ -852,6 +852,7 @@ pub struct FnType {
     pub ret_pltype: Box<TypeNodeEnum>,
     pub generic: bool,
     pub modifier: Option<(TokenType, Range)>,
+    /// flag indicating whether the function is a method
     pub st_method: bool,
     pub trait_method: bool,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,

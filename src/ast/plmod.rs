@@ -534,6 +534,9 @@ impl Mod {
     }
 }
 
+/// # completion_kind
+///
+/// get completion kind from pltype
 fn completion_kind(
     tp: &PLType,
     need_snippet: bool,

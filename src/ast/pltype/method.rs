@@ -93,9 +93,17 @@ pub trait TraitImplAble {
     }
 }
 
+/// # Generic
+///
+/// Describe a type that has generic parameters.
 pub trait Generic {
     fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>>;
     fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>>;
+    /// # get_generic_size
+    /// Although in most cases, the size of generic_map
+    /// is equal to the generic_size, but in method impl
+    /// of a generic type, the generic_size is the size
+    /// generic_map of plus 1
     fn get_generic_size(&self) -> usize;
 }
 

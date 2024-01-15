@@ -178,14 +178,7 @@ impl Node for DefNode {
                     tp = v.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut());
                 }
             }
-            // if self.exp.is_none() && !tp.borrow().is_complete() {
-            //     ctx.add_diag(
-            //         self.var
-            //             .range()
-            //             .new_err(ErrorCode::TYPE_CANNOT_BE_FULLY_INFERRED)
-            //             .add_to_ctx(ctx),
-            //     );
-            // }
+
             pltype = Some(tp);
         }
         let mut expv = None;
