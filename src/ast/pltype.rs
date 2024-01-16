@@ -375,7 +375,7 @@ impl PriType {
 fn new_typename_node(name: &str, range: Range, ns: &[String]) -> Box<TypeNodeEnum> {
     Box::new(TypeNodeEnum::Basic(TypeNameNode {
         id: Some(ExternIdNode {
-            ns: ns
+            namespace: ns
                 .iter()
                 .map(|s| {
                     Box::new(VarNode {
@@ -539,7 +539,7 @@ impl PLType {
             PLType::Struct(st) => {
                 if st.is_tuple {
                     Box::new(TypeNodeEnum::Tuple(TupleTypeNode {
-                        tps: st
+                        types: st
                             .fields
                             .iter()
                             .map(|v| v.1.typenode.clone())

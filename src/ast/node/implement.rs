@@ -10,9 +10,34 @@ use rustc_hash::FxHashSet;
 
 #[node(comment)]
 pub struct ImplNode {
+    /// generics stands for the available generics types in the implementation scope,
+    /// which could be accessed by all methods in the block, even it might have no generic types.
+    /// for example, the generics in the following implementation is the `T` after keyword impl.
+    /// ```rust
+    /// struct A<T> { t: T  }
+    /// trait Demo<T>{
+    ///     fn a(self, t:T);
+    ///     fn b<F>(self,t:T, f:F);
+    /// }
+    /// impl<T> Demo<T> for A<T> {
+    ///     fn a(self,t:T) {
+    ///         todo!()
+    ///     }
+    ///     fn b<F>(self,t:T, f:F) {
+    ///         todo!()
+    ///     }
+    /// }
+    /// ```
+    /// All methods and structures inside the block could access the generic type T. Method `b` could access it without declaring T.
     pub generics: Option<Box<GenericDefNode>>,
+
+    /// target is the structure which implements the methods in impl_trait
     pub target: Box<TypeNodeEnum>,
+
+    /// methods holds the definitions of the implemented methods
     pub methods: Vec<Box<FuncDefNode>>,
+
+    /// impl_trait is the trait to implement for the target structure
     pub impl_trait: Option<(Box<TypeNodeEnum>, (TokenType, Range))>,
 }
 

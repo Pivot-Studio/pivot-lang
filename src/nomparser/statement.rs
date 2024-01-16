@@ -97,7 +97,9 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
         tuple((
             tag_token_word(TokenType::LET),
             deconstruct,
+            // the type of a variable is optional because of type inference
             opt(pair(tag_token_symbol(TokenType::COLON), type_name)),
+            // the value of a variable
             opt(pair(tag_token_symbol(TokenType::ASSIGN), general_exp)),
         )),
         |((_, start), var, tp, v)| {
@@ -109,13 +111,13 @@ pub fn new_variable(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 end = v.as_ref().unwrap().1.range().end;
             }
             let range = start.start.to(end);
-            let tp = tp.map(|(_, tp)| tp);
-            let exp = v.map(|(_, exp)| exp);
+            let variable_type = tp.map(|(_, tp)| tp);
+            let value_expression = v.map(|(_, exp)| exp);
             res_enum(
                 DefNode {
                     var,
-                    tp,
-                    exp,
+                    variable_type,
+                    value_expression,
                     range,
                     comments: vec![],
                 }
@@ -220,9 +222,6 @@ pub fn assignment(input: Span) -> IResult<Span, Box<NodeEnum>> {
 #[test_parser_error("returntrue;")]
 #[test_parser_error("return1 + 2;")]
 #[test_parser_error("return a = 2;")]
-// ```
-// return_statement = "return" logic_exp newline ;
-// ```
 fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(map_res(
         tuple((
@@ -232,7 +231,7 @@ fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
             tag_token_symbol(TokenType::SEMI),
             opt(delspace(comment)),
         )),
-        |(y, (_, range), value, (_, r2), optcomment)| {
+        |(y, (_, range), returned_value, (_, r2), optcomment)| {
             let comments = if let Some(com) = optcomment {
                 vec![vec![com]]
             } else {
@@ -244,10 +243,10 @@ fn return_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
             }
             res_enum(
                 RetNode {
-                    value,
+                    value: returned_value,
                     range,
                     comments,
-                    yiel: y,
+                    yield_identifier: y,
                 }
                 .into(),
             )
@@ -288,7 +287,7 @@ pub fn global_const(input: Span) -> IResult<Span, Box<NodeEnum>> {
             res_enum(
                 GlobalConstNode {
                     range: var.range(),
-                    var,
+                    constant: var,
                 }
                 .into(),
             )

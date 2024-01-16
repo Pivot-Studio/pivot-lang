@@ -10,8 +10,11 @@ use internal_macro::node;
 
 #[node(comment)]
 pub struct RetNode {
+    /// the value returned by the keyword `return`
     pub value: Option<Box<NodeEnum>>,
-    pub yiel: Option<(TokenType, Range)>,
+
+    /// yield_identifier refers whether the keyword 'yield' exists and the range of it
+    pub yield_identifier: Option<(TokenType, Range)>,
 }
 
 impl PrintTrait for RetNode {
@@ -32,7 +35,7 @@ impl Node for RetNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let ret_pltype = ctx.rettp.as_ref().unwrap().clone();
-        if self.yiel.is_some() {
+        if self.yield_identifier.is_some() {
             let ret_node = self.value.as_mut().unwrap();
             let v = ret_node.emit(ctx, builder)?.get_value().unwrap();
             if ctx.generator_data.is_none() {

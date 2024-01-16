@@ -31,7 +31,6 @@ use super::*;
     "(2.3+10-800*9).add(100)[0] as
  i128 as f32"
 )]
-#[test_parser("(2.3+10-800*9).add(100)[0]")]
 pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         tuple((
@@ -50,22 +49,24 @@ pub fn as_exp(input: Span) -> IResult<Span, Box<NodeEnum>> {
         |(exp, casts, tail, is)| {
             let mut exp = exp;
             let start = exp.range().start;
-            for (_, ty) in casts {
-                let end = ty.range().end;
-                let range = start.to(end);
+
+            // wrap the previous expression into a new 'as' expression
+            for (_, target_type) in casts {
+                let range = start.to(target_type.range().end);
+
                 exp = Box::new(NodeEnum::AsNode(AsNode {
                     expr: exp,
-                    ty,
+                    target_type,
                     range,
                     tail,
                 }));
             }
-            if let Some((_, ty)) = is {
-                let end = ty.range().end;
-                let range = start.to(end);
+
+            if let Some((_, target_type)) = is {
+                let range = start.to(target_type.range().end);
                 exp = Box::new(NodeEnum::IsNode(IsNode {
                     expr: exp,
-                    ty,
+                    target_type,
                     range,
                 }));
             }

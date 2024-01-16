@@ -44,8 +44,9 @@ pub fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
             opt(tag_token_symbol(TokenType::DOUBLE_COLON)), // 容忍未写完的语句
             opt(tag_token_symbol(TokenType::COLON)),        // 容忍未写完的语句
         )),
-        |(mut ns, opt, opt2)| {
-            let id = ns.pop().unwrap();
+        |(mut identifier_with_namespace, opt, opt2)| {
+            let id = identifier_with_namespace.pop().unwrap();
+
             let mut range = id.range();
             if let Some(opt) = opt {
                 range = range.start.to(opt.1.end);
@@ -55,7 +56,8 @@ pub fn extern_identifier(input: Span) -> IResult<Span, Box<NodeEnum>> {
             }
             res_enum(
                 ExternIdNode {
-                    ns,
+                    // after poping, only namespaces are left
+                    namespace: identifier_with_namespace,
                     id,
                     range,
                     complete: opt.is_none() && opt2.is_none(),

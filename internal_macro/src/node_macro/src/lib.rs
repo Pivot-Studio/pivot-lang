@@ -1,6 +1,50 @@
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, DeriveInput};
+/// node is a macro to embed new fields, add some macros and implement
+/// crate::ast::node::FmtTrait and crate::ast::node::RangeTrait
+/// traits for the structure.
+/// currently, it supports arguemnts as 'comment' and 'copy':
+///
+/// The node without any argument embeds a new field 'range' into a structure
+/// ```rust
+/// #[node]
+/// pub struct demo {
+///     pub filed: i32,
+///     pub field2: String,
+/// }
+/// ```
+/// The embedded structure looks like:
+/// ```rust
+/// #[derive(Clone, PartialEq, Eq, derivative::Derivative)]
+/// #[derivative(Debug)]
+/// pub struct demo {
+///    pub filed: i32,
+///    pub field2: String,
+///    pub range: crate::ast::range::Range,
+/// }
+/// ```
+///
+/// If we pass the argument `comment`:
+/// ```rust
+/// #[node(comment)]
+/// pub struct demo {
+///     pub filed: i32,
+///     pub field2: String,
+/// }
+/// ```
+///
+/// The embedded structure looks like:
+/// ```rust
+/// #[derive(Clone, PartialEq, Eq, derivative::Derivative)]
+/// #[derivative(Debug)]
+/// pub struct demo {
+///    pub filed: i32,
+///    pub field2: String,
+///    pub comments: Vec<Vec<Box<crate::ast::node::NodeEnum>>>,
+///    pub range: crate::ast::range::Range,
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn node(args: TokenStream, input: TokenStream) -> TokenStream {
     let mut ast = parse_macro_input!(input as DeriveInput);

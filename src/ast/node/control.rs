@@ -7,9 +7,16 @@ use crate::ast::pltype::PriType;
 use internal_macro::node;
 
 #[node(comment)]
+/// IfNode is consisted by a 'if' clause and a 'else' clause.
+/// the 'else' clause is allowed to embed another IfNode
 pub struct IfNode {
+    /// condition is the bool expression for the if keyword
+    /// there is no type check in the AST stage, but we did check it when lowering ast
     pub cond: Box<NodeEnum>,
+    /// then is the logic to be executed if the cond is true
     pub then: Box<StatementsNode>,
+    /// els stands for the left part of the condition clause
+    /// it might be another IfNode or a statement
     pub els: Option<Box<NodeEnum>>,
 }
 
@@ -159,6 +166,20 @@ impl Node for WhileNode {
 }
 
 #[node(comment)]
+/// ForNode is consisted by four parts: pre,cond, opt and body in the format of `for pre;cond;opt body`.
+///
+/// The pre and opt are optional, but the semi-colons are compulsory.
+///
+/// For example:
+/// ```pi
+/// for let i = 0; i < 5; i = i + 1{
+///  // ^pre       ^cond  ^opt        
+///  
+///  println!(i)
+///  // ^body
+/// }
+///
+/// ```
 pub struct ForNode {
     pub pre: Option<Box<NodeEnum>>,
     pub cond: Box<NodeEnum>,

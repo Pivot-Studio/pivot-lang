@@ -25,8 +25,14 @@ use crate::ast::node::RangeTrait;
 
 #[node]
 pub struct AsNode {
+    /// expr is the expression which calculates a value as output
     pub expr: Box<NodeEnum>,
-    pub ty: Box<TypeNodeEnum>,
+
+    /// target_type refers the desired type for the expr
+    pub target_type: Box<TypeNodeEnum>,
+
+    /// tail is the question or exclaimation mark following an 'as' statement
+    /// it will be None if no marks exist
     pub tail: Option<(TokenType, Range)>,
 }
 
@@ -37,10 +43,10 @@ impl Node for AsNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let re = self.expr.emit(ctx, builder);
-        self.ty.emit_highlight(ctx);
+        self.target_type.emit_highlight(ctx);
         let v = re?.get_value();
         let v = v.unwrap();
-        let target_tp = self.ty.get_type(ctx, builder, true)?;
+        let target_tp = self.target_type.get_type(ctx, builder, true)?;
         let (val, target_tp) = ctx.force_cast_safe(
             v.get_value(),
             &v.get_ty().borrow(),
@@ -58,7 +64,7 @@ impl PrintTrait for AsNode {
         tab(tabs, line.clone(), end);
         println!("AsNode");
         self.expr.print(tabs + 1, false, line.clone());
-        self.ty.print(tabs + 1, true, line.clone());
+        self.target_type.print(tabs + 1, true, line.clone());
     }
 }
 
@@ -88,14 +94,14 @@ impl<'a, 'ctx> Ctx<'a> {
             }
             (PLType::Union(union), target_ty) => {
                 if node.tail.is_none() {
-                    let pos = node.ty.range().end;
+                    let pos = node.target_type.range().end;
                     let end_range = Range {
                         start: pos,
                         end: pos,
                     };
                     return Err(node.range.new_err(ErrorCode::INVALID_DIRECT_UNION_CAST)
                         .add_label(node.expr.range(), self.get_file(), format_label!("type of the expression is `{}`", &union.name))
-                        .add_label(node.ty.range(), self.get_file(), format_label!("target type is `{}`", target_ty.get_name()))
+                        .add_label(node.target_type.range(), self.get_file(), format_label!("target type is `{}`", target_ty.get_name()))
                         .add_label(end_range, self.get_file(), format_label!("add `{}` or `{}` to make it legal", "?", "!"))
                         .add_help("cast a union to its member type directly is not allowed, use `?` or `!` after the cast expression")
                         .add_to_ctx(self));
@@ -124,7 +130,7 @@ impl<'a, 'ctx> Ctx<'a> {
                             format_label!("type of the expression is `{}`", &union.name),
                         )
                         .add_label(
-                            node.ty.range(),
+                            node.target_type.range(),
                             self.get_file(),
                             format_label!("target type is `{}`", target_ty.get_name()),
                         )
@@ -137,14 +143,14 @@ impl<'a, 'ctx> Ctx<'a> {
             }
             (PLType::Trait(t), target_ty) => {
                 if node.tail.is_none() {
-                    let pos = node.ty.range().end;
+                    let pos = node.target_type.range().end;
                     let end_range = Range {
                         start: pos,
                         end: pos,
                     };
                     return Err(node.range.new_err(ErrorCode::INVALID_DIRECT_TRAIT_CAST)
                         .add_label(node.expr.range(), self.get_file(), format_label!("type of the expression is `{}`", &t.name))
-                        .add_label(node.ty.range(), self.get_file(), format_label!("target type is `{}`", target_ty.get_name()))
+                        .add_label(node.target_type.range(), self.get_file(), format_label!("target type is `{}`", target_ty.get_name()))
                         .add_label(end_range, self.get_file(), format_label!("add `{}` or `{}` to make it legal", "?", "!"))
                         .add_help("cast a trait to specific type directly is not allowed, use `?` or `!` after the cast expression")
                         .add_to_ctx(self));
@@ -161,7 +167,7 @@ impl<'a, 'ctx> Ctx<'a> {
                     .up_cast(
                         target_ty.clone(),
                         Arc::new(RefCell::new(ty.clone())),
-                        node.ty.range(),
+                        node.target_type.range(),
                         node.expr.range(),
                         val,
                         builder,
@@ -175,7 +181,7 @@ impl<'a, 'ctx> Ctx<'a> {
                                 format_label!("type of the expression is `{}`", ty.get_name()),
                             )
                             .add_label(
-                                node.ty.range(),
+                                node.target_type.range(),
                                 self.get_file(),
                                 format_label!("target type is `{}`", target_ty.borrow().get_name()),
                             )
@@ -486,8 +492,10 @@ pub fn get_option_type<'a, 'b>(
 
 #[node]
 pub struct IsNode {
+    /// expr is the expression which calculates a value as output
     pub expr: Box<NodeEnum>,
-    pub ty: Box<TypeNodeEnum>,
+    /// target_type refers the desired type for the expr
+    pub target_type: Box<TypeNodeEnum>,
 }
 
 impl Node for IsNode {
@@ -497,9 +505,9 @@ impl Node for IsNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let re = self.expr.emit(ctx, builder);
-        self.ty.emit_highlight(ctx);
+        self.target_type.emit_highlight(ctx);
         let v = re?.get_value().unwrap();
-        let target_tp = self.ty.get_type(ctx, builder, true)?;
+        let target_tp = self.target_type.get_type(ctx, builder, true)?;
         let val = v.get_value();
         let binding = v.get_ty();
         let tp = &*binding.borrow();
@@ -528,7 +536,7 @@ impl Node for IsNode {
                         .to_result()
                 } else {
                     Err(self
-                        .ty
+                        .target_type
                         .range()
                         .new_err(ErrorCode::UNION_DOES_NOT_CONTAIN_TYPE)
                         .add_to_ctx(ctx))
@@ -570,6 +578,6 @@ impl PrintTrait for IsNode {
         tab(tabs, line.clone(), end);
         println!("IsNode");
         self.expr.print(tabs + 1, false, line.clone());
-        self.ty.print(tabs + 1, true, line.clone());
+        self.target_type.print(tabs + 1, true, line.clone());
     }
 }

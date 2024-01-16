@@ -452,14 +452,21 @@ fn handle_ret<'a, 'b>(
 }
 #[node]
 pub struct FuncDefNode {
+    /// id is the function identifier
     pub id: Box<VarNode>,
+    /// paralist is the parameter lists
     pub paralist: Vec<Box<TypedIdentifierNode>>,
+    /// ret is the return type of the function
     pub ret: Box<TypeNodeEnum>,
+    /// docs is the documentation of the structure started with `///`
     pub doc: Vec<Box<NodeEnum>>,
+    /// pre_comments is the comments above a structure
     pub pre_comments: Vec<Box<NodeEnum>>,
-    pub declare: bool,
+    /// is_declaration_only refers whether this function is a declaration only, which means it has no body
+    pub is_declaration_only: bool,
     pub generics: Option<Box<GenericDefNode>>,
     pub body: Option<StatementsNode>,
+    /// modifier indicates whether the trait is decorated by a keyword `pub`
     pub modifier: Option<(TokenType, Range)>,
     pub generics_size: usize, // the size of generics except the generics from impl node
     pub trait_bounds: Option<Vec<Box<TraitBoundNode>>>,
@@ -531,7 +538,7 @@ impl TypeNode for FuncDefNode {
                 param_names: param_name,
                 range: self.id.range(),
                 doc: self.doc.clone(),
-                llvmname: if self.declare {
+                llvmname: if self.is_declaration_only {
                     if self.id.name.starts_with('|') {
                         return Err(self
                             .range
@@ -562,7 +569,7 @@ impl TypeNode for FuncDefNode {
                 node: Some(Box::new(self.clone())),
                 body_range: self.range,
                 in_trait: self.in_trait_def,
-                is_declare: self.declare,
+                is_declare: self.is_declaration_only,
             };
             if self.generics.is_none() {
                 builder.get_or_insert_fn_handle(&fnvalue, child);

@@ -28,6 +28,7 @@ pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                         tag_token_symbol(TokenType::DOUBLE_COLON),
                         tag_token_symbol(TokenType::MUL),
                     )),
+                    // the options are used for error toleration
                     opt(tag_token_symbol(TokenType::DOUBLE_COLON)),
                     opt(tag_token_symbol(TokenType::COLON)),
                 ))),
@@ -48,7 +49,7 @@ pub fn use_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 range = range.start.to(opt2.1.end);
             }
             res_enum(NodeEnum::UseNode(UseNode {
-                ids: ns,
+                namespace: ns,
                 range,
                 complete: opt.is_none() && opt2.is_none(),
                 singlecolon: opt2.is_some(),

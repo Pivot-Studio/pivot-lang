@@ -131,7 +131,7 @@ fn new_var(name: &str) -> Box<VarNode> {
 }
 fn new_use(ns: &[&str]) -> Box<NodeEnum> {
     Box::new(NodeEnum::UseNode(UseNode {
-        ids: ns.iter().map(|a| new_var(a)).collect(),
+        namespace: ns.iter().map(|a| new_var(a)).collect(),
         range: Default::default(),
         complete: true,
         singlecolon: false,

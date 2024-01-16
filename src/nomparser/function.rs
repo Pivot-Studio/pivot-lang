@@ -99,7 +99,7 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
             doc,
             g,
             (modifier, (_, start)),
-            id,
+            function_identifier,
             generics,
             _,
             paras,
@@ -120,14 +120,14 @@ pub fn function_def(input: Span) -> IResult<Span, Box<TopLevel>> {
                 }
             }
             let node = FuncDefNode {
-                id,
+                id: function_identifier,
                 paralist: paras,
                 ret,
                 trait_bounds,
                 range,
                 doc: docs,
                 pre_comments: precoms,
-                declare: body.is_none(),
+                is_declaration_only: body.is_none(),
                 generics_size: generics.as_ref().map_or(0, |g| g.generics.len()),
                 generics,
                 body,
