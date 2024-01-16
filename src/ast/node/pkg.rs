@@ -27,7 +27,7 @@ pub struct UseNode {
     /// whether the pub modifier exists
     pub modifier: Option<(TokenType, Range)>,
 
-    /// whether the namespace is imported fully
+    /// whether import all symbols in the namespace
     pub all_import: bool,
 
     /// complete is used for error toleration during parsing

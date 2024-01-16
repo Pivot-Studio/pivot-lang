@@ -25,9 +25,9 @@ use syn::{parse_macro_input, DeriveInput};
 /// }
 /// ```
 ///
-/// If we pass the argument:
+/// If we pass the argument `comment`:
 /// ```rust
-/// #[node]
+/// #[node(comment)]
 /// pub struct demo {
 ///     pub filed: i32,
 ///     pub field2: String,

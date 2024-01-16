@@ -612,7 +612,7 @@ impl Node for EmptyNode {
 }
 
 #[node]
-/// StatementsNode stands several statements held by {}
+/// StatementsNode stands for several statements
 pub struct StatementsNode {
     /// statements is a vector of all statements under a statement block
     /// the order is same of the code, from top to bottom

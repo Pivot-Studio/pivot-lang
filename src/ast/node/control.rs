@@ -11,7 +11,7 @@ use internal_macro::node;
 /// the 'else' clause is allowed to embed another IfNode
 pub struct IfNode {
     /// condition is the bool expression for the if keyword
-    /// there is no type check in the AST stage
+    /// there is no type check in the AST stage, but we did check it when lowering ast
     pub cond: Box<NodeEnum>,
     /// then is the logic to be executed if the cond is true
     pub then: Box<StatementsNode>,
