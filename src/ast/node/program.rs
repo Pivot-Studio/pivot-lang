@@ -51,6 +51,8 @@ pub struct ProgramNode {
     pub structs: Vec<StructDefNode>,
     pub fntypes: Vec<FuncDefNode>,
     pub globaldefs: Vec<GlobalNode>,
+
+    /// uses stores all dependencies used by the program node
     pub uses: Vec<Box<NodeEnum>>,
     pub traits: Vec<TraitDefNode>,
     pub trait_impls: Vec<ImplNode>,
@@ -202,123 +204,145 @@ impl Program {
     pub fn emit(self, db: &dyn Db) -> ModWrapper {
         #[cfg(not(target_arch = "wasm32"))]
         let pb = &COMPILE_PROGRESS;
-        let n = *self.node(db).node(db);
-        let mut prog = match n {
+
+        let mut entry_node = match *self.entry_node(db).node(db) {
             NodeEnum::Program(p) => p,
             _ => panic!("not a program"),
         };
-        let params = self.params(db);
 
-        let mut modmap = FxHashMap::<String, Arc<Mod>>::default();
-        let binding = PathBuf::from(self.params(db).file(db)).with_extension("");
-        let pkgname = binding.file_name().unwrap().to_str().unwrap();
-        // 默认加入gc和builtin module
-        // #[cfg(not(target_arch = "wasm32"))]
-        if pkgname != "gc" {
-            prog.uses.extend_from_slice(&GC_USE_NODES);
-        }
+        // add biltin module by default
         if self.config(db).project == "std" {
-            prog.uses.extend_from_slice(&STD_USE_NODES);
+            entry_node.uses.extend_from_slice(&STD_USE_NODES);
         }
         if self.config(db).project != "core" && self.config(db).project != "std" {
-            prog.uses.extend_from_slice(&DEFAULT_USE_NODES);
+            entry_node.uses.extend_from_slice(&DEFAULT_USE_NODES);
         }
+
+        let binding = PathBuf::from(self.params(db).file(db)).with_extension("");
+        let pkgname = binding.file_name().unwrap().to_str().unwrap();
+        // add gc by default
+        if pkgname != "gc" {
+            entry_node.uses.extend_from_slice(&GC_USE_NODES);
+        }
+
         #[cfg(not(target_arch = "wasm32"))]
-        if pb.length().is_none() {
-            pb.set_length(1 + prog.uses.len() as u64);
-        } else {
-            pb.inc_length(1 + prog.uses.len() as u64);
+        match pb.length() {
+            None => pb.set_length(1 + entry_node.uses.len() as u64),
+            _ => pb.inc_length(1 + entry_node.uses.len() as u64),
         }
+
+        let mut modmap = FxHashMap::<String, Arc<Mod>>::default();
         let mut global_mthd_map: FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>> =
             FxHashMap::default();
         let mut global_tp_map = FxHashMap::default();
         let mut global_macro_map = FxHashMap::default();
-        // load dependencies
-        for (i, u) in prog.uses.iter().enumerate() {
+
+        // parse all dependencies into modules and process symbols into the current sybol table
+        for (i, u) in entry_node.uses.iter().enumerate() {
             #[cfg(not(target_arch = "wasm32"))]
             pb.set_message(format!(
                 "正在编译包{}的依赖项{}/{}",
                 pkgname,
                 i,
-                prog.uses.len()
+                entry_node.uses.len()
             ));
+
             #[cfg(not(target_arch = "wasm32"))]
             pb.inc(1);
-            let u = if let NodeEnum::UseNode(p) = *u.clone() {
-                p
-            } else {
-                continue;
+
+            let use_statemet_node = match *u.clone() {
+                NodeEnum::UseNode(p) => p,
+                // skip the loop if it's not a use statement node
+                _ => continue,
             };
-            let all_import = u.all_import;
-            let re_export = u
+
+            let re_export = use_statemet_node
                 .modifier
                 .map(|(t, _)| t == TokenType::PUB)
                 .unwrap_or_default();
-            let wrapper = ConfigWrapper::new(db, self.config(db), u);
-            let mut mod_id = wrapper.use_node(db).get_last_id();
-            let path = wrapper.resolve_dep_path(db);
+
+            let wrapper = ConfigWrapper::new(db, self.config(db), use_statemet_node);
+            let dep_path = wrapper.resolve_dep_path(db);
             let p = self.config(db).project;
-            log::trace!("load dep {:?} for {:?} (project {:?})", path, pkgname, p);
-            let ff = path.to_str().unwrap().to_string();
-            let mut f = self.docs(db).finalize_parser_input(db, ff.clone(), false);
-            let mut symbol_opt = None;
+            log::trace!(
+                "load dep {:?} for {:?} (project {:?})",
+                dep_path,
+                pkgname,
+                p
+            );
+
+            let mut mod_id = wrapper.use_node(db).get_last_id();
+
+            let dep_path_str = dep_path.to_str().unwrap().to_string();
+            let mut dep_parser_entry =
+                self.docs(db)
+                    .finalize_parser_input(db, dep_path_str.clone(), false);
+
             #[cfg(target_arch = "wasm32")]
-            if ff.starts_with("core") || ff.starts_with("std") {
-                let p = crate::lsp::wasm::PLLIB_DIR.get_entry(&path);
+            if dep_path_str.starts_with("core") || dep_path_str.starts_with("std") {
+                let p = crate::lsp::wasm::PLLIB_DIR.get_entry(&dep_path_str);
                 if p.is_none() {
-                    f = None;
+                    dep_parser_entry = None;
                 }
             }
-            if f.is_none() {
-                if let Some(p) = path.parent() {
+
+            let mut symbol_opt = None;
+            if dep_parser_entry.is_none() {
+                if let Some(p) = dep_path.parent() {
                     mod_id = Some(p.file_name().unwrap().to_str().unwrap().to_string());
                     let file = p.with_extension("pi").to_str().unwrap().to_string();
-                    f = self.docs(db).finalize_parser_input(db, file, false);
+                    dep_parser_entry = self.docs(db).finalize_parser_input(db, file, false);
                     symbol_opt = Some(
-                        path.with_extension("")
+                        dep_path
+                            .with_extension("")
                             .file_name()
                             .unwrap()
                             .to_str()
                             .unwrap()
                             .to_string(),
                     );
-                    if f.is_none() {
+                    if dep_parser_entry.is_none() {
                         continue;
                     }
                 } else {
                     continue;
                 }
             }
-            let f = f.unwrap();
-            // compile depency module first
-            let m = compile_dry_file(db, f);
-            if m.is_none() {
+
+            let dep_parser_entry = dep_parser_entry.unwrap();
+            let dep_module: Option<ModWrapper> = compile_dry_file(db, dep_parser_entry);
+            if dep_module.is_none() {
                 continue;
             }
-            let m = m.unwrap();
-            let module = m.plmod(db);
+            let dep_module = dep_module.unwrap().plmod(db);
+
+            // loads sub_module symbols into the current module
             if let Some(s) = symbol_opt {
-                let symbol = module.types.get(&s);
+                let symbol = dep_module.types.get(&s);
                 if let Some(x) = symbol {
                     import_symbol(&s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
                 }
-                let mac = module.macros.get(&s);
+                let mac = dep_module.macros.get(&s);
                 if let Some(x) = mac {
                     global_macro_map.insert(s, x.clone());
                 }
             }
-            if all_import {
-                for (s, x) in module.types.iter() {
+            if wrapper.use_node(db).all_import {
+                for (s, x) in dep_module.types.iter() {
                     import_symbol(s, x, re_export, &mut global_tp_map, &mut global_mthd_map);
                 }
             }
-            modmap.insert(mod_id.unwrap(), Arc::new(module));
+
+            // insert the dep module into the current module map
+            modmap.insert(mod_id.unwrap(), Arc::new(dep_module));
         }
+
         log::trace!("done deps compile");
         let filepath = Path::new(self.params(db).file(db));
         let abs = crate::utils::canonicalize(filepath).unwrap();
         let dir = abs.parent().unwrap().to_str().unwrap();
         let fname = abs.file_name().unwrap().to_str().unwrap();
+
         // 不要修改这里，除非你知道自己在干什么
         // 除了当前用户正打开的文件外，其他文件的编辑位置都输入None，这样可以保证每次用户修改的时候，
         // 未被修改的文件的`emit_file`参数与之前一致，不会被重新分析
@@ -329,9 +353,10 @@ impl Program {
             None
         };
 
+        let params = self.params(db);
         let p = ProgramEmitParam::new(
             db,
-            self.node(db),
+            self.entry_node(db),
             dir.to_string(),
             fname.to_string(),
             abs.to_str().unwrap().to_string(),
@@ -361,6 +386,7 @@ impl Program {
         pb.set_message(format!("正在编译包{}", pkgname));
         #[cfg(not(target_arch = "wasm32"))]
         pb.inc(1);
+
         // the actual compilation happens here
         let m = emit_file(db, p);
         let plmod = m.plmod(db);
@@ -529,6 +555,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     ctx.plmod.macros = params.macro_table(db).get().clone();
     add_primitive_types(&mut ctx);
     ctx.plmod.submods = params.submods(db);
+
     // imports all builtin symbols
     if let Some(builtin_mod) = ctx.plmod.submods.get("builtin").cloned() {
         ctx.plmod.import_all_symbols_from(&builtin_mod);
@@ -566,6 +593,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
             }
         }
     };
+
     let node = params.node(db);
     let mut nn = node.node(db);
     let _ = nn.emit(m, &builder);

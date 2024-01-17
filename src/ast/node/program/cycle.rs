@@ -82,7 +82,7 @@ pub(crate) fn build_init_params(
 }
 
 pub(crate) fn match_node(params: Program, db: &dyn Db) -> ProgramNode {
-    match *params.node(db).node(db) {
+    match *params.entry_node(db).node(db) {
         NodeEnum::Program(p) => p,
         _ => panic!("not a program"),
     }

@@ -48,7 +48,8 @@ pub struct GlobalVar {
 pub type ImplMap = FxHashMap<String, FxHashMap<String, IndexMap<String, Arc<RefCell<PLType>>>>>;
 
 /// # Mod
-/// Represent a module
+/// Mod represents a module in pivot-lang, which is a single pi file as well.
+/// It carries more information than NodeEnum, such as the functions/variables from another dependency.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mod {
     /// mod name
@@ -57,12 +58,12 @@ pub struct Mod {
     pub path: String,
     /// func and types
     pub types: FxHashMap<String, GlobType>,
-    /// sub mods
+    /// sub modules used by the current module
     pub submods: FxHashMap<String, Arc<Mod>>,
-    /// global variable table
+    /// global variable table which is visiable for the current module
+    /// it is consisted by the variables defined in this module or exported variables outside
     pub global_table: FxHashMap<String, GlobalVar>,
     pub defs: LSPRangeMap<Range, LSPDef>,
-    // pub refcache:LSPRangeMap<String, Arc<RwVec<Location>>>,
     pub local_refs: LSPRangeMap<Range, Arc<MutVec<Location>>>, // hold local vars
     pub glob_refs: LSPRangeMap<Range, String>,                 // hold global refs
     pub refs_map: LSPRangeMap<String, Arc<MutVec<Location>>>,

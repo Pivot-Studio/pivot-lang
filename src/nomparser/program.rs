@@ -13,6 +13,14 @@ use crate::{
 
 use super::{implement::impl_def, macro_parse::macro_parser, union::union_stmt, *};
 
+/// # program
+///
+/// `program` uses [top_level_statement] to consume the input span continuously until all inputs are consumed,
+/// or the process of consuming raises an error. If an error raises on the fly, it stops consuming and return the error
+/// wrapped by [Err].
+///
+/// After finishing consuming, all top level statements are classified based on their catagories.
+/// It returns a [ProgramNode] which entails all top level nodes.
 pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let old = input;
     let mut input = input;
@@ -128,6 +136,23 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     Ok((input, node))
 }
 
+/// # top_level_statement
+///
+/// `top_level_statement` consumes the input span with one top-level statement.
+/// It returns the first top level statemnt and the left span for further consuming.
+/// When an error is encountered, the error will be wrapped in the `TopLevel` format to inspect in the furture.
+///
+/// The top level statements are consisted by the following kinds of statement:
+/// 1. function definition
+/// 2. structure definition
+/// 3. implementation definition
+/// 4. macro
+/// 5. global variable declaration
+/// 6. global constant declaration
+/// 7. use statement to import library
+/// 8. comments
+/// 9. trait definition
+/// 10. union definition
 fn top_level_statement(input: Span) -> IResult<Span, Box<TopLevel>> {
     delspace(alt((
         del_newline_or_space!(function_def),

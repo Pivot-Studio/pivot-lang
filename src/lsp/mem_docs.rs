@@ -24,6 +24,7 @@ pub struct MemDocs {
     docs: FxHashMap<String, SourceProgram>,
 }
 
+/// EmitParams is used to pass information
 #[salsa::tracked]
 pub struct EmitParams {
     #[return_ref]
@@ -50,18 +51,22 @@ pub struct MemDocsInput {
     pub edit_pos: Option<Pos>,
 }
 
-/// 必须有#[id]，否则会导致lru cache失效
+/// FileCompileInput holds the information to parse a program through the entry of file,
+/// with processed dependencies required by the file according to its kagari.toml
 #[salsa::tracked]
 pub struct FileCompileInput {
     /// file represents the entry file path to parse
     #[return_ref]
     pub file: String,
+
+    /// modpath is the path of the project, according to the position of kagari.toml
     #[return_ref]
     pub modpath: String,
     pub docs: MemDocsInput,
     pub config: Config,
     pub opt: HashOptimizationLevel,
 }
+
 #[salsa::tracked]
 impl FileCompileInput {
     #[salsa::tracked]

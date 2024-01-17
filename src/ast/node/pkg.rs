@@ -25,6 +25,7 @@ pub struct UseNode {
     pub namespace: Vec<Box<VarNode>>,
 
     /// whether the pub modifier exists
+    /// it's used to re-export a dependency to another users through the current module
     pub modifier: Option<(TokenType, Range)>,
 
     /// whether import all symbols in the namespace
