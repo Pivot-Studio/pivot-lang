@@ -1123,7 +1123,13 @@ assert_eq!(output, &quot;456&quot;); // 第一个parser失败，第二个成功�
 <p>对于pivot lang的每一条语法规则，都会在parser里对应一个分析函数，这些分析函数可能会调用其他分析函数，最终最上层的分析函数可以将完整的源代码转换为ast。</p>
 <p>pivot lang的完整语法规则见<a href="compiler/../../../#grammar">这里</a></p>
 <p>parser最顶层的函数是<code>parse</code>，它接受一个源文件输出一个AST根节点。</p>
-<pre><code class="language-rust no_run noplayground">#[salsa::tracked]
+<pre><code class="language-rust no_run noplayground">
+/// # parse
+///
+/// parse parses the file contents specified by source by the pivot-lang syntax,
+/// and returns the node representation of the file as a [ProgramNodeWrapper].
+/// the `parse` doesn't attempt to read the other files besides the provided file.
+#[salsa::tracked]
 pub fn parse(db: &amp;dyn Db, source: SourceProgram) -&gt; Result&lt;ProgramNodeWrapper, String&gt; {
     let text = source.text(db);
     let re = program(Span::new_extra(text, false));
