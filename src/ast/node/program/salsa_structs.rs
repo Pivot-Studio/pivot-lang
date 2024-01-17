@@ -52,6 +52,10 @@ pub struct LspParams {
 }
 
 #[salsa::tracked]
+/// # ProgramNodeWrapper
+///
+/// `ProgramNodeWrapper`` is a wrapper for node to enjoy the functionalities provided by salsa.
+/// Because pivot-lang mixes the lsp and compiler together, it always use the wrapper after parsing.
 pub struct ProgramNodeWrapper {
     pub node: Box<NodeEnum>,
 }
@@ -61,11 +65,19 @@ pub struct ModWrapper {
     pub plmod: Mod,
 }
 
+/// # Program
+///
+/// `Program` holds the parsed program entry node, and all necessary information to parse a whole AST tree,
+/// for all files used by the program entry node.
 #[salsa::tracked]
 pub struct Program {
-    pub node: ProgramNodeWrapper,
+    /// entry_node is the entry node of a whole program, which represents a file.
+    /// It's used to find all dependencies used inside it to parse the whole program.
+    pub entry_node: ProgramNodeWrapper,
     pub params: EmitParams,
     pub docs: MemDocsInput,
+
+    /// config is all neccessary information to represent a program
     pub config: Config,
     pub opt: HashOptimizationLevel,
 }

@@ -91,6 +91,12 @@ pub struct SourceProgram {
 }
 
 // ANCHOR: parse
+
+/// # parse
+///
+/// parse parses the file contents specified by source by the pivot-lang syntax,
+/// and returns the node representation of the file as a [ProgramNodeWrapper].
+/// the `parse` doesn't attempt to read the other files besides the provided file.
 #[salsa::tracked]
 pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, String> {
     let text = source.text(db);
