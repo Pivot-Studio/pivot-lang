@@ -61,7 +61,7 @@ jobs:
           profile: minimal
           override: true
 
-      - uses: actions/cache@v3
+      - uses: actions/cache@v4
         name: Cache Cargo
         if: ${{ matrix.config.os != 'self-hosted' && matrix.config.os != 'windows-latest' }}
         with:
