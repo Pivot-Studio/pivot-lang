@@ -24,7 +24,7 @@ pub struct MemDocs {
     docs: FxHashMap<String, SourceProgram>,
 }
 
-/// EmitParams is used to pass information
+/// EmitParams is used to pass information during processing LLVM IR or LSP work
 #[salsa::tracked]
 pub struct EmitParams {
     #[return_ref]
@@ -39,8 +39,8 @@ pub struct EmitParams {
 #[salsa::input]
 pub struct MemDocsInput {
     pub docs: Arc<Mutex<MemDocs>>,
-    /// file is the absolute path of the input file to be build,
-    /// currently we will build the whole project instead of this file only.
+
+    /// file is the path of file focused by the editor now
     #[return_ref]
     pub file: String,
     pub op: Options,
