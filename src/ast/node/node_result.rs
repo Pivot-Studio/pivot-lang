@@ -35,8 +35,8 @@ pub trait NodeResultBuilder {
 }
 
 impl NodeResultBuilder for ValueHandle {
-    fn new_output(&self, ty: Arc<RefCell<PLType>>) -> NodeOutput {
-        NodeOutput::new_value_simple(*self, ty)
+    fn new_output(&self, typ: Arc<RefCell<PLType>>) -> NodeOutput {
+        NodeOutput::new_value_simple(*self, typ)
     }
 }
 
@@ -86,6 +86,9 @@ impl NodeOutput {
         }
     }
 
+    /// # new_value_simple
+    ///
+    /// constructs a new [NodeOutput] with None [TerminatorEnum]
     pub fn new_value_simple(value: ValueHandle, ty: Arc<RefCell<PLType>>) -> Self {
         Self {
             value: Some(NodeValue::new(value, ty)),
@@ -106,11 +109,15 @@ impl NodeOutput {
     }
 }
 
+/// NodeValue is the output of the builder
 #[derive(Debug, Clone)]
 pub struct NodeValue {
+    /// the index which maps the real value stored inside the LLVMBuilder
     value: ValueHandle,
     is_const: bool,
+    /// the type of the node expression
     ty: Arc<RefCell<PLType>>,
+    /// method receiver if any
     receiver: Option<(ValueHandle, Option<Arc<RefCell<PLType>>>)>,
 }
 

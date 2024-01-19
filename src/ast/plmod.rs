@@ -57,7 +57,7 @@ pub struct Mod {
     /// file path of the module
     pub path: String,
     /// func and types
-    pub types: FxHashMap<String, GlobType>,
+    pub types: FxHashMap<String, GlobalType>,
     /// sub modules used by the current module
     pub submods: FxHashMap<String, Arc<Mod>>,
     /// global variable table which is visiable for the current module
@@ -70,6 +70,8 @@ pub struct Mod {
     pub sig_helps: LSPRangeMap<Range, SignatureHelp>,
     pub hovers: LSPRangeMap<Range, Hover>,
     pub completions: Arc<RefCell<Vec<CompletionItemWrapper>>>,
+
+    /// whether the completation is generated already
     pub completion_gened: Arc<RefCell<Gened>>,
     pub semantic_tokens_builder: Arc<RefCell<Box<SemanticTokensBuilder>>>, // semantic token builder
     pub hints: Arc<RefCell<Vec<InlayHint>>>,
@@ -81,24 +83,24 @@ pub struct Mod {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GlobType {
+pub struct GlobalType {
     pub is_extern: bool,
     pub re_export: bool,
-    pub tp: Arc<RefCell<PLType>>,
+    pub typ: Arc<RefCell<PLType>>,
 }
 
-impl GlobType {
+impl GlobalType {
     pub fn borrow(&self) -> Ref<'_, PLType> {
-        self.tp.borrow()
+        self.typ.borrow()
     }
     pub fn borrow_mut(&self) -> RefMut<'_, PLType> {
-        self.tp.borrow_mut()
+        self.typ.borrow_mut()
     }
     pub fn new(tp: PLType) -> Self {
         Self {
             is_extern: false,
             re_export: false,
-            tp: Arc::new(RefCell::new(tp)),
+            typ: Arc::new(RefCell::new(tp)),
         }
     }
     pub fn visibal_outside(&self) -> bool {
@@ -114,18 +116,18 @@ impl GlobType {
     }
 }
 
-impl From<PLType> for GlobType {
+impl From<PLType> for GlobalType {
     fn from(tp: PLType) -> Self {
         Self::new(tp)
     }
 }
 
-impl From<Arc<RefCell<PLType>>> for GlobType {
+impl From<Arc<RefCell<PLType>>> for GlobalType {
     fn from(tp: Arc<RefCell<PLType>>) -> Self {
         Self {
             is_extern: false,
             re_export: false,
-            tp,
+            typ: tp,
         }
     }
 }
@@ -181,8 +183,8 @@ impl Mod {
                 PLType::Fn(_) | PLType::Struct(_) | PLType::Trait(_) | PLType::Union(_) => {
                     self.types.insert(
                         k.to_string(),
-                        GlobType {
-                            tp: v.tp.clone(),
+                        GlobalType {
+                            typ: v.typ.clone(),
                             is_extern: true,
                             re_export: false,
                         },
@@ -351,7 +353,14 @@ impl Mod {
         );
         Ok(())
     }
-    fn get_type_inner(&self, name: &str, range: Range, ctx: &Ctx) -> Option<GlobType> {
+
+    /// # get_type_inner
+    ///
+    /// it checks whether the name refers to a primary type or void,
+    /// and then queries the types to try to find a custom type.
+    ///
+    /// None is returned if no sasified type matches the name.
+    fn get_type_inner(&self, name: &str, range: Range, ctx: &Ctx) -> Option<GlobalType> {
         if let Some(x) = PriType::try_from_str(name) {
             return Some(PLType::Primitive(x).into());
         }
@@ -361,7 +370,7 @@ impl Mod {
         let v = self.types.get(name);
         if let Some(pv) = v {
             if range != Default::default() {
-                ctx.set_if_refs_tp(pv.tp.clone(), range);
+                ctx.set_if_refs_tp(pv.typ.clone(), range);
                 ctx.send_if_go_to_def(
                     range,
                     pv.borrow().get_range().unwrap_or(range),
@@ -373,7 +382,10 @@ impl Mod {
         None
     }
 
-    fn get_type_walker(&self, name: &str, range: Range, ctx: &Ctx) -> Result<GlobType, PLDiag> {
+    /// # get_type_walker
+    ///
+    /// it inspects the generic types, and triggers [get_type_inner] to find among primary types and types.
+    fn get_type_walker(&self, name: &str, range: Range, ctx: &Ctx) -> Result<GlobalType, PLDiag> {
         if let Some(pv) = ctx.generic_types.get(name) {
             ctx.set_if_refs_tp(pv.clone(), range);
             ctx.send_if_go_to_def(
@@ -388,7 +400,14 @@ impl Mod {
         }
         Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
     }
-    pub fn get_type(&self, name: &str, range: Range, ctx: &Ctx) -> Result<GlobType, PLDiag> {
+
+    /// # get_type
+    ///
+    /// It tries to find a type associated to the name from current context and all its ancestor contexts until a matched type is found,
+    /// otherwise it returns an error.
+    ///
+    /// It supports both simple type and generic types during finding. The generic argument lists won't be respected during querying.
+    pub fn get_type(&self, name: &str, range: Range, ctx: &Ctx) -> Result<GlobalType, PLDiag> {
         if let Ok(re) = self.get_type_walker(name, range, ctx) {
             return Ok(re);
         }
@@ -445,7 +464,7 @@ impl Mod {
     pub fn get_pltp_completions(
         &self,
         vmap: &mut FxHashMap<String, CompletionItem>,
-        filter: &impl Fn(&GlobType) -> bool,
+        filter: &impl Fn(&GlobalType) -> bool,
         generic_tps: &FxHashMap<String, Arc<RefCell<PLType>>>,
         need_snippet: bool,
     ) {

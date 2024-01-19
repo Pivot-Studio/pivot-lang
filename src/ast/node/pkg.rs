@@ -114,7 +114,7 @@ impl Node for UseNode {
                 path = path.parent().unwrap().to_path_buf();
             }
             if self.namespace.len() > 1 {
-                ctx.if_completion(self.range, || {
+                ctx.generate_completion_if(ctx.should_gen(self.range), || {
                     if self.singlecolon {
                         return vec![];
                     }
@@ -173,7 +173,7 @@ impl Node for UseNode {
                 ctx.send_if_go_to_def(last.range, Default::default(), m.path.to_owned());
             }
         }
-        ctx.if_completion(self.range, || {
+        ctx.generate_completion_if(ctx.should_gen(self.range), || {
             if self.singlecolon {
                 return vec![];
             }
@@ -246,7 +246,7 @@ impl Node for ExternIdNode {
                 // 如果该节点只有一个id，且完整，那么就是一个普通的包内符号，直接调用idnode
                 return self.id.emit(ctx, builder);
             }
-            ctx.if_completion(self.range, || {
+            ctx.generate_completion_if(ctx.should_gen(self.range), || {
                 // 如果completion请求对应的区域在本节点内
                 // 那么将action设成None防止外层节点生成错误的completion
                 // a.action = None;
@@ -260,7 +260,7 @@ impl Node for ExternIdNode {
             });
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION)));
         } else {
-            ctx.if_completion(self.range, || {
+            ctx.generate_completion_if(ctx.should_gen(self.range), || {
                 ctx.get_completions_in_ns(&self.namespace[0].get_name(ctx))
             });
         }
@@ -290,7 +290,7 @@ impl Node for ExternIdNode {
                     // 必须是public的
                     _ = tp.expect_pub(ctx, self.range);
                     ctx.push_semantic_token(self.id.range, SemanticTokenType::FUNCTION, 0);
-                    usize::MAX.new_output(tp.tp).to_result()
+                    usize::MAX.new_output(tp.typ).to_result()
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION))),
             };
@@ -306,7 +306,7 @@ impl ExternIdNode {
                 // 如果该节点只有一个id，且完整，那么就是一个普通的包内符号，直接调用idnode
                 return self.id.get_type(ctx);
             }
-            ctx.if_completion(self.range, || {
+            ctx.generate_completion_if(ctx.should_gen(self.range), || {
                 // 如果completion请求对应的区域在本节点内
                 // 那么将action设成None防止外层节点生成错误的completion
                 // a.action = None;
@@ -319,7 +319,7 @@ impl ExternIdNode {
             });
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION)));
         } else {
-            ctx.if_completion(self.range, || {
+            ctx.generate_completion_if(ctx.should_gen(self.range), || {
                 ctx.get_completions_in_ns(&self.namespace[0].get_name(ctx))
             });
         }
@@ -338,7 +338,7 @@ impl ExternIdNode {
             _ = tp.expect_pub(ctx, self.range);
             let re = match *tp.clone().borrow() {
                 PLType::Struct(_) | PLType::Trait(_) | PLType::Union(_) => {
-                    usize::MAX.new_output(tp.tp).to_result()
+                    usize::MAX.new_output(tp.typ).to_result()
                 }
                 _ => unreachable!(),
             };

@@ -681,7 +681,7 @@ impl FuncDefNode {
             let noop = BuilderEnum::NoOp(NoOpBuilder::default());
             // get it's pointer
             let noop_ptr = &noop as *const BuilderEnum<'a, '_>;
-            let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap().tp);
+            let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap().typ);
             let child = &mut ctx.new_child(self.range.start, builder);
             child.protect_generic_context(&fnvalue.fntype.generic_map, |child| {
                 if first && fnvalue.fntype.generic {
@@ -980,7 +980,7 @@ impl Node for FuncDefNode {
             self.gen_fntype(ctx, true, builder, fntype)?;
             builder.set_di_file(&ctx.get_file());
         }
-        usize::MAX.new_output(pltype.tp).to_result()
+        usize::MAX.new_output(pltype.typ).to_result()
     }
 }
 
@@ -1001,7 +1001,7 @@ impl Node for ClosureNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         // 设计： https://github.com/Pivot-Studio/pivot-lang/issues/284
-        let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap().tp);
+        let i8ptr = PLType::Pointer(ctx.get_type("i8", Default::default()).unwrap().typ);
         let closure_name = format!(
             "closure_line{}_{}",
             self.range.start.line,

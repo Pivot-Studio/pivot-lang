@@ -305,8 +305,12 @@ pub trait IRBuilder<'a, 'ctx> {
     fn is_main(&self, f: ValueHandle) -> bool;
 }
 
+/// ValueHandle is an index used to map a [AnyValueEnum][inkwell::values::AnyValueEnum] inside the [LLVMBuilder].
 pub type ValueHandle = usize;
+
+/// BlockHandle is an index used to map a [BasicBlock][inkwell::basic_block::BasicBlock] inside the [LLVMBuilder].
 pub type BlockHandle = usize;
+
 #[allow(clippy::upper_case_acronyms)]
 #[enum_dispatch(IRBuilder)]
 pub enum BuilderEnum<'a, 'ctx> {

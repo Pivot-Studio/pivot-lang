@@ -382,7 +382,7 @@ impl Node for TakeOpNode {
                     .new_err(ErrorCode::ILLEGAL_GET_FIELD_OPERATION),
             ));
         }
-        ctx.if_completion(self.range, || {
+        ctx.generate_completion_if(ctx.should_gen(self.range), || {
             let mut comps = match &*ctx.auto_deref_tp(head_pltype.clone()).borrow() {
                 PLType::Struct(s) => s.get_completions(ctx),
                 PLType::Union(s) => s.get_mthd_completions(ctx),
