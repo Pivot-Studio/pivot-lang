@@ -192,19 +192,31 @@ fn import_symbol(
 
 #[salsa::tracked]
 impl Program {
+    /// # is_active_file
+    ///
+    /// it checks whether the current file is focused in the editor as an active file
     #[salsa::tracked]
     pub(crate) fn is_active_file(self, db: &dyn Db) -> bool {
-        let params = self.params(db);
-        let f1 = self.docs(db).file(db);
-        let f2 = params.file(db);
-        crate::utils::canonicalize(f1).unwrap() == crate::utils::canonicalize(f2).unwrap()
+        let entry_file = self.docs(db).file(db);
+        let focused_file = self.params(db).file(db);
+        crate::utils::canonicalize(entry_file).unwrap()
+            == crate::utils::canonicalize(focused_file).unwrap()
     }
 
-    #[salsa::tracked]
-    pub fn emit(self, db: &dyn Db) -> ModWrapper {
-        #[cfg(not(target_arch = "wasm32"))]
-        let pb = &COMPILE_PROGRESS;
+    /// # get_pkgname
+    ///
+    /// get the package name according to the building file path
+    fn get_pkgname(self, db: &dyn Db) -> String {
+        let binding = PathBuf::from(self.params(db).file(db)).with_extension("");
+        let pkgname = binding.file_name().unwrap().to_str().unwrap();
+        pkgname.to_string()
+    }
 
+    /// # guard_and_load_buitin_modules
+    ///
+    /// guard the entry node of the [Program] is a [NodeEnum::Program] node,
+    /// and then loads built-in module and gc module.
+    pub fn guard_and_load_buitin_modules(self, db: &dyn Db) -> ProgramNode {
         let mut entry_node = match *self.entry_node(db).node(db) {
             NodeEnum::Program(p) => p,
             _ => panic!("not a program"),
@@ -218,18 +230,21 @@ impl Program {
             entry_node.uses.extend_from_slice(&DEFAULT_USE_NODES);
         }
 
-        let binding = PathBuf::from(self.params(db).file(db)).with_extension("");
-        let pkgname = binding.file_name().unwrap().to_str().unwrap();
+        let pkgname = self.get_pkgname(db);
         // add gc by default
         if pkgname != "gc" {
             entry_node.uses.extend_from_slice(&GC_USE_NODES);
         }
 
-        #[cfg(not(target_arch = "wasm32"))]
-        match pb.length() {
-            None => pb.set_length(1 + entry_node.uses.len() as u64),
-            _ => pb.inc_length(1 + entry_node.uses.len() as u64),
-        }
+        entry_node
+    }
+
+    /// # load_used_modules
+    ///
+    /// load_used_modules loads each dependent module used by the entry_node, parses them into modules,
+    /// loads all the symbols into the entry_node and returns ProgramEmitParam for the further processing.
+    pub fn load_used_modules(self, db: &dyn Db, entry_node: ProgramNode) -> ProgramEmitParam {
+        let pb = &COMPILE_PROGRESS;
 
         let mut modmap = FxHashMap::<String, Arc<Mod>>::default();
         let mut global_mthd_map: FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>> =
@@ -237,7 +252,8 @@ impl Program {
         let mut global_tp_map = FxHashMap::default();
         let mut global_macro_map = FxHashMap::default();
 
-        // parse all dependencies into modules and process symbols into the current sybol table
+        let pkgname = self.get_pkgname(db);
+        // parse all dependencies into modules and process symbols into the main module symbol table
         for (i, u) in entry_node.uses.iter().enumerate() {
             #[cfg(not(target_arch = "wasm32"))]
             pb.set_message(format!(
@@ -354,7 +370,8 @@ impl Program {
         };
 
         let params = self.params(db);
-        let p = ProgramEmitParam::new(
+
+        ProgramEmitParam::new(
             db,
             self.entry_node(db),
             dir.to_string(),
@@ -379,17 +396,42 @@ impl Program {
             self.is_active_file(db),
             self.opt(db),
             self.docs(db).op(db).debug,
-        );
+        )
+    }
 
-        let nn = p.node(db).node(db);
+    /// # emit
+    ///
+    /// `emit` function analyzes all submodules used by the current program,
+    /// resolves all symbols from submodules into the current one,
+    /// and compiles the current module with all sub-modules into LLVM IR or does some LSP works
+    #[salsa::tracked]
+    pub fn emit(self, db: &dyn Db) -> ModWrapper {
+        #[cfg(not(target_arch = "wasm32"))]
+        let pb = &COMPILE_PROGRESS;
+
+        let entry_node = self.guard_and_load_buitin_modules(db);
+
+        #[cfg(not(target_arch = "wasm32"))]
+        match pb.length() {
+            None => pb.set_length(1 + entry_node.uses.len() as u64),
+            _ => pb.inc_length(1 + entry_node.uses.len() as u64),
+        }
+
+        let pkgname = self.get_pkgname(db);
+
+        let emit_params = self.load_used_modules(db, entry_node);
+        let raw_node = emit_params.node(db).node(db);
+
         #[cfg(not(target_arch = "wasm32"))]
         pb.set_message(format!("正在编译包{}", pkgname));
         #[cfg(not(target_arch = "wasm32"))]
         pb.inc(1);
 
         // the actual compilation happens here
-        let m = emit_file(db, p);
+        let m = emit_file(db, emit_params);
         let plmod = m.plmod(db);
+
+        let pos = emit_params.params(db).editing_postion(db);
         if self.is_active_file(db) {
             if pos.is_some() {
                 Completions::push(
@@ -409,11 +451,14 @@ impl Program {
             let b = plmod.semantic_tokens_builder.borrow().build();
             PLSemanticTokens::push(db, b);
         }
-        self.handle_actions(db, p, nn, m);
+
+        self.handle_actions(db, emit_params, raw_node, m);
         m
     }
 
-    /// Handle different actions
+    /// # handle_actions
+    ///
+    /// it handles one of actions for compiler or LSP features
     fn handle_actions(self, db: &dyn Db, p: ProgramEmitParam, nn: Box<NodeEnum>, m: ModWrapper) {
         let params = self.params(db);
         let plmod = m.plmod(db);
@@ -444,8 +489,6 @@ impl Program {
             }
             ActionType::Flow => {
                 if let NodeEnum::Program(pro) = *nn {
-                    // create dot dir
-                    // let mut dotpath = PathBuf::from(p.dir(db));
                     let mut dotpath = PathBuf::from("./");
                     dotpath.push("dots");
                     if !dotpath.exists() {
@@ -532,6 +575,7 @@ impl Program {
         }
     }
 }
+
 pub use salsa_structs::*;
 mod salsa_structs;
 
@@ -545,7 +589,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     let mut ctx = ctx::Ctx::new(
         params.fullpath(db),
         &v,
-        params.params(db).params(db),
+        params.params(db).editing_postion(db),
         params.params(db).config(db),
         db,
         params.is_active_file(db),
