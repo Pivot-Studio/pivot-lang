@@ -5,7 +5,7 @@ use super::super::plmod::CompletionItemWrapper;
 
 use super::super::range::Range;
 
-use super::super::plmod::GlobType;
+use super::super::plmod::GlobalType;
 use super::BUILTIN_FN_NAME_MAP;
 use super::BUILTIN_FN_SNIPPET_MAP;
 
@@ -29,7 +29,10 @@ use lsp_types::CompletionItem;
 use super::Ctx;
 
 impl Ctx<'_> {
-    pub fn get_completions(&self) -> Vec<CompletionItem> {
+    /// # completion_alternatives
+    ///
+    /// completion_alternatives returns all alternatives for completation in current context scope
+    pub fn completion_alternatives(&self) -> Vec<CompletionItem> {
         let mut m = FxHashMap::default();
         self.get_pltp_completions(&mut m, |_| true);
         self.plmod.get_ns_completions_pri(&mut m);
@@ -154,14 +157,14 @@ impl Ctx<'_> {
                 },
             );
         }
-        if let Some(father) = self.father {
+        if let Some(father) = self.parent {
             father.get_var_completions(vmap);
         }
     }
 
     pub(crate) fn get_macro_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         self.plmod.get_macro_completions(vmap);
-        if let Some(father) = self.father {
+        if let Some(father) = self.parent {
             father.get_macro_completions(vmap);
         }
     }
@@ -184,31 +187,46 @@ impl Ctx<'_> {
     pub(crate) fn get_pltp_completions(
         &self,
         vmap: &mut FxHashMap<String, CompletionItem>,
-        filter: impl Fn(&GlobType) -> bool,
+        filter: impl Fn(&GlobalType) -> bool,
     ) {
         self.plmod
             .get_pltp_completions(vmap, &filter, &self.generic_types, true);
         self.get_builtin_completions(vmap);
-        if let Some(father) = self.father {
+        if let Some(father) = self.parent {
             father.get_pltp_completions(vmap, filter);
         }
     }
 
-    pub fn if_completion(
+    /// # should_gen
+    ///
+    /// it check whether a completion should be generated if it the mod is never generated before,
+    /// and the editing position is located inside the range.
+    pub fn should_gen(&self, range: Range) -> bool {
+        if let Some(pos) = self.edit_pos {
+            return pos.is_in(range) && !self.plmod.completion_gened.borrow().is_true();
+        }
+        false
+    }
+
+    /// # generate_completion_if
+    ///
+    /// generate_completion_if will call get_completions to retrieve all alternative completions
+    /// when the should_gen is true for LSP completion.
+    pub fn generate_completion_if(
         &self,
-        range: Range,
+        should_gen: bool,
         get_completions: impl FnOnce() -> Vec<CompletionItem>,
     ) {
-        if let Some(pos) = self.edit_pos {
-            if pos.is_in(range) && !self.plmod.completion_gened.borrow().is_true() {
-                let comps = get_completions();
-                let comps = comps.iter().map(|x| CompletionItemWrapper(x.clone()));
-                self.plmod.completions.borrow_mut().truncate(0);
-                self.plmod.completions.borrow_mut().extend(comps);
-                self.plmod.completion_gened.borrow_mut().set_true();
-            }
+        if !should_gen {
+            return;
         }
+        let comps = get_completions();
+        let comps = comps.iter().map(|x| CompletionItemWrapper(x.clone()));
+        self.plmod.completions.borrow_mut().truncate(0);
+        self.plmod.completions.borrow_mut().extend(comps);
+        self.plmod.completion_gened.borrow_mut().set_true();
     }
+
     pub(crate) fn get_keyword_completions(&self, vmap: &mut FxHashMap<String, CompletionItem>) {
         let keywords = vec![
             "if", "else", "while", "for", "return", "struct", "let", "true", "false", "as", "is",
@@ -218,7 +236,7 @@ impl Ctx<'_> {
         let toplevel = vec![
             "fn", "struct", "const", "var", "use", "impl", "trait", "pub", "type", "gen",
         ];
-        if self.father.is_none() {
+        if self.parent.is_none() {
             for k in toplevel {
                 vmap.insert(
                     k.to_string(),

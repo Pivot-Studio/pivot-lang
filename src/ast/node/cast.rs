@@ -531,7 +531,7 @@ impl Node for IsNode {
                         )
                         .unwrap();
                     let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
-                    cond.new_output(ctx.get_type("bool", Default::default()).unwrap().tp)
+                    cond.new_output(ctx.get_type("bool", Default::default()).unwrap().typ)
                         .set_const()
                         .to_result()
                 } else {
@@ -560,7 +560,7 @@ impl Node for IsNode {
                     )
                     .unwrap();
                 let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
-                cond.new_output(ctx.get_type("bool", Default::default()).unwrap().tp)
+                cond.new_output(ctx.get_type("bool", Default::default()).unwrap().typ)
                     .set_const()
                     .to_result()
             }

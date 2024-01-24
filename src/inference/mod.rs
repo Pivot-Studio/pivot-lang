@@ -586,7 +586,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                         return SymbolType::PLType(t.tp.clone());
                     }
                     if let Some(r) = plmod.types.get(&ex.id.name) {
-                        return SymbolType::PLType(r.tp.clone());
+                        return SymbolType::PLType(r.typ.clone());
                     }
                 }
             }
@@ -1035,7 +1035,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                     .get("gc")
                     .map(|m| m.types.get("string").unwrap().clone())
                     .unwrap_or_else(|| ctx.plmod.types.get("string").unwrap().clone());
-                return SymbolType::PLType(tp.tp.clone());
+                return SymbolType::PLType(tp.typ.clone());
             }
             _ => (),
         }

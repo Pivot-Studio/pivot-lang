@@ -13,7 +13,7 @@ use crate::ast::builder::IRBuilder;
 use crate::ast::compiler::COMPILE_PROGRESS;
 use crate::ast::compiler::{compile_dry_file, ActionType};
 use crate::ast::ctx::{self, Ctx};
-use crate::ast::plmod::GlobType;
+use crate::ast::plmod::GlobalType;
 use crate::ast::plmod::LSPDef;
 use crate::ast::plmod::Mod;
 use crate::ast::pltype::add_primitive_types;
@@ -45,13 +45,15 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex;
 
+/// ProgramNode is an AST representation of a file
 #[node]
 pub struct ProgramNode {
+    /// nodes stores all NodeEnum nodes in the file
     pub nodes: Vec<Box<NodeEnum>>,
+
     pub structs: Vec<StructDefNode>,
     pub fntypes: Vec<FuncDefNode>,
     pub globaldefs: Vec<GlobalNode>,
-
     /// uses stores all dependencies used by the program node
     pub uses: Vec<Box<NodeEnum>>,
     pub traits: Vec<TraitDefNode>,
@@ -106,7 +108,7 @@ impl Node for ProgramNode {
         self.fntypes.iter_mut().for_each(|x| {
             _ = x.emit_func_def(ctx, builder);
         });
-        // ctx.errs.borrow_mut().clear();
+
         // init global
         ctx.set_init_fn(builder);
         self.globaldefs.iter_mut().for_each(|x| {
@@ -115,7 +117,8 @@ impl Node for ProgramNode {
         ctx.plmod.semantic_tokens_builder = Arc::new(RefCell::new(Box::new(
             SemanticTokensBuilder::new(ctx.plmod.path.to_string()),
         )));
-        // node parser
+
+        // emit information for all nodes
         self.nodes.iter_mut().for_each(|x| {
             _ = x.emit(ctx, builder);
         });
@@ -166,18 +169,18 @@ pub use cycle::*;
 
 fn import_symbol(
     s: &str,
-    x: &GlobType,
+    x: &GlobalType,
     re_export: bool,
-    global_tp_map: &mut FxHashMap<String, GlobType>,
+    global_tp_map: &mut FxHashMap<String, GlobalType>,
     global_mthd_map: &mut FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>,
 ) {
     if x.visibal_outside() {
         global_tp_map.insert(
             s.to_owned(),
-            GlobType {
+            GlobalType {
                 is_extern: true,
                 re_export,
-                tp: x.tp.to_owned(),
+                typ: x.typ.to_owned(),
             },
         );
     }
@@ -241,7 +244,7 @@ impl Program {
 
     /// # load_used_modules
     ///
-    /// load_used_modules loads each dependent module used by the entry_node, parses them into modules,
+    /// load_used_modules loads each dependent module used by the entry_node, parses them into modules by [compile_dry_file],
     /// loads all the symbols into the entry_node and returns ProgramEmitParam for the further processing.
     pub fn load_used_modules(self, db: &dyn Db, entry_node: ProgramNode) -> ProgramEmitParam {
         let pb = &COMPILE_PROGRESS;
@@ -417,10 +420,10 @@ impl Program {
             _ => pb.inc_length(1 + entry_node.uses.len() as u64),
         }
 
-        let pkgname = self.get_pkgname(db);
+        let pkgname: String = self.get_pkgname(db);
 
         let emit_params = self.load_used_modules(db, entry_node);
-        let raw_node = emit_params.node(db).node(db);
+        let raw_node = emit_params.program_node(db).node(db);
 
         #[cfg(not(target_arch = "wasm32"))]
         pb.set_message(format!("正在编译包{}", pkgname));
@@ -431,7 +434,7 @@ impl Program {
         let m = emit_file(db, emit_params);
         let plmod = m.plmod(db);
 
-        let pos = emit_params.params(db).editing_postion(db);
+        let pos = emit_params.lsp_params(db).editing_postion(db);
         if self.is_active_file(db) {
             if pos.is_some() {
                 Completions::push(
@@ -579,26 +582,29 @@ impl Program {
 pub use salsa_structs::*;
 mod salsa_structs;
 
-/// # emit_file
+/// # prepare_module_ctx
 ///
-/// compile a pi file to llvm ir, or do some lsp analysis
-#[salsa::tracked]
-pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
-    log::trace!("emit_file: {}", params.fullpath(db),);
-    let v = RefCell::new(FxHashSet::default());
+/// prepare_module_ctx prepares the [Ctx] for the program based on the emitting parameters
+pub fn prepare_module_ctx<'a>(
+    db: &'a dyn Db,
+    program_emit_params: &'a ProgramEmitParam,
+    v: &'a RefCell<FxHashSet<PLDiag>>,
+) -> Ctx<'a> {
     let mut ctx = ctx::Ctx::new(
-        params.fullpath(db),
-        &v,
-        params.params(db).editing_postion(db),
-        params.params(db).config(db),
+        program_emit_params.fullpath(db),
+        v,
+        program_emit_params.lsp_params(db).editing_postion(db),
+        program_emit_params.lsp_params(db).config(db),
         db,
-        params.is_active_file(db),
+        program_emit_params.is_active_file(db),
     );
-    ctx.plmod.trait_mthd_table = Arc::new(RefCell::new(params.mth_table(db).get().clone()));
-    ctx.plmod.types = params.types(db).get().clone();
-    ctx.plmod.macros = params.macro_table(db).get().clone();
+    ctx.plmod.trait_mthd_table = Arc::new(RefCell::new(
+        program_emit_params.mth_table(db).get().clone(),
+    ));
+    ctx.plmod.types = program_emit_params.types(db).get().clone();
+    ctx.plmod.macros = program_emit_params.macro_table(db).get().clone();
     add_primitive_types(&mut ctx);
-    ctx.plmod.submods = params.submods(db);
+    ctx.plmod.submods = program_emit_params.submods(db);
 
     // imports all builtin symbols
     if let Some(builtin_mod) = ctx.plmod.submods.get("builtin").cloned() {
@@ -607,15 +613,34 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
     if let Some(builtin_mod) = ctx.plmod.submods.get("stdbuiltin").cloned() {
         ctx.plmod.import_all_symbols_from(&builtin_mod);
     }
-    ctx.origin_mod = &ctx.plmod as _;
     ctx.import_all_infer_maps_from_sub_mods();
-    let m = &mut ctx;
+    ctx
+}
+
+/// # emit_file
+///
+/// emit_file generates the LLVM IR for a pi file based on the [program_emit_params],
+/// or it does some LSP operations.
+#[salsa::tracked]
+pub fn emit_file(db: &dyn Db, program_emit_params: ProgramEmitParam) -> ModWrapper {
+    log::trace!("emit_file: {}", program_emit_params.fullpath(db),);
+
+    let v = RefCell::new(FxHashSet::default());
+    let mut ctx = prepare_module_ctx(db, &program_emit_params, &v);
+    ctx.origin_mod = &ctx.plmod as _;
+
+    let mctx = &mut ctx;
+
     #[cfg(feature = "llvm")]
     let context = &Context::create();
     #[cfg(feature = "llvm")]
-    let (a, b, c, d, e) = create_llvm_deps(context, params.dir(db), params.file(db));
+    let (a, b, c, d, e) = create_llvm_deps(
+        context,
+        program_emit_params.dir(db),
+        program_emit_params.file(db),
+    );
     let builder = {
-        if !params.params(db).is_compile(db) {
+        if !program_emit_params.lsp_params(db).is_compile(db) {
             let noop = NoOpBuilder::default();
             noop.into()
         } else {
@@ -630,32 +655,33 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
                     &c,
                     &d,
                     &e,
-                    params.opt(db).to_llvm(),
-                    params.debug(db),
+                    program_emit_params.opt(db).to_llvm(),
+                    program_emit_params.debug(db),
                 );
                 builder.into()
             }
         }
     };
 
-    let node = params.node(db);
-    let mut nn = node.node(db);
-    let _ = nn.emit(m, &builder);
+    // program is a [program::ProgramNode] enum
+    let mut program_node = program_emit_params.program_node(db).node(db);
+    let _ = program_node.emit(mctx, &builder);
+
     Diagnostics::push(
         db,
         (
-            params.fullpath(db).clone(),
-            v.borrow().iter().cloned().collect(),
+            program_emit_params.fullpath(db).clone(),
+            ctx.diagnose.borrow().iter().cloned().collect(),
         ),
     );
-    if params.params(db).is_compile(db) {
+    if program_emit_params.lsp_params(db).is_compile(db) {
         builder.finalize_debug();
         let mut hasher = DefaultHasher::new();
-        params.fullpath(db).hash(&mut hasher);
+        program_emit_params.fullpath(db).hash(&mut hasher);
         let hashed = format!(
             "{}/{}_{:x}",
             &ASSET_PATH.lock().unwrap(),
-            Path::new(&params.file(db))
+            Path::new(&program_emit_params.file(db))
                 .with_extension("")
                 .to_str()
                 .unwrap(),
@@ -674,6 +700,7 @@ pub fn emit_file(db: &dyn Db, params: ProgramEmitParam) -> ModWrapper {
             },
         );
     }
+
     db.add_module(ctx.get_file(), ctx.plmod.clone());
     ModWrapper::new(db, ctx.plmod)
 }

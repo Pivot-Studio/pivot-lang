@@ -207,7 +207,7 @@ impl TraitDefNode {
             if let PLType::Trait(st) = &mut *pltype.borrow_mut() {
                 st.fields = fields.clone();
                 st.derives = derives.clone();
-                if let Some(stpltype) = ctx.linked_tp_tbl.remove(&pltype.tp.as_ptr()) {
+                if let Some(stpltype) = ctx.linked_tp_tbl.remove(&pltype.typ.as_ptr()) {
                     for st in stpltype {
                         if let PLType::Trait(st) = &mut *st.borrow_mut() {
                             st.fields = fields.clone();
@@ -217,7 +217,7 @@ impl TraitDefNode {
                 }
                 builder.add_body_to_struct_type(&ctx.plmod.get_full_name(&self.id.name), st, ctx);
             }
-            ctx.add_doc_symbols(pltype.clone().tp);
+            ctx.add_doc_symbols(pltype.clone().typ);
             // ctx.save_if_comment_doc_hover(self.range, Some(self.doc.clone()));
             Ok(())
         })

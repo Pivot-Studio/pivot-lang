@@ -5,7 +5,7 @@ use crate::ast::pltype::FNValue;
 use crate::ast::range::Pos;
 use crate::utils::read_config::Config;
 
-use crate::ast::plmod::{GlobType, Mod};
+use crate::ast::plmod::{GlobalType, Mod};
 
 use crate::lsp::mem_docs::{EmitParams, MemDocsInput};
 use rustc_hash::FxHashMap;
@@ -18,8 +18,8 @@ use super::UnsafeWrapper;
 /// it's used to generate LLVM IR or do some LSP analysis.
 #[salsa::tracked]
 pub struct ProgramEmitParam {
-    /// node is the entry AST node of a program
-    pub node: ProgramNodeWrapper,
+    /// program_node is the entry AST node of a program
+    pub program_node: ProgramNodeWrapper,
 
     #[return_ref]
     /// dir is the directory path of kagari.toml file
@@ -33,7 +33,7 @@ pub struct ProgramEmitParam {
     /// fullpath is the absolute path of the entry file
     pub fullpath: String,
     #[return_ref]
-    pub params: LspParams,
+    pub lsp_params: LspParams,
 
     /// sub-modules analyzed according to the use statements inside the entry node
     pub submods: FxHashMap<String, Arc<Mod>>,
@@ -45,7 +45,7 @@ pub struct ProgramEmitParam {
 
     /// types is all types in the global scope
     #[return_ref]
-    pub types: UnsafeWrapper<FxHashMap<String, GlobType>>,
+    pub types: UnsafeWrapper<FxHashMap<String, GlobalType>>,
 
     // method table, which holds all available methods across all modules
     #[return_ref]

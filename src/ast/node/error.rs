@@ -28,7 +28,7 @@ impl Node for ErrorNode {
         _builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         let err = ctx.add_diag(self.range.new_err(self.code));
-        ctx.if_completion(self.range, || ctx.get_completions());
+        ctx.generate_completion_if(ctx.should_gen(self.range), || ctx.completion_alternatives());
 
         Err(err)
     }

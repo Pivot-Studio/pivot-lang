@@ -86,6 +86,10 @@ impl Ctx<'_> {
             }),
         );
     }
+
+    /// # push_semantic_token
+    ///
+    /// push a semantic token with range for highlight
     pub fn push_semantic_token(&self, range: Range, tp: SemanticTokenType, modifiers: u32) {
         if self.need_highlight.borrow().ne(&0) || self.in_macro {
             return;
