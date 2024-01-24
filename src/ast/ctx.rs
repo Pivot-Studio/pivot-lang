@@ -119,17 +119,17 @@ pub struct Ctx<'a> {
     /// highlight is generated only if the number is 0
     pub need_highlight: Arc<RefCell<usize>>,
 
-    /// LLVM argument: the index to mark a function element inside builder
+    /// the index to mark a lower level code generation of function element from the builder
     pub function: Option<ValueHandle>,
-    /// LLVM argument: the init function called first in main
+    /// the init function called first in main
     pub init_func: Option<ValueHandle>,
-    /// LLVM argument: current block
+    /// current block
     pub block: Option<BlockHandle>,
-    /// LLVM argument: the block to jump when continue if it's a loop statement
+    /// the block to jump when continue if it's a loop statement
     pub continue_block: Option<BlockHandle>,
-    /// LLVM argument: the block to jump to when break if it's a loop statement
+    /// the block to jump to when break if it's a loop statement
     pub break_block: Option<BlockHandle>,
-    /// LLVM argument: the block to jump to when return and value
+    /// the block to jump to when return and value
     pub return_block: Option<(BlockHandle, Option<ValueHandle>)>,
 
     /// diagnose tries to hold all warning and as many as possible errors
