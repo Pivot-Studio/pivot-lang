@@ -19,9 +19,9 @@
 
 ## CONTRIBUTING
 
-[CONTRIBUTING](CONTRIBUTING.md)  
-中文见[此处](https://lang.pivotstudio.cn/CONTRIBUTING-CN.html)  
-欢迎加入[社区群]([https://jq.qq.com/?_wv=1027&k=I5vdShVl](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=nlRLeRcRfr0SxXcLYsjsXobP6X7EeV_c&authKey=rdyEXtc0uMqjYS4i%2FJapoi7CUdwtKgtK5V8Xv0WKgIIb9n4ZkFaIo9mgkflqV%2Frf&noverify=0&group_code=688301255))
+[CONTRIBUTING](CONTRIBUTING.md)｜[贡献代码](https://lang.pivotstudio.cn/docs/CONTRIBUTING-CN.html)
+
+欢迎加入: [社区QQ群](https://jq.qq.com/?_wv=1027&k=I5vdShVl) | [开发者QQ群](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=nlRLeRcRfr0SxXcLYsjsXobP6X7EeV_c&authKey=rdyEXtc0uMqjYS4i%2FJapoi7CUdwtKgtK5V8Xv0WKgIIb9n4ZkFaIo9mgkflqV%2Frf&noverify=0&group_code=688301255)
 
 ## dependencies
 
