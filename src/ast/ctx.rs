@@ -942,7 +942,10 @@ impl<'a, 'ctx> Ctx<'a> {
         self.diagnose.borrow_mut().insert(dia);
         dia2
     }
-    // load type* to type
+    /// # try_load2var
+    ///
+    /// load the element of a pointer from the builder,
+    /// or get the ordinary types for the others
     pub fn try_load2var<'b>(
         &'b mut self,
         range: Range,
@@ -1067,6 +1070,11 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn get_location(&self, range: Range) -> Location {
         Location::new(self.get_file_url(), range.to_diag_range())
     }
+
+    /// # position_at_end
+    ///
+    /// it replace its current block field with the input block handle,
+    /// and inserts it at the end of current builder
     pub fn position_at_end<'b>(
         &'b mut self,
         block: BlockHandle,
@@ -1076,9 +1084,10 @@ impl<'a, 'ctx> Ctx<'a> {
         builder.position_at_end_block(block);
     }
 
-    /// # auto_deref
-    /// 自动解引用，有几层解几层
-    pub fn auto_deref<'b>(
+    /// # deref_greedily
+    ///
+    /// it de-references greedily until the result cannot be de-referenced anymore.
+    pub fn deref_greedily<'b>(
         &'b mut self,
         tp: Arc<RefCell<PLType>>,
         value: ValueHandle,

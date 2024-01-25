@@ -724,9 +724,9 @@ fn emit_for_fields<'a, 'b>(
         let tp = g.get_ty();
         let tp = get_type_deep(tp);
         let v = g.get_value();
-        let (tp, v) = ctx.auto_deref(tp, v, builder);
+        let (tp, v) = ctx.deref_greedily(tp, v, builder);
         let tp = get_type_deep(tp);
-        let (tp, v) = ctx.auto_deref(tp, v, builder);
+        let (tp, v) = ctx.deref_greedily(tp, v, builder);
         let mut code_gen = false;
         let stp = match &*tp.borrow() {
             PLType::Struct(_) => {
@@ -836,9 +836,9 @@ fn emit_if_arr<'a, 'b>(
         let tp = g.get_ty();
         let tp = get_type_deep(tp);
         let v = g.get_value();
-        let (tp, v) = ctx.auto_deref(tp, v, builder);
+        let (tp, v) = ctx.deref_greedily(tp, v, builder);
         let tp = get_type_deep(tp);
-        let (tp, v) = ctx.auto_deref(tp, v, builder);
+        let (tp, v) = ctx.deref_greedily(tp, v, builder);
         let mut code_gen = false;
         let stp = match &*tp.borrow() {
             PLType::Arr(_) => {
@@ -926,9 +926,9 @@ fn emit_if_union<'a, 'b>(
         let tp = g.get_ty();
         let tp = get_type_deep(tp);
         let v = g.get_value();
-        let (tp, v) = ctx.auto_deref(tp, v, builder);
+        let (tp, v) = ctx.deref_greedily(tp, v, builder);
         let tp = get_type_deep(tp);
-        let (tp, v) = ctx.auto_deref(tp, v, builder);
+        let (tp, v) = ctx.deref_greedily(tp, v, builder);
         let mut code_gen = false;
         let stp = match &*tp.borrow() {
             PLType::Union(_) => {
@@ -1074,7 +1074,7 @@ fn emit_match_type<'a, 'b>(
     if let Some(g) = &v {
         let tp = g.get_ty();
         let v = g.get_value();
-        let (tp, mut v) = ctx.auto_deref(tp, v, builder);
+        let (tp, mut v) = ctx.deref_greedily(tp, v, builder);
         let tp = get_type_deep(tp);
         if tp != generic {
             // 类型不匹配

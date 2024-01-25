@@ -124,6 +124,11 @@ pub trait IRBuilder<'a, 'ctx> {
         v: ValueHandle,
         ctx: &mut Ctx<'a>,
     );
+
+    /// # int_value
+    ///
+    /// int_value converts the [PriType] value into a integer format to emit code,
+    /// ,stores the emitted value into the builder and returns its value handle.
     fn int_value(&self, ty: &PriType, v: u64, sign_ext: bool) -> ValueHandle;
     fn position_at(&self, v: ValueHandle);
     fn print_to_file(&self, file: &Path) -> Result<(), String>;
@@ -137,6 +142,11 @@ pub trait IRBuilder<'a, 'ctx> {
         vbs: &[(ValueHandle, BlockHandle)],
     ) -> ValueHandle;
     fn build_unconditional_branch(&self, bb: BlockHandle);
+
+    /// # position_at_end_block
+    ///
+    /// Set the position of the builder to the end of a basic block refered
+    /// by the block handle.
     fn position_at_end_block(&self, block: BlockHandle);
     fn add_body_to_struct_type(&self, name: &str, sttype: &STType, ctx: &mut Ctx<'a>);
     fn get_or_insert_fn_handle(&self, pltp: &FNValue, ctx: &mut Ctx<'a>) -> (ValueHandle, bool);
@@ -154,6 +164,11 @@ pub trait IRBuilder<'a, 'ctx> {
         tp: &PLType,
         ctx: &mut Ctx<'a>,
     ) -> ValueHandle;
+
+    /// # try_load2var
+    ///
+    /// it returns the element of a pointer,
+    /// or array, int, float, struct, vector, and function value directly
     fn try_load2var(
         &self,
         range: Range,

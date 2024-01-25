@@ -429,7 +429,7 @@ impl Node for TakeOpNode {
         }
         let id = self.field.as_ref().unwrap();
         let id_range = id.range();
-        let (head_pltype, mut headptr) = ctx.auto_deref(head_pltype, nv.get_value(), builder);
+        let (head_pltype, mut headptr) = ctx.deref_greedily(head_pltype, nv.get_value(), builder);
         if !builder.is_ptr(headptr) {
             headptr = builder.alloc("temp", &head_pltype.borrow(), ctx, None);
         }
