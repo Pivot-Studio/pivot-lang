@@ -4,7 +4,7 @@ use super::node::program::ASSET_PATH;
 #[cfg(feature = "llvm")]
 use crate::ast::jit_config::IS_JIT;
 use crate::{
-    ast::{accumulators::ModBuffer, diag::ensure_no_error, node::program::Program},
+    ast::{accumulators::ModBuffer, node::program::Program},
     lsp::mem_docs::{FileCompileInput, MemDocsInput},
     nomparser::parse,
     utils::read_config::search_config_file,
@@ -77,6 +77,7 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
     }
 
     let ctx = Context::create();
+    // ensure_no_error(db, docs);
     let (llvmmod, files) = process_llvm_ir(db, docs, &ctx, op);
 
     pl_link(llvmmod, files, out.clone(), op);
@@ -162,7 +163,6 @@ pub fn process_llvm_ir<'a>(
     op: Options,
 ) -> (Module<'a>, Vec<PathBuf>) {
     let mods = compile_dry::accumulated::<ModBuffer>(db, docs);
-    ensure_no_error(db, docs);
 
     let total_steps = 3;
     let pb = ProgressBar::hidden();

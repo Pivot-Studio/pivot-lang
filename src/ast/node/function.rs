@@ -299,6 +299,7 @@ impl Node for FuncCallNode {
         res
     }
 }
+
 /// # generic_tp_apply
 ///
 /// This method will apply generic parameter types to a generic custom type.
@@ -309,12 +310,11 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
     builder: &'b BuilderEnum<'a, '_>,
 ) -> Result<(), PLDiag> {
     // disable highlight
-    *ctx.need_highlight.borrow_mut() += 1;
     let generic_size = tp.get_generic_size();
     let generic_params = node.get_generic_params();
     let range = node.range();
     let mut generic_types = preprocess_generics(generic_params, generic_size, range, ctx, builder)?;
-
+    *ctx.need_highlight.borrow_mut() += 1;
     let re = ctx.run_in_type_mod(tp, |ctx, t| {
         ctx.protect_generic_context(t.get_generic_map(), |ctx| {
             for (i, (_, pltype)) in t.get_generic_map().iter().enumerate() {
@@ -355,6 +355,14 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
                         format_label!("parameter `{}` defined in `{}`", g.0, t.get_name()),
                     );
                     return Err(diag.add_to_ctx(ctx));
+                } else {
+                    ctx.set_if_refs_tp(
+                        generic_types[i].as_ref().unwrap().clone(),
+                        generic_params
+                            .as_ref()
+                            .and_then(|v| v.generics[i].as_ref().map(|v| v.range()))
+                            .unwrap_or_default()
+                    );
                 }
             }
             Ok(())
