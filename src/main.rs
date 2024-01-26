@@ -25,13 +25,15 @@ use std::{
 
 use version::VergenInfo;
 
-use ast::compiler::{self, convert, ActionType};
+use ast::{compiler::{self, compile_dry, convert, ActionType, CHECK_PROGRESS}, diag::ensure_no_error};
 use clap::{Parser, Subcommand};
 use db::Database;
 use lsp::mem_docs::{self, MemDocsInput};
 
 #[cfg(not(target_arch = "wasm32"))]
 use lsp::start_lsp;
+
+use crate::ast::compiler::{prepare_prgressbar, LOOKING_GLASS};
 
 fn main() {
     #[cfg(target_arch = "wasm32")]
@@ -152,7 +154,7 @@ impl Cli {
             .init()
             .unwrap();
 
-        let db = Database::default();
+        let mut db = Database::default();
         let filepath = Path::new(&name);
         let abs = crate::utils::canonicalize(filepath).unwrap();
 
@@ -166,6 +168,26 @@ impl Cli {
             debug: self.debug,
         };
 
+        let mem = MemDocsInput::new(
+            &db,
+            Arc::new(Mutex::new(mem_docs::MemDocs::default())),
+            abs.to_str().unwrap().to_string(),
+            op,
+            ActionType::Diagnostic,
+            None,
+            None,
+        );
+        let pb = &CHECK_PROGRESS;
+        prepare_prgressbar(
+            pb,
+            op,
+            format!("{}[{:2}/{:2}]", LOOKING_GLASS, 1, 1),
+        );
+        let _ = compile_dry(&  db, mem);
+        pb.finish_with_message("代码检查完成");
+        ensure_no_error(&db, mem);
+
+
         let action = if self.flow {
             ActionType::Flow
         } else if self.printast {
@@ -174,15 +196,7 @@ impl Cli {
             ActionType::Compile
         };
 
-        let mem = MemDocsInput::new(
-            &db,
-            Arc::new(Mutex::new(mem_docs::MemDocs::default())),
-            abs.to_str().unwrap().to_string(),
-            op,
-            action,
-            None,
-            None,
-        );
+        mem.set_action(& mut db).to(action);
         compiler::compile(&db, mem, self.out.clone(), op);
     }
     pub fn version(&self) {
