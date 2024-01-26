@@ -87,4 +87,12 @@ impl LibC {
     ) -> *mut libc::c_void {
         unsafe { libc::memcpy(dest, src, n) }
     }
+
+    fn getrandom(
+        buf: *mut libc::c_void,
+        buflen: libc::size_t,
+        flags: libc::c_uint,
+    ) -> libc::ssize_t {
+        unsafe { libc::syscall(libc::SYS_getrandom, buf, buflen, flags) as libc::ssize_t }
+    }
 }
