@@ -1,6 +1,7 @@
 #![allow(clippy::useless_conversion)]
 use std::ffi::CString;
-
+#[cfg(target_os = "windows")]
+extern crate winapi;
 use internal_macro::is_runtime;
 
 struct LibC {}
@@ -93,6 +94,46 @@ impl LibC {
         buflen: libc::size_t,
         flags: libc::c_uint,
     ) -> libc::ssize_t {
-        unsafe { libc::syscall(libc::SYS_getrandom, buf, buflen, flags) as libc::ssize_t }
+        getrandom_inner(buf, buflen, flags)
     }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn getrandom_inner(
+    buf: *mut libc::c_void,
+    buflen: libc::size_t,
+    flags: libc::c_uint,
+) -> libc::ssize_t {
+    unsafe { libc::syscall(libc::SYS_getrandom, buf, buflen, flags) as libc::ssize_t }
+}
+
+#[cfg(target_os = "windows")]
+fn getrandom_inner(
+    buf: *mut libc::c_void,
+    buflen: libc::size_t,
+    flags: libc::c_uint,
+) -> libc::ssize_t {
+    use winapi::um::wincrypt::{
+        CryptAcquireContextA, CryptGenRandom, CryptReleaseContext, CRYPT_VERIFYCONTEXT,
+        PROV_RSA_FULL,
+    };
+    let mut hcryptprov: winapi::shared::ntdef::HCRYPTPROV = 0;
+    unsafe {
+        if CryptAcquireContextA(
+            &mut hcryptprov,
+            null_mut(),
+            null_mut(),
+            PROV_RSA_FULL,
+            CRYPT_VERIFYCONTEXT,
+        ) == 0
+        {
+            return -1;
+        }
+        if CryptGenRandom(hcryptprov, buflen as u32, buf as *mut u8) == 0 {
+            CryptReleaseContext(hcryptprov, 0);
+            return -1;
+        }
+        CryptReleaseContext(hcryptprov, 0);
+    }
+    0
 }
