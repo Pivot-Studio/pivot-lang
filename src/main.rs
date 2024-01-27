@@ -25,7 +25,10 @@ use std::{
 
 use version::VergenInfo;
 
-use ast::{compiler::{self, compile_dry, convert, ActionType, CHECK_PROGRESS}, diag::ensure_no_error};
+use ast::{
+    compiler::{self, compile_dry, convert, ActionType, CHECK_PROGRESS},
+    diag::ensure_no_error,
+};
 use clap::{Parser, Subcommand};
 use db::Database;
 use lsp::mem_docs::{self, MemDocsInput};
@@ -178,15 +181,10 @@ impl Cli {
             None,
         );
         let pb = &CHECK_PROGRESS;
-        prepare_prgressbar(
-            pb,
-            op,
-            format!("{}[{:2}/{:2}]", LOOKING_GLASS, 1, 1),
-        );
-        let _ = compile_dry(&  db, mem);
+        prepare_prgressbar(pb, op, format!("{}[{:2}/{:2}]", LOOKING_GLASS, 1, 1));
+        let _ = compile_dry(&db, mem);
         pb.finish_with_message("代码检查完成");
         ensure_no_error(&db, mem);
-
 
         let action = if self.flow {
             ActionType::Flow
@@ -196,7 +194,7 @@ impl Cli {
             ActionType::Compile
         };
 
-        mem.set_action(& mut db).to(action);
+        mem.set_action(&mut db).to(action);
         compiler::compile(&db, mem, self.out.clone(), op);
     }
     pub fn version(&self) {

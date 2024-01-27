@@ -77,6 +77,18 @@ impl<'a> Ctx<'a> {
             return;
         }
         let root = self.get_root_ctx();
+        if root.get_file() != self.get_file() {
+            return;
+        }
+        if range.start.line == 1 && range.start.column == 12 && root.get_file().contains("iter.pi")
+        {
+            eprintln!(
+                "{}:{}:{}",
+                root.get_file(),
+                range.start.line,
+                range.start.column
+            );
+        }
         root.plmod
             .glob_refs
             .borrow_mut()

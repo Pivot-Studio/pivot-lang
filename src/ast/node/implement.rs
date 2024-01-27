@@ -125,43 +125,45 @@ fn check_fn<'a, 'b>(
             .add_to_ctx(ctx);
     }
     if let PLType::Trait(st) = &*trait_tp.borrow() {
-        if !st.fields.iter().any(|(_, f)| {
-            let tp = f.typenode.get_type(ctx, builder, true).unwrap();
-            let re = match (&*tp.borrow(), &*fntype.borrow()) {
-                (PLType::Fn(f1), PLType::Fn(f2)) => {
-                    if f1.eq_except_receiver(f2, ctx, builder) {
-                        traitfns.remove(&f1.name);
-                        true
-                    } else {
-                        false
+        ctx.run_in_type_mod(st, |ctx,st| {
+            if !st.fields.iter().any(|(_, f)| {
+                let tp = f.typenode.get_type(ctx, builder, true).unwrap();
+                let re = match (&*tp.borrow(), &*fntype.borrow()) {
+                    (PLType::Fn(f1), PLType::Fn(f2)) => {
+                        if f1.eq_except_receiver(f2, ctx, builder) {
+                            traitfns.remove(&f1.name);
+                            true
+                        } else {
+                            false
+                        }
                     }
-                }
-                _ => unreachable!(),
-            };
-            re
-        }) {
-            method
-                .range()
-                .new_err(ErrorCode::METHOD_NOT_IN_TRAIT)
-                .add_label(
-                    method.range(),
-                    ctx.get_file(),
-                    format_label!(
-                        "method {} not in trait {}",
-                        method.id.name.split("::").last().unwrap(),
-                        &st.name
-                    ),
-                )
-                .add_label(
-                    st.range,
-                    st.get_path(),
-                    format_label!("trait {} def here", &st.name),
-                )
-                .add_help(
-                    "move this method to another impl block or remove it from current impl block",
-                )
-                .add_to_ctx(ctx);
-        }
+                    _ => unreachable!(),
+                };
+                re
+            }) {
+                method
+                    .range()
+                    .new_err(ErrorCode::METHOD_NOT_IN_TRAIT)
+                    .add_label(
+                        method.range(),
+                        ctx.get_file(),
+                        format_label!(
+                            "method {} not in trait {}",
+                            method.id.name.split("::").last().unwrap(),
+                            &st.name
+                        ),
+                    )
+                    .add_label(
+                        st.range,
+                        st.get_path(),
+                        format_label!("trait {} def here", &st.name),
+                    )
+                    .add_help(
+                        "move this method to another impl block or remove it from current impl block",
+                    )
+                    .add_to_ctx(ctx);
+            }
+        });
         return Ok(());
     }
     unreachable!()

@@ -968,13 +968,13 @@ impl FNValue {
             }
         }
         get_type_deep(self.fntype.ret_pltype.get_type(ctx, builder, true).unwrap())
-            == get_type_deep(
+            == get_type_deep(ctx.run_in_type_mod(other, |ctx, other| {
                 other
                     .fntype
                     .ret_pltype
                     .get_type(ctx, builder, true)
-                    .unwrap(),
-            )
+                    .unwrap()
+            }))
     }
     pub fn append_name_with_generic(&self, name: String) -> String {
         if self.fntype.need_gen_code() {

@@ -249,7 +249,6 @@ impl Program {
     /// load_used_modules loads each dependent module used by the entry_node, parses them into modules by [compile_dry_file],
     /// loads all the symbols into the entry_node and returns ProgramEmitParam for the further processing.
     pub fn load_used_modules(self, db: &dyn Db, entry_node: ProgramNode) -> ProgramEmitParam {
-
         let mut modmap = FxHashMap::<String, Arc<Mod>>::default();
         let mut global_mthd_map: FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>> =
             FxHashMap::default();
@@ -258,9 +257,9 @@ impl Program {
 
         let pkgname = self.get_pkgname(db);
         let (job, pb) = if self.params(db).action(db) == ActionType::Compile {
-            ("编译", &COMPILE_PROGRESS as & ProgressBar)
+            ("编译", &COMPILE_PROGRESS as &ProgressBar)
         } else {
-            ("检查", &CHECK_PROGRESS as & ProgressBar)
+            ("检查", &CHECK_PROGRESS as &ProgressBar)
         };
         // parse all dependencies into modules and process symbols into the main module symbol table
         for (i, u) in entry_node.uses.iter().enumerate() {
@@ -418,9 +417,9 @@ impl Program {
     pub fn emit(self, db: &dyn Db) -> ModWrapper {
         #[cfg(not(target_arch = "wasm32"))]
         let (job, pb) = if self.params(db).action(db) == ActionType::Compile {
-            ("编译", &COMPILE_PROGRESS as & ProgressBar)
+            ("编译", &COMPILE_PROGRESS as &ProgressBar)
         } else {
-            ("检查", &CHECK_PROGRESS as & ProgressBar)
+            ("检查", &CHECK_PROGRESS as &ProgressBar)
         };
 
         let entry_node = self.guard_and_load_buitin_modules(db);
