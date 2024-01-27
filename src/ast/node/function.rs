@@ -214,6 +214,9 @@ impl Node for FuncCallNode {
             _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND))),
         };
 
+        if let Some(p) = &self.generic_params {
+            p.emit_highlight(ctx);
+        }
         generic_tp_apply(&fnvalue, self, ctx, builder)?;
         let mut skip = 0;
         let mut para_values = vec![];
@@ -309,12 +312,17 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
     ctx: &'b mut Ctx<'a>,
     builder: &'b BuilderEnum<'a, '_>,
 ) -> Result<(), PLDiag> {
-    // disable highlight
     let generic_size = tp.get_generic_size();
     let generic_params = node.get_generic_params();
-    let range = node.range();
-    let mut generic_types = preprocess_generics(generic_params, generic_size, range, ctx, builder)?;
+    // disable highlight
     *ctx.need_highlight.borrow_mut() += 1;
+    let range = node.range();
+    let re = preprocess_generics(generic_params, generic_size, range, ctx, builder);
+    if let Err(diag) = re {
+        *ctx.need_highlight.borrow_mut() -= 1;
+        return Err(diag);
+    }
+    let mut generic_types = re.unwrap();
     let re = ctx.run_in_type_mod(tp, |ctx, t| {
         ctx.protect_generic_context(t.get_generic_map(), |ctx| {
             for (i, (_, pltype)) in t.get_generic_map().iter().enumerate() {
@@ -361,7 +369,7 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
                         generic_params
                             .as_ref()
                             .and_then(|v| v.generics[i].as_ref().map(|v| v.range()))
-                            .unwrap_or_default()
+                            .unwrap_or_default(),
                     );
                 }
             }
