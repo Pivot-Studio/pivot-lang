@@ -111,7 +111,7 @@ fn getrandom_inner(
 fn getrandom_inner(
     buf: *mut libc::c_void,
     buflen: libc::size_t,
-    flags: libc::c_uint,
+    _flags: libc::c_uint,
 ) -> libc::ssize_t {
     use core::ptr::null_mut;
     use winapi::um::wincrypt::{
