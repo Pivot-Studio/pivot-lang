@@ -252,12 +252,12 @@ impl UnionType {
             .collect::<Result<Vec<_>, PLDiag>>()?;
         res.generic_map.clear();
         let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
-        pltype.tp.replace(PLType::Union(res.clone()));
+        pltype.typ.replace(PLType::Union(res.clone()));
         // ctx.generic_infer
         // .borrow_mut().entry(self.get_full_name_except_generic()).or_insert(Default::default())
         // .borrow_mut()
         // .insert(res.name.clone(), pltype.tp.clone());
-        ctx.add_infer_result(self, &res.name, pltype.tp);
+        ctx.add_infer_result(self, &res.name, pltype.typ);
         builder.set_di_file(&ctx.get_file());
         Ok(res)
     }
@@ -353,6 +353,10 @@ impl PriType {
                 | PriType::BOOL
         )
     }
+
+    /// # try_from_str
+    ///
+    /// try to convert a string to a pivot language type if it's a primary type
     pub fn try_from_str(str: &str) -> Option<Self> {
         match str {
             "i8" => Some(PriType::I8),
@@ -1387,7 +1391,7 @@ impl STType {
                 })
                 .collect();
             if let Ok(pltype) = ctx.get_type(&name, Default::default()) {
-                return Ok(pltype.tp);
+                return Ok(pltype.typ);
             }
             let mut res = self.clone();
             res.name = name;
@@ -1449,9 +1453,9 @@ impl STType {
             res.generic_infer_types = generic_infer_types;
             let pltype = ctx.get_type(&res.name, Default::default()).unwrap();
             if res.is_trait {
-                pltype.tp.replace(PLType::Trait(res.clone()));
+                pltype.typ.replace(PLType::Trait(res.clone()));
             } else {
-                pltype.tp.replace(PLType::Struct(res.clone()));
+                pltype.typ.replace(PLType::Struct(res.clone()));
             }
             // // TODO union & nested placeholder
             // if !res
@@ -1462,9 +1466,9 @@ impl STType {
             //     ctx.add_infer_result(self, &res.name, pltype.tp.clone());
             // }
 
-            ctx.add_infer_result(self, &res.name, pltype.tp.clone());
+            ctx.add_infer_result(self, &res.name, pltype.typ.clone());
             builder.set_di_file(&ctx.get_file());
-            Ok(pltype.tp)
+            Ok(pltype.typ)
         })
     }
     pub fn get_field_completions(&self, must_pub: bool) -> Vec<CompletionItem> {

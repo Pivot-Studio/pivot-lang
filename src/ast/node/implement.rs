@@ -211,7 +211,9 @@ impl Node for ImplNode {
             let mut method_docsymbols = vec![];
             if let TypeNodeEnum::Basic(bt) = &*self.target {
                 if bt.id.is_none() {
-                    ctx.if_completion(bt.range, || ctx.get_type_completions());
+                    ctx.generate_completion_if(ctx.should_gen(bt.range), || {
+                        ctx.get_type_completions()
+                    });
                     return Err(ctx.add_diag(bt.range.new_err(ErrorCode::EXPECT_TYPE)));
                 }
                 let v = bt.id.as_ref().unwrap().get_type(ctx)?.get_value();

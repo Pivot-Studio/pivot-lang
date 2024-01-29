@@ -305,8 +305,12 @@ pub trait IRBuilder<'a, 'ctx> {
     fn is_main(&self, f: ValueHandle) -> bool;
 }
 
+/// ValueHandle is an index used to separate the low level generatted code inside [BuilderEnum] from the respective high level ast node
 pub type ValueHandle = usize;
+
+/// BlockHandle is an index used to separate the low level generatted code inside [BuilderEnum] from the respective high level ast node
 pub type BlockHandle = usize;
+
 #[allow(clippy::upper_case_acronyms)]
 #[enum_dispatch(IRBuilder)]
 pub enum BuilderEnum<'a, 'ctx> {

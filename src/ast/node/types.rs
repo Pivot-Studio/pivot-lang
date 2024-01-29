@@ -75,7 +75,8 @@ impl TypeNameNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> TypeNodeResult {
         if self.id.is_none() {
-            ctx.if_completion(self.range, || ctx.get_type_completions());
+            ctx.generate_completion_if(ctx.should_gen(self.range), || ctx.get_type_completions());
+
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_TYPE)));
         }
         let pltype = self
@@ -86,7 +87,7 @@ impl TypeNameNode {
             .get_value()
             .unwrap()
             .get_ty();
-        ctx.if_completion(self.range, || ctx.get_type_completions());
+        ctx.generate_completion_if(ctx.should_gen(self.range), || ctx.get_type_completions());
 
         match &*pltype.clone().borrow() {
             PLType::Struct(sttype) | PLType::Trait(sttype) => {
@@ -579,7 +580,7 @@ impl StructDefNode {
                 }
                 let tp = tpre.unwrap();
                 field_pltps.push(tp.clone());
-                ctx.set_field_refs(pltype.tp.clone(), &f, f.range);
+                ctx.set_field_refs(pltype.typ.clone(), &f, f.range);
                 ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
                 fields.insert(id.name.to_string(), f.clone());
             }
@@ -587,7 +588,7 @@ impl StructDefNode {
             if let PLType::Struct(st) = &mut *pltype.borrow_mut() {
                 st.fields = fields.clone();
                 st.doc = self.pre_comments.clone();
-                if let Some(stpltype) = ctx.linked_tp_tbl.remove(&pltype.tp.as_ptr()) {
+                if let Some(stpltype) = ctx.linked_tp_tbl.remove(&pltype.typ.as_ptr()) {
                     for st in stpltype {
                         if let PLType::Struct(st) = &mut *st.borrow_mut() {
                             st.fields = fields.clone();
@@ -607,8 +608,8 @@ impl StructDefNode {
                     builder.gen_st_visit_function(ctx, st, &field_pltps);
                 }
             }
-            ctx.set_if_refs_tp(pltype.tp.clone(), self.id.range);
-            ctx.add_doc_symbols(pltype.tp.clone());
+            ctx.set_if_refs_tp(pltype.typ.clone(), self.id.range);
+            ctx.add_doc_symbols(pltype.typ.clone());
             ctx.save_if_comment_doc_hover(self.range, Some(self.pre_comments.clone()));
             Ok(())
         })
@@ -699,7 +700,9 @@ impl Node for StructInitNode {
                     let field_exp_range = fieldinit.exp.range();
                     let field = sttype.fields.get(&fieldinit.id.name);
                     if field.is_none() {
-                        ctx.if_completion(self.range, || sttype.get_completions(ctx));
+                        ctx.generate_completion_if(ctx.should_gen(self.range), || {
+                            sttype.get_completions(ctx)
+                        });
                         return Err(
                             ctx.add_diag(field_id_range.new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND))
                         );
@@ -737,7 +740,9 @@ impl Node for StructInitNode {
                     ctx.set_field_refs(pltype.clone(), field, field_id_range);
                 } else if let NodeEnum::Err(fieldinit) = &mut **fieldinit {
                     if !fieldinit.src.contains(':') {
-                        ctx.if_completion(fieldinit.range(), || sttype.get_completions(ctx));
+                        ctx.generate_completion_if(ctx.should_gen(fieldinit.range()), || {
+                            sttype.get_completions(ctx)
+                        });
                     }
                     let _ = fieldinit.emit(ctx, builder);
                 } else {
@@ -1103,10 +1108,10 @@ impl TypeNode for CustomTypeNode {
         let m = ctx.get_mod(&self.path);
         let re = ctx.get_type(&self.name, self.range);
         if let Ok(tp) = re {
-            return Ok(tp.tp);
+            return Ok(tp.typ);
         }
         let tp = ctx.get_type_in_mod(&m, &self.name, self.range)?;
-        Ok(tp.tp)
+        Ok(tp.typ)
     }
 
     fn emit_highlight(&self, _ctx: &mut Ctx) {

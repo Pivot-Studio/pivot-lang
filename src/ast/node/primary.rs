@@ -85,20 +85,23 @@ impl Node for NumNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.range, SemanticTokenType::NUMBER, 0);
-        if let Num::Int(x) = self.value {
-            let b = builder.int_value(&PriType::I64, x, true);
-            return b
-                .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::I64))))
-                .set_const()
-                .to_result();
-        } else if let Num::Float(x) = self.value {
-            let b = builder.float_value(&PriType::F64, x);
-            return b
-                .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::F64))))
-                .set_const()
-                .to_result();
+
+        match self.value {
+            Num::Int(x) => {
+                let b = builder.int_value(&PriType::I64, x, true);
+                return b
+                    .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::I64))))
+                    .set_const()
+                    .to_result();
+            }
+            Num::Float(x) => {
+                let b = builder.float_value(&PriType::F64, x);
+                return b
+                    .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::F64))))
+                    .set_const()
+                    .to_result();
+            }
         }
-        panic!("not implemented")
     }
 }
 
@@ -116,7 +119,9 @@ impl Node for VarNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         if self.is_macro_var() {
+            // verify whether the macro is a valid macro
             let re = ctx
+                // the parser ensures the name is more than 1 charactor
                 .find_macro_symbol(&self.name[1..])
                 .cloned()
                 .or_else(|| {
@@ -131,10 +136,11 @@ impl Node for VarNode {
                         .new_err(ErrorCode::MACRO_VAR_NOT_FOUND)
                         .add_help(&format!(
                             "add a macro var named `{}` in the macro definition",
-                            self.name
+                            self.name,
                         ))
                         .add_to_ctx(ctx)
                 })?;
+
             match re {
                 MacroReplaceNode::NodeEnum(mut n) => {
                     ctx.macro_skip_level += 1;
@@ -158,10 +164,11 @@ impl Node for VarNode {
                 }
             }
         }
-        ctx.if_completion(self.range, || ctx.get_completions());
+
+        ctx.generate_completion_if(ctx.should_gen(self.range), || ctx.completion_alternatives());
+
         if let Some(s) = ctx.get_symbol(&self.name, builder) {
             let is_captured = s.is_captured();
-            let symbol = s.get_data();
             ctx.push_semantic_token(
                 self.range,
                 SemanticTokenType::VARIABLE,
@@ -171,17 +178,18 @@ impl Node for VarNode {
                     0
                 },
             );
-            let value = if ctx.generator_data.is_some() {
-                builder.build_load(
+
+            let symbol = s.get_data();
+            let symbol_value = match ctx.generator_data {
+                None => symbol.value,
+                _ => builder.build_load(
                     symbol.value,
                     "load_generator_var",
                     &PLType::new_i8_ptr(),
                     ctx,
-                )
-            } else {
-                symbol.value
+                ),
             };
-            let o = value.new_output(symbol.pltype).to_result();
+
             ctx.send_if_go_to_def(self.range, symbol.range, ctx.plmod.path.clone());
             symbol
                 .refs
@@ -192,6 +200,8 @@ impl Node for VarNode {
                     ctx.set_glob_refs(&ctx.plmod.get_full_name(&self.name), self.range);
                     Some(())
                 });
+
+            let o = symbol_value.new_output(symbol.pltype).to_result();
             return o;
         }
         if let Some(builtin) = BUILTIN_FN_NAME_MAP.get(&self.name as &str) {
@@ -207,9 +217,9 @@ impl Node for VarNode {
                     ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
                     if !f.fntype.generic {
                         let handle = builder.get_or_insert_fn_handle(f, ctx).0;
-                        return handle.new_output(tp.tp.clone()).to_result();
+                        return handle.new_output(tp.typ.clone()).to_result();
                     }
-                    return usize::MAX.new_output(tp.tp.clone()).to_result();
+                    return usize::MAX.new_output(tp.typ.clone()).to_result();
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::VAR_NOT_FOUND))),
             }
@@ -252,7 +262,7 @@ impl VarNode {
                 todo!()
             }
         }
-        ctx.if_completion(self.range, || ctx.get_completions());
+        ctx.generate_completion_if(ctx.should_gen(self.range), || ctx.completion_alternatives());
 
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match *tp.borrow() {
@@ -265,11 +275,10 @@ impl VarNode {
                 | PLType::Union(_) => {
                     if let PLType::Struct(st) | PLType::Trait(st) = &*tp.clone().borrow() {
                         ctx.send_if_go_to_def(self.range, st.range, st.path.clone());
-                        // ctx.set_if_refs(st.refs.clone(), self.range);
                     } else if let PLType::Union(u) = &*tp.clone().borrow() {
                         ctx.send_if_go_to_def(self.range, u.range, u.path.clone());
                     }
-                    return usize::MAX.new_output(tp.tp.clone()).to_result();
+                    return usize::MAX.new_output(tp.typ.clone()).to_result();
                 }
                 _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE))),
             }

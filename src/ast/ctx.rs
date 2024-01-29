@@ -9,7 +9,7 @@ use super::node::function::generator::CtxFlag;
 use super::node::macro_nodes::MacroNode;
 use super::node::node_result::NodeResult;
 use super::node::NodeEnum;
-use super::plmod::GlobType;
+use super::plmod::GlobalType;
 use super::plmod::GlobalVar;
 use super::plmod::Mod;
 use super::plmod::MutVec;
@@ -63,8 +63,11 @@ pub struct PLSymbolData {
 
 #[derive(Clone)]
 pub enum PLSymbol {
+    /// Local refers the symbol exists in a local scope
     Local(PLSymbolData),
+    /// Global refers the symbol exists in the global scope of current module
     Global(PLSymbolData),
+    /// Captured refers a symbol exists in another module
     Captured(PLSymbolData),
 }
 
@@ -75,6 +78,9 @@ impl PLSymbol {
     pub fn is_captured(&self) -> bool {
         matches!(self, PLSymbol::Captured(_))
     }
+    /// # get_data_ref
+    ///
+    /// returns the reference of the symbol data regardless the scope of data
     pub fn get_data_ref(&self) -> &PLSymbolData {
         match self {
             PLSymbol::Local(d) => d,
@@ -82,6 +88,10 @@ impl PLSymbol {
             PLSymbol::Captured(d) => d,
         }
     }
+
+    /// # get_data
+    ///
+    /// returns the the symbol data regardless the scope of data
     pub fn get_data(self) -> PLSymbolData {
         match self {
             PLSymbol::Local(d) => d,
@@ -96,45 +106,89 @@ type GenericCacheMap = IndexMap<String, Arc<RefCell<IndexMap<String, Arc<RefCell
 pub type GenericCache = Arc<RefCell<GenericCacheMap>>;
 
 /// # Ctx
-/// Context for code generation
+/// Context for code generation and LSP features
 pub struct Ctx<'a> {
     pub generic_types: FxHashMap<String, Arc<RefCell<PLType>>>,
-    pub need_highlight: Arc<RefCell<usize>>,
     pub plmod: Mod,
-    pub father: Option<&'a Ctx<'a>>, // father context, for symbol lookup
+
+    pub parent: Option<&'a Ctx<'a>>, // parent context, for symbol lookup
     pub root: Option<&'a Ctx<'a>>,   // root context, for symbol lookup
-    pub function: Option<ValueHandle>, // current function
-    pub init_func: Option<ValueHandle>, //init function,call first in main
-    pub block: Option<BlockHandle>,  // current block
-    pub continue_block: Option<BlockHandle>, // the block to jump when continue
-    pub break_block: Option<BlockHandle>, // the block to jump to when break
-    pub return_block: Option<(BlockHandle, Option<ValueHandle>)>, // the block to jump to when return and value
-    pub errs: &'a RefCell<FxHashSet<PLDiag>>,                     // diagnostic list
-    pub edit_pos: Option<Pos>,                                    // lsp params
-    pub table: FxHashMap<String, PLSymbolData>,                   // variable table
-    pub config: Config,                                           // config
+
+    /// LSP argument, because the high light among multiple tokens require an order,
+    /// hence, we stores a value inside it to refer whether we need to generate the code or not.
+    /// highlight is generated only if the number is 0
+    pub need_highlight: Arc<RefCell<usize>>,
+
+    /// the index to mark a lower level code generation of function element from the builder
+    pub function: Option<ValueHandle>,
+    /// the init function called first in main
+    pub init_func: Option<ValueHandle>,
+    /// current block
+    pub block: Option<BlockHandle>,
+    /// the block to jump when continue if it's a loop statement
+    pub continue_block: Option<BlockHandle>,
+    /// the block to jump to when break if it's a loop statement
+    pub break_block: Option<BlockHandle>,
+    /// the block to jump to when return and value
+    pub return_block: Option<(BlockHandle, Option<ValueHandle>)>,
+
+    /// diagnose tries to hold all warning and as many as possible errors
+    pub diagnose: &'a RefCell<FxHashSet<PLDiag>>,
+
+    /// LSP argument: the editing position of this context
+    pub edit_pos: Option<Pos>,
+
+    /// available varaibles in the current block,
+    /// the outside variables could be accessed through the parent ctx.                             
+    pub table: FxHashMap<String, PLSymbolData>,
+    pub config: Config, // config
     pub db: &'a dyn Db,
+
+    /// the return type of a function, all contexts for functions or the child contexts of functions
+    /// hold the return type.
     pub rettp: Option<Arc<RefCell<PLType>>>,
+
+    /// the expect_ty is used when implicitly cast type during assignment
+    /// for example, the `let i:i8 = 1.2`, the expect_ty will be i8
+    pub expect_ty: Option<Arc<RefCell<PLType>>>,
+
+    /// generics requires a code generation at the place where the identifiers are defined
+    /// hence, we need to perserve the definition position as well for a better error report.
+    /// the temp_source stores the position where the code is generated.
+    pub temp_source: Option<String>,
+
+    /// stores the the additional date of a closure
+    pub closure_data: Option<Arc<RefCell<ClosureCtxData>>>,
+
+    /// used to recognize self reference to avoid endless loop
+    pub self_ref_map: FxHashMap<String, FxHashSet<(String, Range)>>,
+
+    pub ctx_flag: CtxFlag, // can ignore first
+    pub generator_data: Option<Arc<RefCell<GeneratorCtxData>>>,
+
+    pub generic_cache: GenericCache, // too old to remember
+
+    /// back up plmod because sometimes we need to find the parent mod after switching
+    pub origin_mod: *const Mod,
+
+    pub linked_tp_tbl: FxHashMap<*mut PLType, Vec<Arc<RefCell<PLType>>>>,
+
+    /// not all lsp request has an edition position
+    is_active_file: bool,
+
+    // for lsp, don't give hints for variables, etc...
+    as_root: bool,
+
+    macro_expand_depth: Arc<RefCell<u64>>,
+    pub unify_table: Arc<RefCell<UnificationTable<TyVariable>>>,
+    pub disable_diag: bool,
+
     pub macro_vars: FxHashMap<String, MacroReplaceNode>,
     pub macro_skip_level: usize,
     pub macro_loop: bool,
     pub macro_loop_idx: usize,
     pub macro_loop_len: usize,
-    pub temp_source: Option<String>,
     pub in_macro: bool,
-    pub closure_data: Option<Arc<RefCell<ClosureCtxData>>>,
-    pub expect_ty: Option<Arc<RefCell<PLType>>>,
-    pub self_ref_map: FxHashMap<String, FxHashSet<(String, Range)>>, // used to recognize self reference
-    pub ctx_flag: CtxFlag,
-    pub generator_data: Option<Arc<RefCell<GeneratorCtxData>>>,
-    pub generic_cache: GenericCache,
-    pub origin_mod: *const Mod,
-    pub linked_tp_tbl: FxHashMap<*mut PLType, Vec<Arc<RefCell<PLType>>>>,
-    is_active_file: bool,
-    as_root: bool,
-    macro_expand_depth: Arc<RefCell<u64>>,
-    pub unify_table: Arc<RefCell<UnificationTable<TyVariable>>>,
-    pub disable_diag: bool,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -236,13 +290,13 @@ impl<'a, 'ctx> Ctx<'a> {
         while let Some(p) = ctx {
             i += 1;
             if i <= self.macro_skip_level {
-                ctx = p.father;
+                ctx = p.parent;
                 continue;
             }
             if let Some(v) = p.macro_vars.get(name) {
                 return Some(v);
             }
-            ctx = p.father;
+            ctx = p.parent;
         }
         None
     }
@@ -259,10 +313,10 @@ impl<'a, 'ctx> Ctx<'a> {
             need_highlight: Default::default(),
             generic_types: FxHashMap::default(),
             plmod: Mod::new(src_file_path.to_string(), generic_infer.clone()),
-            father: None,
+            parent: None,
             init_func: None,
             function: None,
-            errs,
+            diagnose: errs,
             edit_pos,
             table: FxHashMap::default(),
             config,
@@ -297,15 +351,15 @@ impl<'a, 'ctx> Ctx<'a> {
     }
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
         let mut root = self.root;
-        if self.father.is_none() {
+        if self.parent.is_none() {
             root = Some(self);
         }
         let mut ctx = Ctx {
             need_highlight: self.need_highlight.clone(),
             generic_types: FxHashMap::default(),
             plmod: self.plmod.new_child(),
-            father: Some(self),
-            errs: self.errs,
+            parent: Some(self),
+            diagnose: self.diagnose,
             edit_pos: self.edit_pos,
             table: FxHashMap::default(),
             config: self.config.clone(),
@@ -550,7 +604,8 @@ impl<'a, 'ctx> Ctx<'a> {
         }
     }
     /// # get_symbol
-    /// search in current and all father symbol tables
+    ///
+    /// search in current and all parent symbol tables
     pub fn get_symbol<'b>(
         &'b self,
         name: &str,
@@ -564,12 +619,12 @@ impl<'a, 'ctx> Ctx<'a> {
             let mut data = data.borrow_mut();
             if let Some((symbol, _)) = data.table.get(name) {
                 return Some(PLSymbol::Captured(symbol.clone()));
-            } else if let Some(father) = self.father {
-                let re = father.get_symbol(name, builder);
+            }
+            if let Some(parent) = self.parent {
+                let re = parent.get_symbol(name, builder);
                 if let Some(s) = &re {
                     let symbol = s.get_data_ref();
-                    let is_glob = s.is_global();
-                    if !is_glob {
+                    if !s.is_global() {
                         let cur = builder.get_cur_basic_block();
                         // just make sure we are in the alloca bb
                         // so that the captured value is not used before it is initialized
@@ -585,11 +640,11 @@ impl<'a, 'ctx> Ctx<'a> {
                         let new_symbol = symbol.clone();
                         let len = data.table.len();
                         let st_r = data.data_tp.as_ref().unwrap().borrow();
-                        let st = match &*st_r {
+                        let st: &super::pltype::STType = match &*st_r {
                             PLType::Struct(s) => s,
                             _ => unreachable!(),
                         };
-                        let ptr = father as *const _;
+                        let ptr = parent as *const _;
                         let ptr = ptr as usize;
                         let ptr = ptr as *mut Ctx<'_>;
                         builder.add_closure_st_field(st, new_symbol.value, unsafe { &mut *ptr });
@@ -621,7 +676,7 @@ impl<'a, 'ctx> Ctx<'a> {
             }
         }
         if !self.as_root {
-            if let Some(father) = self.father {
+            if let Some(father) = self.parent {
                 let re = father.get_symbol(name, builder);
                 return re;
             }
@@ -715,7 +770,12 @@ impl<'a, 'ctx> Ctx<'a> {
             },
         );
     }
-    pub fn get_type(&self, name: &str, range: Range) -> Result<GlobType, PLDiag> {
+
+    /// # get_type
+    ///
+    /// Get type based on name from the generic types,
+    /// from the current context to its ancestor context until one element is found, otherwise it return an error.
+    pub fn get_type(&self, name: &str, range: Range) -> Result<GlobalType, PLDiag> {
         if let Some(pv) = self.generic_types.get(name) {
             self.set_if_refs_tp(pv.clone(), range);
             if let Ok(pv) = pv.try_borrow() {
@@ -730,14 +790,14 @@ impl<'a, 'ctx> Ctx<'a> {
         if let Ok(pv) = self.plmod.get_type(name, range, self) {
             return Ok(pv);
         }
-        if let Some(father) = self.father {
+        if let Some(father) = self.parent {
             let re = father.get_type(name, range);
             return re;
         }
         Err(range.new_err(ErrorCode::UNDEFINED_TYPE))
     }
 
-    pub fn get_type_in_mod(&self, m: &Mod, name: &str, range: Range) -> Result<GlobType, PLDiag> {
+    pub fn get_type_in_mod(&self, m: &Mod, name: &str, range: Range) -> Result<GlobalType, PLDiag> {
         if let Some(pv) = self.generic_types.get(name) {
             self.set_if_refs_tp(pv.clone(), range);
             self.send_if_go_to_def(
@@ -754,7 +814,7 @@ impl<'a, 'ctx> Ctx<'a> {
         } else if let Ok(pv) = m.get_type(name, range, self) {
             return Ok(pv);
         }
-        if let Some(father) = self.father {
+        if let Some(father) = self.parent {
             let re = father.get_type_in_mod(m, name, range);
             return re;
         }
@@ -879,7 +939,7 @@ impl<'a, 'ctx> Ctx<'a> {
             dia.set_source(src);
         }
         let dia2 = dia.clone();
-        self.errs.borrow_mut().insert(dia);
+        self.diagnose.borrow_mut().insert(dia);
         dia2
     }
     // load type* to type
@@ -1048,7 +1108,7 @@ impl<'a, 'ctx> Ctx<'a> {
         if let Some(m) = self.plmod.macros.get(name) {
             return Some(m.clone());
         }
-        if let Some(father) = &self.father {
+        if let Some(father) = &self.parent {
             return father.get_macro(name);
         }
         None
@@ -1089,7 +1149,7 @@ impl<'a, 'ctx> Ctx<'a> {
     pub fn try_set_closure_alloca_bb(&self, bb: BlockHandle) {
         if let Some(c) = &self.closure_data {
             c.borrow_mut().alloca_bb = Some(bb);
-        } else if let Some(father) = &self.father {
+        } else if let Some(father) = &self.parent {
             father.try_set_closure_alloca_bb(bb);
         }
     }

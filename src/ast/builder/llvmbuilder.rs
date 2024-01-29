@@ -132,7 +132,8 @@ pub fn create_llvm_deps<'ctx>(
 #[derive(Clone)]
 pub struct LLVMBuilder<'a, 'ctx> {
     handle_table: Arc<RefCell<FxHashMap<ValueHandle, AnyValueEnum<'ctx>>>>,
-    handle_reverse_table: Arc<RefCell<FxHashMap<AnyValueEnum<'ctx>, ValueHandle>>>,
+    reserved_handle_table: Arc<RefCell<FxHashMap<AnyValueEnum<'ctx>, ValueHandle>>>,
+
     block_table: Arc<RefCell<FxHashMap<BlockHandle, BasicBlock<'ctx>>>>,
     block_reverse_table: Arc<RefCell<FxHashMap<BasicBlock<'ctx>, BlockHandle>>>,
     context: &'ctx Context,                // llvm context
@@ -203,7 +204,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             ditypes: Arc::new(RefCell::new(FxHashMap::default())),
             ditypes_placeholder: Arc::new(RefCell::new(FxHashMap::default())),
             handle_table: Arc::new(RefCell::new(FxHashMap::default())),
-            handle_reverse_table: Arc::new(RefCell::new(FxHashMap::default())),
+            reserved_handle_table: Arc::new(RefCell::new(FxHashMap::default())),
             block_table: Arc::new(RefCell::new(FxHashMap::default())),
             block_reverse_table: Arc::new(RefCell::new(FxHashMap::default())),
             optimized: Arc::new(RefCell::new(false)),
@@ -655,17 +656,31 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         self.difile.get()
     }
 
+    /// # get_llvm_value_handle
+    ///
+    /// get_llvm_value_handle tries to get the [ValueHandle] of a [AnyValueEnum][inkwell::values::AnyValueEnum] value,
+    /// it returns the handle value if it finds the value appears inside the map already,
+    /// otherwise it will insert the value into the map and create a new handle for it.
     fn get_llvm_value_handle(&self, value: &AnyValueEnum<'ctx>) -> ValueHandle {
         let len = self.handle_table.borrow().len();
-        let nh = match self.handle_reverse_table.borrow().get(value) {
+
+        // it refers the handle value if we need to insert the value
+        let should_insert_handle = len + 1;
+
+        // whether the value exists inside the handle table
+        let handle_value = match self.reserved_handle_table.borrow().get(value) {
             Some(handle) => *handle,
-            None => len + 1,
+            None => should_insert_handle,
         };
-        if nh == len + 1 {
-            self.handle_table.borrow_mut().insert(nh, *value);
-            self.handle_reverse_table.borrow_mut().insert(*value, nh);
+
+        // if the value doesn't exist in current handle table, insert it in the tables
+        if handle_value == should_insert_handle {
+            self.handle_table.borrow_mut().insert(handle_value, *value);
+            self.reserved_handle_table
+                .borrow_mut()
+                .insert(*value, handle_value);
         }
-        nh
+        handle_value
     }
     #[allow(dead_code)]
     fn get_or_insert_print_fn(&self, name: &str) -> FunctionValue<'ctx> {
@@ -1157,7 +1172,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     ) -> (DIType<'ctx>, u64) {
         let field_pltype = match field.typenode.get_type(ctx, &self.clone().into(), true) {
             Ok(field_pltype) => field_pltype,
-            Err(_) => ctx.get_type("i64", Default::default()).unwrap().tp,
+            Err(_) => ctx.get_type("i64", Default::default()).unwrap().typ,
         };
         let di_type = self.get_ditype(&field_pltype.borrow(), ctx);
         let debug_type = di_type.unwrap();

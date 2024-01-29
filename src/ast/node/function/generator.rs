@@ -51,11 +51,19 @@ pub enum CtxFlag {
     InGeneratorYield,
 }
 
+// record some special infomration which is hard to retrieve usually
 #[derive(Clone, Default)]
 pub struct ClosureCtxData {
+    // only the capture lists
     pub table: LinkedHashMap<String, (PLSymbolData, ValueHandle)>,
+
+    // the logic of the closure
     pub data_handle: ValueHandle,
+
+    // the trampoline function from llvm builder
     pub alloca_bb: Option<BlockHandle>,
+
+    // closure type, all capture lists
     pub data_tp: Option<Arc<RefCell<PLType>>>,
 }
 
