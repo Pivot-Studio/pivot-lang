@@ -113,11 +113,12 @@ fn getrandom_inner(
     buflen: libc::size_t,
     flags: libc::c_uint,
 ) -> libc::ssize_t {
+    use core::ptr::null_mut;
     use winapi::um::wincrypt::{
-        CryptAcquireContextA, CryptGenRandom, CryptReleaseContext, CRYPT_VERIFYCONTEXT,
+        CryptAcquireContextA, CryptGenRandom, CryptReleaseContext, CRYPT_VERIFYCONTEXT, HCRYPTPROV,
         PROV_RSA_FULL,
     };
-    let mut hcryptprov: winapi::shared::ntdef::HCRYPTPROV = 0;
+    let mut hcryptprov: HCRYPTPROV = 0;
     unsafe {
         if CryptAcquireContextA(
             &mut hcryptprov,
