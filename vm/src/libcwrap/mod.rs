@@ -116,7 +116,7 @@ extern "C" {
 fn getrandom_inner(
     buf: *mut libc::c_void,
     buflen: libc::size_t,
-    flags: libc::c_uint,
+    _flags: libc::c_uint,
 ) -> libc::ssize_t {
     unsafe {
         if getentropy(buf as *mut u8, buflen) == 0 {
