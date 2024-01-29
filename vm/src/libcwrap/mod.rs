@@ -1,6 +1,7 @@
 #![allow(clippy::useless_conversion)]
 use std::ffi::CString;
-
+#[cfg(target_os = "windows")]
+extern crate winapi;
 use internal_macro::is_runtime;
 
 struct LibC {}
@@ -87,4 +88,73 @@ impl LibC {
     ) -> *mut libc::c_void {
         unsafe { libc::memcpy(dest, src, n) }
     }
+
+    fn getrandom(
+        buf: *mut libc::c_void,
+        buflen: libc::size_t,
+        flags: libc::c_uint,
+    ) -> libc::ssize_t {
+        getrandom_inner(buf, buflen, flags)
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn getrandom_inner(
+    buf: *mut libc::c_void,
+    buflen: libc::size_t,
+    flags: libc::c_uint,
+) -> libc::ssize_t {
+    unsafe { libc::syscall(libc::SYS_getrandom, buf, buflen, flags) as libc::ssize_t }
+}
+
+#[cfg(target_os = "macos")]
+extern "C" {
+    // Supported as of macOS 10.12+.
+    fn getentropy(buf: *mut u8, size: libc::size_t) -> libc::c_int;
+}
+#[cfg(target_os = "macos")]
+fn getrandom_inner(
+    buf: *mut libc::c_void,
+    buflen: libc::size_t,
+    _flags: libc::c_uint,
+) -> libc::ssize_t {
+    unsafe {
+        if getentropy(buf as *mut u8, buflen) == 0 {
+            return buflen as libc::ssize_t;
+        } else {
+            return -1;
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn getrandom_inner(
+    buf: *mut libc::c_void,
+    buflen: libc::size_t,
+    _flags: libc::c_uint,
+) -> libc::ssize_t {
+    use core::ptr::null_mut;
+    use winapi::um::wincrypt::{
+        CryptAcquireContextA, CryptGenRandom, CryptReleaseContext, CRYPT_VERIFYCONTEXT, HCRYPTPROV,
+        PROV_RSA_FULL,
+    };
+    let mut hcryptprov: HCRYPTPROV = 0;
+    unsafe {
+        if CryptAcquireContextA(
+            &mut hcryptprov,
+            null_mut(),
+            null_mut(),
+            PROV_RSA_FULL,
+            CRYPT_VERIFYCONTEXT,
+        ) == 0
+        {
+            return -1;
+        }
+        if CryptGenRandom(hcryptprov, buflen as u32, buf as *mut u8) == 0 {
+            CryptReleaseContext(hcryptprov, 0);
+            return -1;
+        }
+        CryptReleaseContext(hcryptprov, 0);
+    }
+    0
 }
