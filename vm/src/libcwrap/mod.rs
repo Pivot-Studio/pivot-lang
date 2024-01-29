@@ -108,12 +108,23 @@ fn getrandom_inner(
 }
 
 #[cfg(target_os = "macos")]
+extern "C" {
+    // Supported as of macOS 10.12+.
+    fn getentropy(buf: *mut u8, size: libc::size_t) -> libc::c_int;
+}
+#[cfg(target_os = "macos")]
 fn getrandom_inner(
     buf: *mut libc::c_void,
     buflen: libc::size_t,
-    _flags: libc::c_uint,
+    flags: libc::c_uint,
 ) -> libc::ssize_t {
-    unsafe { libc::getentropy(buf, buflen) as libc::ssize_t }
+    unsafe {
+        if getentropy(buf as *mut u8, buflen) == 0 {
+            return buflen as libc::ssize_t;
+        } else {
+            return -1;
+        }
+    }
 }
 
 #[cfg(target_os = "windows")]
