@@ -162,6 +162,7 @@ pub trait Node: RangeTrait + FmtTrait + PrintTrait {
     ) -&gt; NodeResult;
 }
 
+/// print trait to report the AST node structure
 #[enum_dispatch]
 pub trait PrintTrait {
     fn print(&amp;self, tabs: usize, end: bool, line: Vec&lt;bool&gt;);
@@ -208,45 +209,66 @@ pub trait RangeTrait {
         let cond_block = builder.append_basic_block(ctx.function.unwrap(), &quot;if.cond&quot;);
         let then_block = builder.append_basic_block(ctx.function.unwrap(), &quot;if.then&quot;);
         let else_block = builder.append_basic_block(ctx.function.unwrap(), &quot;if.else&quot;);
-        let after_block = builder.append_basic_block(ctx.function.unwrap(), &quot;if.after&quot;);
+        let merge_block = builder.append_basic_block(ctx.function.unwrap(), &quot;if.after&quot;);
         builder.build_unconditional_branch(cond_block);
         ctx.position_at_end(cond_block, builder);
-        let condrange = self.cond.range();
-        let v = self.cond.emit(ctx, builder)?.get_value();
-        let code = ErrorCode::IF_CONDITION_MUST_BE_BOOL;
-        check_bool(&amp;v, ctx, condrange, code)?;
-        let v = v.unwrap();
+
+        let cond_range = self.cond.range();
+        let cond_val = self.cond.emit(ctx, builder)?.get_value();
+        check_bool(
+            &amp;cond_val,
+            ctx,
+            cond_range,
+            ErrorCode::IF_CONDITION_MUST_BE_BOOL,
+        )?;
+
+        let v = cond_val.unwrap();
         let cond = v.get_value();
-        let cond = ctx.try_load2var(condrange, cond, builder, &amp;v.get_ty().borrow())?;
+        let cond = ctx.try_load2var(cond_range, cond, builder, &amp;v.get_ty().borrow())?;
         let cond = builder.build_int_truncate(cond, &amp;PriType::BOOL, &quot;trunctemp&quot;);
+
+        //
         builder.build_conditional_branch(cond, then_block, else_block);
-        // then block
+
+        // emit the else logic into the then block
         ctx.position_at_end(then_block, builder);
+        // emit the code inside a child context because it belongs to a sub-block
         let then_terminator = self.then.emit_child(ctx, builder)?.get_term();
         if then_terminator.is_none() {
-            builder.build_unconditional_branch(after_block);
+            // there is no terminator(like return, yield and so forth) in the statement
+            // create an unconditional branch to merge block to finish off the &quot;then&quot; block
+            builder.build_unconditional_branch(merge_block);
         }
+
+        // emit the else logic into the else block
         ctx.position_at_end(else_block, builder);
         let terminator = if let Some(el) = &amp;mut self.els {
             let mut child = ctx.new_child(el.range().start, builder);
             let else_terminator = el.emit(&amp;mut child, builder)?.get_term();
             if else_terminator.is_none() {
-                builder.build_unconditional_branch(after_block);
+                // create an unconditional branch only if no terminator is detected
+                // otherwise, the code to be executed might be the others instead of merge block
+                // for example, if there is a 'return' statement in the if-then-else clause,
+                // it won't execute the merge block as it returns directly
+                builder.build_unconditional_branch(merge_block);
             }
+
             if then_terminator.is_return() &amp;&amp; else_terminator.is_return() {
                 TerminatorEnum::Return
             } else {
                 TerminatorEnum::None
             }
         } else {
-            builder.build_unconditional_branch(after_block);
+            builder.build_unconditional_branch(merge_block);
             TerminatorEnum::None
         };
-        ctx.position_at_end(after_block, builder);
+
+        ctx.position_at_end(merge_block, builder);
         if terminator.is_return() {
-            builder.build_unconditional_branch(after_block);
+            builder.build_unconditional_branch(merge_block);
         }
         ctx.emit_comment_highlight(&amp;self.comments[0]);
+
         NodeOutput::default().with_term(terminator).to_result()
     }</code></pre>
 <p>emit函数的第一个参数是节点自身，第二个参数是编译上下文。编译上下文中会包含一些需要透传的信息，比如符号表，lsp参数等，
