@@ -1,0 +1,24 @@
+use std::libc::*;
+use core::panic;
+pub fn randi64() i64 {
+    let ret = 0;
+    let ptr = unsafe_cast<u8>(&ret);
+    // 生成的随机数存储在ptr，8 bytes，使用/dev/random
+    // 0阻塞，1非阻塞
+    LibC__getrandom(ptr, 8 as u64, 0 as u32);
+    return ret;
+}
+
+/// 生成 `[0, max)` 的随机数，`max` 必须大于 `0`，否则 `panic`
+pub fn randi64n(max: i64) i64 {
+    panic::assert(max > 0);
+    let ret = (randi64() as u64) % (max as u64);
+    return ret as i64;
+}
+
+/// 生成 `[min, max)` 的随机数，`min` 必须小于 `max`，否则 `panic`
+pub fn randi64r(min: i64, max: i64) i64 {
+    panic::assert(min < max);
+    let ret = randi64n(max - min) + min;
+    return ret;
+}
