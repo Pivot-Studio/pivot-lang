@@ -170,6 +170,7 @@ pub trait Node: RangeTrait + FmtTrait + PrintTrait {
     ) -> NodeResult;
 }
 
+/// print trait to report the AST node structure
 #[enum_dispatch]
 pub trait PrintTrait {
     fn print(&self, tabs: usize, end: bool, line: Vec<bool>);
@@ -186,6 +187,7 @@ pub enum Num {
 impl Eq for Num {
     // FIXME: NaN https://stackoverflow.com/questions/39638363/how-can-i-use-a-hashmap-with-f64-as-key-in-rust
 }
+
 #[macro_export]
 macro_rules! mismatch_err {
     ($ctx:ident, $range:expr,$exprange:expr, $expect:expr,$got:expr) => {

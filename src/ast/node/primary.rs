@@ -5,6 +5,7 @@ use super::*;
 
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
+use crate::ast::builder::ValueHandle;
 use crate::ast::ctx::Ctx;
 use crate::ast::ctx::MacroReplaceNode;
 use crate::ast::ctx::BUILTIN_FN_NAME_MAP;
@@ -167,31 +168,31 @@ impl Node for VarNode {
 
         ctx.generate_completion_if(ctx.should_gen(self.range), || ctx.completion_alternatives());
 
-        if let Some(s) = ctx.get_symbol(&self.name, builder) {
-            let is_captured = s.is_captured();
+        // symbol which is generated else where already
+        if let Some(symbol) = ctx.get_symbol(&self.name, builder) {
             ctx.push_semantic_token(
                 self.range,
                 SemanticTokenType::VARIABLE,
-                if is_captured {
+                if symbol.is_captured() {
                     modifier_set!(CAPTURED)
                 } else {
                     0
                 },
             );
 
-            let symbol = s.get_data();
+            let symbol_data = symbol.get_data();
             let symbol_value = match ctx.generator_data {
-                None => symbol.value,
+                None => symbol_data.value,
                 _ => builder.build_load(
-                    symbol.value,
+                    symbol_data.value,
                     "load_generator_var",
                     &PLType::new_i8_ptr(),
                     ctx,
                 ),
             };
 
-            ctx.send_if_go_to_def(self.range, symbol.range, ctx.plmod.path.clone());
-            symbol
+            ctx.send_if_go_to_def(self.range, symbol_data.range, ctx.plmod.path.clone());
+            symbol_data
                 .refs
                 .map(|refs| {
                     ctx.set_local_refs(refs, self.range);
@@ -201,15 +202,19 @@ impl Node for VarNode {
                     Some(())
                 });
 
-            let o = symbol_value.new_output(symbol.pltype).to_result();
+            let o = symbol_value.new_output(symbol_data.pltype).to_result();
             return o;
         }
+
+        // buildtin symbol
         if let Some(builtin) = BUILTIN_FN_NAME_MAP.get(&self.name as &str) {
             ctx.push_semantic_token(self.range, SemanticTokenType::FUNCTION, 0);
             return builtin
                 .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL))))
                 .to_result();
         }
+
+        // var node might refer to a function as well
         if let Ok(tp) = ctx.get_type(&self.name, self.range) {
             match &*tp.borrow() {
                 PLType::Fn(f) => {
@@ -287,9 +292,12 @@ impl VarNode {
     }
 }
 
+/// One element object inside a whole array
 #[node(comment)]
 pub struct ArrayElementNode {
+    /// the whole array of the element
     pub arr: Box<NodeEnum>,
+    /// the index of current element inside the whole array
     pub index: Box<NodeEnum>,
 }
 
@@ -309,21 +317,29 @@ impl Node for ArrayElementNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
-        let v = self.arr.emit(ctx, builder)?.get_value().unwrap();
-        let pltype = v.get_ty();
+        let array_val = self.arr.emit(ctx, builder)?.get_value().unwrap();
+
+        let pltype = array_val.get_ty();
         if let PLType::Arr(arrtp) = &*pltype.borrow() {
-            let arr = v.get_value();
+            let arr: ValueHandle = array_val.get_value();
             // TODO: check if index is out of bounds
-            let index_range = self.index.range();
-            let v = self.index.emit(ctx, builder)?.get_value().unwrap();
-            let index = v.get_value();
-            let index = ctx.try_load2var(index_range, index, builder, &v.get_ty().borrow())?;
+            let v: NodeValue = self.index.emit(ctx, builder)?.get_value().unwrap();
+            let index_val: ValueHandle = ctx.try_load2var(
+                self.index.range(),
+                v.get_value(),
+                builder,
+                &v.get_ty().borrow(),
+            )?;
+
+            // the index of an array must be an i64 type
+            // REVIEW: this is a potential problem, what if user uses a I32 or I8 type?
             if !v.get_ty().borrow().is(&PriType::I64) {
                 return Err(ctx.add_diag(self.range.new_err(ErrorCode::ARRAY_INDEX_MUST_BE_INT)));
             }
-            let elemptr = {
-                let index = &[index];
-                let real_arr = builder
+
+            let elemptr: ValueHandle = {
+                let index: &[ValueHandle; 1] = &[index_val];
+                let real_arr: ValueHandle = builder
                     .build_struct_gep(arr, 1, "real_arr", &pltype.borrow(), ctx)
                     .unwrap();
                 let real_arr = builder.build_load(real_arr, "load_arr", &PLType::new_i8_ptr(), ctx);

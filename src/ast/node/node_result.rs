@@ -35,12 +35,16 @@ pub trait NodeResultBuilder {
 }
 
 impl NodeResultBuilder for ValueHandle {
+    /// new_output returns a [NodeOutput] with the type and its value handle
     fn new_output(&self, typ: Arc<RefCell<PLType>>) -> NodeOutput {
         NodeOutput::new_value_simple(*self, typ)
     }
 }
 
 impl NodeOutput {
+    /// # set_const
+    ///
+    /// set_const marks a node refered by handle value is immutable
     pub fn set_const(&mut self) -> &mut Self {
         if let Some(value) = &mut self.value {
             value.set_const(true);
@@ -71,6 +75,9 @@ impl NodeOutput {
         self
     }
 
+    /// # to_result
+    ///
+    /// to_result returns a cloned version of [NodeResult]
     pub fn to_result(&self) -> NodeResult {
         Ok(self.clone())
     }
