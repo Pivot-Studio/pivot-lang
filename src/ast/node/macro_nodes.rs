@@ -237,6 +237,7 @@ impl Node for MacroCallNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
+        let ctx = &mut ctx.new_child(self.range.start, builder);
         match &*self.callee {
             NodeEnum::ExternIdNode(ex_node) => {
                 for ns in &ex_node.namespace {

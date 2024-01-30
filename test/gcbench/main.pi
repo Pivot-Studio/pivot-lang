@@ -1,0 +1,112 @@
+pub fn main() i64 {
+    for let i = 0; i < 30; i = i + 1 {
+        bench();   
+    }
+    let start = millitime();
+    for let i = 0; i < 3000; i = i + 1 {
+        bench();   
+    }
+    let end = millitime();
+    println!("time: ", (end - start)/3000);
+
+    let stw = gc::DioGC__get_stw_num();
+    println!("gc stw: ", stw);
+    return 0;
+}
+
+
+fn millitime() i64;
+
+fn bench() void {
+    let root =  &GCTestObj{};
+    populate(*K_LONG_LIVED_TREE_DEPTH, root);
+    let d = K_MIN_TREE_DEPTH;
+    while *d <= *K_MAX_TREE_DEPTH {
+        time_construct(*d);
+        *d = *d + 2;
+    }
+
+    keep_on_stack(root);
+    return;
+}
+
+fn keep_on_stack(p:*GCTestObj) void;
+
+fn time_construct(depth: i64) void {
+    let i_num_iters = num_iters(depth);
+    for let i = 0; i < i_num_iters; i = i + 1 {
+        let temp_tree = make_tree(depth);
+        populate(depth, temp_tree);
+    }
+    for let i = 0; i < i_num_iters; i = i + 1 {
+        make_tree(depth);
+    }
+    return;
+}
+
+
+
+
+fn tree_size(i: i64) i64 {
+    
+    return (1<<(i+1)) -1;
+}
+// const K_STRETCH_TREE_DEPTH: i32 = 18;
+// const K_LONG_LIVED_TREE_DEPTH: i32 = 16;
+// // const K_ARRAY_SIZE: i32 = 500000;
+// const K_MIN_TREE_DEPTH: i32 = 4;
+// const K_MAX_TREE_DEPTH: i32 = 16;
+
+
+var K_STRETCH_TREE_DEPTH = &18;
+var K_LONG_LIVED_TREE_DEPTH = & 16;
+var K_MIN_TREE_DEPTH = & 4;
+var K_MAX_TREE_DEPTH = & 16;
+
+
+fn num_iters(i:i64) i64 {
+    
+    return 2 * tree_size(*K_STRETCH_TREE_DEPTH) / tree_size(i);
+}
+
+struct GCTestObj {
+    b:* GCTestObj;
+    d:u64;
+    e:*GCTestObj;
+    d0:u64;
+    d1:u64;
+    d2:u64;
+    d3:u64;
+    d4:u64;
+    d5:u64;
+    d6:u64;
+    d7:u64;
+    d8:u64;
+    d9:u64;
+    d10:u64;
+    d11:u64;
+
+
+}
+
+fn populate(idepth: i64, thisnode: * GCTestObj) void {
+    if idepth <= 0 {
+        return;
+    }
+    thisnode.b =  &GCTestObj{};
+    thisnode.e =  &GCTestObj{};
+    populate(idepth-1, thisnode.b);
+    populate(idepth-1, thisnode.e);
+    return;
+}
+
+
+fn make_tree(idepth: i64) * GCTestObj {
+    if idepth <= 0 {
+        return  &GCTestObj{};
+    }
+    let left = make_tree(idepth-1);
+    let right = make_tree(idepth-1);
+    let thisnode =  &GCTestObj{b: left, e: right};
+    return thisnode;
+}

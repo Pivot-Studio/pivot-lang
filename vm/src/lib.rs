@@ -288,3 +288,13 @@ thread_local! {
 fn exit_now(code: i64) {
     std::process::exit(code as _);
 }
+
+#[is_runtime]
+fn millitime() -> i64 {
+    let now = std::time::SystemTime::now();
+    let duration = now.duration_since(std::time::UNIX_EPOCH).unwrap();
+    duration.as_millis() as _
+}
+
+#[is_runtime]
+fn keep_on_stack(_p: i64) {}
