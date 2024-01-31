@@ -47,59 +47,84 @@ impl Node for IfNode {
         let cond_block = builder.append_basic_block(ctx.function.unwrap(), "if.cond");
         let then_block = builder.append_basic_block(ctx.function.unwrap(), "if.then");
         let else_block = builder.append_basic_block(ctx.function.unwrap(), "if.else");
-        let after_block = builder.append_basic_block(ctx.function.unwrap(), "if.after");
+        let merge_block = builder.append_basic_block(ctx.function.unwrap(), "if.after");
         builder.build_unconditional_branch(cond_block);
         ctx.position_at_end(cond_block, builder);
-        let condrange = self.cond.range();
-        let v = self.cond.emit(ctx, builder)?.get_value();
-        let code = ErrorCode::IF_CONDITION_MUST_BE_BOOL;
-        check_bool(&v, ctx, condrange, code)?;
-        let v = v.unwrap();
+
+        let cond_range = self.cond.range();
+        let cond_val = self.cond.emit(ctx, builder)?.get_value();
+        check_bool(
+            &cond_val,
+            ctx,
+            cond_range,
+            ErrorCode::IF_CONDITION_MUST_BE_BOOL,
+        )?;
+
+        let v = cond_val.unwrap();
         let cond = v.get_value();
-        let cond = ctx.try_load2var(condrange, cond, builder, &v.get_ty().borrow())?;
+        let cond = ctx.try_load2var(cond_range, cond, builder, &v.get_ty().borrow())?;
         let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
+
+        //
         builder.build_conditional_branch(cond, then_block, else_block);
-        // then block
+
+        // emit the else logic into the then block
         ctx.position_at_end(then_block, builder);
+        // emit the code inside a child context because it belongs to a sub-block
         let then_terminator = self.then.emit_child(ctx, builder)?.get_term();
         if then_terminator.is_none() {
-            builder.build_unconditional_branch(after_block);
+            // there is no terminator(like return, yield and so forth) in the statement
+            // create an unconditional branch to merge block to finish off the "then" block
+            builder.build_unconditional_branch(merge_block);
         }
+
+        // emit the else logic into the else block
         ctx.position_at_end(else_block, builder);
         let terminator = if let Some(el) = &mut self.els {
             let mut child = ctx.new_child(el.range().start, builder);
             let else_terminator = el.emit(&mut child, builder)?.get_term();
             if else_terminator.is_none() {
-                builder.build_unconditional_branch(after_block);
+                // create an unconditional branch only if no terminator is detected
+                // otherwise, the code to be executed might be the others instead of merge block
+                // for example, if there is a 'return' statement in the if-then-else clause,
+                // it won't execute the merge block as it returns directly
+                builder.build_unconditional_branch(merge_block);
             }
+
             if then_terminator.is_return() && else_terminator.is_return() {
                 TerminatorEnum::Return
             } else {
                 TerminatorEnum::None
             }
         } else {
-            builder.build_unconditional_branch(after_block);
+            builder.build_unconditional_branch(merge_block);
             TerminatorEnum::None
         };
-        ctx.position_at_end(after_block, builder);
+
+        ctx.position_at_end(merge_block, builder);
         if terminator.is_return() {
-            builder.build_unconditional_branch(after_block);
+            builder.build_unconditional_branch(merge_block);
         }
         ctx.emit_comment_highlight(&self.comments[0]);
+
         NodeOutput::default().with_term(terminator).to_result()
     }
     // ANCHOR_END: emit
 }
 
+/// # check_bool
+///
+/// it ensures the input NodeValue represents a [PriType::BOOL],
+/// otheriwse it returns an error with the range and error code.
 fn check_bool(
     v: &Option<NodeValue>,
     ctx: &mut Ctx,
-    condrange: Range,
+    range: Range,
     code: ErrorCode,
 ) -> Result<(), PLDiag> {
     if v.is_none() || !v.as_ref().unwrap().get_ty().borrow().is(&PriType::BOOL) {
         return Err(ctx.add_diag(
-            condrange
+            range
                 .new_err(code)
                 .add_help("use a bool variable instead")
                 .clone(),

@@ -691,6 +691,9 @@ impl Node for StatementsNode {
 }
 
 impl StatementsNode {
+    /// # emit_child
+    ///
+    /// it creates a new context by current ctx to emit the current statement
     pub fn emit_child<'a, 'b>(
         &mut self,
         ctx: &'b mut Ctx<'a>,

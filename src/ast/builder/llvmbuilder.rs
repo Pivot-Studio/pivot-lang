@@ -924,6 +924,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         self.block_table.borrow().get(&handle).copied()
     }
 
+    /// # get_pri_basic_type
+    ///
+    /// get_pri_basic_type converts a pivot-lang primitive type into a llvm primitive type
     fn get_pri_basic_type(&self, tp: &PriType) -> BasicTypeEnum<'ctx> {
         match tp {
             PriType::I8 => self.context.i8_type().into(),
@@ -1686,6 +1689,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         *self.optimized.borrow_mut() = true;
     }
 
+    /// # try_load2var_inner
+    ///
+    /// it returns the element of a pointer,
+    /// or array, int, float, struct, vector, and function value rirectly
     fn try_load2var_inner(&self, v: usize, tp: &PLType, ctx: &mut Ctx<'a>) -> Result<usize, ()> {
         let handle = v;
         let v = self.get_llvm_value(handle).unwrap();
@@ -1694,7 +1701,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 AnyValueEnum::ArrayValue(_)
                 | AnyValueEnum::IntValue(_)
                 | AnyValueEnum::FloatValue(_)
-                | AnyValueEnum::PointerValue(_)
                 | AnyValueEnum::StructValue(_)
                 | AnyValueEnum::VectorValue(_) => handle,
                 AnyValueEnum::FunctionValue(f) => {
@@ -1810,6 +1816,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .as_debug_info_scope(),
         );
     }
+
+    /// # position_at_end_block
+    ///
+    /// Set the position of the builder to the end of a basic block refered
+    /// by the block handle.
     fn position_at_end_block(&self, block: BlockHandle) {
         self.builder
             .position_at_end(self.block_table.borrow()[&block]);
@@ -1829,7 +1840,6 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.get_llvm_value_handle(&f.as_any_value_enum())
         }
     }
-
     fn get_or_add_global(
         &self,
         name: &str,
@@ -2032,6 +2042,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     ) -> ValueHandle {
         self.alloc_with_f(name, pltype, ctx, declare, "DioGC__malloc_no_collect")
     }
+
+    /// # build_struct_gep
+    ///
+    /// it builds a GEP(GetElementPtr) instructions and returns the value handle of the instruction.
     fn build_struct_gep(
         &self,
         structv: ValueHandle,
@@ -2041,9 +2055,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
     ) -> Result<ValueHandle, String> {
         let structv = self.get_llvm_value(structv).unwrap();
-        let structv = structv.into_pointer_value();
+        let struct_val_ptr = structv.into_pointer_value();
         let sttp = self.get_basic_type_op(tp, ctx).unwrap();
-        let gep = self.builder.build_struct_gep(sttp, structv, index, name);
+        let gep = self
+            .builder
+            .build_struct_gep(sttp, struct_val_ptr, index, name);
         if let Ok(gep) = gep {
             return Ok(self.get_llvm_value_handle(&gep.as_any_value_enum()));
         } else {
@@ -2204,6 +2220,16 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         // dbg.map(|d| self.builder.set_current_debug_location(d));
     }
 
+    /// # build_phi
+    ///
+    /// it emits the phi node of LLVM and sets up the phi node.
+    /// it returns the value handle of emitted phi node
+    ///
+    /// the pltype specifies the type of variable charged by the phi node.
+    /// for example, if a F64 is manupulated in different branches,
+    ///
+    /// the pltype will be F64.
+    /// the vbs holds a list of tuple which maps the block and value.
     fn build_phi(
         &self,
         pltype: &PLType,
@@ -2222,6 +2248,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.get_llvm_value_handle(&phi.as_any_value_enum())
     }
 
+    /// # build_unconditional_branch
+    ///
+    /// builds a unconditional branch by the value refered by the block handle to
+    /// terminates the current block of the builder, which adds a new block in the
+    /// builder as well.
     fn build_unconditional_branch(&self, bb: BlockHandle) {
         let bb = self.get_llvm_block(bb).unwrap();
         self.builder.build_unconditional_branch(bb).unwrap();
@@ -2266,6 +2297,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         // run_immix_pass(self.module);
         self.module.write_bitcode_to_path(path)
     }
+
     fn int_value(&self, ty: &PriType, v: u64, sign_ext: bool) -> ValueHandle {
         let ty = self.get_pri_basic_type(ty).into_int_type();
         let v = ty.const_int(v, sign_ext);
@@ -2431,6 +2463,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let v = self.builder.build_int_truncate(v, dest_ty, name).unwrap();
         self.get_llvm_value_handle(&v.as_any_value_enum())
     }
+
+    /// # build_conditional_branch
+    ///
+    /// it helps to build a conditional branch by the condition, then bacis block and else block
+    /// refered by the value handle and block handles.
     fn build_conditional_branch(
         &self,
         cond: ValueHandle,

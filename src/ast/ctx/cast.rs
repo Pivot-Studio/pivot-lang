@@ -331,7 +331,7 @@ impl<'a, 'ctx> Ctx<'a> {
                 }
             }
         }
-        let (st_pltype, st_value) = self.auto_deref(ori_pltype, ori_value, builder);
+        let (st_pltype, st_value) = self.deref_greedily(ori_pltype, ori_value, builder);
         if let PLType::Trait(t) = &*target_pltype.borrow() {
             for f in t.list_trait_fields().iter() {
                 if let TypeNodeEnum::Func(fu) = &*f.typenode {

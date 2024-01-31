@@ -2015,6 +2015,7 @@ dependencies = [
  "libc",
  "log",
  "rand",
+ "winapi",
 ]
 
 [[package]]

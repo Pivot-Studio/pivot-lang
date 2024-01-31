@@ -30,6 +30,7 @@ use std::io;
 use std::cols::hashtable;
 use project1::test::inference;
 use project1::test::futuretest;
+use project1::test::rand;
 
 use core::hash::pl_hash::*;
 // use std::cols::hashtable::new_hash_table;
