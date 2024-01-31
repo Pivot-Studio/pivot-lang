@@ -245,6 +245,7 @@ impl Collector {
             || (unsafe { self.thread_local_allocator.as_mut().unwrap().should_gc() })
         {
             self.collect_fast_unwind(sp);
+            return;
         }
         let status = self.status.borrow();
         if status.collect_threshold < status.bytes_allocated_since_last_gc {
@@ -263,6 +264,9 @@ impl Collector {
             return std::ptr::null_mut();
         }
         unsafe {
+            let mut status = self.status.borrow_mut();
+            status.bytes_allocated_since_last_gc += ((size - 1) / LINE_SIZE + 1) * LINE_SIZE;
+            drop(status);
             let ptr = self
                 .thread_local_allocator
                 .as_mut()

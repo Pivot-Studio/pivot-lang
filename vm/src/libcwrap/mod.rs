@@ -120,9 +120,9 @@ fn getrandom_inner(
 ) -> libc::ssize_t {
     unsafe {
         if getentropy(buf as *mut u8, buflen) == 0 {
-            return buflen as libc::ssize_t;
+            buflen as libc::ssize_t
         } else {
-            return -1;
+            -1
         }
     }
 }

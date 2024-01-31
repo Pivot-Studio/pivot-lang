@@ -1637,10 +1637,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         // }
         // self.module.strip_debug_info();
         // self.module.strip_debug_info(); // FIXME
-        self.module.verify().unwrap_or_else(|_| {
+        self.module.verify().unwrap_or_else(|e| {
             panic!(
-                "module {} is not valid",
-                self.module.get_name().to_str().unwrap()
+                "module {} is not valid, err msg: {}",
+                self.module.get_name().to_str().unwrap(),
+                e
             )
         });
         let used = self.used.borrow();

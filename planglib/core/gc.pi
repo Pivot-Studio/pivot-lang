@@ -8,6 +8,8 @@ pub fn DioGC__disable_auto_collect() void;
 
 pub fn DioGC__enable_auto_collect() void;
 
+pub fn DioGC__get_stw_num() i64;
+
 fn DioGC__stuck_begin(sp:i64) void;
 
 fn DioGC__stuck_end() void;
