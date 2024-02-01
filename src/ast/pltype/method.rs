@@ -99,12 +99,18 @@ pub trait TraitImplAble {
 pub trait Generic {
     fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>>;
     fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>>;
-    /// # get_generic_size
-    /// Although in most cases, the size of generic_map
-    /// is equal to the generic_size, but in method impl
-    /// of a generic type, the generic_size is the size
-    /// generic_map of plus 1
-    fn get_generic_size(&self) -> usize;
+    /// return the size of generics that can be annotated explicitly
+    /// by the user. For more details, see [get_generic_size].
+    fn get_user_generic_size(&self) -> usize;
+    /// This is the real generic size.
+    ///
+    /// **Not** all generics can be annotated.
+    /// For example: in generic methods, generics belongs
+    /// to the `impl` block is also counted in the generic size,
+    /// but they are cannot be annotated explicitly.
+    fn get_generic_size(&self) -> usize {
+        self.get_generic_map().len()
+    }
 }
 
 impl Generic for STType {
@@ -116,7 +122,7 @@ impl Generic for STType {
         Some(&self.generic_infer_types)
     }
 
-    fn get_generic_size(&self) -> usize {
+    fn get_user_generic_size(&self) -> usize {
         self.generic_map.len()
     }
 }
@@ -130,7 +136,7 @@ impl Generic for FNValue {
         None
     }
 
-    fn get_generic_size(&self) -> usize {
+    fn get_user_generic_size(&self) -> usize {
         self.fntype.generics_size
     }
 }
@@ -144,7 +150,7 @@ impl Generic for UnionType {
         None
     }
 
-    fn get_generic_size(&self) -> usize {
+    fn get_user_generic_size(&self) -> usize {
         self.generic_map.len()
     }
 }

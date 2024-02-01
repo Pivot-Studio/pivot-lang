@@ -80,7 +80,25 @@ fn test_inference_no_run() void {
     b = ret_reference(c);
     b.test("adsada");
 
+    let t ;t= test1{};
+
+    let re ;re=  t.next();
+    re.0 = 1;
+    re.1 = 1;
+
     return;
+}
+
+
+struct test1<T> {
+    t:T;
+}
+
+impl <T|A> test1<T>{
+    fn next() (T,A) {
+        let d:A;
+        return (self.t, d);
+    }
 }
 
 
