@@ -35,6 +35,7 @@ use crate::utils::read_config::Config;
 use crate::Db;
 
 use crate::ast::node::function::generator::GeneratorCtxData;
+use ena::unify::InPlace;
 use ena::unify::UnificationTable;
 use indexmap::IndexMap;
 
@@ -180,7 +181,7 @@ pub struct Ctx<'a> {
     as_root: bool,
 
     macro_expand_depth: Arc<RefCell<u64>>,
-    pub unify_table: Arc<RefCell<UnificationTable<TyVariable>>>,
+    pub unify_table: Arc<RefCell<UnificationTable<InPlace<TyVariable>>>>,
     pub disable_diag: bool,
 
     pub macro_vars: FxHashMap<String, MacroReplaceNode>,

@@ -1167,8 +1167,6 @@ pub struct STType {
     pub generic_infer_types: IndexMap<String, Arc<RefCell<PLType>>>,
     pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
     pub trait_methods_impl: TraitMthdImpl,
-    // // key name<i64>/name<f64> ...
-    // pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
 }
 
 pub type TraitMthdImpl = Arc<RefCell<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>>;

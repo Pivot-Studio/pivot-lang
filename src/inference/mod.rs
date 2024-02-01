@@ -26,7 +26,7 @@
 //! > record the constraints.
 use std::{cell::RefCell, sync::Arc};
 
-use ena::unify::{UnificationTable, UnifyKey, UnifyValue};
+use ena::unify::{InPlace, UnificationTable, UnifyKey, UnifyValue};
 use linked_hash_map::LinkedHashMap;
 use rustc_hash::FxHashMap;
 
@@ -117,7 +117,7 @@ pub enum GenericTy {
 }
 
 impl UnifyValue for TyInfer {
-    fn unify_values(value1: &Self, value2: &Self) -> Result<Self, (Self, Self)> {
+    fn unify_values(value1: &Self, value2: &Self) -> Result<Self, Self::Error> {
         if matches!(value1, TyInfer::Err) || matches!(value2, TyInfer::Err) {
             return Ok(TyInfer::Err);
         }
@@ -138,11 +138,13 @@ impl UnifyValue for TyInfer {
         } else if matches!(value1, TyInfer::Term(ty) if matches!(&*get_type_deep(ty.clone()).borrow(), PLType::Trait(_)|PLType::Union(_)))
         {
             // implicit cast
-            Err((value1.clone(), value2.clone()))
+            Err(())
         } else {
             Ok(TyInfer::Err)
         }
     }
+
+    type Error = ();
 }
 
 impl TyInfer {
@@ -150,7 +152,7 @@ impl TyInfer {
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
-        unify_table: &mut UnificationTable<TyVariable>,
+        unify_table: &mut UnificationTable<InPlace<TyVariable>>,
     ) -> Arc<RefCell<PLType>> {
         let cur_bb = builder.get_cur_basic_block();
         let re = self.get_type_inner(ctx, builder, unify_table);
@@ -162,7 +164,7 @@ impl TyInfer {
         &self,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
-        unify_table: &mut UnificationTable<TyVariable>,
+        unify_table: &mut UnificationTable<InPlace<TyVariable>>,
     ) -> Arc<RefCell<PLType>> {
         match self {
             TyInfer::Term(ty) => ty.clone(),
@@ -174,13 +176,16 @@ impl TyInfer {
                         let ty = &gen[gen.len() - 1];
                         let mut argtys = vec![];
                         for arg in args {
-                            argtys.push(unify_table.probe(*arg).get_type(
+                            argtys.push(unify_table.probe_value(*arg).get_type(
                                 ctx,
                                 builder,
                                 unify_table,
                             ));
                         }
-                        let ret_ty = unify_table.probe(*ty).get_type(ctx, builder, unify_table);
+                        let ret_ty =
+                            unify_table
+                                .probe_value(*ty)
+                                .get_type(ctx, builder, unify_table);
                         Arc::new(RefCell::new(PLType::Closure(ClosureType {
                             arg_types: argtys,
                             ret_type: ret_ty,
@@ -194,7 +199,10 @@ impl TyInfer {
                             if i != 0 {
                                 name += ", ";
                             }
-                            let ty = unify_table.probe(*arg).get_type(ctx, builder, unify_table);
+                            let ty =
+                                unify_table
+                                    .probe_value(*arg)
+                                    .get_type(ctx, builder, unify_table);
                             fields.insert(
                                 i.to_string(),
                                 new_tuple_field(
@@ -217,7 +225,7 @@ impl TyInfer {
                         let mut partial = false;
                         let mut st = st.clone();
                         for (i, (_, v)) in st.generic_map.iter_mut().enumerate() {
-                            let t = unify_table.probe(*gen.get(i).unwrap()).get_type(
+                            let t = unify_table.probe_value(*gen.get(i).unwrap()).get_type(
                                 ctx,
                                 builder,
                                 unify_table,
@@ -241,7 +249,7 @@ impl TyInfer {
                     }
                     GenericTy::Pointer => {
                         let p = gen[0];
-                        let infer = unify_table.probe(p);
+                        let infer = unify_table.probe_value(p);
                         let ty = infer.get_type(ctx, builder, unify_table);
                         if !ty.borrow().is_complete() {
                             return new_arc_refcell(PLType::PartialInferred(Arc::new(
@@ -255,7 +263,7 @@ impl TyInfer {
                     }
                     GenericTy::Array => {
                         let p = gen[0];
-                        let infer = unify_table.probe(p);
+                        let infer = unify_table.probe_value(p);
                         let ty = infer.get_type(ctx, builder, unify_table);
                         if !ty.borrow().is_complete() {
                             return new_arc_refcell(PLType::PartialInferred(Arc::new(
@@ -278,7 +286,7 @@ impl TyInfer {
 }
 
 pub struct InferenceCtx<'ctx> {
-    unify_table: Arc<RefCell<UnificationTable<TyVariable>>>,
+    unify_table: Arc<RefCell<UnificationTable<InPlace<TyVariable>>>>,
     symbol_table: FxHashMap<String, TyVariable>,
     father: Option<&'ctx InferenceCtx<'ctx>>,
 }
@@ -297,7 +305,7 @@ pub enum SymbolType {
 }
 
 impl<'ctx> InferenceCtx<'ctx> {
-    pub fn new(table: Arc<RefCell<UnificationTable<TyVariable>>>) -> Self {
+    pub fn new(table: Arc<RefCell<UnificationTable<InPlace<TyVariable>>>>) -> Self {
         Self {
             unify_table: table,
             symbol_table: FxHashMap::default(),
@@ -371,8 +379,8 @@ impl<'ctx> InferenceCtx<'ctx> {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) {
-        let v_1 = self.unify_table.borrow_mut().probe(v);
-        let v_2 = self.unify_table.borrow_mut().probe(v2);
+        let v_1 = self.unify_table.borrow_mut().probe_value(v);
+        let v_2 = self.unify_table.borrow_mut().probe_value(v2);
         match (v_1, v_2) {
             (TyInfer::Generic(c1), TyInfer::Generic(c2)) => {
                 if c1.0.len() == c2.0.len() && c1.1 == c2.1 {
@@ -404,7 +412,7 @@ impl<'ctx> InferenceCtx<'ctx> {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) {
-        let ty = self.unify_table.borrow_mut().probe(var);
+        let ty = self.unify_table.borrow_mut().probe_value(var);
         match (ty, &*tp.borrow()) {
             (TyInfer::Generic((c1, GenericTy::Closure)), PLType::Closure(c2)) => {
                 if c1.len() == c2.arg_types.len() + 1 {
@@ -750,7 +758,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                 let func_ty = self.inference(&mut fc.callee, ctx, builder);
                 match func_ty {
                     SymbolType::Var(id) => {
-                        let k = self.unify_table.borrow_mut().probe(id);
+                        let k = self.unify_table.borrow_mut().probe_value(id);
                         match k {
                             TyInfer::Err => (),
                             TyInfer::Term(t) => match &*t.borrow() {
@@ -898,7 +906,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                 let ty = self.inference(&mut p.value, ctx, builder);
                 match ty {
                     SymbolType::Var(v) => {
-                        let k = self.unify_table.borrow_mut().probe(v);
+                        let k = self.unify_table.borrow_mut().probe_value(v);
                         match k {
                             TyInfer::Term(t) => {
                                 if p.op == PointerOpEnum::Addr {
@@ -989,7 +997,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                 let ty = self.inference(&mut ae.arr, ctx, builder);
                 match ty {
                     SymbolType::Var(v) => {
-                        let k = self.unify_table.borrow_mut().probe(v);
+                        let k = self.unify_table.borrow_mut().probe_value(v);
                         match k {
                             TyInfer::Term(t) => {
                                 if let PLType::Arr(arr) = &*t.borrow() {
@@ -1071,6 +1079,9 @@ impl<'ctx> InferenceCtx<'ctx> {
         builder: &'b BuilderEnum<'a, '_>,
         argtys: &Vec<SymbolType>,
     ) -> Option<SymbolType> {
+        if f.name.contains("::next") {
+            eprintln!("gm: {:?}", f.fntype.generic_map);
+        }
         let mut tys = vec![];
         for _ in &f.fntype.generic_map {
             tys.push(self.new_key());
@@ -1100,33 +1111,35 @@ impl<'ctx> InferenceCtx<'ctx> {
             if i < offset {
                 if let NodeEnum::Take(t) = &mut *fc.callee {
                     let head_ty = self.inference(&mut t.head, ctx, builder);
-                    // on method, unify type generic
-                    match &head_ty {
-                        SymbolType::Var(v) => {
-                            let v = *v;
-                            let k = self.unify_table.borrow_mut().probe(v);
-                            match k {
-                                TyInfer::Generic((v, GenericTy::St(_))) => {
-                                    let offset = tys.len() - v.len();
-                                    for (i, g) in v.iter().enumerate() {
-                                        self.unify(
-                                            *g,
-                                            SymbolType::Var(tys[offset + i]),
-                                            ctx,
-                                            builder,
-                                        );
-                                    }
-                                }
-                                TyInfer::Term(t) => {
-                                    self.pltype_receiver_unify(t, &tys, ctx, builder);
-                                }
-                                _ => (),
-                            }
-                        }
-                        SymbolType::PLType(p) => {
-                            self.pltype_receiver_unify(p.clone(), &tys, ctx, builder);
-                        }
-                    };
+                    let head_ty = self.deref_receiver(head_ty, ctx);
+                    // // on method, unify type generic
+                    // match &head_ty {
+                    //     SymbolType::Var(v) => {
+                    //         let v = *v;
+                    //         let k = self.unify_table.borrow_mut().probe_value(v);
+                    //         match k {
+                    //             TyInfer::Generic((v, GenericTy::St(_))) => {
+                    //                 // FIXME: 错误的对应关系，这里的对应关系应该从impl node 中获取
+                    //                 let offset = tys.len() - v.len();
+                    //                 for (i, g) in v.iter().enumerate() {
+                    //                     self.unify(
+                    //                         *g,
+                    //                         SymbolType::Var(tys[offset + i]),
+                    //                         ctx,
+                    //                         builder,
+                    //                     );
+                    //                 }
+                    //             }
+                    //             TyInfer::Term(t) => {
+                    //                 self.pltype_receiver_unify(t, &tys, ctx, builder);
+                    //             }
+                    //             _ => (),
+                    //         }
+                    //     }
+                    //     SymbolType::PLType(p) => {
+                    //         self.pltype_receiver_unify(p.clone(), &tys, ctx, builder);
+                    //     }
+                    // };
                     let sym = ctx.run_in_type_mod(f, |ctx, _| {
                         arg.solve_in_infer_generic_ctx(ctx, builder, self, &generic_map)
                             .unwrap_or(SymbolType::PLType(unknown_arc()))
@@ -1150,37 +1163,42 @@ impl<'ctx> InferenceCtx<'ctx> {
         }))
     }
 
-    fn pltype_receiver_unify<'a, 'b>(
-        &mut self,
-        t: Arc<RefCell<PLType>>,
-        tys: &Vec<TyVariable>,
-        ctx: &'b mut Ctx<'a>,
-        builder: &'b BuilderEnum<'a, '_>,
-    ) {
-        match &*t.borrow() {
-            PLType::Struct(st) | PLType::Trait(st) => {
-                let offset = tys.len() - st.generic_map.len();
-                for (i, (_, ty)) in st.generic_map.iter().enumerate() {
-                    self.unify(
-                        tys[offset + i],
-                        SymbolType::PLType(ty.clone()),
-                        ctx,
-                        builder,
-                    );
+    /// - if receiver is not pointer, wrap it in pointer
+    /// - if receiver is pointer, deref it to only one level
+    fn deref_receiver(&mut self, receiver: SymbolType, ctx: &mut Ctx) -> SymbolType {
+        match receiver {
+            SymbolType::Var(v) => {
+                let k = self.unify_table.borrow_mut().probe_value(v);
+                match k {
+                    TyInfer::Term(t) => {
+                        let tp = ctx.auto_deref_tp(t);
+                        SymbolType::PLType(new_arc_refcell(PLType::Pointer(tp)))
+                    }
+                    TyInfer::Generic((t, GenericTy::Pointer)) => {
+                        let k = self.unify_table.borrow_mut().probe_value(t[0]);
+                        match k {
+                            TyInfer::Term(t) => {
+                                let tp = ctx.auto_deref_tp(t);
+                                SymbolType::PLType(new_arc_refcell(PLType::Pointer(tp)))
+                            }
+                            TyInfer::Generic((_, GenericTy::Pointer)) => {
+                                self.deref_receiver(SymbolType::Var(t[0]), ctx)
+                            }
+                            _ => SymbolType::Var(t[0]),
+                        }
+                    }
+                    _ => {
+                        let p = TyInfer::Generic((vec![v], GenericTy::Pointer));
+                        let id = self.new_key();
+                        self.unify_var_value(id, p);
+                        SymbolType::Var(id)
+                    }
                 }
             }
-            PLType::Union(st) => {
-                let offset = tys.len() - st.generic_map.len();
-                for (i, (_, ty)) in st.generic_map.iter().enumerate() {
-                    self.unify(
-                        tys[offset + i],
-                        SymbolType::PLType(ty.clone()),
-                        ctx,
-                        builder,
-                    );
-                }
+            SymbolType::PLType(tp) => {
+                let tp = ctx.auto_deref_tp(tp);
+                SymbolType::PLType(new_arc_refcell(PLType::Pointer(tp)))
             }
-            _ => (),
         }
     }
 
@@ -1246,7 +1264,7 @@ impl<'ctx> InferenceCtx<'ctx> {
     ) -> Option<SymbolType> {
         match head {
             SymbolType::Var(v) => {
-                let k = self.unify_table.borrow_mut().probe(v);
+                let k = self.unify_table.borrow_mut().probe_value(v);
                 match k {
                     TyInfer::Term(t) => {
                         let tp = ctx.auto_deref_tp(t);
