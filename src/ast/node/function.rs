@@ -337,7 +337,7 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
                         .unwrap_or_default()
                         .get(i)
                         .map(|v| {
-                            let ty = ctx.unify_table.borrow_mut().probe(*v);
+                            let ty = ctx.unify_table.borrow_mut().probe_value(*v);
                             ty.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut())
                         });
                     if let Some(ty) = ty {
@@ -1050,7 +1050,7 @@ impl Node for ClosureNode {
                 typenode.emit_highlight(ctx);
                 typenode.get_type(ctx, builder, true)?
             } else if let Some(id) = v.id {
-                let vv = ctx.unify_table.borrow_mut().probe(id);
+                let vv = ctx.unify_table.borrow_mut().probe_value(id);
                 let tp = vv.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut());
                 if *tp.borrow() == PLType::Unknown {
                     v.range()
@@ -1094,7 +1094,7 @@ impl Node for ClosureNode {
             ret.emit_highlight(ctx);
             ret.get_type(ctx, builder, true)?
         } else if let Some(ty) = self.ret_id {
-            let v = ctx.unify_table.borrow_mut().probe(ty);
+            let v = ctx.unify_table.borrow_mut().probe_value(ty);
             let tp = v.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut());
             tp
         } else if let Some(exp_ty) = &ctx.expect_ty {
