@@ -959,11 +959,11 @@ impl FNValue {
                 self.fntype.param_pltypes[i]
                     .get_type(ctx, builder, true)
                     .unwrap(),
-            ) != get_type_deep(
+            ) != get_type_deep(ctx.run_in_type_mod(other, |ctx, other| {
                 other.fntype.param_pltypes[i]
                     .get_type(ctx, builder, true)
-                    .unwrap(),
-            ) {
+                    .unwrap()
+            })) {
                 return false;
             }
         }

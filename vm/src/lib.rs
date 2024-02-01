@@ -288,3 +288,21 @@ thread_local! {
 fn exit_now(code: i64) {
     std::process::exit(code as _);
 }
+
+#[is_runtime]
+fn itoa(i: i64, rec: *mut u8) -> i64 {
+    let s = unsafe { std::slice::from_raw_parts_mut(rec, 10) };
+    i.to_string()
+        .as_bytes()
+        .iter()
+        .enumerate()
+        .for_each(|(i, b)| {
+            s[i] = *b;
+        });
+    i.to_string().len() as _
+}
+
+#[is_runtime]
+fn sqrt_f64(f: f64) -> f64 {
+    f.sqrt()
+}
