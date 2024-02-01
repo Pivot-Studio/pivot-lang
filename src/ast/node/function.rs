@@ -317,7 +317,14 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
     // disable highlight
     *ctx.need_highlight.borrow_mut() += 1;
     let range = node.range();
-    let re = preprocess_generics(generic_params, generic_size, range, ctx, builder);
+    let re = preprocess_generics(
+        generic_params,
+        generic_size,
+        tp.get_user_generic_size(),
+        range,
+        ctx,
+        builder,
+    );
     if let Err(diag) = re {
         *ctx.need_highlight.borrow_mut() -= 1;
         return Err(diag);
@@ -363,7 +370,7 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
                         format_label!("parameter `{}` defined in `{}`", g.0, t.get_name()),
                     );
                     return Err(diag.add_to_ctx(ctx));
-                } else {
+                } else if i < t.get_user_generic_size() {
                     ctx.set_if_refs_tp(
                         generic_types[i].as_ref().unwrap().clone(),
                         generic_params
@@ -386,6 +393,7 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
 fn preprocess_generics<'a, 'b>(
     generic_params: &Option<Box<GenericParamNode>>,
     generic_size: usize,
+    usr_generic_size: usize,
     range: Range,
     ctx: &'b mut Ctx<'a>,
     builder: &'b BuilderEnum<'a, '_>,
@@ -393,7 +401,7 @@ fn preprocess_generics<'a, 'b>(
     let generic_params = if let Some(generic_params) = generic_params {
         generic_params.emit_highlight(ctx);
         let generic_params_range = generic_params.range;
-        if generic_params.generics.len() != generic_size {
+        if generic_params.generics.len() != usr_generic_size {
             return Err(
                 ctx.add_diag(generic_params_range.new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH))
             );
@@ -405,7 +413,10 @@ fn preprocess_generics<'a, 'b>(
             range,
         })
     };
-    let generic_types = generic_params.get_generic_types(ctx, builder)?;
+    let mut generic_types = generic_params.get_generic_types(ctx, builder)?;
+    if generic_types.len() != generic_size {
+        generic_types.resize(generic_size, None);
+    }
     Ok(generic_types)
 }
 

@@ -1079,9 +1079,6 @@ impl<'ctx> InferenceCtx<'ctx> {
         builder: &'b BuilderEnum<'a, '_>,
         argtys: &Vec<SymbolType>,
     ) -> Option<SymbolType> {
-        if f.name.contains("::next") {
-            eprintln!("gm: {:?}", f.fntype.generic_map);
-        }
         let mut tys = vec![];
         for _ in &f.fntype.generic_map {
             tys.push(self.new_key());
@@ -1112,34 +1109,6 @@ impl<'ctx> InferenceCtx<'ctx> {
                 if let NodeEnum::Take(t) = &mut *fc.callee {
                     let head_ty = self.inference(&mut t.head, ctx, builder);
                     let head_ty = self.deref_receiver(head_ty, ctx);
-                    // // on method, unify type generic
-                    // match &head_ty {
-                    //     SymbolType::Var(v) => {
-                    //         let v = *v;
-                    //         let k = self.unify_table.borrow_mut().probe_value(v);
-                    //         match k {
-                    //             TyInfer::Generic((v, GenericTy::St(_))) => {
-                    //                 // FIXME: 错误的对应关系，这里的对应关系应该从impl node 中获取
-                    //                 let offset = tys.len() - v.len();
-                    //                 for (i, g) in v.iter().enumerate() {
-                    //                     self.unify(
-                    //                         *g,
-                    //                         SymbolType::Var(tys[offset + i]),
-                    //                         ctx,
-                    //                         builder,
-                    //                     );
-                    //                 }
-                    //             }
-                    //             TyInfer::Term(t) => {
-                    //                 self.pltype_receiver_unify(t, &tys, ctx, builder);
-                    //             }
-                    //             _ => (),
-                    //         }
-                    //     }
-                    //     SymbolType::PLType(p) => {
-                    //         self.pltype_receiver_unify(p.clone(), &tys, ctx, builder);
-                    //     }
-                    // };
                     let sym = ctx.run_in_type_mod(f, |ctx, _| {
                         arg.solve_in_infer_generic_ctx(ctx, builder, self, &generic_map)
                             .unwrap_or(SymbolType::PLType(unknown_arc()))
