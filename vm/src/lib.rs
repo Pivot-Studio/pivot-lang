@@ -290,11 +290,19 @@ fn exit_now(code: i64) {
 }
 
 #[is_runtime]
-fn millitime() -> i64 {
-    let now = std::time::SystemTime::now();
-    let duration = now.duration_since(std::time::UNIX_EPOCH).unwrap();
-    duration.as_millis() as _
+fn itoa(i: i64, rec: *mut u8) -> i64 {
+    let s = unsafe { std::slice::from_raw_parts_mut(rec, 10) };
+    i.to_string()
+        .as_bytes()
+        .iter()
+        .enumerate()
+        .for_each(|(i, b)| {
+            s[i] = *b;
+        });
+    i.to_string().len() as _
 }
 
 #[is_runtime]
-fn keep_on_stack(_p: i64) {}
+fn sqrt_f64(f: f64) -> f64 {
+    f.sqrt()
+}

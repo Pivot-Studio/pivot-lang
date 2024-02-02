@@ -183,7 +183,7 @@ impl Node for DefNode {
             let mut tp = Arc::new(RefCell::new(PLType::Unknown));
             if let DefVar::Identifier(i) = &*self.var {
                 if let Some(id) = i.id {
-                    let v = ctx.unify_table.borrow_mut().probe(id);
+                    let v = ctx.unify_table.borrow_mut().probe_value(id);
                     tp = v.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut());
                 }
             }

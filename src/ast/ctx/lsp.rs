@@ -94,6 +94,9 @@ impl Ctx<'_> {
         if self.need_highlight.borrow().ne(&0) || self.in_macro {
             return;
         }
+        if range.start.line > 200 {
+            eprintln!();
+        }
         self.get_root_ctx()
             .plmod
             .semantic_tokens_builder

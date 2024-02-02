@@ -10,6 +10,7 @@ use crate::ast::builder::llvmbuilder::LLVMBuilder;
 use crate::ast::builder::no_op_builder::NoOpBuilder;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
+use crate::ast::compiler::CHECK_PROGRESS;
 use crate::ast::compiler::COMPILE_PROGRESS;
 use crate::ast::compiler::{compile_dry_file, ActionType};
 use crate::ast::ctx::{self, Ctx};
@@ -25,6 +26,7 @@ use crate::lsp::text;
 use crate::utils::read_config::ConfigWrapper;
 use crate::Db;
 use colored::Colorize;
+use indicatif::ProgressBar;
 #[cfg(feature = "llvm")]
 use inkwell::context::Context;
 
@@ -247,8 +249,6 @@ impl Program {
     /// load_used_modules loads each dependent module used by the entry_node, parses them into modules by [compile_dry_file],
     /// loads all the symbols into the entry_node and returns ProgramEmitParam for the further processing.
     pub fn load_used_modules(self, db: &dyn Db, entry_node: ProgramNode) -> ProgramEmitParam {
-        let pb = &COMPILE_PROGRESS;
-
         let mut modmap = FxHashMap::<String, Arc<Mod>>::default();
         let mut global_mthd_map: FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>> =
             FxHashMap::default();
@@ -256,11 +256,17 @@ impl Program {
         let mut global_macro_map = FxHashMap::default();
 
         let pkgname = self.get_pkgname(db);
+        let (job, pb) = if self.params(db).action(db) == ActionType::Compile {
+            ("编译", &COMPILE_PROGRESS as &ProgressBar)
+        } else {
+            ("检查", &CHECK_PROGRESS as &ProgressBar)
+        };
         // parse all dependencies into modules and process symbols into the main module symbol table
         for (i, u) in entry_node.uses.iter().enumerate() {
             #[cfg(not(target_arch = "wasm32"))]
             pb.set_message(format!(
-                "正在编译包{}的依赖项{}/{}",
+                "正在{}包{}的依赖项{}/{}",
+                job,
                 pkgname,
                 i,
                 entry_node.uses.len()
@@ -410,7 +416,11 @@ impl Program {
     #[salsa::tracked]
     pub fn emit(self, db: &dyn Db) -> ModWrapper {
         #[cfg(not(target_arch = "wasm32"))]
-        let pb = &COMPILE_PROGRESS;
+        let (job, pb) = if self.params(db).action(db) == ActionType::Compile {
+            ("编译", &COMPILE_PROGRESS as &ProgressBar)
+        } else {
+            ("检查", &CHECK_PROGRESS as &ProgressBar)
+        };
 
         let entry_node = self.guard_and_load_buitin_modules(db);
 
@@ -426,7 +436,7 @@ impl Program {
         let raw_node = emit_params.program_node(db).node(db);
 
         #[cfg(not(target_arch = "wasm32"))]
-        pb.set_message(format!("正在编译包{}", pkgname));
+        pb.set_message(format!("正在{}包{}", job, pkgname));
         #[cfg(not(target_arch = "wasm32"))]
         pb.inc(1);
 

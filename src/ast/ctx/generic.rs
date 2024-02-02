@@ -102,11 +102,17 @@ impl<'a> Ctx<'a> {
                 if lg.curpltype.is_some() {
                     return self.eq(lg.curpltype.as_ref().unwrap().clone(), r);
                 }
+                // set the real type of generic type to the type of the right
                 lg.set_type(r.clone());
+                // in this case, we need to check if the right type
+                // satisfies the trait constraints of the generic type
+                // so we don't return here
             }
             if let PLType::Generic(lg) = &*l.borrow() {
                 if lg.trait_impl.is_some() {
                     if let PLType::Generic(r) = &*r.borrow() {
+                        // in case checking equality of two generic types,
+                        // we need to check if the trait impls of them are equal
                         if let Some(reason) = self.diff_trait_impl(lg, r) {
                             return EqRes {
                                 eq: false,
@@ -123,6 +129,8 @@ impl<'a> Ctx<'a> {
                         .iter()
                         .any(|lt| !self.eq(lt.clone(), r.clone()).eq)
                     {
+                        // try to pass normal type as generic type, check if it contains
+                        // all the trait expected by the generic type
                         return EqRes {
                             eq: false,
                             need_up_cast: false,

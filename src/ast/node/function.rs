@@ -214,6 +214,9 @@ impl Node for FuncCallNode {
             _ => return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND))),
         };
 
+        if let Some(p) = &self.generic_params {
+            p.emit_highlight(ctx);
+        }
         generic_tp_apply(&fnvalue, self, ctx, builder)?;
         let mut skip = 0;
         let mut para_values = vec![];
@@ -299,6 +302,7 @@ impl Node for FuncCallNode {
         res
     }
 }
+
 /// # generic_tp_apply
 ///
 /// This method will apply generic parameter types to a generic custom type.
@@ -308,13 +312,24 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
     ctx: &'b mut Ctx<'a>,
     builder: &'b BuilderEnum<'a, '_>,
 ) -> Result<(), PLDiag> {
-    // disable highlight
-    *ctx.need_highlight.borrow_mut() += 1;
     let generic_size = tp.get_generic_size();
     let generic_params = node.get_generic_params();
+    // disable highlight
+    *ctx.need_highlight.borrow_mut() += 1;
     let range = node.range();
-    let mut generic_types = preprocess_generics(generic_params, generic_size, range, ctx, builder)?;
-
+    let re = preprocess_generics(
+        generic_params,
+        generic_size,
+        tp.get_user_generic_size(),
+        range,
+        ctx,
+        builder,
+    );
+    if let Err(diag) = re {
+        *ctx.need_highlight.borrow_mut() -= 1;
+        return Err(diag);
+    }
+    let mut generic_types = re.unwrap();
     let re = ctx.run_in_type_mod(tp, |ctx, t| {
         ctx.protect_generic_context(t.get_generic_map(), |ctx| {
             for (i, (_, pltype)) in t.get_generic_map().iter().enumerate() {
@@ -329,7 +344,7 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
                         .unwrap_or_default()
                         .get(i)
                         .map(|v| {
-                            let ty = ctx.unify_table.borrow_mut().probe(*v);
+                            let ty = ctx.unify_table.borrow_mut().probe_value(*v);
                             ty.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut())
                         });
                     if let Some(ty) = ty {
@@ -355,6 +370,14 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
                         format_label!("parameter `{}` defined in `{}`", g.0, t.get_name()),
                     );
                     return Err(diag.add_to_ctx(ctx));
+                } else if i < t.get_user_generic_size() {
+                    ctx.set_if_refs_tp(
+                        generic_types[i].as_ref().unwrap().clone(),
+                        generic_params
+                            .as_ref()
+                            .and_then(|v| v.generics[i].as_ref().map(|v| v.range()))
+                            .unwrap_or_default(),
+                    );
                 }
             }
             Ok(())
@@ -370,6 +393,7 @@ pub fn generic_tp_apply<'a, 'b, T: Generic + CustomType, N: GenericInferenceAble
 fn preprocess_generics<'a, 'b>(
     generic_params: &Option<Box<GenericParamNode>>,
     generic_size: usize,
+    usr_generic_size: usize,
     range: Range,
     ctx: &'b mut Ctx<'a>,
     builder: &'b BuilderEnum<'a, '_>,
@@ -377,7 +401,7 @@ fn preprocess_generics<'a, 'b>(
     let generic_params = if let Some(generic_params) = generic_params {
         generic_params.emit_highlight(ctx);
         let generic_params_range = generic_params.range;
-        if generic_params.generics.len() != generic_size {
+        if generic_params.generics.len() != usr_generic_size {
             return Err(
                 ctx.add_diag(generic_params_range.new_err(ErrorCode::GENERIC_PARAM_LEN_MISMATCH))
             );
@@ -389,7 +413,10 @@ fn preprocess_generics<'a, 'b>(
             range,
         })
     };
-    let generic_types = generic_params.get_generic_types(ctx, builder)?;
+    let mut generic_types = generic_params.get_generic_types(ctx, builder)?;
+    if generic_types.len() != generic_size {
+        generic_types.resize(generic_size, None);
+    }
     Ok(generic_types)
 }
 
@@ -1034,7 +1061,7 @@ impl Node for ClosureNode {
                 typenode.emit_highlight(ctx);
                 typenode.get_type(ctx, builder, true)?
             } else if let Some(id) = v.id {
-                let vv = ctx.unify_table.borrow_mut().probe(id);
+                let vv = ctx.unify_table.borrow_mut().probe_value(id);
                 let tp = vv.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut());
                 if *tp.borrow() == PLType::Unknown {
                     v.range()
@@ -1078,7 +1105,7 @@ impl Node for ClosureNode {
             ret.emit_highlight(ctx);
             ret.get_type(ctx, builder, true)?
         } else if let Some(ty) = self.ret_id {
-            let v = ctx.unify_table.borrow_mut().probe(ty);
+            let v = ctx.unify_table.borrow_mut().probe_value(ty);
             let tp = v.get_type(ctx, builder, &mut ctx.unify_table.clone().borrow_mut());
             tp
         } else if let Some(exp_ty) = &ctx.expect_ty {

@@ -7,6 +7,12 @@ pub struct Mod2 {
     pub y: bool;
 }
 
+impl Eq<Mod2> for Mod2 {
+    fn eq(other:*Mod2) bool {
+        return true;
+    }
+}
+
 
 struct name<T> {
     t:T;

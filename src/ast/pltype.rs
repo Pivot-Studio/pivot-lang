@@ -959,22 +959,22 @@ impl FNValue {
                 self.fntype.param_pltypes[i]
                     .get_type(ctx, builder, true)
                     .unwrap(),
-            ) != get_type_deep(
+            ) != get_type_deep(ctx.run_in_type_mod(other, |ctx, other| {
                 other.fntype.param_pltypes[i]
                     .get_type(ctx, builder, true)
-                    .unwrap(),
-            ) {
+                    .unwrap()
+            })) {
                 return false;
             }
         }
         get_type_deep(self.fntype.ret_pltype.get_type(ctx, builder, true).unwrap())
-            == get_type_deep(
+            == get_type_deep(ctx.run_in_type_mod(other, |ctx, other| {
                 other
                     .fntype
                     .ret_pltype
                     .get_type(ctx, builder, true)
-                    .unwrap(),
-            )
+                    .unwrap()
+            }))
     }
     pub fn append_name_with_generic(&self, name: String) -> String {
         if self.fntype.need_gen_code() {
@@ -1167,8 +1167,6 @@ pub struct STType {
     pub generic_infer_types: IndexMap<String, Arc<RefCell<PLType>>>,
     pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
     pub trait_methods_impl: TraitMthdImpl,
-    // // key name<i64>/name<f64> ...
-    // pub generic_infer: Arc<RefCell<IndexMap<String, Arc<RefCell<PLType>>>>>,
 }
 
 pub type TraitMthdImpl = Arc<RefCell<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>>;
