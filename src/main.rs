@@ -47,9 +47,13 @@ fn main() {
         .module(module_path!())
         .quiet(cli.quiet)
         .verbosity(cli.verbose as usize);
-
+    cli.logger
+        .timestamp(stderrlog::Timestamp::Off)
+        .init()
+        .unwrap();
     match cli.command {
         Some(ref cmd) => match cmd {
+            RunCommand::Check { name } => cli.check(name.clone()),
             RunCommand::Run { name } => cli.run(name.clone()),
             RunCommand::Lsp {} => cli.lsp(),
             RunCommand::Fmt { name } => cli.fmt(name.clone()),
@@ -149,15 +153,8 @@ struct Cli {
 }
 
 impl Cli {
-    // todo(griffin): make the input name more generic
-    // currently it support file path input only,
-    pub fn build(&mut self, name: String) {
-        self.logger
-            .timestamp(stderrlog::Timestamp::Off)
-            .init()
-            .unwrap();
-
-        let mut db = Database::default();
+    pub fn check(&mut self, name: String) {
+        let db = Database::default();
         let filepath = Path::new(&name);
         let abs = crate::utils::canonicalize(filepath).unwrap();
 
@@ -183,8 +180,28 @@ impl Cli {
         let pb = &CHECK_PROGRESS;
         prepare_prgressbar(pb, op, format!("{}[{:2}/{:2}]", LOOKING_GLASS, 1, 1));
         let _ = compile_dry(&db, mem);
-        pb.finish_with_message("代码检查完成");
         ensure_no_error(&db, mem);
+        pb.finish_with_message("finish the type check");
+    }
+
+    // todo(griffin): make the input name more generic
+    // currently it support file path input only,
+    pub fn build(&mut self, name: String) {
+        self.check(name.clone());
+
+        let db = Database::default();
+        let filepath = Path::new(&name);
+        let abs = crate::utils::canonicalize(filepath).unwrap();
+
+        let op = compiler::Options {
+            genir: self.genir,
+            printast: self.printast,
+            flow: self.flow,
+            fmt: false,
+            optimization: convert(self.optimization),
+            jit: self.jit,
+            debug: self.debug,
+        };
 
         let action = if self.flow {
             ActionType::Flow
@@ -194,7 +211,15 @@ impl Cli {
             ActionType::Compile
         };
 
-        mem.set_action(&mut db).to(action);
+        let mem = MemDocsInput::new(
+            &db,
+            Arc::new(Mutex::new(mem_docs::MemDocs::default())),
+            abs.to_str().unwrap().to_string(),
+            op,
+            action,
+            None,
+            None,
+        );
         compiler::compile(&db, mem, self.out.clone(), op);
     }
     pub fn version(&self) {
@@ -282,6 +307,11 @@ impl Cli {
 enum RunCommand {
     /// JIT run the compiled program
     Run {
+        /// Name of the compiled file
+        #[arg(value_parser)]
+        name: String,
+    },
+    Check {
         /// Name of the compiled file
         #[arg(value_parser)]
         name: String,

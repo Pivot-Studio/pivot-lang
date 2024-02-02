@@ -516,14 +516,14 @@ pub(crate) fn ensure_no_error(db: &dyn Db, docs: MemDocsInput) {
             if errs_num == 1 {
                 log::error!(
                     "{}",
-                    format!("compile failed: there is {} error", errs_num).bright_red()
+                    format!("check failed: there is {} error", errs_num).bright_red()
                 );
                 println!("{}", dot::ERROR);
                 exit(1);
             }
             log::error!(
                 "{}",
-                format!("compile failed: there are {} errors", errs_num).bright_red()
+                format!("check failed: there are {} errors", errs_num).bright_red()
             );
             println!("{}", dot::TOOMANYERROR);
             exit(1);
