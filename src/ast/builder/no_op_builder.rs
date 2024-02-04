@@ -21,7 +21,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     fn is_main(&self, _f: ValueHandle) -> bool {
         true
     }
-    fn alloc_no_collect(
+    fn alloc_2(
         &self,
         _name: &str,
         _pltype: &PLType,

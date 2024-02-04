@@ -690,10 +690,24 @@ impl Node for StructInitNode {
             }
         };
         ctx.send_if_go_to_def(self.typename.range(), sttype.range, sttype.path.clone());
-        let mut field_init_values = vec![];
+        // let mut field_init_values = vec![];
         let mut idx = 0;
         ctx.save_if_comment_doc_hover(self.typename.range(), Some(sttype.doc.clone()));
-        ctx.run_in_type_mod_mut(&mut sttype, |ctx, sttype| {
+        let sttype = &mut sttype;
+        if !sttype.generic_map.is_empty() {
+            if sttype.need_gen_code() {
+                pltype =
+                    ctx.run_in_type_mod_mut(sttype, |ctx, sttype| sttype.gen_code(ctx, builder))?;
+            } else {
+                return Err(ctx.add_diag(
+                    self.typename
+                        .range()
+                        .new_err(ErrorCode::GENERIC_CANNOT_BE_INFER),
+                ));
+            }
+        }
+        let struct_pointer = builder.alloc("initstruct", &pltype.borrow(), ctx, None); //alloc(ctx, tp, "initstruct");
+        ctx.run_in_type_mod_mut(sttype, |ctx, sttype| {
             for fieldinit in self.fields.iter_mut() {
                 if let NodeEnum::STInitField(fieldinit) = &mut **fieldinit {
                     let field_id_range = fieldinit.id.range;
@@ -735,7 +749,17 @@ impl Node for StructInitNode {
                         }
                         Ok(())
                     })?;
-                    field_init_values.push((field.index, value));
+                    let fieldptr = builder
+                        .build_struct_gep(
+                            struct_pointer,
+                            field.index,
+                            "fieldptr",
+                            &pltype.borrow(),
+                            ctx,
+                        )
+                        .unwrap();
+                    builder.build_store(fieldptr, value);
+                    // field_init_values.push((field.index, value));
                     ctx.send_if_go_to_def(field_id_range, field.range, sttype.get_path());
                     ctx.set_field_refs(pltype.clone(), field, field_id_range);
                 } else if let NodeEnum::Err(fieldinit) = &mut **fieldinit {
@@ -749,28 +773,16 @@ impl Node for StructInitNode {
                     unreachable!()
                 }
             }
-            if !sttype.generic_map.is_empty() {
-                if sttype.need_gen_code() {
-                    pltype = ctx
-                        .run_in_type_mod_mut(sttype, |ctx, sttype| sttype.gen_code(ctx, builder))?;
-                } else {
-                    return Err(ctx.add_diag(
-                        self.typename
-                            .range()
-                            .new_err(ErrorCode::GENERIC_CANNOT_BE_INFER),
-                    ));
-                }
-            }
             Ok(())
         })?;
 
-        let struct_pointer = builder.alloc_no_collect("initstruct", &pltype.borrow(), ctx, None); //alloc(ctx, tp, "initstruct");
-        field_init_values.iter().for_each(|(index, value)| {
-            let fieldptr = builder
-                .build_struct_gep(struct_pointer, *index, "fieldptr", &pltype.borrow(), ctx)
-                .unwrap();
-            builder.build_store(fieldptr, *value);
-        });
+        // let struct_pointer = builder.alloc("initstruct", &pltype.borrow(), ctx, None); //alloc(ctx, tp, "initstruct");
+        // field_init_values.iter().for_each(|(index, value)| {
+        //     let fieldptr = builder
+        //         .build_struct_gep(struct_pointer, *index, "fieldptr", &pltype.borrow(), ctx)
+        //         .unwrap();
+        //     builder.build_store(fieldptr, *value);
+        // });
         struct_pointer.new_output(pltype.clone()).to_result()
     }
 }
