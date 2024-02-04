@@ -1,4 +1,5 @@
 use super::super::cast::get_option_type;
+use super::Pos;
 
 use crate::ast::builder::BlockHandle;
 use crate::ast::builder::BuilderEnum;
@@ -303,12 +304,17 @@ pub(crate) fn build_generator_ret<'a>(
         other => {
             builder.rm_curr_debug_location();
             data.borrow_mut().ret_handle =
-                builder.alloc_no_collect("retvalue1", other, child, None);
+                builder.alloc("retvalue1", other, child, Some(Pos::default()));
             data.borrow_mut().ret_type = Some(r);
         }
     }
 
     child.position_at_end(entry, builder);
-    let retv = builder.alloc_no_collect("retvalue_generator", &tp.borrow(), child, None);
+    let retv = builder.alloc(
+        "retvalue_generator",
+        &tp.borrow(),
+        child,
+        Some(Pos::default()),
+    );
     Ok(Some(retv))
 }

@@ -344,14 +344,16 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             self.builder.build_store(vtable, i).unwrap();
         }
         if let Some(pos) = declare {
-            self.build_dbg_location(pos);
-            self.insert_var_declare(
-                name,
-                pos,
-                pltype,
-                self.get_llvm_value_handle(&p.as_any_value_enum()),
-                ctx,
-            );
+            if pos != Default::default() {
+                self.build_dbg_location(pos);
+                self.insert_var_declare(
+                    name,
+                    pos,
+                    pltype,
+                    self.get_llvm_value_handle(&p.as_any_value_enum()),
+                    ctx,
+                );
+            }
         }
         let v_heap = self.get_llvm_value_handle(&p.as_any_value_enum());
         v_heap
@@ -459,7 +461,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if let PLType::Arr(arr) = tp {
             // init the array size
             if arr.size_handle != 0 {
-                let mf = "DioGC__malloc_no_collect";
+                let mf = "DioGC__malloc";
                 let f = self.get_gc_mod_f(ctx, mf);
 
                 // let f = self.get_malloc_f(ctx, "DioGC__malloc_no_collect");
@@ -981,14 +983,14 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 let mut param_types = vec![];
                 for param_pltype in fnvalue.fntype.param_pltypes.iter() {
                     param_types.push(
-                        self.get_basic_type_op(
+                        self.get_param_type(
                             &param_pltype
                                 .get_type(ctx, &self.clone().into(), true)
                                 .unwrap()
                                 .borrow(),
                             ctx,
+                            !fnvalue.is_declare,
                         )
-                        .unwrap()
                         .into(),
                     );
                 }
@@ -1136,12 +1138,36 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             PLType::Void => RetTypeEnum::Void(self.context.void_type()),
             _ => RetTypeEnum::Basic({
                 let tp = self.get_basic_type_op(pltp, ctx).unwrap();
-                if is_gc_statepoint && !matches!(&*get_type_deep(Arc::new(RefCell::new(pltp.clone()))).borrow(), PLType::Pointer(_) | PLType::Primitive(_)) {
+                if is_gc_statepoint
+                    && !matches!(
+                        &*get_type_deep(Arc::new(RefCell::new(pltp.clone()))).borrow(),
+                        PLType::Pointer(_) | PLType::Primitive(_)
+                    )
+                {
                     tp.ptr_type(AddressSpace::from(1)).as_basic_type_enum()
                 } else {
                     tp
                 }
             }),
+        }
+    }
+
+    fn get_param_type(
+        &self,
+        pltp: &PLType,
+        ctx: &mut Ctx<'a>,
+        is_gc_statepoint: bool,
+    ) -> BasicTypeEnum<'ctx> {
+        let tp = self.get_basic_type_op(pltp, ctx).unwrap();
+        if is_gc_statepoint
+            && !matches!(
+                &*get_type_deep(Arc::new(RefCell::new(pltp.clone()))).borrow(),
+                PLType::Pointer(_) | PLType::Primitive(_)
+            )
+        {
+            tp.ptr_type(AddressSpace::from(1)).as_basic_type_enum()
+        } else {
+            tp
         }
     }
     fn i8ptr(&self) -> PointerType<'ctx> {
@@ -1638,6 +1664,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         // self.module.strip_debug_info();
         // self.module.strip_debug_info(); // FIXME
         self.module.verify().unwrap_or_else(|e| {
+            self.module.print_to_file(Path::new("err.ll")).unwrap();
             panic!(
                 "module {} is not valid, err msg: {}",
                 self.module.get_name().to_str().unwrap(),
@@ -1929,12 +1956,15 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
 
         let fntp = f_tp.unwrap_or(match self.get_basic_type_op(ret_type, ctx) {
             Some(r) => {
-                if matches!(&*get_type_deep(Arc::new(RefCell::new(ret_type.clone()))).borrow(), PLType::Pointer(_) | PLType::Primitive(_)) {
+                if matches!(
+                    &*get_type_deep(Arc::new(RefCell::new(ret_type.clone()))).borrow(),
+                    PLType::Pointer(_) | PLType::Primitive(_)
+                ) {
                     r.fn_type(&tys, false)
-                }else {
+                } else {
                     r.ptr_type(AddressSpace::from(1)).fn_type(&tys, false)
                 }
-            },
+            }
             None => self.context.void_type().fn_type(&tys, false),
         });
         let cc;
@@ -1969,11 +1999,19 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let ret = v.left().unwrap();
 
         builder.unset_current_debug_location();
-        if matches!(&*get_type_deep(Arc::new(RefCell::new(ret_type.clone()))).borrow(), PLType::Pointer(_)) {
+        if matches!(
+            &*get_type_deep(Arc::new(RefCell::new(ret_type.clone()))).borrow(),
+            PLType::Pointer(_)
+        ) {
             let alloca = self.alloc("call_ret", ret_type, ctx, None);
-            builder.build_store(self.get_llvm_value(alloca).unwrap().into_pointer_value(), ret).unwrap();
+            builder
+                .build_store(
+                    self.get_llvm_value(alloca).unwrap().into_pointer_value(),
+                    ret,
+                )
+                .unwrap();
             Some(alloca)
-        }else {
+        } else {
             Some(self.get_llvm_value_handle(&ret.as_any_value_enum()))
         }
         // return Some(self.get_llvm_value_handle(&ret.as_any_value_enum()));
@@ -2047,7 +2085,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     ) -> ValueHandle {
         self.alloc_with_f(name, pltype, ctx, declare, "DioGC__malloc")
     }
-    fn alloc_no_collect(
+    fn alloc_2(
         &self,
         name: &str,
         pltype: &PLType,
@@ -3054,7 +3092,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         closure_param_tps.extend(
             &params
                 .iter()
-                .map(|p| self.get_basic_type_op(&p.borrow(), ctx).unwrap().into())
+                .map(|p| self.get_param_type(&p.borrow(), ctx, true).into())
                 .collect::<Vec<_>>(),
         );
         let f_tp = self

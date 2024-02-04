@@ -78,7 +78,7 @@ lazy_static! {
                 heap_size
             );
         }
-        
+
         if let Ok(size) = std::env::var("PL_IMMIX_HEAP_SIZE") {
             eprintln!("use env heap size: {}", size);
             heap_size = size.parse().unwrap();
