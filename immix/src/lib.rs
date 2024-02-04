@@ -78,7 +78,9 @@ lazy_static! {
                 heap_size
             );
         }
-        if let Some(size) = option_env!("PL_IMMIX_HEAP_SIZE") {
+        
+        if let Ok(size) = std::env::var("PL_IMMIX_HEAP_SIZE") {
+            eprintln!("use env heap size: {}", size);
             heap_size = size.parse().unwrap();
         }
         heap_size = round_n_up!(heap_size, BLOCK_SIZE);
