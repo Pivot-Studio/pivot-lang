@@ -102,8 +102,20 @@ impl FuncCallNode {
             let v = v.unwrap();
             let value_pltype = v.get_ty();
             let value_pltype = get_type_deep(value_pltype);
-            let load = ctx.try_load2var(pararange, v.get_value(), builder, &v.get_ty().borrow())?;
-            para_values.push(load);
+            if !matches!(
+                &*value_pltype.borrow(),
+                PLType::Pointer(_) | PLType::Primitive(_)
+            ) {
+                let alloca = builder.alloc("arg_ptr", &value_pltype.borrow(), ctx, None);
+                let load =
+                    ctx.try_load2var(pararange, v.get_value(), builder, &v.get_ty().borrow())?;
+                builder.build_store(alloca, load);
+                para_values.push(alloca);
+            } else {
+                let load =
+                    ctx.try_load2var(pararange, v.get_value(), builder, &v.get_ty().borrow())?;
+                para_values.push(load);
+            }
             value_pltypes.push((value_pltype, pararange));
         }
         let re = builder.build_struct_gep(v, 0, "real_fn", &ct, ctx).unwrap();
@@ -150,8 +162,21 @@ impl FuncCallNode {
             let v = v.unwrap();
             let value_pltype = v.get_ty();
             let value_pltype = get_type_deep(value_pltype);
-            let load = ctx.try_load2var(pararange, v.get_value(), builder, &v.get_ty().borrow())?;
-            para_values.push(load);
+
+            if !matches!(
+                &*value_pltype.borrow(),
+                PLType::Pointer(_) | PLType::Primitive(_)
+            ) {
+                let alloca = builder.alloc("arg_ptr", &value_pltype.borrow(), ctx, None);
+                let load =
+                    ctx.try_load2var(pararange, v.get_value(), builder, &v.get_ty().borrow())?;
+                builder.build_store(alloca, load);
+                para_values.push(alloca);
+            } else {
+                let load =
+                    ctx.try_load2var(pararange, v.get_value(), builder, &v.get_ty().borrow())?;
+                para_values.push(load);
+            }
             value_pltypes.push((value_pltype, pararange));
         }
         Ok(())
@@ -464,7 +489,7 @@ fn handle_ret<'a, 'b>(
     match ret {
         Some(mut v) => {
             if declare {
-                let alloca = builder.alloc_no_collect("ret_tmp", &rettp.borrow(), ctx, None);
+                let alloca = builder.alloc("ret_tmp", &rettp.borrow(), ctx, None);
                 builder.build_store(alloca, v);
                 v = alloca;
             }
@@ -790,7 +815,7 @@ impl FuncDefNode {
                         PLType::Void => None,
                         other => {
                             builder.rm_curr_debug_location();
-                            let retv = builder.alloc_no_collect("retvalue3", other, child, None);
+                            let retv = builder.alloc("retvalue3", other, child, None);
                             Some(retv)
                         }
                     }
@@ -798,8 +823,11 @@ impl FuncDefNode {
                 child.position_at_end(return_block, builder);
                 child.return_block = Some((return_block, ret_value_ptr));
                 if let Some(ptr) = ret_value_ptr {
-                    let value = if self.id.name == "main" || matches!(&*get_type_deep( child.rettp.clone().unwrap()).borrow(),
-                        PLType::Primitive(_)|PLType::Pointer(_)) {
+                    let value = if self.id.name == "main"
+                        || matches!(
+                            &*get_type_deep(child.rettp.clone().unwrap()).borrow(),
+                            PLType::Primitive(_) | PLType::Pointer(_)
+                        ) {
                         builder.build_load(
                             ptr,
                             "load_ret_tmp",
@@ -823,33 +851,65 @@ impl FuncDefNode {
                 for (i, para) in fnvalue.fntype.param_pltypes.iter().enumerate() {
                     let tp = para.get_type(child, builder, true)?;
                     let b = tp.clone();
-                    let basetype = b.borrow();
-                    let alloca =
-                        builder.alloc_no_collect(&fnvalue.param_names[i], &basetype, child, None);
-                    // add alloc var debug info
-                    builder.create_parameter_variable(
-                        &fnvalue,
-                        self.paralist[i].range.start,
-                        i,
-                        child,
-                        funcvalue,
-                        alloca,
-                        allocab,
-                        &basetype,
-                    );
-                    let parapltype = tp;
-                    child
-                        .add_symbol(
-                            fnvalue.param_names[i].clone(),
+                    if matches!(
+                        &*get_type_deep(b.clone()).borrow(),
+                        PLType::Pointer(_) | PLType::Primitive(_)
+                    ) {
+                        let basetype = b.borrow();
+                        let alloca = builder.alloc(
+                            &fnvalue.param_names[i],
+                            &basetype,
+                            child,
+                            Some(Pos::default()),
+                        );
+                        // add alloc var debug info
+                        builder.create_parameter_variable(
+                            &fnvalue,
+                            self.paralist[i].range.start,
+                            i,
+                            child,
+                            funcvalue,
                             alloca,
-                            parapltype,
-                            self.paralist[i].id.range,
-                            false,
-                            false,
-                        )
-                        .unwrap();
+                            allocab,
+                            &basetype,
+                        );
+                        let parapltype = tp;
+                        child
+                            .add_symbol(
+                                fnvalue.param_names[i].clone(),
+                                alloca,
+                                parapltype,
+                                self.paralist[i].id.range,
+                                false,
+                                false,
+                            )
+                            .unwrap();
+                    } else {
+                        let p = builder.get_nth_param(funcvalue, i as _);
+                        // // add debug info
+                        // builder.create_parameter_variable(
+                        //     &fnvalue,
+                        //     self.paralist[i].range.start,
+                        //     i,
+                        //     child,
+                        //     funcvalue,
+                        //     p,
+                        //     allocab,
+                        //     &tp.borrow(),
+                        // );
+                        child
+                            .add_symbol(
+                                fnvalue.param_names[i].clone(),
+                                p,
+                                tp,
+                                self.paralist[i].id.range,
+                                false,
+                                false,
+                            )
+                            .unwrap();
+                    }
                 }
-                builder.place_safepoint(child);
+                // builder.place_safepoint(child);
                 if self.generator {
                     child.generator_data.as_ref().unwrap().borrow_mut().is_para = false;
                 }
@@ -1157,17 +1217,19 @@ impl Node for ClosureNode {
             PLType::Void => None,
             other => {
                 builder.rm_curr_debug_location();
-                let retv = builder.alloc_no_collect("retvalue4", other, child, None);
+                let retv = builder.alloc("retvalue4", other, child, None);
                 Some(retv)
             }
         };
         child.position_at_end(return_block, builder);
         child.return_block = Some((return_block, ret_value_ptr));
         if let Some(ptr) = ret_value_ptr {
-            let value = if  matches!(&*get_type_deep( ret_tp.clone()).borrow(),
-                PLType::Primitive(_)|PLType::Pointer(_)){
+            let value = if matches!(
+                &*get_type_deep(ret_tp.clone()).borrow(),
+                PLType::Primitive(_) | PLType::Pointer(_)
+            ) {
                 builder.build_load(ptr, "load_ret_tmp", &ret_tp.borrow(), child)
-            }else {
+            } else {
                 ptr
             };
             // let value = builder.build_load(ptr, "load_ret_tmp", &ret_tp.borrow(), child);
@@ -1191,34 +1253,52 @@ impl Node for ClosureNode {
         // alloc para
         for (i, tp) in paratps.iter().enumerate() {
             let b = tp.clone();
-            let basetype = b.borrow();
-            let alloca = builder.alloc_no_collect(
-                &self.paralist[i].0.name,
-                &basetype,
-                child,
-                Some(self.paralist[i].0.range.start),
-            );
 
-            let parapltype = tp;
-            builder.create_closure_parameter_variable(
-                i as u32 + 1,
-                f,
-                alloca,
-                allocab,
-                &parapltype.borrow(),
-            );
-            child
-                .add_symbol(
-                    self.paralist[i].0.name.clone(),
+            if matches!(
+                &*get_type_deep(b.clone()).borrow(),
+                PLType::Pointer(_) | PLType::Primitive(_)
+            ) {
+                let basetype = b.borrow();
+                let alloca = builder.alloc(
+                    &self.paralist[i].0.name,
+                    &basetype,
+                    child,
+                    Some(self.paralist[i].0.range.start),
+                );
+
+                let parapltype = tp;
+                builder.create_closure_parameter_variable(
+                    i as u32 + 1,
+                    f,
                     alloca,
-                    parapltype.to_owned(),
-                    self.paralist[i].0.range,
-                    false,
-                    false,
-                )
-                .unwrap();
+                    allocab,
+                    &parapltype.borrow(),
+                );
+                child
+                    .add_symbol(
+                        self.paralist[i].0.name.clone(),
+                        alloca,
+                        parapltype.to_owned(),
+                        self.paralist[i].0.range,
+                        false,
+                        false,
+                    )
+                    .unwrap();
+            } else {
+                let p = builder.get_nth_param(f, 1 + i as u32);
+                child
+                    .add_symbol(
+                        self.paralist[i].0.name.clone(),
+                        p,
+                        tp.clone(),
+                        self.paralist[i].0.range,
+                        false,
+                        false,
+                    )
+                    .unwrap();
+            }
         }
-        builder.place_safepoint(child);
+        // builder.place_safepoint(child);
         child.rettp = Some(ret_tp.clone());
         // emit body
         let terminator = self.body.emit(child, builder)?.get_term();

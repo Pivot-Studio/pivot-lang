@@ -313,11 +313,8 @@ fn sqrt_f64(f: f64) -> f64 {
     f.sqrt()
 }
 
-
 #[is_runtime]
-fn keep_on_stack(_i: i64) {
-}
-
+fn keep_on_stack(_i: i64) {}
 
 #[is_runtime]
 fn millitime() -> i64 {

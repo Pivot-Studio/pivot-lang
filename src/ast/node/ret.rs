@@ -129,7 +129,7 @@ impl Node for RetNode {
                     .add_to_ctx(ctx));
             }
             if matches!(
-                &*get_type_deep( ctx.rettp.clone().unwrap()).borrow(),
+                &*get_type_deep(ctx.rettp.clone().unwrap()).borrow(),
                 PLType::Primitive(_) | PLType::Pointer(_)
             ) {
                 builder.build_return(Some(value));

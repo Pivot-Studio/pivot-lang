@@ -311,7 +311,7 @@ fn emit_unsafe_cast<'a, 'b>(
     let ty = Arc::new(RefCell::new(ty));
     let loaded = builder.try_load2var(Default::default(), v.get_value(), &ty.borrow(), ctx)?;
     let re = builder.bitcast(ctx, loaded, &PLType::Pointer(ty.clone()), "unsafe_casted");
-    let alloca = builder.alloc_no_collect("tmp_cast", &ty.borrow(), ctx, None);
+    let alloca = builder.alloc("tmp_cast", &ty.borrow(), ctx, None);
     builder.build_store(alloca, re);
     alloca.new_output(ty).to_result()
 }
