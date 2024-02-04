@@ -14,7 +14,12 @@ use rustc_hash::FxHashMap;
 #[cfg(feature = "llvm_stackmap")]
 use crate::STACK_MAP;
 use crate::{
-    allocator::{GlobalAllocator, ThreadLocalAllocator}, block::{Block, LineHeaderExt, ObjectType}, gc_is_auto_collect_enabled, spin_until, HeaderExt, ENABLE_EVA, FREE_SPACE_DIVISOR, GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_COND, GC_RUNNING, GC_STW_COUNT, GC_SWEEPING, GC_SWEEPPING_NUM, GLOBAL_ALLOCATOR, LINE_SIZE, NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION, USE_SHADOW_STACK
+    allocator::{GlobalAllocator, ThreadLocalAllocator},
+    block::{Block, LineHeaderExt, ObjectType},
+    gc_is_auto_collect_enabled, spin_until, HeaderExt, ENABLE_EVA, FREE_SPACE_DIVISOR,
+    GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_COND, GC_RUNNING, GC_STW_COUNT, GC_SWEEPING,
+    GC_SWEEPPING_NUM, GLOBAL_ALLOCATOR, LINE_SIZE, NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION,
+    USE_SHADOW_STACK,
 };
 
 fn get_ip_from_sp(sp: *mut u8) -> *mut u8 {
@@ -474,16 +479,17 @@ impl Collector {
                 .thread_local_allocator
                 .as_mut()
                 .unwrap()
-                .big_obj_from_ptr(ptr)
-                .unwrap();
-            if (*big_obj).header.get_marked() {
-                return;
-            }
-            (*big_obj).header.set_marked(true);
-            let obj_type = (*big_obj).header.get_obj_type();
-            match obj_type {
-                ObjectType::Atomic => {}
-                _ => (*self.queue).push((ptr, obj_type)),
+                .big_obj_from_ptr(ptr);
+            if let Some(big_obj) = big_obj {
+                if (*big_obj).header.get_marked() {
+                    return;
+                }
+                (*big_obj).header.set_marked(true);
+                let obj_type = (*big_obj).header.get_obj_type();
+                match obj_type {
+                    ObjectType::Atomic => {}
+                    _ => (*self.queue).push((ptr, obj_type)),
+                }
             }
         }
     }
@@ -819,9 +825,10 @@ impl Collector {
         };
         let previous_threshold = self.status.borrow().collect_threshold;
         let this = self.status.borrow().bytes_allocated_since_last_gc;
-        if this <= (previous_threshold as f64 / FREE_SPACE_DIVISOR as f64) as usize  {
+        if this <= (previous_threshold as f64 / FREE_SPACE_DIVISOR as f64) as usize {
             // expand threshold
-            self.status.borrow_mut().collect_threshold = (previous_threshold as f64 * THRESHOLD_PROPORTION) as usize;
+            self.status.borrow_mut().collect_threshold =
+                (previous_threshold as f64 * THRESHOLD_PROPORTION) as usize;
         }
 
         let v = GC_SWEEPPING_NUM.fetch_sub(1, Ordering::AcqRel);
