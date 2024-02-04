@@ -483,18 +483,20 @@ impl Node for TakeOpNode {
                         // walkaround for tuple types
                         ctx.send_if_go_to_def(id_range, field.range, s.path.clone());
                     }
-                    return Ok(NodeOutput::new_value(NodeValue::new(
-                        builder
-                            .build_struct_gep(
-                                headptr,
-                                field.index,
-                                "structgep",
-                                &head_pltype.borrow(),
-                                ctx,
-                            )
-                            .unwrap(),
-                        field.typenode.get_type(ctx, builder, true)?,
-                    )));
+                    return ctx.run_in_type_mod(s, |ctx, _| {
+                        Ok(NodeOutput::new_value(NodeValue::new(
+                            builder
+                                .build_struct_gep(
+                                    headptr,
+                                    field.index,
+                                    "structgep",
+                                    &head_pltype.borrow(),
+                                    ctx,
+                                )
+                                .unwrap(),
+                            field.typenode.get_type(ctx, builder, true)?,
+                        )))
+                    });
                 }
                 handle_mthd(s, ctx, id, headptr, head_pltype, id_range)
             }

@@ -33,7 +33,7 @@ impl <T> Array<T> {
         self.len = self.len - 1;
         return self.data[self.len as i64];
     }
-    pub fn len() u32 {
+    pub fn length() u32 {
         return self.len;
     }
     pub fn get(i:i64) T {

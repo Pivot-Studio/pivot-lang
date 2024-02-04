@@ -1,5 +1,5 @@
 pub fn LibC__read(fd:i32,buf:*u8, size:u64) i64;
-pub fn LibC__write(buf:*u8, size:u64) i64;
+pub fn LibC__write(fd:i32, buf:*u8, size:u64) i64;
 pub fn LibC__open(path:*u8, byte_len:i64, flags:i32) i32;
 pub fn LibC__close(fd:i32) i32;
 
