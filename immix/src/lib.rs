@@ -71,7 +71,7 @@ lazy_static! {
     pub static ref GLOBAL_ALLOCATOR: GAWrapper = unsafe {
         let mut heap_size = DEFAULT_HEAP_SIZE;
         if let Ok(usage) = sys_info::mem_info() {
-            heap_size = usage.free as usize * 1024;
+            heap_size = usage.avail as usize * 1024;
         } else {
             log::warn!(
                 "Failed to get virtual memory size, use default heap size {} byte",
