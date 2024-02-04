@@ -44,10 +44,14 @@ pub static O_RDWR: libc::c_int = libc::O_RDWR;
 #[no_mangle]
 pub static O_CREAT: libc::c_int = libc::O_CREAT;
 
+#[no_mangle]
+pub static RAND_MAX: libc::c_int = libc::RAND_MAX;
+
 internal_macro::add_symbol_consts!(
     STDIN_FILENO,
     STDOUT_FILENO,
     STDERR_FILENO,
+    RAND_MAX,
     O_RDONLY,
     O_WRONLY,
     O_RDWR,

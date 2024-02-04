@@ -13,6 +13,18 @@ pub fn print_s(s: gc::string) void {
 }
 
 
+pub fn stdout() File {
+    return File {
+        fd: libc::STDOUT_FILENO
+    };
+}
+
+pub fn stderr() File {
+    return File {
+        fd: libc::STDERR_FILENO
+    };
+}
+
 pub fn open_read(s:string) File {
     return open(s, libc::O_RDONLY);
 }
@@ -40,6 +52,24 @@ pub struct IoError {
 
 
 impl File {
+    pub fn raw_fd() i32 {
+        return self.fd;
+    }
+
+    pub fn write(bs:[u8]) void {
+        if arr_len(bs) == 0{
+            return;
+        }
+        LibC__write(self.fd, &bs[0], arr_len(bs) as u64);
+        return;
+    }
+    pub fn write_string(s:string) void {
+        if s.byte_len() == 0{
+            return;
+        }
+        LibC__write(self.fd, s.raw(), s.byte_len() as u64);
+        return;
+    }
     pub fn read_all() Result<[u8]|IoError> {
         let fd = self.fd;
         let buf = new_buffer(1024);
