@@ -71,7 +71,7 @@ lazy_static! {
     pub static ref GLOBAL_ALLOCATOR: GAWrapper = unsafe {
         let mut heap_size = DEFAULT_HEAP_SIZE;
         if let Ok(usage) = sys_info::mem_info() {
-            heap_size = usage.total as usize * 1024;
+            heap_size = usage.free as usize * 1024;
         } else {
             log::warn!(
                 "Failed to get virtual memory size, use default heap size {} byte",
@@ -80,7 +80,6 @@ lazy_static! {
         }
 
         if let Ok(size) = std::env::var("PL_IMMIX_HEAP_SIZE") {
-            eprintln!("use env heap size: {}", size);
             heap_size = size.parse().unwrap();
         }
         heap_size = round_n_up!(heap_size, BLOCK_SIZE);
