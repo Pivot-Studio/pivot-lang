@@ -798,7 +798,8 @@ impl FuncDefNode {
                 child.position_at_end(return_block, builder);
                 child.return_block = Some((return_block, ret_value_ptr));
                 if let Some(ptr) = ret_value_ptr {
-                    let value = if self.id.name == "main" {
+                    let value = if self.id.name == "main" || matches!(&*get_type_deep( child.rettp.clone().unwrap()).borrow(),
+                        PLType::Primitive(_)|PLType::Pointer(_)) {
                         builder.build_load(
                             ptr,
                             "load_ret_tmp",
@@ -1163,8 +1164,14 @@ impl Node for ClosureNode {
         child.position_at_end(return_block, builder);
         child.return_block = Some((return_block, ret_value_ptr));
         if let Some(ptr) = ret_value_ptr {
+            let value = if  matches!(&*get_type_deep( ret_tp.clone()).borrow(),
+                PLType::Primitive(_)|PLType::Pointer(_)){
+                builder.build_load(ptr, "load_ret_tmp", &ret_tp.borrow(), child)
+            }else {
+                ptr
+            };
             // let value = builder.build_load(ptr, "load_ret_tmp", &ret_tp.borrow(), child);
-            builder.build_return(Some(ptr));
+            builder.build_return(Some(value));
         } else {
             builder.build_return(None);
         };
