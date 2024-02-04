@@ -12,7 +12,9 @@ pub const EVA_BLOCK_PROPORTION: f64 = 0.025;
 
 pub const ALIGN: usize = 4096;
 
-pub const THRESHOLD_PROPORTION: f64 = 1000000.75;
+pub const THRESHOLD_PROPORTION: f64 = 2.0;
+
+pub const FREE_SPACE_DIVISOR: usize = 4;
 
 pub const LLVM_GC_STRATEGY_NAME: &str = "plimmix";
 
