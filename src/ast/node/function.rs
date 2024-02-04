@@ -461,8 +461,16 @@ fn check_and_cast_params<'a, 'b>(
         }
         if eqres.need_up_cast {
             let mut value = para_values[i + skip as usize];
-            let ptr2v = builder.alloc("tmp_up_cast_ptr", &value_pltype.borrow(), ctx, None);
-            builder.build_store(ptr2v, value);
+            let ptr2v = if !matches!(
+                &*value_pltype.borrow(),
+                PLType::Pointer(_) | PLType::Primitive(_)
+            ) {
+                value
+            } else {
+                let ptr2v = builder.alloc("tmp_up_cast_ptr", &value_pltype.borrow(), ctx, None);
+                builder.build_store(ptr2v, value);
+                ptr2v
+            };
             let trait_pltype = param_types[i + skip as usize].get_type(ctx, builder, true)?;
             value = ctx.up_cast(
                 trait_pltype.clone(),
@@ -472,8 +480,15 @@ fn check_and_cast_params<'a, 'b>(
                 ptr2v,
                 builder,
             )?;
-            value = ctx.try_load2var(*pararange, value, builder, &trait_pltype.borrow())?;
-            para_values[i + skip as usize] = value;
+            if !matches!(
+                &*value_pltype.borrow(),
+                PLType::Pointer(_) | PLType::Primitive(_)
+            ) {
+                para_values[i + skip as usize] = value;
+            } else {
+                value = ctx.try_load2var(*pararange, value, builder, &trait_pltype.borrow())?;
+                para_values[i + skip as usize] = value;
+            }
         }
     }
     Ok(())
