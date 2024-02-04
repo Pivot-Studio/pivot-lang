@@ -312,3 +312,17 @@ fn itoa(i: i64, rec: *mut u8) -> i64 {
 fn sqrt_f64(f: f64) -> f64 {
     f.sqrt()
 }
+
+
+#[is_runtime]
+fn keep_on_stack(_i: i64) {
+}
+
+
+#[is_runtime]
+fn millitime() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as _
+}

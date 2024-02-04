@@ -1136,7 +1136,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             PLType::Void => RetTypeEnum::Void(self.context.void_type()),
             _ => RetTypeEnum::Basic({
                 let tp = self.get_basic_type_op(pltp, ctx).unwrap();
-                if is_gc_statepoint {
+                if is_gc_statepoint && !matches!(&*get_type_deep(Arc::new(RefCell::new(pltp.clone()))).borrow(), PLType::Pointer(_) | PLType::Primitive(_)) {
                     tp.ptr_type(AddressSpace::from(1)).as_basic_type_enum()
                 } else {
                     tp
@@ -1928,7 +1928,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         }
 
         let fntp = f_tp.unwrap_or(match self.get_basic_type_op(ret_type, ctx) {
-            Some(r) => r.ptr_type(AddressSpace::from(1)).fn_type(&tys, false),
+            Some(r) => {
+                if matches!(&*get_type_deep(Arc::new(RefCell::new(ret_type.clone()))).borrow(), PLType::Pointer(_) | PLType::Primitive(_)) {
+                    r.fn_type(&tys, false)
+                }else {
+                    r.ptr_type(AddressSpace::from(1)).fn_type(&tys, false)
+                }
+            },
             None => self.context.void_type().fn_type(&tys, false),
         });
         let cc;
@@ -1963,7 +1969,14 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let ret = v.left().unwrap();
 
         builder.unset_current_debug_location();
-        return Some(self.get_llvm_value_handle(&ret.as_any_value_enum()));
+        if matches!(&*get_type_deep(Arc::new(RefCell::new(ret_type.clone()))).borrow(), PLType::Pointer(_)) {
+            let alloca = self.alloc("call_ret", ret_type, ctx, None);
+            builder.build_store(self.get_llvm_value(alloca).unwrap().into_pointer_value(), ret).unwrap();
+            Some(alloca)
+        }else {
+            Some(self.get_llvm_value_handle(&ret.as_any_value_enum()))
+        }
+        // return Some(self.get_llvm_value_handle(&ret.as_any_value_enum()));
         // if alloca == 0 {
         //     return Some(self.get_llvm_value_handle(&ret.as_any_value_enum()));
         // }

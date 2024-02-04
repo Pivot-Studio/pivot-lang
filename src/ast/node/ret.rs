@@ -116,10 +116,10 @@ impl Node for RetNode {
                 )?;
                 ctx.try_load2var(self.range, value, builder, &ret_pltype.borrow())?
             } else {
-                if builder.is_ptr(v.get_value()) && !builder.is_main(ctx.function.unwrap()) {
-                    builder.build_return(Some(v.get_value()));
-                    return NodeOutput::new_term(TerminatorEnum::Return).to_result();
-                }
+                // if builder.is_ptr(v.get_value()) && !builder.is_main(ctx.function.unwrap()) {
+                //     builder.build_return(Some(v.get_value()));
+                //     return NodeOutput::new_term(TerminatorEnum::Return).to_result();
+                // }
                 ctx.try_load2var(self.range, v.get_value(), builder, &v.get_ty().borrow())?
             };
             if ctx.return_block.unwrap().1.is_none() {
@@ -127,6 +127,13 @@ impl Node for RetNode {
                     .range()
                     .new_err(ErrorCode::NO_RETURN_VALUE_EXPECTED_IN_VOID_FUNCTION)
                     .add_to_ctx(ctx));
+            }
+            if matches!(
+                &*get_type_deep( ctx.rettp.clone().unwrap()).borrow(),
+                PLType::Primitive(_) | PLType::Pointer(_)
+            ) {
+                builder.build_return(Some(value));
+                return NodeOutput::new_term(TerminatorEnum::Return).to_result();
             }
             builder.build_store(ctx.return_block.unwrap().1.unwrap(), value);
         } else if *ret_pltype.borrow() != PLType::Void {

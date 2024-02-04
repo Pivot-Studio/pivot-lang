@@ -828,7 +828,7 @@ impl Collector {
             GC_SWEEPING.store(false, Ordering::Release);
         }
         used
-    }
+    } 
 
     /// # safepoint
     ///
