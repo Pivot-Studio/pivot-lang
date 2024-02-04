@@ -48,7 +48,7 @@ fn main() {
         .quiet(cli.quiet)
         .verbosity(cli.verbose as usize);
     cli.logger
-        .timestamp(stderrlog::Timestamp::Off)
+        .timestamp(stderrlog::Timestamp::Microsecond)
         .init()
         .unwrap();
     match cli.command {
@@ -247,11 +247,6 @@ impl Cli {
         utils::plc_new::init_package(name);
     }
     pub fn lsp(&mut self) {
-        self.logger
-            .timestamp(stderrlog::Timestamp::Microsecond)
-            .init()
-            .unwrap();
-
         #[cfg(not(target_arch = "wasm32"))]
         start_lsp().unwrap();
     }
@@ -262,11 +257,6 @@ impl Cli {
             println!("a file is required to pass as fmt command is not fully implemented yet");
             return;
         }
-
-        self.logger
-            .timestamp(stderrlog::Timestamp::Off)
-            .init()
-            .unwrap();
 
         let db = Database::default();
         let filepath = Path::new(&name);
