@@ -249,8 +249,14 @@ impl Collector {
             return;
         }
         let status = self.status.borrow();
-        if status.collect_threshold < status.bytes_allocated_since_last_gc {
+        if status.collect_threshold
+            <= (status.bytes_allocated_since_last_gc as f64 / FREE_SPACE_DIVISOR as f64) as usize
+        {
+            let previous_threshold = status.collect_threshold;
             drop(status);
+            // expand threshold
+            self.status.borrow_mut().collect_threshold =
+                (previous_threshold as f64 * THRESHOLD_PROPORTION) as usize;
             self.collect_fast_unwind(sp);
         } else {
             drop(status);

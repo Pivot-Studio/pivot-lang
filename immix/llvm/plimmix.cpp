@@ -112,9 +112,12 @@ extern "C" void run_module_pass(LLVMModuleRef  M, int opt, int debug) {
         break;
     }
 
+    MPM.addPass(EscapePass());
+    // MPM.addPass(EscapeFinalPass());
+
     // Create the pass manager.
     // This one corresponds to a typical -O2 optimization pipeline.
-    
+
     MPM.addPass(ImmixPass());
     MPM.addPass(RewriteStatepointsForGC());
     if (debug)
