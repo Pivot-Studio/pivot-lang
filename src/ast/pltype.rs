@@ -94,6 +94,13 @@ impl PLType {
         // Unknow/PartialInfered type are not complete
         !matches!(self, PLType::Unknown | PLType::PartialInferred(_))
     }
+    pub fn is_atomic(&self) -> bool {
+        match self {
+            PLType::Struct(s) => s.is_atomic(),
+            PLType::Primitive(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl TraitImplAble for PriType {
@@ -1197,6 +1204,10 @@ impl PartialEq for STType {
 }
 
 impl STType {
+    pub fn is_atomic(&self) -> bool {
+        // TODO recursive check
+        false
+    }
     pub fn check_impl_derives(&self, ctx: &Ctx, st: &STType, range: Range) {
         debug_assert!(self.is_trait);
         let errnames = self

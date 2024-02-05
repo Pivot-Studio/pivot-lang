@@ -322,11 +322,13 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     "_vtable",
                 )
                 .unwrap();
-            let vtable = self
-                .builder
-                .build_struct_gep(llvm_tp, p, 0, "vtable")
-                .unwrap();
-            self.builder.build_store(vtable, i).unwrap();
+            if !tp.is_atomic() {
+                let vtable = self
+                    .builder
+                    .build_struct_gep(llvm_tp, p, 0, "vtable")
+                    .unwrap();
+                self.builder.build_store(vtable, i).unwrap();
+            }
         } else if let PLType::Arr(tp) = pltype {
             let f = self.gen_or_get_arr_visit_function(ctx, tp);
             let i = self
@@ -411,7 +413,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
 
         let rsp = self.get_sp();
-        let heapptr = self
+        let call_site_value = self
             .builder
             .build_call(
                 f,
@@ -422,23 +424,29 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 },
                 &format!("heapptr_{}", name),
             )
-            .unwrap()
-            .try_as_basic_value()
-            .left()
             .unwrap();
+        if tp.is_atomic() {
+            call_site_value.add_attribute(
+                inkwell::attributes::AttributeLoc::Return,
+                self.context.create_string_attribute("pl_atomic", ""),
+            );
+        }
+        let heapptr = call_site_value.try_as_basic_value().left().unwrap();
         self.builder.position_at_end(lb);
 
         let casted_result = heapptr;
 
-        // TODO: force user to manually init all structs, so we can remove this memset
-        self.builder
-            .build_memset(
-                casted_result.into_pointer_value(),
-                td.get_abi_alignment(&llvmtp),
-                self.context.i8_type().const_zero(),
-                size,
-            )
-            .unwrap();
+        if !tp.is_atomic() {
+            // TODO: force user to manually init all structs, so we can remove this memset
+            self.builder
+                .build_memset(
+                    casted_result.into_pointer_value(),
+                    td.get_abi_alignment(&llvmtp),
+                    self.context.i8_type().const_zero(),
+                    size,
+                )
+                .unwrap();
+        }
 
         let cb = self.builder.get_insert_block().unwrap();
 
@@ -1582,12 +1590,26 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
 
         if pltp.name.starts_with("DioGC__malloc") {
+            // f.add_attribute(
+            //     inkwell::attributes::AttributeLoc::Function,
+            //     self.context
+            //         .create_enum_attribute(Attribute::get_named_enum_kind_id("allockind"), 1),
+            // );
+            // f.add_attribute(
+            //     inkwell::attributes::AttributeLoc::Function,
+            //     self.context
+            //         .create_enum_attribute(Attribute::get_named_enum_kind_id("allockind"), 5),
+            // );
+            // f.add_attribute(
+            //     inkwell::attributes::AttributeLoc::Function,
+            //     self.context
+            //         .create_enum_attribute(Attribute::get_named_enum_kind_id("allockind"), 6),
+            // );
             f.add_attribute(
                 inkwell::attributes::AttributeLoc::Function,
                 self.context
-                    .create_enum_attribute(Attribute::get_named_enum_kind_id("allockind"), 1),
+                    .create_string_attribute("allockind", "alloc,zeroed,aligned"),
             );
-            // f.add_attribute(inkwell::attributes::AttributeLoc::Function,self.context.create_string_attribute("allockind", "alloc"));
         }
         (f, false)
     }
@@ -2337,7 +2359,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         // if let Err(s) = self.module.print_to_file(file) {
         //     return Err(s.to_string());
         // }
-        // self.optimize();
+        self.optimize();
         // self.module.strip_debug_info();
         if let Err(s) = self.module.print_to_file(file) {
             return Err(s.to_string());

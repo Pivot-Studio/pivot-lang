@@ -1,14 +1,14 @@
 pub fn main() i64 {
     // bench();
-    for let i = 0; i < 3; i = i + 1 {
-        bench();
-    }
-    let start = millitime();
     for let i = 0; i < 30; i = i + 1 {
         bench();
     }
+    let start = millitime();
+    for let i = 0; i < 10; i = i + 1 {
+        bench();
+    }
     let end = millitime();
-    println!("time: ", (end - start)/30);
+    println!("time: ", (end - start)/10);
 
     let stw = gc::DioGC__get_stw_num();
     println!("gc stw: ", stw);
@@ -22,7 +22,9 @@ fn bench() void {
     let root =  &GCTestObj{};
     populate(*K_LONG_LIVED_TREE_DEPTH, root);
     let d = *K_MIN_TREE_DEPTH;
+    // println!(d);
     while d <= *K_MAX_TREE_DEPTH {
+        // println!(d);
         time_construct(d);
         d = d + 2;
     }
@@ -34,6 +36,7 @@ fn bench() void {
 fn keep_on_stack(p:*GCTestObj) void;
 
 fn time_construct(depth: i64) void {
+    // println!(depth);
     let i_num_iters = num_iters(depth);
     // println!(i_num_iters);
     for let i = 0; i < i_num_iters; i = i + 1 {
