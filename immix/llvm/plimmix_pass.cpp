@@ -11,6 +11,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#include "llvm/Analysis/CaptureTracking.h"
 using namespace llvm;
 namespace
 {
@@ -25,9 +26,165 @@ namespace
   };
   PreservedAnalyses ImmixPass::run(Module &M, ModuleAnalysisManager &AM)
   {
+    // printf("running immix pass\n");
     immixPassLogic(M);
     return PreservedAnalyses::all();
   }
+
+  class EscapePass : public PassInfoMixin<EscapePass>
+  {
+    static char ID;
+
+  public:
+    PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+  };
+
+
+  PreservedAnalyses EscapePass::run(Module &M, ModuleAnalysisManager &AM)
+  {
+    // printf("running escape analysis\n");
+    // new builder
+    IRBuilder<> builder(M.getContext());
+
+    std::vector<CallInst *> mallocs;
+    std::vector<PHINode *> phis;
+    std::vector<AllocaInst *> allocas;
+
+    for (auto FB = M.functions().begin(), FE = M.functions().end(); FB != FE; ++FB)
+    {
+      Function *FV = &*FB;
+      if (!FV->getName().ends_with("visitorf@") && !FV->getName().starts_with("llvm") && !FV->isDeclaration())
+      {
+        // doing escape analysis
+        for (auto &BB : *FV)
+        {
+          for (auto &I : BB)
+          {
+            // if it's a call instruction and the alloc-family is gc
+            if (auto *call = dyn_cast<CallInst>(&I))
+            {
+              if (auto *F = call->getCalledFunction())
+              {
+                if (!F->getName().contains("malloc"))
+                {
+                   continue;
+                }
+                
+                // if (F->getFnAttribute("alloc-family").getValueAsString() == "gc")
+                // {
+                // }
+                if (!PointerMayBeCaptured(call, true, true))
+                {
+                  // printf("not captured\n");
+                  // if the pointer may be captured, then we change this gc malloc
+                  // to stack alloca
+                  
+                  // the first argument of gc malloc is the size
+                  auto *size = call->getArgOperand(0);
+                  // size is a number, get it's value
+
+                  auto attrs = call->getAttributes();
+                  if (!attrs.hasRetAttr("pl_atomic"))
+                  {
+                    continue;
+                  }
+                  auto *sizeValue = dyn_cast<ConstantInt>(size);
+                  auto sizeInt = sizeValue->getZExtValue();
+                  // get the size value
+
+                  // replace it with alloca
+                  builder.SetInsertPoint(&FV->front().front());
+                  auto &alloca = *builder.CreateAlloca(ArrayType::get(IntegerType::get(M.getContext(), 8), sizeInt));
+                  // auto &cast = *builder.CreateAddrSpaceCast(&alloca, PointerType::get(IntegerType::get(M.getContext(), 8), 1));
+                  // replace the gc malloc with alloca
+                  call->replaceAllUsesWith(&alloca);
+                  allocas.push_back(&alloca);
+                  
+                  
+                  mallocs.push_back(call);
+
+
+                  // // get function from call
+                  // auto *F = call->getCalledFunction();
+                  // // get first bb
+                  // auto &firstBB = FV->front();
+                  // // get the first instruction
+                  // auto &firstI = firstBB.front();
+                
+                  // // generate an alloca, allocationg i8 array of size
+                  // // alloca should in the first block of the function
+                  // auto &alloca = *builder.CreateAlloca(ArrayType::get(IntegerType::get(M.getContext(), 8), sizeInt));
+                  // // cast addressspace to 1
+                  // auto &cast = *builder.CreateAddrSpaceCast(&alloca, PointerType::get(IntegerType::get(M.getContext(), 8), 1));
+                  // // replace the gc malloc with alloca
+                  // call->replaceAllUsesWith(&cast);
+                  // printf("replaced in function %s\n", FV->getName().str().c_str());
+
+                }
+                
+              }
+            }
+          }
+        }
+      }
+      
+    }
+    for (auto *alloca : allocas)
+    {
+      // correect phi
+      auto uses = alloca->uses();
+      while (true)
+      {
+        auto noMorePhi = true;
+        for (auto &U : uses)
+        {
+          
+          auto *user = U.getUser();
+          // if it's phi
+          if (auto *phi = dyn_cast<PHINode>(user))
+          {
+            noMorePhi = false;
+            // build a new phi which address space is 0
+            builder.SetInsertPoint(phi->getParent()->getFirstNonPHI());
+            auto newphi = builder.CreatePHI(PointerType::get(IntegerType::get(M.getContext(), 8), 0), phi->getNumIncomingValues());
+            for (unsigned i = 0; i < phi->getNumIncomingValues(); i++)
+            {
+              auto *incoming = phi->getIncomingValue(i);
+              auto *incomingBlock = phi->getIncomingBlock(i);
+              newphi->addIncoming(incoming, incomingBlock);
+            }
+            phi->replaceAllUsesWith(newphi);
+            phis.push_back(phi);
+            printf("replaced phi\n");
+            uses = newphi->uses();
+
+          }
+
+        }
+        if (noMorePhi)
+        {
+          break;
+        }
+      }
+    }
+    for (auto *call : mallocs)
+    {
+      call->eraseFromParent();
+      // printf("erased gcmalloc\n");
+    }
+    for (auto *phi : phis)
+    {
+      if (phi->getParent())
+      {
+        phi->eraseFromParent();
+      }
+      
+      // printf("erased phi\n");
+    }
+    return PreservedAnalyses::none();
+  }
+
+
 
   /*
     This pass helps integrate immix with LLVM.
@@ -61,6 +218,7 @@ namespace
       if (!FV->getName().ends_with("visitorf@") && !FV->getName().starts_with("llvm"))
       {
         FV->setGC("statepoint-example");
+
       }
       
     }
