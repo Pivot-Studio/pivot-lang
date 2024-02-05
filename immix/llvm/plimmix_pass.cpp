@@ -155,7 +155,7 @@ namespace
             }
             phi->replaceAllUsesWith(newphi);
             phis.push_back(phi);
-            printf("replaced phi\n");
+            // printf("replaced phi\n");
             uses = newphi->uses();
 
           }
