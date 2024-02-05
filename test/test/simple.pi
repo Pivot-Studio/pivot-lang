@@ -15,8 +15,17 @@ pub fn test_primitives() void {
     let utest: u8 = 1;
     utest = utest + 2;
     test = 127;
+    panic::assert(test == 0x7f);
+    panic::assert(test == 0o177);
+    panic::assert(test == 0b0111_1111);
     test = -test - 1;
+    panic::assert(test == 0x80);
+    panic::assert(test == 0o200);
+    panic::assert(test == 0b1000_0000);
     panic::assert(test as i64 == -128);
+    panic::assert(test as i64 == 0xffff_ffff_ffff_ff80);
+    panic::assert(test as i64 == 0o1777777777777777777600);
+    panic::assert(test as i64 == 0b11111111_11111111_11111111_11111111_11111111_11111111_11111111_10000000);
     let b = test | 1;
     panic::assert(b as i64 == -127);
     let c = test & 1;
