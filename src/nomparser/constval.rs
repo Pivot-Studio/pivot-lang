@@ -32,13 +32,13 @@ pub fn number(input: Span) -> IResult<Span, Box<NodeEnum>> {
         }),
         map_res(hexadecimal, |out| {
             let res =
-                u64::from_str_radix(out.fragment().replace("_", "").get(2..).unwrap(), 16).unwrap();
+                u64::from_str_radix(out.fragment().replace('_', "").get(2..).unwrap(), 16).unwrap();
             eprintln!("res: {}", res);
             Ok::<Num, ()>(Num::Int(res))
         }),
         map_res(binary, |out| {
             let res =
-                u64::from_str_radix(out.fragment().replace("_", "").get(2..).unwrap(), 2).unwrap();
+                u64::from_str_radix(out.fragment().replace('_', "").get(2..).unwrap(), 2).unwrap();
             eprintln!("res: {}", res);
             Ok::<Num, ()>(Num::Int(res))
         }),
