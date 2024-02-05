@@ -1590,25 +1590,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
 
         if pltp.name.starts_with("DioGC__malloc") {
-            // f.add_attribute(
-            //     inkwell::attributes::AttributeLoc::Function,
-            //     self.context
-            //         .create_enum_attribute(Attribute::get_named_enum_kind_id("allockind"), 1),
-            // );
-            // f.add_attribute(
-            //     inkwell::attributes::AttributeLoc::Function,
-            //     self.context
-            //         .create_enum_attribute(Attribute::get_named_enum_kind_id("allockind"), 5),
-            // );
-            // f.add_attribute(
-            //     inkwell::attributes::AttributeLoc::Function,
-            //     self.context
-            //         .create_enum_attribute(Attribute::get_named_enum_kind_id("allockind"), 6),
-            // );
             f.add_attribute(
                 inkwell::attributes::AttributeLoc::Function,
                 self.context
-                    .create_string_attribute("allockind", "alloc,zeroed,aligned"),
+                    .create_enum_attribute(Attribute::get_named_enum_kind_id("allockind"), 1),
             );
         }
         (f, false)
