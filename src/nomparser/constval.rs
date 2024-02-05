@@ -19,11 +19,13 @@ use super::*;
 #[test_parser("10")]
 #[test_parser("10_00__3")]
 #[test_parser("0X1a")]
+#[test_parser("0o17")]
 #[test_parser("0b101")]
 #[test_parser_error("_10")]
 #[test_parser_error("10.")]
 #[test_parser_error("0x12g3")]
-#[test_parser_error("0x12.3")]
+#[test_parser_error("0o12.3")]
+#[test_parser_error("0b123")]
 pub fn number(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let (input, _) = space0(input)?;
     let (re, value) = alt((
@@ -33,13 +35,16 @@ pub fn number(input: Span) -> IResult<Span, Box<NodeEnum>> {
         map_res(hexadecimal, |out| {
             let res =
                 u64::from_str_radix(out.fragment().replace('_', "").get(2..).unwrap(), 16).unwrap();
-            eprintln!("res: {}", res);
+            Ok::<Num, ()>(Num::Int(res))
+        }),
+        map_res(octal, |out| {
+            let res =
+                u64::from_str_radix(out.fragment().replace('_', "").get(2..).unwrap(), 8).unwrap();
             Ok::<Num, ()>(Num::Int(res))
         }),
         map_res(binary, |out| {
             let res =
                 u64::from_str_radix(out.fragment().replace('_', "").get(2..).unwrap(), 2).unwrap();
-            eprintln!("res: {}", res);
             Ok::<Num, ()>(Num::Int(res))
         }),
         map_res(decimal, |out| {
@@ -102,6 +107,18 @@ fn hexadecimal(input: Span) -> IResult<Span, Span> {
             one_of("0123456789abcdefABCDEF"),
             many0(char('_')),
         )),
+    ))(input)
+}
+
+#[test_parser("0o10")]
+#[test_parser("0O173")]
+#[test_parser("0o1_2__3")]
+#[test_parser_error("o123")]
+#[test_parser_error("0o1283")]
+fn octal(input: Span) -> IResult<Span, Span> {
+    recognize(preceded(
+        alt((tag("0o"), tag("0O"))),
+        many1(terminated(one_of("01234567"), many0(char('_')))),
     ))(input)
 }
 
