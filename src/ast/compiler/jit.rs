@@ -52,6 +52,15 @@ pub fn run(p: &Path, opt: OptimizationLevel) -> i32 {
         .map(|v| unsafe { v.delete() });
     re.get_function("__gc_init_stackmap")
         .map(|v| unsafe { v.delete() });
+    // some opt may change it's name
+    re.get_functions()
+        .find(|f| {
+            f.get_name()
+                .to_str()
+                .unwrap()
+                .starts_with("__gc_init_stackmap")
+        })
+        .map(|v| unsafe { v.delete() });
     inkwell::targets::Target::initialize_native(&InitializationConfig::default()).unwrap();
     unsafe {
         let ret = immix::CreateAndRunPLJITEngine(re.as_mut_ptr() as _, opt as u32, gc_init);
