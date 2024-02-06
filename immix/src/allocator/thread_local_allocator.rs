@@ -13,8 +13,8 @@ use rustc_hash::FxHashMap;
 use crate::{
     bigobj::BigObj,
     block::{Block, ObjectType},
-    consts::{BLOCK_SIZE, LINE_SIZE},
-    HeaderExt, EVA_BLOCK_PROPORTION, NUM_LINES_PER_BLOCK,
+    consts::LINE_SIZE,
+    HeaderExt, EVA_BLOCK_PROPORTION, MAX_MEDIUM_OBJECT_SIZE, NUM_LINES_PER_BLOCK,
 };
 
 use super::GlobalAllocator;
@@ -225,7 +225,7 @@ impl ThreadLocalAllocator {
     /// * `*mut u8` - object pointer
     pub fn alloc(&mut self, size: usize, obj_type: ObjectType) -> *mut u8 {
         // big size object
-        if size > ((BLOCK_SIZE / LINE_SIZE - 3) / 4 - 1) * LINE_SIZE {
+        if size > MAX_MEDIUM_OBJECT_SIZE {
             return self.big_obj_alloc(size, obj_type);
         }
         // mid size object & small size object

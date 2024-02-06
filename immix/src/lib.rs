@@ -1,3 +1,4 @@
+#![feature(portable_simd)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 #![allow(clippy::missing_safety_doc)]
 use std::{

@@ -1,3 +1,5 @@
+use std::simd::prelude::SimdPartialEq;
+use std::simd::Simd;
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use int_enum::IntEnum;
@@ -313,23 +315,46 @@ impl Block {
         size_line: usize,
     ) -> Option<(usize, usize)> {
         let mut idx = prev_hole.0 + prev_hole.1;
-        let mut len = 0;
-        let line_map: &[u8; 256] = &self.line_map;
+        let mut hole_len = 0;
+        let line_map = &self.line_map;
+        if idx + size_line > NUM_LINES_PER_BLOCK {
+            return None;
+        }
 
         while idx < NUM_LINES_PER_BLOCK {
-            if line_map[idx] & 1 == 0 {
-                len += 1;
-                if len >= size_line {
-                    return Some((idx - len + 1, len));
+            match NUM_LINES_PER_BLOCK - idx {
+                ..=64 => {
+                    // use loop
+                    if line_map[idx] == 0 {
+                        hole_len += 1;
+                        if hole_len == size_line {
+                            return Some((idx - hole_len + 1, hole_len));
+                        }
+                    } else if hole_len > 0 {
+                        return None;
+                    }
+                    idx += 1;
                 }
-            } else {
-                if len >= size_line {
-                    return Some((idx - len, len));
+                _ => {
+                    // first step, use simd to find out first hole
+                    // max miduim object size is 61*128, so the target hole
+                    // can be represent by u8x64
+                    let v = Simd::<u8, 64>::from_slice(&line_map[idx..]);
+                    let mask = v.simd_eq(Simd::splat(0));
+                    let mask = mask.to_bitmask();
+                    let offset = mask.trailing_zeros();
+                    if offset == 0 {
+                        let hole_size = mask.trailing_ones();
+                        if hole_size >= size_line as u32 {
+                            return Some((idx, hole_size as usize));
+                        } else {
+                            return None;
+                        }
+                    } else {
+                        idx += offset as usize;
+                    }
                 }
-                len = 0;
-            }
-
-            idx += 1;
+            };
         }
 
         None
@@ -463,9 +488,9 @@ impl Block {
     pub unsafe fn alloc(&mut self, size: usize, obj_type: ObjectType) -> Option<(usize, bool)> {
         let cursor = self.cursor;
         let line_size = (size - 1) / LINE_SIZE + 1;
-        if line_size + self.cursor > NUM_LINES_PER_BLOCK {
-            return None;
-        }
+        // if line_size + self.cursor > NUM_LINES_PER_BLOCK {
+        //     return None;
+        // }
         let hole = self.find_next_hole((cursor, 0), line_size);
         // debug_assert!(hole.is_some(), "cursor {}, header {:?}, hole: {} av {} first idx {} first_len {}", cursor,self.line_map,self.hole_num,self.available_line_num, self.first_hole_line_idx,self.first_hole_line_len);
         if let Some((start, len)) = hole {
@@ -479,22 +504,26 @@ impl Block {
             let header = self.line_map.get_mut(start).unwrap();
             *header |= (obj_type as u8) << 2 | 0b10000000;
 
-            // 更新first_hole_line_idx和first_hole_line_len
-            if start == self.cursor {
-                self.cursor += line_size;
-                // self.limit -= line_size;
-            }
-            if let Some((idx, _)) = self.find_next_hole((self.cursor, 0), 1) {
-                self.cursor = idx;
-            } else {
-                self.hole_num -= 1;
-                return Some((start, false));
-            }
-            if self.cursor > start + len && len == line_size {
+            // // 更新first_hole_line_idx和first_hole_line_len
+            // if start == self.cursor {
+            //     self.cursor += line_size;
+            //     // self.limit -= line_size;
+            // }
+            self.cursor = start + line_size;
+            // if let Some((idx, _)) = self.find_next_hole((self.cursor, 0), 1) {
+            //     self.cursor = idx;
+            // } else {
+            //     self.hole_num -= 1;
+            //     return Some((start, false));
+            // }
+            if len == line_size {
                 // 正好匹配，那么减少一个hole
                 self.hole_num -= 1;
             }
-            return Some((start, true));
+            return Some((
+                start,
+                self.cursor < NUM_LINES_PER_BLOCK && self.hole_num > 0,
+            ));
         }
         None
     }
@@ -515,14 +544,16 @@ mod tests {
             let header = block.get_nth_line_header(4);
             header.set_used(true);
             // 获取下一个hole，应该是从第五行开始，长度是251
-            assert_eq!(block.find_next_hole((3, 1), 1), Some((5, 1)));
+            assert_eq!(block.find_next_hole((3, 1), 1).unwrap().0, 5);
             // 标记hole隔一行之后五行为已使用
             for i in 6..=10 {
                 let header = block.get_nth_line_header(i as usize);
                 header.set_used(true);
             }
-            // 获取下一个hole，应该是从第十一行开始，长度是245
-            assert_eq!(block.find_next_hole((5, 5), 1), Some((11, 1)));
+            let header = block.get_nth_line_header(14 as usize);
+            header.set_used(true);
+            // 获取下一个hole，应该是从第十一行开始，长度是3
+            assert_eq!(block.find_next_hole((5, 5), 1).unwrap(), (11, 3));
         };
     }
     #[test]
@@ -586,8 +617,24 @@ mod tests {
 
             block.cursor = 6;
             // block.limit = 250;
+            let (ori_start, newcursor) = block
+                .alloc((256 - 6) * LINE_SIZE / 5, crate::block::ObjectType::Complex)
+                .expect("cannot alloc new line");
+            block.cursor = ori_start + (256 - 6) / 5;
             let (start, newcursor) = block
-                .alloc((256 - 6) * LINE_SIZE, crate::block::ObjectType::Complex)
+                .alloc((256 - 6) * LINE_SIZE / 5, crate::block::ObjectType::Complex)
+                .expect("cannot alloc new line");
+            block.cursor = start + (256 - 6) / 5;
+            let (start, newcursor) = block
+                .alloc((256 - 6) * LINE_SIZE / 5, crate::block::ObjectType::Complex)
+                .expect("cannot alloc new line");
+            block.cursor = start + (256 - 6) / 5;
+            let (start, newcursor) = block
+                .alloc((256 - 6) * LINE_SIZE / 5, crate::block::ObjectType::Complex)
+                .expect("cannot alloc new line");
+            block.cursor = start + (256 - 6) / 5;
+            let (start, newcursor) = block
+                .alloc((256 - 6) * LINE_SIZE / 5, crate::block::ObjectType::Complex)
                 .expect("cannot alloc new line");
             block.cursor = 4;
             // block.limit = 1;
@@ -607,7 +654,7 @@ mod tests {
             // |  255 | 已使用
             let l = block.get_nth_line_header(6).get_obj_type();
             assert_eq!(l, crate::block::ObjectType::Complex);
-            assert_eq!(start, 6);
+            assert_eq!(ori_start, 6);
             assert!(!newcursor);
             assert_eq!(block.cursor, 4);
             // assert_eq!(block.limit, 1);

@@ -1,0 +1,3 @@
+[toolchain]
+version = "1.75.0"
+channel = "nightly"
