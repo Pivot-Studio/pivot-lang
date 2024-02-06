@@ -1,9 +1,63 @@
-use std::rand::*;
+use std::rand;
+use std::userrand;
 use core::panic::*;
+use std::io;
+use std::math;
+
 pub fn test_rand() void {
-    let r1 = randi64n(5);
-    assert(r1 >= 0 && r1 < 5);
-    let r2 = randi64r(2, 9);
-    assert(r2 >= 2 && r2 < 9);
+    let rng = userrand::new(12);
+    // test_ppm(); // 生成ppm，查看分布
+    for let i = 0; i < 10000; i = i + 1 {
+        let r1 = rand::randi64n(5);
+        assert(r1 >= 0 && r1 < 5);
+        let r2 = rand::randi64r(2, 9);
+        assert(r2 >= 2 && r2 < 9);
+        let r3 = rng.randi64();
+        assert(r3 <= *userrand::RAND_MAX && r3 >= *userrand::RAND_MIN);
+        let r6 = rng.randf64();
+        assert(r6 <= 1.0 && r6 >= 0.0);
+        let r4 = rng.randi64n(10);
+        assert(r4 < 10 && r4 >= 0);
+        let r5 = rng.randi64r(5, 10);
+        assert(r5 < 10 && r5 >= 5);
+        let r7 = rng.randf64r(5.0, 10.0);
+        assert(r7 <= 10.0 && r7 >= 5.0);
+    }
     return;
+}
+
+pub fn test_ppm() void {
+    let size = 1024;
+    init_ppm(size, size);
+    let num = size * size / 64;
+    let rng = userrand::new(0);
+    for let i = 0; i < num; i = i + 1 {
+        let r = rng.randi64() as u64;
+        // let r = rand::randi64() as u64;
+        gen_line(r);
+    }
+    return;
+}
+
+fn init_ppm(width: i64, height: i64) void {
+    io::print_s("P3\n");
+    print_i64(width);
+    print_s(" ");
+    print_i64(height);
+    print_s("\n255\n");
+    return;
+}
+
+/// if bit i is 0, then the pixel is black
+fn gen_line(data: u64) void {
+    for let i: u64 = 0; i < 64; i = i + 1 {
+        if data & 1 == 0 {
+            print_s("0 0 0\n");
+        } else {
+            print_s("255 255 255\n");
+        }
+        data = data >> 1;
+    }
+    return;
+
 }

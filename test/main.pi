@@ -64,6 +64,7 @@ pub fn main() i64 {
     iter::test_generator();
     inference::test_inference();
     futuretest::test_future();
+    rand::test_rand();
 
 
     let fd = io::open_read("./Cargo.toml");

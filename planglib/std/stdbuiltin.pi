@@ -6,6 +6,7 @@ fn print_i64(i:i64) void;
 fn print_i128(i:i128) void;
 fn print_u64(i:u64) void;
 fn print_u128(i:u128) void;
+fn print_f64(f:f64) void;
 fn print_hex(i:i64) void;
 
 
@@ -89,6 +90,10 @@ pub fn print_any<T>(t:T) void {
     });
     match_type<u128>(t,{
         print_u128(_value);
+        b = true;
+    });
+    match_type<f64>(t,{
+        print_f64(_value);
         b = true;
     });
     match_type<gc::string>(t,{

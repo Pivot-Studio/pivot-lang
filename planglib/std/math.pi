@@ -1,0 +1,100 @@
+use core::panic;
+fn get_hi(x: i64) i64 {
+    return (x & 0xffff_ffff_0000_0000) >> 32;
+}
+
+fn get_lo(x: i64) i64 {
+    return x & 0xffff_ffff;
+}
+
+fn set_hi(x: *i64, hx: i64) void {
+    *x = *x & ((1<<32) - 1) | (hx << 32);
+    return;
+}
+
+fn set_lo(x: *i64, lx: i64) void {
+    *x = *x & (((1<<32)-1)<<32) | (lx & ((1<<32)-1));
+    return;
+}
+
+var Lg1 = &6.666666666666735130e-01;
+var Lg2 = &3.999999999940941908e-01;
+var Lg3 = &2.857142874366239149e-01;
+var Lg4 = &2.222219843214978396e-01;
+var Lg5 = &1.818357216161805012e-01;
+var Lg6 = &1.531383769920937332e-01;
+var Lg7 = &1.479819860511658591e-01;
+
+/// 使用泰勒级数实现
+pub fn ln(x: f64) f64 {
+    panic::assert(x > 0.0);
+    let ln2_hi = 6.93147180369123816490e-1;
+    let ln2_lo  =  1.90821492927058770002e-10;
+    let two54   =  1.80143985094819840000e+16;
+    let i: i64; let hx: i64; let lx: i64; let k: i64;  let j: i64;
+    let f: f64; let kf64: f64; let R: f64; let s: f64; let z: f64;
+    let w: f64; let t1: f64; let t2: f64; let hfsq: f64;
+    hx = get_hi(*unsafe_cast<i64>(&x));
+    lx = get_lo(*unsafe_cast<i64>(&x));
+    k = 0;
+    if hx < 0x0010_0000 { // x < 2^-1022
+        if (hx&0x7fffffff | lx) == 0 {
+            return -two54 / 0.0;
+        }
+        if hx < 0 {
+            return (x - x) / 0.0;
+        }
+        k = k - 54;x = x * two54;
+        hx = get_hi(*unsafe_cast<i64>(&x));
+    }
+    if hx >= 0x7ff00000 {
+        return x + x;
+    }
+    k = k + (hx >> 20) - 1023;
+    hx = hx & 0x000fffff;
+    i = (hx + 0x95f64) & 0x100000;
+    set_hi(unsafe_cast<i64>(&x), hx|(i^0x3ff00000));
+    k = k + (i>>20);
+    f = x - 1.0;
+    if 0x000fffff&(hx+2)<3{
+        if f==0.0 {
+            if k==0 {
+                return 0.0;
+            } else {
+                kf64 = k as f64;
+                return kf64*ln2_hi+kf64*ln2_lo;
+            }
+        }
+        R = f*f*(0.5-0.33333333333333333*f);
+        if k==0 {
+            return f-R;
+        } else {
+            kf64 = k as f64;
+            return kf64*ln2_hi-((R-kf64*ln2_lo)-f);
+        }
+    }
+    s = f/(2.0+f);
+    kf64 = k as f64;
+    z = s*s;
+    i = hx - 0x6147a;
+    w = z*z;
+    j = 0x6b851-hx;
+	t1= w*(*Lg2+w*(*Lg4+w**Lg6)); 
+	t2= z*(*Lg1+w*(*Lg3+w*(*Lg5+w**Lg7))); 
+	i =i | j;
+	R = t2+t1;
+    if i>0 {
+        hfsq=0.5*f*f;
+        if k==0 {
+            return f-(hfsq-s*(hfsq+R));
+        } else {
+            return kf64*ln2_hi-((hfsq-(s*(hfsq+R)+kf64*ln2_lo))-f);
+        }
+    } else {
+        if k==0 {
+            return f-s*(f-R);
+        } else {
+            return kf64*ln2_hi-((s*(f-R)-kf64*ln2_lo)-f);
+        }
+    }
+}

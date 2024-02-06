@@ -108,6 +108,12 @@ fn sleep(secs: u64) {
 fn print_u64(u: u64) {
     println!("u64( {} )", u);
 }
+
+#[is_runtime]
+fn print_f64(f: f64) {
+    println!("{}", f);
+}
+
 #[is_runtime]
 fn print_i128(i: i128) {
     print!("{}", i);
