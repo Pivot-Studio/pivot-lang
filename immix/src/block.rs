@@ -300,7 +300,7 @@ impl Block {
 
     /// # find_next_hole
     ///
-    /// imput a tuple (u8, u8) representing previous hole
+    /// input a tuple (u8, u8) representing previous hole
     ///
     /// Find the next hole in the block.
     ///
@@ -314,13 +314,10 @@ impl Block {
     ) -> Option<(usize, usize)> {
         let mut idx = prev_hole.0 + prev_hole.1;
         let mut len = 0;
+        let line_map: &[u8; 256] = &self.line_map;
 
-        while idx < idx + size_line {
-            if idx >= NUM_LINES_PER_BLOCK {
-                return None;
-            }
-            // 如果是空行
-            if self.line_map[idx] & 1 == 0 {
+        while idx < NUM_LINES_PER_BLOCK {
+            if line_map[idx] & 1 == 0 {
                 len += 1;
                 if len >= size_line {
                     return Some((idx - len + 1, len));
@@ -328,8 +325,7 @@ impl Block {
             } else {
                 if len >= size_line {
                     return Some((idx - len, len));
-                } else if len != 0 {
-                    // len = 0;
+                } else if len > 0 {
                     return None;
                 }
                 len = 0;
@@ -338,9 +334,6 @@ impl Block {
             idx += 1;
         }
 
-        if len >= size_line {
-            return Some((idx - len, len));
-        }
         None
     }
 

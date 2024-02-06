@@ -89,6 +89,7 @@ members = [
 [profile.release]
 lto = "fat"
 opt-level = 3
+debug = "line-tables-only"
 
 [profile.bench]
 opt-level = 3
