@@ -85,6 +85,7 @@ pub fn create_llvm_deps<'ctx>(
     context: &'ctx Context,
     dir: &str,
     file: &str,
+    opt: OptimizationLevel,
 ) -> (
     Module<'ctx>,
     Builder<'ctx>,
@@ -123,7 +124,7 @@ pub fn create_llvm_deps<'ctx>(
         )]);
         module.add_metadata_flag("CodeView", FlagBehavior::Warning, metacv);
     }
-    let tm = get_target_machine(inkwell::OptimizationLevel::None);
+    let tm = get_target_machine(opt);
     module.set_triple(&tm.get_triple());
     module.set_data_layout(&tm.get_target_data().get_data_layout());
     (module, builder, dibuilder, compile_unit, tm)
@@ -152,7 +153,9 @@ pub struct LLVMBuilder<'a, 'ctx> {
     debug: bool,
 }
 
-pub fn get_target_machine(level: OptimizationLevel) -> TargetMachine {
+pub fn get_target_machine(_level: OptimizationLevel) -> TargetMachine {
+    // see issue https://github.com/llvm/llvm-project/issues/75162
+    let level = OptimizationLevel::None;
     let triple = &TargetMachine::get_default_triple();
     let s1 = TargetMachine::get_host_cpu_name();
     let cpu = s1.to_str().unwrap();
@@ -1662,6 +1665,8 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .into_pointer_value()
     }
     fn optimize(&self) {
+        self.module
+            .set_triple(&get_target_machine(self.optlevel).get_triple());
         if *self.optimized.borrow() {
             return;
         }

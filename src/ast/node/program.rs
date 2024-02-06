@@ -648,6 +648,7 @@ pub fn emit_file(db: &dyn Db, program_emit_params: ProgramEmitParam) -> ModWrapp
         context,
         program_emit_params.dir(db),
         program_emit_params.file(db),
+        program_emit_params.opt(db).to_llvm(),
     );
     let builder = {
         if !program_emit_params.lsp_params(db).is_compile(db) {
