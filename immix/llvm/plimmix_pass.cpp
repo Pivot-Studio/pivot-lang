@@ -28,7 +28,7 @@ namespace
   {
     // printf("running immix pass\n");
     immixPassLogic(M);
-    return PreservedAnalyses::all();
+    return PreservedAnalyses::none();
   }
 
   class EscapePass : public PassInfoMixin<EscapePass>

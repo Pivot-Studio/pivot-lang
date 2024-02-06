@@ -196,9 +196,12 @@ pub fn process_llvm_ir<'a>(
             module.get_name().to_str().unwrap().yellow()
         ));
         module.verify().unwrap();
-        tm.write_to_file(&module, inkwell::targets::FileType::Object, &o)
-            .unwrap();
-        output_files.push(o);
+        if op.debug {
+            // if debug, generate one obj file per file, or debug info will be lost
+            tm.write_to_file(&module, inkwell::targets::FileType::Object, &o)
+                .unwrap();
+            output_files.push(o);
+        }
         module.get_global("llvm.used").map(|v| unsafe {
             v.delete();
         });
@@ -215,6 +218,22 @@ pub fn process_llvm_ir<'a>(
             f.set_linkage(inkwell::module::Linkage::External);
         }
     });
+    unsafe {
+        immix::run_module_pass(
+            llvmmod.as_mut_ptr() as _,
+            op.optimization as _,
+            op.debug as _,
+        )
+    };
+    if !op.debug {
+        tm.write_to_file(
+            &llvmmod,
+            inkwell::targets::FileType::Object,
+            Path::new("out.o"),
+        )
+        .unwrap();
+        output_files.push("out.o".into());
+    }
     pb.finish_with_message("中间代码优化完成");
     (llvmmod, output_files)
 }
