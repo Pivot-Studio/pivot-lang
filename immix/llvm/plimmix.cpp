@@ -111,10 +111,11 @@ extern "C" void run_module_pass(LLVMModuleRef  M, int opt, int debug) {
     Triple ModuleTriple(unwrap(M)->getTargetTriple());
       std::string Error;
     
+
     auto target = TargetRegistry::lookupTarget(ModuleTriple.getTriple(), Error);
     CPUStr = sys::getHostCPUName();
     FeaturesStr = getFeaturesStr();
-    codegen::setFunctionAttributes(CPUStr, FeaturesStr, *unwrap(M));
+    // codegen::setFunctionAttributes(CPUStr, FeaturesStr, *unwrap(M));
     TargetOptions Options =
         TargetOptions();
     // Options.UnsafeFPMath = true;
