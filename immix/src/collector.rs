@@ -96,6 +96,8 @@ struct CollectorStatus {
     collect_threshold: usize,
     /// in bytes
     bytes_allocated_since_last_gc: usize,
+    /// in bytes
+    last_gc_remaining: usize,
     collecting: bool,
 }
 
@@ -158,6 +160,7 @@ impl Collector {
                     collect_threshold: 1024,
                     bytes_allocated_since_last_gc: 0,
                     collecting: false,
+                    last_gc_remaining: 0,
                 }),
                 frames_list: AtomicPtr::default(),
                 shadow_thread_running: AtomicBool::new(false),
@@ -249,14 +252,10 @@ impl Collector {
             return;
         }
         let status = self.status.borrow();
-        if status.collect_threshold
-            <= (status.bytes_allocated_since_last_gc as f64 / FREE_SPACE_DIVISOR as f64) as usize
+        if status.bytes_allocated_since_last_gc + status.last_gc_remaining
+            >= status.collect_threshold
         {
-            let previous_threshold = status.collect_threshold;
             drop(status);
-            // expand threshold
-            self.status.borrow_mut().collect_threshold =
-                (previous_threshold as f64 * THRESHOLD_PROPORTION) as usize;
             self.collect_fast_unwind(sp);
         } else {
             drop(status);
@@ -836,6 +835,8 @@ impl Collector {
             self.status.borrow_mut().collect_threshold =
                 (previous_threshold as f64 * THRESHOLD_PROPORTION) as usize;
         }
+        self.status.borrow_mut().bytes_allocated_since_last_gc = 0;
+        self.status.borrow_mut().last_gc_remaining = used.0 * LINE_SIZE;
 
         let v = GC_SWEEPPING_NUM.fetch_sub(1, Ordering::AcqRel);
         if v - 1 == 0 {
@@ -898,7 +899,6 @@ impl Collector {
             return Default::default();
         }
         status.collecting = true;
-        status.bytes_allocated_since_last_gc = 0;
         drop(status);
         // evacuation pre process
         // 这个过程要在完成safepoint同步之前完成，因为在驱逐的情况下
