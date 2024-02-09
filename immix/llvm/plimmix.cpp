@@ -105,22 +105,22 @@ std::string getFeaturesStr() {
     So we have to write one ourselves.
 */
 extern "C" void run_module_pass(LLVMModuleRef  M, int opt, int debug) {
-      InitializeNativeTarget();
+    InitializeNativeTarget();
 //   Initialize();
     std::string CPUStr, FeaturesStr;
     Triple ModuleTriple(unwrap(M)->getTargetTriple());
-      std::string Error;
+    std::string Error;
     
 
     auto target = TargetRegistry::lookupTarget(ModuleTriple.getTriple(), Error);
     CPUStr = sys::getHostCPUName();
     FeaturesStr = getFeaturesStr();
     // codegen::setFunctionAttributes(CPUStr, FeaturesStr, *unwrap(M));
-    TargetOptions Options =
-        TargetOptions();
+    TargetOptions Options = TargetOptions();
     // Options.UnsafeFPMath = true;
     // Options.NoNaNsFPMath = true;
     // Options.NoTrappingFPMath = true;
+    // Options.AllowFPOpFusion = FPOpFusion::Fast;
 
     auto O = OptimizationLevel::O2;
     auto COpt = CodeGenOpt::Default;
@@ -199,6 +199,7 @@ extern "C" void run_module_pass(LLVMModuleRef  M, int opt, int debug) {
         // MPM = PB.buildPerModuleDefaultPipeline(O);
         // FPM = PB.buildFunctionSimplificationPipeline(O, ThinOrFullLTOPhase::None);
         // MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
+        // copied from llvm-opt's pipeline
         PB.parsePassPipeline(MPM, "annotation2metadata,forceattrs,inferattrs,coro-early,function<eager-inv>(lower-expect,simplifycfg<bonus-inst-threshold=1;no-forward-switch-cond;no-switch-range-to-icmp;no-switch-to-lookup;keep-loops;no-hoist-common-insts;no-sink-common-insts>,sroa<modify-cfg>,early-cse<>,callsite-splitting),openmp-opt,ipsccp,called-value-propagation,globalopt,function(mem2reg),function<eager-inv>(instcombine,simplifycfg<bonus-inst-threshold=1;no-forward-switch-cond;switch-range-to-icmp;no-switch-to-lookup;keep-loops;no-hoist-common-insts;no-sink-common-insts>),require<globals-aa>,function(invalidate<aa>),require<profile-summary>,cgscc(devirt<4>(inline<only-mandatory>,inline,function-attrs,argpromotion,openmp-opt-cgscc,function<eager-inv>(sroa<modify-cfg>,early-cse<memssa>,speculative-execution,jump-threading,correlated-propagation,simplifycfg<bonus-inst-threshold=1;no-forward-switch-cond;switch-range-to-icmp;no-switch-to-lookup;keep-loops;no-hoist-common-insts;no-sink-common-insts>,instcombine,aggressive-instcombine,libcalls-shrinkwrap,tailcallelim,simplifycfg<bonus-inst-threshold=1;no-forward-switch-cond;switch-range-to-icmp;no-switch-to-lookup;keep-loops;no-hoist-common-insts;no-sink-common-insts>,reassociate,require<opt-remark-emit>,loop-mssa(loop-instsimplify,loop-simplifycfg,licm<no-allowspeculation>,loop-rotate,licm<allowspeculation>,simple-loop-unswitch<nontrivial;trivial>),simplifycfg<bonus-inst-threshold=1;no-forward-switch-cond;switch-range-to-icmp;no-switch-to-lookup;keep-loops;no-hoist-common-insts;no-sink-common-insts>,instcombine,loop(loop-idiom,indvars,loop-deletion,loop-unroll-full),sroa<modify-cfg>,vector-combine,mldst-motion<no-split-footer-bb>,gvn<>,sccp,bdce,instcombine,jump-threading,correlated-propagation,adce,memcpyopt,dse,loop-mssa(licm<allowspeculation>),coro-elide,simplifycfg<bonus-inst-threshold=1;no-forward-switch-cond;switch-range-to-icmp;no-switch-to-lookup;keep-loops;hoist-common-insts;sink-common-insts>,instcombine),coro-split)),deadargelim,coro-cleanup,globalopt,globaldce,elim-avail-extern,rpo-function-attrs,recompute-globalsaa,function<eager-inv>(float2int,lower-constant-intrinsics,loop(loop-rotate,loop-deletion),loop-distribute,inject-tli-mappings,loop-vectorize<no-interleave-forced-only;no-vectorize-forced-only;>,loop-load-elim,instcombine,simplifycfg<bonus-inst-threshold=1;forward-switch-cond;switch-range-to-icmp;switch-to-lookup;no-keep-loops;hoist-common-insts;sink-common-insts>,slp-vectorizer,vector-combine,instcombine,loop-unroll<O3>,transform-warning,sroa<preserve-cfg>,instcombine,require<opt-remark-emit>,loop-mssa(licm<allowspeculation>),alignment-from-assumptions,loop-sink,instsimplify,div-rem-pairs,tailcallelim,simplifycfg<bonus-inst-threshold=1;no-forward-switch-cond;switch-range-to-icmp;no-switch-to-lookup;keep-loops;no-hoist-common-insts;no-sink-common-insts>),globaldce,constmerge,cg-profile,rel-lookup-table-converter,function(annotation-remarks),verify");
         break;
     default:
