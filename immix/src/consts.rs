@@ -33,13 +33,25 @@ pub const THRESHOLD_PROPORTION: f64 = 2.0;
 /// we expand the heapsize according to [THRESHOLD_PROPORTION].
 ///
 /// The idea is inspired by [BdwGC](https://github.com/ivmai/bdwgc/blob/master/docs/gcdescr.md#allocation)
-///
-/// ## Further works
-///
-/// TODO:
-///
-/// implement sort of heap shrink logic similar to expantion logic
 pub const FREE_SPACE_DIVISOR: usize = 4;
+
+/// When gc heap shrink condition was met,
+/// the opposite of [FREE_SPACE_DIVISOR]
+///
+/// As we don't want to shrink the heap too frequently, causing
+/// heap size to fluctuate, we set the shrink condition to be
+/// really strict.
+pub const USED_SPACE_DIVISOR: usize = 20;
+
+/// The proportion of heap size to shrink
+/// when shrink condition was met
+pub const SHRINK_PROPORTION: f64 = 0.98;
+
+/// [REMAIN_MULTIPLIER] <= ([FREE_SPACE_DIVISOR] - 1) * collect_threshold / ([FREE_SPACE_DIVISOR] * bytes_remains)
+///
+/// if [FREE_SPACE_DIVISOR] is 4, setting 24 here means
+/// bytes remain after gc should be less than 1/8 of the bytes allocated
+pub const REMAIN_MULTIPLIER: usize = 24;
 
 pub const LLVM_GC_STRATEGY_NAME: &str = "plimmix";
 

@@ -2669,7 +2669,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         }
     }
     #[allow(clippy::too_many_arguments)]
-    fn create_parameter_variable_dbg(
+    fn create_closure_variable_dbg(
         &self,
         pltp: &PLType,
         pos: Pos,
@@ -2734,6 +2734,49 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         // }
         // self.position_at_end_block(cubb);
     }
+    #[allow(clippy::too_many_arguments)]
+    fn create_parameter_variable_dbg(
+        &self,
+        fnvalue: &FNValue,
+        pos: Pos,
+        i: usize,
+        child: &mut Ctx<'a>,
+    ) {
+        let divar = self.dibuilder.create_parameter_variable(
+            self.discope.get(),
+            &fnvalue.param_names[i],
+            i as u32,
+            self.get_cur_di_file(),
+            pos.line as u32,
+            self.get_ditype(
+                &fnvalue.fntype.param_pltypes[i]
+                    .get_type(child, &self.clone().into(), true)
+                    .unwrap()
+                    .borrow(),
+                child,
+            )
+            .unwrap(),
+            false,
+            DIFlags::PUBLIC,
+        );
+        self.build_dbg_location(pos);
+
+        self.dibuilder.insert_declare_at_end(
+            self.builder
+                .get_insert_block()
+                .unwrap()
+                .get_parent()
+                .unwrap()
+                .get_nth_param(i as u32)
+                .unwrap()
+                .into_pointer_value(),
+            Some(divar),
+            None,
+            self.builder.get_current_debug_location().unwrap(),
+            self.builder.get_insert_block().unwrap(),
+        );
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn create_parameter_variable(
         &self,

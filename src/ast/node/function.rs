@@ -308,9 +308,6 @@ impl Node for FuncCallNode {
                 builder.get_or_insert_fn_handle(&fnvalue, ctx).0
             };
             builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
-            // let rettp = ctx.run_in_type_mod_mut(&mut fnvalue, |ctx, fnvalue| {
-            //     fnvalue.fntype.ret_pltype.get_type(ctx, builder, true)
-            // })?;
             builder.position_at_end_block(bb);
             let ret = builder.build_call(
                 function,
@@ -901,17 +898,13 @@ impl FuncDefNode {
                             .unwrap();
                     } else {
                         let p = builder.get_nth_param(funcvalue, i as _);
-                        // // add debug info
-                        // builder.create_parameter_variable(
-                        //     &fnvalue,
-                        //     self.paralist[i].range.start,
-                        //     i,
-                        //     child,
-                        //     funcvalue,
-                        //     p,
-                        //     allocab,
-                        //     &tp.borrow(),
-                        // );
+                        // add debug info
+                        builder.create_parameter_variable_dbg(
+                            &fnvalue,
+                            self.paralist[i].range.start,
+                            i,
+                            child,
+                        );
                         child
                             .add_symbol(
                                 fnvalue.param_names[i].clone(),
@@ -1345,7 +1338,7 @@ impl Node for ClosureNode {
         }
         let stpltp = PLType::Struct(st_tp.clone());
         let ptr_tp = PLType::Pointer(Arc::new(RefCell::new(stpltp)));
-        builder.create_parameter_variable_dbg(
+        builder.create_closure_variable_dbg(
             &ptr_tp,
             self.range.start,
             0,
