@@ -109,6 +109,13 @@ pub trait IRBuilder<'a, 'ctx> {
         allocab: BlockHandle,
         tp: &PLType,
     );
+    fn create_parameter_variable_dbg(
+        &self,
+        fnvalue: &FNValue,
+        pos: Pos,
+        i: usize,
+        child: &mut Ctx<'a>,
+    );
     fn delete_block(&self, b: BlockHandle);
     fn finalize_debug(&self);
     fn float_value(&self, ty: &PriType, v: f64) -> ValueHandle;
@@ -269,7 +276,7 @@ pub trait IRBuilder<'a, 'ctx> {
         child: &mut Ctx<'a>,
     );
     #[allow(clippy::too_many_arguments)]
-    fn create_parameter_variable_dbg(
+    fn create_closure_variable_dbg(
         &self,
         pltp: &PLType,
         pos: Pos,

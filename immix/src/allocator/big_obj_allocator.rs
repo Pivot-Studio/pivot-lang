@@ -35,6 +35,10 @@ impl BigObjAllocator {
         println!("heap_end: {:p}", self.heap_end);
     }
 
+    pub fn size(&self) -> usize {
+        self.heap_end as usize - self.heap_start as usize
+    }
+
     pub fn alloc_chunk(&self, size: usize) -> Option<*mut BigObj> {
         // let size = round_n_up!(size, ALIGN);
         let _lock = self.lock.lock();

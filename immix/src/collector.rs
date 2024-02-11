@@ -1,6 +1,7 @@
 #![allow(clippy::box_collection)]
 use std::{
     cell::RefCell,
+    cmp::min,
     sync::{
         atomic::{AtomicBool, AtomicPtr, Ordering},
         Arc,
@@ -18,8 +19,8 @@ use crate::{
     block::{Block, LineHeaderExt, ObjectType},
     gc_is_auto_collect_enabled, spin_until, HeaderExt, ENABLE_EVA, FREE_SPACE_DIVISOR,
     GC_COLLECTOR_COUNT, GC_ID, GC_MARKING, GC_MARK_COND, GC_RUNNING, GC_STW_COUNT, GC_SWEEPING,
-    GC_SWEEPPING_NUM, GLOBAL_ALLOCATOR, LINE_SIZE, NUM_LINES_PER_BLOCK, THRESHOLD_PROPORTION,
-    USE_SHADOW_STACK,
+    GC_SWEEPPING_NUM, GLOBAL_ALLOCATOR, LINE_SIZE, NUM_LINES_PER_BLOCK, REMAIN_MULTIPLIER,
+    SHRINK_PROPORTION, THRESHOLD_PROPORTION, USED_SPACE_DIVISOR, USE_SHADOW_STACK,
 };
 
 fn get_ip_from_sp(sp: *mut u8) -> *mut u8 {
@@ -252,7 +253,7 @@ impl Collector {
             return;
         }
         let status = self.status.borrow();
-        if status.bytes_allocated_since_last_gc + status.last_gc_remaining
+        if status.bytes_allocated_since_last_gc + status.last_gc_remaining * REMAIN_MULTIPLIER
             >= status.collect_threshold
         {
             drop(status);
@@ -829,20 +830,28 @@ impl Collector {
                 .sweep(self.mark_histogram)
         };
         let previous_threshold = self.status.borrow().collect_threshold;
+        let remaining = used.0;
         let this = self.status.borrow().bytes_allocated_since_last_gc;
         if this <= (previous_threshold as f64 / FREE_SPACE_DIVISOR as f64) as usize {
             // expand threshold
+            self.status.borrow_mut().collect_threshold = min(
+                (previous_threshold as f64 * THRESHOLD_PROPORTION) as usize,
+                unsafe { GLOBAL_ALLOCATOR.0.as_mut().unwrap().size() },
+            );
+        } else if remaining <= (previous_threshold as f64 / USED_SPACE_DIVISOR as f64) as usize {
+            // shrink threshold
             self.status.borrow_mut().collect_threshold =
-                (previous_threshold as f64 * THRESHOLD_PROPORTION) as usize;
+                (previous_threshold as f64 * SHRINK_PROPORTION) as usize;
         }
         self.status.borrow_mut().bytes_allocated_since_last_gc = 0;
-        self.status.borrow_mut().last_gc_remaining = used.0 * LINE_SIZE;
+        self.status.borrow_mut().last_gc_remaining = remaining;
 
         let v = GC_SWEEPPING_NUM.fetch_sub(1, Ordering::AcqRel);
         if v - 1 == 0 {
             GC_SWEEPING.store(false, Ordering::Release);
         }
         used
+        // used
     }
 
     /// # safepoint

@@ -92,6 +92,10 @@ impl GlobalAllocator {
         });
     }
 
+    pub fn size(&self) -> usize {
+        self.heap_end as usize - self.heap_start as usize
+    }
+
     pub fn return_big_objs<I>(&mut self, objs: I)
     where
         I: IntoIterator<Item = *mut BigObj>,

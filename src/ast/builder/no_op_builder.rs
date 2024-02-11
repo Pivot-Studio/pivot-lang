@@ -2,7 +2,7 @@ use std::{cell::RefCell, sync::Arc};
 
 use crate::ast::{
     ctx::Ctx,
-    pltype::{PLType, PriType, STType},
+    pltype::{FNValue, PLType, PriType, STType},
     range::Pos,
 };
 
@@ -498,7 +498,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     ) {
     }
     #[allow(clippy::too_many_arguments)]
-    fn create_parameter_variable_dbg(
+    fn create_closure_variable_dbg(
         &self,
         _pltp: &PLType,
         _pos: crate::ast::range::Pos,
@@ -615,4 +615,13 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
     }
 
     fn place_safepoint(&self, _ctx: &mut Ctx<'a>) {}
+
+    fn create_parameter_variable_dbg(
+        &self,
+        _fnvalue: &FNValue,
+        _pos: Pos,
+        _i: usize,
+        _child: &mut Ctx<'a>,
+    ) {
+    }
 }
