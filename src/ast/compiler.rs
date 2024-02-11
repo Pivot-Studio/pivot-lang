@@ -225,14 +225,16 @@ pub fn process_llvm_ir<'a>(
             op.debug as _,
         )
     };
+
     if !op.debug {
+        let obj_f = &format!("{}/{}", &ASSET_PATH.lock().unwrap(), "out.o");
         tm.write_to_file(
             &llvmmod,
             inkwell::targets::FileType::Object,
-            Path::new("out.o"),
+            Path::new(obj_f),
         )
         .unwrap();
-        output_files.push("out.o".into());
+        output_files.push(obj_f.into());
     }
     pb.finish_with_message("中间代码优化完成");
     (llvmmod, output_files)
