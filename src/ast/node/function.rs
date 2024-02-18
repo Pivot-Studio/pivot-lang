@@ -477,8 +477,10 @@ fn check_and_cast_params<'a, 'b>(
                 ptr2v,
                 builder,
             )?;
+            // pointer type and primitives don't need to be converted, otherwise, we need to convert them
+            // to pointer type to walk around llvm issue <https://github.com/llvm/llvm-project/issues/75162>
             if !matches!(
-                &*value_pltype.borrow(),
+                &*trait_pltype.borrow(),
                 PLType::Pointer(_) | PLType::Primitive(_)
             ) {
                 para_values[i + skip as usize] = value;
