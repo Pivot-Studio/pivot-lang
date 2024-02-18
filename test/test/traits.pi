@@ -103,12 +103,19 @@ pub fn test_trait() void {
     fff.name();
     st.call_trait();
     fn_with_trait(y);
+    param_trait(x);
+    param_trait(&x);
     return;
 }
 
 pub fn trait_ret() TestTrait {
     let x = A{};
     return x;
+}
+
+fn param_trait(t:TestTrait) void {
+    
+    return;
 }
 
 pub fn trait_with_generic<T>(x: T) i64
