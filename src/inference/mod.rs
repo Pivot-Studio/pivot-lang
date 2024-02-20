@@ -1077,7 +1077,7 @@ impl<'ctx> InferenceCtx<'ctx> {
         fc: &mut crate::ast::node::function::FuncCallNode,
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
-        argtys: &Vec<SymbolType>,
+        argtys: &[SymbolType],
     ) -> Option<SymbolType> {
         let mut tys = vec![];
         for _ in &f.fntype.generic_map {
