@@ -39,6 +39,7 @@ impl Ctx<'_> {
         self.get_var_completions(&mut m);
         self.get_keyword_completions(&mut m);
         self.get_macro_completions(&mut m);
+        self.get_root_ctx().plmod.get_glob_var_completions(&mut m);
 
         let cm = m.values().cloned().collect();
         cm
@@ -46,7 +47,7 @@ impl Ctx<'_> {
 
     pub fn get_completions_in_ns(&self, ns: &str) -> Vec<CompletionItem> {
         let mut m = FxHashMap::default();
-        self.get_const_completions_in_ns(ns, &mut m);
+        self.get_glob_var_completions_in_ns(ns, &mut m);
         self.get_type_completions_in_ns(ns, &mut m);
         self.get_macro_completion_in_ns(ns, &mut m);
 
@@ -61,22 +62,12 @@ impl Ctx<'_> {
         }
     }
 
-    pub(crate) fn get_const_completions_in_ns(
+    pub(crate) fn get_glob_var_completions_in_ns(
         &self,
         ns: &str,
         m: &mut FxHashMap<String, CompletionItem>,
     ) {
-        self.with_ns(ns, |ns| {
-            for (k, v) in ns.global_table.iter() {
-                let mut item = CompletionItem {
-                    label: k.to_string(),
-                    kind: Some(CompletionItemKind::CONSTANT),
-                    ..Default::default()
-                };
-                item.detail = Some(v.tp.borrow().get_name());
-                m.insert(k.clone(), item);
-            }
-        });
+        self.with_ns(ns, |ns| ns.get_glob_var_completions(m));
     }
 
     pub(crate) fn get_type_completions_in_ns(
@@ -270,6 +261,20 @@ impl Ctx<'_> {
                     },
                 );
             }
+        }
+    }
+}
+
+impl Mod {
+    pub(crate) fn get_glob_var_completions(&self, m: &mut FxHashMap<String, CompletionItem>) {
+        for (k, v) in self.global_table.iter() {
+            let mut item = CompletionItem {
+                label: k.to_string(),
+                kind: Some(CompletionItemKind::CONSTANT),
+                ..Default::default()
+            };
+            item.detail = Some(v.tp.borrow().get_name());
+            m.insert(k.clone(), item);
         }
     }
 }

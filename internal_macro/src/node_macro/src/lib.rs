@@ -7,7 +7,7 @@ use syn::{parse_macro_input, DeriveInput};
 /// currently, it supports arguemnts as 'comment' and 'copy':
 ///
 /// The node without any argument embeds a new field 'range' into a structure
-/// ```rust
+/// ```ignore
 /// #[node]
 /// pub struct demo {
 ///     pub filed: i32,
@@ -15,7 +15,7 @@ use syn::{parse_macro_input, DeriveInput};
 /// }
 /// ```
 /// The embedded structure looks like:
-/// ```rust
+/// ```ignore
 /// #[derive(Clone, PartialEq, Eq, derivative::Derivative)]
 /// #[derivative(Debug)]
 /// pub struct demo {
@@ -26,7 +26,7 @@ use syn::{parse_macro_input, DeriveInput};
 /// ```
 ///
 /// If we pass the argument `comment`:
-/// ```rust
+/// ```ignore
 /// #[node(comment)]
 /// pub struct demo {
 ///     pub filed: i32,
@@ -35,7 +35,7 @@ use syn::{parse_macro_input, DeriveInput};
 /// ```
 ///
 /// The embedded structure looks like:
-/// ```rust
+/// ```ignore
 /// #[derive(Clone, PartialEq, Eq, derivative::Derivative)]
 /// #[derivative(Debug)]
 /// pub struct demo {

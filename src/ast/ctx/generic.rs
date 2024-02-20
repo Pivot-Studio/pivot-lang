@@ -159,7 +159,7 @@ impl<'a> Ctx<'a> {
                 };
             }
             let trait_pltype = l;
-            let st_pltype = self.auto_deref_tp(r);
+            let st_pltype = self.auto_deref_tp(r.clone());
             if let PLType::Trait(t) = &*trait_pltype.borrow() {
                 let eq = st_pltype.borrow().implements_trait(t, self.get_root_ctx());
                 return EqRes {
@@ -172,7 +172,7 @@ impl<'a> Ctx<'a> {
                     )),
                 };
             }
-            if get_type_deep(trait_pltype) == get_type_deep(st_pltype) {
+            if get_type_deep(trait_pltype) == get_type_deep(r) {
                 return EqRes {
                     eq: true,
                     need_up_cast: false,

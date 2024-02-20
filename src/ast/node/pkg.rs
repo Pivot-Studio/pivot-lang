@@ -259,11 +259,10 @@ impl Node for ExternIdNode {
                 // eprintln!("comp {:?}", completions);
             });
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::COMPLETION)));
-        } else {
-            ctx.generate_completion_if(ctx.should_gen(self.range), || {
-                ctx.get_completions_in_ns(&self.namespace[0].get_name(ctx))
-            });
         }
+        ctx.generate_completion_if(ctx.should_gen(self.range), || {
+            ctx.get_completions_in_ns(&self.namespace[0].get_name(ctx))
+        });
         for id in &self.namespace {
             ctx.push_semantic_token(id.range, SemanticTokenType::NAMESPACE, 0);
         }

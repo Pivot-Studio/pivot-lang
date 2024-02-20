@@ -108,3 +108,13 @@ trait TestTrait2 {
 struct BBB<T:TestTrait+TestTrait2> {
     x: BInner<T>;
 }
+
+
+var AAAA = &1;
+
+fn arg_ptr(a:i64) void {
+    arg_ptr(AAAA);
+    arg_ptr(*AAAA);
+    arg_ptr(&*AAAA);
+    return;
+}
