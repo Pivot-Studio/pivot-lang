@@ -2,6 +2,8 @@
 name = "pivot-lang"
 version = "0.1.1"
 edition = "2021"
+rust-version = "1.75.0"
+
 authors = ["The pivot-lang Authors"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -107,4 +109,4 @@ codegen-units = 1
 expect-test = "1.4.1"
 
 [build-dependencies]
-vergen = "7.3.2"
+vergen = "7.5.1"
