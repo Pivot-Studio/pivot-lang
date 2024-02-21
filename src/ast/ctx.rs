@@ -612,95 +612,13 @@ impl<'a, 'ctx> Ctx<'a> {
         name: &str,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Option<PLSymbol> {
-        let v = self.table.get(name);
-        if let Some(symbol) = v {
-            return Some(PLSymbol::Local(symbol.clone()));
-        }
-        if let Some(data) = &self.closure_data.clone() {
-            let mut data = data.borrow_mut();
-            if let Some((symbol, _)) = data.table.get(name) {
-                return Some(PLSymbol::Captured(symbol.clone()));
-            }
-            if let Some(parent) = self.parent {
-                let re = self.get_symbol_parent(name, builder, parent);
-                if let Some(s) = &re {
-                    let symbol = s.get_data_ref();
-                    if !s.is_global() {
-                        let cur = builder.get_cur_basic_block();
-                        // just make sure we are in the alloca bb
-                        // so that the captured value is not used before it is initialized
-                        if let Some(bb) = data.alloca_bb {
-                            builder.position_at_end_block(bb);
-                        } else {
-                            builder.position_at_end_block(
-                                builder.get_first_basic_block(self.function.unwrap()),
-                            );
-                        }
-                        builder.rm_curr_debug_location();
-                        // captured by closure
-                        let new_symbol = symbol.clone();
-                        let len = data.table.len();
-                        let st_r = data.data_tp.as_ref().unwrap().borrow();
-                        let st: &super::pltype::STType = match &*st_r {
-                            PLType::Struct(s) => s,
-                            _ => unreachable!(),
-                        };
-                        builder.add_closure_st_field(st, new_symbol.value, self);
-                        drop(st_r);
-                        let new_symbol = PLSymbolData {
-                            value: builder.build_load(
-                                builder
-                                    .build_struct_gep(
-                                        data.data_handle,
-                                        len as u32 + 1,
-                                        "closure_tmp",
-                                        &data.data_tp.as_ref().unwrap().borrow(),
-                                        self,
-                                    )
-                                    .unwrap(),
-                                "closure_loaded",
-                                &PLType::new_i8_ptr(),
-                                self,
-                            ),
-                            ..new_symbol
-                        };
-                        data.table
-                            .insert(name.to_string(), (new_symbol.clone(), symbol.value));
-                        builder.position_at_end_block(cur);
-                        return Some(PLSymbol::Captured(new_symbol));
-                    }
-                }
-                return re;
-            }
-        }
-        if !self.as_root {
-            if let Some(father) = self.parent {
-                let re = self.get_symbol_parent(name, builder, father);
-                return re;
-            }
-        }
-        if let Some(GlobalVar {
-            tp: pltype, range, ..
-        }) = self.plmod.get_global_symbol(name)
-        {
-            return builder
-                .get_global_var_handle(&self.plmod.get_full_name(name))
-                .or(builder.get_global_var_handle(name))
-                .map(|value| {
-                    PLSymbol::Global(PLSymbolData {
-                        value,
-                        pltype: pltype.clone(),
-                        range: *range,
-                        refs: None,
-                    })
-                });
-        }
-        None
+        let reference = unsafe { (self as *mut Self).as_ref().unwrap() };
+        self.get_symbol_parent(name, builder, reference)
     }
 
     /// # get_symbol in parent ctx
     ///
-    /// search in current and all parent symbol tables
+    /// search in all parent symbol tables
     pub fn get_symbol_parent<'b>(
         &'b mut self,
         name: &str,
