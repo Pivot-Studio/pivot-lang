@@ -204,6 +204,7 @@ fn test_completion() {
     assert!(lables.contains(&"test1".to_string()));
     assert!(lables.contains(&"name".to_string()));
     assert!(lables.contains(&"if".to_string()));
+    assert!(lables.contains(&"GLOB".to_string()));
 }
 #[test]
 fn test_type_completion() {

@@ -49,3 +49,5 @@ fn traitname() void {
     trait1::new();
     return;
 }
+
+var GLOB = &1;

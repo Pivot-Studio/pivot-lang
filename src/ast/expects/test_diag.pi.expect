@@ -2,6 +2,50 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
+                PARAMETER_TYPE_NOT_MATCH,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 116,
+                    column: 13,
+                    offset: 1264,
+                },
+                end: Pos {
+                    line: 116,
+                    column: 17,
+                    offset: 1268,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                PARAMETER_TYPE_NOT_MATCH,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 118,
+                    column: 13,
+                    offset: 1303,
+                },
+                end: Pos {
+                    line: 118,
+                    column: 19,
+                    offset: 1309,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
                 TYPE_CANNOT_BE_FULLY_INFERRED,
             ),
             help: None,
@@ -906,6 +950,52 @@
                     line: 33,
                     column: 10,
                     offset: 399,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Warn(
+                UNUSED_VARIABLE,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "Unused variable `{}`",
+                            [
+                                "a",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 115,
+                            column: 12,
+                            offset: 1238,
+                        },
+                        end: Pos {
+                            line: 115,
+                            column: 13,
+                            offset: 1239,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 115,
+                    column: 12,
+                    offset: 1238,
+                },
+                end: Pos {
+                    line: 115,
+                    column: 13,
+                    offset: 1239,
                 },
             },
         },

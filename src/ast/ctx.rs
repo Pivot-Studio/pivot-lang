@@ -608,21 +608,34 @@ impl<'a, 'ctx> Ctx<'a> {
     ///
     /// search in current and all parent symbol tables
     pub fn get_symbol<'b>(
-        &'b self,
+        &'b mut self,
         name: &str,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) -> Option<PLSymbol> {
-        let v = self.table.get(name);
+        let reference = unsafe { (self as *mut Self).as_ref().unwrap() };
+        self.get_symbol_parent(name, builder, reference)
+    }
+
+    /// # get_symbol in parent ctx
+    ///
+    /// search in all parent symbol tables
+    pub fn get_symbol_parent<'b>(
+        &'b mut self,
+        name: &str,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+        parent: &'b Ctx<'a>,
+    ) -> Option<PLSymbol> {
+        let v = parent.table.get(name);
         if let Some(symbol) = v {
             return Some(PLSymbol::Local(symbol.clone()));
         }
-        if let Some(data) = &self.closure_data {
+        if let Some(data) = &parent.closure_data {
             let mut data = data.borrow_mut();
             if let Some((symbol, _)) = data.table.get(name) {
                 return Some(PLSymbol::Captured(symbol.clone()));
             }
-            if let Some(parent) = self.parent {
-                let re = parent.get_symbol(name, builder);
+            if let Some(p) = parent.parent {
+                let re = self.get_symbol_parent(name, builder, p);
                 if let Some(s) = &re {
                     let symbol = s.get_data_ref();
                     if !s.is_global() {
@@ -633,7 +646,7 @@ impl<'a, 'ctx> Ctx<'a> {
                             builder.position_at_end_block(bb);
                         } else {
                             builder.position_at_end_block(
-                                builder.get_first_basic_block(self.function.unwrap()),
+                                builder.get_first_basic_block(parent.function.unwrap()),
                             );
                         }
                         builder.rm_curr_debug_location();
@@ -645,10 +658,7 @@ impl<'a, 'ctx> Ctx<'a> {
                             PLType::Struct(s) => s,
                             _ => unreachable!(),
                         };
-                        let ptr = parent as *const _;
-                        let ptr = ptr as usize;
-                        let ptr = ptr as *mut Ctx<'_>;
-                        builder.add_closure_st_field(st, new_symbol.value, unsafe { &mut *ptr });
+                        builder.add_closure_st_field(st, new_symbol.value, self);
                         drop(st_r);
                         let new_symbol = PLSymbolData {
                             value: builder.build_load(
@@ -658,12 +668,12 @@ impl<'a, 'ctx> Ctx<'a> {
                                         len as u32 + 1,
                                         "closure_tmp",
                                         &data.data_tp.as_ref().unwrap().borrow(),
-                                        unsafe { &mut *ptr },
+                                        self,
                                     )
                                     .unwrap(),
                                 "closure_loaded",
                                 &PLType::new_i8_ptr(),
-                                unsafe { &mut *ptr },
+                                self,
                             ),
                             ..new_symbol
                         };
@@ -676,18 +686,18 @@ impl<'a, 'ctx> Ctx<'a> {
                 return re;
             }
         }
-        if !self.as_root {
-            if let Some(father) = self.parent {
-                let re = father.get_symbol(name, builder);
+        if !parent.as_root {
+            if let Some(father) = parent.parent {
+                let re = self.get_symbol_parent(name, builder, father);
                 return re;
             }
         }
         if let Some(GlobalVar {
             tp: pltype, range, ..
-        }) = self.plmod.get_global_symbol(name)
+        }) = parent.plmod.get_global_symbol(name)
         {
             return builder
-                .get_global_var_handle(&self.plmod.get_full_name(name))
+                .get_global_var_handle(&parent.plmod.get_full_name(name))
                 .or(builder.get_global_var_handle(name))
                 .map(|value| {
                     PLSymbol::Global(PLSymbolData {
