@@ -4,7 +4,7 @@ use super::{
     node::{
         cast::{AsNode, IsNode},
         comment::CommentNode,
-        control::{BreakNode, ContinueNode, ForNode, IfNode, WhileNode},
+        control::{BreakNode, ContinueNode, ForNode, IfNode, MatchNode, WhileNode},
         error::{ErrorNode, StErrorNode},
         function::{ClosureNode, FuncCallNode, FuncDefNode},
         global::{GlobalConstNode, GlobalNode},
@@ -848,5 +848,8 @@ impl FmtBuilder {
         self.semicolon();
         // 顶层节点加空格
         self.enter();
+    }
+    pub fn parse_match_node(&mut self, node: &MatchNode) {
+        todo!()
     }
 }
