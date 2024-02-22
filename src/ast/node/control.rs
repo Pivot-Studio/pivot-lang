@@ -344,3 +344,45 @@ impl Node for ContinueNode {
             .to_result()
     }
 }
+
+
+#[node]
+pub struct MatchNode {
+    pub value: Box<NodeEnum>,
+    pub arms: Vec<(MatchArmCondition, StatementsNode)>,
+}
+
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MatchArmCondition {
+    Discard(Range),
+    Var(VarNode),
+    Literal(Literal),
+    /// A type with `(xxx)`
+    TypedVar(TypeNodeEnum, Box<MatchArmCondition>),
+    TypedDeconstruct(TypeNodeEnum, Vec<STDeconstructField>),
+    /// when matching a struct, type can be omitted in match arms
+    Deconstruct(Vec<STDeconstructField>),
+    Tuple(Vec<TupleField>)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Literal {
+    Number(NumNode),
+    String(StringNode),
+    Bool(BoolConstNode),
+}
+
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum STDeconstructField {
+    Literal((VarNode,Literal)),// like a:1
+    Var((VarNode,MatchArmCondition)), // like a:b or a:st{c}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TupleField {
+    Literal(Literal),
+    Var(MatchArmCondition),
+}
+
