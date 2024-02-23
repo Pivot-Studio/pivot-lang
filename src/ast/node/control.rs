@@ -345,25 +345,25 @@ impl Node for ContinueNode {
     }
 }
 
-
 #[node]
 pub struct MatchNode {
     pub value: Box<NodeEnum>,
     pub arms: Vec<(MatchArmCondition, StatementsNode)>,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MatchArmCondition {
+    /// match all other cases
     Discard(Range),
+    /// match all other cases to a new variable
     Var(VarNode),
     Literal(Literal),
     /// A type with `(xxx)`
     TypedVar(TypeNodeEnum, Box<MatchArmCondition>),
-    TypedDeconstruct(TypeNodeEnum, Vec<STDeconstructField>),
+    TypedDeconstruct(TypeNodeEnum, Vec<STMatchField>),
     /// when matching a struct, type can be omitted in match arms
-    Deconstruct(Vec<STDeconstructField>),
-    Tuple(Vec<TupleField>)
+    Deconstruct(Vec<STMatchField>),
+    Tuple(Vec<TupleField>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -373,12 +373,7 @@ pub enum Literal {
     Bool(BoolConstNode),
 }
 
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum STDeconstructField {
-    Literal((VarNode,Literal)),// like a:1
-    Var((VarNode,MatchArmCondition)), // like a:b or a:st{c}
-}
+pub type STMatchField = (VarNode, MatchArmCondition);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TupleField {
@@ -386,3 +381,18 @@ pub enum TupleField {
     Var(MatchArmCondition),
 }
 
+impl PrintTrait for MatchNode {
+    fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
+        todo!()
+    }
+}
+
+impl Node for MatchNode {
+    fn emit<'a, 'b>(
+        &mut self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) -> NodeResult {
+        todo!()
+    }
+}

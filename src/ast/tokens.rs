@@ -107,6 +107,7 @@ define_tokens!(
     BIT_LEFT_SHIFT = "<<",
     BIT_RIGHT_SHIFT = ">>",
     BIT_NOT = "~",
+    MATCH = "match",
 );
 
 impl TokenType {

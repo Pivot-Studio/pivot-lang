@@ -162,21 +162,16 @@ where
 #[test_parser("\"dsajdkahdkaj\"")]
 #[test_parser(r#""\u{1234} \" dsadsa""#)]
 #[test_parser_error(r#""\u{1234} " dsadsa""#)]
-pub fn string_literal(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    map_res(
+pub fn string_literal(input: Span) -> IResult<Span, StringNode> {
+    map(
         tuple((
             tag_token(TokenType::DOUBLE_QUOTE),
             parse_string_content,
             tag_token(TokenType::DOUBLE_QUOTE),
         )),
-        |((_, st), s, (_, end))| {
-            res_enum(
-                StringNode {
-                    content: s,
-                    range: st.start.to(end.end),
-                }
-                .into(),
-            )
+        |((_, st), s, (_, end))| StringNode {
+            content: s,
+            range: st.start.to(end.end),
         },
     )(input)
 }
