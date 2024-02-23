@@ -11,6 +11,9 @@ use internal_macro::{test_parser, test_parser_error};
 
 use super::*;
 
+mod _match;
+pub use _match::*;
+
 #[test_parser(
     "if a > 1 { 
     a = 1;

@@ -131,7 +131,7 @@ impl MacroMatchParameter {
             TokenType::MACRO_TYPE_STR => {
                 let (new, node) = del_newline_or_space!(string_literal::string_literal)(args)
                     .map_err(|_| nom::Err::Error(self.range.new_err(ErrorCode::EXPECT_STRING)))?;
-                self.add_to_macro_var(ctx, *node);
+                self.add_to_macro_var(ctx, node.into());
                 Ok((new, ()))
             }
             TokenType::MACRO_TYPE_EXPR => {

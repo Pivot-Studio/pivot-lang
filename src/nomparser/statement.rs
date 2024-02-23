@@ -70,6 +70,7 @@ pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     delspace(alt((
         semi_stmt(new_variable, new_variable),
         semi_stmt(assignment, assignment),
+        map(match_statement, |m| Box::new(m.into())),
         if_statement,
         while_statement,
         for_statement,
