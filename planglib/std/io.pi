@@ -39,6 +39,9 @@ pub fn open(s:string, flag:i32) File {
     return File{fd:LibC__open(s.raw(), s.byte_len(), flag)};
 }
 
+/// # File
+/// 
+/// a simple wrapper around fd
 pub struct File {
     fd:i32;
 }

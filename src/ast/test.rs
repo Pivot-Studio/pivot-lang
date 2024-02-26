@@ -288,10 +288,10 @@ fn test_hint() {
     );
     assert!(!hints.is_empty());
     assert!(!hints[0].is_empty());
-    assert_eq!(
-        hints[0][0].label,
-        InlayHintLabel::String(": i64".to_string())
-    );
+    if let InlayHintLabel::LabelParts(p) = &hints[0][0].label {
+        assert_eq!(p[0].value, ": ".to_string());
+        assert_eq!(p[1].value, "i64".to_string());
+    }
 }
 fn new_diag_range(sl: u32, sc: u32, el: u32, ec: u32) -> lsp_types::Range {
     lsp_types::Range {

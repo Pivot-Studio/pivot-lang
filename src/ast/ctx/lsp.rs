@@ -7,6 +7,8 @@
 use lsp_types::InlayHintKind;
 
 use lsp_types::InlayHint;
+use lsp_types::InlayHintLabelPart;
+use lsp_types::MarkupContent;
 
 use super::super::pltype::PLType;
 
@@ -104,11 +106,24 @@ impl Ctx<'_> {
         if self.need_highlight.borrow().ne(&0) || self.in_macro {
             return;
         }
+        let part1 = InlayHintLabelPart {
+            value: ": ".to_string(),
+            ..Default::default()
+        };
+        let part2 = InlayHintLabelPart {
+            value: pltype.borrow().get_name(),
+            tooltip: Some(lsp_types::InlayHintLabelPartTooltip::MarkupContent(
+                MarkupContent {
+                    kind: lsp_types::MarkupKind::Markdown,
+                    value: pltype.borrow().get_docs().unwrap_or("".to_string()),
+                },
+            )),
+            ..Default::default()
+        };
+
         let hint = InlayHint {
             position: range.to_diag_range().end,
-            label: lsp_types::InlayHintLabel::String(
-                ": ".to_string() + &pltype.borrow().get_name(),
-            ),
+            label: lsp_types::InlayHintLabel::LabelParts(vec![part1, part2]),
             kind: Some(InlayHintKind::TYPE),
             text_edits: None,
             tooltip: None,
@@ -124,7 +139,7 @@ impl Ctx<'_> {
         }
         let hint = InlayHint {
             position: range.to_diag_range().start,
-            label: lsp_types::InlayHintLabel::String(name + ": "),
+            label: lsp_types::InlayHintLabel::String(name + ":"),
             kind: Some(InlayHintKind::TYPE),
             text_edits: None,
             tooltip: None,

@@ -185,7 +185,12 @@ impl FuncCallNode {
     fn build_hint(&mut self, ctx: &mut Ctx, fnvalue: &FNValue, skip: u32) {
         for (i, para) in self.paralist.iter_mut().enumerate() {
             let pararange = para.range();
-            ctx.push_param_hint(pararange, fnvalue.param_names[i + skip as usize].clone());
+            let mut b = FmtBuilder::default();
+            para.format(&mut b);
+            let para_s = b.generate();
+            if para_s != fnvalue.param_names[i + skip as usize] {
+                ctx.push_param_hint(pararange, fnvalue.param_names[i + skip as usize].clone());
+            }
             ctx.set_if_sig(
                 para.range(),
                 fnvalue.name.clone().split("::").last().unwrap().to_string()
