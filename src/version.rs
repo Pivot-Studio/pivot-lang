@@ -7,7 +7,7 @@ use std::fmt;
 pub struct VergenInfo {
     /// `VERGEN_BUILD_TIMESTAMP` e.g. `2021-02-25T23:28:39.493201+00:00`
     pub build_timestamp: String,
-    /// `VERGEN_BUILD_SEMVER` e.g. `5.0.0`
+    /// `CARGO_PKG_VERSION` e.g. `5.0.0`
     pub build_semver: String,
     /// `VERGEN_RUSTC_CHANNEL` e.g. `nightly`
     pub rustc_channel: String,
@@ -23,7 +23,7 @@ pub struct VergenInfo {
     pub rustc_semver: String,
     /// `VERGEN_CARGO_FEATURES` e.g. `git,build`
     pub cargo_features: String,
-    /// `VERGEN_CARGO_PROFILE` e.g. `debug`
+    /// `VERGEN_CARGO_OPT_LEVEL` e.g. `debug`
     pub cargo_profile: String,
     /// `VERGEN_CARGO_TARGET_TRIPLE` e.g. `x86_64-unknown-linux-gnu`
     pub cargo_target_triple: String,
@@ -31,7 +31,7 @@ pub struct VergenInfo {
     pub git_branch: String,
     /// `VERGEN_GIT_COMMIT_TIMESTAMP` e.g. `2021-02-24T20:55:21+00:00`
     pub git_commit_timestamp: String,
-    /// `VERGEN_GIT_SEMVER` e.g. `5.0.0-2-gf49246c`
+    /// `VERGEN_GIT_DESCRIBE` e.g. `5.0.0-2-gf49246c`
     pub git_semver: String,
     /// `VERGEN_GIT_SHA` e.g. `f49246ce334567bff9f950bfd0f3078184a2738a`
     pub git_sha: String,

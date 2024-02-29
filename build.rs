@@ -1,6 +1,6 @@
 use vergen::EmitBuilder;
 
-pub fn main()  {
+pub fn main() {
     // NOTE: This will output everything, and requires all features enabled.
     // NOTE: See the EmitBuilder documentation for configuration options.
     EmitBuilder::builder()
@@ -9,5 +9,6 @@ pub fn main()  {
         .all_git()
         .all_rustc()
         .all_sysinfo()
-        .emit().unwrap();
+        .emit()
+        .unwrap();
 }
