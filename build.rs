@@ -1,8 +1,13 @@
-// build.rs
+use vergen::EmitBuilder;
 
-use vergen::{vergen, Config};
-fn main() {
-    let mut cfg = Config::default();
-    *cfg.sysinfo_mut().name_mut() = false;
-    vergen(cfg).expect("Fail to generate version info");
+pub fn main()  {
+    // NOTE: This will output everything, and requires all features enabled.
+    // NOTE: See the EmitBuilder documentation for configuration options.
+    EmitBuilder::builder()
+        .all_build()
+        .all_cargo()
+        .all_git()
+        .all_rustc()
+        .all_sysinfo()
+        .emit().unwrap();
 }
