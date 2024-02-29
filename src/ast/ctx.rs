@@ -694,7 +694,7 @@ impl<'a, 'ctx> Ctx<'a> {
         }
         if let Some(GlobalVar {
             tp: pltype, range, ..
-        }) = parent.plmod.get_global_symbol(name)
+        }) = parent.get_root_ctx().plmod.get_global_symbol(name)
         {
             return builder
                 .get_global_var_handle(&parent.plmod.get_full_name(name))

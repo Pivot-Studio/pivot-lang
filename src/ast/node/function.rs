@@ -746,6 +746,7 @@ impl FuncDefNode {
         if !first && matches!(builder, BuilderEnum::NoOp(_)) {
             return Ok(());
         }
+        let bb = builder.get_cur_basic_block();
         builder.rm_curr_debug_location();
         let re = ctx.run_as_root_ctx(|ctx| {
             let mut builder = builder;
@@ -865,6 +866,9 @@ impl FuncDefNode {
                     // 设置flag，该flag影响alloc逻辑
                     child.ctx_flag = CtxFlag::InGeneratorYield;
                     child.generator_data.as_ref().unwrap().borrow_mut().is_para = true;
+                } else {
+                    child.ctx_flag = CtxFlag::Normal;
+                    child.generator_data = None;
                 }
                 // alloc para
                 for (i, para) in fnvalue.fntype.param_pltypes.iter().enumerate() {
@@ -1018,6 +1022,7 @@ impl FuncDefNode {
             })
         });
         builder.set_di_file(&ctx.get_file());
+        builder.position_at_end_block(bb);
         // builder.try_set_fn_dbg(self.range.start, ctx.function.unwrap());
         re
     }
