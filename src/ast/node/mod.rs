@@ -216,6 +216,9 @@ impl<'a, 'ctx> Ctx<'a> {
         }
     }
 
+    /// # emit_with_expectation
+    ///
+    /// it emits the node and asserts the result with expected type
     fn emit_with_expectation<'b>(
         &'b mut self,
         node: &mut Box<NodeEnum>,

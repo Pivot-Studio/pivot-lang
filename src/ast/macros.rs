@@ -39,6 +39,10 @@ macro_rules! generic_impl {
     ($($args:ident),*) => (
         $(
             impl $args {
+                /// # need_gen_code
+                ///
+                /// need_gen_code reports whether it requires to generate code for generic
+                /// by check whether the generic_map is empty or not
                 pub fn need_gen_code(&self) -> bool {
                     if self.generic_map.is_empty() {
                         return false;

@@ -178,7 +178,9 @@ impl Node for DefNode {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
         ctx.push_semantic_token(self.var.range(), SemanticTokenType::VARIABLE, 0);
-        let mut pltype = None;
+
+        // process the variable type
+        let mut variable_typ = None;
         if self.variable_type.is_none() {
             let mut tp = Arc::new(RefCell::new(PLType::Unknown));
             if let DefVar::Identifier(i) = &*self.var {
@@ -188,30 +190,33 @@ impl Node for DefNode {
                 }
             }
 
-            pltype = Some(tp);
+            variable_typ = Some(tp);
         }
-        let mut expv = None;
         if let Some(tp) = &self.variable_type {
             tp.emit_highlight(ctx);
             let pltp = tp.get_type(ctx, builder, true)?;
-            pltype = Some(pltp);
+            variable_typ = Some(pltp);
         }
+
+        // process the value of variable
+        let mut exp_val = None;
         if self.value_expression.is_some()
-            && matches!(pltype.clone(), Some(tp) if matches!(&*tp.borrow(), PLType::Unknown))
+            && matches!(variable_typ.clone(), Some(tp) if matches!(&*tp.borrow(), PLType::Unknown))
         {
-            pltype = None;
+            variable_typ = None;
         }
+
         if let Some(exp) = &mut self.value_expression {
-            let re = if let Some(expect) = pltype.clone() {
+            let emitted_node_re = if let Some(expect) = variable_typ.clone() {
                 ctx.emit_with_expectation(exp, expect, self.var.range(), builder)
             } else {
                 exp.emit(ctx, builder)
             };
 
-            // for err tolerate
-            if let Ok(v) = re {
-                if let Some(re) = v.get_value() {
-                    let mut tp = re.get_ty();
+            // we allow the failure of emitting so we ignore the error here
+            if let Ok(v) = emitted_node_re {
+                if let Some(node_val) = v.get_value() {
+                    let mut tp = node_val.get_ty();
                     let v = if let PLType::Fn(f) = &*tp.clone().borrow() {
                         let oritp = tp;
                         let c =
@@ -222,24 +227,27 @@ impl Node for DefNode {
                             oritp,
                             Default::default(),
                             Default::default(),
-                            re.get_value(),
+                            node_val.get_value(),
                             builder,
                         )
                         .unwrap()
                     } else {
-                        re.get_value()
+                        node_val.get_value()
                     };
-                    if self.variable_type.is_none() && pltype.is_none() {
-                        pltype = Some(tp);
+                    if self.variable_type.is_none() && variable_typ.is_none() {
+                        variable_typ = Some(tp);
                     }
-                    expv = Some(v);
+                    exp_val = Some(v);
                 }
             }
         }
-        let pltype = pltype.unwrap_or(unknown_arc());
+
+        let pltype = variable_typ.unwrap_or(unknown_arc());
         if self.variable_type.is_none() {
             ctx.push_type_hints(self.var.range(), pltype.clone());
         }
+
+        // the logic to handle the deconstruct
         let mut gm = IndexMap::new();
         if let PLType::Trait(t) = &*pltype.borrow() {
             gm = t.generic_map.clone();
@@ -259,7 +267,7 @@ impl Node for DefNode {
                 builder,
                 pltype.clone(),
                 ctx,
-                expv,
+                exp_val,
                 &self.var,
                 true,
                 0,

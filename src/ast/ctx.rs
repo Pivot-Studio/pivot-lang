@@ -350,6 +350,10 @@ impl<'a, 'ctx> Ctx<'a> {
             disable_diag: false,
         }
     }
+
+    /// # new_child
+    ///
+    /// it creates a new context inherited to the current context
     pub fn new_child(&'a self, start: Pos, builder: &'a BuilderEnum<'a, 'ctx>) -> Ctx<'a> {
         let mut root = self.root;
         if self.parent.is_none() {
@@ -616,7 +620,7 @@ impl<'a, 'ctx> Ctx<'a> {
         self.get_symbol_parent(name, builder, reference)
     }
 
-    /// # get_symbol in parent ctx
+    /// # get_symbol_parent
     ///
     /// search in all parent symbol tables
     pub fn get_symbol_parent<'b>(
@@ -972,6 +976,10 @@ impl<'a, 'ctx> Ctx<'a> {
         m
     }
 
+    /// # protect_generic_context
+    ///
+    /// it appends the generic maps into the current context, processes the funciton f,
+    /// and restores context generic types to its original value.
     pub fn protect_generic_context<'b, T, F: FnMut(&mut Ctx<'a>) -> T>(
         &mut self,
         generic_map: &IndexMap<String, Arc<RefCell<PLType>>>,
@@ -986,31 +994,35 @@ impl<'a, 'ctx> Ctx<'a> {
         res
     }
 
+    /// # run_in_type_mod
+    ///
+    /// it executes the function f under the module of the custom_type
+    /// to ensure all the references could be found correctly.
     pub fn run_in_type_mod<'b, TP: CustomType, R, F: FnMut(&mut Ctx<'a>, &TP) -> R>(
         &'b mut self,
-        u: &TP,
+        custom_type: &TP,
         mut f: F,
     ) -> R {
-        if u.get_path() != self.plmod.path && !u.get_path().is_empty() {
+        if custom_type.get_path() != self.plmod.path && !custom_type.get_path().is_empty() {
             let ori_mod = unsafe { &*self.origin_mod as &Mod };
-            let m = if u.get_path() == ori_mod.path {
+            let m = if custom_type.get_path() == ori_mod.path {
                 ori_mod.clone()
             } else {
-                self.db.get_module(&u.get_path()).unwrap()
+                self.db.get_module(&custom_type.get_path()).unwrap()
             };
             let oldm = self.set_mod(m);
             let origin = self.origin_mod as isize == &self.plmod as *const Mod as isize;
             if origin {
                 self.origin_mod = &oldm as *const Mod;
             }
-            let res = f(self, u);
+            let res = f(self, custom_type);
             self.set_mod(oldm);
             if origin {
                 self.origin_mod = &self.plmod as *const Mod;
             }
             res
         } else {
-            f(self, u)
+            f(self, custom_type)
         }
     }
 
@@ -1166,6 +1178,11 @@ impl<'a, 'ctx> Ctx<'a> {
         Some(s)
     }
 
+    /// # try_set_closure_alloca_bb
+    ///
+    /// it tries to add the closure allocated block into the current context
+    /// if the respective closure captured exists.
+    /// Otherwise, it tries to add this block to its parent context
     pub fn try_set_closure_alloca_bb(&self, bb: BlockHandle) {
         if let Some(c) = &self.closure_data {
             c.borrow_mut().alloca_bb = Some(bb);
