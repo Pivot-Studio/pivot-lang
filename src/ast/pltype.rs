@@ -985,6 +985,10 @@ impl FNValue {
                     .unwrap()
             }))
     }
+
+    /// # append_name_with_generic
+    ///
+    /// it appends the generic names on the name if any and returns
     pub fn append_name_with_generic(&self, name: String) -> String {
         if self.fntype.need_gen_code() {
             let typeinfer = self

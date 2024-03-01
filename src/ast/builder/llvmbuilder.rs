@@ -988,6 +988,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .add_function(&llvmname, fn_type, Some(Linkage::External))
     }
 
+    /// # get_fn_type
+    ///
+    /// get_fn_type returns the inkwell function type for a pivot-lang function value.
     fn get_fn_type(&self, fnvalue: &FNValue, ctx: &mut Ctx<'a>) -> FunctionType<'ctx> {
         ctx.protect_generic_context(&fnvalue.fntype.generic_map, |ctx| {
             ctx.run_in_type_mod(fnvalue, |ctx, fnvalue| {
@@ -1017,6 +1020,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         !fnvalue.is_declare && fnvalue.name != "main",
                     )
                     .fn_type(&param_types, false);
+
                 fn_type
             })
         })
@@ -1570,14 +1574,16 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         }
     }
 
-    /// try get function value from module
+    /// # get_or_insert_fn
     ///
-    /// if not found, create a declaration
+    /// it returns the emitted function from llvm if it exists,
+    /// otherwise it will emit the function value and the return the new value.
     ///
-    /// bool: 是否已经实现过该函数
+    /// The bool means whether the function exists in the llvm builder or not.
     fn get_or_insert_fn(&self, pltp: &FNValue, ctx: &mut Ctx<'a>) -> (FunctionValue<'ctx>, bool) {
-        let llvmname = pltp.append_name_with_generic(pltp.llvmname.clone());
-        if let Some(v) = self.module.get_function(&llvmname) {
+        let final_llvm_name = pltp.append_name_with_generic(pltp.llvmname.clone());
+
+        if let Some(v) = self.module.get_function(&final_llvm_name) {
             return (v, v.count_basic_blocks() != 0);
         }
         let fn_type = self.get_fn_type(pltp, ctx);
@@ -1587,7 +1593,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             } else {
                 Linkage::Private
             };
-        let f = self.module.add_function(&llvmname, fn_type, Some(linkage));
+        let f = self
+            .module
+            .add_function(&final_llvm_name, fn_type, Some(linkage));
         if !pltp.is_declare {
             f.set_call_conventions(CALL_CONV);
         }
@@ -1801,14 +1809,17 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .yield_ctx_handle = ctx_handle;
         self.builder.position_at_end(prev_bb);
     }
+    /// # bitcast
+    ///
+    /// it casts the origin handle into the pointer value
     fn bitcast(
         &self,
         _ctx: &mut Ctx<'a>,
-        from: ValueHandle,
+        origin: ValueHandle,
         _to: &PLType,
         _name: &str,
     ) -> ValueHandle {
-        let lv = self.get_llvm_value(from).unwrap();
+        let lv = self.get_llvm_value(origin).unwrap();
         let re = if lv.is_function_value() {
             lv.into_function_value()
                 .as_global_value()
@@ -2058,6 +2069,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         fn_value.set_call_conventions(CALL_CONV);
         self.get_llvm_value_handle(&fn_value.as_any_value_enum())
     }
+
+    /// # opaque_struct_type
+    ///
+    /// it creates an opaque StructType with no type definition yet defined.
     fn opaque_struct_type(&self, name: &str) {
         self.context.opaque_struct_type(name);
     }
@@ -2621,24 +2636,28 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         Ok(())
     }
 
+    /// # build_sub_program_by_pltp
+    ///
+    /// it creates a subprogram for a closure, which helps to debug the closure
     fn build_sub_program_by_pltp(
         &self,
-        paralist: &[Arc<RefCell<PLType>>],
-        ret: Arc<RefCell<PLType>>,
+        param_tps: &[Arc<RefCell<PLType>>],
+        ret_tp: Arc<RefCell<PLType>>,
         name: &str,
         start_line: u32,
-        fnvalue: ValueHandle,
+        closure_fn_value: ValueHandle,
         child: &mut Ctx<'a>,
     ) {
-        let mut param_ditypes = vec![];
-        for pltype in paralist.iter() {
-            param_ditypes.push(self.get_ditype(&pltype.borrow(), child).unwrap());
+        // debug information about types
+        let mut param_di_types = vec![];
+        for pltype in param_tps.iter() {
+            param_di_types.push(self.get_ditype(&pltype.borrow(), child).unwrap());
         }
         // debug info
         let subroutine_type = self.dibuilder.create_subroutine_type(
             self.get_cur_di_file(),
-            self.get_ditype(&ret.borrow(), child),
-            &param_ditypes,
+            self.get_ditype(&ret_tp.borrow(), child),
+            &param_di_types,
             DIFlags::PUBLIC,
         );
         let subprogram = self.dibuilder.create_function(
@@ -2654,9 +2673,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             DIFlags::PUBLIC,
             false,
         );
-        let funcvalue = self.get_llvm_value(fnvalue).unwrap().into_function_value();
+        let funcvalue = self
+            .get_llvm_value(closure_fn_value)
+            .unwrap()
+            .into_function_value();
         funcvalue.set_subprogram(subprogram);
-        // let discope = child.discope;
         self.discope.set(subprogram.as_debug_info_scope());
     }
     fn build_return(&self, v: Option<ValueHandle>) {
@@ -2668,6 +2689,10 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.builder.build_return(None).unwrap();
         }
     }
+
+    /// # create_closure_variable_dbg
+    ///
+    /// it creates the debug information for the closure variables
     #[allow(clippy::too_many_arguments)]
     fn create_closure_variable_dbg(
         &self,
@@ -2679,7 +2704,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         allocab: BlockHandle,
         name: &str,
     ) {
-        let divar = self.dibuilder.create_parameter_variable(
+        let di_var = self.dibuilder.create_parameter_variable(
             self.discope.get(),
             name,
             i as u32,
@@ -2697,12 +2722,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             .try_into()
             .unwrap();
         let raw_tp = v.get_type();
-        // self.builder.position_at_end(allocab);
         let alloca = self.builder.build_alloca(raw_tp, "para").unwrap();
         self.builder.build_store(alloca, v).unwrap();
         self.dibuilder.insert_declare_at_end(
             alloca,
-            Some(divar),
+            Some(di_var),
             None,
             self.builder.get_current_debug_location().unwrap(),
             allocab,
@@ -2921,6 +2945,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         self.get_llvm_value_handle(&global.as_any_value_enum())
     }
 
+    /// # gen_st_visit_function
+    ///
+    /// it generates the visit function for each structure field for GC use.
     fn gen_st_visit_function(
         &self,
         ctx: &mut Ctx<'a>,
@@ -3134,6 +3161,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             self.get_llvm_value_handle(&funcvalue.get_nth_param(i).unwrap().as_any_value_enum()),
         );
     }
+
+    /// # create_closure_fn
+    ///
+    /// create_closure_fn creates a function type in LLVM format and then emit it by the builder.
+    /// The first parameter of the function is an i8 pointer points to the captured data.
     fn create_closure_fn(
         &self,
         ctx: &mut Ctx<'a>,
@@ -3160,6 +3192,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         f_v.set_call_conventions(CALL_CONV);
         self.get_llvm_value_handle(&f_v.into())
     }
+
     /// # get_closure_trampoline
     ///
     /// 为指定函数创建一个用于构建闭包的跳板函数
