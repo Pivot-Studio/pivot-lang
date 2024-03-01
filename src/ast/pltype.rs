@@ -53,6 +53,8 @@ use std::cell::RefCell;
 use std::sync::atomic::AtomicI64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+
+mod tpdocs;
 /// # PLType
 /// Type for pivot-lang
 /// including primitive type, struct type, function type, void type

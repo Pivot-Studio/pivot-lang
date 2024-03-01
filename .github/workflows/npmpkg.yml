@@ -16,12 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dsherret/rust-toolchain-file@v1
         name: Install Rust (stable)
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          profile: minimal
-          override: true
       - name: install rust
         run: cargo install wasm-pack
       - name: build wasm

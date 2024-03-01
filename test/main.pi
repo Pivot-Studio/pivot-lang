@@ -19,6 +19,7 @@ use project1::test::closure;
 use project1::test::map;
 use project1::test::tree;
 use project1::test::fixed_point;
+use project1::test::sort_test;
 use project1::tmod2;
 // use pl_test::main;
 use project1::test::deconstruct;
@@ -65,6 +66,7 @@ pub fn main() i64 {
     inference::test_inference();
     futuretest::test_future();
     rand::test_rand();
+    sort_test::test_sort();
 
 
     let fd = io::open_read("./Cargo.toml");
