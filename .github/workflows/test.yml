@@ -46,10 +46,7 @@ jobs:
           sudo apt-get install libasound2-dev libudev-dev
 
       - name: Install Rust (stable)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          profile: minimal
-          override: true
+        uses: dsherret/rust-toolchain-file@v1
 
       - name: Install LLVM
         uses: Pivot-Studio/setup-llvm@main
@@ -106,11 +103,7 @@ jobs:
         uses: Pivot-Studio/setup-llvm@main
 
       - name: Install toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          profile: minimal
-          override: true
-          components: rustfmt, llvm-tools-preview
+        uses: dsherret/rust-toolchain-file@v1
 
 
       - uses: Swatinem/rust-cache@v2
@@ -159,11 +152,8 @@ jobs:
           submodules: true
 
       - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          profile: minimal
-          override: true
-          components: clippy, rustfmt
+        uses: dsherret/rust-toolchain-file@v1
+
 
       - uses: Swatinem/rust-cache@v2
 
