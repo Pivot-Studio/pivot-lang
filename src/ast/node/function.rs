@@ -187,8 +187,8 @@ impl FuncCallNode {
             let pararange = para.range();
             let mut b = FmtBuilder::default();
             para.format(&mut b);
-            let para_s = b.generate();
-            if para_s != fnvalue.param_names[i + skip as usize] {
+            let param_string = b.generate();
+            if param_string != fnvalue.param_names[i + skip as usize] {
                 ctx.push_param_hint(pararange, fnvalue.param_names[i + skip as usize].clone());
             }
             ctx.set_if_sig(

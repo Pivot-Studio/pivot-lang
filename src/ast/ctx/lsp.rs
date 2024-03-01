@@ -106,11 +106,11 @@ impl Ctx<'_> {
         if self.need_highlight.borrow().ne(&0) || self.in_macro {
             return;
         }
-        let part1 = InlayHintLabelPart {
+        let colon = InlayHintLabelPart {
             value: ": ".to_string(),
             ..Default::default()
         };
-        let part2 = InlayHintLabelPart {
+        let type_label = InlayHintLabelPart {
             value: pltype.borrow().get_name(),
             tooltip: Some(lsp_types::InlayHintLabelPartTooltip::MarkupContent(
                 MarkupContent {
@@ -123,7 +123,7 @@ impl Ctx<'_> {
 
         let hint = InlayHint {
             position: range.to_diag_range().end,
-            label: lsp_types::InlayHintLabel::LabelParts(vec![part1, part2]),
+            label: lsp_types::InlayHintLabel::LabelParts(vec![colon, type_label]),
             kind: Some(InlayHintKind::TYPE),
             text_edits: None,
             tooltip: None,
