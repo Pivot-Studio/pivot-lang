@@ -232,8 +232,10 @@ fn main_loop(
             }
             let snapshot = db.snapshot();
             let sender = connection.sender.clone();
+            let completions = completions.clone();
             pool.execute(move || {
                 compile_dry(snapshot.deref(), docin);
+                do_send_completions_and_diags(&snapshot, docin, completions, &sender);
                 let codelens = compile_dry::accumulated::<PLCodeLens>(snapshot.deref(), docin);
                 send_code_lens(&sender, id, codelens);
             });
@@ -245,7 +247,14 @@ fn main_loop(
                 docin.set_file(&mut db).to(uri);
             }
             let snapshot = db.snapshot();
+
             compile_dry(snapshot.deref(), docin);
+            do_send_completions_and_diags(
+                &snapshot,
+                docin,
+                completions.clone(),
+                &connection.sender,
+            );
             let mut newtokens =
                 compile_dry::accumulated::<PLSemanticTokens>(snapshot.deref(), docin);
             if newtokens.is_empty() {
@@ -276,6 +285,12 @@ fn main_loop(
             last_semantic_file = uri.clone();
             let snapshot = db.snapshot();
             compile_dry(snapshot.deref(), docin);
+            do_send_completions_and_diags(
+                &snapshot,
+                docin,
+                completions.clone(),
+                &connection.sender,
+            );
             let mut newtokens =
                 compile_dry::accumulated::<PLSemanticTokens>(snapshot.deref(), docin);
             if newtokens.is_empty() {
@@ -358,6 +373,12 @@ fn main_loop(
                 .set_docs(&mut db)
                 .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
             compile_dry(&db, docin);
+            do_send_completions_and_diags(
+                &db.snapshot(),
+                docin,
+                completions.clone(),
+                &connection.sender,
+            );
             let sigs = compile_dry::accumulated::<PLSignatureHelp>(&db, docin);
             if !sigs.is_empty() {
                 let sender = connection.sender.clone();
@@ -393,9 +414,11 @@ fn main_loop(
             }
             let sender = connection.sender.clone();
             let snapshot = db.snapshot();
+            let completions = completions.clone();
             pool.execute(move || {
                 if docin.file(snapshot.deref()) != &uri {
                     compile_dry(snapshot.deref(), docin);
+                    do_send_completions_and_diags(&snapshot, docin, completions, &sender);
                 }
                 let hints = compile_dry::accumulated::<Hints>(snapshot.deref(), docin);
                 if !hints.is_empty() {
@@ -418,10 +441,12 @@ fn main_loop(
 
             let sender = connection.sender.clone();
             let snapshot = db.snapshot();
+            let completions = completions.clone();
             pool.execute(move || {
                 if docin.file(snapshot.deref()) != &uri {
                     compile_dry(snapshot.deref(), docin);
                 }
+                do_send_completions_and_diags(&snapshot, docin, completions, &sender);
                 let doc_symbols = compile_dry::accumulated::<DocSymbols>(snapshot.deref(), docin);
                 if !doc_symbols.is_empty() {
                     send_doc_symbols(&sender, id, doc_symbols[0].clone());
@@ -454,31 +479,7 @@ fn main_loop(
             let completions = completions.clone();
             pool.execute(move || {
                 compile_dry(snapshot.deref(), docin);
-                let comps = compile_dry::accumulated::<Completions>(snapshot.deref(), docin);
-                let mut guard = completions.lock().unwrap();
-                if let Some(id) = &*guard {
-                    send_completions(
-                        &sender,
-                        id.clone(),
-                        comps.first().cloned().unwrap_or_default(),
-                    );
-                }
-                *guard = None;
-                drop(guard);
-                let diags = compile_dry::accumulated::<Diagnostics>(snapshot.deref(), docin);
-                debug!("diags: {:#?}", diags);
-                let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();
-                for (p, diags) in &diags {
-                    diags.iter().for_each(|x| x.get_diagnostic(p, &mut m));
-                }
-                for (p, _) in &diags {
-                    if m.get(p).is_none() {
-                        send_diagnostics(&sender, p.to_string(), vec![]);
-                    }
-                }
-                for (f, d) in m {
-                    send_diagnostics(&sender, f, d);
-                }
+                do_send_completions_and_diags(&snapshot, docin, completions, &sender);
             });
         })
         .on_noti::<DidOpenTextDocument, _>(|params| {
@@ -512,4 +513,37 @@ fn main_loop(
         log::info!("main loop handle message: {:?}", elapsed);
     }
     Ok(())
+}
+
+fn do_send_completions_and_diags(
+    snapshot: &salsa::Snapshot<db::Database>,
+    docin: MemDocsInput,
+    completions: Arc<Mutex<Option<RequestId>>>,
+    sender: &crossbeam_channel::Sender<Message>,
+) {
+    let comps = compile_dry::accumulated::<Completions>(snapshot.deref(), docin);
+    let mut guard = completions.lock().unwrap();
+    if let Some(id) = &*guard {
+        send_completions(
+            sender,
+            id.clone(),
+            comps.first().cloned().unwrap_or_default(),
+        );
+    }
+    *guard = None;
+    drop(guard);
+    let diags = compile_dry::accumulated::<Diagnostics>(snapshot.deref(), docin);
+    debug!("diags: {:#?}", diags);
+    let mut m = FxHashMap::<String, Vec<Diagnostic>>::default();
+    for (p, diags) in &diags {
+        diags.iter().for_each(|x| x.get_diagnostic(p, &mut m));
+    }
+    for (p, _) in &diags {
+        if m.get(p).is_none() {
+            send_diagnostics(sender, p.to_string(), vec![]);
+        }
+    }
+    for (f, d) in m {
+        send_diagnostics(sender, f, d);
+    }
 }
