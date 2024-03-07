@@ -222,10 +222,13 @@ impl Node for FuncCallNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
-        let id_range = self.callee.range();
+        let mut id_range = self.callee.range();
         let v = self.callee.emit(ctx, builder)?.get_value();
         if v.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::FUNCTION_NOT_FOUND)));
+        }
+        if let NodeEnum::Take(tk) = &*self.callee {
+            id_range = tk.field.as_ref().map(|f| f.range).unwrap_or(tk.range);
         }
         let v = v.unwrap();
         if let Some(builtin) = BUILTIN_FN_MAP.get(&v.get_value()) {

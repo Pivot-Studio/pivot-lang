@@ -57,6 +57,22 @@ impl Ctx<'_> {
         self.save_if_hover(range, HoverContents::Array(content))
     }
 
+    /// # save_if_var_hover
+    ///
+    /// save infomation to display if the variable is hovered
+    pub fn save_if_var_hover(&self, range: Range, tp: &PLType) {
+        if self.need_highlight.borrow().ne(&0) {
+            return;
+        }
+        let mut content = vec![];
+        let mut string = String::new();
+        string.push_str(&tp.get_name());
+        string.push_str("\n\n");
+        string.push_str(&tp.get_docs().unwrap_or("".to_string()));
+        content.push(MarkedString::String(string));
+        self.save_if_hover(range, HoverContents::Array(content))
+    }
+
     pub fn save_if_hover(&self, range: Range, value: HoverContents) {
         if self.need_highlight.borrow().ne(&0) {
             return;

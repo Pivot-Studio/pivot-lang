@@ -728,6 +728,8 @@ impl<'a, 'ctx> Ctx<'a> {
             return Err(self.add_diag(range.new_err(ErrorCode::REDECLARATION)));
         }
 
+        // add basic hover infomation for defs
+        self.save_if_var_hover(range, &pltype.borrow());
         self.add_symbol_without_check(name, pv, real_tp(pltype), range, is_glob, is_extern)
     }
     pub fn add_symbol_without_check(

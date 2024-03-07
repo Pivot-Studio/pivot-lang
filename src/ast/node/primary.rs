@@ -179,6 +179,7 @@ impl Node for VarNode {
                     0
                 },
             );
+            ctx.save_if_var_hover(self.range, &symbol.get_data_ref().pltype.borrow());
 
             let symbol_data = symbol.get_data();
             let symbol_value = match ctx.generator_data {
