@@ -254,8 +254,10 @@ impl TypeNode for TypeNameNode {
                     reason: None,
                 });
             }
-            if let (PLType::Struct(left), PLType::Struct(right)) =
-                (&*left.borrow(), &*right.borrow())
+            if let (
+                PLType::Struct(left) | PLType::Trait(left),
+                PLType::Struct(right) | PLType::Trait(right),
+            ) = (&*left.borrow(), &*right.borrow())
             {
                 return Ok(EqRes {
                     eq: !left.generic_map.iter().any(|(k, l_type)| {

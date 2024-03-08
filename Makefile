@@ -30,7 +30,7 @@ test: vmdebug
 
 clean:
 	@rm -rf out*
-	@cd target && rm -f *.ll && rm -f *.bc && rm -rf *.dSYM && rm -f testout* && rm -f out*  && rm -f *.o
+	@cd target && rm -f *.ll && rm -f *.bc && rm -rf *.dSYM && rm -f testout* && rm -f out*  && rm -f *.o && rm -rf test*
 
 bench:
 	@cd immix && cargo bench 

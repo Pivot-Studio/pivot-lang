@@ -470,7 +470,7 @@ impl Node for TakeOpNode {
                             fnv, re, headptr, None,
                         )))
                     } else {
-                        handle_glob_mthd(s, ctx, id, headptr, head_pltype, id_range)
+                        handle_mthd(s, ctx, id, headptr, head_pltype, id_range)
                     }
                 })
             }),
