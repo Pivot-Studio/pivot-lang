@@ -1,0 +1,34 @@
+use std::future::primitives::*;
+use std::thread;
+
+pub struct Delay {
+    sec:u64;
+    start:u64;
+}
+
+fn unixtime() u64;
+
+pub fn delay(sec:u64)  Delay {
+    return Delay{sec:sec, start:unixtime()};
+}
+
+use std::io;
+
+impl Future<()> for Delay{
+    fn poll(wk:Waker) Poll<()> {
+        if unixtime() - self.start >= self.sec {
+            return Ready<()>{};
+        }
+        thread::spawn(||=>{
+            let sec = self.sec - (unixtime() - self.start);
+            if sec <= 0 {
+                wk.wake(wk.ch);
+                return;
+            }
+            thread::sleep(sec);
+            wk.wake(wk.ch);
+            return;
+        });
+        return Pending{};
+    }
+}

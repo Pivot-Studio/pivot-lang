@@ -13,6 +13,7 @@ pub mod gc;
 pub mod libcwrap;
 pub mod logger;
 pub mod mutex;
+pub mod time;
 
 #[is_runtime]
 fn test_vm_link() -> i64 {
@@ -30,6 +31,7 @@ pub fn reg() {
     gc::reg();
     libcwrap::reg();
     mutex::reg();
+    time::reg();
 }
 
 #[is_runtime]

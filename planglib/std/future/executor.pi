@@ -1,0 +1,47 @@
+use std::future::primitives::*;
+use std::chan;
+
+struct Executor {
+    pub ch:*chan::Chan<|Waker|=>void>;
+}
+
+
+pub fn new_executor() Executor {
+    
+    
+    return Executor {
+        ch: &chan::channel<|Waker|=>void>(10 as u64),
+    };
+}
+
+use std::io;
+
+impl Executor {
+    pub fn start_exec_loop() void {
+        while true {
+            let work: |Waker|=>void = self.ch.recv();
+            let waker = Waker{
+                wake: |ch| => void {
+                    ch.send(work);
+                    return;  
+                },
+                ch: self.ch,
+            };
+            work(waker);
+        }
+        return;
+    }
+
+    pub fn spawn<T>(future:Future<T>) void {
+        self.ch.send(|w|=>{
+            future.poll(w);
+            return;
+        });
+        return;
+    }
+}
+
+
+
+
+
