@@ -53,6 +53,8 @@ pub use jit::*;
 #[cfg(feature = "llvm")]
 #[salsa::tracked]
 pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
+    use std::process::exit;
+
     IS_JIT.store(op.jit, Ordering::Relaxed);
 
     #[cfg(feature = "jit")]
@@ -68,7 +70,10 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
         op,
         format!("{}[{:2}/{:2}]", LOOKING_GLASS, 1, total_steps),
     );
-    compile_dry(db, docs).unwrap();
+    let _ = compile_dry(db, docs).map_err(|e| {
+        pb.abandon_with_message(format!("{}", e.red()));
+        exit(1);
+    });
 
     pb.finish_with_message("中间代码分析完成");
     let is_present_only = op.printast || op.flow;
@@ -86,11 +91,11 @@ pub fn compile(db: &dyn Db, docs: MemDocsInput, out: String, op: Options) {
 /// compile_dry compiles the source code of pivot-lang into the pivot-lang AST with a wrapper.
 /// the `dry` refers the function ends up parsing at LLVM IR or LSP analysis.
 #[salsa::tracked]
-pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
+pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Result<ModWrapper, String> {
     let path = search_config_file(docs.file(db).to_string());
     if path.is_err() {
-        log::error!("lsp error: {}", path.err().unwrap());
-        return None;
+        log::warn!("lsp error: {}", path.err().unwrap());
+        return Err("project config file not found".to_string());
     }
 
     let parser_entry = docs
@@ -102,7 +107,7 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
 
     // calculate find references results for lsp
     if docs.action(db) != ActionType::FindReferences {
-        return re;
+        return re.ok_or("compile failed".to_string());
     }
 
     if let Some(res) = db.get_ref_str() {
@@ -113,7 +118,7 @@ pub fn compile_dry(db: &dyn Db, docs: MemDocsInput) -> Option<ModWrapper> {
         }
         db.set_ref_str(None);
     }
-    re
+    re.ok_or("compile failed".to_string())
 }
 
 /// compile_dry_file parses the file inside parser_entry into AST,

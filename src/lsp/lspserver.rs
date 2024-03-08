@@ -161,7 +161,7 @@ fn main_loop(
             let snapshot = db.snapshot();
             let sender = connection.sender.clone();
             pool.execute(move || {
-                compile_dry(snapshot.deref(), docin);
+                let _ = compile_dry(snapshot.deref(), docin);
                 let defs = compile_dry::accumulated::<GotoDef>(snapshot.deref(), docin);
                 if !defs.is_empty() {
                     send_goto_def(&sender, id, defs[0].clone());
@@ -181,7 +181,7 @@ fn main_loop(
             let snapshot = db.snapshot();
             let sender = connection.sender.clone();
             pool.execute(move || {
-                compile_dry(snapshot.deref(), docin);
+                let _ = compile_dry(snapshot.deref(), docin);
                 let mut hover = compile_dry::accumulated::<PLHover>(snapshot.deref(), docin);
                 let hover = hover.pop();
                 if hover.is_none() {
@@ -210,7 +210,7 @@ fn main_loop(
             let snapshot = db.snapshot();
             let sender = connection.sender.clone();
             pool.execute(move || {
-                compile_dry(snapshot.deref(), docin);
+                let _ = compile_dry(snapshot.deref(), docin);
                 let refs = compile_dry::accumulated::<PLReferences>(snapshot.deref(), docin);
                 let mut rf = vec![];
                 for r in refs {
@@ -234,7 +234,7 @@ fn main_loop(
             let sender = connection.sender.clone();
             let completions = completions.clone();
             pool.execute(move || {
-                compile_dry(snapshot.deref(), docin);
+                let _ = compile_dry(snapshot.deref(), docin);
                 do_send_completions_and_diags(&snapshot, docin, completions, &sender);
                 let codelens = compile_dry::accumulated::<PLCodeLens>(snapshot.deref(), docin);
                 send_code_lens(&sender, id, codelens);
@@ -248,7 +248,7 @@ fn main_loop(
             }
             let snapshot = db.snapshot();
 
-            compile_dry(snapshot.deref(), docin);
+            let _ = compile_dry(snapshot.deref(), docin);
             do_send_completions_and_diags(
                 &snapshot,
                 docin,
@@ -284,7 +284,7 @@ fn main_loop(
             }
             last_semantic_file = uri.clone();
             let snapshot = db.snapshot();
-            compile_dry(snapshot.deref(), docin);
+            let _ = compile_dry(snapshot.deref(), docin);
             do_send_completions_and_diags(
                 &snapshot,
                 docin,
@@ -323,7 +323,7 @@ fn main_loop(
             docin
                 .set_docs(&mut db)
                 .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
-            compile_dry(&db, docin);
+            let _ = compile_dry(&db, docin);
             let fmt = compile_dry::accumulated::<PLFormat>(&db, docin);
             if !fmt.is_empty() {
                 let sender = connection.sender.clone();
@@ -341,7 +341,7 @@ fn main_loop(
             docin
                 .set_docs(&mut db)
                 .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
-            compile_dry(&db, docin);
+            let _ = compile_dry(&db, docin);
             let refs = compile_dry::accumulated::<PLReferences>(&db, docin);
             let sender = connection.sender.clone();
             let mut rf: HashMap<lsp_types::Url, Vec<lsp_types::TextEdit>> = Default::default();
@@ -372,7 +372,7 @@ fn main_loop(
             docin
                 .set_docs(&mut db)
                 .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
-            compile_dry(&db, docin);
+            let _ = compile_dry(&db, docin);
             do_send_completions_and_diags(
                 &db.snapshot(),
                 docin,
@@ -417,7 +417,7 @@ fn main_loop(
             let completions = completions.clone();
             pool.execute(move || {
                 if docin.file(snapshot.deref()) != &uri {
-                    compile_dry(snapshot.deref(), docin);
+                    let _ = compile_dry(snapshot.deref(), docin);
                     do_send_completions_and_diags(&snapshot, docin, completions, &sender);
                 }
                 let hints = compile_dry::accumulated::<Hints>(snapshot.deref(), docin);
@@ -444,7 +444,7 @@ fn main_loop(
             let completions = completions.clone();
             pool.execute(move || {
                 if docin.file(snapshot.deref()) != &uri {
-                    compile_dry(snapshot.deref(), docin);
+                    let _ = compile_dry(snapshot.deref(), docin);
                 }
                 do_send_completions_and_diags(&snapshot, docin, completions, &sender);
                 let doc_symbols = compile_dry::accumulated::<DocSymbols>(snapshot.deref(), docin);
@@ -478,7 +478,7 @@ fn main_loop(
             let sender = connection.sender.clone();
             let completions = completions.clone();
             pool.execute(move || {
-                compile_dry(snapshot.deref(), docin);
+                let _ = compile_dry(snapshot.deref(), docin);
                 do_send_completions_and_diags(&snapshot, docin, completions, &sender);
             });
         })
@@ -491,7 +491,7 @@ fn main_loop(
             docin.set_file(&mut db).to(f);
             docin.set_action(&mut db).to(ActionType::Diagnostic);
             docin.set_params(&mut db).to(None);
-            compile_dry(&db, docin);
+            let _ = compile_dry(&db, docin);
             let diags = compile_dry::accumulated::<Diagnostics>(&db, docin);
             let sender = connection.sender.clone();
             pool.execute(move || {

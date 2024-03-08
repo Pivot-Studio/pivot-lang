@@ -323,6 +323,12 @@ impl PLDiag {
             DiagCode::Warn(_) => false,
         }
     }
+    pub fn is_warn(&self) -> bool {
+        match self.raw.code {
+            DiagCode::Err(_) => false,
+            DiagCode::Warn(_) => true,
+        }
+    }
     pub fn get_msg(&self) -> String {
         match self.raw.code {
             DiagCode::Err(code) => ERROR_MSG[&code].to_string(),
@@ -486,12 +492,11 @@ impl<'a> Cache<&str> for PLFileCache<'a> {
     }
 }
 
-mod dot;
-
 /// ensure_no_error validates the results after parsing from db and docs to ensure there is no error.
 /// it panic directly if there is an error.
 pub(crate) fn ensure_no_error(db: &dyn Db, docs: MemDocsInput) {
     let mut errs_num = 0;
+    let mut warn_num = 0;
     let errs = compile_dry::accumulated::<Diagnostics>(db, docs);
     if !errs.is_empty() {
         for e in errs.iter() {
@@ -509,24 +514,23 @@ pub(crate) fn ensure_no_error(db: &dyn Db, docs: MemDocsInput) {
                 );
                 if e.is_err() {
                     errs_num += 1
+                } else if e.is_warn() {
+                    warn_num += 1
                 }
             }
         }
         if errs_num > 0 {
-            if errs_num == 1 {
-                log::error!(
-                    "{}",
-                    format!("check failed: there is {} error", errs_num).bright_red()
-                );
-                println!("{}", dot::ERROR);
-                exit(1);
-            }
-            log::error!(
-                "{}",
-                format!("check failed: there are {} errors", errs_num).bright_red()
+            eprintln!(
+                "check failed: {} error(s), {} warning(s)",
+                errs_num.to_string().bright_red(),
+                warn_num.to_string().yellow()
             );
-            println!("{}", dot::TOOMANYERROR);
             exit(1);
         }
+        eprintln!(
+            "    {} error(s), {} warning(s)",
+            errs_num.to_string().bright_red(),
+            warn_num.to_string().yellow()
+        );
     }
 }

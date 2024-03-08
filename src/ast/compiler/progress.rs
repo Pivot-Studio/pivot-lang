@@ -11,6 +11,8 @@ lazy_static! {
     pub static ref CHECK_PROGRESS: ProgressBar = ProgressBar::hidden();
 }
 
+pub(crate) static CHECK: Emoji<'_, '_> = Emoji("🧐  ", ":-)");
+
 pub(crate) static LOOKING_GLASS: Emoji<'_, '_> = Emoji("🔍  ", ":-)");
 
 pub(crate) static TRUCK: Emoji<'_, '_> = Emoji("🚚  ", ":-)");

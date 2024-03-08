@@ -17,6 +17,7 @@ mod lsp;
 mod nomparser;
 mod utils;
 mod version;
+use colored::Colorize;
 use std::{
     path::Path,
     process::exit,
@@ -26,7 +27,7 @@ use std::{
 use version::VergenInfo;
 
 use ast::{
-    compiler::{self, compile_dry, convert, ActionType, CHECK_PROGRESS},
+    compiler::{self, compile_dry, convert, ActionType, CHECK, CHECK_PROGRESS},
     diag::ensure_no_error,
 };
 use clap::{Parser, Subcommand};
@@ -36,7 +37,7 @@ use lsp::mem_docs::{self, MemDocsInput};
 #[cfg(not(target_arch = "wasm32"))]
 use lsp::start_lsp;
 
-use crate::ast::compiler::{prepare_prgressbar, LOOKING_GLASS};
+use crate::ast::compiler::prepare_prgressbar;
 
 fn main() {
     #[cfg(target_arch = "wasm32")]
@@ -107,10 +108,10 @@ struct Cli {
     #[arg(
         short,
         long,
-        default_value = "1",
+        default_value = "0",
         help = r"verbose level
-- 0: only error
-- 1(default): error and warning
+- 0(default): only error
+- 1: error and warning
 - 2: error, warning and info
 - 3: error, warning, info and debug
 - 4: error, warning, info, debug and trace"
@@ -156,7 +157,12 @@ impl Cli {
     pub fn check(&mut self, name: String) {
         let db = Database::default();
         let filepath = Path::new(&name);
-        let abs = crate::utils::canonicalize(filepath).unwrap();
+        let abs = crate::utils::canonicalize(filepath)
+            .map_err(|e| {
+                eprintln!("Fatal error: {}", e.to_string().red());
+                exit(1);
+            })
+            .unwrap();
 
         let op = compiler::Options {
             genir: self.genir,
@@ -178,10 +184,14 @@ impl Cli {
             None,
         );
         let pb = &CHECK_PROGRESS;
-        prepare_prgressbar(pb, op, format!("{}[{:2}/{:2}]", LOOKING_GLASS, 1, 1));
-        let _ = compile_dry(&db, mem);
-        ensure_no_error(&db, mem);
+        prepare_prgressbar(pb, op, format!("{}[{:2}/{:2}]", CHECK, 1, 1));
+        if let Err(e) = compile_dry(&db, mem) {
+            pb.abandon_with_message("check failed X".to_string().red().to_string());
+            eprintln!("\n    Fatal error: {}", e.to_string().red());
+            exit(1);
+        }
         pb.finish_with_message("finish the type check");
+        ensure_no_error(&db, mem);
     }
 
     // todo(griffin): make the input name more generic
