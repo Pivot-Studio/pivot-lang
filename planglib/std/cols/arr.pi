@@ -90,3 +90,17 @@ pub fn from_slice<T>(slice:[T]) Array<T> {
     return arr;
 }
 
+pub use core::string::ToString;
+
+impl <T:ToString> ToString for Array<T> {
+    fn to_string() string {
+        let ret = "Array[";
+        for let i = 0; i < self.len as i64 - 1; i = i + 1 {
+            ret.append(self.data[i].to_string());
+            ret.append(", ");
+        }
+        ret.append(self.data[self.len as i64 - 1].to_string());
+        ret.append("]");
+        return ret;
+    }
+}

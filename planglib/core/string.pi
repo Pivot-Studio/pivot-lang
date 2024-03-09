@@ -1,0 +1,175 @@
+pub trait ToString {
+    fn to_string() gc::string;
+}
+
+fn reverse<T>(s: [T], len: i64) [T] {
+    let ret = [T*(len+1);];
+    let i = 0;
+    let j = len - 1;
+    while i <= j {
+        ret[i] = s[j];
+        ret[j] = s[i];
+        i = i + 1;
+        j = j - 1;
+    }
+    return ret;
+}
+
+impl ToString for i64 {
+    fn to_string() gc::string {
+        let bs = [u8*20;];
+        let i = 0;
+        let v = *self;
+        let neg = v < 0;
+        if neg {
+            v = -v;
+        }
+        for ; v > 0; {
+            bs[i] = (v % 10) as u8 + 0x30 as u8;
+            i = i + 1;
+            v = v / 10;
+        }
+        if neg {
+            bs[i] = 0x2d as u8;
+            i = i + 1;
+        }
+        return gc::string_from_bytes(reverse(bs, i));
+    }
+}
+
+impl ToString for i32 {
+    fn to_string() gc::string {
+        return ((*self) as i64).to_string();
+    }
+}
+
+impl ToString for i16 {
+    fn to_string() gc::string {
+        return ((*self) as i64).to_string();
+    }
+}
+
+impl ToString for i8 {
+    fn to_string() gc::string {
+        return ((*self) as i64).to_string();
+    }
+}
+
+impl ToString for u64 {
+    fn to_string() gc::string {
+        let bs = [u8* 20;];
+        let i = 0;
+        let v = *self;
+        for ; v > 0; {
+            bs[i] = (v % 10) as u8 + 0x30 as u8;
+            i = i + 1;
+            v = v / 10;
+        }
+        return gc::string_from_bytes(reverse(bs, i));
+    }
+}
+
+impl ToString for u32 {
+    fn to_string() gc::string {
+        return ((*self) as u64).to_string();
+    }
+}
+
+impl ToString for u16 {
+    fn to_string() gc::string {
+        return ((*self) as u64).to_string();
+    }
+}
+
+impl ToString for u8 {
+    fn to_string() gc::string {
+        return ((*self) as u64).to_string();
+    }
+}
+
+impl ToString for f64 {
+    fn to_string() gc::string {
+        let bs = [u8* 20;];
+        let i = 0;
+        let v = *self;
+        let neg = v < 0.0;
+        if neg {
+            v = -v;
+        }
+        let iv = v as i64;
+        let fv = (v - (iv as f64));
+        for ; i < 16; i = i + 1 {
+            fv = fv * 10.0;
+            bs[i] = (fv as i64) as u8 + 0x30 as u8;
+            fv = fv - (fv as i64) as f64;
+        }
+        let ret = iv.to_string();
+        ret.append(".");
+        ret.append(gc::string_from_bytes(bs));
+        return ret;
+    }
+}
+
+impl ToString for f32 {
+    fn to_string() gc::string {
+        let bs = [u8* 20;];
+        let i = 0;
+        let v = *self;
+        let neg = v < 0.0;
+        if neg {
+            v = -v;
+        }
+        let iv = v as i64;
+        let fv = (v - (iv as f32));
+        for ; i < 7; i = i + 1 {
+            fv = fv * 10.0;
+            bs[i] = (fv as i64) as u8 + 0x30 as u8;
+            fv = fv - (fv as i64) as f32;
+        }
+        if neg {
+            iv=-iv;
+        }
+        let ret = iv.to_string();
+        ret.append(".");
+        ret.append(gc::string_from_bytes(bs));
+        return ret;
+    }
+}
+
+impl ToString for bool {
+    fn to_string() gc::string {
+        if *self {
+            return "true";
+        } else {
+            return "false";
+        }
+    }
+}
+
+impl ToString for gc::string {
+    fn to_string() gc::string {
+        return *self;
+    }
+}
+
+impl ToString for () {
+    fn to_string() gc::string {
+        return "()";
+    }
+}
+
+impl <T:ToString>ToString for [T] {
+    fn to_string() gc::string {
+        let ret = "[";
+        let len = arr_len(*self);
+        for let i = 0; i < len - 1; i = i + 1 {
+            ret.append((*self)[i].to_string());
+            ret.append(", ");
+        }
+        if len > 0 {
+            ret.append((*self)[len - 1].to_string());
+        }
+        ret.append("]");
+        return ret;
+    }
+}

@@ -135,6 +135,23 @@ pub fn new_hash_table<K:Hash+Eq<K>|V>(bucket_size:u64,salt:u64) HashTable<K|V> {
     return table;
 }
 
+// pub use core::string::ToString;
 
-
-
+// impl <K:ToString+Hash+Eq<K>|V:ToString> ToString for HashTable<K|V> {
+//     fn to_string() string {
+//         let ret = "{";
+//         let iterator = self.into_inter();
+//         for let i = iterator.next(); !i is None; {
+//             let (key, value) = i as (K,V)!;
+//             ret.append(key.to_string());
+//             ret.append(": ");
+//             ret.append(value.to_string());
+//             i = iterator.next();
+//             if !i is None {
+//                 ret.append(", ");
+//             }
+//         }
+//         ret.append("}");
+//         return ret;
+//     }
+// }
