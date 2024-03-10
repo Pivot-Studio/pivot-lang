@@ -1,7 +1,10 @@
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 
-use super::builder::{FloatPredicate, IntPredicate};
+use super::{
+    builder::{FloatPredicate, IntPredicate},
+    pltype::PriType,
+};
 macro_rules! define_tokens {
     ($(
         $ident:ident = $string_keyword:expr
@@ -111,15 +114,27 @@ impl TokenType {
     pub fn get_str(&self) -> &'static str {
         TOKEN_TYPE_MAP[self]
     }
-    pub fn get_op(&self) -> IntPredicate {
-        match self {
-            TokenType::GREATER => IntPredicate::SGT,
-            TokenType::LESS => IntPredicate::SLT,
-            TokenType::LEQ => IntPredicate::SLE,
-            TokenType::GEQ => IntPredicate::SGE,
-            TokenType::EQ => IntPredicate::EQ,
-            TokenType::NE => IntPredicate::NE,
-            _ => panic!("expected logic op token,found {:?}", self),
+    pub fn get_op(&self, tp: &PriType) -> IntPredicate {
+        if tp.signed() {
+            match self {
+                TokenType::GREATER => IntPredicate::SGT,
+                TokenType::LESS => IntPredicate::SLT,
+                TokenType::LEQ => IntPredicate::SLE,
+                TokenType::GEQ => IntPredicate::SGE,
+                TokenType::EQ => IntPredicate::EQ,
+                TokenType::NE => IntPredicate::NE,
+                _ => panic!("expected logic op token,found {:?}", self),
+            }
+        } else {
+            match self {
+                TokenType::GREATER => IntPredicate::UGT,
+                TokenType::LESS => IntPredicate::ULT,
+                TokenType::LEQ => IntPredicate::ULE,
+                TokenType::GEQ => IntPredicate::UGE,
+                TokenType::EQ => IntPredicate::EQ,
+                TokenType::NE => IntPredicate::NE,
+                _ => panic!("expected logic op token,found {:?}", self),
+            }
         }
     }
     pub fn get_fop(&self) -> FloatPredicate {

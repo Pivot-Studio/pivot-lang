@@ -301,9 +301,9 @@ impl Node for BinOpNode {
             | TokenType::LEQ
             | TokenType::GEQ
             | TokenType::GREATER
-            | TokenType::LESS => match *lpltype.borrow() {
+            | TokenType::LESS => match &*lpltype.borrow() {
                 PLType::Primitive(
-                    PriType::I128
+                    pri @ (PriType::I128
                     | PriType::I64
                     | PriType::I32
                     | PriType::I16
@@ -313,8 +313,8 @@ impl Node for BinOpNode {
                     | PriType::U32
                     | PriType::U16
                     | PriType::U8
-                    | PriType::BOOL,
-                ) => { builder.build_int_compare(self.op.0.get_op(), left, right, "cmptmp") }
+                    | PriType::BOOL),
+                ) => { builder.build_int_compare(self.op.0.get_op(pri), left, right, "cmptmp") }
                     .new_output(Arc::new(RefCell::new(PLType::Primitive(PriType::BOOL)))),
                 PLType::Primitive(PriType::F64 | PriType::F32) => {
                     { builder.build_float_compare(self.op.0.get_fop(), left, right, "cmptmp") }
