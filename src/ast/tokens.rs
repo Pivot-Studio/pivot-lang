@@ -107,7 +107,6 @@ define_tokens!(
     BIT_LEFT_SHIFT = "<<",
     BIT_RIGHT_SHIFT = ">>",
     BIT_NOT = "~",
-    BIT_RIGHT_SHIFT_NO_SIGN = ">>>",
 );
 
 impl TokenType {

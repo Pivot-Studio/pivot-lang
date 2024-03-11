@@ -79,16 +79,10 @@ fn bit_and(input: Span) -> IResult<Span, Box<NodeEnum>> {
     ))(input)
 }
 
-#[test_parser("a>>>b")]
 #[test_parser("a<<b")]
 #[test_parser("a>>b")]
 fn bit_move(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    parse_bin_ops!(
-        add_exp,
-        BIT_LEFT_SHIFT,
-        BIT_RIGHT_SHIFT_NO_SIGN,
-        BIT_RIGHT_SHIFT
-    )(input)
+    parse_bin_ops!(add_exp, BIT_LEFT_SHIFT, BIT_RIGHT_SHIFT)(input)
 }
 
 #[test_parser("a + 1")]

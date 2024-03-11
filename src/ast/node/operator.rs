@@ -217,22 +217,21 @@ impl Node for BinOpNode {
                     .build_bit_left_shift(left, right)
                     .new_output(lpltype.clone())
             }
-            TokenType::BIT_RIGHT_SHIFT => {
-                if !lpltype.borrow().is_int() || !lpltype.borrow().is_int() {
-                    return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_INT_VALUE)));
-                }
-                builder
+            TokenType::BIT_RIGHT_SHIFT => match *lpltype.borrow() {
+                PLType::Primitive(
+                    PriType::I128 | PriType::I64 | PriType::I32 | PriType::I16 | PriType::I8,
+                ) => builder
                     .build_bit_right_shift_arithmetic(left, right)
-                    .new_output(lpltype.clone())
-            }
-            TokenType::BIT_RIGHT_SHIFT_NO_SIGN => {
-                if !lpltype.borrow().is_int() || !lpltype.borrow().is_int() {
+                    .new_output(lpltype.clone()),
+                PLType::Primitive(
+                    PriType::U128 | PriType::U64 | PriType::U32 | PriType::U16 | PriType::U8,
+                ) => builder
+                    .build_bit_right_shift(left, right)
+                    .new_output(lpltype.clone()),
+                _ => {
                     return Err(ctx.add_diag(self.range.new_err(ErrorCode::EXPECT_INT_VALUE)));
                 }
-                builder
-                    .build_bit_right_shift(left, right)
-                    .new_output(lpltype.clone())
-            }
+            },
             TokenType::PLUS => {
                 handle_calc!(ctx, add, float_add, lpltype, left, right, self.range, builder)
             }
