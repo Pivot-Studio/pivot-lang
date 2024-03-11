@@ -135,7 +135,7 @@ jobs:
           args: nextest --workspace --all-features --lcov --output-path lcov.info --profile ci -vv
           
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4.0.1
+        uses: codecov/codecov-action@v4.1.0
         with:
           token: ${{ secrets.CODE_COV }}
           files: lcov.info
