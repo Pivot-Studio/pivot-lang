@@ -105,7 +105,9 @@ impl GlobalNode {
         if ctx.get_symbol(&self.var.name, builder).is_some() {
             return Err(ctx.add_diag(self.var.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
         }
+        *ctx.need_highlight.borrow_mut() += 1;
         let v = self.exp.emit(ctx, noop)?.get_value();
+        *ctx.need_highlight.borrow_mut() -= 1;
         if v.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));
         }
@@ -126,10 +128,6 @@ impl GlobalNode {
             true,
             false,
         )?;
-        // for gc reason, globals must be pointer
-        if !matches!(&*pltype.borrow(), PLType::Pointer(_)) {
-            return Err(ctx.add_diag(self.var.range.new_err(ErrorCode::GLOBAL_MUST_BE_POINTER)));
-        }
         Ok(())
     }
 }

@@ -781,6 +781,8 @@ impl Collector {
 
     #[cfg(feature = "llvm_stackmap")]
     fn mark_globals(&self) {
+        use int_enum::IntEnum;
+
         if GLOBAL_MARK_FLAG
             .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
             .is_ok()
@@ -791,7 +793,7 @@ impl Collector {
                     .as_mut()
                     .unwrap()
                     .iter()
-                    .for_each(|root| {
+                    .for_each(|(root, tp)| {
                         log::debug!(
                             "gc {}: mark global {:p} {:p} {:p}",
                             self.id,
@@ -810,7 +812,20 @@ impl Collector {
                                 }
                             }
                         );
-                        self.mark_ptr(*root);
+
+                        match IntEnum::from_int(*tp).unwrap() {
+                            ObjectType::Atomic => {}
+                            ObjectType::Complex => {
+                                self.mark_complex(*root);
+                            }
+                            ObjectType::Trait => {
+                                self.mark_trait(*root);
+                            }
+                            ObjectType::Pointer => {
+                                self.mark_ptr(*root);
+                            }
+                        }
+                        // self.mark_ptr(*root);
                     });
             }
         }

@@ -18,7 +18,7 @@ fn DioGC__remove_coro_stack(stack:i64) void;
 
 pub fn DioGC__safepoint(sp:i64) void;
 
-pub fn DioGC__register_global(p:i64) void;
+pub fn DioGC__register_global(p:i64, tp:u8) void;
 
 pub fn DioGC__set_eva(ev:bool) void;
 

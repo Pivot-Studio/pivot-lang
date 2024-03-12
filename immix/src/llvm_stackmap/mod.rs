@@ -138,7 +138,7 @@ struct LiveOuts {
 pub fn build_root_maps(
     mapptr: *const u8,
     roots: &mut FxHashMap<*const u8, Function>,
-    _global_roots: &mut Vec<*mut u8>,
+    _global_roots: &mut Vec<(*mut u8, u8)>,
 ) {
     let header_ptr = mapptr as *const Header;
     let header = unsafe { *header_ptr };

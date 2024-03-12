@@ -50,16 +50,16 @@ lazy_static! {
     };
 }
 
-pub fn register_global(p: *mut u8) {
+pub fn register_global(p: *mut u8, tp: u8) {
     unsafe {
-        STACK_MAP.global_roots.as_mut().unwrap().push(p);
+        STACK_MAP.global_roots.as_mut().unwrap().push((p, tp));
     }
 }
 
 #[cfg(feature = "llvm_stackmap")]
 pub struct StackMapWrapper {
     pub map: *mut FxHashMap<*const u8, Function>,
-    pub global_roots: *mut Vec<*mut u8>,
+    pub global_roots: *mut Vec<(*mut u8, u8)>,
 }
 #[cfg(feature = "llvm_stackmap")]
 unsafe impl Sync for StackMapWrapper {}

@@ -2934,13 +2934,19 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         );
         global.set_initializer(&base_type.const_zero());
         global.set_metadata(exp.as_metadata_value(self.context), 0);
+        let gctp = pltp.get_immix_type();
         let f = self.get_gc_mod_f(ctx, "DioGC__register_global");
         let ptrtoint = self
             .builder
             .build_ptr_to_int(global.as_pointer_value(), self.context.i64_type(), "")
             .unwrap();
+        let gc_tp_int = self
+            .get_llvm_value(self.int_value(&PriType::U8, gctp as u64, false))
+            .unwrap()
+            .into_int_value();
+
         self.builder
-            .build_call(f, &[ptrtoint.into()], "register_global")
+            .build_call(f, &[ptrtoint.into(), gc_tp_int.into()], "register_global")
             .unwrap();
         self.get_llvm_value_handle(&global.as_any_value_enum())
     }
