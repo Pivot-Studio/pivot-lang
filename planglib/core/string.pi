@@ -1,9 +1,38 @@
+use core::dtoa;
 pub trait ToString {
     fn to_string() gc::string;
 }
 
+pub struct StringBuilder {
+    data: [u8];
+    len: i64;
+}
+
+pub fn stringbuilder(len: i64) StringBuilder {
+    return StringBuilder {
+        data: [u8*len+1;],
+        len: 0
+    };
+}
+
+impl StringBuilder {
+    pub fn add_char(ch: u8) void {
+        self.data[self.len] = ch;
+        self.len = self.len + 1;
+        return;
+    }
+    pub fn str() gc::string {
+        self.data[self.len] = 0 as u8;
+        return gc::string_from_bytes(self.data);
+    }
+    pub fn reverse() void {
+        self.data = reverse(self.data, self.len);
+        return;
+    }
+}
+
 fn reverse<T>(s: [T], len: i64) [T] {
-    let ret = [T*(len+1);];
+    let ret = [T*arr_len(s);];
     let i = 0;
     let j = len - 1;
     while i <= j {
@@ -15,101 +44,129 @@ fn reverse<T>(s: [T], len: i64) [T] {
     return ret;
 }
 
+pub fn dtoa(f: f64) gc::string {
+    let buf = [u8*64;];
+    let sb = stringbuilder(64);
+    let neg = *unsafe_cast<u64>(&f) & 0x8000000000000000 != 0;
+    if neg {
+        sb.add_char(0x2d as u8);
+        f = -f;
+    }
+    let len = 0;
+    let de = 0;
+    let _r = dtoa::grisu3(f, 0, buf, &len, &de);
+    let nde = len+de;
+    if nde <= 0 {
+        sb.add_char(0x30 as u8);
+        sb.add_char(0x2e as u8);
+        for let i = 0; i < -nde; i = i + 1{
+            sb.add_char(0x30 as u8);
+        }
+        for let i = 0; i < len; i = i + 1 {
+            sb.add_char(buf[i]);
+        }
+    } else {
+        for let i = 0; i < nde; i = i + 1{
+            sb.add_char(buf[i]);
+        }
+        sb.add_char(0x2e as u8);
+        if nde == len {
+            sb.add_char(0x30 as u8);
+        }
+        for let i = nde; i < len; i = i + 1 {
+            sb.add_char(buf[i]);
+        }
+    }
+    sb.add_char(0 as u8);
+    return sb.str();
+}
+
 impl ToString for i64 {
     fn to_string() gc::string {
-        let bs = [u8*20;];
-        let i = 0;
+        if *self == 0 {
+            return "0";
+        }
+        let sb = stringbuilder(32);
         let v = *self;
         let neg = v < 0;
         if neg {
             v = -v;
         }
-        for ; v > 0; {
-            bs[i] = (v % 10) as u8 + 0x30 as u8;
-            i = i + 1;
-            v = v / 10;
+        for ; v > 0; v = v / 10 {
+            sb.add_char((v % 10) as u8 + 0x30);
         }
         if neg {
-            bs[i] = 0x2d as u8;
-            i = i + 1;
+            sb.add_char(0x2d as u8); // '-'
         }
-        return gc::string_from_bytes(reverse(bs, i));
+        sb.reverse();
+        return sb.str();
     }
 }
 
 impl ToString for i32 {
     fn to_string() gc::string {
-        return ((*self) as i64).to_string();
+        let v = (*self) as i64;
+        return v.to_string();
     }
 }
 
 impl ToString for i16 {
     fn to_string() gc::string {
-        return ((*self) as i64).to_string();
+        let v = (*self) as i64;
+        return v.to_string();
     }
 }
 
 impl ToString for i8 {
     fn to_string() gc::string {
-        return ((*self) as i64).to_string();
+        let v = (*self) as i64;
+        return v.to_string();
     }
 }
 
 impl ToString for u64 {
     fn to_string() gc::string {
-        let bs = [u8* 20;];
-        let i = 0;
-        let v = *self;
-        for ; v > 0; {
-            bs[i] = (v % 10) as u8 + 0x30 as u8;
-            i = i + 1;
-            v = v / 10;
+        if *self == 0 {
+            return "0";
         }
-        return gc::string_from_bytes(reverse(bs, i));
+        let sb = stringbuilder(32);
+        let v = *self;
+        for ; v > 0; v = v / 10 {
+            sb.add_char((v % 10) as u8 + 0x30);
+        }
+        sb.reverse();
+        return sb.str();
     }
 }
 
 impl ToString for u32 {
     fn to_string() gc::string {
-        return ((*self) as u64).to_string();
+        let v = (*self) as u64;
+        return v.to_string();
     }
 }
 
 impl ToString for u16 {
     fn to_string() gc::string {
-        return ((*self) as u64).to_string();
+        let v = (*self) as u64;
+        return v.to_string();
     }
 }
 
 impl ToString for u8 {
     fn to_string() gc::string {
-        return ((*self) as u64).to_string();
+        let v = (*self) as u64;
+        return v.to_string();
     }
 }
 
 impl ToString for f64 {
     fn to_string() gc::string {
-        let bs = [u8* 20;];
-        let i = 0;
-        let v = *self;
-        let neg = v < 0.0;
-        if neg {
-            v = -v;
-        }
-        let iv = v as i64;
-        let fv = (v - (iv as f64));
-        for ; i < 16; i = i + 1 {
-            fv = fv * 10.0;
-            bs[i] = (fv as i64) as u8 + 0x30 as u8;
-            fv = fv - (fv as i64) as f64;
-        }
-        let ret = iv.to_string();
-        ret.append(".");
-        ret.append(gc::string_from_bytes(bs));
-        return ret;
+        return dtoa(*self);
     }
 }
 
+// TODO: implement a better ftoa
 impl ToString for f32 {
     fn to_string() gc::string {
         let bs = [u8* 20;];
@@ -126,10 +183,12 @@ impl ToString for f32 {
             bs[i] = (fv as i64) as u8 + 0x30 as u8;
             fv = fv - (fv as i64) as f32;
         }
+
+        let ret = "";
         if neg {
-            iv=-iv;
+            ret.append("-");
         }
-        let ret = iv.to_string();
+        ret.append(iv.to_string());
         ret.append(".");
         ret.append(gc::string_from_bytes(bs));
         return ret;

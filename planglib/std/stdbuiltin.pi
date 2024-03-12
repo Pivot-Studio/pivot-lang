@@ -1,4 +1,5 @@
 use core::gc::string;
+use core::string;
 pub use std::io::print_s;
 
 
@@ -139,5 +140,22 @@ macro println {
             print_s(" ");
         )*
         print_s("\n");
+    };
+}
+
+macro print {
+    ($start:@expr) => {
+        let s = $start.to_string();
+        s.append("\n");
+        print_s(s);
+    };
+    ($start:@expr$(,$expr:@expr)*) => {
+        let s = $start.to_string();
+        $(
+            s.append(" ");
+            s.append($expr.to_string());
+        )*
+        s.append("\n");
+        print_s(s);
     };
 }

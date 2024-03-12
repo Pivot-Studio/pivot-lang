@@ -1,9 +1,10 @@
 use std::future::*;
 use std::cols::hashtable::*;
+use std::cols::arr::*;
 use core::string::ToString;
 
 pub fn main() i64 {
-    let i1 = -123;
+    let i1 = -0;
     let i2 = 456 as i32;
     let i3 = -789 as i16;
     let i4 = 12 as i8;
@@ -13,25 +14,27 @@ pub fn main() i64 {
     let u4 = 12 as u8;
     let f1 = 123.456;
     let f2 = -789.012;
-    let f3 = 0.123 as f32;
+    let f3 = -0.123 as f32; // TODO: impl a better way to cast f32 (like f64)
     let f4 = -10.0 as f32;
     let a = [1, 2, 3, 4];
-    // let h = new_hash_table<i64|i64>(10 as u64, 1 as u64);
-    // h.insert(1, 2);
-    // h.insert(2, 3);
-    println!(i1.to_string());
-    println!(i2.to_string());
-    println!(i3.to_string());
-    println!(i4.to_string());
-    println!(u1.to_string());
-    println!(u2.to_string());
-    println!(u3.to_string());
-    println!(u4.to_string());
-    println!(f1.to_string());
-    println!(f2.to_string());
-    println!(f3.to_string());
-    println!(f4.to_string());
-    println!(a.to_string());
-    // println!(h.to_string());
+    let arr = from_slice(a);
+    let h = new_hash_table<i64|i64>(10 as u64, 1 as u64);
+    h.insert(1, 2);
+    h.insert(2, 3);
+    print!(i1);
+    print!(i2);
+    print!(i3);
+    print!(i4);
+    print!(u1);
+    print!(u2);
+    print!(u3);
+    print!(u4);
+    print!(f1);
+    print!(f2);
+    print!(f3);
+    print!(f4);
+    print!(a);
+    print!(arr);
+    print!(h);
     return 0;
 }
