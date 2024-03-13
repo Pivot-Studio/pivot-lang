@@ -1143,6 +1143,7 @@ impl Node for ClosureNode {
             // generic_infer: Default::default(),
             methods: Default::default(),
             trait_methods_impl: Default::default(),
+            atomic: false,
         };
 
         builder.opaque_struct_type(&struct_captured_typs.get_full_name());

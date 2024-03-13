@@ -316,19 +316,19 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let (p, _) = self.gc_malloc(name, ctx, pltype, malloc_fn);
         let llvm_tp = self.get_basic_type_op(pltype, ctx).unwrap();
         if let PLType::Struct(tp) = pltype {
-            let f = self.get_or_insert_st_visit_fn_handle(&p, tp);
-            let i = self
-                .builder
-                .build_ptr_to_int(
-                    f.as_global_value().as_pointer_value(),
-                    self.context.i64_type(),
-                    "_vtable",
-                )
-                .unwrap();
-            if !tp.is_atomic() {
+            if !tp.atomic {
+                let f = self.get_or_insert_st_visit_fn_handle(&p, tp);
+                let i = self
+                    .builder
+                    .build_ptr_to_int(
+                        f.as_global_value().as_pointer_value(),
+                        self.context.i64_type(),
+                        "_rtti",
+                    )
+                    .unwrap();
                 let vtable = self
                     .builder
-                    .build_struct_gep(llvm_tp, p, 0, "vtable")
+                    .build_struct_gep(llvm_tp, p, 0, "riit")
                     .unwrap();
                 self.builder.build_store(vtable, i).unwrap();
             }
@@ -389,6 +389,15 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .const_int(tp.get_immix_type().int_value() as u64, false);
         let td = self.targetmachine.get_target_data();
         let size = td.get_store_size(&llvmtp);
+        if size == 0 {
+            // return null
+            let null = self
+                .context
+                .i8_type()
+                .ptr_type(AddressSpace::from(1))
+                .const_null();
+            return (null, llvmtp);
+        }
         let mut size = self.context.i64_type().const_int(size, false);
         if name == "___ctx" {
             // generator ctx, use stack variable as size
@@ -428,7 +437,9 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 &format!("heapptr_{}", name),
             )
             .unwrap();
-        if tp.is_atomic() {
+        // TODO: handle all atomic types
+        // which means we need to handle gep transformation in EscapePass
+        if let PLType::Primitive(_) = tp {
             call_site_value.add_attribute(
                 inkwell::attributes::AttributeLoc::Return,
                 self.context.create_string_attribute("pl_atomic", ""),
@@ -842,7 +853,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         .unwrap();
 
         match &*elm_tp.borrow() {
-            PLType::Arr(_) | PLType::Struct(_) => {
+            PLType::Arr(_) | PLType::Struct(STType { atomic: false, .. }) => {
                 let casted = elm;
                 // call the visit_complex function
                 self.builder
@@ -893,6 +904,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             | PLType::Generic(_)
             | PLType::PlaceHolder(_)
             | PLType::PartialInferred(_)
+            | PLType::Struct(_)
             | PLType::Unknown => (),
         }
         let i = self
@@ -3017,7 +3029,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                         )
                         .unwrap();
                 }
-                PLType::Struct(_) | PLType::Arr(_) => {
+                PLType::Struct(STType { atomic: false, .. }) | PLType::Arr(_) => {
                     let ptr = f;
                     let casted = ptr;
                     self.builder
@@ -3053,6 +3065,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 | PLType::Generic(_)
                 | PLType::PlaceHolder(_)
                 | PLType::PartialInferred(_)
+                | PLType::Struct(_)
                 | PLType::Unknown => (),
             }
             // 其他为原子类型，跳过

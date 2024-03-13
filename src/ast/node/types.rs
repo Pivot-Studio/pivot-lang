@@ -525,6 +525,7 @@ impl StructDefNode {
             methods: Default::default(),
             // generic_infer: Default::default(),
             trait_methods_impl: Default::default(),
+            atomic: false,
         })));
         if self.generics.is_none() {
             builder.opaque_struct_type(&ctx.plmod.get_full_name(&self.id.name));
@@ -561,6 +562,7 @@ impl StructDefNode {
             let mut fields = LinkedHashMap::new();
             let mut field_pltps = vec![];
             let clone_map = ctx.plmod.types.clone();
+            let mut is_atomic = true;
             for (i, field) in self.fields.iter().enumerate() {
                 if !field.has_semi {
                     ctx.add_diag(field.id.range.new_err(ErrorCode::COMPLETION));
@@ -581,6 +583,9 @@ impl StructDefNode {
                     continue;
                 }
                 let tp = tpre.unwrap();
+                if !tp.borrow().is_atomic() {
+                    is_atomic = false;
+                }
                 field_pltps.push(tp.clone());
                 ctx.set_field_refs(pltype.typ.clone(), &f, f.range);
                 ctx.send_if_go_to_def(f.range, f.range, ctx.plmod.path.clone());
@@ -589,6 +594,12 @@ impl StructDefNode {
             ctx.plmod.types = clone_map;
             if let PLType::Struct(st) = &mut *pltype.borrow_mut() {
                 st.fields = fields.clone();
+                st.atomic = is_atomic;
+                if st.atomic {
+                    st.fields.iter_mut().for_each(|(_, f)| {
+                        f.index -= 1;
+                    });
+                }
                 st.doc = self.pre_comments.clone();
                 if let Some(stpltype) = ctx.linked_tp_tbl.remove(&pltype.typ.as_ptr()) {
                     for st in stpltype {
@@ -700,6 +711,12 @@ impl Node for StructInitNode {
             if sttype.need_gen_code() {
                 pltype =
                     ctx.run_in_type_mod_mut(sttype, |ctx, sttype| sttype.gen_code(ctx, builder))?;
+                sttype.atomic = pltype.borrow().is_atomic();
+                if pltype.borrow().is_atomic() {
+                    sttype.fields.iter_mut().for_each(|(_, f)| {
+                        f.index -= 1;
+                    });
+                }
             } else {
                 return Err(ctx.add_diag(
                     self.typename
