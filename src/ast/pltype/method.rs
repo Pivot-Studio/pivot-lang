@@ -17,7 +17,7 @@ use crate::{
     utils::get_hash_code,
 };
 
-use super::{append_name_with_generic, impl_in_mod, FNValue, PLType, STType, UnionType};
+use super::{append_name_with_generic, impl_in_mod, ARRType, FNValue, PLType, STType, UnionType};
 
 pub trait ImplAble: RangeTrait + CustomType + TraitImplAble {
     fn get_method_table(&self) -> Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>;
@@ -110,6 +110,20 @@ pub trait Generic {
     /// but they are cannot be annotated explicitly.
     fn get_generic_size(&self) -> usize {
         self.get_generic_map().len()
+    }
+}
+
+impl Generic for ARRType {
+    fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
+        &self.generic_map
+    }
+
+    fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
+        None
+    }
+
+    fn get_user_generic_size(&self) -> usize {
+        1
     }
 }
 
@@ -264,3 +278,9 @@ pub trait ImplAbleWithGeneric: Generic + ImplAble {
 
 impl ImplAbleWithGeneric for STType {}
 impl ImplAbleWithGeneric for UnionType {}
+impl ImplAble for ARRType {
+    fn get_method_table(&self) -> Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>> {
+        Arc::new(RefCell::new(FxHashMap::default()))
+    }
+}
+impl ImplAbleWithGeneric for ARRType {}
