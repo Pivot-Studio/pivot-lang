@@ -187,28 +187,25 @@ impl F64 {
 }
 
 /// convert f64 to string use grisu2 algorithm
-pub fn grisu3(v: f64, _mode: i64, buf: [u8], len: *i64, de: *i64) bool {
+pub fn grisu3(v: f64, _mode: i64, buf: [u8]) (bool, i64, i64) {
     let w = newDouble(v).as_normal_F64();
     let (boundary_minus, boundary_plus) = newDouble(v).normalize_boundaries();
     panic::assert(boundary_plus.e == w.e);
     let ten_mk_minimal_binary_exponent = -60 - (w.e + 64);
     let ten_mk_maximal_binary_exponent = -32 - (w.e + 64);
-    let mk: i64;
-    let ten_mk: F64;
-    GetCachedPowerForBinaryExponentRange(ten_mk_minimal_binary_exponent,ten_mk_maximal_binary_exponent, &ten_mk, &mk);
+    let (ten_mk, mk) = get_cached_power_for_binary_exponent_range(ten_mk_minimal_binary_exponent,ten_mk_maximal_binary_exponent);
     panic::assert((w.e+ten_mk.e+64>=-60)&&(w.e+ten_mk.e+64<=-32));
     let scaled_w = w.times(ten_mk);
     panic::assert(scaled_w.e == boundary_plus.e + ten_mk.e + 64);
 
     let scaled_boundary_minus = boundary_minus.times(ten_mk);
     let scaled_boundary_plus = boundary_plus.times(ten_mk);
-    let kappa: i64;
-    let success = digit_gen(scaled_boundary_minus, scaled_w, scaled_boundary_plus, buf, len, &kappa);
-    *de = - mk + kappa;
-    return success;
+    let (success, len, kappa) = digit_gen(scaled_boundary_minus, scaled_w, scaled_boundary_plus, buf);
+    let de = - mk + kappa;
+    return (success, len, de);
 }
 
-fn digit_gen(low: F64, w: F64, high: F64, buf: [u8], len: *i64, kappa: *i64) bool {
+fn digit_gen(low: F64, w: F64, high: F64, buf: [u8]) (bool, i64, i64) {
     panic::assert(low.e==w.e&&w.e==high.e);
     panic::assert(low.f+1<=high.f-1);
     panic::assert(w.e>=-60&&w.e<=-32);
@@ -221,19 +218,19 @@ fn digit_gen(low: F64, w: F64, high: F64, buf: [u8], len: *i64, kappa: *i64) boo
     let divisor_exponent_plus_one: i64;
     let divisor: u64;
     biggest_power_10(integrals, 64-(-one.e), &divisor, &divisor_exponent_plus_one);
-    *kappa = divisor_exponent_plus_one;
-    *len = 0;
-    while *kappa > 0 {
+    let kappa = divisor_exponent_plus_one;
+    let len = 0;
+    while kappa > 0 {
         let digit = integrals / divisor;
         panic::assert(digit <= 9);
-        buf[*len] = digit as u8 + 0x30 as u8;
-        *len = *len + 1;
+        buf[len] = digit as u8 + 0x30 as u8;
+        len = len + 1;
         integrals = integrals % divisor;
-        *kappa = *kappa - 1;
+        kappa = kappa - 1;
         let rest = (integrals as u64 << (-one.e) as u64) + fractionals;
         if rest < unsafe_interval.f {
-            let ret = round_weed(buf, *len, minF64(too_high, w).f, unsafe_interval.f, rest, divisor << (-one.e) as u64, 1 as u64);
-            return ret;
+            let ret = round_weed(buf, len, minF64(too_high, w).f, unsafe_interval.f, rest, divisor << (-one.e) as u64, 1 as u64);
+            return (ret, len, kappa);
         }
         divisor = divisor / 10;
     }
@@ -247,19 +244,21 @@ fn digit_gen(low: F64, w: F64, high: F64, buf: [u8], len: *i64, kappa: *i64) boo
         unsafe_interval.f = unsafe_interval.f * 10;
         let digit = (fractionals >> (-one.e) as u64);
         panic::assert(digit <= 9);
-        buf[*len] = digit as u8 + 0x30 as u8;
-        *len = *len + 1;
+        buf[len] = digit as u8 + 0x30 as u8;
+        len = len + 1;
         fractionals = fractionals & (one.f - 1);
-        *kappa = *kappa - 1;
+        kappa = kappa - 1;
         if fractionals < unsafe_interval.f {
-            let ret = round_weed(buf, *len, minF64(too_high, w).f * unit, unsafe_interval.f, fractionals, one.f, unit);
-            return ret;
+            let ret = round_weed(buf, len, minF64(too_high, w).f * unit, unsafe_interval.f, fractionals, one.f, unit);
+            return (ret, len, kappa);
         }
     }
-    return false;
+    return (false, 0, 0);
 }
 
-var kSmallPowersOfTen = &[
+/// kSmallPowersOfTen[k] = 10^(k-1) for k in [1, 10]
+/// kSmallPowersOfTen[0] = 0
+var kSmallPowersOfTen = [
     0, 1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000
 ];
 
@@ -267,10 +266,10 @@ fn biggest_power_10(n: u64, nbs: i64, power: *u64, exponent_plus_one: *i64) void
     panic::assert(n < (1<<(nbs+1)) as u64);
     let exponent_plus_one_guess = (nbs+1)*1233 >> 12;
     exponent_plus_one_guess = exponent_plus_one_guess + 1;
-    if n < (*kSmallPowersOfTen)[exponent_plus_one_guess] as u64 {
+    if n < kSmallPowersOfTen[exponent_plus_one_guess] as u64 {
         exponent_plus_one_guess = exponent_plus_one_guess - 1;
     }
-    *power = (*kSmallPowersOfTen)[exponent_plus_one_guess] as u64;
+    *power = kSmallPowersOfTen[exponent_plus_one_guess] as u64;
     *exponent_plus_one = exponent_plus_one_guess;
     return;
 }
@@ -300,22 +299,17 @@ fn cached_power(s: i64, be: i64, de: i64) CachedPower {
     return CachedPower{significand: s as u64, binary_exponent: be, decimal_exponent: de};
 }
 
-fn GetCachedPowerForBinaryExponentRange(mine: i64, maxe: i64, ten_mk: *F64, de: *i64) void {
+fn get_cached_power_for_binary_exponent_range(mine: i64, maxe: i64) (F64, i64) {
     let k = ((mine + 63) as f64 * 0.30102999566398114) as i64;
     let index = (348 + k -1) / 8 + 1;
     panic::assert(index >= 0 && index <= 87);
-    let cp = (*CachedPowers)[index];
+    let cp = &CachedPowers[index];
     panic::assert(cp.binary_exponent >= mine);
     panic::assert(cp.binary_exponent <= maxe);
-    *ten_mk = F64 {
-        f: cp.significand,
-        e: cp.binary_exponent
-    };
-    *de = cp.decimal_exponent;
-    return;
+    return (F64{ f: cp.significand, e: cp.binary_exponent }, cp.decimal_exponent);
 }
 
-var CachedPowers = &[
+var CachedPowers = [
     cached_power(0xfa8fd5a0_081c0288, -1220, -348),
     cached_power(0xbaaee17f_a23ebf76, -1193, -340),
     cached_power(0x8b16fb20_3055ac76, -1166, -332),

@@ -52,10 +52,8 @@ pub fn dtoa(f: f64) gc::string {
         sb.add_char(0x2d as u8);
         f = -f;
     }
-    let len = 0;
-    let de = 0;
-    let _r = dtoa::grisu3(f, 0, buf, &len, &de);
-    let nde = len+de;
+    let (_r, len, de) = dtoa::grisu3(f, 0, buf);
+    let nde = len + de;
     if nde <= 0 {
         sb.add_char(0x30 as u8);
         sb.add_char(0x2e as u8);
