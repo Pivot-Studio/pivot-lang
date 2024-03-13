@@ -195,6 +195,7 @@ impl TyInfer {
                     GenericTy::Tuple => {
                         let mut fields = LinkedHashMap::default();
                         let mut name = "".to_string();
+                        let mut is_atomic = true;
                         for (i, arg) in gen.iter().enumerate() {
                             if i != 0 {
                                 name += ", ";
@@ -211,15 +212,19 @@ impl TyInfer {
                                     &ty.borrow().get_path().unwrap_or("".to_string()),
                                 ),
                             );
+                            if !ty.borrow().is_atomic() {
+                                is_atomic = false;
+                            }
                             name += &ty.borrow().get_llvm_name();
                         }
                         name = format!("({})", name);
 
-                        Arc::new(RefCell::new(PLType::Struct(new_tuple_type(
-                            name,
-                            fields,
-                            Default::default(),
-                        ))))
+                        let mut st = new_tuple_type(name, fields, Default::default());
+                        st.atomic = is_atomic;
+                        st.fields.iter_mut().for_each(|(_, f)| {
+                            f.index -= 1;
+                        });
+                        Arc::new(RefCell::new(PLType::Struct(st)))
                     }
                     GenericTy::St(st) => {
                         let mut partial = false;

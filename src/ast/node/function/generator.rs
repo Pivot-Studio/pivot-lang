@@ -216,6 +216,7 @@ pub(crate) fn init_generator<'a>(
         // generic_infer: Default::default(),
         methods: Default::default(),
         trait_methods_impl: Default::default(),
+        atomic: false,
     };
     builder.opaque_struct_type(&st_tp.get_full_name());
     builder.add_body_to_struct_type(&st_tp.get_full_name(), &st_tp, child);

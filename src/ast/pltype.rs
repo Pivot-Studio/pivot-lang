@@ -468,7 +468,9 @@ impl PLType {
     #[cfg(feature = "llvm")]
     pub fn get_immix_type(&self) -> ObjectType {
         match self {
-            PLType::Struct(_) | PLType::Arr(_) => ObjectType::Complex,
+            PLType::Struct(s) if s.atomic => ObjectType::Atomic,
+            PLType::Struct(_) => ObjectType::Complex,
+            PLType::Arr(_) => ObjectType::Complex,
             PLType::Pointer(_) => ObjectType::Pointer,
             PLType::Trait(_) => ObjectType::Trait,
             PLType::Union(_) => ObjectType::Trait, // share same layout as trait
@@ -835,13 +837,19 @@ fn impl_in_mod(plmod: &Mod, name: &String, tp: &STType) -> bool {
         .unwrap_or_default()
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Eq)]
 pub struct Field {
     pub index: u32,
     pub typenode: Box<TypeNodeEnum>,
     pub name: String,
     pub range: Range,
     pub modifier: Option<(TokenType, Range)>,
+}
+
+impl PartialEq for Field {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name && self.typenode == other.typenode
+    }
 }
 
 impl Field {
@@ -1180,6 +1188,7 @@ pub struct STType {
     pub generic_infer_types: IndexMap<String, Arc<RefCell<PLType>>>,
     pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
     pub trait_methods_impl: TraitMthdImpl,
+    pub atomic: bool,
 }
 
 pub type TraitMthdImpl = Arc<RefCell<FxHashMap<String, FxHashMap<String, Arc<RefCell<FNValue>>>>>>;
@@ -1211,8 +1220,7 @@ impl PartialEq for STType {
 
 impl STType {
     pub fn is_atomic(&self) -> bool {
-        // TODO recursive check
-        false
+        self.atomic
     }
     pub fn check_impl_derives(&self, ctx: &Ctx, st: &STType, range: Range) {
         debug_assert!(self.is_trait);
@@ -1346,13 +1354,15 @@ impl STType {
             });
         } else {
             // gcrtti fields
-            fields.push(Field {
-                index: 0,
-                typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
-                name: "_vtable".to_string(),
-                range: Default::default(),
-                modifier: None,
-            });
+            if !self.atomic {
+                fields.push(Field {
+                    index: 0,
+                    typenode: Box::new(TypeNameNode::new_from_str("u64").into()),
+                    name: "_rtti".to_string(),
+                    range: Default::default(),
+                    modifier: None,
+                });
+            }
         }
         self.merge_field().iter().for_each(|f| {
             fields.push(f.clone());
@@ -1462,7 +1472,15 @@ impl STType {
                 })
                 .collect::<Vec<_>>();
             if !res.is_trait {
-                builder.gen_st_visit_function(ctx, &res, &field_pltps);
+                let is_atomic = field_pltps.iter().all(|f| f.borrow().is_atomic());
+                res.atomic = is_atomic;
+                if is_atomic {
+                    res.fields.iter_mut().for_each(|(_, f)| {
+                        f.index -= 1;
+                    });
+                } else {
+                    builder.gen_st_visit_function(ctx, &res, &field_pltps);
+                }
             }
             res.generic_map.clear();
             res.generic_infer_types = generic_infer_types;
@@ -1620,6 +1638,7 @@ impl GenericType {
                 methods: Default::default(),
                 trait_methods_impl: Default::default(),
                 range,
+                atomic: false,
             };
             let ph = Arc::new(RefCell::new(PLType::Struct(place_holder)));
 
