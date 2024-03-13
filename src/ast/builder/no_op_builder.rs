@@ -523,7 +523,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
         0
     }
 
-    fn build_indirect_br(&self, _block: ValueHandle, _ctx: &Ctx<'a>) {}
+    fn build_indirect_br(&self, _block: ValueHandle) {}
 
     unsafe fn store_with_aoto_cast(&self, _ptr: ValueHandle, _value: ValueHandle) {}
 

@@ -164,7 +164,7 @@ pub(crate) fn end_generator<'a>(
         )
         .unwrap();
     let address = builder.build_load(address, "block_address", &PLType::new_i8_ptr(), child);
-    builder.build_indirect_br(address, child);
+    builder.build_indirect_br(address);
 
     // 6. 用最终的generator_ctx大小修正之前的malloc语句
     builder.correct_generator_ctx_malloc_inst(child, &st_tp.get_full_name());

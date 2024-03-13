@@ -124,8 +124,6 @@ pub struct Ctx<'a> {
     pub function: Option<ValueHandle>,
     /// the init function called first in main
     pub init_func: Option<ValueHandle>,
-    /// current block
-    pub block: Option<BlockHandle>,
     /// the block to jump when continue if it's a loop statement
     pub continue_block: Option<BlockHandle>,
     /// the block to jump to when break if it's a loop statement
@@ -322,7 +320,6 @@ impl<'a, 'ctx> Ctx<'a> {
             table: FxHashMap::default(),
             config,
             db,
-            block: None,
             continue_block: None,
             break_block: None,
             return_block: None,
@@ -369,7 +366,6 @@ impl<'a, 'ctx> Ctx<'a> {
             table: FxHashMap::default(),
             config: self.config.clone(),
             db: self.db,
-            block: self.block,
             continue_block: self.continue_block,
             break_block: self.break_block,
             return_block: self.return_block,
@@ -1105,7 +1101,6 @@ impl<'a, 'ctx> Ctx<'a> {
         block: BlockHandle,
         builder: &'b BuilderEnum<'a, 'ctx>,
     ) {
-        self.block = Some(block);
         builder.position_at_end_block(block);
     }
 

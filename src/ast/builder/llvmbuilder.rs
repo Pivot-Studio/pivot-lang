@@ -2845,7 +2845,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             let bb_v = data.borrow().entry_bb;
             let bb = self.get_llvm_block(bb_v).unwrap();
             let funcvalue = bb.get_parent().unwrap();
-            let origin_bb = child.block.unwrap();
+            let origin_bb = self.get_cur_basic_block();
             self.position_at_end_block(bb_v);
             child.ctx_flag = CtxFlag::Normal;
             let ptr = self.alloc("param_ptr", tp, child, None);
@@ -2960,7 +2960,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         v: &STType,
         field_tps: &[Arc<RefCell<PLType>>],
     ) {
-        let currentbb = ctx.block;
+        let currentbb = self.builder.get_insert_block();
         self.builder.unset_current_debug_location();
         let _i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::from(1));
         let ty = self.struct_type(v, ctx);
@@ -3058,9 +3058,8 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             // 其他为原子类型，跳过
         }
         self.builder.build_return(None).unwrap();
-        if let Some(currentbb) = currentbb {
-            self.builder
-                .position_at_end(self.get_llvm_block(currentbb).unwrap());
+        if let Some(bb) = currentbb {
+            self.builder.position_at_end(bb);
         }
     }
 
@@ -3309,9 +3308,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
                 .into()
         })
     }
-    fn build_indirect_br(&self, block: ValueHandle, ctx: &Ctx<'a>) {
+    fn build_indirect_br(&self, block: ValueHandle) {
         let block = self.get_llvm_value(block).unwrap();
-        let bv = self.get_llvm_block(ctx.block.unwrap()).unwrap();
+        let bv = self.builder.get_insert_block().unwrap();
         self.builder
             .build_indirect_branch::<BasicValueEnum>(
                 block.try_into().unwrap(),

@@ -1034,7 +1034,7 @@ impl FNValue {
             .borrow_mut()
             .insert(name, Arc::new(RefCell::new(PLType::Fn(res.clone()))));
 
-        let block = ctx.block;
+        let block = builder.get_cur_basic_block();
         *ctx.need_highlight.borrow_mut() += 1;
         let f = self.clone();
         if let Some(n) = &mut self.node {
@@ -1046,7 +1046,7 @@ impl FNValue {
             unreachable!()
         }
         *ctx.need_highlight.borrow_mut() -= 1;
-        ctx.position_at_end(block.unwrap(), builder);
+        ctx.position_at_end(block, builder);
 
         res.fntype.ret_pltype = self
             .fntype
