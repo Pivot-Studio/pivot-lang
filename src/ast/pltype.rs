@@ -5,6 +5,7 @@ use super::node::interface::MultiTraitNode;
 use super::node::tuple::TupleTypeNode;
 use super::node::types::ClosureTypeNode;
 use super::node::types::CustomTypeNode;
+use super::node::RangeTrait;
 use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::tokens::TokenType;
@@ -438,6 +439,7 @@ pub fn get_type_deep(pltype: Arc<RefCell<PLType>>) -> Arc<RefCell<PLType>> {
             let a = ARRType {
                 element_type: get_type_deep(p.element_type.clone()),
                 size_handle: p.size_handle,
+                generic_map: p.generic_map.clone(),
             };
             Arc::new(RefCell::new(PLType::Arr(a)))
         }
@@ -492,6 +494,7 @@ impl PLType {
         match self {
             PLType::Struct(s) => s.implements_trait(tp, ctx),
             PLType::Union(u) => u.implements_trait(tp, ctx),
+            PLType::Arr(a) => a.implements_trait(tp, ctx),
             _ => {
                 let plmod = if tp.path == ctx.plmod.path {
                     ctx.plmod.clone()
@@ -701,9 +704,7 @@ impl PLType {
             PLType::Struct(st) => st.get_full_name_except_generic(),
             PLType::Trait(st) => st.get_full_name_except_generic(),
             PLType::Primitive(pri) => pri.get_name(),
-            PLType::Arr(arr) => {
-                format!("[{}]", arr.element_type.borrow().get_full_elm_name())
-            }
+            PLType::Arr(_) => "[]".to_string(),
             PLType::Void => "void".to_string(),
             PLType::Pointer(p) => p.borrow().get_full_elm_name(),
             PLType::PlaceHolder(p) => p.name.clone(),
@@ -1146,6 +1147,13 @@ impl FNValue {
 pub struct ARRType {
     pub element_type: Arc<RefCell<PLType>>,
     pub size_handle: ValueHandle,
+    pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
+}
+
+impl RangeTrait for ARRType {
+    fn range(&self) -> Range {
+        Default::default()
+    }
 }
 
 impl TraitImplAble for ARRType {
@@ -1204,6 +1212,9 @@ pub fn append_name_with_generic(gm: &IndexMap<String, Arc<RefCell<PLType>>>, nam
         .join(", ");
     if typeinfer.is_empty() {
         return name.to_string();
+    }
+    if name == "[]" {
+        return format!("[{}]", typeinfer);
     }
     format!("{}<{}>", name, typeinfer)
 }

@@ -27,6 +27,7 @@
 use std::{cell::RefCell, sync::Arc};
 
 use ena::unify::{InPlace, UnificationTable, UnifyKey, UnifyValue};
+use indexmap::IndexMap;
 use linked_hash_map::LinkedHashMap;
 use rustc_hash::FxHashMap;
 
@@ -259,8 +260,9 @@ impl TyInfer {
                         if !ty.borrow().is_complete() {
                             return new_arc_refcell(PLType::PartialInferred(Arc::new(
                                 RefCell::new(PLType::Arr(ARRType {
-                                    element_type: ty,
+                                    element_type: ty.clone(),
                                     size_handle: 0,
+                                    generic_map: IndexMap::from([(String::from("T"), ty)]),
                                 })),
                             )));
                         }
@@ -273,14 +275,16 @@ impl TyInfer {
                         if !ty.borrow().is_complete() {
                             return new_arc_refcell(PLType::PartialInferred(Arc::new(
                                 RefCell::new(PLType::Arr(ARRType {
-                                    element_type: ty,
+                                    element_type: ty.clone(),
                                     size_handle: 0,
+                                    generic_map: IndexMap::from([(String::from("T"), ty)]),
                                 })),
                             )));
                         }
                         Arc::new(RefCell::new(PLType::Arr(ARRType {
-                            element_type: ty,
+                            element_type: ty.clone(),
                             size_handle: 0,
+                            generic_map: IndexMap::from([(String::from("T"), ty)]),
                         })))
                     }
                 }

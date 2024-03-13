@@ -1,6 +1,6 @@
 use super::{
     node::types::CustomTypeNode,
-    pltype::{FNValue, PlaceHolderType, STType, UnionType},
+    pltype::{ARRType, FNValue, PlaceHolderType, STType, TraitImplAble, UnionType},
 };
 
 pub trait CustomType {
@@ -36,3 +36,15 @@ macro_rules! impl_custom_type {
 }
 use crate::ast::range::Range;
 impl_custom_type!(UnionType, STType, FNValue, PlaceHolderType, CustomTypeNode);
+
+impl CustomType for ARRType {
+    fn get_path(&self) -> String {
+        "".to_string()
+    }
+    fn get_name(&self) -> String {
+        self.get_full_name()
+    }
+    fn get_range(&self) -> Range {
+        Default::default()
+    }
+}

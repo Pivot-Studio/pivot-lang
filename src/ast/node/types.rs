@@ -328,8 +328,9 @@ impl TypeNode for ArrayTypeNameNode {
             eprintln!("array type not complete {:?}", pltype);
         }
         let arrtype = ARRType {
-            element_type: pltype,
+            element_type: pltype.clone(),
             size_handle: 0,
+            generic_map: IndexMap::from([(String::from("T"), pltype)]),
         };
         let arrtype = Arc::new(RefCell::new(PLType::Arr(arrtype)));
         Ok(arrtype)
@@ -881,6 +882,7 @@ impl Node for ArrayInitNode {
         let arr_tp = Arc::new(RefCell::new(PLType::Arr(ARRType {
             element_type: tp.clone(),
             size_handle,
+            generic_map: IndexMap::from([(String::from("T"), tp.clone())]),
         })));
         let arr = builder.alloc("array_alloca", &arr_tp.borrow(), ctx, None);
         let real_arr = builder
