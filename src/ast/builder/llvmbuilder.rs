@@ -437,9 +437,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 &format!("heapptr_{}", name),
             )
             .unwrap();
-        // TODO: handle all atomic types
-        // which means we need to handle gep transformation in EscapePass
-        if let PLType::Primitive(_) = tp {
+        if tp.is_atomic() {
             call_site_value.add_attribute(
                 inkwell::attributes::AttributeLoc::Return,
                 self.context.create_string_attribute("pl_atomic", ""),
