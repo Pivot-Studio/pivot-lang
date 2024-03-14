@@ -5,7 +5,6 @@ use super::node::interface::MultiTraitNode;
 use super::node::tuple::TupleTypeNode;
 use super::node::types::ClosureTypeNode;
 use super::node::types::CustomTypeNode;
-use super::node::RangeTrait;
 use super::plmod::Mod;
 use super::plmod::MutVec;
 use super::tokens::TokenType;
@@ -113,6 +112,9 @@ impl TraitImplAble for PriType {
     fn get_full_name_except_generic(&self) -> String {
         self.get_name()
     }
+    fn get_mod_path(&self) -> Option<std::borrow::Cow<String>> {
+        None
+    }
 }
 
 #[derive(Debug, Clone, Eq)]
@@ -168,6 +170,9 @@ impl TraitImplAble for ClosureType {
     fn get_full_name_except_generic(&self) -> String {
         self.get_name()
     }
+    fn get_mod_path(&self) -> Option<std::borrow::Cow<String>> {
+        None
+    }
 }
 
 mod method;
@@ -189,6 +194,10 @@ macro_rules! impl_mthd {
             fn get_full_name_except_generic(&self) -> String {
                 let full_name = self.get_full_name();
                 full_name.split('<').collect::<Vec<_>>()[0].to_string()
+            }
+
+            fn get_mod_path(&self) -> Option<std::borrow::Cow<String>> {
+                Some(std::borrow::Cow::Borrowed(&self.path))
             }
         }
     };
@@ -1150,12 +1159,6 @@ pub struct ARRType {
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
 }
 
-impl RangeTrait for ARRType {
-    fn range(&self) -> Range {
-        Default::default()
-    }
-}
-
 impl TraitImplAble for ARRType {
     fn get_full_name_except_generic(&self) -> String {
         "[]".to_owned()
@@ -1163,6 +1166,10 @@ impl TraitImplAble for ARRType {
 
     fn get_full_name(&self) -> String {
         format!("[{}]", self.element_type.borrow().get_full_elm_name())
+    }
+
+    fn get_mod_path(&self) -> Option<std::borrow::Cow<String>> {
+        None
     }
 }
 

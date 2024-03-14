@@ -1,4 +1,4 @@
-use std::{cell::RefCell, sync::Arc};
+use std::{borrow::Cow, cell::RefCell, sync::Arc};
 
 use indexmap::IndexMap;
 use lsp_types::{Command, CompletionItem, CompletionItemKind, InsertTextFormat};
@@ -91,6 +91,7 @@ pub trait TraitImplAble {
         }
         false
     }
+    fn get_mod_path(&self) -> Option<Cow<String>>;
 }
 
 /// # Generic
@@ -169,7 +170,7 @@ impl Generic for UnionType {
     }
 }
 
-pub trait ImplAbleWithGeneric: Generic + ImplAble {
+pub trait TraitImplAbleWithGeneric: Generic + TraitImplAble {
     fn implements_trait_curr_mod(&self, tp: &STType, plmod: &Mod) -> bool {
         // FIXME: strange logic
         let re = plmod
@@ -260,15 +261,15 @@ pub trait ImplAbleWithGeneric: Generic + ImplAble {
         if self.implements_trait_curr_mod(tp, plmod) {
             return true;
         }
-        let p = self.get_path();
-        if p == ctx.plmod.path {
+        let p = self.get_mod_path();
+        if p.as_ref().map(|v| v.as_str()) == Some(ctx.plmod.path.as_str()) {
             let plmod = &ctx.plmod;
             if self.implements_trait_curr_mod(tp, plmod) {
                 return true;
             }
             return false;
         }
-        let plmod = &ctx.db.get_module(&p).unwrap();
+        let plmod = &ctx.db.get_module(p.unwrap_or_default().as_str()).unwrap();
         if self.implements_trait_curr_mod(tp, plmod) {
             return true;
         }
@@ -276,11 +277,6 @@ pub trait ImplAbleWithGeneric: Generic + ImplAble {
     }
 }
 
-impl ImplAbleWithGeneric for STType {}
-impl ImplAbleWithGeneric for UnionType {}
-impl ImplAble for ARRType {
-    fn get_method_table(&self) -> Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>> {
-        Arc::new(RefCell::new(FxHashMap::default()))
-    }
-}
-impl ImplAbleWithGeneric for ARRType {}
+impl TraitImplAbleWithGeneric for STType {}
+impl TraitImplAbleWithGeneric for UnionType {}
+impl TraitImplAbleWithGeneric for ARRType {}
