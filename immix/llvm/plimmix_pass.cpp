@@ -48,6 +48,7 @@ namespace
 
   public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+    void replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::AllocaInst &alloca, std::__1::vector<llvm::GetElementPtrInst *> &geps);
   };
 
 
@@ -58,6 +59,7 @@ namespace
     std::vector<CallInst *> mallocs;
     std::vector<PHINode *> phis;
     std::vector<AllocaInst *> allocas;
+    std::vector<GetElementPtrInst *> geps;
 
 
     // find all gc atomic type allocations, analysis to get non-escaped set.
@@ -96,6 +98,13 @@ namespace
                   // replace it with alloca
                   builder.SetInsertPoint(&FV->front().front());
                   auto &alloca = *builder.CreateAlloca(ArrayType::get(IntegerType::get(M.getContext(), 8), sizeInt));
+                  
+                  // find all gep, replace address space with 0
+                  auto users = call->users();
+                  replace_geps(users, builder, alloca, geps);
+                  
+
+
                   call->replaceAllUsesWith(&alloca);
                   allocas.push_back(&alloca);
                   
@@ -169,10 +178,44 @@ namespace
         phi->eraseFromParent();
       }
     }
+    for (auto *gep : geps)
+    {
+      if (gep->getParent())
+      {
+        gep->eraseFromParent();
+      }
+    }
     return PreservedAnalyses::none();
   }
 
+  void EscapePass::replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::AllocaInst &alloca, std::__1::vector<llvm::GetElementPtrInst *> &geps)
+  {
+    for (auto *U : users)
+    {
+      if (auto *gep = dyn_cast<GetElementPtrInst>(U))
+      {
+        std::vector<Value *> arr;
+        // Value *v = nullptr;
+        for (unsigned i = 0; i < gep->getNumOperands(); ++i)
+        {
+          if (i == 0)
+          {
+            // first operand is the pointer, skip it. we only need index
+            continue;
+          }
 
+          arr.push_back(gep->getOperand(i));
+        }
+        builder.SetInsertPoint(gep);
+        auto *newgep = builder.CreateGEP(gep->getSourceElementType(), &alloca, arr, gep->getName(), gep->isInBounds());
+        auto newusers = gep->users();
+        gep->replaceAllUsesWith(newgep);
+        replace_geps(newusers, builder, alloca, geps);
+        // gep->eraseFromParent();
+        geps.push_back(gep);
+      }
+    }
+  }
 
   /*
     This pass helps integrate immix with LLVM.
