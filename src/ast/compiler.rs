@@ -228,6 +228,7 @@ pub fn process_llvm_ir<'a>(
             llvmmod.as_mut_ptr() as _,
             op.optimization as _,
             op.debug as _,
+            op.print_escape as _,
         )
     };
 

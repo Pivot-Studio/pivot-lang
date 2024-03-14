@@ -59,6 +59,7 @@ pub struct ProgramEmitParam {
     pub is_active_file: bool,
     pub opt: HashOptimizationLevel,
     pub debug: bool,
+    pub print_escaped: bool,
 }
 
 pub type MthdTableWrapper =
