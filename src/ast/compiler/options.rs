@@ -13,6 +13,7 @@ pub struct Options {
     pub fmt: bool,
     pub jit: bool,
     pub debug: bool,
+    pub print_escape: bool,
 }
 
 #[repr(u32)]

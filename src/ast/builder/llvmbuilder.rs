@@ -3,6 +3,7 @@
 /// 1. 所有Builder的字段都应该private，不应该被外部直接访问
 /// 2. 所有涉及llvm类型的函数（包括参数或返回值）都应该是private的
 use std::{
+    borrow::Cow,
     cell::{Cell, RefCell},
     collections::hash_map::DefaultHasher,
     hash::{Hash, Hasher},
@@ -151,6 +152,7 @@ pub struct LLVMBuilder<'a, 'ctx> {
     difile: Cell<DIFile<'ctx>>,
     optlevel: OptimizationLevel,
     debug: bool,
+    print_escaped: bool,
 }
 
 pub fn get_target_machine(_level: OptimizationLevel) -> TargetMachine {
@@ -194,6 +196,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         tm: &'a TargetMachine,
         opt: OptimizationLevel,
         debug: bool,
+        print_escaped: bool,
     ) -> Self {
         module.set_triple(&TargetMachine::get_default_triple());
         Self {
@@ -215,6 +218,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             difile: Cell::new(diunit.get_file()),
             optlevel: opt,
             debug,
+            print_escaped,
         }
     }
     /// 分配内存使用的函数
@@ -313,7 +317,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     ) -> ValueHandle {
         let builder = self.builder;
         builder.unset_current_debug_location();
-        let (p, _) = self.gc_malloc(name, ctx, pltype, malloc_fn);
+        let (p, _) = self.gc_malloc(name, ctx, pltype, malloc_fn, declare);
         let llvm_tp = self.get_basic_type_op(pltype, ctx).unwrap();
         if let PLType::Struct(tp) = pltype {
             if !tp.atomic {
@@ -370,6 +374,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         ctx: &mut Ctx<'a>,
         tp: &PLType,
         malloc_fn: &str,
+        declare: Option<Pos>,
     ) -> (PointerValue<'ctx>, BasicTypeEnum<'ctx>) {
         let lb = self.builder.get_insert_block().unwrap();
         let alloca = self
@@ -438,9 +443,21 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             )
             .unwrap();
         if tp.is_atomic() {
+            let pos = match declare {
+                Some(Pos {
+                    line: 0,
+                    column: 0,
+                    offset: 0,
+                })
+                | None => Cow::Borrowed(""),
+                Some(pos) => Cow::Owned(format!(
+                    "`{}` at {}:{}:{}",
+                    name, &ctx.plmod.path, pos.line, pos.column
+                )),
+            };
             call_site_value.add_attribute(
                 inkwell::attributes::AttributeLoc::Return,
-                self.context.create_string_attribute("pl_atomic", ""),
+                self.context.create_string_attribute("pl_atomic", &pos),
             );
         }
         let heapptr = call_site_value.try_as_basic_value().left().unwrap();
@@ -1742,6 +1759,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 self.module.as_mut_ptr() as _,
                 self.optlevel as i32,
                 self.debug as i32,
+                self.print_escaped as i32,
             );
         }
         *self.optimized.borrow_mut() = true;

@@ -104,7 +104,7 @@ std::string getFeaturesStr() {
     The new LLVM Pass Manager does not have official C bindings yet.
     So we have to write one ourselves.
 */
-extern "C" void run_module_pass(LLVMModuleRef  M, int opt, int debug) {
+extern "C" void run_module_pass(LLVMModuleRef  M, int opt, int debug, int print_escaped) {
     InitializeNativeTarget();
 //   Initialize();
     std::string CPUStr, FeaturesStr;
@@ -174,7 +174,7 @@ extern "C" void run_module_pass(LLVMModuleRef  M, int opt, int debug) {
     FunctionPassManager FPM;
     LoopPassManager LPM;
     CGSCCPassManager CGPM;
-    MPM.addPass(EscapePass());
+    MPM.addPass(EscapePass(print_escaped == 1));
     MPM.addPass(ImmixPass());
     switch (opt)
     {

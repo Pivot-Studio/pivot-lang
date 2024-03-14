@@ -503,6 +503,7 @@ fn test_jit() {
             fmt: false,
             jit: true,
             debug: false,
+            ..Default::default()
         },
     );
     assert!(
@@ -552,6 +553,7 @@ fn test_compile() {
             fmt: false,
             jit: false,
             debug: false,
+            ..Default::default()
         },
     );
     let exe = crate::utils::canonicalize(&exe)
@@ -598,6 +600,7 @@ fn test_printast() {
             fmt: false,
             jit: false,
             debug: false,
+            ..Default::default()
         },
     );
 }
@@ -668,6 +671,7 @@ fn test_tail_call_opt() {
             fmt: false,
             jit: false,
             debug: false,
+            ..Default::default()
         },
     );
     let exe = crate::utils::canonicalize(&exe)

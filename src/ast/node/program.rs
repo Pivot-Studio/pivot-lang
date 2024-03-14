@@ -405,6 +405,7 @@ impl Program {
             self.is_active_file(db),
             self.opt(db),
             self.docs(db).op(db).debug,
+            self.docs(db).op(db).print_escape,
         )
     }
 
@@ -668,6 +669,7 @@ pub fn emit_file(db: &dyn Db, program_emit_params: ProgramEmitParam) -> ModWrapp
                     &e,
                     program_emit_params.opt(db).to_llvm(),
                     program_emit_params.debug(db),
+                    program_emit_params.print_escaped(db),
                 );
                 builder.into()
             }

@@ -94,6 +94,7 @@ pub mod tests {
             optimization: HashOptimizationLevel::Aggressive,
             jit: false,
             debug: false,
+            ..Default::default()
         };
 
         let input = MemDocsInput::new(

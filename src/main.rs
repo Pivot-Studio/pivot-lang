@@ -30,6 +30,7 @@ use ast::{
     compiler::{self, compile_dry, convert, ActionType, CHECK, CHECK_PROGRESS},
     diag::ensure_no_error,
 };
+use clap::CommandFactory;
 use clap::{Parser, Subcommand};
 use db::Database;
 use lsp::mem_docs::{self, MemDocsInput};
@@ -54,22 +55,27 @@ fn main() {
         .unwrap();
     match cli.command {
         Some(ref cmd) => match cmd {
-            RunCommand::Check { name } => cli.check(name.clone()),
-            RunCommand::Run { name } => cli.run(name.clone()),
+            RunCommand::Check { path: name } => cli.check(name.clone()),
+            RunCommand::Run {
+                path: name,
+                optimization,
+            } => {
+                cli.optimization = *optimization;
+                cli.run(name.clone())
+            }
             RunCommand::Lsp {} => cli.lsp(),
             RunCommand::Fmt { name } => cli.fmt(name.clone()),
             RunCommand::New { name } => cli.new_project(name.clone()),
             RunCommand::Version => cli.version(),
-            RunCommand::Build { name } => cli.build(name.clone()),
         },
         // todo(griffin): refine it in the future, technically it should compile one file only instead of a whole project.
         None => {
-            if cli.name.as_deref().is_none() {
-                cli.version();
+            if cli.path.as_deref().is_none() {
+                Cli::command().print_help().unwrap();
                 return;
             }
 
-            let name = cli.name.as_deref().unwrap();
+            let name = cli.path.as_deref().unwrap();
             cli.build(name.to_string())
         }
     }
@@ -92,9 +98,9 @@ _______   __                        __            __
                                                                                  \$$$$$$ 
 "#, long_about = None, styles = get_styles())]
 struct Cli {
-    /// Name of the source file, we will use it as an entry path to find and build a pl project with a kagari.toml
+    /// Path of any source file under the project
     #[arg(value_parser)]
-    name: Option<String>,
+    path: Option<String>,
 
     /// output file
     #[arg(short, long, value_parser, default_value = "out")]
@@ -145,6 +151,10 @@ struct Cli {
     #[command(subcommand)]
     command: Option<RunCommand>,
 
+    /// print escaped variables
+    #[arg(long)]
+    escaped: bool,
+
     /// optimization level, 0-3
     #[arg(short = 'O', value_parser, default_value = "0")]
     optimization: u64,
@@ -172,6 +182,7 @@ impl Cli {
             optimization: convert(self.optimization),
             jit: self.jit,
             debug: self.debug,
+            print_escape: self.escaped,
         };
 
         let mem = MemDocsInput::new(
@@ -211,6 +222,7 @@ impl Cli {
             optimization: convert(self.optimization),
             jit: self.jit,
             debug: self.debug,
+            print_escape: self.escaped,
         };
 
         let action = if self.flow {
@@ -280,6 +292,7 @@ impl Cli {
             optimization: convert(self.optimization),
             jit: self.jit,
             debug: self.debug,
+            print_escape: self.escaped,
         };
 
         let action = if self.flow {
@@ -307,14 +320,18 @@ impl Cli {
 enum RunCommand {
     /// JIT run the compiled program
     Run {
-        /// Name of the compiled file
+        /// Path of the bitcode file
         #[arg(value_parser)]
-        name: String,
+        path: String,
+        /// optimization level, 0-3
+        #[arg(short = 'O', value_parser, default_value = "0")]
+        optimization: u64,
     },
+    /// Check if the project has any error
     Check {
-        /// Name of the compiled file
+        /// Path of any source file under the project
         #[arg(value_parser)]
-        name: String,
+        path: String,
     },
     /// Start the language server
     Lsp,
@@ -331,15 +348,6 @@ enum RunCommand {
     },
     /// Get the whole version infomation
     Version,
-
-    /// Build the source code written in pivot language
-    /// todo(griffin): inside this command, we should enquery the kagari.toml in all children files,
-    /// instead of find it among files under its ancestor
-    Build {
-        #[arg(value_parser)]
-        // Name of a file for a project entry
-        name: String,
-    },
 }
 
 pub fn get_styles() -> clap::builder::Styles {

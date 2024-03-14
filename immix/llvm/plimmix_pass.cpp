@@ -45,10 +45,13 @@ namespace
   class EscapePass : public PassInfoMixin<EscapePass>
   {
     static char ID;
+    bool escaped;
 
   public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
-    void replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::AllocaInst &alloca, std::__1::vector<llvm::GetElementPtrInst *> &geps);
+    void replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::Value * alloca, std::__1::vector<llvm::GetElementPtrInst *> &geps);
+    EscapePass() : escaped(false) {}
+    EscapePass(bool escaped) : escaped(escaped) {}
   };
 
 
@@ -85,6 +88,13 @@ namespace
                 }
                 if (!PointerMayBeCaptured(call, true, true))
                 {
+
+                  auto info = attrs.getRetAttrs().getAttribute("pl_atomic").getValueAsString();
+                  if (info.size() > 0 && this->escaped)
+                  {
+                    printf("variable escaped: %s\n", info.str().c_str());
+                  }
+                  
                   // if the pointer may be captured, then we change this gc malloc
                   // to stack alloca
                   
@@ -101,7 +111,7 @@ namespace
                   
                   // find all gep, replace address space with 0
                   auto users = call->users();
-                  replace_geps(users, builder, alloca, geps);
+                  replace_geps(users, builder, &alloca, geps);
                   
 
 
@@ -188,7 +198,7 @@ namespace
     return PreservedAnalyses::none();
   }
 
-  void EscapePass::replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::AllocaInst &alloca, std::__1::vector<llvm::GetElementPtrInst *> &geps)
+  void EscapePass::replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::Value * ptr, std::__1::vector<llvm::GetElementPtrInst *> &geps)
   {
     for (auto *U : users)
     {
@@ -207,10 +217,10 @@ namespace
           arr.push_back(gep->getOperand(i));
         }
         builder.SetInsertPoint(gep);
-        auto *newgep = builder.CreateGEP(gep->getSourceElementType(), &alloca, arr, gep->getName(), gep->isInBounds());
+        auto *newgep = builder.CreateGEP(gep->getSourceElementType(), ptr, arr, gep->getName(), gep->isInBounds());
         auto newusers = gep->users();
         gep->replaceAllUsesWith(newgep);
-        replace_geps(newusers, builder, alloca, geps);
+        replace_geps(newusers, builder, newgep, geps);
         // gep->eraseFromParent();
         geps.push_back(gep);
       }

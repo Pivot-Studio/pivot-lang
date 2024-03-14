@@ -283,7 +283,7 @@ extern "C" {
     /// the pass selection is mostly determined by the optlevel,
     /// while some special passes are always enabled (Immix GC pass
     /// and Rewrite Statepoint pass)
-    pub fn run_module_pass(m: *mut u8, opt: i32, debug: i32);
+    pub fn run_module_pass(m: *mut u8, opt: i32, debug: i32, print_escaped: i32);
 }
 
 /// Register the LLVM GC plugins.
