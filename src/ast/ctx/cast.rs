@@ -29,8 +29,8 @@ use super::Ctx;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::node::TypeNode;
-use crate::ast::pltype::ImplAbleWithGeneric;
 use crate::ast::pltype::STType;
+use crate::ast::pltype::TraitImplAbleWithGeneric;
 use crate::ast::range::Range;
 use crate::mismatch_err;
 
@@ -203,7 +203,7 @@ pub(crate) fn find_trait_impl_mthd<T: TraitImplAble>(
 }
 
 impl<'a, 'ctx> Ctx<'a> {
-    pub(crate) fn cast_implable<T: ImplAbleWithGeneric>(
+    pub(crate) fn cast_implable<T: TraitImplAbleWithGeneric + ImplAble>(
         &mut self,
         t: &STType,
         st: &T,
