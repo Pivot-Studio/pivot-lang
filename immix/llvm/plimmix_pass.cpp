@@ -50,7 +50,7 @@ namespace
 
   public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
-    void replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::Value * alloca, std::__1::vector<llvm::GetElementPtrInst *> &geps);
+    void replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::Value * alloca, std::vector<llvm::GetElementPtrInst *> &geps);
     EscapePass() : escaped(false) {}
     EscapePass(bool escaped) : escaped(escaped) {}
   };
@@ -219,7 +219,7 @@ namespace
     return PreservedAnalyses::none();
   }
 
-  void EscapePass::replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::Value * ptr, std::__1::vector<llvm::GetElementPtrInst *> &geps)
+  void EscapePass::replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::Value * ptr, std::vector<llvm::GetElementPtrInst *> &geps)
   {
     for (auto *U : users)
     {
