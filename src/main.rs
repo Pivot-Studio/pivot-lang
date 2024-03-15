@@ -151,9 +151,9 @@ struct Cli {
     #[command(subcommand)]
     command: Option<RunCommand>,
 
-    /// print escaped variables
-    #[arg(long)]
-    escaped: bool,
+    /// print variables moved to stack during escape analysis
+    #[arg(long = "pstack")]
+    print_stack_var: bool,
 
     /// optimization level, 0-3
     #[arg(short = 'O', value_parser, default_value = "0")]
@@ -182,7 +182,7 @@ impl Cli {
             optimization: convert(self.optimization),
             jit: self.jit,
             debug: self.debug,
-            print_escape: self.escaped,
+            print_escape: self.print_stack_var,
         };
 
         let mem = MemDocsInput::new(
@@ -222,7 +222,7 @@ impl Cli {
             optimization: convert(self.optimization),
             jit: self.jit,
             debug: self.debug,
-            print_escape: self.escaped,
+            print_escape: self.print_stack_var,
         };
 
         let action = if self.flow {
@@ -292,7 +292,7 @@ impl Cli {
             optimization: convert(self.optimization),
             jit: self.jit,
             debug: self.debug,
-            print_escape: self.escaped,
+            print_escape: self.print_stack_var,
         };
 
         let action = if self.flow {

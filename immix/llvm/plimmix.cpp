@@ -208,7 +208,6 @@ extern "C" void run_module_pass(LLVMModuleRef  M, int opt, int debug, int print_
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
         break;
     }
-    // MPM.addPass(EscapePass());
 
     MPM.addPass(RewriteStatepointsForGC());
     if (debug)
