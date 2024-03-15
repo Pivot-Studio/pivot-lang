@@ -8,6 +8,7 @@
 #include "llvm/Transforms/Utils/ModuleUtils.h"
 #include "llvm/Pass.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
@@ -86,13 +87,17 @@ namespace
                 {
                   continue;
                 }
+                // if (!F->getName().startswith("DioGC__malloc"))
+                // {
+                //   continue;
+                // }
                 if (!PointerMayBeCaptured(call, true, true))
                 {
 
                   auto info = attrs.getRetAttrs().getAttribute("pl_atomic").getValueAsString();
                   if (info.size() > 0 && this->escaped)
                   {
-                    printf("variable escaped: %s\n", info.str().c_str());
+                    printf("variable moved to stack: %s\n", info.str().c_str());
                   }
                   
                   // if the pointer may be captured, then we change this gc malloc
@@ -112,6 +117,22 @@ namespace
                   // find all gep, replace address space with 0
                   auto users = call->users();
                   replace_geps(users, builder, &alloca, geps);
+
+
+                  // find all memset, regenrate memset
+                  for (auto *U : call->users())
+                  {
+                    if (auto *memset = dyn_cast<MemSetInst>(U))
+                    {
+                      auto *dest = memset->getDest();
+                      auto *len = memset->getLength();
+                      auto *value = memset->getValue();
+                      builder.SetInsertPoint(memset);
+                      auto *newmemset = builder.CreateMemSet(&alloca, value, len, memset->getDestAlign(), memset->isVolatile());
+                      memset->replaceAllUsesWith(newmemset);
+                      memset->eraseFromParent();
+                    }
+                  }
                   
 
 
