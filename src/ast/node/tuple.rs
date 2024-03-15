@@ -65,6 +65,8 @@ impl Node for TupleInitNode {
         let mut sttype = new_tuple_type(name, fields, self.range);
         sttype.atomic = is_atomic;
         let mut offset = 1;
+        // atomic struct has no gc pointer in it, so it doesn't need
+        // gcrtti field.
         if is_atomic {
             sttype.fields.iter_mut().for_each(|(_, f)| {
                 f.index -= 1;

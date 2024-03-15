@@ -50,6 +50,9 @@ namespace
 
   public:
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+    /*
+      Regenerate the gep instructions with new address space
+    */
     void replace_geps(llvm::iterator_range<llvm::Value::user_iterator> &users, llvm::IRBuilder<> &builder, llvm::Value * alloca, std::vector<llvm::GetElementPtrInst *> &geps);
     EscapePass() : escaped(false) {}
     EscapePass(bool escaped) : escaped(escaped) {}
@@ -87,10 +90,6 @@ namespace
                 {
                   continue;
                 }
-                // if (!F->getName().startswith("DioGC__malloc"))
-                // {
-                //   continue;
-                // }
                 if (!PointerMayBeCaptured(call, true, true))
                 {
 
