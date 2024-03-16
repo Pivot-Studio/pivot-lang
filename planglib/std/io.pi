@@ -1,15 +1,25 @@
 use std::libc::*;
 use std::buf::*;
 use std::cols::arr;
+use core::string::ToString;
+use core::string;
 
 pub fn printi64ln(i: i64) void;
 
 pub fn print_raw(bs: *u8, len: i64) void;
 
 pub fn print_s(s: gc::string) void {
-   
     print_raw(s.raw(), s.byte_len());  
     return;
+}
+
+pub fn print<T:ToString>(v: T) void {
+    print_s(v.to_string());
+    return;
+}
+
+pub fn sprint<T:ToString>(v: T) string {
+    return v.to_string();
 }
 
 
@@ -35,7 +45,6 @@ pub fn open_write(s:string) File {
 }
 
 pub fn open(s:string, flag:i32) File {
-    
     return File{fd:LibC__open(s.raw(), s.byte_len(), flag)};
 }
 
@@ -48,10 +57,8 @@ pub struct File {
 
 
 
-// TODO use last os error from lib c to resolve error code
-pub struct IoError {
-    
-}
+/// TODO use last os error from lib c to resolve error code
+pub struct IoError { }
 
 
 impl File {
@@ -104,7 +111,6 @@ impl File {
 
     pub fn read_all_as_string() Result<string|IoError> {
         let slice = self.read_all();
-        
         return slice.map(|s:[u8]| => string{
             return string_from_bytes(s);
         });
