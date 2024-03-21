@@ -123,3 +123,15 @@ pub fn string_from_bytes(bytes:[u8]) string {
     return s;
 }
 
+
+pub fn string_eq(l:string, r:string) bool {
+    if l.len() != r.len() {
+        return false;
+    }
+    for let i = 0; i < l.len(); i = i + 1 {
+        if l.bytes()[i] != r.bytes()[i] {
+            return false;
+        }
+    }
+    return true;
+}

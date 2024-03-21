@@ -167,6 +167,10 @@ define_diag!(
     THE_TARGET_TRAIT_CANNOT_BE_INSTANTIATED = "the target trait type cannot be instantiated",
     MACRO_EXPAND_DEPTH_TOO_DEEP = "macro expand depth too deep",
     ILLEGAL_GENERIC_PARAM = "illegal generic parameter",
+    ILLEGAL_MATCH_VALUE =
+        "illegal match value, match vale can only be of type `Union` or `Struct` or `Primitive`",
+    ILLEGAL_MATCH_ARM_CONDITION =
+        "illegal match arm condition: this match condition will never be met",
 );
 
 define_diag! {

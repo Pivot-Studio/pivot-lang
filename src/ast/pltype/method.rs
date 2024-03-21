@@ -6,6 +6,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     ast::{
+        builder::BuilderEnum,
         ctx::Ctx,
         diag::{ErrorCode, PLDiag},
         node::RangeTrait,
@@ -99,6 +100,7 @@ pub trait TraitImplAble {
 /// Describe a type that has generic parameters.
 pub trait Generic {
     fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>>;
+    fn get_generic_map_mut(&mut self) -> &mut IndexMap<String, Arc<RefCell<PLType>>>;
     fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>>;
     /// return the size of generics that can be annotated explicitly
     /// by the user. For more details, see [get_generic_size].
@@ -118,6 +120,9 @@ impl Generic for ARRType {
     fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
         &self.generic_map
     }
+    fn get_generic_map_mut(&mut self) -> &mut IndexMap<String, Arc<RefCell<PLType>>> {
+        &mut self.generic_map
+    }
 
     fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
         None
@@ -131,6 +136,9 @@ impl Generic for ARRType {
 impl Generic for STType {
     fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
         &self.generic_map
+    }
+    fn get_generic_map_mut(&mut self) -> &mut IndexMap<String, Arc<RefCell<PLType>>> {
+        &mut self.generic_map
     }
 
     fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
@@ -146,6 +154,9 @@ impl Generic for FNValue {
     fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
         &self.fntype.generic_map
     }
+    fn get_generic_map_mut(&mut self) -> &mut IndexMap<String, Arc<RefCell<PLType>>> {
+        &mut self.fntype.generic_map
+    }
 
     fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
         None
@@ -159,6 +170,9 @@ impl Generic for FNValue {
 impl Generic for UnionType {
     fn get_generic_map(&self) -> &IndexMap<String, Arc<RefCell<PLType>>> {
         &self.generic_map
+    }
+    fn get_generic_map_mut(&mut self) -> &mut IndexMap<String, Arc<RefCell<PLType>>> {
+        &mut self.generic_map
     }
 
     fn get_generic_infer_map(&self) -> Option<&IndexMap<String, Arc<RefCell<PLType>>>> {
@@ -280,3 +294,31 @@ pub trait TraitImplAbleWithGeneric: Generic + TraitImplAble {
 impl TraitImplAbleWithGeneric for STType {}
 impl TraitImplAbleWithGeneric for UnionType {}
 impl TraitImplAbleWithGeneric for ARRType {}
+
+pub trait CanGenCode {
+    fn gen_code<'a, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) -> Result<Arc<RefCell<PLType>>, PLDiag>;
+}
+
+impl CanGenCode for STType {
+    fn gen_code<'a, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
+        STType::gen_code(self, ctx, builder)
+    }
+}
+
+impl CanGenCode for UnionType {
+    fn gen_code<'a, 'b>(
+        &self,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) -> Result<Arc<RefCell<PLType>>, PLDiag> {
+        UnionType::gen_code(self, ctx, builder).map(|v| Arc::new(RefCell::new(PLType::Union(v))))
+    }
+}
