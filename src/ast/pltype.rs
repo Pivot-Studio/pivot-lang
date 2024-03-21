@@ -291,10 +291,8 @@ impl UnionType {
                 .iter()
                 .enumerate()
                 .find(|(_, t)| {
-                    get_type_deep(
-                        t.get_type(ctx, builder, true)
-                            .unwrap_or_else(|_| panic!("{:?}", t)),
-                    ) == get_type_deep(Arc::new(RefCell::new(pltype.clone())))
+                    get_type_deep(t.get_type(ctx, builder, true).unwrap_or(unknown_arc()))
+                        == get_type_deep(Arc::new(RefCell::new(pltype.clone())))
                 })
                 .map(|(i, _)| i)
         })
@@ -308,7 +306,7 @@ impl UnionType {
         ctx.run_in_type_mod(self, |ctx, u| {
             u.sum_types
                 .iter()
-                .map(|t| t.get_type(ctx, builder, true).unwrap())
+                .map(|t| t.get_type(ctx, builder, true).unwrap_or(unknown_arc()))
                 .collect()
         })
     }

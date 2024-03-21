@@ -1,3 +1,5 @@
+use std::cols::hashtable::*;
+
 pub fn test_inference() void {
     let x;
     x = 100;
@@ -61,6 +63,11 @@ fn test_generic_inference() void {
     let ad6 = st3{};
     ad6.e = d;
     d = (1,2);
+
+    let h;h = new_hash_table<i64|i64>(10 as u64, 1 as u64);
+    h.insert(1, 2);
+    h.insert(2, 3);
+    let re;re = h.get(1);
     
 
     return;

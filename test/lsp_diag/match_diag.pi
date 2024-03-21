@@ -1,0 +1,34 @@
+
+
+fn test_match() void {
+    match 1 {
+        1 => {
+            return;
+        }
+        "dasda" => {
+            return;
+        }
+        i64(_) => {
+            return;
+        }
+        {a:0} => {}
+        _ => {
+            return;
+        }
+    }
+
+    let a = 1 as Option<i64>;
+    match a {
+        i64(x) => {
+            return;
+        }
+        f64(_) => {
+            return;
+        }
+        None(_) => {
+            return;
+        }
+    }
+
+    return;
+}

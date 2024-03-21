@@ -4,7 +4,7 @@ use super::{
     node::{
         cast::{AsNode, IsNode},
         comment::CommentNode,
-        control::{BreakNode, ContinueNode, ForNode, IfNode, MatchNode, WhileNode},
+        control::{BreakNode, ContinueNode, ForNode, IfNode, Literal, MatchNode, WhileNode},
         error::{ErrorNode, StErrorNode},
         function::{ClosureNode, FuncCallNode, FuncDefNode},
         global::{GlobalConstNode, GlobalNode},
@@ -850,6 +850,74 @@ impl FmtBuilder {
         self.enter();
     }
     pub fn parse_match_node(&mut self, node: &MatchNode) {
-        todo!()
+        self.token("match");
+        self.space();
+        node.value.format(self);
+        self.space();
+        self.l_brace();
+        self.enter();
+        self.add_tab();
+        for (cond, st) in &node.arms {
+            self.prefix();
+            self.parse_match_arm_cond(cond);
+            self.space();
+            self.token("=>");
+            self.space();
+            st.format(self);
+            self.semicolon();
+            self.enter();
+        }
+        self.sub_tab();
+        self.prefix();
+        self.r_brace();
+    }
+
+    pub fn parse_match_arm_cond(&mut self, node: &super::node::control::MatchArmCondition) {
+        self.prefix();
+        match node {
+            super::node::control::MatchArmCondition::Discard(_) => {
+                self.token("_");
+            }
+            super::node::control::MatchArmCondition::Var(v) => {
+                self.token(&v.name);
+            }
+            super::node::control::MatchArmCondition::Tuple(t) => {
+                self.l_paren();
+                for (i, v) in t.iter().enumerate() {
+                    if i > 0 {
+                        self.comma();
+                        self.space();
+                    }
+                    self.parse_match_arm_cond(v);
+                }
+                self.r_paren();
+            }
+            super::node::control::MatchArmCondition::Deconstruct(s) => {
+                self.token("{");
+                for (i, (k, v)) in s.iter().enumerate() {
+                    if i > 0 {
+                        self.comma();
+                        self.space();
+                    }
+                    self.token(&k.name);
+                    self.token(":");
+                    self.space();
+                    self.parse_match_arm_cond(v);
+                }
+                self.token("}");
+            }
+            super::node::control::MatchArmCondition::Literal(l) => match l {
+                Literal::Bool(b) => b.format(self),
+                Literal::Number(n) => n.format(self),
+                Literal::String(s) => s.format(self),
+            },
+            super::node::control::MatchArmCondition::TypedVar(t, v) => {
+                t.format(self);
+                self.l_paren();
+                self.parse_match_arm_cond(v);
+                self.r_paren();
+            }
+            super::node::control::MatchArmCondition::TypedDeconstruct(_, _) => todo!(),
+        }
     }
 }

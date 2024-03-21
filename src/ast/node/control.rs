@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use super::node_result::TerminatorEnum;
 use super::statement::StatementsNode;
 use super::*;
@@ -373,33 +371,36 @@ pub enum MatchArmCondition {
 }
 
 impl MatchArmCondition {
-
     fn range(&self) -> Range {
         match self {
             MatchArmCondition::Discard(r) => *r,
             MatchArmCondition::Var(v) => v.range,
-            MatchArmCondition::Literal(l) => {
-                match l {
-                    Literal::Number(n) => n.range,
-                    Literal::String(s) => s.range,
-                    Literal::Bool(b) => b.range,
-                }
-            
+            MatchArmCondition::Literal(l) => match l {
+                Literal::Number(n) => n.range,
+                Literal::String(s) => s.range,
+                Literal::Bool(b) => b.range,
             },
             MatchArmCondition::TypedVar(t, c) => t.range().start.to(c.range().end),
-            MatchArmCondition::TypedDeconstruct(t, f) => {
-                t.range().start.to(f.last().map(|(_,f)|f.range().end).unwrap_or(t.range().end))
-            },
+            MatchArmCondition::TypedDeconstruct(t, f) => t.range().start.to(f
+                .last()
+                .map(|(_, f)| f.range().end)
+                .unwrap_or(t.range().end)),
             MatchArmCondition::Deconstruct(fields) => {
-                let start = fields.first().map(|(v, _)|v.range.start).unwrap_or_default();
-                let end = fields.last().map(|(_, c)|c.range().end).unwrap_or_default();
+                let start = fields
+                    .first()
+                    .map(|(v, _)| v.range.start)
+                    .unwrap_or_default();
+                let end = fields
+                    .last()
+                    .map(|(_, c)| c.range().end)
+                    .unwrap_or_default();
                 start.to(end)
-            },
+            }
             MatchArmCondition::Tuple(fields) => {
-                let start = fields.first().map(|c|c.range().start).unwrap_or_default();
-                let end = fields.last().map(|c|c.range().end).unwrap_or_default();
+                let start = fields.first().map(|c| c.range().start).unwrap_or_default();
+                let end = fields.last().map(|c| c.range().end).unwrap_or_default();
                 start.to(end)
-            },
+            }
         }
     }
     fn add_matched_bb<'a, 'b>(
@@ -413,7 +414,7 @@ impl MatchArmCondition {
         builder.position_at_end_block(matched_bb);
     }
     fn is_matched<'a, 'b>(
-        &self,
+        &mut self,
         v: ValueHandle,
         ty: Arc<RefCell<PLType>>,
         not_matched: BlockHandle,
@@ -421,73 +422,121 @@ impl MatchArmCondition {
         builder: &'b BuilderEnum<'a, '_>,
     ) {
         match self {
-            MatchArmCondition::Discard(_) => (),
+            MatchArmCondition::Discard(range) => {
+                ctx.push_semantic_token(*range, SemanticTokenType::VARIABLE, 0);
+            }
             MatchArmCondition::Var(a) => {
-                _ = ctx.add_symbol(a.name.clone(), v, ty, a.range, false, false);
+                ctx.push_semantic_token(a.range, SemanticTokenType::VARIABLE, 0);
+                _ = ctx.add_symbol(a.name.clone(), v, ty.clone(), a.range, false, false);
+                ctx.push_type_hints(a.range, ty);
                 let i = builder.int_value(&PriType::BOOL, 1, false);
                 Self::add_matched_bb(i, not_matched, ctx, builder);
             }
             MatchArmCondition::Literal(lit) => match lit {
-                Literal::Number(n) => match n.value {
-                    Num::Int(i) => match &*ty.borrow() {
-                        PLType::Primitive(p) => {
-                            if p.is_int() {
-                                let i_v = builder.int_value(&p, i, false);
-                                let v = ctx.try_load2var(Default::default(), v, builder, &ty.borrow()).unwrap();
-                                let i = builder.build_int_compare(
-                                    crate::ast::builder::IntPredicate::EQ,
-                                    i_v,
-                                    v,
-                                    "eq",
-                                );
-                                Self::add_matched_bb(i, not_matched, ctx, builder);
-                            }else {
-                                ctx.position_at_end(not_matched, builder);
+                Literal::Number(n) => {
+                    ctx.push_semantic_token(n.range, SemanticTokenType::NUMBER, 0);
+                    match n.value {
+                        Num::Int(i) => match &*ty.borrow() {
+                            PLType::Primitive(p) => {
+                                if p.is_int() {
+                                    let i_v = builder.int_value(p, i, false);
+                                    let v = ctx
+                                        .try_load2var(Default::default(), v, builder, &ty.borrow())
+                                        .unwrap();
+                                    let i = builder.build_int_compare(
+                                        crate::ast::builder::IntPredicate::EQ,
+                                        i_v,
+                                        v,
+                                        "eq",
+                                    );
+                                    Self::add_matched_bb(i, not_matched, ctx, builder);
+                                } else {
+                                    n.range().new_err(ErrorCode::ILLEGAL_MATCH_ARM_CONDITION)
+                                .add_label(n.range, ctx.get_file(), format_label!("match condition is of type `{}`, imcompatible with type `{}`", "int", "float"))
+                                .add_to_ctx(ctx);
+                                }
                             }
-                        }
-                        _ => {
-                            ctx.position_at_end(not_matched, builder);
-                        },
-                    },
-                    Num::Float(f) => match &*ty.borrow() {
-                        PLType::Primitive(p) => {
-                            if !p.is_int() {
-                                let f_v = builder.float_value(&p, f);
-                                let v = ctx.try_load2var(Default::default(), v, builder, &ty.borrow()).unwrap();
-                                let i = builder.build_float_compare(
-                                    crate::ast::builder::FloatPredicate::OEQ,
-                                    f_v,
-                                    v,
-                                    "eq",
-                                );
-                                Self::add_matched_bb(i, not_matched, ctx, builder);
-                            }else {
-                                ctx.position_at_end(not_matched, builder);
+                            _ => {
+                                n.range().new_err(ErrorCode::ILLEGAL_MATCH_ARM_CONDITION)
+                            .add_label(n.range, ctx.get_file(), format_label!("match condition is of type `{}`, imcompatible with type `{}`", "int", ty.borrow().get_name()))
+                            .add_to_ctx(ctx);
                             }
-                        }
-                        _ => {
-                            ctx.position_at_end(not_matched, builder);
                         },
-                    },
-                },
-                Literal::String(_) => todo!(),
-                Literal::Bool(b) => match &*ty.borrow() {
-                    PLType::Primitive(PriType::BOOL) => {
-                        let b_v =
-                            builder.int_value(&PriType::BOOL, if b.value { 1 } else { 0 }, false);
-                        let v = ctx.try_load2var(Default::default(), v, builder, &ty.borrow()).unwrap();
-                        let i = builder.build_int_compare(
-                            crate::ast::builder::IntPredicate::EQ,
-                            b_v,
-                            v,
-                            "eq",
-                        );
-                        Self::add_matched_bb(i, not_matched, ctx, builder);
+                        Num::Float(f) => match &*ty.borrow() {
+                            PLType::Primitive(p) => {
+                                if !p.is_int() {
+                                    let f_v = builder.float_value(p, f);
+                                    let v = ctx
+                                        .try_load2var(Default::default(), v, builder, &ty.borrow())
+                                        .unwrap();
+                                    let i = builder.build_float_compare(
+                                        crate::ast::builder::FloatPredicate::OEQ,
+                                        f_v,
+                                        v,
+                                        "eq",
+                                    );
+                                    Self::add_matched_bb(i, not_matched, ctx, builder);
+                                } else {
+                                    n.range().new_err(ErrorCode::ILLEGAL_MATCH_ARM_CONDITION)
+                                .add_label(n.range, ctx.get_file(), format_label!("match condition is of type `{}`, imcompatible with type `{}`", "float", "int"))
+                                .add_to_ctx(ctx);
+                                }
+                            }
+                            _ => {
+                                n.range().new_err(ErrorCode::ILLEGAL_MATCH_ARM_CONDITION)
+                            .add_label(n.range, ctx.get_file(), format_label!("match condition is of type `{}`, imcompatible with type `{}`", "float", ty.borrow().get_name()))
+                            .add_to_ctx(ctx);
+                            }
+                        },
                     }
-                    _ => {
-                        ctx.position_at_end(not_matched, builder);
-                    },
-                },
+                }
+                Literal::String(s) => {
+                    match &*ty.borrow() {
+                        PLType::Struct(STType { name: n, .. }) if n == "string" => (),
+                        _ => {
+                            s.range.new_err(ErrorCode::ILLEGAL_MATCH_ARM_CONDITION)
+                            .add_label(s.range, ctx.get_file(), format_label!("match condition is of type `{}`, imcompatible with type `{}`", "string", ty.borrow().get_name()))
+                            .add_to_ctx(ctx);
+                        }
+                    }
+                    let f = ctx.get_gc_mod_f(builder, "string_eq");
+                    let s = s
+                        .emit(ctx, builder)
+                        .unwrap()
+                        .get_value()
+                        .unwrap()
+                        .get_value();
+                    let i = builder
+                        .build_call(f, &[s, v], &PLType::Primitive(PriType::BOOL), ctx, None)
+                        .unwrap();
+                    Self::add_matched_bb(i, not_matched, ctx, builder);
+                }
+                Literal::Bool(b) => {
+                    match &*ty.borrow() {
+                        PLType::Primitive(PriType::BOOL) => {
+                            let b_v = builder.int_value(
+                                &PriType::BOOL,
+                                if b.value { 1 } else { 0 },
+                                false,
+                            );
+                            let v = ctx
+                                .try_load2var(Default::default(), v, builder, &ty.borrow())
+                                .unwrap();
+                            let i = builder.build_int_compare(
+                                crate::ast::builder::IntPredicate::EQ,
+                                b_v,
+                                v,
+                                "eq",
+                            );
+                            Self::add_matched_bb(i, not_matched, ctx, builder);
+                        }
+                        _ => {
+                            b.range().new_err(ErrorCode::ILLEGAL_MATCH_ARM_CONDITION)
+                        .add_label(b.range, ctx.get_file(), format_label!("match condition is of type `{}`, imcompatible with type `{}`", "bool", ty.borrow().get_name()))
+                        .add_to_ctx(ctx);
+                        }
+                    }
+                }
             },
             MatchArmCondition::TypedVar(tp, c) => {
                 tp.emit_highlight(ctx);
@@ -526,25 +575,68 @@ impl MatchArmCondition {
                                 .unwrap();
                             let v_ptr = builder.build_load(v_ptr, "v", &PLType::new_i8_ptr(), ctx);
                             c.is_matched(v_ptr, match_ty.clone(), not_matched, ctx, builder);
-                        }else {
-                            ctx.position_at_end(not_matched, builder);
+                        } else {
+                            tp.range()
+                                .new_err(ErrorCode::ILLEGAL_MATCH_ARM_CONDITION)
+                                .add_label(
+                                    tp.range(),
+                                    ctx.get_file(),
+                                    format_label!(
+                                        "match condition is of \
+                            type `{}`, expected to be one of: `{}`",
+                                        match_ty.borrow().get_name(),
+                                        u.get_sum_types(ctx, builder)
+                                            .iter()
+                                            .map(|t| t.borrow().get_name())
+                                            .collect::<Vec<_>>()
+                                            .join(", ")
+                                    ),
+                                )
+                                .add_to_ctx(ctx);
                         }
                     }
                     _ => {
-                        ctx.position_at_end(not_matched, builder);
-                    },
+                        tp.range()
+                            .new_err(ErrorCode::ILLEGAL_MATCH_ARM_CONDITION)
+                            .add_label(
+                                tp.range(),
+                                ctx.get_file(),
+                                format_label!(
+                                    "match condition like `{}` can \
+                        only be used while maching through union types. Here `{}` \
+                        is of type `{}`",
+                                    "type(cond)",
+                                    ty.borrow().get_name(),
+                                    ty.borrow().get_kind_name()
+                                ),
+                            )
+                            .add_to_ctx(ctx);
+                    }
                 }
             }
             MatchArmCondition::TypedDeconstruct(_, _) => todo!(),
             MatchArmCondition::Deconstruct(fields) => {
                 match &*ty.borrow() {
-                    PLType::Struct(s @ STType{is_tuple:false, ..}) => {
-                        for (f, c) in fields.iter() {
+                    PLType::Struct(
+                        s @ STType {
+                            is_tuple: false, ..
+                        },
+                    ) => {
+                        for (f, c) in fields.iter_mut() {
+                            ctx.push_semantic_token(f.range, SemanticTokenType::PROPERTY, 0);
                             if let Some(f) = s.fields.get(&f.name) {
                                 let v_ptr = builder
                                     .build_struct_gep(v, f.index, "v", &ty.borrow(), ctx)
                                     .unwrap();
-                                c.is_matched(v_ptr, f.typenode.get_type(ctx, builder, false).unwrap_or(unknown_arc()), not_matched, ctx, builder);
+                                c.is_matched(
+                                    v_ptr,
+                                    f.typenode
+                                        .get_type(ctx, builder, false)
+                                        .unwrap_or(unknown_arc()),
+                                    not_matched,
+                                    ctx,
+                                    builder,
+                                );
                             } else {
                                 f.range
                                     .new_err(ErrorCode::STRUCT_FIELD_NOT_FOUND)
@@ -558,16 +650,32 @@ impl MatchArmCondition {
                         }
                     }
                     _ => {
-                        ctx.position_at_end(not_matched, builder);
-                    },
+                        self.range()
+                            .new_err(ErrorCode::ILLEGAL_MATCH_ARM_CONDITION)
+                            .add_label(
+                                self.range(),
+                                ctx.get_file(),
+                                format_label!(
+                                    "match condition like `{}` can \
+                        only be used while maching through struct types. Here `{}` \
+                        is of type `{}`",
+                                    "{field:cond ...}",
+                                    ty.borrow().get_name(),
+                                    ty.borrow().get_kind_name()
+                                ),
+                            )
+                            .add_to_ctx(ctx);
+                    }
                 };
             }
             MatchArmCondition::Tuple(fields) => {
                 match &*ty.borrow() {
-                    PLType::Struct( tuple @ STType{is_tuple:true, ..}) => {
-                        for (i, c) in fields.iter().enumerate() {
-                            if i >= tuple.fields.len(){
-                                c.range().new_err(ErrorCode::TUPLE_WRONG_DECONSTRUCT_PARAM_LEN).add_to_ctx(ctx);
+                    PLType::Struct(tuple @ STType { is_tuple: true, .. }) => {
+                        for (i, c) in fields.iter_mut().enumerate() {
+                            if i >= tuple.fields.len() {
+                                c.range()
+                                    .new_err(ErrorCode::TUPLE_WRONG_DECONSTRUCT_PARAM_LEN)
+                                    .add_to_ctx(ctx);
                                 continue;
                             }
                             let mut offset = 0;
@@ -575,16 +683,42 @@ impl MatchArmCondition {
                                 offset = 1;
                             }
                             let v_ptr = builder
-                                .build_struct_gep(v, (i+offset) as u32, "v", &ty.borrow(), ctx)
+                                .build_struct_gep(v, (i + offset) as u32, "v", &ty.borrow(), ctx)
                                 .unwrap();
-                            c.is_matched(v_ptr, tuple.fields.get(&i.to_string()).unwrap().typenode.get_type(ctx, builder, false).unwrap_or(unknown_arc()), not_matched, ctx, builder);
+                            c.is_matched(
+                                v_ptr,
+                                tuple
+                                    .fields
+                                    .get(&i.to_string())
+                                    .unwrap()
+                                    .typenode
+                                    .get_type(ctx, builder, false)
+                                    .unwrap_or(unknown_arc()),
+                                not_matched,
+                                ctx,
+                                builder,
+                            );
                         }
                     }
                     _ => {
-                        ctx.position_at_end(not_matched, builder);
-                    },
+                        self.range()
+                            .new_err(ErrorCode::ILLEGAL_MATCH_ARM_CONDITION)
+                            .add_label(
+                                self.range(),
+                                ctx.get_file(),
+                                format_label!(
+                                    "match condition like `{}` can \
+                        only be used while maching through union types. Here `{}` \
+                        is of type `{}`",
+                                    "(cond, ...)",
+                                    ty.borrow().get_name(),
+                                    ty.borrow().get_kind_name()
+                                ),
+                            )
+                            .add_to_ctx(ctx);
+                    }
                 };
-            },
+            }
         };
     }
 }
@@ -598,10 +732,78 @@ pub enum Literal {
 
 pub type STMatchField = (VarNode, MatchArmCondition);
 
-
 impl PrintTrait for MatchNode {
-    fn print(&self, tabs: usize, end: bool, line: Vec<bool>) {
-        todo!()
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        deal_line(tabs, &mut line, end);
+        tab(tabs, line.clone(), end);
+        println!("MatchNode");
+        self.value.print(tabs + 1, false, line.clone());
+        for (cond, body) in self.arms.iter() {
+            cond.print(tabs + 1, false, line.clone());
+            body.print(tabs + 1, false, line.clone());
+        }
+    }
+}
+
+impl PrintTrait for MatchArmCondition {
+    fn print(&self, tabs: usize, end: bool, mut line: Vec<bool>) {
+        match self {
+            MatchArmCondition::Discard(_) => {
+                deal_line(tabs, &mut line, end);
+                tab(tabs, line.clone(), end);
+                println!("Discard");
+            }
+            MatchArmCondition::Var(v) => {
+                deal_line(tabs, &mut line, end);
+                tab(tabs, line.clone(), end);
+                println!("Var");
+                v.print(tabs + 1, end, line);
+            }
+            MatchArmCondition::Literal(l) => {
+                deal_line(tabs, &mut line, end);
+                tab(tabs, line.clone(), end);
+                println!("Literal");
+                match l {
+                    Literal::Number(n) => n.print(tabs + 1, end, line),
+                    Literal::String(s) => s.print(tabs + 1, end, line),
+                    Literal::Bool(b) => b.print(tabs + 1, end, line),
+                }
+            }
+            MatchArmCondition::TypedVar(t, c) => {
+                deal_line(tabs, &mut line, end);
+                tab(tabs, line.clone(), end);
+                println!("TypedVar");
+                t.print(tabs + 1, false, line.clone());
+                c.print(tabs + 1, end, line);
+            }
+            MatchArmCondition::TypedDeconstruct(t, f) => {
+                deal_line(tabs, &mut line, end);
+                tab(tabs, line.clone(), end);
+                println!("TypedDeconstruct");
+                t.print(tabs + 1, false, line.clone());
+                for (v, c) in f {
+                    v.print(tabs + 1, false, line.clone());
+                    c.print(tabs + 1, false, line.clone());
+                }
+            }
+            MatchArmCondition::Deconstruct(f) => {
+                deal_line(tabs, &mut line, end);
+                tab(tabs, line.clone(), end);
+                println!("Deconstruct");
+                for (v, c) in f {
+                    v.print(tabs + 1, false, line.clone());
+                    c.print(tabs + 1, false, line.clone());
+                }
+            }
+            MatchArmCondition::Tuple(f) => {
+                deal_line(tabs, &mut line, end);
+                tab(tabs, line.clone(), end);
+                println!("Tuple");
+                for c in f {
+                    c.print(tabs + 1, false, line.clone());
+                }
+            }
+        }
     }
 }
 
@@ -615,6 +817,24 @@ impl Node for MatchNode {
         let value = value.unwrap();
         let ty = value.get_ty();
         let value = value.get_value();
+        match &*ty.borrow() {
+            PLType::Struct(_) | PLType::Primitive(_) | PLType::Union(_) => (),
+            _ => {
+                self.value
+                    .range()
+                    .new_err(ErrorCode::ILLEGAL_MATCH_VALUE)
+                    .add_label(
+                        self.value.range(),
+                        ctx.get_file(),
+                        format_label!(
+                            "type `{}` of kind `{}` is not allowed to be matched",
+                            ty.borrow().get_name(),
+                            ty.borrow().get_kind_name()
+                        ),
+                    )
+                    .add_to_ctx(ctx);
+            }
+        }
         let matchend_b = builder.append_basic_block(ctx.function.unwrap(), "matchend");
 
         // let mut matched = builder.int_value(&PriType::BOOL, 0, false);

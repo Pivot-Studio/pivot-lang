@@ -20,7 +20,7 @@ fn match_cond(input: Span) -> IResult<Span, MatchArmCondition> {
         map(tag_token_symbol_ex(TokenType::INGNORE), |(_, r)| {
             MatchArmCondition::Discard(r)
         }),
-        map(literal, |lit| MatchArmCondition::Literal(lit)),
+        map(literal, MatchArmCondition::Literal),
         map(
             tuple((
                 basic_type,
@@ -33,7 +33,7 @@ fn match_cond(input: Span) -> IResult<Span, MatchArmCondition> {
         // map(tuple((basic_type, st_body_match)), |(bt, b)| {
         //     MatchArmCondition::TypedDeconstruct(*bt, b)
         // }), // TODO: mabye one day we need to match trait
-        map(st_body_match, |b| MatchArmCondition::Deconstruct(b)),
+        map(st_body_match, MatchArmCondition::Deconstruct),
         map(
             tuple((
                 tag_token_symbol_ex(TokenType::LPAREN),
@@ -47,7 +47,6 @@ fn match_cond(input: Span) -> IResult<Span, MatchArmCondition> {
     ))(input)
 }
 
-
 fn st_body_match(input: Span) -> IResult<Span, Vec<STMatchField>> {
     map(
         tuple((
@@ -60,9 +59,9 @@ fn st_body_match(input: Span) -> IResult<Span, Vec<STMatchField>> {
     )(input)
 }
 
-fn st_match_field(
-    input: Span,
-) -> IResult<Span, (Box<VarNode>, (TokenType, Range), MatchArmCondition)> {
+type STMatchRet = (Box<VarNode>, (TokenType, Range), MatchArmCondition);
+
+fn st_match_field(input: Span) -> IResult<Span, STMatchRet> {
     tuple((
         identifier,
         tag_token_symbol_ex(TokenType::COLON),
@@ -75,9 +74,9 @@ fn st_match_field(
 #[test_parser(r#""hellowdshjkfhsdjk""#)]
 fn literal(input: Span) -> IResult<Span, Literal> {
     alt((
-        map(number, |n| Literal::Number(n)),
-        map(string_literal, |s| Literal::String(s)),
-        map(bool_const, |b| Literal::Bool(b)),
+        map(number, Literal::Number),
+        map(string_literal, Literal::String),
+        map(bool_const, Literal::Bool),
     ))(input)
 }
 
@@ -88,9 +87,6 @@ fn literal(input: Span) -> IResult<Span, Literal> {
     }
     A(d) => {
         let a = b;
-    }
-    D{a:1, b:d} => {
-        let a = d;
     }
     {a:1, b:(1,{a:1, b:2})} => {
         let a = b;

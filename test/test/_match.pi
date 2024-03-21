@@ -1,0 +1,50 @@
+
+struct name {
+    a: i64;
+    b: i64;
+}
+
+pub fn test_match() void {
+    let a = 1 as Option<i64>;
+
+    match a {
+        i64(i) => {
+            println!(i);
+        }
+        _ => {
+            println!(222);
+        }
+    }
+    let n = name { a: 1, b: 2 };
+    match n {
+        { a: 1, b: 2 } => {
+            println!(1);
+        }
+        _ => {
+            println!(2);
+        }
+    };
+
+    match (a,n) {
+        (None(_),{ a: 1, b: 2 }) => {
+            println!(1);
+        }
+        (i64(2),{ a: 1, b: 2 }) => {
+            println!(2);
+        }
+        _ => {
+            println!(3);
+        }
+    };
+
+    let s = "fdsafasdad";
+    match s {
+        "fdsafasdad" => {
+            println!(1);
+        }
+        _ => {
+            println!(2);
+        }
+    };
+    return;
+}

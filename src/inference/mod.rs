@@ -24,7 +24,7 @@
 //! > variable has many constraints, and different variables'
 //! > constraints may be the same. So we use unify table to
 //! > record the constraints.
-use std::{cell::RefCell, fmt::format, sync::Arc};
+use std::{cell::RefCell, sync::Arc};
 
 use ena::unify::{InPlace, UnificationTable, UnifyKey, UnifyValue};
 use indexmap::IndexMap;
@@ -35,12 +35,19 @@ use crate::ast::{
     builder::{BuilderEnum, IRBuilder},
     ctx::Ctx,
     node::{
-        control::MatchArmCondition, pointer::PointerOpEnum, statement::{DefVar, StatementsNode}, tuple::{new_tuple_field, new_tuple_type}, types::{GenericParamNode, TypeNameNode}, NodeEnum, TypeNode, TypeNodeEnum
+        control::MatchArmCondition,
+        pointer::PointerOpEnum,
+        statement::{DefVar, StatementsNode},
+        tuple::{new_tuple_field, new_tuple_type},
+        types::{GenericParamNode, TypeNameNode},
+        NodeEnum, TypeNode, TypeNodeEnum,
     },
     pltype::{
-        get_type_deep, ARRType, ClosureType, FNValue, ImplAble, PLType, STType, TraitImplAble,
+        get_type_deep, ARRType, CanGenCode, ClosureType, FNValue, Generic, ImplAble, PLType,
+        STType, TraitImplAble, UnionType,
     },
     tokens::TokenType,
+    traits::CustomType,
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -109,6 +116,7 @@ pub enum GenericTy {
     Closure,
     Tuple,
     St(STType),
+    Un(UnionType),
     Pointer,
     Array,
 }
@@ -223,32 +231,8 @@ impl TyInfer {
                         });
                         Arc::new(RefCell::new(PLType::Struct(st)))
                     }
-                    GenericTy::St(st) => {
-                        let mut partial = false;
-                        let mut st = st.clone();
-                        for (i, (_, v)) in st.generic_map.iter_mut().enumerate() {
-                            let t = unify_table.probe_value(*gen.get(i).unwrap()).get_type(
-                                ctx,
-                                builder,
-                                unify_table,
-                            );
-                            if *t.borrow() == PLType::Unknown {
-                                // return unknown_arc();
-                                partial = true;
-                            }
-                            match &mut *v.borrow_mut() {
-                                PLType::Generic(g) => g.curpltype = Some(t),
-                                _ => unreachable!(),
-                            };
-                        }
-                        let st = ctx.run_in_type_mod(&st, |ctx, st| {
-                            st.gen_code(ctx, builder).unwrap_or(unknown_arc())
-                        });
-                        if partial {
-                            return new_arc_refcell(PLType::PartialInferred(st));
-                        }
-                        st
-                    }
+                    GenericTy::St(st) => get_generic_ty_inner(st, unify_table, gen, ctx, builder),
+                    GenericTy::Un(un) => get_generic_ty_inner(un, unify_table, gen, ctx, builder),
                     GenericTy::Pointer => {
                         let p = gen[0];
                         let infer = unify_table.probe_value(p);
@@ -288,6 +272,39 @@ impl TyInfer {
             _ => unknown_arc(),
         }
     }
+}
+
+fn get_generic_ty_inner<'a, 'b, T: CanGenCode + Generic + CustomType + Clone>(
+    st: &T,
+    unify_table: &mut UnificationTable<InPlace<TyVariable>>,
+    gen: &[TyVariable],
+    ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,
+) -> Arc<RefCell<PLType>> {
+    let mut partial = false;
+    let mut st = st.clone();
+    for (i, (_, v)) in st.get_generic_map_mut().iter_mut().enumerate() {
+        let t = unify_table
+            .probe_value(*gen.get(i).unwrap())
+            .get_type(ctx, builder, unify_table);
+        if *t.borrow() == PLType::Unknown {
+            // return unknown_arc();
+            partial = true;
+        }
+        match &mut *v.borrow_mut() {
+            PLType::Generic(g) => g.curpltype = Some(t),
+            _ => unreachable!(),
+        };
+    }
+    let st = ctx.run_in_type_mod(&st, |ctx, st| {
+        ctx.protect_generic_context(st.get_generic_map(), |ctx| {
+            st.gen_code(ctx, builder).unwrap_or(unknown_arc())
+        })
+    });
+    if partial {
+        return new_arc_refcell(PLType::PartialInferred(st));
+    }
+    st
 }
 
 pub struct InferenceCtx<'ctx> {
@@ -547,6 +564,11 @@ impl<'ctx> InferenceCtx<'ctx> {
             }
             NodeEnum::Assign(a) => {
                 let ty = self.inference(&mut a.exp, ctx, builder);
+                // let t = match &ty {
+                //     SymbolType::Var(v) => self.unify_table.borrow_mut().probe_value(*v),
+                //     SymbolType::PLType(ty) => TyInfer::Term(ty.clone()),
+                // }.get_type(ctx, builder, & mut self.unify_table.borrow_mut());
+                // eprintln!("var: {:?}", t);
                 match &mut a.var {
                     crate::ast::node::statement::AssignVar::Pointer(p) => {
                         let re = self.inference(&mut *p, ctx, builder);
@@ -1052,7 +1074,7 @@ impl<'ctx> InferenceCtx<'ctx> {
             }
             NodeEnum::MatchNode(m) => {
                 let ty = self.inference(&mut m.value, ctx, builder);
-                for (cond,body) in &mut m.arms {
+                for (cond, body) in &mut m.arms {
                     let mut child = self.new_child();
                     child.inference_match_arm(cond, ty.clone(), ctx, builder);
                     child.inference_statements(body, ctx, builder);
@@ -1063,9 +1085,13 @@ impl<'ctx> InferenceCtx<'ctx> {
         unknown()
     }
 
-
-    fn inference_match_arm<'a, 'b>(&mut self, cond:&MatchArmCondition, vty:SymbolType,        ctx: &'b mut Ctx<'a>,
-    builder: &'b BuilderEnum<'a, '_>,) {
+    fn inference_match_arm<'a, 'b>(
+        &mut self,
+        cond: &MatchArmCondition,
+        vty: SymbolType,
+        ctx: &'b mut Ctx<'a>,
+        builder: &'b BuilderEnum<'a, '_>,
+    ) {
         match cond {
             MatchArmCondition::Discard(_) => (),
             MatchArmCondition::Var(a) => {
@@ -1076,66 +1102,68 @@ impl<'ctx> InferenceCtx<'ctx> {
             MatchArmCondition::Literal(_) => (),
             MatchArmCondition::TypedVar(ty, c) => {
                 let vty = ty.get_type(ctx, builder, false).unwrap_or(unknown_arc());
-                self.inference_match_arm(&c, SymbolType::PLType(vty), ctx, builder);
-            },
+                self.inference_match_arm(c, SymbolType::PLType(vty), ctx, builder);
+            }
             MatchArmCondition::TypedDeconstruct(_, _) => todo!(),
-            MatchArmCondition::Deconstruct(fields) => {
-                match &vty {
-                    SymbolType::Var(v) => {
-                        let k = self.unify_table.borrow_mut().probe_value(*v);
-                        match k {
-                            TyInfer::Term(t) => {
-                                if let PLType::Struct(_) = &*t.borrow() {
-                                    for (f, c) in fields {
-                                        let sym = self.symbol_field_symbol(vty.clone(), ctx, &f.name, builder).unwrap();
-                                        self.inference_match_arm(c, sym, ctx, builder);
-                                    }
-                                }
-                            }
-                            _ => (),
-                        }
-                    }
-                    SymbolType::PLType(t) => {
-                        if let PLType::Struct(_) = &*t.borrow() {
-                            for (f, c) in fields {
-                                let sym = self.symbol_field_symbol(vty.clone(), ctx, &f.name, builder).unwrap();
-                                self.inference_match_arm(c, sym, ctx, builder);
-                            }
-                        }
-                    }
-                }
-            
-            },
-            MatchArmCondition::Tuple(fields) => {
-                match &vty {
-                    SymbolType::Var(v) => {
-                        let k = self.unify_table.borrow_mut().probe_value(*v);
-                        match k {
-                            TyInfer::Term(t) => {
-                                if let PLType::Struct(t) = &*t.borrow() {
-                                    for (i, c) in fields.iter().enumerate() {
-                                        t.fields.get(&format!("{}", i)).map(|f| {
-                                            let sym = self.symbol_field_symbol(vty.clone(), ctx, &f.name, builder).unwrap();
-                                            self.inference_match_arm(c, sym, ctx, builder);
-                                        });
-                                    }
-                                }
-                            }
-                            _ => (),
-                        }
-                    }
-                    SymbolType::PLType(t) => {
-                        if let PLType::Struct(t) = &*t.borrow() {
-                            for (i, c) in fields.iter().enumerate() {
-                                t.fields.get(&format!("{}", i)).map(|f| {
-                                    let sym = self.symbol_field_symbol(vty.clone(), ctx, &f.name, builder).unwrap();
+            MatchArmCondition::Deconstruct(fields) => match &vty {
+                SymbolType::Var(v) => {
+                    let k = self.unify_table.borrow_mut().probe_value(*v);
+                    match k {
+                        TyInfer::Term(t) => {
+                            if let PLType::Struct(_) = &*t.borrow() {
+                                for (f, c) in fields {
+                                    let sym = self
+                                        .symbol_field_symbol(vty.clone(), ctx, &f.name, builder)
+                                        .unwrap();
                                     self.inference_match_arm(c, sym, ctx, builder);
-                                });
+                                }
                             }
+                        }
+                        _ => (),
+                    }
+                }
+                SymbolType::PLType(t) => {
+                    if let PLType::Struct(_) = &*t.borrow() {
+                        for (f, c) in fields {
+                            let sym = self
+                                .symbol_field_symbol(vty.clone(), ctx, &f.name, builder)
+                                .unwrap();
+                            self.inference_match_arm(c, sym, ctx, builder);
                         }
                     }
                 }
-            
+            },
+            MatchArmCondition::Tuple(fields) => match &vty {
+                SymbolType::Var(v) => {
+                    let k = self.unify_table.borrow_mut().probe_value(*v);
+                    match k {
+                        TyInfer::Term(t) => {
+                            if let PLType::Struct(t) = &*t.borrow() {
+                                for (i, c) in fields.iter().enumerate() {
+                                    t.fields.get(&format!("{}", i)).map(|f| {
+                                        let sym = self
+                                            .symbol_field_symbol(vty.clone(), ctx, &f.name, builder)
+                                            .unwrap();
+                                        self.inference_match_arm(c, sym, ctx, builder);
+                                    });
+                                }
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+                SymbolType::PLType(t) => {
+                    if let PLType::Struct(t) = &*t.borrow() {
+                        for (i, c) in fields.iter().enumerate() {
+                            t.fields.get(&format!("{}", i)).map(|f| {
+                                let sym = self
+                                    .symbol_field_symbol(vty.clone(), ctx, &f.name, builder)
+                                    .unwrap();
+                                self.inference_match_arm(c, sym, ctx, builder);
+                            });
+                        }
+                    }
+                }
             },
         }
     }
@@ -1338,6 +1366,9 @@ impl<'ctx> InferenceCtx<'ctx> {
                         }
                     }
                     TyInfer::Generic((tys, GenericTy::St(st))) => {
+                        // if f == "get" {
+                        //     eprintln!("{:?}", f);
+                        // }
                         let mut generic_map = FxHashMap::default();
                         st.generic_map.iter().enumerate().for_each(|(i, (k, _))| {
                             generic_map.insert(k.clone(), tys[i]);
@@ -1353,6 +1384,27 @@ impl<'ctx> InferenceCtx<'ctx> {
                                     &generic_map,
                                 );
                             }
+                            let a = st;
+                            if let Some(mthd) = a
+                                .get_method(field)
+                                .or(ctx.find_global_method(&a.get_full_name(), field).or(ctx
+                                    .find_global_method(&a.get_full_name_except_generic(), field)))
+                            {
+                                return Some(SymbolType::PLType(new_arc_refcell(PLType::Fn(
+                                    mthd.borrow().clone(),
+                                ))));
+                            }
+
+                            None
+                        });
+                    }
+                    TyInfer::Generic((tys, GenericTy::Un(st))) => {
+                        let mut generic_map = FxHashMap::default();
+                        st.generic_map.iter().enumerate().for_each(|(i, (k, _))| {
+                            generic_map.insert(k.clone(), tys[i]);
+                        });
+                        return ctx.run_in_type_mod(&st, |ctx, st| {
+                            let field = f;
                             let a = st;
                             if let Some(mthd) = a
                                 .get_method(field)
@@ -1429,6 +1481,17 @@ impl Inferable for TypeNodeEnum {
                                 .unify_var_value(
                                     id,
                                     TyInfer::Generic((tys, GenericTy::St(s.clone()))),
+                                )
+                                .unwrap();
+                            return Some(SymbolType::Var(id));
+                        }
+                        PLType::Union(s) => {
+                            infer_ctx
+                                .unify_table
+                                .borrow_mut()
+                                .unify_var_value(
+                                    id,
+                                    TyInfer::Generic((tys, GenericTy::Un(s.clone()))),
                                 )
                                 .unwrap();
                             return Some(SymbolType::Var(id));

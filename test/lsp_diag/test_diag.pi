@@ -118,3 +118,5 @@ fn arg_ptr(a:i64) void {
     arg_ptr(&*AAAA);
     return;
 }
+
+use test::match_diag;

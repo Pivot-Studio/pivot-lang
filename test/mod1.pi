@@ -11,7 +11,7 @@ pub fn test_mod(args: i64) void {
     return;
 }
 
-pub fn printi64ln(i: i64) void;
+// pub fn printi64ln(i: i64) void;
 
 //415642154
 pub struct Mod1<T> {

@@ -247,6 +247,32 @@ impl<'a, 'ctx> Ctx<'a> {
         data.clone()
     }
 
+    pub fn get_gc_mod_f<'b>(
+        &mut self,
+        builder: &'b BuilderEnum<'a, 'ctx>,
+        malloc_fn: &str,
+    ) -> ValueHandle {
+        let mut root_ctx = &*self;
+        while let Some(f) = root_ctx.root {
+            root_ctx = f
+        }
+        let gcmod = root_ctx
+            .plmod
+            .submods
+            .get("gc")
+            .map(|rc| rc.as_ref())
+            .unwrap_or(&root_ctx.plmod);
+        let f: FNValue = gcmod
+            .types
+            .get(malloc_fn)
+            .unwrap()
+            .borrow()
+            .clone()
+            .try_into()
+            .unwrap();
+        let f = builder.get_or_insert_fn_handle(&f, self);
+        f.0
+    }
     pub fn check_self_ref(&self, name: &str, range: Range) -> Result<(), PLDiag> {
         if let Some(root) = self.root {
             root.check_self_ref_inner(name, name, range)

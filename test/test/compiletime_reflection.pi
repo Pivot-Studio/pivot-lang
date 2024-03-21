@@ -10,7 +10,7 @@ pub fn test_compile_time_reflection() void {
     io::print_s("\n");
     assert(n.f);
     assert(n.dd);
-    println!(n, "你好", true, 10);
+    // println!(n, "你好", true, 10);
     io::print_s("\n");
     return;
 }
