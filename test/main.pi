@@ -1,6 +1,12 @@
 use std::cols::hashtable::*;
 use std::cols::arr::*;
 
+
+struct name {
+    a: i64;
+    b: i64;
+}
+
 pub fn main() i64 {
     println!("Hello, World!");
     let h = new_hash_table<i64|i64>(10 as u64, 1 as u64);
@@ -24,5 +30,45 @@ pub fn main() i64 {
     println!(h);
     println!(1,2,3);
     println!(123);
+
+    let a = h.get(1);
+
+    match a {
+        i64(i) => {
+            println!(i);
+        }
+        _ => {
+            println!(222);
+        }
+    }
+    let n = name { a: 1, b: 2 };
+    match n {
+        { a: 1, b: 2 } => {
+            println!(1);
+        }
+        _ => {
+            println!(2);
+        }
+    };
+
+    match (a,n) {
+        (None(_),{ a: 1, b: 2 }) => {
+            println!(1);
+        }
+        (i64(2),{ a: 1, b: 2 }) => {
+            println!(2);
+        }
+        _ => {
+            println!(3);
+        }
+    };
+    // match (1, n) {
+    //     (1, { a: 1, b: 2 }) => {
+    //         println!(1);
+    //     }
+    //     _ => {
+    //         println!(2);
+    //     }
+    // };
     return 0;
 }

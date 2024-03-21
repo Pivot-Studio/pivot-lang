@@ -371,7 +371,7 @@ impl<'a, 'ctx> Ctx<'a> {
         );
         (result, result_tp)
     }
-    fn force_cast_union_to<'b>(
+    pub fn force_cast_union_to<'b>(
         &mut self,
         builder: &'b BuilderEnum<'a, 'ctx>,
         val: ValueHandle,

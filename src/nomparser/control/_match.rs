@@ -30,14 +30,14 @@ fn match_cond(input: Span) -> IResult<Span, MatchArmCondition> {
             )),
             |(bt, _, c, _)| MatchArmCondition::TypedVar(*bt, Box::new(c)),
         ),
-        map(tuple((basic_type, st_body_match)), |(bt, b)| {
-            MatchArmCondition::TypedDeconstruct(*bt, b)
-        }),
+        // map(tuple((basic_type, st_body_match)), |(bt, b)| {
+        //     MatchArmCondition::TypedDeconstruct(*bt, b)
+        // }), // TODO: mabye one day we need to match trait
         map(st_body_match, |b| MatchArmCondition::Deconstruct(b)),
         map(
             tuple((
                 tag_token_symbol_ex(TokenType::LPAREN),
-                separated_list0(tag_token_symbol_ex(TokenType::COMMA), tuple_match_field),
+                separated_list0(tag_token_symbol_ex(TokenType::COMMA), match_cond),
                 opt(tag_token_symbol_ex(TokenType::COMMA)),
                 tag_token_symbol_ex(TokenType::RPAREN),
             )),
@@ -47,12 +47,6 @@ fn match_cond(input: Span) -> IResult<Span, MatchArmCondition> {
     ))(input)
 }
 
-fn tuple_match_field(input: Span) -> IResult<Span, TupleField> {
-    alt((
-        map(literal, |lit| TupleField::Literal(lit)),
-        map(match_cond, |c| TupleField::Var(c)),
-    ))(input)
-}
 
 fn st_body_match(input: Span) -> IResult<Span, Vec<STMatchField>> {
     map(
