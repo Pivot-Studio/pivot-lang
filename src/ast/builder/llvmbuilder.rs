@@ -332,7 +332,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .unwrap();
                 let vtable = self
                     .builder
-                    .build_struct_gep(llvm_tp, p, 0, "riit")
+                    .build_struct_gep(llvm_tp, p, 0, "rtti")
                     .unwrap();
                 self.builder.build_store(vtable, i).unwrap();
             }

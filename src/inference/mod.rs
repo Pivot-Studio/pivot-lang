@@ -24,7 +24,7 @@
 //! > variable has many constraints, and different variables'
 //! > constraints may be the same. So we use unify table to
 //! > record the constraints.
-use std::{cell::RefCell, sync::Arc};
+use std::{cell::RefCell, fmt::format, sync::Arc};
 
 use ena::unify::{InPlace, UnificationTable, UnifyKey, UnifyValue};
 use indexmap::IndexMap;
@@ -35,11 +35,7 @@ use crate::ast::{
     builder::{BuilderEnum, IRBuilder},
     ctx::Ctx,
     node::{
-        pointer::PointerOpEnum,
-        statement::{DefVar, StatementsNode},
-        tuple::{new_tuple_field, new_tuple_type},
-        types::{GenericParamNode, TypeNameNode},
-        NodeEnum, TypeNode, TypeNodeEnum,
+        control::MatchArmCondition, pointer::PointerOpEnum, statement::{DefVar, StatementsNode}, tuple::{new_tuple_field, new_tuple_type}, types::{GenericParamNode, TypeNameNode}, NodeEnum, TypeNode, TypeNodeEnum
     },
     pltype::{
         get_type_deep, ARRType, ClosureType, FNValue, ImplAble, PLType, STType, TraitImplAble,
@@ -1054,9 +1050,94 @@ impl<'ctx> InferenceCtx<'ctx> {
                     .unwrap_or_else(|| ctx.plmod.types.get("string").unwrap().clone());
                 return SymbolType::PLType(tp.typ.clone());
             }
+            NodeEnum::MatchNode(m) => {
+                let ty = self.inference(&mut m.value, ctx, builder);
+                for (cond,body) in &mut m.arms {
+                    let mut child = self.new_child();
+                    child.inference_match_arm(cond, ty.clone(), ctx, builder);
+                    child.inference_statements(body, ctx, builder);
+                }
+            }
             _ => (),
         }
         unknown()
+    }
+
+
+    fn inference_match_arm<'a, 'b>(&mut self, cond:&MatchArmCondition, vty:SymbolType,        ctx: &'b mut Ctx<'a>,
+    builder: &'b BuilderEnum<'a, '_>,) {
+        match cond {
+            MatchArmCondition::Discard(_) => (),
+            MatchArmCondition::Var(a) => {
+                let id = self.new_key();
+                self.unify(id, vty, ctx, builder);
+                self.add_symbol(&a.name, id);
+            }
+            MatchArmCondition::Literal(_) => (),
+            MatchArmCondition::TypedVar(ty, c) => {
+                let vty = ty.get_type(ctx, builder, false).unwrap_or(unknown_arc());
+                self.inference_match_arm(&c, SymbolType::PLType(vty), ctx, builder);
+            },
+            MatchArmCondition::TypedDeconstruct(_, _) => todo!(),
+            MatchArmCondition::Deconstruct(fields) => {
+                match &vty {
+                    SymbolType::Var(v) => {
+                        let k = self.unify_table.borrow_mut().probe_value(*v);
+                        match k {
+                            TyInfer::Term(t) => {
+                                if let PLType::Struct(_) = &*t.borrow() {
+                                    for (f, c) in fields {
+                                        let sym = self.symbol_field_symbol(vty.clone(), ctx, &f.name, builder).unwrap();
+                                        self.inference_match_arm(c, sym, ctx, builder);
+                                    }
+                                }
+                            }
+                            _ => (),
+                        }
+                    }
+                    SymbolType::PLType(t) => {
+                        if let PLType::Struct(_) = &*t.borrow() {
+                            for (f, c) in fields {
+                                let sym = self.symbol_field_symbol(vty.clone(), ctx, &f.name, builder).unwrap();
+                                self.inference_match_arm(c, sym, ctx, builder);
+                            }
+                        }
+                    }
+                }
+            
+            },
+            MatchArmCondition::Tuple(fields) => {
+                match &vty {
+                    SymbolType::Var(v) => {
+                        let k = self.unify_table.borrow_mut().probe_value(*v);
+                        match k {
+                            TyInfer::Term(t) => {
+                                if let PLType::Struct(t) = &*t.borrow() {
+                                    for (i, c) in fields.iter().enumerate() {
+                                        t.fields.get(&format!("{}", i)).map(|f| {
+                                            let sym = self.symbol_field_symbol(vty.clone(), ctx, &f.name, builder).unwrap();
+                                            self.inference_match_arm(c, sym, ctx, builder);
+                                        });
+                                    }
+                                }
+                            }
+                            _ => (),
+                        }
+                    }
+                    SymbolType::PLType(t) => {
+                        if let PLType::Struct(t) = &*t.borrow() {
+                            for (i, c) in fields.iter().enumerate() {
+                                t.fields.get(&format!("{}", i)).map(|f| {
+                                    let sym = self.symbol_field_symbol(vty.clone(), ctx, &f.name, builder).unwrap();
+                                    self.inference_match_arm(c, sym, ctx, builder);
+                                });
+                            }
+                        }
+                    }
+                }
+            
+            },
+        }
     }
 
     fn handle_closure_call<'a, 'b>(
