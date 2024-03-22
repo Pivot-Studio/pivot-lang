@@ -1,6 +1,6 @@
 use nom::{
     branch::alt,
-    combinator::{map_res, opt},
+    combinator::{map, map_res, opt},
     sequence::{preceded, tuple},
     IResult,
 };
@@ -8,6 +8,8 @@ use nom::{
 use crate::nomparser::Span;
 use crate::{ast::diag::ErrorCode, ast::range::Range, ast::tokens::TokenType};
 use internal_macro::{test_parser, test_parser_error};
+
+use self::error::match_paired_until;
 
 use super::*;
 
@@ -59,7 +61,25 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
             tag_token_word(TokenType::IF),
-            parse_with_ex(general_exp, true),
+            parse_with_ex(
+                alt((
+                    general_exp,
+                    map(
+                        match_paired_until(
+                            "{",
+                            ErrorCode::SYNTAX_ERROR_IF_CONDITION,
+                            "if condition here cannot be parsed",
+                        ),
+                        |_| {
+                            Box::new(NodeEnum::Bool(BoolConstNode {
+                                value: true,
+                                range: Range::new(&input, &input),
+                            }))
+                        },
+                    ),
+                )),
+                true,
+            ),
             statement_block,
             opt(delspace(comment)),
             opt(preceded(
@@ -91,7 +111,7 @@ pub fn if_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 .into(),
             )
         },
-    )(input)
+    )(input.clone())
 }
 
 #[test_parser(
@@ -119,7 +139,7 @@ pub fn while_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 parse_with_ex(general_exp, true),
                 "{",
                 "failed to parse while condition",
-                ErrorCode::WHILE_CONDITION_MUST_BE_BOOL,
+                ErrorCode::SYNTAX_ERROR_WHILE_CONDITION,
             ),
             statement_block,
             opt(delspace(comment)),
@@ -179,15 +199,38 @@ pub fn for_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
     map_res(
         delspace(tuple((
             tag_token_word(TokenType::FOR),
-            opt(alt((assignment, new_variable))),
-            tag_token_symbol(TokenType::SEMI),
-            general_exp,
-            tag_token_symbol(TokenType::SEMI),
-            opt(assignment),
+            alt((
+                tuple((
+                    opt(alt((assignment, new_variable))),
+                    tag_token_symbol(TokenType::SEMI),
+                    general_exp,
+                    tag_token_symbol(TokenType::SEMI),
+                    opt(assignment),
+                )),
+                map(
+                    match_paired_until(
+                        "{",
+                        ErrorCode::SYNTAX_ERROR_FOR_CONDITION,
+                        "`for` condition here cannot be parsed",
+                    ),
+                    |_| {
+                        (
+                            None,
+                            (TokenType::SEMI, Default::default()),
+                            Box::new(NodeEnum::Bool(BoolConstNode {
+                                value: true,
+                                range: Range::new(&input, &input),
+                            })),
+                            (TokenType::SEMI, Default::default()),
+                            None,
+                        )
+                    },
+                ),
+            )),
             statement_block,
             opt(delspace(comment)),
         ))),
-        |(_, pre, _, cond, _, opt, body, optcomment)| {
+        |(_, (pre, _, cond, _, opt), body, optcomment)| {
             let mut range = cond.range().start.to(body.range.end);
             if let Some(pre) = &pre {
                 range = range.end.from(pre.range().start);
@@ -209,7 +252,7 @@ pub fn for_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
                 .into(),
             )
         },
-    )(input)
+    )(input.clone())
 }
 
 #[test_parser("break;")]

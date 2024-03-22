@@ -2,7 +2,7 @@ use control::string_literal::string_literal;
 use nom::{
     branch::alt,
     combinator::{map, opt},
-    multi::{many0},
+    multi::many0,
     sequence::{preceded, terminated, tuple},
     IResult,
 };

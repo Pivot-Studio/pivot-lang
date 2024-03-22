@@ -9,7 +9,6 @@ use nom::{
     IResult, InputTake,
 };
 
-
 use super::*;
 
 #[test_parser("//123")]

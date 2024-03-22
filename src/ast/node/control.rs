@@ -56,21 +56,23 @@ impl Node for IfNode {
         ctx.position_at_end(cond_block, builder);
 
         let cond_range = self.cond.range();
-        let cond_val = self.cond.emit(ctx, builder)?.get_value();
-        check_bool(
-            &cond_val,
-            ctx,
-            cond_range,
-            ErrorCode::IF_CONDITION_MUST_BE_BOOL,
-        )?;
+        _ = self.cond.emit(ctx, builder).and_then(|o| {
+            let cond_val = o.get_value();
+            check_bool(
+                &cond_val,
+                ctx,
+                cond_range,
+                ErrorCode::IF_CONDITION_MUST_BE_BOOL,
+            )?;
 
-        let v = cond_val.unwrap();
-        let cond = v.get_value();
-        let cond = ctx.try_load2var(cond_range, cond, builder, &v.get_ty().borrow())?;
-        let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
+            let v = cond_val.unwrap();
+            let cond = v.get_value();
+            let cond = ctx.try_load2var(cond_range, cond, builder, &v.get_ty().borrow())?;
+            let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
 
-        //
-        builder.build_conditional_branch(cond, then_block, else_block);
+            builder.build_conditional_branch(cond, then_block, else_block);
+            Ok(())
+        });
 
         // emit the else logic into the then block
         ctx.position_at_end(then_block, builder);
@@ -169,14 +171,17 @@ impl Node for WhileNode {
         ctx.position_at_end(cond_block, builder);
         let condrange = self.cond.range();
         let start = self.cond.range().start;
-        let v = self.cond.emit(ctx, builder)?.get_value();
-
-        check_bool(&v, ctx, condrange, ErrorCode::WHILE_CONDITION_MUST_BE_BOOL)?;
-        let v = v.unwrap();
-        let cond = v.get_value();
-        let cond = ctx.try_load2var(condrange, cond, builder, &v.get_ty().borrow())?;
-        let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
-        builder.build_conditional_branch(cond, body_block, after_block);
+        _ = self.cond.emit(ctx, builder).and_then(|o| {
+            let v = o.get_value();
+            check_bool(&v, ctx, condrange, ErrorCode::WHILE_CONDITION_MUST_BE_BOOL)?;
+            let node_value = &v.unwrap();
+            let cond = node_value.get_value();
+            let cond = ctx.try_load2var(condrange, cond, builder, &node_value.get_ty().borrow())?;
+            let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
+            builder.build_dbg_location(self.body.range().start);
+            builder.build_conditional_branch(cond, body_block, after_block);
+            Ok(())
+        });
         ctx.position_at_end(body_block, builder);
         builder.place_safepoint(ctx);
         let terminator = self.body.emit_child(ctx, builder)?.get_term();
@@ -257,14 +262,18 @@ impl Node for ForNode {
         builder.build_dbg_location(self.cond.range().start);
         let condrange = self.cond.range();
         let cond_start = self.cond.range().start;
-        let v = self.cond.emit(ctx, builder)?.get_value();
-        check_bool(&v, ctx, condrange, ErrorCode::FOR_CONDITION_MUST_BE_BOOL)?;
-        let node_value = &v.unwrap();
-        let cond = node_value.get_value();
-        let cond = ctx.try_load2var(condrange, cond, builder, &node_value.get_ty().borrow())?;
-        let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
-        builder.build_dbg_location(self.body.range().start);
-        builder.build_conditional_branch(cond, body_block, after_block);
+        _ = self.cond.emit(ctx, builder).and_then(|o| {
+            let v = o.get_value();
+            check_bool(&v, ctx, condrange, ErrorCode::FOR_CONDITION_MUST_BE_BOOL)?;
+            let node_value = &v.unwrap();
+            let cond = node_value.get_value();
+            let cond = ctx.try_load2var(condrange, cond, builder, &node_value.get_ty().borrow())?;
+            let cond = builder.build_int_truncate(cond, &PriType::BOOL, "trunctemp");
+            builder.build_dbg_location(self.body.range().start);
+            builder.build_conditional_branch(cond, body_block, after_block);
+            Ok(())
+        });
+
         ctx.position_at_end(opt_block, builder);
         if let Some(op) = &mut self.opt {
             builder.build_dbg_location(op.range().start);
@@ -824,8 +833,12 @@ impl Node for MatchNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> NodeResult {
-        let value = self.value.emit(ctx, builder)?.get_value();
-        let value = value.unwrap();
+        let value = self
+            .value
+            .emit(ctx, builder)
+            .unwrap_or_default()
+            .get_value();
+        let value = value.unwrap_or_default();
         let ty = value.get_ty();
         let value = value.get_value();
         match &*ty.borrow() {
