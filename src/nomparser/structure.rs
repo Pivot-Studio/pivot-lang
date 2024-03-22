@@ -18,7 +18,6 @@ use nom::{
     sequence::{terminated, tuple},
     IResult,
 };
-use nom_locate::LocatedSpan;
 
 use super::*;
 
@@ -118,7 +117,7 @@ fn struct_init_field(input: Span) -> IResult<Span, Box<NodeEnum>> {
     ))(input)
 }
 
-#[test_parser("a{a : 1}")]
+#[test_parser("a {a : 1}")]
 #[test_parser("a{a : 1,b:2}")]
 #[test_parser("a{a : 1,b:2,}")]
 #[test_parser("a{}")]
@@ -144,11 +143,12 @@ fn struct_init_field(input: Span) -> IResult<Span, Box<NodeEnum>> {
 )] // fault tolerant
 
 pub fn struct_init(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    if input.extra {
+    if input.extra.extra {
         // extra为true代表在if的逻辑表达区域内，为了避免二义性 跳过 struct init
-        return Err(nom::Err::Error(
-            nom::error::Error::<LocatedSpan<&str, bool>>::new(input, nom::error::ErrorKind::Fail),
-        ));
+        return Err(nom::Err::Error(nom::error::Error::<Span>::new(
+            input,
+            nom::error::ErrorKind::Fail,
+        )));
     }
     map_res(
         tuple((

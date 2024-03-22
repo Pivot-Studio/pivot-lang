@@ -98,11 +98,11 @@ fn macro_match_exp(input: Span) -> IResult<Span, MacroMatchExp> {
                 recognize(is_a(",=|-;&^%#@!<>[]{}\\/~`.*+?")),
             )),
             |exp: Span| {
-                let range = Range::new(input, exp);
+                let range = Range::new(&input, &exp);
                 Ok::<_, ()>(MacroMatchExp::RawTokens((exp.to_string(), range)))
             },
         ),
-    )))(input)
+    )))(input.clone())
 }
 
 #[test_parser(
@@ -112,12 +112,12 @@ fn macro_match_exp(input: Span) -> IResult<Span, MacroMatchExp> {
     )*"#
 )]
 fn macro_body_loop_parser(origin: Span) -> IResult<Span, Box<NodeEnum>> {
-    let (input, _) = tag_token_symbol(TokenType::DOLLAR)(origin)?;
+    let (input, _) = tag_token_symbol(TokenType::DOLLAR)(origin.clone())?;
     let (input, _) = tag_token_symbol(TokenType::LPAREN)(input)?;
     let (input, statements) = many0(del_newline_or_space!(statement))(input)?;
     let (input, _) = tag_token_symbol(TokenType::RPAREN)(input)?;
     let (input, _) = tag_token_symbol(TokenType::MUL)(input)?;
-    let range = Range::new(origin, input);
+    let range = Range::new(&origin, &input);
     Ok((
         input,
         Box::new(NodeEnum::MacroLoopStatementNode(MacroLoopStatementNode {
@@ -149,13 +149,13 @@ fn macro_body_loop_parser(origin: Span) -> IResult<Span, Box<NodeEnum>> {
 )]
 pub fn macro_parser(origin: Span) -> IResult<Span, Box<TopLevel>> {
     // a macro node can have multiple rules
-    let (input, _) = tag_token_symbol(TokenType::MACRO)(origin)?;
+    let (input, _) = tag_token_symbol(TokenType::MACRO)(origin.clone())?;
     let (input, id) = identifier(input)?;
     // rules
     let (input, _) = del_newline_or_space!(tag_token_symbol(TokenType::LBRACE))(input)?;
     let (input, rules) = many0(del_newline_or_space!(macro_rule_parser))(input)?;
     let (input, _) = del_newline_or_space!(tag_token_symbol(TokenType::RBRACE))(input)?;
-    let range = Range::new(origin, input);
+    let range = Range::new(&origin, &input);
     Ok((
         input,
         Box::new(TopLevel::Common(Box::new(NodeEnum::MacroNode(MacroNode {
@@ -168,7 +168,7 @@ pub fn macro_parser(origin: Span) -> IResult<Span, Box<TopLevel>> {
 }
 
 fn macro_rule_parser(origin: Span) -> IResult<Span, MacroRuleNode> {
-    let (input, _) = tag_token_symbol_ex(TokenType::LPAREN)(origin)?;
+    let (input, _) = tag_token_symbol_ex(TokenType::LPAREN)(origin.clone())?;
     let (input, match_exp) = many0(macro_match_exp)(input)?;
     let (input, _) = tag_token_symbol_ex(TokenType::RPAREN)(input)?;
     let (input, _) = tag_token_symbol_ex(TokenType::ARROW)(input)?;
@@ -179,7 +179,7 @@ fn macro_rule_parser(origin: Span) -> IResult<Span, MacroRuleNode> {
     ))))(input)?;
     let (input, _) = tag_token_symbol_ex(TokenType::RBRACE)(input)?;
     let (input, _) = tag_token_symbol_ex(TokenType::SEMI)(input)?;
-    let range = Range::new(origin, input);
+    let range = Range::new(&origin, &input);
     Ok((
         input,
         MacroRuleNode {

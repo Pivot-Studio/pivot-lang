@@ -228,13 +228,13 @@ pub fn break_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
             };
             res_enum(
                 BreakNode {
-                    range: Range::new(input, input),
+                    range: Range::new(&input, &input),
                     comments,
                 }
                 .into(),
             )
         },
-    )(input)
+    )(input.clone())
 }
 
 #[test_parser("continue;")]
@@ -253,11 +253,11 @@ pub fn continue_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
             };
             res_enum(
                 ContinueNode {
-                    range: Range::new(input, input),
+                    range: Range::new(&input, &input),
                     comments,
                 }
                 .into(),
             )
         },
-    )(input)
+    )(input.clone())
 }

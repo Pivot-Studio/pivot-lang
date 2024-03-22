@@ -104,7 +104,7 @@ fn parse_literal<'a, E: ParseError<Span<'a>>>(input: Span<'a>) -> IResult<Span<'
 /// A string fragment contains a fragment of a string being parsed: either
 /// a non-empty Literal (a series of non-escaped characters), a single
 /// parsed escaped character, or a block of escaped whitespace.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum StringFragment<'a> {
     Literal(Span<'a>),
     EscapedChar(char),

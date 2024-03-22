@@ -134,7 +134,7 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
-                MISSING_SEMI,
+                SYNTAX_ERROR_MISSING_SEMI,
             ),
             help: None,
             labels: [],
@@ -156,7 +156,7 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
-                MISSING_SEMI,
+                SYNTAX_ERROR_MISSING_SEMI,
             ),
             help: None,
             labels: [],
@@ -178,7 +178,7 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
-                MISSING_SEMI,
+                SYNTAX_ERROR_MISSING_SEMI,
             ),
             help: None,
             labels: [],

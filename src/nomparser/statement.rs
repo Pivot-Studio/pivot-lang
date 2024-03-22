@@ -1,8 +1,9 @@
 use nom::{
     branch::alt,
+    character::complete::anychar,
     combinator::{map, map_res, opt},
     multi::{many0, separated_list1},
-    sequence::{pair, preceded, tuple},
+    sequence::{pair, preceded, terminated, tuple},
     IResult,
 };
 
@@ -28,13 +29,13 @@ fn empty_statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
             };
             res_enum(
                 EmptyNode {
-                    range: Range::new(input, input),
+                    range: Range::new(&input, &input),
                     comments,
                 }
                 .into(),
             )
         },
-    )(input)
+    )(input.clone())
 }
 
 #[test_parser("{let a = 1;}")]
@@ -80,10 +81,13 @@ pub fn statement(input: Span) -> IResult<Span, Box<NodeEnum>> {
         semi_stmt(pointer_exp, pointer_exp),
         empty_statement,
         comment,
-        except(
-            "\n\r})",
-            "failed to parse statement",
-            ErrorCode::SYNTAX_ERROR_STATEMENT,
+        terminated(
+            except(
+                "\n\r})",
+                "failed to parse statement",
+                ErrorCode::SYNTAX_ERROR_STATEMENT,
+            ),
+            anychar,
         ),
     )))(input)
 }

@@ -881,7 +881,7 @@ impl FmtBuilder {
             super::node::control::MatchArmCondition::Var(v) => {
                 self.token(&v.name);
             }
-            super::node::control::MatchArmCondition::Tuple(t) => {
+            super::node::control::MatchArmCondition::Tuple(t, _) => {
                 self.l_paren();
                 for (i, v) in t.iter().enumerate() {
                     if i > 0 {
