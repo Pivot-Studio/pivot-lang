@@ -9,6 +9,7 @@ use nom::{
 };
 
 use crate::ast::{
+    diag::ErrorCode,
     node::{error::ErrorNode, NodeEnum},
     range::Range,
     tokens::TokenType,
@@ -84,6 +85,8 @@ pub fn match_paired_until<
     E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt::Error>,
 >(
     token: &'static str,
+    code: ErrorCode,
+    msg: &'static str,
 ) -> impl FnMut(Span<'a>) -> IResult<Span<'a>, (), E> {
     move |i| {
         let origin = i.clone();
@@ -98,7 +101,11 @@ pub fn match_paired_until<
                 break;
             }
             if (i.fragment().starts_with(']')
-                || i.fragment().starts_with('}') || i.fragment().starts_with(')')) && r.is_empty() && origin.location_offset() == i.location_offset() {
+                || i.fragment().starts_with('}')
+                || i.fragment().starts_with(')'))
+                && r.is_empty()
+                && origin.location_offset() == i.location_offset()
+            {
                 return Ok((i, ()));
             }
             let (next, nextch) = take_utf8_split(&i);
@@ -124,17 +131,11 @@ pub fn match_paired_until<
             }
             i = next;
         }
-        let msg = format!(
-            "syntax error: unexpected token: `{}`",
-            origin
-                .split_at(i.location_offset() - origin.location_offset())
-                .0
-        );
         i.extra.raise_error(ErrorNode {
-            msg,
+            msg: msg.to_string(),
             src,
             range: Range::new(&origin, &i),
-            code: crate::ast::diag::ErrorCode::UNEXPECTED_TOKEN,
+            code,
         });
         Ok((i, ()))
     }
@@ -156,7 +157,11 @@ pub fn eat_if_error_and_continue<
         parser,
         preceded(
             pair(
-                match_paired_until(token.get_str()),
+                match_paired_until(
+                    token.get_str(),
+                    ErrorCode::SYNTAX_ERROR_UNEXPECTED_TOKEN,
+                    "",
+                ),
                 tag_token_symbol_ex(token),
             ),
             parser2,

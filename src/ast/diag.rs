@@ -85,10 +85,10 @@ define_diag!(
     FUNCTION_MUST_HAVE_RETURN = "function must have a return value",
     REDEFINE_TYPE = "redefine type",
     STRUCT_FIELD_TYPE_NOT_MATCH = "struct field type not match",
-    SYNTAX_ERROR_MISSING_SEMI = "missing semicolon",
+    SYNTAX_ERROR_MISSING_SEMI = "expect semicolon here",
     EXPECT_TYPE = "expect type",
     EXPECT_VALUE = "expect value",
-    REDEFINE_SYMBOL = "redefine symbol",
+    REDEFINE_SYMBOL = "redefined symbol",
     SYMBOL_NOT_FOUND = "symbol not found",
     UNRESOLVED_MODULE = "unresolved module",
     ARRAY_TYPE_NOT_MATCH = "array type not match",
@@ -121,7 +121,7 @@ define_diag!(
     TRAIT_METHOD_SHALL_NOT_HAVE_MODIFIER = "trait method shall not have modifier",
     MACRO_NOT_FOUND = "macro not found",
     EXPECT_IDENTIFIER = "expect identifier",
-    UNEXPECTED_TOKEN = "unexpected token",
+    SYNTAX_ERROR_UNEXPECTED_TOKEN = "syntax error: unexpected token",
     EXPECT_STRING = "expect string",
     EXPECT_EXPRESSION = "expect expression",
     EXPECT_STATEMENT = "expect statement",
@@ -172,6 +172,9 @@ define_diag!(
     ILLEGAL_MATCH_ARM_CONDITION =
         "illegal match arm condition: this match condition will never be met",
     SYNTAX_ERROR_REDUNDENT_SYMBOL = "syntax error: redundant symbol",
+    SYNTAX_ERROR_IF_CONDITION = "syntax error: if condition",
+    SYNTAX_ERROR_WHILE_CONDITION = "syntax error: while condition",
+    SYNTAX_ERROR_FOR_CONDITION = "syntax error: for condition",
 );
 
 define_diag! {

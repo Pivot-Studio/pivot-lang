@@ -2,10 +2,34 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
-                UNEXPECTED_TOKEN,
+                SYNTAX_ERROR_UNEXPECTED_TOKEN,
             ),
             help: Some(
-                "syntax error: unexpected token: `(a,()a, dasdas) `",
+                "",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 34,
+                    column: 12,
+                    offset: 488,
+                },
+                end: Pos {
+                    line: 34,
+                    column: 12,
+                    offset: 488,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                SYNTAX_ERROR_UNEXPECTED_TOKEN,
+            ),
+            help: Some(
+                "",
             ),
             labels: [],
             source: None,
@@ -19,30 +43,6 @@
                     line: 41,
                     column: 25,
                     offset: 620,
-                },
-            },
-        },
-    },
-    PLDiag {
-        raw: PLDiagRaw {
-            code: Err(
-                UNEXPECTED_TOKEN,
-            ),
-            help: Some(
-                "syntax error: unexpected token: ``",
-            ),
-            labels: [],
-            source: None,
-            range: Range {
-                start: Pos {
-                    line: 34,
-                    column: 12,
-                    offset: 488,
-                },
-                end: Pos {
-                    line: 34,
-                    column: 12,
-                    offset: 488,
                 },
             },
         },
