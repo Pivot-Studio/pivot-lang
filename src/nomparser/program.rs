@@ -22,8 +22,8 @@ use super::{implement::impl_def, macro_parse::macro_parser, union::union_stmt, *
 /// After finishing consuming, all top level statements are classified based on their catagories.
 /// It returns a [ProgramNode] which entails all top level nodes.
 pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
-    let old = input;
-    let mut input = input;
+    let old = input.clone();
+    let mut input = input.clone();
     let mut nodes = vec![];
     let mut structs = vec![];
     let mut fntypes = vec![];
@@ -33,7 +33,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
     let mut trait_impls = vec![];
     let mut unions = vec![];
     loop {
-        let top = top_level_statement(input);
+        let top = top_level_statement(input.clone());
         if let Ok((i, t)) = top {
             match *t {
                 TopLevel::FuncType(f) => {
@@ -112,7 +112,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
             }
             input = i;
         } else if let Err(err) = top {
-            let e: Result<(Span, Span), nom::Err<nom::error::Error<Span>>> = eof(input);
+            let e: Result<(Span, Span), nom::Err<nom::error::Error<Span>>> = eof(input.clone());
             if e.is_ok() {
                 break;
             }
@@ -125,7 +125,7 @@ pub fn program(input: Span) -> IResult<Span, Box<NodeEnum>> {
             structs,
             fntypes,
             globaldefs,
-            range: Range::new(old, input),
+            range: Range::new(&old, &input),
             uses,
             traits,
             trait_impls,

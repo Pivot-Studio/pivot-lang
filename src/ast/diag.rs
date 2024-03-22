@@ -85,7 +85,7 @@ define_diag!(
     FUNCTION_MUST_HAVE_RETURN = "function must have a return value",
     REDEFINE_TYPE = "redefine type",
     STRUCT_FIELD_TYPE_NOT_MATCH = "struct field type not match",
-    MISSING_SEMI = "missing semicolon",
+    SYNTAX_ERROR_MISSING_SEMI = "missing semicolon",
     EXPECT_TYPE = "expect type",
     EXPECT_VALUE = "expect value",
     REDEFINE_SYMBOL = "redefine symbol",
@@ -149,7 +149,7 @@ define_diag!(
     ONLY_TRAIT_CAN_BE_IMPL = "only trait can be impl",
     EXPECT_TO_BE_A_TRAIT_IMPL = "expect to be a trait impl block",
     TARGET_TYPE_NOT_IMPL_ABLE = "target type not implable",
-    TUPLE_WRONG_DECONSTRUCT_PARAM_LEN = "tuple wrong deconstruct param len",
+    TUPLE_ELM_SIZE_MISS_MATCH = "tuple element size miss match",
     DEF_DECONSTRUCT_MUST_HAVE_VALUE = "def deconstruct must have value",
     STRUCT_FIELD_NOT_EXISTS = "struct field not exists",
     TRY_TO_EXPORT_NON_REEXPORT_SYMBOL = "try to export non reexport symbol",
@@ -171,6 +171,7 @@ define_diag!(
         "illegal match value, match vale can only be of type `Union` or `Struct` or `Primitive`",
     ILLEGAL_MATCH_ARM_CONDITION =
         "illegal match arm condition: this match condition will never be met",
+    SYNTAX_ERROR_REDUNDENT_SYMBOL = "syntax error: redundant symbol",
 );
 
 define_diag! {

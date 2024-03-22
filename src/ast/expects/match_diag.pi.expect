@@ -2,6 +2,170 @@
     PLDiag {
         raw: PLDiagRaw {
             code: Err(
+                UNEXPECTED_TOKEN,
+            ),
+            help: Some(
+                "syntax error: unexpected token: `(a,()a, dasdas) `",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 41,
+                    column: 9,
+                    offset: 604,
+                },
+                end: Pos {
+                    line: 41,
+                    column: 25,
+                    offset: 620,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                UNEXPECTED_TOKEN,
+            ),
+            help: Some(
+                "syntax error: unexpected token: ``",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 34,
+                    column: 12,
+                    offset: 488,
+                },
+                end: Pos {
+                    line: 34,
+                    column: 12,
+                    offset: 488,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                TUPLE_ELM_SIZE_MISS_MATCH,
+            ),
+            help: None,
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 37,
+                    column: 14,
+                    offset: 541,
+                },
+                end: Pos {
+                    line: 37,
+                    column: 15,
+                    offset: 542,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                TUPLE_ELM_SIZE_MISS_MATCH,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "found {} elements here, expect {} elements",
+                            [
+                                "0",
+                                "2",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 40,
+                            column: 9,
+                            offset: 587,
+                        },
+                        end: Pos {
+                            line: 40,
+                            column: 11,
+                            offset: 589,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 40,
+                    column: 9,
+                    offset: 587,
+                },
+                end: Pos {
+                    line: 40,
+                    column: 11,
+                    offset: 589,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                TUPLE_ELM_SIZE_MISS_MATCH,
+            ),
+            help: None,
+            labels: [
+                PLLabel {
+                    file: "",
+                    txt: Some(
+                        (
+                            "found {} elements here, expect {} elements",
+                            [
+                                "3",
+                                "2",
+                            ],
+                        ),
+                    ),
+                    range: Range {
+                        start: Pos {
+                            line: 37,
+                            column: 9,
+                            offset: 536,
+                        },
+                        end: Pos {
+                            line: 37,
+                            column: 16,
+                            offset: 543,
+                        },
+                    },
+                },
+            ],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 37,
+                    column: 9,
+                    offset: 536,
+                },
+                end: Pos {
+                    line: 37,
+                    column: 16,
+                    offset: 543,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
                 ILLEGAL_MATCH_ARM_CONDITION,
             ),
             help: None,
@@ -185,6 +349,30 @@
                     line: 11,
                     column: 12,
                     offset: 146,
+                },
+            },
+        },
+    },
+    PLDiag {
+        raw: PLDiagRaw {
+            code: Err(
+                SYNTAX_ERROR_REDUNDENT_SYMBOL,
+            ),
+            help: Some(
+                "remove this redundant symbol",
+            ),
+            labels: [],
+            source: None,
+            range: Range {
+                start: Pos {
+                    line: 34,
+                    column: 14,
+                    offset: 490,
+                },
+                end: Pos {
+                    line: 34,
+                    column: 15,
+                    offset: 491,
                 },
             },
         },

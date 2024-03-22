@@ -63,8 +63,8 @@ impl MacroMatchExp {
         match self {
             MacroMatchExp::Parameter(p) => p.parse(ctx, args),
             MacroMatchExp::RawTokens((t, r)) => {
-                let re: (Span, Span) =
-                    del_newline_or_space!(tag(t.as_str()))(args).map_err(|_: nom::Err<()>| {
+                let re: (Span, Span) = del_newline_or_space!(tag(t.as_str()))(args.clone())
+                    .map_err(|_: nom::Err<()>| {
                         nom::Err::Error(
                             r.new_err(ErrorCode::UNEXPECTED_TOKEN)
                                 .add_label(
@@ -78,12 +78,12 @@ impl MacroMatchExp {
                 Ok((re.0, ()))
             }
             MacroMatchExp::Parantheses((ts, r)) => {
-                let (mut new, _) = tag_token_symbol_ex(TokenType::LPAREN)(args)
+                let (mut new, _) = tag_token_symbol_ex::<()>(TokenType::LPAREN)(args.clone())
                     .map_err(|_| nom::Err::Error(r.new_err(ErrorCode::UNEXPECTED_TOKEN)))?;
                 for t in ts {
                     (new, _) = t.parse(ctx, new)?;
                 }
-                let (new, _) = tag_token_symbol_ex(TokenType::RPAREN)(args)
+                let (new, _) = tag_token_symbol_ex::<()>(TokenType::RPAREN)(args)
                     .map_err(|_| nom::Err::Error(r.new_err(ErrorCode::UNEXPECTED_TOKEN)))?;
                 Ok((new, ()))
             }
@@ -91,9 +91,9 @@ impl MacroMatchExp {
                 let mut new = args;
                 loop {
                     for t in ts {
-                        let re = ctx.with_macro_loop_parse(|ctx| t.parse(ctx, new));
+                        let re = ctx.with_macro_loop_parse(|ctx| t.parse(ctx, new.clone()));
                         if re.is_err() {
-                            return Ok((new, ()));
+                            return Ok((new.clone(), ()));
                         }
                         (new, _) = re?;
                     }
@@ -256,15 +256,15 @@ impl Node for MacroCallNode {
                         self.inner_start.offset,
                         self.inner_start.line as u32,
                         &self.args,
-                        false,
+                        Default::default(),
                     )
                 };
                 let mut last_err: Option<PLDiag> = None;
                 for rule in &m.rules {
-                    let mut span = span;
+                    let mut span = span.clone();
                     let mut next = false;
                     for e in rule.match_exp.iter() {
-                        let re = e.parse(ctx, span).map_err(|e| {
+                        let re = e.parse(ctx, span.clone()).map_err(|e| {
                             if let nom::Err::Error(mut e) = e {
                                 e.add_label(
                                     self.range,

@@ -8,7 +8,7 @@ use nom::{
     sequence::{pair, terminated},
     IResult, InputTake,
 };
-use nom_locate::LocatedSpan;
+
 
 use super::*;
 
@@ -29,15 +29,15 @@ pub fn comment(input: Span) -> IResult<Span, Box<NodeEnum>> {
             alt((tag("///"), tag("//"))),
             alt((terminated(take_until("\n"), tag("\n")), rest)),
         ),
-        |(a, c): (LocatedSpan<&str, bool>, LocatedSpan<&str, bool>)| {
+        |(a, c): (Span, Span)| {
             res_enum(
                 CommentNode {
                     comment: c.trim_end_matches('\r').to_string(),
-                    range: Range::new(input, c.take_split(c.len()).0),
+                    range: Range::new(&input, &c.take_split(c.len()).0),
                     is_doc: a.contains("///"),
                 }
                 .into(),
             )
         },
-    )(input)
+    )(input.clone())
 }

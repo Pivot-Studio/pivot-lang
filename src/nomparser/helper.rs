@@ -7,6 +7,7 @@ use nom::character::complete::space1;
 use nom::character::is_alphanumeric;
 use nom::combinator::{opt, recognize};
 
+use nom::error::FromExternalError;
 use nom::multi::many0;
 use nom::sequence::{pair, preceded, terminated, tuple};
 use nom::{
@@ -21,17 +22,22 @@ pub fn tag_token_symbol(token: TokenType) -> impl Fn(Span) -> IResult<Span, (Tok
     move |input| {
         map_res(delspace(tag(token.get_str())), |_out: Span| {
             let end = _out.take_split(token.get_str().len()).0;
-            Ok::<(TokenType, Range), ()>((token, Range::new(_out, end)))
+            Ok::<(TokenType, Range), ()>((token, Range::new(&_out, &end)))
         })(input)
     }
 }
 
 /// parse token with space and newline trimed
-pub fn tag_token_symbol_ex(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
+pub fn tag_token_symbol_ex<
+    'a,
+    E: ParseError<Span<'a>> + FromExternalError<Span<'a>, std::fmt::Error>,
+>(
+    token: TokenType,
+) -> impl Fn(Span<'a>) -> IResult<Span<'a>, (TokenType, Range), E> {
     move |input| {
         map_res(del_newline_or_space!(tag(token.get_str())), |_out: Span| {
             let end = _out.take_split(token.get_str().len()).0;
-            Ok::<(TokenType, Range), ()>((token, Range::new(_out, end)))
+            Ok::<(TokenType, Range), _>((token, Range::new(&_out, &end)))
         })(input)
     }
 }
@@ -41,7 +47,7 @@ pub fn tag_token(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType,
     move |input| {
         map_res(tag(token.get_str()), |_out: Span| {
             let end = _out.take_split(token.get_str().len()).0;
-            Ok::<(TokenType, Range), ()>((token, Range::new(_out, end)))
+            Ok::<(TokenType, Range), ()>((token, Range::new(&_out, &end)))
         })(input)
     }
 }
@@ -53,7 +59,7 @@ pub fn tag_modifier(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenTy
             terminated(tag(token.get_str()), alt((space1, tag("\r\n"), tag("\n")))),
             |_out: Span| {
                 let end = _out.take_split(token.get_str().len()).0;
-                Ok::<(TokenType, Range), ()>((token, Range::new(_out, end)))
+                Ok::<(TokenType, Range), ()>((token, Range::new(&_out, &end)))
             }
         ))(input)
     }
@@ -79,8 +85,7 @@ where
 /// to ensure the token won't be started with number/letter/underscore.
 pub fn tag_token_word(token: TokenType) -> impl Fn(Span) -> IResult<Span, (TokenType, Range)> {
     move |input| {
-        let (s1, s2): (LocatedSpan<&str, bool>, LocatedSpan<&str, bool>) =
-            preceded(space0, tag(token.get_str()))(input)?;
+        let (s1, s2): (Span, Span) = preceded(space0, tag(token.get_str()))(input)?;
         if s1.starts_with(|c: char| is_alphanumeric(c as u8) || c == '_') {
             Err(nom::Err::Error(nom::error::Error::new(
                 s2,
@@ -88,7 +93,7 @@ pub fn tag_token_word(token: TokenType) -> impl Fn(Span) -> IResult<Span, (Token
             )))
         } else {
             let end = s2.take_split(token.get_str().len()).0;
-            Ok((s1, (token, Range::new(s2, end))))
+            Ok((s1, (token, Range::new(&s2, &end))))
         }
     }
 }
@@ -113,10 +118,10 @@ where
 {
     move |i| {
         let mut newi = i;
-        let prevex = newi.extra;
-        newi.extra = extra;
+        let prevex = newi.extra.extra;
+        newi.extra.extra = extra;
         let (mut newi, re) = parser.parse(newi)?;
-        newi.extra = prevex;
+        newi.extra.extra = prevex;
         Ok((newi, re))
     }
 }
@@ -180,7 +185,7 @@ where
             )),
             |(node, e)| {
                 let range = node.range();
-                let r = Range::new(e, e);
+                let r = Range::new(&e, &e);
                 res_enum(
                     StErrorNode {
                         range,
@@ -188,7 +193,7 @@ where
                         err: ErrorNode {
                             range: r,
                             msg: "missing semi".to_string(),
-                            code: ErrorCode::MISSING_SEMI,
+                            code: ErrorCode::SYNTAX_ERROR_MISSING_SEMI,
                             src: "".to_string(),
                         },
                     }

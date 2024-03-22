@@ -51,8 +51,8 @@ pub fn number(input: Span) -> IResult<Span, NumNode> {
             // TODO:err tolerate
             Num::Int(out.fragment().replace('_', "").parse::<u64>().unwrap())
         }),
-    ))(input)?;
-    let range = Range::new(input, re);
+    ))(input.clone())?;
+    let range = Range::new(&input, &re);
     let node = NumNode { value, range };
     Ok((re, node))
 }

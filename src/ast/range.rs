@@ -110,7 +110,7 @@ impl Range {
             end: self.end,
         }
     }
-    pub fn new(start: Span, end: Span) -> Range {
+    pub fn new(start: &Span, end: &Span) -> Range {
         Range {
             start: Pos {
                 line: start.location_line() as usize,

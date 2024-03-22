@@ -1,14 +1,22 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{
-    ast::node::*,
-    ast::node::{
-        function::FuncDefNode,
-        global::GlobalNode,
-        interface::TraitDefNode,
-        types::{GenericParamNode, StructDefNode},
-    },
     ast::{
+        accumulators::Diagnostics,
+        diag::PLDiag,
         node::{
-            control::*, implement::ImplNode, operator::*, primary::*, program::*, statement::*,
+            control::*,
+            error::ErrorNode,
+            function::FuncDefNode,
+            global::GlobalNode,
+            implement::ImplNode,
+            interface::TraitDefNode,
+            operator::*,
+            primary::*,
+            program::*,
+            statement::*,
+            types::{GenericParamNode, StructDefNode},
+            *,
         },
         range::Range,
     },
@@ -21,7 +29,25 @@ use nom_locate::LocatedSpan;
 /// if A{}
 /// ```
 /// 这个时候如果不特殊处理，将无法知道`A{}`整体是个struct init，还是`A`是个变量
-pub type Span<'a> = LocatedSpan<&'a str, bool>;
+pub type Span<'a> = LocatedSpan<&'a str, State>;
+
+#[derive(Debug, Clone, Default)]
+pub struct State {
+    pub extra: bool,
+    pub errors: Rc<RefCell<Vec<PLDiag>>>,
+}
+
+impl State {
+    pub fn report_error(&self, diag: PLDiag) {
+        self.errors.borrow_mut().push(diag);
+    }
+
+    pub fn raise_error(&self, err: ErrorNode) {
+        self.errors
+            .borrow_mut()
+            .push(err.range.new_err(err.code).add_help(&err.msg).clone());
+    }
+}
 
 use self::{
     array::*,
@@ -100,11 +126,15 @@ pub struct SourceProgram {
 #[salsa::tracked]
 pub fn parse(db: &dyn Db, source: SourceProgram) -> Result<ProgramNodeWrapper, String> {
     let text = source.text(db);
-    let re = program(Span::new_extra(text, false));
+    let re = program(Span::new_extra(text, Default::default()));
     match re {
         Err(e) => Err(format!("{:?}", e)),
-        Ok((_, node)) => {
+        Ok((i, node)) => {
             log::info!("parse {:?}", source.path(db));
+            Diagnostics::push(
+                db,
+                (source.path(db).to_string(), i.extra.errors.borrow().clone()),
+            );
             Ok(ProgramNodeWrapper::new(db, node))
         }
     }

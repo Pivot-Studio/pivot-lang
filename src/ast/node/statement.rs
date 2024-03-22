@@ -351,7 +351,7 @@ fn handle_deconstruct<'a, 'b>(
                     if var.len() != st.fields.len() {
                         return Err(ctx.add_diag(
                             range
-                                .new_err(ErrorCode::TUPLE_WRONG_DECONSTRUCT_PARAM_LEN)
+                                .new_err(ErrorCode::TUPLE_ELM_SIZE_MISS_MATCH)
                                 .add_label(
                                     *dec_range,
                                     ctx.get_file(),

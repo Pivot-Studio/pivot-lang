@@ -2,8 +2,8 @@ use control::string_literal::string_literal;
 use nom::{
     branch::alt,
     combinator::{map, opt},
-    multi::{many0, separated_list0},
-    sequence::{preceded, tuple},
+    multi::{many0},
+    sequence::{preceded, terminated, tuple},
     IResult,
 };
 
@@ -11,10 +11,13 @@ use crate::nomparser::Span;
 use crate::{ast::diag::ErrorCode, ast::range::Range, ast::tokens::TokenType};
 use internal_macro::test_parser;
 
+use self::error::{eat_if_error_and_continue, err_tolerable_seplist0};
+
 use super::super::*;
 
 #[test_parser("_")]
 #[test_parser("adsada")]
+#[test_parser("(a,b,,c)")]
 fn match_cond(input: Span) -> IResult<Span, MatchArmCondition> {
     alt((
         map(tag_token_symbol_ex(TokenType::INGNORE), |(_, r)| {
@@ -37,11 +40,10 @@ fn match_cond(input: Span) -> IResult<Span, MatchArmCondition> {
         map(
             tuple((
                 tag_token_symbol_ex(TokenType::LPAREN),
-                separated_list0(tag_token_symbol_ex(TokenType::COMMA), match_cond),
-                opt(tag_token_symbol_ex(TokenType::COMMA)),
+                err_tolerable_seplist0(match_cond, match_cond, TokenType::COMMA),
                 tag_token_symbol_ex(TokenType::RPAREN),
             )),
-            |(_, f, _, _)| MatchArmCondition::Tuple(f),
+            |((_, s), f, (_, e))| MatchArmCondition::Tuple(f, s.start.to(e.end)),
         ),
         map(identifier, |id| MatchArmCondition::Var(*id)),
     ))(input)
@@ -51,7 +53,7 @@ fn st_body_match(input: Span) -> IResult<Span, Vec<STMatchField>> {
     map(
         tuple((
             tag_token_symbol_ex(TokenType::LBRACE),
-            separated_list0(tag_token_symbol_ex(TokenType::COMMA), st_match_field),
+            err_tolerable_seplist0(st_match_field, st_match_field, TokenType::COMMA),
             opt(tag_token_symbol_ex(TokenType::COMMA)),
             tag_token_symbol_ex(TokenType::RBRACE),
         )),
@@ -109,8 +111,15 @@ pub fn match_statement(input: Span) -> IResult<Span, MatchNode> {
             ),
             tag_token_symbol_ex(TokenType::LBRACE),
             many0(tuple((
-                match_cond,
-                preceded(tag_token_symbol_ex(TokenType::ARROW), statement_block),
+                eat_if_error_and_continue(
+                    terminated(match_cond, tag_token_symbol_ex(TokenType::ARROW)),
+                    preceded(
+                        statement_block,
+                        terminated(match_cond, tag_token_symbol_ex(TokenType::ARROW)),
+                    ),
+                    TokenType::ARROW,
+                ),
+                statement_block,
             ))),
             tag_token_symbol_ex(TokenType::RBRACE),
             opt(delspace(comment)),

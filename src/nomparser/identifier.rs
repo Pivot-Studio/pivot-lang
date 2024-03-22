@@ -82,7 +82,7 @@ pub fn identifier(input: Span) -> IResult<Span, Box<VarNode>> {
             }
             Ok(Box::new(VarNode {
                 name: out.to_string(),
-                range: Range::new(out, out.take_split(out.len()).0),
+                range: Range::new(&out, &out.take_split(out.len()).0),
                 id: None,
             }))
         },
@@ -95,7 +95,7 @@ pub fn tuple_field_identifier(input: Span) -> IResult<Span, Box<VarNode>> {
         |out: Span| {
             Ok::<_, ()>(Box::new(VarNode {
                 name: out.to_string(),
-                range: Range::new(out, out.take_split(out.len()).0),
+                range: Range::new(&out, &out.take_split(out.len()).0),
                 id: None,
             }))
         },

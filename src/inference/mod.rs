@@ -1133,7 +1133,7 @@ impl<'ctx> InferenceCtx<'ctx> {
                     }
                 }
             },
-            MatchArmCondition::Tuple(fields) => match &vty {
+            MatchArmCondition::Tuple(fields, _) => match &vty {
                 SymbolType::Var(v) => {
                     let k = self.unify_table.borrow_mut().probe_value(*v);
                     match k {

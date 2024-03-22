@@ -367,7 +367,7 @@ pub enum MatchArmCondition {
     TypedDeconstruct(TypeNodeEnum, Vec<STMatchField>),
     /// when matching a struct, type can be omitted in match arms
     Deconstruct(Vec<STMatchField>),
-    Tuple(Vec<MatchArmCondition>),
+    Tuple(Vec<MatchArmCondition>, Range),
 }
 
 impl MatchArmCondition {
@@ -396,11 +396,7 @@ impl MatchArmCondition {
                     .unwrap_or_default();
                 start.to(end)
             }
-            MatchArmCondition::Tuple(fields) => {
-                let start = fields.first().map(|c| c.range().start).unwrap_or_default();
-                let end = fields.last().map(|c| c.range().end).unwrap_or_default();
-                start.to(end)
-            }
+            MatchArmCondition::Tuple(_, r) => *r,
         }
     }
     fn add_matched_bb<'a, 'b>(
@@ -421,6 +417,7 @@ impl MatchArmCondition {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) {
+        let range = self.range();
         match self {
             MatchArmCondition::Discard(range) => {
                 ctx.push_semantic_token(*range, SemanticTokenType::VARIABLE, 0);
@@ -668,13 +665,27 @@ impl MatchArmCondition {
                     }
                 };
             }
-            MatchArmCondition::Tuple(fields) => {
+            MatchArmCondition::Tuple(fields, _) => {
                 match &*ty.borrow() {
                     PLType::Struct(tuple @ STType { is_tuple: true, .. }) => {
+                        if fields.len() != tuple.fields.len() {
+                            range
+                                .new_err(ErrorCode::TUPLE_ELM_SIZE_MISS_MATCH)
+                                .add_label(
+                                    range,
+                                    ctx.get_file(),
+                                    format_label!(
+                                        "found {} elements here, expect {} elements",
+                                        fields.len().to_string(),
+                                        tuple.fields.len().to_string(),
+                                    ),
+                                )
+                                .add_to_ctx(ctx);
+                        }
                         for (i, c) in fields.iter_mut().enumerate() {
                             if i >= tuple.fields.len() {
                                 c.range()
-                                    .new_err(ErrorCode::TUPLE_WRONG_DECONSTRUCT_PARAM_LEN)
+                                    .new_err(ErrorCode::TUPLE_ELM_SIZE_MISS_MATCH)
                                     .add_to_ctx(ctx);
                                 continue;
                             }
@@ -795,7 +806,7 @@ impl PrintTrait for MatchArmCondition {
                     c.print(tabs + 1, false, line.clone());
                 }
             }
-            MatchArmCondition::Tuple(f) => {
+            MatchArmCondition::Tuple(f, _) => {
                 deal_line(tabs, &mut line, end);
                 tab(tabs, line.clone(), end);
                 println!("Tuple");
