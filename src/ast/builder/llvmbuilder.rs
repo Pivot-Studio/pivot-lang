@@ -1318,7 +1318,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .create_pointer_type(
                         "",
                         elemdi,
-                        elemdi.get_size_in_bits(),
+                        64,
                         elemdi.get_align_in_bits(),
                         AddressSpace::from(1),
                     )
@@ -1361,7 +1361,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                         &[vtabletp.as_type(), arrtp.as_type(), lentp.as_type()],
                         0,
                         None,
-                        "arr_wrapper",
+                        &format!("[{}]", arr.element_type.borrow().get_name()),
                     )
                     .as_type();
                 Some(st)
@@ -1419,7 +1419,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     let realtp = self.dibuilder.create_pointer_type(
                         "",
                         st,
-                        st.get_size_in_bits(),
+                        64,
                         st.get_align_in_bits(),
                         AddressSpace::from(1),
                     );
@@ -1462,11 +1462,10 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .unwrap()
                     .ptr_type(AddressSpace::from(1))
                     .as_basic_type_enum();
-                let size = td.get_bit_size(etp);
                 let align = td.get_preferred_alignment(etp);
                 let di = self
                     .dibuilder
-                    .create_pointer_type("", elemdi, size, align, AddressSpace::from(1))
+                    .create_pointer_type("", elemdi, 64, align, AddressSpace::from(1))
                     .as_type();
                 self.ditypes
                     .borrow_mut()
@@ -1576,12 +1575,11 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                     .borrow()
                     .iter()
                 {
-                    let size = td.get_bit_size(&utp);
                     let align = td.get_preferred_alignment(&utp);
                     let realtp = self.dibuilder.create_pointer_type(
                         "",
                         st.as_type(),
-                        size,
+                        64,
                         align,
                         AddressSpace::from(1),
                     );
