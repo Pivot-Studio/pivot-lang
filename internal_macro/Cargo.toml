@@ -9,7 +9,7 @@ edition = "2021"
 ctor = "0.1"
 log = "0.4"
 
-llvm-sys = { version = "160", optional = true }
+llvm-sys = { version = "180", optional = true }
 [dependencies.add_symbol_macro]
 path = "src/add_symbol_macro"
 [dependencies.range_macro]

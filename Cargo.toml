@@ -8,8 +8,8 @@ authors = ["The pivot-lang Authors"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", optional = true, features = ["llvm16-0", "no-libffi-linking"] }
-llvm-sys = { version = "160", optional = true }
+inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", optional = true, features = ["llvm18-0", "no-libffi-linking"] }
+llvm-sys = { version = "180", optional = true }
 pl_linker = { path = "./pl_linker", optional = true }
 immix = { path = "./immix", optional = true, default-features = false, features = ["llvm_gc_plugin", "llvm_stackmap","auto_gc", "madv_dontneed"] }
 vm = { path = "./vm", optional = true, features = ["jit"] }

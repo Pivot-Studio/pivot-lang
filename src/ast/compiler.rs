@@ -17,8 +17,6 @@ use indicatif::ProgressBar;
 use inkwell::{
     context::Context,
     module::Module,
-    passes::{PassManager, PassManagerBuilder},
-    OptimizationLevel,
 };
 use log::{trace, warn};
 #[cfg(feature = "llvm")]
@@ -195,7 +193,6 @@ pub fn process_llvm_ir<'a>(
             "正在优化模块 {} ",
             module.get_name().to_str().unwrap().yellow()
         ));
-        run_pass(&module, op.optimization.to_llvm());
         pb.set_message(format!(
             "正在生成模块 {} 的目标文件",
             module.get_name().to_str().unwrap().yellow()
@@ -325,31 +322,6 @@ pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
     }
 }
 
-#[cfg(feature = "llvm")]
-pub fn run_pass(llvmmod: &Module, op: OptimizationLevel) {
-    let pass_manager_builder = PassManagerBuilder::create();
-    // unsafe { llvmaddPass(pass_manager_builder.as_mut_ptr() as _) };
-    pass_manager_builder.set_optimization_level(op);
-    // Create FPM MPM
-    let fpm = PassManager::create(llvmmod);
-    let mpm: PassManager<Module> = PassManager::create(());
-    if op != OptimizationLevel::None {
-        pass_manager_builder.set_size_level(0);
-        pass_manager_builder.populate_function_pass_manager(&fpm);
-        pass_manager_builder.populate_module_pass_manager(&mpm);
-        // pass_manager_builder.populate_lto_pass_manager(&mpm, false, true);
-    }
-    let b = fpm.initialize();
-    trace!("fpm init: {}", b);
-    for f in llvmmod.get_functions() {
-        let optimized = fpm.run_on(&f);
-        trace!("try to optimize func {}", f.get_name().to_str().unwrap());
-        let oped = if optimized { "yes" } else { "no" };
-        trace!("optimized: {}", oped,);
-    }
-    fpm.finalize();
-    mpm.run_on(llvmmod);
-}
 
 #[cfg(not(feature = "llvm"))]
 #[salsa::tracked]

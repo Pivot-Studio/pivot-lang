@@ -859,7 +859,7 @@ dependencies = [
 [[package]]
 name = "inkwell"
 version = "0.4.0"
-source = "git+https://github.com/TheDan64/inkwell?branch=master#e0aa2e51a6cb501e4e2a889bbea12a1efab9c4ff"
+source = "git+https://github.com/TheDan64/inkwell?branch=master#67ebc8ab922aef57f9a0ed2360526eeb9be55621"
 dependencies = [
  "either",
  "inkwell_internals",
@@ -872,7 +872,7 @@ dependencies = [
 [[package]]
 name = "inkwell_internals"
 version = "0.9.0"
-source = "git+https://github.com/TheDan64/inkwell?branch=master#e0aa2e51a6cb501e4e2a889bbea12a1efab9c4ff"
+source = "git+https://github.com/TheDan64/inkwell?branch=master#67ebc8ab922aef57f9a0ed2360526eeb9be55621"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -975,8 +975,8 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "lld_rs"
-version = "160.0.0"
-source = "git+https://github.com/Pivot-Studio/lld-rs.git?branch=main#d1b3a4a2e0fffdb9d3e9174c72223861f5629933"
+version = "180.0.0"
+source = "git+https://github.com/Pivot-Studio/lld-rs.git?branch=main#2335c4cecf81333781d334c638ac8d73e7bc77a6"
 dependencies = [
  "cc",
  "lazy_static",
@@ -987,14 +987,15 @@ dependencies = [
 
 [[package]]
 name = "llvm-sys"
-version = "160.1.4"
+version = "180.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49f9888529887dfda6c59e20f0e0727b17e826cd54ae1ddf0d4c83850fa23b69"
+checksum = "778fa5fa02e32728e718f11eec147e6f134137399ab02fd2c13d32476337affa"
 dependencies = [
+ "anyhow",
  "cc",
  "lazy_static",
  "libc",
- "regex",
+ "regex-lite",
  "semver",
 ]
 
@@ -1454,6 +1455,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "regex-lite"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30b661b2f27137bdbc16f00eda72866a92bb28af1753ffbd56744fb6e2e9cd8e"
+
+[[package]]
 name = "regex-syntax"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1508,7 +1515,7 @@ checksum = "e86697c916019a8588c99b5fac3cead74ec0b4b819707a682fd4d23fa0ce1ba1"
 [[package]]
 name = "salsa-2022"
 version = "0.1.0"
-source = "git+https://github.com/salsa-rs/salsa?branch=master#f1d318a2795e87081e316a5f31ef02f0cd6a1c83"
+source = "git+https://github.com/salsa-rs/salsa?branch=master#b5aa4294bda8f82b4d8caf70c7c7bd6581364511"
 dependencies = [
  "arc-swap",
  "crossbeam",
@@ -1526,7 +1533,7 @@ dependencies = [
 [[package]]
 name = "salsa-2022-macros"
 version = "0.1.0"
-source = "git+https://github.com/salsa-rs/salsa?branch=master#f1d318a2795e87081e316a5f31ef02f0cd6a1c83"
+source = "git+https://github.com/salsa-rs/salsa?branch=master#b5aa4294bda8f82b4d8caf70c7c7bd6581364511"
 dependencies = [
  "eyre",
  "heck",

@@ -11,7 +11,6 @@
 #include "llvm/Transforms/Vectorize/SLPVectorizer.h"
 #include "llvm/Transforms/Vectorize/LoadStoreVectorizer.h"
 #include "llvm/Transforms/Vectorize/VectorCombine.h"
-#include "llvm/Transforms/Vectorize.h"
 #include "llvm/Transforms/IPO/ForceFunctionAttrs.h"
 #include "llvm/Transforms/IPO/Attributor.h"
 #include "llvm/Transforms/IPO/InferFunctionAttrs.h"
@@ -71,33 +70,15 @@ extern "C" void LLVMLinkPLImmixGC()
 {
     linkAllBuiltinGCs();
 }
-#include "llvm-c/Transforms/PassManagerBuilder.h"
 
 extern "C" void add_module_pass(llvm::legacy::PassManagerBase *PB) {
     PB->add(new ImmixLegacy());
 
 }
 #include "llvm/ADT/StringExtras.h"
-#include "llvm/MC/SubtargetFeature.h"
 #include "llvm/CodeGen/CommandFlags.h"
 #include "llvm/Support/TargetSelect.h"
-std::string getFeaturesStr() {
-  SubtargetFeatures Features;
 
-  // If user asked for the 'native' CPU, we need to autodetect features.
-  // This is necessary for x86 where the CPU might not support all the
-  // features the autodetected CPU name lists in the target. For example,
-  // not all Sandybridge processors support AVX.
-    StringMap<bool> HostFeatures;
-    if (sys::getHostCPUFeatures(HostFeatures))
-        for (const auto &[Feature, IsEnabled] : HostFeatures)
-        Features.AddFeature(Feature, IsEnabled);
-
-//   for (auto const &MAttr : codegen::getMAttrs())
-//     Features.AddFeature(MAttr);
-
-  return Features.getString();
-}
 /*
     param: opt opt level
 
@@ -105,46 +86,46 @@ std::string getFeaturesStr() {
     So we have to write one ourselves.
 */
 extern "C" void run_module_pass(LLVMModuleRef  M, int opt, int debug, int print_escaped) {
-    InitializeNativeTarget();
-//   Initialize();
-    std::string CPUStr, FeaturesStr;
-    Triple ModuleTriple(unwrap(M)->getTargetTriple());
-    std::string Error;
+//     InitializeNativeTarget();
+// //   Initialize();
+//     std::string CPUStr, FeaturesStr;
+//     Triple ModuleTriple(unwrap(M)->getTargetTriple());
+//     std::string Error;
     
 
-    auto target = TargetRegistry::lookupTarget(ModuleTriple.getTriple(), Error);
-    CPUStr = sys::getHostCPUName();
-    FeaturesStr = getFeaturesStr();
-    // codegen::setFunctionAttributes(CPUStr, FeaturesStr, *unwrap(M));
-    TargetOptions Options = TargetOptions();
-    // Options.UnsafeFPMath = true;
-    // Options.NoNaNsFPMath = true;
-    // Options.NoTrappingFPMath = true;
-    // Options.AllowFPOpFusion = FPOpFusion::Fast;
+//     auto target = TargetRegistry::lookupTarget(ModuleTriple.getTriple(), Error);
+//     CPUStr = sys::getHostCPUName();
+//     FeaturesStr = getFeaturesStr();
+//     // codegen::setFunctionAttributes(CPUStr, FeaturesStr, *unwrap(M));
+//     TargetOptions Options = TargetOptions();
+//     // Options.UnsafeFPMath = true;
+//     // Options.NoNaNsFPMath = true;
+//     // Options.NoTrappingFPMath = true;
+//     // Options.AllowFPOpFusion = FPOpFusion::Fast;
 
     auto O = OptimizationLevel::O2;
-    auto COpt = CodeGenOpt::Default;
-    switch (opt)
-    {
-    case 0:
-        COpt = CodeGenOpt::None;
-        break;
-    case 1:
-        COpt = CodeGenOpt::Less;
-        break;
-    case 2:
-        COpt = CodeGenOpt::Default;
-        break;
-    case 3:
-        COpt = CodeGenOpt::Aggressive;
-        break;
-    default:
-        break;
-    }
-    auto TM = target->createTargetMachine(
-      ModuleTriple.getTriple(), CPUStr, FeaturesStr,
-      Options, Reloc::DynamicNoPIC,
-      std::nullopt, COpt);
+//     auto COpt = CodeGenOpt::Default;
+//     switch (opt)
+//     {
+//     case 0:
+//         COpt = CodeGenOpt::None;
+//         break;
+//     case 1:
+//         COpt = CodeGenOpt::Less;
+//         break;
+//     case 2:
+//         COpt = CodeGenOpt::Default;
+//         break;
+//     case 3:
+//         COpt = CodeGenOpt::Aggressive;
+//         break;
+//     default:
+//         break;
+//     }
+//     auto TM = target->createTargetMachine(
+//       ModuleTriple.getTriple(), CPUStr, FeaturesStr,
+//       Options, Reloc::DynamicNoPIC,
+//       std::nullopt, COpt);
     // These must be declared in this order so that they are destroyed in the
     // correct order due to inter-analysis-manager references.
     LoopAnalysisManager LAM;
@@ -159,7 +140,7 @@ extern "C" void run_module_pass(LLVMModuleRef  M, int opt, int debug, int print_
     // Take a look at the PassBuilder constructor parameters for more
     // customization, e.g. specifying a TargetMachine or various debugging
     // options.
-    PassBuilder PB(TM, PTO);
+    PassBuilder PB;
 
     AAManager AA = PB.buildDefaultAAPipeline();
     FAM.registerPass([&] { return std::move(AA); });
