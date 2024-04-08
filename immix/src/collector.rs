@@ -46,22 +46,26 @@ fn walk_gc_frames(sp: *mut u8, mut walker: impl FnMut(*mut u8, i32, ObjectType))
             for o in frame.iter_roots() {
                 walker(sp, o, ObjectType::Pointer);
             }
+            #[cfg(target_arch = "aarch64")]
+            let frame_size = frame.frame_size;
+            #[cfg(target_arch = "x86_64")]
+            let frame_size = frame.frame_size + 8;
 
             // conservative stack scanning
             // treat all 8 bytes aligned data as a pointer
             #[cfg(feature = "conservative_stack_scan")]
-            for i in 0..=frame.frame_size / 8 {
+            for i in 0..=frame_size / 8 {
                 walker(sp, i * 8, ObjectType::Pointer);
             }
 
             sp = unsafe {
                 #[cfg(target_arch = "aarch64")]
                 {
-                    sp.offset(frame.frame_size as _)
+                    sp.offset(frame_size as _)
                 }
                 #[cfg(target_arch = "x86_64")]
                 {
-                    sp.offset(frame.frame_size as isize + 8)
+                    sp.offset(frame_size as _)
                 }
             };
         } else {
@@ -399,7 +403,7 @@ impl Collector {
         }
 
         let ptr = *(ptr as *mut *mut u8);
-        if ptr.is_null() {
+        if ptr.is_null() || (ptr as usize) % 8 != 0 {
             return;
         }
         // eprintln!("mark ptr {:p} -> {:p}", father, ptr);
