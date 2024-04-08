@@ -430,7 +430,9 @@ impl Node for TakeOpNode {
         let id_range = id.range();
         let (head_pltype, mut headptr) = ctx.deref_greedily(head_pltype, nv.get_value(), builder);
         if !builder.is_ptr(headptr) {
+            let old = headptr;
             headptr = builder.alloc("temp", &head_pltype.borrow(), ctx, None);
+            builder.build_store(headptr, old);
         }
         match &*head_pltype.clone().borrow() {
             PLType::Trait(s) => ctx.run_in_type_mod(s, |ctx, s| {

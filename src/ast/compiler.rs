@@ -14,10 +14,7 @@ use crate::{
 use colored::Colorize;
 use indicatif::ProgressBar;
 #[cfg(feature = "llvm")]
-use inkwell::{
-    context::Context,
-    module::Module,
-};
+use inkwell::{context::Context, module::Module};
 use log::{trace, warn};
 #[cfg(feature = "llvm")]
 use pl_linker::{linker::create_with_target, mun_target::spec::Target};
@@ -321,7 +318,6 @@ pub fn pl_link(llvmmod: Module, oxbjs: Vec<PathBuf>, out: String, op: Options) {
         eprintln!("{}link succ, output file: {}", SPARKLE, fo);
     }
 }
-
 
 #[cfg(not(feature = "llvm"))]
 #[salsa::tracked]

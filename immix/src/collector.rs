@@ -42,8 +42,16 @@ fn walk_gc_frames(sp: *mut u8, mut walker: impl FnMut(*mut u8, i32, ObjectType))
         let ip = get_ip_from_sp(sp);
         let frame = unsafe { STACK_MAP.map.as_ref().unwrap().get(&ip.cast_const()) };
         if let Some(frame) = frame {
+            #[cfg(not(feature = "conservative_stack_scan"))]
             for o in frame.iter_roots() {
                 walker(sp, o, ObjectType::Pointer);
+            }
+
+            // conservative stack scanning
+            // treat all 8 bytes aligned data as a pointer
+            #[cfg(feature = "conservative_stack_scan")]
+            for i in 0..=frame.frame_size / 8 {
+                walker(sp, i * 8, ObjectType::Pointer);
             }
 
             sp = unsafe {
@@ -684,27 +692,6 @@ impl Collector {
                     self.mark_gc_frames(frames);
                 } else {
                     walk_gc_frames(sp, |sp, offset, obj_type| {
-                        log::debug!("{}", {
-                            let root = unsafe { sp.offset(offset as isize) } as *mut *mut *mut u8;
-                            format!(
-                                "gc {} root: {:p}, value: {:p}, *value: {:p}",
-                                self.id,
-                                root,
-                                unsafe { *root },
-                                unsafe {
-                                    if self
-                                        .thread_local_allocator
-                                        .as_mut()
-                                        .unwrap()
-                                        .in_heap(*root as _)
-                                    {
-                                        **root
-                                    } else {
-                                        std::ptr::null_mut()
-                                    }
-                                }
-                            )
-                        });
                         self.mark_stack_offset(sp, offset, obj_type);
                     });
                 }

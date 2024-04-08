@@ -68,6 +68,7 @@ namespace
     std::vector<PHINode *> phis;
     std::vector<AllocaInst *> allocas;
     std::vector<GetElementPtrInst *> geps;
+    std::vector<MemSetInst *> memsets;
 
 
     // find all gc atomic type allocations, analysis to get non-escaped set.
@@ -81,30 +82,43 @@ namespace
         {
           for (auto &I : BB)
           {
-            // if it's a call instruction and has pl_atomic attribute
+            // if it's a call instruction and has pl_ordinary attribute
             if (auto *call = dyn_cast<CallInst>(&I))
             {
               if (auto *F = call->getCalledFunction())
               {
                 auto attrs = call->getAttributes();
-                if (!attrs.hasRetAttr("pl_atomic"))
+                if (!attrs.hasRetAttr("pl_ordinary"))
                 {
                   continue;
                 }
+                if (!F->getName().equals("DioGC__malloc"))
+                {
+                  continue;
+                }
+                
                 if (!PointerMayBeCaptured(call, true, true))
                 {
 
-                  auto info = attrs.getRetAttrs().getAttribute("pl_atomic").getValueAsString();
+                  auto info = attrs.getRetAttrs().getAttribute("pl_ordinary").getValueAsString();
                   if (info.size() > 0 && this->escaped)
                   {
                     printf("variable moved to stack: %s\n", info.str().c_str());
                   }
+
                   
                   // if the pointer may be captured, then we change this gc malloc
                   // to stack alloca
                   
                   // the first argument of gc malloc is the size
                   auto *size = call->getArgOperand(0);
+                  
+                  if (!isa<ConstantInt>(size) || !detail::isPresent(size))
+                  {
+                    // if the size is not a constant, we can't replace it with alloca
+                    continue;
+                  }
+                  
                   // size is a number, get it's value
                   auto *sizeValue = dyn_cast<ConstantInt>(size);
                   auto sizeInt = sizeValue->getZExtValue();
@@ -120,8 +134,9 @@ namespace
 
 
                   // find all memset, regenrate memset
-                  for (auto *U : call->users())
-                  {
+                  auto users1 = call->users();
+                  for (auto *U : users1)
+                  { 
                     if (auto *memset = dyn_cast<MemSetInst>(U))
                     {
                       auto *dest = memset->getDest();
@@ -130,7 +145,7 @@ namespace
                       builder.SetInsertPoint(memset);
                       auto *newmemset = builder.CreateMemSet(&alloca, value, len, memset->getDestAlign(), memset->isVolatile());
                       memset->replaceAllUsesWith(newmemset);
-                      memset->eraseFromParent();
+                      memsets.push_back(memset);
                     }
                   }
                   
@@ -214,6 +229,13 @@ namespace
       if (gep->getParent())
       {
         gep->eraseFromParent();
+      }
+    }
+    for (auto *memset : memsets)
+    {
+      if (memset->getParent())
+      {
+        memset->eraseFromParent();
       }
     }
     return PreservedAnalyses::none();

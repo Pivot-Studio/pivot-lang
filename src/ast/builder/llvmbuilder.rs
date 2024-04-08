@@ -442,7 +442,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
                 &format!("heapptr_{}", name),
             )
             .unwrap();
-        if tp.is_atomic() {
+        if tp.is_atomic() || !matches!(tp, PLType::Arr(_)) {
             let pos = match declare {
                 Some(Pos {
                     line: 0,
@@ -457,7 +457,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             };
             call_site_value.add_attribute(
                 inkwell::attributes::AttributeLoc::Return,
-                self.context.create_string_attribute("pl_atomic", &pos),
+                self.context.create_string_attribute("pl_ordinary", &pos),
             );
         }
         let heapptr = call_site_value.try_as_basic_value().left().unwrap();

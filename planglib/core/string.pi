@@ -29,6 +29,17 @@ impl StringBuilder {
         self.data = reverse(self.data, self.len);
         return;
     }
+    pub fn add_str(s: gc::string) void {
+        let bs = s.bytes();
+        let len = s.byte_len();
+        for let i = 0; i < len; i = i + 1 {
+            if bs[i] == 0 as u8 {
+                break;
+            }
+            self.add_char(bs[i]);
+        }
+        return;
+    }
 }
 
 fn reverse<T>(s: [T], len: i64) [T] {

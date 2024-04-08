@@ -11,7 +11,7 @@ authors = ["The pivot-lang Authors"]
 inkwell = { git = "https://github.com/TheDan64/inkwell", branch = "master", optional = true, features = ["llvm18-0", "no-libffi-linking"] }
 llvm-sys = { version = "180", optional = true }
 pl_linker = { path = "./pl_linker", optional = true }
-immix = { path = "./immix", optional = true, default-features = false, features = ["llvm_gc_plugin", "llvm_stackmap","auto_gc", "madv_dontneed"] }
+immix = { path = "./immix", optional = true, default-features = false, features = ["llvm_gc_plugin", "llvm_stackmap","auto_gc", "madv_dontneed", "conservative_stack_scan"] }
 vm = { path = "./vm", optional = true, features = ["jit"] }
 indexmap = "1.9"
 linked-hash-map = "0.5.6"

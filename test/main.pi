@@ -4,11 +4,6 @@ use std::cols::arr::*;
 use project1::test::_match;
 
 
-struct name {
-    a: i64;
-    b: i64;
-}
-
 pub fn main() i64 {
     println!("Hello, World!");
     let h = new_hash_table<i64|i64>(10 as u64, 1 as u64);
