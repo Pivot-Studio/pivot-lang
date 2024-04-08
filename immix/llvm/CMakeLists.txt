@@ -5,13 +5,12 @@ cmake_minimum_required(VERSION 3.5)
 # Set the project name
 project (plimmix)
 
-find_package(LLVM REQUIRED CONFIG)
+# find llvm 18.0.x, if not, try find llvm 18.1.x
 
-# check version is 18
-if (LLVM_VERSION_MAJOR EQUAL 18)
-  message(STATUS "Found LLVM 18")
-else()
-  message(FATAL_ERROR "LLVM version is not 18")
+find_package(LLVM 18.0.0...18.1.0 CONFIG)
+
+if (NOT LLVM_FOUND)
+  find_package(LLVM 18.1.0...18.2.0 REQUIRED CONFIG)
 endif()
 
 separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})

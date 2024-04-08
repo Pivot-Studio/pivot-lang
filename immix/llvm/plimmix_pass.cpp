@@ -274,9 +274,7 @@ namespace
     This pass helps integrate immix with LLVM.
 
     It does the following:
-    - Sets the GC name to "statepoint-example" for all functions. 
-      TODO: current llvm-16 does not support custom gc strategy using
-      RewriteStatepointsForGC pass. So we need to use the default gc strategy.
+    - Sets the GC name to "plimmix" for all functions. 
     - Adds a call to immix_gc_init in the global constructor
     - Adds a global variable declaration for the module stack map if the main function is present.
 
@@ -301,8 +299,7 @@ namespace
       }
       if (!FV->getName().ends_with("visitorf@") && !FV->getName().starts_with("llvm"))
       {
-        FV->setGC("statepoint-example");
-
+        FV->setGC("plimmix");
       }
       
     }
