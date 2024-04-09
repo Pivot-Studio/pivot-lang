@@ -27,7 +27,7 @@ use std::{
 use version::VergenInfo;
 
 use ast::{
-    compiler::{self, compile_dry, convert, ActionType, CHECK, CHECK_PROGRESS},
+    compiler::{self, compile_dry, convert, ActionType, EngineType, CHECK, CHECK_PROGRESS},
     diag::ensure_no_error,
 };
 use clap::CommandFactory;
@@ -59,9 +59,14 @@ fn main() {
             RunCommand::Run {
                 path: name,
                 optimization,
+                engine,
             } => {
+                if engine != "orc" && engine != "mc" {
+                    eprintln!("engine {} is not supported, only support orc/mc", engine);
+                    exit(1);
+                }
                 cli.optimization = *optimization;
-                cli.run(name.clone())
+                cli.run(name.clone(), engine[..].into())
             }
             RunCommand::Lsp {} => cli.lsp(),
             RunCommand::Fmt { name } => cli.fmt(name.clone()),
@@ -249,12 +254,13 @@ impl Cli {
         v.build_semver = "alpha".to_string();
         println!("{}", v)
     }
-    pub fn run(&self, name: String) {
+    pub fn run(&self, name: String, engine: EngineType) {
         #[cfg(feature = "jit")]
         {
             let re = compiler::run(
                 Path::new(name.as_str()),
                 convert(self.optimization).to_llvm(),
+                engine,
             );
             exit(re);
         }
@@ -326,6 +332,9 @@ enum RunCommand {
         /// optimization level, 0-3
         #[arg(short = 'O', value_parser, default_value = "0")]
         optimization: u64,
+        /// engine used to run the bitcode, currently support orc/mc
+        #[arg(short = 'e', long, value_parser, default_value = "orc")]
+        engine: String,
     },
     /// Check if the project has any error
     Check {

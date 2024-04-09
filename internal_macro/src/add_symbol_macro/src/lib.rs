@@ -137,6 +137,7 @@ impl Parse for MacroInput {
 
 fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
     let mut fnids = Vec::<Ident>::new();
+    let mut extern_c_fns = Vec::<Ident>::new();
     let mut fns = Vec::<String>::new();
     let mut sigs = Vec::<quote::__private::TokenStream>::new();
     let ident = match &*ast.self_ty {
@@ -161,6 +162,7 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
             let fname = format!("{}__{}", tp, str);
             clonedsig.ident = format_ident!("{}", fname);
             let findent = format_ident!("{}", fname);
+            extern_c_fns.push(findent.clone());
             let cl = clonedsig.inputs.clone();
             let inputs = clonedsig.inputs.into_iter();
 
@@ -209,7 +211,7 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
         #[internal_macro::ctor::ctor]
         fn #initfnid() {
             #(
-                let ptr = #ident::#fnids as * const ();
+                let ptr = #extern_c_fns as * const ();
                 let name = #fns;
                 unsafe{
                     internal_macro::add_symbol(name, ptr);

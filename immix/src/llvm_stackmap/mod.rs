@@ -269,6 +269,12 @@ extern "C" {
         opt: u32,
         cb: unsafe extern "C" fn(map: *mut u8),
     ) -> i32;
+
+    pub fn CreateAndRunPLOrcJITEngine(
+        module: *const std::ffi::c_char,
+        opt: u32,
+        cb: unsafe extern "C" fn(map: *mut u8),
+    ) -> i32;
     /// # run_module_pass
     ///
     /// run the module pass
