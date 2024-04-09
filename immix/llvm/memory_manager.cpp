@@ -231,10 +231,10 @@ public:
   }
 
   Expected<ExecutorSymbolDef> lookup(StringRef Name) {
-    auto sym = ES->lookup({&MainJD}, Mangle(Name.str()));
-    if (sym)
+    auto addr = llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(Name.str().c_str());
+    if (addr)
     {
-      return sym;
+      return ExecutorSymbolDef(ExecutorAddr::fromPtr(addr), JITSymbolFlags::Exported);
     }
     
     return ES->lookup({&MainJD}, Mangle(Name.str()));
