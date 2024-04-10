@@ -52,6 +52,7 @@ pub fn run(p: &Path, opt: OptimizationLevel, engine: EngineType) -> i32 {
     }
     match engine {
         EngineType::MCJit => {
+            internal_macro::register_all_symbol_for_mc();
             let re = if p.to_str().unwrap().ends_with(".ll") {
                 let c_str = CString::new(p.to_str().unwrap()).unwrap();
                 let m = unsafe { parse_ir(c_str.as_ptr()) };

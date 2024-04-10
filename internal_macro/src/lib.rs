@@ -15,13 +15,31 @@
 // arbitrary memory address using it
 #[cfg(feature = "jit")]
 pub unsafe fn add_symbol(name: &str, ptr: *const ()) {
-    use llvm_sys::support;
     use std::os::raw::c_void;
-    let name = std::ffi::CString::new(name).unwrap();
-    log::debug!("add symbol {} at {:p}", name.to_str().unwrap(), ptr);
+    log::debug!("add symbol {} at {:p}", name, ptr);
     let addr = ptr as *mut c_void;
-    support::LLVMAddSymbol(name.as_ptr(), addr)
+    SYMBOLS
+        .lock()
+        .unwrap()
+        .insert(name.to_owned(), addr as isize);
+    // llvm_sys::support::LLVMAddSymbol(name.as_ptr(), addr)
 }
+
+#[cfg(feature = "jit")]
+pub fn register_all_symbol_for_mc() {
+    unsafe {
+        for (name, ptr) in SYMBOLS.lock().unwrap().iter() {
+            let name = std::ffi::CString::new(name.as_str()).unwrap();
+            llvm_sys::support::LLVMAddSymbol(name.as_ptr(), *ptr as _);
+        }
+    }
+}
+
+lazy_static::lazy_static! {
+    static ref SYMBOLS: std::sync::Mutex<std::collections::HashMap<String, isize>> = std::sync::Mutex::new(std::collections::HashMap::new());
+
+}
+
 #[macro_export]
 macro_rules! add_runtime_consts {
     () => {

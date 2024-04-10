@@ -917,6 +917,7 @@ dependencies = [
  "comment_macro",
  "ctor",
  "fmt_macro",
+ "lazy_static",
  "llvm-sys",
  "log",
  "node_macro",

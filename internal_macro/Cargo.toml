@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 ctor = "0.1"
 log = "0.4"
+lazy_static = "1.4"
 
 llvm-sys = { version = "180", optional = true }
 [dependencies.add_symbol_macro]

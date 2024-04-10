@@ -89,6 +89,7 @@ fn demo(a: u64, b: u64, c: u64) -> u64 {
 fn test_add_symbol() -> Result<(), Box<dyn std::error::Error>> {
     use inkwell::OptimizationLevel;
     use llvm_sys::target::LLVM_InitializeNativeTarget;
+    internal_macro::register_all_symbol_for_mc();
     let names = vec!["demo", "test__demo", "test__demo1"];
 
     for v in names {

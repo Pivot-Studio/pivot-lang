@@ -18,6 +18,8 @@ vmdebug:
 	@mkdir -p target/release
 	@cd vm && cargo build
 	@cp target/debug/libvm.a target/release/libvm.a
+	@touch target/debug/libvm.so && cp target/debug/libvm.so target/release/libvm.so
+	@touch target/debug/libvm.dylib && cp target/debug/libvm.dylib target/release/libvm.dylib
 
 install:
 	@cargo install --path=.

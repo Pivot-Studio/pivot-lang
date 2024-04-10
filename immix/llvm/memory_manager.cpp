@@ -8,6 +8,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/Core.h"
+#include "llvm/ExecutionEngine/Orc/EPCDynamicLibrarySearchGenerator.h"
 #include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
 #include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
@@ -202,6 +203,23 @@ public:
       ES->reportError(std::move(Err));
   }
 
+  // mangle
+  SymbolStringPtr mangle(StringRef Name) {
+    return Mangle(Name);
+  }
+
+  Expected<JITDylib &> loadPlatformDynamicLibrary(const char *Path) {
+    auto G = EPCDynamicLibrarySearchGenerator::Load(*ES, Path);
+    if (!G)
+      return G.takeError();
+
+    if (auto *ExistingJD = ES->getJITDylibByName(Path))
+      return *ExistingJD;
+
+    auto &JD = ES->createBareJITDylib(Path);
+    JD.addGenerator(std::move(*G));
+    return JD;
+  }
   static Expected<std::unique_ptr<PivotJIT>> Create() {
     auto EPC = SelfExecutorProcessControl::Create();
     if (!EPC)
@@ -231,12 +249,6 @@ public:
   }
 
   Expected<ExecutorSymbolDef> lookup(StringRef Name) {
-    auto addr = llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(Name.str().c_str());
-    if (addr)
-    {
-      return ExecutorSymbolDef(ExecutorAddr::fromPtr(addr), JITSymbolFlags::Exported);
-    }
-    
     return ES->lookup({&MainJD}, Mangle(Name.str()));
   }
 };
@@ -250,6 +262,7 @@ extern "C"
 
   int CreateAndRunPLJITEngine( LLVMModuleRef module, unsigned int opt, stackmap_cb cb)
   {
+    llvm::sys::DynamicLibrary::LoadLibraryPermanently("/Users/bobli/src/pivot-lang/target/debug/libvm.dylib"); 
     LLVMExecutionEngineRef *jit = new LLVMExecutionEngineRef();
     finalize_cb = cb;
     auto sm = new SectionMemoryManager();
@@ -284,16 +297,48 @@ extern "C"
 
   int CreateAndRunPLOrcJITEngine(char * module_path, unsigned int opt, stackmap_cb cb)
   {
+    auto root = std::string(std::getenv("PL_ROOT"));
+    #ifdef __APPLE__
+    auto lib_path = "libvm.dylib";
+    #elif __linux__
+    auto lib_path = "libvm.so";
+    #elif _WIN32
+    auto lib_path = "vm.dll";
+    #endif
+    // join path
+    std::string lib_full_path;
+    if (StringRef(root).ends_with("/"))
+    {
+      lib_full_path = root + lib_path;
+    }
+    else
+    {
+      lib_full_path = root + "/" + lib_path;
+    }
+    
+
+
+
     finalize_cb = cb;
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
     InitializeNativeTargetAsmParser();
-    llvm::sys::DynamicLibrary::LoadLibraryPermanently(nullptr);
-    // llvm::sys::DynamicLibrary::LoadLibraryPermanently("/Users/bobli/src/pivot-lang/target/debug/libvm.dylib", nullptr); 
+    
+    // llvm::sys::DynamicLibrary::LoadLibraryPermanently(lib_full_path.c_str()); 
     auto jit = ExitOnErr(PivotJIT::Create());
-    auto finit = ExitOnErr(jit->lookup("immix_gc_init"));
-    auto finitf = finit.getAddress().toPtr<stackmap_cb>();
-    // finalize_cb = finitf;
+    if (!jit->lookup("immix_gc_init"))
+    {
+      auto libvm = jit->loadPlatformDynamicLibrary(lib_full_path.c_str());
+      if (!libvm)
+      {
+        printf("fatal: load libvm error!\n");
+        exit(1945);
+      }
+      jit->getMainJITDylib().addToLinkOrder(*libvm);
+      auto finit = ExitOnErr(jit->lookup("immix_gc_init"));
+      auto finitf = finit.getAddress().toPtr<stackmap_cb>();
+      finalize_cb = finitf;
+    }
 
     auto RT = jit->getMainJITDylib().createResourceTracker();
     SMDiagnostic E;
