@@ -7,6 +7,7 @@ WORKDIR /home/pivot
 COPY ./target/release/plc /usr/bin/plc
 COPY ./planglib /home/pivot/pl/planglib
 COPY ./target/release/libvm.a /home/pivot/pl/libvm.a
+COPY ./target/release/libvm.so /home/pivot/pl/libvm.so
 COPY ./test /home/pivot/pltest
 RUN chown -R pivot:pivot /home/pivot
 USER pivot

@@ -28,7 +28,7 @@ fmt:
 	@cargo +stable fmt
 
 test: vmdebug
-	@cargo test --all
+	@cargo nextest run --workspace --all-features
 
 clean:
 	@rm -rf out*

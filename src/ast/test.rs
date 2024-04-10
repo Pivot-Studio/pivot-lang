@@ -414,7 +414,7 @@ fn test_doc_symbol() {
 
 #[test]
 #[cfg(feature = "jit")]
-fn test_jit() {
+fn test_orc_jit() {
     use crate::ast::compiler::{compile, Options};
     use std::path::PathBuf;
     let l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
@@ -465,6 +465,55 @@ fn test_jit() {
     //     ) == 0,
     //     "jit compiled program exit with non-zero status"
     // );
+    drop(l);
+}
+
+#[test]
+#[cfg(feature = "jit")]
+fn test_mc_jit() {
+    use crate::ast::compiler::{compile, Options};
+    use std::path::PathBuf;
+    let l = crate::utils::plc_new::tests::TEST_COMPILE_MUTEX
+        .lock()
+        .unwrap();
+    set_test_asset();
+    let out = "testjitout";
+    let docs = MemDocs::default();
+    let db = Database::default();
+    let input = MemDocsInput::new(
+        &db,
+        Arc::new(Mutex::new(docs)),
+        "test/main.pi".to_string(),
+        Default::default(),
+        ActionType::Compile,
+        None,
+        None,
+    );
+    let outplb = "testjitout.bc";
+    compile(
+        &db,
+        input,
+        out.to_string(),
+        Options {
+            optimization: crate::ast::compiler::HashOptimizationLevel::None,
+            genir: true,
+            printast: false,
+            flow: false,
+            fmt: false,
+            jit: true,
+            debug: false,
+            ..Default::default()
+        },
+    );
+
+    assert!(
+        crate::ast::compiler::run(
+            PathBuf::from(outplb).as_path(),
+            inkwell::OptimizationLevel::None,
+            crate::ast::compiler::EngineType::MCJit
+        ) == 0,
+        "jit compiled program exit with non-zero status"
+    );
     drop(l);
 }
 #[test]
