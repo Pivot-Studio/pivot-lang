@@ -25,18 +25,13 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          - os: "macOS-latest"
-            dir: osx64
-            arch: darwin-amd64
-            artifacts: "plc"
-            RUSTFLAGS: ""
-            libvm: "libvm.a"
-          - os: "self-hosted"
+          - os: "macos-14"
             dir: osx64
             arch: darwin-arm64
             artifacts: "plc"
             RUSTFLAGS: ""
             libvm: "libvm.a"
+            libvm_dylib: "libvm.dylib"
           - os: "ubuntu-latest"
             dir: linux64
             debdir: pivot-lang_0.1.0-1_amd64
@@ -44,11 +39,13 @@ jobs:
             arch: linux-amd64
             RUSTFLAGS: ""
             libvm: "libvm.a"
+            libvm_dylib: "libvm.so"
           - os: "windows-latest"
             dir: win64
             artifacts: "plc.exe"
             RUSTFLAGS: "-Dwarnings -Ctarget-feature=+crt-static"
             libvm: "vm.lib"
+            libvm_dylib: "vm.dll"
             arch: windows-amd64
     steps:
       - uses: actions/checkout@v4
@@ -105,6 +102,20 @@ jobs:
       - name: Move libvm
         env:
           ARTIFACTS: ${{ matrix.config.libvm }}
+          OUT_DIR: ${{ matrix.config.dir }}
+          OS: ${{ matrix.config.os }}
+        run: |
+          import os
+          import shutil
+          artifacts = os.environ['ARTIFACTS'].split()
+          for artifact in artifacts:
+            src = "target/release/%s" % artifact
+            dst = os.environ['OUT_DIR'] + "/" + artifact
+            shutil.copy(src, dst)
+        shell: python
+      - name: Move libvm dylib
+        env:
+          ARTIFACTS: ${{ matrix.config.libvm_dylib }}
           OUT_DIR: ${{ matrix.config.dir }}
           OS: ${{ matrix.config.os }}
         run: |
