@@ -64,10 +64,15 @@ pub fn is_runtime(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             let initfnid = format_ident!("add_symbol_{}", str1);
             let fnid = input.sig.ident.clone();
+            // #[cfg(feature = "jit")]
 
+            // #[cfg(not(feature = "jit"))]
             quote!(
+                #[cfg(not(feature = "jit"))]
                 #[no_mangle]
                 pub unsafe extern "C" #input
+                #[cfg(feature = "jit")]
+                pub unsafe #input
                 #[cfg(feature = "jit")]
                 #[internal_macro::ctor::ctor]
                 fn #initfnid() {
@@ -164,7 +169,8 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
             let findent = format_ident!("{}", fname);
             extern_c_fns.push(findent.clone());
             let cl = clonedsig.inputs.clone();
-            let inputs = clonedsig.inputs.into_iter();
+            let inputs = clonedsig.inputs.clone().into_iter();
+            let inputs2 = clonedsig.inputs.into_iter();
 
             let expr = transform_params(cl);
 
@@ -182,18 +188,30 @@ fn impl_macro_impl(arg: &AcceptAttrInput, ast: &ItemImpl) -> TokenStream {
             } else {
                 let first = first.unwrap();
                 if let FnArg::Receiver(_) = first {
-                    let inputs = inputs.skip(1);
+                    let inputs1 = inputs.clone().skip(1);
+                    let inputs2 = inputs.skip(1);
                     cfn = quote!(
+                        #[cfg(not(feature = "jit"))]
                         #[no_mangle]
-                        pub unsafe extern "C" fn #findent(me: * mut #sfty,#(#inputs,)*) #ret {
+                        pub unsafe extern "C" fn #findent(me: * mut #sfty,#(#inputs1,)*) #ret {
+                            let me = &mut *me;
+                            me.#id #expr
+                        }
+                        #[cfg(feature = "jit")]
+                        pub unsafe fn #findent(me: * mut #sfty,#(#inputs2,)*) #ret {
                             let me = &mut *me;
                             me.#id #expr
                         }
                     );
                 } else {
                     cfn = quote!(
+                        #[cfg(not(feature = "jit"))]
                         #[no_mangle]
                         pub unsafe extern "C" fn #findent(#(#inputs,)*) #ret {
+                            #sfty::#id #expr
+                        }
+                        #[cfg(feature = "jit")]
+                        pub unsafe fn #findent(#(#inputs2,)*) #ret {
                             #sfty::#id #expr
                         }
                     );

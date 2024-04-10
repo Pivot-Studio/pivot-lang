@@ -326,19 +326,17 @@ extern "C"
     
     // llvm::sys::DynamicLibrary::LoadLibraryPermanently(lib_full_path.c_str()); 
     auto jit = ExitOnErr(PivotJIT::Create());
-    if (!jit->lookup("immix_gc_init"))
+
+    auto libvm = jit->loadPlatformDynamicLibrary(lib_full_path.c_str());
+    if (!libvm)
     {
-      auto libvm = jit->loadPlatformDynamicLibrary(lib_full_path.c_str());
-      if (!libvm)
-      {
-        printf("fatal: load libvm error!\n");
-        exit(1945);
-      }
-      jit->getMainJITDylib().addToLinkOrder(*libvm);
-      auto finit = ExitOnErr(jit->lookup("immix_gc_init"));
-      auto finitf = finit.getAddress().toPtr<stackmap_cb>();
-      finalize_cb = finitf;
+      printf("fatal: load libvm error!\n");
+      exit(1945);
     }
+    jit->getMainJITDylib().addToLinkOrder(*libvm);
+    auto finit = ExitOnErr(jit->lookup("immix_gc_init"));
+    auto finitf = finit.getAddress().toPtr<stackmap_cb>();
+    finalize_cb = finitf;
 
     auto RT = jit->getMainJITDylib().createResourceTracker();
     SMDiagnostic E;
