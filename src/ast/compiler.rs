@@ -162,6 +162,8 @@ pub fn process_llvm_ir<'a>(
     ctx: &'a Context,
     op: Options,
 ) -> (Module<'a>, Vec<PathBuf>) {
+    use inkwell::memory_buffer::MemoryBuffer;
+
     let mods = compile_dry::accumulated::<ModBuffer>(db, docs);
 
     let total_steps = 3;
@@ -177,6 +179,7 @@ pub fn process_llvm_ir<'a>(
 
     for m in mods {
         pb.inc(1);
+        let mem = &m.buf;
         let m = m.path;
         if set.contains(&m) {
             continue;
@@ -184,7 +187,7 @@ pub fn process_llvm_ir<'a>(
         set.insert(m.clone());
         let o = m.with_extension("o");
         // println!("{}", m.clone().to_str().unwrap());
-        let module = Module::parse_bitcode_from_path(m.clone(), ctx)
+        let module = Module::parse_bitcode_from_buffer(&MemoryBuffer::create_from_memory_range(&mem, m.file_name().unwrap().to_str().unwrap()), ctx)
             .unwrap_or_else(|_| panic!("parse {} failed", m.to_str().unwrap()));
         pb.set_message(format!(
             "正在优化模块 {} ",

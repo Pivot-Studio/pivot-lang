@@ -15,6 +15,7 @@ pub struct NoOpBuilder<'a, 'ctx> {
 }
 
 impl<'a, 'ctx> IRBuilder<'a, 'ctx> for NoOpBuilder<'a, 'ctx> {
+    fn optimize(&self) {}
     fn get_sp_handle(&self) -> ValueHandle {
         0
     }
