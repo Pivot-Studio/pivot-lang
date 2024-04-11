@@ -1697,71 +1697,6 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
             .unwrap()
             .into_pointer_value()
     }
-    fn optimize(&self) {
-        self.module
-            .set_triple(&get_target_machine(self.optlevel).get_triple());
-        if *self.optimized.borrow() {
-            return;
-        }
-        // if self.module.get_name().to_str().unwrap().contains("global") {
-        //     self.module.strip_debug_info();
-        // }
-        // self.module.strip_debug_info();
-        // self.module.strip_debug_info(); // FIXME
-        self.module.verify().unwrap_or_else(|e| {
-            self.module.print_to_file(Path::new("err.ll")).unwrap();
-            panic!(
-                "module {} is not valid, err msg: {}",
-                self.module.get_name().to_str().unwrap(),
-                e
-            )
-        });
-        let used = self.used.borrow();
-        let used_arr = self.i8ptr().ptr_type(AddressSpace::from(0)).const_array(
-            &used
-                .iter()
-                .map(|v| v.as_global_value().as_pointer_value())
-                .collect::<Vec<_>>(),
-        );
-        if !used.is_empty() {
-            // see https://llvm.org/docs/LangRef.html#the-llvm-used-global-variable
-            let used_global = self
-                .module
-                .add_global(used_arr.get_type(), None, "llvm.used");
-            used_global.set_linkage(Linkage::Appending);
-            used_global.set_initializer(&used_arr);
-        }
-        if self.debug {
-            // disable gc evacuation
-            self.module
-                .get_function("main")
-                .and_then(FunctionValue::get_first_basic_block)
-                .map(|bb| {
-                    self.builder
-                        .position_before(&bb.get_first_instruction().unwrap());
-                    let f = self.module.add_function(
-                        "DioGC__set_eva",
-                        self.context
-                            .void_type()
-                            .fn_type(&[self.context.i32_type().into()], false),
-                        None,
-                    );
-                    self.builder
-                        .build_call(f, &[self.context.i32_type().const_int(0, false).into()], "")
-                        .unwrap();
-                });
-        }
-
-        unsafe {
-            immix::run_module_pass(
-                self.module.as_mut_ptr() as _,
-                self.optlevel as i32,
-                self.debug as i32,
-                self.print_escaped as i32,
-            );
-        }
-        *self.optimized.borrow_mut() = true;
-    }
 
     /// # try_load2var_inner
     ///
@@ -2396,6 +2331,71 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
             return Err(s.to_string());
         }
         Ok(())
+    }
+    fn optimize(&self) {
+        self.module
+            .set_triple(&get_target_machine(self.optlevel).get_triple());
+        if *self.optimized.borrow() {
+            return;
+        }
+        // if self.module.get_name().to_str().unwrap().contains("global") {
+        //     self.module.strip_debug_info();
+        // }
+        // self.module.strip_debug_info();
+        // self.module.strip_debug_info(); // FIXME
+        self.module.verify().unwrap_or_else(|e| {
+            self.module.print_to_file(Path::new("err.ll")).unwrap();
+            panic!(
+                "module {} is not valid, err msg: {}",
+                self.module.get_name().to_str().unwrap(),
+                e
+            )
+        });
+        let used = self.used.borrow();
+        let used_arr = self.i8ptr().ptr_type(AddressSpace::from(0)).const_array(
+            &used
+                .iter()
+                .map(|v| v.as_global_value().as_pointer_value())
+                .collect::<Vec<_>>(),
+        );
+        if !used.is_empty() {
+            // see https://llvm.org/docs/LangRef.html#the-llvm-used-global-variable
+            let used_global = self
+                .module
+                .add_global(used_arr.get_type(), None, "llvm.used");
+            used_global.set_linkage(Linkage::Appending);
+            used_global.set_initializer(&used_arr);
+        }
+        if self.debug {
+            // disable gc evacuation
+            self.module
+                .get_function("main")
+                .and_then(FunctionValue::get_first_basic_block)
+                .map(|bb| {
+                    self.builder
+                        .position_before(&bb.get_first_instruction().unwrap());
+                    let f = self.module.add_function(
+                        "DioGC__set_eva",
+                        self.context
+                            .void_type()
+                            .fn_type(&[self.context.i32_type().into()], false),
+                        None,
+                    );
+                    self.builder
+                        .build_call(f, &[self.context.i32_type().const_int(0, false).into()], "")
+                        .unwrap();
+                });
+        }
+
+        unsafe {
+            immix::run_module_pass(
+                self.module.as_mut_ptr() as _,
+                self.optlevel as i32,
+                self.debug as i32,
+                self.print_escaped as i32,
+            );
+        }
+        *self.optimized.borrow_mut() = true;
     }
     fn write_bitcode_to_path(&self, path: &Path) -> bool {
         self.optimize();
