@@ -4,6 +4,7 @@ use crate::ast::builder::no_op_builder::NoOpBuilder;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::diag::ErrorCode;
+use crate::inference::InferenceCtx;
 
 use internal_macro::node;
 use lsp_types::SemanticTokenType;
@@ -72,7 +73,8 @@ impl Node for GlobalNode {
     ) -> NodeResult {
         builder.rm_curr_debug_location();
         let entry = builder.get_last_basic_block(ctx.init_func.unwrap());
-
+        let mut infer_ctx = InferenceCtx::new(ctx.unify_table.clone());
+        infer_ctx.inference(&mut self.exp, ctx, builder);
         ctx.position_at_end(entry, builder);
         let exp_range = self.exp.range();
         ctx.push_semantic_token(self.var.range, SemanticTokenType::VARIABLE, 0);
@@ -98,6 +100,8 @@ impl GlobalNode {
         ctx: &'b mut Ctx<'a>,
         builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<(), PLDiag> {
+        let mut infer_ctx = InferenceCtx::new(ctx.unify_table.clone());
+        infer_ctx.inference(&mut self.exp, ctx, builder);
         let noop = BuilderEnum::NoOp(NoOpBuilder::default());
         // get it's pointer
         let noop_ptr = &noop as *const BuilderEnum<'a, '_>;

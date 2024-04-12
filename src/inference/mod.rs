@@ -562,6 +562,11 @@ impl<'ctx> InferenceCtx<'ctx> {
                 let defvar = &mut *d.var;
                 self.def_inference(defvar, ty, ctx, builder);
             }
+            NodeEnum::Global(g) => {
+                let ty = self.inference(&mut g.exp, ctx, builder);
+
+                self.id_inference(&ty, ctx, builder, &mut g.var);
+            }
             NodeEnum::Assign(a) => {
                 let ty = self.inference(&mut a.exp, ctx, builder);
                 // let t = match &ty {
