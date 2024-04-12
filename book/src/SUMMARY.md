@@ -47,6 +47,8 @@
 
 ## Blogs
 
-- [About pivot lang](blogs/aboutpl.md)
-- [lsp and salsa](blogs/lsp_and_salsa.md)
-- [GC basic tutorial](blogs/gc_for_beginner.md)
+- [Blogs](./blogs/README.md)
+  - [About pivot lang](blogs/aboutpl.md)
+  - [lsp and salsa](blogs/lsp_and_salsa.md)
+  - [GC basic tutorial](blogs/gc_for_beginner.md)
+  - [performance optimization](blogs/performance_optimization.md)

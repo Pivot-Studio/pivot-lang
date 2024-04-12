@@ -129,15 +129,7 @@ pub fn start_repl() -> ! {
                         }
                         ("".to_owned(), global, "".to_owned(), "".to_owned())
                     }),
-                    map(terminated(general_exp, eof), |_| {
-                        // expr, print it!
-                        (
-                            "".to_owned(),
-                            "".to_owned(),
-                            format!("println!({})", &line),
-                            format!("let __rtmp = {}", &line),
-                        )
-                    }),
+                    map(terminated(general_exp, eof), |n| box_expr(&n, &line)),
                     map(statement, |_| {
                         ("".to_owned(), "".to_owned(), line.clone(), line.clone())
                     }),
@@ -191,6 +183,7 @@ pub fn start_repl() -> ! {
                     "{}{}{}\n pub fn __anon__{}() void {{ \n{};\nreturn; }}",
                     used_headers, used_headers_line, global, id, line
                 );
+                // eprintln!("{}", anon_fn);
                 used_headers.push_str(&used_headers_line);
 
                 docs.lock()
@@ -229,7 +222,8 @@ pub fn start_repl() -> ! {
                             .unwrap();
                             let p = mo.as_mut_ptr();
                             loaded_set.insert(m.path.clone(), mo);
-                            immix::AddModuleToOrcJIT(p as _)
+                            immix::AddModuleToOrcJIT(p as _);
+                            log::info!("Loaded module: {:?}", m.path);
                         };
                     }
                 }
@@ -247,6 +241,7 @@ pub fn start_repl() -> ! {
                             .unwrap();
 
                             let p = m.as_mut_ptr();
+                            // m.print_to_stderr();
                             anon_mods.push(m);
                             immix::RunExpr(p as _);
                         }
@@ -270,4 +265,22 @@ pub fn start_repl() -> ! {
     #[cfg(feature = "with-file-history")]
     rl.save_history("history.txt");
     exit(0);
+}
+
+fn box_expr(n: &crate::ast::node::NodeEnum, line: &String) -> (String, String, String, String) {
+    match &n {
+        crate::ast::node::NodeEnum::Primary(p) => box_expr(&p.value, line),
+        crate::ast::node::NodeEnum::FuncCall(_) | crate::ast::node::NodeEnum::MacroCallNode(_) =>
+        // call expr, skip print for it may return void
+        {
+            ("".to_owned(), "".to_owned(), line.clone(), line.clone())
+        }
+        _ => (
+            // expr, print it!
+            "".to_owned(),
+            "".to_owned(),
+            format!("println!({})", &line),
+            format!("let __rtmp = {}", &line),
+        ),
+    }
 }

@@ -15,6 +15,7 @@ mod flow;
 mod inference;
 mod lsp;
 mod nomparser;
+#[cfg(feature = "repl")]
 mod repl;
 mod utils;
 mod version;
@@ -73,7 +74,12 @@ fn main() {
             RunCommand::Fmt { name } => cli.fmt(name.clone()),
             RunCommand::New { name } => cli.new_project(name.clone()),
             RunCommand::Version => cli.version(),
-            RunCommand::Repl => repl::start_repl(),
+            RunCommand::Repl => {
+                #[cfg(feature = "repl")]
+                repl::start_repl();
+                #[cfg(not(feature = "repl"))]
+                eprintln!("feature repl is not enabled, cannot use repl command");
+            }
         },
         // todo(griffin): refine it in the future, technically it should compile one file only instead of a whole project.
         None => {
