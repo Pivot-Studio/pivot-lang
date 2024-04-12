@@ -215,7 +215,7 @@ macro_rules! impl_mthd {
 }
 
 #[range]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Eq)]
 pub struct UnionType {
     pub name: String,
     pub generic_map: IndexMap<String, Arc<RefCell<PLType>>>,
@@ -223,6 +223,15 @@ pub struct UnionType {
     pub path: String,
     pub modifier: Option<(TokenType, Range)>,
     pub methods: Arc<RefCell<FxHashMap<String, Arc<RefCell<FNValue>>>>>,
+}
+
+impl PartialEq for UnionType {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.generic_map == other.generic_map
+            && self.sum_types == other.sum_types
+            && self.path == other.path
+    }
 }
 
 impl_mthd!(UnionType, STType, PlaceHolderType);
@@ -1086,6 +1095,9 @@ impl FNValue {
             .collect::<Vec<Box<TypeNodeEnum>>>();
         let pltype = self.generic_infer.borrow().get(&res.name).unwrap().clone();
         pltype.replace(PLType::Fn(res.clone()));
+        if matches!(builder, BuilderEnum::NoOp(_)) {
+            self.generic_infer.borrow_mut().remove(&res.name);
+        }
         Ok(res.clone())
     }
     pub fn gen_snippet(&self) -> String {
@@ -1186,7 +1198,7 @@ impl PartialEq for ARRType {
 impl Eq for ARRType {}
 
 #[range]
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, Eq, Default)]
 pub struct STType {
     pub name: String,
     pub path: String,

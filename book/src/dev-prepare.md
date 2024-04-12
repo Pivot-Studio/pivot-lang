@@ -14,10 +14,10 @@ rustup install $(cat rust-toolchain)
 
 ## LLVM
 
-Pivot-Lang目前使用LLVM 16作为后端，所以需要安装LLVM。如果你使用的是MacOS，可以使用brew安装LLVM。
+Pivot-Lang目前使用LLVM 18作为后端，所以需要安装LLVM。如果你使用的是MacOS，可以使用brew安装LLVM。
 
 ```bash
-brew install llvm@16
+brew install llvm@18
 ```
 
 如果你使用的是ubuntu，可以使用[这里](https://github.com/Pivot-Studio/setup-llvm/blob/main/scripts/install_llvm.sh)的脚本进行安装
@@ -66,14 +66,14 @@ make test
 需要设置llvm环境变量，如果你使用的是ubuntu，可以执行如下脚本.
 
 ```bash
-echo "export LLVM_SYS_160_PREFIX=/usr/lib/llvm-16" >> ~/.bashrc
+echo "export LLVM_SYS_180_PREFIX=/usr/lib/llvm-18" >> ~/.bashrc
 source ~/.bashrc
 ```
 
 如果是macOS通过`brew install llvm@16`安装，则需要设置环境变量:
 
 ```bash
-echo "export LLVM_SYS_160_PREFIX=$(brew --prefix llvm@16)" >> ~/.bashrc
+echo "export LLVM_SYS_180_PREFIX=$(brew --prefix llvm@18)" >> ~/.bashrc
 source ~/.bashrc
 ```
 

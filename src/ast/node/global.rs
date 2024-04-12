@@ -1,6 +1,5 @@
 use super::*;
 
-use crate::ast::builder::no_op_builder::NoOpBuilder;
 use crate::ast::builder::BuilderEnum;
 use crate::ast::builder::IRBuilder;
 use crate::ast::diag::ErrorCode;
@@ -102,15 +101,11 @@ impl GlobalNode {
     ) -> Result<(), PLDiag> {
         let mut infer_ctx = InferenceCtx::new(ctx.unify_table.clone());
         infer_ctx.inference(&mut self.exp, ctx, builder);
-        let noop = BuilderEnum::NoOp(NoOpBuilder::default());
-        // get it's pointer
-        let noop_ptr = &noop as *const BuilderEnum<'a, '_>;
-        let noop = unsafe { noop_ptr.as_ref().unwrap() };
         if ctx.get_symbol(&self.var.name, builder).is_some() {
             return Err(ctx.add_diag(self.var.range.new_err(ErrorCode::REDEFINE_SYMBOL)));
         }
         *ctx.need_highlight.borrow_mut() += 1;
-        let v = self.exp.emit(ctx, noop)?.get_value();
+        let v = self.exp.emit(ctx, builder)?.get_value();
         *ctx.need_highlight.borrow_mut() -= 1;
         if v.is_none() {
             return Err(ctx.add_diag(self.range.new_err(ErrorCode::UNDEFINED_TYPE)));

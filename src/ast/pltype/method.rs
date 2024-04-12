@@ -283,11 +283,10 @@ pub trait TraitImplAbleWithGeneric: Generic + TraitImplAble {
             }
             return false;
         }
-        let plmod = &ctx.db.get_module(p.unwrap_or_default().as_str()).unwrap();
-        if self.implements_trait_curr_mod(tp, plmod) {
-            return true;
-        }
-        false
+        ctx.db
+            .get_module(p.unwrap_or_default().as_str())
+            .map(|plmod| self.implements_trait_curr_mod(tp, &plmod))
+            .unwrap_or_default()
     }
 }
 

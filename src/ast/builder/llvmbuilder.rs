@@ -1682,7 +1682,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         if global.is_none() {
             let global = self.module.add_global(
                 self.get_basic_type_op(&pltype.borrow(), ctx).unwrap(),
-                None,
+                Some(AddressSpace::from(1)),
                 name,
             );
             if name.to_uppercase() == "__LLVM_STACKMAPS" {
@@ -2195,9 +2195,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     fn global_const(&self, name: &str, pltype: &PLType, ctx: &mut Ctx<'a>) -> ValueHandle {
         let global = self.get_global_var_handle(name);
         if global.is_none() {
-            let global =
-                self.module
-                    .add_global(self.get_basic_type_op(pltype, ctx).unwrap(), None, name);
+            let global = self.module.add_global(
+                self.get_basic_type_op(pltype, ctx).unwrap(),
+                Some(AddressSpace::from(1)),
+                name,
+            );
             global.set_linkage(Linkage::External);
             global.set_constant(true);
             return self.get_llvm_value_handle(&global.as_any_value_enum());
@@ -2360,9 +2362,11 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         );
         if !used.is_empty() {
             // see https://llvm.org/docs/LangRef.html#the-llvm-used-global-variable
-            let used_global = self
-                .module
-                .add_global(used_arr.get_type(), None, "llvm.used");
+            let used_global = self.module.add_global(
+                used_arr.get_type(),
+                Some(AddressSpace::from(1)),
+                "llvm.used",
+            );
             used_global.set_linkage(Linkage::Appending);
             used_global.set_initializer(&used_arr);
         }
@@ -2944,7 +2948,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         pltp: &PLType,
     ) -> ValueHandle {
         let base_type = self.get_basic_type_op(&pltype.borrow(), ctx).unwrap();
-        let global = self.module.add_global(base_type, None, name);
+        let global = self
+            .module
+            .add_global(base_type, Some(AddressSpace::from(1)), name);
         let ditype = self.get_ditype(pltp, ctx);
         let exp = self.dibuilder.create_global_variable_expression(
             self.diunit.as_debug_info_scope(),

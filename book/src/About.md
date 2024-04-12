@@ -24,7 +24,7 @@
 
 ## dependencies
 
-- [llvm-16](https://github.com/llvm/llvm-project/releases/tag/llvmorg-16.0.6)
+- [llvm-18](https://github.com/llvm/llvm-project/releases/tag/llvmorg-18.1.2)
 - [rust](https://www.rust-lang.org/)
 
 **重要**：如果你想参与开发，请先在项目目录`make vm install`，然后根据自己是linux还是mac运行`make devlinux`或者`make devmac`
