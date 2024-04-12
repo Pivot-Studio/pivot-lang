@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::process::exit;
 use std::sync::atomic::AtomicI32;
 use std::sync::{Arc, Mutex};
@@ -6,6 +5,9 @@ use std::sync::{Arc, Mutex};
 use inkwell::context::Context;
 use inkwell::memory_buffer::MemoryBuffer;
 use inkwell::module::Module;
+use nom::branch::alt;
+use nom::combinator::{eof, map};
+use nom::sequence::terminated;
 use rustc_hash::FxHashMap;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
@@ -16,6 +18,10 @@ use crate::ast::diag::print_diags;
 use crate::ast::plmod::GlobalVar;
 use crate::db::Database;
 use crate::lsp::mem_docs::{self, MemDocsInput};
+use crate::nomparser::expression::general_exp;
+use crate::nomparser::pkg::use_statement;
+use crate::nomparser::statement::{new_variable, statement};
+use crate::nomparser::Span;
 pub const REPL_VIRTUAL_ENTRY: &str = "@__repl__/main.pi";
 pub const REPL_VIRTUAL_CONF: &str = "@__repl__/Kagari.toml";
 
@@ -77,14 +83,13 @@ pub fn start_repl() -> ! {
         "".to_string(),
         REPL_VIRTUAL_ENTRY.to_string(),
     );
-    let docs2 = mem_check.docs(&db);
+    let docs2 = mem_check.docs(&db2);
     docs2.lock().unwrap().insert(
         &db2,
         REPL_VIRTUAL_CONF.to_string(),
-        format!(
-            r#"entry = "main.pi"
+        r#"entry = "main.pi"
             project = "repl""#
-        ),
+            .to_owned(),
         REPL_VIRTUAL_CONF.to_string(),
     );
     docs2.lock().unwrap().insert(
@@ -101,35 +106,68 @@ pub fn start_repl() -> ! {
     let mut loaded_set = FxHashMap::default();
     let mut anon_mods = vec![];
     unsafe { immix::CreateGlobalOrcJITEngine() };
+    let mut used_headers = "".to_owned();
     loop {
         let docs = mem.docs(&db);
-        let docs2 = mem_check.docs(&db);
+        let docs2 = mem_check.docs(&db2);
         let readline = rl.readline("pivot> ");
         match readline {
             Ok(line) => {
                 let _ = rl.add_history_entry(line.as_str());
-                let mut line = line.trim().to_owned();
-                let mut global = "".to_owned();
-                if line.starts_with("let") {
-                    // replace first let with var
-                    global = line.replacen("let", "var", 1);
-                    if !global.ends_with(';') {
-                        global.push(';');
-                    }
-                    line = "".to_owned();
+                let line = line.trim().to_owned();
+                if line.is_empty() {
+                    continue;
                 }
+
+                let cl = line.clone();
+                let sp = Span::from(cl.as_str());
+                let re = alt((
+                    map(new_variable, |_| {
+                        let mut global = line.replacen("let", "var", 1);
+                        if !global.ends_with(';') {
+                            global.push(';');
+                        }
+                        ("".to_owned(), global, "".to_owned(), "".to_owned())
+                    }),
+                    map(terminated(general_exp, eof), |_| {
+                        // expr, print it!
+                        (
+                            "".to_owned(),
+                            "".to_owned(),
+                            format!("println!({})", &line),
+                            format!("let __rtmp = {}", &line),
+                        )
+                    }),
+                    map(statement, |_| {
+                        ("".to_owned(), "".to_owned(), line.clone(), line.clone())
+                    }),
+                    map(use_statement, |_| {
+                        let mut used_headers_line = "".to_owned();
+                        let mut line = line.clone();
+                        if !line.ends_with(';') {
+                            line.push(';');
+                        }
+                        used_headers_line.push_str(&line);
+                        used_headers_line.push('\n');
+
+                        (
+                            used_headers_line,
+                            "".to_owned(),
+                            "".to_owned(),
+                            "".to_owned(),
+                        )
+                    }),
+                ))(sp);
+                if re.is_err() {
+                    eprintln!("Error: unsupport statement in REPL mode");
+                    continue;
+                }
+                let (_, (used_headers_line, global, line, check_line)) = re.unwrap();
+                let id = REPL_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 let anon_fn = format!(
-                    "{}\n pub fn __anon__{}() void {{ \n{};\nreturn; }}",
-                    global,
-                    REPL_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
-                    line
+                    "{}{}{}\n pub fn __anon__{}() void {{ \n{};\nreturn; }}",
+                    used_headers, used_headers_line, global, id, check_line
                 );
-                docs.lock()
-                    .unwrap()
-                    .get(REPL_VIRTUAL_ENTRY)
-                    .unwrap()
-                    .set_text(&mut db)
-                    .to(anon_fn.clone());
                 docs2
                     .lock()
                     .unwrap()
@@ -149,6 +187,18 @@ pub fn start_repl() -> ! {
                     REPL_COUNTER.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                     continue;
                 }
+                let anon_fn = format!(
+                    "{}{}{}\n pub fn __anon__{}() void {{ \n{};\nreturn; }}",
+                    used_headers, used_headers_line, global, id, line
+                );
+                used_headers.push_str(&used_headers_line);
+
+                docs.lock()
+                    .unwrap()
+                    .get(REPL_VIRTUAL_ENTRY)
+                    .unwrap()
+                    .set_text(&mut db)
+                    .to(anon_fn.clone());
                 mem.set_docs(&mut db)
                     .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
                 let plmodule = compiler::compile_dry(&db, mem).unwrap();
