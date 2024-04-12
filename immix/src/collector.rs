@@ -640,7 +640,7 @@ impl Collector {
                 // 线程数量变化了？
                 if waiting == *c {
                     GC_MARKING.store(true, Ordering::Release);
-                    GC_STW_COUNT.fetch_add(1, Ordering::Relaxed);
+                    GC_STW_COUNT.fetch_add(1, Ordering::SeqCst);
                     GC_MARK_COND.notify_all();
                     return false;
                 }
@@ -649,7 +649,7 @@ impl Collector {
             drop(v);
         } else {
             GC_MARKING.store(true, Ordering::Release);
-            GC_STW_COUNT.fetch_add(1, Ordering::Relaxed);
+            GC_STW_COUNT.fetch_add(1, Ordering::SeqCst);
             GC_MARK_COND.notify_all();
             unsafe {
                 self.thread_local_allocator

@@ -275,6 +275,9 @@ extern "C" {
         opt: u32,
         cb: unsafe extern "C" fn(map: *mut u8),
     ) -> i32;
+    pub fn CreateGlobalOrcJITEngine() -> std::ffi::c_void;
+    pub fn AddModuleToOrcJIT(module: *mut u8) -> std::ffi::c_void;
+    pub fn RunExpr(module: *mut u8) -> std::ffi::c_void;
     /// # run_module_pass
     ///
     /// run the module pass

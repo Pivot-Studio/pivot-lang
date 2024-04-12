@@ -17,6 +17,7 @@ mod lsp;
 mod nomparser;
 mod utils;
 mod version;
+mod repl;
 use colored::Colorize;
 use std::{
     path::Path,
@@ -72,6 +73,7 @@ fn main() {
             RunCommand::Fmt { name } => cli.fmt(name.clone()),
             RunCommand::New { name } => cli.new_project(name.clone()),
             RunCommand::Version => cli.version(),
+            RunCommand::REPL => repl::start_repl(),
         },
         // todo(griffin): refine it in the future, technically it should compile one file only instead of a whole project.
         None => {
@@ -357,6 +359,8 @@ enum RunCommand {
     },
     /// Get the whole version infomation
     Version,
+    /// Start the REPL
+    REPL,
 }
 
 pub fn get_styles() -> clap::builder::Styles {

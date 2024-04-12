@@ -258,7 +258,10 @@ public:
 };
 
 static ExitOnError ExitOnErr;
-
+static std::unique_ptr<PivotJIT> TheJIT;
+static std::unique_ptr<ThreadSafeModule> TMod;
+static std::vector<std::string *> InitFns;
+static int REPLCounter = 0;
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Bitcode/BitcodeReader.h"
 extern "C"
@@ -382,4 +385,116 @@ extern "C"
     return ret;
 
   }
+
+  void CreateGlobalOrcJITEngine()
+  {
+    InitializeNativeTarget();
+    InitializeNativeTargetAsmPrinter();
+    InitializeNativeTargetAsmParser();
+    auto root = std::string(std::getenv("PL_ROOT"));
+    #ifdef __APPLE__
+    auto lib_path = "libvm.dylib";
+    #elif __linux__
+    auto lib_path = "libvm.so";
+    #elif _WIN32
+    auto lib_path = "vm.dll";
+    #endif
+    // join path
+    std::string lib_full_path;
+    if (StringRef(root).ends_with("/"))
+    {
+      lib_full_path = root + lib_path;
+    }
+    else
+    {
+      lib_full_path = root + "/" + lib_path;
+    }
+    // llvm::sys::DynamicLibrary::LoadLibraryPermanently(lib_full_path.c_str()); 
+    auto jit = ExitOnErr(PivotJIT::Create());
+
+    auto libvm = jit->loadPlatformDynamicLibrary(lib_full_path.c_str());
+    if (!libvm)
+    {
+      printf("fatal: load libvm error!\n");
+      exit(1945);
+    }
+    jit->getMainJITDylib().addToLinkOrder(*libvm);
+    auto finit = ExitOnErr(jit->lookup("immix_gc_init"));
+    auto finitf = finit.getAddress().toPtr<stackmap_cb>();
+    finalize_cb = finitf;
+
+    auto Ctx = std::make_unique<LLVMContext>();
+    // create a new module
+    auto Mod = std::make_unique<llvm::Module>("pivot", *Ctx);
+    TMod =  std::make_unique<ThreadSafeModule>(std::move(Mod),std::move(Ctx));
+    ExitOnErr(jit->addModule(std::move(*TMod)));
+    TheJIT = std::move(jit);
+  }
+
+  void AddModuleToOrcJIT(LLVMModuleRef module)
+  {
+    auto RT = TheJIT->getMainJITDylib().createResourceTracker();
+    std::unique_ptr<Module> mod;
+    mod.reset(unwrap(module));
+    auto FNS = mod->functions();
+    // find ends with "..__init_global"
+    auto init_global = std::find_if(FNS.begin(), FNS.end(), [](Function &F) {
+      return F.getName().endswith("..__init_global");
+    });
+    InitFns.push_back(new std::string(init_global->getName()));
+    auto ctx = std::make_unique<LLVMContext>();
+    auto TSM = ThreadSafeModule(std::move(mod),std::move(ctx));
+    ExitOnErr(TheJIT->addModule(std::move(TSM), RT));
+    // // run init global
+    // auto ExprSymbol = ExitOnErr(TheJIT->lookup(init_global->getName()));
+    // void (*FP)() = ExprSymbol.getAddress().toPtr<void (*)()>();
+    // FP();
+  }
+
+  void RunExpr(LLVMModuleRef module)
+  {
+      // Create a ResourceTracker to track JIT'd memory allocated to our
+      // anonymous expression -- that way we can free it after executing.
+      auto RT = TheJIT->getMainJITDylib().createResourceTracker();
+
+      std::unique_ptr<Module> mod;
+      mod.reset(unwrap(module));
+      auto FNS = mod->functions();
+      auto init_global = std::find_if(FNS.begin(), FNS.end(), [](Function &F) {
+        return F.getName().endswith("..__init_global");
+      });
+      auto init_name = "@__repl__/main.pi..__init_global" + std::to_string(REPLCounter);
+      init_global->setName(init_name);
+      // init_global->print(errs());
+      InitFns.push_back(new std::string(init_global->getName()));
+      auto ctx = std::make_unique<LLVMContext>();
+      auto TSM = ThreadSafeModule(std::move(mod),std::move(ctx));
+      ExitOnErr(TheJIT->addModule(std::move(TSM), RT));
+      // "@__repl__/main.pi..__anon__{}" REPLCounter
+      auto name = "@__repl__/main.pi..__anon__" + std::to_string(REPLCounter);
+      auto ExprSymbol = ExitOnErr(TheJIT->lookup(name));
+      REPLCounter++;
+
+      // pop all init fns, run them
+      for (auto &fn : InitFns)
+      {
+        auto ExprSymbol = ExitOnErr(TheJIT->lookup(*fn));
+        void (*FP)() = ExprSymbol.getAddress().toPtr<void (*)()>();
+        FP();
+        delete fn;
+      }
+      InitFns.clear();
+
+      // Get the symbol's address and cast it to the right type (takes no
+      // arguments, returns a double) so we can call it as a native function.
+      void (*FP)() = ExprSymbol.getAddress().toPtr<void (*)()>();
+      // printf("Running expression...%p\n", FP);
+      FP();
+
+      // // Delete the anonymous expression module from the JIT.
+      // ExitOnErr(RT->remove());
+      
+  }
+
+
 }

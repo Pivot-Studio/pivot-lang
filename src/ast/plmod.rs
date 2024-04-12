@@ -45,6 +45,9 @@ pub struct GlobalVar {
     pub is_extern: bool, // pub loc: Arc<RwVec<Location>>,
 }
 
+unsafe impl Sync for GlobalVar {}
+unsafe impl Send for GlobalVar {}
+
 pub type ImplMap = FxHashMap<String, FxHashMap<String, IndexMap<String, Arc<RefCell<PLType>>>>>;
 
 /// # Mod
