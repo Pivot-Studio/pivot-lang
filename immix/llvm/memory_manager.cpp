@@ -463,7 +463,11 @@ extern "C"
       auto init_global = std::find_if(FNS.begin(), FNS.end(), [](Function &F) {
         return F.getName().endswith("..__init_global");
       });
+      #if _WIN32
+      auto init_name = "@__repl__\\main.pi..__init_global" + std::to_string(REPLCounter);
+      #else
       auto init_name = "@__repl__/main.pi..__init_global" + std::to_string(REPLCounter);
+      #endif
       init_global->setName(init_name);
       // init_global->print(errs());
       InitFns.push_back(new std::string(init_global->getName()));
@@ -471,7 +475,11 @@ extern "C"
       auto TSM = ThreadSafeModule(std::move(mod),std::move(ctx));
       ExitOnErr(TheJIT->addModule(std::move(TSM), RT));
       // "@__repl__/main.pi..__anon__{}" REPLCounter
+      #if _WIN32
+      auto name = "@__repl__\\main.pi..__anon__" + std::to_string(REPLCounter);
+      #else
       auto name = "@__repl__/main.pi..__anon__" + std::to_string(REPLCounter);
+      #endif
       auto ExprSymbol = ExitOnErr(TheJIT->lookup(name));
       REPLCounter++;
 

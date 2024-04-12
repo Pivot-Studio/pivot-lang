@@ -7,9 +7,11 @@ use std::collections::BTreeMap;
 use crate::{
     ast::{compiler::COMPILE_PROGRESS, node::pkg::UseNode},
     nomparser::SourceProgram,
-    repl::{REPL_VIRTUAL_CONF, REPL_VIRTUAL_ENTRY},
     Db,
 };
+
+#[cfg(feature = "repl")]
+use crate::repl::{REPL_VIRTUAL_CONF, REPL_VIRTUAL_ENTRY};
 
 static KAGARI_CONFIG_FILE: &str = "Kagari.toml";
 
@@ -28,6 +30,7 @@ pub fn search_config_file(current: String) -> Result<String, &'static str> {
             return Ok("std/Kagari.toml".to_string());
         }
     }
+    #[cfg(feature = "repl")]
     if current == REPL_VIRTUAL_ENTRY {
         return Ok(REPL_VIRTUAL_CONF.to_string());
     }
