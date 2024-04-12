@@ -5,9 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use crate::{
-    ast::{compiler::COMPILE_PROGRESS, node::pkg::UseNode},
-    nomparser::SourceProgram,
-    Db,
+    ast::{compiler::COMPILE_PROGRESS, node::pkg::UseNode}, nomparser::SourceProgram, repl::{REPL_VIRTUAL_CONF, REPL_VIRTUAL_ENTRY}, Db
 };
 
 static KAGARI_CONFIG_FILE: &str = "Kagari.toml";
@@ -26,6 +24,9 @@ pub fn search_config_file(current: String) -> Result<String, &'static str> {
         } else if current.starts_with("std") {
             return Ok("std/Kagari.toml".to_string());
         }
+    }
+    if current == REPL_VIRTUAL_ENTRY {
+        return Ok(REPL_VIRTUAL_CONF.to_string());
     }
 
     let mut cur_path = PathBuf::from(current);

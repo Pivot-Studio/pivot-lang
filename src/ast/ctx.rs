@@ -1099,6 +1099,9 @@ impl<'a, 'ctx> Ctx<'a> {
     }
 
     pub fn get_file_url(&self) -> Url {
+        if self.plmod.path.starts_with("@__repl") {
+            return Url::parse("httss://example.com").unwrap();
+        }
         #[cfg(any(unix, windows, target_os = "redox", target_os = "wasi"))]
         return Url::from_file_path(self.plmod.path.clone()).unwrap();
         #[cfg(not(any(unix, windows, target_os = "redox", target_os = "wasi")))]

@@ -67,6 +67,12 @@
             "program": "plc",
         },
         {
+            "type": "lldb",
+            "request": "attach",
+            "name": "debug repl",
+            "pid": "${command:pickProcess}"
+        },
+        {
             "type": "pivot",
             "request": "launch",
             "name": "pivot-lang: Launch",
