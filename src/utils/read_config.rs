@@ -5,7 +5,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 use crate::{
-    ast::{compiler::COMPILE_PROGRESS, node::pkg::UseNode}, nomparser::SourceProgram, repl::{REPL_VIRTUAL_CONF, REPL_VIRTUAL_ENTRY}, Db
+    ast::{compiler::COMPILE_PROGRESS, node::pkg::UseNode},
+    nomparser::SourceProgram,
+    repl::{REPL_VIRTUAL_CONF, REPL_VIRTUAL_ENTRY},
+    Db,
 };
 
 static KAGARI_CONFIG_FILE: &str = "Kagari.toml";

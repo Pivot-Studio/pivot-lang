@@ -506,7 +506,7 @@ pub(crate) fn ensure_no_error(db: &dyn Db, docs: MemDocsInput) {
     let mut warn_num = 0;
     let errs = compile_dry::accumulated::<Diagnostics>(db, docs);
     if !errs.is_empty() {
-        print_diags(errs, docs, db, &mut errs_num, &mut warn_num,false);
+        print_diags(errs, docs, db, &mut errs_num, &mut warn_num, false);
         if errs_num > 0 {
             eprintln!(
                 "check failed: {} error(s), {} warning(s)",
@@ -523,7 +523,14 @@ pub(crate) fn ensure_no_error(db: &dyn Db, docs: MemDocsInput) {
     }
 }
 
-pub(crate) fn print_diags(errs: Vec<(String, Vec<PLDiag>)>, docs: MemDocsInput, db: &dyn Db, errs_num: &mut i32, warn_num: &mut i32, err_only:bool) {
+pub(crate) fn print_diags(
+    errs: Vec<(String, Vec<PLDiag>)>,
+    docs: MemDocsInput,
+    db: &dyn Db,
+    errs_num: &mut i32,
+    warn_num: &mut i32,
+    err_only: bool,
+) {
     for e in errs.iter() {
         let mut path = e.0.clone();
         for e in e.1.iter() {

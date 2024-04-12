@@ -187,8 +187,11 @@ pub fn process_llvm_ir<'a>(
         set.insert(m.clone());
         let o = m.with_extension("o");
         // println!("{}", m.clone().to_str().unwrap());
-        let module = Module::parse_bitcode_from_buffer(&MemoryBuffer::create_from_memory_range(&mem, m.file_name().unwrap().to_str().unwrap()), ctx)
-            .unwrap_or_else(|_| panic!("parse {} failed", m.to_str().unwrap()));
+        let module = Module::parse_bitcode_from_buffer(
+            &MemoryBuffer::create_from_memory_range(&mem, m.file_name().unwrap().to_str().unwrap()),
+            ctx,
+        )
+        .unwrap_or_else(|_| panic!("parse {} failed", m.to_str().unwrap()));
         pb.set_message(format!(
             "正在优化模块 {} ",
             module.get_name().to_str().unwrap().yellow()
