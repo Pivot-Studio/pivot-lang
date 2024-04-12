@@ -45,6 +45,6 @@ pub fn canonicalize<P: AsRef<Path>>(path: P) -> io::Result<PathBuf> {
         if path.as_ref().starts_with("@__repl__") {
             return Ok(path.as_ref().to_path_buf());
         }
-        return dunce::canonicalize(path);
+        dunce::canonicalize(path)
     }
 }

@@ -6,28 +6,22 @@ use std::sync::{Arc, Mutex};
 use inkwell::context::Context;
 use inkwell::memory_buffer::MemoryBuffer;
 use inkwell::module::Module;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use rustyline::error::ReadlineError;
-use rustyline::{DefaultEditor, Result};
+use rustyline::DefaultEditor;
 
 use crate::ast::accumulators::{Diagnostics, ModBuffer};
 use crate::ast::compiler::{self, ActionType};
 use crate::ast::diag::print_diags;
-use crate::ast::node::program::Program;
-use crate::ast::node::Node;
 use crate::ast::plmod::GlobalVar;
 use crate::db::Database;
 use crate::lsp::mem_docs::{self, MemDocsInput};
-use crate::nomparser::program::program;
-use crate::nomparser::Span;
-
 pub const REPL_VIRTUAL_ENTRY: &str = "@__repl__/main.pi";
 pub const REPL_VIRTUAL_CONF: &str = "@__repl__/Kagari.toml";
 
-static REPL_COUNTER:AtomicI32 = AtomicI32::new(0);
+static REPL_COUNTER: AtomicI32 = AtomicI32::new(0);
 
-
-lazy_static::lazy_static!{
+lazy_static::lazy_static! {
     pub static ref REPL_VARIABLES: Arc<Mutex<FxHashMap<String, GlobalVar>>> = Arc::new(Mutex::new(FxHashMap::default()));
 }
 
@@ -72,10 +66,9 @@ pub fn start_repl() -> ! {
     docs.lock().unwrap().insert(
         &db,
         REPL_VIRTUAL_CONF.to_string(),
-        format!(
-            r#"entry = "main.pi"
-            project = "repl""#
-        ),
+        r#"entry = "main.pi"
+        project = "repl""#
+            .to_owned(),
         REPL_VIRTUAL_CONF.to_string(),
     );
     docs.lock().unwrap().insert(
@@ -120,32 +113,39 @@ pub fn start_repl() -> ! {
                 if line.starts_with("let") {
                     // replace first let with var
                     global = line.replacen("let", "var", 1);
-                    if !global.ends_with(";") {
+                    if !global.ends_with(';') {
                         global.push(';');
                     }
                     line = "".to_owned();
                 }
-                let anon_fn = format!("{}\n pub fn __anon__{}() void {{ \n{};\nreturn; }}", global,REPL_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst),line);
+                let anon_fn = format!(
+                    "{}\n pub fn __anon__{}() void {{ \n{};\nreturn; }}",
+                    global,
+                    REPL_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+                    line
+                );
                 docs.lock()
                     .unwrap()
                     .get(REPL_VIRTUAL_ENTRY)
                     .unwrap()
                     .set_text(&mut db)
                     .to(anon_fn.clone());
-                docs2.lock()
+                docs2
+                    .lock()
                     .unwrap()
                     .get(REPL_VIRTUAL_ENTRY)
                     .unwrap()
                     .set_text(&mut db2)
                     .to(anon_fn.clone());
-                mem_check.set_docs(&mut db2)
+                mem_check
+                    .set_docs(&mut db2)
                     .to(Arc::new(Mutex::new(docs2.lock().unwrap().clone())));
                 let _ = compiler::compile_dry(&db2, mem_check).unwrap();
                 let diags = compiler::compile_dry::accumulated::<Diagnostics>(&db2, mem_check);
                 let mut errs_num = 0;
                 let mut warn_num = 0;
-                print_diags(diags, mem_check, &db2, & mut errs_num, & mut warn_num,true);
-                if errs_num>0 {
+                print_diags(diags, mem_check, &db2, &mut errs_num, &mut warn_num, true);
+                if errs_num > 0 {
                     REPL_COUNTER.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                     continue;
                 }
@@ -155,7 +155,10 @@ pub fn start_repl() -> ! {
 
                 let plmodule = plmodule.plmod(&db);
 
-                REPL_VARIABLES.lock().unwrap().extend(plmodule.global_table.clone());
+                REPL_VARIABLES
+                    .lock()
+                    .unwrap()
+                    .extend(plmodule.global_table.clone());
 
                 let mods = compiler::compile_dry::accumulated::<ModBuffer>(&db, mem);
 
@@ -164,7 +167,7 @@ pub fn start_repl() -> ! {
                         if loaded_set.contains_key(&m.path) {
                             continue;
                         }
-                        
+
                         unsafe {
                             let mo = Module::parse_bitcode_from_buffer(
                                 &MemoryBuffer::create_from_memory_range(
@@ -172,7 +175,8 @@ pub fn start_repl() -> ! {
                                     m.path.file_name().unwrap().to_str().unwrap(),
                                 ),
                                 &ctx,
-                            ).unwrap();
+                            )
+                            .unwrap();
                             let p = mo.as_mut_ptr();
                             loaded_set.insert(m.path.clone(), mo);
                             immix::AddModuleToOrcJIT(p as _)
@@ -189,13 +193,12 @@ pub fn start_repl() -> ! {
                                     m.path.file_name().unwrap().to_str().unwrap(),
                                 ),
                                 &ctx,
-                            ).unwrap();
+                            )
+                            .unwrap();
 
                             let p = m.as_mut_ptr();
                             anon_mods.push(m);
-                            immix::RunExpr(
-                                p as _
-                            );
+                            immix::RunExpr(p as _);
                         }
                     }
                 }

@@ -307,7 +307,7 @@ pub trait IRBuilder<'a, 'ctx> {
         len: ValueHandle,
         ctx: &mut Ctx<'a>,
     );
-    fn optimize(&self) ;
+    fn optimize(&self);
     fn build_bit_not(&self, v: ValueHandle) -> ValueHandle;
     fn build_bit_and(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;
     fn build_bit_or(&self, lhs: ValueHandle, rhs: ValueHandle) -> ValueHandle;

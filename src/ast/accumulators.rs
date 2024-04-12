@@ -34,7 +34,7 @@ pub struct ModBuffer(PLModBuffer);
 #[derive(Debug, Clone)]
 pub struct PLModBuffer {
     pub path: PathBuf,
-    pub buf:Vec<u8>,
+    pub buf: Vec<u8>,
     pub is_main: bool,
 }
 
