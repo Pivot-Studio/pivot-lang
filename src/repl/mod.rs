@@ -22,8 +22,14 @@ use crate::nomparser::expression::general_exp;
 use crate::nomparser::pkg::use_statement;
 use crate::nomparser::statement::{new_variable, statement};
 use crate::nomparser::Span;
+#[cfg(not(windows))]
 pub const REPL_VIRTUAL_ENTRY: &str = "@__repl__/main.pi";
+#[cfg(not(windows))]
 pub const REPL_VIRTUAL_CONF: &str = "@__repl__/Kagari.toml";
+#[cfg(windows)]
+pub const REPL_VIRTUAL_ENTRY: &str = "@__repl__\\main.pi";
+#[cfg(windows)]
+pub const REPL_VIRTUAL_CONF: &str = "@__repl__\\Kagari.toml";
 
 static REPL_COUNTER: AtomicI32 = AtomicI32::new(0);
 

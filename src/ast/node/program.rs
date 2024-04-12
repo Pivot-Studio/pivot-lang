@@ -23,7 +23,9 @@ use crate::ast::tokens::TokenType;
 use crate::flow::display::Dot;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
+#[cfg(feature = "repl")]
 use crate::repl::REPL_VARIABLES;
+#[cfg(feature = "repl")]
 use crate::repl::REPL_VIRTUAL_ENTRY;
 use crate::utils::read_config::ConfigWrapper;
 use crate::Db;
@@ -114,6 +116,7 @@ impl Node for ProgramNode {
         });
 
         // eprintln!("f: {}", ctx.get_file());
+        #[cfg(feature = "repl")]
         if ctx.get_file() == REPL_VIRTUAL_ENTRY {
             // eprintln!("eq");
             for (k, v) in REPL_VARIABLES.lock().unwrap().iter() {
@@ -731,7 +734,10 @@ pub fn emit_file(db: &dyn Db, program_emit_params: ProgramEmitParam) -> ModWrapp
         builder.optimize();
         // builder.print_to_file(&ll).unwrap();
         // builder.write_bitcode_to_path(p);
+        #[cfg(feature = "llvm")]
         let buf = a.write_bitcode_to_memory().as_slice().to_vec();
+        #[cfg(not(feature = "llvm"))]
+        let buf = vec![];
         ModBuffer::push(
             db,
             PLModBuffer {
