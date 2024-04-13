@@ -1,7 +1,11 @@
+use std::env;
+use std::ops::ControlFlow;
+use std::path::PathBuf;
 use std::process::exit;
 use std::sync::atomic::AtomicI32;
 use std::sync::{Arc, Mutex};
 
+use clap::Parser;
 use inkwell::context::Context;
 use inkwell::memory_buffer::MemoryBuffer;
 use inkwell::module::Module;
@@ -11,6 +15,8 @@ use nom::sequence::terminated;
 use rustc_hash::FxHashMap;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
+
+mod repl_cmd;
 
 use crate::ast::accumulators::{Diagnostics, ModBuffer};
 use crate::ast::compiler::{self, ActionType};
@@ -22,12 +28,13 @@ use crate::nomparser::expression::general_exp;
 use crate::nomparser::pkg::use_statement;
 use crate::nomparser::statement::{new_variable, statement};
 use crate::nomparser::Span;
+use crate::utils::read_config::{self, Config, Dependency};
 #[cfg(not(windows))]
-pub const REPL_VIRTUAL_ENTRY: &str = "@__repl__/main.pi";
+pub const REPL_VIRTUAL_ENTRY: &str = "@__repl__/__anon__.pi";
 #[cfg(not(windows))]
 pub const REPL_VIRTUAL_CONF: &str = "@__repl__/Kagari.toml";
 #[cfg(windows)]
-pub const REPL_VIRTUAL_ENTRY: &str = "@__repl__\\main.pi";
+pub const REPL_VIRTUAL_ENTRY: &str = "@__repl__\\__anon__.pi";
 #[cfg(windows)]
 pub const REPL_VIRTUAL_CONF: &str = "@__repl__\\Kagari.toml";
 
@@ -78,9 +85,11 @@ pub fn start_repl() -> ! {
     docs.lock().unwrap().insert(
         &db,
         REPL_VIRTUAL_CONF.to_string(),
-        r#"entry = "main.pi"
-        project = "repl""#
-            .to_owned(),
+        r#"entry = "__anon__.pi"
+project = "repl"
+[deps]
+"#
+        .to_owned(),
         REPL_VIRTUAL_CONF.to_string(),
     );
     docs.lock().unwrap().insert(
@@ -93,9 +102,11 @@ pub fn start_repl() -> ! {
     docs2.lock().unwrap().insert(
         &db2,
         REPL_VIRTUAL_CONF.to_string(),
-        r#"entry = "main.pi"
-            project = "repl""#
-            .to_owned(),
+        r#"entry = "__anon__.pi"
+project = "repl"
+[deps]
+"#
+        .to_owned(),
         REPL_VIRTUAL_CONF.to_string(),
     );
     docs2.lock().unwrap().insert(
@@ -104,10 +115,8 @@ pub fn start_repl() -> ! {
         "".to_string(),
         REPL_VIRTUAL_ENTRY.to_string(),
     );
-    #[cfg(feature = "with-file-history")]
-    if rl.load_history("history.txt").is_err() {
-        println!("No previous history.");
-    }
+    let root = env::var("PL_ROOT").unwrap_or_default();
+    let _ = rl.load_history(&PathBuf::from(&root).join("history.txt"));
     let ctx = Context::create();
     let mut loaded_set = FxHashMap::default();
     let mut anon_mods = vec![];
@@ -122,6 +131,49 @@ pub fn start_repl() -> ! {
                 let _ = rl.add_history_entry(line.as_str());
                 let line = line.trim().to_owned();
                 if line.is_empty() {
+                    continue;
+                }
+                if line.starts_with("@repl") {
+                    if try_parse_commands(&line)
+                        .map(|repl| match repl.command {
+                            repl_cmd::Commands::Load { proj_path, _as } => {
+                                if let ControlFlow::Break(_) =
+                                    validate_proj_cfg(&proj_path, &db2, &docs2)
+                                {
+                                    return;
+                                }
+
+                                add_deps(
+                                    &docs2,
+                                    &db,
+                                    &_as,
+                                    &Dependency {
+                                        path: proj_path.to_str().unwrap().to_owned(),
+                                        ..Default::default()
+                                    },
+                                    &db2,
+                                    &docs,
+                                );
+                            }
+                            repl_cmd::Commands::LoadDeps { proj_path } => {
+                                match validate_proj_cfg(&proj_path, &db2, &docs2) {
+                                    ControlFlow::Continue(cfg) => {
+                                        for (as_name, path) in &cfg.deps.unwrap_or_default() {
+                                            add_deps(&docs2, &db, as_name, path, &db2, &docs);
+                                        }
+                                    }
+                                    ControlFlow::Break(_) => (),
+                                }
+                            }
+                        })
+                        .is_some()
+                    {
+                        mem_check
+                            .set_docs(&mut db2)
+                            .to(Arc::new(Mutex::new(docs2.lock().unwrap().clone())));
+                        mem.set_docs(&mut db)
+                            .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
+                    }
                     continue;
                 }
 
@@ -212,7 +264,7 @@ pub fn start_repl() -> ! {
                 let mods = compiler::compile_dry::accumulated::<ModBuffer>(&db, mem);
 
                 for m in &mods {
-                    if !m.path.to_str().unwrap().starts_with("target/main") {
+                    if !m.name.starts_with("__anon__") {
                         if loaded_set.contains_key(&m.path) {
                             continue;
                         }
@@ -227,15 +279,18 @@ pub fn start_repl() -> ! {
                             )
                             .unwrap();
                             let p = mo.as_mut_ptr();
+                            mo.strip_debug_info();
+                            log::trace!("Loaded module, content:\n{}", mo.to_string());
                             loaded_set.insert(m.path.clone(), mo);
                             immix::AddModuleToOrcJIT(p as _);
-                            log::info!("Loaded module: {:?}", m.path);
+
+                            log::info!("Loaded module: {:?}", m.name);
                         };
                     }
                 }
 
                 for m in &mods {
-                    if m.path.to_str().unwrap().starts_with("target/main") {
+                    if m.name.starts_with("__anon__") {
                         unsafe {
                             let m = Module::parse_bitcode_from_buffer(
                                 &MemoryBuffer::create_from_memory_range(
@@ -247,7 +302,8 @@ pub fn start_repl() -> ! {
                             .unwrap();
 
                             let p = m.as_mut_ptr();
-                            // m.print_to_stderr();
+                            m.strip_debug_info();
+                            log::trace!("Evaluate module, content:\n{}", m.to_string());
                             anon_mods.push(m);
                             immix::RunExpr(p as _);
                         }
@@ -268,9 +324,73 @@ pub fn start_repl() -> ! {
             }
         }
     }
-    #[cfg(feature = "with-file-history")]
-    rl.save_history("history.txt");
+    let _ = rl.save_history(&PathBuf::from(&root).join("history.txt"));
     exit(0);
+}
+
+fn validate_proj_cfg(
+    proj_path: &PathBuf,
+    db2: &Database,
+    docs2: &Arc<Mutex<mem_docs::MemDocs>>,
+) -> ControlFlow<(), Config> {
+    if !proj_path.exists() {
+        eprintln!("Error: project path not found: {:?}", proj_path);
+        return ControlFlow::Break(());
+    }
+    let conf_path = proj_path.join("Kagari.toml");
+    if !conf_path.exists() {
+        eprintln!("Error: Kagari.toml not found in {:?}", proj_path);
+        return ControlFlow::Break(());
+    }
+    // check proj_path existance
+    // check proj_path/Kagari.toml existance
+    // check is config valid
+    let cfg = read_config::prepare_build_envs(
+        db2,
+        docs2
+            .lock()
+            .unwrap()
+            .get_file_content(db2, conf_path.to_str().unwrap())
+            .unwrap(),
+    );
+    if cfg.is_err() {
+        eprintln!("Error: Kagari.toml is invalid in {:?}", proj_path);
+    }
+    ControlFlow::Continue(cfg.unwrap())
+}
+
+fn add_deps(
+    docs2: &Arc<Mutex<mem_docs::MemDocs>>,
+    db: &Database,
+    _as: &str,
+    proj_path: &Dependency,
+    db2: &Database,
+    docs: &Arc<Mutex<mem_docs::MemDocs>>,
+) {
+    let mut ori_cfg = read_config::prepare_build_envs(
+        db2,
+        *docs2.lock().unwrap().get(REPL_VIRTUAL_CONF).unwrap(),
+    )
+    .unwrap();
+    ori_cfg.entry = "__anon__.pi".to_string();
+    ori_cfg
+        .deps
+        .get_or_insert(Default::default())
+        .insert(_as.to_owned(), proj_path.clone());
+    let new_cfg = toml::to_string(&ori_cfg).unwrap();
+    eprintln!("new cfg:\n{}", new_cfg);
+    docs2.lock().unwrap().insert(
+        db2,
+        REPL_VIRTUAL_CONF.to_string(),
+        new_cfg.clone(),
+        REPL_VIRTUAL_CONF.to_string(),
+    );
+    docs.lock().unwrap().insert(
+        db,
+        REPL_VIRTUAL_CONF.to_string(),
+        new_cfg,
+        REPL_VIRTUAL_CONF.to_string(),
+    );
 }
 
 fn box_expr(n: &crate::ast::node::NodeEnum, line: &String) -> (String, String, String, String) {
@@ -289,4 +409,14 @@ fn box_expr(n: &crate::ast::node::NodeEnum, line: &String) -> (String, String, S
             format!("let __rtmp = {}", &line),
         ),
     }
+}
+
+fn try_parse_commands(line: &str) -> Option<repl_cmd::REPLCli> {
+    // sh lex, parse the cmd
+    shlex::split(line).and_then(|args| {
+        // use repl_cmd to parse the args
+        repl_cmd::REPLCli::try_parse_from(args)
+            .map_err(|err| err.print())
+            .ok()
+    })
 }

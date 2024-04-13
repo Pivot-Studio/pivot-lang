@@ -119,13 +119,13 @@ impl Node for UseNode {
                         return vec![];
                     }
                     let mut comp = get_ns_path_completions(path.to_str().unwrap());
-                    let mod_id = path.file_name().unwrap().to_str().unwrap();
+                    let mod_id = path.file_name().unwrap_or_default().to_str().unwrap();
                     if let Some(m) = ctx.plmod.submods.get(mod_id) {
                         comp.extend(m.get_pltp_completions_list())
                     }
                     comp
                 });
-                let mod_id = path.file_name().unwrap().to_str().unwrap();
+                let mod_id = path.file_name().unwrap_or_default().to_str().unwrap();
                 if let Some(m) = ctx.plmod.submods.get(mod_id) {
                     let n = self.namespace.last().unwrap();
                     if let Ok(tp) = m.get_type(&n.name, n.range, ctx) {
