@@ -463,10 +463,16 @@ extern "C"
       auto init_global = std::find_if(FNS.begin(), FNS.end(), [](Function &F) {
         return F.getName().endswith("..__init_global");
       });
+      auto ModId = mod->getModuleIdentifier();
+      // add REPLCounter
+      auto ModIdStr = ModId + std::to_string(REPLCounter);
+      mod->setModuleIdentifier(ModIdStr);
+
+
       #if _WIN32
-      auto init_name = "@__repl__\\main.pi..__init_global" + std::to_string(REPLCounter);
+      auto init_name = "@__repl__\\__anon__.pi..__init_global" + std::to_string(REPLCounter);
       #else
-      auto init_name = "@__repl__/main.pi..__init_global" + std::to_string(REPLCounter);
+      auto init_name = "@__repl__/__anon__.pi..__init_global" + std::to_string(REPLCounter);
       #endif
       init_global->setName(init_name);
       // init_global->print(errs());
@@ -476,9 +482,9 @@ extern "C"
       ExitOnErr(TheJIT->addModule(std::move(TSM), RT));
       // "@__repl__/main.pi..__anon__{}" REPLCounter
       #if _WIN32
-      auto name = "@__repl__\\main.pi..__anon__" + std::to_string(REPLCounter);
+      auto name = "@__repl__\\__anon__.pi..__anon__" + std::to_string(REPLCounter);
       #else
-      auto name = "@__repl__/main.pi..__anon__" + std::to_string(REPLCounter);
+      auto name = "@__repl__/__anon__.pi..__anon__" + std::to_string(REPLCounter);
       #endif
       auto ExprSymbol = ExitOnErr(TheJIT->lookup(name));
       REPLCounter++;
