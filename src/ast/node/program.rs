@@ -23,6 +23,7 @@ use crate::ast::tokens::TokenType;
 use crate::flow::display::Dot;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
+use crate::repl::LOADED_SET;
 #[cfg(feature = "repl")]
 use crate::repl::REPL_VARIABLES;
 #[cfg(feature = "repl")]
@@ -738,6 +739,8 @@ pub fn emit_file(db: &dyn Db, program_emit_params: ProgramEmitParam) -> ModWrapp
         let buf = a.write_bitcode_to_memory().as_slice().to_vec();
         #[cfg(not(feature = "llvm"))]
         let buf = vec![];
+
+        LOADED_SET.lock().unwrap().remove(&p.to_path_buf());
         ModBuffer::push(
             db,
             PLModBuffer {
@@ -767,10 +770,10 @@ pub struct UnsafeWrapper<T>(T);
 unsafe impl<T> Send for UnsafeWrapper<T> {}
 unsafe impl<T> Sync for UnsafeWrapper<T> {}
 impl<T> UnsafeWrapper<T> {
-    fn new(t: T) -> Self {
+    pub fn new(t: T) -> Self {
         Self(t)
     }
-    fn get(&self) -> &T {
+    pub fn get(&self) -> &T {
         &self.0
     }
 }
