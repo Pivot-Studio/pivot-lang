@@ -12,7 +12,7 @@ use inkwell::module::Module;
 use nom::branch::alt;
 use nom::combinator::{eof, map};
 use nom::sequence::terminated;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 
@@ -42,6 +42,7 @@ static REPL_COUNTER: AtomicI32 = AtomicI32::new(0);
 
 lazy_static::lazy_static! {
     pub static ref REPL_VARIABLES: Arc<Mutex<FxHashMap<String, GlobalVar>>> = Arc::new(Mutex::new(FxHashMap::default()));
+    pub static ref LOADED_SET:Arc<Mutex<FxHashSet<PathBuf>>> = Arc::new(Mutex::new(FxHashSet::default()));
 }
 
 pub fn start_repl() -> ! {
@@ -118,7 +119,7 @@ project = "repl"
     let root = env::var("PL_ROOT").unwrap_or_default();
     let _ = rl.load_history(&PathBuf::from(&root).join("history.txt"));
     let ctx = Context::create();
-    let mut loaded_set = FxHashMap::default();
+    let mut loaded_set = vec![];
     let mut anon_mods = vec![];
     unsafe { immix::CreateGlobalOrcJITEngine() };
     let mut used_headers = "".to_owned();
@@ -164,6 +165,13 @@ project = "repl"
                                     }
                                     ControlFlow::Break(_) => (),
                                 }
+                            }
+                            repl_cmd::Commands::Reload { file_path } => {
+                                // TODO: saparate the generic code gen module to support generic
+                                // hot reload
+                                let file_path = file_path.to_str().unwrap();
+                                docs2.lock().unwrap().remove(file_path);
+                                docs.lock().unwrap().remove(file_path);
                             }
                         })
                         .is_some()
@@ -253,7 +261,6 @@ project = "repl"
                 mem.set_docs(&mut db)
                     .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
                 let plmodule = compiler::compile_dry(&db, mem).unwrap();
-
                 let plmodule = plmodule.plmod(&db);
 
                 REPL_VARIABLES
@@ -265,10 +272,9 @@ project = "repl"
 
                 for m in &mods {
                     if !m.name.starts_with("__anon__") {
-                        if loaded_set.contains_key(&m.path) {
+                        if LOADED_SET.lock().unwrap().contains(&m.path) {
                             continue;
                         }
-
                         unsafe {
                             let mo = Module::parse_bitcode_from_buffer(
                                 &MemoryBuffer::create_from_memory_range(
@@ -281,14 +287,14 @@ project = "repl"
                             let p = mo.as_mut_ptr();
                             mo.strip_debug_info();
                             log::trace!("Loaded module, content:\n{}", mo.to_string());
-                            loaded_set.insert(m.path.clone(), mo);
+                            loaded_set.push(mo);
+                            LOADED_SET.lock().unwrap().insert(m.path.clone());
                             immix::AddModuleToOrcJIT(p as _);
 
                             log::info!("Loaded module: {:?}", m.name);
                         };
                     }
                 }
-
                 for m in &mods {
                     if m.name.starts_with("__anon__") {
                         unsafe {
@@ -378,7 +384,6 @@ fn add_deps(
         .get_or_insert(Default::default())
         .insert(_as.to_owned(), proj_path.clone());
     let new_cfg = toml::to_string(&ori_cfg).unwrap();
-    eprintln!("new cfg:\n{}", new_cfg);
     docs2.lock().unwrap().insert(
         db2,
         REPL_VIRTUAL_CONF.to_string(),

@@ -32,6 +32,8 @@ typedef void (*stackmap_cb)(uint8_t *map);
 typedef int (*mainf)();
 static stackmap_cb finalize_cb = nullptr;
 
+static std::map<std::string, ResourceTrackerSP> ResourceMap;
+
 static uint8_t *roundTripAllocateCodeSection(void *object, uintptr_t size,
                                              unsigned alignment,
                                              unsigned sectionID,
@@ -436,6 +438,16 @@ extern "C"
     auto RT = TheJIT->getMainJITDylib().createResourceTracker();
     std::unique_ptr<Module> mod;
     mod.reset(unwrap(module));
+    // if resource tracker exists, remove it
+    auto ModId = mod->getModuleIdentifier();
+    if (ResourceMap.find(ModId) != ResourceMap.end())
+    {
+      // printf("Removing module from JIT %s\n", mod->getModuleIdentifier().c_str());
+      auto RTOld = ResourceMap[ModId];
+      ExitOnErr(RTOld->remove());
+    }
+    // mod->print(errs(), nullptr);
+    // printf("Adding module to JIT %s\n", mod->getModuleIdentifier().c_str());
     auto FNS = mod->functions();
     // find ends with "..__init_global"
     auto init_global = std::find_if(FNS.begin(), FNS.end(), [](Function &F) {
@@ -445,6 +457,7 @@ extern "C"
     auto ctx = std::make_unique<LLVMContext>();
     auto TSM = ThreadSafeModule(std::move(mod),std::move(ctx));
     ExitOnErr(TheJIT->addModule(std::move(TSM), RT));
+    ResourceMap[ModId] = RT;
     // // run init global
     // auto ExprSymbol = ExitOnErr(TheJIT->lookup(init_global->getName()));
     // void (*FP)() = ExprSymbol.getAddress().toPtr<void (*)()>();

@@ -23,6 +23,10 @@ pub enum Commands {
         /// loads the dependencies of a Pivot Lang project into repl
         proj_path: PathBuf,
     },
+    Reload {
+        /// reload a file
+        file_path: PathBuf,
+    },
 }
 
 #[cfg(test)]

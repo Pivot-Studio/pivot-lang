@@ -19,6 +19,7 @@ use crate::ast::tokens::TokenType;
 use crate::ast::traits::CustomType;
 use crate::format_label;
 use crate::inference::{unknown_arc, GenericInferenceAble, InferenceCtx, TyVariable};
+use crate::repl::REPL_VARIABLES;
 use indexmap::IndexMap;
 use internal_macro::node;
 use linked_hash_map::LinkedHashMap;
@@ -795,7 +796,9 @@ impl FuncDefNode {
                     place_holder_fn.name = name.clone();
                     place_holder_fn.fntype.generic_map.clear();
                     place_holder_fn.generic_infer = Arc::new(RefCell::new(IndexMap::default()));
-                    if !matches!(builder, BuilderEnum::NoOp(_)) {
+                    if !matches!(builder, BuilderEnum::NoOp(_))
+                        && REPL_VARIABLES.lock().unwrap().is_empty()
+                    {
                         fnvalue.generic_infer.borrow_mut().insert(
                             name,
                             Arc::new(RefCell::new(PLType::Fn(place_holder_fn.clone()))),

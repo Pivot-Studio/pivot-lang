@@ -238,8 +238,8 @@ impl MemDocs {
         self.docs.get(key)
     }
     pub fn get_file_content(&mut self, db: &dyn Db, key: &str) -> Option<SourceProgram> {
-        // let sanitized = crate::utils::canonicalize(key).unwrap();
-        // let key = sanitized.to_str().unwrap();
+        let sanitized = crate::utils::canonicalize(key).unwrap();
+        let key = sanitized.to_str().unwrap();
         debug!("memdoc get_file_content {}", key);
         let mem = self.get(key);
         if let Some(mem) = mem {
@@ -248,7 +248,7 @@ impl MemDocs {
         }
         let re = read_to_string(key);
         if let Ok(re) = re {
-            log::info!("read file from path{}", key);
+            log::info!("read file from path {}", key);
             self.insert(db, key.to_string(), re, key.to_string());
             return self.get_file_content(db, key);
         }
@@ -258,7 +258,8 @@ impl MemDocs {
         self.docs.get_mut(key)
     }
     pub fn remove(&mut self, key: &str) -> Option<SourceProgram> {
-        self.docs.remove(key)
+        let k = crate::utils::canonicalize(key).unwrap();
+        self.docs.remove(k.to_str().unwrap())
     }
     pub fn iter(&self) -> impl Iterator<Item = &SourceProgram> {
         self.docs.values()
