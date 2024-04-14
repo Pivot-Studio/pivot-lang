@@ -23,6 +23,7 @@ use crate::ast::tokens::TokenType;
 use crate::flow::display::Dot;
 use crate::lsp::semantic_tokens::SemanticTokensBuilder;
 use crate::lsp::text;
+#[cfg(feature = "repl")]
 use crate::repl::LOADED_SET;
 #[cfg(feature = "repl")]
 use crate::repl::REPL_VARIABLES;
@@ -739,7 +740,7 @@ pub fn emit_file(db: &dyn Db, program_emit_params: ProgramEmitParam) -> ModWrapp
         let buf = a.write_bitcode_to_memory().as_slice().to_vec();
         #[cfg(not(feature = "llvm"))]
         let buf = vec![];
-
+        #[cfg(feature = "repl")]
         LOADED_SET.lock().unwrap().remove(&p.to_path_buf());
         ModBuffer::push(
             db,
