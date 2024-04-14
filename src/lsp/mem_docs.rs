@@ -238,8 +238,8 @@ impl MemDocs {
         self.docs.get(key)
     }
     pub fn get_file_content(&mut self, db: &dyn Db, key: &str) -> Option<SourceProgram> {
-        let sanitized = crate::utils::canonicalize(key).unwrap();
-        let key = sanitized.to_str().unwrap();
+        // let sanitized = crate::utils::canonicalize(key).unwrap();
+        // let key = sanitized.to_str().unwrap();
         debug!("memdoc get_file_content {}", key);
         let mem = self.get(key);
         if let Some(mem) = mem {
@@ -258,8 +258,9 @@ impl MemDocs {
         self.docs.get_mut(key)
     }
     pub fn remove(&mut self, key: &str) -> Option<SourceProgram> {
-        let k = crate::utils::canonicalize(key).unwrap();
-        self.docs.remove(k.to_str().unwrap())
+        // let key =  crate::utils::canonicalize(key).unwrap();
+        // let key = key.to_str().unwrap();
+        self.docs.remove(key)
     }
     pub fn iter(&self) -> impl Iterator<Item = &SourceProgram> {
         self.docs.values()
