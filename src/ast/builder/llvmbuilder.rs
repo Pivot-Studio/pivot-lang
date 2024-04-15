@@ -321,7 +321,7 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
         let llvm_tp = self.get_basic_type_op(pltype, ctx).unwrap();
         if let PLType::Struct(tp) = pltype {
             if !tp.atomic {
-                let f = self.get_or_insert_st_visit_fn_handle(&p, tp);
+                let f = self.get_or_insert_st_visit_fn_handle(tp, ctx);
                 let i = self
                     .builder
                     .build_ptr_to_int(
@@ -986,33 +986,23 @@ impl<'a, 'ctx> LLVMBuilder<'a, 'ctx> {
     }
     fn get_or_insert_st_visit_fn_handle(
         &self,
-        p: &PointerValue<'ctx>,
         st: &STType,
+        ctx: &mut Ctx<'a>,
     ) -> FunctionValue<'ctx> {
-        let ptrtp = p.get_type();
+        let fields = ctx.run_in_type_mod(st, |ctx, st| {
+            st.fields
+                .iter()
+                .map(|(_, f)| {
+                    f.typenode
+                        .get_type(ctx, &self.clone().into(), false)
+                        .unwrap()
+                })
+                .collect::<Vec<_>>()
+        });
+
+        self.gen_st_visit_function(ctx, st, &fields);
         let llvmname = st.get_full_name() + "_visitorf@";
-        if let Some(v) = self.module.get_function(&llvmname) {
-            return v;
-        }
-        let i8ptrtp = self.context.i8_type().ptr_type(AddressSpace::from(1));
-        let visit_ftp = self
-            .context
-            .void_type()
-            .fn_type(&[i8ptrtp.into(), i8ptrtp.into()], false)
-            .ptr_type(AddressSpace::from(1));
-        let ftp = self.context.void_type().fn_type(
-            &[
-                ptrtp.into(),
-                i8ptrtp.into(),
-                visit_ftp.into(),
-                visit_ftp.into(),
-                visit_ftp.into(),
-            ],
-            false,
-        );
-        let fn_type = ftp;
-        self.module
-            .add_function(&llvmname, fn_type, Some(Linkage::External))
+        self.module.get_function(&llvmname).unwrap()
     }
 
     /// # get_fn_type
@@ -1840,6 +1830,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
     /// 返回值的bool：函数是否已有函数体
     fn get_or_insert_fn_handle(&self, pltp: &FNValue, ctx: &mut Ctx<'a>) -> (ValueHandle, bool) {
         let (f, b) = self.get_or_insert_fn(pltp, ctx);
+        if pltp.fntype.generic {
+            f.set_linkage(Linkage::Private);
+        }
         (self.get_llvm_value_handle(&f.as_any_value_enum()), b)
     }
 
@@ -3000,12 +2993,7 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         let ftp = self.mark_fn_tp(ptrtp);
         let name = v.get_full_name() + "_visitorf@";
 
-        let linkage = if v.is_tuple {
-            // tuple will not be used outside of the current module
-            Linkage::Internal
-        } else {
-            Linkage::LinkOnceAny
-        };
+        let linkage = Linkage::Internal;
 
         let f = match self.module.get_function(&name) {
             Some(f) => f,

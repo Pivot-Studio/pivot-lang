@@ -167,8 +167,6 @@ project = "repl"
                                 }
                             }
                             repl_cmd::Commands::Reload { file_path } => {
-                                // TODO: saparate the generic code gen module to support generic
-                                // hot reload
                                 let file_path = file_path.to_str().unwrap();
                                 docs2.lock().unwrap().remove(file_path);
                                 docs.lock().unwrap().remove(file_path);

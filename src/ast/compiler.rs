@@ -220,7 +220,7 @@ pub fn process_llvm_ir<'a>(
             b.build_return(None).unwrap();
         }
         if f.get_linkage() == inkwell::module::Linkage::LinkOnceAny {
-            f.set_linkage(inkwell::module::Linkage::External);
+            f.set_linkage(inkwell::module::Linkage::Private);
         }
     });
     unsafe {

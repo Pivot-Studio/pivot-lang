@@ -1040,12 +1040,12 @@ impl FNValue {
         builder: &'b BuilderEnum<'a, '_>,
     ) -> Result<FNValue, PLDiag> {
         let name = self.append_name_with_generic(self.name.clone());
-        if let Some(pltype) = self.generic_infer.borrow().get(&name) {
-            if let PLType::Fn(f) = &*pltype.borrow() {
-                return Ok(f.clone());
-            }
-            unreachable!()
-        }
+        // if let Some(pltype) = self.generic_infer.borrow().get(&name) {
+        //     if let PLType::Fn(f) = &*pltype.borrow() {
+        //         return Ok(f.clone());
+        //     }
+        //     unreachable!()
+        // }
         let mut res = self.clone();
         res.llvmname = format!(
             "{}..{}",
