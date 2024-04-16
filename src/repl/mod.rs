@@ -1,17 +1,19 @@
 use std::env;
 use std::ops::ControlFlow;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::sync::atomic::AtomicI32;
 use std::sync::{Arc, Mutex};
 
 use clap::Parser;
+use crossbeam_channel::Sender;
 use inkwell::context::Context;
 use inkwell::memory_buffer::MemoryBuffer;
 use inkwell::module::Module;
 use nom::branch::alt;
 use nom::combinator::{eof, map};
 use nom::sequence::terminated;
+use notify::{Event, EventKind, RecursiveMode, Watcher};
 use rustc_hash::{FxHashMap, FxHashSet};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
@@ -123,6 +125,8 @@ project = "repl"
     let mut anon_mods = vec![];
     unsafe { immix::CreateGlobalOrcJITEngine() };
     let mut used_headers = "".to_owned();
+    let (sender, receiver) = crossbeam_channel::unbounded::<PathBuf>();
+    let mut watcher = new_watcher(sender);
     loop {
         let docs = mem.docs(&db);
         let docs2 = mem_check.docs(&db2);
@@ -171,6 +175,11 @@ project = "repl"
                                 docs2.lock().unwrap().remove(file_path);
                                 docs.lock().unwrap().remove(file_path);
                             }
+                            repl_cmd::Commands::Watch { dir } => {
+                                watcher
+                                    .watch(Path::new(&dir), RecursiveMode::Recursive)
+                                    .expect("watch failed");
+                            }
                         })
                         .is_some()
                     {
@@ -181,6 +190,16 @@ project = "repl"
                             .to(Arc::new(Mutex::new(docs.lock().unwrap().clone())));
                     }
                     continue;
+                }
+
+                let set = FxHashSet::from_iter(receiver.try_iter());
+                for path in set {
+                    let path = path.to_str().unwrap();
+                    if path.ends_with(".pi") {
+                        log::info!("File changed: {}", path);
+                        docs2.lock().unwrap().remove(path);
+                        docs.lock().unwrap().remove(path);
+                    }
                 }
 
                 let cl = line.clone();
@@ -422,4 +441,22 @@ fn try_parse_commands(line: &str) -> Option<repl_cmd::REPLCli> {
             .map_err(|err| err.print())
             .ok()
     })
+}
+
+fn new_watcher(sender: Sender<PathBuf>) -> notify::FsEventWatcher {
+    notify::recommended_watcher(move |res| match res {
+        Ok(Event {
+            kind: EventKind::Modify(_) | EventKind::Remove(_) | EventKind::Create(_),
+            paths,
+            attrs: _,
+        }) => {
+            for path in paths {
+                sender.send(path).expect("send path failed");
+            }
+        }
+        e => {
+            eprintln!("watch error: {:?}", e);
+        }
+    })
+    .expect("create watcher failed")
 }

@@ -664,7 +664,7 @@ pub fn prepare_module_ctx<'a>(
 /// or it does some LSP operations.
 #[salsa::tracked]
 pub fn emit_file(db: &dyn Db, program_emit_params: ProgramEmitParam) -> ModWrapper {
-    log::info!("emit_file: {}", program_emit_params.fullpath(db),);
+    log::info!("Compiling: {}", program_emit_params.fullpath(db),);
 
     let v = RefCell::new(FxHashSet::default());
     let mut ctx = prepare_module_ctx(db, &program_emit_params, &v);

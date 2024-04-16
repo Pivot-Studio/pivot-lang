@@ -12,20 +12,28 @@ pub struct REPLCli {
 
 #[derive(Subcommand)]
 pub enum Commands {
+    /// loads a Pivot Lang project into repl
     Load {
-        /// loads a Pivot Lang project into repl
+        /// project path
         proj_path: PathBuf,
         /// sets the project name
         #[arg(long = "as")]
         _as: String,
     },
+    /// loads the dependencies of a Pivot Lang project into repl
     LoadDeps {
-        /// loads the dependencies of a Pivot Lang project into repl
+        /// project path
         proj_path: PathBuf,
     },
+    /// reload a file
     Reload {
-        /// reload a file
+        /// file path
         file_path: PathBuf,
+    },
+    /// Watch a dir, perform a hot reload on file change
+    Watch {
+        /// directory
+        dir: String,
     },
 }
 
