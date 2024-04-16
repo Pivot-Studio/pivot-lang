@@ -32,7 +32,6 @@ typedef void (*stackmap_cb)(uint8_t *map);
 typedef int (*mainf)();
 static stackmap_cb finalize_cb = nullptr;
 
-static std::map<std::string, ResourceTrackerSP> ResourceMap;
 
 static uint8_t *roundTripAllocateCodeSection(void *object, uintptr_t size,
                                              unsigned alignment,
@@ -261,6 +260,7 @@ public:
 
 static ExitOnError ExitOnErr;
 static std::unique_ptr<PivotJIT> TheJIT;
+static std::map<std::string, ResourceTrackerSP> ResourceMap;
 static std::unique_ptr<ThreadSafeModule> TMod;
 static std::vector<std::string *> InitFns;
 static int REPLCounter = 0;
