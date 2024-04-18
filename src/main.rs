@@ -63,8 +63,8 @@ fn main() {
                 optimization,
                 engine,
             } => {
-                if engine != "orc" && engine != "mc" {
-                    eprintln!("engine {} is not supported, only support orc/mc", engine);
+                if engine != "orc" {
+                    eprintln!("engine {} is not supported, only support `orc`", engine);
                     exit(1);
                 }
                 cli.optimization = *optimization;
@@ -340,7 +340,7 @@ enum RunCommand {
         /// optimization level, 0-3
         #[arg(short = 'O', value_parser, default_value = "0")]
         optimization: u64,
-        /// engine used to run the bitcode, currently support orc/mc
+        /// engine used to run the bitcode, currently support orc
         #[arg(short = 'e', long, value_parser, default_value = "orc")]
         engine: String,
     },

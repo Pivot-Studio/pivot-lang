@@ -1460,7 +1460,6 @@ dependencies = [
  "threadpool",
  "toml",
  "vergen",
- "vm",
  "wasm-bindgen",
  "wasm-logger",
 ]
