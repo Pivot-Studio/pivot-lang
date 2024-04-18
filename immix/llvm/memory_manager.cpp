@@ -8,6 +8,7 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
 #include "llvm/ExecutionEngine/Orc/Core.h"
+#include "llvm/ExecutionEngine/Orc/IRTransformLayer.h"
 #include "llvm/ExecutionEngine/Orc/EPCDynamicLibrarySearchGenerator.h"
 #include "llvm/ExecutionEngine/Orc/ExecutionUtils.h"
 #include "llvm/ExecutionEngine/Orc/IRCompileLayer.h"
@@ -21,6 +22,10 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/IRReader/IRReader.h"
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/InstCombine/InstCombine.h"
+#include "llvm/Transforms/Scalar/GVN.h"
 
 
 using namespace llvm;
@@ -183,8 +188,31 @@ private:
 
   RTDyldObjectLinkingLayer ObjectLayer;
   IRCompileLayer CompileLayer;
+  IRTransformLayer TransformLayer;
 
   JITDylib &MainJD;
+
+  static Expected<ThreadSafeModule>
+optimizeModule(ThreadSafeModule M, MaterializationResponsibility &R) {
+  // Create a function pass manager.
+  M.withModuleDo([](Module &M) {
+    auto FPM = std::make_unique<legacy::FunctionPassManager>(&M);
+
+    // Add some optimizations.
+    FPM->add(createInstructionCombiningPass());
+    FPM->add(createReassociatePass());
+    // FPM->add(createGVNPass());
+    FPM->add(createCFGSimplificationPass());
+    FPM->doInitialization();
+
+    // Run the optimizations over all functions in the module being added to
+    // the JIT.
+    for (auto &F : M)
+      FPM->run(F);
+  });
+
+  return M;
+}
 
 public:
   PivotJIT(std::unique_ptr<ExecutionSession> ES,
@@ -194,6 +222,7 @@ public:
                     []() { return std::make_unique<PivotSectionMemoryManager>(); }),
         CompileLayer(*this->ES, ObjectLayer,
                      std::make_unique<ConcurrentIRCompiler>(std::move(JTMB))),
+        TransformLayer(*this->ES, CompileLayer, optimizeModule),
         MainJD(this->ES->createBareJITDylib("<main>")) {
     MainJD.addGenerator(
         cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(
@@ -251,7 +280,7 @@ public:
   Error addModule(ThreadSafeModule TSM, ResourceTrackerSP RT = nullptr) {
     if (!RT)
       RT = MainJD.getDefaultResourceTracker();
-    return CompileLayer.add(RT, std::move(TSM));
+    return TransformLayer.add(RT, std::move(TSM));
   }
 
   Expected<ExecutorSymbolDef> lookup(StringRef Name) {
