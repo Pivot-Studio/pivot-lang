@@ -14,6 +14,7 @@
 #include "llvm/ExecutionEngine/Orc/JITTargetMachineBuilder.h"
 #include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
 #include "llvm/ExecutionEngine/SectionMemoryManager.h"
+#include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/LLVMContext.h"
 #include <memory>
@@ -258,6 +259,28 @@ public:
   }
 };
 
+static std::string getLibvmPath() {
+    auto root = std::string(std::getenv("PL_ROOT"));
+    #ifdef __APPLE__
+    auto lib_path = "libvm.dylib";
+    #elif __linux__
+    auto lib_path = "libvm.so";
+    #elif _WIN32
+    auto lib_path = "vm.dll";
+    #endif
+    // join path
+    std::string lib_full_path;
+    if (StringRef(root).ends_with("/"))
+    {
+      lib_full_path = root + lib_path;
+    }
+    else
+    {
+      lib_full_path = root + "/" + lib_path;
+    }
+    return lib_full_path;
+}
+
 static ExitOnError ExitOnErr;
 static std::unique_ptr<PivotJIT> TheJIT;
 static std::map<std::string, ResourceTrackerSP> ResourceMap;
@@ -271,7 +294,13 @@ extern "C"
 
   int CreateAndRunPLJITEngine( LLVMModuleRef module, unsigned int opt, stackmap_cb cb)
   {
-    llvm::sys::DynamicLibrary::LoadLibraryPermanently("/Users/bobli/src/pivot-lang/target/debug/libvm.dylib"); 
+    InitializeNativeTarget();
+    InitializeNativeTargetAsmPrinter();
+    InitializeNativeTargetAsmParser();
+    std::string lib_full_path = getLibvmPath();
+    std::string errMsgString;
+    llvm::sys::DynamicLibrary::LoadLibraryPermanently(lib_full_path.c_str(), &errMsgString);
+    printf("load libvm: %s\n", errMsgString.c_str()); 
     LLVMExecutionEngineRef *jit = new LLVMExecutionEngineRef();
     finalize_cb = cb;
     auto sm = new SectionMemoryManager();
@@ -306,24 +335,7 @@ extern "C"
 
   int CreateAndRunPLOrcJITEngine(char * module_path, unsigned int opt, stackmap_cb cb)
   {
-    auto root = std::string(std::getenv("PL_ROOT"));
-    #ifdef __APPLE__
-    auto lib_path = "libvm.dylib";
-    #elif __linux__
-    auto lib_path = "libvm.so";
-    #elif _WIN32
-    auto lib_path = "vm.dll";
-    #endif
-    // join path
-    std::string lib_full_path;
-    if (StringRef(root).ends_with("/"))
-    {
-      lib_full_path = root + lib_path;
-    }
-    else
-    {
-      lib_full_path = root + "/" + lib_path;
-    }
+    std::string lib_full_path = getLibvmPath();
     
 
 
@@ -393,24 +405,7 @@ extern "C"
     InitializeNativeTarget();
     InitializeNativeTargetAsmPrinter();
     InitializeNativeTargetAsmParser();
-    auto root = std::string(std::getenv("PL_ROOT"));
-    #ifdef __APPLE__
-    auto lib_path = "libvm.dylib";
-    #elif __linux__
-    auto lib_path = "libvm.so";
-    #elif _WIN32
-    auto lib_path = "vm.dll";
-    #endif
-    // join path
-    std::string lib_full_path;
-    if (StringRef(root).ends_with("/"))
-    {
-      lib_full_path = root + lib_path;
-    }
-    else
-    {
-      lib_full_path = root + "/" + lib_path;
-    }
+    std::string lib_full_path = getLibvmPath();
     // llvm::sys::DynamicLibrary::LoadLibraryPermanently(lib_full_path.c_str()); 
     auto jit = ExitOnErr(PivotJIT::Create());
 
