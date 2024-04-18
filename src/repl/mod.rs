@@ -443,7 +443,7 @@ fn try_parse_commands(line: &str) -> Option<repl_cmd::REPLCli> {
     })
 }
 
-fn new_watcher(sender: Sender<PathBuf>) -> notify::FsEventWatcher {
+fn new_watcher(sender: Sender<PathBuf>) -> notify::RecommendedWatcher {
     notify::recommended_watcher(move |res| match res {
         Ok(Event {
             kind: EventKind::Modify(_) | EventKind::Remove(_) | EventKind::Create(_),
