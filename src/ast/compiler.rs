@@ -136,7 +136,11 @@ pub fn compile_dry_file(db: &dyn Db, parser_entry: FileCompileInput) -> Option<M
     let parsing_result = parse(db, entry_file_content);
     match parsing_result {
         Err(e) => {
-            log::error!("source code parse failed {}", e);
+            log::warn!(
+                "source code parse failed {}\n{:?}",
+                e,
+                entry_file_content.text(db)
+            );
             None
         }
         Ok(root_node) => {

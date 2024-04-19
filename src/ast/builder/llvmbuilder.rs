@@ -2333,11 +2333,9 @@ impl<'a, 'ctx> IRBuilder<'a, 'ctx> for LLVMBuilder<'a, 'ctx> {
         if *self.optimized.borrow() {
             return;
         }
-        // if self.module.get_name().to_str().unwrap().contains("global") {
-        //     self.module.strip_debug_info();
-        // }
-        // self.module.strip_debug_info();
-        // self.module.strip_debug_info(); // FIXME
+        if !self.debug {
+            self.module.strip_debug_info();
+        }
         self.module.verify().unwrap_or_else(|e| {
             self.module.print_to_file(Path::new("err.ll")).unwrap();
             panic!(

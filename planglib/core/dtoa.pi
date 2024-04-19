@@ -187,6 +187,7 @@ impl F64 {
 }
 
 /// convert f64 to string use grisu2 algorithm
+/// FIXME: when value is 0.0, this function will panic
 pub fn grisu3(v: f64, _mode: i64, buf: [u8]) (bool, i64, i64) {
     let w = newDouble(v).as_normal_F64();
     let (boundary_minus, boundary_plus) = newDouble(v).normalize_boundaries();

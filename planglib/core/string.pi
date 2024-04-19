@@ -55,6 +55,9 @@ fn reverse<T>(s: [T], len: i64) [T] {
 }
 
 pub fn dtoa(f: f64) gc::string {
+    if f == 0.0 {
+        return "0.0";
+    }
     let buf = [u8*64;];
     let sb = stringbuilder(64);
     let neg = *unsafe_cast<u64>(&f) & 0x8000000000000000 != 0;
