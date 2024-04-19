@@ -1,7 +1,6 @@
 use std::env;
 use std::ops::ControlFlow;
 use std::path::{Path, PathBuf};
-use std::process::exit;
 use std::sync::atomic::AtomicI32;
 use std::sync::{Arc, Mutex};
 
@@ -15,9 +14,10 @@ use nom::combinator::{eof, map};
 use nom::sequence::terminated;
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use rustc_hash::{FxHashMap, FxHashSet};
+use rustyline::config::Configurer;
 use rustyline::error::ReadlineError;
-use rustyline::DefaultEditor;
 
+mod completer;
 mod repl_cmd;
 
 use crate::ast::accumulators::{Diagnostics, ModBuffer};
@@ -31,6 +31,8 @@ use crate::nomparser::pkg::use_statement;
 use crate::nomparser::statement::{new_variable, statement};
 use crate::nomparser::Span;
 use crate::utils::read_config::{self, Config, Dependency};
+
+use self::completer::{REPLCompleter, REPL_COMLETE_TPL};
 #[cfg(not(windows))]
 pub const REPL_VIRTUAL_ENTRY: &str = "@__repl__/__anon__.pi";
 #[cfg(not(windows))]
@@ -47,11 +49,10 @@ lazy_static::lazy_static! {
     pub static ref LOADED_SET:Arc<Mutex<FxHashSet<PathBuf>>> = Arc::new(Mutex::new(FxHashSet::default()));
 }
 
-pub fn start_repl() -> ! {
-    // `()` can be used when no completer is required
-    let mut rl = DefaultEditor::new().unwrap();
+pub fn start_repl() {
     let mut db = Database::default();
     let mut db2 = Database::default();
+
     let op = compiler::Options {
         genir: false,
         printast: false,
@@ -119,14 +120,20 @@ project = "repl"
         REPL_VIRTUAL_ENTRY.to_string(),
     );
     let root = env::var("PL_ROOT").unwrap_or_default();
-    let _ = rl.load_history(&PathBuf::from(&root).join("history.txt"));
     let ctx = Context::create();
-    let mut loaded_set = vec![];
-    let mut anon_mods = vec![];
     unsafe { immix::CreateGlobalOrcJITEngine() };
     let mut used_headers = "".to_owned();
     let (sender, receiver) = crossbeam_channel::unbounded::<PathBuf>();
     let mut watcher = new_watcher(sender);
+
+    // `()` can be used when no completer is required
+    let completer = REPLCompleter::new(&mut db2 as _, mem_check);
+    let mut rl =
+        rustyline::Editor::<REPLCompleter, rustyline::history::FileHistory>::new().unwrap();
+    rl.set_helper(Some(completer));
+    rl.set_completion_type(rustyline::CompletionType::Circular);
+    let _ = rl.load_history(&PathBuf::from(&root).join("history.txt"));
+
     loop {
         let docs = mem.docs(&db);
         let docs2 = mem_check.docs(&db2);
@@ -250,10 +257,11 @@ project = "repl"
                     .unwrap()
                     .set_text(&mut db2)
                     .to(anon_fn.clone());
+                mem_check.set_edit_pos(&mut db2).to(None);
                 mem_check
                     .set_docs(&mut db2)
                     .to(Arc::new(Mutex::new(docs2.lock().unwrap().clone())));
-                let _ = compiler::compile_dry(&db2, mem_check).unwrap();
+                let _ = compiler::compile_dry(&db2, mem_check);
                 let diags = compiler::compile_dry::accumulated::<Diagnostics>(&db2, mem_check);
                 let mut errs_num = 0;
                 let mut warn_num = 0;
@@ -269,6 +277,11 @@ project = "repl"
                 // eprintln!("{}", anon_fn);
                 used_headers.push_str(&used_headers_line);
 
+                let tpl = format!(
+                    "{}{{}}\n pub fn __anon__0() void {{{{ \n{{}}\nreturn;\n }}}}",
+                    used_headers,
+                );
+                *REPL_COMLETE_TPL.lock() = tpl;
                 docs.lock()
                     .unwrap()
                     .get(REPL_VIRTUAL_ENTRY)
@@ -304,9 +317,10 @@ project = "repl"
                             let p = mo.as_mut_ptr();
                             mo.strip_debug_info();
                             log::trace!("Loaded module, content:\n{}", mo.to_string());
-                            loaded_set.push(mo);
                             LOADED_SET.lock().unwrap().insert(m.path.clone());
                             immix::AddModuleToOrcJIT(p as _);
+                            // Owned by the JIT now
+                            std::mem::forget(mo);
 
                             log::info!("Loaded module: {:?}", m.name);
                         };
@@ -327,8 +341,9 @@ project = "repl"
                             let p = m.as_mut_ptr();
                             m.strip_debug_info();
                             log::trace!("Evaluate module, content:\n{}", m.to_string());
-                            anon_mods.push(m);
                             immix::RunExpr(p as _);
+                            // Owned by the JIT now
+                            std::mem::forget(m);
                         }
                     }
                 }
@@ -348,7 +363,7 @@ project = "repl"
         }
     }
     let _ = rl.save_history(&PathBuf::from(&root).join("history.txt"));
-    exit(0);
+    // exit(0);
 }
 
 fn validate_proj_cfg(

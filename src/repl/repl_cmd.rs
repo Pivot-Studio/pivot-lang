@@ -40,6 +40,6 @@ pub enum Commands {
 #[cfg(test)]
 #[test]
 fn test_repl_cli() {
-    REPLCli::try_parse_from(&["@repl", "load", r#""test""#, "--as", "proj"]).unwrap();
-    REPLCli::try_parse_from(&["@repl", "load-deps", r#""test""#]).unwrap();
+    REPLCli::try_parse_from(["@repl", "load", r#""test""#, "--as", "proj"]).unwrap();
+    REPLCli::try_parse_from(["@repl", "load-deps", r#""test""#]).unwrap();
 }

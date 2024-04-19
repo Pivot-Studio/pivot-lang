@@ -5,6 +5,8 @@ use project1::test::_match;
 
 
 pub fn main() i64 {
+    let a = 0.0;
+    println!(a);
     println!("Hello, World!");
     let h = new_hash_table<i64|i64>(10 as u64, 1 as u64);
     h.insert(1, 2);
