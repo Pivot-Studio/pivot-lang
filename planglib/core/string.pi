@@ -22,8 +22,7 @@ impl StringBuilder {
         return;
     }
     pub fn str() gc::string {
-        self.data[self.len] = 0 as u8;
-        return gc::string_from_bytes(self.data);
+        return gc::string_from_bytes(arr_slice(self.data, 0, self.len));
     }
     pub fn reverse() void {
         self.data = reverse(self.data, self.len);
@@ -199,7 +198,7 @@ impl ToString for f32 {
         }
         ret.append(iv.to_string());
         ret.append(".");
-        ret.append(gc::string_from_bytes(bs));
+        ret.append(gc::string_from_bytes(arr_slice(bs, 0, 7) ));
         return ret;
     }
 }
