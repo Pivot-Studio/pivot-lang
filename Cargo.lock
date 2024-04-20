@@ -1107,7 +1107,7 @@ checksum = "01cda141df6706de531b6c46c3a33ecca755538219bd484262fa09410c13539c"
 [[package]]
 name = "lld_rs"
 version = "180.0.0"
-source = "git+https://github.com/Pivot-Studio/lld-rs.git?branch=main#2b93308f746324f552997283764e465f2216183e"
+source = "git+https://github.com/Pivot-Studio/lld-rs.git?branch=main#553a766e41a3c89c565333809074c75d0d7d9d31"
 dependencies = [
  "cmake",
  "lazy_static",
