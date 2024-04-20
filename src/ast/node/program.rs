@@ -476,7 +476,11 @@ impl Program {
         let plmod = m.plmod(db);
 
         let pos = emit_params.lsp_params(db).editing_postion(db);
-        if self.is_active_file(db) || plmod.path == REPL_VIRTUAL_ENTRY {
+        #[cfg(feature = "repl")]
+        let or_cond = plmod.path == REPL_VIRTUAL_ENTRY;
+        #[cfg(not(feature = "repl"))]
+        let or_cond = false;
+        if self.is_active_file(db) || or_cond {
             if pos.is_some() {
                 Completions::push(
                     db,
