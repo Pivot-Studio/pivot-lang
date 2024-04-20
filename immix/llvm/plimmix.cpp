@@ -105,17 +105,23 @@ extern "C" void run_module_pass(LLVMModuleRef  M, int opt, int debug, int print_
 //     std::string CPUStr, FeaturesStr;
 //     Triple ModuleTriple(unwrap(M)->getTargetTriple());
 //     std::string Error;
-    
+    InitializeNativeTarget();
+    InitializeNativeTargetAsmPrinter();
+    InitializeNativeTargetAsmParser();
+    auto TargetTriple = sys::getDefaultTargetTriple();
+    std::string Error;
+    auto Target = TargetRegistry::lookupTarget(TargetTriple, Error);
 
 //     auto target = TargetRegistry::lookupTarget(ModuleTriple.getTriple(), Error);
 //     CPUStr = sys::getHostCPUName();
 //     FeaturesStr = getFeaturesStr();
 //     // codegen::setFunctionAttributes(CPUStr, FeaturesStr, *unwrap(M));
-//     TargetOptions Options = TargetOptions();
-//     // Options.UnsafeFPMath = true;
-//     // Options.NoNaNsFPMath = true;
-//     // Options.NoTrappingFPMath = true;
-//     // Options.AllowFPOpFusion = FPOpFusion::Fast;
+    TargetOptions Options = TargetOptions();
+    Options.UnsafeFPMath = true;
+    Options.NoNaNsFPMath = true;
+    Options.ApproxFuncFPMath = true;
+    Options.NoTrappingFPMath = true;
+    Options.AllowFPOpFusion = FPOpFusion::Fast;
 
     auto O = OptimizationLevel::O2;
 //     auto COpt = CodeGenOpt::Default;
@@ -154,7 +160,10 @@ extern "C" void run_module_pass(LLVMModuleRef  M, int opt, int debug, int print_
     // Take a look at the PassBuilder constructor parameters for more
     // customization, e.g. specifying a TargetMachine or various debugging
     // options.
-    PassBuilder PB;
+    auto CPU = "generic";
+    auto Features = "";
+    auto TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, Options, Reloc::PIC_);
+    PassBuilder PB(TargetMachine);
 
     AAManager AA = PB.buildDefaultAAPipeline();
     FAM.registerPass([&] { return std::move(AA); });

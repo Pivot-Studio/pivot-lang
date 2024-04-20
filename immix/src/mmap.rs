@@ -5,7 +5,7 @@ mod _win {
 
     use winapi::um::{
         memoryapi::{VirtualAlloc, VirtualFree},
-        winnt::{MEM_COMMIT, MEM_DECOMMIT, MEM_RELEASE, MEM_RESERVE, PAGE_READWRITE},
+        winnt::*,
     };
     pub struct Mmap {
         start: *mut u8,
@@ -45,8 +45,10 @@ mod _win {
 
         pub fn dontneed(&self, page: *mut u8, size: usize) {
             unsafe {
-                //DiscardVirtualMemory(page.cast(), size as _);
+                #[cfg(feature = "madv_free")]
                 VirtualFree(page.cast(), size, MEM_DECOMMIT);
+                #[cfg(feature = "madv_dontneed")]
+                VirtualAlloc(page.cast(), size, MEM_RESET, PAGE_READWRITE);
             }
         }
 
