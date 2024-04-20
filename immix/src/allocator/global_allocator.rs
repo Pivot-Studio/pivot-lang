@@ -1,4 +1,7 @@
-use std::{cell::Cell, collections::VecDeque};
+use std::{
+    cell::{Cell, RefCell},
+    collections::VecDeque,
+};
 
 use parking_lot::ReentrantMutex;
 use threadpool::ThreadPool;
@@ -42,11 +45,14 @@ pub struct GlobalAllocator {
     round: i64,
 
     pub pool: ThreadPool,
+
+    /// a bitmap indicates whether a block is in use
+    block_bitmap: RefCell<Vec<u64>>,
 }
 
 unsafe impl Sync for GlobalAllocator {}
 
-const ROUND_THRESHOLD: i64 = 3;
+const ROUND_THRESHOLD: i64 = 10;
 
 const ROUND_MIN_TIME_MILLIS: u128 = 1000;
 
@@ -59,11 +65,19 @@ impl GlobalAllocator {
 
         // mmap.commit(mmap.aligned(), BLOCK_SIZE);
         // let n_workers = available_parallelism().unwrap().get();
+        let start = mmap.aligned(BLOCK_SIZE);
+        let end = mmap.end();
+
+        // bitmap is only for immix space
+        let immix_size = end as usize - start as usize;
+        // i64 is 64 bits
+        let bitmap_size = immix_size / BLOCK_SIZE / 64;
+        let block_bitmap: Vec<u64> = vec![0; bitmap_size];
 
         Self {
             current: Cell::new(mmap.aligned(BLOCK_SIZE)),
-            heap_start: mmap.aligned(BLOCK_SIZE),
-            heap_end: mmap.end(),
+            heap_start: start,
+            heap_end: end,
             mmap,
             free_blocks: Vec::new(),
             lock: ReentrantMutex::new(()),
@@ -74,6 +88,7 @@ impl GlobalAllocator {
             pool: ThreadPool::default(),
             unavailable_blocks: vec![],
             recycle_blocks: vec![],
+            block_bitmap: RefCell::new(block_bitmap),
         }
     }
     /// 从big object mmap中分配一个大对象，大小为size
@@ -105,6 +120,33 @@ impl GlobalAllocator {
             self.big_obj_allocator.return_chunk(obj);
         }
     }
+
+    fn set_block_bitmap(&self, block: *mut Block, value: bool) {
+        let block_start = block as usize;
+        let block_index = (block_start - self.heap_start as usize) / BLOCK_SIZE;
+        let mut block_bitmap = self.block_bitmap.borrow_mut();
+        let word_index = block_index / 64;
+        let bit_index = block_index % 64;
+        let word = block_bitmap[word_index];
+        let mask = 1 << bit_index;
+        if value {
+            block_bitmap[word_index] = word | mask;
+        } else {
+            block_bitmap[word_index] = word & !mask;
+        }
+    }
+
+    fn get_ptr_bitmap(&self, ptr: *mut u8) -> bool {
+        let ptr_start = ptr as usize;
+        let block_index = (ptr_start - self.heap_start as usize) / BLOCK_SIZE;
+        let block_bitmap = self.block_bitmap.borrow();
+        let word_index = block_index / 64;
+        let bit_index = block_index % 64;
+        let word = block_bitmap[word_index];
+        let mask = 1 << bit_index;
+        word & mask != 0
+    }
+
     /// 从mmap的heap空间之中获取一个Option<* mut Block>，如果heap空间不够了，就返回None
     ///
     /// 每次分配block会让current增加一个block的大小
@@ -121,6 +163,7 @@ impl GlobalAllocator {
                 .set(unsafe { self.current.get().sub(BLOCK_SIZE) });
             return None;
         }
+
         // if unsafe { current.add(BLOCK_SIZE * 32) } >= heap_end {
         //     return None;
         // }
@@ -193,7 +236,7 @@ impl GlobalAllocator {
             (*block).reset_header();
         }
         let now = std::time::Instant::now();
-        // 距离上次alloc时间超过1秒，把free_blocks中的block都dont need
+        // 距离上次alloc时间超过1秒，检查是否需要把free_blocks中的block都dont need
         if now.duration_since(self.last_get_block_time).as_millis() > ROUND_MIN_TIME_MILLIS {
             self.last_get_block_time = now;
             if self.mem_usage_flag > 0 {
@@ -203,7 +246,7 @@ impl GlobalAllocator {
             }
             self.mem_usage_flag = 0;
             if self.round <= -ROUND_THRESHOLD {
-                // 总体有三个周期处于内存不变或减少状态，进行dontneed
+                // 符合条件，进行dontneed
                 self.round = 0;
                 // println!("trigger dont need");
                 self.free_blocks
@@ -219,6 +262,7 @@ impl GlobalAllocator {
                 self.round = 0;
             }
         }
+        self.set_block_bitmap(block, true);
         block
     }
 
@@ -226,7 +270,8 @@ impl GlobalAllocator {
     ///
     /// blocks是into iterator
     ///
-    /// 将blocks放回free_blocks中，所有放回的空间会被标记为DONT_NEED
+    /// 将blocks放回free_blocks中，所有放回的空间都可能会被dontneed，访问它虽然有时不会报错，
+    /// 但是可能会造成Invalid Memory Access
     pub fn return_blocks<I>(&mut self, blocks: I)
     where
         I: IntoIterator<Item = *mut Block>,
@@ -234,6 +279,7 @@ impl GlobalAllocator {
         let _lock = self.lock.lock();
         for block in blocks {
             self.mem_usage_flag -= 1;
+            self.set_block_bitmap(block, false);
             self.free_blocks.push((block, false));
             // self.mmap
             //     .dontneed(block as *mut Block as *mut u8, BLOCK_SIZE);
@@ -249,6 +295,7 @@ impl GlobalAllocator {
         self.recycle_blocks.extend(recycle);
         for block in eva {
             self.mem_usage_flag -= 1;
+            self.set_block_bitmap(*block, false);
             self.free_blocks.push((*block, false));
         }
     }
@@ -264,7 +311,7 @@ impl GlobalAllocator {
     /// # in heap
     /// 判断一个指针是否在heap之中
     pub fn in_heap(&self, ptr: *mut u8) -> bool {
-        ptr >= self.heap_start && ptr < self.heap_end
+        ptr >= self.heap_start && ptr < self.current.get() && self.get_ptr_bitmap(ptr)
     }
 
     /// # in_big_heap
