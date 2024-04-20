@@ -316,7 +316,7 @@ impl Linker for MsvcLinker {
                 self.push_args(&format!("-libpath:{}", lib.to_str().unwrap()));
             }
         }
-        let (linker, libs) = get_win_sdk_lib_paths();
+        let (_, libs) = get_win_sdk_lib_paths();
         libs.iter().for_each(|p| {
             self.push_args(&format!(
                 "-libpath:{}",
@@ -342,32 +342,10 @@ impl Linker for MsvcLinker {
         self.push_args("psapi.lib");
         self.push_args("PowrProf.lib");
 
-        // use linker directly, since lld may report
-        // lld-link: error: The CodeView record is corrupted.
-        // lld_rs::link(lld_rs::LldFlavor::Coff, &self.args)
-        //     .ok()
-        //     .map_err(LinkerError::LinkError)
-        let re = Command::new(linker.expect("failed to find link.exe"))
-            .args(&self.args)
-            .output();
-        if let Ok(re) = re {
-            if !re.status.success() {
-                eprintln!(
-                    "link failed\nargs: {:?}\nld stdout: {}, stderr: {}",
-                    self.args,
-                    String::from_utf8_lossy(&re.stdout),
-                    String::from_utf8_lossy(&re.stderr)
-                );
-                Err(LinkerError::LinkError("link failed".to_string()))
-            } else {
-                Ok(())
-            }
-        } else {
-            Err(LinkerError::LinkError(format!(
-                "link failed: {:?}",
-                re.err()
-            )))
-        }
+        self.args.insert(0, "lld-link".to_owned());
+        lld_rs::link(lld_rs::LldFlavor::Coff, &self.args)
+            .ok()
+            .map_err(LinkerError::LinkError)
     }
 
     fn push_args(&mut self, arg: &str) {
